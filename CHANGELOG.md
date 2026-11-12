@@ -61,6 +61,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A macro that makes a method with `Symbol.newMethod` and a `MethodType`, closes over a method reference with
+  `Closure`, or selects a constructor or `asInstanceOf` with `Select.unique` expands as under scalac (tapir's
+  `formCaseClassCodec` ended in a `MatchError`).
 - A lambda's parameter that the expected type leaves open is typed from the method, constructor or function its
   body applies to it (`sink.contramap(Wrapped(_))`, `on(x => wrap(x))`), and a parameter spread into a
   repeated one is typed as its sequence (`xs => join(xs*)`): such lambdas were refused with `type mismatch: found

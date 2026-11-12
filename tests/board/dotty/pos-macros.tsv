@@ -58,7 +58,7 @@ i12188c	fail	check:fail	Test_2.scala:1:20: not supported yet in a macro: a case 
 i12196	pass	check:pass	
 i12221	pass	check:fail	
 i12253	fail	check:fail	Macro_1.scala:8:7:None:None: the body of MacroUtils.extractNameFromSelectorImpl is withheld from the products of $OUT/pos-macros/i12253/jvm.products (elided: unstated a reference to the body's u$0 the body does not define): the TASTy writer
-i12309	fail	check:fail	Test_2.scala:2:3: not supported yet in a macro: the method getResult is selected without its arguments (called by test in object TestMacro) (in the body of TestMacro.test)
+i12309	pass	check:fail	
 i12343	pass	check:pass	
 i12440.scala	fail	check:fail	i12440.scala:9:10: only classes can have declared but undefined members
 i12498	pass	check:pass	

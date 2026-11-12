@@ -216,6 +216,8 @@ jvm/enum_value_init_threads	pass	-
 jvm/enum_value_order	pass	-	
 jvm/equals_can_equal	pass	-	
 jvm/export_inherited_bridge	pass	-	
+jvm/form_codec_macro	pass	-	
+jvm/form_codec_macro_two	pass	-	
 jvm/function_byname_defaults	pass	-	
 jvm/generic_default_getters	pass	-	
 jvm/given_classes_layout	pass	-	

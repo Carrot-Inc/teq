@@ -449,14 +449,13 @@ impl<'a> Worker<'a> {
         sym
     }
 
-    /// A local method symbol with the given parameter and result types, which a macro makes
-    /// through `Symbol.newMethod`.
-    pub fn new_local_method(&mut self, name: Name, params: &[TypeId], ret: TypeId, span: Span) -> SymId {
+    /// A local method symbol with the given parameters (name and type) and result type, which a
+    /// macro makes through `Symbol.newMethod`.
+    pub fn new_local_method(&mut self, name: Name, params: &[(Name, TypeId)], ret: TypeId, span: Span) -> SymId {
         let file = self.env.file;
         let sym = self.syms.new_sym(name, SymKind::Def, 0, Owner::Local, file, None, span);
         let mut clause = ClauseSig::default();
-        for (i, &ty) in params.iter().enumerate() {
-            let pname = self.interner.intern(&format!("x{}", i));
+        for &(pname, ty) in params {
             let p = self.syms.new_sym(pname, SymKind::Param, 0, Owner::Local, file, None, span);
             let psig = self.value_sig(ty);
             let mut info = self.syms.sym_mut(p);

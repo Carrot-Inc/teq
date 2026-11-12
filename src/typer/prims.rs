@@ -2131,7 +2131,7 @@ impl<'a> Worker<'a> {
     /// `recv.asInstanceOf[t]` for a receiver of type `recv_ty`, lowered as dotty's erasure lowers
     /// a cast (`TypeTestsCasts.transformAsInstanceOf`, `cast_lowering`); a cast of a stored inline
     /// body or of a quote is kept as written, its types filled in where it is instantiated.
-    pub(super) fn lower_cast(&mut self, recv: TExprId, recv_ty: TypeId, t: TypeId, span: Span) -> (TExprId, TypeId) {
+    pub(crate) fn lower_cast(&mut self, recv: TExprId, recv_ty: TypeId, t: TypeId, span: Span) -> (TExprId, TypeId) {
         self.lower_cast_written(recv, recv_ty, t, span, false)
     }
 

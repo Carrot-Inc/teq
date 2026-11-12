@@ -1569,6 +1569,8 @@ macro_by_name_views	fail	-	output differs
 macro_byte_buffer	pass	-	
 macro_cast_char	pass	-	
 macro_char_buffer	pass	-	
+macro_closure_over_method	pass	-	
+macro_closure_receiver_once	pass	-	
 macro_constant_tags	pass	-	
 macro_constant_type_test	pass	-	
 macro_ctor_clauses	fail	-	output differs
@@ -1613,6 +1615,10 @@ macro_module_class_names	fail	-	output differs
 macro_module_members	pass	-	
 macro_named_args	pass	-	
 macro_new_eta_type	fail	-	output differs
+macro_new_method_closure	pass	-	
+macro_new_method_parameters	pass	-	
+macro_new_method_return	pass	-	
+macro_new_method_shown	pass	-	
 macro_new_type_children	fail	-	error: value apply is not a member of TypeProjection
 macro_operator_symbols	pass	-	
 macro_owner_under_check	pass	-	
@@ -1639,6 +1645,7 @@ macro_quoted_inline_application	pass	-
 macro_quoted_parameter_application	pass	-	
 macro_quoted_reduced_refold	fail	-	output differs
 macro_quotes_qualifier	pass	-	
+macro_rebuilt_definition_block	pass	-	
 macro_rebuilt_extension_clauses	pass	-	
 macro_rebuilt_selections	pass	-	
 macro_receiver_copy	pass	-	
@@ -1653,6 +1660,8 @@ macro_reflect_application_order	fail	-	output differs
 macro_reflect_applied_method_type	pass	-	
 macro_reflective_arrays	pass	-	
 macro_reflective_call	pass	-	
+macro_select_unique_cast	pass	-	
+macro_select_unique_constructor	pass	-	
 macro_site_owner_trees	pass	-	
 macro_source_path	fail	-	error: type Path not found
 macro_splice_type_argument_dependency	pass	-	

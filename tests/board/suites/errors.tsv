@@ -522,6 +522,7 @@ macro_abort	pass	-
 macro_apply_function_value	pass	-	
 macro_apply_poly_unapplied	pass	-	
 macro_apply_wrong_arity	pass	-	
+macro_closure_over_super	pass	-	
 macro_files_write	pass	-	
 macro_modifiers	pass	-	
 macro_records_stale	pass	-	
@@ -529,6 +530,7 @@ macro_records_stale_shown	pass	-
 macro_report_inlined	pass	-	
 macro_same_file	pass	-	
 macro_same_file_transparent	pass	-	
+macro_select_unique_overloaded_constructor	pass	-	
 macro_selector_check	pass	-	
 mangled_names_alias_encoded_class	pass	-	
 mangled_names_duplicate_term	pass	-	

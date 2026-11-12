@@ -15,7 +15,6 @@ i11738.scala	i11738.scala:6:12: expected an identifier, found 'type'
 i12188b	Macro_1.scala:6:7:None:None: the body of MatchTest.testImpl is withheld from the products of $OUT/pos-macros/i12188b/jvm.products (elided: unstated an extractor pattern): the TASTy writer's queue of the shapes it withholds writes it (in the
 i12188c	Test_2.scala:1:20: not supported yet in a macro: a case whose pattern is no pattern tree (called by test in object MatchTest) (in the body of MatchTest.test)
 i12253	Macro_1.scala:8:7:None:None: the body of MacroUtils.extractNameFromSelectorImpl is withheld from the products of $OUT/pos-macros/i12253/jvm.products (elided: unstated a reference to the body's u$0 the body does not define): the TASTy writer
-i12309	Test_2.scala:2:3: not supported yet in a macro: the method getResult is selected without its arguments (called by test in object TestMacro) (in the body of TestMacro.test)
 i12440.scala	i12440.scala:9:10: only classes can have declared but undefined members
 i12850	Test_2.scala:1:12: exception in macro: java.util.NoSuchElementException: method scala.Some.unapply not found (called by foo in object Macros_1$package) (in the body of Macros_1$package.foo)
 i13376a.scala	i13376a.scala:5:44: type mismatch: found Expr[C], required Expr[C{def foo: x.T}]

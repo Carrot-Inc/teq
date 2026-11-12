@@ -28,7 +28,7 @@ neg/22145g.scala	same
 neg/22550.scala	syntax	expected {}, found {}
 neg/22550b.scala	syntax	expected {}, found {}
 neg/24782.scala	same	
-neg/25198	same	
+neg/25198	accepts	
 neg/25682.scala	syntax	expected end of statement, found {}
 neg/25724	accepts	
 neg/26037.scala	accepts	
@@ -2055,7 +2055,7 @@ pos/22219.scala	accepts
 pos/22219b.scala	accepts	
 pos/23056.scala	rejects	value {} is not a member of {}
 pos/24707	oos	java
-pos/25198	rejects	exception in macro: scala.MatchError: List(List()) (of class scala.$colon$colon) (called by foo in object Macros)
+pos/25198	accepts	
 pos/26211.scala	accepts	
 pos/26238-min.scala	accepts	
 pos/26238.scala	rejects	cannot resolve import

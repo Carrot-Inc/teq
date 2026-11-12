@@ -169,6 +169,9 @@ pub enum PendingKind {
     Ctor(TypeId),
     /// A bare reference to a class or a package, `Ident(Tuple2)` in the tree of a tuple literal.
     Ref(SymRef),
+    /// `Closure(meth, None)` over the reference to a method that is the selection's receiver: the
+    /// method's function value.
+    Closure,
 }
 
 type A<'v> = &'v [Value];
@@ -1962,6 +1965,8 @@ impl<'a, 't> Interp<'a, 't> {
                         View::Select(inner, self.ctor_sym(ty), self.typer.interner.intern("<init>"))
                     }
                     (_, PendingKind::Ref(r)) => View::Ident(r),
+                    (Some(meth), PendingKind::Closure) => View::Closure(meth),
+                    (None, PendingKind::Closure) => View::Ident(SymRef::None),
                 }
             }
         })
@@ -2379,6 +2384,15 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                     lists.push(ArgList { args: srcs, using: false, span, fun: ArgList::NO_FUN });
                 }
+                // `TypeApply(Select.unique(x, "asInstanceOf"), List(T))`: the member of `Any` with one type
+                // parameter (`Definitions.Any_asInstanceOf`), the cast the typer makes of a written one.
+                if name == crate::names::AS_INSTANCE_OF && lists.is_empty() {
+                    if let [t] = p.targs.as_slice() {
+                        let (te, ty) = self.typer.lower_cast(recv, recv_ty, *t, span);
+                        self.typer.prog.set_type(te, ty);
+                        return Ok(te);
+                    }
+                }
                 // `!b` rebuilt by a macro: the builtin's prefix operator.
                 if lists.is_empty() {
                     if let Some((te, ty)) = self.typer.prim_op_on(recv, recv_ty, name, None, &[], span, None) {
@@ -2426,6 +2440,10 @@ impl<'a, 't> Interp<'a, 't> {
                 let shown = self.symbol_name(r);
                 self.unsupported(format!("a reference to {} where a term was expected", shown))
             }
+            PendingKind::Closure => match p.recv {
+                Some(meth) if !applied => self.method_closure(meth),
+                _ => self.unsupported("a closure applied as a method"),
+            },
             PendingKind::New(ty) | PendingKind::Ctor(ty) => {
                 let ty = self.constructed_type(ty, &p.targs);
                 let Some(c) = self.typer.class_of(ty) else {
@@ -2675,6 +2693,14 @@ impl<'a, 't> Interp<'a, 't> {
                     PendingKind::Ref(_) => ANY,
                     PendingKind::Named(_) => ANY,
                     PendingKind::Operator(_, method, _) => method,
+                    PendingKind::Closure => match p.recv {
+                        Some(meth) => {
+                            let params = self.closure_param_types(meth)?;
+                            let ret = self.tree_type(meth)?;
+                            self.typer.fun_type(&params, ret)
+                        }
+                        None => ANY,
+                    },
                 }
             }
             TreeRef::Def(s) | TreeRef::Member(s) => self.typer.sig_of(s).ret,
@@ -3017,7 +3043,7 @@ impl<'a, 't> Interp<'a, 't> {
                 PendingKind::Sym(s) => SymRef::Term(s),
                 PendingKind::New(ty) | PendingKind::Ctor(ty) => self.ctor_sym(ty),
                 PendingKind::Operator(..) => SymRef::Operator(self.canonical_operator(i)?),
-                PendingKind::Named(_) => SymRef::None,
+                PendingKind::Named(_) | PendingKind::Closure => SymRef::None,
                 PendingKind::Ref(r) => r,
             },
             // An application's symbol is its function's (`GenericApply`'s denotation, `Trees`).
@@ -3177,6 +3203,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             PendingKind::Operator(_, method, _) => ApplyTarget::Method(Clauses::Method(method)),
             PendingKind::Named(_) | PendingKind::Ref(_) => ApplyTarget::Resolved,
+            PendingKind::Closure => ApplyTarget::NotMethod,
         })
     }
 
@@ -3591,6 +3618,31 @@ impl<'a, 't> Interp<'a, 't> {
         if let [TreeRef::LambdaDef(e)] = stats[..] {
             return Ok(TreeRef::Expr(e));
         }
+        // A method's definition and the closure over it are a lambda to dotty (`Lambda.unapply`:
+        // `Block((ddef @ DefDef(..)) :: Nil, Closure(meth, _)) if ddef.symbol == meth.symbol`), and teq's
+        // lambda is that block: the definition's parameters and body. A body that may call the method, or
+        // return from it, keeps the definition.
+        if let ([TreeRef::Fun(f)], TreeRef::Pending(i)) = (&stats[..], expr) {
+            let (sym, params, body) = {
+                let fun = &self.prog().funs[f.idx()];
+                (fun.sym, fun.params.clone(), fun.body)
+            };
+            let closed = match self.pending_of(i)? {
+                Pending { recv: Some(TreeRef::Pending(m)), kind: PendingKind::Closure, .. } => {
+                    matches!(self.pending_of(m)?, Pending { recv: None, kind: PendingKind::Sym(s), .. } if s == sym)
+                }
+                _ => false,
+            };
+            if let (true, Some(body)) = (closed, body) {
+                if !self.expr_mentions(body, sym) {
+                    let ty = self.tree_type(expr)?;
+                    let pl = self.typer.prog.syms(&params);
+                    let te = self.typer.prog.add(TExpr::Lambda(pl, body));
+                    self.typer.prog.set_type(te, ty);
+                    return Ok(TreeRef::Expr(te));
+                }
+            }
+        }
         let mut items: Vec<TStmt> = Vec::new();
         for s in stats {
             items.push(match s {
@@ -3609,6 +3661,107 @@ impl<'a, 't> Interp<'a, 't> {
         let te = self.typer.prog.add(TExpr::Block(l, res));
         self.typer.prog.set_type(te, ty);
         Ok(TreeRef::Expr(te))
+    }
+
+    /// The parameter types of the method a closure is over, as its receiver's class has them.
+    fn closure_param_types(&mut self, meth: TreeRef) -> R<Vec<TypeId>> {
+        let TreeRef::Pending(i) = meth else { return self.unsupported("a closure over a tree that is no method reference") };
+        let p = self.pending_of(i)?;
+        let PendingKind::Sym(s) = p.kind else { return self.unsupported("a closure over a tree that is no method reference") };
+        let sig = self.typer.sig_arc(s);
+        let mut subst: Subst = Vec::new();
+        if let (Some(r), Owner::Class(owner)) = (p.recv, self.syms().sym(s).owner) {
+            let rty = self.tree_type(r)?;
+            if let Some(base) = self.typer.base_type(rty, owner) {
+                if let Type::Class(_, bargs) = self.typer.types.get(base) {
+                    let items = self.typer.types.items(bargs).to_vec();
+                    let tparams = self.syms().class(owner).tparams.clone();
+                    subst.extend(tparams.into_iter().zip(items));
+                }
+            }
+        }
+        Ok(sig.clauses.iter().flat_map(|c| c.params.iter()).map(|p| self.typer.types.subst(p.ty, &subst)).collect())
+    }
+
+    /// The function value of a closure over a method reference: the lambda of the method's
+    /// parameters that applies it, after the receiver's value, which the closure takes once,
+    /// where it is made (the method's qualifier is evaluated with dotty's `Closure` node).
+    fn method_closure(&mut self, meth: TreeRef) -> R<TExprId> {
+        let TreeRef::Pending(i) = meth else { return self.unsupported("a closure over a tree that is no method reference") };
+        let p = self.pending_of(i)?;
+        let span = self.macro_ctx.as_ref().map_or(Span::default(), |c| c.site_span);
+        let mut held: Option<TStmt> = None;
+        let recv = match p.recv {
+            Some(r) => {
+                let value = self.materialize(r)?;
+                // `this` has no evaluation; an object's reference has its initializer's.
+                if matches!(self.prog().expr(value), TExpr::This) {
+                    Some(TreeRef::Expr(value))
+                } else {
+                    let ty = self.tree_type(TreeRef::Expr(value))?;
+                    let local = self.typer.fresh_local("recv", ty, span);
+                    held = Some(TStmt::Val(local, value));
+                    let e = self.typer.prog.add(TExpr::Local(local));
+                    self.typer.prog.set_type(e, ty);
+                    Some(TreeRef::Expr(e))
+                }
+            }
+            None => None,
+        };
+        let callee = self.pending(Pending { recv, ..p });
+        let param_tys = self.closure_param_types(callee)?;
+        let params: Vec<SymId> = param_tys.iter().map(|&t| self.typer.fresh_local("x", t, span)).collect();
+        let mut refs = Vec::with_capacity(params.len());
+        for (&p, &ty) in params.iter().zip(&param_tys) {
+            let e = self.typer.prog.add(TExpr::Local(p));
+            self.typer.prog.set_type(e, ty);
+            refs.push(TreeRef::Expr(e));
+        }
+        let applied = self.reflect_apply(callee, refs)?;
+        let body = self.materialize(applied)?;
+        let ret = self.tree_type(TreeRef::Expr(body))?;
+        let pl = self.typer.prog.syms(&params);
+        let lambda = self.typer.prog.add(TExpr::Lambda(pl, body));
+        let ty = self.typer.fun_type(&param_tys, ret);
+        self.typer.prog.set_type(lambda, ty);
+        let Some(held) = held else { return Ok(lambda) };
+        let l = self.typer.prog.stmts.push_slice(&[held]);
+        let te = self.typer.prog.add(TExpr::Block(l, lambda));
+        self.typer.prog.set_type(te, ty);
+        Ok(te)
+    }
+
+    /// Whether an expression may call the local method `s` or return from it: every node's parts,
+    /// and a node whose parts are not all expressions of its own (a match, a try, a local class's
+    /// instance) taken to.
+    fn expr_mentions(&self, e: TExprId, s: SymId) -> bool {
+        let any = |l: crate::ast::ListRef| self.prog().expr_list(l).iter().any(|&x| self.expr_mentions(x, s));
+        match self.prog().expr(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null => false,
+            TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => false,
+            TExpr::Field(x, _) | TExpr::Unary(_, x) | TExpr::ToStr(x, _) | TExpr::TypeTest(x, _) | TExpr::Cast(x, _, _) | TExpr::Index(x, _) => self.expr_mentions(x, s),
+            TExpr::JsSelect(x, _) | TExpr::Spread(x) | TExpr::Throw(x, _) | TExpr::Lambda(_, x) => self.expr_mentions(x, s),
+            TExpr::CallStatic(f, l) => f == s || any(l),
+            TExpr::CallMethod(x, _, l) | TExpr::CallClosure(x, l) => self.expr_mentions(x, s) || any(l),
+            TExpr::New(c, l) => !self.typer.is_static_owner(self.syms().class(c).owner) || any(l),
+            TExpr::StrConcat(l) | TExpr::Js(_, l) | TExpr::SeqLit(l) | TExpr::ArrayLit(l) => any(l),
+            TExpr::If(c, x, y) => self.expr_mentions(c, s) || self.expr_mentions(x, s) || y.is_some_and(|y| self.expr_mentions(y, s)),
+            TExpr::While(x, y) | TExpr::Assign(x, y) | TExpr::Prim(_, x, y) => self.expr_mentions(x, s) || self.expr_mentions(y, s),
+            TExpr::Block(stmts, res) => {
+                let in_stmt = |st: &TStmt| match *st {
+                    TStmt::Expr(x) | TStmt::Val(_, x) => self.expr_mentions(x, s),
+                    TStmt::Fun(f) => {
+                        let fun = &self.prog().funs[f.idx()];
+                        fun.body.is_some_and(|b| self.expr_mentions(b, s)) || fun.defaults.iter().flatten().any(|&d| self.expr_mentions(d, s))
+                    }
+                    TStmt::Pat(..) => true,
+                };
+                self.prog().stmt_list(stmts).iter().any(in_stmt) || self.expr_mentions(res, s)
+            }
+            // A `return` is the method's: without its definition it would leave the enclosing one.
+            TExpr::Return(_) => true,
+            TExpr::NewVia(..) | TExpr::Match(..) | TExpr::Try(_) | TExpr::ObjLit(_) | TExpr::Default(..) | TExpr::Splice(_) => true,
+        }
     }
 
     fn case_tree(&mut self, pat: TreeRef, guard: Option<TExprId>, body: TExprId) -> R<TreeRef> {
@@ -3782,6 +3935,19 @@ fn install_trees(it: &mut Table) {
     q!(it, "Reflect.Select.unique", |it, a| {
         let q = it.tree_arg(a, 1)?;
         let name = it.str_arg(a, 2)?;
+        // `Select.unique(New(tpt), "<init>")`: the constructor, a member of the class's type to dotty
+        // (`qualifier.tpe.member(name)`) and the reference `Select.apply` makes here. scalac asserts that the
+        // member is not overloaded, which a class with a second constructor's is.
+        if name.as_ref() == "<init>" {
+            if let View::New(ty) = it.view(q)? {
+                // The secondary constructors next to the primary one's symbol; a Java class's are all in the list.
+                let overloaded = |info: &crate::symbols::ClassInfo| info.ctors.len() + usize::from(info.primary_ctor.is_some()) > 1;
+                if it.typer.class_of(ty).is_some_and(|c| overloaded(&it.syms().class(c))) {
+                    return it.throw_named("AssertionError", "assertion failed: The symbol `<init>` is overloaded. The method Select.unique can only be used for non-overloaded symbols.");
+                }
+                return Ok(Value::Tree(it.pending(Pending { recv: None, kind: PendingKind::Ctor(ty), targs: Vec::new() })));
+            }
+        }
         let n = it.typer.interner.intern(&name);
         let recv = it.materialize(q)?;
         let ty = it.tree_type(TreeRef::Expr(recv))?;
@@ -4206,6 +4372,26 @@ fn install_trees(it: &mut Table) {
     });
     q!(it, "Reflect.Closure.apply", |it, a| {
         let t = it.tree_arg(a, 1)?;
+        // A closure over a reference to a method (`tpd.Closure(Nil, meth, tpt)`) is the method's function
+        // value, of the method's function type where no target type is given (`TypeAssigner.assignType` of a
+        // `Closure`: `meth.tpe.widen.toFunctionType`).
+        if let TreeRef::Pending(i) = t {
+            let p = it.pending_of(i)?;
+            if let PendingKind::Sym(s) = p.kind {
+                let sig = it.typer.sig_arc(s);
+                let plain = |c: &ClauseSig| !c.is_using && !c.is_implicit && c.params.iter().all(|p| !p.by_name && !p.repeated);
+                // An inline method has no function value (scalac: "declared as inline, but was not inlined").
+                let inline = it.syms().sym(s).mods & crate::ast::mods::INLINE != 0;
+                // `super.m` names its method statically, which no receiver held in a value does.
+                let on_super = matches!(p.recv, Some(TreeRef::Expr(r)) if matches!(it.prog().expr(r), TExpr::Super(_)));
+                if it.takes_arguments(s) && !inline && !on_super && sig.tparams.is_empty() && matches!(sig.clauses.as_slice(), [c] if plain(c)) {
+                    if it.option_item(&arg(a, 2))?.is_some() {
+                        return it.unsupported("a closure over a method with a target type");
+                    }
+                    return Ok(Value::Tree(it.pending(Pending { recv: Some(t), kind: PendingKind::Closure, targs: Vec::new() })));
+                }
+            }
+        }
         Ok(Value::Tree(t))
     });
     q!(it, "Reflect.Closure.unapply", |it, a| {
@@ -4214,6 +4400,11 @@ fn install_trees(it: &mut Table) {
             TreeRef::LambdaClosure(e) => {
                 let none = it.make_none()?;
                 it.make_tuple(vec![Value::Tree(TreeRef::LambdaRef(e)), none])
+            }
+            TreeRef::Pending(i) if matches!(it.pending_of(i)?, Pending { recv: Some(_), kind: PendingKind::Closure, .. }) => {
+                let meth = it.pending_of(i)?.recv.expect("matched");
+                let none = it.make_none()?;
+                it.make_tuple(vec![Value::Tree(meth), none])
             }
             _ => it.unsupported("Closure.unapply on a tree that is no closure"),
         }
@@ -7645,13 +7836,30 @@ fn install_symbols(it: &mut Table) {
         let ty = it.type_arg(a, 3)?;
         let n = it.typer.interner.intern(&name);
         let span = it.macro_ctx.as_ref().map_or(Span::default(), |c| c.site_span);
-        let (params, ret) = match it.typer.types.get(ty) {
-            Type::Class(c, args) if it.typer.is_function_class(c) => {
-                let items = it.typer.types.items(args).to_vec();
-                let k = items.len() - 1;
-                (items[..k].to_vec(), items[k])
+        // The type is the symbol's info (`QuotesImpl`'s `Symbol.newMethod`: `newSymbol(owner, name, flags | Method,
+        // tpe)`), and a `MethodType`'s names and types are the parameters `tpd.DefDef` makes for it.
+        let (params, ret) = match it.method_type_parts(ty)? {
+            Some(m) => {
+                if m.kind != ClauseKind::Plain {
+                    return it.unsupported("a new method whose parameters are given or implicit");
+                }
+                if it.method_type_parts(m.result)?.is_some() {
+                    return it.unsupported("a new method of more than one parameter clause");
+                }
+                if m.types.iter().any(|&t| it.typer.by_name_arg(t).is_some()) {
+                    return it.unsupported("a new method with a by-name parameter");
+                }
+                (m.names.iter().copied().zip(m.types.iter().copied()).collect::<Vec<_>>(), m.result)
             }
-            _ => (Vec::new(), ty),
+            None => match it.typer.types.get(ty) {
+                Type::Class(c, args) if it.typer.is_function_class(c) => {
+                    let items = it.typer.types.items(args).to_vec();
+                    let k = items.len() - 1;
+                    let named = items[..k].iter().enumerate().map(|(i, &t)| (it.typer.interner.intern(&format!("x{}", i)), t)).collect();
+                    (named, items[k])
+                }
+                _ => (Vec::new(), ty),
+            },
         };
         let s = it.typer.new_local_method(n, &params, ret, span);
         Ok(Value::Sym(SymRef::Term(s)))
