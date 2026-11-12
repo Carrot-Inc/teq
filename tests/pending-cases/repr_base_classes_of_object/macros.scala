@@ -4,7 +4,7 @@
 // type parameters the class's own (`Symbol.typeRef`), and a trait derives from `Object` (`derivesFrom`). teq's
 // reflection gives `scala.AnyRef` and no `Matchable`, `scala.Any` alone for the `typeRef` of a class of type
 // parameters, and no `Object` among a trait's bases to `derivesFrom` (the pass's probe names/M.scala on 39ba4cf2d, the
-// first line, a synthetic function class's as a written trait's). Pinned for the coordinator's ruling.
+// first line, a synthetic function class's as a written trait's). Pinned with scalac's answer.
 import scala.quoted.*
 object M {
  inline def inspect: String = ${ impl }

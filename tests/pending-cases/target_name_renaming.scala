@@ -2,7 +2,7 @@
 // `computeTargetName`, SymDenotations.scala 558-568): a val's getter, field and setter, a var's, a class (the type
 // arm, `str.toTypeName`) and an object (`.moduleClassName`). teq renames methods alone, and a val beside a def of its
 // name, so a scalac caller over teq's classes fails (`NoSuchMethodError tn3.C.vv()`, the adversary's probe TN3 on the
-// M2e refold). Queued as target-name-renaming, beside the erasure work (the coordinator's ruling of 28 Oct).
+// M2e refold). Queued as target-name-renaming, beside the erasure work.
 //> using platform jvm
 package target_name_renaming
 

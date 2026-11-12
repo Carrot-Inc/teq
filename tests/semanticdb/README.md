@@ -29,7 +29,7 @@ documents with them, field by field.
   javac onto the class path.
 - **A dependency's information** is what scalafix's own table answers (scalameta's `GlobalSymbolTable` over the
   class path: Javacp for a Java class, Scalacp for a Scala 2 class, nothing for a Scala 3 class, which is also what
-  another file of the build gives): the coordinator's ruling of 2026-10-21. Its golds are scalameta 4.17.4's own
+  another file of the build gives). Its golds are scalameta 4.17.4's own
   answers, added with the forms' commit that ports that table.
 - **Provenance.** A symbol names the library's own declaration: the forms are scala-library's (a job typed under the
   lean std is typed again under scala-library for them), a package object's member is `p/package.`'s, a top-level

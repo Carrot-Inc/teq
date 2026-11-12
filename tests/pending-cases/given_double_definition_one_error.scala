@@ -2,8 +2,8 @@
 // are a double definition. dotty's `<file>$package` scope keeps both symbols and reports E161 once (Namer's
 // `checkNoConflict`), and scalac 3.8.4 prints that one error. master (efddb38de3) prints one error too; the integration
 // base (cf6fd6d08) and the implicits helper's tip (93eeea276d) print two, adding "type given_Show_Box$ is already
-// defined" for the given object's module class: a TR regression. The package's entries keep one term per name. Queued:
-// cut 2 (B), the `$package` membership port (coordinator, 11:26 PST), before the eligible cache.
+// defined" for the given object's module class: a TR regression. The package's entries keep one term per name. Queued
+// with the port of the `$package` membership.
 package demo
 
 trait Show[A]:

@@ -1,5 +1,5 @@
 // A plain class whose name ends in `$` is shown without it where dotty shows a name, and teq shows it with it, pinned
-// to M10 by the coordinator's ruling of 2026-10-27. Two members of dotty decide it:
+// to M10. Two members of dotty decide it:
 // - a case class's `productPrefix` (and so its `toString`) is `SyntheticMembers.ownName`
 //   (SyntheticMembers.scala:106), `clazz.name.stripModuleClassSuffix`: scalac prints `Foo(1)` and `Foo`, teq
 //   `Foo$(1)` and `Foo$`;

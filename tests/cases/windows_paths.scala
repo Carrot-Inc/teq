@@ -1,6 +1,6 @@
 //> using platform jvm
 // os: windows
-// Windows' file system against the JDK on Windows (the coordinator's acceptance run, `teq.cmd interp`; its
+// Windows' file system against the JDK on Windows (run there with `teq.cmd interp`; its
 // expectation is the Windows JDK's): the platform's properties as the JDK names them; drive, rooted and
 // backslash paths taken apart and put together; a directory with a space and non-ASCII characters and a
 // path past 260 characters written, read and listed; a file moved, its time set and read back, and

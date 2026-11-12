@@ -1,5 +1,5 @@
 """The rows of the board for dotty's own suites at the tag 3.8.4: one per directory under tests/ that dotty's test
-sources compile or run there, as frozen with the coordinator (the table of ~/reports/board-step0-tag.md). Each
+sources compile or run there, a fixed list drawn from those sources. Each
 row: the name of its list, the path under tests/, its kind, where dotty's sources name it, scalac's flags for it,
 and how its tests are named:
 
@@ -19,8 +19,8 @@ and how its tests are named:
 
 A row with `cannot` is listed test by test and never run: the reason is its class.
 
-Left out, since they run the tests of a row once more under an option of scalac's own machinery (the frozen
-list names them): the lazy-vals allowlists (CompilationTests.scala:48, :183), posTwice's files of tests/pos
+Left out, since they run the tests of a row once more under an option of scalac's own
+machinery: the lazy-vals allowlists (CompilationTests.scala:48, :183), posTwice's files of tests/pos
 (:104-136), pickling (:201-202), parallelBackend (:378-407), the idempotency of tests/pos, best-effort over
 tests/neg, from TASTy (FromTastyTests.scala), and neg/i7575.scala a second time without language features
 (:164; the default options name none).

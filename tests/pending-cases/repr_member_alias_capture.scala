@@ -4,7 +4,7 @@
 // `C#K[Int]`, and `X` is `Int`, as scalac 3.8.4 runs it. teq replaces the member alias by its body when it is applied
 // (`Type::Member`: "a member that a prefix fixes is replaced by what it equals"): `M[[X] =>> Int, Int]`, whose case
 // `Int => f` does not determine `f`. Seam 1, the alias reference kept until dealias: moves with type-representation's
-// landing 3 (the coordinator's ruling on the pass on 25e6342fb, lane XF's F2c; ledger 54's pins).
+// landing 3.
 class C:
   type K[X] = Int
 type M[F[_], T] = F[T] match

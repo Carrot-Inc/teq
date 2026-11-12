@@ -1,5 +1,5 @@
-// The pass on fddacdde0's item 4, pinned to printstream's landing of the TypeErasure module (shared-helpers-66; the
-// coordinator's ruling of 2026-10-29, ledgers 13 and 79): an `apply` past 22 parameters whose first parameter nests 18
+// A program that waits for dotty's TypeErasure to be ported whole (the signature of deeply nested arrays):
+// an `apply` past 22 parameters whose first parameter nests 18
 // arrays, beside a base's overload that differs from it in that parameter's element type alone, the class a Function23
 // too. dotty tells the base's two alternatives apart by the parameter's signature name (`TypeErasure.sigName`'s
 // `JavaArrayType` arm, `scala.Int` with 18 `[]`) in `atSignature` and the double definition check; teq reads the name

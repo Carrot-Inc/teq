@@ -4,7 +4,7 @@
 // `scala_name`'s text (src/typer/anon.rs, `scalac_outer_accessor_name`), which would show U+FFFD for a lone unit of
 // the class's own name: a name a class file gives once its names keep their units (classfile-reader-names; table
 // (c)'s c-77 on the M2e refold). This program's first line also waits on target-name-renaming. Queued as
-// classfile-reader-names (the coordinator's ruling of 28 Oct).
+// classfile-reader-names.
 //> using platform jvm
 package outer_accessor_name_units
 

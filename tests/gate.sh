@@ -477,7 +477,7 @@ local_line() {
       result no-caps local $(($(now) - s)) $code "$(tail -1 "$out/no-caps.log")" "$file"
       ;;
     tree-paths)
-      # a machine's absolute path in a tracked file; the list of tracked files is the worktree's (git ls-files)
+      # a machine's absolute path or a workflow word in a tracked file; the list of files is the worktree's (git ls-files)
       (cd "$wt" && timeout 120 ./tests/tree-paths.sh) > "$out/tree-paths.log" 2>&1
       code=$?
       result tree-paths local $(($(now) - s)) $code "$(tail -1 "$out/tree-paths.log")" "$file"

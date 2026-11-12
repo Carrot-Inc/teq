@@ -8,8 +8,8 @@
 // Scala.js bundle built over the products outlines the getter's expansion (`tr$default$1$o...()`, emit/outline.rs),
 // where the whole bundle writes it in place (bundle). The same on integration a097de53d9 and on the tip of the
 // workers exports helper's push 9. Reduced from tests/modules/exporttransparentdefault, whose four known.txt lines
-// (classes, subset, check-lean-whole, bundle) this and its sibling pin replace, by the coordinator's ruling of 14:38
-// PST.
+// (classes, subset, check-lean-whole, bundle) this and its
+// sibling pin replace.
 package etrc
 
 @main def run(): Unit =

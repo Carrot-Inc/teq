@@ -1,6 +1,6 @@
 //> using platform jvm
 // os: windows
-// Windows' processes against the JDK on Windows (the coordinator's acceptance run, `teq.cmd interp`; its
+// Windows' processes against the JDK on Windows (run there with `teq.cmd interp`; its
 // expectation is the Windows JDK's): the environment a child inherits, an entry replaced and one removed
 // by keys of another case; a child's absolute working directory, with a space; the command line a child
 // is given for arguments with spaces, an empty one and one ending in a backslash, as `cmd /c echo` shows

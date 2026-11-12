@@ -62,7 +62,7 @@ class Outer:
   class Inner
 
 class Holder(val n: Int)
-// The encoding record's paths (the coordinator's check of f719a99f0b): a definition literally named `a/b` and a `b`
+// The encoding record's paths: a definition literally named `a/b` and a `b`
 // inside an `a`, each with the same method and body, so a line that joins the path's names with `/` gives their
 // children's lines one value.
 object Paths:

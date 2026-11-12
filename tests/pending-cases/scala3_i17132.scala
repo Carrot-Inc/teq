@@ -6,7 +6,7 @@
 // (TypeErasure.scala:217, `apply` 779, `checkedSuperType` 902), whose `translucentSuperType` normalizes the match
 // type; with `-scalajs` too. teq writes no generic signature (src/jvm/classfile.rs) and its erasure of a parent reads
 // no type argument, so no point of teq's reduces it: pending until the JVM backend's generic signatures, queued as
-// their own part after the stop (the coordinator's ruling on 97f0487ac; the harness pins neg/i17132 to it). teq
+// their own part (the harness pins neg/i17132 to it). teq
 // rejected it on 861d8acf1 only incidentally (a recursion while bound-checking the case pattern's
 // `MultiTransformation[t1, t2]`, which dotty never checks: PostTyper's `Mode.Pattern`, round 22).
 

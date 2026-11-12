@@ -3,7 +3,7 @@
 // scalac 3.8.4 crashes in MatchTypeCaseSpec.analyze (Types.scala:5427), with no diagnostic before its MatchError.
 // Whole-file crash log:
 // (scalac's stack trace of the MatchError; the log is not kept in the tree)
-// Coordinator ruling, 2026-11-04 04:55 UTC: exception to the capture rule because scalac crashes.
+// The expectation is teq's own, scalac having no diagnostic to record: it crashes.
 // Require the primary diagnostic at 12:36, a failing compilation and recovery without a crash;
 // the recovered case has ErrorType, so no secondary diagnostic is required.
 class Inv[X]

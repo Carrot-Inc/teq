@@ -3,7 +3,7 @@
 // (`nonDependentResultApprox`, `SubstApproxMap` over `c := Nothing..A`), is `A#v.type`, a singleton of `O.s.type`, so
 // `f` conforms to `A => O.s.type`, as scalac 3.8.4 accepts it. teq's `Select` takes a path prefix, so a term member
 // through the type `A` is widened to `String`, and `f` is refused (the adversary of the pass on 25e6342fb, X6). Moves
-// with type-representation's landing 4, references (the coordinator's ruling on the fold of 27 Oct, R12.2-p31-4).
+// with type-representation's landing 4, references.
 object O:
   val s: String = "s"
 class A:

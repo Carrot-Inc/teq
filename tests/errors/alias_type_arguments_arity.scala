@@ -11,7 +11,7 @@ object V:
 // E023): an alias applied to fewer or more arguments than its parameters. scalac 3.8.4 reports the three at 4:19, 5:19
 // and 6:20 with these messages; too many arguments apply the first ones (`Many[String, Int]`'s `R` is `Int`), too few
 // make an application scalac's comparer has above and below every type (`few` is accepted). teq reported none before
-// the parser mutant m0881's ruling (the coordinator's on 97f0487ac), applying the alias to what it was given.
+// this check, applying the alias to what it was given.
 // expect: alias_type_arguments_arity.scala:4:20: error: Not enough type arguments for V.Aux[T, P, R0]
 // expect: alias_type_arguments_arity.scala:5:20: error: Not enough type arguments for V.Aux[T, P, R0]
 // expect: alias_type_arguments_arity.scala:6:21: error: Too many type arguments for V.Aux[T, P, R0]

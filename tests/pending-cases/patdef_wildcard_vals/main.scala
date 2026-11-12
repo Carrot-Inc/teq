@@ -1,5 +1,5 @@
-// A pattern definition of no variable is makePatDef's general arm (Desugar.scala 1520-1670), checked against 3.8.4 by
-// the coordinator's ruling of 2026-10-27, which pins it to M10 with the bound whole (makePatDef's shape):
+// A pattern definition of no variable is makePatDef's general arm (Desugar.scala 1520-1670), checked against 3.8.4
+// and pinned to M10 with the bound whole (makePatDef's shape):
 // - `val _ = e`: TreeInfo.scala:518's IdPattern refuses a plain wildcard, so it binds no variable and lowers to
 //   `e match { case _ => () }` (Desugar.scala:1613): no val, no field;
 // - `val _: T = e` is an IdPattern through the ascription and takes `WildcardParamName.fresh()` (1520): a val `_$N`;

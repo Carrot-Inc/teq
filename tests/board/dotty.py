@@ -13,8 +13,8 @@
   --show TEST         run one test of the rows named and print what teq and the program printed
   --rows              print the rows and where dotty's sources name them
 
-The rows are rows.py's: one per directory dotty's test sources compile or run at the tag (the list frozen with
-the coordinator, ~/reports/board-step0-tag.md), each with dotty's flags and its kind. A test is vulpix's unit
+The rows are rows.py's: one per directory dotty's test sources compile or run at the tag (a fixed list, drawn
+from those sources), each with dotty's flags and its kind. A test is vulpix's unit
 (compiler/test/dotty/tools/vulpix/ParallelTesting.scala, compileFilesInDir): a source file directly in the
 directory, or a subdirectory holding a source directly, its files grouped by their `_N` suffix and the groups
 compiled in order, each against the output of those before it.
