@@ -2597,6 +2597,23 @@ impl<'a> Worker<'a> {
         lists: &[ArgList],
         span: Span,
     ) -> Option<(TExprId, TypeId)> {
+        self.universal_member_over(recv, recv_ty, name, targs, lists, None, span)
+    }
+
+    /// `universal_member`, an enum's `valueOf` or `fromOrdinal` taking `param` where one is given: its argument
+    /// typed already, which no list holds, the parameter of the reference without arguments
+    /// (`enum_lookup_value`, the one caller that gives one).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn universal_member_over(
+        &mut self,
+        recv: TExprId,
+        recv_ty: TypeId,
+        name: Name,
+        targs: Option<ListRef>,
+        lists: &[ArgList],
+        param: Option<TExprId>,
+        span: Span,
+    ) -> Option<(TExprId, TypeId)> {
         let no_args = lists.is_empty() || (lists.len() == 1 && lists[0].args.is_empty());
         let one_arg = lists.len() == 1 && lists[0].args.len() == 1;
         let recv_class = self.dealias(recv_ty);
@@ -2808,11 +2825,17 @@ impl<'a> Worker<'a> {
                     }
                     return Some((self.enum_lookup_held(held, receiver, te, array), array));
                 }
-                if !one_arg {
-                    return None;
-                }
-                let expected = if name == names::VALUE_OF { self.b.t_string } else { self.b.t_int };
-                let (key, _) = self.type_expr(arg(0)?, Some(expected));
+                let key = match param {
+                    Some(key) => key,
+                    None => {
+                        if !one_arg {
+                            return None;
+                        }
+                        let expected = if name == names::VALUE_OF { self.b.t_string } else { self.b.t_int };
+                        let (key, _) = self.type_expr(arg(0)?, Some(expected));
+                        key
+                    }
+                };
                 let refs = self.prog.list(&refs);
                 let refs = self.prog.add(TExpr::ArrayLit(refs));
                 let (template, keys): (&str, Vec<TExprId>) = if name == names::VALUE_OF {

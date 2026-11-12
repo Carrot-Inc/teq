@@ -91,6 +91,7 @@ enumcasedefaults	pass	-
 enumcompanionbody	pass	-	
 enumcompanionfirst	pass	-	
 enumforwardcase	pass	-	
+enumlookupvalue	pass	-	
 enumnamedlift	pass	-	
 enumorder	pass	-	
 enumordinalfirst	pass	-	

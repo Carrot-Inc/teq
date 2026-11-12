@@ -7218,6 +7218,45 @@ impl<'a> Worker<'a> {
         (expanded, ty)
     }
 
+    /// An enum companion's `valueOf` or `fromOrdinal` referred to without arguments through a stable path:
+    /// the function of its one argument, the tree of the written `(x: String) => E.valueOf(x)` or
+    /// `(i: Int) => E.fromOrdinal(i)`. dotty has the two as methods of the companion
+    /// (`DesugarEnums.enumScaffolding`, DesugarEnums.scala 136–138; `fromOrdinalMeth`, 278–280), and a method
+    /// referred to without arguments is eta-expanded (`Typer.adaptNoArgsUnappliedMethod`, Typer.scala 4780;
+    /// `EtaExpansion.etaExpand`, EtaExpansion.scala 294–321); teq recognises the applied call
+    /// (`universal_member`), which makes the body here and says where the enum has the lookup. None for a
+    /// receiver that is no idempotent path (a `var`, a by-name or an inline parameter on the way, a call, a
+    /// block), which the expansion evaluates once before the closure (`liftApp`, EtaExpansion.scala 131–135;
+    /// `liftNonIdempotentPrefix`, 151–152) and the written lambda at each call, and where the written lambda
+    /// would not be typed as a function: under an expected `Unit`, a partial function or a SAM type that is no
+    /// function type.
+    fn enum_lookup_value(&mut self, recv: TExprId, recv_ty: TypeId, name: Name, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
+        if !self.is_path(recv) || !self.is_idempotent(recv) {
+            return None;
+        }
+        if let Some(exp) = expected {
+            if self.dealias_canonical(exp) == self.b.t_unit || self.as_partial_function(exp).is_some() || (self.as_function(exp).is_none() && self.sam_method(exp, 1).is_some()) {
+                return None;
+            }
+        }
+        let pty = if name == names::VALUE_OF { self.b.t_string } else { self.b.t_int };
+        let local = self.indexed_local("x", 0, pty, span);
+        let arg = self.prog.add(TExpr::Local(local));
+        self.prog.set_type(arg, pty);
+        let (body, ret) = self.universal_member_over(recv, recv_ty, name, None, &[], Some(arg), span)?;
+        // The call's type and source, which the typed applied call has on its node: the pickle of a body reads
+        // the enum from the type, a class file its line from the source.
+        self.prog.set_type(body, ret);
+        if self.prog.records_spans() && self.prog.span_of(body).is_none() {
+            self.prog.set_span(body, self.env.file, span);
+        }
+        let ty = self.fun_type(&[pty], ret);
+        let ps = self.prog.syms(&[local]);
+        let lambda = self.prog.add(TExpr::Lambda(ps, body));
+        self.prog.set_type(lambda, ty);
+        Some((lambda, ty))
+    }
+
     /// A builtin operator selected with no argument where a function of one parameter is
     /// expected, eta-expanded as dotc expands the method it is a member of: `0 <` under
     /// postfixOps, or `'-'.!=`, is `(a0: Int) => 0 < a0`, an unstable receiver evaluated once
@@ -8661,6 +8700,13 @@ impl<'a> Worker<'a> {
             return r;
         }
         lists = Some(l);
+        // An enum companion's `valueOf` or `fromOrdinal` referred to without arguments, where nothing else of
+        // that name was found: the function of its one argument.
+        if matches!(name, names::VALUE_OF | names::FROM_ORDINAL) && targs.is_none() && lists.as_ref().is_some_and(|l| l.is_empty()) {
+            if let Some(r) = self.enum_lookup_value(recv, recv_ty, name, span, expected) {
+                return r;
+            }
+        }
         // The receiver shown widened (`NotAMember`'s `site.widen`): `Int` for a `0`.
         let msg = format!("value {} is not a member of {}", self.name_str(name), self.show(self.widen_lit(recv_ty)));
         // What a class whose header, or an ancestor's, the parser could not complete lacks is

@@ -118,7 +118,7 @@ i6197d.scala	fail	-	check: line 1: the .check has '6: Pattern Match Exhaustivity
 i6255.scala	pass	-	
 i6255b.scala	fail	-	check: line 1: the .check has '3: Pattern Match Exhaustivity: _: scala.quoted.Expr[Int]', teq gives nothing
 i6490.scala	fail	-	check: line 1: the .check has '8: Pattern Match Exhaustivity: Foo()', teq gives '8: Pattern Match Exhaustivity: _: Foo'
-i7186.scala	fail	-	check: line 1: the .check has nothing, teq gives '214: (error) value valueOf is not a member of Temporaries'
+i7186.scala	pass	-	
 i8203.scala	fail	-	check: line 1: the .check has nothing, teq gives '4: (error) illegal inheritance: self type Pink of case Pink does not conform to self type Product of parent trait Product'
 i8690.scala	pass	-	
 i8690b.scala	pass	-	

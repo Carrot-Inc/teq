@@ -553,6 +553,7 @@ enum_extends_class	pass	-
 enum_from_ordinal_mixed	pass	-	
 enum_from_ordinal_receiver	pass	-	
 enum_gadt	pass	-	
+enum_lookup_method_value	pass	-	
 enum_lookups	fail	-	output differs
 enum_mixed_from_ordinal	pass	-	
 enum_nested	pass	-	

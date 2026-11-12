@@ -577,6 +577,7 @@ message_disambiguation.check	fail	-	< tests/errors/message_disambiguation.scala:
 message_gadt_deferred	pass	-	
 message_gadt_deferred.check	fail	-	< tests/errors/message_gadt_deferred.scala:7:26: error: Found: (t : T)
 method_type_arg_check_bounds	fail	-	missing '14:13: error: type argument Int does not conform to upper bound [_] =>> Any'
+method_value_as_pattern	fail	-	exit code 0
 mirror_bounded_elems	pass	-	
 mirror_false_mono_type	pass	-	
 mirror_from_product_override	pass	-	
@@ -861,6 +862,7 @@ union_instantiation	pass	-
 union_joins	pass	-	
 union_widening	pass	-	
 unit_discard	pass	-	
+unit_result_method_value	fail	-	exit code 0
 universal_trait_anyref	pass	-	
 unreachable	pass	-	
 unreachable_deep_product	pass	-	

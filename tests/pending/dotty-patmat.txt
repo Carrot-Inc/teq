@@ -70,7 +70,6 @@ i6197c.scala	check: line 1: the .check has '3: Match case Unreachable', teq give
 i6197d.scala	check: line 1: the .check has '6: Pattern Match Exhaustivity: _: Array[String]', teq gives nothing
 i6255b.scala	check: line 1: the .check has '3: Pattern Match Exhaustivity: _: scala.quoted.Expr[Int]', teq gives nothing
 i6490.scala	check: line 1: the .check has '8: Pattern Match Exhaustivity: Foo()', teq gives '8: Pattern Match Exhaustivity: _: Foo'
-i7186.scala	check: line 1: the .check has nothing, teq gives '214: (error) value valueOf is not a member of Temporaries'
 i8203.scala	check: line 1: the .check has nothing, teq gives '4: (error) illegal inheritance: self type Pink of case Pink does not conform to self type Product of parent trait Product'
 i8757.scala	check: line 1: the .check has '8: Pattern Match Exhaustivity: C()', teq gives nothing
 i8922.scala	check: line 1: the .check has nothing, teq gives '28: Match case Unreachable'
