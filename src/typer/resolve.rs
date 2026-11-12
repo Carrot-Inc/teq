@@ -4336,16 +4336,22 @@ impl<'a> Worker<'a> {
                 let checked = annot.map_or(true, |k| k.is_some_and(|k| self.class_path(k) == "scala.annotation.internal.RuntimeChecked"));
                 let t = if inner != ERROR && checked && !matches!(self.types.get(inner), Type::Annotated(_)) { self.types.mk(Type::Annotated(inner)) } else { inner };
                 // Under semantic typing the annotation is retained, dotty's `AnnotatedType` (TypeOps reads its class),
-                // with the types of its arguments' trees, which a map maps (`Annotation.mapWith`).
+                // with the types of its arguments' trees, which a map maps (`Annotation.mapWith`). For SemanticDB's
+                // occurrences alone (`sem_records`) the arguments' trees are typed as well and nothing is retained: a
+                // definition inside them (`T @Ann({ type L = T; 1 })`) is a declaration of the document.
                 match annot {
-                    Some(Some(k)) if self.semantic && t != ERROR => {
+                    Some(Some(k)) if (self.semantic || self.sem_records) && t != ERROR => {
                         let file = self.env.file;
                         let instances = &self.ast(file).annotated_instances;
                         let at = instances.partition_point(|&(x, _)| x < id);
                         let instance = instances.get(at).filter(|&&(x, _)| x == id).map(|&(_, e)| e);
                         let args = instance.map(|e| self.annotation_argument_types(file, e)).unwrap_or_default();
-                        let args = self.types.list(&args);
-                        self.types.retained(t, Retention::Annot(k, args))
+                        if self.semantic {
+                            let args = self.types.list(&args);
+                            self.types.retained(t, Retention::Annot(k, args))
+                        } else {
+                            t
+                        }
                     }
                     _ => t,
                 }

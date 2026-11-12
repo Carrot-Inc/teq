@@ -1,7 +1,8 @@
 //! SemanticDB's symbols at the names a rule of `teq fix` asks about (docs/FIX.md, "The rule API"): the port of dotty
 //! 3.8.4's `SemanticSymbolBuilder.symbolName` (SemanticSymbolBuilder.scala 204-286: `addName`, `addOwner`,
 //! `addOverloadIdx`, `addDescriptor`) and of `Scala3.isGlobal` (Scala3.scala 258-268) over what the typer resolved
-//! each name to, the navigation index's records of the semantic typing and the declarations of the document.
+//! each name to, the navigation index's records with SemanticDB's own (`Worker::sem_records`) and the declarations of the
+//! document.
 //!
 //! What is answered is what the three semantic rules teq ships ask: the symbols of the occurrences at a name's exact
 //! range, compared normalized (the owner chain's names) or, for a method of an object, exactly. A local symbol is

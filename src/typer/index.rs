@@ -96,7 +96,7 @@ pub struct Index {
     /// The files where an outermost inline or macro expansion was made, by its call site's file, in the order met:
     /// where `teq fix`'s NoUnusedImports removes nothing (docs/FIX.md, "NoUnusedImports").
     pub expanded: Vec<FileId>,
-    /// Under the semantic typing (`Worker::semantic`, `teq fix`'s SemanticDB service): the packages named in the
+    /// For SemanticDB's occurrences (`Worker::sem_records`, `teq fix`'s SemanticDB service): the packages named in the
     /// paths of imports and of qualified names, each at its name's span, which no record's target holds
     /// (`semanticdb::symbol`).
     pub packages: Vec<(FileId, Span, PkgId)>,
@@ -733,7 +733,7 @@ impl<'a> Worker<'a> {
         // `Obj.m`: the object, which a static path resolves without typing it.
         if let Expr::Select(q, _) = ast.expr(head) {
             self.index_static_prefix(file, q, te);
-            if self.semantic {
+            if self.sem_records {
                 let owner = match target {
                     Target::Sym(s) => Some(self.syms.sym(s).owner),
                     Target::Class(c) => Some(self.syms.class(c).owner),
@@ -1422,7 +1422,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Under the semantic typing: the packages a qualified name spells before what it reaches, `java.math` of
+    /// For SemanticDB's occurrences: the packages a qualified name spells before what it reaches, `java.math` of
     /// `java.math.BigDecimal.ONE`, each segment matched with the owner it names from the reached definition
     /// outwards, as dotty's tree has a `Select` or an `Ident` of each (`ExtractSemanticDB.traverse`, 407-422).
     fn index_owner_path(&mut self, file: FileId, mut q: ExprId, mut owner: Owner) {
@@ -1455,9 +1455,9 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Under the semantic typing: the package `p` named at `span`.
+    /// For SemanticDB's occurrences: the package `p` named at `span`.
     fn index_package(&mut self, file: FileId, span: Span, p: PkgId) {
-        if !self.semantic || span.end <= span.start || p == ROOT_PKG || !self.indexed(file) {
+        if !self.sem_records || span.end <= span.start || p == ROOT_PKG || !self.indexed(file) {
             return;
         }
         if let Some(ix) = self.index.as_mut() {
@@ -1505,8 +1505,8 @@ impl<'a> Worker<'a> {
             _ => return,
         };
         self.index_record(file, span, target, Kind::Type);
-        // Under the semantic typing: the packages a qualified type name spells, `java.time` of `java.time.Instant`.
-        if self.semantic {
+        // For SemanticDB's occurrences: the packages a qualified type name spells, `java.time` of `java.time.Instant`.
+        if self.sem_records {
             let mut owner = match target {
                 Target::Class(c) => self.syms.class(c).owner,
                 Target::Alias(a) => self.syms.aliases[a.idx()].owner,
@@ -1688,8 +1688,8 @@ impl<'a> Worker<'a> {
         let target = match (target, &imp.sel) {
             (super::ImportTarget::PkgAll(p), ast::ImportSel::Name(n, _)) => super::ImportTarget::PkgMember(p, *n),
             (super::ImportTarget::ClassAll(c), ast::ImportSel::Name(n, _)) => super::ImportTarget::ClassMember(c, *n),
-            // Under the semantic typing: a named member of a stable value's type (`import v.m`).
-            (super::ImportTarget::ValueAll(v), ast::ImportSel::Name(n, _)) if self.semantic => super::ImportTarget::ValueMember(v, *n),
+            // For SemanticDB's occurrences: a named member of a stable value's type (`import v.m`).
+            (super::ImportTarget::ValueAll(v), ast::ImportSel::Name(n, _)) if self.sem_records => super::ImportTarget::ValueMember(v, *n),
             (t, _) => t,
         };
         let ast = self.ast(file);
@@ -1699,7 +1699,7 @@ impl<'a> Worker<'a> {
         if let (super::ImportTarget::ClassAll(c) | super::ImportTarget::ClassMember(c, _), Some(&last)) = (target, n.checked_sub(1).and_then(|i| names.get(i))) {
             self.index_record(file, last, Target::Class(c), Kind::Import);
         }
-        if self.semantic {
+        if self.sem_records {
             // The stable value a path ends in.
             if let (super::ImportTarget::ValueAll(v) | super::ImportTarget::ValueMember(v, _), Some(&last)) = (target, n.checked_sub(1).and_then(|i| names.get(i))) {
                 let (value, _, _) = self.import_values[v.0 as usize];
@@ -1737,9 +1737,9 @@ impl<'a> Worker<'a> {
                 self.demand_std(p, member, crate::stdindex::TERM | crate::stdindex::TYPE);
                 let entry = self.syms.entry_named(self.interner, p, member).map(|e| (e.class, e.term, e.alias, e.extensions.first().copied()));
                 match entry {
-                    Some((class, term, alias, _)) if !self.semantic => class.map(Target::Class).or(term.map(Target::Sym)).or(alias.map(Target::Alias)),
-                    None if !self.semantic => None,
-                    // Under the semantic typing a selector is what dotty records at it (`sem_selector_class`): a
+                    Some((class, term, alias, _)) if !self.sem_records => class.map(Target::Class).or(term.map(Target::Sym)).or(alias.map(Target::Alias)),
+                    None if !self.sem_records => None,
+                    // For SemanticDB's occurrences a selector is what dotty records at it (`sem_selector_class`): a
                     // class that has a term of its name, a term, an extension method; a type alone nothing.
                     Some((class, term, alias, extension)) if class.is_some() || term.is_some() || alias.is_some() || extension.is_some() => {
                         class.and_then(|c| self.sem_selector_class(c)).or(term.or(extension).map(Target::Sym))
@@ -1771,10 +1771,10 @@ impl<'a> Worker<'a> {
             super::ImportTarget::ClassMember(c, _) => {
                 let info = self.syms.class(c);
                 let (term, nested, alias) = (info.members.get(&member).copied(), info.nested.get(&member).copied(), info.type_aliases.get(&member).copied());
-                if !self.semantic {
+                if !self.sem_records {
                     term.map(Target::Sym).or(nested.map(Target::Class)).or(alias.map(Target::Alias))
                 } else {
-                    // Under the semantic typing a selector is what dotty records at it (`sem_selector_class`): a
+                    // For SemanticDB's occurrences a selector is what dotty records at it (`sem_selector_class`): a
                     // term the class declares, an extension method among them, or a class that has a term of its
                     // name; a type alone nothing; else a member the class inherits (`import ^.cls`, an object's of
                     // its trait).
@@ -1790,8 +1790,8 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
-            // Under the semantic typing: a member of a stable value's type (`import v.m`).
-            super::ImportTarget::ValueMember(v, _) if self.semantic => {
+            // For SemanticDB's occurrences: a member of a stable value's type (`import v.m`).
+            super::ImportTarget::ValueMember(v, _) if self.sem_records => {
                 let (value, _, _) = self.import_values[v.0 as usize];
                 let t = self.sig_arc(value).ret;
                 self.quietly(|w| w.find_member(t, member)).map(|(s, _)| Target::Sym(s))

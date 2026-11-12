@@ -57,6 +57,13 @@ for the document a rule asks about:
 
 ### Ruling 1: the service (no dotty mechanism: a chore of teq's bridge, stated as a contract)
 
+The code is this ruling's: the service answers from the round's own typer and types nothing; a round whose rules may
+ask is typed by one worker until the records of a typing of several workers are one worker's (src/fix/engine.rs,
+`ASK_NOTHING`). After fold 8 the service for a time typed the round's texts a second time, by one worker keeping the
+retained forms of section 6; those forms are made under `TEQ_FIX_SEMANTICDB`'s dump alone (`Worker::semantic`), and
+the index's records of SemanticDB's occurrences have a switch of their own (`Worker::sem_records`), which the round's
+typing sets where a rule that may ask is configured.
+
 - Owner: `typed` keeps its locals (asts, sources, interner, Typer: `Typer<'a>` borrows them, src/typer/mod.rs
   973-975, 2237-2241) and, after `typer.run()` and the views, sends the `Vec<DocView>` (or the rendered errors) on a
   channel and serves `SemQuery` until `Close` or the channel's end; `round` (src/fix/engine.rs 407-455) no longer
@@ -734,7 +741,7 @@ The table's own decisions, as the ruling leaves them:
 | `src/fix/engine.rs` `round`/`typed`: the typing thread serves until `Close`; `ToRules::Doc` carries the round's `SemLink` | `drive_rounds` (engine.rs 191-260), `rule_thread` (752-936), tests/fix.scala's `Verb` cases (refusals, round two, a rule failing on a second job: 185-406); `TEQ_FIX_TRACE` timing slots (148-171) gain an `answers` slot |
 | `src/fix/host.rs` `Host.sem: Option<SemLink>` | the new natives in `src/interp/fix.rs` (117-325 `install`), `on_doc` generation check |
 | `src/fix/engine.rs` `typed` under R-STD: a job typed under the lean std is typed again under scala-library on its round's first `symbol`/`info` query, on a serving thread of its own (the build's typing keeps answering `unusedImports`) | the service (ruling 1); `TEQ_FIX_TRACE`'s typing slot |
-| `Typer::semantic: bool` (set by `typed` when a semantic rule is configured; read nowhere else) | the semantic journal's sites (below), `local_owner`/`tparam_span` recording, R1's wrapper construction |
+| `Typer::semantic: bool` (set by `typed` when a semantic rule is configured; read nowhere else; later under the dump alone, see ruling 1's note) | the semantic journal's sites (below), `local_owner`/`tparam_span` recording, R1's wrapper construction |
 | semantic journal `SemJournal` (the raw resolution per written name, pre-normalization, every alternative, packages, `this`/`super`/self, setters, constructors, object vs class, synthetic applications, implicit arguments and conversions, inferred type arguments, inline expansion boundaries, a private member's access through a prefix other than its owner's this-type), filled at the index's record sites (index.rs 565-591, 625-1664) and the gaps the index inventory lists, in commit order with the index journal's marks and drops (state.rs 1468, 1549, 1580, 1640) | the SemTree builder alone; `index_record`'s normalization (565-603) and the index tables are unchanged, so the language server's answers are untouched |
 | `SemResolved` (written type references per `(file, TyExprId)`, before expansion) at resolve.rs 3942-4051, 3258-3303, 4053-4190, 3700-3713, 4248-4307, 4192-4219, 4321-4376, 5700-5740, 3634-3698, 4379-4420, 4451-4620, matchtypes.rs 78-126, resolve.rs 5969-6119, 5859-5951, check.rs 3708-3712/3756-3765/3827, resolve.rs 6465-6530, 6977-6993, 7088-7112, 7185-7197 | `SemType` S1 alone |
 | parser: the self alias's span, `[this]`, name kinds of made names, kept in the AST (`SyntaxNotes`, ast.rs 632-638) under `keep` (teq fix sets it, engine.rs 471-478) | `SemSym`; the AST's other readers ignore the new fields |

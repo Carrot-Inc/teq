@@ -1,7 +1,7 @@
 //! `teq fix`'s SemanticDB service (tests/semanticdb/TABLE.md, ruling 1): a semantic rule's questions about a round's
-//! documents, sent by the rule workers and answered on a thread of the round's own, which types the round's texts at
-//! its first question by one worker keeping the retained forms (section 6) and answers from that typing until the
-//! round's last document is done. A question carries its job, round and document's generation, its answer the same:
+//! documents, sent by the rule workers and answered on the round's typing thread from the typer that typed the round
+//! (`engine::serve`), kept there until the round's last document is done; nothing is typed for an answer, and none
+//! reads a retained form (section 6). A question carries its job, round and document's generation, its answer the same:
 //! fix-speed's channel contract (its item 2), `(job, round, generation, request) -> (job, round, generation, Result)`.
 
 use std::sync::mpsc;

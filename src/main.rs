@@ -191,6 +191,7 @@ pub(crate) fn configure_typer(typer: &mut typer::Typer<'_>, opts: &Options, asts
     typer.macro_state_per_worker = opts.macro_state_per_worker;
     crate::measure::set_macro_state_per_worker(opts.macro_state_per_worker);
     typer.dialect = opts.dialect;
+    typer.w.sem_records = opts.semantic_records || opts.semantic_types;
     if opts.semantic_types {
         typer.w.semantic = true;
         typer.threads = 1;
@@ -636,6 +637,10 @@ pub(crate) struct Options {
     /// retained forms (`Worker::semantic`), with one worker; for the identity run of tests/semanticdb (a check's
     /// diagnostics and a build's output alike with and without it).
     pub semantic_types: bool,
+    /// No flag of the command line: `teq fix`'s typing of a round sets it where a rule that may ask its SemanticDB
+    /// service is configured (`fix::engine`), and the index then keeps the records SemanticDB's occurrences have
+    /// (`Worker::sem_records`), without the retained forms.
+    pub semantic_records: bool,
     pub syntax: parser::Syntax,
     /// `--source` was given: a directive's `-source` does not override it (`directives::using_source`).
     pub source_given: bool,
@@ -1025,6 +1030,7 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
         diagnostics_append: false,
         no_outline: false,
         semantic_types: false,
+        semantic_records: false,
         syntax: parser::Syntax::default(),
         source_given: false,
         source_at: Vec::new(),
@@ -3545,6 +3551,7 @@ pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str]
             typer.threads = 1;
             // `--semantic-types`: the typer keeps the retained forms teq fix's documents read.
             typer.w.semantic = opts.semantic_types;
+            typer.w.sem_records = opts.semantic_types;
             install_std(&mut typer, std, &selected, &blocks_of, scalajs_unlocked);
             open_classpath(&opts, &mut typer, cp, jar_files, jdk_file);
             typer.dialect = opts.dialect;

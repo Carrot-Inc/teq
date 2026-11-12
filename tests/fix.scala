@@ -606,14 +606,14 @@ object Verb:
     val plain = "package core\nobject Core { val x = 1 }\n"
     val sv = build(work, "service", "core/src/core/Core.scala" -> plain, "rules/Probe.scala" -> probe, ".scalafix.conf" -> "rules = [\"file:rules/Probe.scala\"]\n")
     val (rsv, svRecord) = recorded(sv, Seq("core"))
-    expect("service", rsv.status == 1 && rsv.errAll().contains(s"[Probe]: semanticdb ${md5(plain)} true") && served(svRecord) == Vector(("1", "1", "1")) && text(sv, "core/src/core/Core.scala") == plain,
+    expect("service", rsv.status == 1 && rsv.errAll().contains(s"[Probe]: semanticdb ${md5(plain)} true") && served(svRecord) == Vector(("1", "0", "1")) && text(sv, "core/src/core/Core.scala") == plain,
       s"exit ${rsv.status}: ${rsv.errAll()}\n${svRecord.filter(l => l.startsWith("serve") || l.startsWith("done")).mkString("\n")}")
     val listed = "package core\nobject Core { val x: List[Int] = List() }\n"
     val rounds = Seq("core/src/core/Core.scala" -> listed, "rules/Probe.scala" -> probe, ".scalafix.conf" -> "rules = [EmptyCollectionsUnified, \"file:rules/Probe.scala\"]\n")
     val sr = build(work, "service-rounds", rounds*)
     val (rsr, srRecord) = recorded(sr, Seq("core"))
     val edited = text(sr, "core/src/core/Core.scala")
-    expect("service/rounds", rsr.status == 1 && edited != listed && rsr.errAll().contains(s"[Probe]: semanticdb ${md5(edited)} true") && served(srRecord) == Vector(("1", "1", "1"), ("2", "1", "1")),
+    expect("service/rounds", rsr.status == 1 && edited != listed && rsr.errAll().contains(s"[Probe]: semanticdb ${md5(edited)} true") && served(srRecord) == Vector(("1", "0", "1"), ("2", "0", "1")),
       s"exit ${rsr.status}: ${rsr.errAll()}\n${srRecord.filter(_.startsWith("serve")).mkString("\n")}")
     val idle = build(work, "service-idle", ".scalafix.conf" -> "rules = [NoUnusedImports]\n")
     val (ridle, idleRecord) = recorded(idle, Seq("core"))
@@ -631,9 +631,39 @@ object Verb:
     val si = build(work, "service-info", "core/src/core/Core.scala" -> plain, "rules/Inform.scala" -> informer, ".scalafix.conf" -> "rules = [\"file:rules/Inform.scala\"]\n")
     val rsi = fix(si, "core")
     expect("service/info refused", rsi.status == 2 && rsi.errAll().contains("the rule Inform failed") && rsi.errAll().contains("informations are not built"), s"exit ${rsi.status}: ${rsi.errAll()}")
+    // A round whose rule may ask is typed by one worker, whatever count is asked for (the suite's switch, `--threads`);
+    // and a round that was not typed to be asked answers no question, at any count (docs/FIX.md, "The rule API"): the
+    // rules that ask nothing are the engine's list, which `TEQ_FIX_PLANT=asks-nothing` takes the asking rule here to
+    // be of.
+    def typedWith(rec: Vector[String]): Vector[String] = rec.filter(_.startsWith("typing ")).map(Parallel.fieldsOf).map(_.getOrElse("effective", "?"))
+    def typings(rec: Vector[String]): String = rec.filter(_.startsWith("typing ")).mkString("\n")
+    val (rone, oneRecord) = recorded(sa, Seq("core"), "TEQ_FIX_TYPING_THREADS" -> "4")
+    expect("service/one worker", rone.status == 1 && rone.errAll().contains("[Ask]: symbols core/Core. defined true") && typedWith(oneRecord) == Vector("1"), s"exit ${rone.status}: ${rone.errAll()}\n${typings(oneRecord)}")
+    val (rthreads, threadsRecord) = recorded(sa, Seq("--threads", "4", "core"))
+    expect("service/one worker under --threads", rthreads.status == 1 && rthreads.errAll().contains("[Ask]: symbols core/Core. defined true") && typedWith(threadsRecord) == Vector("1"),
+      s"exit ${rthreads.status}: ${rthreads.errAll()}\n${typings(threadsRecord)}")
+    def refused(r: Sh.Result): Boolean = r.status == 2 && r.errAll().contains("the rule Ask failed") && r.errAll().contains("so it was not typed to be asked, and a rule asked: nothing is answered")
+    val (rsw, swRecord) = recorded(sa, Seq("core"), "TEQ_FIX_TYPING_THREADS" -> "4", "TEQ_FIX_PLANT" -> "asks-nothing")
+    expect("service/not asked, several workers", refused(rsw) && typedWith(swRecord) == Vector("4"), s"exit ${rsw.status}: ${rsw.errAll()}\n${typings(swRecord)}")
+    val (rs1, s1Record) = recorded(sa, Seq("core"), "TEQ_FIX_PLANT" -> "asks-nothing")
+    expect("service/not asked, one worker", refused(rs1) && typedWith(s1Record) == Vector("1"), s"exit ${rs1.status}: ${rs1.errAll()}\n${typings(s1Record)}")
+    // A syntactic rule is answered no symbol unless the round is typed to be asked: one of a `file:` source that
+    // reaches for its document's symbols all the same, beside a semantic rule that asks nothing, is refused.
+    val syn = "package teq.fix.probe\nimport teq.fix.*\nfinal class Syn extends SyntacticRule(\"Syn\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n    val at = doc.input.text.indexOf(\"Core\")\n    Patch.lint(Diagnostic(\"\", \"symbols \" + Native.symbolsAt(doc.gen, at, at + 4).mkString(\",\"), doc.tree.pos))\n"
+    val ssy = build(work, "service-syntactic", "core/src/core/Core.scala" -> plain, "rules/Syn.scala" -> syn, ".scalafix.conf" -> "rules = [NoUnusedImports, \"file:rules/Syn.scala\"]\n")
+    val rssy = fix(ssy, "core")
+    expect("service/syntactic rule asks", rssy.status == 2 && rssy.errAll().contains("the rule Syn failed") && rssy.errAll().contains("so it was not typed to be asked, and a rule asked: nothing is answered"), s"exit ${rssy.status}: ${rssy.errAll()}")
+    // What the arguments of an annotation in a type declare is a declaration of the document, as dotty has it: the
+    // round's typing types those trees for it (`Worker::sem_records`), no retained form kept.
+    val annotated = "package core\nclass Ann(x: Any) extends scala.annotation.StaticAnnotation\nclass Box[T]\nclass H { type T }\nobject Core:\n  def f(x: H): Box[x.T @Ann({ type Inner = x.T; 1 })] = new Box\n"
+    val askInner = "package teq.fix.probe\nimport teq.fix.*\nfinal class AskInner extends SemanticRule(\"AskInner\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val at = doc.input.text.indexOf(\"Inner\")\n    Patch.lint(Diagnostic(\"\", \"symbols \" + Native.symbolsAt(doc.gen, at, at + 5).mkString(\",\") + \" defined \" + Native.definedAt(doc.gen, at, at + 5), doc.tree.pos))\n"
+    val san = build(work, "service-annotation", "core/src/core/Core.scala" -> annotated, "rules/AskInner.scala" -> askInner, ".scalafix.conf" -> "rules = [\"file:rules/AskInner.scala\"]\n")
+    val rsan = fix(san, "core")
+    expect("service/annotation argument", rsan.status == 1 && rsan.errAll().contains("[AskInner]: symbols local0") && rsan.errAll().contains(" defined true"), s"exit ${rsan.status}: ${rsan.errAll()}")
     // The round's texts (the pass over c14fd75e1, Swap.scala): a file written between the document's dispatch and its
-    // first question, its own or a dependency's the job does not edit, leaves the service's typing as the round read
-    // the program: the answer's MD5 the round's text's, a dependency broken on the disk no failure.
+    // first question, its own or a dependency's the job does not edit, leaves the service's answers those of the
+    // program as the round's typing read it: the answer's MD5 the round's text's, a dependency broken on the disk no
+    // failure.
     val swap = "package teq.fix.probe\nimport teq.fix.*\nimport java.nio.file.{Files, Paths}\nfinal class Swap extends SemanticRule(\"Swap\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val old = doc.input.text\n    val path = Paths.get(doc.path)\n    Files.writeString(path, old.replace(\"= 1\", \"= 2\"))\n    try\n      val shown = Native.docSymbols(doc.gen).map(b => if b >= 32 && b < 127 then b.toChar else ' ').mkString\n      Patch.lint(Diagnostic(\"\", \"semantic-md5=\" + \"[0-9A-F]{32}\".r.findFirstIn(shown).getOrElse(\"none\"), doc.tree.pos))\n    finally Files.writeString(path, old)\n"
     val ss = build(work, "service-snapshot", "core/src/core/Core.scala" -> plain, "rules/Swap.scala" -> swap, ".scalafix.conf" -> "rules = [\"file:rules/Swap.scala\"]\n")
     val rss = fix(ss, "core")

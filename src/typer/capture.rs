@@ -124,8 +124,9 @@ impl<'a> Worker<'a> {
     /// (Annotations.scala 63-82 at 3.8.4: `tpd.allArguments`, each node's type): the class's type arguments, then each
     /// node of the arguments, a stable reference as its path (`path_of`, dotty's `TermRef`), each type once. An
     /// annotation written without arguments has none and is not typed (`mapWith`'s `Nil`). Typed quietly
-    /// (`type_annotation_quietly`); under `Worker::semantic` alone, for the retained annotation's record
-    /// (`Retention::Annot`). Every node of the arguments' trees is visited (`tree_types`).
+    /// (`type_annotation_quietly`); under `Worker::semantic`, for the retained annotation's record
+    /// (`Retention::Annot`), and under `Worker::sem_records`, for what the trees declare. Every node of the arguments'
+    /// trees is visited (`tree_types`).
     pub(super) fn annotation_argument_types(&mut self, file: FileId, instance: crate::ast::ExprId) -> Vec<TypeId> {
         let ast = self.ast(file);
         if let crate::ast::Expr::New(ty, args) = ast.expr(instance) {

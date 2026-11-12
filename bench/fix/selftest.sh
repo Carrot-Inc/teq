@@ -133,13 +133,13 @@ probe_check() {
 probe_check probes-absent "$PWD/$work/none"
 probe_check probes-refused "$PWD/$work/bad"
 # The parity runner (bench/fix/parity.sh, the push pass of ce03e7ddb): both sides read the unused imports alike, check's
-# setting taken from the fix run's record (`semantic=`, the engine's predicate over the configured rules). A project rule
-# that is a SemanticRule, with no NoUnusedImports named, over a program with unused imports: a pair compared, check run
-# with the analysis; the same pair with check forced without it (`PARITY_CHECK_UNUSED=off`) refused; the shipped
+# setting taken from the fix run's record (`semantic=`, the engine's predicate over the configured rules). A rule that is
+# a SemanticRule, with no NoUnusedImports named, over a program with unused imports (the shipped TypelevelAs, which asks
+# the SemanticDB service nothing: a rule that may ask, a project's SemanticRule among them, has its round typed by one
+# worker, docs/FIX.md, and its pair at four workers is none): a pair compared, check run with the analysis; the same pair with check forced without it (`PARITY_CHECK_UNUSED=off`) refused; the shipped
 # DisableSyntax alone, syntactic: a pair compared, no side reading them.
 mkdir -p "$work/parity"
-printf 'import teq.fix.*\n\nfinal class Probe extends SemanticRule("Probe"):\n  override def fix(using doc: SemanticDocument): Patch = Patch.empty\n' > "$work/parity/Probe.scala"
-printf 'rules = ["file:Probe.scala"]\n' > "$work/parity/semantic.conf"
+printf 'rules = [TypelevelAs]\n' > "$work/parity/semantic.conf"
 printf 'rules = [DisableSyntax]\nDisableSyntax.noVars = true\n' > "$work/parity/syntactic.conf"
 # parity_check <name> <compared|rejected> <unused> <conf> [env...]: one pair at four workers, its verdict and every side's
 # reading of the unused imports.

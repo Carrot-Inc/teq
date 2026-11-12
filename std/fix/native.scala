@@ -39,7 +39,7 @@ object Native:
   @js("$fix") def unusedImports(gen: Int): Array[Int]
   @js("$fix") def expanded(gen: Int): Boolean
   /** The document as the round's SemanticDB service gives it (src/fix/service.rs): a `TextDocuments` protobuf, from
-    * the round's semantic typing. A run with no semantic rule answers none. */
+    * the round's typing. A run with no semantic rule answers none. */
   @js("$fix") def docSymbols(gen: Int): Array[Byte]
   /** The symbols of the document's occurrences at exactly `[start, end)`, in UTF-16 units, in occurrence order. */
   @js("$fix") def symbolsAt(gen: Int, start: Int, end: Int): Array[String]

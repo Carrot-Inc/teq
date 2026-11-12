@@ -1970,6 +1970,11 @@ pub struct Worker<'a> {
     /// (`TypeStore::retained`), what dotty's types keep and teq's canonical ones erase (tests/semanticdb/TABLE.md,
     /// section 6). With one worker alone.
     pub semantic: bool,
+    /// Whether the index keeps what SemanticDB's occurrences have and navigation does not (`typer::index`): the
+    /// packages a path spells, an import's selector as dotty records it, what the arguments of an annotation in a
+    /// type declare. `teq fix`'s typing of a round sets it where a rule that may ask is configured, and its service
+    /// answers the rules from that typing (`fix::engine`); set with `semantic` too.
+    pub sem_records: bool,
     /// The parameterized alias `type_ref_to_type` last gave as a constructor, under `semantic`: `TyExpr::Apply`
     /// retains it over its application with the arguments.
     pub semantic_alias_ctor: Option<AliasId>,
@@ -3277,6 +3282,7 @@ impl<'a> Worker<'a> {
             declared_lost: false,
             declared_alias_hit: None,
             semantic: false,
+            sem_records: false,
             semantic_alias_ctor: None,
             form_passes: FormPasses::default(),
             declared_views: FxMap::default(),
@@ -3702,6 +3708,7 @@ impl<'a> Worker<'a> {
             declared_lost: false,
             declared_alias_hit: None,
             semantic: self.semantic,
+            sem_records: self.sem_records,
             semantic_alias_ctor: None,
             form_passes: FormPasses::default(),
             declared_views: FxMap::default(),
