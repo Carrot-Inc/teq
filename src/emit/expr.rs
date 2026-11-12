@@ -320,6 +320,33 @@ impl<'a> Emitter<'a> {
     /// The constructor arguments of an anonymous class are the bindings its body captures, passed
     /// as they are: a lazy val or a local def as the function that stands for it, a `var` as a
     /// cell that reads and writes the variable itself.
+    /// The places among the parameters of the second constructor `s` of `c` that are the class's own
+    /// captures: the captured symbols themselves, where the primary constructor holds them (the typer's
+    /// `ctors_take_captures`; an enclosing instance is a parameter of the constructor's own). None for a class
+    /// that captures nothing.
+    pub(super) fn via_own_captures(&self, c: ClassId, s: SymId) -> Vec<usize> {
+        if !self.local_captures.contains_key(&c) {
+            return Vec::new();
+        }
+        let Some(tc) = self.prog.classes.iter().find(|tc| tc.id == c) else { return Vec::new() };
+        let Some(&f) = tc.ctors.iter().find(|&&f| self.prog.funs[f.idx()].sym == s) else { return Vec::new() };
+        Self::own_captures(tc, &self.prog.funs[f.idx()].params)
+    }
+
+    /// `via_own_captures` of the constructor whose parameters are `params`.
+    pub(super) fn own_captures(tc: &crate::tir::TClass, params: &[SymId]) -> Vec<usize> {
+        (0..tc.captures.min(params.len()).min(tc.ctor_params.len())).filter(|&j| params[j] == tc.ctor_params[j]).collect()
+    }
+
+    /// Where, among the arguments of a creation of the anonymous class `c`, stand the captures it passes on
+    /// to a second constructor of the local class it extends (`via_own_captures`), after its own.
+    fn anon_passed_on(&self, c: ClassId, own: usize) -> Vec<usize> {
+        let info = self.syms.class(c);
+        let Some(sup) = info.superclass.filter(|sup| info.kind == ClassKind::Anon && self.local_captures.contains_key(sup)) else { return Vec::new() };
+        let Some(via) = self.prog.classes.iter().find(|tc| tc.id == c).and_then(|tc| tc.parent_via) else { return Vec::new() };
+        self.via_own_captures(sup, via).into_iter().map(|j| own + j).collect()
+    }
+
     fn emit_capture_args(&mut self, e: TExprId, c: ClassId, args: ListRef) {
         let omitted = self.omitted_args(e);
         self.emit_capture_args_omitting(c, args, &omitted);
@@ -333,6 +360,7 @@ impl<'a> Emitter<'a> {
             Some(&n) => n as usize,
             None => (args.len - self.anon_parent_args.get(&c).copied().unwrap_or(0)) as usize,
         };
+        let passed_on = self.anon_passed_on(c, captures);
         for (i, &a) in self.prog.expr_list(args).iter().enumerate() {
             if i > 0 {
                 self.out.push_str(", ");
@@ -345,7 +373,7 @@ impl<'a> Emitter<'a> {
                 self.emit_expr(a);
                 continue;
             };
-            if i >= captures {
+            if i >= captures && !passed_on.contains(&i) {
                 self.emit_expr(a);
                 continue;
             }
@@ -885,7 +913,12 @@ impl<'a> Emitter<'a> {
             TExpr::NewVia(s, args) => {
                 let factory = self.ctor_factory(s);
                 self.out.push_str(&factory);
-                self.emit_call_args(e, args);
+                // A local class's second constructor takes the class's captures first (the typer's
+                // `settle_local_class`), passed as a creation through the primary passes them.
+                match self.syms.sym(s).owner {
+                    Owner::Class(c) if !self.via_own_captures(c, s).is_empty() => self.emit_capture_args(e, c, args),
+                    _ => self.emit_call_args(e, args),
+                }
             }
             TExpr::New(c, args) => {
                 let init = self.open_init(e);

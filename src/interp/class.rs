@@ -622,12 +622,17 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(Value::Obj(obj))
     }
 
-    pub(super) fn construct_via_new(&mut self, via: SymId, args: Vec<Value>) -> R {
+    pub(super) fn construct_via_new(&mut self, via: SymId, args: Vec<Value>, fr: &Rc<Frame>) -> R {
         let Owner::Class(c) = self.syms().sym(via).owner else { return self.unsupported("a secondary constructor without a class") };
         if let Some(companion) = self.touched_companion(c) {
             self.module(companion)?;
         }
-        let obj = Rc::new(Object { class: c, fields: RefCell::new(Vec::new()), env: None, name: None, ordinal: Cell::new(0), hash: Cell::new(0), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(super::made_now()) });
+        // The scope a class with captures reads them from, kept as `construct_new` keeps it.
+        let env = (self.capture_count(c) > 0).then(|| fr.clone());
+        if let Some(env) = env.as_ref().filter(|_| self.resident) {
+            registry::frame(env);
+        }
+        let obj = Rc::new(Object { class: c, fields: RefCell::new(Vec::new()), env, name: None, ordinal: Cell::new(0), hash: Cell::new(0), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(super::made_now()) });
         self.enter()?;
         let r = self.construct_via(&obj, via, args);
         self.exec.depth -= 1;
@@ -997,7 +1002,11 @@ impl<'a, 't> Interp<'a, 't> {
         let scope = self.exec_stmts(before, &frame, &cx)?;
         match self.prog().expr(call) {
             TExpr::New(target, l) => {
-                let vals = self.eval_parent_args(target, l, &scope, &cx)?;
+                // What the class captures stays in the scope its instance keeps, as a creation through the
+                // primary constructor leaves it (`anon_args`); in a subclass's instance the call is a parent's,
+                // evaluated as the primary's parent call is.
+                let own = obj.class == target && self.ctor_own_captures(via).contains(&true);
+                let vals = if own { self.anon_args(target, l, &scope, &cx)?.1 } else { self.eval_parent_args(target, l, &scope, &cx)? };
                 self.construct(obj, target, vals)?;
             }
             TExpr::NewVia(next, l) => {
@@ -1014,7 +1023,13 @@ impl<'a, 't> Interp<'a, 't> {
         let n = self.prog().funs[f.idx()].params.len();
         let frame = Frame::with(parent, Vec::with_capacity(n));
         let mut args = args.into_iter();
+        // What a local class captures leads its constructors' parameters and is read from the scope the
+        // instance keeps, as the primary's construction leaves it: those parameters are not bound.
+        let own = self.ctor_own_captures(self.prog().funs[f.idx()].sym);
         for i in 0..n {
+            if own.get(i) == Some(&true) {
+                continue;
+            }
             let p = self.prog().funs[f.idx()].params[i];
             let mut v = args.next().unwrap_or(Value::Absent);
             if let Value::Absent = v {

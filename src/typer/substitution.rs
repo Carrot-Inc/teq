@@ -1274,7 +1274,7 @@ impl<'a> Worker<'a> {
             TExpr::New(c, _) if w.class_copies.contains_key(&c) => self.finish_class_copy(w, e, c),
             TExpr::NewVia(s, _) if matches!(self.syms.sym(s).owner, Owner::Class(c) if w.class_copies.contains_key(&c) && self.syms.class(c).kind != ClassKind::Anon) => {
                 let Owner::Class(c) = self.syms.sym(s).owner else { unreachable!() };
-                self.finish_local_copy_via(w, e, c)
+                self.finish_local_copy(w, e, c)
             }
             TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
                 self.walk_list(w, args);
@@ -1461,7 +1461,14 @@ impl<'a> Worker<'a> {
     fn finish_local_copy(&mut self, w: &mut Walk, e: TExprId, c: ClassId) -> TExprId {
         let stored = w.class_copies[&c];
         let stored_captures = w.def.classes.iter().find(|tc| tc.id == stored).map_or(0, |tc| tc.captures);
-        let TExpr::New(_, args) = self.prog.expr(e) else { unreachable!() };
+        // Through the primary constructor or a secondary one (`new C()` for a `def this() = this(n)`, the
+        // constructor the copy's: `Copier::stored_class` copies the constructors with the members): each
+        // takes what the class captures first (`ctors_take_captures`), which the stored creation passed.
+        let (via, args) = match self.prog.expr(e) {
+            TExpr::New(_, args) => (None, args),
+            TExpr::NewVia(s, args) => (Some(s), args),
+            _ => unreachable!(),
+        };
         let items = self.prog.expr_list(args).to_vec();
         let mut own: Vec<TExprId> = items[stored_captures.min(items.len())..].iter().map(|&a| self.walk(w, a)).collect();
         // The outer instance the creation passes stays its own (the prefix of `E.A(1)`).
@@ -1478,7 +1485,10 @@ impl<'a> Worker<'a> {
             }
             Some(LocalCopy::Settling(_)) => {
                 let l = self.prog.list(&own);
-                self.prog.exprs[e.idx()] = TExpr::New(c, l);
+                self.prog.exprs[e.idx()] = match via {
+                    Some(s) => TExpr::NewVia(s, l),
+                    None => TExpr::New(c, l),
+                };
                 if let Some(LocalCopy::Settling(pending)) = w.local_copies.get_mut(&c) {
                     pending.push((e, inside, selfs));
                 }
@@ -1488,22 +1498,6 @@ impl<'a> Worker<'a> {
         }
         let captures = self.settle_local_copy(w, c);
         self.local_copy_new(e, c, &captures, inside, &selfs, &own)
-    }
-
-    /// A creation of the copy of a named local class through one of its secondary constructors
-    /// (`new C()` for a `def this() = this(n)`), the constructor the copy's (`Copier::stored_class`
-    /// copies the constructors with the members): its arguments walked and the class settled
-    /// there, as a creation through the primary constructor settles it (`finish_local_copy`).
-    fn finish_local_copy_via(&mut self, w: &mut Walk, e: TExprId, c: ClassId) -> TExprId {
-        let TExpr::NewVia(s, args) = self.prog.expr(e) else { unreachable!() };
-        let items = self.prog.expr_list(args).to_vec();
-        let own: Vec<TExprId> = items.into_iter().map(|a| self.walk(w, a)).collect();
-        if !w.local_copies.contains_key(&c) {
-            self.settle_local_copy(w, c);
-        }
-        let l = self.prog.list(&own);
-        self.prog.exprs[e.idx()] = TExpr::NewVia(s, l);
-        e
     }
 
     /// The copy `c` of a named local class the stored body makes settled (`finish_local_copy`):
@@ -1538,13 +1532,24 @@ impl<'a> Worker<'a> {
         body.ctor_params = captures.iter().copied().chain(own_params).collect();
         body.ctor_defaults = std::iter::repeat(None).take(n).chain(own_defaults).collect();
         body.captures = n;
+        // Its second constructors take the same (`ctors_take_captures`): the copy's captures in the stored
+        // ones' place, after the outer parameter that is each constructor's own.
+        let ctors = body.ctors.clone();
+        let kept = usize::from(self.outer_class(c).is_some());
+        for f in ctors {
+            let declared: usize = self.syms.sym(self.prog.funs[f.idx()].sym).sig.as_ref().map_or(0, |sig| sig.clauses.iter().map(|cl| cl.params.len()).sum());
+            let params = &mut self.prog.funs[f.idx()].params;
+            let lead = params.len().saturating_sub(declared);
+            let kept = kept.min(lead);
+            params.splice(kept..lead, captures[kept.min(n)..].iter().copied());
+        }
         if is_trait {
             self.lift_class_copy(c, &mut Vec::new());
         }
         self.anon_captures.insert(c, captures.clone());
         let Some(LocalCopy::Settling(pending)) = w.local_copies.insert(c, LocalCopy::Settled(captures.clone())) else { unreachable!() };
         for (p, p_inside, p_selfs) in pending {
-            let TExpr::New(_, l) = self.prog.expr(p) else { continue };
+            let (TExpr::New(_, l) | TExpr::NewVia(_, l)) = self.prog.expr(p) else { continue };
             let rest = self.prog.expr_list(l).to_vec();
             self.local_copy_new(p, c, &captures, p_inside, &p_selfs, &rest);
         }
@@ -1612,6 +1617,12 @@ impl<'a> Worker<'a> {
     /// The node `e` made the creation of the copy `c` of a named local class with the captures
     /// `captures` and its own arguments `own`, as `new_instance` makes one.
     fn local_copy_new(&mut self, e: TExprId, c: ClassId, captures: &[SymId], inside: bool, selfs: &[(SymId, TExprId)], own: &[TExprId]) -> TExprId {
+        // Through the constructor the node names, the primary or a secondary one.
+        let made = |l: crate::ast::ListRef, node: TExpr| match node {
+            TExpr::NewVia(s, _) => TExpr::NewVia(s, l),
+            _ => TExpr::New(c, l),
+        };
+        let node = self.prog.expr(e);
         // A class with an outer instance takes the one the creation passes, first in `own`.
         let outer = self.outer_class(c).map(|o| self.outer_this_sym(o));
         let (captures, own) = match (outer, captures.first(), own.split_first()) {
@@ -1620,7 +1631,7 @@ impl<'a> Worker<'a> {
                 items.extend(self.capture_args(&captures[1..], inside, selfs));
                 items.extend_from_slice(rest);
                 let l = self.prog.list(&items);
-                self.prog.exprs[e.idx()] = TExpr::New(c, l);
+                self.prog.exprs[e.idx()] = made(l, node);
                 return e;
             }
             _ => (captures, own),
@@ -1628,7 +1639,7 @@ impl<'a> Worker<'a> {
         let mut items = self.capture_args(captures, inside, selfs);
         items.extend_from_slice(own);
         let l = self.prog.list(&items);
-        self.prog.exprs[e.idx()] = TExpr::New(c, l);
+        self.prog.exprs[e.idx()] = made(l, node);
         e
     }
 

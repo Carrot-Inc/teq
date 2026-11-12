@@ -61,6 +61,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A local class made through a second constructor that reads a local of the enclosing method works on every
+  target (the interpreter refused it, JavaScript printed `undefined`, the JVM rejected the class).
 - An enum's `valueOf` or `fromOrdinal` passed as a function (`names.map(Tone.valueOf)`) compiles as under scalac
   (it was refused: `value valueOf is not a member of Tone`).
 - A macro that makes a method with `Symbol.newMethod` and a `MethodType`, closes over a method reference with

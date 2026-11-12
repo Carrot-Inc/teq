@@ -195,8 +195,9 @@ impl<'a, 't> Interp<'a, 't> {
                 self.construct_new(c, vals, fr)
             }
             TExpr::NewVia(s, args) => {
-                let args = self.eval_args(Some(s), args, fr, cx)?;
-                self.construct_via_new(s, args)
+                let vals = self.eval_args(Some(s), args, fr, cx)?;
+                let env = self.via_scope(s, args, fr, cx)?;
+                self.construct_via_new(s, vals, &env)
             }
             TExpr::Lambda(params, body) => {
                 self.prof_alloc(|a| a.closures += 1);
@@ -503,8 +504,51 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The arguments of a call, in order: an argument the source left out is its default
     /// getter's application (`TExpr::Default`), evaluated where the typer put it.
-    pub(super) fn eval_args(&mut self, _sym: Option<SymId>, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
-        self.eval_list(args, fr, cx)
+    pub(super) fn eval_args(&mut self, sym: Option<SymId>, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
+        // A constructor of a local class takes what the class captures first, and that stays in the
+        // scope (`via_scope`): the values are the other arguments'.
+        let own = sym.map_or(Vec::new(), |s| self.ctor_own_captures(s));
+        if !own.contains(&true) {
+            return self.eval_list(args, fr, cx);
+        }
+        let mut vals = Vec::with_capacity(args.len as usize);
+        for i in 0..args.len as usize {
+            if own.get(i) == Some(&true) {
+                continue;
+            }
+            let item = self.prog().expr_lists[args.start as usize + i];
+            vals.push(self.eval(item, fr, cx)?);
+        }
+        Ok(vals)
+    }
+
+    /// For each leading parameter of the second constructor `s` that stands for a capture of its
+    /// class, whether it is that capture itself (the class's own symbol, which the typer's
+    /// `settle_local_class` gives every constructor of a local class) and not a parameter of its own
+    /// (the enclosing instance of a class nested in a class): the class's capture count bounds it,
+    /// as the primary's construction reads it (`capture_count`). Empty for any other symbol.
+    pub(super) fn ctor_own_captures(&mut self, s: SymId) -> Vec<bool> {
+        let Owner::Class(c) = self.syms().sym(s).owner else { return Vec::new() };
+        if !self.syms().class(c).ctors.contains(&s) {
+            return Vec::new();
+        }
+        let n = self.capture_count(c);
+        let Some(f) = self.fun_of(s) else { return Vec::new() };
+        let captured = self.tclass_field(c, |tc| tc.ctor_params[..n.min(tc.ctor_params.len())].to_vec()).unwrap_or_default();
+        let params = &self.prog().funs[f.idx()].params;
+        captured.iter().zip(params.iter()).map(|(a, b)| a == b).collect()
+    }
+
+    /// The scope the instance a second constructor makes keeps: what `anon_args` makes of the
+    /// captures a creation through the primary passes, here of those that lead the arguments.
+    pub(super) fn via_scope(&mut self, s: SymId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Rc<Frame>> {
+        let own = self.ctor_own_captures(s);
+        let Owner::Class(c) = self.syms().sym(s).owner else { return Ok(fr.clone()) };
+        if !own.contains(&true) {
+            return Ok(fr.clone());
+        }
+        let lead = (own.len() as u32).min(args.len);
+        Ok(self.anon_args(c, ListRef { start: args.start, len: lead }, fr, cx)?.0)
     }
 
     fn eval_ctor_args(&mut self, _c: ClassId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
@@ -749,7 +793,14 @@ impl<'a, 't> Interp<'a, 't> {
         let captures = self.tclass_field(c, |tc| tc.ctor_params[..n].to_vec()).unwrap_or_default();
         let mut vals = Vec::with_capacity(args.len as usize);
         let mut bound = Vec::new();
+        // What an anonymous class's creation passes on to its superclass's second constructor starts with that
+        // class's captures, which stay in the scope as a creation through it leaves them (`eval_args`).
+        let via = self.tclass_field(c, |tc| tc.parent_via).flatten().filter(|_| self.syms().class(c).kind == ClassKind::Anon);
+        let passed_on = via.map_or(Vec::new(), |v| self.ctor_own_captures(v));
         for i in 0..args.len as usize {
+            if i >= captures.len() && passed_on.get(i - captures.len()) == Some(&true) {
+                continue;
+            }
             let item = self.prog().expr_lists[args.start as usize + i];
             if i < captures.len() {
                 let lazy = self.syms().sym(captures[i]).mods & mods::LAZY != 0;

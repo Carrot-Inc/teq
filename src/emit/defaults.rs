@@ -690,8 +690,9 @@ impl<'a> super::Emitter<'a> {
     /// a by-name parameter's evaluated, in the scope `root` of the function it belongs to.
     /// A local class's getter takes its captures first, `$c0, $c1, ...`, which its default reads
     /// as its constructor's parameters (`captures`).
-    fn emit_getter_rest(&mut self, root: super::scope::Root, params: &[SymId], captures: usize, d: TExprId, by_name: bool, arrow: bool) {
+    fn emit_getter_rest(&mut self, root: super::scope::Root, params: &[SymId], own: &[usize], captures: usize, d: TExprId, by_name: bool, arrow: bool) {
         self.enter_scope(root);
+        let named = self.name_own_captures(own, params);
         let mark = self.emit_params_after_captures(captures, 0, params, &[]);
         let before_super = self.before_super;
         self.before_super = before_super || captures > 0;
@@ -713,6 +714,7 @@ impl<'a> super::Emitter<'a> {
         self.before_super = before_super;
         self.fn_depth = outer_depth;
         self.leave_params(mark);
+        self.restore_own_captures(named);
         self.leave_scope();
     }
 
@@ -738,7 +740,7 @@ impl<'a> super::Emitter<'a> {
             }
             self.line();
             self.out.push_str(&g);
-            self.emit_getter_rest(super::scope::Root::Fun(f), &params, 0, d, by_name, false);
+            self.emit_getter_rest(super::scope::Root::Fun(f), &params, &[], 0, d, by_name, false);
         }
     }
 
@@ -779,7 +781,7 @@ impl<'a> super::Emitter<'a> {
             self.line();
             let n = self.sym_name(sym);
             let _ = write!(self.out, "{}.$default${} = ", n, i + 1);
-            self.emit_getter_rest(super::scope::Root::Fun(f), &params, 0, d, by_name, true);
+            self.emit_getter_rest(super::scope::Root::Fun(f), &params, &[], 0, d, by_name, true);
             self.out.push(';');
         }
     }
@@ -802,7 +804,7 @@ impl<'a> super::Emitter<'a> {
             params.extend(Self::getter_params(&clauses, &tc.ctor_params, captures, i));
             self.line();
             let _ = write!(self.out, "static $default${}", i + 1);
-            self.emit_getter_rest(super::scope::Root::Ctor(idx as u32), &params, captures, d, by_name, false);
+            self.emit_getter_rest(super::scope::Root::Ctor(idx as u32), &params, &[], captures, d, by_name, false);
         }
         for &f in &tc.ctors {
             let fun = &self.prog.funs[f.idx()];
@@ -820,7 +822,10 @@ impl<'a> super::Emitter<'a> {
                 params.extend(Self::getter_params(&sig.clauses, &fun.params, lead, i));
                 self.line();
                 let _ = write!(self.out, "static $default${}", i + 1);
-                self.emit_getter_rest(super::scope::Root::Fun(f), &params, 0, d, by_name, false);
+                // What a local class captures leads the constructor's parameters and its getters': read in the
+                // default as the primary constructor's getter reads it.
+                let own = Self::own_captures(tc, &fun.params[..lead]);
+                self.emit_getter_rest(super::scope::Root::Fun(f), &params, &own, 0, d, by_name, false);
             }
         }
     }

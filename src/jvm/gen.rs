@@ -5581,6 +5581,19 @@ impl<'a> Gen<'a> {
         JType::L(name)
     }
 
+    /// For each capture of `c` its second constructor `s` has a parameter for, whether the parameter is
+    /// that capture itself (the class's own symbol: the typer's `settle_local_class` gives every constructor
+    /// of a local class its captures) and not one of its own (the enclosing instance of a class nested in a
+    /// class).
+    pub fn via_own_captures(&mut self, c: ClassId, s: SymId) -> Vec<bool> {
+        let cx = self.cx;
+        let Some(&idx) = cx.tclass_of.get(c.idx()).filter(|&&i| i != u32::MAX) else { return Vec::new() };
+        let tc = &cx.input.prog.classes[idx as usize];
+        let n = self.capture_count(c).min(tc.ctor_params.len());
+        let Some(fun) = tc.ctors.iter().map(|&f| &cx.input.prog.funs[f.idx()]).find(|f| f.sym == s) else { return Vec::new() };
+        tc.ctor_params[..n].iter().zip(fun.params.iter()).map(|(a, b)| a == b).collect()
+    }
+
     /// Loads the arguments of the secondary constructor `s` of `c` and gives its parameter
     /// types: a class nested in a class takes the enclosing instance first, as every one of its
     /// constructors does (dotty's `ExplicitOuter`, the typer's `new_outer_arg`).
@@ -5592,6 +5605,18 @@ impl<'a> Gen<'a> {
             Owner::Class(o) if matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl) && !matches!(cx.input.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin) && args.len as usize == params.len() + 1 => Some(o),
             _ => None,
         };
+        // What a local class captures leads every constructor's parameters (dotty's `LambdaLift.addFreeParams`),
+        // loaded here as a creation through the primary loads them (`new_arguments`).
+        let own = self.via_own_captures(c, s);
+        if own.contains(&true) {
+            let n = own.len().min(args.len as usize);
+            self.load_new_captures(c, args, n);
+            let mut types = self.anon_ctor_params(c);
+            let rest = ListRef { start: args.start + n as u32, len: args.len - n as u32 };
+            self.ctor_arguments_of(c, Some(s), rest, &params);
+            types.extend(params);
+            return types;
+        }
         let Some(o) = outer else {
             self.ctor_arguments_of(c, Some(s), args, &params);
             return params;
@@ -5659,6 +5684,12 @@ impl<'a> Gen<'a> {
         let sup = cx.input.syms.class(c).superclass?;
         let via = tc.parent_via;
         let types = match via {
+            // A local superclass's second constructor takes its class's captures first (`via_arguments`).
+            Some(v) if self.via_own_captures(sup, v).contains(&true) => {
+                let mut types = self.anon_ctor_params(sup);
+                types.extend(self.param_types(v));
+                types
+            }
             Some(v) => self.param_types(v),
             None if self.capture_count(sup) > 0 => {
                 let mut types = self.anon_ctor_params(sup);
@@ -5682,10 +5713,10 @@ impl<'a> Gen<'a> {
             let mut params: Vec<JType> = self.anon_ctor_params(c);
             if let Some((sup, via, types)) = self.anon_super_params(c) {
                 let rest = ListRef { start: args.start + n_captures as u32, len: args.len - n_captures as u32 };
-                if via.is_none() && self.capture_count(sup) > 0 {
-                    self.new_arguments(sup, rest);
-                } else {
-                    self.ctor_arguments_of(sup, via, rest, &types);
+                match via {
+                    None if self.capture_count(sup) > 0 => _ = self.new_arguments(sup, rest),
+                    Some(v) if self.via_own_captures(sup, v).contains(&true) => _ = self.via_arguments(sup, v, rest),
+                    _ => self.ctor_arguments_of(sup, via, rest, &types),
                 }
                 params.extend(types);
             }

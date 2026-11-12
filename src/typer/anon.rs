@@ -131,6 +131,9 @@ impl<'a> Worker<'a> {
         self.check_class(c);
         let mut captures = self.captured_by(c, first_expr);
         self.add_accessor_captures(c, &mut captures);
+        if let Some(k) = extends_class {
+            self.capture_passed_on(parent_args, k, &mut captures);
+        }
         let tclass = self.checked_class_mut(c).expect("the class was just checked");
         tclass.ctor_defaults = vec![None; captures.len()];
         tclass.ctor_params = captures.clone();
@@ -193,7 +196,10 @@ impl<'a> Worker<'a> {
             .filter(|call| !call.args.is_empty() || call.via.is_some());
         let first_expr = self.prog.exprs.len();
         self.check_class(c);
-        let captures = self.captured_by(c, first_expr);
+        let mut captures = self.captured_by(c, first_expr);
+        if let Some(k) = class_parent {
+            self.capture_passed_on(parent_args, k, &mut captures);
+        }
         let tclass = self.checked_class_mut(c).expect("the class was just checked");
         tclass.ctor_defaults = vec![None; captures.len()];
         tclass.ctor_params = captures.clone();
@@ -875,12 +881,28 @@ impl<'a> Worker<'a> {
     /// `new C(args)`: for a named local class the captures come first, once the class has been
     /// checked and they are known; a `new` typed before that is completed then.
     pub fn new_instance(&mut self, c: ClassId, args: ast::ListRef, span: Span) -> TExprId {
+        self.creation(c, None, args, span)
+    }
+
+    /// A creation of `c` through its constructor `via`, the primary without one. Every constructor of a
+    /// class takes the same things first, the enclosing instance of a class nested in a class and what a
+    /// local class captures, so each creation passes them the one way (dotty's `LambdaLift.addFreeArgs` at
+    /// every application of a constructor, each of which `Dependencies` gives its class's free variables).
+    pub(super) fn creation(&mut self, c: ClassId, via: Option<SymId>, args: ast::ListRef, span: Span) -> TExprId {
+        let made = |args: ast::ListRef| match via {
+            Some(s) => TExpr::NewVia(s, args),
+            None => TExpr::New(c, args),
+        };
         if let Some(o) = self.outer_class(c) {
             let inside = self.inside_class(c);
             let outer = self.new_outer_arg(c, o, span);
             // A default the creation leaves to the constructor's getter takes the enclosing
             // instance the creation passes, its receiver (`retarget_defaults`).
-            self.retarget_defaults(args, DefaultOf::Ctor(c), DefaultOf::Ctor(c), |w| w.prior_copy(outer));
+            let of = match via {
+                Some(s) => DefaultOf::Method(s),
+                None => DefaultOf::Ctor(c),
+            };
+            self.retarget_defaults(args, of, of, |w| w.prior_copy(outer));
             let mut items = vec![outer];
             // What the class takes of its lifted owner's captures, passed here where the owner
             // is done; inside the owner they are given once it is (`capture_through_nested`).
@@ -892,15 +914,15 @@ impl<'a> Worker<'a> {
             }
             items.extend_from_slice(&self.prog.expr_list(args).to_vec());
             let l = self.prog.list(&items);
-            return self.prog.add(TExpr::New(c, l));
+            return self.prog.add(made(l));
         }
         let info = self.syms.class(c);
         if info.owner != Owner::Local || info.kind == ClassKind::Anon {
-            return self.prog.add(TExpr::New(c, args));
+            return self.prog.add(made(args));
         }
         // A class of the block made across a trait a class owns: through the proxy factory the
-        // class of the block holds (`proxies.rs`).
-        if let Some(r) = self.held_holder_of_class(c) {
+        // class of the block holds (`proxies.rs`), which makes it through its primary constructor.
+        if let (None, Some(r)) = (via, self.held_holder_of_class(c)) {
             if let Some(te) = self.held_new(r, c, args) {
                 return te;
             }
@@ -912,13 +934,42 @@ impl<'a> Worker<'a> {
                 let mut items = self.capture_args(&captures, inside, &selfs);
                 items.extend_from_slice(&self.prog.expr_list(args).to_vec());
                 let l = self.prog.list(&items);
-                self.prog.add(TExpr::New(c, l))
+                self.prog.add(made(l))
             }
             None => {
-                let e = self.prog.add(TExpr::New(c, args));
+                let e = self.prog.add(made(args));
                 self.local_news.push((c, e, inside, selfs));
                 e
             }
+        }
+    }
+
+    /// What an anonymous class passes on to a second constructor of the local class `k` it extends: that
+    /// constructor takes its class's captures first (`ctors_take_captures`), and the anonymous class, whose
+    /// constructor makes the call, captures them too.
+    fn capture_passed_on(&mut self, parent_args: Option<ParentCall>, k: ClassId, captures: &mut Vec<SymId>) {
+        let Some(call) = parent_args.filter(|call| call.via.is_some()) else { return };
+        let lead = self.anon_captures.get(&k).map_or(0, |held| held.len());
+        let passed: Vec<TExprId> = self.prog.expr_list(call.args).iter().take(lead).copied().collect();
+        for a in passed {
+            if let TExpr::Local(s) = self.prog.expr(a) {
+                if !captures.contains(&s) {
+                    captures.push(s);
+                }
+            }
+        }
+    }
+
+    /// Every constructor of `c` takes what the class captures (dotty's `Dependencies`: the constructors of a
+    /// local class are local, each with the class's free variables; `LambdaLift.addFreeParams` adds the
+    /// parameters to each one's definition): the second constructors' own parameters get `added` at `at`,
+    /// the place the primary's take them at.
+    pub(super) fn ctors_take_captures(&mut self, c: ClassId, at: usize, added: &[SymId]) {
+        let ctors = self.checked_class(c).map_or(Vec::new(), |tc| tc.ctors.clone());
+        for f in ctors {
+            let params = &mut self.prog.funs[f.idx()].params;
+            let at = at.min(params.len());
+            params.splice(at..at, added.iter().copied());
         }
     }
 
@@ -982,17 +1033,25 @@ impl<'a> Worker<'a> {
             tc.ctor_defaults.splice(0..0, std::iter::repeat(None).take(n));
             tc.captures = n;
         }
+        self.ctors_take_captures(c, 0, &captures);
         self.anon_captures.insert(c, captures.clone());
         let pending: Vec<(TExprId, bool, Vec<(SymId, TExprId)>)> =
             self.local_news.iter().filter(|(k, _, _, _)| *k == c).map(|(_, e, inside, selfs)| (*e, *inside, selfs.clone())).collect();
         self.local_news.retain(|(k, _, _, _)| *k != c);
         for (e, inside, selfs) in pending {
-            let TExpr::New(_, args) = self.prog.expr(e) else { continue };
+            let (via, args) = match self.prog.expr(e) {
+                TExpr::New(_, args) => (None, args),
+                TExpr::NewVia(s, args) => (Some(s), args),
+                _ => continue,
+            };
             let rest = self.prog.expr_list(args).to_vec();
             let mut items = self.capture_args(&captures, inside, &selfs);
             items.extend(rest);
             let l = self.prog.list(&items);
-            self.prog.exprs[e.idx()] = TExpr::New(c, l);
+            self.prog.exprs[e.idx()] = match via {
+                Some(s) => TExpr::NewVia(s, l),
+                None => TExpr::New(c, l),
+            };
         }
         self.capture_through_nested(c, &captures);
     }
@@ -1100,7 +1159,16 @@ impl<'a> Worker<'a> {
                                 names[i].push(s);
                             }
                         }
-                        TExpr::New(m, _) => {
+                        creation @ (TExpr::New(..) | TExpr::NewVia(..)) => {
+                            // A creation through a second constructor is its class's.
+                            let m = match creation {
+                                TExpr::New(m, _) => m,
+                                TExpr::NewVia(s, _) => match self.syms.sym(s).owner {
+                                    Owner::Class(m) => m,
+                                    _ => continue,
+                                },
+                                _ => continue,
+                            };
                             let made = match parts.iter().position(|p| p.0 == m) {
                                 Some(made) => made,
                                 None if m != l && self.syms.class(m).owner == Owner::Local && self.lifted_inside(m, l) && self.prog_index.class(&self.prog, m).is_some() => {
@@ -1179,6 +1247,7 @@ impl<'a> Worker<'a> {
                     tc.captures += n;
                 }
             }
+            self.ctors_take_captures(*k, before[at], &taken[at]);
         }
         // The parent calls: in the subclass's constructor, or for an anonymous class where it
         // is made.
@@ -1197,7 +1266,11 @@ impl<'a> Worker<'a> {
             }
         }
         for (e, made) in news {
-            let TExpr::New(m, args) = self.prog.expr(e) else { continue };
+            let (m, via, args) = match self.prog.expr(e) {
+                TExpr::New(m, args) => (m, None, args),
+                TExpr::NewVia(s, args) => (parts[made].0, Some(s), args),
+                _ => continue,
+            };
             let items = match parts[made].1 {
                 Part::Lifted { anon: true } => {
                     let Some(index) = self.prog_index.class(&self.prog, m) else { continue };
@@ -1215,7 +1288,10 @@ impl<'a> Worker<'a> {
                 _ if taken[made].is_empty() => continue,
                 _ => self.with_captures_at(args, before[made], &taken[made]),
             };
-            self.prog.exprs[e.idx()] = TExpr::New(m, items);
+            self.prog.exprs[e.idx()] = match via {
+                Some(s) => TExpr::NewVia(s, items),
+                None => TExpr::New(m, items),
+            };
         }
     }
 

@@ -1136,6 +1136,7 @@ impl<'a> Worker<'a> {
                     tc.captures += added.len();
                 }
             }
+            self.ctors_take_captures(c, n, &added);
             self.anon_captures.entry(c).or_default().splice(n..n, added.iter().copied());
             // The classes nested in `c` read them through it, from parameters of their own
             // (`capture_through_nested`, which passes them where `c`'s trees make them); a

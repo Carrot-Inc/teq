@@ -371,6 +371,18 @@ struct CellWalk<'a, 'c> {
 }
 
 impl CellWalk<'_, '_> {
+    /// For each capture of its class the second constructor `s` has a parameter for, whether the parameter
+    /// is that capture itself (`Gen::via_own_captures`).
+    fn via_own_captures(&self, s: SymId) -> Vec<bool> {
+        let cx = self.cx;
+        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return Vec::new() };
+        let Some(&idx) = cx.tclass_of.get(c.idx()).filter(|&&i| i != u32::MAX) else { return Vec::new() };
+        let tc = &cx.input.prog.classes[idx as usize];
+        let n = self.capture_count(c).min(tc.ctor_params.len());
+        let Some(fun) = tc.ctors.iter().map(|&f| &cx.input.prog.funs[f.idx()]).find(|f| f.sym == s) else { return Vec::new() };
+        tc.ctor_params[..n].iter().zip(fun.params.iter()).map(|(a, b)| a == b).collect()
+    }
+
     fn capture_count(&self, c: ClassId) -> usize {
         let cx = self.cx;
         let idx = cx.tclass_of[c.idx()];
@@ -433,9 +445,19 @@ impl CellWalk<'_, '_> {
                     self.expr(a);
                 }
             }
-            TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
-                self.list(args)
+            TExpr::NewVia(s, args) => {
+                // A second constructor takes what its class captures first, shared with this scope as the
+                // primary's are.
+                let items = self.cx.input.prog.expr_list(args).to_vec();
+                let own = self.via_own_captures(s);
+                for (i, &a) in items.iter().enumerate() {
+                    let shared = own.get(i) == Some(&true);
+                    self.depth += shared as u32;
+                    self.expr(a);
+                    self.depth -= shared as u32;
+                }
             }
+            TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => self.list(args),
             // A local constructor's getter takes the class's captures as its constructor does;
             // a local def's getter is the def's.
             TExpr::Default(of, at, args) => {

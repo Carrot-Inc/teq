@@ -1580,6 +1580,15 @@ impl<'a> Emitter<'a> {
                     DefaultOf::Method(s) if self.syms.sym(s).name == crate::names::INIT => {
                         if let Owner::Class(c) = self.syms.sym(s).owner {
                             self.walk_class(w, c);
+                            // The class's captures the getter takes first, as the constructor does.
+                            let Some(fun) = prog.funs.iter().find(|f| f.sym == s) else { return };
+                            let own = self.via_own_captures(c, s);
+                            for (k, j) in own.into_iter().enumerate() {
+                                match recv {
+                                    Some(r) if k == 0 && j == 0 => self.walk(w, r),
+                                    _ => self.walk_capture_ref(w, fun.params[j]),
+                                }
+                            }
                         }
                     }
                     DefaultOf::Method(_) if recv.is_some_and(|r| matches!(prog.expr(r), TExpr::Super(_))) => {
@@ -1686,10 +1695,19 @@ impl<'a> Emitter<'a> {
             TExpr::New(c, _) if self.closure_anons.contains_key(&c) => self.walk_closure(w, e, true),
             TExpr::New(c, _) if self.syms.class(c).kind == ClassKind::Builtin => {}
             TExpr::NewVia(s, args) => {
-                if let Owner::Class(c) = self.syms.sym(s).owner {
-                    self.walk_class(w, c);
+                // What `Emitter::emit_expr` writes: a local class's captures first, as a creation through the
+                // primary constructor passes them.
+                let captures = match self.syms.sym(s).owner {
+                    Owner::Class(c) => {
+                        self.walk_class(w, c);
+                        (!self.via_own_captures(c, s).is_empty()).then_some(c)
+                    }
+                    _ => None,
+                };
+                match captures {
+                    Some(c) => self.walk_capture_args(w, c, args),
+                    None => self.walk_args(w, args),
                 }
-                self.walk_args(w, args);
             }
             TExpr::New(c, args) => {
                 if let Some(companion) = self.companion_touch(c) {

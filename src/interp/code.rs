@@ -399,7 +399,22 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                 }
             }
-            TExpr::Default(_, _, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) => self.list_layout(w, args),
+            TExpr::NewVia(s, args) => {
+                // A capture's thunk among a second constructor's arguments, as among the primary's.
+                let own = self.ctor_own_captures(s);
+                for (k, i) in args.range().enumerate() {
+                    let x = self.prog().expr_lists[i];
+                    match self.prog().expr(x) {
+                        TExpr::Lambda(params, body) if params.len == 0 && own.get(k) == Some(&true) => {
+                            w.scopes.push(Scope { opaque: true, ..Scope::new() });
+                            self.expr_layout(w, body);
+                            w.close();
+                        }
+                        _ => self.expr_layout(w, x),
+                    }
+                }
+            }
+            TExpr::Default(_, _, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) => self.list_layout(w, args),
             TExpr::Lambda(params, body) => {
                 let mut scope = Scope::opened(Opener::Lambda(body));
                 for i in params.range() {
@@ -1011,7 +1026,7 @@ enum Op {
     /// is created whole (`anon_args`), its arguments skipped.
     NewPrep { e: TExprId, class: ClassId, skip: u32 },
     New { class: ClassId, argc: u32 },
-    NewVia { sym: SymId, argc: u32 },
+    NewVia { e: TExprId, sym: SymId, argc: u32 },
     Lambda { params: ListRef, body: TExprId },
     /// A template resolved before its arguments: a builtin's go on to `JsCall`, any other runs as
     /// the walker runs it, its arguments skipped.
@@ -1501,8 +1516,18 @@ impl<'a, 't> Interp<'a, 't> {
                 b.patch(prep, to);
             }
             TExpr::NewVia(s, args) => {
-                self.lower_list(b, args);
-                b.emit(Op::NewVia { sym: s, argc: args.len });
+                // A local class's captures among the arguments stay in the scope (`via_scope`).
+                let own = self.ctor_own_captures(s);
+                let mut argc = 0;
+                for i in 0..args.len as usize {
+                    if own.get(i) == Some(&true) {
+                        continue;
+                    }
+                    let item = self.prog().expr_lists[args.start as usize + i];
+                    self.lower(b, item);
+                    argc += 1;
+                }
+                b.emit(Op::NewVia { e, sym: s, argc });
             }
             TExpr::Lambda(params, body) => _ = b.emit(Op::Lambda { params, body }),
             TExpr::If(c, t, els) => self.lower_if(b, c, t, els, false),
@@ -2174,9 +2199,11 @@ impl<'a, 't> Interp<'a, 't> {
                     let args = self.args_of(st, argc);
                     st.push(self.construct_new(class, args, cur)?);
                 }
-                Op::NewVia { sym, argc } => {
+                Op::NewVia { e, sym, argc } => {
                     let args = self.args_of(st, argc);
-                    st.push(self.construct_via_new(sym, args)?);
+                    let TExpr::NewVia(_, all) = self.prog().expr(e) else { unreachable!("a creation through a second constructor") };
+                    let env = self.via_scope(sym, all, cur, cx)?;
+                    st.push(self.construct_via_new(sym, args, &env)?);
                 }
                 Op::Lambda { params, body } => {
                     self.prof_alloc(|a| a.closures += 1);

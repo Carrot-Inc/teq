@@ -3339,6 +3339,28 @@ impl<'a> Emitter<'a> {
         self.syms.class(c).ctors.iter().position(|&x| x == s).map_or(0, |i| i + 1)
     }
 
+    /// Names the parameters of a second constructor that are its class's own captures (`own`, their places
+    /// among `params` and among the class's) `$cN`, as the primary constructor's parameter list names them, in
+    /// the scope being written, and has the code there read a capture by that name, as the constructor does
+    /// before `super` (`local_ref`). What `restore_own_captures` puts back.
+    pub(super) fn name_own_captures(&mut self, own: &[usize], params: &[SymId]) -> (Vec<(SymId, Option<Rc<str>>)>, bool) {
+        let mut saved = Vec::with_capacity(own.len());
+        for &j in own {
+            let name: Rc<str> = Rc::from(format!("$c{}", j));
+            self.declare_fixed(&name);
+            saved.push((params[j], self.sym_names[params[j].idx()].replace(name)));
+        }
+        let before = self.before_super || !own.is_empty();
+        (saved, std::mem::replace(&mut self.before_super, before))
+    }
+
+    pub(super) fn restore_own_captures(&mut self, named: (Vec<(SymId, Option<Rc<str>>)>, bool)) {
+        for (p, was) in named.0 {
+            self.sym_names[p.idx()] = was;
+        }
+        self.before_super = named.1;
+    }
+
     /// A secondary constructor is a static factory that evaluates the arguments of its self
     /// call, makes the instance through the constructor the call goes to and runs the statements
     /// after the call through a method of the instance.
@@ -3359,6 +3381,10 @@ impl<'a> Emitter<'a> {
             if has_after {
                 self.declare_fixed("$t");
             }
+            // What a local class captures leads its second constructors' parameters (the typer's
+            // `ctors_take_captures`): the factory, which has no instance, takes and reads them as the primary
+            // constructor does before `super`.
+            let named = self.name_own_captures(&Self::own_captures(tc, &params), &params);
             // A class nested in a class's secondary constructor takes the enclosing instance before
             // the declared parameters, whose defaults `defaults` holds (`type_secondary_ctor`).
             let declared: usize = self.syms.sym(fun.sym).sig.as_ref().map_or(0, |sig| sig.clauses.iter().map(|c| c.params.len()).sum());
@@ -3383,6 +3409,7 @@ impl<'a> Emitter<'a> {
             }
             self.close("}");
             self.leave_params(mark);
+            self.restore_own_captures(named);
             self.leave_scope();
             if has_after {
                 self.line();
@@ -3426,8 +3453,19 @@ impl<'a> Emitter<'a> {
             let fun = &self.prog.funs[f.idx()];
             let (params, defaults) = (fun.params.clone(), fun.defaults.clone());
             let Some(TExpr::Block(stmts, after)) = fun.body.map(|b| self.prog.expr(b)) else { break };
+            // What the superclass captures leads this constructor's parameters (`via_own_captures`): the
+            // subclass holds each among its own captures, where the code here reads it, so it is bound to no
+            // argument, which would read a `var`'s value and force a lazy val.
+            let own = match self.syms.sym(cur).owner {
+                Owner::Class(owner) => self.via_own_captures(owner, cur),
+                _ => Vec::new(),
+            };
             let mut names: Vec<Rc<str>> = Vec::new();
             for (i, &p) in params.iter().enumerate() {
+                if own.contains(&i) {
+                    names.push(Rc::from("undefined"));
+                    continue;
+                }
                 // The parameter is no binding of the output: its name is the stem of the temporary's.
                 let base = self.unbound_name(p);
                 let n: Rc<str> = Rc::from(self.fresh(&base));
@@ -3435,7 +3473,8 @@ impl<'a> Emitter<'a> {
                 self.line();
                 let _ = write!(self.out, "const {} = ", n);
                 let written = args.get(i).copied().filter(|&a| !matches!(self.prog.expr(a), TExpr::Unit));
-                match (placeholders.get(i), written, defaults.get(i).copied().flatten()) {
+                let declared = i - own.iter().filter(|&&j| j < i).count();
+                match (placeholders.get(i), written, defaults.get(declared).copied().flatten()) {
                     (Some(text), _, _) => self.out.push_str(text),
                     (None, Some(a), _) => self.emit_expr(a),
                     (None, None, Some(d)) => self.emit_expr(d),
@@ -3457,10 +3496,15 @@ impl<'a> Emitter<'a> {
                     cur = next;
                     args = self.prog.expr_list(l).to_vec();
                 }
-                TExpr::New(_, l) => {
+                TExpr::New(target, l) => {
                     self.line();
                     self.out.push_str(primary);
-                    self.emit_args(l);
+                    // The captures go on to the primary constructor as a creation passes them.
+                    if own.is_empty() {
+                        self.emit_args(l);
+                    } else {
+                        self.emit_capture_args_omitting(target, l, &[]);
+                    }
                     self.out.push_str(suffix);
                     self.out.push(';');
                     break;

@@ -6496,24 +6496,12 @@ impl<'a> Worker<'a> {
                     return self.prog.add(TExpr::New(c, args));
                 }
             }
-            // A secondary constructor of a class nested in a class takes the enclosing instance
-            // first, as the primary one does (`new_instance`).
-            let args = match self.syms.sym(call.sym).owner {
-                Owner::Class(c) => match self.outer_class(c) {
-                    Some(o) => {
-                        let at = self.syms.sym(call.sym).span;
-                        let outer = self.new_outer_arg(c, o, at);
-                        // A default the creation leaves to the constructor's getter takes the
-                        // enclosing instance, its receiver, as the primary's do (`new_instance`).
-                        let of = DefaultOf::Method(call.sym);
-                        self.retarget_defaults(args, of, of, |w| w.prior_copy(outer));
-                        let items: Vec<TExprId> = std::iter::once(outer).chain(self.prog.expr_list(args).iter().copied()).collect();
-                        self.prog.list(&items)
-                    }
-                    None => args,
-                },
-                _ => args,
-            };
+            // A creation through a secondary constructor passes first what one through the primary does:
+            // the enclosing instance of a class nested in a class, what a local class captures (`creation`).
+            if let Owner::Class(c) = self.syms.sym(call.sym).owner {
+                let at = self.syms.sym(call.sym).span;
+                return self.creation(c, Some(call.sym), args, at);
+            }
             return self.prog.add(TExpr::NewVia(call.sym, args));
         }
         // Only a library body spells a widening through the companion, told before the call.

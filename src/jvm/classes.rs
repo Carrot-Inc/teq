@@ -1826,9 +1826,43 @@ impl<'a> Gen<'a> {
         let Some(body) = fun.body else { return };
         let TExpr::Block(stmts, after) = prog.expr(body) else { return };
         let Some((&TStmt::Expr(call), prelude)) = prog.stmts[stmts.range()].split_last() else { return };
-        let params: Vec<(Option<SymId>, JType)> = fun.params.iter().map(|&s| (Some(s), self.sym_type(s))).collect();
+        // What a local class captures leads every constructor's parameters (dotty's `LambdaLift.addFreeParams`),
+        // as the primary's and the default getters' take it: a `var` as its cell, a lazy val as its holder, a
+        // local def's own captures in its place. A parameter that is not the capture itself (the enclosing
+        // instance of a class nested in a class) is the constructor's own, as before.
+        let own = self.this_class.map_or(Vec::new(), |c| self.via_own_captures(c, fun.sym));
+        let mut params: Vec<(Option<SymId>, JType)> = Vec::new();
+        let mut held: Option<(Vec<(SymId, SymId)>, Extras, u16)> = None;
+        let mut declared_from = 0;
+        if let (true, Some(c)) = (own.contains(&true), self.this_class) {
+            let captured: Vec<SymId> = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].ctor_params[..own.len()].to_vec();
+            // Each parameter with the capture it stands for; then what the class's copies of its captured
+            // local defs capture (`class_captured`).
+            let mut slots: Vec<(SymId, SymId)> = captured.iter().enumerate().filter(|&(_, &cap)| !self.is_local_def(cap)).map(|(j, &cap)| (fun.params[j], cap)).collect();
+            let through = self.class_captured(c).split_off(slots.len());
+            slots.extend(through.into_iter().map(|s| (s, s)));
+            let extras = self.class_extras(c);
+            params.extend(slots.iter().map(|&(p, cap)| (Some(p), self.anon_capture_type(cap))));
+            let extras_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+            params.extend(self.extras_types(&extras).into_iter().map(|t| (None, t)));
+            held = Some((slots, extras, extras_slot));
+            declared_from = own.len().min(fun.params.len());
+        }
+        params.extend(fun.params[declared_from..].iter().map(|&s| (Some(s), self.sym_type(s))));
         self.context = format!("{}.<init>", self.this_name);
         self.begin_method(false, true, &params, JType::V, &[body]);
+        if let Some((slots, extras, extras_slot)) = held {
+            self.bind_extras(&extras, extras_slot);
+            for &(p, cap) in &slots {
+                if self.held(cap) == Held::Cell {
+                    let ty = self.sym_type(cap);
+                    if let Some(local) = self.m.locals.get_mut(&p) {
+                        local.ty = ty;
+                        local.cell = true;
+                    }
+                }
+            }
+        }
         let owner = self.this_name.clone();
         let this = JType::L(owner.clone());
         for s in prelude {
