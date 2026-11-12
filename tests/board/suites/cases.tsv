@@ -21,6 +21,7 @@ and_base_three_instances	fail	-	< ok
 annotated_type_params	pass	-	
 annotation_through_export	pass	-	
 annotations_ignored	pass	-	
+anon_captures_outer_itself	pass	-	
 anon_class_bound_members	pass	-	
 anon_classes	pass	-	
 anon_default_args	pass	-	
@@ -42,6 +43,11 @@ anyval_extractor_view	pass	-
 applied_alias_constructor	pass	-	
 applied_inner_class_prefix	pass	-	
 applied_kind_positive	pass	-	
+applied_lambda_anon_inner_parent	pass	-	
+applied_lambda_anon_inner_parent_in_inner_class	pass	-	
+applied_lambda_anon_inner_parent_in_local_class	pass	-	
+applied_lambda_anon_parent_arg_outer	pass	-	
+applied_lambda_outer_this_argument	pass	-	
 applied_member_declared_variance	fail	-	< true
 applied_param_reference	pass	-	
 apply_value	pass	-	
@@ -104,6 +110,7 @@ block_infix_argument	pass	-
 block_lambda_stmts	pass	-	
 block_statement_lambda	pass	-	
 block_then_select	pass	-	
+body_reads_outer_member	pass	-	
 boolean_assign_ops	pass	-	
 boolean_strict_operators	pass	-	
 bottom_path_kinds	pass	-	
@@ -124,6 +131,7 @@ brace_next_line	pass	-
 brace_self_type_parent	pass	-	
 braces	pass	-	
 branch_var_bound_conversion	pass	-	
+brief_passing_neighbour	pass	-	
 bson_macros	cannot run	-	the JVM's platform
 bson_opaque_list_handler	cannot run	-	the JVM's platform
 buffer_append_varargs	pass	-	
@@ -224,6 +232,7 @@ case_guard_indentation	pass	-
 case_lambda_parameter	pass	-	
 case_lambda_pinned_constructor	pass	-	
 case_lambda_tuples	pass	-	
+case_object_equals_from_superclass_trait	pass	-	
 cast_array_kinds	cannot run	-	the JVM's platform
 cast_array_nothing	pass	-	
 cast_boxed_unit	pass	-	
@@ -392,6 +401,7 @@ constant_typed_literal	pass	-
 constant_union_join	pass	-	
 constructor_default_synthetic_companion	pass	-	
 constructor_proxy_shadowed_value	pass	-	
+context_arg_applied_to_a_val	pass	-	
 context_bound_merge	pass	-	
 context_closure_written	pass	-	
 context_function_inferred	pass	-	
@@ -1133,6 +1143,8 @@ inline_collapsed_nullary_plus	pass	-
 inline_collapsed_plus_over_negation	pass	-	
 inline_conditional_condition	pass	-	
 inline_constant_final	pass	-	
+inline_context_arg_anon_inner_parent	pass	-	
+inline_context_arg_anon_inner_parent_bare	pass	-	
 inline_copy_private_defaults	pass	-	
 inline_ctor_closures	pass	-	
 inline_ctor_expansion_classes	pass	-	
@@ -1908,6 +1920,7 @@ paren_pattern_types	pass	-
 paren_self_type	pass	-	
 parens_call_then_using	pass	-	
 parens_op_assign_target	pass	-	
+parent_arg_plain_local	pass	-	
 parser_combinators_regex	pass	-	
 parser_combinators_sequence	pass	-	
 partial_application_expected_function	pass	-	
@@ -2325,6 +2338,7 @@ singleton_constructor_inference	pass	-
 singleton_types	pass	-	
 singleton_union_arg	pass	-	
 singleton_union_wide	pass	-	
+site_in_lambda_of_the_class	pass	-	
 small_map_iterators	pass	-	
 small_maps_size_hint	pass	-	
 socket_accept	cannot run	-	the JVM's platform
@@ -2775,6 +2789,7 @@ zio_runtime_module_race	cannot run	-	the JVM's platform
 zio_runtime_pipe	cannot run	-	the JVM's platform
 zio_runtime_sleep_fork	cannot run	-	the JVM's platform
 zio_signal_handler	cannot run	-	the JVM's platform
+zio_succeed_anon_inner_parent	cannot run	-	the JVM's platform
 zip_default_zone	cannot run	-	the JVM's platform
 zip_digest	cannot run	-	the JVM's platform
 zip_entry_times	cannot run	-	the JVM's platform

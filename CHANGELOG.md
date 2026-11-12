@@ -57,6 +57,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- An anonymous class made in the argument of zio's `ZIO.succeed`, or in any function literal applied where it is
+  written, finds the enclosing class's instance from inside another class's method: an anonymous subclass of an
+  inner class made there threw `ClassCastException` on the JVM, and its outer members read `undefined` in JavaScript.
 - The lean standard library declares `List`, `Option`, `Either` and `Try` as abstract classes and `Iterator` and
   `immutable.Map` as traits, as scala-library does, and `List` has its `AbstractSeq` ancestors: a type test on
   one of them is an `instanceof`, messages say `class List`, and a match over a value narrowed to `Option` is no

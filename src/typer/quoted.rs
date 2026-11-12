@@ -2310,7 +2310,7 @@ impl<'a> Worker<'a> {
     /// answering for the rest (`Copier::declared`).
     pub(super) fn instantiate_tree(&mut self, body: TExprId, holes: &FxMap<SymId, TExprId>, params: &FxMap<SymId, TExprId>, subst: &Subst, renames: &FxMap<SymId, SymId>, paths: &[(SymId, TypeId)], declared: &[(TExprId, Vec<ClassId>)]) -> TExprId {
         let copies = self.capturing().then(FxMap::default);
-        let mut copier = Copier { holes, params, subst, renames, paths, extra: FxMap::default(), classes: FxMap::default(), added: FxMap::default(), locals: None, carries_chain: false, map: None, copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: None, deferring: false, class_depth: 0, body_depth: 0, hole_depth: None, suspended: Vec::new(), scratch: Scratch::default(), reducing: false, declared, block_declares: None };
+        let mut copier = Copier { holes, params, subst, renames, paths, extra: FxMap::default(), classes: FxMap::default(), added: FxMap::default(), locals: None, carries_chain: false, map: None, copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: None, deferring: false, class_depth: 0, body_depth: 0, hole_depth: None, site_this: Vec::new(), suspended: Vec::new(), scratch: Scratch::default(), reducing: false, declared, block_declares: None };
         let copied = copier.expr(self, body);
         if copier.copies.is_some() {
             let roots: Vec<TExprId> = std::iter::once(body).chain(copier.filled.iter().copied()).collect();
@@ -2337,7 +2337,7 @@ impl<'a> Worker<'a> {
         let copies = self.capturing().then(FxMap::default);
         let (extra, copied_classes) = (std::mem::take(members), std::mem::take(classes));
         let scratch = std::mem::take(&mut map.part.scratch);
-        let mut copier = Copier { holes: &holes, params, subst, renames, paths, extra, classes: copied_classes, added: FxMap::default(), locals: None, carries_chain: false, map: Some(map), copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: Some(stored), deferring: stored.leaves_for_demand.is_some(), class_depth: 0, body_depth: 0, hole_depth: None, suspended: Vec::new(), scratch, reducing: false, declared: stored.blocks, block_declares: None };
+        let mut copier = Copier { holes: &holes, params, subst, renames, paths, extra, classes: copied_classes, added: FxMap::default(), locals: None, carries_chain: false, map: Some(map), copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: Some(stored), deferring: stored.leaves_for_demand.is_some(), class_depth: 0, body_depth: 0, hole_depth: None, site_this: Vec::new(), suspended: Vec::new(), scratch, reducing: false, declared: stored.blocks, block_declares: None };
         for &r in roots {
             let copy = copier.expr(self, r);
             copier.map.as_mut().expect("the copy's map").part.roots.push(copy);
@@ -2600,6 +2600,11 @@ struct Copier<'c> {
     /// The `body_depth` at which the tree filling the hole being copied was entered: a tree the
     /// site made, whose own `this` is the site's.
     hole_depth: Option<u32>,
+    /// The locals the copy put for a `This` of the site inside a class it makes (`expr_node`):
+    /// each is `this` where a class capturing it is created at the site's level. A local the
+    /// copied tree itself names for an enclosing instance is the site's own spelling of it there
+    /// and is passed as it stands.
+    site_this: Vec<SymId>,
     /// The receiver each of those classes suspended and the frames of the place that creates it,
     /// for the arguments an anonymous class passes its superclass, which that place evaluates.
     suspended: Vec<(Option<TExprId>, usize)>,
@@ -3629,6 +3634,9 @@ impl<'c> Copier<'c> {
                 Some(c) => {
                     let s = t.outer_this_sym(c);
                     self.note_local(s);
+                    if !self.site_this.contains(&s) {
+                        self.site_this.push(s);
+                    }
                     TExpr::Local(s)
                 }
                 None => TExpr::This,
@@ -3747,10 +3755,14 @@ impl<'c> Copier<'c> {
                 for &s in self.added.get(&nc).cloned().unwrap_or_default().iter() {
                     // The local standing for the site's `this` (`expr_node`'s `This` of a hole) is
                     // `this` where the class is created at the site's level, and captured again
-                    // inside another class the copy makes.
+                    // inside another class the copy makes. One the copied tree names (the outer
+                    // argument of an inner-class parent, an argument put for a parameter, inside
+                    // another class of the site) is that class's local for the enclosing instance,
+                    // read as the tree reads it: dotty leaves `This(C)` a reference by class and
+                    // finds the instance where the tree stands (`ExplicitOuter.OuterOps.path`).
                     let stands_for = t.outer_this.find(|_, &sym| sym == s).map(|(k, _)| k);
                     let arg = match stands_for {
-                        Some(k) if self.body_depth == 0 => {
+                        Some(k) if self.body_depth == 0 && self.site_this.contains(&s) => {
                             let this = t.prog.add(TExpr::This);
                             let ty = t.syms.this_type(k);
                             t.prog.set_type(this, ty);

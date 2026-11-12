@@ -394,6 +394,7 @@ zio_runtime_module_race	error: cannot resolve import: zio not found
 zio_runtime_pipe	error: cannot resolve import: zio not found
 zio_runtime_sleep_fork	error: cannot resolve import: zio not found
 zio_signal_handler	error: not found: Unsafe
+zio_succeed_anon_inner_parent	error: cannot resolve import: zio not found
 zip_default_zone	error: value zoneName is not a member of zip
 zip_digest	error: not supported on JavaScript: class CRC32 java.util.zip.CRC32 (a Java definition without an implementation in the std's platform layer
 zip_entry_times	error: not supported on JavaScript: class DeflaterOutputStream java.util.zip.DeflaterOutputStream (a Java definition without an implementati
