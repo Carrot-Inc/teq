@@ -1651,5 +1651,30 @@ for fork in import_bound:tests/cases/given_import_bounds.scala import_bound_situ
   fi
 done
 
+# A memo of the typer keyed or valued by a worker's numbers and asked again after the merge: the simplified
+# form of a union a worker met (`Dog | Animal`), read where the file a macro of the run suspended is typed
+# again. The check at two, four, eight and sixteen workers is one worker's, which accepts the program as scalac
+# does (without, "value get is not a member of Any" in most runs), and the built program prints scalac's `dog1`
+# from one worker's JavaScript.
+saved_counts=$COUNTS
+COUNTS="2 4 8 16"
+same_lines fork_memo_simplified_check '.*' 6 compiler check tests/workers/fork_memo_simplified
+same_run_and_js fork_memo_simplified_run 6 tests/workers/fork_memo_simplified
+if [ "$(cat "$work/fork_memo_simplified_run.one")" = dog1 ]; then ok; else bad "fork_memo_simplified_printed: one worker prints $(head -1 "$work/fork_memo_simplified_run.one" | cut -c1-80), scalac dog1"; fi
+COUNTS=$saved_counts
+
+# A type lambda's binder annotation is kept by the binder's type parameter, which a worker makes and the merge
+# renumbers: the merge's own sweep (TEQ_MERGE_SWEEP, above) finds no worker's id left, and each program's check
+# at two, four, eight and sixteen workers is one worker's (without, "the merge left the workers' ids in the
+# merged program" at every count above one).
+saved_counts=$COUNTS
+COUNTS="2 4 8 16"
+for annotated in tests/workers/fork_binder_annotation tests/cases/bottom_path_kinds.scala tests/cases/poly_context_bound_names.scala \
+  tests/errors/binder_annotation_checks.scala tests/errors/binder_annotations.scala tests/errors/binder_annotation_args.scala; do
+  name=$(basename "$annotated" .scala)
+  same_lines "fork_annots_${name#fork_}" '.*' 2 compiler check "$annotated"
+done
+COUNTS=$saved_counts
+
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass

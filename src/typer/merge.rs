@@ -3142,6 +3142,12 @@ impl<'a> Worker<'a> {
         self.matches.forget();
         self.class_given_indexes.clear();
         self.conversion_indexes.clear();
+        // Memos keyed or valued by a worker's numbers (a type made after the fork, a symbol or a
+        // class of its chunk), which the next asker fills again.
+        self.given_indexes.clear();
+        self.simplified_memo.clear();
+        self.retracted_unapplies.clear();
+        self.variance_checked.clear();
         // What the last typing of an item left in the working state, which the next typing sets
         // before it reads.
         self.case_binders.clear();
