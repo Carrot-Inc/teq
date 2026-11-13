@@ -47,6 +47,10 @@ pub struct DocTable {
     /// parameters does.
     param_owner: FxMap<SymId, SymId>,
     tparam_owner: FxMap<TParamId, Target>,
+    /// The type parameters of the document's globally named extension groups, by each: where the name of the
+    /// group's first method starts, and the group's methods' parameters at the same position, in the methods' order
+    /// (`sem_group_references`).
+    group_tparams: FxMap<TParamId, (u32, std::sync::Arc<[TParamId]>)>,
 }
 
 /// What the documents of one typing share: its files' declarations and the packages their paths name, found once.
@@ -100,6 +104,37 @@ impl DocTable {
             Target::Sym(s) if w.syms.sym(s).kind == SymKind::Def && w.syms.sym(s).ext_clauses > 0 => Some(s),
             _ => None,
         }).collect();
+        // The group's type parameters: each method has its own, declared at the group's one place, which tells the
+        // methods of one group; a method of a local group is in none. A forwarder of an export has its method's
+        // parameters: where the export stands before the group, the forwarder's name is the place's earliest and
+        // the group's clauses keep the index's one reference.
+        let mut places: FxMap<(FileId, u32, u32), Vec<(u32, TParamId)>> = FxMap::default();
+        for &m in &methods {
+            let (leading, start) = {
+                let info = w.syms.sym(m);
+                (info.ext_tparams as usize, info.span.start)
+            };
+            if leading == 0 || !w.sem_global(Target::Sym(m)) {
+                continue;
+            }
+            let sig = w.sig_arc(m);
+            for &q in sig.tparams.iter().take(leading) {
+                if let Some((file, span)) = w.tparam_declared(q).filter(|(file, _)| entries.contains(file)) {
+                    let of_place = places.entry((file, span.start, span.end)).or_default();
+                    if !of_place.iter().any(|&(_, known)| known == q) {
+                        of_place.push((start, q));
+                    }
+                }
+            }
+        }
+        let mut group_tparams: FxMap<TParamId, (u32, std::sync::Arc<[TParamId]>)> = FxMap::default();
+        for of_place in places.into_values() {
+            let first = of_place.iter().map(|&(start, _)| start).min().unwrap_or(0);
+            let params: std::sync::Arc<[TParamId]> = of_place.iter().map(|&(_, q)| q).collect();
+            for &(_, q) in &of_place {
+                group_tparams.insert(q, (first, params.clone()));
+            }
+        }
         let mut group: Vec<(Span, Target)> = Vec::new();
         for m in methods {
             let leading = w.syms.sym(m).ext_clauses as usize;
@@ -119,7 +154,7 @@ impl DocTable {
         let mut packages: Vec<(Span, PkgId)> = entries.iter().filter_map(|f| declared.packages.get(f)).flatten().copied().collect();
         packages.sort_by_key(|(span, p)| (span.start, span.end, p.0));
         packages.dedup();
-        DocTable { entries, decls, packages, locals: FxMap::default(), local_places: FxMap::default(), named: FxMap::default(), param_owner, tparam_owner }
+        DocTable { entries, decls, packages, locals: FxMap::default(), local_places: FxMap::default(), named: FxMap::default(), param_owner, tparam_owner, group_tparams }
     }
 }
 
@@ -162,13 +197,32 @@ impl<'a> Worker<'a> {
             // (`ExtractSemanticDB.traverse`, 423-437), and the index both for a rename.
             let renamed = kind == Kind::Import && !self.sem_spelled(&table.entries, span, t);
             if !renamed && matches!(kind, Kind::Ref | Kind::Call | Kind::Type | Kind::Import | Kind::Pattern | Kind::NamedArg | Kind::Def) && !matches!(t, Target::Node(_)) {
-                let symbol = self.sem_symbol(table, t)?;
-                if !out.iter().any(|o| o.symbol == symbol) {
-                    out.push(Occurrence { symbol, definition: kind == Kind::Def });
+                for t in self.sem_group_references(table, t, kind, span) {
+                    let symbol = self.sem_symbol(table, t)?;
+                    if !out.iter().any(|o| o.symbol == symbol) {
+                        out.push(Occurrence { symbol, definition: kind == Kind::Def });
+                    }
                 }
             }
         }
         Ok(out)
+    }
+
+    /// What the index's record at `span` refers to: its target, except where that is an extension group's type
+    /// parameter named in the group's own clauses (the receiver's type, a using clause, another parameter's bound).
+    /// Every method of the group has the group's clauses (`Desugar.extMethods` gives each `extMethod(mdef,
+    /// ext.paramss)`), so the name there refers to each method's own parameter, in the methods' order, where the
+    /// index keeps the one filed last (`DocTable::group_tparams`). From the name of the group's first method on, a
+    /// name is its method's alone; a local group's reference stays the index's one.
+    fn sem_group_references(&self, table: &DocTable, t: Target, kind: Kind, span: Span) -> Vec<Target> {
+        if let (Target::TParam(p), Kind::Type) = (t, kind) {
+            if let Some((first, group)) = table.group_tparams.get(&p) {
+                if span.end <= *first {
+                    return group.iter().map(|&q| Target::TParam(q)).collect();
+                }
+            }
+        }
+        vec![t]
     }
 
     /// Every range of the document an occurrence stands at, with its occurrences, in the order of the ranges: what

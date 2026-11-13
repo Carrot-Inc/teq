@@ -719,6 +719,44 @@ object Verb:
       Files.writeString(dir.resolve(".scalafix.conf"), "rules = [\"file:rules/Offsets.scala\"]\n")
       val rsoff = Sh(teq, "compiler", "fix", "--check", "Case.scala", "--config", ".scalafix.conf").in(dir).timeout(300).check(false).run()
       expect("service/type parameter, a std class applied in " + name, rsoff.status == 1 && rsoff.errAll().contains("Case.scala:1:1: error: [Offsets]: " + said + "\n"), s"exit ${rsoff.status}: ${rsoff.errAll()}")
+    // A reference to an extension group's type parameter in the group's own clauses (the receiver's type, a using
+    // clause) is one a method of the group, in the methods' order, as dotty gives every method the group's clauses
+    // (scalac 3.8.4's documents); a reference inside a method is that method's own. Three methods; a method with
+    // type parameters of its own; a right-associative operator first; a using clause that names the parameter
+    // again; an inline method in the group.
+    val clauseRefs = "package teq.fix.probe\nimport teq.fix.*\nfinal class ClauseRefs extends SemanticRule(\"ClauseRefs\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    val group = text.indexOf(\"extension [\")\n    if group < 0 then Patch.empty\n    else\n      def at(i: Int): String = Native.symbolsAt(doc.gen, i, i + 1).mkString(\",\")\n      val receiver = text.indexOf(\"(a: A)\", group) + 4\n      val again = text.indexOf(\"Ord[A]\", group)\n      val result = text.indexOf(\": A = a\", group) + 2\n      Patch.lint(Diagnostic(\"\", \"receiver \" + at(receiver) + (if again >= 0 then \" using \" + at(again + 4) else \"\") + \" result \" + at(result) + \".\", doc.tree.pos))\n"
+    val clauseConf = ".scalafix.conf" -> "rules = [\"file:rules/ClauseRefs.scala\"]\n"
+    def group(name: String, methods: String*): String = methods.map(m => s"core/$name.$m().[A]").mkString(",")
+    val groups = Seq(
+      ("Three", "package core\nobject Three:\n  extension [A](a: A)\n    def first: A = a\n    def second: A = a\n    def third: A = a\n", s"receiver ${group("Three", "first", "second", "third")} result ${group("Three", "first")}."),
+      ("Own", "package core\nobject Own:\n  extension [A](a: A)\n    def first[B](b: B): A = a\n    def second[C](c: C): C = c\n", s"receiver ${group("Own", "first", "second")} result ${group("Own", "first")}."),
+      ("Right", "package core\nobject Right:\n  extension [A](a: A)\n    def +:[B](b: B): A = a\n    def plain[C](c: C): A = a\n", s"receiver ${group("Right", "`+:`", "plain")} result ${group("Right", "`+:`")}."),
+      ("Using", "package core\nobject Using:\n  trait Ord[A]\n  extension [A](a: A)(using o: Ord[A])\n    def first: A = a\n    def second: A = a\n", s"receiver ${group("Using", "first", "second")} using ${group("Using", "first", "second")} result ${group("Using", "first")}."),
+      ("Inlined", "package core\nobject Inlined:\n  extension [A](a: A)\n    inline def first: A = a\n    def second: A = a\n", s"receiver ${group("Inlined", "first", "second")} result ${group("Inlined", "first")}."),
+      // A method whose body holds another group, in a local object: that group's method is no method of this one.
+      ("Nested", "package core\nobject Nested:\n  extension [A](a: A)\n    def first: A = a\n    def second: A =\n      object Inner:\n        extension [B](b: B)\n          def inner: B = b\n      import Inner.*\n      a.inner\n", s"receiver ${group("Nested", "first", "second")} result ${group("Nested", "first")}."),
+      ("NestedOne", "package core\nobject NestedOne:\n  extension [A](a: A)\n    def only: A =\n      object Inner:\n        extension [B](b: B)\n          def inner: B = b\n      import Inner.*\n      val kept: A = a\n      kept.inner\n", s"receiver ${group("NestedOne", "only")} result ${group("NestedOne", "only")}."))
+    for (name, source, said) <- groups do
+      val sgroup = build(work, "service-clause-" + name, s"core/src/core/$name.scala" -> source, "rules/ClauseRefs.scala" -> clauseRefs, clauseConf)
+      val rsgroup = fix(sgroup, "core")
+      expect("service/extension clause's type parameter, " + name, rsgroup.status == 1 && rsgroup.errAll().contains(s"$name.scala:1:1: error: [ClauseRefs]: $said\n"), s"exit ${rsgroup.status}: ${rsgroup.errAll()}")
+    // A group inside a method: scalac has one local for the group's type parameter (dotty's `localIdx`) and one
+    // reference to it at the receiver's type; the reference is one here.
+    val localGroup = "package core\nobject Tally2:\n  def run: Int =\n    extension [A](a: A)\n      def first: A = a\n      def second: A = a\n    1.first.second\n"
+    val slocalGroup = build(work, "service-clause-local", "core/src/core/Tally2.scala" -> localGroup, "rules/ClauseRefs.scala" -> clauseRefs, clauseConf)
+    val rslocalGroup = fix(slocalGroup, "core")
+    val localReceiver = rslocalGroup.errAll().linesIterator.collectFirst { case l if l.contains("[ClauseRefs]: receiver ") => l.substring(l.indexOf("receiver ") + 9, l.indexOf(" result ")) }
+    expect("service/extension clause's type parameter, a local group", rslocalGroup.status == 1 && localReceiver.exists(r => r.startsWith("local") && !r.contains(",")), s"exit ${rslocalGroup.status}: ${rslocalGroup.errAll()}")
+    // The same in a case of tests/cases typed alone: `extension [A](a: A)` over `===` and `=!=`, the `A` of the
+    // receiver's type at 1971.
+    val at1971 = "package teq.fix.probe\nimport teq.fix.*\nfinal class At1971 extends SemanticRule(\"At1971\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    if text.length < 1972 || text.substring(1954, 1972) != \"extension [A](a: A\" then Patch.empty\n    else Patch.lint(Diagnostic(\"\", \"the receiver's A: \" + Native.symbolsAt(doc.gen, 1971, 1972).mkString(\",\") + \".\", doc.tree.pos))\n"
+    val dvdom = work.resolve("clause-vdom")
+    Files.createDirectories(dvdom.resolve("rules"))
+    Files.writeString(dvdom.resolve("vdom_dsl.scala"), read(Paths.get("tests/cases/vdom_dsl.scala")))
+    Files.writeString(dvdom.resolve("rules/At1971.scala"), at1971)
+    Files.writeString(dvdom.resolve(".scalafix.conf"), "rules = [\"file:rules/At1971.scala\"]\n")
+    val rsvdom = Sh(teq, "compiler", "fix", "--check", "vdom_dsl.scala", "--config", ".scalafix.conf").in(dvdom).timeout(300).check(false).run()
+    expect("service/extension clause's type parameter, vdom_dsl", rsvdom.status == 1 && rsvdom.errAll().contains("[At1971]: the receiver's A: _empty_/vdom_dsl$package.`===`().[A],_empty_/vdom_dsl$package.`=!=`().[A].\n"), s"exit ${rsvdom.status}: ${rsvdom.errAll()}")
     // What the arguments of an annotation in a type declare is a declaration of the document, as dotty has it: the
     // round's typing types those trees for it (`Worker::sem_records`), no retained form kept.
     val annotated = "package core\nclass Ann(x: Any) extends scala.annotation.StaticAnnotation\nclass Box[T]\nclass H { type T }\nobject Core:\n  def f(x: H): Box[x.T @Ann({ type Inner = x.T; 1 })] = new Box\n"

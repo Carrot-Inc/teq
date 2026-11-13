@@ -667,6 +667,12 @@ impl<'a> Worker<'a> {
         self.index.as_ref().and_then(|ix| ix.locals.get(&p).copied())
     }
 
+    /// Where the index recorded the declaration of the type parameter `p` (`index_tparams`): its file and the span
+    /// of its name there, which the type parameters of an extension group's methods share.
+    pub(super) fn tparam_declared(&self, p: TParamId) -> Option<(FileId, Span)> {
+        self.index.as_ref().and_then(|ix| ix.tparams.get(&p).copied())
+    }
+
     /// The span of `name` at `at`: the name's own length where the text there spells it,
     /// `None` where it does not (a name the compiler made, a span that covers more).
     fn name_at(&self, file: FileId, at: u32, name: Name) -> Option<Span> {
