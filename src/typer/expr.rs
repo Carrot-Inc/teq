@@ -4899,7 +4899,14 @@ impl<'a> Worker<'a> {
         let pending_imports = if self.inline.checking > 0 { self.pending_imports_mark() } else { None };
         let pending_trees = self.block_trees_mark();
         self.push_scope();
-        self.local_blocks.push(super::resolve::LocalBlock { file, stmts, frame_depth: self.env.frames.len(), imports_scope, next: 0 });
+        self.local_blocks.push(super::resolve::LocalBlock { file, stmts, frame_depth: self.env.frames.len(), imports_scope, next: 0, standing: None, alias_sites: Vec::new() });
+        // What stands here is the place of the methods and the givens the block defines (`Worker::standing_of`).
+        if items.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(ast.def(*d).kind, DefKind::Fun(_) | DefKind::Given(_)))) {
+            let standing = Box::new(self.standing_here());
+            if let Some(b) = self.local_blocks.last_mut() {
+                b.standing = Some(standing);
+            }
+        }
         let cursor = items.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(ast.def(*d).kind, DefKind::Fun(_)) && ast.def(*d).mods & mods::INLINE != 0));
         if cursor {
             let frame = self.env.frames.len() - 1;
@@ -5115,9 +5122,7 @@ impl<'a> Worker<'a> {
             self.finish_deferred_classes(deferred, true);
         }
         self.pop_scope();
-        if let Some(b) = self.local_blocks.pop() {
-            self.local_alias_sites.retain(|_, &mut (depth, _)| depth != b.frame_depth);
-        }
+        self.local_blocks.pop();
         self.env.imports.truncate(imports_scope);
         self.inline.body_imports.truncate(body_imports);
         for alias in self.inline.import_aliases.drain(import_aliases..) {

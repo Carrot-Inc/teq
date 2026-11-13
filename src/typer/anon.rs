@@ -665,6 +665,9 @@ impl<'a> Worker<'a> {
         // owners answers false at the first owner that is a class), so the given is a candidate in a member's body.
         let made = super::inline::Made { defining: None, ..self.made_here(false) };
         self.inline.made_classes.insert(c, made);
+        let mut standing = self.standing_here();
+        standing.settings.defining = None;
+        self.inline.standing_classes.insert(c, standing);
         if !self.forked {
             self.anon_envs.insert(c, env);
         } else if c.0 >= crate::arena::LOCAL_BASE {

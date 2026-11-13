@@ -9,6 +9,7 @@ mod capture_census;
 pub mod check;
 mod complete;
 mod constructors;
+mod context;
 mod conversions;
 pub mod deps;
 mod depfun;
@@ -1754,6 +1755,10 @@ pub struct Worker<'a> {
     /// (parameter, type, variance of the position that related them). Variance 0 is equality,
     /// 1 makes the type a lower bound and -1 an upper bound.
     pub gadt: Vec<(TParamId, TypeId, i8)>,
+    /// The bounds of `gadt` a comparison under way is using (`is_sub_by_gadt_bound`), each with the variance its
+    /// mark stands over: the entry's index and that variance. The comparison's own: a definition typed in its own
+    /// place has none in use (`Worker::where_made`).
+    pub gadt_in_use: Vec<(u32, i8)>,
     /// Whether a wildcard type argument occurs anywhere, so that capture conversion has
     /// something to do: read off the syntax before anything is typed (`scan_wildcards`), so
     /// that a body's type does not depend on what was typed before it.
@@ -2131,9 +2136,6 @@ pub struct Worker<'a> {
     /// The blocks being typed, innermost last, each with what its deferred aliases are completed
     /// in (`resolve::LocalBlock`).
     pub local_blocks: Vec<resolve::LocalBlock>,
-    /// Each deferred alias of a block being typed, with its block's frame depth and its
-    /// statement's place: where it is completed whichever statement names it first.
-    pub local_alias_sites: crate::intern::FxMap<AliasId, (usize, usize)>,
     /// The type the last typed pattern (`x: T`) gave its binder, which the enclosing `Bind`
     /// reads: the ascription with its wildcard arguments inferred from the scrutinee.
     pub last_typed_pattern: Option<(crate::ast::PatId, TypeId)>,
@@ -3214,6 +3216,7 @@ impl<'a> Worker<'a> {
             selections: Vec::new(),
             selection_typed: Vec::new(),
             gadt: Vec::new(),
+            gadt_in_use: Vec::new(),
             wildcards_used: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             captured_locals: Default::default(),
             index: None,
@@ -3342,7 +3345,6 @@ impl<'a> Worker<'a> {
             match_pt: None,
             refine_scopes: Vec::new(),
             local_blocks: Default::default(),
-            local_alias_sites: Default::default(),
             last_typed_pattern: None,
             pattern_alternatives: Vec::new(),
             refutable_is_error: false,
@@ -3637,6 +3639,7 @@ impl<'a> Worker<'a> {
             selections: Vec::new(),
             selection_typed: Vec::new(),
             gadt: Default::default(),
+            gadt_in_use: Default::default(),
             wildcards_used: self.wildcards_used.clone(),
             captured_locals: self.captured_locals.clone(),
             gadt_open: Default::default(),
@@ -3772,7 +3775,6 @@ impl<'a> Worker<'a> {
             match_pt: None,
             refine_scopes: Default::default(),
             local_blocks: Default::default(),
-            local_alias_sites: Default::default(),
             last_typed_pattern: Default::default(),
             pattern_alternatives: Vec::new(),
             refutable_is_error: false,

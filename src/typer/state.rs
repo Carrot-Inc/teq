@@ -694,9 +694,11 @@ impl<'a> Worker<'a> {
 
     /// Whether `sym` is a callee whose call the inlining phase expands, in the typer as inside a
     /// transparent expansion (`Inlines.needsInlining`, one decision for both): not a transparent
-    /// method. A local inline method's call is kept once its definition's record is checked: what
-    /// the call checks of a forward reference (scalac's E039, the typer's) is checked here, where
-    /// such a call keeps its expansion (`Fallback::ForwardReference`). A local inline given is
+    /// method. A local inline method's call is kept whether its definition's record is checked or
+    /// its check is under way (a method the check first needed calls it back: `needsInlining` asks
+    /// nothing of the callee's body); what the call checks of a forward reference (scalac's E039,
+    /// the typer's) is checked here, before the record is read, where such a call keeps its
+    /// expansion (`Fallback::ForwardReference`). A local inline given is
     /// found by the search, as a member's is, and expanded as the member's. A deferred inline
     /// member's call is rejected where it is typed (`Typer.adapt`'s "Deferred inline ... cannot be
     /// invoked"). Of `scala.compiletime`'s methods, those scalac declares a plain `inline def`
@@ -710,7 +712,9 @@ impl<'a> Worker<'a> {
         mods & crate::ast::mods::TRANSPARENT == 0
             && self.intrinsic_of(sym).map_or(true, |i| i.is_plain_inline())
             && !(defined && self.is_abstract_member(sym))
-            && (owner != crate::symbols::Owner::Local || mods & crate::ast::mods::GIVEN != 0 || self.substitution_entry(sym).is_ok())
+            && (owner != crate::symbols::Owner::Local
+                || mods & crate::ast::mods::GIVEN != 0
+                || matches!(self.substitution_entry(sym), Ok(_) | Err(super::substitution::Fallback::InProgress)))
     }
 
     /// Whether a plain inline call of `sym` met in an expansion under way stays a call kept for the

@@ -17,6 +17,11 @@ pub struct LocalBlock {
     pub frame_depth: usize,
     pub imports_scope: usize,
     pub next: usize,
+    /// What stood where the block opened, for a block that defines a method or a given (`Worker::standing_of`).
+    pub standing: Option<Box<super::context::Standing>>,
+    /// The block's deferred aliases, each with its statement's place: where it is completed whichever statement
+    /// names it first.
+    pub alias_sites: Vec<(AliasId, usize)>,
 }
 
 /// A refinement whose members are being resolved: dotty's refinement class, whose statements
@@ -394,6 +399,7 @@ impl<'a> Worker<'a> {
             _ => self.env_at(file, owner, span.start),
         };
         env.frames.push(Frame::Class(c));
+        self.dump_door("class imports", super::context::Entered::Class(c));
         // A retype forgets the imports of the file's classes, which hold their positions.
         let resolved = self.again(|t| {
             t.with_env(env, |t| {
@@ -6362,6 +6368,7 @@ impl<'a> Worker<'a> {
         // A block's alias is completed in its own context, whichever statement names it first:
         // the block's frames and the imports before its statement (`Namer.indexExpanded`).
         if owner == Owner::Local {
+            self.dump_door("alias", super::context::Entered::Alias(a));
             let env = self.local_alias_env(a);
             let (ids, ty, bounds) = match env {
                 Some(env) => self.with_env(env, |t| t.resolve_alias_def(a, tparams, *rhs, *lower, *upper)),
@@ -6381,7 +6388,9 @@ impl<'a> Worker<'a> {
         let outer_owner = alias_owner.map(|o| self.enter_owner(o));
         let marks = (self.inlining.demands.len(), self.diags.items.len(), self.inlining.typing_suspensions);
         let env = self.env_at(file, owner, def.span.start);
-        let (ids, ty, bounds) = self.with_env(env, |t| t.resolve_alias_def(a, tparams, *rhs, *lower, *upper));
+        self.dump_door("alias", super::context::Entered::Alias(a));
+        // In the alias's own place, whatever named it first (`where_made`).
+        let (ids, ty, bounds) = self.where_made("alias", super::context::Entered::Alias(a), |t| t.with_env(env, |t| t.resolve_alias_def(a, tparams, *rhs, *lower, *upper)));
         let mut noted = false;
         if let Some(outer) = outer_owner {
             noted = self.inlining.demands.len() > marks.0 || self.diags.items.len() > marks.1;
@@ -6444,8 +6453,9 @@ impl<'a> Worker<'a> {
     /// has not reached yet are resolved for it, quietly (their statement enters them). None where
     /// the alias's block is not being typed.
     fn local_alias_env(&mut self, a: AliasId) -> Option<Env> {
-        let &(frame_depth, at) = self.local_alias_sites.get(&a)?;
-        let b = self.local_blocks.iter().rev().find(|b| b.frame_depth == frame_depth)?.clone();
+        let (b, at) = self.local_blocks.iter().rev().find_map(|b| b.alias_sites.iter().find(|&&(x, _)| x == a).map(|&(_, at)| (b, at)))?;
+        let b = LocalBlock { file: b.file, stmts: b.stmts, frame_depth: b.frame_depth, imports_scope: b.imports_scope, next: b.next, standing: None, alias_sites: Vec::new() };
+        let frame_depth = b.frame_depth;
         if self.env.frames.len() < frame_depth {
             return None;
         }
@@ -6505,7 +6515,9 @@ impl<'a> Worker<'a> {
         self.syms.alias_cells.set(a.0, Completion::NotStarted);
         if let Some(b) = self.local_blocks.last() {
             let at = self.ast(file).stmt_list(b.stmts).iter().position(|s| matches!(s, ast::Stmt::Def(x) if *x == d)).unwrap_or(b.next);
-            self.local_alias_sites.insert(a, (b.frame_depth, at));
+            if let Some(b) = self.local_blocks.last_mut() {
+                b.alias_sites.push((a, at));
+            }
         }
         if let Some(Frame::Locals { aliases, .. }) = self.env.frames.last_mut() {
             aliases.push((def.name, a));
@@ -6794,6 +6806,7 @@ impl<'a> Worker<'a> {
             Owner::Local => self.anon_env(c),
             _ => self.env_at(file, owner, def.span.start),
         };
+        self.dump_door("class type parameters", super::context::Entered::Class(c));
         // The parameters are the class's own tree's: made where the class is written, so that a
         // kind written as a bound is read in that file's tree and the index files each
         // parameter under it (`Namer.ClassCompleter.init` indexes a class's parameters in the
@@ -7065,6 +7078,7 @@ impl<'a> Worker<'a> {
         // parents, its constructor, its bounds; a suspension met in it suspends the completion,
         // published `Suspended` for its readers (`completion_done`), as a `SuspendCompleter`
         // replaces any completer that met one (`Namer.Completer.complete`).
+        self.dump_door("class completion", super::context::Entered::Class(c));
         let outer_owner = self.class_owner(c).map(|o| self.enter_owner(o));
         let marks = (self.inlining.demands.len(), self.diags.items.len());
         self.inlining.sig_marks.push(Some(self.inlining.typing_suspensions));

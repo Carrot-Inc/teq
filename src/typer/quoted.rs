@@ -77,6 +77,59 @@ pub struct QuoteState {
     pub(super) copied_deferred: Vec<TExprId>,
 }
 
+impl QuoteState {
+    /// What `Worker::outside_quotes` sets aside, as counts: the level, the quotes being typed, the holes' ranges, and
+    /// whether a quote pattern's body is under way.
+    pub(super) fn standing(&self) -> (u32, u32, u32, bool) {
+        (self.level, self.frames.len() as u32, self.hole_ranges.len() as u32, self.pattern.is_some())
+    }
+
+    /// Whether the four at hand are not a place's (`standing`'s counts there): another level, other quotes, a
+    /// pattern under way that the place had not, or, for a place outside every quote, holes' ranges at hand. The
+    /// ranges of a place inside a quote are the quote's as it goes on (each splice adds its own), not a count.
+    pub(super) fn differs(&self, made: (u32, u32, u32, bool)) -> bool {
+        self.level != made.0 || self.frames.len() != made.1 as usize || (self.pattern.is_some() && !made.3) || (made.1 == 0 && !self.hole_ranges.is_empty())
+    }
+
+    /// Puts the four up as a place had them, together: the level means nothing without the quotes it counts
+    /// (`Worker::in_splice_of_quote`). The quotes beyond the place's are set aside for `give_back`, with the
+    /// pattern under way if the place had none, and for a place outside every quote the holes' ranges (what
+    /// `Worker::outside_quotes` takes); nothing where the place's are the ones at hand.
+    pub(super) fn put_up(&mut self, made: (u32, u32, u32, bool)) -> Option<QuoteAside> {
+        if !self.differs(made) {
+            return None;
+        }
+        let level = std::mem::replace(&mut self.level, made.0);
+        let kept = ((made.1 as usize).min(self.frames.len()), if made.1 == 0 { 0 } else { self.hole_ranges.len() });
+        let frames = self.frames.split_off(kept.0);
+        let holes = self.hole_ranges.split_off(kept.1);
+        let pattern = if made.3 { None } else { self.pattern.take() };
+        Some(QuoteAside { level, kept, frames, holes, pattern })
+    }
+
+    /// Gives back what `put_up` set aside.
+    pub(super) fn give_back(&mut self, aside: Option<QuoteAside>) {
+        let Some(aside) = aside else { return };
+        self.level = aside.level;
+        self.frames.truncate(aside.kept.0);
+        self.frames.extend(aside.frames);
+        self.hole_ranges.truncate(aside.kept.1);
+        self.hole_ranges.extend(aside.holes);
+        if aside.pattern.is_some() {
+            self.pattern = aside.pattern;
+        }
+    }
+}
+
+/// What `QuoteState::put_up` set aside of the asking code's quotes, with how many quotes and holes it left.
+pub(super) struct QuoteAside {
+    level: u32,
+    kept: (usize, usize),
+    frames: Vec<Vec<(SymId, TExprId)>>,
+    holes: Vec<(usize, usize)>,
+    pattern: Option<PatternHoles>,
+}
+
 #[derive(Clone)]
 pub(super) struct DeferredInline {
     pub sym: SymId,

@@ -4037,19 +4037,23 @@ impl<'a> Worker<'a> {
         let outer_owner = sig_owner.map(|o| self.enter_owner(o));
         let marks = (self.inlining.demands.len(), self.diags.items.len());
         let def = self.ast(file).def(def_id);
-        let sig = if owner == Owner::Local {
-            self.compute_sig(sym, def)
-        } else {
-            let env = self.env_at(file, owner, span.start);
-            if self.made_in_block(owner) {
-                self.with_env(env, |t| t.compute_sig(sym, def))
+        // The signature, and the body an inferred result is read from, in the definition's own place, whatever
+        // asked for it (`where_made`); a block's own definition in its block's frames.
+        let sig = self.where_made("signature", super::context::Entered::Def(sym), |t| {
+            if owner == Owner::Local {
+                t.in_block_frames(sym, |t| t.compute_sig(sym, def))
             } else {
-                // The declared types name the class's type parameters and `this`, which are
-                // the definition's and not the receiver's of the expansion that was the first
-                // to ask for the signature.
-                self.outside_inline(|t| t.with_env(env, |t| t.compute_sig(sym, def)))
+                let env = t.env_at(file, owner, span.start);
+                if t.made_in_block(owner) {
+                    t.with_env(env, |t| t.compute_sig(sym, def))
+                } else {
+                    // The declared types name the class's type parameters and `this`, which are
+                    // the definition's and not the receiver's of the expansion that was the first
+                    // to ask for the signature.
+                    t.outside_inline(|t| t.with_env(env, |t| t.compute_sig(sym, def)))
+                }
             }
-        };
+        });
         let mut noted = false;
         if let Some(outer) = outer_owner {
             noted = self.inlining.demands.len() > marks.0 || self.diags.items.len() > marks.1;
@@ -4240,6 +4244,7 @@ impl<'a> Worker<'a> {
     }
 
     fn compute_sig(&mut self, sym: SymId, def: &'a ast::Def) -> MethodSig {
+        self.dump_door("signature", super::context::Entered::Def(sym));
         self.completing += 1;
         let sig = if self.deps.is_none() { self.compute_sig_inner(sym, def) } else { self.compute_sig_recorded(sym, def) };
         self.completing -= 1;
@@ -4923,6 +4928,7 @@ impl<'a> Worker<'a> {
     /// statements after it with them. The body of the resulting function is a block whose
     /// last statement is that call and whose result is the rest.
     fn type_secondary_ctor(&mut self, c: ClassId, sym: SymId, tclass: &mut TClass) {
+        self.dump_door("secondary constructor", super::context::Entered::Def(sym));
         // Kept for the parameters' entry below.
         let sig = self.sig_arc(sym);
         let (file, def_id, span) = {
@@ -5231,6 +5237,7 @@ impl<'a> Worker<'a> {
     }
 
     fn type_body_in(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>) -> TypeId {
+        self.dump_door("body", super::context::Entered::Def(sym));
         if self.deps.is_none() {
             return self.type_body_in_now(sym, sig, expected);
         }
@@ -5453,6 +5460,7 @@ impl<'a> Worker<'a> {
     }
 
     fn check_class_once(&mut self, c: ClassId) {
+        self.dump_door("class check", super::context::Entered::Class(c));
         if self.syms.class(c).replaced {
             return;
         }
@@ -6624,6 +6632,7 @@ impl<'a> Worker<'a> {
         parents: &'a [ast::Parent],
         tclass: &mut TClass,
     ) -> Vec<(ClassId, ParentCall)> {
+        self.dump_door("trait parents' arguments", super::context::Entered::Class(c));
         let (file, class_span, kind, owner) = {
             let i = self.syms.class(c);
             (i.file, i.span, i.kind, i.owner)
@@ -6821,6 +6830,9 @@ impl<'a> Worker<'a> {
         parent_ty: Option<TypeId>,
         in_place: bool,
     ) -> Option<(ParentCall, TypeId)> {
+        if !in_place {
+            self.dump_door("parent's call", super::context::Entered::Class(c));
+        }
         let (file, class_span) = {
             let i = self.syms.class(c);
             (i.file, i.span)

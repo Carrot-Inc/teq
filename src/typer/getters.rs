@@ -209,14 +209,26 @@ impl<'a> Worker<'a> {
             },
             _ => None,
         };
-        let outer_ctor = match ctor_outer {
-            Some(bound) => Some(std::mem::replace(&mut self.ctor_outer, Some(bound))),
-            None => None,
+        // A getter's place is its method's, or its class's for a constructor's (`where_made`); the enclosing
+        // instance a constructor's getter reads is bound inside it, for the getter.
+        let entered = match of {
+            DefaultOf::Method(m) => super::context::Entered::Def(m),
+            DefaultOf::Ctor(c) => super::context::Entered::Class(c),
         };
-        let (typed, ret) = self.outside_inline(|t| t.with_env(env, |t| t.type_getter(&site)));
-        if let Some(outer) = outer_ctor {
-            self.ctor_outer = outer;
-        }
+        let (typed, ret) = self.where_made("getter", entered, |t| {
+            let outer_ctor = match ctor_outer {
+                Some(bound) => Some(std::mem::replace(&mut t.ctor_outer, Some(bound))),
+                None => None,
+            };
+            let r = t.outside_inline(|t| {
+                t.dump_door("getter", entered);
+                t.with_env(env, |t| t.type_getter(&site))
+            });
+            if let Some(outer) = outer_ctor {
+                t.ctor_outer = outer;
+            }
+            r
+        });
         let noted = self.inlining.demands.len() > marks.0 || self.diags.items.len() > marks.1;
         self.leave_owner(outer_owner, false);
         self.val_init.insert(g, typed);

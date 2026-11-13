@@ -113,6 +113,9 @@ pub struct InlineState {
     /// member of it, or of a class inside it, runs under. Emptied where the workers' merge runs: a class's members
     /// are all checked by the body that makes it.
     pub made_classes: FxMap<ClassId, Made>,
+    /// What stood where each class of a block was made (`Worker::standing_of_class`), kept and emptied as
+    /// `made_classes` is.
+    pub standing_classes: FxMap<ClassId, super::context::Standing>,
     /// The index each record's copies read (`Worker::stored_index_of`), with the record it was
     /// made from; emptied where the workers' merge renumbers what an index holds
     /// (`settle_merge`).
@@ -377,6 +380,7 @@ impl InlineState {
             no_subst: _,
             // Keyed by the classes of the blocks being typed, read where a member's check begins.
             made_classes: _,
+            standing_classes: _,
             // Kept from one copy of a record to the next, until the workers' merge
             // (`settle_merge`).
             stored_indexes: _,
@@ -551,6 +555,7 @@ impl InlineState {
             forward_refs: _,
             // A stack's length where a class of a block was made, which no body's typing outlives.
             made_classes,
+            standing_classes,
             // The state of an expansion, a body's check or a copy under way, unwound where each
             // ends: the merge runs between the items, where none is under way.
             copy_locals: _,
@@ -600,6 +605,7 @@ impl InlineState {
         } = self;
         copies.clear();
         made_classes.clear();
+        standing_classes.clear();
         *erased = None;
         recv_types.clear();
         this_written.clear();

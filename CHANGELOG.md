@@ -21,6 +21,15 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   members: …`) come in one order at every worker count: the members of the trait mixed in last in that trait's
   order, then those of the trait before it; for the program's and a library's traits the first error is the one
   scalac reports.
+- A method or value whose result type is inferred, a default argument, an inline method and a class's type member
+  are typed where they are defined, whichever use asks for them first, as scalac types them. One first used inside
+  a `match` case that refines a type parameter, a given's right-hand side, a constructor's call of another
+  constructor, the arguments of a `new` or of a parent, a quote, or the body of another method of the same block
+  no longer takes that code's bounds, given, constructor or names: `def shown = which(held)` in a `class Keeper[A]`,
+  first called under `case IntTag`, picks `which(x: Any)` as it does everywhere else. A block's inline method may be
+  called back by a later method of the block that its own body needs (`inline def shown = "got " + later` above
+  `def later = if done then "x" else shown`). Programs that were refused, or built with another overload or another
+  given than scalac's, build as scalac builds them, and the same at every number of workers.
 
 ## 0.1.10 (2026-11-13)
 

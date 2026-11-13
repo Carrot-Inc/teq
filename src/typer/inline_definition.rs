@@ -708,7 +708,7 @@ impl<'a> Worker<'a> {
     /// definition's claim on a fork (`claim_definition`), which a caller discarding what it made
     /// gives back.
     pub(super) fn check_definition_in(&mut self, sym: SymId, env: super::Env) -> bool {
-        self.in_state_made(sym, |t| t.check_definition_where_made(sym, env))
+        self.where_made("inline check", super::context::Entered::Def(sym), |t| t.in_state_made(sym, |t| t.check_definition_where_made(sym, env)))
     }
 
     /// The worker's state here beyond the environment (`Made`), with the owners' chain's length for a block.
@@ -2425,6 +2425,7 @@ impl<'a> Worker<'a> {
     /// definition, with the parameters entered as themselves, against the declared result type
     /// when there is one. What it answers: the body, its type and the defaults.
     fn type_inline_definition(&mut self, sym: SymId, sig: &MethodSig) -> (Option<TExprId>, TypeId, Vec<Option<TExprId>>) {
+        self.dump_door("inline body", super::context::Entered::Def(sym));
         if self.forked {
             self.refresh_std_if_stale();
             self.sync_arity_tables();

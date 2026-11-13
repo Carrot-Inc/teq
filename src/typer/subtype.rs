@@ -2221,15 +2221,19 @@ impl<'a> Worker<'a> {
     #[cold]
     #[inline(never)]
     fn is_sub_by_gadt_bound(&mut self, p: TParamId, other: TypeId, side: i8) -> bool {
-        const IN_USE: i8 = 2;
+        const IN_USE: i8 = super::context::GADT_IN_USE;
         for i in 0..self.gadt.len() {
             let (q, bound, variance) = self.gadt[i];
             if q != p || variance == IN_USE || variance == -side {
                 continue;
             }
+            // The mark hides the bound from this comparison and from `gadt_upper` while it is used; what was marked
+            // is kept beside it, for a definition entered meanwhile to be typed with none in use.
             self.gadt[i].2 = IN_USE;
+            self.gadt_in_use.push((i as u32, variance));
             let mark = self.snapshot();
             let holds = if side == 1 { self.is_sub(other, bound) } else { self.is_sub(bound, other) };
+            self.gadt_in_use.pop();
             self.gadt[i].2 = variance;
             if holds {
                 return true;
