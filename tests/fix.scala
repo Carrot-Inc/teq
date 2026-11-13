@@ -694,6 +694,31 @@ object Verb:
     val sselectors = build(work, "service-extension-selectors", "core/src/core/Shown.scala" -> selectors, "rules/AtSelectors.scala" -> atSelectors, ".scalafix.conf" -> "rules = [\"file:rules/AtSelectors.scala\"]\n")
     val rsselectors = fix(sselectors, "core")
     expect("service/extension parameter, an export's selectors", rsselectors.status == 1 && rsselectors.errAll().contains("[AtSelectors]: at the selectors' first letters 0 defined false at the group's place core/Texts.loud().(s),core/Texts.width().(s)"), s"exit ${rsselectors.status}: ${rsselectors.errAll()}")
+    // A class's type parameters are declared in the class's own file, wherever the class is first applied: here a
+    // class of an earlier file extends `Later[Int]` before `Later` is completed, and both files have a `T` at one
+    // offset. scalac 3.8.4's documents: `core/Apps2#[T]` alone in the first file, `core/Later#[T]` in the second.
+    val filed = "package teq.fix.probe\nimport teq.fix.*\nfinal class Filed extends SemanticRule(\"Filed\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    if !text.contains(\"class Apps2[\") && !text.contains(\"class Later[\") then Patch.empty\n    else\n      def at(i: Int): String = text.substring(i, i + 1) + \" \" + Native.definedAt(doc.gen, i, i + 1) + \" \" + Native.symbolsAt(doc.gen, i, i + 1).mkString(\",\")\n      val first = text.indexOf(\"[\") + 1\n      val second = text.indexOf(\", \", first)\n      Patch.lint(Diagnostic(\"\", (if second > 0 then List(first, second + 2) else List(first)).map(at).mkString(\"; \"), doc.tree.pos))\n"
+    val filedConf = ".scalafix.conf" -> "rules = [\"file:rules/Filed.scala\"]\n"
+    val sfiled = build(work, "service-tparam-file", "core/src/core/Apps2.scala" -> "package core\nclass Apps2[T] extends Later[Int]\n", "core/src/core/Later.scala" -> "package core\nclass Later[T]\n", "rules/Filed.scala" -> filed, filedConf)
+    val rsfiled = fix(sfiled, "core")
+    expect("service/type parameter, a class applied from an earlier file", rsfiled.status == 1 && rsfiled.errAll().contains("Apps2.scala:1:1: error: [Filed]: T true core/Apps2#[T]\n") && rsfiled.errAll().contains("Later.scala:1:1: error: [Filed]: T true core/Later#[T]\n"), s"exit ${rsfiled.status}: ${rsfiled.errAll()}")
+    // The same with a bound that names the class's other parameter: scalac has both declarations in the class's file.
+    val sbound = build(work, "service-tparam-bound", "core/src/core/Applied.scala" -> "package core\nclass Applied extends Later[AnyRef, String]\n", "core/src/core/Later.scala" -> "package core\nclass Later[A, B <: A]\n", "rules/Filed.scala" -> filed, filedConf)
+    val rsbound = fix(sbound, "core")
+    expect("service/type parameter, a bound naming another parameter", rsbound.status == 1 && rsbound.errAll().contains("Later.scala:1:1: error: [Filed]: A true core/Later#[A]; B true core/Later#[B]\n"), s"exit ${rsbound.status}: ${rsbound.errAll()}")
+    // A class of the std first applied from a program's file declares nothing in that file: three cases of
+    // tests/cases whose text has the parameter's letter where the std's file has the parameter (the `T` of
+    // `ClassTag` at 418, the `A` of `Attr(` at 2568). scalac has no declaration at either place.
+    val offsets = "package teq.fix.probe\nimport teq.fix.*\nfinal class Offsets extends SemanticRule(\"Offsets\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    def word(i: Int, w: String): Boolean = text.length >= i + w.length && text.substring(i, i + w.length) == w\n    def at(i: Int): String = \"\" + Native.definedAt(doc.gen, i, i + 1) + \" \" + Native.symbolsAt(doc.gen, i, i + 1).mkString(\",\") + \".\"\n    if word(413, \"ClassTag\") then Patch.lint(Diagnostic(\"\", \"the T of ClassTag: \" + at(418), doc.tree.pos))\n    else if word(2568, \"Attr(\") then Patch.lint(Diagnostic(\"\", \"the A of Attr: \" + at(2568), doc.tree.pos))\n    else Patch.empty\n"
+    for (name, said) <- Seq("class_tag_of_unit_arrays" -> "the T of ClassTag: false .", "erasure_universal_lub" -> "the T of ClassTag: false .", "vdom_dsl" -> "the A of Attr: false .") do
+      // The case alone, as tests/run.sh types it: the std's class is first applied from the case's own file.
+      val dir = work.resolve("tparam-std-" + name)
+      Files.createDirectories(dir.resolve("rules"))
+      Files.writeString(dir.resolve("Case.scala"), read(Paths.get("tests/cases/" + name + ".scala")))
+      Files.writeString(dir.resolve("rules/Offsets.scala"), offsets)
+      Files.writeString(dir.resolve(".scalafix.conf"), "rules = [\"file:rules/Offsets.scala\"]\n")
+      val rsoff = Sh(teq, "compiler", "fix", "--check", "Case.scala", "--config", ".scalafix.conf").in(dir).timeout(300).check(false).run()
+      expect("service/type parameter, a std class applied in " + name, rsoff.status == 1 && rsoff.errAll().contains("Case.scala:1:1: error: [Offsets]: " + said + "\n"), s"exit ${rsoff.status}: ${rsoff.errAll()}")
     // What the arguments of an annotation in a type declare is a declaration of the document, as dotty has it: the
     // round's typing types those trees for it (`Worker::sem_records`), no retained form kept.
     val annotated = "package core\nclass Ann(x: Any) extends scala.annotation.StaticAnnotation\nclass Box[T]\nclass H { type T }\nobject Core:\n  def f(x: H): Box[x.T @Ann({ type Inner = x.T; 1 })] = new Box\n"

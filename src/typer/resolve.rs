@@ -6788,7 +6788,11 @@ impl<'a> Worker<'a> {
             Owner::Local => self.anon_env(c),
             _ => self.env_at(file, owner, def.span.start),
         };
-        let ids = self.make_tparams(&cls.tparams);
+        // The parameters are the class's own tree's: made where the class is written, so that a
+        // kind written as a bound is read in that file's tree and the index files each
+        // parameter under it (`Namer.ClassCompleter.init` indexes a class's parameters in the
+        // context the class was created in), not in the file of the application that asked.
+        let ids = self.with_env(env.clone(), |t| t.make_tparams(&cls.tparams));
         {
             let mut info = self.syms.class_mut(c);
             info.tparams = ids.iter().map(|&(_, p)| p).collect();

@@ -76,6 +76,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A class whose type parameter takes a type constructor of its own (`class Later[F[G[_]]]`) is accepted where
+  another file applies it before the class is completed (it was refused with a kind mismatch).
 - A class compiled for the JVM lists as its interfaces the traits it inherits directly, as scalac's class files
   do, and no longer every trait of its ancestors: a class or an object below `javax.swing.JButton` loads (it was an
   `IllegalAccessError` for an interface of the JDK that is not public), and `getInterfaces` answers as under scalac.
