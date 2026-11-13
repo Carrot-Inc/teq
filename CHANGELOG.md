@@ -5,202 +5,81 @@ support, and the platforms the binaries run on. The newest release comes first; 
 notes of its GitHub release, which carries the binaries (`teq-<version>-<classifier>`, the Windows one with `.exe`) beside their
 `SHA256SUMS`.
 
-## Unreleased
+## 0.1.10 (2026-11-13)
 
-- An import the editor adds, completion's and a quick fix's, goes into the clause a file already has of that
-  prefix (`import a.b.X` becomes `import a.b.{X, Z}`, the name at its sorted place where the clause is in order)
+- `teq fix` runs scalafix's rules over a build's sources with no sbt and no JVM: the rules it ships and a
+  project's own (the configuration's `file:` entries) over scalameta 4.17's tree, the configuration's `include`s
+  and substitutions, `--rules` and `--check`; `OptionGetWarn`, `ForbiddenSymbol` and
+  `TypelevelHttp4sLiteralsSyntax` are answered by the compiler's own typing, which gives a semantic rule the
+  names scalac's SemanticDB has, those of an annotation's arguments and of a method an inline method calls
+  among them
+  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
+- sbt-teq 1.0.2 records in `teq.lock` the configuration file sbt-scalafix reads for each configuration, and the
+  ordered groups of `teqTestGroups` ([the lockfile](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- The editor offers quick fixes that add a missing import: for a name that is not found, the imports completion
+  offers and the objects of the program that hold a member of that name; for a method a value lacks
+  (`42.asGlyph`), the objects whose extension method the selection then finds. An import the editor adds,
+  completion's and a quick fix's, goes into the clause a file already has of that prefix (`import a.b.X` becomes
+  `import a.b.{X, Z}`, the name at its sorted place where the clause is in order)
   ([the language server](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md#the-language-server-and-zed)).
-- `teq fix` answers a semantic rule about the names of a method that an inline method defined before it calls
-  (`inline def never(n: Int): Int = hidden(n)` above `private def hidden(k: Int): Int = k + 1`: the parameter `k`
-  and the types of `hidden`'s header, and the names of its body where its result is inferred), whether anything
-  expands the inline method or not, as scalafix does from scalac's SemanticDB
-  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
-- The editor offers quick fixes that add a missing import: on a name that is not found, the imports completion
-  offers for it and the import of each object of the program that holds a member of that name (the nearest
-  objects first); on a method a value lacks (`42.asGlyph`), the import of each object of the program whose
-  extension method of that name the selection then finds (`import lib.Glyphs.*`, or the member's own name where
-  another name of the object is in use in the file)
-  ([the language server](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md#the-language-server-and-zed)).
-- `teq fix` answers a semantic rule about the names in an annotation's arguments (`@named(Style.Upper)`: the
-  object and its member), as scalafix does from scalac's SemanticDB
-  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
-- `teq fix` runs a project's own rules (the configuration's `file:` entries) on every rule worker, as it runs the
-  rules it ships, where a guard that reads the rules' sources sees nothing they keep between documents; where it
-  sees a definition that does, they run on one worker as before, and the run says so in a note at the definition
-  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
-- `teq fix` runs three more rules, answered by the compiler's own typing: `OptionGetWarn`, `ForbiddenSymbol`
-  and `TypelevelHttp4sLiteralsSyntax`. `Option.get` is reported wherever the member is `Option`'s or `None`'s,
-  an overrider of a forbidden member where it is referenced, and a configured entry that names no symbol is
-  told once as a warning ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
-- `teq test` runs a test configuration's suites in the ordered groups sbt-teq's `teqTestGroups` names, each group
-  with its own summary and the rest last, and `teq test --list` lists what a run with the same arguments would run
-  ([the test verb](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md),
-  [the command line](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
-- `teq test` loads a run's frameworks, libraries and classes through one class loader in the test class path's
-  order, as sbt 2's forked worker does: a service a project registers in its own resources is found, and an object
-  is one per run.
-- `teq test` calls a test framework's code as sbt 2.0.8's host and worker call it: fingerprints read and copied in
-  sbt's order, a framework with no selected suite left out, a suite named twice run once, and a failure while
-  reporting a failure ending the run as sbt's does.
-- `teq compiler watch`, `teq lsp` and `teq fix` give memory back between builds: a session's resident memory on a
-  large program is about half of what it was, and its peak lower, whatever its class path's length.
-- A large program (from 512 KiB of source, where the type checker works in several workers) no longer aborts on a
-  `given T` import inside a class, an object or a block that holds an anonymous class, on a match-type alias
-  reached through a type prefix (`Kind[String]#Elem[Int]`), or on a local inline method called through a
-  transparent one; there too a `given T` import at a file's top admits only the givens it brings (a program
-  scalac refuses was accepted), and the unused-import warning names the right selector.
-- A large program with a file that waits for a macro of its own build is no longer refused in some builds with
-  `value ... is not a member of Any`: what the type checker's workers had cached of a type is dropped where their
-  results are merged.
-- A build reports the same errors and warnings at any worker count: every worker applies the build's warning
-  options, and the diagnostics come in one worker's order.
+- `teq test` runs a configuration's suites in ordered groups, lists a run with `--list`, and loads and calls the
+  test frameworks as sbt 2.0.8's forked worker does: one class loader in the test class path's order, so a service
+  a project registers in its own resources is found
+  ([the test verb](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
 - Non-transparent inline calls expand in a phase after the whole program is typed, as scalac's: an expansion's
-  error is reported only when the typer reports none, a unit that meets a macro of its own build is typed again in
-  a later round, and `--retain-trees` and `--max-inlined-trees` are scalac's `-Yretain-trees` and `-Xmax-inlined-trees`
+  error is reported only when the typer reports none, and `--retain-trees` and `--max-inlined-trees` are scalac's
+  `-Yretain-trees` and `-Xmax-inlined-trees`
   ([Macros, inline and derivation](https://github.com/Carrot-Inc/teq/blob/master/docs/COMPATIBILITY.md#macros-inline-and-derivation)).
-- `teq interp` runs a program's threads, `java.lang.Thread`, `synchronized`, `Object.wait` and `notify`, and
-  `java.util.concurrent`'s executors, locks, queues, latches, futures and atomics, taking turns on one OS thread;
-  zio's runtime runs on them, and a program's signal handlers (`sun.misc.Signal`) run as the JDK runs them
-  ([`teq interp`](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
-- `teq interp` runs Scala CLI scripts (`.sc`) as Scala CLI wraps them, the arguments after `--` their `args`, a
-  script of a directory in the package of its subdirectories.
-- A script's `//> using dep` lines resolve through the lock of the build it is in: the classpath of the
-  configuration that owns the sources the script includes, or of `--module`, and the sources of the configurations
-  whose products that classpath holds. Under `--classpath` the lock still
-  checks each inside such a project, and outside one each is checked against the jars it names.
-- sbt-teq records in `teq.lock` each dependency a build declares at a version its resolution evicted, so that a
-  script asking that version runs on the one chosen ([the lockfile](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
-- `teq fix` runs scalafix's rules over a build's sources with no sbt and no JVM, each program typed over compile's
-  workers, the output the one-worker run's ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md),
-  [the command line](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
-- `teq fix` gives a rule scalameta 4.17's tree (its argument and parameter clauses, template and package bodies, no
-  node of parentheses) and plans patches as scalafix does: an importee's removal as token removals, two rules' edits
-  of one token merged ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
-- `teq fix` reads a configuration's `include`s and `${...}` substitutions as typesafe-config resolves them, `--rules`
-  chooses among the shipped rules and the configuration's `file:` rules, and `--check` prints the lints at the files'
-  own lines ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
-- sbt-teq records in `teq.lock` the configuration file sbt-scalafix reads for each configuration and whether it skips
-  it, and `teq fix` runs each configuration under its file and leaves the skipped ones out
-  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md),
-  [the lockfile](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
-- A build's warnings and errors, their order and its exit are the same at every worker count: every typing worker
-  reads the build's warning flags (`--wtostring-interpolated`, `--language` among them), and the diagnostics are
-  those of one worker's walk, the build typed again by one worker where the order cannot be kept.
-- A trait's `super` calls give the same class files, JavaScript and TASTy at every worker count: the accessors a
-  trait takes for them, and the forwarders of the classes that mix it in, stood in one order when one worker
-  built the program and in another when several did. They stand in scalac's order now: the order of the calls
-  in the trait's source, an application's arguments before its function.
-- A JavaScript module's exports and the error `several entry points` no longer depend on the worker count: an
-  exported object written after its enum changed places with the exports before it when several workers built
-  the module, and the error named the entry points in another order and stood at another of them. Both follow
-  the order in which the definitions of a file, or of a `package` block, are written.
-- A build with several workers no longer refuses a member that the JDK's class has and the standard library's
-  declaration of it leaves out (`getClass.getResource`: `value getResource is not a member of Class[_]`;
-  `ArrayList.trimToSize`) where several files meet the member at the same moment: such a build failed in most
-  runs at eight workers and passed in the others.
-- A library's class whose parent is a JDK class that the standard library does not declare has that class's own
-  parents, as scalac's has: their members are found (`distance` on a class below `java.awt.Point` was `not a
-  member`), the class is a subtype of them, and a build with several workers no longer aborts on such a class
-  (`a shared record (...) changed outside the loader's lock`).
+- A build is the same at every worker count: its errors and warnings, their order and its exit, the class
+  files, JavaScript and TASTy of a trait's `super` calls, and a JavaScript module's exports and the error
+  `several entry points`, which follow the order in which the definitions of a file are written.
+- A large program typed by several workers no longer aborts or is refused in some builds: on a `given T` import
+  inside a class, a match-type alias reached through a type prefix, a member the JDK's class has and the standard
+  library's declaration leaves out (`getClass.getResource`), or a file that waits for a macro of its own build.
+- `teq compiler watch`, `teq lsp` and `teq fix` give memory back between builds: a session's resident memory on a
+  large program is about half of what it was.
 
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
-- A build that would hold a call of an inline method that was never expanded is refused, with an error at the
-  call (`the inline call ... was not expanded`): it used to succeed and the program failed when run
-  (`... is not a function`, a `NoSuchMethodError` on the JVM).
-- A local inline method (and a `transparent inline` member) called before its definition is checked in the
-  context of its own place: inside a match case that refines a type parameter the body was typed under the
-  caller's bound and chose another overload (a wrong value on JavaScript, a `ClassCastException` on the JVM).
-- `m.level += 1` (and every operator assignment) through an `inline def` getter with a setter runs: the build
-  succeeded and the program failed when run (`m.level is not a function`, a `NoSuchMethodError` on the JVM).
-- A class whose type parameter takes a type constructor of its own (`class Later[F[G[_]]]`) is accepted where
-  another file applies it before the class is completed (it was refused with a kind mismatch).
-- A class compiled for the JVM lists as its interfaces the traits it inherits directly, as scalac's class files
-  do, and no longer every trait of its ancestors: a class or an object below `javax.swing.JButton` loads (it was an
-  `IllegalAccessError` for an interface of the JDK that is not public), and `getInterfaces` answers as under scalac.
-- A Java class's static member class is no member of a Scala class below it, as in scalac: inside a class that
-  extends `java.awt.Point`, `Double` is `scala.Double` and not `Point2D.Double`, and a member enum or interface
-  of a Java ancestor is named through that ancestor (`java.net.Proxy.Type`). An inner class is inherited as before.
-- A file whose inline expansion has to wait for a macro of its own build no longer loses what that expansion had
-  asked of the standard library or of a library on the class path (a method's body a macro ran first, a class, a
-  default argument): a correct program was refused with `not supported yet in a macro: ... has no body to run` or
-  built JavaScript that failed when run, and above one worker the result changed from build to build.
-- A local class made through a second constructor that reads a local of the enclosing method works on every
-  target (the interpreter refused it, JavaScript printed `undefined`, the JVM rejected the class).
-- A macro whose implementation needs a definition of its own build (a class it constructs, an object it reads, a
-  method it calls whose body makes a class) expands the same whatever the number of workers that type the build:
-  a correct program is no longer refused with `not supported yet in a macro: ... has no constructor to run`, and
-  a build is no longer typed a second time by one worker for it.
-- An enum's `valueOf` or `fromOrdinal` passed as a function (`names.map(Tone.valueOf)`) compiles as under scalac
-  (it was refused: `value valueOf is not a member of Tone`).
-- A macro that makes a method with `Symbol.newMethod` and a `MethodType`, closes over a method reference with
-  `Closure`, or selects a constructor or `asInstanceOf` with `Select.unique` expands as under scalac (tapir's
-  `formCaseClassCodec` ended in a `MatchError`).
-- A lambda's parameter that the expected type leaves open is typed from the method, constructor or function its
-  body applies to it (`sink.contramap(Wrapped(_))`, `on(x => wrap(x))`), and with no expected type a parameter
-  spread into a repeated one is typed as its sequence (`val f = xs => join(xs*)`): such lambdas were refused with
-  `type mismatch: found Any` or `missing parameter type`. Where scalac finds no callee to type a parameter from
-  (the parameter twice among the arguments, a plain argument of a repeated parameter), the lambda is refused as
-  scalac refuses it. A parameter that an expected type leaves open, or bounds only by a type a sequence
-  conforms to, and that the body spreads into a repeated parameter (`on(xs => join(xs*))`) stays refused: scalac
-  types that function as `Int* => String`, a function of the elements, which teq does not type yet.
-- A lambda's open parameter is typed from an enum case its body applies to it, as from a case class
-  (`sink.contramap(Wrapped(_))` with `enum Node: case Wrapped(inner: Inner)`): such a lambda was refused with
-  `type mismatch: found Any`.
-- An unqualified `synchronized`, `wait`, `notifyAll`, `toString`, `hashCode` or `getClass` inside a function
-  literal converted to a Java interface is the enclosing instance's, as scalac's is (it was the lambda object's).
-- An implicit search no longer answers "no given instance" because two unrelated classes of a large program fell
-  on one bit of the divergence check, which compares the goals' covering sets as scalac does.
-- A lambda whose body leaves its result's type constructor open takes that constructor's arguments as scalac does
-  (`next.tap(_.traverse_(serve))` over zio and cats has the error type `Nothing`, where it was `Throwable`).
-- On the JVM a `lazy val` is initialised once under concurrent readers, as scalac's is (it ran its initialiser
-  once a racing thread), `synchronized` takes its receiver's monitor (it took none), and `@threadUnsafe` gives
-  the unsynchronised getter.
-- A pattern's binder over `T | Null` (a `Regex` pattern's groups against scala-library) has the type `T`, so
-  an interpolated binder no longer warns under `-Wtostring-interpolated`.
-- An anonymous class made in the argument of zio's `ZIO.succeed`, or in any function literal applied where it is
-  written, finds the enclosing class's instance from inside another class's method: an anonymous subclass of an
-  inner class made there threw `ClassCastException` on the JVM, and its outer members read `undefined` in JavaScript.
-- The lean standard library declares `List`, `Option`, `Either` and `Try` as abstract classes and `Iterator` and
-  `immutable.Map` as traits, as scala-library does, and `List` has its `AbstractSeq` ancestors: a type test on
-  one of them is an `instanceof`, messages say `class List`, and a match over a value narrowed to `Option` is no
-  longer reported as not exhaustive.
-- A class made by an inline given's expansion can read the given's own recursive instance: such a program built
-  JavaScript that threw `ReferenceError: rec$0 is not defined` and was refused on the JVM and by `teq interp`.
-- In split output a case object whose `equals` comes from a superclass, or from a trait of that superclass, uses
-  it: such an object compared by reference when its superclass was registered after it.
-- `-Wtostring-interpolated` reads an opaque alias as what it stands for: an interpolated value whose type is an
-  opaque alias of `String` or of a primitive (refined's `NonEmptyString`) is no longer reported.
-- A given found through an inline given can refer to itself by name: kittens' `derives Eq` over a class with a
-  `List[A]` field where `A` has no instance, or over a recursive enum, no longer answers `No given instance`.
-- A local named `$jsFn` or `$ap` no longer shadows the JavaScript runtime's helper for a call of a function value
-  that may be an object, or for such a value passed on to a method (`xs.filter(p)`).
-- `ProcessHandle.of` under `teq interp` takes its pid as the JDK does: a number that wraps to 0 or below names no
-  process, where `ProcessHandle.of(4294967295L)` gave a handle whose `destroy` signalled every process of the user.
-- An enum case's `override val` parameter passed on to its enum's own is accepted, as scalac accepts it, and an
-  override through a qualified-private accessor is warned about as scalac warns.
-- A class's constructor code reads its own parameters where it names their accessors, so a subclass's override no
-  longer changes what the class's body computes.
-- An enum case naming its enum's type parameters where it may not, or extending a parent that is not its enum, is
-  refused with scalac's errors.
-- A sorted set's or map's `map`, `flatMap`, `collect` and `zip` keep their `Ordering` and build their results as
-  scala-library does, one element at a time, so an `Ordering` or a function with side effects runs in scalac's order.
-- Every value of an enum that extends `java.lang.Enum` is a `Mirror.Singleton`.
-- `new Array[T](n)` with no `ClassTag[T]` in scope is refused, `No ClassTag available for T`, as scalac refuses it,
-  whatever was typed before it.
-- Each value of an enum that extends `java.lang.Enum` is a `Mirror.Singleton`, as scalac makes it (scala-java-time's
-  `ChronoUnit` among them), where only some were, which ones depending on the order of the typing.
-- `teq interp` gives a program more of the JDK: `Files.walkFileTree` and basic file attributes, a file's byte
-  channel and the streams over it, `BufferedOutputStream`, `Class.getDeclaredMethod`, `MethodHandles` and
-  `Proxy` as far as a library finds a constructor or a static method and installs a handler through them,
-  `java.util.logging`'s loggers, and `java.time`'s `LocalTime`, `Month`, `DayOfWeek`, `OffsetDateTime` and ISO
-  formatters, with a pattern's parsing.
-- A `scala.collection.Seq` extractor's pattern binds its elements at the sequence's element type, and on the JVM and
-  in the interpreter matches a mutable sequence, its rest an immutable one, as scalac's does.
-- A condition's signal and an interrupt of its waiter are arbitrated as the JDK's `ConditionObject` arbitrates
-  them, and a sleeper's deadline is kept when another wait's timer was cancelled before it.
-- `$"` in an interpolated string is a quote, as scalac reads it.
+- Inline: a build that would hold an inline call that was never expanded is refused with an error at the call (it
+  succeeded and the program failed when run); a local inline method called before its definition is checked in
+  the context of its own place; an operator assignment through an `inline def` getter (`m.level += 1`) runs.
+- Macros: a file whose expansion waits for a macro of its own build keeps what the expansion asked of a library,
+  and a macro whose implementation needs a definition of its own build expands the same at every worker count;
+  `Symbol.newMethod` with a `MethodType`, `Closure` over a method reference and `Select.unique` of a constructor
+  expand as under scalac (tapir's `formCaseClassCodec`).
+- Givens: a class made by an inline given's expansion reads the given's own recursive instance, and a given found
+  through an inline given can refer to itself by name (kittens' `derives Eq` over a recursive enum); the
+  divergence check of an implicit search compares the goals' covering sets as scalac does.
+- Exports: a singleton type whose path goes through an export's forwarder has the exported member's value
+  (`valueOf[Facade.width.type]`, a type test `case _: Facade.width.type`).
+- Lambdas: an open parameter is typed from the method, constructor, function or enum case its body applies to it
+  (`sink.contramap(Wrapped(_))`), a parameter spread into a repeated one as its sequence; a body that leaves its
+  result's type constructor open takes that constructor's arguments as scalac does (`next.tap(_.traverse_(serve))`
+  over zio and cats).
+- The JVM: a `lazy val` is initialised once under concurrent readers and `synchronized` takes its receiver's
+  monitor; a class lists as its interfaces the traits it inherits directly (a class below `javax.swing.JButton`
+  loads); an unqualified `synchronized`, `toString` or `getClass` inside a function literal converted to a Java
+  interface is the enclosing instance's.
+- Java classes: a static member class of a Java class is no member of a Scala class below it (`Double` inside a
+  class that extends `java.awt.Point`), and a library's class whose parent is a JDK class the standard library
+  does not declare has that class's own parents and members.
+- Enums: `valueOf` and `fromOrdinal` are taken as functions (`names.map(Tone.valueOf)`); every value of an enum that
+  extends `java.lang.Enum` is a `Mirror.Singleton`; a case's `override val` parameter is accepted, and a case that
+  names its enum's type parameters where it may not is refused with scalac's errors.
+- Classes: a local class made through a second constructor that reads a local of the enclosing method, and an
+  anonymous class made in a function literal applied where it is written (zio's `ZIO.succeed`), work on every
+  target; a class's constructor code reads its own parameters, whatever a subclass overrides; a class whose type
+  parameter takes a type constructor of its own (`class Later[F[G[_]]]`) is accepted from another file.
+- The standard library: `List`, `Option`, `Either` and `Try` are abstract classes and `Iterator` and
+  `immutable.Map` traits, as in scala-library; a sorted set's or map's `map`, `flatMap`, `collect` and `zip` keep
+  their `Ordering`; `new Array[T](n)` with no `ClassTag[T]` is refused as scalac refuses it.
+- Warnings and patterns: a pattern's binder over `T | Null` has the type `T`, and `-Wtostring-interpolated` reads
+  an opaque alias as what it stands for (refined's `NonEmptyString`); `$"` in an interpolated string is a quote.
+- JavaScript: a local named `$jsFn` or `$ap` no longer shadows the runtime's helper, and in split output a case
+  object uses the `equals` of its superclass.
+- `teq interp`: `ProcessHandle.of` takes its pid as the JDK does.
 
 </details>
 
