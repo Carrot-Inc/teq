@@ -1,0 +1,12 @@
+a conversion over a cast: other
+a cast over a conversion: other
+a unary plus over a cast: other
+a component, a conversion over a cast: other
+by value, a conversion over a cast: other
+by value, a conversion over a cast to the singleton: other
+a conversion over a cast to the singleton: nine
+a block ending in a cast: other
+a case class's component under a cast to the singleton: nine
+by value, an operation over a cast to the singleton: other
+a cast over a cast to the singleton: other
+a component, an ascription over a cast to the singleton: other

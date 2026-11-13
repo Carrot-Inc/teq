@@ -236,6 +236,9 @@ pub struct InlineState {
     /// How many leaves the folding of constants met, which tells a condition on the call site's
     /// constants from one on the body's.
     pub leaf_reads: u32,
+    /// How many casts the reading of constants read by their own type (`Worker::read_constant`),
+    /// which tells a condition a cast is in from one that is a constant as it stands.
+    pub cast_reads: u32,
     compiletime: Option<Option<PkgId>>,
     ops_name: Option<Name>,
 }
@@ -347,6 +350,7 @@ impl InlineState {
             expansions: _,
             tparam_reads: _,
             leaf_reads: _,
+            cast_reads: _,
             // The interpreter's, whose fold is still running when a body it asks for is typed.
             folding: _,
             // Set while a constant is read off a typed tree, which asks for no body.
@@ -541,6 +545,7 @@ impl InlineState {
             expansions: _,
             tparam_reads: _,
             leaf_reads: _,
+            cast_reads: _,
             // A forward reference's message by its local method, read by a call the walk types
             // before the definition and dropped where the walk checks the definition.
             forward_refs: _,
@@ -601,6 +606,23 @@ impl InlineState {
         arg_types.clear();
         stored_indexes.clear();
     }
+}
+
+/// Which of scalac's readers of a constant a caller stands for (`Worker::read_constant`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Reads {
+    /// `ConstantValue` (ast/TreeInfo.scala): an `if`'s condition and a guard.
+    Condition,
+    /// `ConstFold.ConstantTree`: an operand of a folded operation.
+    Operand,
+    /// `InlineTyper.typedMatchFinish`'s `selTyped`: an `inline match`'s selector.
+    Selector,
+    /// The type of the tree `InlineReducer.reduceProjection` gives a pattern for a component of
+    /// a construction that is the selector.
+    Component,
+    /// `Inliner.paramBinding`: what a by-value parameter's reference stands for, the argument's
+    /// own type where that is a singleton's on an idempotent path.
+    Binding,
 }
 
 #[derive(Clone, Copy)]
@@ -1789,7 +1811,7 @@ impl<'a> Worker<'a> {
         // the interpreter can evaluate is bound to its value too, marked so that the
         // typing of the body does not read it as a constant of the language.
         let fold = self.part(Part::Fold);
-        let binding = (!repeated).then(|| if is_macro { self.fold_structural(te).map(|v| (v, true)) } else { self.binding_constant(te) }).flatten();
+        let binding = (!repeated).then(|| if is_macro { self.fold_structural(te).map(|v| (v, true)) } else { self.binding_constant(te, !by_name && !inline) }).flatten();
         let constant = binding.map(|(v, _)| v);
         let te = match binding {
             // A path that is no pure one stands for the parameter itself (`binding_constant`).
@@ -2930,11 +2952,19 @@ impl<'a> Worker<'a> {
     /// The constant and whether the parameter is its literal. teq's typer gives a literal
     /// argument the parameter's type, so the constant type is the folded constant, which the
     /// marks of an ascription or a plain inline call widen (`widened_constant`).
-    fn binding_constant(&mut self, e: TExprId) -> Option<(LitVal, bool)> {
+    ///
+    /// `by_value` for a parameter that is neither `inline` nor by name, whose reference dotty
+    /// makes the argument's own type only where that is a singleton's on an idempotent path
+    /// (`Reads::Binding`): a cast is none.
+    fn binding_constant(&mut self, e: TExprId, by_value: bool) -> Option<(LitVal, bool)> {
         use super::elaborate::Purity;
+        let read = |t: &mut Self, x: TExprId| match by_value {
+            true => t.read_constant(x, Reads::Binding),
+            false => t.fold_constant(x),
+        };
         let path = |t: &Self, x: TExprId| matches!(t.prog.expr(x), TExpr::Local(_) | TExpr::Static(_) | TExpr::Field(..));
         if path(self, e) {
-            let constant = self.fold_constant(e)?;
+            let constant = read(self, e)?;
             let p = self.expr_purity(e);
             return p.at_least(Purity::IDEMPOTENT_PATH).then_some((constant, p.at_least(Purity::PURE)));
         }
@@ -2945,7 +2975,7 @@ impl<'a> Worker<'a> {
         if path(self, res) {
             return None;
         }
-        let constant = self.fold_constant(res)?;
+        let constant = read(self, res)?;
         self.expr_purity(e).at_least(Purity::IDEMPOTENT).then_some((constant, true))
     }
 
@@ -2967,7 +2997,53 @@ impl<'a> Worker<'a> {
     /// strings. What the interpreter evaluated an argument to is not one, unless the dialect
     /// says so.
     pub fn fold_constant(&mut self, e: TExprId) -> Option<LitVal> {
-        self.fold_tree(e, false).or_else(|| if self.dialect.interpreted_constants { self.fold_by_eval(e) } else { None })
+        self.fold_tree(e, false, None).or_else(|| if self.dialect.interpreted_constants { self.fold_by_eval(e) } else { None })
+    }
+
+    /// The constant the tree `e` is to the reader of scalac's that `reads` names: `fold_constant`
+    /// with what the reader sees of the node that its shape does not say, a cast, which is read
+    /// by its own type and never by the tree under it.
+    pub(super) fn read_constant(&mut self, e: TExprId, reads: Reads) -> Option<LitVal> {
+        self.fold_tree(e, false, Some(reads)).or_else(|| if self.dialect.interpreted_constants { self.fold_by_eval(e) } else { None })
+    }
+
+    /// Where the outermost layer of the node `e` is a cast that keeps no node of its own (dotty's
+    /// `TypeApply(Select(_, asInstanceOf), _)`, `Program::cast_bits`), the type it casts to where
+    /// one is kept (`Worker::ascription_constants`: none is kept for a class type under which no
+    /// ascription or cast stands); none where an ascription was written over the cast, which is
+    /// the node's outer layer then (`AscribedLayer::Typed`).
+    fn cast_layer(&self, e: TExprId) -> Option<Option<TypeId>> {
+        if !self.prog.is_cast(e) {
+            return None;
+        }
+        match self.ascription_constants.get(&e) {
+            Some(&super::prims::AscribedLayer::Cast(to)) => Some(to),
+            Some(super::prims::AscribedLayer::Typed(_)) => None,
+            None => Some(None),
+        }
+    }
+
+    /// What a cast to the type `to` is to a reader of constants, where the type says it for
+    /// certain: the constant of a literal type and of a path that stands for one (scalac widens
+    /// the path, `widenTermRefExpr`), no constant for a class type and a path that stands for
+    /// one. None for any other type (an alias, an intersection, a union, a match type, a type
+    /// parameter, an opaque type): its cast is left to the reading of the tree under it.
+    fn cast_constant(&mut self, to: TypeId) -> Option<Option<LitVal>> {
+        let mut t = self.deref(to);
+        if matches!(self.types.get(t), Type::This(_) | Type::Term(_) | Type::Select(..)) {
+            let widened = self.widen_path(t);
+            t = self.deref(widened);
+        }
+        match self.types.get(t) {
+            Type::Lit(l) => Some(Some(self.types.lit_val(l))),
+            Type::Class(..) if !self.is_opaque_class_type(t) => Some(None),
+            _ => None,
+        }
+    }
+
+    /// Whether `t` is an opaque type, from wherever it is seen.
+    pub(super) fn is_opaque_class_type(&self, t: TypeId) -> bool {
+        matches!(self.types.get(t), Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Opaque)
     }
 
     /// The constant `e` is as it has been typed: scalac's, without typing the body of a val on
@@ -2975,7 +3051,7 @@ impl<'a> Worker<'a> {
     pub fn fold_constant_as_typed(&mut self, e: TExprId) -> Option<LitVal> {
         let reads = self.inline.leaf_reads;
         let outer = std::mem::replace(&mut self.inline.as_typed, true);
-        let v = self.fold_tree(e, false);
+        let v = self.fold_tree(e, false, None);
         self.inline.as_typed = outer;
         self.inline.leaf_reads = reads;
         v
@@ -2994,7 +3070,7 @@ impl<'a> Worker<'a> {
     /// typer folds them (`M.one + 0` over `inline def one: 1` is 1), none expanded.
     pub(super) fn fold_by_pending_types(&mut self, e: TExprId) -> Option<LitVal> {
         let outer = std::mem::replace(&mut self.attempts.by_pending_types, true);
-        let v = self.fold_tree(e, false);
+        let v = self.fold_tree(e, false, None);
         self.attempts.by_pending_types = outer;
         v
     }
@@ -3077,10 +3153,10 @@ impl<'a> Worker<'a> {
     /// The constant a macro sees an argument as: scalac's, and the field of a case class or
     /// tuple built in place, which its inliner reduces.
     fn fold_structural(&mut self, e: TExprId) -> Option<LitVal> {
-        self.fold_tree(e, true)
+        self.fold_tree(e, true, None)
     }
 
-    fn fold_tree(&mut self, e: TExprId, projections: bool) -> Option<LitVal> {
+    fn fold_tree(&mut self, e: TExprId, projections: bool, reads: Option<Reads>) -> Option<LitVal> {
         use LitVal::*;
         if self.prog.is_leaf(e) {
             self.inline.leaf_reads += 1;
@@ -3090,6 +3166,22 @@ impl<'a> Worker<'a> {
                 return self.fold_type(t);
             }
         }
+        if let Some(r) = reads {
+            // A cast is read by its own type (`cast_constant`), never by the tree under it; it is
+            // no path, so no binding takes its type.
+            let constant = match self.cast_layer(e) {
+                Some(Some(to)) => self.cast_constant(to),
+                Some(None) => Some(None),
+                None => None,
+            };
+            if let Some(constant) = constant {
+                self.inline.cast_reads = self.inline.cast_reads.wrapping_add(1);
+                return if r == Reads::Binding { None } else { constant };
+            }
+        }
+        // An operation's operands are its folder's to read; under a by-value binding no cast
+        // answers anywhere in the argument (an operation over one is no path either).
+        let operand = reads.map(|r| if r == Reads::Binding { r } else { Reads::Operand });
         let literal = |t: &Self, v: LitVal| (t.dialect.interpreted_constants || !t.inline.evaluated.contains_key(&e)).then_some(v);
         Some(match self.prog.expr(e) {
             TExpr::Int(v) => return literal(self, Int(v)),
@@ -3113,19 +3205,19 @@ impl<'a> Worker<'a> {
                         return None;
                     }
                 }
-                return self.fold_tree(res, projections);
+                return self.fold_tree(res, projections, reads);
             }
             TExpr::Local(s) | TExpr::Static(s) => return self.fold_value(s),
             TExpr::Field(r, s) => match self.prog.expr(r) {
                 TExpr::New(c, args) if projections && (self.is_tuple_class(c) || self.syms.class(c).mods & mods::CASE != 0) => {
                     let i = self.syms.class(c).ctor_syms.first()?.iter().position(|&f| f == s)?;
                     let items = self.prog.expr_list(args).to_vec();
-                    let folded: Vec<_> = items.iter().map(|&x| self.fold_tree(x, projections)).collect::<Option<_>>()?;
+                    let folded: Vec<_> = items.iter().map(|&x| self.fold_tree(x, projections, None)).collect::<Option<_>>()?;
                     return folded.into_iter().nth(i);
                 }
                 _ => return self.fold_value(s),
             },
-            TExpr::Unary(op, a) => match (op, self.fold_tree(a, projections)?) {
+            TExpr::Unary(op, a) => match (op, self.fold_tree(a, projections, operand)?) {
                 (UnOp::IntNeg, Int(v)) => Int(v.wrapping_neg()),
                 (UnOp::LongNeg, Long(v)) => Long(v.wrapping_neg()),
                 (UnOp::DoubleNeg, Double(v)) => Double((-f64::from_bits(v)).to_bits()),
@@ -3161,7 +3253,7 @@ impl<'a> Worker<'a> {
                 // `null == c` for a constant `c` is false, `null == null` true.
                 let (a_null, b_null) = (matches!(self.prog.expr(a), TExpr::Null), matches!(self.prog.expr(b), TExpr::Null));
                 if a_null || b_null {
-                    let both = a_null && b_null || (a_null && self.fold_tree(b, projections).is_some()) || (b_null && self.fold_tree(a, projections).is_some());
+                    let both = a_null && b_null || (a_null && self.fold_tree(b, projections, operand).is_some()) || (b_null && self.fold_tree(a, projections, operand).is_some());
                     if !both {
                         return None;
                     }
@@ -3171,14 +3263,14 @@ impl<'a> Worker<'a> {
                         _ => None,
                     };
                 }
-                let (x, y) = (self.fold_tree(a, projections)?, self.fold_tree(b, projections)?);
+                let (x, y) = (self.fold_tree(a, projections, operand)?, self.fold_tree(b, projections, operand)?);
                 if !same_tag_or_numeric(x, y) {
                     return None;
                 }
                 return fold_prim(op, x, y);
             }
             // Only strings concatenate to a constant; `"n=" + 1` stays a computation.
-            TExpr::ToStr(a, _) => match self.fold_tree(a, projections)? {
+            TExpr::ToStr(a, _) => match self.fold_tree(a, projections, operand)? {
                 v @ Str(_) => v,
                 _ => return None,
             },
@@ -3186,12 +3278,22 @@ impl<'a> Worker<'a> {
                 let items: Vec<TExprId> = self.prog.expr_list(l).to_vec();
                 let mut out = String::new();
                 for item in items {
-                    match self.fold_tree(item, projections)? {
+                    match self.fold_tree(item, projections, operand)? {
                         Str(s) => crate::text::push_str(&mut out, &self.name_str(s)),
                         _ => return None,
                     }
                 }
                 Str(self.interner.intern(&out))
+            }
+            // A cast that keeps its node: its own type, as one that keeps none, unless an
+            // ascription is written over it (the node's outer layer then, read as any is). The
+            // unboxing erasure puts round an erased result is no cast of scalac's typer.
+            TExpr::Cast(_, op, to) if !matches!(op, CastOp::Adapt(..)) && !self.prog.is_widened(e) && reads.is_some_and(|r| r != Reads::Binding) => {
+                let constant = self.cast_constant(to).flatten();
+                if constant.is_some() {
+                    self.inline.cast_reads = self.inline.cast_reads.wrapping_add(1);
+                }
+                return constant;
             }
             _ => return None,
         })
@@ -3199,13 +3301,13 @@ impl<'a> Worker<'a> {
 
     /// A binding an inline match left: a constant, or a case class or tuple built from constants.
     fn pure_binding(&mut self, init: TExprId, projections: bool) -> bool {
-        if self.fold_tree(init, projections).is_some() {
+        if self.fold_tree(init, projections, None).is_some() {
             return true;
         }
         match self.prog.expr(init) {
             TExpr::New(c, args) if self.is_tuple_class(c) || self.syms.class(c).mods & mods::CASE != 0 => {
                 let items = self.prog.expr_list(args).to_vec();
-                items.iter().all(|&x| self.fold_tree(x, projections).is_some())
+                items.iter().all(|&x| self.fold_tree(x, projections, None).is_some())
             }
             _ => false,
         }
@@ -3590,9 +3692,11 @@ impl<'a> Worker<'a> {
         let tc = self.adapt(raw, cond_ty, self.b.t_boolean, self.cur_ast().expr_span(c));
         // scalac reduces on a condition of a literal type too (`valueOf[debug]`), keeping the
         // condition before the branch it selects.
-        let reads = self.inline.leaf_reads;
-        let (folded, kept) = match self.fold_constant(tc) {
-            Some(v) => (Some(v), None),
+        let (reads, casts) = (self.inline.leaf_reads, self.inline.cast_reads);
+        let (folded, kept) = match self.read_constant(tc, Reads::Condition) {
+            // A cast is evaluated where it stood (`InlineTyper.typedIf` keeps a condition that is
+            // not idempotent before the branch it selects).
+            Some(v) => (Some(v), (self.inline.cast_reads != casts).then_some(tc)),
             None => (self.fold_type(cond_ty), Some(tc)),
         };
         let read_leaf = self.inline.leaf_reads != reads;
@@ -3669,7 +3773,7 @@ impl<'a> Worker<'a> {
         let (ts, sty) = self.type_expr(scrut, None);
         self.inline.forcing -= 1;
         let sty = self.solve_in(sty);
-        let constant = self.fold_constant(ts).or_else(|| self.fold_type(sty));
+        let constant = self.read_constant(ts, Reads::Selector).or_else(|| self.fold_type(sty));
         // A scrutinee with an `erasedValue` anywhere in it is erased (`existsSubTree(_.symbol.isErased)`).
         let mut parts = self.erased_tested(ts);
         let marked = self.inline.erased.take() == Some(ts);
@@ -3697,7 +3801,7 @@ impl<'a> Worker<'a> {
                 && match c.guard {
                     Some(g) => {
                         let tg = self.check_expr(g, self.b.t_boolean);
-                        match self.constant_tree_value(tg, None) {
+                        match self.read_constant(tg, Reads::Condition).or_else(|| self.constant_by_type(tg, None)) {
                             Some(LitVal::Bool(b)) => b,
                             _ => {
                                 stuck = true;
@@ -3921,7 +4025,7 @@ impl<'a> Worker<'a> {
             let constant = match self.prog.expr(s.expr) {
                 TExpr::New(k, items) if k == c => {
                     let item = self.prog.expr_list(items)[i];
-                    self.fold_constant(item)
+                    self.read_constant(item, Reads::Component)
                 }
                 _ => self.fold_type(fty),
             };

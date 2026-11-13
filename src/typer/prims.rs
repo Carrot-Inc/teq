@@ -1850,7 +1850,7 @@ impl<'a> Worker<'a> {
     /// the node's outer layer now (`AscribedLayer::Cast`).
     pub(super) fn note_conversion_layer(&mut self, te: TExprId, widened: TExprId) {
         if widened == te && self.prog.is_widened(te) {
-            self.ascription_constants.insert(te, AscribedLayer::Cast);
+            self.ascription_constants.insert(te, AscribedLayer::Cast(None));
         }
     }
 
@@ -1875,7 +1875,7 @@ impl<'a> Worker<'a> {
                 // `Typed(expr, _)`: the inner tree as the ascription's typing read it, a negative answer as well.
                 Some(&AscribedLayer::Typed(c)) => return c,
                 // A cast over it (`TypeApply(Select(_, asInstanceOf), _)`): its own type, never the tree inside.
-                Some(AscribedLayer::Cast) => return self.constant_of_simplified(ty).map(FoldConst::Val),
+                Some(AscribedLayer::Cast(_)) => return self.constant_of_simplified(ty).map(FoldConst::Val),
                 None => {}
             }
         }
@@ -2298,9 +2298,14 @@ impl<'a> Worker<'a> {
                 // (`TypeTestsCasts.transformAsInstanceOf`: "Replace cast by type ascription"), and a
                 // cast a passed test leaves untested (`untested_lowering`) dotty's cast tree.
                 self.prog.mark_ascribed(recv);
-                // The cast is the node's outer layer now, an ascription's constant inside it no longer read.
-                if self.prog.is_widened(recv) {
-                    self.ascription_constants.insert(recv, AscribedLayer::Cast);
+                // The cast is the node's outer layer now, an ascription's constant inside it no longer read; its
+                // own type is kept where it may stand for a constant (no class's) or is an opaque type, which a
+                // build that records no types has nowhere else (`Worker::cast_layer`).
+                if self.prog.is_widened(recv) || !matches!(self.types.get(t), Type::Class(..)) || self.is_opaque_class_type(t) {
+                    self.ascription_constants.insert(recv, AscribedLayer::Cast(Some(t)));
+                } else if matches!(self.ascription_constants.get(&recv), Some(AscribedLayer::Cast(_))) {
+                    // A cast under this one is no longer the outer layer.
+                    self.ascription_constants.insert(recv, AscribedLayer::Cast(Some(t)));
                 }
                 if self.capturing() {
                     self.capture_wrap(recv, Wrap::Cast(t));
@@ -3048,8 +3053,9 @@ fn arith_op(op: Name, rank: u8) -> Option<PrimOp> {
 pub(crate) enum AscribedLayer {
     /// `Typed(expr, _)`: `expr`'s constant, or none (a negative answer kept).
     Typed(Option<FoldConst>),
-    /// A cast, read by its own type.
-    Cast,
+    /// A cast, read by its own type: the type it casts to, where one is kept (a same-type cast's
+    /// that may stand for a constant); none for a numeric conversion made in place.
+    Cast(Option<TypeId>),
 }
 
 /// A `ConstantTree`'s constant (`Constant`): a value, or `null` (`NullTag`), which only `==` and `!=` fold.

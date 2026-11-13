@@ -1,0 +1,16 @@
+a final val's path: nine
+a final val's path, another value under it: nine
+a final val's path, a literal under it: nine
+a val typed with a literal type: nine
+a val of the type Int: other
+an inline val: nine
+a val of an inner object: nine
+a local val: nine
+in a method the inlining phase expands: nine
+a String's path: nine
+a condition: 100
+a condition, another value under it: 100
+a plain condition: 100
+an operand: 100
+a guard: nine
+a component: nine

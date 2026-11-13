@@ -1,0 +1,19 @@
+evaluated
+walked, a call that answers true: 100
+evaluated
+walked, a call that answers false: 100
+evaluated
+walked, a plain if: 100
+walked, a cast that fails: the cast failed
+evaluated
+held back, a call that answers true: 100
+evaluated
+held back, a call that answers false: 100
+evaluated
+held back, a block: 100
+evaluated
+held back, a plain if, true: 100
+evaluated
+held back, a plain if, false: 100
+held back, a cast that fails: the cast failed
+held back, a plain if, a cast that fails: the cast failed

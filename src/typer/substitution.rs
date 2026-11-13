@@ -13,7 +13,7 @@
 
 use super::apply::MethodCall;
 use crate::ast::DefKind as DefKindAst;
-use super::inline::{InlineArg, InlineBody, Intrinsic};
+use super::inline::{InlineArg, InlineBody, Intrinsic, Reads};
 use super::inline_definition::{Bindings, Demand, Instance, StoredIndex, TreeOf};
 use super::{ResolvedImport, Worker};
 use crate::intern::FxMap;
@@ -1112,6 +1112,15 @@ impl<'a> Worker<'a> {
             }
             if self.prog.is_spread(e) {
                 self.prog.mark_spread(walked);
+            }
+        }
+        // An ascription written over a cast the walk lowered onto its receiver's node is that
+        // node's outer layer, as the typing of the same source records it
+        // (`note_ascribed_tree_constant`): the cast's constant is what stands inside it.
+        if walked != e && self.prog.is_widened(e) && matches!(self.prog.expr(e), TExpr::Cast(_, CastOp::Written, _)) {
+            if let Some(&super::prims::AscribedLayer::Cast(to)) = self.ascription_constants.get(&walked) {
+                let inner = to.and_then(|t| self.constant_of_simplified(t)).map(super::prims::FoldConst::Val);
+                self.ascription_constants.insert(walked, super::prims::AscribedLayer::Typed(inner));
             }
         }
         // And an ascription stands over what the walk made of its expression, whether it put
@@ -2736,7 +2745,7 @@ impl<'a> Worker<'a> {
         // b: true`), selects its branch; the condition stays before it unless evaluating it
         // twice or not at all is as evaluating it once (`isIdempotentExpr`).
         let reads = self.inline.leaf_reads;
-        let constant = match self.fold_constant(c2) {
+        let constant = match self.read_constant(c2, Reads::Condition) {
             Some(LitVal::Bool(taken)) => Some((taken, true)),
             _ => {
                 let cond_ty = self.walked_type(w, c2);
@@ -2958,7 +2967,7 @@ impl<'a> Worker<'a> {
         self.inline.forcing -= 1;
         let sty = self.walked_type(w, s2);
         let sty = self.solve_in(sty);
-        let constant = self.fold_constant(s2).or_else(|| self.fold_type(sty));
+        let constant = self.read_constant(s2, Reads::Selector).or_else(|| self.fold_type(sty));
         // A scrutinee with an `erasedValue` anywhere in it is erased (`existsSubTree(_.symbol.isErased)`).
         let mut parts = self.erased_tested(s2);
         let marked = self.inline.erased.take() == Some(s2);
@@ -3019,7 +3028,7 @@ impl<'a> Worker<'a> {
                     // scalac's `ConstantValue` of the guard: its tree, or its type (`yes()` of
                     // `def yes(): true`).
                     let gty = self.walked_type(w, g2);
-                    match self.constant_tree_value(g2, Some(gty)) {
+                    match self.read_constant(g2, Reads::Condition).or_else(|| self.constant_by_type(g2, Some(gty))) {
                         Some(LitVal::Bool(b)) => matched = b,
                         _ => {
                             stuck = true;
@@ -3176,7 +3185,7 @@ impl<'a> Worker<'a> {
                 self.store_tests_and_pats(g);
                 let g2 = self.walk(w, g);
                 let gty = self.walked_type(w, g2);
-                let taken = match self.constant_tree_value(g2, Some(gty)) {
+                let taken = match self.read_constant(g2, Reads::Condition).or_else(|| self.constant_by_type(g2, Some(gty))) {
                     Some(LitVal::Bool(b)) if !w.failed => Some(b),
                     _ => None,
                 };
@@ -3385,7 +3394,7 @@ impl<'a> Worker<'a> {
             let constant = match self.prog.expr(s.expr) {
                 TExpr::New(k, items) if k == c => {
                     let item = self.prog.expr_list(items)[i];
-                    self.fold_constant(item)
+                    self.read_constant(item, Reads::Component)
                 }
                 _ => self.fold_type(fty),
             };

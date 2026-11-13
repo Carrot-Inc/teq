@@ -1156,7 +1156,12 @@ inline_case_renewed_import	fail	-	< abcabc
 inline_collapsed_nullary_plus	pass	-	
 inline_collapsed_plus_over_negation	pass	-	
 inline_conditional_condition	pass	-	
+inline_constant_cast_conversion	pass	-	
+inline_constant_cast_effect	pass	-	
+inline_constant_cast_path	pass	-	
 inline_constant_final	pass	-	
+inline_constant_readers	pass	-	
+inline_constant_readers_held	pass	-	
 inline_context_arg_anon_inner_parent	pass	-	
 inline_context_arg_anon_inner_parent_bare	pass	-	
 inline_copy_private_defaults	pass	-	

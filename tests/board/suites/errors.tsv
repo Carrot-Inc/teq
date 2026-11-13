@@ -393,6 +393,10 @@ inline_bodies_impure_path	pass	-
 inline_body_import_ambiguous	pass	-	
 inline_case_class	pass	-	
 inline_conditions	pass	-	
+inline_constant_kept_branch	pass	-	
+inline_constant_kept_branch_held	pass	-	
+inline_constant_readers	pass	-	
+inline_constant_readers_held	pass	-	
 inline_constants	pass	-	
 inline_definition_bounds	pass	-	
 inline_definition_errors	pass	-	

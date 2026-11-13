@@ -2421,8 +2421,14 @@ impl<'a> Worker<'a> {
                 // as scalac's inliner does; the other branch is not typed, which is what ends
                 // a recursion the arguments bound.
                 if self.inline.depth > 0 {
-                    let reads = self.inline.leaf_reads;
-                    if let Some(LitVal::Bool(taken)) = self.fold_constant(tc) {
+                    let (reads, casts) = (self.inline.leaf_reads, self.inline.cast_reads);
+                    let read = self.read_constant(tc, super::inline::Reads::Condition);
+                    let cast = self.inline.cast_reads != casts;
+                    // The condition a cast is in stays as a statement, and a call in it that waits
+                    // for the inlining phase would stay unexpanded in a body typed here: such an
+                    // `if` keeps both branches.
+                    let read = read.filter(|_| !(cast && self.holds_pending_call(tc)));
+                    if let Some(LitVal::Bool(taken)) = read {
                         let (te, ty) = match (taken, els) {
                             (true, _) => self.type_expr_adapted(t, expected),
                             (false, Some(els)) => self.type_expr_adapted(els, expected),
@@ -2430,6 +2436,14 @@ impl<'a> Worker<'a> {
                         };
                         let read_leaf = self.inline.leaf_reads != reads;
                         self.mark_folded_leaf(te, |_| read_leaf);
+                        // A cast is evaluated where it stood: the condition stays before the
+                        // branch it selects (`InlineTyper.typedIf`).
+                        if cast {
+                            let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(tc)]);
+                            let block = self.prog.add(TExpr::Block(stmts, te));
+                            self.prog.set_type(block, ty);
+                            return (block, ty);
+                        }
                         return (te, ty);
                     }
                 }

@@ -12,6 +12,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   write them, several names of one prefix into its clause in one edit; a name with two candidates keeps its own
   quick fixes
   ([the language server](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md#the-language-server-and-zed)).
+- An inline method's expansion reads a cast by the cast's own type, as scalac does: `inline if n.asInstanceOf[Int] > 5`,
+  an `inline match` over such a cast and a by-value argument under one are no constant (a correct program's other
+  case is taken; an `inline if` that scalac refuses is refused), where a cast to a singleton type (`n.asInstanceOf[9]`,
+  or to the type of a constant val, `n.asInstanceOf[Limits.max.type]`) is that constant whatever stands under it. The
+  condition under such a cast is still evaluated before the branch it selects.
 
 ## 0.1.10 (2026-11-13)
 

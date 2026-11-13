@@ -1,0 +1,29 @@
+inlineIf, the literal: 100
+inlineIf, the ascribed literal: 100
+inlineIf, in an empty block: 100
+inlineIf, a plain inline call written there: 100
+inlineIf, under a cast to the singleton: 100
+plainIf, the literal: 100
+plainIf, the ascribed literal: 100
+plainIf, in an empty block: 100
+plainIf, under a cast to the singleton: 100
+operand, the literal: 100
+operand, the ascribed literal: 100
+operand, a plain inline call written there: 100
+operand, under a cast to the singleton: 100
+selector, the literal: nine
+selector, the ascribed literal: nine
+selector, in an empty block: nine
+selector, a plain inline call written there: nine
+selector, under a cast to Boolean: other
+selector, under a cast to the singleton: nine
+guard, the literal: nine
+guard, the ascribed literal: nine
+guard, in an empty block: nine
+guard, under a cast to the singleton: nine
+component, the literal: nine
+component, under a cast to Boolean: other
+component, under a cast to the singleton: nine
+byValue, the literal: 100
+operand, the null literal: 100
+selector, the null literal: nine
