@@ -269,6 +269,13 @@ pub struct Diagnostic {
     /// inline override, made by its `Inlining`): presented only while the program has no other
     /// error, as scalac runs no phase after a typer that reported one (`Phase.isRunnable`).
     pub late: bool,
+    /// Made by the inlining phase (`Diagnostics::in_phase`), an error or a warning, or an error
+    /// the typing of a unit the phase suspended reported in a later run
+    /// (`Diagnostics::later_typing`): scalac's `Inlining` runs only where its typer reported no
+    /// error, and a session keeps the record with its file through later checks, which may
+    /// report one. Presented only while the records hold no error of the first run's typer and
+    /// the program no syntax error (`Diagnostics::typer_failed`).
+    pub by_phase: bool,
     /// For a diagnostic of an inline expansion, moved to the call, where the inlined code it
     /// was reported at stands: an error there hides a later one whose place overlaps it, as
     /// scalac hides a message at a position a message already took (`UniqueMessagePositions`,
@@ -436,7 +443,7 @@ impl Place {
 impl Diagnostic {
     /// A diagnostic of nothing but its place, message and severity.
     pub fn plain(file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
-        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), unwound: Unwound(false) }
+        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, by_phase: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), unwound: Unwound(false) }
     }
 
     /// What the reporting policy's filters read of the diagnostic.
@@ -641,6 +648,15 @@ pub struct Diagnostics {
     /// Whether the program has a lexical or syntax error (`Diagnostic::unknown`): set by the
     /// driver for what it presents.
     pub syntax_errors: bool,
+    /// Whether the inlining phase is running: what is reported now is the phase's
+    /// (`Diagnostic::by_phase`). Set by the typer with `Inlining::running`, on each worker.
+    pub in_phase: bool,
+    /// Whether a later run of the inlining phase is typing again the units it suspended
+    /// (`Worker::retype_suspended`): an error reported now is the phase's doing
+    /// (`Diagnostic::by_phase`), since a later run exists only where the first run's typer
+    /// reported no error, so no check whose typer failed reports it. A warning may be one the
+    /// first run's typing made too, and stays the typer's.
+    pub later_typing: bool,
     /// The lexical and parse diagnostics of the program's texts, which a session sets before it
     /// answers: presented with the typer's, in file and position order.
     pub syntax: Vec<Diagnostic>,
@@ -668,6 +684,12 @@ impl Diagnostics {
     /// The record `d`, made now where it has no identity yet (`Ordinal`), as the last of the
     /// diagnostics: every record goes in by here or `extend`.
     pub fn push(&mut self, mut d: Diagnostic) {
+        // What enters the records while the inlining phase runs is the phase's report: a record
+        // an expansion ahead of the phase made and held for it among them (`Worker::release_held`),
+        // and an error of a later run's typing (`later_typing`).
+        if self.in_phase || (self.later_typing && !d.is_warning) {
+            d.by_phase = true;
+        }
         if d.ordinal.0 == 0 {
             d.ordinal = Ordinal(self.made.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1);
             if self.unwinding.is_some_and(|f| !d.owner.is_none() && d.owner.file == f) {
@@ -748,11 +770,24 @@ impl Diagnostics {
     fn presented_from(&self, from: usize, whole: bool) -> impl Iterator<Item = &Diagnostic> {
         let syntax = self.syntax_errors;
         let earlier = self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
-        let hidden = self.hidden_inlined();
+        let failed = self.typer_failed();
+        let hidden = self.hidden_inlined(earlier, failed);
         self.syntax
             .iter()
             .filter(move |_| whole)
-            .chain(self.items.iter().enumerate().skip(from).filter(move |(i, d)| !d.dependent && !(d.unknown && syntax) && !(d.late && earlier) && !hidden.contains(i)).map(|(_, d)| d))
+            .chain(self.items.iter().enumerate().skip(from).filter(move |(i, d)| !d.dependent && !(d.unknown && syntax) && !(d.late && earlier) && !(d.by_phase && failed) && !hidden.contains(i)).map(|(_, d)| d))
+    }
+
+    /// Whether the typer failed, after which scalac runs no phase: the program has a syntax error
+    /// (the driver's flag, set before the typing; a session's records of the syntax are the last
+    /// check's until it answers), or the records hold an error that is the first run's typer's
+    /// own (not a later phase's, `late`, nor the inlining phase's or a later run's typing's,
+    /// `by_phase`, which a session keeps from the checks before). One question, asked by the
+    /// typer before it runs the inlining phase and by a report of what a phase made: dotty asks
+    /// whether its reporter has errors run by run (`Run.compileSuspendedUnits`), so what the
+    /// phase of one run reported stays reported where a later run's typer reports an error.
+    pub(crate) fn typer_failed(&self) -> bool {
+        self.syntax_errors || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !d.by_phase)
     }
 
     /// `TEQ_UNPRESENTED=1`: the typer's records `presented_from` leaves out, each with why, in their
@@ -762,7 +797,8 @@ impl Diagnostics {
     fn trace_unpresented(&self) {
         let syntax = self.syntax_errors;
         let earlier = self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
-        let hidden = self.hidden_inlined();
+        let failed = self.typer_failed();
+        let hidden = self.hidden_inlined(earlier, failed);
         for (i, d) in self.items.iter().enumerate() {
             let why = if d.dependent {
                 "dependent"
@@ -770,6 +806,8 @@ impl Diagnostics {
                 "unknown after a syntax error"
             } else if d.late && earlier {
                 "late, an earlier error presented"
+            } else if d.by_phase && failed {
+                "the inlining phase's, the typer failed"
             } else if hidden.contains(&i) {
                 "an inlined error at an earlier one's place"
             } else {
@@ -780,13 +818,20 @@ impl Diagnostics {
     }
 
     /// The errors of inline expansions whose inlined place overlaps that of an earlier one
-    /// (`Diagnostic::inlined_from`), by index.
-    fn hidden_inlined(&self) -> Vec<usize> {
+    /// (`Diagnostic::inlined_from`), by index. An error takes a place only where it is presented
+    /// itself: not one left out for what malformed syntax left unknown, nor a late one while an
+    /// error that is not late exists (`earlier`), nor the inlining phase's where the typer
+    /// failed (`failed`), as scalac hides a message at a position a message it reported took
+    /// (`UniqueMessagePositions`) and reports none of a phase it does not run: an `inline if` an
+    /// expansion cannot reduce is presented where an `inline val` of the same body, whose check
+    /// is a later phase's, reported first at the same place.
+    fn hidden_inlined(&self, earlier: bool, failed: bool) -> Vec<usize> {
+        let syntax = self.syntax_errors;
         let mut inlined: Vec<(FileId, u32, usize, FileId, Span)> = self
             .items
             .iter()
             .enumerate()
-            .filter(|(_, d)| !d.is_warning && !d.dependent)
+            .filter(|(_, d)| !d.is_warning && !d.dependent && !(d.unknown && syntax) && !(d.late && earlier) && !(d.by_phase && failed))
             .filter_map(|(i, d)| d.inlined_from.map(|(f, s)| (d.file, d.span.start, i, f, s)))
             .collect();
         if inlined.len() < 2 {
@@ -995,6 +1040,14 @@ impl Diagnostics {
         }
         let errors = shown.iter().filter(|s| s.level == Level::Error).count();
         let warnings = shown.iter().filter(|s| s.level == Level::Warning).count();
+        // A build whose records hold an error presents one: a rule that leaves an error's place to
+        // another record leaves it to one that is shown. A dependent error and, under a syntax
+        // error, an unknown one or the inlining phase's are left out for an error reported before
+        // them, and are not asked about.
+        debug_assert!(
+            !whole || errors > 0 || !self.items.iter().any(|d| !d.is_warning && !d.dependent && !((d.unknown || d.by_phase) && self.syntax_errors)),
+            "the records hold an error and the report presents none"
+        );
         Report { shown, errors, warnings }
     }
 
@@ -1161,5 +1214,90 @@ mod tests {
         assert_eq!(again, vec![file_tag(c), file_tag(a) + 2, file_tag(a)]);
         assert_eq!(file_tags([c].into_iter()), vec![file_tag(c)]);
         assert_eq!(file_tags([a, b].into_iter()), vec![file_tag(a), file_tag(a) + 1]);
+    }
+
+    /// An error of an inline expansion, moved to the call at `at`, of the inlined code at `from`.
+    fn inlined(at: u32, from: u32, msg: &str) -> Diagnostic {
+        let mut d = Diagnostic::plain(FileId(0), Span { start: at, end: at + 4 }, msg.to_string(), false, true);
+        d.inlined_from = Some((FileId(0), Span { start: from, end: from + 4 }));
+        d
+    }
+
+    /// The errors a whole report of `items` presents, by their messages.
+    fn presented(items: Vec<Diagnostic>, syntax_errors: bool) -> Vec<String> {
+        let diags = Diagnostics { items, syntax_errors, ..Default::default() };
+        diags.report(&[]).shown.iter().map(|s| s.d.msg.clone()).collect()
+    }
+
+    /// An inlined error hides a later one at its place only where it is presented itself: a late
+    /// one gives way to an error that is not late, and then takes no place.
+    #[test]
+    fn a_late_error_left_out_hides_no_error_at_its_place() {
+        let late = |at, from, msg| Diagnostic { late: true, phase: PHASE_FIRST_TRANSFORM, ..inlined(at, from, msg) };
+        // the late one first, the typer's at the same inlined place: the typer's is the one shown
+        assert_eq!(presented(vec![late(10, 40, "of a later phase"), inlined(10, 40, "of the typer")], false), ["of the typer"]);
+        // alone, the late one is shown; of two late ones at a place, the first
+        assert_eq!(presented(vec![late(10, 40, "of a later phase")], false), ["of a later phase"]);
+        assert_eq!(presented(vec![late(10, 40, "the first"), late(10, 40, "the second")], false), ["the first"]);
+        // two of the typer's at one inlined place: the first
+        assert_eq!(presented(vec![inlined(10, 40, "the first"), inlined(10, 40, "the second")], false), ["the first"]);
+        // the typer's error elsewhere leaves the late one out, which hides nothing at its own place
+        assert_eq!(presented(vec![late(10, 40, "of a later phase"), inlined(10, 40, "at its place"), inlined(90, 70, "elsewhere")], false), ["at its place", "elsewhere"]);
+        // an error over the late one's place takes the place, and hides the next one over its own
+        assert_eq!(presented(vec![late(10, 40, "of a later phase"), inlined(20, 42, "over it"), inlined(30, 45, "over that one alone")], false), ["over it"]);
+    }
+
+    /// An error the inlining phase made is presented only while the records hold no error of the
+    /// typer and the program no syntax error, as scalac runs no phase after its typer failed; a
+    /// later phase's error at its place gives way to it.
+    #[test]
+    fn the_inlining_phases_error_gives_way_to_the_typers() {
+        let phase = |at, from, msg| Diagnostic { by_phase: true, ..inlined(at, from, msg) };
+        let late = |at, from, msg| Diagnostic { late: true, by_phase: true, phase: PHASE_FIRST_TRANSFORM, ..inlined(at, from, msg) };
+        let typers = |at, msg: &str| Diagnostic::plain(FileId(1), Span { start: at, end: at + 4 }, msg.to_string(), false, true);
+        // alone, and over a later phase's error made first at the same inlined place
+        assert_eq!(presented(vec![phase(10, 40, "of the phase")], false), ["of the phase"]);
+        assert_eq!(presented(vec![late(10, 40, "of a later phase"), phase(10, 40, "of the phase")], false), ["of the phase"]);
+        // beside an error of the typer in another file: the typer's alone
+        assert_eq!(presented(vec![late(10, 40, "of a later phase"), phase(10, 40, "of the phase"), typers(5, "of the typer")], false), ["of the typer"]);
+        // under a syntax error, which the driver presents: none of the records
+        assert_eq!(presented(vec![late(10, 40, "of a later phase"), phase(10, 40, "of the phase")], true), [] as [&str; 0]);
+        // left out, it takes no place: an inlined error of the typer over its place is shown
+        assert_eq!(presented(vec![phase(10, 40, "of the phase"), inlined(10, 40, "of the typer, inlined")], false), ["of the typer, inlined"]);
+        // a warning of the phase is the phase's too: shown alone, left out beside the typer's error
+        let warning = |at: u32, msg: &str| Diagnostic { by_phase: true, ..Diagnostic::plain(FileId(0), Span { start: at, end: at + 4 }, msg.to_string(), true, true) };
+        assert_eq!(presented(vec![warning(60, "a warning of the phase")], false), ["a warning of the phase"]);
+        assert_eq!(presented(vec![warning(60, "a warning of the phase"), typers(5, "of the typer")], false), ["of the typer"]);
+    }
+
+    /// An error the typing of a suspended unit reports in a later run is the phase's doing: it
+    /// leaves what the phase reported before it presented, and goes with it where the first
+    /// run's typer failed; a warning of that typing stays the typer's.
+    #[test]
+    fn a_later_runs_typer_error_leaves_the_phases_report_presented() {
+        let warning = |at: u32, msg: &str| Diagnostic { by_phase: true, ..Diagnostic::plain(FileId(0), Span { start: at, end: at + 4 }, msg.to_string(), true, true) };
+        let made = |later_typing: bool, is_warning: bool, msg: &str| {
+            let mut diags = Diagnostics { later_typing, ..Default::default() };
+            diags.push(Diagnostic::plain(FileId(1), Span { start: 5, end: 9 }, msg.to_string(), is_warning, true));
+            diags.items.pop().unwrap()
+        };
+        assert!(made(true, false, "of a later run's typer").by_phase);
+        assert!(!made(true, true, "a warning of a later run's typing").by_phase);
+        assert!(!made(false, false, "of the first run's typer").by_phase);
+        // the phase's warning of the run before, then the later run's typer's error: both
+        assert_eq!(presented(vec![warning(60, "a warning of the phase"), made(true, false, "of a later run's typer")], false), ["a warning of the phase", "of a later run's typer"]);
+        // beside an error of the first run's typer, and under a syntax error: neither
+        assert_eq!(presented(vec![warning(60, "a warning of the phase"), made(true, false, "of a later run's typer"), made(false, false, "of the first run's typer")], false), ["of the first run's typer"]);
+        assert_eq!(presented(vec![warning(60, "a warning of the phase"), made(true, false, "of a later run's typer")], true), [] as [&str; 0]);
+    }
+
+    /// An error about an erroneous type is left out while the program has a syntax error, and
+    /// then hides no error at its inlined place.
+    #[test]
+    fn an_unknown_error_left_out_hides_no_error_at_its_place() {
+        let unknown = |at, from, msg| Diagnostic { unknown: true, ..inlined(at, from, msg) };
+        assert_eq!(presented(vec![unknown(10, 40, "of an erroneous type"), inlined(10, 40, "a known one")], true), ["a known one"]);
+        // without a syntax error the unknown one is shown and takes the place
+        assert_eq!(presented(vec![unknown(10, 40, "of an erroneous type"), inlined(10, 40, "a known one")], false), ["of an erroneous type"]);
     }
 }

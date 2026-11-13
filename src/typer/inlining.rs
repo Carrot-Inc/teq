@@ -759,7 +759,7 @@ impl<'a> Worker<'a> {
         let measured = crate::measure::phase_work_begin(self.worker);
         self.prog.exprs.owning = true;
         self.prog.expr_types.owning = true;
-        self.inlining.running = true;
+        self.set_phase_running(true);
         let outer_env = self.env.clone();
         let erased = self.erased_values.len();
         // `TEQ_IDLE_WORKERS` keeps a worker from the units as from the items (`check::idle_worker`).
@@ -1388,11 +1388,21 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether the typing reported an error, after which no phase runs (dotty's `Run` runs a
-    /// phase only while the reporter has no error); an error of a later phase scalac reports
-    /// (`Diagnostic::late`) is none.
+    /// The inlining phase running or not on this worker: an error reported while it runs is the
+    /// phase's (`Diagnostics::in_phase`).
+    fn set_phase_running(&mut self, on: bool) {
+        self.inlining.running = on;
+        self.diags.in_phase = on;
+    }
+
+    /// Whether an error was reported, the phase's own of an earlier round included, after which
+    /// no later run goes through the phase (dotty's `Run` runs a phase only while the reporter
+    /// has no error); an error of a later phase scalac reports (`Diagnostic::late`) is none. The
+    /// phase itself starts where the typer did not fail (`Diagnostics::typer_failed`). A syntax
+    /// error is this check's (`Diagnostics::syntax_errors`, which every driver sets before the
+    /// typing): the records of syntax errors a session keeps are its last answer's.
     fn typing_failed(&self) -> bool {
-        !self.diags.syntax.is_empty() || self.diags.items.iter().any(|d| !d.is_warning && !d.late)
+        self.diags.syntax_errors || self.diags.items.iter().any(|d| !d.is_warning && !d.late)
     }
 
     /// The inlining phase: every kept call expanded at its site, in the walk's order, its node
@@ -1411,7 +1421,7 @@ impl<'a> Worker<'a> {
         if self.inlining.is_empty() && self.inlining.suspended.is_empty() {
             return;
         }
-        if self.typing_failed() {
+        if self.diags.typer_failed() {
             // The calls depend on their callees' bodies, whether a later build expands them or
             // an edit of a callee's file is what makes it one.
             for k in &self.inlining.kept {
@@ -1423,7 +1433,7 @@ impl<'a> Worker<'a> {
             }
             return;
         }
-        self.inlining.running = true;
+        self.set_phase_running(true);
         let errors = self.diags.items.iter().filter(|d| !d.is_warning).count();
         let erased_mark = self.erased_values.len();
         // The order of dotty's runs: every file in the walk's order, as `Phase.runOn` takes the
@@ -1467,7 +1477,7 @@ impl<'a> Worker<'a> {
                 self.inlining.suspendable = false;
                 self.inlining.splices_name_run = false;
                 self.inlining.current_run = None;
-                self.inlining.running = false;
+                self.set_phase_running(false);
                 return;
             }
             if self.inlining.suspended.is_empty() {
@@ -1501,9 +1511,12 @@ impl<'a> Worker<'a> {
             if !suspended.is_empty() {
                 suspended.sort_unstable();
                 super::substitution::counts::suspended_files(0, suspended.len());
-                self.inlining.running = false;
+                self.set_phase_running(false);
+                // An error this typing reports is the phase's doing (`Diagnostics::later_typing`).
+                self.diags.later_typing = true;
                 self.retype_suspended(&suspended);
-                self.inlining.running = true;
+                self.diags.later_typing = false;
+                self.set_phase_running(true);
                 // The walk of the next round takes the retyped trees, their classes of blocks and
                 // their templates' nodes, as dotty's `InliningTreeMap` walks the unit's tree its
                 // later run typed again.
@@ -1598,7 +1611,7 @@ impl<'a> Worker<'a> {
         if let Some(memo) = self.inlining.reflect.take() {
             super::substitution::counts::reflected(memo.asked, memo.answered);
         }
-        self.inlining.running = false;
+        self.set_phase_running(false);
     }
 
     /// The files a macro of the run suspended at typing, waiting for the next round: what their typing

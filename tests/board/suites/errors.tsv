@@ -395,6 +395,7 @@ inline_bodies_block_path	pass	-
 inline_bodies_erased_value	pass	-	
 inline_bodies_impure_path	pass	-	
 inline_body_import_ambiguous	pass	-	
+inline_call_after_syntax_error	pass	-	
 inline_case_class	pass	-	
 inline_conditions	pass	-	
 inline_constant_kept_branch	pass	-	
@@ -411,6 +412,7 @@ inline_error_positions	pass	-
 inline_errors	pass	-	
 inline_errors_expansion	pass	-	
 inline_evaluated_argument_not_constant	pass	-	
+inline_if_after_inline_val	pass	-	
 inline_if_demanded	pass	-	
 inline_if_final_val_call	pass	-	
 inline_inferred_result_call	pass	-	
@@ -419,6 +421,7 @@ inline_local_forward_ambiguous	pass	-
 inline_local_forward_extension	pass	-	
 inline_local_forward_failed	pass	-	
 inline_local_forward_reference	pass	-	
+inline_match_after_inline_val	pass	-	
 inline_match_guard	pass	-	
 inline_parameter_block_path	pass	-	
 inline_parameter_block_path_final	fail	-	missing '9:25: error: (x$proxy1 : Int) is not a constant type; cannot take constValue'
@@ -552,6 +555,7 @@ macro_same_file	pass	-
 macro_same_file_transparent	pass	-	
 macro_select_unique_overloaded_constructor	pass	-	
 macro_selector_check	pass	-	
+macro_warning_before_later_run_error	pass	-	
 mangled_names_alias_encoded_class	pass	-	
 mangled_names_duplicate_term	pass	-	
 mangled_names_duplicate_type	pass	-	

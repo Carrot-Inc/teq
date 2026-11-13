@@ -30,6 +30,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   called back by a later method of the block that its own body needs (`inline def shown = "got " + later` above
   `def later = if done then "x" else shown`). Programs that were refused, or built with another overload or another
   given than scalac's, build as scalac builds them, and the same at every number of workers.
+- A build no longer ends with `0 errors found` and a failing exit where an inline method's expansion reports an
+  `inline val` that is no constant and then another error of the same call (an `inline if` or an `inline match` it
+  cannot reduce, a `summonInline` that finds no instance): that error is shown, as under scalac. And what the
+  expansion of an inline method that is not transparent, or of a macro that is not, reports is shown by a watch
+  session and by the editor as a fresh check shows it: not beside a syntax error, and again once the syntax error
+  is corrected; so is an error a transparent macro reports.
 
 ## 0.1.10 (2026-11-13)
 

@@ -8011,7 +8011,140 @@ async function importAll() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, importMerges, importAll, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
+// --- What the inlining phase reports, across the checks of a session ---------------------------
+//
+// A session's check of a state presents what a fresh check of that state presents. The records
+// here are the inlining phase's: an `inline if` a method that is not transparent cannot reduce
+// (beside an `inline val`'s error at the same place), a macro's error, a macro's warning, and
+// both; the macros are the build's own, so their calling unit suspends. And an error the typing
+// of such a unit reports in a later run, where the macro is a transparent one: the macro's own
+// error, a type error after its call. Another file gains an
+// unclosed string or loses it, by an edit to the right side of a val the file keeps, so that the
+// session types that file alone. By `compiler watch --check` at one worker and at eight, by the
+// server's didChange, and by didChange followed by didSave.
+
+async function phaseRecords() {
+  encoding = "utf-16"
+  const notes = [
+    "import scala.quoted.*",
+    "object Notes:",
+    "  inline def noted(inline n: Int): Int = ${ notedImpl('n) }",
+    "  def notedImpl(n: Expr[Int])(using Quotes): Expr[Int] =",
+    '    quotes.reflect.report.warning("noted here")',
+    "    '{ $n + 1 }",
+    "  inline def refused(inline n: Int): Int = ${ refusedImpl('n) }",
+    "  def refusedImpl(n: Expr[Int])(using Quotes): Expr[Int] =",
+    '    quotes.reflect.report.error("refused here")',
+    "    n",
+    "  transparent inline def early(inline n: Int): Int = ${ earlyImpl('n) }",
+    "  def earlyImpl(n: Expr[Int])(using Quotes): Expr[Int] = n",
+    "  transparent inline def denied(inline n: Int): Int = ${ deniedImpl('n) }",
+    "  def deniedImpl(n: Expr[Int])(using Quotes): Expr[Int] =",
+    '    quotes.reflect.report.error("denied here")',
+    "    n",
+    'val lastOfDefs: String = "kept"',
+    "",
+  ].join("\n")
+  const measured = 'inline def measured(inline n: Int): Int =\n  inline val limit = n\n  inline if limit > 5 then 100 else 200\nval lastOfDefs: String = "kept"\n'
+  const last = 'val lastOfMain: String = "kept"\n'
+  // kind: Defs.scala, Main.scala, and what the clean program's check reports
+  const kinds = {
+    "an inline if beside an inline val": [measured, `def first: Int = measured((9: Int))\n${last}`, ["error Main.scala:1"]],
+    "a macro's error": [notes, `def first: Int = Notes.refused(9)\n${last}`, ["error Main.scala:1 refused here"]],
+    "a macro's warning": [notes, `def first: Int = Notes.noted(9)\n${last}`, ["warning Main.scala:1 noted here"]],
+    "a macro's warning and a macro's error": [notes, `def first: Int = Notes.noted(9)\ndef second: Int = Notes.refused(9)\n${last}`, ["error Main.scala:2 refused here", "warning Main.scala:1 noted here"]],
+    "a transparent macro's error": [notes, `def first: Int = Notes.denied(9)\n${last}`, ["error Main.scala:1 denied here"]],
+    "a type error after a transparent macro's call": [notes, `def first: Int = Notes.early(9)\nval wrong: String = 3\n${last}`, ["error Main.scala:2 type mismatch"]],
+  }
+  const other = { clean: 'val unrelated: Int = 1\nval lastOfOther: String = "kept"\n', broken: 'val unrelated: Int = 1\nval lastOfOther: String = "\n' }
+  const names = ["Defs.scala", "Main.scala", "Other.scala"]
+  const base = (file) => file.split("/").pop()
+  const sorted = (records) => [...records].sort()
+  // A message's first line: what follows it is the trace of the inlined positions.
+  const head = (message) => message.split("\n")[0]
+  /** A fresh `compiler check` of the three files in `dir`: its errors and warnings, sorted. */
+  const fresh = (dir) => {
+    let out
+    try {
+      out = execSync(`"${teq}" compiler check ${names.join(" ")} --threads 1 2>&1`, { cwd: dir }).toString()
+    } catch (e) {
+      out = `${e.stdout ?? ""}`
+    }
+    return sorted([...out.matchAll(/^(\w+\.scala):(\d+):\d+: (error|warning): (.*)$/gm)].map((m) => `${m[3]} ${m[1]}:${m[2]} ${m[4]}`))
+  }
+  const answered = (a) => sorted([...(a.errors ?? []).map((d) => `error ${base(d.file)}:${d.line} ${head(d.message)}`), ...(a.warnings ?? []).filter((d) => d.file).map((d) => `warning ${base(d.file)}:${d.line} ${head(d.message)}`)])
+  const setUp = (name, defs, main, state) => {
+    const dir = join(work, "phase", name.replace(/[^a-z0-9]+/gi, "-"))
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, "Defs.scala"), defs)
+    writeFileSync(join(dir, "Main.scala"), main)
+    writeFileSync(join(dir, "Other.scala"), other[state])
+    return dir
+  }
+  for (const [kind, [defs, main, cleanRecords]] of Object.entries(kinds)) {
+    for (const [from, to] of [["broken", "clean"], ["clean", "broken"]]) {
+      const what = `${kind}, another file ${from} then ${to}`
+      // The fresh checks, each state a program of its own.
+      const expected = {}
+      for (const state of [from, to]) expected[state] = fresh(setUp(`${what} fresh ${state}`, defs, main, state))
+      check(`the phase's records (${what}): a fresh check of the clean state reports them`, cleanRecords.every((r) => expected.clean.some((x) => x.startsWith(r))) && expected.clean.length >= cleanRecords.length, expected.clean)
+      check(`the phase's records (${what}): a fresh check of the broken state reports the syntax error alone`, same(expected.broken, ["error Other.scala:2 unclosed string literal"]), expected.broken)
+      for (const threads of ["1", "8"]) {
+        const dir = setUp(`${what} check ${threads}`, defs, main, from)
+        const s = session(dir, ["--threads", threads])
+        try {
+          const first = await s.next()
+          const text = other[to]
+          s.child.stdin.write(`text ${join(dir, "Other.scala")} ${Buffer.byteLength(text)}\n${text}build ${join(dir, "Other.scala")}\n\n`)
+          const second = await s.next()
+          check(`the phase's records (${what}), a check session at ${threads}: the first answer is the fresh check's`, same(answered(first), expected[from]), [answered(first), expected[from]])
+          check(`the phase's records (${what}), a check session at ${threads}: the second answer is the fresh check's`, same(answered(second), expected[to]) && second.ok === (expected[to].every((r) => !r.startsWith("error "))), [second.ok, answered(second), expected[to]])
+        } catch (e) {
+          check(`the phase's records (${what}), a check session at ${threads}, ran to its end`, false, `${e.stack}`)
+        } finally {
+          s.child.stdin.end()
+          s.child.kill()
+        }
+      }
+      for (const saved of [false, true]) {
+        const how = saved ? "didChange and didSave" : "didChange"
+        const dir = setUp(`${what} ${how}`, defs, main, from)
+        const c = new Client(dir)
+        const published = () => sorted(names.flatMap((n) => c.latestDiagnostics(uriOf(join(dir, n))).filter((d) => d.severity === 1 || d.severity === 2).map((d) => `${d.severity === 1 ? "error" : "warning"} ${n}:${d.range.start.line + 1} ${head(d.message)}`)))
+        try {
+          await c.result("initialize", { processId: null, rootUri: uriOf(dir), capabilities: {} })
+          c.notify("initialized", {})
+          for (const n of names) c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(join(dir, n)), languageId: "scala", version: 1, text: readFileSync(join(dir, n), "utf8") } })
+          const hover = { textDocument: { uri: uriOf(join(dir, "Main.scala")) }, position: { line: 0, character: 4 } }
+          // A request waits for the build under way: what is published once it is answered is the build's.
+          await c.result("textDocument/hover", hover)
+          const first = (await until(() => same(published(), expected[from]), 20000)) || published()
+          check(`the phase's records (${what}), ${how}: the first build publishes the fresh check's`, first === true, [first, expected[from]])
+          const text = other[to]
+          c.notify("textDocument/didChange", { textDocument: { uri: uriOf(join(dir, "Other.scala")), version: 2 }, contentChanges: [{ text }] })
+          if (saved) {
+            writeFileSync(join(dir, "Other.scala"), text)
+            c.notify("textDocument/didSave", { textDocument: { uri: uriOf(join(dir, "Other.scala")) }, text })
+          }
+          await c.result("textDocument/hover", hover)
+          const second = (await until(() => same(published(), expected[to]), 20000)) || published()
+          // And it stays: nothing more is published once every message so far is handled.
+          await sync(c)
+          await c.result("textDocument/hover", hover)
+          check(`the phase's records (${what}), ${how}: the edit's build publishes the fresh check's`, second === true && same(published(), expected[to]), [second, published(), expected[to]])
+          await c.result("shutdown", null)
+          c.notify("exit", null)
+          await Promise.race([c.exited, sleep(10000)])
+        } catch (e) {
+          check(`the phase's records (${what}), ${how}, ran to its end`, false, `${e.stack}\nstderr: ${c.stderr.slice(-600)}`)
+          c.proc.kill()
+        }
+      }
+    }
+  }
+}
+
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, importMerges, importAll, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths, phaseRecords }
 // Run only when named: the idle minute, the jar fetch and the sources' fetches, which tests/lsp.sh
 // runs once each.
 const named = new Set(["idleMinute", "jarFetch", "librarySources", "sourcesFailures", "sourcesHeld", "sourcesBackoff", "sourcesPaths"])
