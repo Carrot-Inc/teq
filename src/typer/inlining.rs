@@ -2392,10 +2392,13 @@ impl<'a> Worker<'a> {
             self.inline_unboxes.extend(waiting);
         }
         self.erased_values.truncate(c.erased_values);
-        // An unboxing that waits with the phase's records is its kept call's (`apply_inline_unboxes`).
-        let calls: Vec<TExprId> = self.inlining.kept.iter().filter(|k| k.at.file == file).map(|k| k.node).collect();
+        // An unboxing that waits with the phase's records is its kept call's (`apply_inline_unboxes`):
+        // the file's kept calls are listed only where one waits past the checkpoint.
+        if self.inlining.unboxes.len() > c.lists[0] {
+            let calls: Vec<TExprId> = self.inlining.kept.iter().filter(|k| k.at.file == file).map(|k| k.node).collect();
+            cut_owned(&mut self.inlining.unboxes, c.lists[0], |&(e, _)| calls.contains(&e));
+        }
         let l = &mut self.inlining;
-        cut_owned(&mut l.unboxes, c.lists[0], |&(e, _)| calls.contains(&e));
         l.tailrec.truncate(c.lists[1]);
         cut_owned(&mut l.lifted, c.lists[2], |n| n.unit.0 == file);
         cut_owned(&mut l.deferred_traits, c.lists[3], |d| d.unit.0 == file);
