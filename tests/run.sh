@@ -101,4 +101,7 @@ for src in "$dir"/*.scala "$dir"/*/; do
   fi
 done
 echo "$pass passed, $fail failed"
+# A machine without python3 (the floor's container of bench/cross-ship.sh) names TEQ_TEST_PENDING=later: the one
+# that started it holds $out/results.txt to the list.
+[ "${TEQ_TEST_PENDING:-}" != later ] || exit 0
 python3 tests/support/pending.py "$suite" "$out/results.txt" $update $add

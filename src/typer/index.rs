@@ -560,14 +560,41 @@ impl<'a> Worker<'a> {
         self.unused.put_back(taken.marks);
     }
 
-    /// Keeps what was recorded since `mark` by the check of `sym`'s definition, for its
-    /// expansions by substitution.
-    pub(super) fn index_keep_body(&mut self, sym: SymId, mark: Recorded) {
+    /// Keeps, for the expansions by substitution of the inline method `sym`, the names the check of its definition
+    /// recorded since `mark` inside the definition, `span` of `file` (its header to the end of its body). What
+    /// another definition recorded meanwhile, its signature or its body completed on demand inside the check, is
+    /// that definition's: it stays in the journal, where the walk would have recorded it, as dotty reads a
+    /// definition's occurrences off its own tree whoever forced its completion. The records that stay move together,
+    /// and what is kept by its position there moves with them (`promoted_records_moved`): an attempt given up after
+    /// the check keeps the work done on demand inside it, and nothing else that came to stand where that work stood.
+    pub(super) fn index_keep_body(&mut self, sym: SymId, mark: Recorded, file: FileId, span: Span) {
+        // Where each record of the window stands afterwards, told only where something is kept by position.
+        let mut moved: Vec<u32> = Vec::new();
+        let tracks = self.keeps_promoted_records();
+        let mut end = mark.records as u32;
         if let Some(ix) = self.index.as_mut() {
-            // The body's nodes are the definition's own, which its expansions do not repeat.
-            let (nodes, records): (Vec<_>, Vec<_>) = ix.journal.split_off(mark.records).into_iter().partition(|(_, r)| matches!(r.kind, Kind::Node | Kind::Function | Kind::Applied));
-            ix.journal.extend(nodes);
+            let mut records = Vec::new();
+            let mut k = mark.records;
+            for i in mark.records..ix.journal.len() {
+                let (f, r) = ix.journal[i];
+                if tracks {
+                    moved.push(k as u32);
+                }
+                // The body's nodes are the definition's own, which its expansions do not repeat.
+                let node = matches!(r.kind, Kind::Node | Kind::Function | Kind::Applied);
+                if !node && f == file && r.span.start >= span.start && r.span.end <= span.end {
+                    records.push((f, r));
+                } else {
+                    ix.journal.swap(k, i);
+                    k += 1;
+                }
+            }
+            ix.journal.truncate(k);
+            end = k as u32;
             ix.bodies.insert(sym, records);
+        }
+        if tracks {
+            self.promoted_records_moved(mark.records as u32, &moved, end);
         }
     }
 

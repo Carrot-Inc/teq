@@ -1835,6 +1835,23 @@ impl<'a> Worker<'a> {
         ]
     }
 
+    /// Whether a range of the index's journal is kept by its positions (`Promoted::records`): work done on demand
+    /// inside an open attempt.
+    pub(super) fn keeps_promoted_records(&self) -> bool {
+        !self.attempts.promoted.is_empty()
+    }
+
+    /// The journal's records from position `from` on were moved together (`index_keep_body` took a definition's own
+    /// names out from among them): the record that stood at `from + i` stands at `moved[i]`, one taken out where the
+    /// next that stayed stands, and `end` is past the last. The promoted ranges follow their records, so that a
+    /// retraction keeps the work they hold and not what came to stand at their old positions.
+    pub(super) fn promoted_records_moved(&mut self, from: u32, moved: &[u32], end: u32) {
+        let at = |x: u32| if x < from { x } else { moved.get((x - from) as usize).copied().unwrap_or(end) };
+        for p in self.attempts.promoted.iter_mut() {
+            p.records = (at(p.records.0), at(p.records.1));
+        }
+    }
+
     /// The attempt `m` is over: it leaves the stack, and with the outermost one the promoted
     /// ranges are no attempt's to keep any more.
     #[inline]

@@ -544,6 +544,7 @@ printf '[package]\nname = "teq"\nversion = "0.1.7"\n' > "$x/Cargo.toml"
 echo '[toolchain]' > "$x/rust-toolchain.toml"
 echo 'object A' > "$x/tests/cases/end_markers.scala"
 echo ':' > "$x/tests/support/jars.sh"
+mkdir -p "$x/tests/pending" && cp tests/support/pending.py "$x/tests/support/" && : > "$x/tests/pending/cases.txt"
 printf '#!/bin/bash\n[ "$1" = restore ] && [ -f "$2" ]\n' > "$x/bench/actions/jars.sh"
 # The training's stand-in: one run of the instrumented binary in its place (the trainer, or qemu_wrapper's script).
 cat > "$x/bench/pgo.sh" << 'EOF'
@@ -555,12 +556,19 @@ d=target/pgo/ship
 echo counts > "$d/teq.profdata"
 printf 'training status ok\ntraining programs 2\ntraining runs 1\ntraining corpus c 1 files\ntraining jars j 1 jars\ntraining profile %s\ntraining trainer x native\ntraining tuple rustc of-pgo\n' "$(manifest_sha256 "$d/teq.profdata")" > "$d/training.txt"
 EOF
-# The suite's stand-in: the native suite's outputs written again, one other with STUB_SUITE_DIFF.
+# The suite's stand-in: the native suite's outputs written again, one other with STUB_SUITE_DIFF; its results for
+# the list, which the floor's container leaves to its caller (TEQ_TEST_PENDING=later), a failure the list lacks
+# with STUB_SUITE_UNLISTED; with STUB_SUITE_TRACE an output's trace names its program in this run's directory
+# (`other`: and at another line).
 cat > "$x/tests/run.sh" << 'EOF'
 #!/bin/bash
 cd "$(dirname "$0")/.." || exit 1
 mkdir -p "$TEQ_TEST_OUT" && cp out/tests/* "$TEQ_TEST_OUT/" || exit 1
 [ -z "$STUB_SUITE_DIFF" ] || echo other > "$TEQ_TEST_OUT/a.js"
+[ -z "$STUB_SUITE_TRACE" ] || sed -i "s#/native/place/out/tests/#$PWD/$TEQ_TEST_OUT/#g" "$TEQ_TEST_OUT/b.actual"
+[ "$STUB_SUITE_TRACE" != other ] || sed -i 's#:3:1#:4:1#' "$TEQ_TEST_OUT/b.actual"
+if [ -n "$STUB_SUITE_UNLISTED" ]; then printf 'fail a\t< other\n' > "$TEQ_TEST_OUT/results.txt"; else echo "pass a" > "$TEQ_TEST_OUT/results.txt"; fi
+echo "suite list ${TEQ_TEST_PENDING:-now}" >> "$STUB_LOG"
 echo "1 passed, 0 failed"
 EOF
 chmod +x "$x/bench/"*.sh "$x/bench/actions/jars.sh" "$x/tests/run.sh"
@@ -653,10 +661,25 @@ check "cross-ship linux-arm-suite on arm64" "$?" 0
 check "linux-arm-suite: no Rust asked, the floor's image run, its package installed" \
   "$(grep -c '^rustc' "$work/x.log")/$(sed -n 's/^docker image //p' "$work/x.log")/$(grep -c '^dpkg -i .*libc6_2.28-10+deb10u1_arm64.deb$' "$work/x.log")" \
   "0/docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f/1"
+check "linux-arm-suite: the suite in the floor's container leaves its list to this machine" "$(grep -c '^suite list later$' "$work/x.log")" 1
 check "linux-arm-suite: its record" "$(cat "$x/out/cross/teq-guided-linux-arm.suite" 2> /dev/null | tr '\n' '|')" \
-  "suite $lsha tests/run.sh passed: 1 passed, 0 failed, 0 of them skipped for missing jars, outputs 1 of 1 as the native suite's, natively in docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f over libc6_2.28-10+deb10u1_arm64.deb $debsha|suite-tuple floor-aarch64 docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f|suite-tuple sysroot-aarch64 libc6_2.28-10+deb10u1_arm64.deb $debsha|suite-tuple node-aarch64 24.21.0 $(sed -n 's/^floor_node_sha256=//p' "$x/bench/cross-ship.sh")|"
+  "suite $lsha tests/run.sh passed: cases: 1 pass, 0 fail as tests/pending/cases.txt lists, 0 of them skipped for missing jars, outputs 1 of 1 as the native suite's, natively in docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f over libc6_2.28-10+deb10u1_arm64.deb $debsha|suite-tuple floor-aarch64 docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f|suite-tuple sysroot-aarch64 libc6_2.28-10+deb10u1_arm64.deb $debsha|suite-tuple node-aarch64 24.21.0 $(sed -n 's/^floor_node_sha256=//p' "$x/bench/cross-ship.sh")|"
 cross STUB_ARCH=aarch64 STUB_SUITE_DIFF=1 timeout 120 bench/cross-ship.sh linux-arm-suite
 check "linux-arm-suite with an output not the native suite's: refused, no record" "$?/$([ -e "$x/out/cross/teq-guided-linux-arm.suite" ] && echo record)" "1/"
+cross STUB_ARCH=aarch64 STUB_SUITE_UNLISTED=1 timeout 120 bench/cross-ship.sh linux-arm-suite
+check "linux-arm-suite with a failure its list lacks: refused, no record" "$?/$([ -e "$x/out/cross/teq-guided-linux-arm.suite" ] && echo record)" "1/"
+has "linux-arm-suite: says the run is not its list's" "$work/x.out" "is not its list's"
+# An uncaught error's trace names the program by its absolute path, each machine's own: the comparison takes
+# that directory off and nothing else.
+echo js > "$x/out/tests/b.js"
+printf '/native/place/out/tests/b.js:3\n    at run (/native/place/out/tests/b.js:3:1)\nNode.js v24.21.0\n' > "$x/out/tests/b.actual"
+cross STUB_ARCH=aarch64 STUB_SUITE_TRACE=1 timeout 120 bench/cross-ship.sh linux-arm-suite
+check "linux-arm-suite with a trace naming its program in this machine's directory" \
+  "$?/$(grep -c "outputs 3 of 3 as the native suite's" "$x/out/cross/teq-guided-linux-arm.suite" 2> /dev/null)" "0/1"
+cross STUB_ARCH=aarch64 STUB_SUITE_TRACE=other timeout 120 bench/cross-ship.sh linux-arm-suite
+check "linux-arm-suite with a trace that differs beside the directory: refused, no record" "$?/$([ -e "$x/out/cross/teq-guided-linux-arm.suite" ] && echo record)" "1/"
+has "linux-arm-suite: names the output that differs" "$work/x.out" "differing: b.actual"
+rm -f "$x/out/tests/b.js" "$x/out/tests/b.actual"
 cross STUB_ARCH=aarch64 STUB_FLOOR_LIBC=2.28-10+deb10u3 timeout 120 bench/cross-ship.sh linux-arm-suite
 check "linux-arm-suite over another libc6 than the floor's package: refused" "$?" 1
 has "linux-arm-suite: names the libc6" "$work/x.out" "libc6 is 2.28-10+deb10u3"

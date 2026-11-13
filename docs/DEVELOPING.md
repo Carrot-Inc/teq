@@ -735,7 +735,8 @@ pinned by its commit. The order:
    cross links, whose bytes the stage and the qualification know); the Linux aarch64 binary's suite natively on an
    arm64 runner (`linux-arm-suite`), in the floor's container, Debian 10's arm64 image by its digest with the
    floor's glibc package installed and verified, so that its loader and teq's restart of itself are the system's
-   own, its outputs against the x86-64 suite's, and its record given to the binary's manifest by the stage, which
+   own, the run held to its list of expected failures on the runner (the floor's image has no python3), its
+   outputs against the x86-64 suite's, and its record given to the binary's manifest by the stage, which
    stages no Linux aarch64 binary without it; then the stage, the five by one invocation. A machine without an
    arm64 runner makes the same binaries by the emulated route, `bench/ship.sh` without `--step` on x86-64: the
    trainer and the Linux aarch64 suite under qemu-user; each manifest says which route made it

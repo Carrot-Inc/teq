@@ -7,6 +7,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `teq fix` answers a semantic rule about the names of a method that an inline method defined before it calls
+  (`inline def never(n: Int): Int = hidden(n)` above `private def hidden(k: Int): Int = k + 1`: the parameter `k`
+  and the types of `hidden`'s header, and the names of its body where its result is inferred), whether anything
+  expands the inline method or not, as scalafix does from scalac's SemanticDB
+  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
 - The editor offers quick fixes that add a missing import: on a name that is not found, the imports completion
   offers for it and the import of each object of the program that holds a member of that name (the nearest
   objects first); on a method a value lacks (`42.asGlyph`), the import of each object of the program whose

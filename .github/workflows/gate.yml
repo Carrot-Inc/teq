@@ -118,7 +118,7 @@ jobs:
             jars: true
           - group: modules-2
             suites: modules.2/2 analysis-bytes gate-scripts
-            minutes: 35
+            minutes: 50
             jars: true
           - group: corpus
             suites: app planted asymptotics

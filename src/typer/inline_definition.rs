@@ -918,7 +918,7 @@ impl<'a> Worker<'a> {
         self.deps_leave(recorded);
         self.case_binders = case_binders;
         if keeps_index {
-            self.index_keep_body(sym, index_mark);
+            self.index_keep_body(sym, index_mark, file, def_span);
         } else {
             self.index = index;
         }

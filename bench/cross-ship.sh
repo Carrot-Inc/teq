@@ -436,6 +436,14 @@ linux_arm_build() {
   echo "cross-ship: its suite is linux-arm-suite's, on an arm64 Linux machine; the stage takes the binary once its record names these bytes"
 }
 
+# own_program <output>: a case's output with the directory taken off wherever it names the case's own program
+# (<directory>/<case>.js).
+own_program() {
+  local name
+  name=$(basename "$1" .actual | sed -e 's/[][\\.*^$+?(){}|#]/\\&/g')
+  sed -E "s#[^[:space:]()]*/($name\\.js)#\\1#g" "$1"
+}
+
 # compare_suites <outputs>: the suite's outputs under <outputs> and the native suite's (out/tests) the same
 # files, each the same bytes; sets $same and $total.
 compare_suites() {
@@ -444,12 +452,17 @@ compare_suites() {
   [ "$names" = "$(cd "$1" && find . -maxdepth 1 -type f \( -name '*.js' -o -name '*.actual' \) -printf '%f\n' | LC_ALL=C sort)" ] ||
     { echo "cross-ship: the suite on aarch64 wrote other files than the native suite ($(wc -l <<< "$names") native): $(diff <(echo "$names") <(cd "$1" && find . -maxdepth 1 -type f \( -name '*.js' -o -name '*.actual' \) -printf '%f\n' | LC_ALL=C sort) | grep '^[<>]' | head -5 | tr '\n' ' ')"; return 1; }
   # A macro reads a source's path as the suite gives it, relative (`SourceFileMethods.path`), so the two
-  # machines' outputs compare as they are.
+  # machines' outputs compare as they are, but for a program that ends in an uncaught error: node's trace names
+  # the program by its absolute path, each machine's own, which own_program takes off.
   same=0 total=0
   local differing=
   for f in $names; do
     total=$((total + 1))
-    if cmp -s "out/tests/$f" "$1/$f"; then same=$((same + 1)); else differing="$differing $f"; fi
+    if cmp -s "out/tests/$f" "$1/$f" || { [ "${f##*.}" = actual ] && cmp -s <(own_program "out/tests/$f") <(own_program "$1/$f"); }; then
+      same=$((same + 1))
+    else
+      differing="$differing $f"
+    fi
   done
   [ $total -gt 0 ] && [ $same -eq $total ] || { echo "cross-ship: $same of $total outputs of the suite on aarch64 are the native suite's; differing:$differing"; return 1; }
 }
@@ -499,7 +512,8 @@ floor_fetch() {
 # container (floor_image) with the floor's glibc package installed there (dpkg -i, dpkg --verify), as the
 # machine's user, each case given three times the native bound, no network, the corpus's jars read from
 # COURSIER_CACHE and the jars the native suite built (out/tests-jars.tgz) restored as bench/actions/jars.sh
-# does; its outputs compared with the native suite's (out/tests), the bytes unchanged throughout. Writes its
+# does; the run held to its list of expected failures on this machine (the floor's image has no python3); its
+# outputs compared with the native suite's (out/tests), the bytes unchanged throughout. Writes its
 # record, out/cross/teq-guided-linux-arm.suite: the `suite` line against the binary's digest and the
 # environment's `suite-tuple` lines (bench/ship-manifest.sh), which the stage gives the manifest.
 linux_arm_suite() {
@@ -536,12 +550,16 @@ linux_arm_suite() {
       user() { setpriv --reuid="${FLOOR_USER%:*}" --regid="${FLOOR_USER#*:}" --clear-groups env PATH="$FLOOR_NODE/bin:/usr/bin:/bin" "$@"; }
       teq=$(user "$TEQ" --version) || { echo "floor: $TEQ does not run here"; exit 3; }
       echo "floor: $(. /etc/os-release && echo "$PRETTY_NAME"), libc6 $version, $(uname -m), node $(user node --version), $teq"
-      user env TEQ_TEST_OUT=out/tests-arm TEQ_TEST_TIMEOUT=60 DIFF_LINES="$DIFF_LINES" timeout 1800 tests/run.sh' > "$dir/guided-linux-arm.suite" 2>&1
+      user env TEQ_TEST_OUT=out/tests-arm TEQ_TEST_TIMEOUT=60 TEQ_TEST_PENDING=later DIFF_LINES="$DIFF_LINES" timeout 1800 tests/run.sh' > "$dir/guided-linux-arm.suite" 2>&1
   status=$?
   timeout 60 docker rm -f "$name" > /dev/null 2>&1
   smoke=$(cat "$dir/guided-linux-arm.suite")
   grep '^floor: ' <<< "$smoke" | sed 's/^/cross-ship: /'
   [ $status -eq 0 ] || { tail -20 <<< "$smoke"; echo "cross-ship: tests/run.sh in the floor's container failed (exit $status, $dir/guided-linux-arm.suite)"; return 1; }
+  # The floor's image has no python3: the run is held to its list of expected failures here, from its results.
+  timeout 120 python3 tests/support/pending.py cases out/tests-arm/results.txt >> "$dir/guided-linux-arm.suite" 2>&1 ||
+    { tail -20 "$dir/guided-linux-arm.suite"; echo "cross-ship: the suite in the floor's container is not its list's ($dir/guided-linux-arm.suite)"; return 1; }
+  smoke=$(cat "$dir/guided-linux-arm.suite")
   skipped=$(grep -c '^skip ' <<< "$smoke")
   compare_suites out/tests-arm || return 1
   [ "$(manifest_sha256 "$binary")" = "$sha" ] || { echo "cross-ship: $binary changed while its suite ran"; return 1; }

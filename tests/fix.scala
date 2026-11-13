@@ -764,6 +764,52 @@ object Verb:
     val srefined = build(work, "service-local-inline-context", "core/src/core/Core.scala" -> refined, "rules/AtHelper.scala" -> atHelper, ".scalafix.conf" -> "rules = [\"file:rules/AtHelper.scala\"]\n")
     val rsrefined = fix(srefined, "core")
     expect("service/local inline method's context", rsrefined.status == 1 && rsrefined.errAll().contains("[AtHelper]: which core/Core.which().\n"), s"exit ${rsrefined.status}: ${rsrefined.errAll()}")
+    // What an inline method's definition check keeps for its expansions is the names of its own definition. The
+    // names of another definition whose signature or body is completed inside the check are that definition's
+    // occurrences, as scalac has them, whether anything expands the inline method or not: a plain method that an
+    // inline method nothing calls names, as a member and at the top level (its parameter and the two types of its
+    // header), and one whose result is inferred there (its parameter, its type and the names of its body; the
+    // `List` of its body is answered too, scalac's symbol for it being the alias `scala/package.List.`). At one
+    // worker and at eight.
+    val namesAt = "package teq.fix.probe\nimport teq.fix.*\nfinal class NamesAt extends SemanticRule(\"NamesAt\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    def at(o: Int): String =\n      var line = 1\n      var col = 1\n      var i = 0\n      while i < o do\n        if text.charAt(i) == '\\n' then\n          line += 1\n          col = 1\n        else col += 1\n        i += 1\n      line.toString + \":\" + col.toString\n    val names = doc.tree.collect { case t: Name => at(t.pos.start) + \"=\" + Native.symbolsAt(doc.gen, t.pos.start, t.pos.end).mkString(\"|\") }\n    Patch.lint(Diagnostic(\"\", names.mkString(\" \", \" \", \" \"), doc.tree.pos))\n"
+    val namesConf = ".scalafix.conf" -> "rules = [\"file:rules/NamesAt.scala\"]\n"
+    val windows = Seq(
+      ("Kept", "package core\nobject Kept:\n  inline def never(n: Int): Int = hidden(n)\n  private def hidden(k: Int): Int = k + 1\n",
+        Seq("4:22=core/Kept.hidden().(k)", "4:25=scala/Int#", "4:31=scala/Int#")),
+      ("Top", "package core\ninline def never(n: Int): Int = hidden(n)\nprivate def hidden(k: Int): Int = k + 1\n",
+        Seq("3:20=core/Top$package.hidden().(k)", "3:23=scala/Int#", "3:29=scala/Int#")),
+      ("Made", "package core\nobject Made:\n  inline def never(n: Int): Int = made(n).size\n  def made(k: Int) = List(k, k + 1)\n",
+        Seq("4:12=core/Made.made().(k)", "4:15=scala/Int#", "4:27=core/Made.made().(k)", "4:30=core/Made.made().(k)", "4:22=scala/")))
+    for (name, source, places) <- windows; workers <- Seq(1, 8) do
+      val swindow = build(work, s"service-window-$name-$workers", s"core/src/core/$name.scala" -> source, "rules/NamesAt.scala" -> namesAt, namesConf)
+      val rswindow = Sh(teq, "fix", "core").in(swindow).withEnv("TEQ_THREADS" -> workers.toString).timeout(300).check(false).run()
+      val said = rswindow.errAll()
+      val missing = places.filterNot(p => said.contains(" " + p + (if p.endsWith("/") then "" else " ")))
+      expect(s"service/another definition's names in a check's window, $name at $workers", rswindow.status == 1 && missing.isEmpty, s"exit ${rswindow.status}, not answered: ${missing.mkString(" ")}: $said")
+    // The same where the check runs inside a candidate that is given up: the method an inline given's body names,
+    // its result inferred inside the given's check, in the case of tests/cases typed alone.
+    for workers <- Seq(1, 8) do
+      val dgiven = work.resolve(s"window-given-$workers")
+      Files.createDirectories(dgiven.resolve("rules"))
+      for f <- Seq("Macro.scala", "Use.scala") do Files.writeString(dgiven.resolve(f), read(Paths.get("tests/cases/typer_state_dropped_promoted").resolve(f)))
+      Files.writeString(dgiven.resolve("rules/NamesAt.scala"), namesAt)
+      Files.writeString(dgiven.resolve(".scalafix.conf"), "rules = [\"file:rules/NamesAt.scala\"]\n")
+      val rsgiven = Sh(teq, "compiler", "fix", "--check", "Macro.scala", "Use.scala", "--config", ".scalafix.conf").in(dgiven).withEnv("TEQ_THREADS" -> workers.toString).timeout(300).check(false).run()
+      val use = rsgiven.errAll().linesIterator.find(_.contains("Use.scala:")).getOrElse("")
+      expect(s"service/another definition's names in a check's window, a candidate given up at $workers", rsgiven.status == 1 && use.contains(" 23:17=_empty_/M. ") && use.contains(" 23:19=_empty_/M.warnv(). "), s"exit ${rsgiven.status}: ${rsgiven.errAll()}")
+    // A candidate given up after such a check keeps what the check left of other definitions and nothing by its
+    // place in the records. An inline given whose only expansion is inside a candidate that is given up (its body
+    // fails a `summonInline`): the names of the methods its body calls, their results inferred inside its check,
+    // are answered, as scalac has them; the names of the given's own body are answered as those of an inline
+    // method nothing expands are, none (scalac has each: `core/Counts.` at 17:5 and eight more).
+    val givenUp = "package core\nimport scala.compiletime.summonInline\nclass Absent\nclass Held(val n: Int)\ntrait Lower:\n  given fallback: Held = new Held(0)\ntrait Joins:\n  extension [T](x: Int)\n    def join(y: Int, z: Int): String = \"s \" + y\n  extension [T](x: Int)\n    def join(y: Int, z: String): String = \"i \" + y\nobject Both extends Joins\nobject Asked:\n  val r = Both.join[Unit](1)(summon[Held].n, \"z\")\nobject Held extends Lower:\n  transparent inline given picked: Held =\n    Counts.pair(0, 0)\n    val one = Counts.single + 1\n    summonInline[Absent]\n    new Held(7)\nobject Counts:\n  def pair(k: Int, j: Int) = List(k, j, k, j).size\n  def single: Int = 1\n"
+    val sgivenUp = build(work, "service-window-given-up", "core/src/core/GivenUp.scala" -> givenUp, "rules/NamesAt.scala" -> namesAt, namesConf)
+    val rsgivenUp = fix(sgivenUp, "core")
+    val saidUp = rsgivenUp.errAll()
+    val calledNames = Seq("22:12=core/Counts.pair().(k)", "22:15=scala/Int#", "22:20=core/Counts.pair().(j)", "22:23=scala/Int#", "22:35=core/Counts.pair().(k)", "22:38=core/Counts.pair().(j)", "22:41=core/Counts.pair().(k)", "22:44=core/Counts.pair().(j)", "22:47=scala/collection/SeqOps#size().", "23:15=scala/Int#")
+    val givenNames = Seq("17:5", "17:12", "18:9", "18:15", "18:22", "18:29", "19:5", "19:18", "20:9", "20:13")
+    expect("service/a candidate given up after a check, the other definitions' names", rsgivenUp.status == 1 && calledNames.forall(p => saidUp.contains(" " + p + " ")), s"exit ${rsgivenUp.status}, not answered: ${calledNames.filterNot(p => saidUp.contains(" " + p + " ")).mkString(" ")}: $saidUp")
+    expect("service/a candidate given up after a check, the given's own names", rsgivenUp.status == 1 && givenNames.forall(p => saidUp.contains(" " + p + "= ")), s"exit ${rsgivenUp.status}, answered: ${givenNames.filterNot(p => saidUp.contains(" " + p + "= ")).mkString(" ")}: $saidUp")
     // What the arguments of an annotation in a type declare is a declaration of the document, as dotty has it: the
     // round's typing types those trees for it (`Worker::sem_records`), no retained form kept.
     val annotated = "package core\nclass Ann(x: Any) extends scala.annotation.StaticAnnotation\nclass Box[T]\nclass H { type T }\nobject Core:\n  def f(x: H): Box[x.T @Ann({ type Inner = x.T; 1 })] = new Box\n"
