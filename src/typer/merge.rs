@@ -51,7 +51,7 @@ mod parallel;
 mod records;
 mod trace;
 
-pub(super) use records::Mapping;
+pub(super) use records::{Ids, Mapping};
 use records::SigMemo;
 use super::{Env, ResolvedImport, TVarInfo, TVars, Worker};
 use crate::source::{Diagnostic, FileId};
@@ -1551,8 +1551,9 @@ impl Remap {
         TablesMode { forked: self.forked && self.checking.is_none(), checking: self.checking.is_some() }
     }
 
-    /// The worker's tables whose values hold types, in the walk's order (the deferred bounds and
-    /// matches by their sites, the sorted maps, the inline definitions, the builtins' types and
+    /// The worker's tables whose keys or values hold types, in the walk's order (the deferred
+    /// bounds and matches by their sites, the sorted maps, the imports' bounds, the derived
+    /// aliases' prefixes, the selectors' types, the inline definitions, the builtins' types and
     /// the quote state's deferred calls), and the builtins' and the sites' classes beside them.
     fn tables_typed(&mut self, w: &mut Worker) {
         self.promote_in_order(w.deferred_bounds.iter().enumerate().map(|(i, b)| ((b.site(), i), b.types().collect::<Vec<_>>())));
@@ -1584,6 +1585,57 @@ impl Remap {
         });
         self.map_sorted(&mut w.captured_locals, |r, s| r.sym(s), |r, t| *t = r.ty(*t));
         self.map_sorted(&mut w.unchecked_variance.local, |_, k| k, |r, t| *t = r.ty(*t));
+        // An import's bound (`given T`) is a type: the imports a class's body holds, the
+        // environment a local class is made in and a file's own imports, each renumbered whole
+        // where it names a record or a type the merge moves.
+        self.map_sorted(&mut w.class_imports.local, |r, c| r.class(c), |r, imports| {
+            if imports.iter().any(|(_, i)| records::env_moves(r, &Env { file: FileId(0), frames: Vec::new(), imports: vec![*i], import_limit: None, visible_imports: None })) {
+                let mut env = Env { file: FileId(0), frames: Vec::new(), imports: imports.iter().map(|(_, i)| *i).collect(), import_limit: None, visible_imports: None };
+                records::env(r, &mut env);
+                let renumbered: Vec<(u32, ResolvedImport)> = imports.iter().zip(env.imports).map(|(&(at, _), i)| (at, i)).collect();
+                *imports = Arc::from(renumbered);
+            }
+        });
+        self.map_sorted(&mut w.anon_envs.local, |r, c| r.class(c), |r, env| {
+            if records::env_moves(r, env) {
+                let mut moved = (**env).clone();
+                records::env(r, &mut moved);
+                *env = Arc::new(moved);
+            }
+        });
+        // A file's own imports are resolved on first use: by a worker after the fork where no
+        // signature of the file named anything. In the files' order.
+        for imports in w.file_imports.own_mut().iter_mut().flatten() {
+            let mut env = Env { file: FileId(0), frames: Vec::new(), imports: (**imports).clone(), import_limit: None, visible_imports: None };
+            if records::env_moves(&*self, &env) {
+                records::env(&*self, &mut env);
+                *imports = Arc::new(env.imports);
+            }
+        }
+        // A worker's own copies kept under their prefixes' new types, so that a match alias a local
+        // class's member derives is one alias across the merge, as one worker's walk keeps it; taken
+        // in the order of their workers' ids, so that the types the keys hand the promotion follow
+        // it and not the order the entries hash to (`promote`).
+        let mut own: Vec<((AliasId, TypeId), AliasId)> = std::mem::take(&mut w.derived_aliases.local).into_iter().collect();
+        own.sort_unstable_by_key(|&((a, t), _)| (a.0, t.0));
+        for ((a, t), d) in own {
+            w.derived_aliases.local.insert((self.alias(a), self.ty(t)), self.alias(d));
+        }
+        // A `given T` selector's own type, which the unused-import check credits the selector's
+        // givens by (`Worker::sel_of`), in the slab every worker appended to: promoted in the
+        // selectors' order in the sources and renumbered where it stands.
+        self.promote_in_order((0..w.import_sels.len()).filter_map(|i| {
+            let (sel, own) = *w.import_sels.get(i);
+            own.map(|t| ((sel.file.0, sel.span.start, sel.span.end), [t]))
+        }));
+        for i in 0..w.import_sels.len() {
+            let (sel, own) = *w.import_sels.get(i);
+            let moved = own.map(|t| self.ty(t));
+            if moved != own {
+                // SAFETY: the workers that appended to the slab have ended; the merge alone reads it.
+                unsafe { *w.import_sels.get_mut(i) = (sel, moved) };
+            }
+        }
         self.map_sorted(&mut w.inline_definitions.local, |r, s| r.sym(s), |r, d| r.inline_definition(Arc::make_mut(d)));
         for d in &mut w.superseded_definitions {
             self.inline_definition(Arc::make_mut(d));
@@ -1881,11 +1933,14 @@ impl Remap {
     }
 }
 
-impl Mapping for Remap {
+impl Ids for Remap {
     #[inline]
     fn ids(&self) -> &Tables {
         &self.ids
     }
+}
+
+impl Mapping for Remap {
     #[inline]
     fn ty(&self, t: TypeId) -> TypeId {
         Remap::ty(self, t)
@@ -1901,8 +1956,10 @@ pub(super) struct TablesMode {
     checking: bool,
 }
 
-/// A task of the id-only tables (`untyped_tables`), run with the merge's mapping.
-pub(super) type TableTask<'w> = Box<dyn FnOnce(&dyn Mapping) + Send + 'w>;
+/// A task of the id-only tables (`untyped_tables`), run with the merge's mapping of the ids alone:
+/// a table that holds a type has no way to renumber it here and goes with the typed ones
+/// (`Remap::tables_typed`).
+pub(super) type TableTask<'w> = Box<dyn FnOnce(&dyn Ids) + Send + 'w>;
 
 /// The worker's tables none of whose entries hands a type over, renumbered by the arenas' new ids
 /// alone: tasks over disjoint fields, in no order of their own, which the parallel merge's crew
@@ -1917,33 +1974,18 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         map(m, interpolations, |r, e| r.expr(e), |_, _| {});
         map(m, class_done, |r, c| r.class(c), |_, _| {});
     }));
-    let (class_imports, anon_envs, anon_captures, anon_parent_args, inferred_parent_args) = (&mut w.class_imports.local, &mut w.anon_envs.local, &mut w.anon_captures, &mut w.anon_parent_args, &mut w.inferred_parent_args.local);
+    let (anon_captures, anon_parent_args, inferred_parent_args) = (&mut w.anon_captures, &mut w.anon_parent_args, &mut w.inferred_parent_args.local);
     let inferred_trait_args = &mut w.inferred_trait_args.local;
     let (local_news, outer_this, sam_classes, sam_arity, entry_points) = (&mut w.local_news, &mut w.outer_this.local, &mut w.sam_classes, &mut w.sam_arity, &mut w.entry_points);
     let ctor_outer_params = &mut w.ctor_outer_params.local;
     let (lifted_members, lifted_lazy, accessor_captures) = (&mut w.lifted_members, &mut w.lifted_lazy, &mut w.accessor_captures);
     let (held_proxies, held_proxy_of) = (&mut w.held_proxies, &mut w.held_proxy_of);
     tasks.push(Box::new(move |m| {
-        map(m, class_imports, |r, c| r.class(c), |r, imports| {
-            if imports.iter().any(|(_, i)| records::env_moves(r, &Env { file: FileId(0), frames: Vec::new(), imports: vec![*i], import_limit: None, visible_imports: None })) {
-                let mut env = Env { file: FileId(0), frames: Vec::new(), imports: imports.iter().map(|(_, i)| *i).collect(), import_limit: None, visible_imports: None };
-                records::env(r, &mut env);
-                let renumbered: Vec<(u32, ResolvedImport)> = imports.iter().zip(env.imports).map(|(&(at, _), i)| (at, i)).collect();
-                *imports = Arc::from(renumbered);
-            }
-        });
-        map(m, anon_envs, |r, c| r.class(c), |r, env| {
-            if records::env_moves(r, env) {
-                let mut moved = (**env).clone();
-                records::env(r, &mut moved);
-                *env = Arc::new(moved);
-            }
-        });
         map(m, anon_captures, |r, c| r.class(c), |r, syms| syms_in(r, syms));
         map(m, lifted_members, |r, s| r.sym(s), |r, syms| syms_in(r, syms));
         map(m, lifted_lazy, |r, s| r.sym(s), |r, s| *s = r.sym(*s));
         map(m, accessor_captures, |r, c| r.class(c), |r, syms| syms_in(r, syms));
-        let held = |r: &dyn Mapping, of: super::HeldOf| match of {
+        let held = |r: &dyn Ids, of: super::HeldOf| match of {
             super::HeldOf::Get(s) => super::HeldOf::Get(r.sym(s)),
             super::HeldOf::Set(s) => super::HeldOf::Set(r.sym(s)),
             super::HeldOf::Call(s) => super::HeldOf::Call(r.sym(s)),
@@ -2028,7 +2070,7 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         });
         map(m, irrefutable_pats, |r, p| r.pat(p), |_, _| {});
     }));
-    let (poisoned, poisoned_withheld, outer_accessors, merged_overloads, derived_aliases, derived_opaques) = (&mut w.poisoned, &mut w.poisoned_withheld.local, &mut w.outer_accessors.local, &mut w.merged_overloads.local, &mut w.derived_aliases.local, &mut w.derived_opaques.local);
+    let (poisoned, poisoned_withheld, outer_accessors, merged_overloads, derived_opaques) = (&mut w.poisoned, &mut w.poisoned_withheld.local, &mut w.outer_accessors.local, &mut w.merged_overloads.local, &mut w.derived_opaques.local);
     let withheld_notes = &mut w.withheld_notes;
     tasks.push(Box::new(move |m| {
         map(m, poisoned, |r, f| r.fun(f), |_, _| {});
@@ -2036,15 +2078,6 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         map(m, withheld_notes, |r, e| r.expr(e), |_, _| {});
         map(m, outer_accessors, |r, c| r.class(c), |r, s| *s = r.sym(*s));
         map(m, merged_overloads, |r, (a, b)| (r.sym(a), r.sym(b)), |r, s| *s = r.sym(*s));
-        // A worker's own copies kept under their prefixes' new types, so that a match alias a local
-        // class's member derives is one alias across the merge, as one worker's walk keeps it; taken
-        // in the order of their workers' ids, so that the types the keys hand the promotion follow
-        // it and not the order the entries hash to (`promote`).
-        let mut own: Vec<((crate::types::AliasId, crate::types::TypeId), crate::types::AliasId)> = std::mem::take(derived_aliases).into_iter().collect();
-        own.sort_unstable_by_key(|&((a, t), _)| (a.0, t.0));
-        for ((a, t), d) in own {
-            derived_aliases.insert((m.alias(a), m.ty(t)), m.alias(d));
-        }
         map(m, derived_opaques, |r, (c, k)| (r.class(c), r.class(k)), |r, c| *c = r.class(*c));
     }));
     // The program files' definition maps: the local and anonymous classes and the local
@@ -2132,7 +2165,7 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
 /// An export table (`exports.rs`) under the new ids: its references renumbered, a provisional
 /// one, never final, gone in the workers' merge (its lookups made again); under the merge's check
 /// its references counted.
-fn export_slot(m: &dyn Mapping, s: &mut super::exports::ExportSlot, mode: TablesMode) {
+fn export_slot(m: &dyn Ids, s: &mut super::exports::ExportSlot, mode: TablesMode) {
     use super::exports::ExportSlot;
     if let ExportSlot::Provisional(..) = s {
         if mode.forked {
@@ -3124,7 +3157,7 @@ impl<'a> Worker<'a> {
         self.erroneous_args.clear();
         self.erroneous_lambdas.clear();
         self.quote.hole_ranges.clear();
-        self.inline.clear_leftovers();
+        self.inline.settle_merge();
         clock.part("cleanup");
         let started = std::time::Instant::now();
         let roots_left = remap.promoted.get_mut().counts.roots_left;

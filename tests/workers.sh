@@ -1570,5 +1570,86 @@ for name in phase_fork_products phase_fork_chain_wrap; do
 done
 COUNTS=$saved_counts
 
+# What a worker makes after the fork and a table of the merge holds beside its records: the type a `given T`
+# selector bounds its import by, kept with a class's imports (an object's body), with an anonymous class's
+# environment (a block that holds one) and with a file's own imports (a file whose signatures name nothing, its
+# imports first read where a body is typed); the prefix a match alias of a generic class is seen through, which
+# keys the alias's copy; the own type of a `given T` selector, which the unused-import check keeps beside the
+# imports; and the stored index of a local inline method the main worker copied. Each program ends at two, four,
+# eight and sixteen workers as at one: the check's exit and diagnostics, what the built program prints, and the
+# JavaScript the build wrote. A `given T` selector that admits nothing, in an object's body or at a file's top,
+# gives one worker's error at every count (scalac's E172); a selector's own type read after the merge, where the
+# inlining phase's search credits the selector its given came through, gives one worker's unused-import warnings,
+# the check's and those `teq fix` reads for its `NoUnusedImports`. Then the first five and the two files' imports
+# at the count the compiler picks for itself, beside enough source for it to fork (above 512 KiB, no top-level
+# definition half of it; `--time` prints the workers' join where it did): twenty-four checks each end as one
+# worker's.
+# same_run_and_js <name> <trials> <inputs...>: same_output of a run of the inputs, and the JavaScript each
+# count's build wrote against one worker's.
+same_run_and_js() {
+  local name=$1 trials=$2
+  shift 2
+  one "$name" 1 run "$@" > "$work/$name.one" 2>&1
+  local i t
+  for i in $(seq 1 "$trials"); do
+    for t in $COUNTS; do
+      one "$name" $t run "$@" > "$work/$name.$t" 2>&1
+      if ! cmp -s "$work/$name.one" "$work/$name.$t"; then
+        bad "$name: $t workers differ from one at trial $i: $(diff "$work/$name.one" "$work/$name.$t" | head -3 | tr '\n' ' ' | cut -c1-200)"
+        return
+      fi
+      if ! cmp -s "$work/$name.1.js" "$work/$name.$t.js"; then
+        bad "$name: $t workers write other JavaScript than one at trial $i"
+        return
+      fi
+    done
+  done
+  ok
+}
+saved_counts=$COUNTS
+COUNTS="2 4 8 16"
+for fork in import_bound:tests/cases/given_import_bounds.scala import_bound_situated:tests/cases/given_import_bound_situated.scala \
+  anon_import_bound:tests/workers/fork_anon_import_bound derived_alias_prefix:tests/workers/fork_derived_alias_prefix \
+  local_inline_index:tests/cases/inline_phase_local_through_transparent \
+  object_import_bound_summon:tests/workers/fork_object_import_bound_summon \
+  object_import_bound_inline:tests/workers/fork_object_import_bound_inline; do
+  same_lines "fork_${fork%%:*}_check" '.*' 6 compiler check "${fork#*:}"
+  same_run_and_js "fork_${fork%%:*}_run" 6 "${fork#*:}"
+done
+same_lines fork_import_bound_constrained_check '.*' 6 compiler check tests/errors/given_import_bound_constrained.scala
+same_lines fork_file_import_bound_check '.*' 6 compiler check tests/workers/fork_file_import_bound
+same_lines fork_file_import_alias_bound_check '.*' 6 compiler check tests/workers/fork_file_import_alias_bound
+same_lines fork_import_sel_bound_check '.*' 6 compiler check --wunused imports tests/workers/fork_import_sel_bound
+printf 'rules = [NoUnusedImports]\n' > "$work/fork_fix.conf"
+same_lines fork_import_sel_bound_fix '.*' 6 compiler fix --check tests/workers/fork_import_sel_bound --config "$work/fork_fix.conf"
+COUNTS=$saved_counts
+filler=$work/fork_filler
+mkdir -p "$filler"
+for i in $(seq 1 64); do
+  { echo "package filler"; echo "object Fill$i:"; for j in $(seq 1 260); do echo "  def step$j(x: Int): Int = x + $j"; done; } > "$filler/Fill$i.scala"
+done
+for fork in import_bound:tests/cases/given_import_bounds.scala import_bound_situated:tests/cases/given_import_bound_situated.scala \
+  anon_import_bound:tests/workers/fork_anon_import_bound derived_alias_prefix:tests/workers/fork_derived_alias_prefix \
+  local_inline_index:tests/cases/inline_phase_local_through_transparent \
+  file_import_bound:tests/workers/fork_file_import_bound file_import_alias_bound:tests/workers/fork_file_import_alias_bound; do
+  name=fork_${fork%%:*}_own_count
+  sources=$(find "${fork#*:}" -name '*.scala' | sort)
+  { timeout 120 "$TEQ" compiler check $sources "$filler"/*.scala --threads 1 2>&1; echo "exit $?"; } > "$work/$name.one"
+  if ! timeout 120 "$TEQ" compiler check $sources "$filler"/*.scala --time 2>&1 | grep -q 'the others joined'; then
+    bad "$name: the compiler picked one worker beside the filler"
+    continue
+  fi
+  differs=
+  for i in $(seq 1 24); do
+    { timeout 120 "$TEQ" compiler check $sources "$filler"/*.scala 2>&1; echo "exit $?"; } > "$work/$name.own"
+    cmp -s "$work/$name.one" "$work/$name.own" || { differs=$i; break; }
+  done
+  if [ -n "$differs" ]; then
+    bad "$name: its own count differs from one worker at check $differs: $(diff "$work/$name.one" "$work/$name.own" | head -3 | tr '\n' ' ' | cut -c1-200)"
+  else
+    ok
+  fi
+done
+
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass

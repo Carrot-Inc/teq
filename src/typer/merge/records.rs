@@ -14,12 +14,11 @@ use crate::tir::*;
 use crate::types::*;
 use std::sync::Arc;
 
-/// What a record's references are mapped through.
-pub(in crate::typer) trait Mapping {
+/// What a record's ids are mapped through, and no type: all that a table none of whose entries
+/// holds a type is renumbered with (`untyped_tables`).
+pub(in crate::typer) trait Ids {
     /// The arenas' new ids.
     fn ids(&self) -> &Tables;
-    /// A type under the merge.
-    fn ty(&self, t: TypeId) -> TypeId;
 
     #[inline]
     fn sym(&self, s: SymId) -> SymId {
@@ -99,6 +98,12 @@ pub(in crate::typer) trait Mapping {
     }
 }
 
+/// What a record's references are mapped through: its ids and its types.
+pub(in crate::typer) trait Mapping: Ids {
+    /// A type under the merge.
+    fn ty(&self, t: TypeId) -> TypeId;
+}
+
 /// The signatures renumbered so far, by the one each replaced: a signature is shared by several
 /// records (`value_sigs`, overload sets), and each holder renumbered by the same walk gets the same
 /// copy. And the records walked, for the profile.
@@ -108,7 +113,7 @@ pub(in crate::typer) struct SigMemo {
     pub records: u64,
 }
 
-pub(in crate::typer) fn syms_in<M: Mapping + ?Sized>(m: &M, v: &mut [SymId]) {
+pub(in crate::typer) fn syms_in<M: Ids + ?Sized>(m: &M, v: &mut [SymId]) {
     for s in v {
         *s = m.sym(*s);
     }
@@ -155,7 +160,7 @@ pub(in crate::typer) fn clause<M: Mapping + ?Sized>(m: &M, c: &mut ClauseSig) {
     }
 }
 
-pub(in crate::typer) fn parent_call<M: Mapping + ?Sized>(m: &M, pc: &mut ParentCall) {
+pub(in crate::typer) fn parent_call<M: Ids + ?Sized>(m: &M, pc: &mut ParentCall) {
     pc.prelude = m.stmt_list(pc.prelude);
     pc.args = m.expr_list(pc.args);
     pc.via = pc.via.map(|s| m.sym(s));
@@ -513,7 +518,7 @@ pub(in crate::typer) fn quote_pat<M: Mapping + ?Sized>(m: &M, q: &mut TQuotePat)
 }
 
 /// Rebuilds a map keyed by ids where a key moved, and renumbers the values in place.
-pub(in crate::typer) fn map<M: Mapping + ?Sized, K: Copy + Eq + std::hash::Hash, V>(m: &M, map: &mut FxMap<K, V>, key: impl Fn(&M, K) -> K, value: impl Fn(&M, &mut V)) {
+pub(in crate::typer) fn map<M: Ids + ?Sized, K: Copy + Eq + std::hash::Hash, V>(m: &M, map: &mut FxMap<K, V>, key: impl Fn(&M, K) -> K, value: impl Fn(&M, &mut V)) {
     let moved = map.keys().any(|&k| key(m, k) != k);
     if moved {
         let old = std::mem::take(map);

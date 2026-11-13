@@ -11,7 +11,7 @@
 //! The first difference ends the build, named.
 
 use super::parallel::{self, Arenas, Listing, Slots, KINDS, OTHERS};
-use super::records::{Mapping, SigMemo};
+use super::records::{Ids, Mapping, SigMemo};
 use super::{Remap, Table, Tables, UNMET, VISITING};
 use crate::ast::ListRef;
 use crate::tir::*;
@@ -157,30 +157,9 @@ impl<'r> Tracer<'r> {
     }
 }
 
-impl Mapping for Tracer<'_> {
+impl Ids for Tracer<'_> {
     fn ids(&self) -> &Tables {
         self.ids
-    }
-    fn ty(&self, t: TypeId) -> TypeId {
-        self.note(Ref::Type, t.0);
-        if let Some(slots) = self.slots {
-            if t.0 >= slots.from() && t != NO_TYPE {
-                let first = match slots.index(t) {
-                    Some(i) => {
-                        let mut seen = self.seen.borrow_mut();
-                        let (w, b) = (i / 64, 1u64 << (i % 64));
-                        let first = seen[w] & b == 0;
-                        seen[w] |= b;
-                        first
-                    }
-                    None => true,
-                };
-                if first {
-                    self.order.borrow_mut().push((self.at.get(), t));
-                }
-            }
-        }
-        t
     }
     fn sym(&self, s: SymId) -> SymId {
         self.note(Ref::Sym, s.0);
@@ -244,6 +223,30 @@ impl Mapping for Tracer<'_> {
     }
     fn case_list(&self, l: ListRef) -> ListRef {
         self.list(Ref::CaseList, l)
+    }
+}
+
+impl Mapping for Tracer<'_> {
+    fn ty(&self, t: TypeId) -> TypeId {
+        self.note(Ref::Type, t.0);
+        if let Some(slots) = self.slots {
+            if t.0 >= slots.from() && t != NO_TYPE {
+                let first = match slots.index(t) {
+                    Some(i) => {
+                        let mut seen = self.seen.borrow_mut();
+                        let (w, b) = (i / 64, 1u64 << (i % 64));
+                        let first = seen[w] & b == 0;
+                        seen[w] |= b;
+                        first
+                    }
+                    None => true,
+                };
+                if first {
+                    self.order.borrow_mut().push((self.at.get(), t));
+                }
+            }
+        }
+        t
     }
 }
 

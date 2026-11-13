@@ -13,7 +13,7 @@
 //! shares; a thread lists a type once, at the first of its places, the later ones handing over a
 //! type promoted by then.
 
-use super::records::{self, Mapping, SigMemo};
+use super::records::{self, Ids, Mapping, SigMemo};
 use super::{Remap, Table, Tables, UNMET, VISITING};
 use crate::crew::{Crew, Shared};
 use crate::symbols::*;
@@ -329,12 +329,14 @@ struct Lister<'r> {
     out: RefCell<Vec<TypeId>>,
 }
 
-impl Mapping for Lister<'_> {
+impl Ids for Lister<'_> {
     #[inline]
     fn ids(&self) -> &Tables {
         self.ids
     }
+}
 
+impl Mapping for Lister<'_> {
     #[inline]
     fn ty(&self, t: TypeId) -> TypeId {
         if t.0 >= self.slots.from && t != NO_TYPE {
@@ -425,12 +427,14 @@ struct Renumber<'r> {
     record: Cell<(&'static str, usize, u32)>,
 }
 
-impl Mapping for Renumber<'_> {
+impl Ids for Renumber<'_> {
     #[inline]
     fn ids(&self) -> &Tables {
         self.ids
     }
+}
 
+impl Mapping for Renumber<'_> {
     #[inline]
     fn ty(&self, t: TypeId) -> TypeId {
         if t.0 < self.types.from || t == NO_TYPE {

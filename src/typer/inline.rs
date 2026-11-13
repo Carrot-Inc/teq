@@ -110,7 +110,8 @@ pub struct InlineState {
     /// with scalac's E039 for the call.
     pub forward_refs: FxMap<SymId, String>,
     /// The index each record's copies read (`Worker::stored_index_of`), with the record it was
-    /// made from.
+    /// made from; emptied where the workers' merge renumbers what an index holds
+    /// (`settle_merge`).
     pub(super) stored_indexes: FxMap<SymId, (Arc<crate::tir::InlineDefinition>, Arc<super::inline_definition::StoredIndex>)>,
     /// The empty substitution the copies of bodies without type parameters share
     /// (`Worker::begin_demand`).
@@ -365,8 +366,10 @@ impl InlineState {
             compiletime: _,
             ops_name: _,
             forward_refs: _,
-            stored_indexes: _,
             no_subst: _,
+            // Kept from one copy of a record to the next, until the workers' merge
+            // (`settle_merge`).
+            stored_indexes: _,
             // Taken by the expansion the walk starts next, before anything else runs.
             entry: _,
             // A stack of the matches being reduced, each truncating it to its own mark: a body
@@ -495,15 +498,99 @@ impl InlineState {
 }
 
 impl InlineState {
-    /// What an expansion leaves behind that the next one sets before it reads, dropped at the
-    /// workers' merge: a local inline val's copies, an `erasedValue` no match took, the
-    /// receivers' and arguments' types of selections and applications that never expanded.
-    pub fn clear_leftovers(&mut self) {
-        self.copies.clear();
-        self.erased = None;
-        self.recv_types.clear();
-        self.this_written.clear();
-        self.arg_types.clear();
+    /// The state at the end of the workers' merge, which gave every record a worker made a new
+    /// id. Every field is named here, so that a new one is renumbered, emptied or left for a
+    /// reason.
+    pub fn settle_merge(&mut self) {
+        let InlineState {
+            // Renumbered with the worker's tables (`Remap::tables_typed`) and united with the
+            // other workers'.
+            evaluated: _,
+            args: _,
+            // What an expansion leaves behind that the next one sets before it reads: a local
+            // inline val's copies, an `erasedValue` no match took, the receivers' and arguments'
+            // types of selections and applications that never expanded.
+            copies,
+            erased,
+            recv_types,
+            this_written,
+            arg_types,
+            // An index holds its record's nodes, tests and type parameters by their ids, and a
+            // local method's symbol keys it: the method's next copy makes it again
+            // (`Worker::stored_index_of`).
+            stored_indexes,
+            // The build's settings.
+            max_depth: _,
+            max_trees: _,
+            retain_trees: _,
+            production: _,
+            outlines: _,
+            es_modules: _,
+            // Found once: a package of the classpath's, a name, a substitution of nothing.
+            compiletime: _,
+            ops_name: _,
+            no_subst: _,
+            // Counts that only move, read as differences.
+            tparams_gen: _,
+            expansions: _,
+            tparam_reads: _,
+            leaf_reads: _,
+            // A forward reference's message by its local method, read by a call the walk types
+            // before the definition and dropped where the walk checks the definition.
+            forward_refs: _,
+            // The state of an expansion, a body's check or a copy under way, unwound where each
+            // ends: the merge runs between the items, where none is under way.
+            copy_locals: _,
+            copy_respan: _,
+            depth: _,
+            last_binds: _,
+            walks: _,
+            forcing: _,
+            trees: _,
+            sites: _,
+            site_env: _,
+            args_this: _,
+            body_imports: _,
+            import_aliases: _,
+            blocks: _,
+            entry: _,
+            outer_locals: _,
+            body_frames: _,
+            outer_scopes: _,
+            site_at_end: _,
+            tparams: _,
+            tparams_subst: _,
+            param_proxies: _,
+            param_paths: _,
+            param_bindings: _,
+            this: _,
+            this_paths: _,
+            pat_vars: _,
+            unusable: _,
+            retained: _,
+            checking: _,
+            notes: _,
+            counting: _,
+            type_trees: _,
+            binder_trees: _,
+            stored_deferred: _,
+            inherited: _,
+            counted: _,
+            pending_trees: _,
+            folding: _,
+            as_typed: _,
+            lenient_match: _,
+            record_args: _,
+            // Room for the next walk, whose contents no walk reads from another.
+            spare_walks: _,
+            stored_lists: _,
+        } = self;
+        copies.clear();
+        *erased = None;
+        recv_types.clear();
+        this_written.clear();
+        arg_types.clear();
+        stored_indexes.clear();
     }
 }
 
