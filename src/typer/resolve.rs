@@ -1480,13 +1480,19 @@ impl<'a> Worker<'a> {
                         return Some(TypeRef::Member(c, name));
                     }
                     let object = self.syms.class(k).kind == ClassKind::Object;
-                    if let Some(&n) = self.syms.class(k).nested.get(&name) {
+                    // A Java class's static member class is no member of its instances, as for a
+                    // subclass (`inherited_type_member_uncached`): it is passed over, and stays
+                    // the name's class where a base of `k` holds the name too.
+                    let held = self.syms.class(k).nested.get(&name).copied();
+                    let passed = held.filter(|&n| self.syms.class(n).mods & mods::JAVA_STATIC != 0);
+                    if let Some(n) = held.filter(|_| passed.is_none()) {
                         return Some(if !object && self.is_inner_class(n) { TypeRef::Member(c, name) } else { TypeRef::Class(n) });
                     }
                     if let Some(r) = self.inherited_type_member(k, name) {
-                        return Some(match r {
-                            TypeRef::Member(_, n) => TypeRef::Member(c, n),
-                            other => other,
+                        return Some(match (passed, r) {
+                            (Some(p), _) => TypeRef::Class(p),
+                            (None, TypeRef::Member(_, n)) => TypeRef::Member(c, n),
+                            (None, other) => other,
                         });
                     }
                 }
@@ -1587,8 +1593,31 @@ impl<'a> Worker<'a> {
 
     fn inherited_type_member_uncached(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
         let object = self.syms.class(c).kind == ClassKind::Object;
+        // The first Java static member class of the name that a base holds.
+        let mut passed: Option<ClassId> = None;
         for i in 1..self.syms.class(c).base_types.len() {
             let b = self.syms.class(c).base_types[i].0;
+            let held = self.syms.class(b).nested.get(&name).copied();
+            // A Java class's static member class is not inherited: it is a member of the class's
+            // module class (dotty's `ClassfileParser.enterOwnInnerClasses`, by `getOwner` and
+            // `getScope`), so `Double` inside a class below `java.awt.geom.Point2D` is no
+            // `Point2D.Double`. It is passed over.
+            if let Some(n) = held.filter(|&n| self.syms.class(n).mods & mods::JAVA_STATIC != 0) {
+                passed.get_or_insert(n);
+                continue;
+            }
+            // Where a later base holds the name too, the name stays the static member class
+            // that was passed over: what makes a class of a name through `this`
+            // (`inner_class_member`, `inherited_inner_class`) takes the first nested class of
+            // the name among the bases, and would not find the later one.
+            if let Some(p) = passed {
+                let info = self.syms.class(b);
+                let answers = info.type_aliases.contains_key(&name) || held.is_some_and(|n| info.kind != ClassKind::Object || (object && self.is_opaque_path_class(n)));
+                if answers {
+                    return Some(TypeRef::Class(p));
+                }
+                continue;
+            }
             // An opaque type of a trait is the object's own copy through an object.
             if let Some(&n) = self.syms.class(b).nested.get(&name).filter(|&&n| object && self.is_opaque_path_class(n)) {
                 return Some(TypeRef::Class(self.derived_opaque(n, c)));

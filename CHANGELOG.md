@@ -70,6 +70,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A Java class's static member class is no member of a Scala class below it, as in scalac: inside a class that
+  extends `java.awt.Point`, `Double` is `scala.Double` and not `Point2D.Double`, and a member enum or interface
+  of a Java ancestor is named through that ancestor (`java.net.Proxy.Type`). An inner class is inherited as before.
 - A file whose inline expansion has to wait for a macro of its own build no longer loses what that expansion had
   asked of the standard library or of a library on the class path (a method's body a macro ran first, a class, a
   default argument): a correct program was refused with `not supported yet in a macro: ... has no body to run` or

@@ -1932,6 +1932,7 @@ nested_class_base_through_path	pass	-
 nested_class_ctor_defaults	pass	-	
 nested_class_default_shapes	pass	-	
 nested_class_inherited	pass	-	
+nested_class_of_base_and_object	pass	-	
 nested_class_overloads	pass	-	
 nested_class_prefix	pass	-	
 nested_class_prefix_givens	pass	-	

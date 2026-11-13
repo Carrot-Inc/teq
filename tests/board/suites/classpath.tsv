@@ -249,10 +249,20 @@ jvm/jar_trait_object_methods	pass	-
 jvm/jar_trait_params	pass	-	
 jvm/jar_value_class_signature	pass	-	
 jvm/java_bounded_wildcards	pass	-	
+jvm/java_inner_class_inherited	pass	-	
 jvm/java_parent_ctors_fields	pass	-	
 jvm/java_run	pass	-	
 jvm/java_scala_parent	pass	-	
 jvm/java_scala_parent_trait_first	pass	-	
+jvm/java_static_member_before_inner_class	pass	-	
+jvm/java_static_member_before_inner_class_made	fail	-	tests/classpath/jvm/java_static_member_before_inner_class_made.scala:12:20: error: Kind is a trait; it cannot be instantiated
+jvm/java_static_member_before_java_inner_class	pass	-	
+jvm/java_static_member_enum_not_inherited	pass	-	
+jvm/java_static_member_interface_not_inherited	pass	-	
+jvm/java_static_member_named_in_full	pass	-	
+jvm/java_static_member_not_inherited	pass	-	
+jvm/java_static_member_self_type	pass	-	
+jvm/java_static_member_two_levels	pass	-	
 jvm/java_string_ctors	pass	-	
 jvm/java_time	pass	-	
 jvm/java_util_date_from	pass	-	

@@ -276,7 +276,7 @@ java_default_jar() {
   fi
   echo "$jar"
 }
-# tests/support/hidden_owner/nesting's Java class compiled by javac into a jar.
+# tests/support/hidden_owner/nesting's Java classes compiled by javac into a jar.
 java_nesting_jar() {
   local src=tests/support/hidden_owner/nesting
   local jar=$scratch/nesting-lib.jar

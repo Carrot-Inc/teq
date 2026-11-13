@@ -482,6 +482,9 @@ java_signature_missing_class_throws	fail	-	exit code 0
 java_signature_missing_jdk_root_class	fail	-	exit code 0
 java_signature_missing_parent	fail	-	exit code 0
 java_signature_missing_scala_class	fail	-	exit code 0
+java_static_member_term_not_inherited	pass	-	
+java_static_member_through_subclass	pass	-	
+java_static_member_two_bases	pass	-	
 jdk_abstract_unimplemented_jvm	pass	-	
 jsinterop	pass	-	
 kind_error_argument_in_bound	pass	-	

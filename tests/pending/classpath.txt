@@ -15,6 +15,7 @@ js/nul_identifier	js run, --std=lean: tests/classpath/js/nul_identifier.scala:13
 jvm/jar_copy_guarded_defaults	tests/classpath/jvm/jar_copy_guarded_defaults.scala:8:14: error: not found: Guarded
 jvm/jar_export_extension_getters	tests/classpath/jvm/jar_export_extension_getters.scala:8:10: error: cannot resolve export: OpsExports not found
 jvm/jar_inline_extension_forwarders	tests/classpath/jvm/jar_inline_extension_forwarders.scala:15:10: error: cannot resolve export: InlExports not found
+jvm/java_static_member_before_inner_class_made	tests/classpath/jvm/java_static_member_before_inner_class_made.scala:12:20: error: Kind is a trait; it cannot be instantiated
 jvm/jdk_stand_in_module_terms	tests/classpath/jvm/jdk_stand_in_module_terms.scala:14:77: error: Entry is a trait; it cannot be instantiated
 jvm/value_erasure_lambda	< public int Reader.first(int[])
 scala2_overloaded_members	exit code 1: error: type Entries not found
