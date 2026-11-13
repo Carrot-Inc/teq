@@ -757,6 +757,13 @@ object Verb:
     Files.writeString(dvdom.resolve(".scalafix.conf"), "rules = [\"file:rules/At1971.scala\"]\n")
     val rsvdom = Sh(teq, "compiler", "fix", "--check", "vdom_dsl.scala", "--config", ".scalafix.conf").in(dvdom).timeout(300).check(false).run()
     expect("service/extension clause's type parameter, vdom_dsl", rsvdom.status == 1 && rsvdom.errAll().contains("[At1971]: the receiver's A: _empty_/vdom_dsl$package.`===`().[A],_empty_/vdom_dsl$package.`=!=`().[A].\n"), s"exit ${rsvdom.status}: ${rsvdom.errAll()}")
+    // A block's inline method called first inside a case that refines the method's type parameter: the name in its
+    // body is what the definition's own context gives it, the `Any` alternative of `which`, as scalac has it.
+    val refined = "package core\nsealed trait Box[A]\ncase class I(value: Int) extends Box[Int]\nobject Core:\n  def which(x: Any): String = \"any\"\n  def which(x: Int): String = \"int\"\n  def run[A](box: Box[A], x: A): String =\n    val result = box match\n      case I(_) => helper(x)\n    inline def helper(a: A): String = which(a)\n    result\n"
+    val atHelper = "package teq.fix.probe\nimport teq.fix.*\nfinal class AtHelper extends SemanticRule(\"AtHelper\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val at = doc.input.text.indexOf(\"which(a)\")\n    Patch.lint(Diagnostic(\"\", \"which \" + Native.symbolsAt(doc.gen, at, at + 5).mkString(\",\"), doc.tree.pos))\n"
+    val srefined = build(work, "service-local-inline-context", "core/src/core/Core.scala" -> refined, "rules/AtHelper.scala" -> atHelper, ".scalafix.conf" -> "rules = [\"file:rules/AtHelper.scala\"]\n")
+    val rsrefined = fix(srefined, "core")
+    expect("service/local inline method's context", rsrefined.status == 1 && rsrefined.errAll().contains("[AtHelper]: which core/Core.which().\n"), s"exit ${rsrefined.status}: ${rsrefined.errAll()}")
     // What the arguments of an annotation in a type declare is a declaration of the document, as dotty has it: the
     // round's typing types those trees for it (`Worker::sem_records`), no retained form kept.
     val annotated = "package core\nclass Ann(x: Any) extends scala.annotation.StaticAnnotation\nclass Box[T]\nclass H { type T }\nobject Core:\n  def f(x: H): Box[x.T @Ann({ type Inner = x.T; 1 })] = new Box\n"

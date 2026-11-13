@@ -708,6 +708,104 @@ impl<'a> Worker<'a> {
     /// definition's claim on a fork (`claim_definition`), which a caller discarding what it made
     /// gives back.
     pub(super) fn check_definition_in(&mut self, sym: SymId, env: super::Env) -> bool {
+        self.in_state_made(sym, |t| t.check_definition_where_made(sym, env))
+    }
+
+    /// The worker's state here beyond the environment (`Made`), with the owners' chain's length for a block.
+    pub(super) fn made_here(&self, block: bool) -> super::inline::Made {
+        super::inline::Made {
+            gadt: self.gadt.len() as u32,
+            defining: self.defining,
+            search_only_depth: self.search_only_depth,
+            typing_annotation: self.typing_annotation,
+            annotation_args: self.annotation_args,
+            inline_val_rhs: self.inline_val_rhs,
+            inferring_depth: self.inferring_depth,
+            inline_getters_only: self.inline_getters_only,
+            param_paths: self.param_paths.len() as u32,
+            view_compat: self.view_compat,
+            owners: block.then(|| self.sites.owners.len() as u32),
+        }
+    }
+
+    /// The state the definition of the inline method `sym` was made in. A block's own method: where its block opened
+    /// (`BlockCursor::made`), found by the frame that names it as a call before the definition finds it
+    /// (`demand_local_definition`). A member: where the class of a block around it was made (`InlineState::
+    /// made_classes`: the state there, without the given whose initialiser holds the class), and outside every
+    /// block the state without a case, a given, an inline value or an annotation under way. Where no record tells
+    /// (a block whose cursor an expansion set aside, a class of a block that was entered without its environment),
+    /// the state as it stands.
+    fn made_of(&self, sym: SymId) -> super::inline::Made {
+        let info = self.syms.sym(sym);
+        match info.owner {
+            Owner::Local => {
+                let (name, file) = (info.name, info.file);
+                let frame = self.env.frames.iter().rposition(|f| matches!(f, super::Frame::Locals { names, .. } if names.iter().any(|&(n, s)| n == name && s == sym)));
+                let cursor = frame.and_then(|k| self.inline.blocks.iter().rev().find(|b| b.frame == k && b.file == file));
+                // No block of the environment names it (a body being expanded or checked, whose blocks are set
+                // aside): the state as it is.
+                cursor.map_or_else(|| self.made_here(false), |b| b.made)
+            }
+            Owner::Class(mut c) => loop {
+                if let Some(&made) = self.inline.made_classes.get(&c) {
+                    break made;
+                }
+                match self.syms.class(c).owner {
+                    Owner::Class(outer) => c = outer,
+                    Owner::Local => break self.made_here(false),
+                    _ => break super::inline::Made::default(),
+                }
+            },
+            _ => super::inline::Made::default(),
+        }
+    }
+
+    /// Runs the check `f` of the inline method `sym` in the state its definition was made in (`made_of`), the state
+    /// of the code that asks for it set aside and given back: the bounds of the cases between the definition and the
+    /// call, the given, the inline value and the annotation the call is typed for, a search that only looks, the
+    /// member whose result the call is inferred for, the typing of an inline method's getters alone, the paths the
+    /// applications between the two give their parameters, an overload resolution's round that accepts conversions,
+    /// and for a block's method the owners above its block. A check in the definition's own place finds the state it
+    /// stands in.
+    fn in_state_made<R>(&mut self, sym: SymId, f: impl FnOnce(&mut Self) -> R) -> R {
+        let made = self.made_of(sym);
+        let bounds = (made.gadt as usize).min(self.gadt.len());
+        let gadt = self.gadt.split_off(bounds);
+        let owners = made.owners.map(|n| {
+            let n = (n as usize).min(self.sites.owners.len());
+            (n, self.sites.owners.split_off(n))
+        });
+        let defining = std::mem::replace(&mut self.defining, made.defining);
+        let search_only_depth = std::mem::replace(&mut self.search_only_depth, made.search_only_depth);
+        let typing_annotation = std::mem::replace(&mut self.typing_annotation, made.typing_annotation);
+        let annotation_args = std::mem::replace(&mut self.annotation_args, made.annotation_args);
+        let inline_val_rhs = std::mem::replace(&mut self.inline_val_rhs, made.inline_val_rhs);
+        let inferring_depth = std::mem::replace(&mut self.inferring_depth, made.inferring_depth);
+        let inline_getters_only = std::mem::replace(&mut self.inline_getters_only, made.inline_getters_only);
+        let view_compat = std::mem::replace(&mut self.view_compat, made.view_compat);
+        let paths = (made.param_paths as usize).min(self.param_paths.len());
+        let param_paths = self.param_paths.split_off(paths);
+        let r = f(self);
+        self.param_paths.truncate(paths);
+        self.param_paths.extend(param_paths);
+        self.view_compat = view_compat;
+        self.inline_getters_only = inline_getters_only;
+        self.inferring_depth = inferring_depth;
+        self.inline_val_rhs = inline_val_rhs;
+        self.annotation_args = annotation_args;
+        self.typing_annotation = typing_annotation;
+        self.search_only_depth = search_only_depth;
+        self.defining = defining;
+        if let Some((n, owners)) = owners {
+            self.sites.owners.truncate(n);
+            self.sites.owners.extend(owners);
+        }
+        self.gadt.truncate(bounds);
+        self.gadt.extend(gadt);
+        r
+    }
+
+    fn check_definition_where_made(&mut self, sym: SymId, env: super::Env) -> bool {
         if !self.forked {
             self.again(|t| t.check_definition_in_body(sym, env));
             return false;

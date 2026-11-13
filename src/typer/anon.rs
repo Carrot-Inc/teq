@@ -659,6 +659,12 @@ impl<'a> Worker<'a> {
     /// made under the lock, has it shared at the release unless it names a record of this worker's
     /// own chunk, which the merge renumbers in the worker's entries alone.
     pub(super) fn set_anon_env(&mut self, c: ClassId, env: Arc<Env>) {
+        // What the worker holds beyond the environment where the class is made, for the checks of its inline members
+        // (`Worker::made_of`). The given whose initialiser holds the class is none of it: a search inside a class is
+        // past the reach of the given being defined (dotty's `Implicits.comesTooLate`, whose walk of the search's
+        // owners answers false at the first owner that is a class), so the given is a candidate in a member's body.
+        let made = super::inline::Made { defining: None, ..self.made_here(false) };
+        self.inline.made_classes.insert(c, made);
         if !self.forked {
             self.anon_envs.insert(c, env);
         } else if c.0 >= crate::arena::LOCAL_BASE {

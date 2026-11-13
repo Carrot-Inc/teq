@@ -4879,7 +4879,8 @@ impl<'a> Worker<'a> {
         let cursor = items.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(ast.def(*d).kind, DefKind::Fun(_)) && ast.def(*d).mods & mods::INLINE != 0));
         if cursor {
             let frame = self.env.frames.len() - 1;
-            self.inline.blocks.push(super::inline::BlockCursor { frame, file, stmts, at: 0, imports_scope });
+            let made = self.made_here(true);
+            self.inline.blocks.push(super::inline::BlockCursor { frame, file, stmts, at: 0, imports_scope, made });
         }
         let mut defined: Vec<(Name, &'static str)> = Vec::new();
         // The named classes the block defines, which the IR lifts out of it: the pickle writes

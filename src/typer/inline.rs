@@ -109,6 +109,10 @@ pub struct InlineState {
     /// between the two reads from (`val first = g(); val source = ..; import source.k`), each
     /// with scalac's E039 for the call.
     pub forward_refs: FxMap<SymId, String>,
+    /// The worker's state where each class of a block was made (`Worker::set_anon_env`): what the check of an inline
+    /// member of it, or of a class inside it, runs under. Emptied where the workers' merge runs: a class's members
+    /// are all checked by the body that makes it.
+    pub made_classes: FxMap<ClassId, Made>,
     /// The index each record's copies read (`Worker::stored_index_of`), with the record it was
     /// made from; emptied where the workers' merge renumbers what an index holds
     /// (`settle_merge`).
@@ -367,6 +371,8 @@ impl InlineState {
             ops_name: _,
             forward_refs: _,
             no_subst: _,
+            // Keyed by the classes of the blocks being typed, read where a member's check begins.
+            made_classes: _,
             // Kept from one copy of a record to the next, until the workers' merge
             // (`settle_merge`).
             stored_indexes: _,
@@ -538,6 +544,8 @@ impl InlineState {
             // A forward reference's message by its local method, read by a call the walk types
             // before the definition and dropped where the walk checks the definition.
             forward_refs: _,
+            // A stack's length where a class of a block was made, which no body's typing outlives.
+            made_classes,
             // The state of an expansion, a body's check or a copy under way, unwound where each
             // ends: the merge runs between the items, where none is under way.
             copy_locals: _,
@@ -586,6 +594,7 @@ impl InlineState {
             stored_lists: _,
         } = self;
         copies.clear();
+        made_classes.clear();
         *erased = None;
         recv_types.clear();
         this_written.clear();
@@ -602,8 +611,42 @@ pub struct InlineArg {
     pub source: Option<(FileId, Span)>,
 }
 
+/// The worker's state where a definition is made, beyond its environment: what the definition's check runs under
+/// whichever code asks for it first. dotty's completer runs "in the context at the point where the completer was
+/// created" (`Namer.Completer`, `completeInCreationContext`) and an inline method's lazy body under its `inlineCtx`
+/// (`PrepareInlineable.registerInlineInfo`): a case around the call, the given, the inline value or the annotation
+/// the call is typed for and the member whose result is inferred from it are the caller's and no part of it. A
+/// block's method inside a given's initialiser has that given left out of its searches; a member of a class made
+/// there has not (`Worker::set_anon_env`). The
+/// bounds are the stack's length (`Worker::gadt`): what a case around the definition added lies below it, and a
+/// definition of a block is asked for only inside the block. The count of the completions under way
+/// (`Worker::completing`) is none of it: it says what this thread has begun and not ended, whichever context asks,
+/// and what waits for the outermost completion's end (`outermost_completion_done`) waits through a check too.
+#[derive(Clone, Copy, Default)]
+pub struct Made {
+    pub gadt: u32,
+    pub defining: Option<SymId>,
+    pub search_only_depth: Option<u32>,
+    pub typing_annotation: bool,
+    pub annotation_args: bool,
+    pub inline_val_rhs: bool,
+    pub inferring_depth: u32,
+    /// Whether only an inline method's ordinary getters are typed there (`type_local_inline_getters`).
+    pub inline_getters_only: bool,
+    /// The length of the paths the applications under way give their parameters (`Worker::param_paths`): what an
+    /// application round the definition pushed lies below it.
+    pub param_paths: u32,
+    /// Whether a compatibility test there accepts an implicit conversion (`Worker::view_compat`, an overload
+    /// resolution's second round).
+    pub view_compat: bool,
+    /// The owners' chain's length (`DefSites::owners`), for a block's own method; a member's check runs under its
+    /// class's chain, which the walk builds.
+    pub owners: Option<u32>,
+}
+
 /// A block being typed that defines a local inline method: its frame in the environment, its
-/// statements, the one being typed and where its imports begin in `Env::imports`.
+/// statements, the one being typed, where its imports begin in `Env::imports`, and the worker's
+/// state where the block opens, which its methods are made in.
 #[derive(Clone, Copy)]
 pub struct BlockCursor {
     pub frame: usize,
@@ -611,6 +654,7 @@ pub struct BlockCursor {
     pub stmts: crate::ast::ListRef,
     pub at: usize,
     pub imports_scope: usize,
+    pub made: Made,
 }
 
 #[derive(Clone, Copy)]
