@@ -1196,6 +1196,15 @@ inline_expansion_rules	pass	-
 inline_final_block_argument	fail	-	< -1
 inline_fold_std	pass	-	
 inline_folded_origin	pass	-	
+inline_getter_assign_op	pass	-	
+inline_getter_assign_op_inline_setter	pass	-	
+inline_getter_assign_op_operators	pass	-	
+inline_getter_assign_op_order	pass	-	
+inline_getter_assign_op_own_operator	pass	-	
+inline_getter_assign_op_places	pass	-	
+inline_getter_assign_op_receiver_once	pass	-	
+inline_getter_assign_op_unqualified	pass	-	
+inline_getter_assign_op_untaken	pass	-	
 inline_getter_private_param	pass	-	
 inline_given_by_name	pass	-	
 inline_given_pattern_fresh	pass	-	
@@ -1215,6 +1224,7 @@ inline_match	pass	-
 inline_match_erased_projection	pass	-	
 inline_match_intersection_tuple	pass	-	
 inline_match_scrutinee_effect	pass	-	
+inline_members_made_by_the_typer	pass	-	
 inline_mirror_labels	pass	-	
 inline_mirror_proxy	pass	-	
 inline_mirror_refinements	pass	-	

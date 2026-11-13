@@ -76,6 +76,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- `m.level += 1` (and every operator assignment) through an `inline def` getter with a setter runs: the build
+  succeeded and the program failed when run (`m.level is not a function`, a `NoSuchMethodError` on the JVM).
 - A class whose type parameter takes a type constructor of its own (`class Later[F[G[_]]]`) is accepted where
   another file applies it before the class is completed (it was refused with a kind mismatch).
 - A class compiled for the JVM lists as its interfaces the traits it inherits directly, as scalac's class files

@@ -579,7 +579,8 @@ impl<'a> Worker<'a> {
             receiver => receiver,
         };
         if let (Some(base), Some(receiver)) = (base, receiver) {
-            if let Some(done) = self.assign_op_through_setter(tl, lty, receiver, op, base, r, op_end, span) {
+            let at = self.cur_ast().expr_span(l);
+            if let Some(done) = self.assign_op_through_setter(tl, lty, receiver, op, base, r, op_end, at, span) {
                 return done;
             }
         }
@@ -694,8 +695,9 @@ impl<'a> Worker<'a> {
 
     /// `q.y op= r` where `y` is a method without parameters and `q` has a setter `y_=`: `q.y_=(q.y
     /// base r)`, `q` evaluated once, unless the value has an `op=` of its own. `receiver` is the
-    /// typed `q` of `tl`.
-    fn assign_op_through_setter(&mut self, tl: TExprId, lty: TypeId, receiver: (TExprId, TypeId), op: Name, base: Name, r: ExprId, op_end: u32, span: Span) -> Option<(TExprId, TypeId)> {
+    /// typed `q` of `tl`, `at` the place of `q.y`.
+    #[allow(clippy::too_many_arguments)]
+    fn assign_op_through_setter(&mut self, tl: TExprId, lty: TypeId, receiver: (TExprId, TypeId), op: Name, base: Name, r: ExprId, op_end: u32, at: Span, span: Span) -> Option<(TExprId, TypeId)> {
         let (tq, qty) = receiver;
         let TExpr::CallMethod(recv, getter, args) = self.prog.expr(tl) else { return None };
         if recv != tq || args.len != 0 || self.syms.sym(getter).kind != SymKind::Def || qty == ERROR {
@@ -715,9 +717,24 @@ impl<'a> Worker<'a> {
             return None;
         }
         let mark = self.hoisted.len();
+        // The read of an inline getter is the member's application over the receiver, at the left
+        // operand's place, kept for expansion as the operand's own call was (dotty's `typedOpAssign`
+        // types the assignment over the one typed left operand, whose inline call `Inlining`
+        // expands like any other): a call node made here would be one nothing expands. The
+        // operand's own call stands in no tree, and is given up before the receiver is bound and
+        // the right operand typed, where a call still waiting is expanded ahead of them.
+        let inline = self.is_inline_callee(getter);
+        if inline {
+            self.drop_pending_copied(&[tl], tq);
+        }
         let tq = if self.is_stable(tq) { tq } else { self.hoist(tq, qty, span) };
-        let current = self.prog.add(TExpr::CallMethod(tq, getter, args));
-        self.prog.set_type(current, lty);
+        let current = if inline {
+            self.apply_member(tq, qty, name, None, Vec::new(), at, None).0
+        } else {
+            let current = self.prog.add(TExpr::CallMethod(tq, getter, args));
+            self.prog.set_type(current, lty);
+            current
+        };
         let (value, vty) = self.binop_or_member(base, current, lty, lty, r, FunEnd::operand_at(op_end), span, None);
         let lists = vec![ArgList { args: vec![ArgSrc::Typed(value, vty)], using: false, span, fun: ArgList::NO_FUN }];
         let (call, _) = self.apply_member(tq, qty, setter, None, lists, span, None);
