@@ -7559,7 +7559,181 @@ async function importActions() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
+/**
+ * An import the editor adds goes into a clause the document already has of its prefix, among the imports its
+ * own line would join (docs/TOOLING.md): a quick fix's and completion's alike. Each document has one name not found, used as a type in `val v: NAME`; its quick
+ * fix is applied as a client applies it, the clause is as expected, the build of the edited text has no such
+ * report; and completion's additional edit for that name at that place is the quick fix's edit.
+ */
+async function importMerges() {
+  encoding = "utf-16"
+  const dir = join(work, "link/merges")
+  mkdirSync(join(dir, "src"), { recursive: true })
+  writeExport(join(dir, "teq.lock"), { app: { platform: "jvm", sources: ["src"] } })
+  const use = (head, name, pkg = "package mgu\n\n") => `${pkg}${head}\n\nobject NAME:\n  val v: ${name} = ???\n`
+  // [the imports before the site, the name wanted, the clause after the edit (null: no action), what the row shows]
+  const rows = [
+    ["import mg.b.Xa", "Za", "import mg.b.{Xa, Za}", "a single selector put in braces"],
+    ["import mg.b.Xa", "Va", "import mg.b.{Va, Xa}", "a single selector, the name before it in order"],
+    ["import mg.b.{Wa, Xa}", "Za", "import mg.b.{Wa, Xa, Za}", "braces in order, the name last"],
+    ["import mg.b.{Wa, Xa}", "Va", "import mg.b.{Va, Wa, Xa}", "braces in order, the name first"],
+    ["import mg.b.{Wa, Xa}", "Wab", "import mg.b.{Wa, Wab, Xa}", "braces in order, the name at its sorted place"],
+    ["import mg.b.{Xa, Wa}", "Va", "import mg.b.{Xa, Wa, Va}", "braces not in order, the name after the last"],
+    ["import mg.b.{ Wa, Xa }", "Za", "import mg.b.{ Wa, Xa, Za }", "the clause's own spacing"],
+    ["import mg.b.{\n  Wa,\n  Xa\n}", "Wab", "import mg.b.{\n  Wa,\n  Wab,\n  Xa\n}", "a clause over several lines, a line of its own"],
+    ["import mg.b.{\n  Wa,\n  Xa,\n}", "Za", "import mg.b.{\n  Wa,\n  Xa,\n  Za,\n}", "a trailing comma kept"],
+    ["import mg.b.{Xa as Ya}", "Za", "import mg.b.{Xa as Ya, Za}", "a rename kept as written"],
+    ["import mg.b.{Xa as Ya}", "Xa", null, "the name the clause renames: no action, the clause spelling it"],
+    ["import mg.b.{Wa as _, Xa}", "Za", "import mg.b.{Wa as _, Xa, Za}", "an exclusion of another name kept"],
+    ["import mg.b.{Xa, given}", "Za", "import mg.b.{Xa, Za, given}", "the name before a given selector"],
+    ["import mg.b.given", "Za", "import mg.b.{Za, given}", "a given alone put in braces after the name"],
+    ["import mg.b.Xa, mgo.Other", "Za", "import mg.b.{Xa, Za}, mgo.Other", "the matching clause of two on a line"],
+    ["import mg.b.{Za as _, *}", "Za", null, "a wildcard that excludes the name: no action, as for completion"],
+    ["import mg.b.Xa // why", "Za", "import mg.b.{Xa, Za} // why", "a trailing comment kept"],
+    ["import mg.b.{Xa, /* note */ Wa}", "Za", "import mg.b.{Xa, /* note */ Wa, Za}", "a comment inside the braces where it was"],
+    ["import mg.b.Xa\nimport mg.b.Wa", "Za", "import mg.b.{Xa, Za}\nimport mg.b.Wa", "two clauses of the prefix: the first"],
+    ["import mg.b.Xa", "`type`", "import mg.b.{Xa, `type`}", "a name that needs backquotes"],
+    ["import x.b.Xa", "Za", "import x.b.Xa\nimport mg.b.Za", "a clause of another prefix with the same last segment: a line of its own"],
+  ]
+  const texts = {
+    "Lib.scala": "package mg.b\n\nclass Va\nclass Wa\nclass Wab\nclass Xa\nclass Za\nclass Zq\nclass `type`\ngiven mgInt: Int = 7\n",
+    "Other.scala": "package mgo\n\nclass Other\n",
+    "XB.scala": "package x.b\n\nclass Xa\n",
+    "XZ.scala": "package xzb\n\nclass Zq\n",
+    "Bag.scala": "package mgl\n\nobject Bag:\n  given bagOrd: Ordering[String] = Ordering.String\n  extension (n: Int) def asBag: String = n.toString\n  def bagPlain(n: Int): Int = n\nobject Crate:\n  class CrateBox\n  class CrateLid\n",
+  }
+  rows.forEach(([head, name], k) => (texts[`R${k}.scala`] = use(head, name).replace("NAME", `R${k}`)))
+  const special = {
+    // A relative prefix under the document's package clause; a CRLF file; a clause inside a package's block.
+    "Rel.scala": ["package mg\n\nimport b.Xa\n\nobject Rel:\n  val v: Za = ???\n", "Za", "import b.{Xa, Za}", "a relative prefix"],
+    "Crlf.scala": ["package mgu\r\n\r\nimport mg.b.Xa\r\n\r\nobject Crlf:\r\n  val v: Za = ???\r\n", "Za", "import mg.b.{Xa, Za}\r\n", "a CRLF file"],
+    "Block.scala": ["package mgp {\n  import mg.b.Xa\n  object Block {\n    val v: Za = ???\n  }\n}\n", "Za", "  import mg.b.{Xa, Za}\n  object Block", "a clause inside a package's block"],
+    // A clause of the prefix after the site, and one inside a method's body: a line of its own.
+    "After.scala": ["package mgu\n\nobject After:\n  val v: Za = ???\n\nimport mg.b.Xa\n", "Za", "package mgu\n\nimport mg.b.Za\n\nobject After:", "a clause of the prefix after the site: a line of its own"],
+    // The clause is one of the imports the line would join: a definition between it and that line's place ends
+    // the run; blanks and comments do not.
+    "Mid.scala": ["package mgu\n\nimport mg.b.Xa\nobject MidA\nimport mgo.Other\n\nobject Mid:\n  val v: Za = ???\n", "Za", "import mg.b.Xa\nobject MidA\nimport mgo.Other\nimport mg.b.Za\n", "a clause before a definition that stands before the line's place: a line of its own"],
+    "Gap.scala": ["package mgu\n\nimport mg.b.Xa\n\n// the others\nimport mgo.Other\n\nobject Gap:\n  val v: Za = ???\n", "Za", "import mg.b.{Xa, Za}\n\n// the others\nimport mgo.Other\n", "a clause a blank line and a comment before the last import"],
+    // A clause in a sibling block does not reach the site: a line of its own. The file's top clause is merged
+    // into where the line would follow it; a block's between the file and the site's block is not the line's.
+    "Sibling.scala": ["package sib1 {\n  import mg.b.Xa\n  object SibA\n}\npackage sib2 {\n  object Sibling { val v: Za = ??? }\n}\n", "Za", "import mg.b.Za\n\npackage sib1 {\n  import mg.b.Xa\n", "a clause in a sibling block, which does not reach the site: a line of its own"],
+    "Outer.scala": ["package outb {\n  import mg.b.Xa\n  package inb {\n    object Outer { val v: Za = ??? }\n  }\n}\n", "Za", "import mg.b.Za\n\npackage outb {\n  import mg.b.Xa\n", "a clause in a block around the site's own, where the line goes to the file's top: that line"],
+    "Top.scala": ["import mg.b.Xa\n\npackage topb {\n  object Top { val v: Za = ??? }\n}\n", "Za", "import mg.b.{Xa, Za}\n\npackage topb {", "the file's top clause, the site in a block without imports: the line would follow it"],
+    "Inner.scala": ["package mgu\n\nobject Inner:\n  def f: Int =\n    import mg.b.Xa\n    1\n  val v: Za = ???\n", "Za", "package mgu\n\nimport mg.b.Za\n\nobject Inner:", "a clause of the prefix in a method's body: a line of its own"],
+  }
+  for (const [n, [text]] of Object.entries(special)) texts[n] = text
+  // A clause further up would bring the name to code the import's own line does not reach: another object's
+  // wildcard of the name between the clause and that line; a sibling block's under the file's top clause. And a
+  // name not found inside the clause's own `given` selector, which no selector of that clause can bring.
+  texts["Between.scala"] = "package mgu\n\nimport mg.b.Xa\nobject BetweenA { import xzb.*; val a = new Zq }\nimport mgo.Other\nobject Between:\n  val v: Zq = ???\n"
+  texts["Blocks.scala"] = "import mg.b.Xa\n\npackage blk1 {\n  import xzb.*\n  object B1 { val a = new Zq }\n}\npackage blk2 {\n  import mgo.Other\n  object Blocks { val v: Zq = ??? }\n}\n"
+  // A name an object's wildcard leaves out, which completion still offers: no merge into the clause that
+  // leaves it out.
+  texts["Excl.scala"] = "package mgu\n\nimport mgl.Crate.{CrateBox as _, *}\n\nobject Excl:\n  val v: CrateBox = ???\n"
+  texts["GivenSite.scala"] = "package mgu\n\nimport mg.b.{Xa, given Za}\n\nobject GivenSite:\n  val x: Xa = ???\n"
+  // An object's members: its wildcard beside a given selector, and by name beside a rename, whose clause spells
+  // a name of the object.
+  texts["BagAll.scala"] = "package mgu\n\nimport mgl.Bag.given\n\nobject BagAll:\n  val a = 42.asBag\n  val b = bagPlain(1)\n"
+  texts["BagName.scala"] = "package mgu\n\nimport mgl.Bag.{asBag as g}\n\nobject BagName:\n  val b = bagPlain(1)\n"
+  for (const [n, t] of Object.entries(texts)) writeFileSync(join(dir, "src", n), t)
+  const file = (n) => join(dir, "src", n)
+  const offsetAt = (text, { line, character }) => {
+    const lines = text.split("\n")
+    let offset = 0
+    for (let i = 0; i < line && i < lines.length; i++) offset += lines[i].length + 1
+    return offset + Math.min(character, (lines[line] ?? "").replace(/\r$/, "").length)
+  }
+  const apply = (text, edits) => {
+    const spans = edits.map((e) => [offsetAt(text, e.range.start), offsetAt(text, e.range.end), e.newText]).sort((a, b) => b[0] - a[0])
+    for (const [from, to, newText] of spans) text = text.slice(0, from) + newText + text.slice(to)
+    return text
+  }
+  const c = new Client(dir)
+  const versions = {}
+  const published = async (mark, n, v) => {
+    const uri = uriOf(file(n))
+    let found
+    await until(() => (found = c.diagnosticsSince(mark).find((p) => p.uri === uri && p.version === v)) !== undefined, 60000)
+    return found?.diagnostics
+  }
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(dir), capabilities: { workspace: { workspaceEdit: { documentChanges: true } } } })
+    const m = c.mark()
+    c.notify("initialized", {})
+    for (const n of Object.keys(texts)) {
+      versions[n] = 1
+      c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file(n)), languageId: "scala", version: 1, text: texts[n] } })
+    }
+    const uses = Object.keys(texts).filter((n) => !["Lib.scala", "Other.scala", "XB.scala", "XZ.scala", "Bag.scala"].includes(n))
+    for (const n of uses) await published(m, n, 1)
+    /** The document's import fixes over `range`, the first applied, and the errors of the build of that text. */
+    const fixedBy = async (n, range) => {
+      const got = ((await c.request("textDocument/codeAction", { textDocument: { uri: uriOf(file(n)) }, range, context: { diagnostics: [] } }, { timeout: 30000 })).result ?? []).filter((a) => a.title.startsWith("import "))
+      if (!got[0]) return { got, fixed: texts[n], errors: [] }
+      const edits = got[0].edit?.documentChanges?.[0]?.edits ?? []
+      const fixed = apply(texts[n], edits)
+      const mk = c.mark()
+      c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file(n)), version: ++versions[n] }, contentChanges: [{ text: fixed }] })
+      const ds = await published(mk, n, versions[n])
+      return { got, edits, fixed, errors: ds === undefined ? ["no publication"] : ds.filter((d) => d.severity === 1).map((d) => d.message) }
+    }
+    /** Completion's additional edit for the name `name` at the end of its use in the document. */
+    const completed = async (n, name, owner = "mg.b") => {
+      const text = texts[n]
+      const at = text.indexOf(`: ${name} =`) + 2 + name.length
+      const list = await c.result("textDocument/completion", { ...doc(file(n)), position: positionAt(text, at) })
+      const item = (list?.items ?? []).find((i) => i.label === name && i.data?.import === `${owner}.${name}`)
+      if (!item) return undefined
+      return (await c.result("completionItem/resolve", item))?.additionalTextEdits
+    }
+    const named = async (n, name, want, what) => {
+      const plain = name.replace(/`/g, "")
+      const range = rangeIn(texts[n], `: ${name} =`, 0, 2, name.length)
+      const viaCompletion = name === plain ? await completed(n, name) : undefined
+      const r = await fixedBy(n, range)
+      if (want === null) return check(`merges: ${what}`, same(r.got.map((a) => a.title), []), r.got)
+      check(`merges: ${what}: the clause, applied, no error`, same(r.got.map((a) => a.title), [`import mg.b.${name}`]) && r.fixed.includes(want) && r.errors.length === 0, r)
+      if (name === plain) check(`merges: ${what}: completion's additional edit is the fix's`, same(viaCompletion, r.edits), { viaCompletion, edits: r.edits })
+    }
+    for (const [k, [, name, want, what]] of rows.entries()) await named(`R${k}.scala`, name, want, what)
+    for (const [n, [, name, want, what]] of Object.entries(special)) await named(n, name, want, what)
+    /** The document with `edits` applied, built: its errors. */
+    const builtWith = async (n, edits) => {
+      const fixed = apply(texts[n], edits ?? [])
+      const mk = c.mark()
+      c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file(n)), version: ++versions[n] }, contentChanges: [{ text: fixed }] })
+      const ds = await published(mk, n, versions[n])
+      return { fixed, errors: ds === undefined ? ["no publication"] : ds.filter((d) => d.severity === 1).map((d) => d.message) }
+    }
+    for (const [n, line, what] of [
+      ["Between.scala", "import mgo.Other\nimport mg.b.Zq\n", "another object's wildcard of the name between the clause and the line's place"],
+      ["Blocks.scala", "  import mgo.Other\n  import mg.b.Zq\n", "a sibling block's wildcard of the name, under the file's top clause"],
+    ]) {
+      const edits = await completed(n, "Zq")
+      const res = await builtWith(n, edits)
+      check(`merges: completion's import, ${what}: on its line, no error`, edits?.length === 1 && res.fixed.includes(line) && res.fixed.includes("import mg.b.Xa\n") && res.errors.length === 0, { edits, res })
+    }
+    {
+      const edits = await completed("Excl.scala", "CrateBox", "mgl.Crate")
+      const res = await builtWith("Excl.scala", edits)
+      check("merges: completion's import of a name an object's wildcard leaves out: no selector beside the exclusion, its line, no error", edits?.length === 1 && res.fixed.includes("import mgl.Crate.{CrateBox as _, *}\nimport mgl.Crate.CrateBox\n") && res.errors.length === 0, { edits, res })
+    }
+    let r = await fixedBy("GivenSite.scala", { start: { line: 0, character: 0 }, end: positionAt(texts["GivenSite.scala"], texts["GivenSite.scala"].length) })
+    check("merges: a name not found in the clause's own given selector: its import on a line before that clause, no error", same(r.got.map((a) => a.title), ["import mg.b.Za"]) && r.fixed.startsWith("package mgu\n\nimport mg.b.Za\n\nimport mg.b.{Xa, given Za}\n") && r.errors.length === 0, r)
+    r = await fixedBy("BagAll.scala", { start: { line: 0, character: 0 }, end: positionAt(texts["BagAll.scala"], texts["BagAll.scala"].length) })
+    check("merges: an object's extension and plain member beside its given selector: one action, the wildcard in the clause, no error", same(r.got.map((a) => a.title), ["import mgl.Bag.*"]) && r.got[0]?.diagnostics?.length === 2 && r.fixed.includes("import mgl.Bag.{*, given}\n") && r.errors.length === 0, r)
+    r = await fixedBy("BagName.scala", rangeIn(texts["BagName.scala"], "bagPlain"))
+    check("merges: an object's member beside a rename, whose clause spells a name of the object: by name in the clause, no error", same(r.got.map((a) => a.title), ["import mgl.Bag.bagPlain"]) && r.fixed.includes("import mgl.Bag.{asBag as g, bagPlain}\n") && r.errors.length === 0, r)
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+    await Promise.race([c.exited, sleep(10000)])
+  } catch (e) {
+    check("the import merges ran to their end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  }
+}
+
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, importMerges, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
 // Run only when named: the idle minute, the jar fetch and the sources' fetches, which tests/lsp.sh
 // runs once each.
 const named = new Set(["idleMinute", "jarFetch", "librarySources", "sourcesFailures", "sourcesHeld", "sourcesBackoff", "sourcesPaths"])

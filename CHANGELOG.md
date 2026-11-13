@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An import the editor adds, completion's and a quick fix's, goes into the clause a file already has of that
+  prefix (`import a.b.X` becomes `import a.b.{X, Z}`, the name at its sorted place where the clause is in order)
+  ([the language server](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md#the-language-server-and-zed)).
 - `teq fix` answers a semantic rule about the names of a method that an inline method defined before it calls
   (`inline def never(n: Int): Int = hidden(n)` above `private def hidden(k: Int): Int = k + 1`: the parameter `k`
   and the types of `hidden`'s header, and the names of its body where its result is inferred), whether anything

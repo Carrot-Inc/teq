@@ -32,7 +32,7 @@ use super::super::index::Files;
 use super::super::resolve::{TermRef, TypeRef};
 use super::super::unused::SelRef;
 use super::super::{Env, ImportTarget, ResolvedImport, Worker};
-use super::{decode, encode, import_insertion, import_segment, ImportEdit, CAP, ROOT_PKG};
+use super::{decode, encode, import_segment, ImportEdit, CAP, ROOT_PKG};
 use crate::ast::ListRef;
 use crate::index::Lines;
 use crate::intern::Name;
@@ -158,7 +158,7 @@ impl<'a> Worker<'a> {
                 (MissingKind::Term | MissingKind::Type, _) => self.name_imports(&ids, first, text, w, &spellings, &objects),
             };
             for edit in found {
-                match actions.iter_mut().find(|(e, _)| e.import == edit.import && e.at == edit.at && e.text == edit.text) {
+                match actions.iter_mut().find(|(e, _)| e.import == edit.import && (e.start, e.end) == (edit.start, edit.end) && e.text == edit.text) {
                     Some((_, of)) if of.contains(&i) => {}
                     Some((_, of)) => of.push(i),
                     None => actions.push((edit, vec![i])),
@@ -169,7 +169,7 @@ impl<'a> Worker<'a> {
         let actions = actions
             .into_iter()
             .map(|(edit, of)| {
-                let range = lines.range(Span::new(edit.at, edit.at), files.positions);
+                let range = lines.range(Span::new(edit.start, edit.end), files.positions);
                 let edits = Json::Arr(vec![obj([("range", range), ("newText", edit.text.into())])]);
                 obj([("for", Json::Arr(of.into_iter().map(|i| (i as u32).into()).collect())), ("title", edit.import.into()), ("edits", edits)])
             })
@@ -254,8 +254,8 @@ impl<'a> Worker<'a> {
             return;
         }
         holders.sort_by(|a, b| (nearness(&document, &a.pkg), &a.path).cmp(&(nearness(&document, &b.pkg), &b.path)));
-        let (at, before, after) = import_insertion(self.ast(file), self.ast(first), text, offset);
         let last = encode(&w.name);
+        let selector = import_segment(&w.name);
         let binders = self.binders(file);
         let mut taken = 0;
         for o in holders {
@@ -271,7 +271,7 @@ impl<'a> Worker<'a> {
                     me.resolves_with(ResolvedImport { name: Some(name), target: ImportTarget::ClassMember(o.class, name), hidden: ListRef::EMPTY, bound: None, depth: 0, stmt: u32::MAX, unimports_predef: None, sel: SelRef::NONE }, o.class, name, types, w.span)
                 });
                 let reached = resolves && self.in_query(top(), |me| me.member_reached(o.class, name, types));
-                self.written_import(file, &segments, false).filter(|_| reached).map(|import| ImportEdit { at, text: format!("{}{}{}", before, import, after), import, ty: None, term: None })
+                self.written_import(file, &segments, false).filter(|_| reached).map(|import| self.placed_edit(file, first, text, offset, ImportTarget::ClassMember(o.class, name), false, import, &selector))
             } else {
                 self.import_edit(file, first, text, offset, &format!("{}.{}", o.path, last)).filter(|edit| if types { edit.ty.is_some() } else { edit.term.is_some() || matches!(edit.ty, Some(TypeRef::Class(_))) })
             };
@@ -285,7 +285,7 @@ impl<'a> Worker<'a> {
                     me.resolves_with(ResolvedImport { name: None, target: ImportTarget::ClassAll(o.class), hidden: ListRef::EMPTY, bound: None, depth: 0, stmt: u32::MAX, unimports_predef: None, sel: SelRef::NONE }, o.class, name, types, w.span)
                 });
             let edit = match wildcard.then(|| self.written_import(file, &segments, true)).flatten() {
-                Some(import) => ImportEdit { at, text: format!("{}{}{}", before, import, after), import, ty: None, term: None },
+                Some(import) => self.placed_edit(file, first, text, offset, ImportTarget::ClassMember(o.class, name), true, import, &selector),
                 None => by_name,
             };
             if !out.iter().any(|e| e.import == edit.import) {
@@ -294,6 +294,16 @@ impl<'a> Worker<'a> {
             }
         }
         self.keep_imports(binders);
+    }
+
+    /// The edit of the import `import` of `target` for the site at `offset`: on a line of its
+    /// own, or its selector (`selector`, the object's `*` with `wildcard`) in a clause of its
+    /// prefix (`import_placed`).
+    #[allow(clippy::too_many_arguments)]
+    fn placed_edit(&mut self, file: FileId, first: FileId, text: &str, offset: u32, target: ImportTarget, wildcard: bool, import: String, selector: &str) -> ImportEdit {
+        let placed = self.import_placed(file, first, text, offset, target, wildcard);
+        let written = placed.text(&import, if wildcard { "*" } else { selector });
+        ImportEdit { start: placed.start, end: placed.end, text: written, import, ty: None, term: None }
     }
 
     /// Whether the object `c` holds a member named `name` that an import of it brings for the
@@ -460,13 +470,13 @@ impl<'a> Worker<'a> {
             owners.iter().zip(&allowed).map(|(o, forms)| forms.iter().copied().find(|&form| with(me, o, form))).collect()
         });
         self.keep_imports(binders);
-        let (at, before, after) = import_insertion(self.ast(file), self.ast(first), text, offset);
+        let selector = import_segment(&w.name);
         let mut out = Vec::new();
         for (o, form) in owners.iter().zip(chosen) {
             let Some(form) = form else { continue };
             let segments: Vec<String> = o.path.split('.').map(decode).collect();
             let Some(import) = self.written_import(file, &segments, form == Form::Wildcard) else { continue };
-            out.push(ImportEdit { at, text: format!("{}{}{}", before, import, after), import, ty: None, term: None });
+            out.push(self.placed_edit(file, first, text, offset, o.target, form == Form::Wildcard, import, &selector));
         }
         out
     }

@@ -606,7 +606,8 @@ callers and callees of a method, grouped by their enclosing definition), complet
 publishes diagnostics after each edit (an unused import as a hint, with a quick fix removing it: scalac's own
 edit, CheckUnused's, which deletes the statement, keeps its one used selector or drops the unused ones with
 their commas). An error that an import would fix carries quick fixes that add it, each titled as the import it
-writes and placed where completion's import goes: for a name not found, the imports completion offers for that
+writes and placed where completion's import goes (into a clause of its prefix, the object's `*` after the
+clause's names, or on a line of its own): for a name not found, the imports completion offers for that
 name out of scope, in its order, those that name a type where a type is wanted and a term or a class where a term
 is, and after them the import of each object of the program that holds a member of that name (a method, a value,
 a nested object, an enum's case; a class or an alias for a type), the twelve nearest objects: the document's own
@@ -645,8 +646,12 @@ type, not yet an expression's.
 Completion lists the members of a receiver (extension methods and conversions included), the names in scope
 (the extension methods in scope among them), types, the class after `new`, imports and keywords, filtered by
 the prefix case-insensitively and cut at 1,000. With a prefix of two characters or more, names out of scope
-follow, each with the import that brings it, written after the file's last top-level import; merging into an
-existing braced import is a later part. A client with snippet support gets a method's call with a placeholder
+follow, each with the import that brings it: written into a clause the file already has of that prefix among
+the imports its own line would join, nothing but imports, blank lines and comments between the clause and that
+line's place (`import a.b.X` becomes `import a.b.{X, Z}`; in braces the name goes at its sorted
+place where the clause's names are in order, else after the last of them, before a `*` or a `given`, in the
+clause's own spacing; renames, exclusions and comments stay as written), else on a line of its own after the
+file's last top-level import. A client with snippet support gets a method's call with a placeholder
 per parameter (`inc(${1:x})$0`), and after `new` a constructor's (an alias's class's, a Java class's single
 one); where the program expects a function of the name (a function type, a trait of one method that takes
 parameters, the element of a tuple whose type expects one) the name alone, as no call would type there.
