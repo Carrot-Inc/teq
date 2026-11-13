@@ -1,6 +1,6 @@
 Plain:Tame Below: Single$:Serializable Again: Mixed:Louder Wide:Side Task:Runnable Chore: Boxed:Product,Serializable Unboxed: Listing: Short: Steps:Iterator,Stepping Still$:Iterator,Stepping,Serializable Louder:Tame Under:Iterator Lone$:Iterator,Serializable Both:Careful,Iterator Calls:Predicate,Iterator
 Paired:Predicate,Iterator PairedBack:Iterator,Predicate Deferred:Iterator,Predicate Prompt:Predicate,Iterator Above:Iterator,Predicate Local:Iterator,Predicate Inside:Iterator,Predicate InsideFirst:Iterator,Predicate Reached:Gentle,Iterator,Predicate ReachedLate:Gentle,Iterator,Predicate Built:Iterator,Predicate BuiltBody:Iterator,Predicate BuiltTwice:Iterator,Predicate BuiltLambda:Iterator,Predicate Idle:Predicate,Iterator IdleFirst:Iterator,Predicate Plainly:Iterator,Predicate Given:Iterator,Predicate Within:Iterator,IntConsumer
-Mixing:Gentle,Denying,Iterator,Predicate MixingBack:Denying,Gentle,Predicate,Iterator Three:Gentle,Denying,Chained,Iterator,Predicate,IntConsumer ThreeBack:Chained,Denying,Gentle,IntConsumer,Predicate,Iterator ThreeMixed:Denying,Chained,Gentle,Predicate,IntConsumer,Iterator OneTrait:Twice,Iterator,Predicate
+Mixing:Gentle,Denying,Iterator,Predicate MixingBack:Denying,Gentle,Predicate,Iterator Three:Gentle,Denying,Chained,Iterator,Predicate,IntConsumer ThreeBack:Chained,Denying,Gentle,IntConsumer,Predicate,Iterator ThreeMixed:Denying,Chained,Gentle,Predicate,IntConsumer,Iterator OneTrait:Twice,Iterator,Predicate OneTraitBack:TwiceBack,Predicate,Iterator
 1 1 11 2 5 1 3
 xy
 false unsupported

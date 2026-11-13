@@ -1440,7 +1440,10 @@ impl Remap {
         self.map_segment(Some(1));
         let p = &mut w.prog;
         self.map(&mut p.overrides.local, |r, s| r.sym(s), |r, ps| r.syms_in(ps));
-        self.map(&mut p.expansions, |r, e| r.expr(e), |r, x| x.callee = r.sym(x.callee));
+        self.map(&mut p.expansions, |r, e| r.expr(e), |r, x| {
+            x.callee = r.sym(x.callee);
+            x.replaced = r.expr_list(x.replaced);
+        });
         self.map(&mut p.block_classes, |r, e| r.expr(e), |r, cs| {
             for c in cs {
                 *c = r.class(*c);
@@ -3312,9 +3315,6 @@ impl<'a> Worker<'a> {
         self.unsettled_std_entries.sort();
         self.local_news.sort_by_key(|&(c, e, _, _)| (c, e));
         self.deferred_bounds.sort_by_key(|b| b.site());
-        for syms in self.mixin_supers.values_mut() {
-            syms.sort();
-        }
     }
 
     /// The merge of what the body phase made into the arenas the signature phase left, with

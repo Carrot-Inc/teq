@@ -786,13 +786,252 @@ impl<'a> Worker<'a> {
             Some(shared) => shared.entry(c).or_default(),
             None => self.mixin_supers.entry(c).or_default(),
         };
-        if calls.contains(&call) {
-            return;
+        if !calls.contains(&call) {
+            calls.push(call);
         }
-        match call.getter.and_then(|_| calls.iter().position(|k| k.member == call.member && k.getter.is_none())) {
-            Some(at) => calls.insert(at, call),
-            None => calls.push(call),
+    }
+
+    /// The `super` calls of traits in `roots`, each handed to `meet` where dotty's `PostTyper`
+    /// reaches it, which is the order `SuperAccessors` makes the accessors in
+    /// (`superAccessorCall` appends one at a call's first meeting, a default's getter like any
+    /// other). A selection's qualifier comes before the selection; an application's arguments
+    /// before its function, the last clause's first (PostTyper's `Apply` transforms the
+    /// arguments, then the function), an operator's right operand before its left; an inline
+    /// call's own call before its expansion (`Inlined(call, ..)`, `Expansion::replaced`); a
+    /// default's getter where the elaborated application has it, among the arguments or in the
+    /// temporary the call's lifting made for it; every other tree in its written order.
+    ///
+    /// A tree is visited once: one that an expansion holds and the expansion's record holds too
+    /// gives a second visit nothing to meet first. `meet` answers whether the walk may end.
+    /// `bodies` finds a class's typed body, for a closure that becomes a class.
+    pub(super) fn mixin_supers_in(&self, roots: &[SuperVisit], bodies: Option<&FxMap<ClassId, u32>>, meet: &mut dyn FnMut(ClassId, SuperCall) -> bool) {
+        let mut stack: Vec<SuperVisit> = roots.iter().rev().copied().collect();
+        let mut seen: FxMap<TExprId, ()> = FxMap::default();
+        while let Some(v) = stack.pop() {
+            let at = stack.len();
+            match v {
+                SuperVisit::Meet(t, call) => {
+                    if meet(t, call) {
+                        return;
+                    }
+                }
+                SuperVisit::Fun(f) => {
+                    // A default's getter follows its method (`Desugar`'s `defaultGetters`).
+                    let fun = &self.prog.funs[f.idx()];
+                    stack.extend(fun.body.map(SuperVisit::Expr));
+                    stack.extend(fun.defaults.iter().flatten().map(|&d| SuperVisit::Expr(d)));
+                }
+                SuperVisit::Expr(e) => {
+                    if seen.insert(e, ()).is_none() {
+                        self.super_visits(e, bodies, &mut stack);
+                    }
+                }
+            }
+            stack[at..].reverse();
         }
+    }
+
+    /// What the walk of `mixin_supers_in` visits for `e`, in its order.
+    fn super_visits(&self, e: TExprId, bodies: Option<&FxMap<ClassId, u32>>, out: &mut Vec<SuperVisit>) {
+        let prog = &self.prog;
+        let exprs = |l: ast::ListRef, out: &mut Vec<SuperVisit>| out.extend(prog.expr_list(l).iter().map(|&a| SuperVisit::Expr(a)));
+        if prog.is_expansion(e) {
+            if let Some(x) = prog.expansions.get(&e) {
+                exprs(x.replaced, out);
+            }
+        }
+        match prog.expr(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_)
+            | TExpr::Unit | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_)
+            | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null => {}
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::Index(r, _) | TExpr::Spread(r)
+            | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::Lambda(_, r) | TExpr::Splice(r)
+            | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) => out.push(SuperVisit::Expr(r)),
+            TExpr::CallStatic(s, args) | TExpr::NewVia(s, args) => {
+                let sig = self.syms.sym(s).sig.clone();
+                self.super_visit_args(sig.as_deref().map(|g| &g.clauses[..]), args, None, out);
+            }
+            TExpr::New(c, args) => {
+                self.super_visit_args(Some(&self.syms.class(c).ctor[..]), args, None, out);
+                // A closure that becomes a class (a function type that is a class or a trait with
+                // more than its one method): `PostTyper` reaches the closure's body where the
+                // closure stands, and a `super` in it is the trait's (`ExpandSAMs` makes the class
+                // later).
+                if self.sam_classes.contains_key(&c) {
+                    let slot = match bodies {
+                        Some(ix) => ix.get(&c).copied(),
+                        None => self.prog.classes.entries().find(|(_, tc)| tc.id == c).map(|(i, _)| i),
+                    };
+                    if let Some(i) = slot {
+                        out.extend(self.prog.classes[i as usize].methods.iter().map(|&f| SuperVisit::Fun(f)));
+                    }
+                }
+            }
+            TExpr::CallMethod(r, s, args) => {
+                let target = match prog.expr(r) {
+                    TExpr::Super(SuperTarget::Mixin(t)) => Some(t),
+                    _ => None,
+                };
+                let sig = self.syms.sym(s).sig.clone();
+                self.super_visit_args(sig.as_deref().map(|g| &g.clauses[..]), args, target, out);
+                out.push(SuperVisit::Expr(r));
+                out.extend(target.map(|t| SuperVisit::Meet(t, SuperCall::member(s))));
+            }
+            TExpr::CallClosure(f, args) => {
+                exprs(args, out);
+                out.push(SuperVisit::Expr(f));
+            }
+            TExpr::Js(_, l) | TExpr::SeqLit(l) | TExpr::ArrayLit(l) | TExpr::ObjLit(l) => exprs(l, out),
+            // An interpolation's holes are the arguments of one call; a `+` is a call on its
+            // left operand.
+            TExpr::StrConcat(l) => match prog.expr_list(l) {
+                &[left, right] if !self.interpolations.contains_key(&e) => out.extend([SuperVisit::Expr(right), SuperVisit::Expr(left)]),
+                _ => exprs(l, out),
+            },
+            TExpr::Prim(_, left, right) => out.extend([SuperVisit::Expr(right), SuperVisit::Expr(left)]),
+            TExpr::If(c, t, els) => {
+                out.extend([SuperVisit::Expr(c), SuperVisit::Expr(t)]);
+                out.extend(els.map(SuperVisit::Expr));
+            }
+            TExpr::While(a, b) | TExpr::Assign(a, b) => out.extend([SuperVisit::Expr(a), SuperVisit::Expr(b)]),
+            TExpr::Block(stmts, value) => {
+                // A default's getter that the call's lifting bound to a temporary is the getter
+                // on the call's receiver.
+                let lifted = match prog.expr(value) {
+                    TExpr::CallMethod(r, _, args) => match prog.expr(r) {
+                        TExpr::Super(SuperTarget::Mixin(t)) => Some((t, args)),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                for st in prog.stmt_list(stmts) {
+                    match *st {
+                        TStmt::Expr(x) | TStmt::Pat(_, x) => out.push(SuperVisit::Expr(x)),
+                        TStmt::Fun(f) => out.push(SuperVisit::Fun(f)),
+                        TStmt::Val(local, x) => match (lifted, prog.expr(x)) {
+                            (Some((t, args)), TExpr::Default(DefaultOf::Method(m), at, priors))
+                                if at & DEFAULT_RECEIVER == 0 && prog.expr_list(args).iter().any(|&a| matches!(prog.expr(a), TExpr::Local(v) if v == local)) =>
+                            {
+                                exprs(priors, out);
+                                out.push(SuperVisit::Meet(t, SuperCall { member: m, getter: Some(at) }));
+                            }
+                            _ => out.push(SuperVisit::Expr(x)),
+                        },
+                    }
+                }
+                out.push(SuperVisit::Expr(value));
+            }
+            TExpr::Match(scrut, cases) => {
+                out.push(SuperVisit::Expr(scrut));
+                for c in prog.case_list(cases) {
+                    out.extend(c.guard.map(SuperVisit::Expr));
+                    out.push(SuperVisit::Expr(c.body));
+                }
+            }
+            TExpr::Try(i) => {
+                let t = &prog.tries[i as usize];
+                out.push(SuperVisit::Expr(t.body));
+                for c in prog.case_list(t.cases) {
+                    out.extend(c.guard.map(SuperVisit::Expr));
+                    out.push(SuperVisit::Expr(c.body));
+                }
+                out.extend(t.finalizer.map(SuperVisit::Expr));
+            }
+            // A getter with its receiver: the arguments of the earlier clauses, then the receiver.
+            TExpr::Default(of, at, l) => match (prog.expr_list(l), of) {
+                (&[r, ref priors @ ..], DefaultOf::Method(m)) if at & DEFAULT_RECEIVER != 0 => {
+                    out.extend(priors.iter().map(|&a| SuperVisit::Expr(a)));
+                    out.push(SuperVisit::Expr(r));
+                    if let TExpr::Super(SuperTarget::Mixin(t)) = prog.expr(r) {
+                        out.push(SuperVisit::Meet(t, SuperCall { member: m, getter: Some(at & !DEFAULT_RECEIVER) }));
+                    }
+                }
+                _ => exprs(l, out),
+            },
+        }
+    }
+
+    /// The arguments `args` of a call in the walk's order: the last clause's first. A default
+    /// among the arguments of a trait's `super` call is its getter on that receiver.
+    fn super_visit_args(&self, clauses: Option<&[ClauseSig]>, args: ast::ListRef, getters_of: Option<ClassId>, out: &mut Vec<SuperVisit>) {
+        let prog = &self.prog;
+        let items = prog.expr_list(args);
+        let one = |a: TExprId, out: &mut Vec<SuperVisit>| match (getters_of, prog.expr(a)) {
+            (Some(t), TExpr::Default(DefaultOf::Method(m), at, priors)) if at & DEFAULT_RECEIVER == 0 => {
+                out.extend(prog.expr_list(priors).iter().map(|&p| SuperVisit::Expr(p)));
+                out.push(SuperVisit::Meet(t, SuperCall { member: m, getter: Some(at) }));
+            }
+            _ => out.push(SuperVisit::Expr(a)),
+        };
+        match clauses {
+            Some(cs) if cs.len() > 1 && cs.iter().map(|c| c.params.len()).sum::<usize>() == items.len() => {
+                let mut end = items.len();
+                for c in cs.iter().rev() {
+                    let start = end - c.params.len();
+                    items[start..end].iter().for_each(|&a| one(a, out));
+                    end = start;
+                }
+            }
+            _ => items.iter().for_each(|&a| one(a, out)),
+        }
+    }
+
+    /// A trait's `super` calls `noted`, in the order of its super accessors: the order the walk
+    /// of its template meets them (`mixin_supers_in`), the statements in the template's order.
+    /// A trait without a body in this program (a library's) keeps its pickle's order.
+    fn ordered_mixin_supers(&self, tr: ClassId, noted: &[SuperCall], bodies: &FxMap<ClassId, u32>) -> Vec<SuperCall> {
+        let Some(&slot) = bodies.get(&tr) else { return noted.to_vec() };
+        let tc = &self.prog.classes[slot as usize];
+        let mut roots: Vec<(u32, SuperVisit)> = Vec::new();
+        for init in &tc.init {
+            match *init {
+                TInit::Field(s, e) => roots.push((self.syms.sym(s).span.start, SuperVisit::Expr(e))),
+                TInit::Stmt(e) => roots.push((self.prog.span_of(e).map_or(u32::MAX, |(_, span)| span.start), SuperVisit::Expr(e))),
+                TInit::Parent(..) => {}
+            }
+        }
+        for &f in &tc.methods {
+            roots.push((self.syms.sym(self.prog.funs[f.idx()].sym).span.start, SuperVisit::Fun(f)));
+        }
+        roots.sort_by_key(|&(at, _)| at);
+        let roots: Vec<SuperVisit> = roots.into_iter().map(|(_, v)| v).collect();
+        let mut ordered: Vec<SuperCall> = Vec::with_capacity(noted.len());
+        self.mixin_supers_in(&roots, Some(bodies), &mut |t, call| {
+            if t == tr && noted.contains(&call) && !ordered.contains(&call) {
+                ordered.push(call);
+            }
+            ordered.len() == noted.len()
+        });
+        if ordered.len() < noted.len() {
+            // A call the walk met nowhere stands after the walked ones, by its place in the source.
+            let mut rest: Vec<((u32, u32), bool, SuperCall)> =
+                noted.iter().filter(|c| !ordered.contains(c)).map(|&c| (self.super_call_place(tr, c), c.getter.is_none(), c)).collect();
+            debug_assert!(rest.is_empty(), "a trait's super call that the walk of its template did not meet");
+            rest.sort_by_key(|&(place, member, c)| (place, member, c.getter));
+            ordered.extend(rest.into_iter().map(|(_, _, c)| c));
+        }
+        ordered
+    }
+
+    /// Where a trait's `super` call stands in the source: the least file and start of the typed
+    /// expressions that are that call.
+    fn super_call_place(&self, tr: ClassId, call: SuperCall) -> (u32, u32) {
+        let prog = &self.prog;
+        let mut place = (u32::MAX, u32::MAX);
+        for i in 0..prog.exprs.len() as u32 {
+            let e = TExprId(i);
+            let is_call = match (prog.expr(e), call.getter) {
+                (TExpr::CallMethod(r, s, _), None) => s == call.member && matches!(prog.expr(r), TExpr::Super(SuperTarget::Mixin(t)) if t == tr),
+                (TExpr::Default(DefaultOf::Method(m), at, _), Some(index)) => m == call.member && at & !DEFAULT_RECEIVER == index,
+                _ => false,
+            };
+            if is_call {
+                if let Some((file, span)) = prog.span_of(e) {
+                    place = place.min((file.0, span.start));
+                }
+            }
+        }
+        place
     }
 
     /// The member of class `b` a call of `member` through `super` may run: of an overloaded
@@ -858,6 +1097,18 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        // Each trait's calls in the order of its super accessors, for every reader of the list.
+        let unordered: Vec<ClassId> = calls.iter().filter(|(_, m)| m.len() > 1).map(|(&tr, _)| tr).collect();
+        let bodies: FxMap<ClassId, u32> = if unordered.is_empty() { FxMap::default() } else { self.prog.classes.entries().map(|(i, tc)| (tc.id, i)).collect() };
+        for tr in unordered {
+            let ordered = self.ordered_mixin_supers(tr, &calls[&tr], &bodies);
+            if let Some(mine) = self.mixin_supers.get_mut(&tr) {
+                if mine.len() == ordered.len() && *mine != ordered {
+                    mine.clone_from(&ordered);
+                }
+            }
+            calls.insert(tr, ordered);
+        }
         let (upto, seen) = std::mem::take(&mut self.mixins_bound);
         let changed: FxMap<ClassId, ()> = calls.iter().filter(|&(tr, m)| seen.get(tr) != Some(m)).map(|(&tr, _)| (tr, ())).chain(seen.keys().filter(|tr| !calls.contains_key(tr)).map(|&tr| (tr, ()))).collect();
         let syms = &self.syms;
@@ -880,7 +1131,10 @@ impl<'a> Worker<'a> {
             let inherited: Vec<ClassId> =
                 info.superclass.map_or(Vec::new(), |s| self.syms.class(s).base_types.iter().map(|&(b, _)| b).collect());
             let mut accessors = Vec::new();
-            for (at, &tr) in bases.iter().enumerate().skip(1) {
+            // Trait by trait from the first mixed in to the last, as `ResolveSuper.transformTemplate`
+            // writes them (`mixins.flatMap(superAccessors)`; `SymUtils.mixins`: the traits the
+            // superclass does not bring, the linearisation's order reversed).
+            for (at, &tr) in bases.iter().enumerate().skip(1).rev() {
                 if inherited.contains(&tr) {
                     continue;
                 }
@@ -10178,4 +10432,13 @@ struct NonCyclic {
     variance: i8,
     where_: &'static str,
     last_checked: TypeId,
+}
+
+/// A step of the walk that orders a trait's `super` calls (`Worker::mixin_supers_in`): a tree to
+/// visit, a local method (its body, then its defaults), or a call met.
+#[derive(Clone, Copy)]
+pub(super) enum SuperVisit {
+    Expr(TExprId),
+    Fun(FunId),
+    Meet(ClassId, SuperCall),
 }

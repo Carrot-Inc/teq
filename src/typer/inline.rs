@@ -1180,8 +1180,9 @@ impl<'a> Worker<'a> {
         if !self.jvm && !body.transparent {
             self.inline_unboxes.push((result.0, ret_ty));
         }
-        if self.records_expansions() {
-            self.prog.note_expansion(result.0, Expansion { callee: sym });
+        let replaced = self.replaced_call(call, sig, args);
+        if self.records_expansions() || !replaced.is_empty() {
+            self.prog.note_expansion(result.0, Expansion { callee: sym, replaced });
         } else {
             self.prog.mark_expansion(result.0);
         }
@@ -2506,6 +2507,40 @@ impl<'a> Worker<'a> {
     #[inline]
     pub fn records_expansions(&self) -> bool {
         self.inline.outlines
+    }
+
+    /// The call an expansion replaces, kept with the expansion where one of the call's own
+    /// arguments or its receiver holds a trait's `super` call (`Expansion::replaced`): the
+    /// arguments, the last clause's first, then the receiver, which is the order dotty's
+    /// `PostTyper` visits the call in before its expansion (`Inlined(call, ..)`). The expansion
+    /// holds an `inline` parameter's argument where the body uses it, or nowhere.
+    fn replaced_call(&mut self, call: &MethodCall, sig: &MethodSig, args: &[TExprId]) -> ListRef {
+        if !self.this_class().is_some_and(|c| self.syms.class(c).kind == ClassKind::Trait) {
+            return ListRef::EMPTY;
+        }
+        let mut own: Vec<TExprId> = Vec::with_capacity(args.len() + 2);
+        if sig.clauses.len() > 1 && sig.clauses.iter().map(|c| c.params.len()).sum::<usize>() == args.len() {
+            let mut end = args.len();
+            for c in sig.clauses.iter().rev() {
+                own.extend_from_slice(&args[end - c.params.len()..end]);
+                end -= c.params.len();
+            }
+        } else {
+            own.extend_from_slice(args);
+        }
+        own.extend(call.ext_recv.map(|(e, _)| e));
+        own.extend(call.recv);
+        let roots: Vec<super::check::SuperVisit> = own.iter().map(|&e| super::check::SuperVisit::Expr(e)).collect();
+        let mut holds = false;
+        self.mixin_supers_in(&roots, None, &mut |_, _| {
+            holds = true;
+            true
+        });
+        if holds {
+            self.prog.list(&own)
+        } else {
+            ListRef::EMPTY
+        }
     }
 
     pub fn mark_leaf(&mut self, e: TExprId) {

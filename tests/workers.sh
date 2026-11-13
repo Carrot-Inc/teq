@@ -552,6 +552,13 @@ same_as_one_worker() {
 same_as_one_worker inline_names -o tests/workers/inline_names
 same_as_one_worker inline_names_jvm -o tests/workers/inline_names --target jvm
 same_as_one_worker inline_names_split --split tests/workers/inline_names
+# A trait's super accessors stand in the order scalac's `SuperAccessors` makes them, the order of the trait's
+# `super` calls in its source (an application's arguments before its function, an inline call's own
+# arguments where the call stands, a default's getter where the application has it), at every worker count:
+# the class files, the pickles and the JavaScript of several workers are one worker's.
+same_as_one_worker super_accessor_order_jvm -o tests/workers/super_accessor_order --target jvm
+same_as_one_worker super_accessor_order_products --products tests/workers/super_accessor_order --target jvm
+same_as_one_worker super_accessor_order_split --split tests/workers/super_accessor_order
 
 # A member's result type written `@uncheckedVariance`, its signature completed outside the
 # loader's lock by whichever worker reaches it first while another checks its class's

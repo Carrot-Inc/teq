@@ -893,7 +893,7 @@ lambda-serialization-security.scala	fail	interp:fail	run: exit 1: Exception in t
 lambda-serialization.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.io.NotSerializableException: C$$Lambda/0x…
 lambda-unit.scala	pass	interp:pass	
 lazy-exprs.scala	pass	interp:fail	
-lazy-impl.scala	fail	interp:fail	output: line 1: the .check has 'initialize x', the program printed 'WARNING: A terminally deprecated method in sun.misc.Unsafe has been called'
+lazy-impl.scala	pass	interp:fail	
 lazy-implicit-lists.scala	pass	interp:fail	
 lazy-implicit-nums.scala	pass	interp:fail	
 lazy-override-run.scala	pass	interp:fail	

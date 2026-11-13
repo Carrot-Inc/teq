@@ -126,6 +126,9 @@ trait Chained extends java.util.function.IntConsumer:
 trait Twice extends java.util.Iterator[Int] with java.util.function.Predicate[Int]:
   override def remove(): Unit = super.remove()
   override def negate(): java.util.function.Predicate[Int] = super.negate()
+trait TwiceBack extends java.util.Iterator[Int] with java.util.function.Predicate[Int]:
+  override def negate(): java.util.function.Predicate[Int] = super.negate()
+  override def remove(): Unit = super.remove()
 abstract class Broad extends Start with java.util.function.IntConsumer:
   def accept(x: Int): Unit = ()
 class Within extends Broad with java.util.Iterator[Int] with java.util.function.IntConsumer:
@@ -136,6 +139,7 @@ class Three extends Broad with Gentle with Denying with Chained
 class ThreeBack extends Broad with Chained with Denying with Gentle
 class ThreeMixed extends Broad with Denying with Chained with Gentle
 class OneTrait extends Start with Twice
+class OneTraitBack extends Start with TwiceBack
 @main def run(): Unit =
   def show(c: Class[?]): String = c.getSimpleName + ":" + c.getInterfaces.map(_.getSimpleName).mkString(",")
   val classes = List(classOf[Plain], classOf[Below], Single.getClass, classOf[Again], classOf[Mixed], classOf[Wide],
@@ -146,7 +150,7 @@ class OneTrait extends Start with Twice
     classOf[InsideFirst], classOf[Reached], classOf[ReachedLate], classOf[Built], classOf[BuiltBody], classOf[BuiltTwice], classOf[BuiltLambda],
     classOf[Idle], classOf[IdleFirst], classOf[Plainly], classOf[Given], classOf[Within])
   println(ordered.map(show).mkString(" "))
-  val mixed = List(classOf[Mixing], classOf[MixingBack], classOf[Three], classOf[ThreeBack], classOf[ThreeMixed], classOf[OneTrait])
+  val mixed = List(classOf[Mixing], classOf[MixingBack], classOf[Three], classOf[ThreeBack], classOf[ThreeMixed], classOf[OneTrait], classOf[OneTraitBack])
   println(mixed.map(show).mkString(" "))
   println(List(new Below().m, new Again().m, new Picked().m, new Mixed().m, new Wide().v, new Unboxed().m, new Short().get(3)).mkString(" "))
   new Steps().remove()

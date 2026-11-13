@@ -354,6 +354,7 @@ jvm/scala2_traits_mixed	pass	-
 jvm/scala2_traits_only	pass	-	
 jvm/scala2_traits_padded	pass	-	
 jvm/string_identity	pass	-	
+jvm/super_accessor_order	pass	-	
 jvm/tap_traverse_error_type	pass	-	
 jvm/tapir_schema_derivation	pass	-	
 jvm/trait_given_defs	pass	-	

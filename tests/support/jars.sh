@@ -1299,6 +1299,8 @@ maven_extras() {
     "$M2/org/scala-sbt/test-interface/1.0/test-interface-1.0.jar" \
     "$M2/org/scala-sbt/worker/2.0.8/worker-2.0.8.jar" \
     "$M2/org/scala-sbt/gson/shaded-gson/2.13.1/shaded-gson-2.13.1.jar" \
+    "$M2/org/slf4j/slf4j-api/2.0.18/slf4j-api-2.0.18.jar" \
+    "$M2/org/slf4j/slf4j-simple/2.0.18/slf4j-simple-2.0.18.jar" \
     "$M2/org/portable-scala/portable-scala-reflect_2.13/1.1.3/portable-scala-reflect_2.13-1.1.3.jar" \
     "$M2/org/scalameta/munit_sjs1_3/1.2.1/munit_sjs1_3-1.2.1.jar" \
     "$M2/org/scalameta/munit-diff_sjs1_3/1.2.1/munit-diff_sjs1_3-1.2.1.jar" \

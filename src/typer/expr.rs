@@ -1758,7 +1758,7 @@ impl<'a> Worker<'a> {
             self.mark_leaf(te);
         }
         if let Some(callee) = callee {
-            self.prog.note_expansion(te, crate::tir::Expansion { callee });
+            self.prog.note_expansion(te, crate::tir::Expansion { callee, replaced: crate::ast::ListRef::EMPTY });
         }
         if let (true, TExpr::TypeTest(_, t)) = (test, self.prog.expr(te)) {
             self.prog.leaf_tests.insert(t, ());

@@ -912,8 +912,11 @@ def patmat_lines(diags):
 def run_program(ctx, test, scratch, products):
     """`java Test` over the class files, as dotty's child JVM runs it (RunnerOrchestration.scala at the tag:
     its arguments, stdout and stderr one stream). (ok, first line, output lines)."""
+    # From JDK 24 the JVM warns on stderr of a program's own use of `sun.misc.Unsafe` (run/lazy-impl.scala): the
+    # option keeps a test's verdict the same on every JDK.
+    unsafe = ["--sun-misc-unsafe-memory-access=allow"] if ctx.jdk >= 24 else []
     cmd = ["java", "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8", "-Duser.language=en",
-           "-Duser.country=US", "-Xmx1g", "-XX:-UsePerfData", "-cp", products + ":" + ctx.lib, "Test"]
+           "-Duser.country=US", "-Xmx1g", "-XX:-UsePerfData"] + unsafe + ["-cp", products + ":" + ctx.lib, "Test"]
     status, text, secs = run(cmd, os.path.join(scratch, "java.out"), 0, RUN_LIMIT, {"LC_ALL": "C.UTF-8"}, cwd=scratch)
     return program_outcome(test, status, text, "jvm")
 

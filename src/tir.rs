@@ -370,20 +370,6 @@ impl SuperCall {
     }
 }
 
-/// A member's getters before the member, as `SuperAccessors` declares a getter's accessor ahead of
-/// the member's: the order a merge sorts a trait's calls in is the one a single typing notes.
-impl Ord for SuperCall {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.member, self.getter.is_none(), self.getter).cmp(&(other.member, other.getter.is_none(), other.getter))
-    }
-}
-
-impl PartialOrd for SuperCall {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum TStmt {
     Expr(TExprId),
@@ -1232,10 +1218,16 @@ pub struct Program {
     pub block_class_traits: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
-/// An inline method's expansion: the method expanded.
+/// An inline method's expansion: the method expanded, and the call the expansion replaced.
 #[derive(Clone, Copy, Debug)]
 pub struct Expansion {
     pub callee: SymId,
+    /// The call the expansion stands for, as dotty's `Inlined(call, ..)` keeps it: the call's own
+    /// typed arguments and its receiver in the order `PostTyper` visits the call (the arguments,
+    /// then the function's qualifier). Empty where the call was not recorded: one is where an
+    /// argument or the receiver holds a trait's `super` call (`Worker::replaced_call`), for the
+    /// order of the trait's super accessors, which is the call's and not the expansion's.
+    pub replaced: ListRef,
 }
 
 impl Program {

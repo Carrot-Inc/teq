@@ -77,6 +77,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - A build's warnings and errors, their order and its exit are the same at every worker count: every typing worker
   reads the build's warning flags (`--wtostring-interpolated`, `--language` among them), and the diagnostics are
   those of one worker's walk, the build typed again by one worker where the order cannot be kept.
+- A trait's `super` calls give the same class files, JavaScript and TASTy at every worker count: the accessors a
+  trait takes for them, and the forwarders of the classes that mix it in, stood in one order when one worker
+  built the program and in another when several did. They stand in scalac's order now: the order of the calls
+  in the trait's source, an application's arguments before its function.
 - A build with several workers no longer refuses a member that the JDK's class has and the standard library's
   declaration of it leaves out (`getClass.getResource`: `value getResource is not a member of Class[_]`;
   `ArrayList.trimToSize`) where several files meet the member at the same moment: such a build failed in most

@@ -326,7 +326,6 @@ junitForwarders	java source: teq reads none
 lambda-serialization-gc.scala	lambda-serialization-gc.scala:28:98: ClassLoader is abstract; it cannot be instantiated
 lambda-serialization-security.scala	run: exit 1: Exception in thread "main" java.io.NotSerializableException: Test$$$Lambda/0x…
 lambda-serialization.scala	run: exit 1: Exception in thread "main" java.io.NotSerializableException: C$$Lambda/0x…
-lazy-impl.scala	output: line 1: the .check has 'initialize x', the program printed 'WARNING: A terminally deprecated method in sun.misc.Unsafe has been called'
 llift.scala	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError: T1$134qwe6_1093: method 'void <init>()' not found
 loops-alt.scala	loops-alt.scala:19:12: no given instance of type Label[Unit] was found for parameter label
 loops.scala	timeout: the program: over 45 s
