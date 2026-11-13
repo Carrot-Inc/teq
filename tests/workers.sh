@@ -559,6 +559,11 @@ same_as_one_worker inline_names_split --split tests/workers/inline_names
 same_as_one_worker super_accessor_order_jvm -o tests/workers/super_accessor_order --target jvm
 same_as_one_worker super_accessor_order_products --products tests/workers/super_accessor_order --target jvm
 same_as_one_worker super_accessor_order_split --split tests/workers/super_accessor_order
+# A module's exports stand in the source order of their definitions (an object written after its enum where it
+# is written), and "several entry points" names the entry points in the order they are written and stands at the
+# first: the JavaScript and the error of several workers are one worker's.
+same_as_one_worker exports_in_source_order -o tests/workers/exports_in_source_order
+same_output entry_points_in_source_order 1 compiler build tests/workers/entry_points_in_source_order -o "$work/entry_points_in_source_order.js"
 
 # A member's result type written `@uncheckedVariance`, its signature completed outside the
 # loader's lock by whichever worker reaches it first while another checks its class's

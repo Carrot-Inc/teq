@@ -743,11 +743,41 @@ check "manifest_check: a native suite in another floor than its record's" "$(che
 check "manifest_check: the emulated suite" "$(checked linux-emulated)" 0
 sed 's/^tuple qemu-user .*/tuple qemu-user 9.0 other/' "$m/linux-emulated" > "$m/linux-emulated-qemu"
 check "manifest_check: an emulated suite under another qemu-user than the toolchain's" "$(checked linux-emulated-qemu)" 1
+# The suite's counts of a run held to its list, `cases: <n> pass, <m> fail as tests/pending/cases.txt lists`.
+listed='s/passed: 3 passed, 0 failed,/passed: cases: 3 pass, 2 fail as tests\/pending\/cases.txt lists,/'
+sed "$listed" "$m/linux-native" > "$m/linux-native-listed"
+check "manifest_check: the native suite held to its list" "$(checked linux-native-listed)" 0
+sed "$listed" "$m/linux-emulated" > "$m/linux-emulated-listed"
+check "manifest_check: the emulated suite held to its list" "$(checked linux-emulated-listed)" 0
+sed 's/passed: 3 passed, 0 failed,/passed: cases: 0 pass, 2 fail as tests\/pending\/cases.txt lists,/' "$m/linux-native" > "$m/linux-native-none"
+check "manifest_check: a listed suite of which nothing passed" "$(checked linux-native-none)" 1
+sed 's/passed: 3 passed, 0 failed,/passed: cases: 2 fail and are not in tests\/pending\/cases.txt:,/' "$m/linux-native" > "$m/linux-native-unlisted"
+check "manifest_check: a suite with a failure its list lacks" "$(checked linux-native-unlisted)" 1
+checked_x64() {
+  (. bench/ship-manifest.sh && manifest_header() { echo linux-x86_64; } && manifest_glibc() { echo "2.28 needs libc.so.6"; } && manifest_carries() { :; } &&
+    manifest_check "$m/teq" "$m/$1" linux-x86_64 "$head_") > "$m/out" 2>&1; echo $?
+}
+manifest linux-x64 x86_64-unknown-linux-gnu "$own" "glibc 2.28 needs libc.so.6" "suite $msha tests/run.sh passed: 3 passed, 0 failed, 0 of them skipped for missing jars"
+check "manifest_check: a Linux x86-64 binary's suite" "$(checked_x64 linux-x64)" 0
+sed 's/passed: 3 passed, 0 failed,/passed: cases: 3 pass, 2 fail as tests\/pending\/cases.txt lists,/' "$m/linux-x64" > "$m/linux-x64-listed"
+check "manifest_check: a Linux x86-64 binary's suite held to its list" "$(checked_x64 linux-x64-listed)" 0
+grep -v '^suite ' "$m/linux-x64" > "$m/linux-x64-none"
+check "manifest_check: a Linux x86-64 binary with no suite recorded" "$(checked_x64 linux-x64-none)" 1
 grep -v '^suite ' "$m/linux-native" > "$m/linux-built"
 printf 'suite %s tests/run.sh passed: 3 passed, 0 failed, 0 of them skipped for missing jars, outputs 3 of 3 as the native suite'"'"'s, natively in floor@sha256:f over libc6.deb s\n' "$msha" > "$m/record"
 cp "$m/teq" "$m/b" && grep -v '^suite' "$m/linux-native" > "$m/b.manifest"
 check "manifest_attest: the record given to the manifest" "$( (. bench/ship-manifest.sh && manifest_attest "$m/b" "$m/record") > /dev/null 2>&1; echo $?)/$(grep -c '^suite ' "$m/b.manifest")" "0/1"
 check "manifest_attest: a second record refused" "$( (. bench/ship-manifest.sh && manifest_attest "$m/b" "$m/record") > /dev/null 2>&1; echo $?)" 1
+# The staged set's check refuses a version that is out, but for a dry run, which rehearses the version the
+# checkout's files name; the stage's job hands the admission's word to it.
+guard=$(grep -F 'release_unserved "$version"' integrations/sbt/binary/check.sh)
+check "check.sh: one rule on a version that is out" "$(grep -c . <<< "$guard")" 1
+served() { (version=9.9.9; release_unserved() { return 1; }; fail() { echo refused; exit 1; }; eval "$guard"; echo passed) 2>&1 | tail -1; }
+check "check.sh: a version that is out is refused" "$(served)" refused
+check "check.sh: a version that is out, in a dry run" "$(TEQ_DRY=true served)" passed
+check "check.sh: TEQ_DRY of another value refuses" "$(TEQ_DRY=1 served)" refused
+check "the stage's job gives its step the admission's dry" \
+  "$(grep -A3 -F 'bench/actions/step.sh stage out/actions/carry' .github/workflows/release.yml | grep -c -F 'TEQ_DRY: ${{ needs.admit.outputs.dry }}')" 1
 
 # --- tests/support/identity.sh across machines, with a stand-in compiler: its outputs a digest of the source,
 # STANDIN_DIFF=<program> another for that one, STANDIN_KILL=<program> a run that dies of a signal.

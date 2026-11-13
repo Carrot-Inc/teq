@@ -3304,9 +3304,7 @@ impl<'a> Worker<'a> {
         self.prog.top_funs.own_mut().dedup();
         self.prog.top_vals.sort();
         self.prog.top_vals.own_mut().dedup();
-        self.prog.js_exports.sort_by_key(|&(s, _)| s);
         self.prog.template_calls.sort();
-        self.entry_points.sort();
         self.dispatch_pending.sort();
         self.named_like.sort();
         self.renamed_roots.sort();

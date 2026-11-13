@@ -630,7 +630,10 @@ jobs:
           merge-multiple: true
       - run: timeout 300 bench/actions/toolchain.sh check
       - run: timeout 1200 bench/actions/jars.sh fetch
+      # A dry run's set is checked as a release's but for its version, which may be out already.
       - run: bench/actions/step.sh stage out/actions/carry out/actions/staged.tar out/actions/in/*.tar
+        env:
+          TEQ_DRY: ${{ needs.admit.outputs.dry }}
       # The release's assets as the draft will hold them: the five or none (a dry run's held back among them).
       - run: |
           mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged

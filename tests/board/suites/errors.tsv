@@ -163,6 +163,8 @@ dynamic_named_missing_given	fail	-	missing '11:27: error:'
 encoded_key_script	pass	-	
 end_marker_duplicate	fail	-	exit code 0
 entry_points	pass	-	
+entry_points_source_order	pass	-	
+entry_points_source_order.check	pass	-	
 enum_case_infix_search	pass	-	
 enum_case_override_nothing	pass	-	
 enum_case_parents	pass	-	

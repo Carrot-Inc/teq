@@ -9,6 +9,7 @@ exit	pass	-
 export statement of exports	pass	-	
 exports	pass	-	
 exports_toplevel	pass	-	
+exports_written_order	pass	-	
 facade_parenthesized_arguments	fail	-	< c.txt
 first line of imports	pass	-	
 first line of jsvalues	pass	-	

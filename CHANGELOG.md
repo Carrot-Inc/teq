@@ -90,6 +90,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   trait takes for them, and the forwarders of the classes that mix it in, stood in one order when one worker
   built the program and in another when several did. They stand in scalac's order now: the order of the calls
   in the trait's source, an application's arguments before its function.
+- A JavaScript module's exports and the error `several entry points` no longer depend on the worker count: an
+  exported object written after its enum changed places with the exports before it when several workers built
+  the module, and the error named the entry points in another order and stood at another of them. Both follow
+  the order in which the definitions of a file, or of a `package` block, are written.
 - A build with several workers no longer refuses a member that the JDK's class has and the standard library's
   declaration of it leaves out (`getClass.getResource`: `value getResource is not a member of Class[_]`;
   `ArrayList.trimToSize`) where several files meet the member at the same moment: such a build failed in most

@@ -239,8 +239,12 @@ manifest_check() {
       glibc=$(manifest_glibc "$binary") || return 1
       [ "$(printf '%s\n%s\n' "${glibc%% *}" "$release_glibc" | sort -V | tail -1)" = "$release_glibc" ] || { echo "$binary loads on glibc ${glibc%% *} and later, past the floor $release_glibc" >&2; return 1; }
       [ "$(manifest_get "$manifest" glibc)" = "$glibc" ] || { echo "$binary needs glibc $glibc, its manifest says '$(manifest_get "$manifest" glibc)'" >&2; return 1; }
-      # The suite's counts as tests/run.sh prints them, some passed and none failed, the skips counted.
+      # The suite's counts as tests/run.sh prints them, some passed and none failed, the skips counted. A run
+      # held to its list (tests/support/pending.py) ends `cases: <n> pass, <m> fail as tests/pending/cases.txt
+      # lists`: n passed and no failure the list lacks, read here as the counts of a run with no list.
       suite=$(manifest_get "$manifest" suite)
+      local listed='^(.* tests/run\.sh passed: )cases: ([0-9]+) pass, [0-9]+ fail as tests/pending/cases\.txt lists(, .*)$'
+      [[ $suite =~ $listed ]] && suite="${BASH_REMATCH[1]}${BASH_REMATCH[2]} passed, 0 failed${BASH_REMATCH[3]}"
       local counts='([0-9]+) passed, 0 failed, ([0-9]+) of them skipped for missing jars' same='outputs ([0-9]+) of ([0-9]+) as the native suite'\''s'
       if [ "$classifier" = linux-aarch_64 ]; then
         # Emulated, under the qemu-user and over the sysroot the build's toolchain records; or natively, in the

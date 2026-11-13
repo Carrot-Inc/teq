@@ -46,5 +46,6 @@ for c in $set; do
 done
 [ "$(sort -u <<< "${runs%$'\n'}" | wc -l)" -eq 1 ] || fail "the binaries were staged by different invocations: $(sort -u <<< "$runs" | tr '\n' ' ')"
 
-release_unserved "$version" || fail "$version cannot be published"
+# A dry run rehearses the version the checkout's files name, which may be out already, and publishes nothing.
+[ "${TEQ_DRY:-}" = true ] || release_unserved "$version" || fail "$version cannot be published"
 echo "check: the set checks out as the release $version of $head, not published: $(echo $set)"

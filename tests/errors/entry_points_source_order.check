@@ -1,0 +1,4 @@
+tests/errors/entry_points_source_order.scala:13:8: error: several entry points: Kind.main, entry_points_source_order$package.main, Later.main, Last.main, Sort.main; choose one with --main
+  object Kind extends Runs
+         ^^^^
+1 error found

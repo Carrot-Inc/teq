@@ -122,7 +122,31 @@ impl<'a> Emitter<'a> {
 
     /// The JS expression of each `@jsExport` definition with its exported name.
     fn exported_values(&mut self) -> Vec<(String, Name)> {
-        let exports = self.prog.js_exports.clone();
+        // In the order the exported definitions are written, whatever order they were registered
+        // in: a file's rank, then the definitions from the file's outermost one down to the
+        // exported one, each by its order among the definitions of its body, a definition before
+        // its members. The order is the definitions' and not the symbols' starts: an object
+        // written after its enum or its case class shares the record made with that class and
+        // stands where it is written.
+        let mut exports = self.prog.js_exports.clone();
+        exports.sort_by_cached_key(|&(sym, _)| {
+            let info = self.syms.sym(sym);
+            let (file, def, start, mut owner) = match info.kind {
+                SymKind::Object(c) => {
+                    let k = self.syms.class(c);
+                    (k.file, k.def, k.span.start, k.owner)
+                }
+                _ => (info.file, info.def, info.span.start, info.owner),
+            };
+            let mut path = vec![def.map_or(u32::MAX, |d| d.0)];
+            while let Owner::Class(k) = owner {
+                path.push(self.syms.class(k).def.map_or(u32::MAX, |d| d.0));
+                owner = self.syms.class(k).owner;
+            }
+            path.reverse();
+            let (rank, at) = self.syms.place(file, def, start);
+            (rank, file.0, path, at, sym.0)
+        });
         exports
             .into_iter()
             .map(|(sym, name)| {

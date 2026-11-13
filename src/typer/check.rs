@@ -1285,11 +1285,18 @@ impl<'a> Worker<'a> {
         if !self.choose_entry {
             return;
         }
-        let mut candidates: Vec<(SymId, Option<ClassId>)> =
-            self.entry_points.iter().copied().filter(|&(s, _)| self.syms.sym(s).is_main).collect();
+        // The entry points in the order they are written, a file's rank and then the definitions
+        // from the file's outermost one down to the entry point's (`entry_point_path`): the
+        // order they are named in and the place an error about them stands at.
+        let mut entries: Vec<(SymId, Option<ClassId>)> = self.entry_points.clone();
+        entries.sort_by_cached_key(|&(s, object)| {
+            let (file, span) = self.entry_point_site(s, object);
+            (self.syms.file_rank(file), file, self.entry_point_path(s, object), span.start, s)
+        });
+        let mut candidates: Vec<(SymId, Option<ClassId>)> = entries.iter().copied().filter(|&(s, _)| self.syms.sym(s).is_main).collect();
         // A name chooses among every entry point, the `main` an object inherits included.
         if candidates.is_empty() || self.main_name.is_some() {
-            candidates = self.entry_points.clone();
+            candidates = entries;
         }
         if let Some(name) = self.main_name {
             // A qualified name is the entry point's class as `java` runs it (`app.Main`, or
@@ -1418,11 +1425,38 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Where an entry point is written: its method, or the object that inherits it. An object
+    /// written after its enum or its case class shares the record made with that class, whose
+    /// place is the class's: the object's is its own definition's.
     fn entry_point_site(&self, sym: SymId, object: Option<ClassId>) -> (FileId, Span) {
         match object {
-            Some(c) => (self.syms.class(c).file, self.syms.class(c).span),
+            Some(c) => {
+                let info = self.syms.class(c);
+                let span = match info.def {
+                    Some(d) if !self.in_jar(info.file) => self.ast(info.file).def(d).span,
+                    _ => info.span,
+                };
+                (info.file, span)
+            }
             None => (self.syms.sym(sym).file, self.syms.sym(sym).span),
         }
+    }
+
+    /// The definitions from the file's outermost one down to an entry point's own, the method's
+    /// or the inheriting object's, each by its order among the definitions of its body: a
+    /// definition stands before its members and where it is written.
+    fn entry_point_path(&self, sym: SymId, object: Option<ClassId>) -> Vec<u32> {
+        let (def, mut owner) = match object {
+            Some(c) => (self.syms.class(c).def, self.syms.class(c).owner),
+            None => (self.syms.sym(sym).def, self.syms.sym(sym).owner),
+        };
+        let mut path = vec![def.map_or(u32::MAX, |d| d.0)];
+        while let Owner::Class(k) = owner {
+            path.push(self.syms.class(k).def.map_or(u32::MAX, |d| d.0));
+            owner = self.syms.class(k).owner;
+        }
+        path.reverse();
+        path
     }
 
     fn entry_point_name(&self, sym: SymId, object: Option<ClassId>) -> String {
