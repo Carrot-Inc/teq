@@ -1,0 +1,4 @@
+tests/errors/entry_points_source_order_def_first.scala:4:5: error: several entry points: entry_points_source_order_def_first$package.main, Held.main; choose one with --main
+  def main(args: Array[String]): Unit = println("package")
+      ^^^^
+1 error found

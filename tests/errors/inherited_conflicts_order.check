@@ -1,0 +1,22 @@
+tests/errors/inherited_conflicts_order.scala:14:7: error: class Three inherits conflicting members: m2 in trait Early and m2 in trait Late; declare an override in class Three
+  class Three extends Early with Late
+        ^^^^^
+tests/errors/inherited_conflicts_order.scala:14:7: error: class Three inherits conflicting members: m3 in trait Early and m3 in trait Late; declare an override in class Three
+  class Three extends Early with Late
+        ^^^^^
+tests/errors/inherited_conflicts_order.scala:14:7: error: class Three inherits conflicting members: m1 in trait Early and m1 in trait Late; declare an override in class Three
+  class Three extends Early with Late
+        ^^^^^
+tests/errors/inherited_conflicts_order.scala:19:7: error: class Owners inherits conflicting members: y in trait Mid and y in trait Last; declare an override in class Owners
+  class Owners extends First with Mid with Last
+        ^^^^^^
+tests/errors/inherited_conflicts_order.scala:19:7: error: class Owners inherits conflicting members: x in trait First and x in trait Mid; declare an override in class Owners
+  class Owners extends First with Mid with Last
+        ^^^^^^
+tests/errors/inherited_conflicts_order.scala:23:7: error: class Names inherits conflicting members: g in trait Plain and g in trait Loaded; declare an override in class Names
+  class Names extends Plain with Loaded
+        ^^^^^
+tests/errors/inherited_conflicts_order.scala:23:7: error: class Names inherits conflicting members: f in trait Plain and f in trait Loaded; declare an override in class Names
+  class Names extends Plain with Loaded
+        ^^^^^
+7 errors found

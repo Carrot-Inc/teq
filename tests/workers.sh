@@ -564,6 +564,9 @@ same_as_one_worker super_accessor_order_split --split tests/workers/super_access
 # first: the JavaScript and the error of several workers are one worker's.
 same_as_one_worker exports_in_source_order -o tests/workers/exports_in_source_order
 same_output entry_points_in_source_order 1 compiler build tests/workers/entry_points_in_source_order -o "$work/entry_points_in_source_order.js"
+# A class's inherited conflicts stand in the order of the trait mixed in last and of that trait's declarations:
+# the errors of several workers are one worker's, in that order.
+same_output inherited_conflicts_order 3 compiler check tests/workers/inherited_conflicts_order
 
 # A member's result type written `@uncheckedVariance`, its signature completed outside the
 # loader's lock by whichever worker reaches it first while another checks its class's

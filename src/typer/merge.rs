@@ -3308,7 +3308,6 @@ impl<'a> Worker<'a> {
         self.dispatch_pending.sort();
         self.named_like.sort();
         self.renamed_roots.sort();
-        self.inherited_pairs.sort();
         self.member_cycles.sort();
         self.unsettled_std_entries.sort();
         self.local_news.sort_by_key(|&(c, e, _, _)| (c, e));

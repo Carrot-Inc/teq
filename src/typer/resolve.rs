@@ -8802,31 +8802,52 @@ impl<'a> Worker<'a> {
 
     /// The pairs of methods, and of givens that may be deferred ones, that
     /// `check_conflicting_members` left open: a conflict if a concrete one of `first` takes the
-    /// parameters of a concrete one of `second`.
+    /// parameters of a concrete one of `second`. A class's conflicts are reported in the order
+    /// dotty's `OverridingPairs.Cursor` meets its pairs (`RefChecks.checkAllOverrides`), whatever
+    /// order the list has them in: the concrete overriding members before the deferred ones; an
+    /// overriding member by its owner's place in the class's linearisation, then by its own place
+    /// among its owner's declarations; the overridden one the same way after it. The overriding
+    /// side is `first`, the base the linearisation meets first, and a name's place is that of
+    /// its alternative that conflicts.
     pub(super) fn check_inherited_conflicts(&mut self) {
+        type Place = (u32, FileId, u32, u32);
+        type Pair = (bool, usize, usize, usize, usize);
+        let mut conflicts: Vec<(Place, Pair, (ClassId, Name, ClassId, ClassId, bool))> = Vec::new();
         for (c, name, first, second, marked) in std::mem::take(&mut self.inherited_pairs) {
             if self.record_synthesizes(c, name) {
                 continue;
             }
             let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
             let Some(&(_, second_ty)) = bases.iter().find(|&&(b, _)| b == second) else { continue };
-            let mut conflict = false;
+            let rank = |b: ClassId| bases.iter().position(|&(x, _)| x == b).unwrap_or(usize::MAX);
+            let declared = |t: &Self, owner: ClassId, m: SymId| t.syms.class(owner).member_order.iter().position(|&x| x == m).unwrap_or(usize::MAX);
+            let mut conflict: Option<Pair> = None;
             let mut i = 0;
             while let Some(a) = self.own_alternative(first, name, i) {
                 i += 1;
                 let mut j = 0;
                 while let Some(b) = self.own_alternative(second, name, j) {
                     j += 1;
-                    conflict |= !self.is_deferred_given(a)
-                        && !self.is_abstract_member(a)
+                    let deferred = self.is_deferred_given(a) || self.is_abstract_member(a);
+                    if !deferred
                         && !self.is_deferred_given(b)
                         && !self.is_abstract_member(b)
-                        && self.inherited_members_match(c, &bases, a, b, second_ty);
+                        && self.inherited_members_match(c, &bases, a, b, second_ty)
+                    {
+                        let pair = (deferred, rank(first), declared(self, first, a), rank(second), declared(self, second, b));
+                        conflict = Some(conflict.map_or(pair, |least| least.min(pair)));
+                    }
                 }
             }
-            if conflict {
-                self.report_conflicting_members(c, name, first, second, marked);
+            if let Some(pair) = conflict {
+                let info = self.syms.class(c);
+                let place = (self.syms.file_rank(info.file), info.file, info.span.start, info.span.end);
+                conflicts.push((place, pair, (c, name, first, second, marked)));
             }
+        }
+        conflicts.sort_by(|x, y| (x.0, x.1).cmp(&(y.0, y.1)).then_with(|| self.name_ref(x.2 .1).cmp(self.name_ref(y.2 .1))));
+        for (_, _, (c, name, first, second, marked)) in conflicts {
+            self.report_conflicting_members(c, name, first, second, marked);
         }
     }
 

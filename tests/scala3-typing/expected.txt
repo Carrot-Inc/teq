@@ -1903,7 +1903,7 @@ neg/tcpoly_typealias.scala	accepts
 neg/tcpoly_variance_enforce.scala	accepts	
 neg/templateParents.scala	same	
 neg/this-toplevel-cc.scala	syntax	expected {}, found {}
-neg/this-toplevel.scala	superset	+1 lines: 'this' is not available outside of a class
+neg/this-toplevel.scala	superset	+1 lines: several entry points: main, O.inObj, main, O.inObj; choose one with --main
 neg/throws-annot.scala	accepts	
 neg/toplevel-cyclic	same	
 neg/toplevel-doubledef	same	

@@ -17,6 +17,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   case is taken; an `inline if` that scalac refuses is refused), where a cast to a singleton type (`n.asInstanceOf[9]`,
   or to the type of a constant val, `n.asInstanceOf[Limits.max.type]`) is that constant whatever stands under it. The
   condition under such a cast is still evaluated before the branch it selects.
+- The errors for the members a class inherits from two unrelated traits (`class C inherits conflicting
+  members: …`) come in one order at every worker count: the members of the trait mixed in last in that trait's
+  order, then those of the trait before it; for the program's and a library's traits the first error is the one
+  scalac reports.
 
 ## 0.1.10 (2026-11-13)
 

@@ -165,6 +165,8 @@ end_marker_duplicate	fail	-	exit code 0
 entry_points	pass	-	
 entry_points_source_order	pass	-	
 entry_points_source_order.check	pass	-	
+entry_points_source_order_def_first	pass	-	
+entry_points_source_order_def_first.check	pass	-	
 enum_case_infix_search	pass	-	
 enum_case_override_nothing	pass	-	
 enum_case_parents	pass	-	
@@ -384,6 +386,8 @@ infix_unresolved_selection	pass	-
 inherit_members	pass	-	
 inherit_parents	pass	-	
 inherited_abstract_type_member_cycle	fail	-	exit code 0
+inherited_conflicts_order	pass	-	
+inherited_conflicts_order.check	pass	-	
 inherited_given_two_objects	pass	-	
 inline_arg_given	pass	-	
 inline_arg_result_boundary	pass	-	
