@@ -608,16 +608,22 @@ edit, CheckUnused's, which deletes the statement, keeps its one used selector or
 their commas). An error that an import would fix carries quick fixes that add it, each titled as the import it
 writes and placed where completion's import goes: for a name not found, the imports completion offers for that
 name out of scope, in its order, those that name a type where a type is wanted and a term or a class where a term
-is, where the document does not spell that name anywhere else; for a member a selection lacks (`42.asGlyph`), the import of each extension method of that name, in an object
-of the program or at the top level of one of its packages, that the selection would then find for its receiver.
-An object's extension is imported with the object (`import lib.Glyphs.*`), which also brings what else of it the
-file goes on to use, where the document spells no name the object holds anywhere else and the object has no
-`implicit` member; else by its own name (`import lib.Glyphs.asGlyph`), as a package's top-level extension always
-is, where the document does not spell that name anywhere else: an import could change what such a use means.
-What counts is the text: every identifier and operator of the document (an operator's assignment form `+=` for
-`+`, a prefix `-` for `unary_-`), but the names its own errors say are missing. A use that is not written is not
-seen: an `apply` or an `update` (`c(0)`, `c(0) = x`), a `for` comprehension's `map`, `flatMap` or `withFilter`
-taken from an extension, an interpolator's method.
+is, and after them the import of each object of the program that holds a member of that name (a method, a value,
+a nested object, an enum's case; a class or an alias for a type), the twelve nearest objects: the document's own
+package first, then the longer package prefix shared with it; all where the document does not spell that name
+anywhere else, and never the import of a given or of an implicit by its name, which would join every implicit
+search of the document. For a member a selection lacks (`42.asGlyph`), the import of each extension method of that name,
+in an object of the program or at the top level of one of its packages, that the selection would then find for
+its receiver. An object's member or extension is imported with the object (`import lib.Glyphs.*`), which also
+brings what else of it the file goes on to use, where the document spells no name the object holds anywhere else
+and the object has no `implicit` member and none a document uses without writing it (`apply`, `update`,
+`unapply`, `unapplySeq`, a `for` comprehension's `map`, `flatMap`, `withFilter` and `foreach`, an interpolator);
+else by its own name (`import lib.Glyphs.asGlyph`), as a package's top-level extension always is, where the
+document does not spell that name anywhere else: an import could change what such a use means. What counts is the
+text: every identifier and operator of the document (an operator's assignment form `+=` for `+`, a prefix `-` for
+`unary_-`, the name a setter `x_=` sets, an interpolated string's prefix), but the names its own errors say are
+missing. By name, a use that is not written is not seen: an `apply` or an `update` (`c(0)`, `c(0) = x`), a `for`
+comprehension's methods.
 The receiver is read from the error's range: an operator written infix gets its fix where its operand stands in
 parentheses, a name between backquotes none.
 A definition into a library goes to its source, read from the jar's sources jar, or

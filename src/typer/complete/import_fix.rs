@@ -44,8 +44,9 @@ use crate::types::*;
 use std::path::Path;
 
 /// The names a document's text spells: its identifier and operator tokens as the lexer reads
-/// them (none in a string or a comment; an interpolation's `$name` is one; a backquoted one
-/// without its backquotes), each with its span, and those among them that are a report's own:
+/// them (none in a string or a comment; an interpolation's `$name` is one, and so is its
+/// prefix, the interpolator's name; a backquoted one without its backquotes), each with its
+/// span, and those among them that are a report's own:
 /// the name the build says is missing, where the report has it.
 struct Spellings {
     tokens: Vec<(Span, Box<str>)>,
@@ -60,7 +61,8 @@ impl Spellings {
     fn of(text: &str, wanted: &[ImportWanted], receivers: &[Option<(TExprId, u32)>]) -> Spellings {
         let interner = crate::intern::Interner::new();
         let lexed = crate::lexer::lex(text, &interner);
-        let tokens: Vec<(Span, Box<str>)> = lexed.tokens.iter().filter(|t| matches!(t.kind, crate::token::Tok::Ident | crate::token::Tok::OpIdent)).map(|t| (t.span, interner.get(t.name).into())).collect();
+        let named = |t: &&crate::token::Token| matches!(t.kind, crate::token::Tok::Ident | crate::token::Tok::OpIdent | crate::token::Tok::InterpStart);
+        let tokens: Vec<(Span, Box<str>)> = lexed.tokens.iter().filter(named).map(|t| (t.span, interner.get(t.name).into())).collect();
         let mut own = Vec::new();
         for (w, recv) in wanted.iter().zip(receivers) {
             let named = |(span, written): &&(Span, Box<str>)| **written == *w.name && w.span.start <= span.start && span.end <= w.span.end;
@@ -78,12 +80,13 @@ impl Spellings {
     /// Whether the document spells one of `names` somewhere other than at a report's own name:
     /// a use the import of that name could change, resolved or not, or a definition of it. An
     /// operator is also spelled by its assignment form (`+=` for `+`), a prefix operator's
-    /// method by the operator alone (`-` for `unary_-`).
+    /// method by the operator alone (`-` for `unary_-`), a setter by the name it sets (`level`
+    /// for `level_=`, which `c.level = v` calls).
     fn hold(&self, names: &[&str]) -> bool {
         let operator = |n: &str| n.chars().next().is_some_and(|c| !(c.is_alphanumeric() || c == '_' || c == '$'));
         self.tokens.iter().any(|(span, written)| {
             let written: &str = written;
-            !self.own.contains(span) && names.iter().any(|&n| n == written || n.strip_prefix("unary_") == Some(written) || (operator(n) && written.strip_suffix('=') == Some(n)))
+            !self.own.contains(span) && names.iter().any(|&n| n == written || n.strip_prefix("unary_") == Some(written) || n.strip_suffix("_=") == Some(written) || (operator(n) && written.strip_suffix('=') == Some(n)))
         })
     }
 }
@@ -95,6 +98,29 @@ enum Form {
     Wildcard,
     /// `import a.O.name`.
     ByName,
+}
+
+/// An object of the program that an import can name: its class, its path and its package's
+/// path, their segments encoded as completion's are (none for the empty package).
+struct NamedObject {
+    class: ClassId,
+    path: String,
+    pkg: String,
+}
+
+/// How many objects that hold a not-found name are offered, the nearest to the document.
+const NEAREST: usize = 12;
+
+/// The names a document can use without writing them: an application's and an assignment's
+/// methods, an extractor's, a `for` comprehension's. An object that holds one is not imported by
+/// its wildcard, since such a use of the document's would not be seen.
+const UNWRITTEN: [&str; 8] = ["apply", "update", "unapply", "unapplySeq", "map", "flatMap", "withFilter", "foreach"];
+
+/// How near the package `pkg` of an object is to the document's package, the smaller the
+/// nearer: the document's own package first, then the more leading segments the two share.
+fn nearness(document: &str, pkg: &str) -> (bool, std::cmp::Reverse<usize>) {
+    let shared = pkg.split('.').zip(document.split('.')).take_while(|(a, b)| a == b && !a.is_empty()).count();
+    (pkg != document, std::cmp::Reverse(shared))
 }
 
 /// An owner of extension methods of one name that an import can name: the import's path, its
@@ -122,11 +148,14 @@ impl<'a> Worker<'a> {
         // receiver for a selection's, the report's place for a name not found.
         let receivers: Vec<Option<(TExprId, u32)>> = wanted.iter().map(|w| if w.kind == MissingKind::Member { self.receiver_in(&ids, text, w) } else { None }).collect();
         let spellings = Spellings::of(text, wanted, &receivers);
+        // The program's objects an import can name, listed once for the command's reports.
+        let top = Env { file: first, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
+        let objects = if wanted.iter().any(|w| w.asked) { self.in_query(top, |me| me.nameable_objects()) } else { Vec::new() };
         for (i, w) in wanted.iter().enumerate().filter(|(_, w)| w.asked) {
             let found = match (w.kind, receivers[i]) {
-                (MissingKind::Member, Some((recv, _))) => self.member_imports(&ids, first, text, w, recv, &spellings),
+                (MissingKind::Member, Some((recv, _))) => self.member_imports(&ids, first, text, w, recv, &spellings, &objects),
                 (MissingKind::Member, None) => Vec::new(),
-                (MissingKind::Term | MissingKind::Type, _) => self.name_imports(&ids, first, text, w, &spellings),
+                (MissingKind::Term | MissingKind::Type, _) => self.name_imports(&ids, first, text, w, &spellings, &objects),
             };
             for edit in found {
                 match actions.iter_mut().find(|(e, _)| e.import == edit.import && e.at == edit.at && e.text == edit.text) {
@@ -150,48 +179,244 @@ impl<'a> Worker<'a> {
 
     /// The imports that bring the name `w` says is not found where it stands, none where the
     /// document spells the name elsewhere (`Spellings::hold`): completion's
-    /// candidates out of the scope for the whole spelling (its floor of two characters kept),
+    /// candidates out of the scope for the whole spelling (its floor of two characters theirs),
     /// in its order, each with its edit, where the import resolves and names a type for a type's
     /// place, a term or a class (which its creator application makes a term) for a term's.
-    fn name_imports(&mut self, ids: &[FileId], first: FileId, text: &str, w: &ImportWanted, spellings: &Spellings) -> Vec<ImportEdit> {
+    fn name_imports(&mut self, ids: &[FileId], first: FileId, text: &str, w: &ImportWanted, spellings: &Spellings, objects: &[NamedObject]) -> Vec<ImportEdit> {
         let offset = w.span.start;
         let file = self.file_at(ids, offset);
         let lower = w.name.to_lowercase();
         // The import is by name: none where the document spells the name anywhere else, a use the
         // import could change (another tree of the file that finds the name its own way).
-        if lower.chars().count() < 2 || self.std_file(file) || spellings.hold(&[&w.name]) {
+        if self.std_file(file) || spellings.hold(&[&w.name]) {
             return Vec::new();
         }
         let types = w.kind == MissingKind::Type;
-        let binders = self.binders(file);
-        let catalogue = self.catalogue();
-        let program = self.program_entries();
-        let base = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
-        let paths: Vec<String> = self.in_query(base, |me| {
-            me.enter_scope_at(file, offset, &binders);
-            let mut more = Vec::new();
-            me.unimported_candidates(types, &lower, &w.name, offset, &[&program, &catalogue.external], &mut more);
-            more.into_iter().filter(|c| *c.name == *w.name).filter_map(|c| c.import.map(|(path, _)| path)).collect()
-        });
-        if let Some(ix) = self.index.as_mut() {
-            ix.catalogue = Some(catalogue);
-        }
-        self.keep_imports(binders);
         let mut out: Vec<ImportEdit> = Vec::new();
-        for path in paths {
-            let Some(edit) = self.import_edit(file, first, text, offset, &path) else { continue };
-            let named = if types { edit.ty.is_some() } else { edit.term.is_some() || matches!(edit.ty, Some(TypeRef::Class(_))) };
-            if named && !out.iter().any(|e| e.import == edit.import) {
-                out.push(edit);
+        // Completion's candidates, where completion offers any: a name of two characters or more.
+        if lower.chars().count() >= 2 {
+            let binders = self.binders(file);
+            let catalogue = self.catalogue();
+            let program = self.program_entries();
+            let base = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
+            let paths: Vec<String> = self.in_query(base, |me| {
+                me.enter_scope_at(file, offset, &binders);
+                let mut more = Vec::new();
+                me.unimported_candidates(types, &lower, &w.name, offset, &[&program, &catalogue.external], &mut more);
+                more.into_iter().filter(|c| *c.name == *w.name).filter_map(|c| c.import.map(|(path, _)| path)).collect()
+            });
+            if let Some(ix) = self.index.as_mut() {
+                ix.catalogue = Some(catalogue);
+            }
+            self.keep_imports(binders);
+            for path in paths {
+                let Some(edit) = self.import_edit(file, first, text, offset, &path) else { continue };
+                let named = if types { edit.ty.is_some() } else { edit.term.is_some() || matches!(edit.ty, Some(TypeRef::Class(_))) };
+                // A given or an implicit by name would join every implicit search of the document.
+                if named && !self.brings_implicit(edit.ty, edit.term) && !out.iter().any(|e| e.import == edit.import) {
+                    out.push(edit);
+                }
             }
         }
+        self.object_member_imports(file, first, text, w, spellings, objects, &mut out);
         out
+    }
+
+    /// After completion's candidates for the name `w` says is not found (`out`), the imports of
+    /// the objects of the program that hold a member of the name of the kind the place wants: a
+    /// term (a def, a val, an object, an enum's case; inherited and exported ones) or, for a
+    /// type's place, a class or an alias. What holds one is what an import's own resolution
+    /// finds (`module_term`, `module_type`): a companion's members the compiler made (`apply`,
+    /// `unapply`, `fromProduct`, an enum's `values` and `ordinal`) are not in the table it reads,
+    /// so their import would not resolve; what the table holds unwritten (a case class's
+    /// companion's `toString`) is no holder's (`member_written`). The
+    /// nearest objects first (the document's own package, then the longer package prefix shared
+    /// with it, then the path), the first `NEAREST` whose import resolves; the object's wildcard
+    /// where the document allows it (`import_forms`) and the name then resolves at its place to
+    /// that member, else the member's own import, completion's edit for its path. An object whose
+    /// member completion already offers by that import adds no action.
+    #[allow(clippy::too_many_arguments)]
+    fn object_member_imports(&mut self, file: FileId, first: FileId, text: &str, w: &ImportWanted, spellings: &Spellings, objects: &[NamedObject], out: &mut Vec<ImportEdit>) {
+        let offset = w.span.start;
+        let types = w.kind == MissingKind::Type;
+        let name = self.interner.intern(&w.name);
+        // A name no program writes is no candidate: a `derives` clause's `derived$T`, as for
+        // completion, and a setter's (`x_=`), which a `var` makes.
+        if !super::importable(&w.name) || w.name.ends_with("_=") {
+            return;
+        }
+        let top = || Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
+        let (document, mut holders): (String, Vec<&NamedObject>) = self.in_query(top(), |me| {
+            let p = me.pkg_chain()[0];
+            (me.package_key(p), objects.iter().filter(|o| me.holds_member(o.class, name, types)).collect())
+        });
+        if holders.is_empty() {
+            return;
+        }
+        holders.sort_by(|a, b| (nearness(&document, &a.pkg), &a.path).cmp(&(nearness(&document, &b.pkg), &b.path)));
+        let (at, before, after) = import_insertion(self.ast(file), self.ast(first), text, offset);
+        let last = encode(&w.name);
+        let binders = self.binders(file);
+        let mut taken = 0;
+        for o in holders {
+            if taken == NEAREST {
+                break;
+            }
+            let segments: Vec<String> = o.path.split('.').map(decode).chain(std::iter::once(w.name.to_string())).collect();
+            // By name: completion's own edit for the path, or, for an object of the empty package,
+            // which that edit cannot name, the path as it is where the file sees the object.
+            let by_name = if o.pkg.is_empty() {
+                let resolves = self.in_query(top(), |me| {
+                    me.enter_scope_at(file, offset, &binders);
+                    me.resolves_with(ResolvedImport { name: Some(name), target: ImportTarget::ClassMember(o.class, name), hidden: ListRef::EMPTY, bound: None, depth: 0, stmt: u32::MAX, unimports_predef: None, sel: SelRef::NONE }, o.class, name, types, w.span)
+                });
+                let reached = resolves && self.in_query(top(), |me| me.member_reached(o.class, name, types));
+                self.written_import(file, &segments, false).filter(|_| reached).map(|import| ImportEdit { at, text: format!("{}{}{}", before, import, after), import, ty: None, term: None })
+            } else {
+                self.import_edit(file, first, text, offset, &format!("{}.{}", o.path, last)).filter(|edit| if types { edit.ty.is_some() } else { edit.term.is_some() || matches!(edit.ty, Some(TypeRef::Class(_))) })
+            };
+            let Some(by_name) = by_name else { continue };
+            if out.iter().any(|e| e.import == by_name.import) {
+                continue;
+            }
+            let wildcard = self.import_forms(Some(o.class), spellings, true, file).contains(&Form::Wildcard)
+                && self.in_query(top(), |me| {
+                    me.enter_scope_at(file, offset, &binders);
+                    me.resolves_with(ResolvedImport { name: None, target: ImportTarget::ClassAll(o.class), hidden: ListRef::EMPTY, bound: None, depth: 0, stmt: u32::MAX, unimports_predef: None, sel: SelRef::NONE }, o.class, name, types, w.span)
+                });
+            let edit = match wildcard.then(|| self.written_import(file, &segments, true)).flatten() {
+                Some(import) => ImportEdit { at, text: format!("{}{}{}", before, import, after), import, ty: None, term: None },
+                None => by_name,
+            };
+            if !out.iter().any(|e| e.import == edit.import) {
+                out.push(edit);
+                taken += 1;
+            }
+        }
+        self.keep_imports(binders);
+    }
+
+    /// Whether the object `c` holds a member named `name` that an import of it brings for the
+    /// kind of place: a type for a type's, a term or a class for a term's; no given and no
+    /// implicit (`brings_implicit`).
+    fn holds_member(&mut self, c: ClassId, name: Name, types: bool) -> bool {
+        let ty = self.quietly(|me| me.module_type(c, name));
+        let term = self.quietly(|me| me.module_term(c, name));
+        if self.brings_implicit(ty, term) {
+            return false;
+        }
+        if types {
+            return ty.is_some();
+        }
+        matches!(ty, Some(TypeRef::Class(_))) || term.is_some_and(|r| self.member_written(c, r))
+    }
+
+    /// Whether an import by name of what a name is as a type and as a term would bring a given
+    /// or an implicit (a value, a method, one of an overloaded name's, an implicit class): it
+    /// would join every implicit search of the document, which may then find another instance
+    /// or an ambiguity. Such a name gets no import from a quick fix.
+    fn brings_implicit(&self, ty: Option<TypeRef>, term: Option<TermRef>) -> bool {
+        let implicit_class = |k: ClassId| self.syms.class(k).mods & crate::ast::mods::IMPLICIT != 0;
+        let implicit_term = |r: TermRef| match r {
+            TermRef::Class(k) | TermRef::ValueClass(_, k) => implicit_class(k),
+            other => other.sym().is_some_and(|s| self.syms.is_given(s) || self.syms.alternatives(s).is_some_and(|alts| alts.iter().any(|&a| self.syms.is_given(a)))),
+        };
+        matches!(ty, Some(TypeRef::Class(k)) if implicit_class(k)) || term.is_some_and(implicit_term)
+    }
+
+    /// Whether the term `r` the object `c` holds is one a program wrote, not a member the
+    /// compiler made in the object: one it inherits (a parent's, a library's, a class
+    /// parameter's), or its own with its definition's tree, or an object, an enum's case, an
+    /// overloaded name or an export's forwarder, which have none by their kind. What is left is
+    /// the object's own member without a tree: a case class's companion's `toString`.
+    fn member_written(&self, c: ClassId, r: TermRef) -> bool {
+        let Some(s) = r.sym() else { return true };
+        let info = self.syms.sym(s);
+        info.def.is_some() || info.owner != Owner::Class(c) || matches!(info.kind, SymKind::Object(_) | SymKind::Overloaded(_) | SymKind::EnumValue(_)) || self.syms.forward_of(s).is_some()
+    }
+
+    /// Whether the member `name` of the object `c` that `holds_member` found is one an import
+    /// reaches from outside the object: no private or protected one (`import_target`'s test).
+    fn member_reached(&mut self, c: ClassId, name: Name, types: bool) -> bool {
+        let hidden = crate::ast::mods::PRIVATE | crate::ast::mods::PROTECTED;
+        let ty = self.quietly(|me| me.module_type(c, name));
+        let public_type = match ty {
+            Some(TypeRef::Class(k)) => self.syms.class(k).mods & hidden == 0,
+            Some(TypeRef::Alias(a)) => {
+                let (file, def) = (self.syms.aliases[a.idx()].file, self.syms.aliases[a.idx()].def);
+                def.map_or(true, |d| self.ast(file).def(d).mods & hidden == 0)
+            }
+            _ => false,
+        };
+        if types {
+            return public_type;
+        }
+        let term = self.quietly(|me| me.module_term(c, name));
+        term.is_some_and(|r| self.public_term(r)) || (term.is_none() && public_type && matches!(ty, Some(TypeRef::Class(_))))
+    }
+
+    /// Whether, with the import `imp` added to the environment's file's as `picked_with` adds
+    /// one, `name` resolves at `at` without a report to the member of the object `c`: the
+    /// typer's own lookup, as a term or, for a type's place, as a type.
+    fn resolves_with(&mut self, imp: ResolvedImport, c: ClassId, name: Name, types: bool, at: Span) -> bool {
+        let f = self.env.file.0 as usize;
+        self.import_count();
+        let saved = self.file_imports[f].clone();
+        let mut imports: Vec<ResolvedImport> = saved.as_deref().cloned().unwrap_or_default();
+        let place = if imp.name.is_some() { 0 } else { imports.iter().take_while(|i| i.name.is_some()).count() };
+        imports.insert(place, imp);
+        self.file_imports[f] = Some(std::sync::Arc::new(imports));
+        let key = |r: TermRef| match r {
+            TermRef::Class(k) | TermRef::ValueClass(_, k) => (0, k.0),
+            TermRef::Package(p) => (1, p.0),
+            other => (2, other.sym().map_or(u32::MAX, |s| s.0)),
+        };
+        let as_type = |me: &mut Self| {
+            let wanted = me.quietly(|me| me.module_type(c, name));
+            wanted.is_some() && me.quietly(|me| me.lookup_type_at(name, at)) == wanted
+        };
+        let resolved = if types {
+            as_type(self)
+        } else {
+            match self.quietly(|me| me.module_term(c, name)).map(key) {
+                Some(wanted) => self.quietly(|me| me.lookup_term_at(name, at)).map(key) == Some(wanted),
+                // A class alone, which its creator application makes a term.
+                None => as_type(self),
+            }
+        };
+        self.file_imports[f] = saved;
+        resolved
+    }
+
+    /// The import of the path `segments` as it is written at the top of `file`, with the
+    /// object's wildcard in the place of its last name where `wildcard`: every segment as an
+    /// import's path spells it; from `_root_` where the path starts at a top-level package whose
+    /// name is something else there; `None` where it starts at an object of the empty package
+    /// that the file's top does not see, which only the empty package's files do.
+    fn written_import(&mut self, file: FileId, segments: &[String], wildcard: bool) -> Option<String> {
+        let head = self.interner.intern(segments.first()?);
+        let top = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
+        let rooted = self.in_query(top, |me| match me.quietly(|me| me.pkg_term(ROOT_PKG, head))? {
+            found @ TermRef::Package(_) => Some(me.import_rooted(head, found)),
+            found => {
+                let here = me.quietly(|me| me.lookup_term_at(head, Span::new(0, 0)))?;
+                let object = |r: TermRef| me.path_object(r);
+                (object(here).is_some() && object(here) == object(found)).then_some(false)
+            }
+        })?;
+        let mut written: Vec<String> = segments.iter().map(|s| import_segment(s)).collect();
+        if wildcard {
+            written.pop();
+            written.push("*".to_string());
+        }
+        Some(format!("import {}{}", if rooted { "_root_." } else { "" }, written.join(".")))
     }
 
     /// The imports that bring an extension method for the selection `w` reports a member
     /// missing of: by name, one an owner whose method the selection would find with it, in the
     /// order of the owners' paths.
-    fn member_imports(&mut self, ids: &[FileId], first: FileId, text: &str, w: &ImportWanted, recv: TExprId, spellings: &Spellings) -> Vec<ImportEdit> {
+    #[allow(clippy::too_many_arguments)]
+    fn member_imports(&mut self, ids: &[FileId], first: FileId, text: &str, w: &ImportWanted, recv: TExprId, spellings: &Spellings, objects: &[NamedObject]) -> Vec<ImportEdit> {
         let offset = w.span.start;
         let file = self.file_at(ids, offset);
         if self.std_file(file) {
@@ -201,14 +426,23 @@ impl<'a> Worker<'a> {
         let Some(recv_ty) = self.prog.type_of(recv) else { return Vec::new() };
         let name = self.interner.intern(&w.name);
         let top = || Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
-        let owners = self.in_query(top(), |me| me.extension_owners(name));
+        let owners = self.in_query(top(), |me| me.extension_owners(name, objects));
         if owners.is_empty() {
             return Vec::new();
         }
         // The forms the document allows each owner's import, then the first of them with which the
         // selection finds the owner's method.
         let by_name = !spellings.hold(&[&w.name]);
-        let allowed: Vec<Vec<Form>> = owners.iter().map(|o| self.import_forms(o, spellings, by_name, file)).collect();
+        let allowed: Vec<Vec<Form>> = owners
+            .iter()
+            .map(|o| {
+                let object = match o.target {
+                    ImportTarget::ClassMember(c, _) => Some(c),
+                    _ => None,
+                };
+                self.import_forms(object, spellings, by_name, file)
+            })
+            .collect();
         if allowed.iter().all(Vec::is_empty) {
             return Vec::new();
         }
@@ -231,27 +465,7 @@ impl<'a> Worker<'a> {
         for (o, form) in owners.iter().zip(chosen) {
             let Some(form) = form else { continue };
             let segments: Vec<String> = o.path.split('.').map(decode).collect();
-            let head = self.interner.intern(&segments[0]);
-            // A path from a top-level package is written from `_root_` where its first name is
-            // something else at the file's top; one from an object of the empty package is
-            // written where that name is the object there, which only the empty package's files
-            // see.
-            let rooted = self.in_query(top(), |me| match me.quietly(|me| me.pkg_term(ROOT_PKG, head))? {
-                found @ TermRef::Package(_) => Some(me.import_rooted(head, found)),
-                found => {
-                    let here = me.quietly(|me| me.lookup_term_at(head, Span::new(0, 0)))?;
-                    let object = |r: TermRef| me.path_object(r);
-                    (object(here).is_some() && object(here) == object(found)).then_some(false)
-                }
-            });
-            let Some(rooted) = rooted else { continue };
-            // Every segment as an import's path spells it, the wildcard after the object's.
-            let mut written: Vec<String> = segments.iter().map(|s| import_segment(s)).collect();
-            if form == Form::Wildcard {
-                written.pop();
-                written.push("*".to_string());
-            }
-            let import = format!("import {}{}", if rooted { "_root_." } else { "" }, written.join("."));
+            let Some(import) = self.written_import(file, &segments, form == Form::Wildcard) else { continue };
             out.push(ImportEdit { at, text: format!("{}{}{}", before, import, after), import, ty: None, term: None });
         }
         out
@@ -263,18 +477,24 @@ impl<'a> Worker<'a> {
     /// (`module_names`, its extensions among them; `Spellings::hold`) and the object has no
     /// `implicit` member, which a wildcard would bring into every implicit search of the file;
     /// then the method's own name, where the document does not spell it (`by_name`). A
-    /// package's top-level extension is imported by name alone.
-    fn import_forms(&mut self, o: &ExtensionOwner, spellings: &Spellings, by_name: bool, file: FileId) -> Vec<Form> {
+    /// package's top-level extension is imported by name alone (no `object`). An object that
+    /// holds a name a document uses without writing it (`UNWRITTEN`, an interpolator) is not
+    /// imported by its wildcard either.
+    fn import_forms(&mut self, object: Option<ClassId>, spellings: &Spellings, by_name: bool, file: FileId) -> Vec<Form> {
         let mut forms = Vec::new();
-        if let (true, ImportTarget::ClassMember(c, _)) = (by_name, o.target) {
+        if let (true, Some(c)) = (by_name, object) {
             let top = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
-            let (names, implicit) = self.in_query(top, |me| {
+            let (names, closed) = self.in_query(top, |me| {
                 let mut names = me.module_names(c, false);
                 names.extend(me.module_names(c, true));
-                (names, me.holds_implicit(c))
+                // And the extension methods it exports, which its wildcard brings as its own.
+                if let Some(exports) = me.exports_of(c) {
+                    names.extend(exports.extensions.keys().copied());
+                }
+                (names, me.holds_implicit(c) || me.holds_interpolator(c))
             });
             let names: Vec<&str> = names.iter().map(|&n| self.name_ref(n)).collect();
-            if !implicit && !spellings.hold(&names) {
+            if !closed && !names.iter().any(|n| UNWRITTEN.contains(n)) && !spellings.hold(&names) {
                 forms.push(Form::Wildcard);
             }
         }
@@ -282,6 +502,23 @@ impl<'a> Worker<'a> {
             forms.push(Form::ByName);
         }
         forms
+    }
+
+    /// Whether the object `c` holds an interpolator, its own or inherited: an extension method of
+    /// a `StringContext`, which a document uses as a string's prefix, not as a name.
+    fn holds_interpolator(&mut self, c: ClassId) -> bool {
+        let Some(context) = self.b.string_context else { return false };
+        self.complete_class(c);
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+        bases.into_iter().any(|b| {
+            self.complete_class(b);
+            let extensions: Vec<SymId> = self.syms.class_raw(b).extensions.clone();
+            extensions.into_iter().any(|s| {
+                let leading = self.syms.sym(s).ext_clauses as usize;
+                let receiver = self.sig_of(s).clauses.iter().take(leading).find(|cl| !cl.is_using).and_then(|cl| cl.params.first().map(|p| p.ty));
+                receiver.is_some_and(|t| self.class_of(t) == Some(context))
+            })
+        })
     }
 
     /// Whether the object `c` holds an `implicit` member, its own or inherited: a value, a
@@ -322,31 +559,23 @@ impl<'a> Worker<'a> {
         picked.is_some_and(|call| methods.contains(&call.sym))
     }
 
-    /// The owners of the program's extension methods named `name` that an import can name, by
-    /// their paths: each package's own at its top level, and each object's reached through
-    /// packages and objects (the walk of `program_entries`), private ones left out, as many as
-    /// completion lists.
-    fn extension_owners(&mut self, name: Name) -> Vec<ExtensionOwner> {
+    /// The objects of the program that an import can name, by their paths: each package's (the
+    /// root's are the empty package's, named without a path), a class's companion among them
+    /// (the entry's object beside its class), and the objects nested in them, which are their
+    /// members; private ones left out.
+    fn nameable_objects(&mut self) -> Vec<NamedObject> {
         let mut out = Vec::new();
-        let last = encode(self.name_ref(name));
         for i in 0..self.syms.pkgs.len() {
             let p = PkgId(i as u32);
-            // The root's objects are the empty package's, named without a path; its top-level
-            // extensions are in scope wherever those objects can be named.
-            let owner = if p == ROOT_PKG { String::new() } else { self.pkg_path(p) };
-            if p != ROOT_PKG {
-                let methods: Vec<SymId> = self.syms.package_object_entry(p, name).map_or_else(Vec::new, |e| e.extensions.clone());
-                let methods = self.importable_extensions(methods);
-                if !methods.is_empty() {
-                    out.push(ExtensionOwner { path: format!("{}.{}", owner, last), target: ImportTarget::PkgMember(p, name), methods });
-                }
-            }
-            // An entry's object, and its class where that is one (a class's companion is the
-            // entry's object beside the class).
+            let pkg = self.package_key(p);
             let objects: Vec<ClassId> = self
                 .syms
                 .members(p)
                 .flat_map(|(_, e)| {
+                    // A package of the same name takes an import's path: its object is not named.
+                    if e.pkg.is_some() {
+                        return [None, None];
+                    }
                     let object = e.term.and_then(|s| match self.syms.sym(s).kind {
                         SymKind::Object(c) => Some(c),
                         _ => None,
@@ -356,18 +585,26 @@ impl<'a> Worker<'a> {
                 .flatten()
                 .collect();
             for c in objects {
-                self.object_extension_owners(c, &owner, name, &last, &mut out);
+                self.nameable_object(c, &pkg, &pkg, &mut out);
             }
         }
         out.sort_by(|a, b| a.path.cmp(&b.path));
         out.dedup_by(|later, kept| later.path == kept.path);
-        out.truncate(CAP);
         out
     }
 
-    /// `extension_owners` of the program object `c` at the path `owner` and of the objects
-    /// nested in it.
-    fn object_extension_owners(&mut self, c: ClassId, owner: &str, name: Name, last: &str, out: &mut Vec<ExtensionOwner>) {
+    /// The path of the package `p` with its segments encoded as an object's path has them, empty
+    /// for the root.
+    fn package_key(&self, p: PkgId) -> String {
+        if p == ROOT_PKG {
+            return String::new();
+        }
+        self.pkg_path(p).split('.').map(encode).collect::<Vec<_>>().join(".")
+    }
+
+    /// `nameable_objects` of the program object `c` at the path `owner` of the package `pkg`, and
+    /// of the objects nested in it.
+    fn nameable_object(&mut self, c: ClassId, owner: &str, pkg: &str, out: &mut Vec<NamedObject>) {
         let (file, mods, kind, own) = {
             let info = self.syms.class(c);
             (info.file, info.mods, info.kind, info.name)
@@ -377,21 +614,45 @@ impl<'a> Worker<'a> {
             return;
         }
         let path = if owner.is_empty() { encode(&own) } else { format!("{}.{}", owner, encode(&own)) };
-        self.complete_class(c);
-        let mut methods = Vec::new();
-        self.module_extensions(c, name, &mut methods);
-        let methods = self.importable_extensions(methods);
-        if !methods.is_empty() {
-            out.push(ExtensionOwner { path: format!("{}.{}", path, last), target: ImportTarget::ClassMember(c, name), methods });
-        }
+        out.push(NamedObject { class: c, path: path.clone(), pkg: pkg.to_string() });
         // An object nested in an object is its member.
         let nested: Vec<ClassId> = self.syms.class(c).members.values().filter_map(|&m| match self.syms.sym(m).kind {
             SymKind::Object(n) => Some(n),
             _ => None,
         }).collect();
         for n in nested {
-            self.object_extension_owners(n, &path, name, last, out);
+            self.nameable_object(n, &path, pkg, out);
         }
+    }
+
+    /// The owners of the program's extension methods named `name` that an import can name, by
+    /// their paths: each package's own at its top level, and each of `objects` (its own,
+    /// inherited and exported ones), as many as completion lists.
+    fn extension_owners(&mut self, name: Name, objects: &[NamedObject]) -> Vec<ExtensionOwner> {
+        let mut out = Vec::new();
+        let last = encode(self.name_ref(name));
+        // The root's top-level extensions are in scope wherever its objects can be named.
+        for i in 1..self.syms.pkgs.len() {
+            let p = PkgId(i as u32);
+            let methods: Vec<SymId> = self.syms.package_object_entry(p, name).map_or_else(Vec::new, |e| e.extensions.clone());
+            let methods = self.importable_extensions(methods);
+            if !methods.is_empty() {
+                out.push(ExtensionOwner { path: format!("{}.{}", self.pkg_path(p), last), target: ImportTarget::PkgMember(p, name), methods });
+            }
+        }
+        for o in objects {
+            self.complete_class(o.class);
+            let mut methods = Vec::new();
+            self.module_extensions(o.class, name, &mut methods);
+            let methods = self.importable_extensions(methods);
+            if !methods.is_empty() {
+                out.push(ExtensionOwner { path: format!("{}.{}", o.path, last), target: ImportTarget::ClassMember(o.class, name), methods });
+            }
+        }
+        out.sort_by(|a, b| a.path.cmp(&b.path));
+        out.dedup_by(|later, kept| later.path == kept.path);
+        out.truncate(CAP);
+        out
     }
 
     /// Those of `methods` that are the program's and that an import reaches: no private or
@@ -466,10 +727,26 @@ mod tests {
         assert!(Spellings::of("val name = 1\nval t = s\"$name and ${other}\"\n", &[], &[]).hold(&["other"]));
         assert!(Spellings::of("val t = s\"$name\"\n", &[], &[]).hold(&["name"]));
         assert!(Spellings::of("val x = `asGlyph`\n", &[], &[]).hold(&["asGlyph"]));
+        // An interpolator's prefix is a name the document writes; a setter is written as the name it sets.
+        let prefixed = Spellings::of("val t = tag\"x\" + raw\"\"\"y\"\"\"\n", &[], &[]);
+        assert!(prefixed.hold(&["tag"]) && prefixed.hold(&["raw"]) && !prefixed.hold(&["x"]) && !prefixed.hold(&["y"]));
+        let set = Spellings::of("def g(c: Cell): Unit = c.level = 5\n", &[], &[]);
+        assert!(set.hold(&["level_="]) && !set.hold(&["leve_="]));
         let ops = Spellings::of("def f(c: C) = { var d = c; d += 1; -d }\n", &[], &[]);
         assert!(ops.hold(&["+"]) && ops.hold(&["unary_-"]) && !ops.hold(&["unary_!"]) && !ops.hold(&["*"]));
         // A word's assignment-like neighbour is no spelling of it, nor is a longer name.
         assert!(!Spellings::of("val asGlyphs = 1\n", &[], &[]).hold(&["asGlyph"]));
+    }
+
+    /// The objects that hold a name are offered the nearest first: the document's own package,
+    /// then the longer package prefix shared with it; the empty package shares nothing.
+    #[test]
+    fn the_nearest_objects_come_first() {
+        let mut pkgs = vec!["zeta", "ord.a", "ord", "ord.a.b.c", "ord.a.b", "", "ord.x.b"];
+        pkgs.sort_by_key(|p| (nearness("ord.a.b", p), *p));
+        assert_eq!(pkgs, ["ord.a.b", "ord.a.b.c", "ord.a", "ord", "ord.x.b", "", "zeta"]);
+        assert!(nearness("", "") < nearness("", "a"));
+        assert_eq!(nearness("a.b", "x.a.b"), nearness("a.b", "zeta"));
     }
 
     /// The names the build's own reports say are missing are set apart where they stand: a name

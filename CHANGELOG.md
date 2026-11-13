@@ -8,8 +8,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 ## Unreleased
 
 - The editor offers quick fixes that add a missing import: on a name that is not found, the imports completion
-  offers for it; on a method a value lacks (`42.asGlyph`), the import of each object of the program whose
-  extension method of that name the selection then finds (`import lib.Glyphs.*`, or the method's own name where
+  offers for it and the import of each object of the program that holds a member of that name (the nearest
+  objects first); on a method a value lacks (`42.asGlyph`), the import of each object of the program whose
+  extension method of that name the selection then finds (`import lib.Glyphs.*`, or the member's own name where
   another name of the object is in use in the file)
   ([the language server](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md#the-language-server-and-zed)).
 - `teq fix` answers a semantic rule about the names in an annotation's arguments (`@named(Style.Upper)`: the

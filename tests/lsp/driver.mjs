@@ -7026,7 +7026,7 @@ async function importActions() {
     // method named `*`; a prefix operator of the object in use.
     "C.scala": "package clib\n\nclass Marks(val n: Int)\nobject Marks:\n  extension (n: Int) def viaCompanion: Int = n\n",
     "C1.scala": "package cuse\n\nobject C1:\n  val g = 42.viaCompanion\n",
-    "E.scala": "object EmptyGlyphs:\n  extension (n: Int) def emptyGlyph: Int = n\n",
+    "E.scala": "object EmptyGlyphs:\n  extension (n: Int) def emptyGlyph: Int = n\n  def emptyPlain(n: Int): Int = n\n  private def emptyHidden(n: Int): Int = n\n",
     "E1.scala": "object E1:\n  val g = 42.emptyGlyph\n",
     "E2.scala": "package euse\n\nobject E2:\n  val g = 42.emptyGlyph\n",
     "T.scala": "package tlib\n\nobject Stars:\n  implicit val unit: String = \"\"\n  extension (b: Boolean) def *(m: Int): String = \"\"\n",
@@ -7059,6 +7059,67 @@ async function importActions() {
     "VTwin.scala": "package vfirst {\n  object A2 { val x: Vessel = null }\n}\n",
     "Star.scala": "package starlib\n\nobject `*`:\n  extension (n: Int) def starGlyph: Int = n\n",
     "StarUse.scala": "package staruse\n\nobject StarUse:\n  val g = 42.starGlyph\n",
+    // A name not found that is a member of an object of the program: the objects, and a document a use.
+    "M.scala":
+      "package mlib\n\nobject Members:\n  def mplain(n: Int): Int = n\n  def twice(n: Int): Int = n\n  def twice(s: String): String = s\n  val value: Int = 1\n  var counter: Int = 0\n  lazy val late: Int = 2\n  val spare: Int = 0\n  private def hidden(n: Int): Int = n\n  type MAlias = Int\n  extension (n: Int) def asMember: String = n.toString\n  extension (n: Int) def asOther: String = n.toString\n  object MInner:\n    val deep: Int = 3\n    class Leaf\n" +
+      "trait MOps:\n  def inherited(n: Int): Int = n\nobject MHeld extends MOps\nobject MExp:\n  export Members.mplain as exported\nenum Tint derives CanEqual:\n  case Red, Green\nenum Form:\n  case Circle(r: Int)\n  case Dot\nclass Comp\nobject Comp:\n  def made: Comp = new Comp\n  class MNested\ncase class MPair(a: Int, b: Int) derives CanEqual\nobject Mirrors:\n  val ofPair = summon[scala.deriving.Mirror.ProductOf[MPair]]\n  val ofTint = summon[scala.deriving.Mirror.SumOf[Tint]]\n  val rebuilt: MPair = ofPair.fromProduct((1, 2))\n  val nth: Int = ofTint.ordinal(Tint.Red)\nobject MExt:\n  export Members.asOther\n  def viaExt(n: Int): Int = n\nabstract class MBase(val fromCtor: Int)\nobject MSub extends MBase(4)\nobject MTicks extends Ordering[Int]:\n  def compare(x: Int, y: Int): Int = x - y\nclass Host:\n  object InHost:\n    def hosted(n: Int): Int = n\n",
+    "M1.scala": "package muse\n\nobject M1:\n  val a = mplain(1)\n",
+    "M2.scala": "package muse\n\nobject M2:\n  val b = twice(\"x\")\n",
+    "M3.scala": "package muse\n\nobject M3:\n  val c = value\n  val d = late\n  def set(): Unit = counter = 5\n",
+    "M4.scala": "package muse\n\nobject M4:\n  val e = MInner.deep\n",
+    "M5.scala": "package muse\n\nobject M5:\n  val f = inherited(1)\n  val g = exported(1)\n",
+    "M6.scala": "package muse\n\nobject M6:\n  val h = Red\n  def q(c: mlib.Tint) = c match\n    case Green => 1\n    case _ => 0\n  val i = Circle(1)\n",
+    "M7.scala": "package muse\n\nobject M7:\n  val k = made\n",
+    "M8.scala": "package muse\n\nobject M8:\n  val n: Leaf = ???\n  val o: MNested = ???\n",
+    "M9Here.scala": "package ord.a.b\n\nobject Here:\n  def shared9(n: Int): Int = n\n",
+    "M9Up.scala": "package ord.a\n\nobject Up:\n  def shared9(n: Int): Int = n\n",
+    "M9Far.scala": "package zeta\n\nobject Far:\n  def shared9(n: Int): Int = n\n",
+    "M9.scala": "package ord.a.b\n\nobject M9:\n  val a = shared9(1)\n",
+    "M10Lib.scala": "package tenlib\n\ndef both(n: Int): Int = n\nobject Ten:\n  def both(n: Int): Int = n\n",
+    "M10.scala": "package muse\n\nobject M10:\n  val a = both(1)\n",
+    "M11Lib.scala": "package many\n\n" + Array.from({ length: 14 }, (_, k) => `object O${String(k + 1).padStart(2, "0")}:\n  def crowd(n: Int): Int = n\n`).join(""),
+    "M11.scala": "package muse\n\nobject M11:\n  val a = crowd(1)\n",
+    "M12.scala": "package muse\n\nobject M12:\n  val spare = 3\n  val a = mplain(1)\n",
+    "M13.scala": "package muse\n\nobject M13:\n  def one: Int =\n    val mplain = 1\n    mplain\n  val a = mplain(1)\n",
+    "M14.scala": "package muse\n\nobject M14:\n  val a = hidden(1)\n  val b = hosted(1)\n  val c = fromProduct(null)\n  val d = ordinal(null)\n  val e = values\n  val f = fromOrdinal(0)\n  val g = derived$CanEqual\n",
+    "M20.scala": "package muse\n\nobject M20:\n  extension (s: String) def asOther: Int = 0\n  val x = \"a\".asOther\n  val a = viaExt(1)\n",
+    "M21.scala": "package muse\n\nobject M21:\n  val a = fromCtor\n  val b = lt(1, 2)\n",
+    "M11Near.scala": "package muse\n\nobject Shy:\n  private def crowd(n: Int): Int = n\n",
+    "E5.scala": "object E5:\n  val a = emptyHidden(1)\n",
+    "M15.scala": "package muse\n\nobject M15:\n  val g = 42.asMember\n  val p = mplain(1)\n",
+    "M16.scala": "package mo {\n  package mi {\n    object M16 {\n      val a = mplain(1)\n    }\n  }\n}\n",
+    "M17.scala": "package muse\n\nobject M17:\n  val spare = 0\n  val a = mplain(1)\n  val b = mplain(2)\n  val c = mplain(3)\n  val d = mplain(4)\n  val e = twice(\"x\")\n",
+    "M18Lib.scala": "package alib\n\nobject AGlyphs:\n  extension (n: Int) def asApplied: Int = n\n  extension [A](a: A) def apply(i: Int): String = \"new\"\n",
+    "M18C.scala": "package ause\n\nclass C\nobject C:\n  extension (c: C) def apply(i: Int): Int = 1\n",
+    "M18.scala": "package ause\n\nobject M18:\n  val c = new C\n  val previous: Int = c(0)\n  val g = 42.asApplied\n",
+    "M19.scala": "package muse\n\nobject M19:\n  val p: MAlias = 1\n",
+    // An object whose wildcard would bring an interpolator or a setter the document uses of its own; an object a
+    // package of its name stands beside; a member the compiler made at a place where its name is not found; a
+    // setter's name; a member of one character.
+    "I.scala": "package ilib\n\nobject Tools:\n  def helperI: Int = 1\n  extension [A](a: A) def tagI(args: Any*): Int = 1\n",
+    "IMine.scala": "package iuse\n\nextension (sc: StringContext) def tagI(args: Any*): String = \"mine\"\n",
+    "I1.scala": "package iuse\n\nobject I1:\n  val a = helperI\n  val s: String = tagI\"x\"\n",
+    "Q.scala": "package qlib\n\nobject Tools:\n  def helperQ: Int = 1\n  extension (c: quse.Cell) def level_=(v: String): Unit = ()\n",
+    "QMine.scala": "package quse\n\nclass Cell\nextension (c: Cell)\n  def level: Int = 1\n  def level_=(v: Int): Unit = ()\n",
+    "Q1.scala": "package quse\n\nobject Q1:\n  val a = helperQ\n  def g(c: Cell): Unit = c.level = 5\n",
+    "D.scala": "package dup\n\nobject pk:\n  def memberD: Int = 1\n",
+    "DPkg.scala": "package dup.pk\n\nobject Other\n",
+    "D1.scala": "package duse\n\nobject D1:\n  val a = memberD\n",
+    "X1.scala": "package xuse\n\nval t = toString\n",
+    "Z1.scala": "package zuse\n\nobject Z1:\n  val a = counter_=(5)\n",
+    "OLib.scala": "package olib\n\nobject Consts:\n  val Q: Double = 9.8\n",
+    "O1.scala": "package ouse\n\nobject O1:\n  val a = Q\n",
+    // A given and an implicit, an object's and a package's own: no import by name; the plain members beside them.
+    "Gv.scala": "package glib\n\ntrait GChoice { def number: Int }\nobject GChoice { given default: GChoice with { def number: Int = 1 } }\nobject GTools:\n  given pickedG: GChoice with { def number: Int = 2 }\n  implicit val implicitV: Int = 3\n  implicit def implicitD: String = \"s\"\n  implicit class RichG(n: Int) { def rich: Int = n }\n  val plainV: Int = 4\nobject GOnly:\n  given onlyG: GChoice with { def number: Int = 5 }\n  val plainO: Int = 6\n",
+    "GvTop.scala": "package gtop\n\nimport glib.GChoice\ngiven topG: GChoice with { def number: Int = 7 }\nimplicit val topImplicit: Long = 8L\nval topPlain: Int = 9\n",
+    "Gv1.scala": "package guse\n\nimport glib.GChoice.default\n\nobject Gv1:\n  val missing = pickedG\n  def previous: Int = summon[glib.GChoice].number\n",
+    "Gv2.scala": "package guse\n\nobject Gv2:\n  val b = implicitV\n  val c = implicitD\n  val e: RichG = ???\n",
+    "Gv3.scala": "package guse\n\nobject Gv3:\n  val f = plainV\n",
+    "Gv4.scala": "package guse\n\nobject Gv4:\n  val g = plainO\n",
+    "Gv5.scala": "package guse\n\nobject Gv5:\n  val h = topG\n  val i = topImplicit\n",
+    "Gv6.scala": "package guse\n\nobject Gv6:\n  val j = topPlain\n",
+    "E3.scala": "object E3:\n  val a = emptyPlain(1)\n",
+    "E4.scala": "package euse\n\nobject E4:\n  val a = emptyPlain(1)\n",
     // The receiver's forms, a document each.
     "RA.scala": "package use\n\nobject RA:\n  val a = (42).asGlyph\n",
     "RB.scala": "package use\n\nobject RB:\n  def f(x: Int): Int = x\n  val b = f(1).asGlyph\n",
@@ -7125,7 +7186,7 @@ async function importActions() {
     }
     // The files of a use each have a report; the build of the first texts publishes them.
     const first = {}
-    for (const n of Object.keys(texts).filter((n) => /^(Use[A-Z]|J\d|R[\dA-HN]|S2?|P\d(Use|Twin)|W\d|[CET]\d|N1|G\db?(Use|Twin)|V(Use|Twin)|StarUse)\.scala$/.test(n))) first[n] = (await published(m, n, 1)) ?? []
+    for (const n of Object.keys(texts).filter((n) => /^(Use[A-Z]|J\d|R[\dA-HN]|S2?|P\d(Use|Twin)|W\d|[CET]\d|N1|G\db?(Use|Twin)|V(Use|Twin)|StarUse|M\d+|E[345]|[IQDXZO]1|Gv\d)\.scala$/.test(n))) first[n] = (await published(m, n, 1)) ?? []
     check("imports: the reports the fixes are for are published", first["UseA.scala"].filter((d) => d.message === "type Widget not found").length === 2 && first["R1.scala"].some((d) => d.message === "value asGlyph is not a member of Int"), { a: first["UseA.scala"], r: first["R1.scala"] })
 
     // A name not found: completion's candidates for the whole name.
@@ -7254,6 +7315,85 @@ async function importActions() {
     a = await imports("G1bTwin.scala", at("G1bTwin.scala", "42.glyphBody"))
     r = a[0] ? await applied("G1bTwin.scala", a[0]) : { errors: ["no action"] }
     check("imports: the same without that call: the fix, applied, no error", same(titles(a), ["import g1blib.Glyphs.*"]) && r.errors.length === 0, { a, r })
+    // A name not found that an object of the program holds as a member: the object's import, in the form the
+    // document allows, after completion's own candidates.
+    const fixed = async (n, needle, want, what, then = []) => {
+      const got = await imports(n, rangeIn(current[n], needle))
+      const res = got[0] ? await applied(n, got[0]) : { errors: ["no action"] }
+      check(`imports: ${what}`, same(titles(got), want) && same(res.errors, then), { got, res })
+      return got
+    }
+    await fixed("M1.scala", "mplain", ["import mlib.Members.*"], "a def of an object, not found: the object's import, applied, no error")
+    await fixed("M2.scala", "twice", ["import mlib.Members.*"], "an overloaded def of an object")
+    a = await imports("M3.scala", wholeOf(texts["M3.scala"]))
+    r = a[0] ? await applied("M3.scala", a[0]) : { errors: ["no action"] }
+    check("imports: a val, a lazy val and a var as an assignment's target: one import for the three reports, applied, no error", same(titles(a), ["import mlib.Members.*"]) && a[0]?.diagnostics?.length === 3 && same(preferred(a), ["import mlib.Members.*"]) && r.errors.length === 0, { a, r })
+    await fixed("M4.scala", "MInner", ["import mlib.Members.*"], "a nested object as a path's root")
+    await fixed("M5.scala", "inherited", ["import mlib.MHeld.*"], "a member the object inherits", ["not found: exported"])
+    await fixed("M5.scala", "exported", ["import mlib.MExp.*"], "a member the object exports under another name")
+    a = await imports("M6.scala", wholeOf(texts["M6.scala"]))
+    check("imports: an enum's cases as a value, in a pattern and applied: their companions' imports", same(titles(a), ["import mlib.Tint.*", "import mlib.Form.*"]) && a[0]?.diagnostics?.length === 2, a)
+    r = a[0] ? await applied("M6.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the enum's import applied: its two reports gone", same(r.errors, ["not found: Circle"]), r)
+    await fixed("M6.scala", "Circle", ["import mlib.Form.*"], "a class case applied, its enum's import")
+    await fixed("M7.scala", "made", ["import mlib.Comp.*"], "a def of a class's companion")
+    await fixed("M8.scala", "Leaf", ["import mlib.Members.MInner.*"], "a class of an object nested in an object, as a type", ["type MNested not found"])
+    await fixed("M8.scala", "MNested", ["import mlib.Comp.*"], "a class of a class's companion, as a type")
+    a = await imports("M9.scala", at("M9.scala", "shared9"))
+    check("imports: the name in three objects: the document's package's first, then the nearer package's, none preferred", same(titles(a), ["import ord.a.b.Here.*", "import ord.a.Up.*", "import zeta.Far.*"]) && same(preferred(a), []), a)
+    r = a[1] ? await applied("M9.scala", a[1]) : { errors: ["no action"] }
+    check("imports: the second of them applied, no error", r.errors.length === 0, r)
+    a = await imports("M10.scala", at("M10.scala", "both"))
+    check("imports: a name completion offers and an object holds too: completion's first", same(titles(a), ["import tenlib.both", "import tenlib.Ten.*"]), a)
+    a = await imports("M11.scala", at("M11.scala", "crowd"))
+    check("imports: fourteen objects with the name and a nearer one whose member no import reaches: the twelve nearest that resolve", a.length === 12 && a[0]?.title === "import many.O01.*" && a[11]?.title === "import many.O12.*", titles(a))
+    await fixed("M12.scala", "mplain", ["import mlib.Members.mplain"], "another name of the object spelled in the document: by name")
+    a = await imports("M13.scala", rangeIn(texts["M13.scala"], "mplain(1)"))
+    check("imports: the name itself spelled elsewhere in the document: none", same(titles(a), []), a)
+    a = await imports("M14.scala", wholeOf(texts["M14.scala"]))
+    check("imports: a private member, a member of an object inside a class, the members the compiler made of a case class, an enum and a derives clause: none", same(titles(a), []) && first["M14.scala"].filter((d) => d.severity === 1).length === 7, { a, ds: first["M14.scala"] })
+    await fixed("M20.scala", "viaExt", ["import mlib.MExt.viaExt"], "an object that exports an extension the document has one of its own name of: by name")
+    await fixed("M21.scala", "fromCtor", ["import mlib.MSub.*"], "a member the object inherits from a class's parameter", ["not found: lt"])
+    await fixed("M21.scala", "lt", ["import mlib.MTicks.lt"], "a member the object inherits from a library's trait: by name, the trait holding an implicit")
+    a = await imports("E5.scala", at("E5.scala", "emptyHidden"))
+    check("imports: a private member of an object of the empty package: none", same(titles(a), []), a)
+    a = await imports("M15.scala", wholeOf(texts["M15.scala"]))
+    r = a[0] ? await applied("M15.scala", a[0]) : { errors: ["no action"] }
+    check("imports: an extension and a plain member of one object: one import for both reports, applied, no error", same(titles(a), ["import mlib.Members.*"]) && a[0]?.diagnostics?.length === 2 && r.errors.length === 0, { a, r })
+    a = await imports("M16.scala", at("M16.scala", "mplain"))
+    r = a[0] ? await applied("M16.scala", a[0]) : { errors: ["no action"] }
+    check("imports: a member's use inside nested package blocks: the import at the file's top, no error", same(titles(a), ["import mlib.Members.*"]) && r.errors.length === 0 && r.fixed?.startsWith("import mlib.Members.*\n\npackage mo {"), { a, r })
+    a = await imports("M17.scala", wholeOf(texts["M17.scala"]))
+    check("imports: an object the document spells another name of: by name, one action for a member's four uses and one for the other's", same(titles(a), ["import mlib.Members.mplain", "import mlib.Members.twice"]) && same(a.map((x) => x.diagnostics.length), [4, 1]) && same(preferred(a), titles(a)), a)
+    r = a[0] ? await applied("M17.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the first applied: its four reports gone", same(r.errors, ["not found: twice"]), r)
+    await fixed("M17.scala", "twice", ["import mlib.Members.twice"], "the other applied, no error")
+    await fixed("M18.scala", "42.asApplied", ["import alib.AGlyphs.asApplied"], "an object that holds an `apply`, which a document uses without writing it: by name")
+    a = await imports("M19.scala", at("M19.scala", "MAlias"))
+    check("imports: an object's alias that completion offers by name: that one action, preferred", same(titles(a), ["import mlib.Members.MAlias"]) && same(preferred(a), titles(a)), a)
+    await fixed("I1.scala", "helperI", ["import ilib.Tools.helperI"], "an object that holds an interpolator of a name the document uses as a string's prefix: by name")
+    await fixed("Q1.scala", "helperQ", ["import qlib.Tools.helperQ"], "an object that holds a setter of a name the document assigns through: by name")
+    a = await imports("D1.scala", at("D1.scala", "memberD"))
+    check("imports: a member of an object that a package of its name stands beside, whose path an import reads as the package: none", same(titles(a), []), a)
+    a = await imports("X1.scala", at("X1.scala", "toString"))
+    check("imports: a member the compiler made of a case class's companion, where its name is not found: none", same(titles(a), []) && first["X1.scala"].some((d) => d.message === "not found: toString"), { a, ds: first["X1.scala"] })
+    a = await imports("Z1.scala", at("Z1.scala", "counter_="))
+    check("imports: a var's setter by its name: none", same(titles(a), []) && first["Z1.scala"].some((d) => d.message === "not found: counter_="), { a, ds: first["Z1.scala"] })
+    await fixed("O1.scala", "Q", ["import olib.Consts.*"], "a member whose name is one character, which completion does not offer: the object's import")
+    // A given or an implicit by name would join the document's implicit searches (another `summon` of the
+    // document turns ambiguous): none, for an object's member and for a package's that completion offers.
+    a = await imports("Gv1.scala", wholeOf(texts["Gv1.scala"]))
+    check("imports: a named given of an object, where the document summons its type through another import: none", same(titles(a), []) && first["Gv1.scala"].filter((d) => d.severity === 1).length === 1, { a, ds: first["Gv1.scala"] })
+    a = await imports("Gv2.scala", wholeOf(texts["Gv2.scala"]))
+    check("imports: an implicit val, an implicit def and an implicit class of an object: none", same(titles(a), []) && first["Gv2.scala"].filter((d) => d.severity === 1).length === 3, { a, ds: first["Gv2.scala"] })
+    await fixed("Gv3.scala", "plainV", ["import glib.GTools.plainV"], "a plain val of an object that holds implicits: by name")
+    await fixed("Gv4.scala", "plainO", ["import glib.GOnly.*"], "a plain val of an object that holds a given and no implicit: the object's import, which brings no given")
+    a = await imports("Gv5.scala", wholeOf(texts["Gv5.scala"]))
+    check("imports: a package's own given and implicit val, which completion offers: none", same(titles(a), []) && first["Gv5.scala"].filter((d) => d.severity === 1).length === 2, { a, ds: first["Gv5.scala"] })
+    await fixed("Gv6.scala", "topPlain", ["import gtop.topPlain"], "a package's plain val beside them: completion's import")
+    await fixed("E3.scala", "emptyPlain", ["import EmptyGlyphs.*"], "a member of an object of the empty package, from a file of it")
+    a = await imports("E4.scala", at("E4.scala", "emptyPlain"))
+    check("imports: the same from a package, which cannot name the object: none", same(titles(a), []), a)
     // The receiver is read from the report's range: the expression that starts it, up to the name.
     for (const [n, needle, want, what] of [
       ["RA.scala", "(42).asGlyph", ["import lib.Glyphs.*"], "a receiver in parentheses"],
