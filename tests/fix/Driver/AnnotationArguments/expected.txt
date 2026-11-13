@@ -1,0 +1,225 @@
+Driver/AnnotationArguments/input.scala:26:2: warning: [AnnotationNames.at]: annotated/named#
+  @named(Style.Upper) final case class First(a: Int) // assert: AnnotationNames.at
+   ^^^^^
+Driver/AnnotationArguments/input.scala:26:8: warning: [AnnotationNames.at]: annotated/Style.
+  @named(Style.Upper) final case class First(a: Int) // assert: AnnotationNames.at
+         ^^^^^
+Driver/AnnotationArguments/input.scala:26:14: warning: [AnnotationNames.at]: annotated/Style.Upper.
+  @named(Style.Upper) final case class First(a: Int) // assert: AnnotationNames.at
+               ^^^^^
+Driver/AnnotationArguments/input.scala:28:2: warning: [AnnotationNames.at]: annotated/bound#
+  @bound(Limits.low) object Second // assert: AnnotationNames.at
+   ^^^^^
+Driver/AnnotationArguments/input.scala:28:8: warning: [AnnotationNames.at]: annotated/Limits.
+  @bound(Limits.low) object Second // assert: AnnotationNames.at
+         ^^^^^^
+Driver/AnnotationArguments/input.scala:28:15: warning: [AnnotationNames.at]: annotated/Limits.low.
+  @bound(Limits.low) object Second // assert: AnnotationNames.at
+                ^^^
+Driver/AnnotationArguments/input.scala:30:15: warning: [AnnotationNames.at]: annotated/bound#
+  class Holder[@bound(Limits.low) T](val held: T): // assert: AnnotationNames.at
+                ^^^^^
+Driver/AnnotationArguments/input.scala:30:21: warning: [AnnotationNames.at]: annotated/Limits.
+  class Holder[@bound(Limits.low) T](val held: T): // assert: AnnotationNames.at
+                      ^^^^^^
+Driver/AnnotationArguments/input.scala:30:28: warning: [AnnotationNames.at]: annotated/Limits.low.
+  class Holder[@bound(Limits.low) T](val held: T): // assert: AnnotationNames.at
+                             ^^^
+Driver/AnnotationArguments/input.scala:31:4: warning: [AnnotationNames.at]: annotated/named#
+    @named(Style.Lower) def method: Int = 1 // assert: AnnotationNames.at
+     ^^^^^
+Driver/AnnotationArguments/input.scala:31:10: warning: [AnnotationNames.at]: annotated/Style.
+    @named(Style.Lower) def method: Int = 1 // assert: AnnotationNames.at
+           ^^^^^
+Driver/AnnotationArguments/input.scala:31:16: warning: [AnnotationNames.at]: annotated/Style.Lower.
+    @named(Style.Lower) def method: Int = 1 // assert: AnnotationNames.at
+                 ^^^^^
+Driver/AnnotationArguments/input.scala:32:4: warning: [AnnotationNames.at]: annotated/bound#
+    @bound(Limits.low) val value: Int = 1 // assert: AnnotationNames.at
+     ^^^^^
+Driver/AnnotationArguments/input.scala:32:10: warning: [AnnotationNames.at]: annotated/Limits.
+    @bound(Limits.low) val value: Int = 1 // assert: AnnotationNames.at
+           ^^^^^^
+Driver/AnnotationArguments/input.scala:32:17: warning: [AnnotationNames.at]: annotated/Limits.low.
+    @bound(Limits.low) val value: Int = 1 // assert: AnnotationNames.at
+                  ^^^
+Driver/AnnotationArguments/input.scala:33:15: warning: [AnnotationNames.at]: annotated/bound#
+    def taking(@bound(Limits.low) x: Int): Int = x // assert: AnnotationNames.at
+                ^^^^^
+Driver/AnnotationArguments/input.scala:33:21: warning: [AnnotationNames.at]: annotated/Limits.
+    def taking(@bound(Limits.low) x: Int): Int = x // assert: AnnotationNames.at
+                      ^^^^^^
+Driver/AnnotationArguments/input.scala:33:28: warning: [AnnotationNames.at]: annotated/Limits.low.
+    def taking(@bound(Limits.low) x: Int): Int = x // assert: AnnotationNames.at
+                             ^^^
+Driver/AnnotationArguments/input.scala:34:4: warning: [AnnotationNames.at]: annotated/bound#
+    @bound(Limits.scaled(Limits.low)) def nested: Int = 2 // assert: AnnotationNames.at
+     ^^^^^
+Driver/AnnotationArguments/input.scala:34:10: warning: [AnnotationNames.at]: annotated/Limits.
+    @bound(Limits.scaled(Limits.low)) def nested: Int = 2 // assert: AnnotationNames.at
+           ^^^^^^
+Driver/AnnotationArguments/input.scala:34:17: warning: [AnnotationNames.at]: annotated/Limits.scaled().
+    @bound(Limits.scaled(Limits.low)) def nested: Int = 2 // assert: AnnotationNames.at
+                  ^^^^^^
+Driver/AnnotationArguments/input.scala:34:24: warning: [AnnotationNames.at]: annotated/Limits.
+    @bound(Limits.scaled(Limits.low)) def nested: Int = 2 // assert: AnnotationNames.at
+                         ^^^^^^
+Driver/AnnotationArguments/input.scala:34:31: warning: [AnnotationNames.at]: annotated/Limits.low.
+    @bound(Limits.scaled(Limits.low)) def nested: Int = 2 // assert: AnnotationNames.at
+                                ^^^
+Driver/AnnotationArguments/input.scala:35:4: warning: [AnnotationNames.at]: annotated/tagged#
+    @tagged[Holder[Int]]("x") def typed: Int = 3 // assert: AnnotationNames.at
+     ^^^^^^
+Driver/AnnotationArguments/input.scala:35:11: warning: [AnnotationNames.at]: annotated/Holder#
+    @tagged[Holder[Int]]("x") def typed: Int = 3 // assert: AnnotationNames.at
+            ^^^^^^
+Driver/AnnotationArguments/input.scala:35:18: warning: [AnnotationNames.at]: scala/Int#
+    @tagged[Holder[Int]]("x") def typed: Int = 3 // assert: AnnotationNames.at
+                   ^^^
+Driver/AnnotationArguments/input.scala:36:25: warning: [AnnotationNames.at]: annotated/bound#
+    def signature(x: Int @bound(Limits.low)): Int = x // assert: AnnotationNames.at
+                          ^^^^^
+Driver/AnnotationArguments/input.scala:36:31: warning: [AnnotationNames.at]: annotated/Limits.
+    def signature(x: Int @bound(Limits.low)): Int = x // assert: AnnotationNames.at
+                                ^^^^^^
+Driver/AnnotationArguments/input.scala:36:38: warning: [AnnotationNames.at]: annotated/Limits.low.
+    def signature(x: Int @bound(Limits.low)): Int = x // assert: AnnotationNames.at
+                                       ^^^
+Driver/AnnotationArguments/input.scala:38:6: warning: [AnnotationNames.at]: annotated/bound#
+      @bound(Limits.low) val inner = 5 // assert: AnnotationNames.at
+       ^^^^^
+Driver/AnnotationArguments/input.scala:38:12: warning: [AnnotationNames.at]: annotated/Limits.
+      @bound(Limits.low) val inner = 5 // assert: AnnotationNames.at
+             ^^^^^^
+Driver/AnnotationArguments/input.scala:38:19: warning: [AnnotationNames.at]: annotated/Limits.low.
+      @bound(Limits.low) val inner = 5 // assert: AnnotationNames.at
+                    ^^^
+Driver/AnnotationArguments/input.scala:39:24: warning: [AnnotationNames.at]: annotated/bound#
+      val ascribed: Int @bound(Limits.low) = inner // assert: AnnotationNames.at
+                         ^^^^^
+Driver/AnnotationArguments/input.scala:39:30: warning: [AnnotationNames.at]: annotated/Limits.
+      val ascribed: Int @bound(Limits.low) = inner // assert: AnnotationNames.at
+                               ^^^^^^
+Driver/AnnotationArguments/input.scala:39:37: warning: [AnnotationNames.at]: annotated/Limits.low.
+      val ascribed: Int @bound(Limits.low) = inner // assert: AnnotationNames.at
+                                      ^^^
+Driver/AnnotationArguments/input.scala:42:6: warning: [AnnotationNames.at]: annotated/bound#
+      @bound(Limits.low) val within = x // assert: AnnotationNames.at
+       ^^^^^
+Driver/AnnotationArguments/input.scala:42:12: warning: [AnnotationNames.at]: annotated/Limits.
+      @bound(Limits.low) val within = x // assert: AnnotationNames.at
+             ^^^^^^
+Driver/AnnotationArguments/input.scala:42:19: warning: [AnnotationNames.at]: annotated/Limits.low.
+      @bound(Limits.low) val within = x // assert: AnnotationNames.at
+                    ^^^
+Driver/AnnotationArguments/input.scala:43:24: warning: [AnnotationNames.at]: annotated/bound#
+      val ascribed: Int @bound(Limits.low) = within // assert: AnnotationNames.at
+                         ^^^^^
+Driver/AnnotationArguments/input.scala:43:30: warning: [AnnotationNames.at]: annotated/Limits.
+      val ascribed: Int @bound(Limits.low) = within // assert: AnnotationNames.at
+                               ^^^^^^
+Driver/AnnotationArguments/input.scala:43:37: warning: [AnnotationNames.at]: annotated/Limits.low.
+      val ascribed: Int @bound(Limits.low) = within // assert: AnnotationNames.at
+                                      ^^^
+Driver/AnnotationArguments/input.scala:46:19: warning: [AnnotationNames.at]: annotated/bound#
+      case n: (Int @bound(Limits.low)) => n // assert: AnnotationNames.at
+                    ^^^^^
+Driver/AnnotationArguments/input.scala:46:25: warning: [AnnotationNames.at]: annotated/Limits.
+      case n: (Int @bound(Limits.low)) => n // assert: AnnotationNames.at
+                          ^^^^^^
+Driver/AnnotationArguments/input.scala:46:32: warning: [AnnotationNames.at]: annotated/Limits.low.
+      case n: (Int @bound(Limits.low)) => n // assert: AnnotationNames.at
+                                 ^^^
+Driver/AnnotationArguments/input.scala:48:22: warning: [AnnotationNames.at]: annotated/bound#
+    def context(using @bound(Limits.low) order: Ordering[Int]): Int = 1 // assert: AnnotationNames.at
+                       ^^^^^
+Driver/AnnotationArguments/input.scala:48:28: warning: [AnnotationNames.at]: annotated/Limits.
+    def context(using @bound(Limits.low) order: Ordering[Int]): Int = 1 // assert: AnnotationNames.at
+                             ^^^^^^
+Driver/AnnotationArguments/input.scala:48:35: warning: [AnnotationNames.at]: annotated/Limits.low.
+    def context(using @bound(Limits.low) order: Ordering[Int]): Int = 1 // assert: AnnotationNames.at
+                                    ^^^
+Driver/AnnotationArguments/input.scala:49:4: warning: [AnnotationNames.at]: annotated/bound#
+    @bound(Limits.low) def this() = this(null.asInstanceOf[T]) // assert: AnnotationNames.at
+     ^^^^^
+Driver/AnnotationArguments/input.scala:49:10: warning: [AnnotationNames.at]: annotated/Limits.
+    @bound(Limits.low) def this() = this(null.asInstanceOf[T]) // assert: AnnotationNames.at
+           ^^^^^^
+Driver/AnnotationArguments/input.scala:49:17: warning: [AnnotationNames.at]: annotated/Limits.low.
+    @bound(Limits.low) def this() = this(null.asInstanceOf[T]) // assert: AnnotationNames.at
+                  ^^^
+Driver/AnnotationArguments/input.scala:50:4: warning: [AnnotationNames.at]: annotated/bound#
+    @bound(Holder.shared) def reading: Int = 3 // assert: AnnotationNames.at
+     ^^^^^
+Driver/AnnotationArguments/input.scala:50:10: warning: [AnnotationNames.at]: annotated/Holder.
+    @bound(Holder.shared) def reading: Int = 3 // assert: AnnotationNames.at
+           ^^^^^^
+Driver/AnnotationArguments/input.scala:50:17: warning: [AnnotationNames.at]: annotated/Holder.shared.
+    @bound(Holder.shared) def reading: Int = 3 // assert: AnnotationNames.at
+                  ^^^^^^
+Driver/AnnotationArguments/input.scala:56:33: warning: [AnnotationNames.at]: annotated/bound#
+    def taking(size: Int)(x: Int @bound(size)): Int = x // assert: AnnotationNames.at
+                                  ^^^^^
+Driver/AnnotationArguments/input.scala:56:39: warning: [AnnotationNames.at]: annotated/Carrier#taking().(size)
+    def taking(size: Int)(x: Int @bound(size)): Int = x // assert: AnnotationNames.at
+                                        ^^^^
+Driver/AnnotationArguments/input.scala:57:31: warning: [AnnotationNames.at]: annotated/bound#
+    def giving(size: Int): Int @bound(size) = size // assert: AnnotationNames.at
+                                ^^^^^
+Driver/AnnotationArguments/input.scala:57:37: warning: [AnnotationNames.at]: annotated/Carrier#giving().(size)
+    def giving(size: Int): Int @bound(size) = size // assert: AnnotationNames.at
+                                      ^^^^
+Driver/AnnotationArguments/input.scala:59:43: warning: [AnnotationNames.at]: annotated/bound#
+      val each = (size: Int) => (size: Int @bound(size)) // assert: AnnotationNames.at
+                                            ^^^^^
+Driver/AnnotationArguments/input.scala:59:49: warning: [AnnotationNames.at]: local6
+      val each = (size: Int) => (size: Int @bound(size)) // assert: AnnotationNames.at
+                                                  ^^^^
+Driver/AnnotationArguments/input.scala:62:35: warning: [AnnotationNames.at]: annotated/bound#
+      case size: Int => (size: Int @bound(size)) // assert: AnnotationNames.at
+                                    ^^^^^
+Driver/AnnotationArguments/input.scala:62:41: warning: [AnnotationNames.at]: local7
+      case size: Int => (size: Int @bound(size)) // assert: AnnotationNames.at
+                                          ^^^^
+Driver/AnnotationArguments/input.scala:65:20: warning: [AnnotationNames.at]: annotated/bound#
+      val kept: Int @bound(size) = size // assert: AnnotationNames.at
+                     ^^^^^
+Driver/AnnotationArguments/input.scala:65:26: warning: [AnnotationNames.at]: annotated/Carrier#local().(size)
+      val kept: Int @bound(size) = size // assert: AnnotationNames.at
+                           ^^^^
+Driver/AnnotationArguments/input.scala:69:4: warning: [AnnotationNames.at]: annotated/bound#
+    @bound(Limits.low) case Dark // assert: AnnotationNames.at
+     ^^^^^
+Driver/AnnotationArguments/input.scala:69:10: warning: [AnnotationNames.at]: annotated/Limits.
+    @bound(Limits.low) case Dark // assert: AnnotationNames.at
+           ^^^^^^
+Driver/AnnotationArguments/input.scala:69:17: warning: [AnnotationNames.at]: annotated/Limits.low.
+    @bound(Limits.low) case Dark // assert: AnnotationNames.at
+                  ^^^
+Driver/AnnotationArguments/input.scala:72:2: warning: [AnnotationNames.at]: annotated/bound#
+  @bound(Limits.low) type Alias = Int // assert: AnnotationNames.at
+   ^^^^^
+Driver/AnnotationArguments/input.scala:72:8: warning: [AnnotationNames.at]: annotated/Limits.
+  @bound(Limits.low) type Alias = Int // assert: AnnotationNames.at
+         ^^^^^^
+Driver/AnnotationArguments/input.scala:72:15: warning: [AnnotationNames.at]: annotated/Limits.low.
+  @bound(Limits.low) type Alias = Int // assert: AnnotationNames.at
+                ^^^
+Driver/AnnotationArguments/input.scala:75:4: warning: [AnnotationNames.at]: annotated/bound#
+    @bound(Limits.low) val first, second = 1 // assert: AnnotationNames.at
+     ^^^^^
+Driver/AnnotationArguments/input.scala:75:10: warning: [AnnotationNames.at]: annotated/Limits.
+    @bound(Limits.low) val first, second = 1 // assert: AnnotationNames.at
+           ^^^^^^
+Driver/AnnotationArguments/input.scala:75:17: warning: [AnnotationNames.at]: annotated/Limits.low.
+    @bound(Limits.low) val first, second = 1 // assert: AnnotationNames.at
+                  ^^^
+Driver/AnnotationArguments/input.scala:76:4: warning: [AnnotationNames.at]: annotated/bound#
+    @bound(Limits.low) given ordering: Ordering[Shade] = Ordering.by(_.ordinal) // assert: AnnotationNames.at
+     ^^^^^
+Driver/AnnotationArguments/input.scala:76:10: warning: [AnnotationNames.at]: annotated/Limits.
+    @bound(Limits.low) given ordering: Ordering[Shade] = Ordering.by(_.ordinal) // assert: AnnotationNames.at
+           ^^^^^^
+Driver/AnnotationArguments/input.scala:76:17: warning: [AnnotationNames.at]: annotated/Limits.low.
+    @bound(Limits.low) given ordering: Ordering[Shade] = Ordering.by(_.ordinal) // assert: AnnotationNames.at
+                  ^^^

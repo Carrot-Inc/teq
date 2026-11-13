@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `teq fix` answers a semantic rule about the names in an annotation's arguments (`@named(Style.Upper)`: the
+  object and its member), as scalafix does from scalac's SemanticDB
+  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
 - `teq fix` runs a project's own rules (the configuration's `file:` entries) on every rule worker, as it runs the
   rules it ships, where a guard that reads the rules' sources sees nothing they keep between documents; where it
   sees a definition that does, they run on one worker as before, and the run says so in a note at the definition

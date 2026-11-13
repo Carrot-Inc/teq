@@ -701,6 +701,31 @@ object Verb:
     val san = build(work, "service-annotation", "core/src/core/Core.scala" -> annotated, "rules/AskInner.scala" -> askInner, ".scalafix.conf" -> "rules = [\"file:rules/AskInner.scala\"]\n")
     val rsan = fix(san, "core")
     expect("service/annotation argument", rsan.status == 1 && rsan.errAll().contains("[AskInner]: symbols local0") && rsan.errAll().contains(" defined true"), s"exit ${rsan.status}: ${rsan.errAll()}")
+    // The names in a definition's annotation are occurrences whatever reads the annotation (the cases of
+    // tests/fix/Driver/AnnotationArguments hold scalac's): a named argument's value; a lambda's parameter, one local
+    // where it is defined and where it is used. A named argument's name is the constructor's parameter in scalac
+    // (`bound#`<init>`().(n)`) and is answered no symbol. An ascription's annotation has none in scalac: its argument
+    // is answered no symbol. And an annotation whose argument does not type, which scalac refuses, leaves none
+    // either.
+    val marked = "package core\nimport scala.annotation.StaticAnnotation\nobject Limits:\n  val low: Int = 1\nfinal class bound(n: Int) extends StaticAnnotation\nfinal class made(f: Int => Int) extends StaticAnnotation\nobject Core:\n  @bound(n = Limits.low) def valued: Int = 1\n  @made(each => each + 1) def mapped: Int = 2\n  def ascribed(x: Int): Int = (x: @bound(Limits.low)) + 1\n  @bound(Limits.absent) def untyped: Int = 3\n"
+    val atMarks = "package teq.fix.probe\nimport teq.fix.*\nfinal class AtMarks extends SemanticRule(\"AtMarks\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    def at(mark: String, shift: Int, width: Int): String =\n      val i = text.indexOf(mark) + shift\n      Native.symbolsAt(doc.gen, i, i + width).mkString(\",\")\n    val defined = at(\"each =>\", 0, 4)\n    val used = at(\"each + 1\", 0, 4)\n    Patch.lint(Diagnostic(\"\", \"valued [\" + at(\"n = Limits.low\", 0, 1) + \"] \" + at(\"n = Limits.low\", 4, 6) + \" \" + at(\"n = Limits.low\", 11, 3) + \" mapped \" + (defined == used && defined.startsWith(\"local\")) + \" ascribed [\" + at(\"@bound(Limits.low))\", 7, 6) + \"] untyped [\" + at(\"Limits.absent\", 0, 6) + \"]\", doc.tree.pos))\n"
+    val smarks = build(work, "service-annotation-marks", "core/src/core/Core.scala" -> marked, "rules/AtMarks.scala" -> atMarks, ".scalafix.conf" -> "rules = [\"file:rules/AtMarks.scala\"]\n")
+    val rsmarks = fix(smarks, "core")
+    expect("service/annotation names", rsmarks.status == 1 && rsmarks.errAll().contains("[AtMarks]: valued [] core/Limits. core/Limits.low. mapped true ascribed [] untyped []"), s"exit ${rsmarks.status}: ${rsmarks.errAll()}")
+    // A type's annotation is typed where the type stands: an argument naming the method's parameter, a lambda's or a
+    // pattern's binder is that one (scalac's `Carrier#taking().(size)`, a local), not the class's member of the name,
+    // so a rule that forbids the member reports its definition alone. A type's annotation inside an ascription's
+    // annotation has no occurrence, as the ascription's own has none in scalac. A local object defined in an argument
+    // has one symbol at its name, as in scalac.
+    val scoped = "package core\nimport scala.annotation.StaticAnnotation\nobject Limits:\n  val low: Int = 1\nfinal class bound(n: Int) extends StaticAnnotation\nfinal class noted(v: Any) extends StaticAnnotation\nclass Carrier(val size: Int):\n  def taking(size: Int)(x: Int @bound(size)): Int = x\n  def giving(size: Int): Int @bound(size) = size\n  def inside(x: Int): Int =\n    val each = (size: Int) => (size: Int @bound(size))\n    each(x)\n  def matched(x: Any): Int = x match\n    case size: Int => (size: Int @bound(size))\n    case _ => 0\n  def ascribed: Int = (1: @noted(Limits.low: Int @bound(Limits.low)))\n  @noted({ object Unit1 { val w = Limits.low }; Unit1.w }) def objected: Int = 1\n"
+    val atScopes = "package teq.fix.probe\nimport teq.fix.*\nfinal class AtScopes extends SemanticRule(\"AtScopes\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    def at(mark: String, shift: Int, width: Int): String =\n      val i = text.indexOf(mark) + shift\n      Native.symbolsAt(doc.gen, i, i + width).mkString(\",\")\n    val lambda = at(\"(size: Int) =>\", 1, 4)\n    val binder = at(\"case size: Int\", 5, 4)\n    Patch.lint(Diagnostic(\"\", \"taking \" + at(\"x: Int @bound(size)\", 14, 4) + \" giving \" + at(\"): Int @bound(size)\", 14, 4) + \" lambda \" + (lambda.startsWith(\"local\") && lambda == at(\"=> (size: Int @bound(size))\", 21, 4)) + \" binder \" + (binder.startsWith(\"local\") && binder == at(\"Int => (size: Int @bound(size))\", 25, 4)) + \" nested [\" + at(\"@bound(Limits.low)))\", 7, 6) + \"] object \" + at(\"Unit1 {\", 0, 5).startsWith(\"local\") + \" \" + at(\"Unit1 {\", 0, 5).contains(\",\"), doc.tree.pos))\n"
+    val sscopes = build(work, "service-annotation-scopes", "core/src/core/Core.scala" -> scoped, "rules/AtScopes.scala" -> atScopes, ".scalafix.conf" -> "rules = [\"file:rules/AtScopes.scala\"]\n")
+    val rsscopes = fix(sscopes, "core")
+    expect("service/annotation scopes", rsscopes.status == 1 && rsscopes.errAll().contains("[AtScopes]: taking core/Carrier#taking().(size) giving core/Carrier#giving().(size) lambda true binder true nested [] object true false"), s"exit ${rsscopes.status}: ${rsscopes.errAll()}")
+    val sforbidden = build(work, "service-annotation-forbidden", "core/src/core/Core.scala" -> scoped, ".scalafix.conf" -> "rules = [ForbiddenSymbol]\nForbiddenSymbol.symbols = [\"core.Carrier.size\"]\n")
+    val rsforbidden = fix(sforbidden, "core")
+    val forbiddenLints = rsforbidden.errAll().linesIterator.count(_.contains("[ForbiddenSymbol]"))
+    expect("service/annotation scopes, a forbidden member", rsforbidden.status == 1 && forbiddenLints == 1, s"exit ${rsforbidden.status}, $forbiddenLints lints: ${rsforbidden.errAll()}")
     // The round's texts (Swap.scala): a file written between the document's dispatch and its
     // first question, its own or a dependency's the job does not edit, leaves the service's answers those of the
     // program as the round's typing read it: the answer's MD5 the round's text's, a dependency broken on the disk no

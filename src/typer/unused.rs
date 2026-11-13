@@ -391,7 +391,7 @@ impl<'a> Worker<'a> {
             ast::DefKind::Val { .. } => (&[], &[]),
         };
         for a in &def.annots {
-            self.mark_annotation(file, a.instance);
+            self.mark_annotation(file, a.instance, true);
         }
         // The annotations of its parameters and type parameters see its type parameters.
         let inner: Vec<&ast::Annot> = tparams.iter().flat_map(|tp| tp.annots.iter()).chain(clauses.iter().flat_map(|c| c.params.iter()).flat_map(|p| ast.param_annots(p).iter())).collect();
@@ -399,7 +399,7 @@ impl<'a> Worker<'a> {
             let own = self.own_tparams(file, d);
             self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: own, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
             for a in inner {
-                self.mark_annotation(file, a.instance);
+                self.mark_annotation(file, a.instance, true);
             }
             self.env.frames.pop();
         }
@@ -423,10 +423,14 @@ impl<'a> Worker<'a> {
             let from = ast.inline_annots.partition_point(|a| at(a) < range.start);
             let inline: Vec<ast::ExprId> = ast.inline_annots[from..].iter().take_while(|a| at(a) < range.end).map(|a| a.instance).collect();
             if !inline.is_empty() {
+                // Typed here for the marks alone: the frame holds the definition's type parameters and none of its
+                // value parameters, its body's locals or a pattern's binders, so a name of the argument that is one of
+                // those resolves here to whatever else has the name. The occurrences of a type's annotation are those
+                // of its typing where the type stands (`type_annotation_quietly`); an ascription's has none.
                 let own = self.own_tparams(file, d);
                 self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: own, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
                 for instance in inline {
-                    self.mark_annotation(file, instance);
+                    self.mark_annotation(file, instance, false);
                 }
                 self.env.frames.pop();
             }
@@ -449,19 +453,36 @@ impl<'a> Worker<'a> {
         tps.into_iter().map(|tp| (self.syms.tparam(tp).name, tp)).collect()
     }
 
-    /// Types the annotation `instance` (`new C[T](args)`) for its marks alone: its class, the
+    /// Types the annotation `instance` (`new C[T](args)`) for its marks: its class, the
     /// names of its arguments with what they take (an implicit argument's search included), as a
     /// products build types it for its pickle (`capture_annotations`), quietly (what it reports
-    /// at itself goes, as teq reports no unknown annotation), the tree left behind and its index
-    /// records dropped, outside the capture, whose records a products build writes.
-    fn mark_annotation(&mut self, file: FileId, instance: ast::ExprId) {
-        self.type_annotation_quietly(file, instance, |_, _| ());
+    /// at itself goes, as teq reports no unknown annotation), the tree left behind, outside the
+    /// capture, whose records a products build writes. Its index records are dropped, but for the
+    /// names of an annotation of a definition's symbol (`occurrences`: a definition's own, a
+    /// parameter's, a type parameter's) in a typing that keeps SemanticDB's
+    /// (`Worker::sem_records`): dotty's ExtractSemanticDB walks each such annotation's tree
+    /// (`traverseAnnotsOfDefinition` for a definition's symbol, a constructor's and a
+    /// parameter's), so that a name in its arguments is an occurrence of the document whether or
+    /// not a macro reads the annotation.
+    fn mark_annotation(&mut self, file: FileId, instance: ast::ExprId, occurrences: bool) {
+        let names = occurrences && self.sem_records;
+        self.type_annotation(file, instance, names, |_, _| ());
     }
 
     /// Types the annotation `instance` as `mark_annotation` types it, quietly, and runs `then` over its tree before
-    /// the typing's trail is taken back: what it reports at itself goes, the tree is left behind, its index records are
-    /// dropped, outside the capture.
+    /// the typing's trail is taken back: what it reports at itself goes, the tree is left behind, outside the capture.
+    /// It is a type's annotation (`Int @a(x)`), typed where the type stands with what is in scope there
+    /// (`Worker::annotation_argument_types`): in a typing that keeps SemanticDB's records its names stay, the
+    /// occurrences dotty's ExtractSemanticDB finds as it walks the `Annotated` type tree; its other index records are
+    /// dropped.
     pub(super) fn type_annotation_quietly<R>(&mut self, file: FileId, instance: ast::ExprId, then: impl FnOnce(&mut Self, Option<crate::tir::TExprId>) -> R) -> R {
+        let names = self.sem_records;
+        self.type_annotation(file, instance, names, then)
+    }
+
+    /// `type_annotation_quietly`; with `names`, the name records of an annotation that typed stay (`index_drop_nodes_within`):
+    /// one with an error at itself leaves none, as a products build keeps no tree of it (`capture_annotations`).
+    fn type_annotation<R>(&mut self, file: FileId, instance: ast::ExprId, names: bool, then: impl FnOnce(&mut Self, Option<crate::tir::TExprId>) -> R) -> R {
         let recorded = self.index_mark();
         let capture = self.prog.capture.take();
         let deps = self.deps.take();
@@ -483,12 +504,17 @@ impl<'a> Worker<'a> {
         self.var_frame_end(frame);
         let span = self.ast(file).expr_span(instance);
         let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
+        let typed = !self.diags.items[mark..].iter().any(|d| own(d) && !d.is_warning);
         let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
         self.diags.extend(elsewhere);
         self.typing_annotation = outer;
         self.deps = deps;
         self.prog.capture = capture;
-        self.index_drop_records_within(recorded, file, span);
+        if names && typed {
+            self.index_drop_nodes_within(recorded, file, span);
+        } else {
+            self.index_drop_records_within(recorded, file, span);
+        }
         out
     }
 

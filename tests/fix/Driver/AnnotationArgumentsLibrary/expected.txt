@@ -1,0 +1,12 @@
+Driver/AnnotationArgumentsLibrary/input.scala:11:2: warning: [AnnotationNames.at]: zio/json/jsonMemberNames#
+  @jsonMemberNames(PascalCase) final case class Parcel(firstPart: Int, secondPart: String) derives JsonCodec // assert: AnnotationNames.at
+   ^^^^^^^^^^^^^^^
+Driver/AnnotationArgumentsLibrary/input.scala:11:18: warning: [AnnotationNames.at]: zio/json/PascalCase.
+  @jsonMemberNames(PascalCase) final case class Parcel(firstPart: Int, secondPart: String) derives JsonCodec // assert: AnnotationNames.at
+                   ^^^^^^^^^^
+Driver/AnnotationArgumentsLibrary/input.scala:13:2: warning: [AnnotationNames.at]: zio/json/jsonMemberNames#
+  @jsonMemberNames(SnakeCase) final case class Crate(firstPart: Int) // assert: AnnotationNames.at
+   ^^^^^^^^^^^^^^^
+Driver/AnnotationArgumentsLibrary/input.scala:13:18: warning: [AnnotationNames.at]: zio/json/SnakeCase.
+  @jsonMemberNames(SnakeCase) final case class Crate(firstPart: Int) // assert: AnnotationNames.at
+                   ^^^^^^^^^

@@ -516,6 +516,43 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// `index_drop_records_within` for a typing whose names are occurrences of the document (an annotation's,
+    /// `Worker::type_annotation`): the names stay (a reference, a call, a type, a pattern's class, an import's name, a
+    /// local's declaration: each a symbol at a name's span), the rest goes. The records of its trees (an expression's
+    /// node, a name where a function is expected, an applied argument list) are what a completion or signature help
+    /// reads off a tree, and the tree is left behind. A named argument's record names a class's field where
+    /// SemanticDB has the constructor's parameter (`C#`<init>`().(x)`), so a named argument's name stays without an
+    /// occurrence. The declaration of a local object's value goes too: the object's name is answered by its class's
+    /// declaration, one symbol as in SemanticDB, and the value's record would put a second beside it.
+    pub(super) fn index_drop_nodes_within(&mut self, mark: Recorded, file: FileId, span: Span) {
+        let (syms, types) = (&self.syms, &self.types);
+        // The value that holds a block's object (`ClassInfo::local_module`).
+        let object_value = |s: SymId| {
+            let class = syms.sym(s).sig.as_ref().map(|sig| types.get(sig.ret));
+            matches!(class, Some(Type::Class(c, _)) if syms.class(c).local_module == Some(s))
+        };
+        if let Some(ix) = self.index.as_mut() {
+            let goes = |(f, r): &(FileId, Record)| {
+                *f == file
+                    && r.span.start >= span.start
+                    && r.span.end <= span.end
+                    && match r.kind {
+                        Kind::Node | Kind::Function | Kind::Applied | Kind::NamedArg => true,
+                        Kind::Def => matches!(r.target, Target::Sym(s) if object_value(s)),
+                        _ => false,
+                    }
+            };
+            let mut k = mark.records;
+            for i in mark.records..ix.journal.len() {
+                if !goes(&ix.journal[i]) {
+                    ix.journal.swap(k, i);
+                    k += 1;
+                }
+            }
+            ix.journal.truncate(k);
+        }
+    }
+
     pub(super) fn index_put_back(&mut self, taken: Taken) {
         if let Some(ix) = self.index.as_mut() {
             ix.journal.extend(taken.records);
