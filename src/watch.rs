@@ -1418,6 +1418,12 @@ fn finish_jvm(
     }
     let reach = session_reach(t, array_seq, false, kept, reuse, report);
     report.ms.reach = t_reach.elapsed();
+    if let Some(refused) = unexpanded_calls(reach) {
+        report.errors = render_all(&refused, &diag_files(t, sources), false);
+        report.diagnostics = Some(render_check(&refused, &diag_files(t, sources)));
+        *kept = None;
+        return false;
+    }
     if t.diags.has_errors() {
         report.errors = render_all(&t.diags, &diag_files(t, sources), false);
         report.diagnostics = Some(render_check(&t.diags, &diag_files(t, sources)));
@@ -1898,6 +1904,20 @@ fn session_reach<'k>(t: &mut Worker, array_seq: Option<crate::types::ClassId>, j
     &kept.as_ref().expect("a reach kept or walked").reach
 }
 
+/// The calls the reach's walk refused (`Reach::unexpanded`), as the build's errors: they are the
+/// walk's, not the typer's, and a reach that holds any is not kept, so that the next build walks
+/// from the roots and finds them again or finds them gone.
+fn unexpanded_calls(reach: &emit::reach::Reach) -> Option<Diagnostics> {
+    if reach.unexpanded.is_empty() {
+        return None;
+    }
+    let mut refused = Diagnostics::default();
+    for (file, span, message) in &reach.unexpanded {
+        refused.error(*file, *span, message.clone());
+    }
+    Some(refused)
+}
+
 /// Reach, emit and write after a successful type check; false when errors stop the build. The
 /// modules written last are kept in `written`, so that the writer reads back only what changed.
 fn finish_build(
@@ -1921,6 +1941,11 @@ fn finish_build(
     let array_seq = crate::typer::thread::run(|| t.array_seq_class());
     let reach = session_reach(t, array_seq, opts.release, kept, reuse, report);
     report.ms.reach = t_reach.elapsed();
+    if let Some(refused) = unexpanded_calls(reach) {
+        report.errors = render_all(&refused, &diag_files(t, sources), false);
+        *kept = None;
+        return false;
+    }
     if t.diags.has_errors() {
         report.errors = render_all(&t.diags, &diag_files(t, sources), false);
         return false;
@@ -1980,6 +2005,11 @@ fn finish_file(t: &mut Worker, sources: &Sources, file: &str, opts: &Options, re
     let array_seq = crate::typer::thread::run(|| t.array_seq_class());
     let reach = session_reach(t, array_seq, opts.release, kept, reuse, report);
     report.ms.reach = t_reach.elapsed();
+    if let Some(refused) = unexpanded_calls(reach) {
+        report.errors = render_all(&refused, &diag_files(t, sources), false);
+        *kept = None;
+        return false;
+    }
     if t.diags.has_errors() {
         report.errors = render_all(&t.diags, &diag_files(t, sources), false);
         return false;

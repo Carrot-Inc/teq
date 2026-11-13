@@ -89,6 +89,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A build that would hold a call of an inline method that was never expanded is refused, with an error at the
+  call (`the inline call ... was not expanded`): it used to succeed and the program failed when run
+  (`... is not a function`, a `NoSuchMethodError` on the JVM).
 - A local inline method (and a `transparent inline` member) called before its definition is checked in the
   context of its own place: inside a match case that refines a type parameter the body was typed under the
   caller's bound and chose another overload (a wrong value on JavaScript, a `ClassCastException` on the JVM).

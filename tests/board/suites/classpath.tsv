@@ -144,6 +144,7 @@ js/relinked_effect	pass	-
 js/retained_inline_array_overloads	pass	-	
 js/retained_inline_nested_array_overloads	pass	-	
 js/retained_inline_overloads	pass	-	
+js/retained_library_inline_in_quoted_class	pass	-	
 js/runtime_shapes	pass	-	
 js/scala_library_empty_tuple	pass	-	
 js/scala_library_regex_listset	pass	-	
@@ -328,6 +329,7 @@ jvm/kantan_java8_export	pass	-
 jvm/lazy_null_value	pass	-	
 jvm/line_numbers	pass	-	
 jvm/literally_validate	pass	-	
+jvm/local_inline_in_nested_trait	pass	-	
 jvm/macro_jdk_time_arithmetic	pass	-	
 jvm/mirror_product_summon	pass	-	
 jvm/narrowed_literal_boxed	pass	-	
@@ -336,6 +338,7 @@ jvm/nested_object_dollar_name	pass	-
 jvm/nonlocal_return_control	pass	-	
 jvm/opaque_tag	pass	-	
 jvm/pureconfig_derived_reader	pass	-	
+jvm/retained_library_inline_in_quoted_class	pass	-	
 jvm/scala2_case_companion_function	pass	-	
 jvm/scala2_companion_trait_storage	pass	-	
 jvm/scala2_dollar_trait_storage	pass	-	
@@ -359,6 +362,9 @@ jvm/trait_param_override	pass	-
 jvm/trait_setter_override	pass	-	
 jvm/tuple_type_tests	pass	-	
 jvm/type_test_abi	pass	-	
+jvm/unexpanded_library_call_beside_inline	pass	-	
+jvm/unexpanded_library_call_beside_literal	pass	-	
+jvm/unexpanded_library_call_reached	pass	-	
 jvm/value_class_byname_defaults	pass	-	
 jvm/value_class_layout	pass	-	
 jvm/value_erasure_lambda	fail	-	< public int Reader.first(int[])

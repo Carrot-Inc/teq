@@ -322,8 +322,8 @@ i8651a.scala	pass	check:pass
 i8651b.scala	pass	check:pass	
 i8858	fail	check:fail	Test_2.scala:3:27: exception in macro: scala.MatchError: x (of class scala.quoted.Expr) (called by mcr in object Macro_1$package) (in the body of Macro_1$package.mcr)
 i8865.scala	pass	check:pass	
-i8866	pass	check:pass	
-i8866b	pass	check:pass	
+i8866	fail	check:pass	the inline call OtherMacro.apply was not expanded
+i8866b	fail	check:pass	the inline call Other.apply was not expanded
 i8866c	pass	check:pass	
 i8879	pass	check:pass	
 i8887.scala	pass	check:pass	
@@ -343,7 +343,7 @@ i9484	pass	check:fail
 i9484b	pass	check:pass	
 i9518	fail	check:fail	Macro_1.scala:13:12: type argument [X] =>> CB[X] does not have the same kind as its bound
 i9684	pass	check:pass	
-i9687	pass	check:pass	
+i9687	fail	check:pass	Test_2.scala:8:12: the inline call x.FastPath.sum in x.Main.main was not expanded
 i9802	pass	check:pass	
 i9812.scala	pass	check:pass	
 i9891.scala	pass	check:pass	

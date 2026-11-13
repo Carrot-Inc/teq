@@ -2224,6 +2224,10 @@ fn compile() -> i32 {
     let source_target_names = if opts.jvm { typer.on_thread(|w| w.source_target_names()) } else { intern::FxMap::default() };
     let t_compute = Instant::now();
     let mut reach = typer.on_thread(|w| emit::reach::compute(w, array_seq, js_visible));
+    // The calls the walk refused (`Reach::unexpanded`) are the program's compile errors.
+    for (file, span, message) in std::mem::take(&mut reach.unexpanded) {
+        typer.diags.error(file, span, message);
+    }
     let t_reach = Instant::now();
     let t_computed = t_reach;
     if opts.profile && !opts.classpath.is_empty() {

@@ -96,6 +96,8 @@ i8577f	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySe
 i8577g	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577h	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8858	Test_2.scala:3:27: exception in macro: scala.MatchError: x (of class scala.quoted.Expr) (called by mcr in object Macro_1$package) (in the body of Macro_1$package.mcr)
+i8866	the inline call OtherMacro.apply was not expanded: a call of an inline method in a tree a macro builds by reflection is left a call, where dotty's Inlining phase expands it (scalac's run prints 42)
+i8866b	the inline call Other.apply was not expanded: a call of an inline method in a tree a macro builds by reflection is left a call, where dotty's Inlining phase expands it (scalac's run prints 5)
 i8945.scala	i8945.scala:19:28: expected end of statement, found identifier
 i9251	Macro_1.scala:29:25: type argument F does not have the same kind as its bound
 i9254	Macros_1.scala:48:25: type argument F does not have the same kind as its bound
@@ -103,6 +105,7 @@ i9296	Macros_1.scala:17:18: type argument F does not have the same kind as its b
 i9360.scala	i9360.scala:17:21: only classes can have declared but undefined members
 i9361.scala	i9361.scala:9:23: type argument m2 does not have the same kind as its bound [_]
 i9518	Macro_1.scala:13:12: type argument [X] =>> CB[X] does not have the same kind as its bound
+i9687	Test_2.scala:8:12: the inline call x.FastPath.sum in x.Main.main was not expanded: a call of an inline method in a tree a macro builds by reflection is left a call, where dotty's Inlining phase expands it (scalac's run prints 2)
 i9894	Macro_1.scala:48:67: type argument CB does not have the same kind as its bound
 macro-classloaders	Caller.scala:2:3: not supported yet in a macro: java.lang.Thread$ is a JDK class, which has no body for currentThread to run; put a library implementing it on the class path (called by f in object Macro)
 macro-docs.scala	macro-docs.scala:11:9: recursive use of apply needs an explicit result type

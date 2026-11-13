@@ -189,6 +189,44 @@ if piece_has scripted; then
   stop
   rm -rf "$work/out"
 
+  # A call of an inline method that was left unexpanded is refused by each build whose output would hold
+  # it, and by no build after it is gone: the errors are the walk's own (`Reach::unexpanded`,
+  # src/emit/reach.rs), and a reach that holds any is not kept. A macro's quote declares a class whose
+  # default argument calls an inline method, which is left as a call; the file that uses the macro is
+  # switched to one without such a class and back, another file edited in between.
+  src=$work/unexpanded
+  mkdir -p "$src"
+  printf '%s\n' 'package watching' '' 'import scala.quoted.*' '' 'object Doubling:' '  inline def three: Int = 3' '  inline def twice(inline x: Int): Int = x + x' '' \
+    'object Making:' '  inline def held: Int = ${ heldImpl }' \
+    "  def heldImpl(using Quotes): Expr[Int] = '{ class Held(val a: Int = Doubling.three); new Held().a }" \
+    '  inline def local: Int = ${ localImpl }' \
+    "  def localImpl(using Quotes): Expr[Int] = '{ def l(z: Int) = Doubling.twice(z); l(4) }" > "$src/a_macros.scala"
+  unexpanded_use() { printf '%s\n' 'package watching' '' "def value: Int = Making.$1" > "$src/b_use.scala"; }
+  unexpanded_main() { printf '%s\n' 'package watching' '' '@main def run(): Unit =' "  println(\"$1 \" + value)" > "$src/z_main.scala"; }
+  unexpanded_refused() {
+    if [ "$(field ok)" = false ] && has 'the inline call watching.Doubling.three in Held was not expanded'; then ok; else bad "unexpanded call: $1: $RESULT"; fi
+  }
+  unexpanded_use local
+  unexpanded_main one
+  start "$src" $PIN
+  expect "unexpanded call: none at the first build" "$(field ok)" 'true'
+  unexpanded_use held
+  build "$src/b_use.scala"
+  unexpanded_refused "the build that reaches it"
+  unexpanded_main two
+  build "$src/z_main.scala"
+  unexpanded_refused "another file edited"
+  unexpanded_use local
+  build "$src/b_use.scala"
+  expect "unexpanded call: gone" "$(field ok)" 'true'
+  unexpanded_main three
+  build "$src/z_main.scala"
+  expect "unexpanded call: gone, another file edited" "$(field ok),$(field incremental)" 'true,true'
+  same_as_fresh "unexpanded call: gone" "$src" $PIN
+  expect "unexpanded call: gone, the output runs" "$(run_out watching.run)" "three 8"
+  stop
+  rm -rf "$work/out"
+
   # The kept class files (src/jvm/kept.rs): a retype takes the class files of the units it did not
   # type again from the last build where the facts their emission reads are the same, and emits
   # every unit again where they are not. Each scenario below changes, by a body edit in one file,

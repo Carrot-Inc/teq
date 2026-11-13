@@ -1,7 +1,9 @@
 // A library whose bodies a macro's run reaches for the first time while the inlining phase expands a file that
 // then waits for a macro of its run (tests/cases/macro_suspended_library_*): scalac compiles this directory
 // into the jar rounddemand-lib, and each body is typed from its pickle when it is first asked for. What is
-// typed then is the library's own, whatever becomes of the file whose expansion asked.
+// typed then is the library's own, whatever becomes of the file whose expansion asked. A body whose own
+// macro's call could not be expanded then keeps the call (tests/errors/unexpanded_library_call_*,
+// tests/classpath/jvm/unexpanded_library_call_*).
 package rounddemand
 
 import scala.quoted.*
@@ -45,3 +47,32 @@ object Derived:
 object Chosen:
   inline def one: Int = ${ oneImpl }
   def oneImpl(using Quotes): Expr[Int] = Expr(Reader.either(true))
+
+// A macro whose first run alone calls a body that holds a call of the library's own macro.
+object Once:
+  private var cold: Boolean = true
+  inline def one: Int = ${ oneImpl }
+  def oneImpl(using Quotes): Expr[Int] =
+    if cold then
+      cold = false
+      val reached: Int = Reader.depth
+    Expr(1)
+
+// A macro whose run takes the first branch of a body whose other branch calls the library's own macro.
+object Settled:
+  inline def one: Int = ${ oneImpl }
+  def oneImpl(using Quotes): Expr[Int] = Expr(Reader.settled(true))
+
+// An inline method that implements a member that is not inline: scalac keeps a method of its own for it,
+// which a call left as a call links to.
+trait Doubles:
+  def twice(x: Int): Int
+
+trait DoublesInline extends Doubles:
+  override inline def twice(x: Int): Int = x + x
+
+object Doubled extends DoublesInline
+
+// An inline method that implements nothing: it has no method of its own.
+object Tripled:
+  inline def thrice(x: Int): Int = x + x + x

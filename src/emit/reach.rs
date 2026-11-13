@@ -158,11 +158,19 @@ pub struct Reach {
     pub getter_names: crate::intern::FxMap<(Name, u32), ()>,
     pub getter_funs: crate::intern::FxMap<(SymId, u32), ()>,
     pub getter_ctors: crate::intern::FxMap<(ClassId, u32), ()>,
+    /// The reached calls of inline methods that no expansion replaced, each the error the build
+    /// ends with: the walk's own, which the typer's diagnostics do not keep, so that a session's
+    /// next walk finds them again or finds them gone.
+    pub unexpanded: Vec<Unexpanded>,
 }
+
+/// An error of the walk at a call's place (a call with no place has no file).
+pub type Unexpanded = (FileId, crate::source::Span, String);
 
 impl Reach {
     fn empty() -> Reach {
         Reach {
+            unexpanded: Vec::new(),
             getter_names: Default::default(),
             getter_funs: Default::default(),
             getter_ctors: Default::default(),
@@ -234,6 +242,17 @@ pub enum Place {
     Val,
 }
 
+/// A call of an inline method, or a reference to one, that the walk from the roots reached: the
+/// node, its callee and the definition whose tree holds it (a function, a class's template, a
+/// top-level val).
+#[derive(Clone, Copy)]
+pub(crate) struct Unfinished {
+    pub(crate) call: TExprId,
+    pub(crate) callee: SymId,
+    pub(crate) place: Option<Place>,
+    pub(crate) val: Option<SymId>,
+}
+
 /// Types the bodies of the standard library that the program reaches and returns what it reaches.
 /// `js_visible` asks for the names JavaScript code can see, which a release build keeps.
 pub fn compute(typer: &mut Worker, array_seq: Option<ClassId>, js_visible: bool) -> Reach {
@@ -303,6 +322,9 @@ trait Typing<'a> {
     fn runtime_exceptions(&mut self) -> Vec<ClassId>;
     /// The errors stored for the reached members of a library body's anonymous class.
     fn take_poisoned(&mut self, reached: &[FunId]);
+    /// The reached calls of inline methods that have no method of their own to call: each an
+    /// error at the call, since no target writes a definition for its callee.
+    fn unfinished_calls(&mut self, calls: &[Unfinished]) -> Vec<Unexpanded>;
     fn demand_extenders(&mut self, c: ClassId);
     fn deferred_body(&mut self, s: SymId) -> Option<DeferredBody>;
     fn check_class(&mut self, c: ClassId);
@@ -318,6 +340,22 @@ trait Typing<'a> {
     /// The signatures of what the members of classes the module makes override, which their
     /// bridges read (`Worker::complete_overridden_members`).
     fn complete_overridden(&mut self, classes: &[ClassId]);
+}
+
+impl<'a> Worker<'a> {
+    /// Whether the inline method `s` has a method of its own, which a call left as a call links
+    /// to: scalac retains one for an inline method that overrides or implements a member that is
+    /// not inline (`SymDenotations.isRetainedInlineMethod`). A program's own is the one the typer
+    /// keeps a body for (`is_retained_inline`). A library's, and another module's product's, is
+    /// the one its class's pickle holds `m$retainedBody` beside (`retained_bodies`), which is read
+    /// with the class's bodies: the class is converted here where nothing asked for it before.
+    fn has_retained_method(&mut self, s: SymId) -> bool {
+        if self.is_retained_inline(s) {
+            return true;
+        }
+        let Owner::Class(c) = self.syms.sym(s).owner else { return false };
+        self.is_library_member(s) && self.convert_library_class(c) && self.retained_bodies.get(&s).is_some()
+    }
 }
 
 impl<'a> Typing<'a> for Worker<'a> {
@@ -339,6 +377,29 @@ impl<'a> Typing<'a> for Worker<'a> {
                 self.diags.extend(diags);
             }
         }
+    }
+
+    fn unfinished_calls(&mut self, calls: &[Unfinished]) -> Vec<Unexpanded> {
+        let mut errors = Vec::new();
+        for u in calls {
+            if self.has_retained_method(u.callee) {
+                continue;
+            }
+            let callee = self.sym_path(u.callee);
+            let holder = match (u.place, u.val) {
+                (Some(Place::Fun(f)), _) => Some(self.sym_path(self.prog.funs[f.idx()].sym)),
+                (Some(Place::Class(c)), _) => Some(self.class_path(c)),
+                (_, Some(v)) => Some(self.sym_path(v)),
+                _ => None,
+            };
+            let message = match holder {
+                Some(h) => format!("the inline call {} in {} was not expanded", callee, h),
+                None => format!("the inline call {} was not expanded", callee),
+            };
+            let (file, span) = self.prog.span_of(u.call).unwrap_or((crate::source::NO_FILE, crate::source::Span::default()));
+            errors.push((file, span, message));
+        }
+        errors
     }
 
     fn demand_extenders(&mut self, c: ClassId) {
@@ -421,6 +482,11 @@ impl<'w, 'a> Typing<'a> for Unchanged<'w, 'a> {
         for f in reached {
             self.divergences.push(format!("the errors of poisoned function {} are left", f.0));
         }
+    }
+
+    // The walk from the roots reported them: a kept reach is one that walk gave.
+    fn unfinished_calls(&mut self, _calls: &[Unfinished]) -> Vec<Unexpanded> {
+        Vec::new()
     }
 
     fn demand_extenders(&mut self, _c: ClassId) {}
@@ -774,6 +840,10 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
         let reached: Vec<FunId> = t.w().poisoned.keys().copied().filter(|f| w.reach.funs.get(f.idx()).copied().unwrap_or(false)).collect();
         t.take_poisoned(&reached);
         lap.done("poisoned members' errors", reached.len());
+        // A reached call of an inline method that no expansion replaced is an error: the output
+        // would call a method no target defines.
+        let left = std::mem::take(&mut w.unfinished);
+        w.reach.unexpanded.extend(t.unfinished_calls(&left));
         // A library class is compiled before its members are asked for, so that the methods
         // find the class they belong to.
         if w.wants_array_seq && w.array_seq.is_some() {
@@ -1307,6 +1377,9 @@ struct Walker {
     /// belongs to the definition around it.
     place: Option<Place>,
     local_places: FxMap<FunId, Place>,
+    /// The reached calls of inline methods, which no expansion replaced: each with the definition
+    /// that holds it, reported after the walk (`Typing::unfinished_calls`).
+    unfinished: Vec<Unfinished>,
     /// The file whose initialiser has run, or is running, wherever the code being walked runs:
     /// inside the body of one of its top-level defs or its initialiser (`Reach::forwarded`).
     region: Option<FileId>,
@@ -1429,6 +1502,7 @@ impl Walker {
             reach: Reach { files: vec![false; n_files], ..Reach::empty() },
             place: None,
             local_places: FxMap::default(),
+            unfinished: Vec::new(),
             region: None,
             local_regions: FxMap::default(),
             layout,
@@ -2930,6 +3004,9 @@ pub(super) trait Meet {
     fn pat_rest(&mut self, cx: Cx);
     /// A default getter's application the output writes (`TExpr::Default`).
     fn default_getter(&mut self, cx: Cx, of: DefaultOf, index: u32);
+    /// The member read, the static reference or the call `e` of `s`, before `s` is reached: the
+    /// walk from the roots notes one of an inline method (`Walker::unfinished`).
+    fn callee(&mut self, _cx: Cx, _e: TExprId, _s: SymId) {}
 }
 
 pub(super) fn visit_list<M: Meet>(m: &mut M, cx: Cx, l: ListRef) {
@@ -2997,20 +3074,26 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
                 m.class(cx, c);
             }
         }
-        TExpr::Static(s) => m.static_ref(cx, s),
+        TExpr::Static(s) => {
+            m.callee(cx, e, s);
+            m.static_ref(cx, s);
+        }
         TExpr::Module(c) => m.class(cx, c),
         TExpr::ClassOf(c, dims) => m.class_of(cx, c, dims),
         TExpr::Field(r, s) => {
             visit(m, cx, r);
+            m.callee(cx, e, s);
             m.field(cx, matches!(prog.expr(r), TExpr::This), s);
         }
         TExpr::CallStatic(s, args) => {
             visit_args(m, cx, e, args);
+            m.callee(cx, e, s);
             m.call_static(cx, s);
         }
         TExpr::CallMethod(r, s, args) => {
             visit(m, cx, r);
             visit_args(m, cx, e, args);
+            m.callee(cx, e, s);
             m.call_method(cx, matches!(prog.expr(r), TExpr::Super(_)), s);
         }
         TExpr::CallClosure(f, args) => {
@@ -3238,6 +3321,15 @@ impl Meet for Walker {
     fn expansion(&mut self, e: TExprId) {
         if let Some(p) = self.place {
             self.reach.roots.push((e, p));
+        }
+    }
+
+    fn callee(&mut self, cx: Cx, e: TExprId, s: SymId) {
+        let info = cx.syms.sym(s);
+        // An inline `def` alone: whether the output holds a method for an inline given goes by the
+        // given's form (an instance given's is written), which is not the walk's to say.
+        if info.mods & mods::INLINE != 0 && info.kind == SymKind::Def {
+            self.unfinished.push(Unfinished { call: e, callee: s, place: self.place, val: self.current_val });
         }
     }
 
