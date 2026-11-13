@@ -13,10 +13,10 @@ line:
 
 ```scala
 // project/plugins.sbt
-addSbtPlugin("build.teq" % "sbt-teq" % "1.0.1")
+addSbtPlugin("build.teq" % "sbt-teq" % "1.0.2")
 
 // build.sbt
-teqVersion := "0.1.9"
+teqVersion := "0.1.10"
 teqCompiler := true
 ```
 
