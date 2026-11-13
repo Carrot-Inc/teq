@@ -73,6 +73,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A class compiled for the JVM lists as its interfaces the traits it inherits directly, as scalac's class files
+  do, and no longer every trait of its ancestors: a class or an object below `javax.swing.JButton` loads (it was an
+  `IllegalAccessError` for an interface of the JDK that is not public), and `getInterfaces` answers as under scalac.
 - A Java class's static member class is no member of a Scala class below it, as in scalac: inside a class that
   extends `java.awt.Point`, `Double` is `scala.Double` and not `Point2D.Double`, and a member enum or interface
   of a Java ancestor is named through that ancestor (`java.net.Proxy.Type`). An inner class is inherited as before.

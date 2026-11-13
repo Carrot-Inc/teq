@@ -1424,6 +1424,7 @@ js_this_function_null_receiver	cannot run	-	its expectation is Scala.js's
 js_typed_array_iterables	cannot run	-	its expectation is Scala.js's
 js_wrapped_dictionary	cannot run	-	its expectation is Scala.js's
 junit_comparison_failure	fail	-	unsupported
+jvm_direct_interfaces	fail	-	compile
 jvm_lazy_local_closure	pass	-	
 jvm_lazy_trait	pass	-	
 jvm_lazy_val_race	pass	-	
@@ -2640,6 +2641,7 @@ structural_signatures	pass	-
 structural_value_class	pass	-	
 summon_from_wildcard_given	pass	-	
 summoner_sugar	pass	-	
+super_call_kinds	pass	-	
 super_rebind_result	fail	-	unsupported
 suppression_disabled	pass	-	
 suppression_inheritance	pass	-	

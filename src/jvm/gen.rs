@@ -293,6 +293,10 @@ impl Default for MethodCx {
     }
 }
 
+/// Where a class first names a super call's target: the kind of body, then the place in it
+/// (`Gen::super_call_place`); the class's list takes its targets in this order.
+pub type SuperPlace = (u8, u32, u32, u32);
+
 pub struct Gen<'a> {
     pub cx: &'a Cx<'a>,
     pub errors: Vec<String>,
@@ -332,6 +336,19 @@ pub struct Gen<'a> {
     /// The fields of the traits read from class files, by trait (`class_file_trait_fields`).
     pub(super) trait_fields: FxMap<ClassId, Rc<super::classes::ClassFileTrait>>,
     pub cw: ClassWriter,
+    /// The interfaces the class being written names in an `invokespecial`, each with the place
+    /// of its first call (`super_call_place`): the JVM wants each among the class's direct
+    /// superinterfaces, so the class's list takes them (dotty's `superCallTargets`). It is the
+    /// writer's: emptied where a class's writer is made, read at the class's end.
+    pub super_targets: Vec<(String, SuperPlace)>,
+    /// The end of the super call being written in the source, where its text is the class's
+    /// file's: an `invokespecial` is written after its call's arguments.
+    pub super_call_at: Option<u32>,
+    /// The end and the start of the lifted body being written (a lambda, a by-name argument, a
+    /// local def), none in a member's own code.
+    pub lifted_body: Option<(u32, u32)>,
+    /// Set while the primary constructor is written.
+    pub ctor_code: bool,
     pub this_name: Rc<str>,
     pub this_class: Option<ClassId>,
     pub is_interface: bool,
@@ -418,6 +435,10 @@ impl<'a> Gen<'a> {
             mref_arities: FxMap::default(),
             trait_fields: FxMap::default(),
             cw: ClassWriter::new(0, "x", OBJECT, &[]),
+            super_targets: Vec::new(),
+            super_call_at: None,
+            lifted_body: None,
+            ctor_code: false,
             this_name: Rc::from(""),
             this_class: None,
             is_interface: false,
@@ -2396,12 +2417,69 @@ impl<'a> Gen<'a> {
         self.code.push(top);
     }
 
+    /// Whether `c` is a Java-defined interface: one read from a class file, or one the std
+    /// declares in a `java` package for the JDK's (`Cx::java_defined` of its members).
+    /// The place of the super call being written, by which a class's targets are ordered: the
+    /// order in which scalac's back end writes a class's bodies and so fills `superCallTargets`.
+    /// First the members made for the class, a trait's super accessor among them
+    /// (`ResolveSuper.transformTemplate` and `Mixin.transformTemplate` put them before the
+    /// class's own), in the order written; then the primary constructor's code
+    /// (`BCodeSkelBuilder.gen`: the constructor, then the body), the field initialisers and the
+    /// body's statements; then the other members by their place in the source; last the
+    /// lifted bodies, which `LambdaLift.transformTemplate` appends to the class, an inner one
+    /// before the one around it: by the end of the body, the later start first. Inside one
+    /// body the calls stand by their line and then by the call's end: a call in another's
+    /// argument is written before it.
+    fn super_call_place(&self) -> SuperPlace {
+        let at = self.super_call_at.unwrap_or(u32::MAX);
+        match (self.lifted_body, self.code.current_line()) {
+            (Some((end, start)), _) => (3, end, u32::MAX - start, at),
+            (None, None) => (0, 0, 0, 0),
+            (None, Some(line)) => (if self.ctor_code { 1 } else { 2 }, u32::from(line), at, 0),
+        }
+    }
+
+    pub(super) fn java_interface(&self, c: ClassId) -> bool {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let info = syms.class(c);
+        if info.kind != ClassKind::Trait {
+            return false;
+        }
+        if cx.input.java_class(c).is_some() {
+            return true;
+        }
+        if !cx.input.sources.get(info.file.0 as usize).is_some_and(|f| f.is_std) {
+            return false;
+        }
+        let mut owner = info.owner;
+        while let Owner::Class(o) = owner {
+            owner = syms.class(o).owner;
+        }
+        let Owner::Package(mut p) = owner else { return false };
+        while let Some(parent) = syms.pkg(p).parent.filter(|&q| q != crate::symbols::ROOT_PKG) {
+            p = parent;
+        }
+        syms.pkg(p).parent.is_some() && syms.pkg(p).name == crate::names::JAVA
+    }
+
     pub fn invoke(&mut self, kind: Invoke, owner: &str, owner_is_interface: bool, name: &str, params: &[JType], ret: &JType) {
         let desc = method_desc(params, ret);
         self.invoke_desc(kind, owner, owner_is_interface, name, &desc, params.len(), ret);
     }
 
     pub fn invoke_desc(&mut self, kind: Invoke, owner: &str, owner_is_interface: bool, name: &str, desc: &str, n_params: usize, ret: &JType) {
+        // An `invokespecial` of an interface's method links only where the interface is a direct
+        // superinterface of the class: every one written is recorded for the class's list
+        // (`BCodeBodyBuilder.genCallMethod` adds to `superCallTargets`). A trait's call of its
+        // own method names the trait itself, which is no interface of its own.
+        if owner_is_interface && matches!(kind, Invoke::Special) && owner != &*self.this_name {
+            let place = self.super_call_place();
+            match self.super_targets.iter_mut().find(|(t, _)| t == owner) {
+                Some((_, first)) => *first = (*first).min(place),
+                None => self.super_targets.push((owner.to_string(), place)),
+            }
+        }
         let index = if owner_is_interface {
             self.cw.cp.interface_method(owner, name, desc)
         } else {
@@ -3024,7 +3102,7 @@ impl<'a> Gen<'a> {
             TExpr::ClassOf(c, dims) => self.class_of(e, c, dims),
             TExpr::Field(r, s) => self.field_read(r, s),
             TExpr::CallStatic(s, args) => self.call_static(s, args),
-            TExpr::CallMethod(r, s, args) => self.call_method(r, s, args),
+            TExpr::CallMethod(r, s, args) => self.call_method(e, r, s, args),
             TExpr::CallClosure(f, args) => {
                 let items = prog.expr_list(args);
                 let ft = self.function_type(items.len());
@@ -5327,7 +5405,7 @@ impl<'a> Gen<'a> {
         seq
     }
 
-    fn call_method(&mut self, r: TExprId, s: SymId, args: ListRef) -> JType {
+    fn call_method(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> JType {
         let cx = self.cx;
         if let Some(array) = self.spread_conversion(s, args) {
             self.statement(r);
@@ -5369,12 +5447,20 @@ impl<'a> Gen<'a> {
             }
         }
         if let TExpr::Super(target) = cx.input.prog.expr(r) {
-            // `invokespecial` on the superclass, or on the interface of a trait of this class.
+            // `invokespecial` on the superclass, or on the interface of a trait of this class. A
+            // Java interface's method is called on the interface itself, whatever brings it: the
+            // receiver of a super call is the method's owner (`BCodeBodyBuilder.genCallMethod`),
+            // which the class then lists (`superCallTargets`).
             let superclass = self.this_class.and_then(|c| cx.input.syms.class(c).superclass);
+            let java = match cx.input.syms.sym(s).owner {
+                Owner::Class(o) if self.java_interface(o) => Some(o),
+                _ => None,
+            };
             let owner = match target {
+                SuperTarget::Mixin(_) => None,
+                _ if java.is_some() => java,
                 SuperTarget::Chain => superclass,
                 SuperTarget::Class(c) => Some(c),
-                SuperTarget::Mixin(_) => None,
             };
             match owner {
                 // `super` inside a trait goes through the accessor its class implements.
@@ -5392,14 +5478,19 @@ impl<'a> Gen<'a> {
                 _ => self.unsupported("not supported on the JVM yet: this super call"),
             }
         }
-        let site = if matches!(cx.input.prog.expr(r), TExpr::Super(_)) { None } else { self.invoke_site(r, s, &m) };
+        let is_super = matches!(cx.input.prog.expr(r), TExpr::Super(_));
+        let site = if is_super { None } else { self.invoke_site(r, s, &m) };
         self.site_receiver(r, s, &site);
         let params = m.params.clone();
         self.arguments(Some(s), args, &params);
+        if is_super {
+            self.super_call_at = cx.input.prog.span_of(e).filter(|&(f, _)| f == self.line_file).map(|(_, span)| span.end);
+        }
         match site {
             Some(site) => self.invoke_desc(site.kind(), &site.owner, site.interface, &m.name, &m.desc, m.params.len(), &m.ret),
             None => self.invoke_mref(&m),
         }
+        self.super_call_at = None;
         if java {
             return self.java_value(m.ret.clone());
         }

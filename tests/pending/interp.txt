@@ -115,6 +115,7 @@ jdk_member_missing_class	compile
 jdk_static_values_stable	compile
 jdk_statics_import	compile
 junit_comparison_failure	unsupported
+jvm_direct_interfaces	compile
 jvm_varargs_backing_arrays	output
 lambda_spread_bounded_formal_anyref	compile
 lambda_spread_bounded_formal_case_class	compile

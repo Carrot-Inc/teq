@@ -2219,6 +2219,11 @@ impl<'a> Gen<'a> {
     /// superinterface).
     fn super_call_owner(&self, c: ClassId, target: ClassId) -> ClassId {
         let syms = self.cx.input.syms;
+        // A Java interface's method is called on the interface itself, as a written super call's
+        // is (`BCodeBodyBuilder.genCallMethod`): the class that holds the call lists it.
+        if self.java_interface(target) {
+            return target;
+        }
         let Some(sup) = syms.class(c).superclass else { return target };
         if target == sup || syms.class(target).kind != ClassKind::Trait {
             return target;

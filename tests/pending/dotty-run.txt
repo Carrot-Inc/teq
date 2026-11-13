@@ -370,7 +370,6 @@ publicInBinary	option: -Wsafe-init with -Werror (teq has no flag for it)
 quotes-add-erased	Test_2.scala:4:19: 'erased' is not part of the supported Scala subset
 quotes-reflection	Test_2.scala:7:10: 'erased' is not part of the supported Scala subset
 reducable.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: 4
-redundantParents.scala	output: line 2: the .check has 'C1 interfaces: List(interface T2)', the program printed 'C1 interfaces: List(interface T2, interface T1)'
 repeatable	java source: teq reads none
 runtimeChecked-2.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 runtimeChecked.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -463,7 +462,6 @@ t8549b.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitia
 t8601e	java source: teq reads none
 t8611b.scala	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad type on operand stack
 t8803.scala	t8803.scala:20:68: expected an identifier, found 'super'
-t8931.scala	output: line 1: the .check has 'List(interface B)', the program printed 'List(interface B, interface A)'
 t949.scala	t949.scala:6:20: not found: Value
 t9915	java source: teq reads none
 tagless.scala	tagless.scala:86:18: expected end of statement, found ','

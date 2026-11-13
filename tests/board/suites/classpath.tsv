@@ -283,6 +283,7 @@ jvm/jvm_class_tag_of_bottoms	pass	-
 jvm/jvm_concat_flush	pass	-	
 jvm/jvm_concat_order	pass	-	
 jvm/jvm_concat_wide_boxes	pass	-	
+jvm/jvm_interfaces_below_swing	pass	-	
 jvm/jvm_java_nullary_override	pass	-	
 jvm/jvm_jdk_statics	pass	-	
 jvm/jvm_link_arrays_varargs	pass	-	

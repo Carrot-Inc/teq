@@ -113,8 +113,23 @@ impl<'a> Gen<'a> {
     /// The lifted methods that the methods emitted so far asked for, and the ones those ask for.
     pub fn drain_pending(&mut self) {
         while let Some(p) = self.pending.pop() {
+            self.lifted_body = Some(self.lifted_span(&p));
             self.emit_lifted(p);
+            self.lifted_body = None;
         }
+    }
+
+    /// The end and the start of a lifted body's text, by which the super calls of lifted bodies
+    /// are ordered; the last place for one without text of its own.
+    fn lifted_span(&self, p: &Pending) -> (u32, u32) {
+        let prog = self.cx.input.prog;
+        let body = match &p.body {
+            PendingBody::Lambda(_, body) | PendingBody::LazyInit(_, body) => Some(*body),
+            PendingBody::Fun(f) => prog.funs[f.idx()].body,
+            PendingBody::Default(f, i) => prog.funs[f.idx()].defaults[*i],
+            PendingBody::LazyAccessor(_) | PendingBody::JarGetter(_) => None,
+        };
+        body.and_then(|e| prog.span_of(e)).map_or((u32::MAX, 0), |(_, span)| (span.end, span.start))
     }
 
     fn emit_lifted(&mut self, p: Pending) {
@@ -824,10 +839,10 @@ impl<'a> Gen<'a> {
         let mut desugared: Vec<ClassId> = Vec::new();
         // In the order of the parents clause, the reverse of the linearisation's (dotty's
         // `directlyInheritedTraits`, the traits before the superclass), those no other of them
-        // brings first, as `BCodeSkelBuilder.initJClass` lists them; then the ones it leaves out,
-        // the traits another brings or the superclass does, which teq lists for the calls it makes
-        // on them (dotty adds its super calls' targets). A library class the std's stands for
-        // (`link_library_class`) goes by the same name.
+        // brings, as `BCodeSkelBuilder.initJClass` lists them. The ones it leaves out, the traits
+        // another brings or the superclass does, are no interfaces of the class unless one of its
+        // super calls names them: those join the list at the class's end (`super_targets`). A
+        // library class the std's stands for (`link_library_class`) goes by the same name.
         let before_super = info.base_types.iter().position(|&(b, _)| Some(b) == enum_class.or(superclass)).unwrap_or(info.base_types.len());
         let mut traits: Vec<(ClassId, bool)> = Vec::new();
         for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1).rev() {
@@ -841,11 +856,11 @@ impl<'a> Gen<'a> {
             }
         }
         let brought = |t: ClassId| traits.iter().any(|&(u, direct)| direct && u != t && syms.class(u).base_types.iter().skip(1).any(|&(x, _)| x == t));
-        let (first, rest): (Vec<_>, Vec<_>) = traits.iter().partition(|&&(t, direct)| direct && !brought(t));
-        for &(b, _) in first.into_iter().chain(rest) {
-            interfaces.push(cx.class_names[b.idx()].clone());
-            listed.push(b);
-        }
+        // The direct traits in their order, each with whether another of them brings it.
+        let direct: Vec<(String, bool)> = traits.iter().filter(|&&(_, direct)| direct).map(|&(t, _)| (cx.class_names[t.idx()].clone(), brought(t))).collect();
+        interfaces.extend(direct.iter().filter(|(_, brought)| !brought).map(|(n, _)| n.clone()));
+        let direct_listed = interfaces.len();
+        listed.extend(traits.iter().map(|&(b, _)| b));
         // The parents `Desugar.classDef` gives (`Product` and `java.io.Serializable`, an enum's
         // `Enum`) as scalac's backend lists them: after the others, less one another parent or the
         // superclass brings (`directlyInheritedTraits` less the redundant, `CoreBTypesFromSymbols`):
@@ -871,11 +886,17 @@ impl<'a> Gen<'a> {
         if (is_object && info.companion.map_or(false, |e| cx.has_enum_fields(e)) || instance_enum_companion) && !interfaces.iter().any(|i| i == super::callable::MIRROR_SUM) {
             interfaces.push(super::callable::MIRROR_SUM.to_string());
         }
+        // What the class's parents give; a module class's `Serializable` comes after it, and after
+        // the targets of its super calls (`initJClass` appends it last).
+        let declared = interfaces.len();
         if is_object || info.inner_object.is_some() || cx.given_object_classes.contains_key(&c) || cx.inner_given_object_classes.contains_key(&c) {
             interfaces = super::callable::module_interfaces(interfaces, info.owner == Owner::Local);
         }
         let access = self.class_access(c);
         self.cw = ClassWriter::new(access, &name, &super_name, &interfaces);
+        self.super_targets.clear();
+        self.lifted_body = None;
+        self.ctor_code = false;
 
         self.this_name = name.clone();
         self.this_class = Some(c);
@@ -1046,7 +1067,9 @@ impl<'a> Gen<'a> {
                 self.ctor_default_getters(Some(c), Some(crate::tir::DefaultOf::Ctor(c)), &tc.ctor_params, &tc.ctor_defaults, &clauses);
             }
         } else {
+            self.ctor_code = true;
             self.constructor(tc, &fields, &super_name, enum_class.or(superclass), superclass.is_some(), is_value_case, is_object || given_module, is_anon);
+            self.ctor_code = false;
             for &f in &tc.ctors {
                 if cx.input.reach.funs[f.idx()] {
                     self.secondary_ctor(f);
@@ -1151,6 +1174,46 @@ impl<'a> Gen<'a> {
         // The methods of its code's local lazy vals, whichever class reads them.
         self.owned_lazy_methods(Some(c), info.file);
         self.drain_pending();
+        // The targets of the class's super calls are interfaces of it (`initJClass`): a direct
+        // trait another brings keeps its place among the direct ones, any other target comes
+        // after the parents' list, in the order scalac's back end writes the class's bodies and
+        // so fills its set (`super_call_place`). A call copied into a class that is no instance
+        // of the interface (a value class's method in its companion) names no interface of the
+        // class.
+        if !self.super_targets.is_empty() {
+            let mut recorded = std::mem::take(&mut self.super_targets);
+            // The super accessors' targets stand trait by trait, the first mixed in first
+            // (`ResolveSuper.transformTemplate` takes the class's mixins in that order), and
+            // in a trait's own order inside it; the accessors themselves are written in the
+            // linearisation's order.
+            let mut accessors: Vec<(usize, usize, &str)> = Vec::new();
+            for (i, a) in tc.super_accessors.iter().enumerate() {
+                let Some(Owner::Class(o)) = a.target.map(|t| cx.input.syms.sym(t).owner) else { continue };
+                if self.java_interface(o) {
+                    let mixed = info.base_types.iter().position(|&(b, _)| b == a.of_trait).unwrap_or(0);
+                    accessors.push((usize::MAX - mixed, i, &cx.class_names[o.idx()]));
+                }
+            }
+            accessors.sort();
+            for (target, place) in recorded.iter_mut() {
+                if place.0 == 0 {
+                    if let Some(n) = accessors.iter().position(|&(_, _, t)| t == target.as_str()) {
+                        place.1 = n as u32 + 1;
+                    }
+                }
+            }
+            recorded.sort_by_key(|&(_, place)| place);
+            let targets: Vec<String> = recorded.into_iter().map(|(t, _)| t).filter(|t| info.base_types.iter().skip(1).any(|&(b, _)| cx.class_names[b.idx()] == *t)).collect();
+            let mut list: Vec<String> = direct.iter().filter(|(n, brought)| !brought || targets.contains(n)).map(|(n, _)| n.clone()).collect();
+            list.extend(interfaces[direct_listed..declared].iter().cloned());
+            for t in targets {
+                if !list.contains(&t) && !interfaces[declared..].contains(&t) {
+                    list.push(t);
+                }
+            }
+            list.extend(interfaces[declared..].iter().cloned());
+            self.cw.set_interfaces(&list);
+        }
         self.finish_class(&name)
     }
 

@@ -1424,6 +1424,7 @@ js_this_function_null_receiver	pass	-
 js_typed_array_iterables	pass	-	
 js_wrapped_dictionary	pass	-	
 junit_comparison_failure	pass	-	
+jvm_direct_interfaces	cannot run	-	the JVM's platform
 jvm_lazy_local_closure	cannot run	-	the JVM's platform
 jvm_lazy_trait	cannot run	-	the JVM's platform
 jvm_lazy_val_race	cannot run	-	the JVM's platform
@@ -2640,6 +2641,7 @@ structural_signatures	pass	-
 structural_value_class	pass	-	
 summon_from_wildcard_given	pass	-	
 summoner_sugar	pass	-	
+super_call_kinds	pass	-	
 super_rebind_result	fail	-	< text
 suppression_disabled	pass	-	
 suppression_inheritance	pass	-	

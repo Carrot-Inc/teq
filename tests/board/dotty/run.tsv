@@ -1029,7 +1029,7 @@ rawstrings.scala	pass	interp:fail
 recursive-with-option.scala	pass	interp:pass	
 reducable.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: 4
 reduce-projections.scala	pass	interp:pass	
-redundantParents.scala	fail	interp:fail	output: line 2: the .check has 'C1 interfaces: List(interface T2)', the program printed 'C1 interfaces: List(interface T2, interface T1)'
+redundantParents.scala	pass	interp:fail	
 repeatable	fail	-	java source: teq reads none
 rescue-boundary.scala	pass	interp:fail	
 rescue.scala	pass	interp:fail	
@@ -1529,7 +1529,7 @@ t8888.scala	pass	interp:fail
 t889.scala	pass	interp:fail	
 t8893.scala	pass	interp:pass	
 t8893b.scala	pass	interp:pass	
-t8931.scala	fail	interp:fail	output: line 1: the .check has 'List(interface B)', the program printed 'List(interface B, interface A)'
+t8931.scala	pass	interp:fail	
 t8933b	pass	interp:pass	
 t8933c.scala	pass	interp:pass	
 t920.scala	pass	interp:pass	

@@ -182,6 +182,7 @@ jdk_routes_compiler_subset	error: not supported on JavaScript: class File java.i
 jdk_static_values_stable	error: a singleton type needs a val, a parameter or an object
 jdk_statics_import	error: not found: getType
 junit_comparison_failure	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+jvm_direct_interfaces	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
 jvm_lazy_local_closure	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
 jvm_lazy_trait	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
 jvm_lazy_val_race	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in

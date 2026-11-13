@@ -375,6 +375,11 @@ impl Code {
         self.bytes.len() as u32
     }
 
+    /// The source line the code being written is at, none before the first.
+    pub fn current_line(&self) -> Option<u16> {
+        self.lines.last().map(|&(_, line)| line)
+    }
+
     pub fn line(&mut self, line: u32) {
         let pc = self.pc() as u16;
         let line = line.min(u16::MAX as u32) as u16;
@@ -782,6 +787,13 @@ impl ClassWriter {
         let name = self.cp.utf8(name);
         let desc = self.cp.utf8(desc);
         self.fields.insert(0, Member { access, name, desc, attrs: Vec::new() });
+    }
+
+    /// The class's interfaces in the place of the list it was made with: a list that holds the
+    /// targets of the class's super calls is known when its bodies are written.
+    pub fn set_interfaces(&mut self, interfaces: &[String]) {
+        let list = interfaces.iter().map(|i| self.cp.class(i)).collect();
+        self.interfaces = list;
     }
 
     pub fn has_method(&self, name: &str, desc: &str) -> bool {
