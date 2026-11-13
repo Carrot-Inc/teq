@@ -2077,10 +2077,43 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the path's step `s` is a method: an export's forwarder of a stable member, the
+    /// one method a path goes through (`Namer.addForwarder`: `StableRealizable`, its type the
+    /// member's path).
+    pub(super) fn is_path_method(&self, s: SymId) -> bool {
+        self.syms.sym(s).kind == SymKind::Def
+    }
+
+    /// The value of the forwarder `s` on its path's prefix, a package's having none: dotty's
+    /// `tpd.ref` of a `TermRef` to a method is the method's application, so it is made as the
+    /// reference written in an expression is, an inline forwarder's kept for expansion like any
+    /// call. A member read of the symbol is the method itself where a method is a value.
+    pub(super) fn forwarder_value(&mut self, prefix: Option<(TExprId, TypeId)>, s: SymId, span: Span) -> Option<TExprId> {
+        let name = self.syms.sym(s).name;
+        match prefix {
+            Some((recv, recv_ty)) => Some(self.apply_member(recv, recv_ty, name, None, Vec::new(), span, None).0),
+            None => {
+                let callee = self.term_callee(super::resolve::TermRef::Global(s), name, span)?;
+                Some(self.apply_callee(callee, None, Vec::new(), span, None).0)
+            }
+        }
+    }
+
+    /// Whether the path's step `s` is made as a forwarder's application (`forwarder_value`): a
+    /// forwarder, but for an inline one where `inline_applied` is not set, which stays the member
+    /// read it was. A singleton type test asks so: dotty makes its reference in its erasure,
+    /// after the inline calls are expanded, and what is left of the test by then is not the
+    /// typer's to know; the build's check of unexpanded calls refuses the program where the test
+    /// is reached.
+    pub(super) fn applies_forwarder(&self, s: SymId, inline_applied: bool) -> bool {
+        self.is_path_method(s) && (inline_applied || !self.is_inline_callee(s))
+    }
+
     /// The value of the stable path `s` (a local, a top-level val, a member of an enclosing
     /// class or of an object) as an expression where the typer stands; none for a member of a
-    /// class that is no enclosing one.
-    pub(super) fn stable_path_expr(&mut self, s: SymId) -> Option<TExprId> {
+    /// class that is no enclosing one. `span` is where a forwarder on the path is applied,
+    /// `inline_applied` whether an inline one is (`applies_forwarder`).
+    pub(super) fn stable_path_expr(&mut self, s: SymId, span: Span, inline_applied: bool) -> Option<TExprId> {
         // A static object's module val is the object: its module (`this` inside it), as dotty's
         // `ref` of the module's `TermRef` loads it where an outer argument is rebuilt from a
         // path (`ExplicitOuter.outerPrefix`, `singleton(prefix)`), not a top-level val of its
@@ -2103,7 +2136,10 @@ impl<'a> Worker<'a> {
                 }).collect();
                 match classes.into_iter().find(|&k| k == o || self.derives_from(k, o)) {
                     Some(through) => {
-                        let (this, _) = self.type_this_of(through);
+                        let (this, this_ty) = self.type_this_of(through);
+                        if self.applies_forwarder(s, inline_applied) {
+                            return self.forwarder_value(Some((this, this_ty)), s, span);
+                        }
                         let field = self.prog.add(TExpr::Field(this, s));
                         // The path's `ref`: the class's own parameter accessor on its `this` is an `Ident`
                         // (`prefixIsElidable`).
@@ -2113,11 +2149,16 @@ impl<'a> Worker<'a> {
                     // An object's member (`Registry.token`): through the object itself.
                     None if self.syms.class(o).kind == ClassKind::Object && !self.class_in_class(o) => {
                         let module = self.prog.add(TExpr::Module(o));
+                        if self.applies_forwarder(s, inline_applied) {
+                            let module_ty = self.types.class(o, &[]);
+                            return self.forwarder_value(Some((module, module_ty)), s, span);
+                        }
                         self.prog.add(TExpr::Field(module, s))
                     }
                     None => return None,
                 }
             }
+            Owner::Package(_) if self.applies_forwarder(s, inline_applied) => return self.forwarder_value(None, s, span),
             Owner::Package(_) => self.prog.add(TExpr::Static(s)),
             // Across a trait a class of the block owns: the proxy that class holds (`proxies.rs`).
             Owner::Local => match self.held_holder(s) {
@@ -2135,7 +2176,7 @@ impl<'a> Worker<'a> {
         let te = self.evidence_given(c, target, span)
             .or_else(|| self.class_tag_given(c, target))
             .or_else(|| self.type_test_given(c, target, span))
-            .or_else(|| self.value_of_given(c, target))
+            .or_else(|| self.value_of_given(c, target, span))
             .or_else(|| self.quoted_type_given(c, target, span))
             .or_else(|| self.synthesized_can_equal(c, target, span))
             .or_else(|| self.not_given(c, target, span, byname))?;

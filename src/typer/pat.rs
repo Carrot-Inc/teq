@@ -2535,14 +2535,65 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The value of the stable path type `t` as an expression: an unqualified term through the
-    /// scope (`stable_path_expr`), a selection through its prefix, kept whole (`other.token`,
-    /// not the enclosing instance's `token`).
-    pub(super) fn path_expr(&mut self, t: TypeId) -> Option<TExprId> {
+    /// The path a selection's qualifier type `p` stands for: dotty types a selection on its
+    /// qualifier's type widened where the qualifier is no stable member (`TypeAssigner.selectionType`,
+    /// `Types.widenIfUnstable`), so `o.x.n.type` over an inline given `x: box.type` is
+    /// `o.box.n.type`. A forwarder is stable as its member is (`Namer.addForwarder`).
+    pub(super) fn widen_if_unstable(&mut self, p: TypeId) -> TypeId {
+        let mut p = p;
+        // The types widened so far: a path that comes back to one of them ends the walk.
+        let mut seen: Vec<TypeId> = Vec::new();
+        loop {
+            let (Type::Term(s) | Type::Select(_, s)) = self.types.get(p) else { break };
+            let mut member = s;
+            while let Some(fwd) = self.syms.forward_of(member) {
+                member = fwd.target;
+            }
+            if self.is_stable_member(member) {
+                break;
+            }
+            let under = self.path_underlying(p);
+            let under = self.deref(under);
+            if under == p || seen.contains(&under) {
+                break;
+            }
+            seen.push(p);
+            p = under;
+        }
+        p
+    }
+
+    /// The path type `t` as dotty's typer holds it: the qualifier of each of its selections
+    /// widened where it is no stable member (`widen_if_unstable`).
+    pub(super) fn widened_path(&mut self, t: TypeId) -> TypeId {
         match self.types.get(t) {
-            Type::Term(s) => self.stable_path_expr(s),
             Type::Select(p, s) => {
-                let prefix = self.path_expr(p)?;
+                let q = self.widen_if_unstable(p);
+                let q = self.widened_path(q);
+                if q == p {
+                    t
+                } else {
+                    self.types.mk(Type::Select(q, s))
+                }
+            }
+            _ => t,
+        }
+    }
+
+    /// The value of the stable path type `t` as an expression, dotty's `tpd.singleton`: an
+    /// unqualified term through the scope (`stable_path_expr`), a selection through its prefix,
+    /// kept whole (`other.token`, not the enclosing instance's `token`), a forwarder its
+    /// application on the prefix (`forwarder_value`, at `span`), an inline one at the path's
+    /// end where `inline_applied` says so (`applies_forwarder`).
+    pub(super) fn path_expr(&mut self, t: TypeId, span: Span, inline_applied: bool) -> Option<TExprId> {
+        match self.types.get(t) {
+            Type::Term(s) => self.stable_path_expr(s, span, inline_applied),
+            Type::Select(p, s) => {
+                let p = self.widen_if_unstable(p);
+                let prefix = self.path_expr(p, span, true)?;
+                if self.applies_forwarder(s, inline_applied) {
+                    return self.forwarder_value(Some((prefix, p)), s, span);
+                }
                 let field = self.prog.add(TExpr::Field(prefix, s));
                 // The path's `ref`: the class's own parameter accessor on its `this` is an `Ident` (`prefixIsElidable`).
                 if let Type::This(c) = self.types.get(p) {
@@ -2968,12 +3019,22 @@ impl<'a> Worker<'a> {
             // the instance's outer (`PatternMatcher.addOuterTest`), which teq does not make.
             Type::Nested(_, class) => return self.test_for(class, sty, span, unchecked),
             // A singleton type's test is `isInstance` of the singleton (TypeTestsCasts.scala
-            // 325-326), the identity test `case _: x.type` makes; a path the
-            // typer cannot name here (a member of no enclosing class) is the error below.
-            Type::Term(_) | Type::Select(..) if self.path_expr(t).is_some() => {
-                let value = self.path_expr(t).unwrap();
-                self.prog.set_type(value, t);
-                TypeTest::Value(value)
+            // 325-326), the identity test `case _: x.type` makes, the path's value read at the
+            // test, an inline forwarder at its end left a member read (`applies_forwarder`); a
+            // path the typer cannot name here (a member of no enclosing class) is the error
+            // below.
+            Type::Term(_) | Type::Select(..) => {
+                match self.path_expr(t, span, false) {
+                    Some(value) => {
+                        self.prog.set_type(value, t);
+                        TypeTest::Value(value)
+                    }
+                    None => {
+                        let msg = format!("this type cannot be tested at runtime: {}", self.show(t));
+                        self.error(span, msg);
+                        TypeTest::Always
+                    }
+                }
             }
             _ => {
                 let msg = format!("this type cannot be tested at runtime: {}", self.show(t));

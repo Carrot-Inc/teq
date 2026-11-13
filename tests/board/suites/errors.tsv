@@ -667,6 +667,7 @@ package_private_access	pass	-
 param_clause_blank_line	pass	-	
 param_clause_next_line	pass	-	
 parens	pass	-	
+path_test_of_inline_forwarder	pass	-	
 pattern_binder_types	pass	-	
 pattern_binding_refutable	pass	-	
 pattern_binding_refutable_future	pass	-	
@@ -876,8 +877,6 @@ unexpanded_library_call_branch_not_taken	pass	-
 unexpanded_library_call_reached	pass	-	
 unexpanded_library_inline_in_quoted_class	pass	-	
 unexpanded_library_inline_in_quoted_class_jvm	pass	-	
-unexpanded_top_level_forwarder_path	pass	-	
-unexpanded_top_level_forwarder_path_jvm	pass	-	
 union_constant_conversion	pass	-	
 union_instantiation	pass	-	
 union_joins	pass	-	

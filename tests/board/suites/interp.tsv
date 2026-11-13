@@ -2114,6 +2114,14 @@ partial_sites	pass	-
 partial_unification_fixed_args	pass	-	
 path_member_override_prefix	pass	-	
 path_operations	pass	-	
+path_value_exported_constants	pass	-	
+path_value_exported_from_instance	pass	-	
+path_value_exported_initialisation	pass	-	
+path_value_exported_inline_val	pass	-	
+path_value_exported_top_level	pass	-	
+path_value_exported_vals	pass	-	
+path_value_plain_paths	pass	-	
+path_value_unstable_prefix	pass	-	
 pattern_abstract_scrutinee	pass	-	
 pattern_array_gadt	fail	-	output
 pattern_bind_tuple_type	pass	-	

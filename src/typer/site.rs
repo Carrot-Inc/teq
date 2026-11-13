@@ -805,8 +805,41 @@ impl<'a> Worker<'a> {
         Some(call)
     }
 
-    /// `ValueOf[L]` for a literal type `L`, as scalac synthesizes it.
-    pub fn value_of_given(&mut self, class: ClassId, target: TypeId) -> Option<TExprId> {
+    /// What `FirstTransform` makes of the reference `ValueOf`'s synthesis gives a path whose
+    /// step `s` is an export's forwarder (`TreeInfo.constToLiteral`, of every reference): where
+    /// the path's type widens to a constant type and the reference is pure (`isPureExpr`), the
+    /// constant, nothing evaluated. The reference is `tpd.ref`'s of the path as the typer holds
+    /// it (`widened_path`), which elides a static object's prefix: the exporting object's
+    /// initialiser does not count, nor does what stands behind the forwarder, a stable member
+    /// that is no lazy val itself (`singleton_purity`). An inline forwarder's reference is
+    /// expanded before that (`Inlining`) to its member's, an inline val's, of which
+    /// `constToLiteral` asks idempotence alone (`isInlineVal`: `isIdempotentExpr`), so that a
+    /// lazy val on the path is not evaluated either.
+    fn forwarder_constant(&mut self, path: TypeId, s: SymId) -> Option<LitVal> {
+        use super::elaborate::Purity;
+        if !self.is_path_method(s) {
+            return None;
+        }
+        let path = self.widened_path(path);
+        let value = self.constant_of_type(path)?;
+        let level = if self.is_inline_callee(s) { Purity::IDEMPOTENT } else { Purity::PURE };
+        self.singleton_purity(path).at_least(level).then_some(value)
+    }
+
+    /// A constant's literal as `ValueOf`'s value: a `Float` constant is a `Double` node of its
+    /// value (`literal_expr`), typed `Float` for the box its target makes of it.
+    fn value_of_literal(&mut self, v: LitVal) -> TExprId {
+        let e = self.literal_expr(v);
+        if matches!(v, LitVal::Float(_)) {
+            let float = self.b.t_float;
+            self.prog.set_type(e, float);
+        }
+        e
+    }
+
+    /// `ValueOf[L]` for a literal type `L`, as scalac synthesizes it; `span` is where it is
+    /// asked for, the place of a forwarder's application on the path.
+    pub fn value_of_given(&mut self, class: ClassId, target: TypeId, span: Span) -> Option<TExprId> {
         let info = self.syms.class(class);
         if info.owner != Owner::Package(self.b.scala_pkg) || self.interner.get(info.name) != "ValueOf" || Some(class) != self.value_of_class() {
             return None;
@@ -827,25 +860,32 @@ impl<'a> Worker<'a> {
         // a stable path (`valueOf[x.type]`, its constant where it is one) or a `this` type.
         let arg = self.deref_alias_canonical(arg);
         let float = self.b.t_float;
+        let step = match self.types.get(arg) {
+            Type::Term(s) | Type::Select(_, s) => Some(s),
+            _ => None,
+        };
+        let folded = step.and_then(|s| self.forwarder_constant(arg, s));
         let value = match self.types.get(arg) {
-            // A `Float` constant is a `Double` node of its value (`literal_expr`), typed `Float`
-            // for the box its target makes of it.
             Type::Lit(l) => {
                 let v = self.types.lit_val(l);
-                let e = self.literal_expr(v);
-                if matches!(v, crate::types::LitVal::Float(_)) {
-                    self.prog.set_type(e, float);
-                }
-                e
+                self.value_of_literal(v)
             }
             _ if arg == self.b.t_unit => self.prog.add(TExpr::Unit),
-            // A `Float` constant val (of the constant type `1.0f` or of `Float`) is held as a
-            // `Double` literal: its path is read.
-            Type::Term(s) | Type::Select(_, s) if self.constant_of(s).is_some() && { let ret = self.sig_of(s).ret; self.canon(self.widen_lit(ret)) != float } && self.path_expr(arg).is_some() => {
-                let literal = self.constant_of(s)?;
-                self.prog.add(literal)
+            // A forwarder of a constant, its reference pure: the constant, no reference made.
+            Type::Term(_) | Type::Select(..) if folded.is_some() => self.value_of_literal(folded?),
+            Type::Term(_) | Type::Select(..) | Type::This(_) => {
+                let value = self.path_expr(arg, span, true)?;
+                // A constant val's path is its constant. A `Float` constant val (of the constant
+                // type `1.0f` or of `Float`) is held as a `Double` literal: its path is read.
+                let constant = match step {
+                    Some(s) if { let ret = self.sig_of(s).ret; self.canon(self.widen_lit(ret)) != float } => self.constant_of(s),
+                    _ => None,
+                };
+                match constant {
+                    Some(literal) => self.prog.add(literal),
+                    None => value,
+                }
             }
-            Type::Term(_) | Type::Select(..) | Type::This(_) => self.path_expr(arg)?,
             // An object's singleton type, which is its module class's type here (dotty's `TypeRef` of a
             // module class, made the module's reference through its prefix): a local object's lazy val,
             // an object nested in a class (a class of its own here, with its instance's val) read on
@@ -860,7 +900,7 @@ impl<'a> Worker<'a> {
             Type::Nested(p, k) => match self.types.get(k) {
                 Type::Class(c, _) if self.syms.class(c).inner_object.is_some() => {
                     let v = self.syms.class(c).inner_object?;
-                    match self.path_expr(p) {
+                    match self.path_expr(p, span, true) {
                         Some(recv) => self.prog.add(TExpr::Field(recv, v)),
                         None => self.inner_object_ref(v)?,
                     }

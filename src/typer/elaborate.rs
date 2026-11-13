@@ -361,6 +361,34 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// dotty's `TreeInfo.exprPurity` of the reference `tpd.singleton` makes of the path type `t`:
+    /// a constant's literal and `this` are pure paths; a member whose prefix `tpd.ref` elides
+    /// (`prefixIsElidable`: a static object, a package, the block; `this` counts for nothing) is
+    /// an `Ident`, its own `refPurity`; any other member is a `Select`, its `refPurity` under
+    /// its prefix's. An object nested in an instance is selected on a path its type does not
+    /// hold: impure, no more being known.
+    pub(super) fn singleton_purity(&mut self, t: TypeId) -> Purity {
+        match self.types.get(t) {
+            Type::Lit(_) | Type::This(_) => Purity::PURE_PATH,
+            Type::Term(s) => self.ref_purity(s),
+            Type::Select(p, s) => {
+                let own = self.ref_purity(s);
+                let elided = match self.types.get(p) {
+                    Type::Term(m) => matches!(self.syms.sym(m).kind, SymKind::Object(o) if self.static_object(o)),
+                    Type::Class(o, _) => self.syms.class(o).kind == ClassKind::Object && self.static_object(o),
+                    _ => false,
+                };
+                if elided {
+                    own
+                } else {
+                    own.min(self.singleton_purity(p))
+                }
+            }
+            Type::Class(o, _) if self.syms.class(o).kind == ClassKind::Object && self.static_object(o) => self.module_purity(o),
+            _ => Purity::IMPURE,
+        }
+    }
+
     /// An object's reference: a path where its class has no initialisation, else idempotent
     /// (`refPurity`, `isNoInitsRealClass`).
     fn module_purity(&mut self, c: ClassId) -> Purity {

@@ -2611,13 +2611,23 @@ impl<'a> Worker<'a> {
     }
 
     /// The value of the path `p` as an expression where the typer stands, dotty's `ref` of a
-    /// prefix: `C.this`, a local or a top-level val, a val selected through a path, an object.
+    /// prefix: `C.this`, a local or a top-level val, a val selected through a path, an object; a
+    /// forwarder on the path its application (`forwarder_value`), placed at the forwarder, a
+    /// prefix having no place of its own.
     pub(super) fn prefix_value(&mut self, p: TypeId) -> Option<TExprId> {
         match self.types.get(p) {
             Type::This(k) => Some(self.this_ref(k)),
-            Type::Term(s) => self.stable_path_expr(s),
+            Type::Term(s) => {
+                let span = self.syms.sym(s).span;
+                self.stable_path_expr(s, span, true)
+            }
             Type::Select(q, s) => {
+                let q = self.widen_if_unstable(q);
                 let recv = self.prefix_value(q)?;
+                if self.is_path_method(s) {
+                    let span = self.syms.sym(s).span;
+                    return self.forwarder_value(Some((recv, q)), s, span);
+                }
                 let field = self.prog.add(TExpr::Field(recv, s));
                 // `ref`'s: the class's own parameter accessor on its `this` is an `Ident` (`prefixIsElidable`).
                 if let Type::This(k) = self.types.get(q) {

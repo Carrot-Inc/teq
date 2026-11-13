@@ -1,0 +1,26 @@
+start
+7
+then the call
+showing-init
+7
+7
+then the test
+literal-init
+literal
+wide-init
+8
+8
+carrier-init
+7
+7
+7
+6
+then its call
+passing-init
+plainly-init
+6
+3
+string
+tested-init
+tested
+end
