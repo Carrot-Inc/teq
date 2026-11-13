@@ -32,7 +32,7 @@ use super::super::index::Files;
 use super::super::resolve::{TermRef, TypeRef};
 use super::super::unused::SelRef;
 use super::super::{Env, ImportTarget, ResolvedImport, Worker};
-use super::{decode, encode, import_segment, ImportEdit, CAP, ROOT_PKG};
+use super::{decode, encode, import_owner, import_segment, ImportEdit, Line, Place, Placing, Selected, CAP, ROOT_PKG};
 use crate::ast::ListRef;
 use crate::index::Lines;
 use crate::intern::Name;
@@ -42,6 +42,17 @@ use crate::symbols::*;
 use crate::tir::TExprId;
 use crate::types::*;
 use std::path::Path;
+
+/// The name an import as it is written (`import a.b.X`) starts its path with, which is looked
+/// up where the import stands; none for a path written from `_root_`.
+fn path_head(import: &str) -> Option<&str> {
+    let path = import.strip_prefix("import ")?;
+    let head = match path.strip_prefix('`') {
+        Some(quoted) => quoted.split('`').next()?,
+        None => path.split('.').next()?,
+    };
+    (head != "_root_").then_some(head)
+}
 
 /// The names a document's text spells: its identifier and operator tokens as the lexer reads
 /// them (none in a string or a comment; an interpolation's `$name` is one, and so is its
@@ -137,8 +148,10 @@ impl<'a> Worker<'a> {
     /// `{"actions":[{"for":[<indices of wanted>],"title","edits":[{"range","newText"}]}]}`, an
     /// action an import, titled as the import it writes, with the reports it answers (one
     /// import that answers several is one action); null for a file the program has no text of,
-    /// or a std one, which takes no import.
-    pub fn import_actions(&mut self, path: &Path, wanted: &[ImportWanted], files: &Files) -> Json {
+    /// or a std one, which takes no import. With `composed` (`import-all`) the answer has `all`
+    /// as well, the imports of every report that has exactly one, added together (`composed`):
+    /// `{"for":[<indices of wanted>],"imports":[<each as it is written>],"edits":[..]}`.
+    pub fn import_actions(&mut self, path: &Path, wanted: &[ImportWanted], composed: bool, files: &Files) -> Json {
         let ids = files.ids_of(path);
         let Some(&first) = ids.first().filter(|&&f| !self.std_file(f)) else { return Json::Null };
         let sources: &'a crate::source::Sources = self.files;
@@ -150,14 +163,26 @@ impl<'a> Worker<'a> {
         let spellings = Spellings::of(text, wanted, &receivers);
         // The program's objects an import can name, listed once for the command's reports.
         let top = Env { file: first, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
-        let objects = if wanted.iter().any(|w| w.asked) { self.in_query(top, |me| me.nameable_objects()) } else { Vec::new() };
-        for (i, w) in wanted.iter().enumerate().filter(|(_, w)| w.asked) {
-            let found = match (w.kind, receivers[i]) {
+        let objects = if composed || wanted.iter().any(|w| w.asked) { self.in_query(top, |me| me.nameable_objects()) } else { Vec::new() };
+        // The imports of each report asked for, and of every report for the composed answer.
+        let mut found: Vec<Vec<ImportEdit>> = Vec::with_capacity(wanted.len());
+        for (i, w) in wanted.iter().enumerate() {
+            found.push(match (w.kind, receivers[i]) {
+                _ if !(composed || w.asked) => Vec::new(),
                 (MissingKind::Member, Some((recv, _))) => self.member_imports(&ids, first, text, w, recv, &spellings, &objects),
                 (MissingKind::Member, None) => Vec::new(),
                 (MissingKind::Term | MissingKind::Type, _) => self.name_imports(&ids, first, text, w, &spellings, &objects),
-            };
-            for edit in found {
+            });
+        }
+        let lines = Lines::new(text);
+        let written = |edits: Vec<(u32, u32, String)>| -> Json { Json::Arr(edits.into_iter().map(|(start, end, text)| obj([("range", lines.range(Span::new(start, end), files.positions)), ("newText", text.into())])).collect()) };
+        let indices = |of: Vec<usize>| -> Json { Json::Arr(of.into_iter().map(|i| (i as u32).into()).collect()) };
+        let all = composed.then(|| {
+            let (of, imports, edits) = self.composed(first, text, wanted, &found);
+            obj([("for", indices(of)), ("imports", Json::Arr(imports.into_iter().map(Json::from).collect())), ("edits", written(edits))])
+        });
+        for (i, _) in wanted.iter().enumerate().filter(|(_, w)| w.asked) {
+            for edit in std::mem::take(&mut found[i]) {
                 match actions.iter_mut().find(|(e, _)| e.import == edit.import && (e.start, e.end) == (edit.start, edit.end) && e.text == edit.text) {
                     Some((_, of)) if of.contains(&i) => {}
                     Some((_, of)) => of.push(i),
@@ -165,16 +190,111 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        let lines = Lines::new(text);
-        let actions = actions
-            .into_iter()
-            .map(|(edit, of)| {
-                let range = lines.range(Span::new(edit.start, edit.end), files.positions);
-                let edits = Json::Arr(vec![obj([("range", range), ("newText", edit.text.into())])]);
-                obj([("for", Json::Arr(of.into_iter().map(|i| (i as u32).into()).collect())), ("title", edit.import.into()), ("edits", edits)])
-            })
-            .collect();
-        obj([("actions", Json::Arr(actions))])
+        let actions = actions.into_iter().map(|(edit, of)| obj([("for", indices(of)), ("title", edit.import.into()), ("edits", written(vec![(edit.start, edit.end, edit.text)]))])).collect();
+        match all {
+            Some(all) => obj([("actions", Json::Arr(actions)), ("all", all)]),
+            None => obj([("actions", Json::Arr(actions))]),
+        }
+    }
+
+    /// The imports of the reports that have exactly one (`found`: each report's imports), added
+    /// together: the reports answered, the imports as they are written, and the edits, none
+    /// meeting another. An import that answers several reports is written once: once a place,
+    /// and not at a place that another place of it reaches, one before it in the same tree or
+    /// in the file's own, whose imports every later tree of the file sees. Two of
+    /// them that would each bring a name some report of the document spells, from two owners,
+    /// are both left: a name each brings by itself, an object's wildcard every such name the
+    /// object holds; together they may make the name ambiguous. And one whose written path
+    /// starts with a name another of them brings is left: each was spelled for the document as
+    /// it is, where nothing brings that name, and beside the other its path would start at
+    /// what that one brings. The imports that take a line at
+    /// one place are one insertion, in string order; the selectors that go into one clause are
+    /// one edit of it (`merge_placement`); a clause's edit that ends where a line is inserted
+    /// is one edit with it.
+    fn composed(&mut self, first: FileId, text: &str, wanted: &[ImportWanted], found: &[Vec<ImportEdit>]) -> (Vec<usize>, Vec<String>, Vec<(u32, u32, String)>) {
+        let mut chosen: Vec<(&ImportEdit, Vec<usize>)> = Vec::new();
+        for (i, edits) in found.iter().enumerate() {
+            let [edit] = edits.as_slice() else { continue };
+            match chosen.iter_mut().find(|(e, _)| e.import == edit.import && (e.start, e.end) == (edit.start, edit.end) && e.text == edit.text) {
+                Some((_, of)) => of.push(i),
+                None => chosen.push((edit, vec![i])),
+            }
+        }
+        // What each brings of the names the reports spell and of the names the imports' own
+        // paths start with.
+        let heads: Vec<Option<Name>> = chosen.iter().map(|(e, _)| path_head(&e.import).map(|h| self.interner.intern(h))).collect();
+        let names: Vec<Name> = wanted.iter().map(|w| self.interner.intern(&w.name)).chain(heads.iter().flatten().copied()).collect();
+        let top = Env { file: first, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
+        let brought: Vec<Vec<Name>> = self.in_query(top, |me| {
+            chosen
+                .iter()
+                .map(|(e, _)| match e.placing.target {
+                    ImportTarget::ClassMember(c, _) if e.placing.wildcard => names.iter().copied().filter(|&n| me.holds_member(c, n, true) || me.holds_member(c, n, false)).collect(),
+                    ImportTarget::PkgMember(_, n) | ImportTarget::ClassMember(_, n) => vec![n],
+                    _ => Vec::new(),
+                })
+                .collect()
+        });
+        let owner = |k: usize| import_owner(chosen[k].0.placing.target);
+        let left = |a: usize| (0..chosen.len()).any(|b| b != a && (heads[a].is_some_and(|h| brought[b].contains(&h)) || (owner(a) != owner(b) && brought[a].iter().any(|n| brought[b].contains(n)))));
+        let mut of: Vec<usize> = Vec::new();
+        let mut imports: Vec<String> = Vec::new();
+        let mut placed: Vec<(&ImportEdit, Place)> = Vec::new();
+        for (k, (e, reports)) in chosen.iter().enumerate() {
+            if left(k) {
+                continue;
+            }
+            of.extend(reports);
+            imports.push(e.import.clone());
+            placed.push((e, self.import_place(first, text, &e.placing)));
+        }
+        let reached = |j: usize| {
+            let (e, place) = &placed[j];
+            placed.iter().any(|(other, from)| other.import == e.import && from.at() < place.at() && (from.tree == first || from.tree == place.tree))
+        };
+        let written: Vec<bool> = (0..placed.len()).map(|j| !reached(j)).collect();
+        let mut lines: Vec<(Line, Vec<&str>)> = Vec::new();
+        let mut clauses: Vec<((FileId, u32), Vec<Selected>)> = Vec::new();
+        for ((e, place), _) in placed.into_iter().zip(written).filter(|(_, written)| *written) {
+            match place.clause {
+                Some(key) => {
+                    let selected = self.selected(&e.placing);
+                    match clauses.iter_mut().find(|(c, _)| *c == key) {
+                        Some((_, into)) => into.push(selected),
+                        None => clauses.push((key, vec![selected])),
+                    }
+                }
+                None => match lines.iter_mut().find(|(l, _)| l.at == place.line.at) {
+                    Some((_, at)) => at.push(&e.import),
+                    None => lines.push((place.line, vec![&e.import])),
+                },
+            }
+        }
+        let mut edits: Vec<(u32, u32, String)> = Vec::new();
+        for ((f, stmt), selected) in &clauses {
+            edits.extend(self.clause_edit(*f, *stmt, text, selected));
+        }
+        for (line, mut written) in lines {
+            written.sort();
+            written.dedup();
+            edits.push((line.at, line.at, format!("{}{}{}", line.before, written.join(&line.between), line.after)));
+        }
+        edits.sort_by_key(|e| (e.0, e.1));
+        let mut fused: Vec<(u32, u32, String)> = Vec::new();
+        for e in edits {
+            match fused.last_mut() {
+                Some(l) if e.0 <= l.1 => {
+                    l.1 = l.1.max(e.1);
+                    l.2.push_str(&e.2);
+                }
+                _ => fused.push(e),
+            }
+        }
+        of.sort();
+        of.dedup();
+        imports.sort();
+        imports.dedup();
+        (of, imports, fused)
     }
 
     /// The imports that bring the name `w` says is not found where it stands, none where the
@@ -301,9 +421,9 @@ impl<'a> Worker<'a> {
     /// prefix (`import_placed`).
     #[allow(clippy::too_many_arguments)]
     fn placed_edit(&mut self, file: FileId, first: FileId, text: &str, offset: u32, target: ImportTarget, wildcard: bool, import: String, selector: &str) -> ImportEdit {
-        let placed = self.import_placed(file, first, text, offset, target, wildcard);
-        let written = placed.text(&import, if wildcard { "*" } else { selector });
-        ImportEdit { start: placed.start, end: placed.end, text: written, import, ty: None, term: None }
+        let placing = Placing { site: file, offset, target, wildcard, selector: selector.to_string() };
+        let (start, end, written) = self.import_placed(first, text, &import, &placing);
+        ImportEdit { start, end, text: written, import, ty: None, term: None, placing }
     }
 
     /// Whether the object `c` holds a member named `name` that an import of it brings for the
@@ -725,6 +845,17 @@ mod tests {
     fn report(text: &str, at: &str, name: &str, kind: MissingKind) -> ImportWanted {
         let start = text.find(at).expect("the report's text") as u32;
         ImportWanted { name: name.into(), kind, span: Span::new(start, start + at.len() as u32), asked: true }
+    }
+
+    /// The name an import's path starts with: its first segment, a backquoted one whole, none
+    /// from `_root_`.
+    #[test]
+    fn an_imports_path_starts_with_a_name() {
+        assert_eq!(path_head("import a.b.X"), Some("a"));
+        assert_eq!(path_head("import lib.Kit.*"), Some("lib"));
+        assert_eq!(path_head("import `a.b`.X"), Some("a.b"));
+        assert_eq!(path_head("import _root_.a.X"), None);
+        assert_eq!(path_head("import Top"), Some("Top"));
     }
 
     /// What a document spells is its identifier and operator tokens: a comment and a string

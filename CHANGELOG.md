@@ -5,6 +5,14 @@ support, and the platforms the binaries run on. The newest release comes first; 
 notes of its GitHub release, which carries the binaries (`teq-<version>-<classifier>`, the Windows one with `.exe`) beside their
 `SHA256SUMS`.
 
+## Unreleased
+
+- The editor offers one action that adds every missing import of a file at once, "Import all missing names"
+  (`source.addMissingImports`): the import of each name that has exactly one, written as the single quick fixes
+  write them, several names of one prefix into its clause in one edit; a name with two candidates keeps its own
+  quick fixes
+  ([the language server](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md#the-language-server-and-zed)).
+
 ## 0.1.10 (2026-11-13)
 
 - `teq fix` runs scalafix's rules over a build's sources with no sbt and no JVM: the rules it ships and a

@@ -250,8 +250,8 @@ const NUMERIC: &[(&str, &str)] = &[
 
 /// An import's edit of a document (`Worker::import_edit`): the range it replaces, the text put
 /// there (the import on a line of its own, or its selector in a clause of its prefix:
-/// `Worker::import_placed`), the import as it is written, and what it names as a type and as a
-/// term.
+/// `Worker::import_placed`), the import as it is written, what it names as a type and as a
+/// term, and what it was placed by.
 pub(super) struct ImportEdit {
     pub start: u32,
     pub end: u32,
@@ -259,6 +259,61 @@ pub(super) struct ImportEdit {
     pub import: String,
     pub ty: Option<TypeRef>,
     pub term: Option<TermRef>,
+    pub placing: Placing,
+}
+
+/// What an import is placed by (`Worker::import_place`): the tree and the offset of the site it
+/// is for, its target (a member of a package or an object by its name; with `wildcard` the
+/// object's wildcard, the target then naming the name it is wanted for), and its selector as a
+/// clause writes it.
+pub(super) struct Placing {
+    pub site: FileId,
+    pub offset: u32,
+    pub target: ImportTarget,
+    pub wildcard: bool,
+    pub selector: String,
+}
+
+/// Where an import goes (`Worker::import_place`): its line, the clause that takes it instead
+/// where one does, by its tree and its statement's start, and the tree it is written in, the
+/// site's or the file's own.
+pub(super) struct Place {
+    pub line: Line,
+    pub clause: Option<(FileId, u32)>,
+    pub tree: FileId,
+}
+
+impl Place {
+    /// Where the import stands from: its clause's statement, or its line.
+    pub(super) fn at(&self) -> u32 {
+        self.clause.map_or(self.line.at, |(_, stmt)| stmt)
+    }
+}
+
+/// An import's line of its own (`import_insertion`): where it is inserted, what stands before
+/// and after what is written there, and what stands between two imports written there together.
+pub(super) struct Line {
+    pub at: u32,
+    pub before: String,
+    pub between: String,
+    pub after: String,
+}
+
+/// A selector an import adds to a clause (`merge_placement`): the name it is wanted for, which
+/// the clause's own selectors are compared with, and how it is written; `None` the wildcard.
+pub(super) struct Selected {
+    pub name: String,
+    pub written: Option<String>,
+}
+
+/// What an import's target imports from, a package or an object: two targets of one owner are
+/// one clause's.
+pub(super) fn import_owner(target: ImportTarget) -> Option<(u8, u32)> {
+    match target {
+        ImportTarget::PkgMember(p, _) | ImportTarget::PkgAll(p) | ImportTarget::PkgGivens(p) => Some((0, p.0)),
+        ImportTarget::ClassMember(c, _) | ImportTarget::ClassAll(c) | ImportTarget::ClassGivens(c) => Some((1, c.0)),
+        _ => None,
+    }
 }
 
 impl<'a> Worker<'a> {
@@ -322,65 +377,77 @@ impl<'a> Worker<'a> {
         let (rooted, ty, term, target) = self.in_query(base, |w| w.import_check(&segments))?;
         let written: Vec<String> = segments.iter().map(|s| import_segment(s)).collect();
         let import = format!("import {}{}", if rooted { "_root_." } else { "" }, written.join("."));
-        let placed = self.import_placed(file, first, text, offset, target, false);
-        let text = placed.text(&import, written.last().map_or("", |s| s.as_str()));
-        Some(ImportEdit { start: placed.start, end: placed.end, text, import, ty, term })
+        let placing = Placing { site: file, offset, target, wildcard: false, selector: written.last().cloned().unwrap_or_default() };
+        let (start, end, text) = self.import_placed(first, text, &import, &placing);
+        Some(ImportEdit { start, end, text, import, ty, term, placing })
     }
 
-    /// Where the import of `target` (a member of a package or an object by its name; the
-    /// object's wildcard with `wildcard`, `target` then naming the name it is wanted for) goes
-    /// for the site at `offset` of the tree `site` of a file whose own tree is `top`: on a line
-    /// of its own (`import_insertion`), or into a clause of the imports that line would join:
-    /// the first clause whose resolved prefix is the target's owner (a relative `import b.Z`
-    /// under `package a` among them, whatever its spelling) in the run of import statements
-    /// that ends where the line would go, nothing but blanks and comments between one and the
-    /// next, as `merge_placement` writes it. A clause further up, past a definition or in
-    /// another tree, would bring the name to code the line does not reach.
-    pub(super) fn import_placed(&mut self, site: FileId, top: FileId, text: &str, offset: u32, target: ImportTarget, wildcard: bool) -> Placed {
-        let prefix_of = |t: ImportTarget| match t {
-            ImportTarget::PkgMember(p, _) | ImportTarget::PkgAll(p) | ImportTarget::PkgGivens(p) => Some((0u8, p.0)),
-            ImportTarget::ClassMember(c, _) | ImportTarget::ClassAll(c) | ImportTarget::ClassGivens(c) => Some((1u8, c.0)),
+    /// The edit that writes the import `import`, placed by `p`, into the document `text` whose own
+    /// tree is `top`: its selector in the clause that takes it (`import_place`), else the import
+    /// on its line.
+    pub(super) fn import_placed(&mut self, top: FileId, text: &str, import: &str, p: &Placing) -> (u32, u32, String) {
+        let place = self.import_place(top, text, p);
+        let merged = place.clause.and_then(|(f, stmt)| self.clause_edit(f, stmt, text, &[self.selected(p)]));
+        merged.unwrap_or_else(|| (place.line.at, place.line.at, format!("{}{}{}", place.line.before, import, place.line.after)))
+    }
+
+    /// What the import placed by `p` adds to a clause.
+    pub(super) fn selected(&self, p: &Placing) -> Selected {
+        let name = match p.target {
+            ImportTarget::PkgMember(_, n) | ImportTarget::ClassMember(_, n) => self.name_str(n),
+            _ => String::new(),
+        };
+        Selected { name, written: (!p.wildcard).then(|| p.selector.clone()) }
+    }
+
+    /// The one edit that writes the selectors `wanted` into the clause of the tree `f` whose
+    /// statement starts at `stmt` (`merge_placement`).
+    pub(super) fn clause_edit(&self, f: FileId, stmt: u32, text: &str, wanted: &[Selected]) -> Option<(u32, u32, String)> {
+        let selectors: Vec<&ast::Import> = self.ast(f).imports.iter().filter(|i| i.span.start == stmt).collect();
+        merge_placement(text, &selectors, wanted, |n| self.name_str(n))
+    }
+
+    /// Where the import placed by `p` goes in the document `text` whose own tree is `top`: on a
+    /// line of its own (`import_insertion`), or into a clause of the imports that line would
+    /// join: the first clause whose resolved prefix is the target's owner (a relative
+    /// `import b.Z` under `package a` among them, whatever its spelling) in the run of import
+    /// statements that ends where the line would go, nothing but blanks and comments between
+    /// one and the next, where `merge_placement` takes the selector. A clause further up, past a
+    /// definition or in another tree, would bring the name to code the line does not reach.
+    pub(super) fn import_place(&mut self, top: FileId, text: &str, p: &Placing) -> Place {
+        let (site, offset) = (p.site, p.offset);
+        let wanted = match p.target {
+            ImportTarget::PkgMember(..) | ImportTarget::ClassMember(..) => import_owner(p.target),
             _ => None,
         };
-        let wanted = match target {
-            ImportTarget::PkgMember(_, n) | ImportTarget::ClassMember(_, n) => prefix_of(target).map(|p| (p, n)),
-            _ => None,
-        };
+        let line = import_insertion(self.ast(site), self.ast(top), text, offset);
         // The statement the import's own line would follow, with its tree (`import_insertion`'s
         // choice): a clause is merged into where the name then reaches what that line would
         // reach and no more.
         let last_before = |ast: &Ast| ast.import_ranges.iter().rev().find(|r| r.end <= offset).copied();
         let follows = last_before(self.ast(site)).map(|r| (site, r)).or_else(|| last_before(self.ast(top)).map(|r| (top, r)));
-        if let (Some((prefix, name)), Some((f, last))) = (wanted, follows) {
-            let name = self.name_str(name);
-            // The run of import statements that ends there, nothing but blanks and comments
-            // between one and the next.
-            let mut statements: Vec<Span> = self.ast(f).import_ranges.iter().copied().filter(|r| r.end <= last.end).collect();
-            statements.sort_by_key(|r| r.start);
-            let mut from = last.start;
-            for pair in statements.windows(2).rev() {
-                if !only_blank(text, pair[0].end, pair[1].start) {
-                    break;
-                }
-                from = pair[0].start;
+        let tree = follows.map_or(top, |(f, _)| f);
+        let (Some(prefix), Some((f, last))) = (wanted, follows) else { return Place { line, clause: None, tree } };
+        // The run of import statements that ends there, nothing but blanks and comments
+        // between one and the next.
+        let mut statements: Vec<Span> = self.ast(f).import_ranges.iter().copied().filter(|r| r.end <= last.end).collect();
+        statements.sort_by_key(|r| r.start);
+        let mut from = last.start;
+        for pair in statements.windows(2).rev() {
+            if !only_blank(text, pair[0].end, pair[1].start) {
+                break;
             }
-            // The tree's top-level imports as its own environment resolves them.
-            let env = Env { file: f, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
-            let imports = self.in_query(env, |w| {
-                w.import_count();
-                w.file_imports[f.0 as usize].clone()
-            });
-            let first = imports.and_then(|imports| imports.iter().filter(|r| r.depth == 0 && r.stmt != u32::MAX && from <= r.stmt && r.stmt < last.end && prefix_of(r.target) == Some(prefix)).map(|r| r.stmt).min());
-            if let Some(stmt) = first {
-                let ast = self.ast(f);
-                let selectors: Vec<&ast::Import> = ast.imports.iter().filter(|i| i.span.start == stmt).collect();
-                if let Some(placed) = merge_placement(text, &selectors, &name, wildcard, |n| self.name_str(n)) {
-                    return placed;
-                }
-            }
+            from = pair[0].start;
         }
-        let (at, before, after) = import_insertion(self.ast(site), self.ast(top), text, offset);
-        Placed { start: at, end: at, before, after, merged: false }
+        // The tree's top-level imports as its own environment resolves them.
+        let env = Env { file: f, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
+        let imports = self.in_query(env, |w| {
+            w.import_count();
+            w.file_imports[f.0 as usize].clone()
+        });
+        let first = imports.and_then(|imports| imports.iter().filter(|r| r.depth == 0 && r.stmt != u32::MAX && from <= r.stmt && r.stmt < last.end && import_owner(r.target) == Some(prefix)).map(|r| r.stmt).min());
+        let clause = first.filter(|&stmt| self.clause_edit(f, stmt, text, &[self.selected(p)]).is_some()).map(|stmt| (f, stmt));
+        Place { line, clause, tree }
     }
 
     /// Whether the import of the path `segments` resolves at the top of the file, a package's,
@@ -2561,8 +2628,9 @@ fn importable(name: &str) -> bool {
 /// site's tree (a `package p:` block's, else the file's) on a line of its own with its
 /// indentation, a `;` before it where the import ends a statement the line goes on with; else
 /// after the file's last package clause, a blank line between; else at the start of the file, a
-/// blank line after. The file's line ending is kept.
-fn import_insertion(site: &Ast, top: &Ast, text: &str, offset: u32) -> (u32, String, String) {
+/// blank line after. Two imports written there together are a line each. The file's line ending
+/// is kept.
+fn import_insertion(site: &Ast, top: &Ast, text: &str, offset: u32) -> Line {
     let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let before_site = |ast: &Ast| ast.import_ranges.iter().rev().find(|r| r.end <= offset).copied();
     if let Some(r) = before_site(site).or_else(|| before_site(top)) {
@@ -2571,12 +2639,12 @@ fn import_insertion(site: &Ast, top: &Ast, text: &str, offset: u32) -> (u32, Str
         let indent = if indent.chars().all(char::is_whitespace) { indent } else { "" };
         let rest = text[r.end as usize..].trim_start_matches([' ', '\t']);
         let separator = if rest.starts_with(';') { ";" } else { "" };
-        return (r.end, format!("{}{}{}", separator, nl, indent), String::new());
+        return Line { at: r.end, before: format!("{}{}{}", separator, nl, indent), between: format!("{}{}", nl, indent), after: String::new() };
     }
     if let Some(r) = top.package_ranges.last() {
-        return (r.end, format!("{}{}", nl, nl), String::new());
+        return Line { at: r.end, before: format!("{}{}", nl, nl), between: nl.to_string(), after: String::new() };
     }
-    (0, String::new(), format!("{}{}", nl, nl))
+    Line { at: 0, before: String::new(), between: nl.to_string(), after: format!("{}{}", nl, nl) }
 }
 
 /// Whether `text` holds nothing but blanks, `;` and comments from `from` to `to`.
@@ -2608,45 +2676,34 @@ fn only_blank(text: &str, from: u32, to: u32) -> bool {
     true
 }
 
-/// Where an import's edit goes (`Worker::import_placed`): the range it replaces, and what
-/// stands before and after what is written there: the whole import on a line of its own, or
-/// (`merged`) its selector in a clause that imports from its prefix.
-pub(super) struct Placed {
-    pub start: u32,
-    pub end: u32,
-    pub before: String,
-    pub after: String,
-    pub merged: bool,
-}
-
-impl Placed {
-    /// The edit's text: the import `import` on its line, or its `selector` in the clause.
-    pub(super) fn text(&self, import: &str, selector: &str) -> String {
-        format!("{}{}{}", self.before, if self.merged { selector } else { import }, self.after)
-    }
-}
-
-/// The merge of the name `name` into the clause whose selectors are `selectors` (every one of a
-/// clause shares its start, `Import::span`), or with `wildcard` of the clause's `*`, wanted for
-/// `name`. A single selector is put in braces (`a.b.X` to `a.b.{X, Z}`). In braces the name goes
-/// at its sorted place where the clause's named selectors are in order by the names they
-/// select (one is in order; an exclusion `W as _` is none of them), else after the last of
-/// them, before any wildcard or `given` selector, which named ones cannot follow
-/// (`Parsers.importSelectors`), with the separator the clause writes between its first two
-/// selectors. The wildcard goes after the last named selector. `None` where the clause takes no
-/// merge (it renames or leaves out the name; it has the wildcard already; the parser could not
-/// close its brace): the import goes where `import_insertion` puts it.
-fn merge_placement(text: &str, selectors: &[&ast::Import], name: &str, wildcard: bool, name_of: impl Fn(Name) -> String) -> Option<Placed> {
+/// The one edit that writes the selectors `wanted` into the clause whose selectors are
+/// `selectors` (every one of a clause shares its start, `Import::span`): the range it replaces
+/// and the text put there. A single selector is put in braces with them (`a.b.X` to
+/// `a.b.{X, Z}`). In braces a name goes at its sorted place where the clause's named selectors
+/// are in order by the names they select (one is in order; an exclusion `W as _` is none of
+/// them), else after the last of them, before any wildcard or `given` selector, which named
+/// ones cannot follow (`Parsers.importSelectors`), with the separator the clause writes between
+/// its first two selectors; the wildcard goes after the last named selector. Each is placed
+/// against the clause as it is; those that fall at one point are written there in string
+/// order, the wildcard last, and what the clause writes between the first point and the last
+/// stays as it is. `None` where the clause takes no merge (it renames or leaves out one of the
+/// names; it has the wildcard already; the parser could not close its brace): the import goes
+/// where `import_insertion` puts it.
+fn merge_placement(text: &str, selectors: &[&ast::Import], wanted: &[Selected], name_of: impl Fn(Name) -> String) -> Option<(u32, u32, String)> {
     let (first, last) = (selectors.first()?, selectors.last()?);
     let slice = |s: Span| &text[s.start as usize..s.end as usize];
-    let at = |at: u32, before: String, after: String| Placed { start: at, end: at, before, after, merged: true };
-    // A clause that renames or leaves out the name is none to write it into, nor is one that has
+    // A clause that renames or leaves out a name is none to write it into, nor is one that has
     // the wildcard a place for another.
     let has_wildcard = selectors.iter().any(|i| matches!(i.sel, ast::ImportSel::Wildcard));
-    let names_it = selectors.iter().any(|i| matches!(i.sel, ast::ImportSel::Name(n, Some(_)) if name_of(n) == name));
-    if names_it || (wildcard && has_wildcard) {
+    let names_it = |name: &str| selectors.iter().any(|i| matches!(i.sel, ast::ImportSel::Name(n, Some(_)) if name_of(n) == name));
+    if wanted.is_empty() || wanted.iter().any(|w| names_it(&w.name) || (w.written.is_none() && has_wildcard)) {
         return None;
     }
+    // The names in string order, each once, and whether the wildcard is among them.
+    let mut names: Vec<(&str, &str)> = wanted.iter().filter_map(|w| Some((w.name.as_str(), w.written.as_deref()?))).collect();
+    names.sort();
+    names.dedup();
+    let wildcard = wanted.iter().any(|w| w.written.is_none());
     // Braced where the parser's clause ends past its last selector, at its `}`: the tree
     // decides, not the text, whose comments may hold a brace.
     if last.clause_end <= last.selector_span.end {
@@ -2656,13 +2713,25 @@ fn merge_placement(text: &str, selectors: &[&ast::Import], name: &str, wildcard:
         if selectors.len() != 1 || dot != Some(".") {
             return None;
         }
-        let sel = slice(last.selector_span);
-        let after_it = match last.sel {
-            ast::ImportSel::Name(n, _) => wildcard || name_of(n).as_str() <= name,
-            ast::ImportSel::Given | ast::ImportSel::Wildcard => false,
+        let own = match last.sel {
+            ast::ImportSel::Name(n, _) => Some(name_of(n)),
+            ast::ImportSel::Given | ast::ImportSel::Wildcard => None,
         };
-        let (before, after) = if after_it { (format!("{{{}, ", sel), "}".to_string()) } else { ("{".to_string(), format!(", {}}}", sel)) };
-        return Some(Placed { start: last.selector_span.start, end: last.selector_span.end, before, after, merged: true });
+        // A name selector among the names in their order, the wildcard after them; a wildcard
+        // or a `given` after them all.
+        let after_it = |name: &str| own.as_deref().is_some_and(|o| o <= name);
+        let mut parts: Vec<&str> = names.iter().filter(|(n, _)| !after_it(n)).map(|&(_, w)| w).collect();
+        if own.is_some() {
+            parts.push(slice(last.selector_span));
+        }
+        parts.extend(names.iter().filter(|(n, _)| after_it(n)).map(|&(_, w)| w));
+        if wildcard {
+            parts.push("*");
+        }
+        if own.is_none() {
+            parts.push(slice(last.selector_span));
+        }
+        return Some((last.selector_span.start, last.selector_span.end, format!("{{{}}}", parts.join(", "))));
     }
     // The separator as the clause writes it between its first two selectors.
     let sep = match selectors {
@@ -2673,12 +2742,6 @@ fn merge_placement(text: &str, selectors: &[&ast::Import], name: &str, wildcard:
         _ => ", ".to_string(),
     };
     let named: Vec<&ast::Import> = selectors.iter().copied().filter(|i| matches!(i.sel, ast::ImportSel::Name(..))).collect();
-    if wildcard {
-        return Some(match named.last() {
-            Some(l) => at(l.selector_span.end, sep, String::new()),
-            None => at(first.selector_span.start, String::new(), sep),
-        });
-    }
     // The selectors that bring a name, each with the name it selects.
     let plain: Vec<(&ast::Import, String)> = named
         .iter()
@@ -2688,13 +2751,48 @@ fn merge_placement(text: &str, selectors: &[&ast::Import], name: &str, wildcard:
         })
         .collect();
     let in_order = plain.windows(2).all(|w| w[0].1 <= w[1].1);
-    if let Some((greater, _)) = plain.iter().find(|(_, o)| in_order && o.as_str() > name) {
-        return Some(at(greater.selector_span.start, String::new(), sep));
+    // The points written at: before a selector (what is written, then the separator) or after
+    // one (the separator, then what is written), each with what goes there, in its order.
+    let mut points: Vec<(u32, bool, Vec<&str>)> = Vec::new();
+    fn put<'a>(points: &mut Vec<(u32, bool, Vec<&'a str>)>, at: u32, before: bool, written: &'a str) {
+        match points.iter_mut().find(|p| p.0 == at) {
+            Some(p) => p.2.push(written),
+            None => points.push((at, before, vec![written])),
+        }
     }
-    Some(match plain.last().map(|(i, _)| *i).or(named.last().copied()) {
-        Some(l) => at(l.selector_span.end, sep, String::new()),
-        None => at(first.selector_span.start, String::new(), sep),
-    })
+    for &(name, written) in &names {
+        match plain.iter().find(|(_, o)| in_order && o.as_str() > name) {
+            Some((greater, _)) => put(&mut points, greater.selector_span.start, true, written),
+            None => match plain.last().map(|(i, _)| *i).or(named.last().copied()) {
+                Some(l) => put(&mut points, l.selector_span.end, false, written),
+                None => put(&mut points, first.selector_span.start, true, written),
+            },
+        }
+    }
+    if wildcard {
+        match named.last() {
+            Some(l) => put(&mut points, l.selector_span.end, false, "*"),
+            None => put(&mut points, first.selector_span.start, true, "*"),
+        }
+    }
+    points.sort_by_key(|p| p.0);
+    let (start, end) = (points.first()?.0, points.last()?.0);
+    let mut out = String::new();
+    let mut at = start;
+    for (point, before, written) in &points {
+        out.push_str(&text[at as usize..*point as usize]);
+        for w in written {
+            if *before {
+                out.push_str(w);
+                out.push_str(&sep);
+            } else {
+                out.push_str(&sep);
+                out.push_str(w);
+            }
+        }
+        at = *point;
+    }
+    Some((start, end, out))
 }
 
 pub(super) fn list(incomplete: bool, items: Vec<Json>) -> Json {
@@ -2800,18 +2898,21 @@ mod tests {
 
     #[test]
     fn merges_into_a_clause() {
-        let merged = |text: &str, clause: &str, name: &str, wildcard: bool| -> String {
+        // The clause `a.b` of `text` with the names `names` written into it, the last of them as
+        // the wildcard wanted for it with `wildcard`.
+        let several = |text: &str, names: &[&str], wildcard: bool| -> String {
             let interner = crate::intern::Interner::new();
             let ast = crate::frontend::parse_one(text, &interner, crate::parser::Syntax { index: true, ..Default::default() }).0.remove(0);
-            let at = text.find(clause).unwrap() as u32;
+            let at = text.find("a.b").unwrap() as u32;
             let selectors: Vec<&ast::Import> = ast.imports.iter().filter(|i| i.span.start == at).collect();
-            match merge_placement(text, &selectors, name, wildcard, |n| interner.get(n).to_string()) {
-                Some(p) => format!("{}{}{}", &text[..p.start as usize], p.text(&format!("import a.b.{}", name), if wildcard { "*" } else { name }), &text[p.end as usize..]),
+            let wanted: Vec<Selected> = names.iter().enumerate().map(|(k, n)| Selected { name: n.to_string(), written: (!wildcard || k + 1 < names.len()).then(|| n.to_string()) }).collect();
+            match merge_placement(text, &selectors, &wanted, |n| interner.get(n).to_string()) {
+                Some((start, end, written)) => format!("{}{}{}", &text[..start as usize], written, &text[end as usize..]),
                 None => "none".to_string(),
             }
         };
-        let name = |text: &str, name: &str| merged(text, "a.b", name, false);
-        let star = |text: &str, name: &str| merged(text, "a.b", name, true);
+        let name = |text: &str, name: &str| several(text, &[name], false);
+        let star = |text: &str, name: &str| several(text, &[name], true);
         assert_eq!(name("import a.b.X\nobject O\n", "Z"), "import a.b.{X, Z}\nobject O\n");
         assert_eq!(name("import a.b.X\n", "V"), "import a.b.{V, X}\n");
         assert_eq!(name("import a.b.{W, X}\n", "Z"), "import a.b.{W, X, Z}\n");
@@ -2846,6 +2947,20 @@ mod tests {
         assert_eq!(star("import a.b.{X as Y}\n", "X"), "none");
         assert_eq!(star("import a.b.{Z as _, X}\n", "Z"), "none");
         assert_eq!(star("import a.b.{X, *}\n", "Z"), "none");
+        // Several names into one clause: each at its own place against the clause as it is,
+        // those of one point in string order, one edit; the wildcard after the names.
+        assert_eq!(several("import a.b.X\n", &["Z", "V"], false), "import a.b.{V, X, Z}\n");
+        assert_eq!(several("import a.b.{W, X}\n", &["Z", "V", "Wa"], false), "import a.b.{V, W, Wa, X, Z}\n");
+        assert_eq!(several("import a.b.{W, Zq}\n", &["Za", "X"], false), "import a.b.{W, X, Za, Zq}\n");
+        assert_eq!(several("import a.b.{X, W}\n", &["Z", "V"], false), "import a.b.{X, W, V, Z}\n");
+        assert_eq!(several("import a.b.{\n  W,\n  X\n}\n", &["Z", "V"], false), "import a.b.{\n  V,\n  W,\n  X,\n  Z\n}\n");
+        assert_eq!(several("import a.b.{X, given}\n", &["Z", "V"], false), "import a.b.{V, X, Z, given}\n");
+        assert_eq!(several("import a.b.given\n", &["Z", "V"], false), "import a.b.{V, Z, given}\n");
+        assert_eq!(several("import a.b.{W as _, X}\n", &["Z", "V"], false), "import a.b.{W as _, V, X, Z}\n");
+        assert_eq!(several("import a.b.{X, /* note */ W}\n", &["Z", "Y"], false), "import a.b.{X, /* note */ W, Y, Z}\n");
+        assert_eq!(several("import a.b.{X as Y}\n", &["Z", "X"], false), "none");
+        assert_eq!(several("import a.b.{X, W as _}\n", &["Z", "V"], true), "import a.b.{X, Z, W as _, *}\n");
+        assert_eq!(several("import a.b.X\n", &["Z", "V"], true), "import a.b.{X, Z, *}\n");
     }
 
     #[test]

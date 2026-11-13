@@ -627,6 +627,17 @@ missing. By name, a use that is not written is not seen: an `apply` or an `updat
 comprehension's methods.
 The receiver is read from the error's range: an operator written infix gets its fix where its operand stands in
 parentheses, a name between backquotes none.
+One action more, "Import all missing names" (`source.addMissingImports`), adds together the import of every such
+error of the document that has exactly one: the imports that would each take a line at one place in one insertion,
+in string order, the names that go into one clause in one edit of it, an import that several of the errors need
+once, at the place that reaches them where one does. An error with two imports or more keeps its
+own quick fixes, and so do two errors whose imports would bring one name of the document's errors from two
+owners, a name each or an object's `*` (together they could make that name ambiguous), and an error whose
+import's path starts with a name another of the imports brings. A request for that kind,
+or for `source`, gets the action with its edit, for the whole document; a request that names no kind gets it
+last, where the document has two such errors or more and one of them in the range, without its edit, which
+`codeAction/resolve` then answers, from a client that resolves an action's `edit` and hands its `data` back; a
+request for `quickfix` gets the quick fixes alone.
 A definition into a library goes to its source, read from the jar's sources jar, or
 into teq's own standard library, shown in read-only documents where navigation works as in a source, and
 completion and signature help too in the standard library's. A jar's sources jar is found beside the jar, in

@@ -5657,7 +5657,7 @@ async function unusedImportActions() {
   const c = new Client(dir)
   try {
     const init = await c.result("initialize", { processId: null, rootUri: uriOf(dir), capabilities: { workspace: { workspaceEdit: { documentChanges: true } } } })
-    check("the code action capability: quick fixes", same(init?.capabilities?.codeActionProvider, { codeActionKinds: ["quickfix"] }), init?.capabilities)
+    check("the code action capability: quick fixes, the action of every missing import and its resolve", same(init?.capabilities?.codeActionProvider, { codeActionKinds: ["quickfix", "source.addMissingImports"], resolveProvider: true }), init?.capabilities)
     const m = c.mark()
     c.notify("initialized", {})
     const texts = {}
@@ -7177,7 +7177,7 @@ async function importActions() {
   }
   try {
     const init = await c.result("initialize", { processId: null, rootUri: uriOf(dir), capabilities: { workspace: { workspaceEdit: { documentChanges: true } } } })
-    check("imports (m): the code action capability stays quick fixes", same(init?.capabilities?.codeActionProvider, { codeActionKinds: ["quickfix"] }), init?.capabilities)
+    check("imports (m): the code action capability: quick fixes, the action of every missing import and its resolve", same(init?.capabilities?.codeActionProvider, { codeActionKinds: ["quickfix", "source.addMissingImports"], resolveProvider: true }), init?.capabilities)
     const m = c.mark()
     c.notify("initialized", {})
     for (const n of Object.keys(texts)) {
@@ -7733,7 +7733,285 @@ async function importMerges() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, importMerges, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
+// The action that adds together the import of every name a document misses that has one candidate
+// (`source.addMissingImports`): its edit as the session composes it (a line each at one place, the names of
+// one clause in one edit, no two edits meeting), against the single fixes applied one at a time; and the
+// request: with its edit where its kind is asked for, last and without one on a request that names no kind
+// (a client that resolves an action's edit), resolved then by `codeAction/resolve`.
+async function importAll() {
+  encoding = "utf-16"
+  const dir = join(work, "link/all")
+  mkdirSync(join(dir, "src"), { recursive: true })
+  writeExport(join(dir, "teq.lock"), { app: { platform: "jvm", sources: ["src"] } })
+  const use = (head, lines, pkg = "package iau\n\n") => `${pkg}${head ? `${head}\n\n` : ""}object NAME:\n${lines.map((l) => `  ${l}\n`).join("")}`
+  const libs = {
+    "Lib.scala": "package ia.b\n\nclass Va\nclass Wa\nclass Wab\nclass Xa\nclass Za\nclass Zq\ngiven iaInt: Int = 7\n",
+    "Other.scala": "package iao\n\nclass Other\nclass Thing\n",
+    "Twin1.scala": "package iat1\n\nclass Twin\n",
+    "Twin2.scala": "package iat2\n\nclass Twin\n",
+    "Kit.scala": "package ial\n\nobject Kit:\n  given kitOrd: Ordering[String] = Ordering.String\n  extension (n: Int) def asKit: String = n.toString\n  def kitPlain(n: Int): Int = n\n  class KitBox\nobject Gizmo:\n  def gizmoHelp(n: Int): Int = n\n",
+    "Dup1.scala": "package iad1\n\ntype Dup = Int\n",
+    "Dup2.scala": "package iad2\n\ndef Dup(n: Int): Int = n\n",
+    "Wide.scala": "package iaw\n\nobject Wide:\n  def widePlain(n: Int): Int = n\n  val iao: Int = 1\n",
+    "Share.scala": "package ias\n\nobject Left:\n  def onlyLeft(n: Int): Int = n\n  def shared(n: Int): Int = n\nobject Right:\n  def onlyRight(n: Int): Int = n\n  def shared(n: Int): Int = n + 1\n",
+  }
+  const za = "val a: Za = ???"
+  const other = "val b: Other = ???"
+  const twoNames = ["val a: Va = ???", "val b: Za = ???"]
+  // [the document, what it holds after the composed edit, the edits, the reports answered, the errors left, whether
+  // the single fixes one at a time give the same imports, what the row shows]
+  const rows = {
+    "A1.scala": [use("", [za, other]), "package iau\n\nimport ia.b.Za\nimport iao.Other\n\nobject A1:", 1, 2, 0, true, "two names, no import of either prefix: one insertion, the lines in string order"],
+    "A2.scala": [use("import ia.b.{Wa, Xa}", ["val a: Va = ???", "val b: Wab = ???", "val c: Za = ???"]), "import ia.b.{Va, Wa, Wab, Xa, Za}\n", 1, 3, 0, true, "three names of one prefix into its clause, each at its sorted place: one edit"],
+    "A3.scala": [use("import ia.b.Xa", twoNames), "import ia.b.{Va, Xa, Za}\n", 1, 2, 0, true, "two names beside a single selector: braced once"],
+    "A4.scala": [use("", ["val t: Twin = ???", za, other]), "package iau\n\nimport ia.b.Za\nimport iao.Other\n\nobject A4:", 1, 2, 1, true, "a name with two candidates among three: the two others, that report left"],
+    "A5.scala": [use("import ia.b.{Wa, Xa}\nimport iat1.Twin", [za, other, "val t: Twin = ???"]), "import ia.b.{Wa, Xa, Za}\nimport iat1.Twin\nimport iao.Other\n", 2, 2, 0, true, "a clause and a line apart: two edits"],
+    "A6.scala": [use("", ["val a = 42.asKit", "val b = kitPlain(1)", "val c: Za = ???"]), "package iau\n\nimport ia.b.Za\nimport ial.Kit.*\n\nobject A6:", 1, 3, 0, true, "an object's extension and plain member and another package's class: two imports for three reports"],
+    "A7.scala": [use("", [za, "val b: Za = ???", "def f(z: Za): Za = z"]), "package iau\n\nimport ia.b.Za\n\nobject A7:", 1, 4, 0, true, "one name at four places: one import"],
+    "A8.scala": [use("", ["val a: Dup = 1", "val b = Dup(1)", "val c: Za = ???"]), "package iau\n\nimport ia.b.Za\n\nobject A8:", 1, 1, 2, false, "a type of one owner and a term of another under one name, each alone for its report: both left, the third name imported"],
+    "A9.scala": ["package iap1 {\n  import iat1.Twin\n  object A9a { val a: Za = ???; val t: Twin = ??? }\n}\npackage iap2 {\n  import iat2.Twin\n  object A9b { val b: Other = ???; val t: Twin = ??? }\n}\n", "  import iat1.Twin\n  import ia.b.Za\n", 2, 2, 0, true, "sites in two package blocks, each with its imports: an edit in each block"],
+    "A10.scala": [use("", [za, other]).replace(/\n/g, "\r\n"), "package iau\r\n\r\nimport ia.b.Za\r\nimport iao.Other\r\n\r\nobject A10:", 1, 2, 0, true, "a CRLF file: its line ends"],
+    "A21.scala": [use("import ia.b.Xa", [za, other]), "import ia.b.{Xa, Za}\nimport iao.Other\n\nobject A21:", 1, 2, 0, true, "a clause's edit that ends where the line is inserted: one edit"],
+    "M2.scala": [use("import ia.b.{Wa, Zq}", ["val a: Xa = ???", "val b: Za = ???"]), "import ia.b.{Wa, Xa, Za, Zq}\n", 1, 2, 0, true, "two names at one sorted point"],
+    "M3.scala": [use("import ia.b.{Xa, Wa}", twoNames), "import ia.b.{Xa, Wa, Va, Za}\n", 1, 2, 0, true, "two names after the last selector of a clause not in order"],
+    "M4.scala": [use("import ia.b.{\n  Wa,\n  Xa\n}", twoNames), "import ia.b.{\n  Va,\n  Wa,\n  Xa,\n  Za\n}\n", 1, 2, 0, true, "two names into a clause over several lines: a line each"],
+    "M5.scala": [use("import ia.b.{Xa, given}", twoNames), "import ia.b.{Va, Xa, Za, given}\n", 1, 2, 0, true, "two names before a given selector"],
+    "M6.scala": [use("import ial.Kit.given", ["val a = 42.asKit", "val b = kitPlain(1)", "val c: Za = ???"]), "import ial.Kit.{*, given}\nimport ia.b.Za\n\nobject M6:", 1, 3, 0, true, "an object's wildcard into its clause and a line after that clause: one edit"],
+    "P2.scala": [use("", twoNames), "package iau\n\nimport ia.b.Va\nimport ia.b.Za\n\nobject P2:", 1, 2, 0, true, "two names of one prefix the file has no clause of: a line each"],
+    "MS.scala": [use("import ial.Kit.given", ["val a = kitPlain(1)", "val b: KitBox = ???"]), "import ial.Kit.{KitBox, *, given}\n", 1, 2, 0, false, "a class of an object by its name and the object's wildcard into its clause: the name, then the wildcard"],
+    "R1.scala": ["package iau\n\nimport iao.Thing\nobject R1a { val a: Za = ??? }\nimport iat1.Twin\nobject R1 { val b: Za = ???; val t: Twin = ???; val th: Thing = ??? }\n", "import iao.Thing\nimport ia.b.Za\nobject R1a { val a: Za = ??? }\nimport iat1.Twin\nobject R1 ", 1, 2, 0, true, "a name before and after an import that stands between its sites: once, at the place that reaches both"],
+    "R2.scala": ["package iar1 {\n  import ia.b.Xa\n  object R2a { val a: Za = ???; val x: Xa = ??? }\n}\npackage iar2 {\n  object R2 { val a: Za = ??? }\n}\n", "import ia.b.Za\n\npackage iar1 {\n  import ia.b.Xa\n  object R2a ", 1, 2, 0, false, "a name in a block that has a clause of its prefix and in a block that has no import: once, at the file's top, which reaches both"],
+    "R3.scala": ["package iar3 {\n  import iat1.Twin\n  object R3a { val a: Za = ???; val t: Twin = ??? }\n}\npackage iar4 {\n  import iat2.Twin\n  object R3 { val a: Za = ???; val t: Twin = ??? }\n}\n", "  import iat2.Twin\n  import ia.b.Za\n  object R3 ", 2, 2, 0, false, "a name in two sibling blocks, each with its imports: in each"],
+    "T1.scala": [use("", ["val a = Gizmo.toString", "val b = gizmoHelp(1)"]), "package iau\n\nimport ial.Gizmo\nimport ial.Gizmo.*\n\nobject T1:", 1, 2, 0, true, "an object and a member of it: both imports, as the fixes give in the document's order"],
+  }
+  const texts = { ...libs }
+  for (const [n, [text]] of Object.entries(rows)) texts[n] = text.replace("NAME", n.replace(".scala", ""))
+  // No import to add together: the pair of one name alone; two objects' wildcards that share a name a report
+  // spells; a name with two candidates twice.
+  texts["W1.scala"] = use("", ["val a = widePlain(1)", other]).replace("NAME", "W1")
+  texts["N8.scala"] = use("", ["val a: Dup = 1", "val b = Dup(1)"]).replace("NAME", "N8")
+  texts["NC.scala"] = use("", ["val a = onlyLeft(1)", "val b = onlyRight(1)", "val c = shared(1)"]).replace("NAME", "NC")
+  texts["N14.scala"] = use("", ["val a: Twin = ???", "val b: Twin = ???"]).replace("NAME", "N14")
+  // The request's documents: three names, one of them with two candidates; one name alone; one of two with one
+  // import; one edited before its resolve, one while its resolve is answered, one closed before it.
+  const three = (name) => use("", ["val t: Twin = ???", za, other]).replace("NAME", name)
+  texts["Q1.scala"] = three("Q1")
+  texts["Q13.scala"] = use("", [za]).replace("NAME", "Q13")
+  texts["Q19.scala"] = use("", ["val t: Twin = ???", za]).replace("NAME", "Q19")
+  for (const n of ["Q15", "Q17", "QC"]) texts[`${n}.scala`] = three(n)
+  for (const [n, t] of Object.entries(texts)) writeFileSync(join(dir, "src", n), t)
+  const file = (n) => join(dir, "src", n)
+  const offsetAt = (text, { line, character }) => {
+    const lines = text.split("\n")
+    let offset = 0
+    for (let i = 0; i < line && i < lines.length; i++) offset += lines[i].length + 1
+    return offset + Math.min(character, (lines[line] ?? "").replace(/\r$/, "").length)
+  }
+  /** The edits applied as a client applies them, each against the one text; null where two of them overlap or touch. */
+  const apply = (text, edits) => {
+    const spans = edits.map((e) => [offsetAt(text, e.range.start), offsetAt(text, e.range.end), e.newText]).sort((a, b) => b[0] - a[0] || b[1] - a[1])
+    if (spans.some((s, i) => i > 0 && s[1] >= spans[i - 1][0])) return null
+    for (const [from, to, newText] of spans) text = text.slice(0, from) + newText + text.slice(to)
+    return text
+  }
+  /** What a text imports: each selector of each clause under its prefix. */
+  const importsOf = (text) => {
+    const out = []
+    for (const m of text.matchAll(/^[ \t]*import ([\w.]+)\.(\{[^}]*\}|[\w*]+)/gm)) for (const sel of m[2].replace(/[{}]/g, "").split(",")) if (sel.trim()) out.push(`${m[1]}.${sel.trim()}`)
+    return out.sort()
+  }
+  const wholeOf = (text) => ({ start: { line: 0, character: 0 }, end: positionAt(text, text.length) })
+  const KIND = "source.addMissingImports"
+  const TITLE = "Import all missing names"
+  const resolving = { workspace: { workspaceEdit: { documentChanges: true } }, textDocument: { codeAction: { dataSupport: true, resolveSupport: { properties: ["edit"] } } } }
+  const trace = join(work, "all-trace")
+  const barrier = join(work, "all-barrier")
+  const c = new Client(dir, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  const versions = {}
+  const current = { ...texts }
+  const published = async (client, mark, n, v) => {
+    const uri = uriOf(file(n))
+    let found
+    await until(() => (found = client.diagnosticsSince(mark).find((p) => p.uri === uri && p.version === v)) !== undefined, 60000)
+    return found?.diagnostics
+  }
+  const change = (n, text) => {
+    current[n] = text
+    c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file(n)), version: ++versions[n] }, contentChanges: [{ text }] })
+  }
+  /** The document with `text`, built: its errors. */
+  const built = async (n, text) => {
+    const mk = c.mark()
+    change(n, text)
+    const ds = await published(c, mk, n, versions[n])
+    return ds === undefined ? ["no publication"] : ds.filter((d) => d.severity === 1).map((d) => d.message)
+  }
+  const actionsOn = (client, n, range, only) => client.request("textDocument/codeAction", { textDocument: { uri: uriOf(file(n)) }, range, context: { diagnostics: [], ...(only ? { only } : {}) } }, { timeout: 30000 })
+  const actionsAt = async (n, range, only) => (await actionsOn(c, n, range, only)).result ?? []
+  const editsOf = (a) => a?.edit?.documentChanges?.[0]?.edits
+  const unresolved = (a, n) => a?.title === TITLE && a?.kind === KIND && a?.edit === undefined && a?.diagnostics === undefined && same(a?.data, { uri: uriOf(file(n)), version: versions[n] })
+  const kinds = (as) => as.map((a) => (a.kind === KIND ? "all" : a.title))
+  try {
+    const init = await c.result("initialize", { processId: null, rootUri: uriOf(dir), capabilities: resolving })
+    check("import all: the capability names the two kinds and the resolve", same(init?.capabilities?.codeActionProvider, { codeActionKinds: ["quickfix", KIND], resolveProvider: true }), init?.capabilities)
+    const m = c.mark()
+    c.notify("initialized", {})
+    for (const n of Object.keys(texts)) {
+      versions[n] = 1
+      c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file(n)), languageId: "scala", version: 1, text: texts[n] } })
+    }
+    const uses = Object.keys(texts).filter((n) => !(n in libs))
+    for (const n of uses) await published(c, m, n, 1)
+
+    // The composed edit: asked for by its kind, the action alone with its edit; the same edit by the resolve of
+    // the action a request without a kind offers last; applied, the build; then the single fixes one at a time
+    // on the first text again.
+    for (const [n, [, want, count, answered, left, sequential, what]] of Object.entries(rows)) {
+      const whole = wholeOf(texts[n])
+      const asked = await actionsAt(n, whole, [KIND])
+      const edits = editsOf(asked[0]) ?? []
+      const fixed = apply(texts[n], edits)
+      check(`import all: ${what}: the action alone with its edit, no two edits meeting`, asked.length === 1 && asked[0].title === TITLE && asked[0].kind === KIND && asked[0].isPreferred === undefined && asked[0].diagnostics?.length === answered && edits.length === count && fixed !== null && fixed.includes(want), { asked, fixed })
+      const offered = await actionsAt(n, whole)
+      const last = offered[offered.length - 1]
+      const resolved = unresolved(last, n) ? await c.result("codeAction/resolve", last) : undefined
+      check(`import all: ${what}: offered last without its edit, its resolve the action with that edit`, unresolved(last, n) && offered.slice(0, -1).every((a) => a.kind === "quickfix") && same(resolved, { ...last, edit: asked[0]?.edit }), { offered, resolved })
+      const errors = await built(n, fixed ?? texts[n])
+      check(`import all: ${what}: applied, the reports it answered gone`, errors.length === left, { fixed, errors })
+      if (!sequential) continue
+      // The single fixes: the first that is alone for its reports, applied, the build, and again.
+      let text = texts[n]
+      let after = await built(n, text)
+      for (let step = 0; step < 8; step++) {
+        const one = (await actionsAt(n, wholeOf(text), ["quickfix"])).find((a) => a.title.startsWith("import ") && a.isPreferred)
+        if (!one) break
+        text = apply(text, editsOf(one) ?? []) ?? text
+        after = await built(n, text)
+      }
+      check(`import all: ${what}: the single fixes one at a time end with the same imports and errors`, same(importsOf(text), importsOf(fixed ?? "")) && after.length === left, { one: importsOf(text), all: importsOf(fixed ?? ""), after })
+    }
+
+    // An import whose path would start at a name another of the imports brings is left: the object's wildcard
+    // alone, and that report's own fix, asked on the text with it, written from the root.
+    {
+      const n = "W1.scala"
+      const asked = await actionsAt(n, wholeOf(texts[n]), [KIND])
+      const fixed = apply(texts[n], editsOf(asked[0]) ?? [])
+      const errors = await built(n, fixed ?? texts[n])
+      const next = (await actionsAt(n, wholeOf(fixed ?? ""), ["quickfix"])).filter((a) => a.title.startsWith("import "))
+      const whole = apply(fixed ?? "", editsOf(next[0]) ?? [])
+      const after = await built(n, whole ?? "")
+      check("import all: an object's wildcard that brings the first name of another import's path: the wildcard alone, the other report left to its own fix, which then starts at the root", asked.length === 1 && asked[0].diagnostics?.length === 1 && fixed?.includes("package iau\n\nimport iaw.Wide.*\n\nobject W1:") && same(errors, ["type Other not found"]) && same(next.map((a) => a.title), ["import _root_.iao.Other"]) && after.length === 0, { asked, fixed, errors, next, whole, after })
+    }
+
+    // Nothing to add together.
+    for (const [n, fixes, what] of [
+      ["N8.scala", ["import iad1.Dup", "import iad2.Dup"], "a type and a term of one name from two owners, each alone for its report"],
+      ["NC.scala", ["import ias.Left.*", "import ias.Right.*"], "two objects' wildcards that share a name a report spells"],
+      ["N14.scala", ["import iat1.Twin", "import iat2.Twin"], "a name with two candidates, twice"],
+    ]) {
+      const whole = wholeOf(texts[n])
+      const asked = await actionsAt(n, whole, ["source"])
+      const offered = await actionsAt(n, whole)
+      const last = offered[offered.length - 1]
+      const resolved = unresolved(last, n) ? await c.result("codeAction/resolve", last) : undefined
+      check(`import all: ${what}: no action for its kind; the single fixes as they were; the resolve an empty edit`, same(asked, []) && same(kinds(offered), [...fixes, "all"]) && same(editsOf(resolved), []) && same({ ...resolved, edit: undefined }, { ...last, edit: undefined }), { asked, offered, resolved })
+    }
+
+    // The request, on a document of three names, one of them with two candidates.
+    const q1 = texts["Q1.scala"]
+    const atZa = rangeIn(q1, ": Za =", 0, 2, 2)
+    const plain = await actionsAt("Q1.scala", atZa)
+    const fixesOnly = await actionsAt("Q1.scala", atZa, ["quickfix"])
+    check("import all: a request that names no kind: the range's fixes, then the action without its edit", same(kinds(plain), ["import ia.b.Za", "all"]) && unresolved(plain[1], "Q1.scala"), plain)
+    check("import all: a request for quick fixes: the fixes alone, those of the request without a kind", same(kinds(fixesOnly), ["import ia.b.Za"]) && same(fixesOnly, plain.slice(0, -1)), { fixesOnly, plain })
+    const empty = await actionsAt("Q1.scala", atZa, [""])
+    check("import all: a request for the empty kind: as one that names none", same(empty, plain), empty)
+    const bySource = await actionsAt("Q1.scala", atZa, ["source"])
+    const byKind = await actionsAt("Q1.scala", atZa, [KIND])
+    check("import all: a request for source actions, or for the kind: that action alone with its edit, of the document's reports whatever the range", bySource.length === 1 && same(bySource, byKind) && bySource[0].title === TITLE && bySource[0].kind === KIND && bySource[0].diagnostics?.length === 2 && apply(q1, editsOf(bySource[0]) ?? [])?.includes("package iau\n\nimport ia.b.Za\nimport iao.Other\n\nobject Q1:"), { bySource, byKind })
+    const both = await actionsAt("Q1.scala", atZa, ["quickfix", "source"])
+    check("import all: a request for both kinds: the range's fixes, then the action with its edit", same(both, [...fixesOnly, ...bySource]), both)
+    const refactor = await actionsAt("Q1.scala", wholeOf(q1), ["refactor", "source.organizeImports"])
+    check("import all: a request for other kinds: none", same(refactor, []), refactor)
+    const apart = await actionsAt("Q1.scala", { start: { line: 0, character: 0 }, end: { line: 0, character: 7 } })
+    check("import all: a request that names no kind, no report in its range: none", same(apart, []), apart)
+    const resolvedQ1 = await c.result("codeAction/resolve", plain[1])
+    check("import all: the resolve: the action as it was sent with the edit the request for its kind gets", same(resolvedQ1, { ...plain[1], edit: bySource[0]?.edit }), resolvedQ1)
+    const foreign = await c.result("codeAction/resolve", plain[0])
+    check("import all: the resolve of another action: back as it was sent", same(foreign, plain[0]), foreign)
+    const resolvedAgain = await c.result("codeAction/resolve", resolvedQ1)
+    check("import all: the resolve of the action that has its edit: back as it was sent", same(resolvedAgain, resolvedQ1), resolvedAgain)
+
+    // One name alone: the action for its kind; beside its quick fix, none.
+    const q13 = texts["Q13.scala"]
+    const aloneKind = await actionsAt("Q13.scala", wholeOf(q13), [KIND])
+    const alonePlain = await actionsAt("Q13.scala", wholeOf(q13))
+    check("import all: one report in the document: the action for its kind, its quick fix alone on a request without one", same(kinds(aloneKind), ["all"]) && same(editsOf(aloneKind[0]), editsOf(alonePlain[0])) && same(kinds(alonePlain), ["import ia.b.Za"]), { aloneKind, alonePlain })
+    // One name of two has one import: the resolve brings it.
+    const q19 = await actionsAt("Q19.scala", wholeOf(texts["Q19.scala"]))
+    const resolved19 = await c.result("codeAction/resolve", q19[q19.length - 1])
+    check("import all: the resolve where one name has exactly one import: that import", same(kinds(q19), ["import iat1.Twin", "import iat2.Twin", "import ia.b.Za", "all"]) && apply(texts["Q19.scala"], editsOf(resolved19) ?? [])?.includes("package iau\n\nimport ia.b.Za\n\nobject Q19:"), { q19, resolved19 })
+
+    // The document's version moved since the action was offered: before the resolve, and while the session answers it.
+    const q17 = await actionsAt("Q17.scala", wholeOf(texts["Q17.scala"]))
+    let mk = c.mark()
+    change("Q17.scala", texts["Q17.scala"].replace("object Q17:", "object Q17: // moved"))
+    const moved = await c.request("codeAction/resolve", q17[q17.length - 1], { timeout: 30000 })
+    check("import all: the resolve after the document's version moved: ContentModified", unresolved({ ...q17[q17.length - 1], data: { ...q17[q17.length - 1]?.data, version: versions["Q17.scala"] } }, "Q17.scala") && moved.error?.code === -32801, { q17, moved })
+    await published(c, mk, "Q17.scala", versions["Q17.scala"])
+    const q15 = await actionsAt("Q15.scala", wholeOf(texts["Q15.scala"]))
+    writeFileSync(`${barrier}.query`, "")
+    const from = traceOf(trace).length
+    const flying = c.request("codeAction/resolve", q15[q15.length - 1], { timeout: 30000 })
+    await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "query", "the command held")
+    mk = c.mark()
+    change("Q15.scala", texts["Q15.scala"].replace("object Q15:", "object Q15: // moved"))
+    rmSync(`${barrier}.query`)
+    const flown = await flying
+    check("import all: the document edited while the session answers the resolve: ContentModified", flown.error?.code === -32801, flown)
+    await published(c, mk, "Q15.scala", versions["Q15.scala"])
+    // A document closed since: an empty edit.
+    const qc = await actionsAt("QC.scala", wholeOf(texts["QC.scala"]))
+    c.notify("textDocument/didClose", { textDocument: { uri: uriOf(file("QC.scala")) } })
+    const closed = await c.request("codeAction/resolve", qc[qc.length - 1], { timeout: 30000 })
+    check("import all: the resolve for a document closed since: an empty edit", closed.error === undefined && same(editsOf(closed.result), []), closed)
+
+    // A client that does not resolve an action's edit, or does not hand an action's data back: the fixes alone.
+    for (const [codeAction, what] of [
+      [{ dataSupport: true, resolveSupport: { properties: ["command"] } }, "no edit among the properties it resolves"],
+      [{ resolveSupport: { properties: ["edit"] } }, "no data handed back"],
+      [undefined, "no word of code actions"],
+    ]) {
+      const c2 = new Client(dir)
+      try {
+        await c2.result("initialize", { processId: null, rootUri: uriOf(dir), capabilities: { workspace: { workspaceEdit: { documentChanges: true } }, textDocument: codeAction ? { codeAction } : {} } })
+        const m2 = c2.mark()
+        c2.notify("initialized", {})
+        for (const n of [...Object.keys(libs), "Q1.scala"]) c2.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file(n)), languageId: "scala", version: 1, text: texts[n] } })
+        await published(c2, m2, "Q1.scala", 1)
+        const got = (await actionsOn(c2, "Q1.scala", atZa)).result
+        const whole = (await actionsOn(c2, "Q1.scala", wholeOf(q1))).result
+        const byKind2 = (await actionsOn(c2, "Q1.scala", atZa, [KIND])).result
+        check(`import all: a client with ${what}: a request without a kind gets the fixes alone; one for the kind the action with its edit`, same(got, fixesOnly) && same(kinds(whole ?? []), ["import iat1.Twin", "import iat2.Twin", "import ia.b.Za", "import iao.Other"]) && same(byKind2, bySource), { got, whole, byKind2 })
+        await c2.result("shutdown", null)
+        c2.notify("exit", null)
+        await Promise.race([c2.exited, sleep(10000)])
+      } catch (e) {
+        check(`the import-all client with ${what} ran to its end`, false, `${e.stack}\nstderr: ${c2.stderr.slice(-1000)}`)
+        c2.proc.kill()
+      }
+    }
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+    await Promise.race([c.exited, sleep(10000)])
+  } catch (e) {
+    check("the import-all scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  }
+}
+
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, importMerges, importAll, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
 // Run only when named: the idle minute, the jar fetch and the sources' fetches, which tests/lsp.sh
 // runs once each.
 const named = new Set(["idleMinute", "jarFetch", "librarySources", "sourcesFailures", "sourcesHeld", "sourcesBackoff", "sourcesPaths"])

@@ -45,7 +45,9 @@
 //! found and a member a selection lacks with `"missing":{"kind","name","start","end"}`, what was
 //! wanted and the report's span in bytes, which `import-actions <n> <item>.. <path>` hands back,
 //! every one of the file's with those asked for marked, for the imports that bring them:
-//! `{"actions":[{"for":[<items>],"title","edits":[...]}]}`); lines and columns are 1-based, the end
+//! `{"actions":[{"for":[<items>],"title","edits":[...]}]}`, and `import-all` with the same items
+//! for those imports and, as `"all":{"for","imports","edits"}`, the imports of every item that
+//! has exactly one, added together); lines and columns are 1-based, the end
 //! exclusive, and the columns of a check session count UTF-16 units, as scalac's and an
 //! editor's do. `ok` is false when there is an error (or a warning under `--werror`); a
 //! diagnostic without a position has no `line`. The typed program survives a build with errors,
@@ -106,8 +108,9 @@ enum Command {
     Query(crate::index::Query, Option<(u32, u32)>),
     /// `import-actions <n> <item>.. <path>`: the imports that bring what the file's reports at the
     /// items asked for say is missing (`ImportWanted`: every such report of the file, some of
-    /// them asked for), answered with one JSON line as a query is.
-    Imports(PathBuf, Vec<crate::source::ImportWanted>),
+    /// them asked for), answered with one JSON line as a query is; as `import-all`, with the
+    /// imports of every item that has exactly one added together as well (`true`).
+    Imports(PathBuf, Vec<crate::source::ImportWanted>, bool),
     /// `stats`: what the session holds, answered with one JSON line.
     Stats,
     /// `cancel <n>`: the build of that identity stops if it has not begun typing; answered by
@@ -920,10 +923,10 @@ pub fn run(opts: &Options) -> ! {
                     print_answer_declared(&answered.result, answered.declared.as_ref(), &texts);
                     continue;
                 }
-                Command::Imports(path, wanted) => {
+                Command::Imports(path, wanted, composed) => {
                     crate::lsp::hooks::hold_query();
                     let result = match typer.as_mut() {
-                        Some(t) => t.on_thread(|w| w.import_actions(&path, &wanted, &query_files)),
+                        Some(t) => t.on_thread(|w| w.import_actions(&path, &wanted, composed, &query_files)),
                         None => crate::lsp::json::Json::Null,
                     };
                     // The text the items' places are in, which the language server holds the reports'
@@ -2266,9 +2269,10 @@ fn read_command(input: &mut impl BufRead, opts: &Options) -> Option<Command> {
         return Some(Command::Stats);
     }
     if opts.index {
-        if let Some(rest) = line.strip_prefix("import-actions ") {
+        let imports = line.strip_prefix("import-actions ").map(|rest| (rest, false)).or_else(|| line.strip_prefix("import-all ").map(|rest| (rest, true)));
+        if let Some((rest, composed)) = imports {
             return Some(match parse_imports(rest) {
-                Some((path, wanted)) => Command::Imports(path, wanted),
+                Some((path, wanted)) => Command::Imports(path, wanted, composed),
                 None => Command::Unknown(line.to_string()),
             });
         }
@@ -2380,13 +2384,13 @@ fn json_array(items: &[String], quoted: bool) -> String {
     out
 }
 
-/// The line of `import-actions` for the reports `wanted` of the file `path`: their count, an item
-/// each (what was wanted, as a small letter where the imports are asked for and a capital where
-/// not; the report's span in bytes; the name with every byte but a letter, a digit or `_` as
-/// `%XX`), then the path, which may hold a space.
-pub(crate) fn imports_command(path: &std::path::Path, wanted: &[crate::source::ImportWanted]) -> String {
+/// The line of `import-actions`, or with `composed` of `import-all`, for the reports `wanted` of
+/// the file `path`: their count, an item each (what was wanted, as a small letter where the
+/// imports are asked for and a capital where not; the report's span in bytes; the name with
+/// every byte but a letter, a digit or `_` as `%XX`), then the path, which may hold a space.
+pub(crate) fn imports_command(path: &std::path::Path, wanted: &[crate::source::ImportWanted], composed: bool) -> String {
     use crate::source::MissingKind;
-    let mut line = format!("import-actions {}", wanted.len());
+    let mut line = format!("{} {}", if composed { "import-all" } else { "import-actions" }, wanted.len());
     for w in wanted {
         let kind = match w.kind {
             MissingKind::Term => 'v',
@@ -2997,9 +3001,10 @@ mod tests {
             ImportWanted { name: "+:é".into(), kind: MissingKind::Type, span: Span::new(7, 9), asked: true },
         ];
         let path = std::path::Path::new("/work dir/src/A.scala");
-        let line = imports_command(path, &wanted);
+        let line = imports_command(path, &wanted, false);
         let rest = line.strip_prefix("import-actions ").and_then(|l| l.strip_suffix('\n')).expect("the command's word and its line end");
         assert!(!rest.contains('\n'));
+        assert_eq!(imports_command(path, &wanted, true), format!("import-all {}\n", rest));
         assert_eq!(parse_imports(rest), Some((path.to_path_buf(), wanted)));
         assert_eq!(parse_imports("2 m1-2:a /p/A.scala"), None);
         assert_eq!(parse_imports("1 x1-2:a /p/A.scala"), None);

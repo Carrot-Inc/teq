@@ -68,6 +68,10 @@ const METHOD_NOT_FOUND: i64 = -32601;
 const SERVER_NOT_INITIALIZED: i64 = -32002;
 /// A request whose document changed before it could be answered: the client asks again.
 const CONTENT_MODIFIED: i64 = -32801;
+/// The kind and the title of the action that adds together the import of every name a document
+/// misses that has one candidate.
+const ALL_IMPORTS: &str = "source.addMissingImports";
+const ALL_IMPORTS_TITLE: &str = "Import all missing names";
 /// A request the client cancelled (`$/cancelRequest`) while it was under way.
 const REQUEST_CANCELLED: i64 = -32800;
 
@@ -679,6 +683,10 @@ struct Server {
     /// Whether the client takes a workspace edit as document changes, each naming the version of
     /// the document it edits.
     document_changes: bool,
+    /// Whether the client takes a code action without its edit and asks for it when the action
+    /// is chosen (`resolveSupport` with `edit`), handing back the `data` that names the
+    /// action's document (`dataSupport`).
+    action_resolve: bool,
     /// Whether the client takes a signature's parameter label as a range of the signature's
     /// label (`labelOffsetSupport`); else as the label's text, as dotty's presentation compiler
     /// gives it (`SignatureHelpProvider.paramToParameterInformation`).
@@ -740,6 +748,7 @@ pub fn run(args: &[String]) -> ! {
         insert_replace: false,
         snippets: false,
         document_changes: false,
+        action_resolve: false,
         label_offsets: false,
         sources: sources::Fetcher::new(),
     };
@@ -1008,6 +1017,7 @@ impl Server {
             "textDocument/completion" => self.complete(id, params),
             "completionItem/resolve" => self.resolve_item(id, params),
             "textDocument/codeAction" => self.code_actions(id, params),
+            "codeAction/resolve" => self.resolve_action(id, params),
             "textDocument/documentSymbol" => match document_path(params) {
                 Some(path) if self.library_document_changed(&path) => respond(&id, Json::Null),
                 Some(path) => {
@@ -1426,10 +1436,22 @@ impl Server {
     /// edits are of the text the diagnostics were published for: where the document changed
     /// since, there are none until the next build's diagnostics are, and an answer of the session
     /// found in another text ends the request `ContentModified`, as a position's query does.
+    ///
+    /// One action more adds together the import of every such report of the document that has
+    /// exactly one (`ALL_IMPORTS`). A request for its kind, or for the kind above it, gets it
+    /// with its edit where it imports anything, from the session's `import-all`. A request that
+    /// names no kind gets it last and without its edit, by the count of the document's reports
+    /// alone (two or more, one of them in the range), where the client asks for an edit when
+    /// the action is chosen (`resolve_action`): the session's command is then the one of
+    /// before. A request for quick fixes by their kind gets those alone.
     fn code_actions(&mut self, id: Json, params: &Json) {
         let none = || Json::Arr(Vec::new());
         let only = params.at(&["context", "only"]).map(Json::arr);
-        if only.is_some_and(|kinds| !kinds.iter().any(|k| matches!(k.str(), Some("quickfix" | "")))) {
+        let asks = |kind: &str| only.is_some_and(|kinds| kinds.iter().any(|k| k.str() == Some(kind)));
+        let ordinary = only.is_none() || asks("");
+        let fixes = ordinary || asks("quickfix");
+        let source = !ordinary && (asks("source") || asks(ALL_IMPORTS));
+        if !fixes && !source {
             return respond(&id, none());
         }
         let Some(path) = document_path(params) else { return respond(&id, none()) };
@@ -1446,7 +1468,7 @@ impl Server {
         let mut reports = Vec::new();
         for d in published {
             let (Some(start), Some(end)) = (point(d.at(&["range", "start"])), point(d.at(&["range", "end"]))) else { continue };
-            let asked = !(end < from || to < start);
+            let asked = fixes && !(end < from || to < start);
             if let Some(mut w) = d.at(&["data", "missing"]).and_then(import_wanted) {
                 w.asked = asked;
                 wanted.push(w);
@@ -1464,14 +1486,54 @@ impl Server {
         }
         // The session is asked where the document is open, its text the one the reports are of.
         let digest = self.docs.get(&path).map(|d| d.digest.clone());
-        let (true, Some(digest), Some(doc_version)) = (wanted.iter().any(|w| w.asked), digest, current) else { return respond(&id, Json::Arr(actions)) };
+        let asked = wanted.iter().any(|w| w.asked) || (source && !wanted.is_empty());
+        let (true, Some(digest), Some(doc_version)) = (asked, digest, current) else { return respond(&id, Json::Arr(actions)) };
         self.flush();
         let Some(s) = self.one_for(&path) else { return respond(&id, Json::Arr(actions)) };
         self.sessions[s].last_used = Instant::now();
-        let command = crate::watch::imports_command(&path, &wanted);
+        let command = crate::watch::imports_command(&path, &wanted, source);
         let versioned = version.filter(|_| self.document_changes).map_or(Json::Null, |v| Json::Num(v as f64));
-        let context = obj([("actions", Json::Arr(actions)), ("reports", Json::Arr(reports)), ("uri", uri.into()), ("version", versioned), ("asked", Json::Num(doc_version as f64))]);
+        // The action offered without its edit, which names its document for the resolve.
+        let later = if ordinary && self.action_resolve && wanted.len() >= 2 {
+            let data = obj([("uri", uri.clone().into()), ("version", Json::Num(doc_version as f64))]);
+            obj([("title", ALL_IMPORTS_TITLE.into()), ("kind", ALL_IMPORTS.into()), ("data", data)])
+        } else {
+            Json::Null
+        };
+        let context = obj([("actions", Json::Arr(actions)), ("reports", Json::Arr(reports)), ("uri", uri.into()), ("version", versioned), ("asked", Json::Num(doc_version as f64)), ("later", later)]);
         self.query_one(id, "textDocument/codeAction", s, &command, Some(context), path, doc_version, digest);
+    }
+
+    /// `codeAction/resolve`: the action offered without its edit (`code_actions`) gets it from
+    /// its document's session, the imports of every report of the document that has exactly
+    /// one, added together (`import-all`): an empty edit where there is none, where the
+    /// document is closed or no session has it. The document's version moved since the action
+    /// was offered ends the request `ContentModified`. Any other action is complete as it is.
+    fn resolve_action(&mut self, id: Json, params: &Json) {
+        let action = params.clone();
+        let data = action.get("data").filter(|_| action.get("kind").and_then(Json::str) == Some(ALL_IMPORTS) && action.get("edit").is_none());
+        let uri = data.and_then(|d| d.get("uri")).and_then(Json::str).map(str::to_string);
+        let version = data.and_then(|d| d.get("version")).and_then(Json::num).map(|v| v as i64);
+        let (Some(uri), Some(version)) = (uri, version) else { return respond(&id, action) };
+        let Some(path) = uri::to_path(&uri).map(|p| canonical(&p)) else { return respond(&id, action) };
+        if self.docs.get(&path).is_some_and(|d| d.version != version) {
+            return respond_error(&id, CONTENT_MODIFIED, "the document changed");
+        }
+        let versioned = Some(version).filter(|_| self.document_changes);
+        let context = obj([("action", action), ("uri", uri.into()), ("version", versioned.map_or(Json::Null, |v| Json::Num(v as f64))), ("asked", Json::Num(version as f64))]);
+        // Every report of the document that says what is missing, none of them asked for by
+        // itself.
+        let digest = self.docs.get(&path).map(|d| d.digest.clone());
+        let wanted: Vec<crate::source::ImportWanted> = match self.published.get(&path).filter(|(_, v)| *v == Some(version)) {
+            Some((published, _)) => published.iter().filter_map(|d| d.at(&["data", "missing"]).and_then(import_wanted)).collect(),
+            None => Vec::new(),
+        };
+        let (false, Some(digest)) = (wanted.is_empty(), digest) else { return respond(&id, resolved_action(context, &Json::Null)) };
+        self.flush();
+        let Some(s) = self.one_for(&path) else { return respond(&id, resolved_action(context, &Json::Null)) };
+        self.sessions[s].last_used = Instant::now();
+        let command = crate::watch::imports_command(&path, &wanted, true);
+        self.query_one(id, "codeAction/resolve", s, &command, Some(context), path, version, digest);
     }
 
     fn initialize(&mut self, id: &Json, params: &Json) {
@@ -1509,11 +1571,14 @@ impl Server {
             ("implementationProvider", true.into()),
             ("callHierarchyProvider", true.into()),
             ("completionProvider", obj([("triggerCharacters", Json::Arr(vec![".".into()])), ("resolveProvider", true.into())])),
-            ("codeActionProvider", obj([("codeActionKinds", Json::Arr(vec!["quickfix".into()]))])),
+            ("codeActionProvider", obj([("codeActionKinds", Json::Arr(vec!["quickfix".into(), ALL_IMPORTS.into()])), ("resolveProvider", true.into())])),
         ]);
         self.insert_replace = params.at(&["capabilities", "textDocument", "completion", "completionItem", "insertReplaceSupport"]).and_then(Json::bool) == Some(true);
         self.snippets = params.at(&["capabilities", "textDocument", "completion", "completionItem", "snippetSupport"]).and_then(Json::bool) == Some(true);
         self.document_changes = params.at(&["capabilities", "workspace", "workspaceEdit", "documentChanges"]).and_then(Json::bool) == Some(true);
+        let actions = params.at(&["capabilities", "textDocument", "codeAction"]);
+        let resolves = |property: &str| actions.and_then(|a| a.at(&["resolveSupport", "properties"])).map(Json::arr).unwrap_or(&[]).iter().any(|p| p.str() == Some(property));
+        self.action_resolve = resolves("edit") && actions.and_then(|a| a.get("dataSupport")).and_then(Json::bool) == Some(true);
         self.label_offsets = params.at(&["capabilities", "textDocument", "signatureHelp", "signatureInformation", "parameterInformation", "labelOffsetSupport"]).and_then(Json::bool) == Some(true);
         self.watch_files = params.at(&["capabilities", "workspace", "didChangeWatchedFiles", "dynamicRegistration"]).and_then(Json::bool) == Some(true);
         self.relative_patterns = params.at(&["capabilities", "workspace", "didChangeWatchedFiles", "relativePatternSupport"]).and_then(Json::bool) == Some(true);
@@ -2793,8 +2858,9 @@ impl Server {
                 self.remember_documents(s, &winner);
             }
         }
-        // A code action's request: its context's quick fixes and the imports the session answered.
-        if method == "textDocument/codeAction" {
+        // A code action's request: its context's quick fixes and the imports the session answered;
+        // its resolve: the action with the edit the session answered.
+        if method == "textDocument/codeAction" || method == "codeAction/resolve" {
             let context = item.unwrap_or(Json::Null);
             // The document edited while the session answered: the edits are of a text it no longer has.
             let asked = context.get("asked").and_then(Json::num).map(|v| v as i64);
@@ -2802,7 +2868,7 @@ impl Server {
                 return Err((CONTENT_MODIFIED, "the document changed"));
             }
             let answer = results.into_iter().next().map_or(Json::Null, |(_, r)| r);
-            return Ok(import_actions(context, &answer));
+            return Ok(if method == "codeAction/resolve" { resolved_action(context, &answer) } else { import_actions(context, &answer) });
         }
         if origin.as_deref().is_some_and(|f| self.library_document_changed(f)) {
             return Ok(match item {
@@ -2934,7 +3000,9 @@ fn import_wanted(missing: &Json) -> Option<crate::source::ImportWanted> {
 /// The answer to a code action's request that asked its session for imports: the quick fixes
 /// its context already holds (`actions`), then one for each import the session answered, in its
 /// order, with the reports it is for (`for`, indices into the context's `reports`); preferred
-/// where each of those reports has no other import.
+/// where each of those reports has no other import. Last the action that adds the imports
+/// together: with the edit the session composed (`all`) and the reports it answers, where it
+/// was asked for one and there is one; else as the context holds it without its edit (`later`).
 fn import_actions(context: Json, answer: &Json) -> Json {
     let mut actions: Vec<Json> = context.get("actions").map(Json::arr).unwrap_or(&[]).to_vec();
     let reports = context.get("reports").map(Json::arr).unwrap_or(&[]);
@@ -2954,7 +3022,32 @@ fn import_actions(context: Json, answer: &Json) -> Json {
         action.push(("edit".to_string(), workspace_edit(uri, version, edits.clone())));
         actions.push(Json::Obj(action));
     }
+    match (answer.get("all"), context.get("later")) {
+        (Some(all), _) => {
+            let edits = all.get("edits").cloned().unwrap_or(Json::Arr(Vec::new()));
+            if !edits.arr().is_empty() {
+                let diagnostics: Vec<Json> = of(all).iter().filter_map(|&i| reports.get(i).cloned()).collect();
+                actions.push(obj([("title", ALL_IMPORTS_TITLE.into()), ("kind", ALL_IMPORTS.into()), ("diagnostics", Json::Arr(diagnostics)), ("edit", workspace_edit(uri, version, edits))]));
+            }
+        }
+        (None, Some(later)) if !later.is_null() && !answer.is_null() => actions.push(later.clone()),
+        _ => {}
+    }
     Json::Arr(actions)
+}
+
+/// The answer to a code action's resolve: the action its context holds (`action`) with the
+/// edit the session composed (`all`), an empty one where it answered none.
+fn resolved_action(context: Json, answer: &Json) -> Json {
+    let uri = context.get("uri").and_then(Json::str).unwrap_or("");
+    let version = context.get("version").and_then(Json::num).map(|v| v as i64);
+    let edits = answer.at(&["all", "edits"]).cloned().unwrap_or(Json::Arr(Vec::new()));
+    let mut action = match context.get("action") {
+        Some(Json::Obj(fields)) => fields.clone(),
+        _ => Vec::new(),
+    };
+    action.push(("edit".to_string(), workspace_edit(uri, version, edits)));
+    Json::Obj(action)
 }
 
 /// Names the document's version in the `data` of a completion list's items, which their
@@ -3074,7 +3167,33 @@ mod tests {
         assert_eq!(actions[2].get("isPreferred"), None);
         assert_eq!(actions[1].at(&["edit", "documentChanges"]).map(|d| d.arr()[0].at(&["textDocument", "version"]).cloned()), Some(Some(Json::Num(4.0))));
         // No answer of the session (a file it holds no text of): the context's own alone.
-        assert_eq!(import_actions(context, &Json::Null).arr().len(), 1);
+        assert_eq!(import_actions(context.clone(), &Json::Null).arr().len(), 1);
+        // The action that adds the imports together comes last: as the context holds it without
+        // its edit, where the session answered and composed nothing; with the edit the session
+        // composed and the reports it answers; none for an edit of nothing or no answer.
+        let later = Json::parse(r#"{"title":"Import all missing names","kind":"source.addMissingImports","data":{"uri":"file:///w/A.scala","version":4}}"#).unwrap();
+        let mut held = match context.clone() {
+            Json::Obj(fields) => fields,
+            _ => Vec::new(),
+        };
+        held.push(("later".to_string(), later.clone()));
+        let held = Json::Obj(held);
+        assert_eq!(import_actions(held.clone(), &answer).arr().last(), Some(&later));
+        assert_eq!(import_actions(held.clone(), &Json::Null).arr().len(), 1);
+        let composed = Json::parse(r#"{"actions":[],"all":{"for":[2,0],"imports":["import p.A"],"edits":[{"newText":"x"}]}}"#).unwrap();
+        let with = import_actions(held.clone(), &composed);
+        let last = with.arr().last().unwrap();
+        assert_eq!(last.get("kind"), Some(&Json::from(ALL_IMPORTS)));
+        assert_eq!(last.get("diagnostics"), Some(&Json::Arr(vec![report("c"), report("a")])));
+        assert_eq!(last.at(&["edit", "documentChanges"]).map(|d| d.arr()[0].get("edits").cloned()), Some(Some(Json::parse(r#"[{"newText":"x"}]"#).unwrap())));
+        let nothing = Json::parse(r#"{"actions":[],"all":{"for":[],"imports":[],"edits":[]}}"#).unwrap();
+        assert_eq!(import_actions(held, &nothing).arr().len(), 1);
+        // Its resolve: the action as it was sent with the edit, an empty one for no answer.
+        let resolve = Json::parse(r#"{"action":{"title":"Import all missing names","data":{"uri":"file:///w/A.scala","version":4}},"uri":"file:///w/A.scala","version":4,"asked":4}"#).unwrap();
+        let resolved = resolved_action(resolve.clone(), &composed);
+        assert_eq!(resolved.get("data"), resolve.at(&["action", "data"]));
+        assert_eq!(resolved.at(&["edit", "documentChanges"]).map(|d| d.arr()[0].get("edits").cloned()), Some(Some(Json::parse(r#"[{"newText":"x"}]"#).unwrap())));
+        assert_eq!(resolved_action(resolve, &Json::Null).at(&["edit", "documentChanges"]).map(|d| d.arr()[0].get("edits").cloned()), Some(Some(Json::Arr(Vec::new()))));
     }
 
     /// A Mill build's definition files and the inputs an export declares are build files whose change
