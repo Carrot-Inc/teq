@@ -106,6 +106,8 @@ js/jdk_stand_in_constructor_proxies	pass	-
 js/js_array_jar_body	pass	-	
 js/kittens_derive	pass	-	
 js/kittens_shapes	pass	-	
+js/library_forwarder_path_value	pass	-	
+js/library_forwarder_singleton_type	pass	-	
 js/macro_suspended_after_library_demand	pass	-	
 js/macro_suspended_library_demand_no_final_newline	pass	-	
 js/macro_suspended_library_demand_reaches_output	pass	-	
@@ -327,6 +329,8 @@ jvm/jvm_varargs_literal_types	pass	-
 jvm/jvm_varargs_value_classes	pass	-	
 jvm/kantan_java8_export	pass	-	
 jvm/lazy_null_value	pass	-	
+jvm/library_forwarder_path_value	pass	-	
+jvm/library_forwarder_singleton_type	pass	-	
 jvm/line_numbers	pass	-	
 jvm/literally_validate	pass	-	
 jvm/local_inline_in_nested_trait	pass	-	

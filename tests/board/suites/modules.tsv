@@ -138,6 +138,7 @@ extension	pass	-
 extensionoverload	pass	-	
 extractorclash	pass	-	
 filemoduleidentity	pass	-	
+forwardersingleton	pass	-	
 functionxxl	fail	-	functionxxl build
 genericdefaults	pass	-	
 given	pass	-	

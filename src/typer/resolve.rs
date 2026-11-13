@@ -5944,6 +5944,12 @@ impl<'a> Worker<'a> {
                 };
                 let under = self.widen_path(p);
                 let (s, _) = self.find_member(under, n)?;
+                // A stable def's signature is asked for before it is tested (`path_of_ref`): a
+                // forwarder, whose signature a source has from its making and a library's
+                // pickle gives with no body typed.
+                if matches!(self.syms.sym(s), info if info.kind == SymKind::Def && info.stable) {
+                    self.sig_of(s);
+                }
                 let info = self.syms.sym(s);
                 Some(match info.kind {
                     // An enum's value is a stable val of its companion (`DesugarEnums`), read on

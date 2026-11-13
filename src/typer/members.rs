@@ -2207,6 +2207,13 @@ impl<'a> Worker<'a> {
     pub fn path_of_ref(&mut self, r: super::resolve::TermRef) -> Result<TypeId, &'static str> {
         use super::resolve::TermRef;
         let with_sym = |t: &mut Self, prefix: Option<TypeId>, s: SymId| {
+            // Whether a stable def is a path is read off its signature, which is asked for
+            // first: a library's or another module's member has none until something asks, and
+            // dotty's read of a symbol's info completes it. A stable def is a forwarder, whose
+            // signature a source has from its making and a pickle gives with no body typed.
+            if matches!(t.syms.sym(s), info if info.kind == SymKind::Def && info.stable) {
+                t.sig_of(s);
+            }
             let info = t.syms.sym(s);
             match info.kind {
                 SymKind::Object(c) => Ok(t.object_ref(c)),

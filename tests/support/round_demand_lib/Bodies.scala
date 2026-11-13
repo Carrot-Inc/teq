@@ -76,3 +76,13 @@ object Doubled extends DoublesInline
 // An inline method that implements nothing: it has no method of its own.
 object Tripled:
   inline def thrice(x: Int): Int = x + x + x
+
+// A val and an object behind an export, whose forwarders a program names as paths.
+object Stock:
+  val plain: String = "p"
+  object Inner:
+    val n = 9
+
+object Counter:
+  println("counter-init")
+  export Stock.{plain, Inner}
