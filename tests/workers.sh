@@ -375,6 +375,56 @@ else
   same_output type_reread 4 check tests/workers/type_reread --std=scala-library --classpath "$JARS_CP"
 fi
 
+# one_jar <name> <scalac's output> <trials>: a JVM build of tests/workers/<name> at one worker, then <trials>
+# builds at each of two, four and eight workers: every build without a diagnostic and with the one-worker
+# jar's bytes, and the jar printing what scalac's prints.
+one_jar() {
+  local name=$1 want=$2 trials=$3 t i said
+  jars_of tests/workers/$name
+  if [ -n "$JARS_MISSING" ]; then
+    echo "skip $name: not in the coursier cache:$JARS_MISSING"
+    ok
+    return
+  fi
+  said=$(timeout 120 "$TEQ" compiler build tests/workers/$name --target jvm --classpath "$JARS_CP" --threads 1 -o "$work/$name.one.jar" 2>&1)
+  if [ $? -ne 0 ] || [ -n "$said" ]; then
+    bad "$name: one worker does not build it clean: $(head -2 <<< "$said" | tr '\n' ' ' | cut -c1-200)"
+    return
+  fi
+  for i in $(seq 1 "$trials"); do
+    for t in 2 4 8; do
+      said=$(timeout 120 "$TEQ" compiler build tests/workers/$name --target jvm --classpath "$JARS_CP" --threads $t -o "$work/$name.$t.jar" 2>&1)
+      if [ $? -ne 0 ] || [ -n "$said" ] || ! cmp -s "$work/$name.one.jar" "$work/$name.$t.jar"; then
+        bad "$name: $t workers do not build one worker's jar at trial $i: $(head -2 <<< "$said" | tr '\n' ' ' | cut -c1-200)"
+        return
+      fi
+    done
+  done
+  said=$(run_jvm 120 "$work/$name.one.jar" "$JARS_CP" 2>&1)
+  if [ "$said" = "$want" ]; then
+    ok
+  else
+    bad "$name: the jar does not print scalac's output: $(head -2 <<< "$said" | tr '\n' ' ' | cut -c1-200)"
+  fi
+}
+
+# The member side: a member of the JDK's class that a std class stands for and leaves out
+# (`Class.getResource`, `ArrayList.trimToSize`), which another worker read from the JDK between
+# this worker's lookup and its question to the loader, is looked up again: eight units that meet it
+# at about the same moment find it at every worker count, as scalac finds it.
+one_jar member_reread 8 5
+one_jar member_reread_list 44 5
+# A library class whose parent is a JDK class the std does not declare (tests/support/jdkparent_lib.scala):
+# the parent is read when the class is completed, as dotty's base classes complete every parent, and nothing
+# of the class is made again where a member is asked of it.
+# A member of the parent; a member the std's stand-in two levels up leaves out; units that ask a member beside
+# units whose inferred type reads the class's base types; a class of the program below the library class.
+one_jar member_reread_placeholder 52 5
+one_jar member_reread_point 44.0 5
+one_jar member_reread_below_standin 36 5
+one_jar jdk_parent_two_kinds 18.0 5
+one_jar jdk_parent_program_class "1 jdkparent.Spot java.awt.Point" 5
+
 # A library's block typed again under the loader's lock (an argument typed once more against
 # another expected type) enters its locals afresh, and its statements read the last entry, as one
 # worker's map gives it: reactivemongo's `productReader`, whose partial function reads the last

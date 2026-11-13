@@ -243,6 +243,15 @@ fn split_binary(name: &str) -> (&str, &str) {
     }
 }
 
+/// What asking Java for the class a std class stands for gave: read by this call, read before
+/// it, or nothing to read.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Absorbed {
+    Now,
+    Before,
+    Nothing,
+}
+
 impl<'a> Worker<'a> {
     fn java(&self) -> &Java {
         &self.loaded.as_ref().unwrap().java
@@ -358,6 +367,13 @@ impl<'a> Worker<'a> {
     /// Opens the JDK's `ct.sym` for a lookup of `wanted` and enters its packages; false, with
     /// the error reported once, when no JDK is found.
     fn open_jdk(&mut self, wanted: &str) -> bool {
+        self.open_jdk_for(Some(wanted))
+    }
+
+    /// `open_jdk` for a read nothing asked for by name (`None`: a loaded class's parent, read
+    /// with the class): where no JDK is found it says nothing and leaves the report to a lookup
+    /// that names what it wants, so that a build that needs no JDK goes on without one.
+    pub(super) fn open_jdk_for(&mut self, wanted: Option<&str>) -> bool {
         if self.java().jdk.is_some() {
             return true;
         }
@@ -367,26 +383,32 @@ impl<'a> Worker<'a> {
         let start = Instant::now();
         let file = self.env.file;
         let Some(home) = jdk::find_home() else {
-            self.java_mut().jdk_missing = true;
-            let msg = format!("no JDK found (JAVA_HOME, /usr/libexec/java_home or java on the PATH) while looking for {}", wanted);
-            self.diags.error(file, Span::default(), msg);
+            if let Some(wanted) = wanted {
+                self.java_mut().jdk_missing = true;
+                let msg = format!("no JDK found (JAVA_HOME, /usr/libexec/java_home or java on the PATH) while looking for {}", wanted);
+                self.diags.error(file, Span::default(), msg);
+            }
             return false;
         };
         let path = jdk::ct_sym_path(&home);
         let ct = match CtSym::open(&path.to_string_lossy()) {
             Ok(ct) => ct,
             Err(e) => {
-                self.java_mut().jdk_missing = true;
-                self.diags.error(file, Span::default(), e);
+                if wanted.is_some() {
+                    self.java_mut().jdk_missing = true;
+                    self.diags.error(file, Span::default(), e);
+                }
                 return false;
             }
         };
         let release = match self.java().release {
             Some(r) if ct.releases.contains(&r) => r,
             Some(r) => {
-                self.java_mut().jdk_missing = true;
-                let msg = format!("{}: release {} is not in it (it holds {} to {})", path.display(), r, ct.releases[0], ct.latest_release());
-                self.diags.error(file, Span::default(), msg);
+                if wanted.is_some() {
+                    self.java_mut().jdk_missing = true;
+                    let msg = format!("{}: release {} is not in it (it holds {} to {})", path.display(), r, ct.releases[0], ct.latest_release());
+                    self.diags.error(file, Span::default(), msg);
+                }
                 return false;
             }
             None => ct.latest_release(),
@@ -1090,14 +1112,30 @@ impl<'a> Worker<'a> {
     }
 
     fn absorb_java_class(&mut self, c: ClassId) -> bool {
-        if self.forked && crate::shared::lock_depth() == 0 && (self.std_jvm_class(c).is_none() || self.java().absorbed_done.contains_key(&c)) {
-            crate::measure::looked_up_unlocked(crate::measure::Lookup::JavaClassEntry);
-            return false;
+        self.java_class_absorbed(c) == Absorbed::Now
+    }
+
+    /// `absorb_java_class`, telling a class read before this call from one with nothing to read:
+    /// with several workers, the one that read it may be a peer, whose release published the
+    /// JDK's members after the asking worker last looked at the class.
+    fn java_class_absorbed(&mut self, c: ClassId) -> Absorbed {
+        if self.forked && crate::shared::lock_depth() == 0 {
+            let stand_in = self.std_jvm_class(c).is_some();
+            if !stand_in || self.java().absorbed_done.contains_key(&c) {
+                crate::measure::looked_up_unlocked(crate::measure::Lookup::JavaClassEntry);
+                return if stand_in { Absorbed::Before } else { Absorbed::Nothing };
+            }
         }
         self.with_loader_for(crate::measure::Hold::JarEntry, |w| {
+            // Read already where this worker waited for the lock while a peer read it.
+            let before = w.forked && w.java().classes.contains_key(&c) && w.std_jvm_class(c).is_some();
             let absorbed = w.absorb_java_class_unlocked(c);
             crate::measure::looked_up(crate::measure::Lookup::JavaClassEntry, absorbed);
-            absorbed
+            match (absorbed, before) {
+                (true, _) => Absorbed::Now,
+                (false, true) => Absorbed::Before,
+                (false, false) => Absorbed::Nothing,
+            }
         })
     }
 
@@ -1339,54 +1377,41 @@ impl<'a> Worker<'a> {
         if self.java_members_exhausted.get(c.0 as usize).copied().unwrap_or(false) {
             return false;
         }
-        let more = self.java_member_miss_now(c);
-        if !more {
+        let got = self.java_member_miss_now(c);
+        if got != Absorbed::Now {
             let i = c.0 as usize;
             if self.java_members_exhausted.len() <= i {
                 self.java_members_exhausted.resize(i + 1, false);
             }
             self.java_members_exhausted[i] = true;
         }
-        more
+        // What a peer read of the class since this worker's lookup found nothing is there now:
+        // the lookup is repeated once more, and the class is marked, so the next miss ends here.
+        got != Absorbed::Nothing
     }
 
-    fn java_member_miss_now(&mut self, c: ClassId) -> bool {
-        if self.absorb_java_class(c) {
-            return true;
+    /// `Now` where this call gave the class more members, `Before` where it gave none and the
+    /// JDK's class of `c` or of a base the std stands in for had been read before it.
+    fn java_member_miss_now(&mut self, c: ClassId) -> Absorbed {
+        let mut got = self.java_class_absorbed(c);
+        if got == Absorbed::Now {
+            return Absorbed::Now;
         }
         // A class below one the std stands in for inherits the JDK class's members the std leaves
         // out, its default methods (`Predicate.negate`) among them.
         let stand_ins: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).filter(|&b| self.std_jvm_class(b).is_some()).collect();
         let mut absorbed = false;
         for b in stand_ins {
-            absorbed |= self.absorb_java_class(b);
+            match self.java_class_absorbed(b) {
+                Absorbed::Now => absorbed = true,
+                Absorbed::Before => got = Absorbed::Before,
+                Absorbed::Nothing => {}
+            }
         }
         if absorbed {
-            return true;
+            return Absorbed::Now;
         }
-        let pending: Vec<ClassId> = self
-            .syms
-            .class(c)
-            .base_types
-            .iter()
-            .skip(1)
-            .map(|&(b, _)| b)
-            .filter(|&b| self.is_java_placeholder(b))
-            .collect();
-        if pending.is_empty() {
-            return false;
-        }
-        for &b in &pending {
-            self.complete_class(b);
-        }
-        // A base that stays a placeholder has nothing to add: answering true again would
-        // have the lookup ask forever.
-        if pending.iter().all(|&b| self.is_java_placeholder(b)) {
-            return false;
-        }
-        let parents = self.syms.class(c).parents.clone();
-        self.set_loaded_parents(c, parents);
-        true
+        got
     }
 
     // ---- signatures ----

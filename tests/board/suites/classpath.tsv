@@ -270,6 +270,11 @@ jvm/jdk_class_std_ancestor	pass	-
 jvm/jdk_ctors_of_std_classes	pass	-	
 jvm/jdk_float_text	pass	-	
 jvm/jdk_nested_of_stand_ins	pass	-	
+jvm/jdk_parent_inferred_type	pass	-	
+jvm/jdk_parent_member_above	pass	-	
+jvm/jdk_parent_static_member_name	pass	-	
+jvm/jdk_parent_subtype	pass	-	
+jvm/jdk_parent_swing_below	pass	-	
 jvm/jdk_receiver_owner	pass	-	
 jvm/jdk_stand_in_module_terms	fail	-	tests/classpath/jvm/jdk_stand_in_module_terms.scala:14:77: error: Entry is a trait; it cannot be instantiated
 jvm/jdk_two_segment_roots	pass	-	

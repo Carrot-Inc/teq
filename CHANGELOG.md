@@ -72,6 +72,14 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - A build's warnings and errors, their order and its exit are the same at every worker count: every typing worker
   reads the build's warning flags (`--wtostring-interpolated`, `--language` among them), and the diagnostics are
   those of one worker's walk, the build typed again by one worker where the order cannot be kept.
+- A build with several workers no longer refuses a member that the JDK's class has and the standard library's
+  declaration of it leaves out (`getClass.getResource`: `value getResource is not a member of Class[_]`;
+  `ArrayList.trimToSize`) where several files meet the member at the same moment: such a build failed in most
+  runs at eight workers and passed in the others.
+- A library's class whose parent is a JDK class that the standard library does not declare has that class's own
+  parents, as scalac's has: their members are found (`distance` on a class below `java.awt.Point` was `not a
+  member`), the class is a subtype of them, and a build with several workers no longer aborts on such a class
+  (`a shared record (...) changed outside the loader's lock`).
 
 <details>
 <summary>Conformance with scalac and the JDK</summary>

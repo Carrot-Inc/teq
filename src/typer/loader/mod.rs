@@ -2233,12 +2233,14 @@ impl<'a> Worker<'a> {
                 _ => (pt, None),
             };
             let Type::Class(pc, pargs) = self.types.get(class_pt) else { continue };
-            // A Java class that only a signature named stays unread until a member is asked of it,
-            // but for one of the class path's, outside the JDK's packages: a library's Scala class
-            // extends that class's own parents through it (zio's `RingBuffer` its Java padding
-            // classes), as dotty's base classes complete every parent (`ClassDenotation.baseClasses`).
+            // A Java class that only a signature named is read where it is a parent, the JDK's as
+            // the class path's: a library's Scala class extends that class's own parents through
+            // it (zio's `RingBuffer` its Java padding classes, a class below `java.awt.Point` its
+            // `Point2D`), as dotty's base classes complete every parent
+            // (`ClassDenotation.baseClasses`). Where no JDK is found a JDK parent stays unread, and
+            // a build that asks nothing of the JDK (for JavaScript, a check) goes on without one.
             let jdk_placeholder = self.loaded.as_ref().and_then(|l| l.java.placeholder(pc)).is_some_and(|(p, _)| self.jdk_rooted(p));
-            if !jdk_placeholder {
+            if !jdk_placeholder || self.open_jdk_for(None) {
                 self.complete_class(pc);
             }
             let pinfo = self.syms.class(pc);
