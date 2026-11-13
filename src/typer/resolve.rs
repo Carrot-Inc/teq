@@ -1012,7 +1012,7 @@ impl<'a> Worker<'a> {
                     // (`import demo.implicits._; import demo._`): an error type through that import,
                     // without a report of its own.
                     if target.is_none() && !is_value {
-                        self.not_found_error(seg, span, msg);
+                        self.not_found_error(seg, span, msg, None);
                     } else {
                         self.error(span, msg);
                     }
@@ -4047,7 +4047,7 @@ impl<'a> Worker<'a> {
                     names::NOTHING => NOTHING,
                     _ => {
                         let msg = format!("type {} not found", self.name_str(n));
-                        self.not_found_error(n, span, msg);
+                        self.not_found_error(n, span, msg, Some(crate::source::MissingKind::Type));
                         ERROR
                     }
                 }

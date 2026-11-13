@@ -409,7 +409,7 @@ impl<'a> Worker<'a> {
             match unbound {
                 Some(n) => {
                     let msg = format!("not found: {}", self.name_str(n));
-                    self.not_found_error(n, span, msg);
+                    self.not_found_error(n, span, msg, Some(crate::source::MissingKind::Term));
                 }
                 None => self.error(span, "this is not a case class or enum case"),
             }

@@ -293,6 +293,10 @@ pub struct Diagnostic {
     /// The change of the source the diagnostic proposes (an unused import's removal), which a
     /// language server offers as a quick fix.
     pub action: Option<Box<Action>>,
+    /// The name the report says is missing (a name not found, the member a selection lacks),
+    /// which a language server reads to offer the imports that bring it
+    /// (`typer::complete::import_fix`).
+    pub missing: MissingName,
     /// The phase of scalac's that reports it where its kind does not say (`producer_rank`): an
     /// inline expansion's late error is `Inlining`'s, an impossible type test's `Erasure`'s.
     pub phase: u8,
@@ -355,6 +359,52 @@ pub struct Action {
     pub patches: Vec<(Span, String)>,
 }
 
+/// What a report says is missing, for the quick fix that imports it: the name as the source
+/// spells it and what was wanted of it.
+#[derive(Clone, Debug)]
+pub struct Missing {
+    pub name: Box<str>,
+    pub kind: MissingKind,
+}
+
+/// A name not found where a term or where a type is wanted, or the member a selection `e.N`
+/// lacks.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MissingKind {
+    Term,
+    Type,
+    Member,
+}
+
+/// A report's missing name as a language server hands it back (`import-actions`,
+/// `typer::complete::import_fix`), with the report's span: every such report of a document,
+/// those the imports are asked for (`asked`, the ones of the request's range) and the others,
+/// whose places the answer needs to know as well.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImportWanted {
+    pub name: Box<str>,
+    pub kind: MissingKind,
+    pub span: Span,
+    pub asked: bool,
+}
+
+/// A report's missing name, where it says one is (`Diagnostic::missing`). Equality and hashing
+/// ignore it: a report is the same record with it and without.
+#[derive(Clone, Debug, Default)]
+pub struct MissingName(pub Option<Box<Missing>>);
+
+impl PartialEq for MissingName {
+    fn eq(&self, _: &MissingName) -> bool {
+        true
+    }
+}
+
+impl Eq for MissingName {}
+
+impl std::hash::Hash for MissingName {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+
 /// A place in a library's source: the source (`<artifact>!<path>`), the line and column where
 /// they are known, the line's text where the source is attached.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -386,7 +436,7 @@ impl Place {
 impl Diagnostic {
     /// A diagnostic of nothing but its place, message and severity.
     pub fn plain(file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
-        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, phase: 0, unplaced: false, ordinal: Ordinal(0), unwound: Unwound(false) }
+        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), unwound: Unwound(false) }
     }
 
     /// What the reporting policy's filters read of the diagnostic.

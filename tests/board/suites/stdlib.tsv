@@ -317,6 +317,7 @@ class_tag_to_array_evidence	pass	-
 class_tag_unapply	pass	-	
 class_tag_void_array	pass	-	
 class_tags	pass	-	
+class_tparams_kind_other_file	pass	-	
 classes	pass	-	
 clone_without_parens	pass	-	
 closure_builtin_bases	pass	-	

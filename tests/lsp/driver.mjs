@@ -6937,7 +6937,489 @@ async function refusedMapping() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
+/**
+ * The quick fixes that add an import (docs/TOOLING.md): on a name not found, the imports completion offers for
+ * the whole name out of scope, in its order, each with completion's edit, where the import names something of
+ * the kind the place wants; on a member a selection lacks, the import of each extension method of that name the
+ * selection would then find for its receiver, in an object of the program (its wildcard, or the method's own
+ * name) or at a package's top level, where the document spells no name the import brings other than at the
+ * build's own reports. Each edit is applied as a client applies it,
+ * and the build of the edited text has no such report at that place. The texts are the scenario's own; the
+ * class path's name is the fixture jar's (tests/lsp/libs/lib).
+ */
+async function importActions() {
+  encoding = "utf-16"
+  const dir = join(work, "link/imports")
+  mkdirSync(join(dir, "src"), { recursive: true })
+  mkdirSync(join(dir, "lean"), { recursive: true })
+  mkdirSync(join(dir, "lib"), { recursive: true })
+  copyFileSync(join(here, "libs/lib/libb-1.0.jar"), join(dir, "lib/libb-1.0.jar"))
+  // A JVM project: its class path takes the jar, and its std is scala-library's with the JDK's classes. And one
+  // on the lean std, whose package `scala` holds the members of a `String` as extensions.
+  writeExport(join(dir, "teq.lock"), { app: { platform: "jvm", sources: ["src"], classpath: [{ file: "lib/libb-1.0.jar" }] }, lean: { platform: "js", sources: ["lean"] } })
+  // An extension named as a member of `String`, and a file that uses both.
+  const named = (p) => `package ${p}\n\nclass Boxed\nobject Strs:\n  extension (b: Boxed) def mkString(sep: String): String = sep\n`
+  const both = (p, use) => `package ${use}\n\nobject S:\n  val a = "ab".mkString("-")\n  val b = new ${p}.Boxed().mkString("-")\n`
+  const alone = (p, use) => `package ${use}\n\nobject S:\n  val b = new ${p}.Boxed().mkString("-")\n`
+  writeFileSync(join(dir, "lean/Strs.scala"), named("leanlib"))
+  writeFileSync(join(dir, "lean/S.scala"), alone("leanlib", "leanuse"))
+  const twenty = Array.from({ length: 20 }, (_, i) => `  val x${i}: Missing${i} = ???`).join("\n")
+  const texts = {
+    "Own.scala": "package own\n\nclass Widget\nclass Gadget\nobject Lantern\nobject RemoteObject\nobject Holder { class Nested; class Other }\n",
+    "Twins.scala": "package twinsa { class Twin }\npackage twinsb { class Twin }\n",
+    "Empties.scala": "package e0 { object ListBuffer }\npackage e1 { object ListBuffer }\n",
+    "Glyphs.scala":
+      "package lib\n\nobject Glyphs:\n  extension (n: Int)\n    def asGlyph: String = n.toString\n    def plus(m: Int): Int = n + m\n  extension (n: Long)\n    def asGlyph: String = n.toString + \"L\"\n  def plain(n: Int): Int = n\n" +
+      "trait Ops:\n  extension (n: Int) def inherited: Int = n\nobject Held extends Ops\nobject Outer:\n  object Inner:\n    extension (n: Int) def deep: Int = n\n" +
+      "object First:\n  extension (n: Int) def twin: Int = 1\nobject Second:\n  extension (n: Int) def twin: Int = 2\nobject Longs:\n  extension (n: Long) def wide: Long = n\nclass Box:\n  def asGlyph: Int = 1\n",
+    "Tops.scala": "package tops\n\nextension (n: Int) def topLevel: Int = n\n",
+    "RevExt.scala": "package rev\n\nextension (s: String) def asGlyph: Int = 0\n",
+    "UseA.scala": "package usea\n\nobject A:\n  val w: Widget = new Widget\n",
+    "UseB.scala": "object B:\n  val u = UUID.randomUUID()\n",
+    "UseC.scala": "object C:\n  val c: Carrier = ???\n",
+    "UseD.scala": "object D:\n  val t: Twin = ???\n",
+    "UseE.scala": "object E:\n  val o = RemoteObject\n  val no: RemoteObject = ???\n  def f(v: Any) = v match\n    case Lantern => 1\n    case _ => 0\n",
+    "UseF.scala": "import own.{Gadget as _, *}\n\nobject F:\n  val g: Gadget = ???\n",
+    "UseG.scala": "import own.Holder.{Nested as _, *}\n\nobject G:\n  val y: Nested = ???\n  val z: Other = ???\n",
+    "UseI.scala": "object I:\n  val b = ListBuffer(1)\n",
+    "UseL.scala": `object L:\n${twenty}\n`,
+    "J1.scala": "package j1\n\nimport scala.util.Try\n\nobject J1:\n  val t = Try(1)\n  val w: Widget = ???\n",
+    "J3.scala": "object J3:\n  val w: Widget = ???\n",
+    "J4.scala": "package j4\r\n\r\nimport scala.util.Try\r\n\r\nobject J4:\r\n  val t = Try(1)\r\n  val w: Widget = ???\r\n",
+    "J5.scala": "/*\n * A header.\n */\n\n// The object.\nobject J5:\n  val w: Widget = ???\n",
+    "J6.scala": "//> using scala 3.8.4\n\nobject J6:\n  val w: Widget = ???\n",
+    "J7.scala": "package j7 {\n  import scala.util.Try\n  object J7 {\n    val t = Try(1)\n    val w: Widget = ???\n  }\n}\n",
+    "R1.scala": "package use\n\nobject R1:\n  val g = 42.asGlyph\n  val s: String = g\n  val p = plain(1)\n",
+    "R2.scala": "package use\n\nobject R2:\n  extension (s: String) def asGlyph: Int = 0\n  val g = 42.asGlyph\n",
+    "R3.scala": "package rev\n\nobject R3:\n  val a = \"a\".asGlyph\n  val g = 42.asGlyph\n",
+    "R4.scala": "package use\n\nobject R4:\n  val a = \"a\".plus(1)\n",
+    "R5.scala": "package use\n\nobject R5:\n  val a = 42.inherited\n  val b = 42.deep\n  val c = 42.topLevel\n",
+    "R6.scala": "package use\n\nobject R6:\n  val a = 42.twin\n",
+    "R8.scala": "package outer {\n  package inner {\n    object R8 {\n      val g = 42.asGlyph\n    }\n  }\n}\n",
+    "R9.scala": "package use\n\nobject R9:\n  val w = 42.wide\n",
+    "Strs.scala": named("strs"),
+    "S.scala": both("strs", "struse"),
+    "S2.scala": alone("strs", "struse2"),
+    // Another use of the document spelled as the name, which the import would change, and the same without it.
+    "P1.scala": "package p1lib\n\nobject Glyphs:\n  extension (n: Int) def glyphOne: Int = n\n",
+    "P1Pkg.scala": "package p1\n\ndef glyphOne(s: String): Int = 1\n",
+    "P1Use.scala": "package p1\n\nobject Use:\n  val old = glyphOne(\"a\")\n  val g = 42.glyphOne\n",
+    "P1Twin.scala": "package p1\n\nobject Twin:\n  val g = 42.glyphOne\n",
+    "P2.scala": "package p2lib\n\nobject Glyphs:\n  class glyphTwo\n  extension (n: Int) def glyphTwo: Int = n\n",
+    "P2Pkg.scala": "package p2\n\nclass glyphTwo\n",
+    "P2Use.scala": "package p2\n\nobject Use:\n  val old: glyphTwo = new p2.glyphTwo\n  val g = 42.glyphTwo\n",
+    "P2Twin.scala": "package p2\n\nobject Twin:\n  val g = 42.glyphTwo\n",
+    "P3.scala": "package p3lib\n\nobject Glyphs:\n  extension (n: Int) def glyphThree: Int = n\n",
+    "P3Other.scala": "package p3other\n\nobject Ops:\n  extension (s: String) def glyphThree: Int = 1\n",
+    "P3Use.scala": "package p3\n\nobject Use:\n  val g = 42.glyphThree\n  def old =\n    import p3other.Ops.*\n    \"a\".glyphThree\n",
+    "P3Twin.scala": "package p3\n\nobject Twin:\n  val g = 42.glyphThree\n",
+    "P4.scala": "package p4lib\n\nobject Glyphs:\n  extension [A](a: A) def glyphFour: String = \"new\"\n",
+    "P4C.scala": "package p4\n\nclass C\nobject C:\n  extension (c: C) def glyphFour: Int = 1\n",
+    "P4Use.scala": "package p4\n\nobject Use:\n  val old: Int = (new C).glyphFour\n  val g = 42.glyphFour\n",
+    "P4Twin.scala": "package p4\n\nobject Twin:\n  val g = 42.glyphFour\n",
+    // The object's wildcard gives way to the method's own import.
+    "W.scala": "package wlib\n\nobject Imp:\n  implicit val ord: Ordering[String] = Ordering.String\n  extension (n: Int) def viaImp: Int = n\n",
+    "W1Pkg.scala": "package wuse\n\ndef plain(s: String): String = s\n",
+    "W1.scala": "package wuse\n\nobject W1:\n  val a = plain(\"x\")\n  val g = 42.asGlyph\n",
+    "W2.scala": "package wuse\n\nobject W2:\n  val g = 42.viaImp\n",
+    // An object that is a class's companion; an object of the empty package, used from it and from a package; a
+    // method named `*`; a prefix operator of the object in use.
+    "C.scala": "package clib\n\nclass Marks(val n: Int)\nobject Marks:\n  extension (n: Int) def viaCompanion: Int = n\n",
+    "C1.scala": "package cuse\n\nobject C1:\n  val g = 42.viaCompanion\n",
+    "E.scala": "object EmptyGlyphs:\n  extension (n: Int) def emptyGlyph: Int = n\n",
+    "E1.scala": "object E1:\n  val g = 42.emptyGlyph\n",
+    "E2.scala": "package euse\n\nobject E2:\n  val g = 42.emptyGlyph\n",
+    "T.scala": "package tlib\n\nobject Stars:\n  implicit val unit: String = \"\"\n  extension (b: Boolean) def *(m: Int): String = \"\"\n",
+    "T1.scala": "package tuse\n\nobject T1:\n  val g = true.*(2)\n",
+    "N.scala": "package nlib\n\nobject Negs:\n  extension [A](a: A) def unary_- : String = \"lib\"\n  extension (n: Int) def viaNeg: Int = n\n",
+    "N0.scala": "package nuse\n\nclass Num\nobject Num:\n  extension (c: Num) def unary_- : Int = 1\n",
+    "N1.scala": "package nuse\n\nobject N1:\n  val old: Int = -(new Num)\n  val g = 42.viaNeg\n",
+    // A use the build keeps no record of is spelled all the same: inside an inline method's body, as the root
+    // of a qualified type, as an operator's assignment form.
+    "G1.scala": "package g1lib\n\nobject Glyphs:\n  def helper(n: Int): String = \"lib\"\n  extension (n: Int) def glyphInline: String = n.toString\n",
+    "G1Pkg.scala": "package g1\n\ndef helper(n: Int): Int = n\ndef glyphBody(s: String): Int = 1\n",
+    "G1Use.scala": "package g1\n\nobject Use:\n  inline def old: Int = helper(1)\n  val g = 42.glyphInline\n",
+    "G1b.scala": "package g1blib\n\nobject Glyphs:\n  extension (n: Int) def glyphBody: String = n.toString\n",
+    "G1bUse.scala": "package g1\n\nobject UseB:\n  inline def old: Int = glyphBody(\"a\")\n  val g = 42.glyphBody\n",
+    "G1bTwin.scala": "package g1\n\nobject TwinB:\n  val g = 42.glyphBody\n",
+    "G2.scala": "package g2lib\n\nobject Glyphs:\n  object Obj\n  extension (n: Int) def glyphRoot: String = n.toString\n",
+    "G2Pkg.scala": "package g2\n\nobject Obj { class In }\n",
+    "G2Use.scala": "package g2\n\nobject Use:\n  val old: Obj.In = null\n  val g = 42.glyphRoot\n",
+    "G3.scala": "package g3lib\n\nobject Glyphs:\n  extension [A](a: A) def +(b: Int): String = \"lib\"\n  extension (n: Int) def glyphAssign: String = n.toString\n",
+    "G3C.scala": "package g3\n\nclass C\nobject C:\n  extension (c: C) def +(n: Int): C = c\n",
+    "G3Use.scala": "package g3\n\nobject Use:\n  var c = new C\n  def old(): Unit = c += 1\n  val g = 42.glyphAssign\n",
+    // An extension of the name nearer than an import, inherited by the using object from another file's trait.
+    "Near.scala": "package near\n\ntrait Near:\n  extension (s: String) def asGlyph: Int = 0\n",
+    "RN.scala": "package use\n\nobject RN extends near.Near:\n  val g = 42.asGlyph\n",
+    // A name not found in one package clause of a document that another clause finds its own way; an owner
+    // named `*`.
+    "V.scala": "package vlib\n\nclass Vessel\nobject Vessel:\n  def apply(s: String): String = s\n",
+    "VOld.scala": "package vold\n\nobject Vessel:\n  def apply(n: Int): Int = n\n",
+    "VUse.scala": "package vfirst {\n  object A { val x: Vessel = null }\n}\npackage vsecond {\n  import vold.*\n  object B { val old: Int = Vessel(1) }\n}\n",
+    "VTwin.scala": "package vfirst {\n  object A2 { val x: Vessel = null }\n}\n",
+    "Star.scala": "package starlib\n\nobject `*`:\n  extension (n: Int) def starGlyph: Int = n\n",
+    "StarUse.scala": "package staruse\n\nobject StarUse:\n  val g = 42.starGlyph\n",
+    // The receiver's forms, a document each.
+    "RA.scala": "package use\n\nobject RA:\n  val a = (42).asGlyph\n",
+    "RB.scala": "package use\n\nobject RB:\n  def f(x: Int): Int = x\n  val b = f(1).asGlyph\n",
+    "RC.scala": "package use\n\nobject RC:\n  val c = 42 plus (1)\n",
+    "RD.scala": "package use\n\nobject RD:\n  val d = 1.plus(2.plus(3))\n",
+    "RE.scala": "package use\n\nobject RE:\n  val e = new lib.Box().asGlyph.asGlyph\n",
+    "RF.scala": "package use\n\nobject RF:\n  val h = 42.asGlyph.asGlyph\n",
+    "RH.scala": "package use\n\nobject RH:\n  val e = new lib.Box().asGlyph.plus(1)\n",
+    "RG.scala": "package use\n\nobject RG:\n  val a = 42 /* a note */ .asGlyph\n  val b = 42.`asGlyph`\n  val c = 42\n    .asGlyph\n",
+  }
+  for (const [n, t] of Object.entries(texts)) writeFileSync(join(dir, "src", n), t)
+  const file = (n) => join(dir, "src", n)
+  const offsetAt = (text, { line, character }) => {
+    const lines = text.split("\n")
+    let offset = 0
+    for (let i = 0; i < line && i < lines.length; i++) offset += lines[i].length + 1
+    return offset + Math.min(character, (lines[line] ?? "").replace(/\r$/, "").length)
+  }
+  const apply = (text, edits) => {
+    const spans = edits.map((e) => [offsetAt(text, e.range.start), offsetAt(text, e.range.end), e.newText]).sort((a, b) => b[0] - a[0])
+    for (const [from, to, newText] of spans) text = text.slice(0, from) + newText + text.slice(to)
+    return text
+  }
+  const wholeOf = (text) => ({ start: { line: 0, character: 0 }, end: positionAt(text, text.length) })
+  /** The range of the `n`th `needle` of the file's first text. */
+  const at = (n, needle, k = 0) => rangeIn(texts[n], needle, k)
+  const trace = join(work, "imports-trace")
+  const barrier = join(work, "imports-barrier")
+  const c = new Client(dir, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  const versions = {}
+  const current = { ...texts }
+  /** The publication for the file's version `v` after `mark`: the build of exactly that text. */
+  const published = async (mark, n, v) => {
+    const uri = uriOf(file(n))
+    let found
+    await until(() => (found = c.diagnosticsSince(mark).find((p) => p.uri === uri && p.version === v)) !== undefined, 60000)
+    return found?.diagnostics
+  }
+  const change = (n, text) => {
+    current[n] = text
+    c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file(n)), version: ++versions[n] }, contentChanges: [{ text }] })
+  }
+  const actionsAt = (n, range, only) => c.request("textDocument/codeAction", { textDocument: { uri: uriOf(file(n)) }, range, context: { diagnostics: [], ...(only ? { only } : {}) } }, { timeout: 30000 })
+  const imports = async (n, range) => ((await actionsAt(n, range)).result ?? []).filter((a) => a.title.startsWith("import "))
+  const titles = (as) => as.map((a) => a.title)
+  const preferred = (as) => as.filter((a) => a.isPreferred).map((a) => a.title)
+  const editsOf = (a) => a.edit?.documentChanges?.[0]?.edits ?? []
+  /** The action applied to the file's text, and the errors of the build of that text. */
+  const applied = async (n, a) => {
+    const fixed = apply(current[n], editsOf(a))
+    const m = c.mark()
+    change(n, fixed)
+    const ds = await published(m, n, versions[n])
+    return { fixed, errors: ds === undefined ? ["no publication"] : ds.filter((d) => d.severity === 1).map((d) => d.message) }
+  }
+  try {
+    const init = await c.result("initialize", { processId: null, rootUri: uriOf(dir), capabilities: { workspace: { workspaceEdit: { documentChanges: true } } } })
+    check("imports (m): the code action capability stays quick fixes", same(init?.capabilities?.codeActionProvider, { codeActionKinds: ["quickfix"] }), init?.capabilities)
+    const m = c.mark()
+    c.notify("initialized", {})
+    for (const n of Object.keys(texts)) {
+      versions[n] = 1
+      c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file(n)), languageId: "scala", version: 1, text: texts[n] } })
+    }
+    // The files of a use each have a report; the build of the first texts publishes them.
+    const first = {}
+    for (const n of Object.keys(texts).filter((n) => /^(Use[A-Z]|J\d|R[\dA-HN]|S2?|P\d(Use|Twin)|W\d|[CET]\d|N1|G\db?(Use|Twin)|V(Use|Twin)|StarUse)\.scala$/.test(n))) first[n] = (await published(m, n, 1)) ?? []
+    check("imports: the reports the fixes are for are published", first["UseA.scala"].filter((d) => d.message === "type Widget not found").length === 2 && first["R1.scala"].some((d) => d.message === "value asGlyph is not a member of Int"), { a: first["UseA.scala"], r: first["R1.scala"] })
+
+    // A name not found: completion's candidates for the whole name.
+    let a = await imports("UseA.scala", wholeOf(texts["UseA.scala"]))
+    check("imports (a): the program's class in another package, one action for its two reports, preferred", same(titles(a), ["import own.Widget"]) && same(preferred(a), ["import own.Widget"]) && a[0]?.diagnostics?.length === 2 && a[0].kind === "quickfix" && a[0].edit?.documentChanges?.[0]?.textDocument?.version === 1, a)
+    let r = a[0] ? await applied("UseA.scala", a[0]) : { errors: ["no action"] }
+    check("imports (a): applied after the package clause, no error", r.errors.length === 0 && r.fixed?.startsWith("package usea\n\nimport own.Widget\n\nobject A:"), r)
+    a = await imports("UseB.scala", at("UseB.scala", "UUID"))
+    check("imports (b): a std name", same(titles(a), ["import java.util.UUID"]), a)
+    r = a[0] ? await applied("UseB.scala", a[0]) : { errors: ["no action"] }
+    check("imports (b): applied at the top, no error", r.errors.length === 0 && r.fixed?.startsWith("import java.util.UUID\n\nobject B:"), r)
+    a = await imports("UseC.scala", at("UseC.scala", "Carrier"))
+    check("imports (c): the class path's class", same(titles(a), ["import libb.Carrier"]), a)
+    r = a[0] ? await applied("UseC.scala", a[0]) : { errors: ["no action"] }
+    check("imports (c): applied, no error", r.errors.length === 0, r)
+    a = await imports("UseD.scala", at("UseD.scala", "Twin"))
+    check("imports (d): one name in two packages, in order, none preferred", same(titles(a), ["import twinsa.Twin", "import twinsb.Twin"]) && same(preferred(a), []), a)
+    r = a[1] ? await applied("UseD.scala", a[1]) : { errors: ["no action"] }
+    check("imports (d): the second applied, no error", r.errors.length === 0 && r.fixed?.startsWith("import twinsb.Twin\n"), r)
+    a = await imports("UseE.scala", at("UseE.scala", "RemoteObject", 0))
+    check("imports (e): where a term is wanted, the program's object then the JDK's class", same(titles(a), ["import own.RemoteObject", "import java.rmi.server.RemoteObject"]), a)
+    a = await imports("UseE.scala", at("UseE.scala", "RemoteObject", 1))
+    check("imports (e): where a type is wanted, the class alone: an object names no type", same(titles(a), ["import java.rmi.server.RemoteObject"]), a)
+    a = await imports("UseE.scala", at("UseE.scala", "Lantern"))
+    check("imports (e): a pattern's stable identifier, a term", same(titles(a), ["import own.Lantern"]), a)
+    r = a[0] ? await applied("UseE.scala", a[0]) : { errors: ["no action"] }
+    check("imports (e): the pattern's import applied, that report gone", !r.errors.includes("not found: Lantern") && r.errors.length === 2, r)
+    a = await imports("UseF.scala", at("UseF.scala", "Gadget", 1))
+    check("imports (f): a name the file's wildcard leaves out, none", same(titles(a), []), a)
+    a = await imports("UseG.scala", at("UseG.scala", "Nested", 1))
+    check("imports (f): a name an object's wildcard leaves out, which the import's clause spells: none", same(titles(a), []), a)
+    // The name spelled elsewhere in the document, in a package clause that finds it through its own import: the
+    // import at the file's top would stand before that one; none. The same without that clause: the fix.
+    a = await imports("VUse.scala", at("VUse.scala", "Vessel"))
+    check("imports: a name not found that another clause of the document spells and resolves: none", same(titles(a), []) && first["VUse.scala"].filter((d) => d.severity === 1).length === 1, { a, ds: first["VUse.scala"] })
+    a = await imports("VTwin.scala", at("VTwin.scala", "Vessel"))
+    r = a[0] ? await applied("VTwin.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the same without that clause: the fix, applied, no error", same(titles(a), ["import vlib.Vessel"]) && r.errors.length === 0, { a, r })
+    a = await imports("UseI.scala", at("UseI.scala", "ListBuffer"))
+    check("imports (i): every candidate of the name, the program's before the std's", same(titles(a), ["import e0.ListBuffer", "import e1.ListBuffer", "import scala.collection.mutable.ListBuffer"]) && same(preferred(a), []), a)
+    r = a[2] ? await applied("UseI.scala", a[2]) : { errors: ["no action"] }
+    check("imports (i): the std's applied, no error", r.errors.length === 0, r)
+
+    // The placements of the import, each applied.
+    const placed = {
+      "J1.scala": ["after the file's last import", "package j1\n\nimport scala.util.Try\nimport own.Widget\n\nobject J1:"],
+      "J3.scala": ["at the top of a file of no clause", "import own.Widget\n\nobject J3:"],
+      "J4.scala": ["with the file's line ending", "package j4\r\n\r\nimport scala.util.Try\r\nimport own.Widget\r\n\r\nobject J4:"],
+      "J5.scala": ["above a leading comment", "import own.Widget\n\n/*\n * A header.\n */"],
+      "J6.scala": ["above a directive's line", "import own.Widget\n\n//> using scala 3.8.4"],
+      "J7.scala": ["inside a package's block, with its indentation", "package j7 {\n  import scala.util.Try\n  import own.Widget\n  object J7 {"],
+    }
+    for (const [n, [where, want]] of Object.entries(placed)) {
+      a = await imports(n, at(n, "Widget"))
+      r = a[0] ? await applied(n, a[0]) : { errors: ["no action"] }
+      check(`imports (j): ${where}, applied, no error`, same(titles(a), ["import own.Widget"]) && r.errors.length === 0 && r.fixed?.startsWith(want), { a, r })
+    }
+
+    // A member a selection lacks: the extension methods of that name the selection would find.
+    a = await imports("R1.scala", at("R1.scala", "42.asGlyph"))
+    check("imports: an extension method of an object not imported: the object's import, preferred", same(titles(a), ["import lib.Glyphs.*"]) && same(preferred(a), ["import lib.Glyphs.*"]) && a[0]?.diagnostics?.[0]?.message === "value asGlyph is not a member of Int", a)
+    r = a[0] ? await applied("R1.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the object's import applied: the selection typed and the object's plain member found, no error", r.errors.length === 0 && r.fixed?.startsWith("package use\n\nimport lib.Glyphs.*\n\nobject R1:"), r)
+    a = await imports("R2.scala", at("R2.scala", "42.asGlyph"))
+    check("imports: an extension of the name nearer than an import would stand, none", same(titles(a), []), a)
+    a = await imports("RN.scala", at("RN.scala", "42.asGlyph"))
+    check("imports: an extension of the name the using object inherits, which no import comes before: none", same(titles(a), []) && first["RN.scala"].filter((d) => d.severity === 1).length === 1, { a, ds: first["RN.scala"] })
+    a = await imports("StarUse.scala", at("StarUse.scala", "42.starGlyph"))
+    r = a[0] ? await applied("StarUse.scala", a[0]) : { errors: ["no action"] }
+    check("imports: an object named `*`: its segment between backquotes before the wildcard, applied, no error", same(titles(a), ["import starlib.`*`.*"]) && r.errors.length === 0, { a, r })
+    a = await imports("R3.scala", at("R3.scala", "42.asGlyph"))
+    check("imports: the package's own extension of the name, which the import would hide, none", same(titles(a), []), a)
+    a = await imports("R4.scala", at("R4.scala", "\"a\".plus(1)"))
+    check("imports: a receiver no extension of the name takes, none", same(titles(a), []), a)
+    a = await imports("R5.scala", at("R5.scala", "42.inherited"))
+    check("imports: an extension the object inherits", same(titles(a), ["import lib.Held.*"]), a)
+    r = a[0] ? await applied("R5.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the inherited extension's import applied, its report gone", same(r.errors, ["value deep is not a member of Int", "value topLevel is not a member of Int"]), r)
+    a = await imports("R5.scala", rangeIn(current["R5.scala"], "42.deep"))
+    check("imports: an extension of an object nested in an object", same(titles(a), ["import lib.Outer.Inner.*"]), a)
+    r = a[0] ? await applied("R5.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the nested object's import applied, its report gone", same(r.errors, ["value topLevel is not a member of Int"]), r)
+    a = await imports("R5.scala", rangeIn(current["R5.scala"], "42.topLevel"))
+    check("imports: a package's own top-level extension, by name", same(titles(a), ["import tops.topLevel"]), a)
+    r = a[0] ? await applied("R5.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the package's extension imported, no error", r.errors.length === 0, r)
+    a = await imports("R6.scala", at("R6.scala", "42.twin"))
+    check("imports: two objects with the method, in order, none preferred", same(titles(a), ["import lib.First.*", "import lib.Second.*"]) && same(preferred(a), []), a)
+    r = a[1] ? await applied("R6.scala", a[1]) : { errors: ["no action"] }
+    check("imports: the second object's applied, no error", r.errors.length === 0, r)
+    // The object's wildcard brings every name the object holds: where the document uses one of them otherwise, or
+    // the object has an implicit member, the method's own import.
+    a = await imports("W1.scala", at("W1.scala", "42.asGlyph"))
+    r = a[0] ? await applied("W1.scala", a[0]) : { errors: ["no action"] }
+    check("imports: a name the object holds is one the document uses of its own: by name, applied, no error", same(titles(a), ["import lib.Glyphs.asGlyph"]) && r.errors.length === 0, { a, r })
+    a = await imports("W2.scala", at("W2.scala", "42.viaImp"))
+    r = a[0] ? await applied("W2.scala", a[0]) : { errors: ["no action"] }
+    check("imports: an object with an implicit member: by name, applied, no error", same(titles(a), ["import wlib.Imp.viaImp"]) && r.errors.length === 0, { a, r })
+    a = await imports("C1.scala", at("C1.scala", "42.viaCompanion"))
+    r = a[0] ? await applied("C1.scala", a[0]) : { errors: ["no action"] }
+    check("imports: an object that is a class's companion: the fix, applied, no error", same(titles(a), ["import clib.Marks.*"]) && r.errors.length === 0, { a, r })
+    a = await imports("E1.scala", at("E1.scala", "42.emptyGlyph"))
+    r = a[0] ? await applied("E1.scala", a[0]) : { errors: ["no action"] }
+    check("imports: an object of the empty package, from a file of it: named as it is, applied, no error", same(titles(a), ["import EmptyGlyphs.*"]) && r.errors.length === 0 && r.fixed?.startsWith("import EmptyGlyphs.*\n\nobject E1:"), { a, r })
+    a = await imports("E2.scala", at("E2.scala", "42.emptyGlyph"))
+    check("imports: the same from a package, which cannot name it: none", same(titles(a), []), a)
+    a = await imports("T1.scala", at("T1.scala", "true.*(2)"))
+    r = a[0] ? await applied("T1.scala", a[0]) : { errors: ["no action"] }
+    check("imports: a method named `*` by name, between backquotes, applied, no error", same(titles(a), ["import tlib.Stars.`*`"]) && r.errors.length === 0, { a, r })
+    a = await imports("N1.scala", at("N1.scala", "42.viaNeg"))
+    r = a[0] ? await applied("N1.scala", a[0]) : { errors: ["no action"] }
+    check("imports: a prefix operator of the object in use, written without its `unary_`: by name, applied, no error", same(titles(a), ["import nlib.Negs.viaNeg"]) && r.errors.length === 0, { a, r })
+    // A name the object holds that the document spells where the build keeps no record of the use: the wildcard
+    // gives way all the same; and the method's own name spelled so: none.
+    for (const [n, name, lib, what] of [
+      ["G1Use.scala", "glyphInline", "g1lib", "inside an inline method's body"],
+      ["G2Use.scala", "glyphRoot", "g2lib", "as the root of a qualified type"],
+      ["G3Use.scala", "glyphAssign", "g3lib", "as an operator's assignment form"],
+    ]) {
+      a = await imports(n, at(n, `42.${name}`))
+      r = a[0] ? await applied(n, a[0]) : { errors: ["no action"] }
+      check(`imports: another name of the object spelled ${what}: by name, applied, no error`, same(titles(a), [`import ${lib}.Glyphs.${name}`]) && r.errors.length === 0, { a, r })
+    }
+    a = await imports("G1bUse.scala", at("G1bUse.scala", "42.glyphBody"))
+    check("imports: the method's name called inside an inline method's body: none", same(titles(a), []) && first["G1bUse.scala"].filter((d) => d.severity === 1).length === 1, { a, ds: first["G1bUse.scala"] })
+    a = await imports("G1bTwin.scala", at("G1bTwin.scala", "42.glyphBody"))
+    r = a[0] ? await applied("G1bTwin.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the same without that call: the fix, applied, no error", same(titles(a), ["import g1blib.Glyphs.*"]) && r.errors.length === 0, { a, r })
+    // The receiver is read from the report's range: the expression that starts it, up to the name.
+    for (const [n, needle, want, what] of [
+      ["RA.scala", "(42).asGlyph", ["import lib.Glyphs.*"], "a receiver in parentheses"],
+      ["RB.scala", "f(1).asGlyph", ["import lib.Glyphs.*"], "an application as the receiver"],
+      ["RC.scala", "42 plus (1)", ["import lib.Glyphs.*"], "the infix form, its operand in parentheses"],
+      ["RD.scala", "1.plus(2.plus(3))", ["import lib.Glyphs.*"], "a selection whose argument holds the name again"],
+      ["RE.scala", "new lib.Box().asGlyph.asGlyph", [], "a receiver that ends in the name as a member, which is a use spelled as the name: none"],
+      ["RF.scala", "42.asGlyph.asGlyph", [], "the inner selection of two of the name, the outer one a spelling of it: none"],
+      ["RH.scala", "new lib.Box().asGlyph.plus(1)", ["import lib.Glyphs.plus"], "a receiver that is a selection, whose name the object holds too: by name"],
+      ["RG.scala", "42 /* a note */ .asGlyph", [], "a comment between the receiver and the name: none"],
+      ["RG.scala", "42.`asGlyph`", [], "the name between backquotes: none"],
+      ["RG.scala", "42\n    .asGlyph", ["import lib.Glyphs.*"], "the name on the next line"],
+    ]) {
+      const range = at(n, needle)
+      const got = ((await actionsAt(n, { start: range.start, end: range.start })).result ?? []).filter((x) => x.diagnostics?.some((d) => same(d.range.start, range.start)))
+      check(`imports: ${what}`, same(titles(got), want), got)
+    }
+    // Another use of the document spelled as the name: the import could change what it means, and none is
+    // offered; the same document without that use gets the fix, and its build is clean.
+    for (const [k, name, what] of [
+      [1, "glyphOne", "a plain function of the name, which the document calls"],
+      [2, "glyphTwo", "a type of the name beside the extension, and the package's own type of it in use"],
+      [3, "glyphThree", "another object's extension of the name, in use through an inner wildcard"],
+      [4, "glyphFour", "an extension of the name found through its receiver's companion, in use"],
+    ]) {
+      a = await imports(`P${k}Use.scala`, at(`P${k}Use.scala`, `42.${name}`))
+      check(`imports: ${what}: none`, same(titles(a), []) && first[`P${k}Use.scala`].filter((d) => d.severity === 1).length === 1, { a, ds: first[`P${k}Use.scala`] })
+      a = await imports(`P${k}Twin.scala`, at(`P${k}Twin.scala`, `42.${name}`))
+      r = a[0] ? await applied(`P${k}Twin.scala`, a[0]) : { errors: ["no action"] }
+      check(`imports: the same without that use: the fix, applied, no error`, same(titles(a), [`import p${k}lib.Glyphs.*`]) && r.errors.length === 0, { a, r })
+    }
+    a = await imports("R8.scala", at("R8.scala", "42.asGlyph"))
+    r = a[0] ? await applied("R8.scala", a[0]) : { errors: ["no action"] }
+    check("imports: a use inside nested package blocks, the import at the file's top, no error", same(titles(a), ["import lib.Glyphs.*"]) && r.errors.length === 0 && r.fixed?.startsWith("import lib.Glyphs.*\n\npackage outer {"), { a, r })
+    // An `Int` receiver widens to the `Long` an extension takes, as the selection widens it; asking changes no
+    // later answer: the receiver's completion is the same before and after.
+    const members = async () => ((await c.result("textDocument/completion", { ...doc(file("R9.scala")), position: positionAt(current["R9.scala"], current["R9.scala"].indexOf("42.wide") + "42.wi".length) }))?.items ?? []).map((i) => `${i.label} ${i.detail ?? ""}`)
+    const before = await members()
+    a = await imports("R9.scala", at("R9.scala", "42.wide"))
+    check("imports: a receiver the extension takes once widened", same(titles(a), ["import lib.Longs.*"]), a)
+    const after = await members()
+    check("imports: the receiver's completion as before the question", same(before, after), { before, after })
+    r = a[0] ? await applied("R9.scala", a[0]) : { errors: ["no action"] }
+    check("imports: the widened receiver's import applied, no error", r.errors.length === 0, r)
+
+    // An extension named as a member of `String`: the document's own use of the member is spelled as the name,
+    // so none; without it, the fix, on scala-library and on the lean std.
+    a = await imports("S.scala", at("S.scala", "new strs.Boxed().mkString(\"-\")"))
+    check("imports: an extension named as a member the document uses: none", same(titles(a), []), a)
+    a = await imports("S2.scala", at("S2.scala", "new strs.Boxed().mkString(\"-\")"))
+    r = a[0] ? await applied("S2.scala", a[0]) : { errors: ["no action"] }
+    check("imports: an extension named as a member of String, not used here: the fix, applied, no error", same(titles(a), ["import strs.Strs.*"]) && r.errors.length === 0, { a, r })
+    {
+      const f = join(dir, "lean/S.scala")
+      const text = readFileSync(f, "utf-8")
+      const waitLean = async (mark, v) => {
+        let found
+        await until(() => (found = c.diagnosticsSince(mark).find((p) => p.uri === uriOf(f) && p.version === v)) !== undefined, 60000)
+        return found?.diagnostics
+      }
+      let ml = c.mark()
+      c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(f), languageId: "scala", version: 1, text } })
+      const ds = await waitLean(ml, 1)
+      const got = (((await c.request("textDocument/codeAction", { textDocument: { uri: uriOf(f) }, range: rangeIn(text, "new leanlib.Boxed().mkString(\"-\")"), context: { diagnostics: [] } }, { timeout: 30000 })).result) ?? []).filter((x) => x.title.startsWith("import "))
+      const fixed = got[0] ? apply(text, editsOf(got[0])) : text
+      ml = c.mark()
+      c.notify("textDocument/didChange", { textDocument: { uri: uriOf(f), version: 2 }, contentChanges: [{ text: fixed }] })
+      const left = ((await waitLean(ml, 2)) ?? [{ severity: 1, message: "no publication" }]).filter((d) => d.severity === 1).map((d) => d.message)
+      check("imports: the same on the lean std: the fix, applied, no error", same(ds?.filter((d) => d.severity === 1).map((d) => d.message), ["value mkString is not a member of Boxed"]) && same(got.map((x) => x.title), ["import leanlib.Strs.*"]) && left.length === 0, { ds, got, left })
+    }
+
+    // One command to the session a request, however many reports its range holds.
+    let from = traceOf(trace).length
+    const queries = (t) => t.filter((e) => e.who === "server" && e.event === "wrote-query")
+    a = (await actionsAt("UseL.scala", at("UseL.scala", "Missing7"))).result
+    check("imports (l): twenty reports in the file, one line asked, one command and no action", same(a, []) && queries(traceOf(trace).slice(from)).length === 1, { a, t: traceOf(trace).slice(from) })
+    from = traceOf(trace).length
+    a = (await actionsAt("UseL.scala", wholeOf(texts["UseL.scala"]))).result
+    check("imports (l): the whole file asked, one command", same(a, []) && queries(traceOf(trace).slice(from)).length === 1, { a, t: traceOf(trace).slice(from) })
+    a = (await actionsAt("J3.scala", wholeOf(current["J3.scala"]), ["refactor"])).result
+    check("imports (m): asked for refactorings alone, none", same(a, []), a)
+
+    // A document edited since its reports: none until its build's; edited while the session answers: the
+    // request ends as one whose text changed.
+    const stale = "object K:\n  val w: Widget = ???\n"
+    writeFileSync(file("K.scala"), stale)
+    versions["K.scala"] = 1
+    current["K.scala"] = stale
+    let mk = c.mark()
+    c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file("K.scala")), languageId: "scala", version: 1, text: stale } })
+    await published(mk, "K.scala", 1)
+    mk = c.mark()
+    change("K.scala", stale + "\n")
+    a = (await actionsAt("K.scala", wholeOf(stale))).result
+    check("imports (k): a document edited since its reports, none", same(a, []), a)
+    await published(mk, "K.scala", versions["K.scala"])
+    a = await imports("K.scala", wholeOf(stale))
+    check("imports (k): its build's reports published, the fix on the new version", same(titles(a), ["import own.Widget"]) && a[0]?.edit?.documentChanges?.[0]?.textDocument?.version === versions["K.scala"], a)
+    writeFileSync(`${barrier}.query`, "")
+    from = traceOf(trace).length
+    const flying = actionsAt("K.scala", wholeOf(stale))
+    await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "query", "the command held")
+    mk = c.mark()
+    change("K.scala", stale)
+    rmSync(`${barrier}.query`)
+    const flown = await flying
+    check("imports (k): edited while the session answers, ContentModified", flown.error?.code === -32801, flown)
+    await published(mk, "K.scala", versions["K.scala"])
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+    await Promise.race([c.exited, sleep(10000)])
+  } catch (e) {
+    check("the import fixes ran to their end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    rmSync(`${barrier}.query`, { force: true })
+  }
+
+  // The defining object in another project of the workspace, which the using project's session types from
+  // source: by the project's dependency, and by its description's own list of sources.
+  const two = join(work, "link/imports-two")
+  const glyphs = "package lib\n\nobject Glyphs:\n  extension (n: Int)\n    def asGlyph: String = n.toString\n  extension (n: Long)\n    def asGlyph: String = n.toString + \"L\"\n  def plain(n: Int): Int = n\n"
+  const use = "package use\n\nobject Use:\n  val g = 42.asGlyph\n  val s: String = g\n"
+  mkdirSync(join(two, "lib/src"), { recursive: true })
+  writeFileSync(join(two, "lib/src/Glyphs.scala"), glyphs)
+  for (const p of ["use", "listed"]) {
+    mkdirSync(join(two, p, "src"), { recursive: true })
+    writeFileSync(join(two, p, "src/Use.scala"), use)
+  }
+  writeExport(join(two, "teq.lock"), {
+    lib: { platform: "jvm", sources: ["lib/src"] },
+    use: { platform: "jvm", sources: ["use/src"], classpath: [{ project: "lib", configuration: "compile" }] },
+    listed: { platform: "jvm", sources: ["listed/src"], description: { sources: ["listed/src", "lib/src"] } },
+  })
+  const c2 = new Client(two)
+  try {
+    await c2.result("initialize", { processId: null, rootUri: uriOf(two), capabilities: { workspace: { workspaceEdit: { documentChanges: true } } } })
+    c2.notify("initialized", {})
+    for (const [p, how] of [["use", "its dependency"], ["listed", "its description's sources"]]) {
+      const f = join(two, p, "src/Use.scala")
+      const uri = uriOf(f)
+      const waitVersion = async (mark, v) => {
+        let found
+        await until(() => (found = c2.diagnosticsSince(mark).find((x) => x.uri === uri && x.version === v)) !== undefined, 60000)
+        return found?.diagnostics
+      }
+      let m2 = c2.mark()
+      c2.notify("textDocument/didOpen", { textDocument: { uri, languageId: "scala", version: 1, text: use } })
+      const ds = await waitVersion(m2, 1)
+      const got = ((await c2.result("textDocument/codeAction", { textDocument: { uri }, range: rangeIn(use, "42.asGlyph"), context: { diagnostics: [] } })) ?? []).filter((x) => x.title.startsWith("import "))
+      const fixed = got[0] ? apply(use, got[0].edit?.documentChanges?.[0]?.edits ?? []) : use
+      m2 = c2.mark()
+      c2.notify("textDocument/didChange", { textDocument: { uri, version: 2 }, contentChanges: [{ text: fixed }] })
+      const left = ((await waitVersion(m2, 2)) ?? [{ severity: 1, message: "no publication" }]).filter((d) => d.severity === 1).map((d) => d.message)
+      check(`imports: the object in another project, typed from source by ${how}: the fix, applied, no error`, ds?.some((d) => d.message === "value asGlyph is not a member of Int") && same(got.map((x) => x.title), ["import lib.Glyphs.*"]) && left.length === 0, { ds, got, left })
+    }
+    await c2.result("shutdown", null)
+    c2.notify("exit", null)
+    await Promise.race([c2.exited, sleep(10000)])
+  } catch (e) {
+    check("the import fixes over two projects ran to their end", false, `${e.stack}\nstderr: ${c2.stderr.slice(-1000)}`)
+    c2.proc.kill()
+  }
+}
+
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
 // Run only when named: the idle minute, the jar fetch and the sources' fetches, which tests/lsp.sh
 // runs once each.
 const named = new Set(["idleMinute", "jarFetch", "librarySources", "sourcesFailures", "sourcesHeld", "sourcesBackoff", "sourcesPaths"])

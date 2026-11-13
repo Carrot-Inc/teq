@@ -3525,7 +3525,7 @@ impl<'a> Worker<'a> {
                 self.error(span, msg);
             } else {
                 let msg = format!("not found: {}", self.name_str(name));
-                self.not_found_error(name, span, msg);
+                self.not_found_error(name, span, msg, Some(crate::source::MissingKind::Term));
             }
             return None;
         };
@@ -8702,7 +8702,9 @@ impl<'a> Worker<'a> {
         if self.incomplete_ancestry(recv_ty) {
             self.dependent_error(span, msg);
         } else {
+            let made = self.diags.items.len();
             self.error(span, msg);
+            self.note_missing(made, name, crate::source::MissingKind::Member);
         }
         if let Some(l) = &lists {
             self.type_args_for_errors(l);
@@ -10722,7 +10724,7 @@ impl<'a> Worker<'a> {
 
     /// The extensions called `name` of the nearest scope that has one and of package `scala`,
     /// the std's last on a builtin receiver, and how many imports of that scope brought one.
-    fn lexical_extensions_for(&mut self, name: Name, recv_ty: TypeId) -> (Vec<SymId>, u32) {
+    pub(super) fn lexical_extensions_for(&mut self, name: Name, recv_ty: TypeId) -> (Vec<SymId>, u32) {
         let (mut lexical, imports) = self.nearest_extensions_counted(name);
         if self.is_builtin_type(recv_ty) {
             lexical.sort_by_key(|&s| !self.is_std_extension(s));
@@ -13152,7 +13154,7 @@ impl<'a> Worker<'a> {
     /// arity and auto-tupling included, as dotc deepens the prototype of an ambiguous overload;
     /// failing that, the first. One named without arguments is taken before one that would be
     /// eta-expanded.
-    fn pick_extension(
+    pub(super) fn pick_extension(
         &mut self,
         mut candidates: Vec<SymId>,
         recv: TExprId,

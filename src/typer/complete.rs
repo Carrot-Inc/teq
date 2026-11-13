@@ -15,6 +15,8 @@
 //! conformance check made are rolled back, so that a completion leaves the session answering as
 //! it did.
 
+mod import_fix;
+
 use super::apply::MethodCall;
 use super::index::Files;
 use super::resolve::{TermRef, TypeRef};
@@ -246,6 +248,17 @@ const NUMERIC: &[(&str, &str)] = &[
     ("toShort", ": Short"),
 ];
 
+/// An import's edit of a document (`Worker::import_edit`): the offset it goes at, the text put
+/// there (the import with what `import_insertion` puts around it), the import as it is written,
+/// and what it names as a type and as a term.
+pub(super) struct ImportEdit {
+    pub at: u32,
+    pub text: String,
+    pub import: String,
+    pub ty: Option<TypeRef>,
+    pub term: Option<TermRef>,
+}
+
 impl<'a> Worker<'a> {
     /// The answer to `complete <path> <offset> <flags>`: a `CompletionList`. The flags' bit 0
     /// says the client takes insert-and-replace edits, bit 1 that it takes snippets.
@@ -288,34 +301,49 @@ impl<'a> Worker<'a> {
         let sources: &'a crate::source::Sources = self.files;
         let text: &'a str = &sources[first.0 as usize].text;
         let file = self.file_at(&ids, offset);
-        let (at, before, after) = import_insertion(self.ast(file), self.ast(first), text, offset);
-        let segments: Vec<String> = name.split('.').map(decode).collect();
-        let base = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
-        let checked = self.in_query(base, |w| w.import_check(&segments));
-        let Some(rooted) = checked else {
+        let Some(edit) = self.import_edit(file, first, text, offset, name) else {
             let warning = format!("completion: the import of {} does not resolve, or leaves its name ambiguous, in {}", name, path.display());
             return obj([("edits", Json::Arr(Vec::new())), ("warning", warning.into())]);
         };
-        let written: Vec<String> = segments.iter().map(|s| spelled(s)).collect();
-        let import = format!("{}import {}{}{}", before, if rooted { "_root_." } else { "" }, written.join("."), after);
-        let range = Lines::new(text).range(Span::new(at, at), files.positions);
-        obj([("edits", Json::Arr(vec![obj([("range", range), ("newText", import.into())])]))])
+        let range = Lines::new(text).range(Span::new(edit.at, edit.at), files.positions);
+        obj([("edits", Json::Arr(vec![obj([("range", range), ("newText", edit.text.into())])]))])
+    }
+
+    /// The edit that imports `name`, a path of encoded segments, for the site at `offset` of the
+    /// tree `file` of the document whose own tree is `first` and whose text is `text`: where the
+    /// import goes (`import_insertion`) and the text put there, with the import as it is written
+    /// and what it names as a type and as a term; `None` where the import does not resolve
+    /// there or leaves its name ambiguous (`import_check`).
+    pub(super) fn import_edit(&mut self, file: FileId, first: FileId, text: &str, offset: u32, name: &str) -> Option<ImportEdit> {
+        let (at, before, after) = import_insertion(self.ast(file), self.ast(first), text, offset);
+        let segments: Vec<String> = name.split('.').map(decode).collect();
+        let base = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
+        let (rooted, ty, term) = self.in_query(base, |w| w.import_check(&segments))?;
+        let written: Vec<String> = segments.iter().map(|s| import_segment(s)).collect();
+        let import = format!("import {}{}", if rooted { "_root_." } else { "" }, written.join("."));
+        Some(ImportEdit { at, text: format!("{}{}{}", before, import, after), import, ty, term })
     }
 
     /// Whether the import of the path `segments` resolves at the top of the file, a package's,
     /// an object's or a member's, and whether it must be written from `_root_` there: where its
-    /// first segment names something else than the top-level package. `None` where it resolves to
-    /// nothing.
-    fn import_check(&mut self, segments: &[String]) -> Option<bool> {
+    /// first segment names something else than the top-level package; with what it names as a
+    /// type and as a term. `None` where it resolves to nothing.
+    fn import_check(&mut self, segments: &[String]) -> Option<(bool, Option<TypeRef>, Option<TermRef>)> {
         let (head, top, last, target, ty, term) = self.import_target(segments)?;
         // The spelling with the import among the file's: it has to name what the import brings,
         // with nothing else of its name at that level to make it ambiguous.
         if !self.imported_alone(last, target, ty, term) {
             return None;
         }
+        Some((self.import_rooted(head, top), ty, term))
+    }
+
+    /// Whether an import whose path starts with `head`, the top-level package `top`, must be
+    /// written from `_root_` at the top of the environment's file: where the name is something
+    /// else there.
+    pub(super) fn import_rooted(&mut self, head: Name, top: TermRef) -> bool {
         let here = self.quietly(|w| w.lookup_term_at(head, Span::new(0, 0)));
-        let same = matches!((here, top), (Some(TermRef::Package(a)), TermRef::Package(b)) if a == b);
-        Some(!same)
+        !matches!((here, top), (Some(TermRef::Package(a)), TermRef::Package(b)) if a == b)
     }
 
     /// What an import of the path `segments` brings, from the root: its first segment and the
@@ -2496,6 +2524,16 @@ pub(super) fn list(incomplete: bool, items: Vec<Json>) -> Json {
     obj([("isIncomplete", incomplete.into()), ("items", Json::Arr(items))])
 }
 
+/// A segment of an import's path as source spells it: a name `*` between backquotes, which bare
+/// is the import's wildcard, and any other as `spelled`.
+pub(super) fn import_segment(name: &str) -> String {
+    if name == "*" {
+        "`*`".to_string()
+    } else {
+        spelled(name)
+    }
+}
+
 /// A name as source spells it: backquoted where it is no identifier.
 pub(super) fn spelled(name: &str) -> String {
     let plain = {
@@ -2608,6 +2646,7 @@ mod tests {
         assert_eq!(spelled("type"), "`type`");
         assert_eq!(spelled("my val"), "`my val`");
         assert_eq!(spelled("++"), "++");
+        assert_eq!((spelled("*"), import_segment("*"), import_segment("++")), ("*".to_string(), "`*`".to_string(), "++".to_string()));
         assert_eq!(spelled("unary_!"), "unary_!");
         assert_eq!(spelled("a-b"), "`a-b`");
     }

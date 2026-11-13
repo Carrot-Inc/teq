@@ -1419,9 +1419,13 @@ impl Server {
 
     /// `textDocument/codeAction`: a quick fix for each diagnostic published on the document whose
     /// range meets the one asked on and that carries the compiler's change (an unused import's
-    /// removal, `typer::unused_edits`). The edits were computed on the text the diagnostics were
-    /// published for: where the document changed since, there are none until the next build's
-    /// diagnostics are.
+    /// removal, `typer::unused_edits`), and, for each that says what is missing (a name not found,
+    /// the member a selection lacks), the imports that bring it, asked of the document's session
+    /// in one command for the whole range (`import-actions`, `typer::complete::import_fix`), which
+    /// names the document's other such reports too, for their places. The
+    /// edits are of the text the diagnostics were published for: where the document changed
+    /// since, there are none until the next build's diagnostics are, and an answer of the session
+    /// found in another text ends the request `ContentModified`, as a position's query does.
     fn code_actions(&mut self, id: Json, params: &Json) {
         let none = || Json::Arr(Vec::new());
         let only = params.at(&["context", "only"]).map(Json::arr);
@@ -1431,28 +1435,43 @@ impl Server {
         let Some(path) = document_path(params) else { return respond(&id, none()) };
         let current = self.docs.get(&path).map(|d| d.version);
         let Some((published, version)) = self.published.get(&path).filter(|(_, v)| *v == current) else { return respond(&id, none()) };
+        let version = *version;
         let point = |p: Option<&Json>| -> Option<(u32, u32)> { Some((p?.get("line")?.uint()?, p?.get("character")?.uint()?)) };
         let (Some(from), Some(to)) = (point(params.at(&["range", "start"])), point(params.at(&["range", "end"]))) else { return respond(&id, none()) };
         let uri = self.client_uri(&path);
         let mut actions = Vec::new();
+        // The document's reports that say what is missing, as the session takes them back: those
+        // of the range asked for, the others for their places.
+        let mut wanted = Vec::new();
+        let mut reports = Vec::new();
         for d in published {
-            let Some(action) = d.at(&["data", "action"]) else { continue };
             let (Some(start), Some(end)) = (point(d.at(&["range", "start"])), point(d.at(&["range", "end"]))) else { continue };
-            if end < from || to < start {
+            let asked = !(end < from || to < start);
+            if let Some(mut w) = d.at(&["data", "missing"]).and_then(import_wanted) {
+                w.asked = asked;
+                wanted.push(w);
+                reports.push(d.clone());
+            }
+            if !asked {
                 continue;
             }
-            let edits = action.get("edits").cloned().unwrap_or(Json::Arr(Vec::new()));
-            let edit = match version {
-                Some(v) if self.document_changes => {
-                    let document = obj([("uri", uri.clone().into()), ("version", Json::Num(*v as f64))]);
-                    obj([("documentChanges", Json::Arr(vec![obj([("textDocument", document), ("edits", edits)])]))])
-                }
-                _ => obj([("changes", Json::Obj(vec![(uri.clone(), edits)]))]),
-            };
-            let title = action.get("title").and_then(Json::str).unwrap_or("").to_string();
-            actions.push(obj([("title", title.into()), ("kind", "quickfix".into()), ("diagnostics", Json::Arr(vec![d.clone()])), ("isPreferred", true.into()), ("edit", edit)]));
+            if let Some(action) = d.at(&["data", "action"]) {
+                let edits = action.get("edits").cloned().unwrap_or(Json::Arr(Vec::new()));
+                let edit = workspace_edit(&uri, version.filter(|_| self.document_changes), edits);
+                let title = action.get("title").and_then(Json::str).unwrap_or("").to_string();
+                actions.push(obj([("title", title.into()), ("kind", "quickfix".into()), ("diagnostics", Json::Arr(vec![d.clone()])), ("isPreferred", true.into()), ("edit", edit)]));
+            }
         }
-        respond(&id, Json::Arr(actions));
+        // The session is asked where the document is open, its text the one the reports are of.
+        let digest = self.docs.get(&path).map(|d| d.digest.clone());
+        let (true, Some(digest), Some(doc_version)) = (wanted.iter().any(|w| w.asked), digest, current) else { return respond(&id, Json::Arr(actions)) };
+        self.flush();
+        let Some(s) = self.one_for(&path) else { return respond(&id, Json::Arr(actions)) };
+        self.sessions[s].last_used = Instant::now();
+        let command = crate::watch::imports_command(&path, &wanted);
+        let versioned = version.filter(|_| self.document_changes).map_or(Json::Null, |v| Json::Num(v as f64));
+        let context = obj([("actions", Json::Arr(actions)), ("reports", Json::Arr(reports)), ("uri", uri.into()), ("version", versioned), ("asked", Json::Num(doc_version as f64))]);
+        self.query_one(id, "textDocument/codeAction", s, &command, Some(context), path, doc_version, digest);
     }
 
     fn initialize(&mut self, id: &Json, params: &Json) {
@@ -2587,8 +2606,11 @@ impl Server {
             }
             // The change the compiler proposes (an unused import's removal) goes in the `data`
             // the protocol keeps with the diagnostic, which `textDocument/codeAction` reads.
-            if let (Some(action), Json::Obj(fields)) = (d.get("action"), &mut diagnostic) {
-                fields.push(("data".to_string(), obj([("action", action.clone())])));
+            // What the report says is missing (a name not found, the member a selection lacks) goes
+            // there too: `textDocument/codeAction` asks the session for the imports that bring it.
+            let data: Vec<(String, Json)> = ["action", "missing"].into_iter().filter_map(|k| Some((k.to_string(), d.get(k)?.clone()))).collect();
+            if let (false, Json::Obj(fields)) = (data.is_empty(), &mut diagnostic) {
+                fields.push(("data".to_string(), Json::Obj(data)));
             }
             let list = by_file.entry(file).or_default();
             if !list.contains(&diagnostic) {
@@ -2771,6 +2793,17 @@ impl Server {
                 self.remember_documents(s, &winner);
             }
         }
+        // A code action's request: its context's quick fixes and the imports the session answered.
+        if method == "textDocument/codeAction" {
+            let context = item.unwrap_or(Json::Null);
+            // The document edited while the session answered: the edits are of a text it no longer has.
+            let asked = context.get("asked").and_then(Json::num).map(|v| v as i64);
+            if origin.as_deref().and_then(|f| self.docs.get(f)).map(|d| d.version) != asked {
+                return Err((CONTENT_MODIFIED, "the document changed"));
+            }
+            let answer = results.into_iter().next().map_or(Json::Null, |(_, r)| r);
+            return Ok(import_actions(context, &answer));
+        }
         if origin.as_deref().is_some_and(|f| self.library_document_changed(f)) {
             return Ok(match item {
                 Some(item) => item,
@@ -2873,6 +2906,57 @@ fn resolved(item: Json, answer: Json) -> Result<Json, &'static str> {
     Ok(Json::Obj(fields))
 }
 
+/// A workspace edit of one document: versioned for a client that takes `documentChanges` (the
+/// version the edits' text is of), else the plain map.
+fn workspace_edit(uri: &str, version: Option<i64>, edits: Json) -> Json {
+    match version {
+        Some(v) => {
+            let document = obj([("uri", uri.into()), ("version", Json::Num(v as f64))]);
+            obj([("documentChanges", Json::Arr(vec![obj([("textDocument", document), ("edits", edits)])]))])
+        }
+        None => obj([("changes", Json::Obj(vec![(uri.to_string(), edits)]))]),
+    }
+}
+
+/// What a published diagnostic's `data.missing` says, as `import-actions` hands it back.
+fn import_wanted(missing: &Json) -> Option<crate::source::ImportWanted> {
+    use crate::source::MissingKind;
+    let kind = match missing.get("kind")?.str()? {
+        "term" => MissingKind::Term,
+        "type" => MissingKind::Type,
+        "member" => MissingKind::Member,
+        _ => return None,
+    };
+    let span = crate::source::Span::new(missing.get("start")?.uint()?, missing.get("end")?.uint()?);
+    Some(crate::source::ImportWanted { name: missing.get("name")?.str()?.into(), kind, span, asked: false })
+}
+
+/// The answer to a code action's request that asked its session for imports: the quick fixes
+/// its context already holds (`actions`), then one for each import the session answered, in its
+/// order, with the reports it is for (`for`, indices into the context's `reports`); preferred
+/// where each of those reports has no other import.
+fn import_actions(context: Json, answer: &Json) -> Json {
+    let mut actions: Vec<Json> = context.get("actions").map(Json::arr).unwrap_or(&[]).to_vec();
+    let reports = context.get("reports").map(Json::arr).unwrap_or(&[]);
+    let uri = context.get("uri").and_then(Json::str).unwrap_or("");
+    let version = context.get("version").and_then(Json::num).map(|v| v as i64);
+    let imports = answer.get("actions").map(Json::arr).unwrap_or(&[]);
+    let of = |a: &Json| -> Vec<usize> { a.get("for").map(Json::arr).unwrap_or(&[]).iter().filter_map(|i| Some(i.uint()? as usize)).collect() };
+    for a in imports {
+        let (Some(title), Some(edits)) = (a.get("title").and_then(Json::str), a.get("edits")) else { continue };
+        let mine = of(a);
+        let diagnostics: Vec<Json> = mine.iter().filter_map(|&i| reports.get(i).cloned()).collect();
+        let alone = mine.iter().all(|i| imports.iter().filter(|b| of(b).contains(i)).count() == 1);
+        let mut action = vec![("title".to_string(), title.into()), ("kind".to_string(), "quickfix".into()), ("diagnostics".to_string(), Json::Arr(diagnostics))];
+        if alone {
+            action.push(("isPreferred".to_string(), true.into()));
+        }
+        action.push(("edit".to_string(), workspace_edit(uri, version, edits.clone())));
+        actions.push(Json::Obj(action));
+    }
+    Json::Arr(actions)
+}
+
 /// Names the document's version in the `data` of a completion list's items, which their
 /// resolve checks against the document's version then.
 fn name_version(list: &mut Json, version: i64) {
@@ -2972,6 +3056,25 @@ mod tests {
         let call = |text: &str| obj([("from", item(text)), ("fromRanges", Json::Arr(Vec::new()))]);
         let joined = merge("callHierarchy/incomingCalls", "", vec![Json::Arr(vec![call("a")]), Json::Arr(vec![call("b")])]);
         assert_eq!(joined, Json::Arr(vec![call("a")]));
+    }
+
+    /// A code action's answer: the context's quick fixes first, then an action an import the
+    /// session answered, with the reports it is for and the document's version; preferred where
+    /// each of its reports has no other import, and an entry without a title or edits passed over.
+    #[test]
+    fn imports_join_a_code_actions_context() {
+        let report = |m: &str| Json::parse(&format!(r#"{{"message":"{m}"}}"#)).unwrap();
+        let context = Json::parse(r#"{"actions":[{"title":"unused import"}],"reports":[{"message":"a"},{"message":"b"},{"message":"c"}],"uri":"file:///w/A.scala","version":4,"asked":4}"#).unwrap();
+        let answer = Json::parse(r#"{"actions":[{"for":[0,2],"title":"import p.A","edits":[{"newText":"x"}]},{"for":[1],"title":"import p.B","edits":[]},{"for":[1],"title":"import q.B","edits":[]},{"for":[1],"edits":[]}]}"#).unwrap();
+        let joined = import_actions(context.clone(), &answer);
+        let actions = joined.arr();
+        assert_eq!(actions.iter().map(|a| a.get("title").and_then(Json::str).unwrap_or("")).collect::<Vec<_>>(), ["unused import", "import p.A", "import p.B", "import q.B"]);
+        assert_eq!(actions[1].get("diagnostics"), Some(&Json::Arr(vec![report("a"), report("c")])));
+        assert_eq!(actions[1].get("isPreferred"), Some(&Json::from(true)));
+        assert_eq!(actions[2].get("isPreferred"), None);
+        assert_eq!(actions[1].at(&["edit", "documentChanges"]).map(|d| d.arr()[0].at(&["textDocument", "version"]).cloned()), Some(Some(Json::Num(4.0))));
+        // No answer of the session (a file it holds no text of): the context's own alone.
+        assert_eq!(import_actions(context, &Json::Null).arr().len(), 1);
     }
 
     /// A Mill build's definition files and the inputs an export declares are build files whose change

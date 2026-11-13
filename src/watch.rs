@@ -41,7 +41,11 @@
 //! file and position order (an unused import with `"tags":[1]` and, where it carries the edit
 //! removing it, an `"action":{"title","description","edits":[...]}` whose edits are ranges as the
 //! diagnostic's with their `"newText"`, and in a session with `--index`
-//! outside `--wunused` a `"hint"`, which no count reads); lines and columns are 1-based, the end
+//! outside `--wunused` a `"hint"`, which no count reads; in a session with `--index` a name not
+//! found and a member a selection lacks with `"missing":{"kind","name","start","end"}`, what was
+//! wanted and the report's span in bytes, which `import-actions <n> <item>.. <path>` hands back,
+//! every one of the file's with those asked for marked, for the imports that bring them:
+//! `{"actions":[{"for":[<items>],"title","edits":[...]}]}`); lines and columns are 1-based, the end
 //! exclusive, and the columns of a check session count UTF-16 units, as scalac's and an
 //! editor's do. `ok` is false when there is an error (or a warning under `--werror`); a
 //! diagnostic without a position has no `line`. The typed program survives a build with errors,
@@ -100,6 +104,10 @@ enum Command {
     /// position it gave as a line and a character where it had no text to turn it into an offset
     /// (`Query::parse_at`).
     Query(crate::index::Query, Option<(u32, u32)>),
+    /// `import-actions <n> <item>.. <path>`: the imports that bring what the file's reports at the
+    /// items asked for say is missing (`ImportWanted`: every such report of the file, some of
+    /// them asked for), answered with one JSON line as a query is.
+    Imports(PathBuf, Vec<crate::source::ImportWanted>),
     /// `stats`: what the session holds, answered with one JSON line.
     Stats,
     /// `cancel <n>`: the build of that identity stops if it has not begun typing; answered by
@@ -455,7 +463,7 @@ pub fn run(opts: &Options) -> ! {
                     crate::lsp::hooks::began(build_id, requested.is_some());
                     break;
                 }
-                Some(Command::Query(..)) => print_answer(&crate::lsp::json::Json::Null),
+                Some(Command::Query(..) | Command::Imports(..)) => print_answer(&crate::lsp::json::Json::Null),
                 Some(Command::Stats) => print_stats(None),
                 _ => end_session(full_builds),
             }
@@ -539,7 +547,7 @@ pub fn run(opts: &Options) -> ! {
                         reason = "previous build failed".to_string();
                         break;
                     }
-                    Some(Command::Query(..)) => print_answer(&crate::lsp::json::Json::Null),
+                    Some(Command::Query(..) | Command::Imports(..)) => print_answer(&crate::lsp::json::Json::Null),
                     Some(Command::Stats) => print_stats(None),
                     _ => end_session(full_builds),
                 }
@@ -910,6 +918,18 @@ pub fn run(opts: &Options) -> ! {
                     name_item_texts(&query_files, &sources, &q, &mut answered.result);
                     let texts = Texts { declined: positional && answered.text.is_none(), text: answered.text, declared: declared_text };
                     print_answer_declared(&answered.result, answered.declared.as_ref(), &texts);
+                    continue;
+                }
+                Command::Imports(path, wanted) => {
+                    crate::lsp::hooks::hold_query();
+                    let result = match typer.as_mut() {
+                        Some(t) => t.on_thread(|w| w.import_actions(&path, &wanted, &query_files)),
+                        None => crate::lsp::json::Json::Null,
+                    };
+                    // The text the items' places are in, which the language server holds the reports'
+                    // ranges against; a file the session has no program text of is declined.
+                    let text = if result.is_null() { None } else { answered_text(&query_files, &sources, &path) };
+                    print_answer_declared(&result, None, &Texts { declined: text.is_none(), text, declared: None });
                     continue;
                 }
             };
@@ -2216,6 +2236,12 @@ fn read_command(input: &mut impl BufRead, opts: &Options) -> Option<Command> {
         return Some(Command::Stats);
     }
     if opts.index {
+        if let Some(rest) = line.strip_prefix("import-actions ") {
+            return Some(match parse_imports(rest) {
+                Some((path, wanted)) => Command::Imports(path, wanted),
+                None => Command::Unknown(line.to_string()),
+            });
+        }
         if let Some((q, at)) = crate::index::Query::parse_at(line) {
             return Some(Command::Query(q, at));
         }
@@ -2324,6 +2350,65 @@ fn json_array(items: &[String], quoted: bool) -> String {
     out
 }
 
+/// The line of `import-actions` for the reports `wanted` of the file `path`: their count, an item
+/// each (what was wanted, as a small letter where the imports are asked for and a capital where
+/// not; the report's span in bytes; the name with every byte but a letter, a digit or `_` as
+/// `%XX`), then the path, which may hold a space.
+pub(crate) fn imports_command(path: &std::path::Path, wanted: &[crate::source::ImportWanted]) -> String {
+    use crate::source::MissingKind;
+    let mut line = format!("import-actions {}", wanted.len());
+    for w in wanted {
+        let kind = match w.kind {
+            MissingKind::Term => 'v',
+            MissingKind::Type => 't',
+            MissingKind::Member => 'm',
+        };
+        let kind = if w.asked { kind } else { kind.to_ascii_uppercase() };
+        line.push_str(&format!(" {}{}-{}:", kind, w.span.start, w.span.end));
+        for b in w.name.bytes() {
+            if b.is_ascii_alphanumeric() || b == b'_' {
+                line.push(b as char);
+            } else {
+                line.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    format!("{} {}\n", line, path.display())
+}
+
+/// What `imports_command` wrote after the command's word.
+fn parse_imports(rest: &str) -> Option<(PathBuf, Vec<crate::source::ImportWanted>)> {
+    use crate::source::MissingKind;
+    let (count, mut rest) = rest.split_once(' ')?;
+    let mut wanted = Vec::new();
+    for _ in 0..count.parse::<usize>().ok()? {
+        let (item, after) = rest.split_once(' ')?;
+        rest = after;
+        let letter = *item.as_bytes().first()?;
+        let kind = match letter.to_ascii_lowercase() {
+            b'v' => MissingKind::Term,
+            b't' => MissingKind::Type,
+            b'm' => MissingKind::Member,
+            _ => return None,
+        };
+        let (span, name) = item[1..].split_once(':')?;
+        let (start, end) = span.split_once('-')?;
+        let mut bytes = Vec::new();
+        let mut at = name.as_bytes();
+        while let Some((&b, more)) = at.split_first() {
+            if b == b'%' {
+                bytes.push(u8::from_str_radix(std::str::from_utf8(more.get(..2)?).ok()?, 16).ok()?);
+                at = &more[2..];
+            } else {
+                bytes.push(b);
+                at = more;
+            }
+        }
+        wanted.push(crate::source::ImportWanted { name: String::from_utf8(bytes).ok()?.into(), kind, span: crate::source::Span::new(start.parse().ok()?, end.parse().ok()?), asked: letter.is_ascii_lowercase() });
+    }
+    (!rest.is_empty()).then(|| (PathBuf::from(rest), wanted))
+}
+
 /// One diagnostic as JSON, with the line it points at and the caret line under it, as the text
 /// form prints them.
 fn render_at(path: &str, line: usize, col: usize, line_text: &str, start: u32, end: u32, msg: &str) -> String {
@@ -2350,7 +2435,8 @@ fn utf16_col(line_text: &str, byte_col: usize) -> usize {
 
 /// One diagnostic of a `--check` session: the span's start and exclusive end as lines and
 /// UTF-16 columns, its severity, and the source line and caret as the build answers have them.
-fn render_check_at(path: &str, text: &str, start: u32, end: u32, severity: &str, msg: &str, unnecessary: bool, action: Option<&crate::source::Action>) -> String {
+#[allow(clippy::too_many_arguments)]
+fn render_check_at(path: &str, text: &str, start: u32, end: u32, severity: &str, msg: &str, unnecessary: bool, action: Option<&crate::source::Action>, missing: Option<&crate::source::Missing>) -> String {
     let end = end.max(start);
     let (line, col, line_text) = locate(text, start as usize);
     let (end_line, end_col, end_line_text) = locate(text, end as usize);
@@ -2387,6 +2473,19 @@ fn render_check_at(path: &str, text: &str, start: u32, end: u32, severity: &str,
     let action = action.map(|a| render_action(text, a));
     if let Some(a) = &action {
         fields.push(("action", JsonValue::Raw(a)));
+    }
+    // What the report says is missing, with its span in bytes: a language server's session gives
+    // it, and takes it back in `import-actions`.
+    let missing = missing.filter(|_| uri.is_some()).map(|m| {
+        let kind = match m.kind {
+            crate::source::MissingKind::Term => "term",
+            crate::source::MissingKind::Type => "type",
+            crate::source::MissingKind::Member => "member",
+        };
+        json_object(&[("kind", JsonValue::Str(kind)), ("name", JsonValue::Str(&m.name)), ("start", JsonValue::Int(start as usize)), ("end", JsonValue::Int(end as usize))])
+    });
+    if let Some(m) = &missing {
+        fields.push(("missing", JsonValue::Raw(m)));
     }
     json_object(&fields)
 }
@@ -2446,7 +2545,7 @@ fn render_check_one(d: &Diagnostic, level: crate::source::Level, files: &[Source
     let Some(f) = files.get(d.file.0 as usize) else {
         return json_object(&[("file", JsonValue::Str("<library>")), ("severity", JsonValue::Str(severity)), ("message", JsonValue::Str(&d.msg))]);
     };
-    render_check_at(&f.path, &f.text, d.span.start, d.span.end, severity, &d.msg, d.unnecessary, d.action.as_deref())
+    render_check_at(&f.path, &f.text, d.span.start, d.span.end, severity, &d.msg, d.unnecessary, d.action.as_deref(), d.missing.0.as_deref())
 }
 
 /// The diagnostics as the reporting policy presents them (`Diagnostics::report`) that `keep`
@@ -2849,4 +2948,32 @@ fn print_report(r: &Report) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{}", json_object(&fields));
     let _ = out.flush();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source::{ImportWanted, MissingKind, Span};
+
+    /// The line of `import-actions` reads back as it was written: a path with a space in it, a
+    /// name with a space, a `%`, an operator's characters and a letter outside ASCII, each kind,
+    /// asked for and not;
+    /// a line cut short or with another count than its items reads as nothing.
+    #[test]
+    fn the_imports_command_reads_back() {
+        let wanted = vec![
+            ImportWanted { name: "asGlyph".into(), kind: MissingKind::Member, span: Span::new(10, 20), asked: true },
+            ImportWanted { name: "a b%c".into(), kind: MissingKind::Term, span: Span::new(0, 5), asked: false },
+            ImportWanted { name: "+:é".into(), kind: MissingKind::Type, span: Span::new(7, 9), asked: true },
+        ];
+        let path = std::path::Path::new("/work dir/src/A.scala");
+        let line = imports_command(path, &wanted);
+        let rest = line.strip_prefix("import-actions ").and_then(|l| l.strip_suffix('\n')).expect("the command's word and its line end");
+        assert!(!rest.contains('\n'));
+        assert_eq!(parse_imports(rest), Some((path.to_path_buf(), wanted)));
+        assert_eq!(parse_imports("2 m1-2:a /p/A.scala"), None);
+        assert_eq!(parse_imports("1 x1-2:a /p/A.scala"), None);
+        assert_eq!(parse_imports("1 m1-2:a%4 /p/A.scala"), None);
+        assert_eq!(parse_imports("0 /p/A.scala"), Some((PathBuf::from("/p/A.scala"), Vec::new())));
+    }
 }

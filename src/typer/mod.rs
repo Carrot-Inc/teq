@@ -4563,7 +4563,11 @@ impl<'a> Worker<'a> {
     /// That `name` is not found: dependent where an import in scope whose path did not resolve
     /// could bind it (`ImportTarget::Unresolved`, a wildcard but for the names its clause leaves
     /// out), as scalac resolves it through the import to its error.
-    pub(super) fn not_found_error(&mut self, name: crate::intern::Name, span: Span, msg: String) {
+    /// `wanted` is what the place wanted of the name, a term or a type, which the report keeps
+    /// with the name for a quick fix that imports it (`note_missing`); none for an import's own
+    /// path.
+    pub(super) fn not_found_error(&mut self, name: crate::intern::Name, span: Span, msg: String, wanted: Option<crate::source::MissingKind>) {
+        let made = self.diags.items.len();
         let unknown = (0..self.import_count()).any(|i| {
             let imp = self.import_at(i);
             matches!(imp.target, ImportTarget::Unresolved) && imp.name.map_or_else(|| !self.import_hides(imp, name), |n| n == name)
@@ -4577,6 +4581,22 @@ impl<'a> Worker<'a> {
             self.dependent_error(span, msg);
         } else {
             self.error(span, msg);
+            if let Some(kind) = wanted {
+                self.note_missing(made, name, kind);
+            }
+        }
+    }
+
+    /// Keeps with the one report made since `made` the name it says is missing
+    /// (`Diagnostic::missing`); a library body's report, which no edit of the program fixes,
+    /// keeps none.
+    pub(super) fn note_missing(&mut self, made: usize, name: crate::intern::Name, kind: crate::source::MissingKind) {
+        if self.diags.items.len() != made + 1 || self.is_body_file(self.env.file) {
+            return;
+        }
+        let name = self.name_ref(name).into();
+        if let Some(d) = self.diags.items.last_mut() {
+            d.missing = crate::source::MissingName(Some(Box::new(crate::source::Missing { name, kind })));
         }
     }
 

@@ -605,7 +605,22 @@ definitions, references, hovers, document and workspace symbols, implementations
 callers and callees of a method, grouped by their enclosing definition), completion and signature help, and
 publishes diagnostics after each edit (an unused import as a hint, with a quick fix removing it: scalac's own
 edit, CheckUnused's, which deletes the statement, keeps its one used selector or drops the unused ones with
-their commas). A definition into a library goes to its source, read from the jar's sources jar, or
+their commas). An error that an import would fix carries quick fixes that add it, each titled as the import it
+writes and placed where completion's import goes: for a name not found, the imports completion offers for that
+name out of scope, in its order, those that name a type where a type is wanted and a term or a class where a term
+is, where the document does not spell that name anywhere else; for a member a selection lacks (`42.asGlyph`), the import of each extension method of that name, in an object
+of the program or at the top level of one of its packages, that the selection would then find for its receiver.
+An object's extension is imported with the object (`import lib.Glyphs.*`), which also brings what else of it the
+file goes on to use, where the document spells no name the object holds anywhere else and the object has no
+`implicit` member; else by its own name (`import lib.Glyphs.asGlyph`), as a package's top-level extension always
+is, where the document does not spell that name anywhere else: an import could change what such a use means.
+What counts is the text: every identifier and operator of the document (an operator's assignment form `+=` for
+`+`, a prefix `-` for `unary_-`), but the names its own errors say are missing. A use that is not written is not
+seen: an `apply` or an `update` (`c(0)`, `c(0) = x`), a `for` comprehension's `map`, `flatMap` or `withFilter`
+taken from an extension, an interpolator's method.
+The receiver is read from the error's range: an operator written infix gets its fix where its operand stands in
+parentheses, a name between backquotes none.
+A definition into a library goes to its source, read from the jar's sources jar, or
 into teq's own standard library, shown in read-only documents where navigation works as in a source, and
 completion and signature help too in the standard library's. A jar's sources jar is found beside the jar, in
 coursier's cache (where `sbt updateClassifiers` and Metals put it) or in teq's own cache: once a project's session
