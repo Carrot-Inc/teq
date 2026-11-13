@@ -33,7 +33,8 @@ Categories, neg suite (scalac rejects; lines with `// error` are the expected er
   accepts     teq accepts the program: a soundness or strictness gap unless the construct is
               outside the subset
   oos         teq fails on a construct left out on purpose (detail: which one), or the test needs a file
-              compiled by an older scalac (`_c3.0.0`)
+              compiled by an older scalac (`_c3.0.0`), or it is a test of a later compiler's feature that the
+              tracked scalac refuses at the same line as teq (`inline-trait`: by teq's message and that line)
   syntax      teq fails while parsing (detail: message); syntax outside the subset or a parser gap
   std         teq cannot find a library name the test relies on (detail: name)
   crash/hang  teq exits with another code, panics or exceeds the time limit
@@ -147,6 +148,12 @@ OOS_MESSAGES = [
     ("local-val", "a local val needs an initializer"),
     ("val-type", "a val needs a type or an initializer"),
 ]
+
+# teq's words for a modifier a definition cannot take, and the line of an `inline trait`: a feature of a compiler
+# later than the tracked scalac, which refuses that line as a syntax error (the corpus's inline traits and its
+# specialized traits, which are inline traits). A test is out of scope by the message AND the line it stands at.
+INLINE_MODIFIER = "modifier inline is not allowed for this definition"
+INLINE_TRAIT = re.compile(r"\binline\s+(?:(?:sealed|open|final|abstract|private|protected|transparent)\s+)*trait\b")
 
 SYNTAX_PREFIXES = (
     "expected ", "unexpected ", "unterminated ", "unclosed ", "unmatched ", "malformed ", "number too large",
@@ -350,6 +357,17 @@ def expected_error_lines(files):
     return lines
 
 
+def inline_trait_line(diag):
+    """Whether the line the diagnostic stands at declares an `inline trait`."""
+    try:
+        with open(diag.group(1), encoding="utf-8", errors="replace") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return False
+    n = int(diag.group(2))
+    return 0 < n <= len(lines) and bool(INLINE_TRAIT.search(lines[n - 1]))
+
+
 def defined_names(files):
     names = set()
     for f in files:
@@ -416,6 +434,8 @@ def classify(test):
     if not errors:
         return "crash", "exit 1 without an error line", out
     first = errors[0].group(5)
+    if first == INLINE_MODIFIER and inline_trait_line(errors[0]):
+        return "oos", "inline-trait", out
     for bucket, needle in OOS_MESSAGES:
         if needle in first:
             return "oos", bucket, out

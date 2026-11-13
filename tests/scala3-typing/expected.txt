@@ -1453,57 +1453,57 @@ neg/inline-overload.scala	same
 neg/inline-override.scala	accepts	
 neg/inline-param-unstable-path.scala	subset	1/2 lines
 neg/inline-parameter-override.scala	accepts	
-neg/inline-trait-body-class-case.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-class-extends-inline-trait.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-class-generic.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-class-params.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-class-return.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-class-sealed.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-class-simple.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-override-def-final.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-override-val-final.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-override-var.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-private-name-collision.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-trait-inline.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-trait-parameter.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-trait-simple.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-body-trait-term-parameters.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-child-overrides-parent-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-method-method-needs-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-method-param.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-method-val-param-needs-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-method-var-param-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-method-var-param.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-val-param-method-2.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-val-param-method.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-val-param-param.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-val-param-val-param-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-var-param-method-2.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-var-param-method.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-var-param-param.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clash-var-param-var-param.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clashing-parent-members.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clashing-parent-methods.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-clashing-parent-val-params.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-co-nested.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-cross-reference-defined-after.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-double-nested-class.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-infinite-inline-triangle-cycle.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-inline-overrides-non-inline-retained-inline.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-inline-val-constant-value.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-nested-class-outside-ref.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-nested-class-parameter-passing.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-opaque-type-fail.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-override-private-member-deleted.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-parent-trait-param-access.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-self-inline-anonymous-class.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-self-inline-three-cycle.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-self-inline-two-cycle.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-self-specialization-loop.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/inline-trait-self-type-missing-parent.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-self-type-problems.scala	superset	+4 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-supercall-into-trait.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/inline-trait-uninitialized-value-should-warn.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-class-case.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-class-extends-inline-trait.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-class-generic.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-class-params.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-class-return.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-class-sealed.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-class-simple.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-override-def-final.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-override-val-final.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-override-var.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-private-name-collision.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-trait-inline.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-trait-parameter.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-trait-simple.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-body-trait-term-parameters.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-child-overrides-parent-missing-override.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-method-method-needs-override.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-method-param.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-method-val-param-needs-override.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-method-var-param-missing-override.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-method-var-param.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-val-param-method-2.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-val-param-method.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-val-param-param.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-val-param-val-param-missing-override.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-var-param-method-2.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-var-param-method.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-var-param-param.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clash-var-param-var-param.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clashing-parent-members.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clashing-parent-methods.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-clashing-parent-val-params.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-co-nested.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-cross-reference-defined-after.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-double-nested-class.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-infinite-inline-triangle-cycle.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-inline-overrides-non-inline-retained-inline.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-inline-val-constant-value.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-nested-class-outside-ref.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-nested-class-parameter-passing.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-opaque-type-fail.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-override-private-member-deleted.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-parent-trait-param-access.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-self-inline-anonymous-class.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-self-inline-three-cycle.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-self-inline-two-cycle.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-self-specialization-loop.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/inline-trait-self-type-missing-parent.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-self-type-problems.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-supercall-into-trait.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/inline-trait-uninitialized-value-should-warn.scala	oos	inline-trait	--language experimental.inlineTraits
 neg/inline-unstable-accessors.scala	accepts	
 neg/inline-val-in-inline-method.scala	same	
 neg/inline-val.scala	same	
@@ -1779,35 +1779,35 @@ neg/skolemize.scala	subset	1/2 lines
 neg/source-import-3-1-migration.scala	same	
 neg/source-import.scala	same	
 neg/spaces-vs-tabs.scala	subset	1/5 lines
-neg/specialized-trait-anonymous-class-breaks-rules.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-bad-type-param.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-banned-covariance.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-drops-specialized-qualifier.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-exhaustivity-check-2.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-exhaustivity-check.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-infinite-inline.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-inline-method-missing-specialized.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-inlining-causes-implementation-required-loop-bad-manual.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-nested-specialized.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-no-path-dependent.scala	same		--language experimental.specializedTraits
-neg/specialized-trait-no-regression-overrides-nothing.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-anonymous-class-breaks-rules.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-bad-type-param.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-banned-covariance.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-drops-specialized-qualifier.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-exhaustivity-check-2.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-exhaustivity-check.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-infinite-inline.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-inline-method-missing-specialized.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-inlining-causes-implementation-required-loop-bad-manual.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-nested-specialized.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-no-path-dependent.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-no-regression-overrides-nothing.scala	oos	inline-trait	--language experimental.specializedTraits
 neg/specialized-trait-not-inline.scala	std	Specialized	--language experimental.specializedTraits
-neg/specialized-trait-opaque-type-fail.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-overload.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-question-mark-in-inheritance.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-question-mark-interface.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits,experimental.inlineTraits
-neg/specialized-trait-question-mark.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-scoped-inside-object-deep-nesting.scala	same		--language experimental.specializedTraits
-neg/specialized-trait-sealed-cross-file	superset	+3 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-self-type-problems.scala	superset	+4 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-opaque-type-fail.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-overload.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-question-mark-in-inheritance.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-question-mark-interface.scala	oos	inline-trait	--language experimental.specializedTraits,experimental.inlineTraits
+neg/specialized-trait-question-mark.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-scoped-inside-object-deep-nesting.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-sealed-cross-file	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-self-type-problems.scala	oos	inline-trait	--language experimental.specializedTraits
 neg/specialized-trait-specialized-incorrect-usage.scala	same		--language experimental.specializedTraits
 neg/specialized-trait-specialized-incorrect-usage2.scala	std	Specialized	--language experimental.specializedTraits
 neg/specialized-trait-specialized-incorrect-usage3.scala	std	Specialized	--language experimental.specializedTraits
-neg/specialized-trait-trait-extends-specialized-trait-no-param.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-trait-extends-specialized-trait.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-variance-not-allowed.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-variance-nothing.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-neg/specialized-trait-variant-warns.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-trait-extends-specialized-trait-no-param.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-trait-extends-specialized-trait.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-variance-not-allowed.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-variance-nothing.scala	oos	inline-trait	--language experimental.specializedTraits
+neg/specialized-trait-variant-warns.scala	oos	inline-trait	--language experimental.specializedTraits
 neg/specializing-inline.scala	same	
 neg/spread-patterns.scala	same	
 neg/static-implements.scala	accepts	
@@ -1917,9 +1917,9 @@ neg/tracked2.scala	syntax	expected {}, found {}
 neg/trailing-comma-pattern.scala	oos	val-type
 neg/trailing-comma-pattern2.scala	oos	val-type
 neg/trailingCommas.scala	syntax	expected identifier, found {}
-neg/trait-extends-inline-trait-indirectly.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/trait-extends-inline-trait-with-params-uninitialized.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-neg/trait-inline-trait-clashing.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/trait-extends-inline-trait-indirectly.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/trait-extends-inline-trait-with-params-uninitialized.scala	oos	inline-trait	--language experimental.inlineTraits
+neg/trait-inline-trait-clashing.scala	oos	inline-trait	--language experimental.inlineTraits
 neg/trait-java-enum.scala	accepts	
 neg/traitParamsMixin.scala	same	
 neg/traitParamsTyper.scala	same	
@@ -4376,102 +4376,102 @@ pos/inline-null-wrapper.scala	rejects	Ambiguous overload. The overloaded alterna
 pos/inline-rewrite.scala	accepts	
 pos/inline-separate	std	App
 pos/inline-t2425.scala	std	App
-pos/inline-trait-1-simple-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-2-generic-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-3-trait-params.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-3-trait-with-params.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-4-no-inner-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-accesses-parent-val-param.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-abstract-def.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-context-bound.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-curried-params.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-extension-method.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-final.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-generic-singleton.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-generic.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-implicit.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-inline-abstract.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-inline-compiletime.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-inline-transparent.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-inline.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-lambda.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-local-val.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-params.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-parens.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-simple.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-def-using.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-lazy-val.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-macro	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-macro-suspend	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-rhs-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-setter.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-val-inline.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-body-val.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-clash-type-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-class-type-generic.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-extends-abstract-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-extends-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-extends-non-inline.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-extends-trait-with-parameters.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-extends-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-generic-array.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-inheritance-multiple-override.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-inheritance-multiple.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-inheritance-single-abstract-class-override.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-inheritance-single-abstract-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-inheritance-single-object-override.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-inheritance-single-object.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-inter-trait-inlining-no-cycle.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-multiple-files	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-multiple-stages	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-multiple-stages-defs	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-multiple-stages-generic-defs	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-multiple-stages-inline-traits	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-object-not-primitive.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-opaque-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-override-overload.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-pair-example.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-parameter-passing.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-parent-method-call.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-parent-ref.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-private-evidence.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-private-nested-inline-must-delete.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-private-this-nowarn.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-return-ref.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-self-inline-two-cycle-no-use.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-self-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-generic-context-bound.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-generic-inferred-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-generic-invariant.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-generic-parameter.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-generic-refinement-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-generic-singleton.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-generic-type-bounds.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-generic-variant.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-currying.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-default-value.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-implicit.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-using-nameless.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-using.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-val-private.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-val-protected.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-val.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parameters-var.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-parentheses.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-sealed.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-signature-simple.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-super-call-non-overridden.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-usage-anonymous-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-usage-extension.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-usage-inner.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-usage-param-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-usage-return-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-usage-type-bound.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-usage-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-val-def-inner-class-inner-class-owners-init.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-val-def-inner-class-inner-class-owners.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
-pos/inline-trait-y-equals-x-inlined-nowarn.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-1-simple-trait.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-2-generic-trait.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-3-trait-params.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-3-trait-with-params.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-4-no-inner-class.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-accesses-parent-val-param.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-abstract-def.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-context-bound.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-curried-params.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-extension-method.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-final.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-generic-singleton.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-generic.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-implicit.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-inline-abstract.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-inline-compiletime.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-inline-transparent.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-inline.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-lambda.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-local-val.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-params.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-parens.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-simple.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-def-using.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-lazy-val.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-macro	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-macro-suspend	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-rhs-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-setter.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-val-inline.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-body-val.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-clash-type-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-class-type-generic.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-extends-abstract-class.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-extends-class.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-extends-non-inline.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-extends-trait-with-parameters.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-extends-trait.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-generic-array.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-inheritance-multiple-override.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-inheritance-multiple.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-inheritance-single-abstract-class-override.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-inheritance-single-abstract-class.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-inheritance-single-object-override.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-inheritance-single-object.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-inter-trait-inlining-no-cycle.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-multiple-files	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-multiple-stages	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-multiple-stages-defs	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-multiple-stages-generic-defs	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-multiple-stages-inline-traits	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-object-not-primitive.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-opaque-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-override-overload.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-pair-example.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-parameter-passing.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-parent-method-call.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-parent-ref.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-private-evidence.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-private-nested-inline-must-delete.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-private-this-nowarn.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-return-ref.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-self-inline-two-cycle-no-use.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-self-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-context-bound.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-inferred-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-invariant.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-parameter.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-refinement-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-singleton.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-type-bounds.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-variant.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-currying.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-default-value.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-implicit.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-using-nameless.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-using.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-val-private.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-val-protected.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-val.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-var.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-parentheses.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-sealed.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-signature-simple.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-super-call-non-overridden.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-usage-anonymous-class.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-usage-extension.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-usage-inner.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-usage-param-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-usage-return-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-usage-type-bound.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-usage-type.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-val-def-inner-class-inner-class-owners-init.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-val-def-inner-class-inner-class-owners.scala	oos	inline-trait	--language experimental.inlineTraits
+pos/inline-trait-y-equals-x-inlined-nowarn.scala	oos	inline-trait	--language experimental.inlineTraits
 pos/inline-unapply.scala	accepts	
 pos/inline-val-constValue-1.scala	accepts	
 pos/inline-val-constValue-2.scala	accepts	
@@ -4911,41 +4911,41 @@ pos/spec-traits.scala	accepts
 pos/spec-vector.scala	accepts	
 pos/spec.scala	accepts	
 pos/specialize10.scala	accepts	
-pos/specialized-trait-anonymous-class-as-param.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-body-macro	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-class-extends-specialized-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-exhaustivity-check-3.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-exhaustivity-no-problem.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-function-takes-specialized-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-inline-anonymous-class-defn-nowarn.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-inline-def-specialized.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-inlining-causes-implementation-required-loop-bad-manual-no-usage.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-inlining-causes-implementation-required-loop-bad.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-inlining-causes-implementation-required-loop-without-implementation-fine.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-inlining-causes-implementation-required.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-inlining-causes-specialization.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-multiple-stages-specialized-numeric.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-object-extends-specialized-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-opaque-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-original-diamond.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-parameter-passing-as-named.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-partial-complete-specialization-with-return-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-partial-specialization-self-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-partial-specialization-with-argument-passing.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-partial-specialization-with-body.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-partial-specialization.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-processing-order-matters.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-question-mark-non-specialized-allowed.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-self-as-param.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-self-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-simplest-implicit-type-name.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-simplest.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-specialized-context-bound.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-supercall-non-overridden.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-val-parameter.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-var-parameter.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-very-specialized-list.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
-pos/specialized-trait-with-param.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-anonymous-class-as-param.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-body-macro	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-class-extends-specialized-trait.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-exhaustivity-check-3.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-exhaustivity-no-problem.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-function-takes-specialized-trait.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-inline-anonymous-class-defn-nowarn.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-inline-def-specialized.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-implementation-required-loop-bad-manual-no-usage.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-implementation-required-loop-bad.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-implementation-required-loop-without-implementation-fine.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-implementation-required.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-specialization.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-multiple-stages-specialized-numeric.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-object-extends-specialized-trait.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-opaque-type.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-original-diamond.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-parameter-passing-as-named.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-partial-complete-specialization-with-return-type.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-partial-specialization-self-type.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-partial-specialization-with-argument-passing.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-partial-specialization-with-body.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-partial-specialization.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-processing-order-matters.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-question-mark-non-specialized-allowed.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-self-as-param.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-self-type.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-simplest-implicit-type-name.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-simplest.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-specialized-context-bound.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-supercall-non-overridden.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-val-parameter.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-var-parameter.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-very-specialized-list.scala	oos	inline-trait	--language experimental.specializedTraits
+pos/specialized-trait-with-param.scala	oos	inline-trait	--language experimental.specializedTraits
 pos/specs2-failure.scala	rejects	type mismatch
 pos/spurious-overload.scala	std	App
 pos/staleSymbol.scala	accepts	
@@ -5759,7 +5759,7 @@ pos/tracked.scala	accepts
 pos/trailing-comma-pattern.scala	accepts	
 pos/trailingCommas	accepts	
 pos/trait-access.scala	accepts	
-pos/trait-extends-inline-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/trait-extends-inline-trait.scala	oos	inline-trait	--language experimental.inlineTraits
 pos/trait-parents.scala	accepts	
 pos/traits.scala	accepts	
 pos/traits_1.scala	accepts	
