@@ -59,6 +59,15 @@ pub struct InlineState {
     /// While a search's kept tree is copied to a new site (`resolve_given_searching`'s replay):
     /// the kept site's position and the new one's, which a copied node standing at the first takes.
     pub copy_respan: Option<((crate::source::FileId, crate::source::Span), (crate::source::FileId, crate::source::Span))>,
+    /// What the copy under way takes of a cast (`CastCopy`): all of it but around an argument's
+    /// copy for a proxy (`Worker::copy_for_proxy`) or for a call the inlining phase expands
+    /// (`bare_trees`).
+    pub copy_casts: CastCopy,
+    /// The trees standing for the parameters and the receiver of the call the inlining phase is
+    /// expanding (`BoundCall::bare`): typed before the workers' merge, where the type a cast was
+    /// written with stays with its worker, they are copied at each use without the casts' marks,
+    /// so that the phase reads the same of them at every number of workers.
+    pub bare_trees: FxMap<TExprId, ()>,
     pub depth: u32,
     /// Whether the last expansion's value is a block of the receiver's and the arguments'
     /// bindings around the body's expansion, for the capture (`capture::InlineCall::binds`).
@@ -366,6 +375,10 @@ impl InlineState {
             copy_locals: _,
             // Set around one copy (a search's replay).
             copy_respan: _,
+            // Set around one copy (an argument's, for its uses).
+            copy_casts: _,
+            // Of the entries of `args` the phase's own call wrote.
+            bare_trees: _,
             // Kept by a local of the code that wrote the entry (a proxy, a binder, a local
             // `inline val`) or by an expression, neither of which a body typed on its own
             // names; what an `inline val` was evaluated to is read again after its body.
@@ -560,6 +573,8 @@ impl InlineState {
             // ends: the merge runs between the items, where none is under way.
             copy_locals: _,
             copy_respan: _,
+            copy_casts: _,
+            bare_trees: _,
             depth: _,
             last_binds: _,
             walks: _,
@@ -629,6 +644,30 @@ pub(super) enum Reads {
     /// `Inliner.paramBinding`: what a by-value parameter's reference stands for, the argument's
     /// own type where that is a singleton's on an idempotent path.
     Binding,
+    /// `Binding`, for a by-value parameter of the call the inlining phase is expanding: a cast is
+    /// read as the phase reads it after the workers' merge, whether its layer's record is there
+    /// (`Worker::cast_layer`): a cast to no known type, no constant, at every number of workers,
+    /// as dotty's binding of the widened type has none (`Inliner.paramBindingDef`).
+    KeptBinding,
+}
+
+impl Reads {
+    /// Whether the reader is a by-value parameter's binding, which takes no constant from a cast.
+    fn binds(self) -> bool {
+        matches!(self, Reads::Binding | Reads::KeptBinding)
+    }
+}
+
+/// What a copy takes of a cast that keeps no node of its own (`Worker::copy_expr`).
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum CastCopy {
+    /// Its mark and its layer's record (`Worker::cast_layer`).
+    #[default]
+    Whole,
+    /// Its mark alone: a cast to no type a reader knows, which is no constant.
+    Mark,
+    /// Nothing: the tree under it.
+    Bare,
 }
 
 #[derive(Clone, Copy)]
@@ -747,6 +786,11 @@ pub(super) struct BoundCall {
     pub this_proxy: Option<SymId>,
     proxies: Vec<SymId>,
     givens: Vec<SymId>,
+    /// The call is the one the inlining phase is expanding, kept where it was typed: its
+    /// arguments are bound without a cast on them being read (`InlineState::bare_trees`).
+    kept: bool,
+    /// The trees it put into `InlineState::bare_trees`.
+    bare: Vec<TExprId>,
     result_names: Option<SymId>,
     outer_proxies: Vec<(SymId, Option<SymId>)>,
     paths_mark: usize,
@@ -1495,6 +1539,9 @@ impl<'a> Worker<'a> {
             this_proxy: None,
             proxies: Vec::new(),
             givens: Vec::new(),
+            // The phase's own call, its body not entered yet (`expand_inline_call` counts it).
+            kept: self.inlining.running && self.inline.depth == 1,
+            bare: Vec::new(),
             result_names: None,
             outer_proxies: Vec::new(),
             paths_mark: 0,
@@ -1559,6 +1606,10 @@ impl<'a> Worker<'a> {
                     }
                     if self.is_stable(r) && !widened_this {
                         self.inline.args.insert(proxy, InlineArg { expr: r, ty: this_ty, source: None });
+                        if bound.kept {
+                            self.inline.bare_trees.insert(r, ());
+                            bound.bare.push(r);
+                        }
                         bound.this_arg = Some(proxy);
                     } else {
                         bound.stmts.push((0, TStmt::Val(proxy, r)));
@@ -1623,8 +1674,19 @@ impl<'a> Worker<'a> {
                             Type::Class(c, _) if Some(c) == self.b.cons_tuple => solved,
                             _ => {
                                 let normalized = self.normalize(solved);
-                                self.widen_lit(normalized)
+                                // An `inline` parameter's reference is its argument's tree: one kept
+                                // for a cast in it (`bind_parameter`) is read with its own type.
+                                if is_inline && !bound.kept && self.holds_cast(te) { normalized } else { self.widen_lit(normalized) }
                             }
+                        };
+                        // The argument's singleton type stands for a parameter that is not `inline`
+                        // only where the argument is an idempotent path, which a cast is not
+                        // (`computeParamBindings`); otherwise its proxy has `argtpe.widen`.
+                        let t = if !is_inline && !bound.kept && (self.holds_cast(te) || !self.expr_purity(te).at_least(super::elaborate::Purity::IDEMPOTENT_PATH)) {
+                            let widened = self.widen_path(t);
+                            self.widen_lit(widened)
+                        } else {
+                            t
                         };
                         if t == ERROR || self.is_bottom_after_erasure(t) { local_ty } else { t }
                     }
@@ -1817,8 +1879,27 @@ impl<'a> Worker<'a> {
         // the interpreter can evaluate is bound to its value too, marked so that the
         // typing of the body does not read it as a constant of the language.
         let fold = self.part(Part::Fold);
-        let binding = (!repeated).then(|| if is_macro { self.fold_structural(te).map(|v| (v, true)) } else { self.binding_constant(te, !by_name && !inline) }).flatten();
+        // An `inline` parameter stands for its argument's tree, which each reader reads by its
+        // own rule (`read_constant`): a cast is read by its type there, so an argument that
+        // holds one where a constant is read from (`holds_cast`), or under which the fold read
+        // one, is bound as it is written, never as the constant under it nor as what the
+        // interpreter evaluates it to.
+        // The arguments of a call the inlining phase expands are bound by their shape alone, a cast
+        // on them unread (`BoundCall::kept`).
+        let kept = bound.kept;
+        let casts = self.inline.cast_reads;
+        let binding = (!repeated)
+            .then(|| match (is_macro, kept) {
+                (true, _) => self.fold_structural(te).map(|v| (v, true)),
+                (false, true) => self.binding_constant(te, (!by_name && !inline).then_some(Reads::KeptBinding), false),
+                (false, false) => self.binding_constant(te, (!inline).then_some(Reads::Binding), inline),
+            })
+            .flatten();
+        let met_cast = !is_macro && !kept && (self.inline.cast_reads != casts || self.holds_cast(te));
+        let cast = inline && met_cast;
+        let binding = binding.filter(|_| !cast);
         let constant = binding.map(|(v, _)| v);
+        let written = te;
         let te = match binding {
             // A path that is no pure one stands for the parameter itself (`binding_constant`).
             Some((_, false)) => te,
@@ -1835,7 +1916,7 @@ impl<'a> Worker<'a> {
                 }
                 lit
             }
-            None if !is_macro && !repeated => match self.fold_by_eval(te) {
+            None if !is_macro && !repeated && !cast => match self.fold_by_eval(te) {
                 Some(v) => {
                     let lit = self.literal_expr(v);
                     self.prog.copy_span(te, lit);
@@ -1858,7 +1939,16 @@ impl<'a> Worker<'a> {
                 Some(v) if !by_name && !inline && self.prog.expr(te).is_constant() && !self.prog.is_widened(te) => self.types.lit(v),
                 _ => local_ty,
             };
-            self.inline.args.insert(proxy, InlineArg { expr: te, ty, source: None });
+            // A parameter that is not `inline` takes no constant from a cast: its reference is
+            // dotty's proxy of the widened type (`paramBindingDef`), a by-name one's a call of
+            // it. Where its argument stands for it at each use as it is written, the uses copy a
+            // tree whose casts say no type (`copy_for_proxy`).
+            let expr = if !inline && met_cast && te == written { self.copy_for_proxy(te) } else { te };
+            self.inline.args.insert(proxy, InlineArg { expr, ty, source: None });
+            if kept {
+                self.inline.bare_trees.insert(expr, ());
+                bound.bare.push(expr);
+            }
         } else {
             bound.stmts.push((at as u32 + 1, TStmt::Val(proxy, te)));
         }
@@ -1894,6 +1984,9 @@ impl<'a> Worker<'a> {
         for &p in &bound.proxies {
             self.inline.args.remove(&p);
             self.inline.param_bindings.remove(&p);
+        }
+        for e in bound.bare.drain(..) {
+            self.inline.bare_trees.remove(&e);
         }
         for &g in &bound.givens {
             self.inline.args.remove(&g);
@@ -2313,7 +2406,8 @@ impl<'a> Worker<'a> {
         }
         let arg = *self.inline.args.get(&s)?;
         let part = self.body_part(Part::Copy);
-        let copied = self.copy_expr(arg.expr);
+        let bare = !self.inline.bare_trees.is_empty() && self.inline.bare_trees.contains_key(&arg.expr);
+        let copied = if bare { self.copy_casts_as(arg.expr, CastCopy::Bare) } else { self.copy_expr(arg.expr) };
         self.part_end(part);
         self.inline.copies.push((copied, s));
         // The copy stands where the proxy stood, so it carries the proxy's type: a mirror
@@ -2888,6 +2982,14 @@ impl<'a> Worker<'a> {
         if self.prog.is_spread(e) {
             self.prog.mark_spread(id);
         }
+        // A cast that keeps no node of its own: its mark and its layer's record (`cast_layer`), or
+        // what the copy under way takes of it (`InlineState::copy_casts`).
+        if self.prog.is_cast(e) && self.inline.copy_casts != CastCopy::Bare {
+            self.prog.mark_cast(id);
+            if let Some(&layer) = self.ascription_constants.get(&e).filter(|_| self.inline.copy_casts == CastCopy::Whole) {
+                self.ascription_constants.insert(id, layer);
+            }
+        }
         if self.prog.is_ascribed(e) {
             self.prog.mark_ascribed(id);
         }
@@ -2959,14 +3061,19 @@ impl<'a> Worker<'a> {
     /// argument the parameter's type, so the constant type is the folded constant, which the
     /// marks of an ascription or a plain inline call widen (`widened_constant`).
     ///
-    /// `by_value` for a parameter that is neither `inline` nor by name, whose reference dotty
-    /// makes the argument's own type only where that is a singleton's on an idempotent path
-    /// (`Reads::Binding`): a cast is none.
-    fn binding_constant(&mut self, e: TExprId, by_value: bool) -> Option<(LitVal, bool)> {
+    /// `by_value` for a parameter that is not `inline` (by value or by name), whose reference
+    /// dotty makes the argument's own type only where that is a singleton's on an idempotent path:
+    /// the reader's kind (`Reads::Binding`, `Reads::KeptBinding`), to which a cast is none.
+    /// `inline` for one that is, whose argument is read as the typer folded it where it was
+    /// written.
+    fn binding_constant(&mut self, e: TExprId, by_value: Option<Reads>, inline: bool) -> Option<(LitVal, bool)> {
         use super::elaborate::Purity;
-        let read = |t: &mut Self, x: TExprId| match by_value {
-            true => t.read_constant(x, Reads::Binding),
-            false => t.fold_constant(x),
+        let read = |t: &mut Self, x: TExprId| match (by_value, inline) {
+            (Some(binding), _) => t.read_constant(x, binding),
+            // An `inline` parameter's argument, as the typer folded it where it was written: an
+            // operation's operands by `ConstFold`'s rule, a cast among them by its type.
+            (None, true) => t.read_constant(x, Reads::Operand),
+            (None, false) => t.fold_constant(x),
         };
         let path = |t: &Self, x: TExprId| matches!(t.prog.expr(x), TExpr::Local(_) | TExpr::Static(_) | TExpr::Field(..));
         if path(self, e) {
@@ -3011,6 +3118,36 @@ impl<'a> Worker<'a> {
     /// by its own type and never by the tree under it.
     pub(super) fn read_constant(&mut self, e: TExprId, reads: Reads) -> Option<LitVal> {
         self.fold_tree(e, false, Some(reads)).or_else(|| if self.dialect.interpreted_constants { self.fold_by_eval(e) } else { None })
+    }
+
+    /// A copy of the argument `e` whose casts keep their marks and lose their layers' records:
+    /// `cast_layer` then reads each as a cast to no known type, which is no constant to any
+    /// reader, whatever type it was written with.
+    fn copy_for_proxy(&mut self, e: TExprId) -> TExprId {
+        self.copy_casts_as(e, CastCopy::Mark)
+    }
+
+    /// A copy of `e` that takes `mode` of its casts (`InlineState::copy_casts`).
+    fn copy_casts_as(&mut self, e: TExprId, mode: CastCopy) -> TExprId {
+        let outer = std::mem::replace(&mut self.inline.copy_casts, mode);
+        let copy = self.copy_expr(e);
+        self.inline.copy_casts = outer;
+        copy
+    }
+
+    /// Whether the argument `e` holds a cast that keeps no node of its own (`Program::cast_bits`)
+    /// where a constant is read from: on the node itself, on a block's result, on an operation's
+    /// operands.
+    fn holds_cast(&self, e: TExprId) -> bool {
+        if self.prog.is_cast(e) {
+            return true;
+        }
+        match self.prog.expr(e) {
+            TExpr::Block(_, r) => self.holds_cast(r),
+            TExpr::Unary(_, a) | TExpr::ToStr(a, _) => self.holds_cast(a),
+            TExpr::Prim(_, a, b) => self.holds_cast(a) || self.holds_cast(b),
+            _ => false,
+        }
     }
 
     /// Where the outermost layer of the node `e` is a cast that keeps no node of its own (dotty's
@@ -3175,19 +3312,24 @@ impl<'a> Worker<'a> {
         if let Some(r) = reads {
             // A cast is read by its own type (`cast_constant`), never by the tree under it; it is
             // no path, so no binding takes its type.
-            let constant = match self.cast_layer(e) {
-                Some(Some(to)) => self.cast_constant(to),
-                Some(None) => Some(None),
-                None => None,
+            let constant = if r == Reads::KeptBinding && self.prog.is_cast(e) {
+                // Whatever record its layer has, an ascription's among them.
+                Some(None)
+            } else {
+                match self.cast_layer(e) {
+                    Some(Some(to)) => self.cast_constant(to),
+                    Some(None) => Some(None),
+                    None => None,
+                }
             };
             if let Some(constant) = constant {
                 self.inline.cast_reads = self.inline.cast_reads.wrapping_add(1);
-                return if r == Reads::Binding { None } else { constant };
+                return if r.binds() { None } else { constant };
             }
         }
         // An operation's operands are its folder's to read; under a by-value binding no cast
         // answers anywhere in the argument (an operation over one is no path either).
-        let operand = reads.map(|r| if r == Reads::Binding { r } else { Reads::Operand });
+        let operand = reads.map(|r| if r.binds() { r } else { Reads::Operand });
         let literal = |t: &Self, v: LitVal| (t.dialect.interpreted_constants || !t.inline.evaluated.contains_key(&e)).then_some(v);
         Some(match self.prog.expr(e) {
             TExpr::Int(v) => return literal(self, Int(v)),
@@ -3294,7 +3436,7 @@ impl<'a> Worker<'a> {
             // A cast that keeps its node: its own type, as one that keeps none, unless an
             // ascription is written over it (the node's outer layer then, read as any is). The
             // unboxing erasure puts round an erased result is no cast of scalac's typer.
-            TExpr::Cast(_, op, to) if !matches!(op, CastOp::Adapt(..)) && !self.prog.is_widened(e) && reads.is_some_and(|r| r != Reads::Binding) => {
+            TExpr::Cast(_, op, to) if !matches!(op, CastOp::Adapt(..)) && !self.prog.is_widened(e) && reads.is_some_and(|r| !r.binds()) => {
                 let constant = self.cast_constant(to).flatten();
                 if constant.is_some() {
                     self.inline.cast_reads = self.inline.cast_reads.wrapping_add(1);

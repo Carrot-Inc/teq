@@ -1245,6 +1245,10 @@ inline_outer_this_in_type	pass	-
 inline_outer_this_overloaded	pass	-	
 inline_outer_through_block_class	fail	-	ReferenceError: $this1sivzzj_489 is not defined
 inline_outline	pass	-	
+inline_parameter_cast_argument	pass	-	
+inline_parameter_cast_block	pass	-	
+inline_parameter_cast_forwarded	pass	-	
+inline_parameter_cast_proxy	pass	-	
 inline_parameter_pure_block	pass	-	
 inline_parameter_purity	pass	-	
 inline_phase_bridge	pass	-	

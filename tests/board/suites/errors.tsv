@@ -425,6 +425,10 @@ inline_match_after_inline_val	pass	-
 inline_match_guard	pass	-	
 inline_parameter_block_path	pass	-	
 inline_parameter_block_path_final	fail	-	missing '9:25: error: (x$proxy1 : Int) is not a constant type; cannot take constValue'
+inline_parameter_cast_argument	pass	-	
+inline_parameter_cast_kept_branch	pass	-	
+inline_parameter_cast_proxy	pass	-	
+inline_parameter_cast_proxy_later	pass	-	
 inline_parameter_impure_path	pass	-	
 inline_parameter_widened_path	pass	-	
 inline_phase_cross_file	pass	-	

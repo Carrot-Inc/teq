@@ -59,6 +59,17 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   3 configurations, 12 files, 0 lints, 0 files rewritten in 2400 ms`; a time of ten seconds or more reads `75.0 s`).
   On a terminal the line of a configuration's start is written over itself with the seconds it has stood
   ([teq fix](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
+- A transparent inline method reads its `inline` parameter's argument where the parameter is read, with a cast
+  written on it, as scalac reads it: `transparent inline def pick(inline b: Boolean) = inline if b then 1 else 2`
+  given `flag.asInstanceOf[true]` takes its first branch whatever `flag` holds, and given
+  `true.asInstanceOf[Boolean]` is refused (a cast to `Boolean` is no constant), where the value under the cast was
+  read; so through a transparent method that passes the argument on, a block
+  (`{ val x = flag; x.asInstanceOf[true] }`) and an operation over the cast. Its parameter that is not `inline`
+  takes no constant from a cast to a singleton type or to a class, and a by-value one none from a call whose
+  result type is a singleton: an `inline match` on it takes its other case, an `inline if` is refused. An inline
+  method that is not transparent reads its arguments as before, but its by-value parameter no longer reads through
+  an ascription over a cast or a cast to a union or an intersection in a build on one worker: it did there, and
+  not in a build on several.
 
 ## 0.1.10 (2026-11-13)
 

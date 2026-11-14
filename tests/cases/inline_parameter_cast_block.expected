@@ -1,0 +1,21 @@
+inlineIf, a block whose result is a local under a cast to the singleton: 100
+selector, a block whose result is a local under a cast to the singleton: nine
+component, a block whose result is a local under a cast to the singleton: nine
+inlineIf, a local of a call under a cast to the singleton: 100
+selector, a local of a call under a cast to the singleton: nine
+selector, a local under a cast to a path's type: nine
+component, a local under a cast to a path's type: nine
+selector, a local under a cast to Boolean: other
+component, a local under a cast to Boolean: other
+inlineIf, a block with a local method, ending in a cast to the singleton: 100
+selector, a block with a local method, ending in a cast to the singleton: nine
+inlineIf, a lazy local under a cast to the singleton: 100
+selector, a lazy local under a cast to the singleton: nine
+inlineIf, a block with a statement, ending in a cast of a call: 100
+component, a block with a statement, ending in a cast of a call: nine
+selector, a block with a local method, ending in a cast to Boolean: other
+held
+a by-value parameter given a call of a singleton result type: the proxy is evaluated: other
+a by-value parameter given a call of a singleton result type takes no constant: other
+a by-value parameter given a final val's path takes its constant: nine
+a by-value parameter given a block ending in a literal takes its constant: nine

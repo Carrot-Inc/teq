@@ -1,0 +1,77 @@
+inlineIf, a cast to the singleton over its literal: 100
+inlineIf, a cast to the singleton over the other literal: 100
+inlineIf, a cast to the singleton over an ascribed literal: 100
+inlineIf, a cast to the singleton over a call: 100
+inlineIf, a cast to a path's type over an ascribed literal: 100
+inlineIf, a cast to a path's type over a call: 100
+inlineIf, a cast to the singleton over a cast to Boolean: 100
+inlineIf, a block of a cast to the singleton: 100
+inlineIf, a block with a statement ending in a cast to the singleton: 100
+inlineIf, the negation of a cast to the singleton: 200
+plainIf, a cast to the singleton over its literal: 100
+plainIf, a cast to the singleton over the other literal: 100
+plainIf, a cast to the singleton over an ascribed literal: 100
+plainIf, a cast to the singleton over a call: 100
+plainIf, a cast to a path's type over an ascribed literal: 100
+plainIf, a cast to a path's type over a call: 100
+plainIf, a cast to the singleton over a cast to Boolean: 100
+plainIf, a block of a cast to the singleton: 100
+plainIf, a block with a statement ending in a cast to the singleton: 100
+operand, a cast to the singleton over its literal: 100
+operand, a cast to the singleton over the other literal: 100
+operand, a cast to the singleton over an ascribed literal: 100
+operand, a cast to the singleton over a call: 100
+operand, a cast to a path's type over an ascribed literal: 100
+operand, a cast to a path's type over a call: 100
+operand, a cast to the singleton over a cast to Boolean: 100
+operand, a block of a cast to the singleton: 100
+operand, a block with a statement ending in a cast to the singleton: 100
+operand, the negation of a cast to the singleton: 200
+selector, a cast to Boolean over the literal: other
+selector, a cast to Boolean over an ascribed literal: other
+selector, a cast to Boolean over a call: other
+selector, a cast to Boolean over a final val: other
+selector, a cast to the singleton over its literal: nine
+selector, a cast to the singleton over the other literal: nine
+selector, a cast to the singleton over an ascribed literal: nine
+selector, a cast to the singleton over a call: nine
+selector, a cast to a path's type over an ascribed literal: nine
+selector, a cast to a path's type over a call: nine
+selector, a cast to an alias of Boolean: other
+selector, a cast to Boolean over a cast to the singleton: other
+selector, a cast to the singleton over a cast to Boolean: nine
+selector, a block of a cast to Boolean: other
+selector, a block of a cast to the singleton: nine
+selector, a block with a statement ending in a cast to the singleton: nine
+selector, a block with a statement ending in a cast to Boolean: other
+selector, a parenthesised cast to Boolean: other
+selector, the negation of a cast to the singleton: other
+guard, a cast to the singleton over its literal: nine
+guard, a cast to the singleton over the other literal: nine
+guard, a cast to the singleton over an ascribed literal: nine
+guard, a cast to the singleton over a call: nine
+guard, a cast to a path's type over an ascribed literal: nine
+guard, a cast to a path's type over a call: nine
+guard, a cast to the singleton over a cast to Boolean: nine
+guard, a block of a cast to the singleton: nine
+guard, a block with a statement ending in a cast to the singleton: nine
+guard, the negation of a cast to the singleton: other
+component, a cast to Boolean over the literal: other
+component, a cast to Boolean over an ascribed literal: other
+component, a cast to Boolean over a call: other
+component, a cast to Boolean over a final val: other
+component, a cast to the singleton over its literal: nine
+component, a cast to the singleton over the other literal: nine
+component, a cast to the singleton over an ascribed literal: nine
+component, a cast to the singleton over a call: nine
+component, a cast to a path's type over an ascribed literal: nine
+component, a cast to a path's type over a call: nine
+component, a cast to an alias of Boolean: other
+component, a cast to Boolean over a cast to the singleton: other
+component, a cast to the singleton over a cast to Boolean: nine
+component, a block of a cast to Boolean: other
+component, a block of a cast to the singleton: nine
+component, a block with a statement ending in a cast to the singleton: nine
+component, a block with a statement ending in a cast to Boolean: other
+component, a parenthesised cast to Boolean: other
+component, the negation of a cast to the singleton: other

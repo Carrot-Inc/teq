@@ -1,0 +1,22 @@
+a forwarder passes a cast to the singleton on to inlineIf: 100
+a forwarder passes a cast over a call on to inlineIf: 100
+a forwarder passes a cast to a path's type on to inlineIf: 100
+a forwarder passes a cast to Boolean on to the selector: other
+a forwarder passes a cast to the singleton on to the selector: nine
+a forwarder passes a cast to Boolean on to the component: other
+a forwarder passes a cast over a call on to the component: nine
+a forwarder casts its parameter to the singleton for inlineIf: 100
+a forwarder casts a call to the singleton for inlineIf: 100
+a forwarder casts its parameter to the singleton for the selector: nine
+a forwarder casts a literal to Boolean for the selector: other
+a by-name parameter takes no constant from a cast to the singleton: other
+a by-name parameter takes no constant from a cast to Boolean: other
+a by-value parameter takes no constant from a cast to the singleton: other
+evaluated
+evaluated
+an argument with an effect under a cast, read twice: 11
+an Int selector over a cast to the singleton 9: nine
+an Int selector over a cast of a call to 9: nine
+an Int selector over a cast to Int: other
+an Int selector over the negation of a cast to 9: minus
+an Int selector over a cast to a path's type: nine

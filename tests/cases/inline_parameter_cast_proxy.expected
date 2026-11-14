@@ -1,0 +1,52 @@
+evaluated
+byNameSelector, a call with an effect under a cast to the singleton: neither
+byNameSelector, a local of the caller under a cast to the singleton: neither
+byNameSelector, the caller's parameter under a cast to the singleton: neither
+byNameSelector, a field under a cast to the singleton: neither
+evaluated
+byNameSelector, a lazy local under a cast to the singleton: neither
+byNameSelector, a local of a literal type under a cast to Boolean: neither
+byNameSelector, the negation of a local under a cast to the singleton: neither
+byNameSelector, a block of a local under a cast to the singleton: neither
+evaluated
+byValueSelector, a call with an effect under a cast to the singleton: neither
+byValueSelector, a local of the caller under a cast to the singleton: neither
+byValueSelector, the caller's parameter under a cast to the singleton: neither
+byValueSelector, a field under a cast to the singleton: neither
+byValueSelector, a lazy local under a cast to the singleton: neither
+byValueSelector, a local of a literal type under a cast to Boolean: neither
+byValueSelector, the negation of a local under a cast to the singleton: neither
+byValueSelector, a block of a local under a cast to the singleton: neither
+evaluated
+laterByNameSelector, a call with an effect under a cast to the singleton: neither
+laterByNameSelector, a local of the caller under a cast to the singleton: neither
+laterByNameSelector, the caller's parameter under a cast to the singleton: neither
+laterByNameSelector, a field under a cast to the singleton: neither
+laterByNameSelector, a lazy local under a cast to the singleton: neither
+laterByNameSelector, the negation of a local under a cast to the singleton: neither
+laterByNameSelector, a block of a local under a cast to the singleton: neither
+evaluated
+laterByValueSelector, a call with an effect under a cast to the singleton: neither
+laterByValueSelector, a local of the caller under a cast to the singleton: neither
+laterByValueSelector, the caller's parameter under a cast to the singleton: neither
+laterByValueSelector, a field under a cast to the singleton: neither
+laterByValueSelector, a lazy local under a cast to the singleton: neither
+laterByValueSelector, the negation of a local under a cast to the singleton: neither
+laterByValueSelector, a block of a local under a cast to the singleton: neither
+evaluated
+laterByNameChoice, a call with an effect under a cast to the singleton: other
+laterByNameChoice, a local of the caller under a cast to the singleton: other
+laterByNameChoice, the caller's parameter under a cast to the singleton: other
+laterByNameChoice, a field under a cast to the singleton: other
+laterByNameChoice, a lazy local under a cast to the singleton: other
+laterByNameChoice, a local of a literal type under a cast to Boolean: taken
+laterByNameChoice, a block of a local under a cast to the singleton: other
+evaluated
+byNameComponent, a call with an effect under a cast to the singleton: neither
+byNameComponent, a local of the caller under a cast to the singleton: neither
+byNameComponent, the caller's parameter under a cast to the singleton: neither
+byNameComponent, a field under a cast to the singleton: neither
+byNameComponent, a lazy local under a cast to the singleton: neither
+byNameComponent, a local of a literal type under a cast to Boolean: neither
+byNameComponent, the negation of a local under a cast to the singleton: neither
+byNameComponent, a block of a local under a cast to the singleton: neither
