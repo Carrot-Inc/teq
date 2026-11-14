@@ -82,6 +82,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   aside, as the whole build does while the given's class is being completed, and the val is typed. Before, the
   part build could be refused with `recursive value alias needs type`. An alias given of the products there, or
   a given typed by another val that is still being typed, is refused as the whole build refuses it.
+- A type parameter whose upper bound is a refinement with a `def` or a `val` (`T <: AnyRef { def self: Int }`), and a
+  higher-kinded one applied to arguments (`F[X] <: AnyRef { def self: X }`), conforms to a refinement that asks
+  for that member, the bound written on the parameter or reached through another parameter, an intersection or
+  an alias: `def keep[T <: AnyRef { def self: Int }](t: T): AnyRef { def self: Int } = t`, and
+  `class D[G[X] <: { def self: Int }] extends C[G]` for a `class C[F[X] <: { def self: Int }]`, were refused (a type
+  mismatch, "type argument G does not conform to upper bound") and build as scalac builds them.
 
 ## 0.1.10 (2026-11-13)
 

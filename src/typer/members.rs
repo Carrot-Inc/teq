@@ -8,6 +8,19 @@ use crate::intern::{FxMap, Name};
 use crate::symbols::*;
 use crate::types::*;
 
+thread_local! {
+    /// How many refinements, on this thread, held by a type parameter's bound alone: the member
+    /// a refinement of the bound declares, where no refinement written on the type and no
+    /// class's member held (`refinement_holds`). A comparison's caller reads it before and
+    /// after to learn that the comparison held that way (`held_through_bound`).
+    static HELD_THROUGH_BOUND: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The count of refinements that held by a type parameter's bound alone on this thread.
+pub(super) fn held_through_bound() -> u64 {
+    HELD_THROUGH_BOUND.with(|n| n.get())
+}
+
 /// What a type member is through a prefix.
 #[derive(Clone, Copy, Debug)]
 pub enum MemberInfo {
@@ -2295,29 +2308,110 @@ impl<'a> Worker<'a> {
             wanted_ref @ (Refinement::Term(name, ..) | Refinement::Val(name, ..)) => {
                 let wanted = self.refinement_sig(wanted_ref);
                 let refined = if self.types.is_path(t) { self.widen_path(t) } else { t };
+                let mark = self.snapshot();
                 // A recursive refinement of `t`'s type is opened at `t`, as the wanted member was.
-                let (sig, found, owner_ty, own) = match self.refined_term_through(refined, name, t) {
-                    Some(r @ (Refinement::Term(_, s, _) | Refinement::Val(_, s, _))) => (self.refinement_sig(r), s, ANY, true),
-                    _ => {
-                        let Some((found, owner_ty)) = self.find_member(t, name) else { return false };
-                        // An overloaded member holds the refinement when one of its alternatives
-                        // qualifies (dotty's `hasMatchingMember`: `hasAltWith(qualifies)`).
-                        if let Some(alts) = self.syms.alternatives(found).map(|a| a.to_vec()) {
-                            for alt in alts {
-                                let mark = self.snapshot();
-                                let sig = self.refinement_member_sig(alt, t);
-                                if self.term_member_qualifies(wanted_ref, &wanted, sig, alt, owner_ty, name, false, parent) {
-                                    return true;
+                let written = 'member: {
+                    let (sig, found, owner_ty, own) = match self.refined_term_through(refined, name, t) {
+                        Some(r @ (Refinement::Term(_, s, _) | Refinement::Val(_, s, _))) => (self.refinement_sig(r), s, ANY, true),
+                        _ => {
+                            let Some((found, owner_ty)) = self.find_member(t, name) else { break 'member false };
+                            // An overloaded member holds the refinement when one of its alternatives
+                            // qualifies (dotty's `hasMatchingMember`: `hasAltWith(qualifies)`).
+                            if let Some(alts) = self.syms.alternatives(found).map(|a| a.to_vec()) {
+                                for alt in alts {
+                                    let mark = self.snapshot();
+                                    let sig = self.refinement_member_sig(alt, t);
+                                    if self.term_member_qualifies(wanted_ref, &wanted, sig, alt, owner_ty, name, false, parent) {
+                                        break 'member true;
+                                    }
+                                    self.rollback(&mark);
                                 }
-                                self.rollback(&mark);
+                                break 'member false;
                             }
+                            (self.refinement_member_sig(found, t), found, owner_ty, false)
+                        }
+                    };
+                    self.term_member_qualifies(wanted_ref, &wanted, sig, found, owner_ty, name, own, parent)
+                };
+                if written {
+                    return true;
+                }
+                // A type parameter has its bound's members too (`param_bound`): where neither a
+                // refinement written on `t` nor a class's member holds, the member a refinement of
+                // the bound declares may (the two are one member, met, in dotty's `goAnd` and
+                // `goRefined`: what either gives, the meet gives). It is no member of the wanted
+                // type's own refinement, so its erased parameters are held to the wanted ones'.
+                let bound = self.param_bound(refined);
+                if bound == refined {
+                    return false;
+                }
+                self.rollback(&mark);
+                match self.refined_term_through(bound, name, t) {
+                    Some(r @ (Refinement::Term(_, s, _) | Refinement::Val(_, s, _))) => {
+                        // A refinement's `var` stands here as a `val` whose symbol is mutable: the
+                        // bound's `var` is no `val`, and its `val` no `var` (a getter and a setter).
+                        let mutable = |w: &Self, x: SymId| w.syms.sym(x).mods & crate::ast::mods::MUTABLE != 0;
+                        if matches!(wanted_ref, Refinement::Val(_, w, _) if mutable(self, w) != mutable(self, s)) {
                             return false;
                         }
-                        (self.refinement_member_sig(found, t), found, owner_ty, false)
+                        let sig = self.refinement_sig(r);
+                        let held = self.term_member_qualifies(wanted_ref, &wanted, sig, s, ANY, name, false, parent);
+                        if held {
+                            HELD_THROUGH_BOUND.with(|n| n.set(n.get() + 1));
+                        }
+                        held
                     }
-                };
-                self.term_member_qualifies(wanted_ref, &wanted, sig, found, owner_ty, name, own, parent)
+                    _ => false,
+                }
             }
+        }
+    }
+
+    /// The type the term members of `t` are looked in where `t` is, or is made of, type
+    /// parameters: each parameter in a place a member is read through gives way to its upper
+    /// bound, an applied higher-kinded one to its bound applied to its arguments (dotty's
+    /// `findMember`: `go(d.info)` of a parameter's `TypeRef`, `go(tp.superType)` of an applied
+    /// one, `goParam`); the places are the type itself, the sides of an intersection, a
+    /// refinement's parent and an alias's reduct, as `go` reaches a parameter from each. A type
+    /// with no parameter in such a place is itself.
+    fn param_bound(&mut self, t: TypeId) -> TypeId {
+        self.param_bound_past(t, &mut Vec::new())
+    }
+
+    /// `param_bound` below the parameters `past` whose bounds the walk is inside: a bound that
+    /// comes back to one of them (`T <: U, U <: T`, an error where it is written) is left as
+    /// the parameter, so the walk ends.
+    fn param_bound_past(&mut self, t: TypeId, past: &mut Vec<TParamId>) -> TypeId {
+        let d = self.deref(t);
+        match self.types.get(d) {
+            Type::Param(p) | Type::AppParam(p, _) if past.contains(&p) => t,
+            ty @ (Type::Param(p) | Type::AppParam(p, _)) => {
+                let upper = match ty {
+                    Type::AppParam(_, args) => self.app_param_upper(p, args),
+                    _ => Some(self.syms.tparam(p).upper).filter(|&u| u != ANY),
+                };
+                let Some(upper) = upper else { return t };
+                past.push(p);
+                let bound = self.param_bound_past(upper, past);
+                past.pop();
+                bound
+            }
+            Type::Inter(x, y) => {
+                let (nx, ny) = (self.param_bound_past(x, past), self.param_bound_past(y, past));
+                if nx == x && ny == y { t } else { self.types.mk(Type::Inter(nx, ny)) }
+            }
+            Type::Refined(parent, r) => {
+                let np = self.param_bound_past(parent, past);
+                if np == parent { t } else { self.types.mk(Type::Refined(np, r)) }
+            }
+            Type::Alias(..) => match self.reduce_head(d) {
+                Some(reduct) => {
+                    let bound = self.param_bound_past(reduct, past);
+                    if bound == reduct { t } else { bound }
+                }
+                None => t,
+            },
+            _ => t,
         }
     }
 
@@ -2805,5 +2899,83 @@ impl InheritedNamed {
             self.names.clear();
             self.generation = now;
         }
+    }
+}
+
+#[cfg(test)]
+mod param_bound_tests {
+    use super::*;
+
+    const PROGRAM: &str = "trait Named\nobject O:\n  type Id[A] = A\n  type Selfish = AnyRef { def self: Int }\n@main def run(): Unit = println(1)\n";
+
+    fn alias(w: &mut Worker, n: &str) -> AliasId {
+        let n = w.interner.intern(n);
+        let a = (0..w.syms.aliases.len()).map(|i| AliasId(i as u32)).find(|&a| w.syms.aliases[a.idx()].name == n).expect("the alias");
+        w.complete_alias(a);
+        a
+    }
+
+    fn param(w: &mut Worker, n: &str, upper: TypeId) -> (TParamId, TypeId) {
+        let p = w.syms.new_tparam(w.interner.intern(n), 0);
+        w.syms.tparams[p.idx()].upper = upper;
+        (p, w.types.param(p))
+    }
+
+    /// The type a parameter's term members are looked in: its bound, through as many parameters
+    /// as the bounds name, the sides of an intersection, a refinement's parent and an alias's
+    /// reduct; a type with no parameter in such a place is itself; and two parameters bounded by
+    /// each other (`T <: U, U <: T`), alone and inside an intersection, end the walk at the
+    /// parameter it came back to.
+    #[test]
+    fn a_parameter_gives_way_to_its_bound_and_a_cycle_ends() {
+        crate::with_typed_program("param-bound", PROGRAM, &[], |w| {
+            let selfish = alias(w, "Selfish");
+            let refined = w.syms.aliases[selfish.idx()].rhs;
+            assert!(matches!(w.types.get(refined), Type::Refined(..)));
+            let named = (0..w.syms.classes.len()).map(|i| ClassId(i as u32)).find(|&c| w.interner.get(w.syms.class(c).name) == "Named").expect("the trait");
+            let named = w.types.class(named, &[]);
+            // `T <: AnyRef { def self: Int }`, `U <: T`, `V <: U`: each is the refinement.
+            let (_, t) = param(w, "T", refined);
+            let (_, u) = param(w, "U", t);
+            let (_, v) = param(w, "V", u);
+            assert_eq!(w.param_bound(t), refined);
+            assert_eq!(w.param_bound(v), refined);
+            // No bound, and no parameter: themselves.
+            let (_, free) = param(w, "Free", ANY);
+            assert_eq!(w.param_bound(free), free);
+            assert_eq!(w.param_bound(refined), refined);
+            let plain = w.types.mk(Type::Inter(refined, named));
+            assert_eq!(w.param_bound(plain), plain);
+            // `T & Named` and `W <: T & Named`: the refinement in the parameter's place.
+            let both = w.types.mk(Type::Inter(t, named));
+            assert_eq!(w.param_bound(both), plain);
+            let (_, w1) = param(w, "W", both);
+            assert_eq!(w.param_bound(w1), plain);
+            // A refinement over the parameter: over its bound.
+            let Type::Refined(_, r) = w.types.get(refined) else { panic!("a refinement") };
+            let over = w.types.mk(Type::Refined(t, r));
+            assert_eq!(w.param_bound(over), w.types.mk(Type::Refined(refined, r)));
+            // `Id[T]`: the alias's reduct followed; `Id[Named]` is itself.
+            let id = alias(w, "Id");
+            let through = w.types.mk(Type::Alias(id, w.types.list(&[t])));
+            assert_eq!(w.param_bound(through), refined);
+            let kept = w.types.mk(Type::Alias(id, w.types.list(&[named])));
+            assert_eq!(w.param_bound(kept), kept);
+            // `A <: B, B <: A`: the walk ends at the parameter it came back to, from either.
+            let (a, at) = param(w, "A", ANY);
+            let (_, bt) = param(w, "B", at);
+            w.syms.tparams[a.idx()].upper = bt;
+            assert_eq!(w.param_bound(at), at);
+            assert_eq!(w.param_bound(bt), bt);
+            // A parameter bounded by itself, and the cycle inside an intersection beside a bound that ends.
+            let (c, ct) = param(w, "C", ANY);
+            w.syms.tparams[c.idx()].upper = ct;
+            assert_eq!(w.param_bound(ct), ct);
+            let (d, dt) = param(w, "D", ANY);
+            let beside = w.types.mk(Type::Inter(dt, t));
+            let (_, et) = param(w, "E", beside);
+            w.syms.tparams[d.idx()].upper = et;
+            assert_eq!(w.param_bound(dt), w.types.mk(Type::Inter(dt, refined)));
+        });
     }
 }

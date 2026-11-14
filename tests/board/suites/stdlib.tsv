@@ -2060,6 +2060,10 @@ package_object_import_parent	pass	-
 package_object_parents	pass	-	
 package_val_object_accessor	pass	-	
 pair_extractor	pass	-	
+param_bound_refinement_member	fail	-	output differs
+param_bound_refinement_member_class_member	pass	-	
+param_bound_refinement_member_pattern	fail	-	output differs
+param_bound_refinement_member_two_files	fail	-	output differs
 param_bounded_by_intersection	pass	-	
 param_clauses	pass	-	
 parameterless_literal_selection	pass	-	

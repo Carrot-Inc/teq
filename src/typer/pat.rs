@@ -599,7 +599,11 @@ impl<'a> Worker<'a> {
                 // (`testNotNull`), which no type pattern takes, whatever the type a stored body's
                 // abstract pattern type comes to at an expansion.
                 let mark = self.snapshot();
+                let held_before = super::members::held_through_bound();
                 let conforms = self.is_sub(sty, t) && self.trail.len() == mark.at();
+                // The scrutinee conforms by a member that a refinement of a type parameter's
+                // bound declares, and by nothing written on its own type.
+                let conforms_through_bound = conforms && super::members::held_through_bound() != held_before;
                 self.rollback(&mark);
                 self.refine_gadt(t, sty);
                 let always = conforms && !self.scrutinee_may_be_null(sty);
@@ -635,7 +639,11 @@ impl<'a> Worker<'a> {
                 if self.inline.checking > 0 {
                     self.note_leaf_test(test, t);
                 }
-                let narrowed = if conforms && !equal { sty } else { self.pattern_binding_type(sty, t) };
+                // Temporary: a member is not yet selected through a type parameter's bound, so a
+                // scrutinee that conforms through its bound alone binds the pattern's type with
+                // its own (`T & R` for a `T <: R` met by `case r: R`), on which the member is
+                // selected; once selection reads a parameter's bound this condition goes.
+                let narrowed = if conforms && !equal && !conforms_through_bound { sty } else { self.pattern_binding_type(sty, t) };
                 let tp = self.type_pattern(inner, narrowed);
                 self.last_typed_pattern = Some((p, narrowed));
                 self.prog.add_pat(TPat::Test(test, t, tp))

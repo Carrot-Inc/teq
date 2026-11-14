@@ -307,6 +307,9 @@ opaque_selector_matchable	output differs
 overload_jdk_using	error: String cannot be instantiated
 overloaded_type_argument_kinds	error: type argument [X] =>> Int does not have the same kind as its bound
 package_extension_path	error: value pk is not a member of p
+param_bound_refinement_member	output differs
+param_bound_refinement_member_pattern	output differs
+param_bound_refinement_member_two_files	output differs
 parser_combinators_regex	error: cannot resolve import: parsing not found
 parser_combinators_sequence	error: cannot resolve import: parsing not found
 path_operations	error: not supported on JavaScript: method getProperties of java.lang.System (a Java definition without an implementation in the std's platf

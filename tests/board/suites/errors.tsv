@@ -684,6 +684,8 @@ override_nullary_loose	pass	-
 override_rules	pass	-	
 package_not_value	pass	-	
 package_private_access	pass	-	
+param_bound_refinement_member	pass	-	
+param_bound_refinement_member_argument	pass	-	
 param_clause_blank_line	pass	-	
 param_clause_next_line	pass	-	
 parens	pass	-	
