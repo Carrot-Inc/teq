@@ -20,6 +20,7 @@ mod job;
 mod jsdom;
 mod jsrunner;
 pub mod lock;
+pub mod progress;
 mod resident;
 mod run;
 mod runner;
@@ -137,7 +138,8 @@ const VERBS: &str = "  compile [project...]       type the projects' closures an
                              the lint and rewrite rules of .scalafix.conf (docs/FIX.md) over
                              the projects' sources as compile types them, the files rewritten
                              in place and the lints printed; --check rewrites nothing and
-                             exits 1 where a file would change or a lint is printed
+                             exits 1 where a file would change or a lint is printed; where
+                             the run is and how it ended, with its time, on stderr
   stage [project]            compile, then write the project's Docker stage (every project's
                              with a stage block without one) as sbt-native-packager's does
   watch <project> [options]  the project's resident on stdin and stdout, options added to its
@@ -220,6 +222,8 @@ pub fn takes(word: &str) -> bool {
 /// the daemon's own `--daemon --identity <id> --export <file>` comes without a verb. A prefix
 /// option before any word but a project verb is refused.
 pub fn run(args: &[String]) -> ! {
+    // When the verb began: what a verb's last line counts its time from (`fix::run`).
+    let began = std::time::Instant::now();
     let mut export_file: Option<PathBuf> = None;
     let mut identity: Option<String> = None;
     let (mut strict, mut daemon) = (false, false);
@@ -286,7 +290,7 @@ pub fn run(args: &[String]) -> ! {
         "run" => run::run(&export, &rest),
         "watch" | "build" => one_project(&export, &verb, &rest),
         "dev" => dev::run(export, &rest),
-        "fix" => fix::run(&export, &rest),
+        "fix" => fix::run(&export, &rest, began),
         _ => unreachable!("a project verb"),
     };
     std::process::exit(code)

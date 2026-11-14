@@ -11,7 +11,7 @@
 // exactly its lints; the exit is 1 where an error remains, else 0; a second run over
 // what the first left changes nothing and prints the same; `--check` over the input changes nothing and exits 1
 // where there is an edit or a lint. A script's case is `input.sc` and `output.sc`. A case with a `refused.txt` is one the run refuses: exit 2, that text among what it
-// prints, every file as it was. A build's case, a directory with a teq.lock, is run by `teq fix` twice (below). Then the verb's own cases (`verb`), the rules' phase over several workers (`parallel`) and the jobs' typing over several workers (`typing`), below. `--record` writes each expected.txt from
+// prints, every file as it was. A build's case, a directory with a teq.lock, is run by `teq fix` twice (below). Then the verb's own lines of a run (`told`), the verb's own cases (`verb`), the rules' phase over several workers (`parallel`) and the jobs' typing over several workers (`typing`), below. `--record` writes each expected.txt from
 // a run whose lints match their assertions, the first target's, the others held to it. Run from the repository's root:
 // `./teq interp tests/fix.scala [-- --teq <binary>] [--record] [--only <Rule/Case prefix>]`.
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
@@ -126,9 +126,10 @@ import scala.jdk.CollectionConverters.*
     if problems.isEmpty then pass += 1 else bad(name + target.suffix, problems.mkString("\n  "))
 
   // A build's case, a directory holding a teq.lock with the configurations and sources it names: `teq fix` in a copy of
-  // it, twice. The first leaves the files `output/` holds (the others as they were) and prints `expected.txt`, exit 1
-  // where an error is among it; the second, over what the first left, exits as the first and prints the same, as one
-  // run reports what the next identical one does.
+  // it, twice. The first leaves the files `output/` holds (the others as they were) and prints `expected.txt`, the
+  // verb's own lines among it with their times left out (`timeless`), exit 1 where an error is among it; the second,
+  // over what the first left, exits as the first and prints the same lints (`untold`), as one run reports what the
+  // next identical one does, and ends with nothing rewritten.
   val builds: Vector[Path] =
     Files.list(root).iterator.asScala.toVector.filter(Files.isDirectory(_)).filterNot(_.getFileName.toString == "support").sorted
       .flatMap(r => Files.list(r).iterator.asScala.toVector.filter(c => Files.exists(c.resolve("teq.lock"))).sorted)
@@ -143,12 +144,14 @@ import scala.jdk.CollectionConverters.*
       Files.copy(c.resolve(f), dir.resolve(f))
     def fixRun() = Sh(teq, "fix").in(dir).timeout(300).check(false).run()
     val r1 = fixRun()
-    val lints = withoutNote(r1.errAll())
+    val lints = timeless(withoutNote(r1.errAll()))
     val r2 = fixRun()
     val problems = scala.collection.mutable.ListBuffer.empty[String]
     val expectedStatus = if lints.linesIterator.exists(_.contains(": error: [")) then 1 else 0
     if r1.status != expectedStatus then problems += s"exit ${r1.status}, expected $expectedStatus:\n$lints"
-    if r2.status != r1.status || withoutNote(r2.errAll()) != lints then problems += s"the second run exited ${r2.status} printing\n${r2.errAll()}where the first exited ${r1.status} printing\n$lints"
+    if r2.status != r1.status || untold(withoutNote(r2.errAll())) != untold(lints) then problems += s"the second run exited ${r2.status} printing\n${r2.errAll()}where the first exited ${r1.status} printing\n$lints"
+    if !timeless(r2.errAll()).linesIterator.toVector.lastOption.exists(l => l.startsWith("teq fix: ") && l.endsWith(", 0 files rewritten in <t>")) then
+      problems += s"the second run does not end with nothing rewritten:\n${r2.errAll()}"
     for f <- files if f.toString.endsWith(".scala") do
       val output = c.resolve("output").resolve(f)
       val want = read(if Files.exists(output) then output else c.resolve(f))
@@ -161,6 +164,9 @@ import scala.jdk.CollectionConverters.*
       if lints != want then problems += s"the lints differ from expected.txt:\n${diff(want, lints)}"
     if problems.isEmpty then pass += 1 else bad(name, problems.mkString("\n  "))
 
+  if only.forall(o => "told".startsWith(o) || o.startsWith("told")) then
+    val (tp, _) = Told.run(teq, work, record, bad)
+    pass += tp
   if only.forall(o => "verb".startsWith(o) || o.startsWith("verb")) then
     val (vp, _) = Verb.run(teq, work, bad)
     pass += vp
@@ -196,6 +202,26 @@ def header(input: String, dir: Path): String =
   * rounds"): it says how the run's rules were scheduled and is no lint of a fixture's. */
 def withoutNote(err: String): String =
   err.split("\n", -1).filterNot(l => l.contains(": note: ") && l.endsWith("so the project's rules run on one worker")).mkString("\n")
+
+/** A duration as the verb's lines write one (`task::progress::duration`), at a line's end. */
+val toldTime = " in (\\d+ ms|\\d+\\.\\d s)$".r
+
+/** What a job's line says after its time of a typing done twice. */
+val typedTwice = " (typed twice: the parallel attempt gave way)"
+
+/** A run's stderr with the time of each of the verb's lines made `<t>`. */
+def timeless(err: String): String =
+  err.split("\n", -1).map { l =>
+    val (body, tail) = if l.endsWith(typedTwice) then (l.dropRight(typedTwice.length), typedTwice) else (l, "")
+    toldTime.replaceFirstIn(body, " in <t>") + tail
+  }.mkString("\n")
+
+/** A run's stderr without the verb's own lines (docs/CLI.md, "teq fix"): where each job's typing begins and its
+  * round ends, the line between the rounds, the run's last line. What is left is its lints and messages. */
+def untold(err: String): String =
+  val job = "^[^ :]+/[^ :]+: (typing( again)?( on one worker, since \\S+ may ask a symbol)?( \\(\\d+ of \\d+\\))?|\\d+ files?, \\d+ lints?, \\d+ (more )?to rewrite in .*)$".r
+  val run = "^teq fix( --check)?: .* in (<t>|\\d+ ms|\\d+\\.\\d s)$|^teq fix: \\d+ files? to rewrite; typing again what reads (it|them)$".r
+  err.split("\n", -1).filterNot(l => job.matches(l) || run.matches(l)).mkString("\n")
 
 /** The text without its leading configuration comment. */
 def withoutHeader(text: String): String =
@@ -276,6 +302,132 @@ def diff(a: String, b: String): String =
   (minus ++ plus).mkString("\n")
 
 /** The verb's own cases: `teq fix` over a lock of two JVM projects, `app` over `core` (each check named). */
+/** The verb's own lines of a run (docs/CLI.md, "teq fix"), over the build of tests/fix/Merge/SharedLints in four
+  * states of its two sources: clean, one lint, one rewrite with its second round, one type error. Each state is run by
+  * `teq fix` and by `teq fix --check` in a copy of its own, stderr no terminal: the whole of stderr, its times left
+  * out, is tests/fix/Told/<state>.txt and <state>-check.txt, stdout is empty, and the exit is the one named. Then the
+  * clean state on a pseudo-terminal (tests/support/pty_run.py, where python3 is there): the status line that replaces
+  * itself and the lines that stay, at 80, 40 and 20 columns, every status within its row and no whole line cut, a
+  * project whose name is longer than the row and one whose name has a character outside ASCII; and an interrupt and
+  * a termination while a status shows: the status erased, the process ended by the signal, and not a byte of it where
+  * stderr is a pipe. */
+object Told:
+  val states: Vector[(String, String, String, Int, Int)] = Vector(
+    // name, core's value, shared's keyword, the exit of `teq fix`, of `teq fix --check`
+    ("clean", "List.empty", "val", 0, 0),
+    ("lint", "List.empty", "var", 1, 1),
+    ("rewrite", "List()", "val", 0, 1),
+    ("typeerror", "\"no\"", "val", 2, 2))
+
+  /** A fresh copy of the build in the state of `core` and `shared`. */
+  def build(work: Path, name: String, core: String, shared: String): Path =
+    val from = Paths.get("tests/fix/Merge/SharedLints")
+    val dir = work.resolve("told-" + name)
+    Sh.remove(dir)
+    for f <- Vector("teq.lock", "a.conf", "b.conf") do
+      Files.createDirectories(dir)
+      Files.copy(from.resolve(f), dir.resolve(f))
+    Files.createDirectories(dir.resolve("core/src"))
+    Files.createDirectories(dir.resolve("shared/src"))
+    Files.writeString(dir.resolve("core/src/Core.scala"), s"object Core { val xs: List[Int] = $core }\n")
+    Files.writeString(dir.resolve("shared/src/Shared.scala"), s"// Shared by a and b.\nobject Shared { $shared counter = 1 }\n")
+    dir
+
+  def run(teq: String, work: Path, record: Boolean, bad: (String, String) => Unit): (Int, Int) =
+    var pass = 0
+    var fail = 0
+    val told = Paths.get("tests/fix/Told")
+    for (name, core, shared, fixExit, checkExit) <- states; (suffix, flags, exit) <- Vector(("", Vector(), fixExit), ("-check", Vector("--check"), checkExit)) do
+      val dir = build(work, name + suffix, core, shared)
+      val r = Sh((Vector(teq, "fix") ++ flags)*).in(dir).timeout(300).check(false).run()
+      val printed = timeless(r.errAll())
+      val file = told.resolve(name + suffix + ".txt")
+      val problems = scala.collection.mutable.ListBuffer.empty[String]
+      if r.status != exit then problems += s"exit ${r.status}, expected $exit"
+      if r.out.nonEmpty then problems += s"stdout is not empty: ${r.out}"
+      if record && problems.isEmpty then Files.writeString(file, printed)
+      else
+        val want = if Files.exists(file) then read(file) else ""
+        if printed != want then problems += s"stderr differs from $file:\n${diff(want, printed)}"
+      if problems.isEmpty then pass += 1 else { fail += 1; bad("told/" + name + suffix, problems.mkString("\n  ")) }
+    // On a terminal: each job's first line is a status line, written over itself and replaced by the job's summary;
+    // the lines that stay are the piped run's without those first lines.
+    if Sh("python3", "--version").check(false).run().status == 0 then
+      val dir = build(work, "clean-terminal", "List.empty", "val")
+      val script = Paths.get("tests/support/pty_run.py").toAbsolutePath.toString
+      // A terminal that takes the erasing sequence, whatever the suite's own `TERM` is.
+      val r = Sh("python3", script, teq, "fix").in(dir).withEnv("TERM" -> "xterm").timeout(300).check(false).run()
+      val bytes = r.out.replace("\r\n", "\n")
+      val erase = "\r\u001b[K"
+      val stay = timeless(bytes.split("\n", -1).map(l => if l.contains(erase) then l.substring(l.lastIndexOf(erase) + erase.length) else l).mkString("\n"))
+      val want = read(told.resolve("clean.txt")).linesIterator.filterNot(_.contains(": typing")).mkString("", "\n", "\n")
+      val statuses = Vector("teq fix: preparing the rules", "a/compile: typing (1 of 3)", "a/compile: rules over 1 of 1 file", "b/compile: typing (3 of 3)").map(erase + _)
+      val problems = scala.collection.mutable.ListBuffer.empty[String]
+      if r.status != 0 then problems += s"exit ${r.status}"
+      if stay != want then problems += s"the lines that stay differ from the piped run's without its headers:\n${diff(want, stay)}"
+      for st <- statuses if !bytes.contains(st) do problems += s"no status line `${st.drop(erase.length)}`"
+      if bytes.split("\n").exists(l => l.endsWith(": typing (1 of 3)")) then problems += "a status line stayed as a line"
+      if problems.isEmpty then pass += 1 else { fail += 1; bad("told/terminal", problems.mkString("\n  ") + "\n" + bytes.replace("\r", "\\r").replace("\u001b", "\\e")) }
+      // The columns a status takes: a character outside ASCII counted as two.
+      def columnsOf(text: String): Int = text.map(c => if c < 128 then 1 else 2).sum
+      // A terminal's bytes: its statuses (what an erasing sequence is followed by, but the last of a row) and the
+      // lines that stay.
+      def terminal(bytes: String): (Vector[String], Vector[String]) =
+        val rows = bytes.replace("\r\n", "\n").split("\n", -1).toVector
+        val parts = rows.map(_.split(java.util.regex.Pattern.quote(erase), -1).toVector)
+        (parts.flatMap(p => p.drop(1).dropRight(1)) ++ parts.lastOption.filter(_.size > 1).map(_.last).filter(_.nonEmpty), parts.map(_.last).filter(_.nonEmpty))
+      def onTerminal(dir: Path, columns: Int, options: String*): Sh.Result =
+        Sh((Vector("python3", script, "--columns", columns.toString) ++ options ++ Vector(teq, "fix"))*).in(dir).withEnv("TERM" -> "xterm").timeout(300).check(false).run()
+      for columns <- Vector(80, 40, 20) do
+        val r = onTerminal(build(work, s"clean-$columns", "List.empty", "val"), columns)
+        val (statuses, stay) = terminal(r.out)
+        val wide = statuses.filter(columnsOf(_) >= columns)
+        val problems = scala.collection.mutable.ListBuffer.empty[String]
+        if r.status != 0 then problems += s"exit ${r.status}"
+        if wide.nonEmpty then problems += s"statuses not within the row: ${wide.mkString(" | ")}"
+        if timeless(stay.mkString("", "\n", "\n")) != want then problems += s"the lines that stay are not the piped run's whole lines:\n${diff(want, timeless(stay.mkString("", "\n", "\n")))}"
+        if columns == 20 && !statuses.contains("a/compile: typin...") then problems += s"no status cut to the row: ${statuses.mkString(" | ")}"
+        if problems.isEmpty then pass += 1 else { fail += 1; bad(s"told/terminal/$columns", problems.mkString("\n  ")) }
+      // A project's name longer than the row, and one with a character outside ASCII: cut by whole characters.
+      for (name, cut) <- Vector("a-project-with-a-name-longer-than-the-row" -> "a-project-with-a...", "p\u00e4ckchen" -> "p\u00e4ckchen/compil...") do
+        val dir = work.resolve("told-named-" + cut.takeWhile(c => c.isLetterOrDigit && c < 128))
+        Sh.remove(dir)
+        // A lock's text outside ASCII is written quoted: a key, a value, a list's item.
+        def quoting(line: String): String =
+          val (indent, rest) = line.span(_ == ' ')
+          if line.forall(_ < 128) then line
+          else if rest.endsWith(":") then indent + "\"" + rest.dropRight(1) + "\":"
+          else if rest.startsWith("- ") then indent + "- \"" + rest.drop(2) + "\""
+          else indent + rest.take(rest.indexOf(": ") + 2) + "\"" + rest.drop(rest.indexOf(": ") + 2) + "\""
+        val project = Verb.project(name, Nil).split("\n").map(quoting).mkString("", "\n", "\n")
+        for (f, text) <- Seq("teq.lock" -> Verb.lockWith(project), ".scalafix.conf" -> "rules = [DisableSyntax]\n", s"$name/src/Pot.scala" -> "object Pot { val glaze = 1 }\n") do
+          Files.createDirectories(dir.resolve(f).getParent)
+          Files.writeString(dir.resolve(f), text)
+        val r = onTerminal(dir, 20)
+        val (statuses, stay) = terminal(r.out)
+        val ok = r.status == 0 && statuses.forall(columnsOf(_) < 20) && statuses.contains(cut) && stay.exists(_.startsWith(s"$name/compile: 1 file, 0 lints, 0 to rewrite in "))
+        if ok then pass += 1 else { fail += 1; bad(s"told/terminal/name/$name", s"exit ${r.status}; statuses ${statuses.mkString(" | ")}; lines ${stay.mkString(" | ")}") }
+      // A signal while a status shows: a rule that takes twenty seconds a document holds the status up.
+      def slow(tag: String): Path =
+        val dir = work.resolve("told-slow-" + tag)
+        Sh.remove(dir)
+        val rule = "import teq.fix.*\n\nfinal class Slow extends SyntacticRule(\"Slow\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n    val until = System.nanoTime + 20000000000L\n    while System.nanoTime < until do ()\n    Patch.empty\n"
+        for (f, text) <- Seq("teq.lock" -> Verb.lockWith(Verb.project("kiln", Nil)), ".scalafix.conf" -> "rules = [\"file:rules/Slow.scala\"]\n", "rules/Slow.scala" -> rule, "kiln/src/Pot.scala" -> "object Pot { val glaze = 1 }\n") do
+          Files.createDirectories(dir.resolve(f).getParent)
+          Files.writeString(dir.resolve(f), text)
+        dir
+      for (signal, code) <- Vector("INT" -> 130, "TERM" -> 143) do
+        val r = onTerminal(slow(signal), 80, "--signal", signal, "--when", "rules over 0 of 1 file")
+        val ok = r.status == code && r.out.endsWith(erase) && terminal(r.out)._1.lastOption.exists(_.startsWith("kiln/compile: rules over 0 of 1 file"))
+        if ok then pass += 1 else { fail += 1; bad(s"told/terminal/$signal", s"exit ${r.status}, expected $code and the status erased last:\n" + r.out.replace("\r", "\\r").replace("\u001b", "\\e")) }
+      // Where stderr is a pipe the signal ends the run with nothing written after the whole line that was last.
+      for (signal, code) <- Vector("INT" -> 130, "TERM" -> 143) do
+        val piped = Sh("python3", script, "--pipe", "--signal", signal, "--when", "typing (1 of 1)", teq, "fix").in(slow("pipe-" + signal)).timeout(300).check(false).run()
+        if piped.status == code && piped.out.endsWith("kiln/compile: typing (1 of 1)\n") && !piped.out.contains("\u001b") && !piped.out.contains("\r") then pass += 1
+        else { fail += 1; bad(s"told/pipe/$signal", s"exit ${piped.status}, expected $code and nothing after the whole line:\n" + piped.out.replace("\r", "\\r").replace("\u001b", "\\e")) }
+    else println("told/terminal: skipped, no python3 for the pseudo-terminal")
+    (pass, fail)
+
 object Verb:
   val lock: String = lockOf(Nil)
 
@@ -378,7 +530,7 @@ object Verb:
     val r1 = fix(r)
     expect("fix", r1.status == 1 && text(r, "core/src/core/Core.scala") == coreFixed && text(r, "app/src/app/App.scala") == appSource && r1.errAll().contains(varLint), s"exit ${r1.status}: ${r1.errAll()}")
     val r2 = fix(r)
-    expect("idempotent", r2.status == 1 && text(r, "core/src/core/Core.scala") == coreFixed && r2.errAll() == r1.errAll(), s"exit ${r2.status}: ${r2.errAll()}")
+    expect("idempotent", r2.status == 1 && text(r, "core/src/core/Core.scala") == coreFixed && untold(r2.errAll()) == untold(r1.errAll()), s"exit ${r2.status}: ${r2.errAll()}")
     // The jars' cache written as `teq compile` writes it, for the next run.
     val j = build(work, "jarcache")
     val cache = work.resolve("jarcache-dir")
@@ -530,8 +682,9 @@ object Verb:
     expect("shared file failure", rsh.status == 2 && rsh.errAll().contains("the rule Fail failed: java.lang.IllegalStateException: second context failed"), s"exit ${rsh.status}: ${rsh.errAll()}")
     // The verb over several workers (fix-speed's table, row 5.5): the lock's two projects, and a file two jobs read (core
     // selected twice), with the shipped rules, each job with 34 editable files so that its rounds run on the pool. At
-    // eight workers, the barrier holding four of them, each run gives the one-worker run's bytes (both streams, the exit,
-    // every file it leaves), and its record is a parallel one by `Parallel.recordProblems`: every round's documents and
+    // eight workers, the barrier holding four of them, each run gives the one-worker run's bytes (both streams, the times
+    // of the verb's own lines aside, the exit, every file it leaves), and its record is a parallel one by
+    // `Parallel.recordProblems`: every round's documents and
     // generations complete, evaluations overlapping; the same run serialized (`TEQ_FIX_PLANT=serial`) fails that check.
     val many = (0 until 33).flatMap { i =>
       Seq(f"core/src/core/C$i%02d.scala" -> s"package core\nimport scala.collection.mutable\nobject C$i { val x = $i }\n",
@@ -543,7 +696,7 @@ object Verb:
         val record = d.resolve("record.txt")
         val res = Sh((Vector(teq, "fix") ++ args)*).in(d).withEnv((Seq("TEQ_THREADS" -> w.toString, "TEQ_FIX_RECORD" -> record.toString) ++ env)*).timeout(300).check(false).run()
         val files = ("core/src/core/Core.scala" +: "app/src/app/App.scala" +: many.map(_._1)).map(f => f -> text(d, f)).toMap
-        (res.status, res.outAll(), res.errAll(), files, if Files.exists(record) then read(record).linesIterator.toVector else Vector())
+        (res.status, res.outAll(), timeless(res.errAll()), files, if Files.exists(record) then read(record).linesIterator.toVector else Vector())
       val one = go("1", 1)
       val eight = go("8", 8, "TEQ_FIX_BARRIER" -> "4")
       val serialized = go("serial", 8, "TEQ_FIX_PLANT" -> "serial")
@@ -1301,11 +1454,16 @@ object Typing:
     var fail = 0
     def expect(name: String, cond: Boolean, why: => String): Unit =
       if cond then pass += 1 else { fail += 1; bad("typing/" + name, why) }
+    // What the verb's line of a job says of a typing done twice is the worker count's, not the run's bytes: left out
+    // here, and held to the record's retried attempts by `twice`.
+    def untwice(err: String): String = err.linesIterator.map(_.stripSuffix(typedTwice)).mkString("\n")
     def sameBytes(a: Parallel.Outcome, b: Parallel.Outcome): Option[String] =
       if a.status != b.status then Some(s"exit ${b.status}, the one-worker run's ${a.status}")
       else if a.out != b.out then Some("stdout differs:\n" + diff(a.out, b.out))
-      else if a.err != b.err then Some("stderr differs:\n" + diff(a.err, b.err))
+      else if untwice(a.err) != untwice(b.err) then Some("stderr differs:\n" + diff(untwice(a.err), untwice(b.err)))
       else a.files.find((f, t) => b.files.get(f) != Some(t)).map((f, t) => s"$f differs:\n" + diff(t, b.files.getOrElse(f, "")))
+    /** The verb's lines of `o` that say a typing was done twice, each by its configuration. */
+    def twice(o: Parallel.Outcome): Vector[String] = o.err.linesIterator.filter(_.endsWith(typedTwice)).map(_.takeWhile(_ != ':')).toVector
     /** The typing check of a run at `asked` typing workers: passed by the parallel engine, refused by a serial one. */
     def typing(name: String, o: Parallel.Outcome, asked: Int, retried: Set[(Int, Int)] = Set(), witness: Boolean = false): Unit =
       val problems = typingProblems(o.record, asked, retried) ++ (if witness && asked > 1 then workProblems(o.record) else Vector())
@@ -1550,14 +1708,16 @@ object Typing:
       Sh(teq, "compiler", "check", "lib/macros.scala", "--products", "lib-products", "--target", "jvm", "--std=scala-library").in(d).timeout(300).check(true).run()
       val record = d.resolve("record.txt")
       val r = Sh((Vector(teq, "fix") ++ args)*).in(d).withEnv((Seq("TEQ_FIX_RECORD" -> record.toString) ++ env)*).timeout(300).check(false).run()
-      val err = r.errAll().linesIterator.filterNot(_.startsWith("fix: ")).mkString("\n")
+      val err = timeless(r.errAll()).linesIterator.filterNot(_.startsWith("fix: ")).mkString("\n")
       Parallel.Outcome(r.status, r.outAll(), err, twoFiles.map((f, _) => f -> read(d.resolve(f))).toMap, if Files.exists(record) then read(record).linesIterator.toVector else Vector())
     val verbs = counts.map(t => verb(s"w$t", Seq(), "TEQ_THREADS" -> t.toString))
     val vOne = verbs.head
     expect("later-job", vOne.status == 0 && vOne.files("a/src/a/A.scala") == "package a\nobject A { val empty: List[Int] = List.empty }\n" && vOne.files("b/src/p/Edit.scala") == editFixed,
       s"exit ${vOne.status}\n${vOne.err}")
+    expect("later-job/told", twice(vOne).isEmpty && vOne.err.linesIterator.contains("b/compile: typing (2 of 2)"), vOne.err)
     for (o, t) <- verbs.zip(counts).drop(1) do
       expect(s"later-job/w$t/bytes", sameBytes(vOne, o).isEmpty, sameBytes(vOne, o).getOrElse(""))
+      expect(s"later-job/w$t/told", twice(o) == Vector("b/compile", "b/compile"), o.err)
       // The job b's: the one whose attempts give way.
       val bJob = attemptsOf(o.record).find(_.outcome == "retried").map(_.job).getOrElse(-1)
       typing(s"later-job/w$t/typing", o, t, retried = Set((bJob, 1), (bJob, 2)))

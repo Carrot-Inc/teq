@@ -9,10 +9,11 @@
 //! are a part of one run (`engine::run`), its rules on workers of their own.
 
 use super::export::{Configuration, Export, Key};
-use crate::fix::engine::{self, Job, Part, Setup};
+use super::progress::Progress;
+use crate::fix::engine::{self, Job, Part, Setup, Told};
 use std::path::{Path, PathBuf};
 
-pub fn run(export: &Export, args: &[String]) -> i32 {
+pub fn run(export: &Export, args: &[String], began: std::time::Instant) -> i32 {
     let flags = match crate::fix::cli::flags(args) {
         Ok(f) => f,
         Err(e) => {
@@ -135,14 +136,28 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
         eprintln!("teq fix: cannot work from {}: {}", export.root.display(), e);
         return 2;
     }
+    // From here the run tells where it is and how it ended (`Told`): a refusal below ends with the last line's twin.
+    // Under a switch that has the engine write to stderr while a round goes (docs/FIX.md, "Debugging a rule"), in
+    // whole lines on a terminal too: a status line would share its row with the switch's.
+    let traced = ["TEQ_FIX_TRACE", "TEQ_FIX_TREE", "TEQ_SERIAL_TRACE"].iter().any(|k| std::env::var_os(k).is_some());
+    let told = Told::new(if traced { Progress::stderr_lines() } else { Progress::stderr() }, began, check);
+    let code = work(export, &jobs, confs, &files, &cwd, &threads, rules, check, &told);
+    told.stopped_at(code);
+    code
+}
+
+/// The planned jobs run: each one's generators and typing arguments, then the one run of all parts (`engine::run`).
+#[allow(clippy::too_many_arguments)]
+fn work(export: &Export, jobs: &[(Key, Vec<String>, Vec<PathBuf>, Option<String>)], confs: Vec<(Option<String>, crate::fix::config::Conf, PathBuf)>, files: &[PathBuf], cwd: &Path, threads: &[String], rules: Option<Vec<String>>, check: bool, told: &Told) -> i32 {
+    let progress = &told.progress;
     let env = std::env::vars().filter(|(k, _)| k == "SOURCE_VERSION").collect();
     let mut engine_jobs = Vec::new();
-    for (key, own, generated, file) in &jobs {
+    for (key, own, generated, file) in jobs {
         let closure = export.closure(key);
         match super::generators::run(export, &closure, export.path(&export.classes(key)), &env) {
             Ok(notes) => {
                 for n in notes {
-                    eprintln!("{}", n);
+                    progress.line(&n);
                 }
             }
             Err(e) => {
@@ -150,7 +165,8 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
                 return 2;
             }
         }
-        let typing = match export.typing_args_with(key, &|_| {}) {
+        // A jar that is fetched is announced as `teq compile` announces it.
+        let typing = match export.typing_args_with(key, &|line| progress.line(line)) {
             Ok(t) => t,
             Err(e) => {
                 eprintln!("teq fix: {}: {}", key, e);
@@ -166,7 +182,7 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
         args.extend(threads.iter().cloned());
         let roots: Vec<String> = own.iter().map(|r| export.relative(&export.path(r))).collect();
         let generated = generated.iter().map(|g| export.relative(g)).collect();
-        engine_jobs.push((file.clone(), Job { key: key.to_string(), args, roots: Some(roots), files: (!files.is_empty()).then(|| files.clone()), generated }));
+        engine_jobs.push((file.clone(), Job { key: key.to_string(), args, roots: Some(roots), files: (!files.is_empty()).then(|| files.to_vec()), generated }));
     }
     // A file argument names an input of the selection: a source its projects' own roots hold that the program reads
     // (their exclusions applied, what a generator writes not), not merely a path under a root.
@@ -176,18 +192,18 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
             .flat_map(|(_, j)| engine::program_paths(j).into_iter().filter(|p| j.owns(p)))
             .filter_map(|p| crate::source::canonicalize(Path::new(&p)).ok())
             .collect();
-        for f in &files {
+        for f in files {
             if !inputs.contains(f) {
-                let at = crate::source::canonicalize(&cwd).ok().and_then(|c| f.strip_prefix(c).ok().map(Path::to_path_buf)).unwrap_or_else(|| f.clone());
+                let at = crate::source::canonicalize(cwd).ok().and_then(|c| f.strip_prefix(c).ok().map(Path::to_path_buf)).unwrap_or_else(|| f.clone());
                 eprintln!("teq fix: {} is no source of the projects selected (not among the inputs they compile)", at.display());
                 return 2;
             }
         }
     }
-    let display = (export.root != cwd).then(|| (export.root.clone(), cwd.clone()));
+    let display = (export.root != cwd).then(|| (export.root.clone(), cwd.to_path_buf()));
     // One run, each configuration file's jobs a part under its rules.
     let parts = confs.into_iter().map(|(file, conf, config_dir)| Part { conf, config_dir, jobs: engine_jobs.iter().filter(|(f, _)| *f == file).map(|(_, j)| j.clone()).collect() }).collect();
-    engine::run(Setup { rules, check, display }, parts)
+    engine::run(Setup { rules, check, display, told: Some(told) }, parts)
 }
 
 /// The source roots of a project's configuration that are its own: its `sources` less what its generators write.

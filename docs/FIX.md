@@ -319,13 +319,15 @@ is the first line alone.
   removals may edit (an import a rewrite made unused, as `Nil` rewritten `List.empty` leaves `import scala.Nil`);
   any other edit then is exit 2, the rule rewriting its own output. In the second round a file the first left as it
   was reads alike, so only the semantic rules run over it again (another file's edits may leave its imports
-  unused), the others' results being the first round's. A run that edits nothing types once.
+  unused), the others' results being the first round's. A run that edits nothing types once. `teq fix` says on
+  stderr where each typing begins and each round ends, and the second round as what it is (docs/CLI.md, "teq fix").
 - Each program is typed as `teq compiler check` types it, over compile's workers: `--threads` (or `TEQ_THREADS`), else
   compile's count for that round's text (one under 512 KiB or where one unit holds over half of it, else the cores up
   to eight), and by one worker where a rule that may ask a symbol is configured ("The rule API"); the unused imports and the expansions are the merged typer's, as one worker's. A parallel attempt that
   gives way (a macro's run that changed state other runs share, two diagnostics at one place) is the round's: its
   program is typed again by one worker from the round's texts, nothing of the attempt kept and the rules not configured
-  again, so that the output is the one-worker run's; the record and the trace say so, nothing else does. A typing waits
+  again, so that the output is the one-worker run's; the record and the trace say so, and `teq fix`'s line of that
+  configuration (`typed twice`, docs/CLI.md). A typing waits
   for every rule worker started to be ready, and the rules for the typing's end. Where the system gives one of the
   typing's threads no thread (the address space bounded: a body phase's or an inlining phase's worker, a merge thread),
   the attempt is given up as above and the round typed by one worker, the record naming the thread; a rule worker it

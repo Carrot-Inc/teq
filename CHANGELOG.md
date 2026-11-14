@@ -53,6 +53,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   such methods that call each other, and one that calls itself, are refused as scalac refuses them (`recursive use
   of outer needs an explicit result type`). Two such methods of one block with a value
   or a given defined between them are not covered yet: that call still builds the program it built before.
+- `teq fix` says where it is and how it ended, on stderr: a line where the typing of each configuration begins
+  (`app/compile: typing (1 of 3)`) and one where its round ends (`app/compile: 12 files, 0 lints, 1 to rewrite in
+  840 ms`), a second round as what it is, and a last line with the result and the time, a clean run's too (`teq fix:
+  3 configurations, 12 files, 0 lints, 0 files rewritten in 2400 ms`; a time of ten seconds or more reads `75.0 s`).
+  On a terminal the line of a configuration's start is written over itself with the seconds it has stood
+  ([teq fix](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
 
 ## 0.1.10 (2026-11-13)
 

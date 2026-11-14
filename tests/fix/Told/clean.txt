@@ -1,0 +1,7 @@
+a/compile: typing (1 of 3)
+a/compile: 1 file, 0 lints, 0 to rewrite in <t>
+core/compile: typing (2 of 3)
+core/compile: 1 file, 0 lints, 0 to rewrite in <t>
+b/compile: typing (3 of 3)
+b/compile: 1 file, 0 lints, 0 to rewrite in <t>
+teq fix: 3 configurations, 2 files, 0 lints, 0 files rewritten in <t>

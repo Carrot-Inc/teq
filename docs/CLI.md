@@ -162,7 +162,27 @@ lint); 1 when `--check` finds an edit or a lint, or an error-severity lint remai
 project, file, rule or setting, a configuration teq does not read, a program that does not type, an analysis that
 is unavailable, a rule that fails, edits of two rules that overlap, or a file that cannot be written. `--check`
 writes nothing, names each file it would rewrite and prints the lints of the files as they are (scalafix's
-`--check`), where a fixing run prints those of the files it writes, at their lines. A second run after a fixing run changes nothing. `--threads n`
+`--check`), where a fixing run prints those of the files it writes, at their lines. A second run after a fixing run changes nothing.
+All of this is on stderr, and stdout stays empty. On stderr too the run says where it is and how it ended: a line
+where the typing of each configuration begins, `a/compile: typing (1 of 3)` (`typing on one worker, since <Rule> may
+ask a symbol` where a rule's questions have it typed so), and one where its round ends, `a/compile: 12 files, 0 lints,
+1 to rewrite in 840 ms`, with its own files, their lints and those the rules edit (`(typed twice: the parallel attempt
+gave way)` where it was); where the rules edit, `teq fix: 1 file to rewrite; typing again what reads it` and the same
+two lines for each configuration typed again (`typing again`, `0 more to rewrite`); after the lints, the last line,
+`teq fix: 3 configurations, 12 files, 1 lint (1 error), 1 file rewritten in 2400 ms` (`teq fix --check: … 1 file
+would be rewritten in …`), the time since the command began, in whole milliseconds below ten seconds and in seconds
+from there (`75.0 s`). A program that does not type ends the run with `teq fix: a/compile does not type (1 error);
+nothing rewritten, in 260 ms` after its errors, any other refusal with `teq fix: stopped; nothing rewritten, in …`
+after its message (`stopped while writing` where a file was replaced before another could not be); a refusal of the command's arguments,
+before anything runs, prints its message alone. Where stderr is a terminal the line of a configuration's start is
+written over itself, with the seconds it has stood and then the rules' progress (`a/compile: rules over 12 of 40
+files, 3 s`), and gives its place to the round's line: the lines that stay are the others. (A `TERM=dumb` terminal
+and a Windows console get the whole lines, and so does a run under `TEQ_FIX_TRACE` or `TEQ_FIX_TREE`, whose own lines
+then keep their rows, the trace's total after the last line; what a rule itself prints goes where the rule writes it.)
+The line written over itself is held within the terminal's row, one column short of its width: where it is longer its
+text is cut by whole characters, `...` in their place, and the seconds stay (`app/compile: typ..., 14 s`); a line that
+stays is never cut. An interrupt or a termination while that line shows erases it, and the run ends by the signal as
+it did before, with no last line. `teq compiler fix` prints none of these lines. `--threads n`
 (or `--threads=n`) is compile's option, handed to every program the run types, over a project's own `threads`: the
 workers that type each program and those the rules run on (docs/FIX.md, "Patches, suppressions and rounds"); without
 it `TEQ_THREADS`, then compile's count for each program typed.

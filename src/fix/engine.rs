@@ -18,17 +18,156 @@ use super::nodes;
 use super::plan::{self, Plan, Printed};
 use super::service::{Answer as SemAnswer, Ask, SemQuery, SemReply};
 use crate::source::{FileId, SourceFile, Span};
+use crate::task::progress::{counted, duration, Progress};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 /// What a run asks beside its parts: the rules, whether it only checks.
-pub struct Setup {
+pub struct Setup<'a> {
     /// `--rules`, which replaces each configuration's `rules`.
     pub rules: Option<Vec<String>>,
     pub check: bool,
     /// Where the run works (the build's root) and the directory its paths print from, where they differ.
     pub display: Option<(PathBuf, PathBuf)>,
+    /// The verb's lines of the run (`teq fix`); `teq compiler fix` tells none.
+    pub told: Option<&'a Told>,
+}
+
+/// The lines `teq fix` tells of its run (docs/CLI.md, "teq fix"), on the verb's reporter: each job where its typing
+/// begins and where it ends, a second round as what it is, and the run's last line, with the time since the verb began.
+pub struct Told {
+    pub progress: Progress,
+    began: std::time::Instant,
+    check: bool,
+    ended: std::cell::Cell<bool>,
+}
+
+impl Told {
+    pub fn new(progress: Progress, began: std::time::Instant, check: bool) -> Told {
+        Told { progress, began, check, ended: std::cell::Cell::new(false) }
+    }
+
+    /// The run's last line: `teq fix: <what> in <time>`, a check's `teq fix --check: <what> in <time>`.
+    fn end(&self, what: &str) {
+        let verb = if self.check { "teq fix --check" } else { "teq fix" };
+        self.progress.line(&format!("{}: {} in {}", verb, what, duration(self.began.elapsed())));
+        self.ended.set(true);
+    }
+
+    /// The last line of a run that a refusal ended (exit 2), where the run has not told its own.
+    pub fn stopped_at(&self, code: i32) {
+        if code == 2 && !self.ended.get() {
+            self.end("stopped; nothing rewritten,");
+        }
+    }
+}
+
+/// A job's line where its typing begins: `a/compile: typing (1 of 3)` with its place among the run's jobs, `a/compile:
+/// typing again` in round two. `asker`: the rule that may ask a symbol, for which the round is typed by one worker.
+fn typing_line(key: &str, place: Option<(usize, usize)>, asker: Option<&str>) -> String {
+    let how = match asker {
+        Some(rule) => format!(" on one worker, since {} may ask a symbol", rule),
+        None => String::new(),
+    };
+    match place {
+        Some((k, of)) => format!("{}: typing{} ({} of {})", key, how, k, of),
+        None => format!("{}: typing again{}", key, how),
+    }
+}
+
+/// How far a job's rules have come, the status line of a terminal.
+fn rules_line(key: &str, done: usize, of: usize) -> String {
+    format!("{}: rules over {} of {}", key, done, counted(of, "file", "files"))
+}
+
+/// A job's line where its round ends: its documents, their lints, those the rules edit (`more` of round two's), the
+/// round's time, and whether the round was typed twice.
+fn job_line(key: &str, (files, lints, edited): (usize, usize, usize), again: bool, took: std::time::Duration, twice: bool) -> String {
+    let more = if again { " more" } else { "" };
+    let tail = if twice { " (typed twice: the parallel attempt gave way)" } else { "" };
+    format!("{}: {}, {}, {}{} to rewrite in {}{}", key, counted(files, "file", "files"), counted(lints, "lint", "lints"), edited, more, duration(took), tail)
+}
+
+/// A round's counts for its line (`job_line`): its documents, their lints as the configuration's filters leave them,
+/// and the documents the rules edit.
+fn job_counts(outcomes: &[Outcome]) -> (usize, usize, usize) {
+    (outcomes.len(), outcomes.iter().map(|o| o.plan.lints.len()).sum(), outcomes.iter().filter(|o| !o.plan.edits.is_empty()).count())
+}
+
+/// The line between the rounds: `teq fix: 1 file to rewrite; typing again what reads it`.
+fn again_line(files: usize) -> String {
+    format!("teq fix: {} to rewrite; typing again what reads {}", counted(files, "file", "files"), if files == 1 { "it" } else { "them" })
+}
+
+/// The lints of a run by severity, the errors first, those there are: `0 lints`, `1 lint (1 error)`, `3 lints (1 error,
+/// 2 warnings)`.
+fn lints_told(errors: usize, warnings: usize, infos: usize) -> String {
+    let by: Vec<String> = [(errors, "error", "errors"), (warnings, "warning", "warnings"), (infos, "info", "infos")].iter().filter(|(n, ..)| *n > 0).map(|&(n, one, many)| counted(n, one, many)).collect();
+    let all = counted(errors + warnings + infos, "lint", "lints");
+    if by.is_empty() {
+        all
+    } else {
+        format!("{} ({})", all, by.join(", "))
+    }
+}
+
+/// What the last line tells of a run that came to its end: `3 configurations, 2 files, 1 lint (1 error), 1 file
+/// rewritten`, a check's `would be rewritten`.
+fn run_line(jobs: usize, files: usize, lints: &str, written: usize, check: bool) -> String {
+    let done = if check { "would be rewritten" } else { "rewritten" };
+    format!("{}, {}, {}, {} {}", counted(jobs, "configuration", "configurations"), counted(files, "file", "files"), lints, counted(written, "file", "files"), done)
+}
+
+/// What the last line tells of a job that does not type.
+fn untyped_line(key: &str, errors: usize) -> String {
+    format!("{} does not type ({}); nothing rewritten,", key, counted(errors, "error", "errors"))
+}
+
+/// Why a round gives no outcomes: what to print, and the count of the program's errors where it does not type (none
+/// of another failure).
+struct Stop {
+    text: String,
+    errors: usize,
+}
+
+impl From<String> for Stop {
+    fn from(text: String) -> Stop {
+        Stop { text, errors: 0 }
+    }
+}
+
+/// A message of the run on stderr, the verb's status line out of its way.
+fn say(told: Option<&Told>, text: &str) {
+    if let Some(t) = told {
+        t.progress.clear();
+    }
+    eprint!("{}", text);
+}
+
+/// `rx.recv()`, a terminal's status line drawn again while it waits (`Progress::tick`).
+fn recv_told<T>(rx: &mpsc::Receiver<T>, told: Option<&Told>) -> Result<T, mpsc::RecvError> {
+    let Some(t) = told.filter(|t| t.progress.is_terminal()) else { return rx.recv() };
+    loop {
+        match rx.recv_timeout(std::time::Duration::from_millis(200)) {
+            Ok(v) => return Ok(v),
+            Err(mpsc::RecvTimeoutError::Timeout) => t.progress.tick(),
+            Err(mpsc::RecvTimeoutError::Disconnected) => return Err(mpsc::RecvError),
+        }
+    }
+}
+
+/// A round that gave no outcomes ends the run: its message (round two's after `before`), and where the job does not
+/// type the run's last line.
+fn stop(told: Option<&Told>, key: &str, e: Stop, before: Option<String>) -> i32 {
+    if let Some(b) = before {
+        say(told, &b);
+    }
+    say(told, &e.text);
+    if let (Some(t), true) = (told, e.errors > 0) {
+        t.end(&untyped_line(key, e.errors));
+    }
+    2
 }
 
 /// A configuration file and the jobs typed under it: a part of one run, its rules on rule workers of its own.
@@ -320,6 +459,14 @@ fn asks_service(infos: &[RuleInfo]) -> bool {
     plant().as_deref() != Some("asks-nothing") && infos.iter().any(|i| i.semantic && !(i.shipped && ASK_NOTHING.contains(&i.name.as_str())))
 }
 
+/// The first configured rule that may ask the service (`asks_service`), which a round typed by one worker names.
+fn asking_rule(infos: &[RuleInfo]) -> Option<&str> {
+    if !asks_service(infos) {
+        return None;
+    }
+    infos.iter().find(|i| i.semantic && !(i.shipped && ASK_NOTHING.contains(&i.name.as_str()))).map(|i| i.name.as_str())
+}
+
 /// What a question gets where its round was not typed to be asked (`ASK_NOTHING`): whatever the count it was typed
 /// at, so that a run is never answered or refused by its program's size.
 fn not_asked_refusal() -> String {
@@ -355,7 +502,7 @@ struct Outcome {
 /// Runs every part's jobs as one run: each under its configuration's rules, all planned over the files as read, their
 /// plans merged as the jobs of one part's are, and what is refused refused before anything is written; the run's exit
 /// status (docs/CLI.md, "teq fix").
-pub fn run(setup: Setup, parts: Vec<Part>) -> i32 {
+pub fn run(setup: Setup<'_>, parts: Vec<Part>) -> i32 {
     // A run tells its own entries alone (`print_dead_entries`).
     ENTRIES.lock().unwrap_or_else(|e| e.into_inner()).clear();
     // `TEQ_FIX_INPUTS=<file>`: each job's inputs as the compiler resolves them (`program_paths`: the roots, the links
@@ -555,20 +702,26 @@ fn add_time(k: usize, d: f64) {
     });
 }
 
-fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
+fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
+    let told = setup.told;
+    let jobs: usize = driven.iter().map(|d| d.part.jobs.len()).sum();
+    const PREPARING: &str = "teq fix: preparing the rules";
+    if let Some(t) = told {
+        t.progress.status(PREPARING);
+    }
     for d in driven.iter_mut() {
         let ready = std::time::Instant::now();
-        let infos = match d.pool.from.recv() {
+        let infos = match recv_told(&d.pool.from, told) {
             Ok(FromRules::Ready(_, Ok(infos), boot)) => {
                 record(format_args!("worker w=0 ready_us={} boot_us={}", now_us(), boot));
                 infos
             }
             Ok(FromRules::Ready(_, Err(e), _)) => {
-                eprintln!("{}", e.trim_end());
+                say(told, &format!("{}\n", e.trim_end()));
                 return 2;
             }
             _ => {
-                eprintln!("teq fix: the rule thread ended");
+                say(told, "teq fix: the rule thread ended\n");
                 return 2;
             }
         };
@@ -580,7 +733,10 @@ fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
         // (`state::kept`): then the run keeps the lead alone, as scalafix runs it, and says so once, at the definition.
         let seen = infos.iter().find_map(|i| i.state.as_ref());
         if let Some(k) = seen {
-            eprintln!("{}:{}:{}: note: {} keeps something between documents or reaches outside the program, so the project's rules run on one worker", shown_path(&setup.display, &k.path), k.line, k.col, k.name);
+            say(told, &format!("{}:{}:{}: note: {} keeps something between documents or reaches outside the program, so the project's rules run on one worker\n", shown_path(&setup.display, &k.path), k.line, k.col, k.name));
+            if let Some(t) = told {
+                t.progress.status(PREPARING);
+            }
         }
         d.pool.eligible = seen.is_none();
         d.pool.limit = if d.pool.eligible { requested_workers(&d.part.jobs) } else { 1 };
@@ -600,27 +756,32 @@ fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
         for (j, job) in d.part.jobs.iter().enumerate() {
             let k = d.first_job + j;
             let earlier = Earlier { job: k, results: &HashMap::new(), semantic: &d.semantic_rules };
-            match round((k, 1), job, &HashMap::new(), d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, Some(&mut d.kept)) {
+            let began = std::time::Instant::now();
+            if let Some(t) = told {
+                t.progress.begin(&typing_line(&job.key, Some((k + 1, jobs)), asking_rule(&d.infos)));
+            }
+            let mut twice = false;
+            match round((k, 1), job, &HashMap::new(), d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, Some(&mut d.kept), told, &mut twice) {
                 Ok(mut outcomes) => {
                     record_documents((k, 1), job, &d.part.conf.file, &outcomes, &d.lints);
                     d.lints.apply(&mut outcomes);
+                    if let Some(t) = told {
+                        t.progress.line(&job_line(&job.key, job_counts(&outcomes), false, began.elapsed(), twice));
+                    }
                     first.push((p, j, outcomes));
                 }
-                Err(e) => {
-                    eprint!("{}", e);
-                    return 2;
-                }
+                Err(e) => return stop(told, &job.key, e, None),
             }
         }
     }
     let mut by_path = match merge(first.iter().flat_map(|(.., o)| o.iter())) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("{}", e);
+            say(told, &format!("{}\n", e));
             return 2;
         }
     };
-    if let Some(code) = refused(by_path.values().map(|o| &o.plan)) {
+    if let Some(code) = refused(told, by_path.values().map(|o| &o.plan)) {
         return code;
     }
     // Round two, where round one edits: the files as round one leaves them, typed again, every job whose program reads
@@ -631,6 +792,9 @@ fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
     let changed: HashMap<String, String> = by_path.values().filter(|o| !o.plan.edits.is_empty()).map(|o| (o.file.clone(), plan::apply(&o.text, &o.plan.edits))).collect();
     let mut finals: HashMap<String, (String, Plan)> = HashMap::new();
     if !changed.is_empty() {
+        if let Some(t) = told {
+            t.progress.line(&again_line(changed.len()));
+        }
         let mut second: Vec<Outcome> = Vec::new();
         // The files whose round-two edit is another rule's than NoUnusedImports, with that rule.
         let mut own: HashMap<String, String> = HashMap::new();
@@ -643,7 +807,12 @@ fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
             }
             let k = d.first_job + j;
             let earlier = Earlier { job: k, results: &d.kept, semantic: &d.semantic_rules };
-            match round((k, 2), job, &changed, d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, None) {
+            let began = std::time::Instant::now();
+            if let Some(t) = told {
+                t.progress.begin(&typing_line(&job.key, None, asking_rule(&d.infos)));
+            }
+            let mut twice = false;
+            match round((k, 2), job, &changed, d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, None, told, &mut twice) {
                 Ok(mut o) => {
                     record_documents((k, 2), job, &d.part.conf.file, &o, &d.lints);
                     for x in &o {
@@ -653,30 +822,29 @@ fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
                         }
                     }
                     d.lints.apply(&mut o);
+                    if let Some(t) = told {
+                        t.progress.line(&job_line(&job.key, job_counts(&o), true, began.elapsed(), twice));
+                    }
                     second.extend(o);
                 }
-                Err(e) => {
-                    eprintln!("teq fix: the program does not type after the rules' edits ({}):", rules_of(&by_path, &changed));
-                    eprint!("{}", e);
-                    return 2;
-                }
+                Err(e) => return stop(told, &job.key, e, Some(format!("teq fix: the program does not type after the rules' edits ({}):\n", rules_of(&by_path, &changed)))),
             }
         }
         let second = match merge(second.iter()) {
             Ok(m) => m,
             Err(e) => {
-                eprintln!("{}", e);
+                say(told, &format!("{}\n", e));
                 return 2;
             }
         };
-        if let Some(code) = refused(second.values().map(|o| &o.plan)) {
+        if let Some(code) = refused(told, second.values().map(|o| &o.plan)) {
             return code;
         }
         // In the paths' order, so that the file a refusal names is the same in every run.
         let mut second: Vec<(String, Outcome)> = second.into_iter().collect();
         second.sort_by(|a, b| a.0.cmp(&b.0));
         if let Some((path, rule)) = second.iter().find_map(|(path, _)| own.get(path).map(|r| (path, r))) {
-            eprintln!("{}: the rule {} rewrites its own output: a second run would change the file again", path, rule);
+            say(told, &format!("{}: the rule {} rewrites its own output: a second run would change the file again\n", path, rule));
             return 2;
         }
         for (_, o) in second {
@@ -710,18 +878,34 @@ fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
             shown.push((path.clone(), text.clone(), l));
         }
     }
+    if let Some(t) = told {
+        t.progress.clear();
+    }
     print_dead_entries();
     print_lints(&shown);
-    let errors = shown.iter().filter(|(_, _, l)| l.severity == Severity::Error).count();
+    let of = |s: Severity| shown.iter().filter(|(_, _, l)| l.severity == s).count();
+    let errors = of(Severity::Error);
+    // The run's last line: its jobs, the files they edit between them, the lints shown, the files written.
+    let account = run_line(jobs, paths.len(), &lints_told(errors, of(Severity::Warning), of(Severity::Info)), writes.len(), setup.check);
     if setup.check {
         for (path, _) in &writes {
             eprintln!("{}: would be rewritten", shown_path(&setup.display, path));
         }
+        if let Some(t) = told {
+            t.end(&account);
+        }
         return if writes.is_empty() && shown.is_empty() { 0 } else { 1 };
     }
-    if let Err(e) = write_all(&writes) {
+    if let Err((e, replaced)) = write_all(&writes) {
         eprintln!("teq fix: {}", e);
+        // Every original as it was, or the failure came part way through the renames.
+        if let Some(t) = told {
+            t.end(if replaced == 0 { "stopped; nothing rewritten," } else { "stopped while writing," });
+        }
         return 2;
+    }
+    if let Some(t) = told {
+        t.end(&account);
     }
     if errors > 0 {
         1
@@ -794,13 +978,13 @@ fn merge<'a>(outcomes: impl Iterator<Item = &'a Outcome>) -> Result<HashMap<Stri
     Ok(out)
 }
 
-fn refused<'a>(plans: impl Iterator<Item = &'a Plan>) -> Option<i32> {
+fn refused<'a>(told: Option<&Told>, plans: impl Iterator<Item = &'a Plan>) -> Option<i32> {
     let mut any = false;
     let mut msgs: Vec<&String> = plans.flat_map(|p| p.refused.iter()).collect();
     msgs.sort();
     msgs.dedup();
     for m in msgs {
-        eprintln!("{}", m);
+        say(told, &format!("{}\n", m));
         any = true;
     }
     any.then_some(2)
@@ -867,22 +1051,22 @@ impl Earlier<'_> {
 /// in `kept`, under the job's number. `base` numbers the atomic groups as one counter over the whole run would: each document's are numbered
 /// from 1 on its worker, then offset by the groups of the documents planned before it.
 #[allow(clippy::too_many_arguments)]
-fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, semantic: bool, gen: &mut u32, base: &mut u32, names: &[String], infos: &[RuleInfo], display: &Option<(PathBuf, PathBuf)>, pool: &mut Pool<'_, '_>, earlier: Earlier<'_>, mut kept: Option<&mut HashMap<(usize, String), Results>>) -> Result<Vec<Outcome>, String> {
+fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, semantic: bool, gen: &mut u32, base: &mut u32, names: &[String], infos: &[RuleInfo], display: &Option<(PathBuf, PathBuf)>, pool: &mut Pool<'_, '_>, earlier: Earlier<'_>, mut kept: Option<&mut HashMap<(usize, String), Results>>, told: Option<&Told>, twice: &mut bool) -> Result<Vec<Outcome>, Stop> {
     let first_gen = *gen;
     // Every rule worker started is ready before a typing begins: its bootstrap types the rules' program at one worker,
     // which sets the interpreter's process-wide watch (`interp::WATCHING`) a typing of several workers depends on.
     while let Some(w) = pool.ready.iter().position(|&ready| !ready) {
-        match pool.from.recv() {
+        match recv_told(&pool.from, told) {
             Ok(FromRules::Ready(w, Ok(theirs), boot)) => {
                 if theirs != infos {
-                    return Err(format!("teq fix: the rule worker {} configured the rules otherwise than the first\n", w));
+                    return Err(format!("teq fix: the rule worker {} configured the rules otherwise than the first\n", w).into());
                 }
                 record(format_args!("worker w={} ready_us={} boot_us={}", w, now_us(), boot));
                 pool.ready[w] = true;
             }
-            Ok(FromRules::Ready(_, Err(e), _)) => return Err(format!("{}\n", e.trim_end())),
-            Ok(FromRules::Done(_)) => return Err(format!("teq fix: the results of a document of another round, before worker {} was ready\n", w)),
-            Ok(FromRules::Ended) | Err(_) => return Err("teq fix: the rule thread ended\n".to_string()),
+            Ok(FromRules::Ready(_, Err(e), _)) => return Err(format!("{}\n", e.trim_end()).into()),
+            Ok(FromRules::Done(_)) => return Err(format!("teq fix: the results of a document of another round, before worker {} was ready\n", w).into()),
+            Ok(FromRules::Ended) | Err(_) => return Err("teq fix: the rule thread ended\n".to_string().into()),
         }
     }
     let typing = std::time::Instant::now();
@@ -929,14 +1113,14 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
         })
     });
     let (attempts, docs, mut owner) = match thread {
-        Ok(t) => match typed_back.recv() {
+        Ok(t) => match recv_told(&typed_back, told) {
             Ok((attempts, docs)) => (attempts, docs, Some(t)),
             Err(_) => {
                 let _ = t.join();
-                (Vec::new(), Err("teq fix: the typing thread panicked\n".to_string()), None)
+                (Vec::new(), Err("teq fix: the typing thread panicked\n".to_string().into()), None)
             }
         },
-        Err(e) => (Vec::new(), Err(format!("teq fix: the system gave the typing thread no thread ({})\n", e)), None),
+        Err(e) => (Vec::new(), Err(format!("teq fix: the system gave the typing thread no thread ({})\n", e).into()), None),
     };
     // A round no rule asks about, or one that did not type: its typing thread ends now.
     if link.is_none() || docs.is_err() {
@@ -960,8 +1144,13 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
     let waited = waiting.elapsed();
     timed(1, typing);
     record_attempts(k, r, &attempts, waited);
+    *twice = attempts.len() > 1;
     let docs = docs?;
     let n = docs.len();
+    // The job's status goes on from its typing to its rules, its seconds the job's.
+    if let Some(t) = told {
+        t.progress.advance(&rules_line(&job.key, 0, n));
+    }
     *gen = first_gen + n as u32;
     record(format_args!("round job={} round={} docs={} first_gen={}", k, r, n, first_gen));
     // The workers this round takes, started now that its typing has ended: no worker's interpreter runs beside a typing
@@ -1011,12 +1200,12 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
             pool.to[w].send(ToRules::Doc(Box::new(d), Handout { semantic_only, asker, delay: schedule.delay(slot), first, link: link.clone() })).map_err(|_| ended())?;
             in_flight += 1;
         }
-        match pool.from.recv() {
+        match recv_told(&pool.from, told) {
             Ok(FromRules::Done(a)) => {
                 in_flight -= 1;
                 let (w, slot) = (a.asker.worker as usize, a.asker.slot as usize);
                 if a.asker.job != k as u32 || a.asker.round != r || slot >= n || slots[slot].is_some() || docs[slot].is_some() {
-                    return Err(format!("teq fix: the results of a document of another round, or twice (slot {})\n", slot));
+                    return Err(format!("teq fix: the results of a document of another round, or twice (slot {})\n", slot).into());
                 }
                 idle.push(w);
                 later_done |= slot != 0;
@@ -1036,7 +1225,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
             }
             Ok(FromRules::Ready(w, Ok(theirs), boot)) => {
                 if theirs != infos {
-                    return Err(format!("teq fix: the rule worker {} configured the rules otherwise than the first\n", w));
+                    return Err(format!("teq fix: the rule worker {} configured the rules otherwise than the first\n", w).into());
                 }
                 record(format_args!("worker w={} ready_us={} boot_us={}", w, now_us(), boot));
                 pool.ready[w] = true;
@@ -1044,14 +1233,18 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
                     idle.push(w);
                 }
             }
-            Ok(FromRules::Ready(_, Err(e), _)) => return Err(format!("{}\n", e.trim_end())),
-            Ok(FromRules::Ended) | Err(_) => return Err(ended()),
+            Ok(FromRules::Ready(_, Err(e), _)) => return Err(format!("{}\n", e.trim_end()).into()),
+            Ok(FromRules::Ended) | Err(_) => return Err(ended().into()),
         }
+        let before = consumed;
         while next < n {
             let Some(a) = slots[next].take() else { break };
             out.push(consume(*a, overrides, &earlier, names, base, kept.as_deref_mut()));
             next += 1;
             consumed += 1;
+        }
+        if let (Some(t), true) = (told, consumed > before) {
+            t.progress.advance(&rules_line(&job.key, consumed, n));
         }
     }
     // The round's last document done, its service ends with the round's link, and the round joins its typing thread.
@@ -1211,7 +1404,7 @@ struct Attempt {
 /// come back for the record. `asks`: a rule of the round may ask the service (`asks_service`), so the round is typed by
 /// one worker; under `serving`, which such a round gives, the attempt that types hands its documents and the attempts
 /// to it and its typer answers the round's rules before its exit; what comes back here is then empty.
-fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>, mut serving: Option<&mut Serving<'_>>) -> (Vec<Attempt>, Result<Vec<DocView>, String>) {
+fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>, mut serving: Option<&mut Serving<'_>>) -> (Vec<Attempt>, Result<Vec<DocView>, Stop>) {
     let (mut attempts, mut texts) = (Vec::new(), None);
     #[cfg(debug_assertions)]
     let numbers = crate::typer::thread::run(crate::shared::numbers_taken_by_others);
@@ -1226,7 +1419,7 @@ fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks: b
         assert_eq!((depth, staged, overlay), (0, 0, false), "the attempt left the loader's lock held, completions staged or an overlay entered");
     }
     // One worker takes no fork, and only a forked build gives way (`Worker::need_serial_for_state`).
-    let docs = attempt(job, overrides, semantic, asks, first_gen, display, Some(1), &mut attempts, &mut texts, serving).unwrap_or_else(|| Err("teq fix: the typing gave way at one worker\n".to_string()));
+    let docs = attempt(job, overrides, semantic, asks, first_gen, display, Some(1), &mut attempts, &mut texts, serving).unwrap_or_else(|| Err("teq fix: the typing gave way at one worker\n".to_string().into()));
     (attempts, docs)
 }
 
@@ -1422,7 +1615,7 @@ fn panic_text(p: &(dyn std::any::Any + Send)) -> String {
 /// attempt that has documents hands them over with the attempts so far and itself, as the record has it at that moment,
 /// and its typer answers the round's rules before that exit (`Serving`); it then gives back no document.
 #[allow(clippy::too_many_arguments)]
-fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>, forced: Option<usize>, attempts: &mut Vec<Attempt>, texts: &mut Option<RoundTexts>, serving: Option<&mut Serving<'_>>) -> Option<Result<Vec<DocView>, String>> {
+fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>, forced: Option<usize>, attempts: &mut Vec<Attempt>, texts: &mut Option<RoundTexts>, serving: Option<&mut Serving<'_>>) -> Option<Result<Vec<DocView>, Stop>> {
     let (began, start_us) = (std::time::Instant::now(), now_us());
     let mut args = vec!["compiler".to_string(), "check".to_string()];
     args.extend(job.args.iter().cloned());
@@ -1482,7 +1675,7 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks:
     };
     let program = match read {
         Ok(p) => p,
-        Err(e) => return Some(Err(format!("{}\n", e))),
+        Err(e) => return Some(Err(format!("{}\n", e).into())),
     };
     let program_bytes: usize = program.iter().map(|f| f.text.len()).sum();
     let mut interner = crate::intern::Interner::new();
@@ -1492,7 +1685,8 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks:
     let jars = opening.elapsed();
     let (mut files, mut asts, blocks_of, std, selected, scalajs_unlocked) = crate::parse_build(&opts, cp.as_ref(), program, &mut interner, &mut diags);
     if diags.has_errors() {
-        return Some(Err(diags.render(&files)));
+        let report = diags.report(&files);
+        return Some(Err(Stop { text: crate::source::render_shown(&report.shown, &files, &[]), errors: report.errors }));
     }
     // Compile's count, from the program's bytes and its largest unit before the jars' pseudo-files (`compile`).
     let largest_unit = crate::frontend::largest_unit_bytes(&files, &asts, &blocks_of);
@@ -1554,13 +1748,15 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks:
         None
     } else if typer.merge_failed {
         a.outcome = "refused";
-        Some(Err(typer.report_diags().0))
+        let (text, errors, _) = typer.report_diags();
+        Some(Err(Stop { text, errors }))
     } else {
         let caching = std::time::Instant::now();
         crate::save_jar_caches(&mut typer);
         a.parts[4] = caching.elapsed().as_secs_f64();
         if typer.diags.items.iter().any(|d| !d.is_warning) || typer.diags.syntax_errors {
-            Some(Err(typer.report_diags().0))
+            let (text, errors, _) = typer.report_diags();
+            Some(Err(Stop { text, errors }))
         } else {
             let documents = std::time::Instant::now();
             // Round one's SemanticDB documents under `TEQ_FIX_SEMANTICDB` (`semanticdb_dump`), each file named by the
@@ -1581,7 +1777,7 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks:
                     serve(&mut typer, &sources, &written, so_far, docs);
                     Some(Ok(Vec::new()))
                 }
-                (docs, _) => Some(docs),
+                (docs, _) => Some(docs.map_err(Stop::from)),
             }
         }
     };
@@ -1730,7 +1926,7 @@ fn print_lints(shown: &[(String, String, Printed)]) {
 
 /// Each changed file to a temporary file beside it, then each over its original: a failure before the renames
 /// leaves every original as it was.
-fn write_all(writes: &[(String, String)]) -> Result<(), String> {
+fn write_all(writes: &[(String, String)]) -> Result<(), (String, usize)> {
     let mut temps: Vec<(PathBuf, &str)> = Vec::new();
     for (path, text) in writes {
         let p = Path::new(path);
@@ -1740,7 +1936,7 @@ fn write_all(writes: &[(String, String)]) -> Result<(), String> {
                 let _ = std::fs::remove_file(t);
             }
             let _ = std::fs::remove_file(&temp);
-            return Err(format!("cannot write {}: {}", path, e));
+            return Err((format!("cannot write {}: {}", path, e), 0));
         }
         if let Ok(meta) = std::fs::metadata(p) {
             let _ = std::fs::set_permissions(&temp, meta.permissions());
@@ -1752,7 +1948,7 @@ fn write_all(writes: &[(String, String)]) -> Result<(), String> {
             for (t, _) in &temps[k..] {
                 let _ = std::fs::remove_file(t);
             }
-            return Err(format!("cannot replace {}: {}", path, e));
+            return Err((format!("cannot replace {}: {}", path, e), k));
         }
     }
     Ok(())
@@ -2133,4 +2329,50 @@ fn unread_settings(h: &Host, infos: &[RuleInfo]) -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn a_job_is_told_where_its_typing_begins() {
+        assert_eq!(typing_line("a/compile", Some((1, 3)), None), "a/compile: typing (1 of 3)");
+        assert_eq!(typing_line("a/compile", None, None), "a/compile: typing again");
+        assert_eq!(typing_line("a/compile", Some((2, 3)), Some("Asking")), "a/compile: typing on one worker, since Asking may ask a symbol (2 of 3)");
+        assert_eq!(typing_line("a/compile", None, Some("Asking")), "a/compile: typing again on one worker, since Asking may ask a symbol");
+        assert_eq!(rules_line("a/compile", 12, 40), "a/compile: rules over 12 of 40 files");
+        assert_eq!(rules_line("a/compile", 0, 1), "a/compile: rules over 0 of 1 file");
+    }
+
+    #[test]
+    fn a_job_is_told_where_its_round_ends() {
+        let took = Duration::from_millis(68);
+        assert_eq!(job_line("a/compile", (1, 0, 0), false, took, false), "a/compile: 1 file, 0 lints, 0 to rewrite in 68 ms");
+        assert_eq!(job_line("b/compile", (2, 1, 0), false, took, false), "b/compile: 2 files, 1 lint, 0 to rewrite in 68 ms");
+        assert_eq!(job_line("core/compile", (1, 0, 1), false, took, false), "core/compile: 1 file, 0 lints, 1 to rewrite in 68 ms");
+        assert_eq!(job_line("a/compile", (1, 0, 0), true, took, false), "a/compile: 1 file, 0 lints, 0 more to rewrite in 68 ms");
+        assert_eq!(
+            job_line("a/compile", (40, 3, 2), false, Duration::from_millis(12_340), true),
+            "a/compile: 40 files, 3 lints, 2 to rewrite in 12.3 s (typed twice: the parallel attempt gave way)"
+        );
+    }
+
+    #[test]
+    fn a_run_is_told_between_its_rounds_and_at_its_end() {
+        assert_eq!(again_line(1), "teq fix: 1 file to rewrite; typing again what reads it");
+        assert_eq!(again_line(3), "teq fix: 3 files to rewrite; typing again what reads them");
+        assert_eq!(lints_told(0, 0, 0), "0 lints");
+        assert_eq!(lints_told(1, 0, 0), "1 lint (1 error)");
+        assert_eq!(lints_told(1, 2, 0), "3 lints (1 error, 2 warnings)");
+        assert_eq!(lints_told(0, 1, 1), "2 lints (1 warning, 1 info)");
+        assert_eq!(lints_told(0, 0, 2), "2 lints (2 infos)");
+        assert_eq!(run_line(3, 2, "0 lints", 0, false), "3 configurations, 2 files, 0 lints, 0 files rewritten");
+        assert_eq!(run_line(1, 1, "1 lint (1 error)", 1, false), "1 configuration, 1 file, 1 lint (1 error), 1 file rewritten");
+        assert_eq!(run_line(3, 2, "0 lints", 1, true), "3 configurations, 2 files, 0 lints, 1 file would be rewritten");
+        assert_eq!(run_line(3, 2, "0 lints", 0, true), "3 configurations, 2 files, 0 lints, 0 files would be rewritten");
+        assert_eq!(untyped_line("a/compile", 1), "a/compile does not type (1 error); nothing rewritten,");
+        assert_eq!(untyped_line("a/compile", 4), "a/compile does not type (4 errors); nothing rewritten,");
+    }
 }

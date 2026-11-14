@@ -104,7 +104,7 @@ pub fn compiler_fix(args: &[String]) -> ! {
     };
     rest.extend(flags.threads_args());
     let job = Job { key: "compiler".to_string(), args: rest, roots: None, files: None, generated: Vec::new() };
-    let code = engine::run(Setup { rules: flags.rules, check: flags.check, display: None }, vec![Part { conf, config_dir, jobs: vec![job] }]);
+    let code = engine::run(Setup { rules: flags.rules, check: flags.check, display: None, told: None }, vec![Part { conf, config_dir, jobs: vec![job] }]);
     std::process::exit(code)
 }
 
