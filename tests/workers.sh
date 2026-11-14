@@ -2022,6 +2022,32 @@ shaken_as_one nested_trait_two_files tests/workers/nested_trait_two_files 1
 # read as the def of one parameter without a default that it stands for (dotty's `Desugar.valDef`).
 shaken_as_one nested_trait_abstract_vars tests/workers/nested_trait_abstract_vars.scala hammer1
 shaken_as_one nested_trait_abstract_var_inferred_prefix tests/workers/nested_trait_abstract_var_inferred_prefix.scala 2
+# The member of an intersection whose two parts overload one name is the parts' overloads met (dotty's
+# `Denotation.meet`): each alternative of the second part compared with the first's by their signatures, the
+# unmatched ones joining them in a set every worker shares. The comparison runs before the loader's lock is taken,
+# where a signature another worker is completing is waited for, and the set is published under it; made under the
+# lock, the wait stopped the build ("a wait on a cell under the loader's lock": the first program in nearly every
+# schedule at eight workers, and in four checks of five with no shaking). Each program's check under twenty
+# schedules at eight and at sixteen workers is one worker's, and its run prints scalac's lines.
+shaken_as_one meet_overloads_arity_first tests/workers/meet_overloads_arity_first k6t
+shaken_as_one meet_overloads_generic_owner tests/workers/meet_overloads_generic_owner k6t
+# A cycle through the signature of an alternative the meet compares, across two files (scalac: E044): the wait
+# that would close it gives the build to one worker, which reports the recursive use; every schedule ends with one
+# worker's error.
+shaken_refusal() {
+  local name=$1 program=$2 text=$3
+  timeout 120 "$TEQ" compiler check "$program" --threads 1 > "$work/$name.one" 2>&1
+  grep -qF -- "$text" "$work/$name.one" && ok || bad "${name}_refused: one worker does not report $text: $(head -2 "$work/$name.one" | tr '\n' ' ' | cut -c1-120)"
+  local s t differ=""
+  for s in $(seq 1 20); do
+    for t in 8 16; do
+      TEQ_SHAKE=$s timeout 120 "$TEQ" compiler check "$program" --threads $t > "$work/$name.$t" 2>&1
+      cmp -s "$work/$name.one" "$work/$name.$t" || differ="$differ $t workers under TEQ_SHAKE=$s ($(grep -m1 -E 'error|panicked' "$work/$name.$t" | cut -c1-80));"
+    done
+  done
+  [ -z "$differ" ] && ok || bad "${name}_shaken: the check differs from one worker's at$differ"
+}
+shaken_refusal meet_overloads_cycle tests/workers/meet_overloads_cycle "recursive use of at needs an explicit result type"
 
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass

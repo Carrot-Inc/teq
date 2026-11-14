@@ -2263,6 +2263,10 @@ pub struct Worker<'a> {
     /// The member whose signature this thread is completing innermost (`complete_sig`), a block's own
     /// definitions apart: the val in whose initialiser a search stands.
     pub completing_member: Option<SymId>,
+    /// The pairs of members whose alternatives this thread is comparing for an intersection's merged set
+    /// (`merged_overload`), outermost first: an alternative's result may be inferred from a body that
+    /// selects on the same intersection, and the call nested there publishes nothing.
+    pub meets_under_way: Vec<(SymId, SymId)>,
     /// The extension method the last extension application applied (`apply_extension`), which a
     /// right-associative selection reads to know which overload it took.
     pub applied_extension: Option<SymId>,
@@ -3461,6 +3465,7 @@ impl<'a> Worker<'a> {
             sames: None,
             fit_pass: None,
             completing_member: None,
+            meets_under_way: Vec::new(),
             applied_extension: None,
             quote: quoted::QuoteState::default(),
             macro_files: FxMap::default(),
@@ -3903,6 +3908,7 @@ impl<'a> Worker<'a> {
             sames: None,
             fit_pass: None,
             completing_member: None,
+            meets_under_way: Vec::new(),
             applied_extension: None,
             quote: self.quote.attach(),
             macro_files: self.macro_files.clone(),

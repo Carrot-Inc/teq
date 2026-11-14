@@ -155,6 +155,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   was written: a run with nothing to compile prints the program's output alone. A build's time of ten seconds and
   more reads in seconds (`12.3 s`)
   ([teq compile and run](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- A build on several workers no longer stops with `a wait on a cell under the loader's lock` where a method is
+  called on an intersection whose two parts overload its name (`x.at("k")` for `x: Reads & Writes`, each trait
+  with several `at`) while another worker is still typing what those overloads' signatures name: the overloads
+  are compared first, where the other worker is waited for, and the member they make is then recorded for every
+  worker. A build of three small files could stop four times in five on eight workers. Where such overloads'
+  signatures depend on each other in a cycle across files, the build is refused with one worker's error at
+  every count (`recursive use of at needs an explicit result type`), where it stopped.
 
 ## 0.1.10 (2026-11-13)
 

@@ -606,6 +606,7 @@ match_type_pattern_wildcards	fail	-	missing 'case B[_] => Int'
 match_types	pass	-	
 max_inlines_default	pass	-	
 max_inlines_toml	pass	-	
+meet_nested_in_its_own_comparison	pass	-	
 member_fallback_boundary	pass	-	
 member_fallback_clauses	pass	-	
 member_fallback_inline_error	pass	-	

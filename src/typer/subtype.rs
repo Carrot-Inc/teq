@@ -7123,8 +7123,8 @@ impl<'a> Worker<'a> {
     /// its type parameters: what tells an overload from an override across an intersection.
     /// Every input of the shape is in the reader's view before the shape is made of it (the
     /// canonicalisation rule): the parameters through
-    /// `parameters_of`, the owner's arguments by the caller, the owner's bounds, read raw from
-    /// its type parameters, translated here. `renamed`: type parameters of another method its
+    /// `parameters_of`, the owner's arguments the caller's own (it compares in its own view),
+    /// the owner's bounds, read raw from its type parameters, translated here. `renamed`: type parameters of another method its
     /// own are read as, by position, where they are as many.
     fn parameter_shape(&mut self, s: SymId, owner_ty: TypeId, renamed: Option<&[TParamId]>) -> (usize, Vec<(TypeId, bool, bool)>) {
         let sig = self.parameters_of(s);
@@ -7147,30 +7147,38 @@ impl<'a> Worker<'a> {
         (tparams, params)
     }
 
-    /// The overloaded set joining the alternatives of `a` (on `ta`) and `b` (on `tb`), made and
-    /// published under the loader's lock as the shared allocation it is (`with_loader`).
+    /// The overloaded set joining the alternatives of `a` (on `ta`) and `b` (on `tb`). Its
+    /// alternatives are compared here, before the loader's lock is taken and in the worker's own
+    /// view, where a signature another worker is completing is waited for, as dotty compares
+    /// them where the member is looked up (`Denotation.meet`, by `matches` over the alternatives'
+    /// signatures, at the 3.8.4 tag); the set, the shared allocation it is, is made and
+    /// published under the lock (`with_loader`), unless the pair has one already. A call nested
+    /// in the comparison of its own pair (`meets_under_way`: an alternative's result inferred
+    /// from a body that selects on the same intersection, its signature in progress there) takes
+    /// the pair's set where the first look finds one, as any call does (another worker's,
+    /// published whole); else it makes a set for its caller and publishes none, without the
+    /// second look: the pair's is the outer call's, made once that signature is read.
     fn merged_overload(&mut self, a: SymId, ta: TypeId, b: SymId, tb: TypeId) -> SymId {
-        self.with_loader(|w| w.merged_overload_unlocked(a, ta, b, tb))
-    }
-
-    /// Under the loader's lock, whose holder's namespace is the base: the owners' types a
-    /// worker passes in are canonicalised into the base first (exported with their parts), so
-    /// that the shapes compared below are made of base types alone, whichever worker holds the
-    /// lock (the canonicalisation rule).
-    fn merged_overload_unlocked(&mut self, a: SymId, ta: TypeId, b: SymId, tb: TypeId) -> SymId {
         if let Some(&set) = self.merged_overloads.get(&(a, b)) {
             return set;
         }
-        // Two members of single names are the two alternatives whatever their instances (their
-        // signatures do not match, or their informations do not merge); of an overloaded name,
-        // the second's alternatives that match none of the first's join them.
-        let alts = if a == b {
+        let nested = self.meets_under_way.contains(&(a, b));
+        self.meets_under_way.push((a, b));
+        let alts = self.met_alternatives(a, ta, b, tb);
+        self.meets_under_way.pop();
+        self.with_loader(|w| w.publish_merged_overload(a, b, alts, nested))
+    }
+
+    /// The alternatives of the set `merged_overload` makes: two members of single names are
+    /// the two alternatives whatever their instances (their signatures do not match, or their
+    /// informations do not merge); of an overloaded name, the second's alternatives that match
+    /// none of the first's join them.
+    fn met_alternatives(&mut self, a: SymId, ta: TypeId, b: SymId, tb: TypeId) -> Vec<SymId> {
+        if a == b {
             vec![a]
         } else if self.syms.alternatives(a).is_none() && self.syms.alternatives(b).is_none() {
             vec![a, b]
         } else {
-            let view = self.types.view_here();
-            let (ta, tb) = (self.types.translate(view, ta), self.types.translate(view, tb));
             let mut alts: Vec<SymId> = self.syms.alternatives(a).map_or_else(|| vec![a], |l| l.to_vec());
             let own = alts.clone();
             for s in self.syms.alternatives(b).map_or_else(|| vec![b], |l| l.to_vec()) {
@@ -7179,12 +7187,25 @@ impl<'a> Worker<'a> {
                 }
             }
             alts
-        };
+        }
+    }
+
+    /// Under the loader's lock: the set of `alts` for the pair, published unless another worker
+    /// published the pair's between the caller's look and the lock; for a nested call
+    /// (`merged_overload`), a set of its own that the memo does not hold.
+    fn publish_merged_overload(&mut self, a: SymId, b: SymId, alts: Vec<SymId>, nested: bool) -> SymId {
+        if !nested {
+            if let Some(&set) = self.merged_overloads.get(&(a, b)) {
+                return set;
+            }
+        }
         let owner = self.syms.sym(a).owner;
         // A view of members of other classes, which neither marks them as overloads nor their
         // class as having some (their names in the output stay their own).
         let set = self.syms.new_overloaded_view(a, owner, alts);
-        self.merged_overloads.insert((a, b), set);
+        if !nested {
+            self.merged_overloads.insert((a, b), set);
+        }
         set
     }
 

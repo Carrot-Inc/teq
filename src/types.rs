@@ -4324,7 +4324,7 @@ pub enum View {
 /// `export`), which count nothing, and the measurement's (`import_at`, `export_at`), which count
 /// their work under a route while the routes are noted (`TEQ_WORKERS_TYPES=1`). The typer routes
 /// the signature reads (`Worker::completed_sig`) and the loader operations' inputs
-/// (`merged_overload`, `parameters_of`) through them; a consumer that meets a record's type raw
+/// (`parameters_of`) through them; a consumer that meets a record's type raw
 /// (a quote's, a quote pattern's, a stored inline body's) takes `in_view_here`, which imports it
 /// for a worker outside the loader's lock and exports it for the lock's holder.
 impl TypeStore {

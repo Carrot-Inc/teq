@@ -153,7 +153,7 @@ USES_TYPE = re.compile(r'\|&{0,2}\(_, \w+\)\||base_types(\[[^\]]*\])?\.1\b|\(\w+
 # the accessors).
 LOADER = {
     'scala_mirror_value_unlocked': ('the declared type of the mirror (a type, translated into the base at entry)', 'a tree over a new shared symbol whose signature is the declared type'),
-    'merged_overload_unlocked': ('the two owners (types, translated into the base at entry), their members\' signatures (`parameters_of`, the holder\'s view)', 'the merged symbol'),
+    'publish_merged_overload': ('ids (the two members and the alternatives compared before the hold, in the worker\'s view)', 'the merged symbol'),
     'bind_mixin_supers_unlocked': ('ids', 'nothing'),
     'resolve_declaration': ('ids (a library body\'s declaration reference)', 'the declaration\'s resolution (and for the declarations\' listing its owner): ids'),
     'std_body_unlocked': ('a symbol', 'nothing (the body published with its cell)'),
