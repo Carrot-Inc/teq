@@ -88,6 +88,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   an alias: `def keep[T <: AnyRef { def self: Int }](t: T): AnyRef { def self: Int } = t`, and
   `class D[G[X] <: { def self: Int }] extends C[G]` for a `class C[F[X] <: { def self: Int }]`, were refused (a type
   mismatch, "type argument G does not conform to upper bound") and build as scalac builds them.
+- A class whose type parameter takes a type constructor and has a bound (`class Later[F[G[_]] <: AnyRef]`,
+  `class Later[F[X] <: Iterable[X]]`), a top-level class, an object's or a block's, is accepted where it is
+  applied before the class is completed: in a file typed before the class's, in the class's own constructor or
+  parents, in a block before the class (it was refused with a kind mismatch); and an argument outside that bound
+  is refused there too (the program was built).
 
 ## 0.1.10 (2026-11-13)
 

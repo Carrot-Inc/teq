@@ -1929,5 +1929,26 @@ refused_by_contract partial_rebuild_two_vals_crossing "error: recursive value fi
 # in progress there, and the build is refused (scalac: E124).
 refused_by_contract partial_rebuild_alias_given "error: recursive value alias needs type"
 
+# A higher-kinded type parameter's kind and its written bound where the class is applied before it is complete: in
+# the file typed before the class's, inside the class's own definition, in a block before the class. The parameter
+# has its clause's kind from the start and the application's bound is read once it is resolved, at one worker,
+# where a class's parameters are made before the class is completed, as at two, four, eight and sixteen, where a
+# worker completes the class whole: each program's run or check at those counts is one worker's (without, a
+# block's class applied before its definition was refused at one worker and accepted above it, and an argument of
+# another kind or outside the bound the other way round). The last of each list applies a class inside its own
+# parameter's bound.
+saved_counts=$COUNTS
+COUNTS="2 4 8 16"
+for early in tests/cases/early_param_kind tests/cases/early_param_kind_defined_first tests/cases/early_param_kind_one_file.scala \
+  tests/cases/early_param_kind_inner_class tests/cases/early_param_kind_own_bound.scala; do
+  same_output "$(basename "$early" .scala)" 2 run "$early"
+done
+for early in tests/errors/early_param_kind_bound tests/errors/early_param_kind_bound_defined_first tests/errors/early_param_kind_wrong \
+  tests/errors/early_param_kind_wrong_defined_first tests/errors/early_param_kind_bound_one_file.scala tests/errors/early_param_kind_wrong_block.scala \
+  tests/errors/early_param_kind_own_bound.scala; do
+  same_lines "$(basename "$early" .scala)" '.*' 2 compiler check "$early"
+done
+COUNTS=$saved_counts
+
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass

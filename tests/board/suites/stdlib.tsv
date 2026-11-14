@@ -521,6 +521,11 @@ duration_time_unit	pass	-
 duration_time_unit_constants	pass	-	
 dynamic_variable	pass	-	
 dynamic_written_apply	fail	-	TypeError: (intermediate value).go is not a function
+early_param_kind	pass	-	
+early_param_kind_defined_first	pass	-	
+early_param_kind_inner_class	pass	-	
+early_param_kind_one_file	pass	-	
+early_param_kind_own_bound	pass	-	
 either_merge_adders	pass	-	
 either_right	pass	-	
 else_between_widths_brace_lambda	pass	-	

@@ -160,6 +160,16 @@ directive_werror_files	fail	-	exit code 0
 duplicates	pass	-	
 dynamic_inserted_apply	fail	-	missing '18:11: error: method apply in trait ContextFunction1 does not take more parameters'
 dynamic_named_missing_given	fail	-	missing '11:27: error:'
+early_param_kind_bound	pass	-	
+early_param_kind_bound_defined_first	pass	-	
+early_param_kind_bound_one_file	pass	-	
+early_param_kind_inner_bound	fail	-	exit code 0
+early_param_kind_inner_bound_one_file	fail	-	exit code 0
+early_param_kind_inner_class_wrong	pass	-	
+early_param_kind_own_bound	pass	-	
+early_param_kind_wrong	pass	-	
+early_param_kind_wrong_block	pass	-	
+early_param_kind_wrong_defined_first	pass	-	
 encoded_key_script	pass	-	
 end_marker_duplicate	fail	-	exit code 0
 entry_points	pass	-	

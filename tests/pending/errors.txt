@@ -35,6 +35,8 @@ directive_wconf_files	exit code 0
 directive_werror_files	exit code 0
 dynamic_inserted_apply	missing '18:11: error: method apply in trait ContextFunction1 does not take more parameters'
 dynamic_named_missing_given	missing '11:27: error:'
+early_param_kind_inner_bound	exit code 0
+early_param_kind_inner_bound_one_file	exit code 0
 end_marker_duplicate	exit code 0
 enum_parent_recovery	missing 'extends enum Choice, but extending enums is prohibited.'
 erased_use_definition_tie	missing 'inlined from tests/errors/erased_use_definition_tie.scala:5'

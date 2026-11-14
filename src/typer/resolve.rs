@@ -4222,7 +4222,11 @@ impl<'a> Worker<'a> {
                         },
                         _ => None,
                     };
-                    self.check_type_args_through(&params, &resolved, &arg_ids, through);
+                    let class = match self.types.get(ctor) {
+                        Type::Ctor(c) => Some(c),
+                        _ => None,
+                    };
+                    self.check_type_args_through(&params, &resolved, &arg_ids, through, class);
                 }
                 if self.declaring > 0 && t != ERROR && !self.declared_views.is_empty() {
                     self.note_declared_application(id, f, ctor, &arg_ids, &resolved);
@@ -4441,7 +4445,9 @@ impl<'a> Worker<'a> {
                     self.binder_annotations(ast::BinderClause::Lambda(id));
                 }
                 let (_, ps) = self.poly_params(&names, bounds, ast::BinderClause::Lambda(id));
-                let b = self.resolve_type(body);
+                // A clause read for its kind alone (`make_tparams`) has no result yet: the bound
+                // written after it is resolved with the parameter's bounds.
+                let b = if self.kind_only_bound { ANY } else { self.resolve_type(body) };
                 self.env.frames.pop();
                 let l = self.types.list(&ps);
                 self.types.mk(Type::Lambda(l, b))
@@ -5404,18 +5410,16 @@ impl<'a> Worker<'a> {
         false
     }
 
-    /// Each parameter's lower and upper bound of the list `bl` (`Ast::lambda_bounds`'s layout),
-    /// resolved where the parameters `ids` are in scope.
+    /// The kinds of the parameters `ids` of a clause read for its kind alone (`make_tparams`), by
+    /// the list `bl` of their bounds (`Ast::lambda_bounds`'s layout): one whose upper bound is
+    /// the lambda over its own clause takes that clause's kind; a bound that is no clause, and
+    /// a lower bound, say nothing of the kind and are resolved with the parameter's bounds.
     fn resolve_lambda_bounds(&mut self, bl: ListRef, ids: &[TParamId]) {
         // A binder's bounds are its own (`typedTypeDef`'s context), no type definition's.
         let type_def = self.type_def_frames.take();
         let bounds: Vec<TyExprId> = self.cur_ast().ty_lists[bl.range()].to_vec();
         for (&id, pair) in ids.iter().zip(bounds.chunks(2)) {
-            if let [lower, upper] = *pair {
-                if lower != crate::ast::NO_BOUND {
-                    let l = self.resolve_type(lower);
-                    self.syms.tparams[id.idx()].lower = l;
-                }
+            if let [_, upper] = *pair {
                 if upper != crate::ast::NO_BOUND {
                     // A higher-kinded binder's bound is a type lambda over its own clause (`F[X]`'s
                     // `[X] =>> Any`, `Parser::parse_type_params_of_lambda`), dotty's kind: its
@@ -5423,9 +5427,9 @@ impl<'a> Worker<'a> {
                     if let TyExpr::Lambda(own, _) = self.cur_ast().ty(upper) {
                         self.syms.tparams[id.idx()].arity = own.len.min(u8::MAX as u32) as u8;
                         self.own_clause_variances(id, upper);
+                        let u = self.resolve_type(upper);
+                        self.syms.tparams[id.idx()].upper = u;
                     }
-                    let u = self.resolve_type(upper);
-                    self.syms.tparams[id.idx()].upper = u;
                 }
             }
         }
@@ -5450,7 +5454,7 @@ impl<'a> Worker<'a> {
     /// class being completed (`class Bar extends Foo[Bar]` for `Foo[F <: Foo[F]]`). The bounds
     /// of a class nested in a class applied through the prefix `through` gives
     /// (`Ext.this.Visitor[T]`) are seen from that prefix, as dotty sees a `TypeRef`'s class.
-    fn check_type_args_through(&mut self, params: &[TParamId], args: &[TypeId], arg_asts: &[TyExprId], through: Option<(TypeId, ClassId)>) {
+    fn check_type_args_through(&mut self, params: &[TParamId], args: &[TypeId], arg_asts: &[TyExprId], through: Option<(TypeId, ClassId)>, class: Option<ClassId>) {
         let ast = self.cur_ast();
         let subst: Subst = params.iter().copied().zip(args.iter().copied()).collect();
         let seen = |t: &mut Self, b: TypeId| match through {
@@ -5473,14 +5477,27 @@ impl<'a> Worker<'a> {
             let (upper, lower) = (self.syms.tparam(p).upper, self.syms.tparam(p).lower);
             // A higher-kinded argument is held to its bound at the end as well (`is_sub` applies
             // both to the bound's parameters), when the bounds of a parameter given as the
-            // argument (`Attr[E]` in a class over `E[x] <: Event[x]`) are resolved.
+            // argument (`Attr[E]` in a class over `E[x] <: Event[x]`) are resolved. Where the
+            // parameter has only its clause's kind yet (the class `class` is applied before its
+            // completion's end, its written bound not resolved: `make_tparams`), the check reads
+            // the parameter's bound when it runs, through the application's arguments. That is
+            // for a class without an enclosing instance (`free_class`): an inner class's bound
+            // has to be seen from the application's prefix, which that reading does not make,
+            // so its check is of the bound as it stands here.
             if arity > 0 {
                 if self.canon(upper) != ANY && !self.is_body_file(self.env.file) {
-                    let u = self.types.subst(upper, &subst);
                     let (file, transparent) = (self.env.file, self.transparent.clone());
                     let of_body = self.diags.of_bodies;
+                    let kind_alone = matches!(self.types.get(upper), Type::Lambda(_, r) if self.canon(r) == ANY);
+                    let free = class.is_some_and(|c| self.free_class(c));
+                    let (upper, of) = if kind_alone && free {
+                        let applied: Vec<(TypeId, TypeId)> = subst.iter().map(|&(q, t)| (self.types.param(q), t)).collect();
+                        (None, Some((self.types.param(p), applied)))
+                    } else {
+                        (Some(self.types.subst(upper, &subst)), None)
+                    };
                     self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
-                    self.deferred_bounds.push(DeferredBound { arg: a, upper: Some(u), lower: None, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
+                    self.deferred_bounds.push(DeferredBound { arg: a, upper, lower: None, of, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
                 }
                 continue;
             }
@@ -5515,7 +5532,7 @@ impl<'a> Worker<'a> {
             if !self.is_body_file(file) {
                 let of_body = self.diags.of_bodies;
                 self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
-                self.deferred_bounds.push(DeferredBound { arg: a, upper, lower, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
+                self.deferred_bounds.push(DeferredBound { arg: a, upper, lower, of: None, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
             }
         }
     }
@@ -5595,7 +5612,15 @@ impl<'a> Worker<'a> {
             self.transparent = check.transparent;
             self.diags.of_bodies = check.of_body;
             self.diags.owner = check.owner;
-            if let Some(u) = check.upper {
+            // A higher-kinded argument's bound: its parameter's as it is now, through the
+            // application's arguments; a kind alone is no bound.
+            let later = check.of.as_ref().and_then(|(p, applied)| {
+                let Type::Param(p) = self.types.get(*p) else { return None };
+                let upper = self.syms.tparam(p).upper;
+                let subst: Subst = applied.iter().filter_map(|&(q, t)| if let Type::Param(q) = self.types.get(q) { Some((q, t)) } else { None }).collect();
+                (self.canon(upper) != ANY).then(|| self.types.subst(upper, &subst))
+            });
+            if let Some(u) = check.upper.or(later) {
                 if !self.is_sub(check.arg, u) {
                     let msg = format!("type argument {} does not conform to upper bound {}", self.show(check.arg), self.show(u));
                     self.diags.error(check.file, check.span, msg);
@@ -5948,6 +5973,24 @@ impl<'a> Worker<'a> {
     // ---- completion ----
 
     pub fn make_tparams(&mut self, tps: &[ast::TypeParam]) -> Vec<(Name, TParamId)> {
+        self.make_tparams_of(tps, true)
+    }
+
+    /// Whether the class `c` has no enclosing instance: a package's, a static object's or a
+    /// block's, whose parameters' bounds read the same wherever the class is applied; an inner
+    /// class's are seen from the application's prefix (`Checking.checkAppliedType`'s
+    /// `paramInfoAsSeenFrom`).
+    fn free_class(&self, c: ClassId) -> bool {
+        let owner = self.syms.class(c).owner;
+        matches!(owner, Owner::Local) || self.is_static_owner(owner)
+    }
+
+    /// The parameters `tps`, made; `own_kind`: whether a higher-kinded one has its clause's
+    /// kind from the start whatever bound is written (a class without an enclosing instance,
+    /// a method, an alias), or only where its bound is that kind and no more (an inner class,
+    /// whose written bound is the application's prefix's to see and is held to it once it is
+    /// resolved, not before).
+    fn make_tparams_of(&mut self, tps: &[ast::TypeParam], own_kind: bool) -> Vec<(Name, TParamId)> {
         let ids: Vec<(Name, TParamId)> = tps
             .iter()
             .map(|tp| {
@@ -5956,11 +5999,16 @@ impl<'a> Worker<'a> {
                 if !tp.hk_variances.is_empty() {
                     self.syms.tparams[p.idx()].hk_variances = tp.hk_variances.as_slice().into();
                 }
-                // A kind written as the bound (`F[G[_]]`'s `[G[_]] =>> Any`) names nothing, so
-                // it is the parameter's from the start, where a written bound waits for the
-                // class it may name (`resolve_tparam_bounds_of`): an argument's kind is read
-                // before then, in the class's parents.
-                if let Some(b) = tp.upper.filter(|&b| tp.arity > 0 && kind_only(self.cur_ast(), b)) {
+                // The kind of the parameter's own clause (`F[G[_]]`'s `[G[_]] =>> Any`) names
+                // nothing, so it is the parameter's from the start (`typeSig`'s
+                // `boundsFromParams(tparamSyms, TypeBounds.empty)`), whether or not a bound is
+                // written after it (`own_kind`; else only where the bound is that kind and no
+                // more): the lambda the parser made over the clause, read for its parameters'
+                // kinds alone. A written bound, and the bounds of the clause's own parameters,
+                // wait for the classes they may name (`resolve_tparam_bounds_of`): an
+                // argument's kind is read before then, in the class's parents and its own
+                // constructor.
+                if let Some(b) = tp.upper.filter(|&b| tp.arity > 0 && matches!(self.cur_ast().ty(b), TyExpr::Lambda(..)) && (own_kind || kind_only(self.cur_ast(), b))) {
                     let outer = std::mem::replace(&mut self.kind_only_bound, true);
                     let u = self.resolve_type(b);
                     self.kind_only_bound = outer;
@@ -6785,7 +6833,8 @@ impl<'a> Worker<'a> {
         // kind written as a bound is read in that file's tree and the index files each
         // parameter under it (`Namer.ClassCompleter.init` indexes a class's parameters in the
         // context the class was created in), not in the file of the application that asked.
-        let ids = self.with_env(env.clone(), |t| t.make_tparams(&cls.tparams));
+        let free = self.free_class(c);
+        let ids = self.with_env(env.clone(), |t| t.make_tparams_of(&cls.tparams, free));
         {
             let mut info = self.syms.class_mut(c);
             info.tparams = ids.iter().map(|&(_, p)| p).collect();
@@ -7141,7 +7190,8 @@ impl<'a> Worker<'a> {
         let ids: Vec<(Name, TParamId)> = if made {
             self.syms.class(c).tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect()
         } else {
-            self.make_tparams(tparam_asts)
+            let free = self.free_class(c);
+            self.make_tparams_of(tparam_asts, free)
         };
         self.syms.class_mut(c).tparams = ids.iter().map(|&(_, p)| p).collect();
         self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
@@ -8925,6 +8975,10 @@ pub struct DeferredBound {
     arg: TypeId,
     upper: Option<TypeId>,
     lower: Option<TypeId>,
+    /// A higher-kinded argument's parameter, whose upper bound the check reads when it runs,
+    /// with the application's parameters and arguments, which the bound is read through: each
+    /// parameter as its type.
+    of: Option<(TypeId, Vec<(TypeId, TypeId)>)>,
     span: Span,
     file: FileId,
     transparent: Vec<ClassId>,
@@ -8949,7 +9003,8 @@ impl DeferredBound {
 impl DeferredBound {
     /// The types it holds, for the measurement of what outlives the body phase.
     pub(super) fn types(&self) -> impl Iterator<Item = TypeId> + '_ {
-        std::iter::once(self.arg).chain(self.upper).chain(self.lower)
+        let of = self.of.iter().flat_map(|(p, applied)| std::iter::once(*p).chain(applied.iter().flat_map(|&(q, t)| [q, t])));
+        std::iter::once(self.arg).chain(self.upper).chain(self.lower).chain(of)
     }
 
     pub(super) fn remap(&mut self, class: impl Fn(ClassId) -> ClassId, ty: impl Fn(TypeId) -> TypeId) {
@@ -8959,6 +9014,12 @@ impl DeferredBound {
         self.arg = ty(self.arg);
         self.upper = self.upper.map(&ty);
         self.lower = self.lower.map(&ty);
+        if let Some((p, applied)) = &mut self.of {
+            *p = ty(*p);
+            for (q, t) in applied {
+                (*q, *t) = (ty(*q), ty(*t));
+            }
+        }
     }
 }
 
