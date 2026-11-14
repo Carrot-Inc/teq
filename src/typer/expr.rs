@@ -326,14 +326,15 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether `s` is a stable val declared as the type of the object `c`.
+    /// Whether `s` is a stable val declared as the type of the object `c`, its signature asked
+    /// for (`declared_singleton`).
     fn val_of_object(&mut self, s: SymId, c: ClassId) -> bool {
         let info = self.syms.sym(s);
         if !matches!(info.kind, SymKind::Val | SymKind::Param) || info.by_name || info.mods & mods::MUTABLE != 0 {
             return false;
         }
-        let Some(sig) = info.sig.clone() else { return false };
-        let ret = self.dealias(sig.ret);
+        let ret = self.sig_of(s).ret;
+        let ret = self.dealias(ret);
         matches!(self.types.get(ret), Type::Class(k, a) if k == c && a == EMPTY_LIST)
     }
 

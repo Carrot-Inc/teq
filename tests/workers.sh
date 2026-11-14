@@ -1770,5 +1770,59 @@ for annotated in tests/workers/fork_binder_annotation tests/cases/bottom_path_ki
 done
 COUNTS=$saved_counts
 
+# A module rebuilt in part over its own products: the products' pickles name the vals of the sources
+# rebuilt beside them, whose signatures other workers are still computing. A path a pickle names
+# through such a val is the val's path, read without the val's signature (dotty's `TermRef(prefix,
+# name)`, which forces nothing), and what the val stands for is asked where a type is compared, outside
+# the loader's lock (before, the decode asked for the signature under the lock and the build stopped
+# with "a wait on a cell under the loader's lock": 5 of 12 seeds at two workers for the forwarders).
+# rebuilt_in_part <fixture> <scalac's lines...>: tests/workers/<fixture>'s Stock.scala and
+# Counter.scala built to products at one worker, then Stock.scala and Use.scala over them: the check
+# under the points the typing rows shake, seeds 1 to 12 at two and at eight workers, and the program
+# the part build makes, which prints scalac's lines at every count.
+rebuilt_in_part() {
+  local name=$1 dir=tests/workers/$1 products=$work/$1_products
+  shift
+  rm -rf "$products"
+  timeout 120 "$TEQ" compiler check --products "$products" --sourceroot "$dir" "$dir/Stock.scala" "$dir/Counter.scala" --threads 1 > /dev/null 2>&1
+  local part=("$dir/Stock.scala" "$dir/Use.scala" --classpath "$products") s t stopped=""
+  for s in $(seq 1 12); do
+    for t in 2 8; do
+      TEQ_SHAKE="$s:item,claimed,computed" timeout 120 "$TEQ" compiler check "${part[@]}" --threads $t > "$work/$name.shaken" 2>&1 ||
+        stopped="$stopped $t workers under TEQ_SHAKE=$s ($(grep -m1 -E 'error|panicked' "$work/$name.shaken" | cut -c1-80));"
+    done
+  done
+  [ -z "$stopped" ] && ok || bad "${name}_shaken: the part build fails at$stopped"
+  same_output "${name}_run" 2 run "${part[@]}"
+  if [ "$(cat "$work/${name}_run.one")" = "$(printf '%s\n' "$@")" ]; then
+    ok
+  else
+    bad "${name}_printed: one worker prints $(head -3 "$work/${name}_run.one" | tr '\n' ' ' | cut -c1-120), scalac $*"
+  fi
+}
+# Forwarders of two vals whose types are inferred.
+rebuilt_in_part partial_rebuild_forwarders stock-init p12
+# A val that stands for an object: its forwarder read as the object, the object given where a
+# products method takes the val's singleton, and a member type through a products val declared as it.
+rebuilt_in_part partial_rebuild_object_stand_in stock-init inner-init 364
+# The singleton type of an inherited val in the body of a products class's transparent method, which
+# is converted while the program is typed.
+rebuilt_in_part partial_rebuild_path_in_body 3
+# An export's forwarder of an object keeps the object's type where a pickle names it.
+rebuilt_in_part partial_rebuild_forwarded_object 1
+# A member the products name as a val's path which the sources built again write as a def of a
+# singleton result is a path all the same (dotty's `Types.isStable`: `tp.info.isStable`): the part
+# build is accepted and prints scalac's lines. At one worker, where no other worker is computing the
+# def's signature when the pickle is read.
+val_now_def=tests/workers/partial_rebuild_val_now_def
+rm -rf "$work/partial_rebuild_val_now_def_products"
+timeout 120 "$TEQ" compiler check --products "$work/partial_rebuild_val_now_def_products" --sourceroot "$val_now_def" "$val_now_def/Stock.scala" "$val_now_def/Counter.scala" --threads 1 > /dev/null 2>&1
+one partial_rebuild_val_now_def 1 run "$val_now_def/rebuilt/Stock.scala" "$val_now_def/Use.scala" --classpath "$work/partial_rebuild_val_now_def_products" > "$work/partial_rebuild_val_now_def.one" 2>&1
+if [ "$(cat "$work/partial_rebuild_val_now_def.one")" = "$(printf '%s\n' stock-init shelf-init 33)" ]; then
+  ok
+else
+  bad "partial_rebuild_val_now_def: one worker prints $(head -3 "$work/partial_rebuild_val_now_def.one" | tr '\n' ' ' | cut -c1-160), scalac stock-init shelf-init 33"
+fi
+
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass

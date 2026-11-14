@@ -1788,8 +1788,15 @@ impl<'a> Worker<'a> {
             // static field, which is stable as dotty's `ClassfileParser` reads a final one
             // (`TimeUnit.SECONDS.type` of scala-library's `duration.SECONDS`).
             SymKind::Def => {
-                let (owner, stable) = (info.owner, info.stable);
-                self.sig_of(sym);
+                let (owner, stable, file) = (info.owner, info.stable, info.file);
+                // An export's forwarder of the program, which a pickle of the module's own products
+                // names where part of the module is built again, has its signature from its making
+                // (`make_forwarder`): it is read, nothing asked. Any other def is asked for its
+                // signature: a library's, and a written def of the program too, which is a path
+                // where its result is a singleton (`Types.isStable`: `tp.info.isStable`).
+                if !(self.program_file(file) && self.syms.is_forwarder(sym)) {
+                    self.sig_of(sym);
+                }
                 let sig = self.syms.sig(sym);
                 let ret = sig.ret;
                 let plain = sig.tparams.is_empty() && sig.clauses.is_empty();
@@ -1812,11 +1819,16 @@ impl<'a> Worker<'a> {
             SymKind::Var | SymKind::Overloaded(_) => None,
             _ if info.by_name => None,
             // A val standing for an object (`val Either = scala.util.Either` of `scala.package`)
-            // has the object's type, as the object does.
+            // has the object's type, as the object does. A val of the program, which a pickle of
+            // the module's own products names where part of the module is built again, is its
+            // path: its signature is the program's to compute, on whichever worker claimed it,
+            // and is not asked for here (dotty's unpickler makes `TermRef(prefix, name)` and
+            // forces nothing, `TreeUnpickler.readType`); what the val stands for is asked where
+            // a type is compared (`declared_singleton`, `val_of_object`).
             SymKind::Val => {
-                let ret = self.sig_of(sym).ret;
-                match self.types.get(ret) {
-                    Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(ret),
+                let ret = if self.program_file(info.file) { None } else { Some(self.sig_of(sym).ret) };
+                match ret.map(|ret| (ret, self.types.get(ret))) {
+                    Some((ret, Type::Class(c, _))) if self.syms.class(c).kind == ClassKind::Object => Some(ret),
                     _ => Some(match (object, prefix) {
                         (Some(o), _) => self.object_member_path(o, sym),
                         (None, Some(p)) => self.types.mk(Type::Select(p, sym)),

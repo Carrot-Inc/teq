@@ -1940,13 +1940,15 @@ impl<'a> Worker<'a> {
     }
 
     /// The singleton type a stable val is declared with, if any: a path, or an object's type
-    /// (`val alias: O.type`), which is the object's one value.
-    fn declared_singleton(&self, v: SymId) -> Option<TypeId> {
+    /// (`val alias: O.type`), which is the object's one value. The val's signature is asked for,
+    /// as dotty's comparison of two paths reads the info of the one it compares against
+    /// (`TypeComparer.comparePaths`: `tp2.superType.widenExpr`).
+    fn declared_singleton(&mut self, v: SymId) -> Option<TypeId> {
         let info = self.syms.sym(v);
         if !matches!(info.kind, SymKind::Val | SymKind::Param) || info.by_name || info.mods & crate::ast::mods::MUTABLE != 0 {
             return None;
         }
-        let ret = info.sig.as_ref()?.ret;
+        let ret = self.sig_of(v).ret;
         match self.types.get(ret) {
             Type::This(_) | Type::Term(_) | Type::Select(..) => Some(ret),
             Type::Class(c, args) if args == EMPTY_LIST && self.syms.class(c).kind == ClassKind::Object => Some(ret),

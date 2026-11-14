@@ -70,6 +70,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   method that is not transparent reads its arguments as before, but its by-value parameter no longer reads through
   an ascription over a cast or a cast to a union or an intersection in a build on one worker: it did there, and
   not in a build on several.
+- A module of which some sources are built again over its own products no longer stops with `a wait on a cell
+  under the loader's lock` where the products name a val of those sources as a path in one of these ways: an
+  export's forwarder of it (`export Stock.*`), a parameter of its singleton type (`def take(x: Stock.alias.type)`),
+  `this.tag.type` in a transparent method's body. The val's path is read without its signature, which another
+  worker may still be computing, and what the val stands for is asked where a type is compared. A type selected on
+  such a val (`Stock.api.Request`) or a products method overloaded on such a parameter can still stop the build.
 
 ## 0.1.10 (2026-11-13)
 
