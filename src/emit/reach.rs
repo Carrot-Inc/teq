@@ -2383,7 +2383,7 @@ impl Walker {
             for c in 0..self.reach.classes.len() {
                 if self.reach.classes[c] {
                     self.mark_member(cx, ClassId(c as u32), name);
-                    self.mark_bridge(cx, ClassId(c as u32), name);
+                    self.mark_free_bridge(cx, ClassId(c as u32), name);
                 }
             }
             return;
@@ -2489,12 +2489,37 @@ impl Walker {
     /// A call of `name` on an instance of `c` may go through a bridge of `c` to a method of
     /// another name.
     fn mark_bridge(&mut self, cx: Cx, c: ClassId, name: Name) {
+        self.mark_bridges(cx, c, name, false)
+    }
+
+    /// `mark_bridge` for a class walked before `name` was called on a receiver of any class: on
+    /// JavaScript no bridge that would stand where another method of the class goes by the name
+    /// (`Program::name_held_beside`), whichever method it answers with. Such a bridge to an inherited
+    /// implementation is reached through a receiver of the class's own kind (`call_name` with an
+    /// owner) and where the class is walked after the call (`process_class_from`).
+    fn mark_free_bridge(&mut self, cx: Cx, c: ClassId, name: Name) {
+        self.mark_bridges(cx, c, name, true)
+    }
+
+    fn mark_bridges(&mut self, cx: Cx, c: ClassId, name: Name, free: bool) {
         if !cx.syms.class(c).has_overloads {
             return;
         }
         let Some(idx) = index(self.tclass_of[c.idx()]) else { return };
         for &(declared, implementation) in &cx.prog.classes[idx].bridges {
             if cx.syms.dispatch_name(declared) == name {
+                // A bridge JavaScript does not write (`Program::bridge_name_held`) reaches nothing there; the JVM,
+                // whose methods go by their descriptors, takes the implementation through every bridge.
+                let is_abstract = |s: SymId| !self.concrete(cx, s);
+                let tc = &cx.prog.classes[idx];
+                let held = self.jvm.is_none()
+                    && match free {
+                        true => cx.prog.name_held_beside(cx.syms, &is_abstract, tc, declared, implementation),
+                        false => cx.prog.bridge_name_held(cx.syms, &is_abstract, tc, declared, implementation),
+                    };
+                if held {
+                    continue;
+                }
                 self.reach.bridged[implementation.idx()] = true;
                 self.reach_fun_of(cx, implementation);
             }

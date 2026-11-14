@@ -2032,6 +2032,12 @@ impl<'a, 't> Interp<'a, 't> {
             let bridges = self.prog().classes[ti].bridges.clone();
             for (declared, implementation) in bridges {
                 if self.syms().dispatch_name(declared) == name {
+                    // Not where another method of the class goes by the name: that method answers
+                    // it (`Program::bridge_name_held`).
+                    let typer = &*self.typer;
+                    if typer.prog.bridge_name_held(&typer.syms, &|s| typer.is_abstract_member(s), &typer.prog.classes[ti], declared, implementation) {
+                        continue;
+                    }
                     let target = self.syms().dispatch_name(implementation);
                     if target != name {
                         return self.member(k, target);

@@ -3,10 +3,11 @@
 //! elaborated here.
 
 use crate::arena::{Arena, Bits, Parallel, Registers};
-use crate::ast::ListRef;
+use crate::ast::{mods, ListRef};
 use crate::intern::{FxMap, Name};
 use crate::source::{FileId, Span};
 use crate::types::{ClassId, SymId, TParamId, TypeId};
+use crate::symbols::{Owner, SymKind, Symbols};
 
 pub mod capture;
 
@@ -1271,6 +1272,64 @@ pub struct Expansion {
     /// argument or the receiver holds a trait's `super` call (`Worker::replaced_call`), for the
     /// order of the trait's super accessors, which is the call's and not the expansion's.
     pub replaced: ListRef,
+}
+
+/// Who answers a name a bridge of a class would stand under (`TClass::bridges`).
+impl Program {
+    /// Whether the bridge that answers `declared`'s output name with `implementation`, a method the
+    /// class `tc` itself declares, would stand where another method of the class goes by that
+    /// name, for a reader that goes by output names: one the class declares with a body, or one
+    /// with a body that it inherits and `implementation` does not override. That method answers the name:
+    /// the JavaScript emitter does not write the bridge (`emit_bridges`), the reach takes nothing
+    /// through it (`mark_bridge`) and the interpreter does not take it (`own_member`); the JVM,
+    /// whose methods go by their descriptors, has its own skip (`emit_inherited_bridges`). A bridge
+    /// to an inherited implementation, or to a value, stands.
+    pub fn bridge_name_held(&self, syms: &Symbols, is_abstract: &dyn Fn(SymId) -> bool, tc: &TClass, declared: SymId, implementation: SymId) -> bool {
+        let implemented = syms.sym(implementation);
+        implemented.owner == Owner::Class(tc.id) && implemented.kind == SymKind::Def && self.name_held_beside(syms, is_abstract, tc, declared, implementation)
+    }
+
+    /// Whether a method of the class `tc` other than `implementation` goes by `declared`'s output
+    /// name: an alternative of the declaration's own name, one the class declares with a body, or
+    /// one with a body that it inherits, that is not the declaration and that `implementation`
+    /// does not override. A method of another name that carries the same output name (a
+    /// `@targetName`) is no such holder: the two were not named apart from one another.
+    pub fn name_held_beside(&self, syms: &Symbols, is_abstract: &dyn Fn(SymId) -> bool, tc: &TClass, declared: SymId, implementation: SymId) -> bool {
+        let name = syms.dispatch_name(declared);
+        let source = syms.sym(declared).name;
+        let own = tc.methods.iter().any(|&m| {
+            let fun = &self.funs[m.idx()];
+            fun.sym != implementation && fun.body.is_some() && syms.sym(fun.sym).name == source && syms.dispatch_name(fun.sym) == name
+        });
+        if own {
+            return true;
+        }
+        let overridden = self.overrides.get(&implementation);
+        let parameters = |s: SymId| syms.sym(s).sig.as_ref().map(|sig| sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty)).collect::<Vec<TypeId>>());
+        let declared_parameters = parameters(declared);
+        for &(b, _) in syms.class(tc.id).base_types.iter().skip(1) {
+            let Some(&entry) = syms.class(b).members.get(&source) else { continue };
+            let alternatives = match syms.alternatives(entry) {
+                Some(alternatives) => alternatives,
+                None => std::slice::from_ref(&entry),
+            };
+            for &x in alternatives {
+                let info = syms.sym(x);
+                if x == declared || info.owner != Owner::Class(b) || info.kind != SymKind::Def || info.mods & mods::PRIVATE != 0 {
+                    continue;
+                }
+                if is_abstract(x) || syms.dispatch_name(x) != name {
+                    continue;
+                }
+                // What `implementation` overrides is the declaration's own member under that name.
+                if overridden.is_some_and(|o| o.contains(&x)) || parameters(x) == declared_parameters {
+                    continue;
+                }
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl Program {

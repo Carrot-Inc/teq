@@ -3280,6 +3280,11 @@ impl<'a> Emitter<'a> {
             if !self.reach.bridged[implementation.idx()] {
                 continue;
             }
+            // Not where another method of the class goes by the declaration's name (`Program::bridge_name_held`).
+            let is_abstract = |s: SymId| self.reach.abstract_syms.get(s.idx()).copied().unwrap_or(false);
+            if self.prog.bridge_name_held(self.syms, &is_abstract, tc, declared, implementation) {
+                continue;
+            }
             let from = self.sym_name(declared);
             let to = self.sym_name(implementation);
             self.line();

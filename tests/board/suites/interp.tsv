@@ -134,6 +134,7 @@ brace_next_line	pass	-
 brace_self_type_parent	pass	-	
 braces	pass	-	
 branch_var_bound_conversion	pass	-	
+bridge_beside_target_name	pass	-	
 brief_passing_neighbour	pass	-	
 bson_macros	pass	-	
 bson_opaque_list_handler	pass	-	
@@ -1925,6 +1926,7 @@ member_retry_transparent	pass	-
 memberaliases	pass	-	
 method_type_arg_kind	fail	-	compile
 method_type_arg_kinds_accepted	fail	-	compile
+methods_of_namesake_parameters	pass	-	
 mirror_declared_parent_interfaces	fail	-	compile
 mirror_declared_type	pass	-	
 mirror_derives	pass	-	
