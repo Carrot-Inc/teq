@@ -13,6 +13,7 @@ inferred	pass	-
 inherit	pass	-	
 inline	pass	-	
 inline_stored_tests	pass	-	
+joined_function_local	pass	-	
 macro_run_types_std_body	pass	-	
 macro_run_types_std_body_walk	pass	-	
 outline	pass	-	

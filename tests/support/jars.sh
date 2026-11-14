@@ -36,7 +36,8 @@
 # and Java annotation compiled by scalac, each but mixedclone's with
 # <name>-scalac, the directory's Use.scala compiled by scalac against it; companionmethod-lib,
 # tests/support/companion_method_lib.scala compiled the same way; universal-equality-lib,
-# tests/support/universal_equality_lib.scala compiled the same way; regroup-a1, regroup-a2 and regroup-b,
+# tests/support/universal_equality_lib.scala compiled the same way; joined-function-lib,
+# tests/support/joined_function_lib.scala compiled the same way; regroup-a1, regroup-a2 and regroup-b,
 # tests/support/regroup/ compiled the same way, b against a1; lazyval-lib, tests/support/lazyval_lib.scala
 # compiled the same way; lazy-inline-lib, tests/support/lazy_inline_lib.scala compiled the same way; bodycasts-lib, tests/support/body_casts_lib.scala compiled the same way; extend-lib,
 # tests/support/extend_lib.scala compiled the same way; bundle-lib,
@@ -840,6 +841,20 @@ universal_equality_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/joined_function_lib.scala compiled by scalac into a jar: a class that is a function
+# and has a trait's `apply` of another parameter.
+joined_function_lib_jar() {
+  local src=tests/support/joined_function_lib.scala
+  local jar=$scratch/joined-function-lib.jar
+  local dir=$scratch/joined-function-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/joined_function_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/nestedcompanion_lib.scala compiled by scalac into a jar: case classes nested in
 # traits whose companions the traits' bodies apply, run by a macro (chimney's shape).
 nestedcompanion_lib_jar() {
@@ -1129,6 +1144,7 @@ jar_of() {
     parammeta-scalac) scalac_use_jar parammeta parammeta-lib ;;
     companionmethod-lib) companion_method_lib_jar ;;
     universal-equality-lib) universal_equality_lib_jar ;;
+    joined-function-lib) joined_function_lib_jar ;;
     lazyval-lib) lazyval_lib_jar ;;
     lazy-inline-lib) lazy_inline_lib_jar ;;
     bodycasts-lib) bodycasts_lib_jar ;;

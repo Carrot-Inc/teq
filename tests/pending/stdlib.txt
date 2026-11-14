@@ -390,6 +390,8 @@ std_byteswap	error: not supported on JavaScript: method reverseBytes of java.lan
 std_collection_protocol	output differs
 std_duration_parse	RangeError: Maximum call stack size exceeded
 std_formats	output differs
+std_method_joined_by_class	TypeError: pf.isDefinedAt$Any is not a function
+std_method_joined_in_library	error: cannot resolve import: joinedfn not found
 std_strings	error: not supported on JavaScript: method isISOControl of java.lang.Character (a Java definition without an implementation in the std's pla
 std_surface	error: not supported on JavaScript: method format of scala.String (a Java definition without an implementation in the std's platform layer)
 stdin_lines	error: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's pl

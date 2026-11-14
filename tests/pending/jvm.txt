@@ -192,6 +192,8 @@ script_owned_children	compile
 script_owned_signal	compile
 selectable_anon_members	exception
 std_collection_protocol	exception
+std_method_beside_namesake_parameter	compile
+std_method_joined_and_called	verify
 std_small_members	backend
 string_constant_fold_surrogates	output
 string_f_targ	verify

@@ -136,6 +136,17 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   (`enum demo$package$._$Tone has no case with name: mid`, `... has no case with ordinal: 0`: the enum under the
   object of its file) whatever the number of typing workers; a build typed on more than one worker wrote the bare
   name (`enum Tone has no case ...`).
+- A class that joins a method the standard library declares with a trait's method of the same name (`abstract
+  class Guard extends PartialFunction[Int, Int] with Tester`, `Tester` declaring another `isDefinedAt`) no longer
+  renames the library's method for the whole program: partial functions, sequence patterns, `compareTo`, an
+  exception's cause and plain function values work beside it on JavaScript and in the interpreter (`TypeError:
+  pf.isDefinedAt$Any is not a function`), and a class implementing the library's method runs on the JVM
+  (`NoSuchMethodError`). A method that implements both the library's method and a program trait's joined one
+  (`class Both extends Runnable with Own`) builds and answers through both types, where teq refused it ("overrides
+  methods that are called run$0 and run").
+  A class's value or method that implements a trait's method which another class joins with an overload answers
+  through the trait on JavaScript and in the interpreter (`TypeError: c.size$0 is not a function`), also where a
+  `super` call of the name comes before it (`TypeError: o.run$0 is not a function`).
 
 ## 0.1.10 (2026-11-13)
 

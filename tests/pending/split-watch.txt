@@ -1,5 +1,6 @@
 erasure_pure_gadt	first build: cannot resolve import: caps not found
 erasure_pure_intersection	first build: cannot resolve import: caps not found
+implemented_method_joined_elsewhere	comment inserted: watch output differs from a fresh build
 jdk_member_missing_class	first build: cannot resolve import: Future is not an object or a package
 lazy_initializer_release	first build: value getDeclaredField is not a member of Class[_]
 poly_function_parent_erasure	first build: type PolyFunction not found

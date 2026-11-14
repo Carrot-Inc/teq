@@ -2384,6 +2384,7 @@ impl Walker {
             for c in 0..self.reach.classes.len() {
                 if self.reach.classes[c] {
                     self.mark_member(cx, ClassId(c as u32), name);
+                    self.mark_bridge(cx, ClassId(c as u32), name);
                 }
             }
             return;

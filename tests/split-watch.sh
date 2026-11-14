@@ -16,6 +16,8 @@
 # takes the full path though it changes nothing, or brings only a text that fails to parse; and one
 # under `TEQ_COMPACT_EVERY=1`, whose every request takes it; a session over tests/split/capture
 # that adds and removes a definition a local's scope reads, and another package's of its name; a
+# session over tests/split/joined_function_local that adds a local class joining a function type with a
+# trait's `apply` to a body and takes it out; a
 # session over an upstream module's products that another build rewrites between two requests,
 # once keeping every file's size and time, once with a request for a file whose time was kept,
 # once killed on the way (the session reads the last whole publication); a session over an
@@ -183,6 +185,28 @@ sed -i.bak 's/def value: Int = 1/def value: Int = 2/' "$src/Main.scala"
 build "$src/Main.scala"
 expect "anon_order: retype" "$(field ok),$(field incremental)" 'true,true'
 same_as_fresh "anon_order: retype after an edit of the initialiser's body" "$src" --no-outline
+stop
+rm -rf "$work/out"
+
+# A local class that joins a function type with a trait's `apply` of another parameter, added to a body of one
+# file and taken out again: the function classes of the other files answer as before at each step, and each build
+# is a fresh build's modules.
+src=$work/joined_local
+cp -r tests/split/joined_function_local "$src"
+start "$src" --split "$work/out" --module-per-file probe
+expect "joined_function_local: first build" "$(field ok)" 'true'
+same_as_fresh "joined_function_local: first build" "$src" --module-per-file probe
+expect "joined_function_local: first build runs" "$(timeout 20 node "$work/out/main.mjs" 2>&1 | head -1)" "3"
+sed -i.bak 's|def unused(): Unit = ()|def unused(): Unit = { abstract class Joined extends (Int => Int) with Other; () }|' "$src/Touch.scala"
+build "$src/Touch.scala"
+expect "joined_function_local: the join added" "$(field ok)" 'true'
+same_as_fresh "joined_function_local: the join added" "$src" --module-per-file probe
+expect "joined_function_local: the join added runs" "$(timeout 20 node "$work/out/main.mjs" 2>&1 | head -1)" "3"
+cp tests/split/joined_function_local/Touch.scala "$src/Touch.scala"
+build "$src/Touch.scala"
+expect "joined_function_local: the join taken out" "$(field ok)" 'true'
+same_as_fresh "joined_function_local: the join taken out" "$src" --module-per-file probe
+expect "joined_function_local: the join taken out runs" "$(timeout 20 node "$work/out/main.mjs" 2>&1 | head -1)" "3"
 stop
 rm -rf "$work/out"
 

@@ -1,0 +1,22 @@
+true
+false
+other
+List(one, one)
+List(one, one)
+None
+1 2 List(3)
+List(1, 2, 3)
+true
+true
+false
+inner
+1
+1
+1
+-1
+Map(2 -> 20)
+-1
+0
+2
+12
+List(2, 3)

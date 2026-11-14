@@ -851,7 +851,33 @@ impl<'a> Worker<'a> {
         if !(info.alternative || info.meets_inherited || info.dispatch == Dispatch::Named) {
             return;
         }
+        let root = self.std_rooted_beside(m, root).unwrap_or(root);
         self.name_like_always(m, root)
+    }
+
+    /// The member `m` implements beside `root` whose root the std declares, where `root`'s own is
+    /// none of the std's: `m` goes by that member's name, as a class's own method does
+    /// (`overridden_dispatch`), and its class answers `root`'s name through a bridge (`bridges_of`).
+    fn std_rooted_beside(&mut self, m: SymId, root: SymId) -> Option<SymId> {
+        if self.std_rooted(root) {
+            return None;
+        }
+        let Owner::Class(c) = self.syms.sym(m).owner else { return None };
+        let name = self.syms.sym(m).name;
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
+        for &(b, bt) in bases.iter().skip(1) {
+            let mut k = 0;
+            while let Some(p) = self.own_alternative(b, name, k) {
+                k += 1;
+                if p == root || self.syms.sym(p).kind != SymKind::Def || self.is_private(p) {
+                    continue;
+                }
+                if self.same_parameters(c, &bases, m, p, bt) && self.std_rooted(p) {
+                    return Some(p);
+                }
+            }
+        }
+        None
     }
 
     pub(super) fn name_beside_method(&mut self, m: SymId) {
@@ -988,8 +1014,11 @@ impl<'a> Worker<'a> {
         // The classes are settled here: what a name asked earlier was told is asked again.
         self.plain_name_members.clear();
         // The roots of the alternatives of one class, of which one at most can keep the plain
-        // name, and the roots of one method, which have to agree on its name.
-        let mut groups: Vec<(bool, Vec<SymId>)> = Vec::new();
+        // name, and the roots of one method, which have to agree on its name; each with whether
+        // the class is the std's own, a class's with the number of its alternatives, whose groups stand
+        // before it, and an alternative's with the alternative as the class has it and whether the class
+        // declares it.
+        let mut groups: Vec<(bool, bool, Vec<SymId>, usize, Option<(SymId, bool)>)> = Vec::new();
         for i in 0..self.syms.overloads.len() {
             let (set, alts) = (self.syms.overloads[i].0, self.syms.overloads[i].1.clone());
             let Owner::Class(c) = self.syms.sym(set).owner else { continue };
@@ -1002,6 +1031,7 @@ impl<'a> Worker<'a> {
             // In a class of a library body a function class's `apply`, which the runtime calls a
             // function value by, keeps its plain name: scalac let the class have it.
             let body_local = self.syms.class(c).owner == Owner::Local && self.in_jar(self.syms.class(c).file);
+            let of_std = self.std_source(self.syms.class(c).file);
             let mut roots = Vec::new();
             for &a in &alts {
                 let mut own = self.roots_of(a).to_vec();
@@ -1013,26 +1043,49 @@ impl<'a> Worker<'a> {
                         roots.push(r);
                     }
                 }
-                groups.push((true, own));
+                groups.push((true, of_std, own, 0, Some((a, self.syms.sym(a).owner == Owner::Class(c)))));
             }
-            groups.push((false, roots));
+            groups.push((false, of_std, roots, alts.len(), None));
         }
         for &m in members {
             let mut roots = Vec::new();
             self.root_declarations(m, 0, &mut roots);
-            groups.push((true, roots));
+            groups.push((true, self.std_declared(m), roots, 0, None));
         }
         // A root that gets a suffix may share a group with another plain one: until nothing changes.
         for _ in 0..16 {
             let mut changed = false;
-            for (one_method, roots) in &groups {
+            for g in 0..groups.len() {
+                let (one_method, of_std, roots, alternatives) = (&groups[g].0, &groups[g].1, &groups[g].2, groups[g].3);
                 let plain: Vec<SymId> = roots.iter().copied().filter(|&r| self.keeps_plain_name(r)).collect();
                 let clash = match one_method {
                     true => !plain.is_empty() && plain.len() < roots.len(),
                     false => plain.len() > 1,
                 };
                 if clash {
+                    // A value among the roots keeps its plain name whatever the group does (`dispatch_name`):
+                    // beside it no other root can stay plain, the std's neither.
+                    let beside_value = roots.iter().any(|&r| matches!(self.syms.sym(r).kind, SymKind::Val | SymKind::Var));
+                    // Two roots of the std's that one class holds as two methods cannot both keep the name
+                    // there: they take the suffix with the group, but a function class's `apply`, which the
+                    // runtime calls a function value by.
+                    let std_plain = plain.iter().filter(|&&r| self.std_declared(r)).count();
+                    let two_of_std = !*one_method && std_plain > 1;
                     for r in plain {
+                        // A root the std declares keeps the name the std's own classes give it, whatever a
+                        // program's or a library's class joins it with another method: the runtime and the
+                        // std's code reach it by that name in every program. The group's other roots take the
+                        // suffix, and a method that overrides roots of two names answers under both
+                        // (`overridden_dispatch`, `bridges_of`).
+                        if !of_std
+                            && !beside_value
+                            && self.std_declared(r)
+                            && (!two_of_std || self.is_function_apply(r))
+                            && !self.erases_like_another(&groups[g - alternatives..g], r)
+                            && !self.two_inherited_bodies(&groups[g - alternatives..g], r)
+                        {
+                            continue;
+                        }
                         self.suffixed_roots.insert(r, ());
                         if self.alternatives_named {
                             self.renamed_roots.push(r);
@@ -1072,6 +1125,11 @@ impl<'a> Worker<'a> {
                     if !self.dispatch_pending.contains(&m) {
                         self.dispatch_pending.push(m);
                     }
+                    // Its method may implement a root of another name beside this one: the class's
+                    // bridges are looked for (`bridges_of`).
+                    if !self.syms.class(d).has_overloads {
+                        self.syms.class_mut(d).has_overloads = true;
+                    }
                 }
             }
         }
@@ -1087,6 +1145,8 @@ impl<'a> Worker<'a> {
         // type's members are called in the output is no name of its.
         let object_function = bases.iter().any(|&(b, _)| self.syms.class(b).object_function);
         let mut inherited: Option<Option<Name>> = None;
+        // The overridden member `inherited` is the name of.
+        let mut named_by: Option<SymId> = None;
         for &(b, bt) in &bases[1..] {
             if object_function && (self.is_function_class(b) || self.is_partial_function(b)) {
                 continue;
@@ -1098,8 +1158,21 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 let theirs = self.dispatch_name(p);
+                // Whether, of two overridden members of two names, a root of one is the std's declaration:
+                // which of the two it is, `p` (true) or the one met before.
+                let std_named = |t: &mut Self, before: Option<SymId>| match (t.std_rooted(p), before.is_some_and(|q| t.std_rooted(q))) {
+                    (false, false) => None,
+                    (theirs, ours) => Some(theirs && !ours),
+                };
                 match inherited {
-                    None => inherited = Some(theirs),
+                    None => (inherited, named_by) = (Some(theirs), Some(p)),
+                    // Beside a member whose root the std declares, the method takes the std's name, which the
+                    // runtime calls it by; its class answers the other name through a bridge (`bridges_of`).
+                    Some(ours) if ours != theirs && std_named(self, named_by).is_some() => {
+                        if std_named(self, named_by) == Some(true) {
+                            (inherited, named_by) = (Some(theirs), Some(p));
+                        }
+                    }
                     Some(ours) if ours != theirs && self.is_library_class(c) => {
                         self.note_name_clash(c, name);
                     }
@@ -1124,6 +1197,98 @@ impl<'a> Worker<'a> {
             }
         }
         inherited
+    }
+
+    /// Whether the alternative of a class that `r` is a root of (`alternatives`: each with its roots) erases
+    /// like another of them that no `@targetName` tells from it: by the alternative as the class has it or by
+    /// one of its roots, whose erasure a bridge takes, on either side. scalac refuses the class that holds
+    /// the two (a name clash after erasure), and the suffixes, which give the two one name, refuse it here:
+    /// the std's root is then suffixed with the rest.
+    fn erases_like_another(&mut self, alternatives: &[(bool, bool, Vec<SymId>, usize, Option<(SymId, bool)>)], r: SymId) -> bool {
+        if self.target_name_of(r).is_some() {
+            return false;
+        }
+        let mut own: Vec<SymId> = Vec::new();
+        for (_, _, roots, _, alternative) in alternatives.iter().filter(|g| g.2.contains(&r)) {
+            for m in roots.iter().copied().chain(alternative.map(|(a, _)| a)) {
+                if !own.contains(&m) {
+                    own.push(m);
+                }
+            }
+        }
+        for (_, _, roots, _, alternative) in alternatives {
+            if roots.contains(&r) {
+                continue;
+            }
+            for o in roots.iter().copied().chain(alternative.map(|(a, _)| a)) {
+                if self.target_name_of(o).is_some() {
+                    continue;
+                }
+                for i in 0..own.len() {
+                    if self.erase_alike(own[i], o) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// On the JVM, whether the class takes the alternative of `r` and another of them from its parents,
+    /// each with a body: the class file's forwarders for two such methods of one name are not told apart
+    /// there, so the std's root is suffixed with the rest and the class is named as two such are.
+    fn two_inherited_bodies(&mut self, alternatives: &[(bool, bool, Vec<SymId>, usize, Option<(SymId, bool)>)], r: SymId) -> bool {
+        if !self.jvm {
+            return false;
+        }
+        let (mut of_root, mut of_another) = (false, false);
+        for (_, _, roots, _, alternative) in alternatives {
+            let Some((a, declared)) = *alternative else { continue };
+            if declared || self.is_abstract_member(a) {
+                continue;
+            }
+            match roots.contains(&r) {
+                true => of_root = true,
+                false => of_another = true,
+            }
+        }
+        of_root && of_another
+    }
+
+    /// Whether the methods `a` and `b` erase to the same parameters and result as scalac computes them
+    /// (`pickled_signature`: a value class is what it wraps), which is what its check of clashes after
+    /// erasure compares; their type parameters are gone by then and are no part of it.
+    /// Where teq's types do not tell the signature of one of them the two count as alike, and the
+    /// std's root takes the suffix with the rest.
+    fn erase_alike(&mut self, a: SymId, b: SymId) -> bool {
+        use super::loader::declared::PickledSigParam;
+        let shown = |(params, result): (Vec<PickledSigParam>, String)| {
+            let params: Vec<String> = params
+                .into_iter()
+                .filter_map(|p| match p {
+                    PickledSigParam::Types(_) => None,
+                    PickledSigParam::Term(t) => Some(t),
+                })
+                .collect();
+            (params, result)
+        };
+        match (self.pickled_signature(a, ""), self.pickled_signature(b, "")) {
+            (Some(of_a), Some(of_b)) => shown(of_a) == shown(of_b),
+            _ => true,
+        }
+    }
+
+    /// Whether the declaration `r` is the std's own, of a file of `std/`: a root no join of a
+    /// program's or a library's class renames (`suffix_clashing_roots`).
+    fn std_declared(&self, r: SymId) -> bool {
+        self.std_source(self.syms.sym(r).file)
+    }
+
+    /// Whether a root of `m` is the std's declaration (`std_declared`): `m` is then reached by the
+    /// name the std gives that root.
+    fn std_rooted(&mut self, m: SymId) -> bool {
+        let roots = self.roots_of(m);
+        roots.iter().any(|&r| self.std_declared(r))
     }
 
     /// Two methods of a library class that the output cannot tell apart by name; the census
@@ -1426,7 +1591,14 @@ impl<'a> Worker<'a> {
                     };
                     let from_jar = |t: &Self, a: SymId| class_of(t, a).map_or(false, |k| t.is_library_class(k));
                     let root = |t: &mut Self, a: SymId| *t.roots_of(a) == [a];
-                    let apart: &[usize] = if below(self, alts[i], alts[j]) && root(self, alts[i]) {
+                    // One of the two reached by a name the std gives its root keeps that name: the other
+                    // alone takes the suffix.
+                    let (std_i, std_j) = (self.std_rooted(alts[i]), self.std_rooted(alts[j]));
+                    let apart: &[usize] = if std_i && !std_j {
+                        &[j]
+                    } else if std_j && !std_i {
+                        &[i]
+                    } else if below(self, alts[i], alts[j]) && root(self, alts[i]) {
                         &[i]
                     } else if below(self, alts[j], alts[i]) && root(self, alts[j]) {
                         &[j]
@@ -1442,6 +1614,11 @@ impl<'a> Worker<'a> {
                             names[k] = Some(self.name_apart(alts[k], set));
                         }
                     }
+                    continue;
+                }
+                // Two the std's roots name alike keep the std's name both: the class that joins them is
+                // not told apart here. Two that share a suffixed name are refused as any two are.
+                if names[i].is_none() && self.std_rooted(alts[i]) && self.std_rooted(alts[j]) {
                     continue;
                 }
                 let msg = format!(
@@ -1850,10 +2027,12 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 let Some(implementation) = self.implementation_of(c, &bases, m) else { continue };
-                // A value implementing a parameterless method of an overloaded name keeps its
-                // plain name as the field's accessor, so a bridge answers the method's name.
-                let value = matches!(self.syms.sym(implementation).kind, SymKind::Val | SymKind::Var);
-                if implementation == m || (self.syms.sym(implementation).owner == Owner::Class(c) && !value) {
+                // The class's own method goes by the name of what it overrides, so no bridge
+                // answers for it but where it overrides members of two names: it then goes by the
+                // std's (`overridden_dispatch`), and a bridge answers the other. A value implementing
+                // a parameterless method of an overloaded name keeps its plain name as the field's
+                // accessor, so a bridge answers the method's name.
+                if implementation == m {
                     continue;
                 }
                 let (declared, actual) = (self.dispatch_name(m), self.dispatch_name(implementation));

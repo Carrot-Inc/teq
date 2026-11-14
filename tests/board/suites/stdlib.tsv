@@ -1018,6 +1018,7 @@ hkt	pass	-
 iarray_ops	pass	-	
 immutable_hash_map	pass	-	
 immutable_queue	pass	-	
+implemented_method_joined_elsewhere	pass	-	
 implicit_argument_interpolation	pass	-	
 implicit_class_default	pass	-	
 implicit_class_parameter	pass	-	
@@ -1126,6 +1127,7 @@ inherit_trait_over_class	pass	-
 inherited_companion_extension	pass	-	
 inherited_extension_two_objects	pass	-	
 inherited_main	pass	-	
+inherited_method_under_two_names_super	pass	-	
 inherited_storage	pass	-	
 init_companions	pass	-	
 init_field_zero	fail	-	TypeError: Cannot read properties of undefined (reading 'charCodeAt')
@@ -2558,6 +2560,7 @@ std_console_valueof	pass	-
 std_duration_parse	fail	-	RangeError: Maximum call stack size exceeded
 std_factories_flow	pass	-	
 std_formats	fail	-	output differs
+std_function_beside_std_method	pass	-	
 std_grouped_iterator	pass	-	
 std_implicit_evidence	pass	-	
 std_iterator	pass	-	
@@ -2568,6 +2571,22 @@ std_map_set_buffer	pass	-
 std_maps_sets	pass	-	
 std_mapview_map	pass	-	
 std_math_queue_breaks	pass	-	
+std_method_beside_namesake_parameter	pass	-	
+std_method_beside_other_result	pass	-	
+std_method_beside_target_named	pass	-	
+std_method_joined_and_called	pass	-	
+std_method_joined_by_class	fail	-	TypeError: pf.isDefinedAt$Any is not a function
+std_method_joined_implemented	pass	-	
+std_method_joined_in_library	fail	-	error: cannot resolve import: joinedfn not found
+std_method_under_two_names	pass	-	
+std_method_under_two_names_classes	pass	-	
+std_method_under_two_names_files	pass	-	
+std_method_under_two_names_overloaded	pass	-	
+std_method_under_two_names_stacked	pass	-	
+std_method_under_two_names_super	pass	-	
+std_methods_two_declared_in_class	pass	-	
+std_methods_two_in_class	pass	-	
+std_methods_two_in_class_compared	pass	-	
 std_misc	pass	-	
 std_mutable_map_default	pass	-	
 std_mutable_sorted_set	pass	-	

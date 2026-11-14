@@ -75,3 +75,7 @@ inlinecopymembers classes  the same as inlinesam: the classes b's expansions of 
 inlinecopymembers subset  the same as classes
 inlinecopymembers bundle  the same as inlinesam bundle
 untupledplaceholder bundle  an untupled placeholder lambda (`xs.map(_ + _)` over pairs) reads each element as `(t$0._1 ?? 0)` in the split bundle, as `t$0._1` in the whole build's (master's, met by the gate of ed4dafbea's fold): a part of its own
+joinedfunction classes  the JVM class files of the library trait and of the class that adds a third `apply` differ between the whole build and the build in part (jfa/Measure.class, jfb/Wider.class): a class below two unrelated traits that share a method name gets its JVM forwarders and bridges by the name alone (the JVM's part of the joined names)
+joinedfunction subset  the same as classes, and its run stops as jvm-run does
+joinedfunction jvm-run  `(c: String => Int)("two")` throws ClassCastException in jfa.Scale.apply, whole and in part: a class below two unrelated traits that share a method name gets its JVM forwarders and bridges by the name alone
+joinedfunction scalac-run  the same as jvm-run: scalac's classes of the user run over teq's class files of the library
