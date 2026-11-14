@@ -7,6 +7,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A class of a block whose own classes read givens of the block through inline methods takes those captures in
+  one order however the program is built: the classes it declares are taken by their place when the captures are
+  completed after the inlining phase. A module built alone over the program's own products gave such a class
+  another constructor than the whole build did (`class Outer { class Z { .. Lib.b .. }; class Y { .. Lib.c .. } }`:
+  `Outer(a, b, c, d)` whole, `Outer(a, c, d, b)` in parts), so the part build's class files and JavaScript were
+  not the whole build's. Where a class declares two or more such classes, a whole build's constructor can take
+  them in another order than before (their places, where it was their names'); no program's meaning changes.
 - The editor offers one action that adds every missing import of a file at once, "Import all missing names"
   (`source.addMissingImports`): the import of each name that has exactly one, written as the single quick fixes
   write them, several names of one prefix into its clause in one edit; a name with two candidates keeps its own

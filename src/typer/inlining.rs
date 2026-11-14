@@ -1216,7 +1216,15 @@ impl<'a> Worker<'a> {
             let mut classes = vec![c];
             let mut k = 0;
             while k < classes.len() {
-                let nested: Vec<ClassId> = self.syms.class(classes[k]).nested.values().copied().collect();
+                // The classes a class declares, by their place (a class before the object of its
+                // name the compiler makes there): the map hands them in the order of their names'
+                // ids, which a build over the program's own products gives otherwise than a whole
+                // build, and the captures are appended as the classes are met.
+                let mut nested: Vec<ClassId> = self.syms.class(classes[k]).nested.values().copied().collect();
+                nested.sort_by_cached_key(|&n| {
+                    let info = self.syms.class(n);
+                    (info.file.0, info.span.start, info.kind == crate::symbols::ClassKind::Object, self.name_str(info.name), n)
+                });
                 for n in nested {
                     if !classes.contains(&n) {
                         classes.push(n);
