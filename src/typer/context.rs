@@ -63,21 +63,35 @@ macro_rules! worker_fields {
             /// Runs `f` with the list put up as `made` has it and gives the asking code's back after: a setting takes
             /// the place's value; a stack is held to the length it had at the place, what stands past it set aside
             /// and what `f` leaves past it dropped; a value that is the asking code's own is taken, so that `f` starts
-            /// with none.
+            /// with none. Only what differs is moved: a stack that stands no longer than at the place is cut nowhere,
+            /// and an own value the asking code does not hold is not taken (what `f` leaves in it is dropped).
             fn in_standing<R>(&mut self, made: &Standing, f: impl FnOnce(&mut Self) -> R) -> R {
                 $(let $p = std::mem::replace(&mut self.$p, made.settings.$p);)*
                 $(
                     let $s = {
                         let n = (made.lengths.$s as usize).min(self.$s.len());
-                        (n, self.$s.split_off(n))
+                        (n, if n < self.$s.len() { Some(self.$s.split_off(n)) } else { None })
                     };
                 )*
-                $(let $o = std::mem::take(&mut self.$o);)*
+                $(let $o = if neutral::$on(&self.$o) { None } else { Some(std::mem::take(&mut self.$o)) };)*
                 let r = f(self);
-                $(self.$o = $o;)*
                 $(
-                    self.$s.truncate($s.0);
-                    self.$s.extend($s.1);
+                    match $o {
+                        Some(own) => self.$o = own,
+                        None => {
+                            if !neutral::$on(&self.$o) {
+                                self.$o = Default::default();
+                            }
+                        }
+                    }
+                )*
+                $(
+                    if self.$s.len() > $s.0 {
+                        self.$s.truncate($s.0);
+                    }
+                    if let Some(rest) = $s.1 {
+                        self.$s.extend(rest);
+                    }
                 )*
                 $(self.$p = $p;)*
                 r
@@ -555,18 +569,27 @@ impl<'a> Worker<'a> {
             self.dump_put_up(door, entered, made);
         }
         // The bounds the place holds that a comparison is using: for the definition none is.
-        let lifted: Vec<(u32, i8)> = self.gadt_in_use.iter().copied().filter(|&(i, _)| i < made.lengths.gadt && (i as usize) < self.gadt.len()).collect();
+        // None in use, the common case, makes no list.
+        let lifted: Vec<(u32, i8)> = if self.gadt_in_use.is_empty() {
+            Vec::new()
+        } else {
+            self.gadt_in_use.iter().copied().filter(|&(i, _)| i < made.lengths.gadt && (i as usize) < self.gadt.len()).collect()
+        };
         for &(i, variance) in &lifted {
             self.gadt[i as usize].2 = variance;
         }
-        let quote = self.quote.put_up(made.parts.quote);
+        // The quote's four are put up only where they are not the place's.
+        let quoted = self.quote.differs(made.parts.quote);
+        let quote = if quoted { self.quote.put_up(made.parts.quote) } else { None };
         let checked = made.parts.inline_checking == 0 && self.inline.checking > 0 && self.inline.depth == made.parts.inline_depth;
         let r = self.in_standing(made, |t| {
             let r = if checked { t.outside_inline(f) } else { f(t) };
             debug_assert!(t.gadt_in_use.is_empty(), "a definition's typing left a bound in use");
             r
         });
-        self.quote.give_back(quote);
+        if quoted {
+            self.quote.give_back(quote);
+        }
         for &(i, variance) in &lifted {
             debug_assert!(self.gadt[i as usize].2 == variance, "a definition's typing changed a bound its place holds");
             self.gadt[i as usize].2 = GADT_IN_USE;

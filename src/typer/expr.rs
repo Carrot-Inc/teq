@@ -4901,13 +4901,28 @@ impl<'a> Worker<'a> {
         self.push_scope();
         self.local_blocks.push(super::resolve::LocalBlock { file, stmts, frame_depth: self.env.frames.len(), imports_scope, next: 0, standing: None, alias_sites: Vec::new() });
         // What stands here is the place of the methods and the givens the block defines (`Worker::standing_of`).
-        if items.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(ast.def(*d).kind, DefKind::Fun(_) | DefKind::Given(_)))) {
+        // One reading of the statements for both: whether the block defines a method or a given, and whether it
+        // defines an inline method.
+        let (mut defines, mut cursor) = (false, false);
+        for s in items.iter() {
+            if let Stmt::Def(d) = s {
+                let def = ast.def(*d);
+                match def.kind {
+                    DefKind::Fun(_) => {
+                        defines = true;
+                        cursor |= def.mods & mods::INLINE != 0;
+                    }
+                    DefKind::Given(_) => defines = true,
+                    _ => {}
+                }
+            }
+        }
+        if defines {
             let standing = Box::new(self.standing_here());
             if let Some(b) = self.local_blocks.last_mut() {
                 b.standing = Some(standing);
             }
         }
-        let cursor = items.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(ast.def(*d).kind, DefKind::Fun(_)) && ast.def(*d).mods & mods::INLINE != 0));
         if cursor {
             let frame = self.env.frames.len() - 1;
             let made = self.made_here(true);
