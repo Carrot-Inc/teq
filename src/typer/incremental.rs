@@ -26,6 +26,20 @@ pub struct Change<'r> {
 /// to one worker (`retype_files`), which a session answers with a build of one worker.
 pub const RETYPE_GAVE_WAY: &str = "a retype gave way: ";
 
+thread_local! {
+    /// Whether the typing on this thread told a diagnostic at the member its walk met first since the retype
+    /// under way began (`told_in_walk_order`).
+    static TOLD_IN_WALK_ORDER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Notes a diagnostic told at the member the walk met first (a cycle of inline results,
+/// `Worker::inline_inferred_result`). A retype's walk types the files that use an edited file before it, another
+/// order than a fresh check's: a retype that told one takes the full path (`Typer::retype`), as it does with two
+/// workers and more, where such a diagnostic gives the build to one worker (`Worker::need_serial`).
+pub(super) fn told_in_walk_order() {
+    TOLD_IN_WALK_ORDER.with(|told| told.set(true));
+}
+
 impl<'a> super::Typer<'a> {
     /// Types the bodies of the changed files anew. `Err` names why a full build is needed
     /// instead; `Ok` leaves the diagnostics of the files in `diags`. An inferred signature that
@@ -147,6 +161,7 @@ impl<'a> Worker<'a> {
         // A retype's walk is one worker's: what a fork tracked to place and check its workers' records
         // (`merge::DiagRange`, the history reads, the events) is the full build's, gone with it.
         self.forget_fork_tracking();
+        TOLD_IN_WALK_ORDER.with(|told| told.set(false));
         for change in changes {
             self.check_file(change.file);
         }
@@ -158,6 +173,10 @@ impl<'a> Worker<'a> {
         // the fork's, nothing after reads them, and the session types the build again by one worker.
         if self.serial.is_needed() {
             return Err(format!("{}{}", RETYPE_GAVE_WAY, self.serial.reason().unwrap_or_default()));
+        }
+        // What this walk told at the member it met first, a fresh check's walk may tell at another.
+        if TOLD_IN_WALK_ORDER.with(|told| told.replace(false)) {
+            return Err("a cycle's error is told at the member a fresh check's walk meets first".to_string());
         }
         self.into_constr_program(None);
         // The files' top-level value forwarders, forgotten with their typing: made again as the

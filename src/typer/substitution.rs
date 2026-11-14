@@ -241,6 +241,14 @@ impl CopyKinds {
     }
 }
 
+/// A block at the statement being typed (`Worker::block_cursor`).
+#[derive(Clone, Copy)]
+struct BlockAt {
+    stmts: crate::ast::ListRef,
+    at: usize,
+    imports_scope: usize,
+}
+
 impl Walk {
     /// The index of the source of the copy's reducible node `e`, the last the instance
     /// published for it.
@@ -337,14 +345,17 @@ impl<'a> Worker<'a> {
     }
 
     /// The record of a call's callee, checked on the call if the walk has not met its
-    /// definition yet, so that what a call gives does not depend on the typing order.
+    /// definition yet, so that what a call gives does not depend on the typing order: under
+    /// another definition's check as outside one (the check is the definition's own, typed in its
+    /// own place, `check_definition_in`), so that a body under check reads the result its callee's
+    /// body infers (`inline_inferred_result`) whichever of the two is written first.
     pub(super) fn demand_definition(&mut self, sym: SymId) {
         // The expansion needs the body, which dotty's Namer types when it is first forced
         // (`addInlineInfo`'s lazy body): a demand of the definition being typed.
         if self.is_inline_callee(sym) {
             self.note_reached(sym);
         }
-        if self.checks_inline_definition() || !self.is_inline_callee(sym) || self.inline_definitions.contains_key(&sym) {
+        if !self.is_inline_callee(sym) || self.inline_definitions.contains_key(&sym) {
             return;
         }
         // The check is the definition's whatever becomes of an attempt that asked for it, an item
@@ -370,17 +381,24 @@ impl<'a> Worker<'a> {
     /// (`check_local_inline_definition`): the call's environment down to the frame that names the
     /// method, with the imports in scope there and those the block enters between the call and
     /// the definition (`env_at_definition`), not the scopes around the call (a lambda's
-    /// parameter of the call's name is not the definition's). Not in a body being expanded or
-    /// checked, whose local methods the check does not take (and which scalac rejects, "nested
-    /// inline methods are not supported"). The record it makes is the definition's, which the
-    /// block's own check finds made, its diagnostics reported once.
+    /// parameter of the call's name is not the definition's). Not in a body being expanded, whose
+    /// local methods are copied with it, nor in a quote; and under another definition's check only
+    /// where the block has entered what stands before the definition (`entered_up_to`: a block
+    /// enters its values and givens where their statements are reached). The record it makes is the
+    /// definition's, which the block's own check finds made, its diagnostics reported once.
     fn demand_local_definition(&mut self, sym: SymId) {
-        if self.inline.depth > 0 || self.inline.checking > 0 || self.quote.level > 0 {
+        if self.inline.depth > 0 || self.quote.level > 0 {
             return;
         }
         let name = self.syms.sym(sym).name;
         let frame = self.env.frames.iter().rposition(|f| matches!(f, super::Frame::Locals { names, .. } if names.iter().any(|&(n, s)| n == name && s == sym)));
         let Some(k) = frame else { return };
+        // Under a check the definition is demanded where the block has entered what stands before it. A value, a
+        // lazy value or a given between the statement being typed and the definition is not entered yet, and the
+        // body may name it: the block's own check of the definition, where it stands, has them.
+        if self.inline.checking > 0 && !self.entered_up_to(sym, k) {
+            return;
+        }
         let mut env = self.env.clone();
         env.frames.truncate(k + 1);
         env.imports.retain(|i| i.depth as usize <= k + 1);
@@ -455,6 +473,34 @@ impl<'a> Worker<'a> {
         })
     }
 
+    /// The block whose frame `k` holds a local inline method of `file`: its statements, the statement being
+    /// typed and where its imports are entered. Under a check the inline state is set aside (`outside_inline`),
+    /// and the block's own record has the same (`local_blocks`, where `standing_of` finds a block's place).
+    fn block_cursor(&self, k: usize, file: crate::source::FileId) -> Option<BlockAt> {
+        if let Some(b) = self.inline.blocks.iter().rev().find(|b| b.frame == k && b.file == file) {
+            return Some(BlockAt { stmts: b.stmts, at: b.at, imports_scope: b.imports_scope });
+        }
+        let b = self.local_blocks.iter().rev().find(|b| b.frame_depth == k + 1 && b.file == file)?;
+        Some(BlockAt { stmts: b.stmts, at: b.next, imports_scope: b.imports_scope })
+    }
+
+    /// Whether the block whose frame `k` defines the local inline method `sym` has entered every binding that
+    /// stands before the definition: no value, lazy value or given between the statement being typed and it (the
+    /// methods, classes, objects and type aliases are named from the block's start, and the imports between are
+    /// entered ahead, `env_at_definition`). False where the block's statements are not at hand.
+    fn entered_up_to(&self, sym: SymId, k: usize) -> bool {
+        let (file, def) = {
+            let s = self.syms.sym(sym);
+            (s.file, s.def)
+        };
+        let (Some(def), Some(cursor)) = (def, self.block_cursor(k, file)) else { return false };
+        let ast = self.ast(file);
+        let items = ast.stmt_list(cursor.stmts);
+        let Some(at) = items.iter().position(|s| matches!(s, crate::ast::Stmt::Def(d) if *d == def)) else { return false };
+        let between = items.get(cursor.at + 1..at).unwrap_or(&[]);
+        !between.iter().any(|s| matches!(s, crate::ast::Stmt::Def(d) if matches!(ast.def(*d).kind, DefKindAst::Val { .. } | DefKindAst::Given(_))))
+    }
+
     /// `env`, the environment of the block whose frame `k` defines the local inline method `sym`
     /// as the block stands at the statement being typed, with the imports of the statements
     /// between that one and the definition entered as the block will enter them, so that the
@@ -474,7 +520,7 @@ impl<'a> Worker<'a> {
         };
         let unchanged = |env| Some(ForwardScope { env, pending: Vec::new(), first: None });
         let Some(def) = def else { return unchanged(env) };
-        let Some(cursor) = self.inline.blocks.iter().rev().find(|b| b.frame == k && b.file == file).copied() else { return unchanged(env) };
+        let Some(cursor) = self.block_cursor(k, file) else { return unchanged(env) };
         let ast = self.ast(file);
         let items = ast.stmt_list(cursor.stmts);
         let Some(at) = items.iter().position(|s| matches!(s, crate::ast::Stmt::Def(d) if *d == def)) else { return unchanged(env) };

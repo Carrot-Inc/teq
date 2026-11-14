@@ -1192,15 +1192,38 @@ impl<'a> Worker<'a> {
     /// The result type of an inline method declared without one, as its checked definition
     /// infers it and `Namer.inferredResultType` widens it (`infer_inline_results`): the program's
     /// definition checked on demand, as an expansion demands it (`substitution_entry`); none
-    /// while it is in progress, failed, or names its parameters' paths.
+    /// where it failed or names its parameters' paths. A record in progress is a cycle: the body
+    /// being checked reads, itself or through the definitions it demands, the result it is
+    /// inferring (scalac's E044, as a signature's cycle is told, `uncompleted_sig`).
     #[cold]
     #[inline(never)]
     pub(super) fn inline_inferred_result(&mut self, sym: SymId) -> Option<TypeId> {
+        // An override's result is the member's it overrides, read before any body (`Namer.inferredResultType`'s
+        // `inherited`): an inline method that implements an abstract one may call itself.
+        let sig = self.sig_arc(sym);
+        if let Some(t) = self.inherited_result_type(sym, &sig) {
+            return (t != ERROR).then_some(t);
+        }
         let info = self.syms.sym(sym);
-        if info.def.is_some() && self.program_file(info.file) && !self.is_body_file(info.file) && !self.library_inline(sym) {
+        let (name, file, span) = (info.name, info.file, info.span);
+        // The read depends on the callee's body as an expansion of it does, whether or not the build reaches the
+        // inlining phase: an edit of that body types the reading file again (`Worker::inline_deps`).
+        if file != self.env.file {
+            self.inline_deps.entry(file).or_default().insert(self.env.file, ());
+        }
+        if info.def.is_some() && self.program_file(file) && !self.is_body_file(file) && !self.library_inline(sym) {
             self.demand_definition(sym);
         }
         let record = self.inline_definitions.get(&sym)?;
+        if record.state == DefinitionState::InProgress {
+            // Which member of the cycle reports it is the member the walk met first, which several
+            // workers' walks do not keep to.
+            self.need_serial(|| format!("a recursive inline result ({})", self.name_str(name)));
+            super::incremental::told_in_walk_order();
+            let msg = format!("recursive use of {} needs an explicit result type", self.name_str(name));
+            self.diags.error(file, span, msg);
+            return None;
+        }
         if record.state != DefinitionState::Checked || self.types.contains_error(record.ty) || self.types.has_paths(record.ty) {
             return None;
         }
@@ -2426,6 +2449,11 @@ impl<'a> Worker<'a> {
     /// when there is one. What it answers: the body, its type and the defaults.
     fn type_inline_definition(&mut self, sym: SymId, sig: &MethodSig) -> (Option<TExprId>, TypeId, Vec<Option<TExprId>>) {
         self.dump_door("inline body", super::context::Entered::Def(sym));
+        // A check nested in the typing of too many bodies is the cycle a plain body's typing reports there
+        // (`type_body_plain`): a chain of inline methods of inferred result, each written before the one it calls.
+        if self.body_nested_too_deep(sym) {
+            return (None, ERROR, Vec::new());
+        }
         if self.forked {
             self.refresh_std_if_stale();
             self.sync_arity_tables();

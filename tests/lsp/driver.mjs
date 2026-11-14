@@ -8144,7 +8144,105 @@ async function phaseRecords() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, importMerges, importAll, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths, phaseRecords }
+// --- An inline method's check that reads its callee's inferred result, across a session's edits ---
+//
+// The caller's check reads the result the callee's body infers and so uses the callee's body, as an
+// expansion of it does: an edit of the callee types the caller's file and the use's again. Each
+// state's answer is a fresh check's: a cycle of the two made and undone (the retype that tells the
+// cycle is answered by a full build, whose walk meets the members in a fresh check's order), a
+// mismatch the callee's new result brings to the use, made and undone. By `compiler watch --check`
+// and by the server's didChange, each at one worker and at eight.
+
+async function inlineResults() {
+  encoding = "utf-16"
+  const callee = (body) => `object Callee:\n  inline def inner(x: Int) = ${body}\n`
+  const files = {
+    "Callee.scala": callee("x * 3"),
+    "Caller.scala": "object Caller:\n  inline def outer(x: Int) = Callee.inner(x) + 1\n",
+    "Use.scala": "object Use:\n  val held: Int = Caller.outer(5)\n",
+  }
+  const edits = [
+    ["a cycle of the two", callee("if x > 0 then Caller.outer(x - 1) else 0")],
+    ["the cycle undone", callee("x * 3")],
+    ["a mismatch at the use", callee("x * 3L")],
+    ["the mismatch undone", callee("x * 4")],
+  ]
+  const names = Object.keys(files)
+  const base = (file) => file.split("/").pop()
+  const sorted = (records) => [...records].sort()
+  const head = (message) => message.split("\n")[0]
+  const setUp = (name, text) => {
+    const dir = join(work, "inline-results", name.replace(/[^a-z0-9]+/gi, "-"))
+    mkdirSync(dir, { recursive: true })
+    for (const n of names) writeFileSync(join(dir, n), n === "Callee.scala" ? text : files[n])
+    return dir
+  }
+  /** A fresh `compiler check` of the three files in `dir`: its errors, sorted. */
+  const fresh = (dir) => {
+    let out
+    try {
+      out = execSync(`"${teq}" compiler check ${names.join(" ")} --threads 1 2>&1`, { cwd: dir }).toString()
+    } catch (e) {
+      out = `${e.stdout ?? ""}`
+    }
+    return sorted([...out.matchAll(/^(\w+\.scala):(\d+):\d+: error: (.*)$/gm)].map((m) => `error ${m[1]}:${m[2]} ${m[3]}`))
+  }
+  const answered = (a) => sorted((a.errors ?? []).map((d) => `error ${base(d.file)}:${d.line} ${head(d.message)}`))
+  const expected = [fresh(setUp("fresh first", files["Callee.scala"])), ...edits.map(([what, text]) => fresh(setUp(`fresh ${what}`, text)))]
+  check(
+    "an inline result's edits: a fresh check reports the cycle, the mismatch at the use, and nothing where each is undone",
+    expected[0].length === 0 && expected[1].length === 1 && expected[1][0].includes("needs an explicit result type") && expected[2].length === 0 && expected[3].length === 1 && expected[3][0].startsWith("error Use.scala:2 ") && expected[4].length === 0,
+    expected,
+  )
+  for (const workers of ["1", "8"]) {
+    const dir = setUp(`check ${workers}`, files["Callee.scala"])
+    const s = session(dir, ["--threads", workers])
+    try {
+      const first = await s.next()
+      check(`an inline result's edits, a check session at ${workers}: the first answer is the fresh check's`, same(answered(first), expected[0]), [answered(first), expected[0]])
+      for (const [i, [what, text]] of edits.entries()) {
+        s.child.stdin.write(`text ${join(dir, "Callee.scala")} ${Buffer.byteLength(text)}\n${text}build ${join(dir, "Callee.scala")}\n\n`)
+        const answer = await s.next()
+        check(`an inline result's edits, a check session at ${workers}, ${what}: the answer is the fresh check's`, same(answered(answer), expected[i + 1]), [answered(answer), expected[i + 1]])
+      }
+    } catch (e) {
+      check(`an inline result's edits, a check session at ${workers}, ran to its end`, false, `${e.stack}`)
+    } finally {
+      s.child.stdin.end()
+      s.child.kill()
+    }
+    const open = setUp(`didChange ${workers}`, files["Callee.scala"])
+    const c = new Client(open, { TEQ_SESSION_WORKERS: workers })
+    const published = () => sorted(names.flatMap((n) => c.latestDiagnostics(uriOf(join(open, n))).filter((d) => d.severity === 1).map((d) => `error ${n}:${d.range.start.line + 1} ${head(d.message)}`)))
+    try {
+      await c.result("initialize", { processId: null, rootUri: uriOf(open), capabilities: {} })
+      c.notify("initialized", {})
+      for (const n of names) c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(join(open, n)), languageId: "scala", version: 1, text: readFileSync(join(open, n), "utf8") } })
+      const hover = { textDocument: { uri: uriOf(join(open, "Use.scala")) }, position: { line: 1, character: 6 } }
+      // A request waits for the build under way: what is published once it is answered is the build's.
+      await c.result("textDocument/hover", hover)
+      const first = (await until(() => same(published(), expected[0]), 20000)) || published()
+      check(`an inline result's edits, didChange at ${workers}: the first build publishes the fresh check's`, first === true, [first, expected[0]])
+      for (const [i, [what, text]] of edits.entries()) {
+        c.notify("textDocument/didChange", { textDocument: { uri: uriOf(join(open, "Callee.scala")), version: i + 2 }, contentChanges: [{ text }] })
+        await c.result("textDocument/hover", hover)
+        const reached = (await until(() => same(published(), expected[i + 1]), 20000)) || published()
+        // And it stays: nothing more is published once every message so far is handled.
+        await sync(c)
+        await c.result("textDocument/hover", hover)
+        check(`an inline result's edits, didChange at ${workers}, ${what}: the build publishes the fresh check's`, reached === true && same(published(), expected[i + 1]), [reached, published(), expected[i + 1]])
+      }
+      await c.result("shutdown", null)
+      c.notify("exit", null)
+      await Promise.race([c.exited, sleep(10000)])
+    } catch (e) {
+      check(`an inline result's edits, didChange at ${workers}, ran to its end`, false, `${e.stack}\nstderr: ${c.stderr.slice(-600)}`)
+      c.proc.kill()
+    }
+  }
+}
+
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, importActions, importMerges, importAll, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths, phaseRecords, inlineResults }
 // Run only when named: the idle minute, the jar fetch and the sources' fetches, which tests/lsp.sh
 // runs once each.
 const named = new Set(["idleMinute", "jarFetch", "librarySources", "sourcesFailures", "sourcesHeld", "sourcesBackoff", "sourcesPaths"])

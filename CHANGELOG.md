@@ -47,6 +47,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   `java.awt.Point` is refused. A library's pickle names such a class in a signature as scalac does
   (`java.lang.ProcessBuilder$.Redirect`), so that a module compiled by scalac can use an inline method of a
   teq-built library that calls an overloaded Java method over one.
+- An inline method whose result type is inferred may call another inline method of inferred result that is written
+  after it or stands in another file (`inline def outer(x: Int) = inner(x) + 1` above
+  `inline def inner(x: Int) = x * 3`): the call no longer builds a program that prints `undefined` or `()`. Two
+  such methods that call each other, and one that calls itself, are refused as scalac refuses them (`recursive use
+  of outer needs an explicit result type`). Two such methods of one block with a value
+  or a given defined between them are not covered yet: that call still builds the program it built before.
 
 ## 0.1.10 (2026-11-13)
 

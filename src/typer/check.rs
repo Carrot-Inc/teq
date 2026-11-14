@@ -5060,6 +5060,22 @@ impl<'a> Worker<'a> {
         self.type_body_plain(sym, sig, expected)
     }
 
+    /// Whether the typing of `sym`'s body would stand inside the typing of too many other bodies, which is told as
+    /// the cycle it is, at the definition: a plain body's typing and an inline definition's check alike
+    /// (`type_body_plain`, `type_inline_definition`).
+    #[inline]
+    pub(super) fn body_nested_too_deep(&mut self, sym: SymId) -> bool {
+        self.body_depth >= MAX_BODY_DEPTH && self.tell_nested_too_deep(sym)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn tell_nested_too_deep(&mut self, sym: SymId) -> bool {
+        let msg = format!("the definition of {} is nested in the typing of {} other bodies, which is a cycle", self.sym_path(sym), MAX_BODY_DEPTH);
+        self.error(self.syms.sym(sym).span, msg);
+        true
+    }
+
     pub(super) fn type_body_plain(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>) -> TypeId {
         if self.forked {
             // What other workers entered or made since this worker last looked (a std file, an
@@ -5067,9 +5083,7 @@ impl<'a> Worker<'a> {
             self.refresh_std_if_stale();
             self.sync_arity_tables();
         }
-        if self.body_depth >= MAX_BODY_DEPTH {
-            let msg = format!("the definition of {} is nested in the typing of {} other bodies, which is a cycle", self.sym_path(sym), MAX_BODY_DEPTH);
-            self.error(self.syms.sym(sym).span, msg);
+        if self.body_nested_too_deep(sym) {
             return ERROR;
         }
         if self.body_depth + 40 >= MAX_BODY_DEPTH && std::env::var_os("TEQ_CLASSPATH_DETAIL").is_some() {

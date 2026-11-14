@@ -577,6 +577,10 @@ same_as_one_worker() {
 same_as_one_worker inline_names -o tests/workers/inline_names
 same_as_one_worker inline_names_jvm -o tests/workers/inline_names --target jvm
 same_as_one_worker inline_names_split --split tests/workers/inline_names
+# An inline method of inferred result that calls one of another file, not checked yet: the callee's check is first
+# needed inside its caller's, by several workers at once, each for its own record; the JavaScript of several
+# workers is one worker's.
+same_as_one_worker inline_result_ring -o tests/cases/inline_result_ring
 # A trait's super accessors stand in the order scalac's `SuperAccessors` makes them, the order of the trait's
 # `super` calls in its source (an application's arguments before its function, an inline call's own
 # arguments where the call stands, a default's getter where the application has it), at every worker count:

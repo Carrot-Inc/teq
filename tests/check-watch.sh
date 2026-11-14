@@ -1173,6 +1173,35 @@ retype_jar_state
 retype_jar_state --index
 retype_sweep
 
+# An inline method's check that reads its callee's inferred result uses the callee's body as an expansion of it does,
+# whether or not the build reaches the inlining phase: the edit that undoes a cycle of the two, or a mismatch the
+# callee's new result brought to a use, types the caller's file again, and the error goes as in a fresh check. The
+# cycle itself is told at the member a fresh check's walk meets first: the retype that tells it takes the full path.
+ires=$work/ires && rm -rf "$ires" && mkdir -p "$ires"
+printf 'object Callee:\n  inline def inner(x: Int) = x * 3\n' > "$ires/Callee.scala"
+printf 'object Caller:\n  inline def outer(x: Int) = Callee.inner(x) + 1\n' > "$ires/Caller.scala"
+printf 'object Use:\n  val held: Int = Caller.outer(5)\n' > "$ires/Use.scala"
+start "$ires"
+expect "inline result: the first build" "$(field ok),$(count error)" 'true,0'
+printf 'object Callee:\n  inline def inner(x: Int) = if x > 0 then Caller.outer(x - 1) else 0\n' > "$ires/Callee.scala"
+build "$ires/Callee.scala"
+expect "inline result: a cycle of the two" "$(field ok),$(count error)" 'false,1'
+if has 'needs an explicit result type'; then ok; else bad "inline result: the cycle's error: $RESULT"; fi
+as_fresh "inline result: a cycle of the two" "$ires"
+printf 'object Callee:\n  inline def inner(x: Int) = x * 3\n' > "$ires/Callee.scala"
+build "$ires/Callee.scala"
+expect "inline result: the cycle undone" "$(field ok),$(count error)" 'true,0'
+as_fresh "inline result: the cycle undone" "$ires"
+printf 'object Callee:\n  inline def inner(x: Int) = x * 3L\n' > "$ires/Callee.scala"
+build "$ires/Callee.scala"
+expect "inline result: a mismatch at the use" "$(field ok),$(count error)" 'false,1'
+as_fresh "inline result: a mismatch at the use" "$ires"
+printf 'object Callee:\n  inline def inner(x: Int) = x * 4\n' > "$ires/Callee.scala"
+build "$ires/Callee.scala"
+expect "inline result: the mismatch undone" "$(field ok),$(count error)" 'true,0'
+as_fresh "inline result: the mismatch undone" "$ires"
+stop
+
 sessions_forked check-watch
 echo "$pass passed, $fail failed"
 [ $fail = 0 ]

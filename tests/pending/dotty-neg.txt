@@ -385,7 +385,6 @@ i15569.scala	marks: 20 errors where 7 are marked: i15569.scala:6:11: several ent
 i15575.scala	check: diagnostic 1 of 2: scalac's is error i15575.scala:5:28 Type argument T & Any does not conform to lower bound Any; teq's is error i15575.scala:5:22 type argument T does not conform to lower bound Any
 i15614.scala	marks: 30 errors where 17 are marked: i15614.scala:3:21: expected ':', found identifier
 i15618.scala	marks: 1 errors where 2 are marked
-i1568.scala	marks: no error where 1 are marked
 i15741.scala	marks: no error where 2 are marked
 i15750.scala	marks: 2 errors where 3 are marked
 i15784.scala	marks: 10 errors where 2 are marked: i15784.scala:2:21: expected ')', found '@'

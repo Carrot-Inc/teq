@@ -608,7 +608,7 @@ neg/i15569.scala	different	type mismatch
 neg/i15575.scala	same	
 neg/i15614.scala	syntax	expected {}, found {}
 neg/i15618.scala	subset	1/2 lines
-neg/i1568.scala	accepts	
+neg/i1568.scala	same	
 neg/i15687.scala	same	
 neg/i15692.scala	same	
 neg/i15741.scala	accepts	
