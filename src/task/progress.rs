@@ -18,6 +18,16 @@ pub fn duration(d: Duration) -> String {
     }
 }
 
+/// `duration` of a time a build's answer gives in milliseconds with a fraction: the whole millisecond nearest
+/// below ten seconds (`6 ms`), seconds with one decimal from there (`12.3 s`).
+pub fn duration_of_ms(ms: f64) -> String {
+    if ms.round() < 10_000.0 {
+        format!("{:.0} ms", ms)
+    } else {
+        duration(Duration::from_millis(ms.round() as u64))
+    }
+}
+
 /// `1 file`, `2 files`: a count with its noun, the plural for every count but one.
 pub fn counted(n: usize, one: &str, many: &str) -> String {
     format!("{} {}", n, if n == 1 { one } else { many })
@@ -202,6 +212,18 @@ impl Progress {
         }
     }
 
+    /// The status line of something that began at `since`, its seconds counted from there; nothing where stderr is
+    /// no terminal.
+    pub fn status_since(&self, text: &str, since: Instant) {
+        let mut inner = self.lock();
+        if !inner.terminal {
+            return;
+        }
+        let stood = (inner.now)().saturating_duration_since(since).as_secs();
+        inner.status = Some((text.to_string(), since, stood));
+        inner.draw();
+    }
+
     /// The status line's text replaced, its seconds going on: how far the unit has come.
     pub fn advance(&self, text: &str) {
         let mut inner = self.lock();
@@ -304,6 +326,33 @@ mod tests {
         let (start, clock) = (Instant::now(), moved.clone());
         let now = move || start + Duration::from_millis(*clock.lock().unwrap());
         (Progress::over(Box::new(kept.clone()), terminal, Box::new(now), Box::new(|| 80)), kept, moved)
+    }
+
+    #[test]
+    fn a_build_s_milliseconds_read_as_before_below_ten_seconds() {
+        assert_eq!(duration_of_ms(0.4), "0 ms");
+        assert_eq!(duration_of_ms(2.5), "2 ms");
+        assert_eq!(duration_of_ms(6.49), "6 ms");
+        assert_eq!(duration_of_ms(39.6), "40 ms");
+        assert_eq!(duration_of_ms(9_999.4), "9999 ms");
+        assert_eq!(duration_of_ms(9_999.6), "10.0 s");
+        assert_eq!(duration_of_ms(12_349.0), "12.3 s");
+        assert_eq!(duration_of_ms(75_000.0), "75.0 s");
+    }
+
+    #[test]
+    fn a_status_counts_its_seconds_from_where_its_unit_began() {
+        let (progress, kept, clock) = reporter(true);
+        let began = Instant::now();
+        *clock.lock().unwrap() = 2_300;
+        progress.status_since("compiling a/compile (3 projects)", began);
+        assert_eq!(kept.taken(), "\r\x1b[Kcompiling a/compile (3 projects), 2 s");
+        *clock.lock().unwrap() = 3_100;
+        progress.tick();
+        assert_eq!(kept.taken(), "\r\x1b[Kcompiling a/compile (3 projects), 3 s");
+        let (lines, kept, _) = reporter(false);
+        lines.status_since("compiling a/compile (3 projects)", began);
+        assert_eq!(kept.taken(), "");
     }
 
     #[test]

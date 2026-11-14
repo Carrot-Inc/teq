@@ -147,6 +147,14 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   A class's value or method that implements a trait's method which another class joins with an overload answers
   through the trait on JavaScript and in the interpreter (`TypeError: c.size$0 is not a function`), also where a
   `super` call of the name comes before it (`TypeError: o.run$0 is not a function`).
+- `teq compile` and `teq run` say that they wait: a build that has not answered a second after the command began
+  is named on stderr (`app/compile: compiling api, app, core (1 of 2)`; on a terminal a line written over itself
+  with the seconds, `compiling app/compile (3 projects), 14 s`), and the command then ends with its own time (`teq
+  compile: 3 configurations in 14.2 s`; `teq run: 1 configuration compiled in 14.2 s` before the program). A build
+  that answers within the second prints nothing new, and `teq run` no longer prints its build's line when nothing
+  was written: a run with nothing to compile prints the program's output alone. A build's time of ten seconds and
+  more reads in seconds (`12.3 s`)
+  ([teq compile and run](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
 
 ## 0.1.10 (2026-11-13)
 

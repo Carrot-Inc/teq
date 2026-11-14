@@ -238,6 +238,15 @@ impl Reply {
 struct Sink(Mutex<Option<TcpStream>>);
 
 impl Sink {
+    /// A record of the request's own (`progress`), which its client reads and does not print.
+    fn record(&self, record: Json) {
+        if let Some(stream) = self.0.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+            let mut line = record.to_text();
+            line.push('\n');
+            let _ = stream.write_all(line.as_bytes());
+        }
+    }
+
     fn line(&self, text: &str) {
         log(text);
         if let Some(stream) = self.0.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
@@ -503,12 +512,17 @@ fn lock_within<T>(mutex: &Mutex<T>, bound: Duration) -> Option<std::sync::MutexG
 /// sources a Scala.js project shares writes class files a Scala.js check does not); a
 /// configuration nothing else types gets its project's widest resident.
 fn plan(export: &Export, running: &[Key], wanted: &[Key]) -> Vec<Key> {
+    plan_served(export, running, wanted).into_iter().map(|(key, _)| key).collect()
+}
+
+/// `plan`, each resident with the wanted configurations it types, in their order.
+fn plan_served(export: &Export, running: &[Key], wanted: &[Key]) -> Vec<(Key, Vec<Key>)> {
     let inputs = |k: &Key| export.session_inputs(k).into_iter().collect::<BTreeSet<PathBuf>>();
     let platform = |k: &Key| export.projects.get(&k.project).map(|p| p.platform);
     let needs: BTreeMap<Key, BTreeSet<PathBuf>> = wanted.iter().map(|k| (k.clone(), inputs(k))).collect();
     let types = |resident: &Key, has: &BTreeSet<PathBuf>, k: &Key| platform(resident) == platform(k) && needs[k].is_subset(has) && export.serves(resident, k);
     let mut left: Vec<Key> = wanted.to_vec();
-    let mut chosen: Vec<Key> = Vec::new();
+    let mut chosen: Vec<(Key, Vec<Key>)> = Vec::new();
     while let Some(first) = left.first().cloned() {
         let typed = |resident: &Key, has: &BTreeSet<PathBuf>, left: &[Key]| left.iter().filter(|k| types(resident, has, k)).count();
         // A running resident whose closure has come to hold a generator sbt runs is passed over,
@@ -528,12 +542,29 @@ fn plan(export: &Export, running: &[Key], wanted: &[Key]) -> Vec<Key> {
                 (k, has)
             }
         };
+        let served: Vec<Key> = left.iter().filter(|k| types(&key, &has, k)).cloned().collect();
         left.retain(|k| !types(&key, &has, k));
-        if !chosen.contains(&key) {
-            chosen.push(key);
+        match chosen.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, taken)) => taken.extend(served),
+            None => chosen.push((key, served)),
         }
     }
     chosen
+}
+
+/// The projects whose compile configuration the resident `key` types, in the export's order: what a build of it
+/// types, whichever of them the request asked for (`served`, which are among them).
+fn typed_projects(export: &Export, key: &Key, served: &[Key]) -> Vec<String> {
+    let has: BTreeSet<PathBuf> = export.session_inputs(key).into_iter().collect();
+    let platform = |k: &Key| export.projects.get(&k.project).map(|p| p.platform);
+    let mut names: BTreeSet<String> = served.iter().map(|k| k.project.clone()).collect();
+    for (name, _) in export.projects.iter().filter(|(_, p)| p.configurations.contains_key("compile")) {
+        let k = Key::new(name, "compile");
+        if platform(&k) == platform(key) && export.serves(key, &k) && export.session_inputs(&k).into_iter().all(|i| has.contains(&i)) {
+            names.insert(name.clone());
+        }
+    }
+    names.into_iter().collect()
 }
 
 /// Where a build's summary line goes.
@@ -570,12 +601,34 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
         }
     }
     let running = running(state);
-    let keys = plan(export, &running, &wanted);
+    let planned = plan_served(export, &running, &wanted);
+    let keys: Vec<Key> = planned.iter().map(|(key, _)| key.clone()).collect();
     let sink = reply.sink();
+    // What the client tells of a build that has not answered within a second (`client::Waiting`): the plan
+    // before the builds start, each resident with the projects it types and whether this request starts it,
+    // and a record as each answers.
+    let residents: Vec<Json> = planned
+        .iter()
+        .map(|(key, served)| {
+            let projects: Vec<Json> = typed_projects(export, key, served).iter().map(|n| Json::from(n.as_str())).collect();
+            obj([("key", key.to_string().as_str().into()), ("projects", Json::Arr(projects)), ("started", (!running.contains(key)).into())])
+        })
+        .collect();
+    sink.record(obj([("progress", obj([("plan", Json::Arr(residents))]))]));
+    let sink = &sink;
     let progress = |line: &str| sink.line(line);
     let progress = &progress;
     let results: Vec<(Key, Result<Answer, String>, Vec<String>)> = std::thread::scope(|scope| {
-        let handles: Vec<_> = keys.iter().map(|key| crate::alloc::spawn_in(scope, move || build(state, export, key, &request.env, progress))).collect();
+        let handles: Vec<_> = keys
+            .iter()
+            .map(|key| {
+                crate::alloc::spawn_in(scope, move || {
+                    let built = build(state, export, key, &request.env, progress);
+                    sink.record(obj([("progress", obj([("answered", key.to_string().as_str().into())]))]));
+                    built
+                })
+            })
+            .collect();
         keys.iter()
             .cloned()
             .zip(handles)
@@ -586,6 +639,8 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
             .collect()
     });
     let mut code = 0;
+    // The errors the result lines tell, a build that failed otherwise counted as one.
+    let mut errors = 0;
     for (key, answer, notes) in results {
         for note in notes {
             noted(request, &key, &note, reply);
@@ -601,35 +656,44 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
                 for e in &a.errors {
                     shown(request, &key, e, "error", &export.root, reply);
                 }
+                let first = a.fallback.as_deref() == Some("first build");
                 let line = if a.ok {
-                    let first = if a.fallback.as_deref() == Some("first build") { ", the first build" } else { "" };
                     let jvm = export.projects.get(&key.project).is_some_and(|p| p.platform == Platform::Jvm);
                     let what = if jvm { format!("{} classes, {} written", a.classes, a.changed.len()) } else { "checked".to_string() };
-                    format!("{}: {} in {:.0} ms{}\n", key, what, a.ms, first)
+                    format!("{}: {} in {}{}\n", key, what, super::progress::duration_of_ms(a.ms), if first { ", the first build" } else { "" })
                 } else {
                     let n = a.errors.len().max(1);
                     code = 1;
+                    errors += n;
                     format!("{}: {} error{}\n", key, n, if n == 1 { "" } else { "s" })
                 };
                 match summary {
                     Summary::Out => reply.out(&line),
+                    // `run` says nothing of a build that wrote nothing: the program's own output follows.
+                    Summary::Err if a.ok && a.changed.is_empty() && !first => {}
                     Summary::Err => reply.err(&line),
                 }
             }
             Err(e) => {
                 failed(request, &key, e, reply);
                 code = 1;
+                errors += 1;
             }
         }
     }
     if keys.is_empty() {
-        reply.out("teq: nothing to compile\n");
+        match summary {
+            Summary::Out => reply.out("teq: nothing to compile\n"),
+            Summary::Err => reply.err("teq: nothing to compile\n"),
+        }
     }
     let left = super::left_out(export, "compile", &left_out);
     match summary {
         Summary::Out => reply.out(&left),
         Summary::Err => reply.err(&left),
     }
+    // What the client's last line counts, where it told of the wait: the configurations asked for and the errors.
+    sink.record(obj([("progress", obj([("done", obj([("configurations", Json::Num(wanted.len() as f64)), ("errors", Json::Num(errors as f64))]))]))]));
     (super::with_left_out(code, &left_out), keys)
 }
 

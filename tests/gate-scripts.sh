@@ -556,6 +556,11 @@ check "records: a baseline from master's binary, its evidence beside it and its 
   grep -q -x "p: compile: 2 errors, within the record.s 2" "$work/records.log" && [ "$(grep -c "^error core/compile " "$rec/bench/p/errors.txt")" = 2 ] &&
   grep -q -x "kind baseline" "$rec/bench/p/errors.txt" && grep -q "^error core/compile modules/a/A.scala:2:15: error: Found: " "$rec/bench/p/errors.txt" &&
   ! grep -q -F "$rec" "$rec/bench/p/errors.txt" && [ -s "$rec/bench/p/errors.evidence.gz" ] && ! gzip -dc "$rec/bench/p/errors.evidence.gz" | grep -q -F "$rec" && grep -q -x "key web/compile" "$rec/bench/p/errors.txt"'
+# A configuration's summary of ten seconds and more reads in seconds: the same judgment.
+sed 's/^web\/compile: 3 classes, 3 written in 4 ms$/web\/compile: 3 classes, 3 written in 12.3 s/' "$work/t-ab" > "$work/t-ab-seconds"
+held "$work/t-ab-seconds"
+code=$?
+check "records: a summary in seconds is a configuration's as one in milliseconds is" "$work/records.log" eval '[ $code = 0 ] && grep -q -x "p: compile: 2 errors, within the record.s 2" "$work/records.log" && grep -q "written in 12.3 s" "$work/t-ab-seconds"'
 commit_records "master: the baseline"
 transcript_of "$work/t-abc" 1 a b c
 held "$work/t-abc"

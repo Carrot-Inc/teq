@@ -222,7 +222,7 @@ pub fn takes(word: &str) -> bool {
 /// the daemon's own `--daemon --identity <id> --export <file>` comes without a verb. A prefix
 /// option before any word but a project verb is refused.
 pub fn run(args: &[String]) -> ! {
-    // When the verb began: what a verb's last line counts its time from (`fix::run`).
+    // When the verb began: what a verb's last line counts its time from (`fix::run`, `client::Waiting`).
     let began = std::time::Instant::now();
     let mut export_file: Option<PathBuf> = None;
     let mut identity: Option<String> = None;
@@ -286,8 +286,9 @@ pub fn run(args: &[String]) -> ! {
     }
     let Some(verb) = verb else { usage(Some(&export)) };
     let code = match verb.as_str() {
-        "compile" | "test" | "stage" | "stop" => client::request(&export, &verb, &rest),
-        "run" => run::run(&export, &rest),
+        "compile" => client::request_told(&export, &verb, &rest, "compile", began).0,
+        "test" | "stage" | "stop" => client::request(&export, &verb, &rest),
+        "run" => run::run(&export, &rest, began),
         "watch" | "build" => one_project(&export, &verb, &rest),
         "dev" => dev::run(export, &rest),
         "fix" => fix::run(&export, &rest, began),

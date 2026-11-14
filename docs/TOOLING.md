@@ -338,6 +338,23 @@ the daemon compile and runs the program itself, so that it holds the terminal; `
 the client's own. Jars come from coursier's cache when their size and sha1 are the pinned ones, else are
 fetched with curl into teq's cache, each announced on stderr.
 
+**What compile and run print.** `teq compile` ends with a line a resident on stdout, once every resident has
+answered: `app/compile: 41 classes, 3 written in 212 ms` on the JVM (`, the first build` for a resident's first),
+`web/compile: checked in 96 ms` for a Scala.js project, `app/compile: 2 errors` after the diagnostics on stderr; the
+time is the resident's own build, in whole milliseconds below ten seconds and in seconds from there (`12.3 s`).
+`teq run` prints that line on stderr, and only for a build that wrote something or was a resident's first: a run
+with nothing to compile prints nothing of its own, and everything it does print is on stderr before the program
+starts, so that stdout holds the program's output alone. A build that has not answered when the command is one
+second old is told of, on stderr. Where stderr is no terminal, one line a resident still building, once: `app/compile:
+compiling api, app, core (1 of 2)`, the projects it types and its place among the request's residents (`, started
+now` where this request started the resident). On a terminal a line that is written over itself with the seconds
+since the command began, `compiling app/compile, web/compile (5 projects), 14 s`, which a resident leaves as it
+answers (`teq compile: starting, 2 s` while the daemon has not answered yet); it is held within the terminal's
+row, gives its place to every line the command prints, and is erased before the program of `run` starts and where
+an interrupt ends the command. A command that told of its wait ends with a line of its own time on stderr: `teq
+compile: 3 configurations in 14.2 s` (`, 1 error`), `teq run: 1 configuration compiled in 14.2 s` before the program.
+A build that answers within the second prints none of this.
+
 **Run.** `teq run api -- web` runs the main class the build declares (`Compile / run / mainClass`, else
 `Compile / mainClass`), else the single main class among the project's own sources, as sbt's `run` does, and
 refuses where sbt would prompt; `teq run api server` runs an alias of `teqRunAliases` or a main class by

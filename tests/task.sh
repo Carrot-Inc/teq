@@ -2026,8 +2026,18 @@ fi
 
 # `run`: app's main classes on a JVM of their own, through the daemon's compile.
 run_app() { (cd "$b" && timeout 150 "$TEQ" run app "$@" 2> "$work/run.err"); }
+# What a command says of a build that has not answered within its first second (docs/TOOLING.md, "What compile and
+# run print"), taken out: a machine's speed decides whether those lines are there.
+untold() { grep -v -E '^[^ ]+: compiling .+ \([0-9]+ of [0-9]+\)(, started now)?$|^teq (compile|run): [0-9]+ configurations?( compiled)? in [0-9.]+ m?s(, [0-9]+ errors?)?$'; }
 out=$(run_app main)
-if [ $? = 0 ] && [[ "$out" =~ ^[0-9]+$ ]] && grep -q '^app/test: ' "$work/run.err"; then pass "run: an alias's main class, its output alone on stdout, the compile's summary on stderr"; else fail "run main: $out // $(cat "$work/run.err")"; fi
+code=$?
+first=$(untold < "$work/run.err")
+out2=$(run_app main)
+if [ $code = 0 ] && [[ "$out" =~ ^[0-9]+$ ]] && { [ -z "$first" ] || [[ "$first" =~ ^app/test:\ [0-9]+\ classes,\ [0-9]+\ written\ in\ [0-9.]+\ m?s,\ the\ first\ build$ ]]; } && [ "$out2" = "$out" ] && [ -z "$(untold < "$work/run.err")" ]; then
+  pass "run: an alias's main class, its output alone on stdout; a resident's first build is told on stderr, a run with nothing to compile says nothing there"
+else
+  fail "run main: $out // $first // $out2 // $(cat "$work/run.err")"
+fi
 main_out=$out
 out=$(run_app exit -- 3)
 code=$?
@@ -2071,7 +2081,7 @@ out=$(run_in solo -- x y)
 code=$?
 out2=$(run_in solo)
 code2=$?
-if [ $code = 0 ] && [ "$out" = "solo x y" ] && [ $code2 = 0 ] && [ "$out2" = "solo" ] && grep -q '^solo/compile: ' "$work/run.err"; then pass "run: the single product main inherited through another module's trait, with and without arguments"; else fail "run solo ($code, $code2): $out / $out2 // $(cat "$work/run.err")"; fi
+if [ $code = 0 ] && [ "$out" = "solo x y" ] && [ $code2 = 0 ] && [ "$out2" = "solo" ] && [ -z "$(untold < "$work/run.err")" ]; then pass "run: the single product main inherited through another module's trait, with and without arguments"; else fail "run solo ($code, $code2): $out / $out2 // $(cat "$work/run.err")"; fi
 out=$(run_in pair --)
 code=$?
 err=$(cat "$work/run.err")
@@ -2084,6 +2094,192 @@ if [ $code = 2 ] && [ -z "$out" ] && [[ "$err" == *"pair declares no main class 
 else
   fail "run's implied refusals ($code, $code2): $err // $err2"
 fi
+# A build that has not answered a second after the command began is told of on stderr, and the command then
+# ends with its own time (docs/TOOLING.md, "What compile and run print"). app's generator is made to sleep two
+# seconds and its input changed before each command, so that no row hangs on a machine's speed; the times are
+# taken out of the lines. Off a terminal: one line for the resident, once; the result line where it was; the last line.
+cp "$b/gen.sh" "$work/gen.sh.kept"
+{ echo 'sleep 2'; cat "$work/gen.sh.kept"; } > "$b/gen.sh"
+timeless() { sed -E 's/ in [0-9]+ ms/ in <t>/; s/ in [0-9]+\.[0-9] s/ in <t>/'; }
+slow() { local words=$1; shift; echo "$words" > "$b/labels.txt"; (cd "$b" && timeout 150 "$TEQ" "$@" 2> "$work/slow.err"); }
+out=$(slow 'one two three four five' compile app | timeless)
+err=$(timeless < "$work/slow.err")
+if [[ "$out" =~ ^app/test:\ [0-9]+\ classes,\ [1-9][0-9]*\ written\ in\ \<t\>$ ]] && [ "$err" = "app/test: compiling app, core (1 of 1)
+teq compile: 1 configuration in <t>" ]; then
+  pass "compile: a build over a second is named on stderr once, its result line stays on stdout, and the command ends with its own time"
+else
+  fail "a slow compile: $out // $err"
+fi
+# Two projects asked for: the same header, the projects the resident types, and the last line counts both.
+out=$(slow 'one two three four five six seven eight' compile app core | timeless)
+err=$(timeless < "$work/slow.err")
+if [ "$err" = "app/test: compiling app, core (1 of 1)
+teq compile: 2 configurations in <t>" ]; then
+  pass "compile: two projects of one resident over a second: one header naming both, the last line counting both"
+else
+  fail "a slow compile of two projects: $out // $err"
+fi
+out=$(slow 'one two three four five six' run app main)
+code=$?
+err=$(timeless < "$work/slow.err")
+if [ $code = 0 ] && [ "$out" = 48 ] && [ "$(sed -E 's/^app\/test: [0-9]+ classes, [1-9][0-9]* written/app\/test: <n> classes, <m> written/' <<< "$err")" = "app/test: compiling app, core (1 of 1)
+app/test: <n> classes, <m> written in <t>
+teq run: 1 configuration compiled in <t>" ]; then
+  pass "run: a build over a second is named, its line and the command's time are on stderr before the program, whose output is alone on stdout"
+else
+  fail "a slow run ($code): $out // $err"
+fi
+# The same where the build fails: the diagnostic and the count of errors as they were, the last line with the count.
+{ echo 'sleep 2'; echo 'mkdir -p "$2/app"'; echo "printf 'package app\\n\\nobject Labels:\\n  val count: Int = \"no\"\\n' > \"\$2/app/Labels.scala\""; } > "$b/gen.sh"
+out=$(slow 'one two' compile app)
+code=$?
+err=$(timeless < "$work/slow.err")
+if [ $code = 1 ] && [ "$out" = "app/test: 1 error" ] && [ "$(head -1 <<< "$err")" = "app/test: compiling app, core (1 of 1)" ] && [[ "$err" == *"error: type mismatch: found \"no\", required Int"* ]] && [ "$(tail -1 <<< "$err")" = "teq compile: 1 configuration in <t>, 1 error" ]; then
+  pass "compile: a failing build over a second: the diagnostic and the count as before, the last line with the errors"
+else
+  fail "a slow failing compile ($code): $out // $err"
+fi
+out=$(slow 'one two three' run app main)
+code=$?
+err=$(timeless < "$work/slow.err")
+if [ $code = 1 ] && [ -z "$out" ] && [ "$(head -1 <<< "$err")" = "app/test: compiling app, core (1 of 1)" ] && [ "$(tail -2 <<< "$err")" = "app/test: 1 error
+teq run: 1 configuration compiled in <t>, 1 error" ]; then
+  pass "run: a failing build over a second: no program, the count of errors and the last line on stderr"
+else
+  fail "a slow failing run ($code): $out // $err"
+fi
+# A daemon that this command starts: the same lines, the resident said to be started now.
+{ echo 'sleep 2'; cat "$work/gen.sh.kept"; } > "$b/gen.sh"
+(cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+out=$(slow 'one two three four' compile app | timeless)
+err=$(timeless < "$work/slow.err")
+if [[ "$out" =~ ^app/test:\ [0-9]+\ classes,\ [0-9]+\ written\ in\ \<t\>(,\ the\ first\ build)?$ ]] && [ "$err" = "app/test: compiling app, core (1 of 1), started now
+teq compile: 1 configuration in <t>" ]; then
+  pass "compile: a command that starts the daemon prints the same lines, its resident said to be started now"
+else
+  fail "a slow compile that starts the daemon: $out // $err"
+fi
+# On a terminal: the line written over itself from the second on, erased before the result line; no line of the
+# resident's stays.
+if command -v python3 > /dev/null 2>&1; then
+  echo 'one two three four five six seven' > "$b/labels.txt"
+  out=$( (cd "$b" && TERM=xterm timeout 150 python3 "$OLDPWD/tests/support/pty_run.py" --columns 80 "$TEQ" compile app) | tr -d '\r' | timeless)
+  if [[ "$out" =~ $'\x1b'\[Kcompiling\ app/test\ \(2\ projects\),\ [0-9]+\ s ]] && [[ "$out" != *"app/test: compiling"* ]] && [[ "$out" == *$'\x1b[Kapp/test: '*' classes, '*$'\nteq compile: 1 configuration in <t>'* ]]; then
+    pass "compile on a terminal: a status written over itself from the second on, the result line and the last line stay"
+  else
+    fail "a slow compile on a terminal: $(sed 's/\x1b/\\e/g' <<< "$out")"
+  fi
+  # While the daemon before is finishing a build and the next one starts, no plan has come: the status says so,
+  # and the command ends with its last line, a refused one too.
+  starting() {
+    echo "$1" > "$b/labels.txt"
+    (cd "$b" && timeout 150 "$TEQ" compile app > /dev/null 2>&1) &
+    sleep 0.4
+    (cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+    shift
+    (cd "$b" && TERM=xterm timeout 150 python3 "$OLDPWD/tests/support/pty_run.py" --columns 80 "$TEQ" "$@") | tr -d '\r' | timeless
+    wait
+  }
+  out=$(starting 'one two three four five six seven eight nine' compile app)
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *$'\nteq compile: 1 configuration in <t>'* ]]; then
+    pass "compile on a terminal while the daemon before ends: the status says it is starting, and the last line ends the command"
+  else
+    fail "a compile on a terminal while the daemon before ends: $(sed 's/\x1b/\\e/g' <<< "$out")"
+  fi
+  out=$(starting 'one two three four five six seven eight nine ten' compile nosuch)
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: no project nosuch in "*$'\nteq compile: 0 configurations in <t>'* ]]; then
+    pass "compile on a terminal while the daemon before ends: a refused command ends with the last line too"
+  else
+    fail "a refused compile on a terminal while the daemon before ends: $(sed 's/\x1b/\\e/g' <<< "$out")"
+  fi
+  # However a command ends after its status, the last line ends it: the daemon's start is held past the second
+  # (the start's lock taken for 2.5 s, no process suspended) and the command run on a terminal, or with `pipe`
+  # off one, where nothing is shown of a daemon that starts and the bytes are those of a command within the second;
+  # with `pty-broken` the export is made unreadable while the start is held, so that the daemon ends before it listens.
+  held() {
+    local how=$1
+    shift
+    (cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+    (cd "$b" && TERM=xterm timeout 150 python3 - "$how" "$OLDPWD/tests/support/pty_run.py" "$TEQ" "$@" <<'PY'
+import fcntl, os, subprocess, sys, time
+how, runner, command = sys.argv[1], sys.argv[2], sys.argv[3:]
+os.makedirs("target/teq", exist_ok=True)
+with open("target/teq/task.start.lock", "a") as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    child = subprocess.Popen([sys.executable, runner] + (["--pipe"] if how == "pipe" else ["--columns", "80"]) + command)
+    time.sleep(2.2)
+    if how == "pty-broken":
+        open("teq.lock", "w").write("not an export\n")
+    time.sleep(0.3)
+    fcntl.flock(lock, fcntl.LOCK_UN)
+    sys.exit(child.wait())
+PY
+    ) | tr -d '\r' | timeless
+  }
+  shown() { sed 's/\x1b/\\e/g' <<< "$1"; }
+  out=$(held pty compile --diagnostics)
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: --diagnostics needs a file"$'\nteq compile: 0 configurations in <t>'* ]]; then
+    pass "compile on a terminal, its start held past the second: a request refused for its arguments ends with the last line"
+  else
+    fail "a compile without its diagnostics file on a terminal, the start held: $(shown "$out")"
+  fi
+  out=$(held pipe compile --diagnostics)
+  if [ "$out" = "teq: --diagnostics needs a file" ]; then
+    pass "compile off a terminal, its start held past the second: the same refusal is its line alone"
+  else
+    fail "a compile without its diagnostics file off a terminal, the start held: $(shown "$out")"
+  fi
+  out=$(held pty compile --diagnostics nosuchdir/d.jsonl)
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot write "*"nosuchdir/d.jsonl"*$'\nteq compile: 0 configurations in <t>'* ]]; then
+    pass "compile on a terminal, its start held past the second: a diagnostics file that cannot be written ends with the last line"
+  else
+    fail "a compile whose diagnostics file cannot be written, on a terminal, the start held: $(shown "$out")"
+  fi
+  out=$(held pty run app main --diagnostics nosuchdir/d.jsonl)
+  if [[ "$out" =~ $'\x1b'\[Kteq\ run:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot write "*"nosuchdir/d.jsonl"*$'\nteq run: 0 configurations compiled in <t>'* ]]; then
+    pass "run on a terminal, its start held past the second: a diagnostics file that cannot be written ends with the last line"
+  else
+    fail "a run whose diagnostics file cannot be written, on a terminal, the start held: $(shown "$out")"
+  fi
+  # A start that fails after the status (the daemon's log cannot be opened): the client's own line, then the last line.
+  (cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+  mv "$b/target/teq/task.log" "$work/task.log.kept" && mkdir "$b/target/teq/task.log"
+  out=$(held pty compile app)
+  rmdir "$b/target/teq/task.log" && mv "$work/task.log.kept" "$b/target/teq/task.log"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot "*"task.log"*$'\nteq compile: 0 configurations in <t>'* ]]; then
+    pass "compile on a terminal, its start held past the second: a start that fails ends with the last line"
+  else
+    fail "a compile whose daemon cannot start, on a terminal, the start held: $(shown "$out")"
+  fi
+  cp "$b/teq.lock" "$work/teq.lock.kept"
+  out=$(held pty-broken compile app)
+  cp "$work/teq.lock.kept" "$b/teq.lock"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: the daemon ended ("*") before it listened"*$'\nteq compile: 0 configurations in <t>'* ]]; then
+    pass "compile on a terminal, its start held past the second: a daemon that ends before it listens ends with the last line"
+  else
+    fail "a compile whose daemon ends before it listens, on a terminal, the start held: $(shown "$out")"
+  fi
+fi
+# A daemon that ends without an answer after its build was named (it is killed while the generator sleeps, which
+# for this row is eight seconds, so that the build cannot answer first): the client's line, then the last line,
+# which counts no configuration.
+{ echo 'sleep 8'; cat "$work/gen.sh.kept"; } > "$b/gen.sh"
+echo 'one two three four five six seven eight nine ten eleven' > "$b/labels.txt"
+(cd "$b" && timeout 150 "$TEQ" compile app > "$work/killed.out" 2> "$work/killed.err") &
+for _ in $(seq 1 100); do grep -q "^app/test: compiling" "$work/killed.err" 2> /dev/null && break; sleep 0.1; done
+# The daemon leads its own process group: its generator's sleep goes with it, and writes nothing after.
+daemon=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["pid"])' "$b/target/teq/daemon.json" 2> /dev/null)
+[ -n "$daemon" ] && kill -9 -- "-$daemon" 2> /dev/null
+wait
+err=$(timeless < "$work/killed.err" | sed "s|$b/||")
+if [ ! -s "$work/killed.out" ] && [[ "$err" =~ ^app/test:\ compiling\ app,\ core\ \(1\ of\ 1\)(,\ started\ now)?$'\n'teq:\ the\ daemon\ ended\ without\ an\ answer\ \(see\ target/teq/task.log\)$'\n'teq\ compile:\ 0\ configurations\ in\ \<t\>$ ]]; then
+  pass "compile: a daemon that ends without an answer after its build was named: the client's line, then the last line"
+else
+  fail "a compile whose daemon is killed after its header: $(cat "$work/killed.out") // $err"
+fi
+cp "$work/gen.sh.kept" "$b/gen.sh"
+echo 'one two three four' > "$b/labels.txt"
+(cd "$b" && timeout 150 "$TEQ" compile app > /dev/null 2>&1)
 # The old shape, an export of a plugin before the block's mainClass and the block for every JVM
 # project: app, four product mains and app.Main declared, is refused naming its own four alone (not
 # core's CoreMain, not the test sources' app.tool); core, without a block, as predating it.
@@ -2666,6 +2862,11 @@ open(os.path.join(r, "target/teq/teq.lock"), "w", encoding="utf-8").write(lock.c
 # Every project left out: gen and uses alone.
 export["projects"] = {k: v for k, v in export["projects"].items() if k in ("gen", "uses")}
 open(os.path.join(r, "target/teq/blocked.lock"), "w", encoding="utf-8").write(lock.canonical(export))
+# A project of jars alone, with no compile configuration: what compile and run say where there is nothing to compile.
+export["projects"] = {"jars": {"base": "jars", "platform": "jvm", "scalaVersion": "3.8.4",
+                               "configurations": {"runtime": {"classpath": list(table), "resources": [], "sources": []}},
+                               "run": {"aliases": {}, "baseDirectory": ".", "envVars": {}, "javaOptions": []}}}
+open(os.path.join(r, "target/teq/jars.lock"), "w", encoding="utf-8").write(lock.canonical(export))
 PY
 generated="gen/compile has the source generator an unnamed task, which sbt runs and teq cannot: make it a TeqCommand of Compile / teqGenerators, or build gen with sbt"
 out=$(cd "$r/other/src" && timeout 120 "$TEQ" compile gen uses 2>&1)
@@ -2703,6 +2904,18 @@ if [ $? = 2 ] && [[ "$out" == *"teq: nothing to compile"* ]] && [[ "$out" == *"t
   pass "target/teq: a compile of every project with every one left out compiles nothing and exits 2"
 else
   fail "target/teq, every project left out: $out"
+fi
+# That line is a result of the verb: compile's on stdout, a run's on stderr with the rest of what it says of its build.
+# The daemon of the export before is stopped first: a daemon of its own answers under this one.
+(cd "$r" && timeout 30 "$TEQ" --export target/teq/blocked.lock stop > /dev/null 2>&1)
+out=$(cd "$r" && timeout 120 "$TEQ" --export target/teq/jars.lock compile jars 2> "$work/nothing.err")
+out2=$(cd "$r" && timeout 120 "$TEQ" --export target/teq/jars.lock run jars jars.Main 2> "$work/nothing2.err")
+code2=$?
+(cd "$r" && timeout 30 "$TEQ" --export target/teq/jars.lock stop > /dev/null 2>&1)
+if [ "$out" = "teq: nothing to compile" ] && [ ! -s "$work/nothing.err" ] && [ -z "$out2" ] && [ $code2 = 2 ] && [ "$(head -1 "$work/nothing2.err")" = "teq: nothing to compile" ]; then
+  pass "target/teq: a project with no compile configuration: nothing to compile is said on stdout by compile and on stderr by run"
+else
+  fail "target/teq, nothing to compile by stream: $out // $(cat "$work/nothing.err") // run ($code2): $out2 // $(cat "$work/nothing2.err")"
 fi
 (cd "$r" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
 

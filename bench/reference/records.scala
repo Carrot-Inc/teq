@@ -301,7 +301,7 @@ object Roots:
 // further lines, the source line and the caret; its identity is that block, whatever its message holds, and in the
 // transcript its lines are the record's, never one of teq's. src/task/daemon.rs's `compile` and `built` print a
 // configuration's notes (`teq: <key>: <note>`), warnings and errors, then its summary: `<key>: <n> errors`, `<key>:
-// checked in <ms> ms`, `<key>: <n> classes, <n> written in <ms> ms`; a build that failed outright `teq: <key>: <why>`
+// checked in <ms> ms`, `<key>: <n> classes, <n> written in <ms> ms` (from ten seconds `in <s>.<d> s`); a build that failed outright `teq: <key>: <why>`
 // and no summary, a generator's failure with its command's whole output, which teq records whole (`failed`, severity
 // `failure`), as it records each line a passing generator printed (`noted`, severity `note`). A summary of n errors
 // claims its configuration's errors recorded before it; a configuration that failed outright is its failure's record,
@@ -326,7 +326,7 @@ object Roots:
 object Transcript:
   private val ansi = "\u001b\\[[0-9;]*m"
   private val errorsLine = "^([^ :]+/[^ :]+): ([0-9]+) errors?$".r
-  private val okLine = "^([^ :]+/[^ :]+): (?:checked|[0-9]+ classes, [0-9]+ written) in [0-9]+ ms(?:, the first build)?$".r
+  private val okLine = "^([^ :]+/[^ :]+): (?:checked|[0-9]+ classes, [0-9]+ written) in (?:[0-9]+ ms|[0-9]+\\.[0-9] s)(?:, the first build)?$".r
   private val teqLine = "^teq: ([^ :]+/[^ :]+): (.*)$".r
   private val leftOut = "^teq: compile left out ([^ ,]+),.*$".r
   private val endMarker = "^# exit (-?[0-9]+)$".r

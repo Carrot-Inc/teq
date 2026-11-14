@@ -723,6 +723,11 @@ cexpect "a baseline of two errors" pass $?
   { echo "FAIL a baseline of two errors: no record of them and their digests: $(tail -3 "$work/verb.log")"; fail=$((fail + 1)); }
 cverb judge
 cexpect "a rerun within the baseline" pass $?
+# A configuration's summary of ten seconds and more reads in seconds: the same judgment.
+printf '%s\n' "$two" | sed 's/ written in 10 ms$/ written in 12.3 s/' | compiled 1
+cverb judge
+cexpect "a rerun within the baseline, a summary in seconds" pass $?
+printf '%s\n' "$two" | compiled 1
 cp "$work/rec/errors.txt" "$work/errors.kept"
 printf '%s\n' "$two" | sed 's/^lila\/compile: 2 errors$/modules\/c\/C.scala:3:3: error: Not found: z\
 z\

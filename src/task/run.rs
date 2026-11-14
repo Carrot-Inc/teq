@@ -27,7 +27,7 @@ use std::time::Duration;
 
 const POLL: Duration = Duration::from_millis(20);
 
-pub fn run(export: &Export, args: &[String]) -> i32 {
+pub fn run(export: &Export, args: &[String], began: std::time::Instant) -> i32 {
     // `--diagnostics <file>` before `--`: the build's diagnostics recorded there (the daemon's).
     let mut args = args.to_vec();
     let end = args.iter().position(|a| a == "--").unwrap_or(args.len());
@@ -104,7 +104,7 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
     };
     let records = diagnostics.get(1).map(PathBuf::from);
     let request: Vec<String> = std::iter::once(name.clone()).chain(diagnostics).collect();
-    let (code, data) = client::request_data(export, "classes", &request);
+    let (code, data) = client::request_told(export, "classes", &request, "run", began);
     if code != 0 {
         return code;
     }

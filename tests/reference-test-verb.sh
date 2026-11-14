@@ -395,7 +395,7 @@ git -C "$rc/co" init -q && git -C "$rc/co" add src && git -C "$rc/co" -c user.na
 cat > "$rc/teq" <<SH
 #!/bin/sh
 case \$1 in
-  compile) [ "\$2" != --diagnostics ] || : > "\$3"; cp $rc/gen.txt src/Gen.scala; echo "airstream/compile: checked in 1 ms" ;;
+  compile) [ "\$2" != --diagnostics ] || : > "\$3"; cp $rc/gen.txt src/Gen.scala; echo "airstream/compile: checked in \$(cat $rc/took.txt)" ;;
   --version) echo "teq 0.1.8 abcdef123" ;;
 esac
 exit 0
@@ -408,10 +408,15 @@ rverb() {
     echo "FAIL $what: expected the compile verb to $want, exit $code: $(tail -5 "$work/verb.log")"; fail=$((fail + 1)); fi
 }
 echo A > "$rc/gen.txt"
+echo "1 ms" > "$rc/took.txt"
 rverb baseline pass "a baseline of a generated file with wrong bytes"
 grep -q "^error generated src/Gen.scala: $(printf 'A\n' | sha256sum | cut -d' ' -f1), not the pin's bytes$" "$rc/here/errors.txt" && pass=$((pass + 1)) ||
   { echo "FAIL the baseline's item names no digest of the bytes: $(grep '^error' "$rc/here/errors.txt")"; fail=$((fail + 1)); }
 rverb judge pass "the same wrong bytes again"
+# A configuration's summary of ten seconds and more reads in seconds: the same judgment.
+echo "12.3 s" > "$rc/took.txt"
+rverb judge pass "the same wrong bytes again, a summary in seconds"
+echo "1 ms" > "$rc/took.txt"
 echo B > "$rc/gen.txt"
 rverb judge fail "other wrong bytes"
 grep -q "FAIL airstream: compile run 1: 1 error new" "$work/verb.log" || { echo "FAIL other wrong bytes: not a new item"; fail=$((fail + 1)); }
