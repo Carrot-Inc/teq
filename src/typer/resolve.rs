@@ -886,8 +886,7 @@ impl<'a> Worker<'a> {
                 // `import env.api.*`), which becomes an entry of its own.
                 if let Some((m, _)) = self.find_member(ty, seg) {
                     if (self.inner_object_of_sym(m).is_some() || self.is_stable_path_member(m)) && self.is_accessible(m) {
-                        let prev = ValueImport(self.import_values.len() as u32);
-                        self.import_values.push(reached);
+                        let prev = self.push_import_value(reached);
                         static_val = Some((m, None, Some(prev)));
                         value = None;
                         continue;
@@ -1029,7 +1028,7 @@ impl<'a> Worker<'a> {
         if let Some(value) = static_val {
             // The value path checked as dotty checks the typed path (`checkLegalImportOrExportPath`):
             // a lazy val's realizability among it.
-            let id = self.with_loader(|w| ValueImport(w.import_values.push(value) as u32));
+            let id = self.push_import_value(value);
             return Some(ImportTarget::ValueAll(id));
         }
         if let Some(ty) = value {
@@ -1173,8 +1172,7 @@ impl<'a> Worker<'a> {
                 if !self.is_stable_path_member(s) {
                     return None;
                 }
-                let v = ValueImport(self.import_values.len() as u32);
-                self.import_values.push(prev);
+                let v = self.push_import_value(prev);
                 Some((s, None, Some(v)))
             }
             _ => None,

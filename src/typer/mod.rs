@@ -942,6 +942,64 @@ pub struct ResolvedImport {
     pub sel: unused::SelRef,
 }
 
+/// The value imports' table as the workers share it, in a module of its own so that nothing outside it can push
+/// to the table: every module of the typer reads an entry by its index, and the one pusher is
+/// `Worker::push_import_value`, here. The vector under it is one writer's (`SlabVec::push` loads the length,
+/// writes the slot and stores the length again): two workers pushing at once write one slot, and each then reads
+/// the other's entry as its own.
+mod import_values {
+    use super::{ClassId, SymId, ValueImport, Worker};
+
+    /// The val an import selects on, the module it is where it is an object, and the entry it is reached through.
+    type Entry = (SymId, Option<ClassId>, Option<ValueImport>);
+
+    pub struct ImportValues(crate::shared::SlabVec<Entry>);
+
+    impl ImportValues {
+        pub(super) fn new() -> ImportValues {
+            ImportValues(crate::shared::SlabVec::with_capacity(16))
+        }
+
+        /// Appends an entry and gives its index: the pusher's alone, under the loader's lock once the workers
+        /// are forked, which the builds that sweep the merge check at every push.
+        fn push(&self, forked: bool, entry: Entry) -> usize {
+            if super::merge::sweep_wanted() {
+                assert!(!forked || crate::shared::lock_depth() > 0, "a value import's entry pushed outside the loader's lock");
+            }
+            self.0.push(entry)
+        }
+
+        pub fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        pub fn get(&self, i: usize) -> &Entry {
+            self.0.get(i)
+        }
+
+        /// The entry `i` for the merge's renumbering, which runs with no worker typing.
+        pub(super) unsafe fn get_mut(&self, i: usize) -> &mut Entry {
+            self.0.get_mut(i)
+        }
+    }
+
+    impl std::ops::Index<usize> for ImportValues {
+        type Output = Entry;
+        fn index(&self, i: usize) -> &Entry {
+            &self.0[i]
+        }
+    }
+
+    impl<'a> Worker<'a> {
+        /// The one pusher of the value imports' table: the push is made under the loader's lock, the hold the
+        /// push alone, and the entry's index is the one the push returned, never the length read before it.
+        pub(in crate::typer) fn push_import_value(&mut self, entry: Entry) -> ValueImport {
+            self.with_loader(|w| ValueImport(w.import_values.push(w.forked, entry) as u32))
+        }
+    }
+}
+pub use import_values::ImportValues;
+
 /// A stable val an import selects on, an index into `Worker::import_values`: the val and the
 /// object it was reached through, which an inherited val (`O.v` of a trait) is read on, or the
 /// enclosing class whose instance it is read on (`C.this.v`).
@@ -1584,7 +1642,7 @@ pub struct Worker<'a> {
     /// it is selected on where it is an object nested in a class (`import o.R.S.*` reads `S` on
     /// `o.R`, an entry of its own reading `R` on `o`). One table for every worker, appended to
     /// under the loader's lock.
-    pub import_values: std::sync::Arc<crate::shared::SlabVec<(SymId, Option<ClassId>, Option<ValueImport>)>>,
+    pub import_values: std::sync::Arc<ImportValues>,
     /// Counts the lookups that met an export table which was still being built.
     pub export_blocks: u32,
     /// Tables left incomplete by such a lookup, to be built again on their own.
@@ -3161,7 +3219,7 @@ impl<'a> Worker<'a> {
             derived_opaques: Default::default(),
             function_targets: Vec::new(),
             ext_modules: Vec::new(),
-            import_values: std::sync::Arc::new(crate::shared::SlabVec::with_capacity(16)),
+            import_values: std::sync::Arc::new(ImportValues::new()),
             export_blocks: 0,
             export_retry: Vec::new(),
             export_retrying: false,

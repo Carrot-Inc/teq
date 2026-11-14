@@ -99,6 +99,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   goes by another `@targetName`, and in a source under `import scala.language.`2.13``, whose classes are Scala 2's
   to the code that uses them, in the same build or from another module, as they are under scalac: a call without
   `()` of their methods warns, their alphanumeric methods are operators, a case class's mirror is not its companion.
+- An import through a value's member (`val shelf = new Shelf(..); import shelf.row.*`, `import shelf.row.given`)
+  is the value's own in a build typed on several workers, and in the expansions of an inline method whose body
+  holds one: two such imports typed or expanded at the same moment could be read as each other's, so that a build
+  refused a correct line (`not found: label`, `No given instance of type Badge was found`), or passed and named
+  another method's value at run time, or stopped with a crash; the more so in a large build, whose inline calls
+  are expanded on several workers. One worker's build was never affected.
 
 ## 0.1.10 (2026-11-13)
 

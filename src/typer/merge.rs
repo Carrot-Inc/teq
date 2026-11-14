@@ -2212,7 +2212,7 @@ fn export_slot(m: &dyn Ids, s: &mut super::exports::ExportSlot, mode: TablesMode
 /// assertion-enabled builds always, in the others under `TEQ_MERGE_SWEEP=1` (the determinism
 /// suites'), where the roots the promotion hands the records are validated as they are handed
 /// over and the sweep's walk, some 40 ms on the frontend, is not paid.
-fn sweep_wanted() -> bool {
+pub(super) fn sweep_wanted() -> bool {
     cfg!(debug_assertions) || std::env::var_os("TEQ_MERGE_SWEEP").is_some_and(|v| v == "1")
 }
 

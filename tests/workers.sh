@@ -823,6 +823,15 @@ done
 # inline method's expansion, which no callee's body tells: met at expansion, its unit suspended on a
 # worker of the forked phase and its file on one worker, the code emitted alike (before, `No given
 # instance of type Box was found` at every count, the given's run failing; scalac prints 42 and 8).
+# The table of value imports is the workers' own, and has one pusher, which takes the loader's lock
+# (`Worker::push_import_value`). Imports through a local value's member typed in eight files at once (without the
+# lock two workers wrote one entry of the table and each read the other's value: a name not found on a correct
+# line, or a program that names another method's value and dies at run time); and an inline method whose body
+# imports through a value, walked into sixty-four expansions by the forked inlining phase (a given of the value not
+# found, or another expansion's value read). Four trials at each count: a build without the lock differs from one
+# worker's in about one of two at two workers and three of four at sixteen.
+same_output value_import_slots 4 run tests/workers/value_import_slots
+TEQ_PHASE_FORK=1 same_output inline_value_import 4 run tests/workers/inline_value_import
 for name in phase_macro_local_trait phase_macro_summoned; do
   TEQ_PHASE_FORK=1 same_output $name 3 run tests/workers/$name
 done

@@ -201,7 +201,7 @@ impl<'a> Worker<'a> {
     /// keeps its val's path.
     fn object_value_path(&mut self, o: ClassId) -> Option<ValuePath> {
         let m = self.syms.class(o).module_sym?;
-        let value = self.with_loader(|w| ValueImport(w.import_values.push((m, None, None)) as u32));
+        let value = self.push_import_value((m, None, None));
         let path = if self.static_object(o) { self.types.class(o, &[]) } else { self.import_value_type(value) };
         Some(ValuePath { value, path, object: true, pkg: None, path_method: None })
     }

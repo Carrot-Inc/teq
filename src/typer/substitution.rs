@@ -2212,9 +2212,8 @@ impl<'a> Worker<'a> {
             Some(prev) => (s, module, Some(self.walked_value(w, prev)?)),
             None => (*w.param_proxies.iter().find(|(p, _)| *p == s).map(|(_, x)| x).or_else(|| w.inst.renames.get(&s))?, module, None),
         };
-        let at = super::ValueImport(self.import_values.len() as u32);
-        self.import_values.push(moved);
-        Some(at)
+        // The entry is whole before the hold: the walk of what it reaches through is done above.
+        Some(self.push_import_value(moved))
     }
 
     /// A val whose type the definition inferred, typed again from its walked initialiser as the
