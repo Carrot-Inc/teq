@@ -1994,8 +1994,10 @@ nested_object_member_paths	pass	-
 nested_object_path_patterns	pass	-	
 nested_object_singleton	pass	-	
 nested_objects	pass	-	
+nested_trait_local_class_in_val_it_names	pass	-	
 nested_trait_path_outer	pass	-	
 nested_trait_prefix_parents	pass	-	
+nested_trait_test_in_val_it_names	pass	-	
 new_array	pass	-	
 new_eta_expanded_class	pass	-	
 new_leading_using_clause	pass	-	
@@ -2798,6 +2800,7 @@ toplevel_init_failed	cannot run	-	its expectation is Scala.js's
 toplevel_init_given_objects	pass	-	
 toplevel_init_order	pass	-	
 toplevel_init_triggers	pass	-	
+toplevel_trait_local_class_in_val_it_names	pass	-	
 tostring_binder_shapes	pass	-	
 tostring_opaque_string	pass	-	
 tostring_regex_binder	pass	-	

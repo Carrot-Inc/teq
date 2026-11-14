@@ -50,7 +50,9 @@
 # the same way; defaults-lib, tests/support/defaults_lib.scala compiled the same way; stddefaults-lib,
 # tests/support/std_defaults_lib.scala compiled the same way; erasedoverloads-lib, tests/support/erased_overloads_lib.scala
 # compiled the same way; quotenest-lib, tests/support/quote_nest_lib.scala compiled the same way; aliasval-lib,
-# tests/support/alias_val_lib.scala compiled the same way; missingdep-lib,
+# tests/support/alias_val_lib.scala compiled the same way; aliastop-lib, tests/support/alias_top_lib.scala compiled
+# the same way; aliasimp-lib, tests/support/alias_imported_lib.scala compiled the same way; aliasgiven-lib,
+# tests/support/alias_given_lib.scala compiled the same way; missingdep-lib,
 # tests/support/missing_dep/A.scala compiled against dep/B.scala into a jar without it; missingclass-mixed,
 # tests/support/missing_class_mixed's Scala and Java classes compiled against its Gone2 into a jar without it; lazyorder-lib,
 # tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib, tests/support/ctorinit_lib.scala
@@ -612,6 +614,48 @@ alias_val_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/alias_top_lib.scala compiled by scalac into a jar: as alias_val_lib.scala, the alias at the top level of
+# the library's package.
+alias_top_lib_jar() {
+  local src=tests/support/alias_top_lib.scala
+  local jar=$scratch/aliastop-lib.jar
+  local dir=$scratch/aliastop-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/alias_top_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/alias_imported_lib.scala compiled by scalac into a jar: as alias_val_lib.scala, the alias a member of
+# another object, imported and written as an identifier.
+alias_imported_lib_jar() {
+  local src=tests/support/alias_imported_lib.scala
+  local jar=$scratch/aliasimp-lib.jar
+  local dir=$scratch/aliasimp-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/alias_imported_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/alias_given_lib.scala compiled by scalac into a jar: three givens whose signature names the library's
+# alias of a val's singleton type (a using clause of a given class, of an alias given, a refined result).
+alias_given_lib_jar() {
+  local src=tests/support/alias_given_lib.scala
+  local jar=$scratch/aliasgiven-lib.jar
+  local dir=$scratch/aliasgiven-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/alias_given_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/erased_overloads_lib.scala compiled by scalac into a jar: overloads scala-library's erasure tells apart.
 erased_overloads_lib_jar() {
   local src=tests/support/erased_overloads_lib.scala
@@ -1051,6 +1095,9 @@ jar_of() {
     erasedoverloads-lib) erased_overloads_lib_jar ;;
     quotenest-lib) quote_nest_lib_jar ;;
     aliasval-lib) alias_val_lib_jar ;;
+    aliastop-lib) alias_top_lib_jar ;;
+    aliasimp-lib) alias_imported_lib_jar ;;
+    aliasgiven-lib) alias_given_lib_jar ;;
     missingdep-lib) missingdep_lib_jar ;;
     missingclass-mixed) missingclass_mixed_jar ;;
     predef-lib) predef_lib_jar ;;

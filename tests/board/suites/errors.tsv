@@ -498,6 +498,9 @@ intersection_member_range_input	pass	-
 intersection_member_refined	pass	-	
 intersection_member_refinements	pass	-	
 irrefutable_extractor_partial	pass	-	
+jar_alias_in_alias_given_using_names_program_val	fail	-	exit code 0
+jar_alias_in_refined_result_names_program_val	fail	-	exit code 0
+jar_alias_in_using_names_program_val	fail	-	exit code 0
 jar_hk_lower_bound	pass	-	
 jar_private_ctors	pass	-	
 java_module_not_a_value	fail	-	missing 'error: Java defined class Future is not a value'

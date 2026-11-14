@@ -73,6 +73,9 @@ inherited_abstract_type_member_cycle	exit code 0
 inline_library_summon_from	present '(in the body of'
 inline_parameter_block_path_final	missing '9:25: error: (x$proxy1 : Int) is not a constant type; cannot take constValue'
 inline_val_purity.check	< tests/errors/inline_val_purity.scala:18:18: error: inline value must be pure
+jar_alias_in_alias_given_using_names_program_val	exit code 0 (accepted since pickle-path-under-lock: a val a pickle names is read as its path)
+jar_alias_in_refined_result_names_program_val	exit code 0 (accepted since pickle-path-under-lock: a val a pickle names is read as its path)
+jar_alias_in_using_names_program_val	exit code 0 (accepted since pickle-path-under-lock: a val a pickle names is read as its path)
 java_module_not_a_value	missing 'error: Java defined class Future is not a value'
 java_signature_missing_class	exit code 0
 java_signature_missing_class_bound	exit code 0

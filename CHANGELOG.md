@@ -105,6 +105,15 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   refused a correct line (`not found: label`, `No given instance of type Badge was found`), or passed and named
   another method's value at run time, or stopped with a crash; the more so in a large build, whose inline calls
   are expanded on several workers. One worker's build was never affected.
+- A build on several workers no longer stops with `a wait on a cell under the loader's lock` at a class that
+  mixes in a trait nested in a class or in another trait (`class Crate extends rack.Slot`; `Tools.Entry` of an
+  `object Tools extends Catalog[Tool]`) while another worker is still typing the trait's abstract methods or
+  vars: whether such a trait needs its enclosing instance is read from how its members are written (abstract, no
+  default argument), as scalac reads it, and no member's type is asked. A check of one small file could stop one
+  time in five on eight workers. And a program that tests for such a trait, or defines a local class of it,
+  inside the initialiser of a val that the trait's own methods or vars name (`def fit(a: Yard.held.Label): Int`
+  in `Slot`, and `val held = { x match { case _: rack.Slot => … }; new Holder }`) builds as scalac builds it;
+  it was refused with `recursive use of fit needs an explicit result type` or `recursive value held needs type`.
 
 ## 0.1.10 (2026-11-13)
 

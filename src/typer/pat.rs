@@ -1,6 +1,6 @@
 use super::resolve::{TermRef, TypeRef};
 use super::Worker;
-use crate::ast::{mods, Expr, ExprId, ListRef, Pat, PatId};
+use crate::ast::{mods, DefKind, Expr, ExprId, ListRef, Pat, PatId};
 use crate::names;
 use crate::source::Span;
 use crate::symbols::*;
@@ -3184,8 +3184,36 @@ impl<'a> Worker<'a> {
             matches!(kind, SymKind::Def | SymKind::Val | SymKind::Var)
                 && info.mods & mods::LAZY == 0
                 && self.is_abstract_member(m)
-                && (kind != SymKind::Def || self.sig_of(m).clauses.iter().all(|cl| cl.params.iter().all(|p| !p.has_default)))
+                && (kind != SymKind::Def || !self.has_default_parameter(m))
         })
+    }
+
+    /// Whether a parameter of the method `m` has a default argument. A method the program
+    /// defines is asked in its definition's clauses, as `is_abstract_member` asks its body:
+    /// dotty reads the untyped tree (`TreeInfo.defKind`: `vparams.forall(_.rhs.isEmpty)`) where
+    /// `Namer` gives the class its flags (`setNoInitsFlags(parentsKind(parents), bodyKind(rest))`),
+    /// which `ExplicitOuter.needsOuterIfReferenced` reads, and no member's type is asked. Its
+    /// signature would name types whose owners may be in progress: a val in whose initialiser
+    /// the question stands, or one another worker is completing while this one holds the
+    /// loader's lock. A var's setter, which the namer made without a definition, is the def
+    /// dotty's `Desugar.valDef` writes for it, of one parameter without a right side, and its
+    /// signature is the var's. A member without a definition otherwise (an outer accessor, a
+    /// library's) is asked in its signature.
+    fn has_default_parameter(&mut self, m: SymId) -> bool {
+        let written = {
+            let info = self.syms.sym(m);
+            if !self.program_file(info.file) {
+                None
+            } else if info.def.is_none() {
+                (info.mods & mods::SETTER != 0).then_some(false)
+            } else {
+                match info.def.and_then(|d| self.ast(info.file).defs.get(d.idx())).map(|def| &def.kind) {
+                    Some(DefKind::Fun(f)) => Some(f.clauses.iter().any(|cl| cl.params.iter().any(|p| p.default.is_some()))),
+                    _ => None,
+                }
+            }
+        };
+        written.unwrap_or_else(|| self.sig_of(m).clauses.iter().any(|cl| cl.params.iter().any(|p| p.has_default)))
     }
 
     /// Whether the scrutinee type fixes the type arguments a test asks for: `Some[Int]` on an

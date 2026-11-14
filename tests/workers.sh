@@ -1959,5 +1959,40 @@ for early in tests/errors/early_param_kind_bound tests/errors/early_param_kind_b
 done
 COUNTS=$saved_counts
 
+# A class that mixes in a trait nested in a class defines the trait's outer accessor unless the trait is a pure
+# interface (dotty's `ExplicitOuter.needsOuterIfReferenced`): its members deferred, no parameter with a default,
+# which is read from what the trait's methods are written as (`TreeInfo.defKind`) and asks no signature. The
+# class's check holds the loader's lock there, and a method's signature that another worker was completing was
+# waited for under it ("a wait on a cell under the loader's lock": a check of the first program stopped in about
+# half of a hundred schedules at eight workers, and in some with no shaking). Each program's check under twenty
+# schedules at eight and at sixteen workers is one worker's, and its run prints scalac's lines.
+shaken_as_one() {
+  local name=$1 program=$2
+  shift 2
+  timeout 120 "$TEQ" compiler check "$program" --threads 1 > "$work/$name.one" 2>&1
+  local s t differ=""
+  for s in $(seq 1 20); do
+    for t in 8 16; do
+      TEQ_SHAKE=$s timeout 120 "$TEQ" compiler check "$program" --threads $t > "$work/$name.$t" 2>&1
+      cmp -s "$work/$name.one" "$work/$name.$t" || differ="$differ $t workers under TEQ_SHAKE=$s ($(grep -m1 -E 'error|panicked' "$work/$name.$t" | cut -c1-80));"
+    done
+  done
+  [ -z "$differ" ] && ok || bad "${name}_shaken: the check differs from one worker's at$differ"
+  one "$name" 1 run "$program" > "$work/$name.run" 2>&1
+  if [ "$(cat "$work/$name.run")" = "$(printf '%s\n' "$@")" ]; then
+    ok
+  else
+    bad "${name}_run: prints $(head -3 "$work/$name.run" | tr '\n' ' ' | cut -c1-120), scalac $*"
+  fi
+}
+shaken_as_one nested_trait_abstract_defs tests/workers/nested_trait_abstract_defs.scala hammer1
+shaken_as_one nested_trait_method_names_val tests/workers/nested_trait_method_names_val.scala true true
+shaken_as_one nested_trait_inferred_prefix tests/workers/nested_trait_inferred_prefix.scala 2
+shaken_as_one nested_trait_two_files tests/workers/nested_trait_two_files 1
+# An abstract var of such a trait has a setter, a member without a definition whose signature is the var's: it is
+# read as the def of one parameter without a default that it stands for (dotty's `Desugar.valDef`).
+shaken_as_one nested_trait_abstract_vars tests/workers/nested_trait_abstract_vars.scala hammer1
+shaken_as_one nested_trait_abstract_var_inferred_prefix tests/workers/nested_trait_abstract_var_inferred_prefix.scala 2
+
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass

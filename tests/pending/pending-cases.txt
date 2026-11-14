@@ -69,8 +69,10 @@ inline_val_float	< 0.0
 interleaved_type_clause	< 1
 iterable_once_iterator_only	< TreeSet(1, 2)
 jar_alias_names_program_val	< in:int
+jar_imported_alias_names_program_val	< in:int
 jar_inline_forwarder_argument_order	< eval b
 jar_inline_forwarder_inline_param_default	< 1279
+jar_toplevel_alias_names_program_val	< in:int
 java_enum_ordinal_through_enum_js	< 4
 java_lang_string_type	< a
 java_wildcard_object_bound	< 1
