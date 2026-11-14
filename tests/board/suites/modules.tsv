@@ -346,6 +346,7 @@ runtimecheckedresult	pass	-
 runtimecheckedstacked	pass	-	
 runtimewhole	pass	-	
 samclasses	pass	-	
+scala2source	pass	-	
 sealed	pass	-	
 selectorproducts	pass	-	
 selfaliasoverride	pass	-	

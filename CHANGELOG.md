@@ -93,6 +93,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   applied before the class is completed: in a file typed before the class's, in the class's own constructor or
   parents, in a block before the class (it was refused with a kind mismatch); and an argument outside that bound
   is refused there too (the program was built).
+- On JavaScript a value class below a universal trait that overrides `equals` or `hashCode` (`class Meters(val n:
+  Int) extends AnyVal with Rounded`) compares and hashes by the trait's, as on the JVM and under scalac; it compared
+  and hashed by its field. On every target it keeps its own `equals` and `hashCode` where the trait's `equals`
+  goes by another `@targetName`, and in a source under `import scala.language.`2.13``, whose classes are Scala 2's
+  to the code that uses them, in the same build or from another module, as they are under scalac: a call without
+  `()` of their methods warns, their alphanumeric methods are operators, a case class's mirror is not its companion.
 
 ## 0.1.10 (2026-11-13)
 

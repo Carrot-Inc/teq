@@ -338,6 +338,9 @@ pkgobj_b usedName pb.Use Obj$package package-object teq Default
 pkgobj_b binaryDependency pb.Use pa.nested.package$ package-object scalac products:pkgobj_a/pa/nested/package.class,Use.scala,DependencyByMemberRef
 pkgobj_b binaryDependency pb.Use pa.nested.Obj$package$ package-object teq products:pkgobj_a/pa/nested/Obj$package.class,Use.scala,DependencyByMemberRef
 refinement_b usedName rb.Use Nothing refinement-member teq Default
+scala2source_a usedName oldsrc.Odd Object member-owner teq Default
+scala2source_a binaryDependency oldsrc.Odd java.lang.Object member-owner teq jrt:/modules/java.base/java/lang/Object.class,Lib.scala,DependencyByInheritance
+scala2source_a binaryDependency oldsrc.Odd java.lang.Object member-owner teq jrt:/modules/java.base/java/lang/Object.class,Lib.scala,DependencyByMemberRef
 typemembers_b usedName tmb.Use Registry this-prefix teq Default
 valueclass_a usedName vca.Prices ImpureFunction2 impure-function scalac Default
 valueclass_a usedName vca.Prices _$1 synthetic-local scalac Default

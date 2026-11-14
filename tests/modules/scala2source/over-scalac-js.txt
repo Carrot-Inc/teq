@@ -1,0 +1,1 @@
+the last module over scalac's upstream products on JavaScript and in the interpreter

@@ -228,9 +228,16 @@ impl<'a> Worker<'a> {
         self.loaded.as_ref().map_or(false, |l| l.is_product_class(c))
     }
 
-    /// Whether `c` was read from a Scala 2 library (`Loaded::is_scala2_class`).
+    /// Whether `c` is a class scalac marks `Scala2x`: one read from a Scala 2 library
+    /// (`Loaded::is_scala2_class`), or one of the program's own in a source whose version is `2.13`,
+    /// which dotty marks where it enters the class (`Namer`: `if Feature.shouldBehaveAsScala2 then
+    /// flags |= Scala2x`) and whose pickle says so to a build that reads it (the writer's attribute).
     pub fn is_scala2_class(&self, c: ClassId) -> bool {
-        self.loaded.as_ref().map_or(false, |l| l.is_scala2_class(c))
+        if self.loaded.as_ref().is_some_and(|l| l.is_scala2_class(c)) {
+            return true;
+        }
+        let file = self.syms.class(c).file;
+        self.program_source(file) && self.ast(file).source_version.is_scala2()
     }
 
     /// Whether `c` is a class of the lean std standing for one of scala-library's compiled from

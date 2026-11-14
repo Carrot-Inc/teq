@@ -80,8 +80,10 @@ struct ClassData {
     /// `path` as scalac names the class: the object of a `package object p`'s members, which is
     /// `<stem>$package` by its binary name, and what is nested in it are `p.package`'s.
     api_path: Vec<String>,
-    /// Read from the Scala 2 standard library's TASTy: scalac marks the class `Scala2x`, and its
-    /// members are not inherited into the API.
+    /// The class's pickle carries the attribute of a unit that behaves as Scala 2 (the Scala 2
+    /// standard library's TASTy, a unit of a source under `2.13`, this build's own among them): scalac
+    /// marks the class `Scala2x`, and its members are not inherited into the API (`ExtractAPI`:
+    /// `cinfo.baseClasses.filter(bc => !bc.is(Scala2x))`).
     scala2: bool,
     tparams: Vec<TParam>,
     accessors: Vec<Param>,
@@ -772,7 +774,7 @@ impl<'r, 'a> Renderer<'r, 'a> {
             path: cp.path,
             module: flags.has(OBJECT),
             trait_: flags.has(TRAIT),
-            scala2: matches!(at.src, Src::Lib(_)) && f.has_attribute(crate::tasty::tags::attr::SCALA2_STANDARD_LIBRARY),
+            scala2: f.has_attribute(crate::tasty::tags::attr::SCALA2_STANDARD_LIBRARY),
             tparams: sig.tparams,
             accessors: sig.accessors,
             parents: sig.parents,

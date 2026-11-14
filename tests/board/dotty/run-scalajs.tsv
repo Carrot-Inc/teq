@@ -1428,7 +1428,7 @@ value-class-partial-func-depmet.scala	pass	lean:pass
 valueclasses-constr.scala	pass	lean:fail	
 valueclasses-nested-object.scala	pass	lean:pass	
 valueclasses-pavlov.scala	pass	lean:pass	
-vc-equals.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+vc-equals.scala	pass	lean:fail	
 verify-ctor.scala	pass	lean:pass	
 view-headoption.scala	pass	lean:pass	
 viewtest.scala	pass	lean:fail	

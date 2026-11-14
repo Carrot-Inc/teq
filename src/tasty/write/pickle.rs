@@ -6838,6 +6838,12 @@ impl<'w, 'a> P<'w, 'a> {
     fn attributes_section(&mut self) -> Vec<u8> {
         self.attributes_name = self.names.simple("Attributes");
         let mut out = Vec::new();
+        // SCALA2STANDARDLIBRARYattr, as dotty's `Pickler` writes it (`scala2StandardLibrary =
+        // Feature.shouldBehaveAsScala2`): for a unit whose source version is `2.13`. A reader takes
+        // the unit's classes for Scala 2's by it (`Loaded::is_scala2_class`).
+        if self.w.ast(self.file).source_version.is_scala2() {
+            out.push(crate::tasty::tags::attr::SCALA2_STANDARD_LIBRARY);
+        }
         // OUTLINEattr: a body is elided, which `TreeUnpickler` admits under it alone.
         if self.elided_bodies > 0 {
             out.push(6);

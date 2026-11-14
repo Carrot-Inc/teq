@@ -501,6 +501,13 @@ deferred_inline_dispatch	pass	-
 deferred_inline_intersection	pass	-	
 deferred_inline_overloaded	pass	-	
 deferred_inline_shapes	pass	-	
+definition_place_alias	pass	-	
+definition_place_block	pass	-	
+definition_place_block_class	pass	-	
+definition_place_bound_in_use	pass	-	
+definition_place_callback	pass	-	
+definition_place_getter	pass	-	
+definition_place_member	pass	-	
 dependent_function_calls	pass	-	
 dependent_function_types	pass	-	
 dependent_givens	pass	-	
@@ -1158,6 +1165,10 @@ inline_case_binder_prefix	pass	-
 inline_case_default_calls	pass	-	
 inline_case_default_match	pass	-	
 inline_case_renewed_import	fail	-	compile
+inline_check_class_in_given	pass	-	
+inline_check_conversion_round	pass	-	
+inline_check_getters_and_paths	pass	-	
+inline_check_transparent_member	pass	-	
 inline_collapsed_nullary_plus	pass	-	
 inline_collapsed_plus_over_negation	pass	-	
 inline_conditional_condition	pass	-	
@@ -1282,6 +1293,10 @@ inline_recursive_proxies	pass	-
 inline_reduce_local_extractor	pass	-	
 inline_reduce_local_value	pass	-	
 inline_repeated_named_reorder	pass	-	
+inline_result_block_scope	pass	-	
+inline_result_overridden	pass	-	
+inline_result_ring	pass	-	
+inline_result_under_check	pass	-	
 inline_retained	pass	-	
 inline_retained_match	pass	-	
 inline_retained_match_effects	pass	-	
@@ -1666,6 +1681,9 @@ local_given_conversion	pass	-
 local_imports	pass	-	
 local_imports_blocks	pass	-	
 local_imports_members	pass	-	
+local_inline_check_caller_bounds	pass	-	
+local_inline_check_either_order	pass	-	
+local_inline_check_given_under_way	pass	-	
 local_lazy_forward	pass	-	
 local_lazy_val_return	pass	-	
 local_object_case_companion	pass	-	
@@ -1749,6 +1767,7 @@ macro_jar_ctor_val	pass	-
 macro_java_annotation_constructor	fail	-	output
 macro_jdk_bodies	pass	-	
 macro_jvm_template_body	pass	-	
+macro_kept_map	pass	-	
 macro_lambda_definition_tree	pass	-	
 macro_lambda_method_type	pass	-	
 macro_lambda_quotes	pass	-	
@@ -2352,6 +2371,7 @@ scala2_control	pass	-
 scala2_control_mixed	pass	-	
 scala2_implicit_ranking	pass	-	
 scala2_implicits	pass	-	
+scala2_source_classes	pass	-	
 scala2_std_auto_application	cannot run	-	its expectation is Scala.js's
 scala3_LazyValsLongs	pass	-	
 scala3_ReverseSeqView	pass	-	
@@ -2951,7 +2971,14 @@ val_overrides_tostring	pass	-
 val_refinement_subst	pass	-	
 value_class_array_store	pass	-	
 value_class_can_equal	pass	-	
+value_class_inherited_equality	pass	-	
+value_class_library_equality	pass	-	
+value_class_library_equality_called	pass	-	
+value_class_renamed_equality	pass	-	
+value_class_scala2_library_equality	pass	-	
+value_class_scala2_source_equality	pass	-	
 value_class_signature_only	pass	-	
+value_class_synthesized_equality	pass	-	
 value_classes	pass	-	
 value_companion_strings	pass	-	
 value_export_case_selectors	pass	-	

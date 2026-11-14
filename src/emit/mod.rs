@@ -3313,16 +3313,17 @@ impl<'a> Emitter<'a> {
     }
 
     /// A value class equals and hashes as its one field does, as it does on the JVM, where it
-    /// is that field.
+    /// is that field: each of the two where the rule gives it (`TClass::synthesized`), which is
+    /// where no base but `Any` defines a matching one (dotty's `SyntheticMembers.existingDef`): a
+    /// universal trait's `equals` or `hashCode` stands.
     fn emit_value_class_equality(&mut self, tc: &TClass, name: &str) {
         let Some(&field) = tc.ctor_params.first() else { return };
-        let defines = |t: &Self, n: Name| t.syms.class(tc.id).members.contains_key(&n);
         let access = self.field_access(field);
-        if !defines(self, crate::names::EQUALS) {
+        if tc.synthesized & synthetic::EQUALS != 0 {
             self.line();
             let _ = write!(self.out, "equals(that) {{ return that instanceof {0} && $eq(this{1}, that{1}); }}", name, access);
         }
-        if !defines(self, crate::names::HASH_CODE) {
+        if tc.synthesized & synthetic::HASH_CODE != 0 {
             self.line();
             let _ = write!(self.out, "hashCode() {{ return $hash(this{}); }}", access);
         }

@@ -33,3 +33,4 @@ small	pass	-
 storage_unrelated	pass	-	
 taken	pass	-	
 tuple_match_patdef	pass	-	
+value_class_renamed	pass	-	

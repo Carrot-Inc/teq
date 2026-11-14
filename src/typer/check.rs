@@ -6173,7 +6173,13 @@ impl<'a> Worker<'a> {
             return (0, Vec::new());
         }
         let superclass = self.syms.class(c).superclass;
-        let held = self.held_rule_names(c);
+        let mut held = self.held_rule_names(c);
+        // `existingDef`'s first branch: a value class that behaves as Scala 2's takes `equals` and
+        // `hashCode` by the rule whatever its bases hold.
+        const OF_ANY: u16 = synthetic::EQUALS | synthetic::HASH_CODE;
+        if value_class && held & OF_ANY != 0 && self.behaves_as_scala2(c) {
+            held &= !OF_ANY;
+        }
         // A member no base can hold a definition of is synthesized without a lookup.
         let mut synthesized = wanted & !held;
         let mut existing = Vec::new();
@@ -6211,6 +6217,21 @@ impl<'a> Worker<'a> {
             }
         }
         (synthesized, existing)
+    }
+
+    /// dotty's `Feature.shouldBehaveAsScala2` where the class `c` was compiled: the setting
+    /// `-Ycompile-scala2-library`, or the source's version `2.13` (`sourceVersion.isScala2`, which an
+    /// import of `scala.language.`2.13`` gives a file). Of a class read from a pickle the pickle
+    /// says it: `Pickler` writes the attribute `SCALA2STANDARDLIBRARYattr` as that very answer. teq
+    /// has no such setting of its own, so a source's answer is its version's.
+    fn behaves_as_scala2(&self, c: ClassId) -> bool {
+        if let Some(l) = self.loaded.as_ref() {
+            if let Some(lc) = l.classes.get(&c) {
+                return l.file(lc.file).tasty.has_attribute(crate::tasty::tags::attr::SCALA2_STANDARD_LIBRARY);
+            }
+        }
+        let file = self.syms.class(c).file;
+        !self.in_jar(file) && self.ast(file).source_version.is_scala2()
     }
 
     /// The `toString` member of the companion `m` the typer or the parser makes for a case class,
@@ -6404,6 +6425,11 @@ impl<'a> Worker<'a> {
                 if self.is_private(s) || !self.matches_synthesized_at(s, param, b, bt) {
                     continue;
                 }
+                // `matchingDenotation`'s `sym.hasTargetName(targetName)`: a member another target name
+                // renames is no member of the rule's name.
+                if self.matching_target_name(s).is_some_and(|t| t != name) {
+                    continue;
+                }
                 if self.is_abstract_member(s) {
                     abstract_in.push(b);
                     continue;
@@ -6416,6 +6442,20 @@ impl<'a> Worker<'a> {
             }
         }
         None
+    }
+
+    /// The `@targetName` of the member `s` as scalac's matching reads it (`Symbol.targetName`),
+    /// wherever the member was loaded from. It is kept in three places: a source's annotation on
+    /// the definition and a jar's signature, read with the member's (`target_name_of`:
+    /// `Loaded::target_names`), and a pickle of teq's own products, whose target names the loader
+    /// keeps apart because teq's class files name such a member by its Scala name
+    /// (`Loaded::product_target_names`).
+    fn matching_target_name(&mut self, s: SymId) -> Option<Name> {
+        if let Some(n) = self.target_name_of(s) {
+            return Some(n);
+        }
+        // `target_name_of` has read the signature of a loaded member, and with it the name.
+        self.loaded.as_ref().and_then(|l| l.product_target_names.get(&s).copied())
     }
 
     /// Which of the names `synthetic::MEMBERS` gives (their bits) a base of `c` that can hold an

@@ -452,6 +452,8 @@ inline_phase_transparent_error	pass	-
 inline_phase_transparent_error_typing	pass	-	
 inline_phase_two_roots	pass	-	
 inline_result_bindings_avoided	pass	-	
+inline_result_chain	pass	-	
+inline_result_cycle	pass	-	
 inline_retained_if	pass	-	
 inline_retry_typing_error	pass	-	
 inline_stored_class_mismatch	pass	-	
@@ -769,6 +771,7 @@ sam_context_function_result	pass	-
 sam_lambda_declared_param	pass	-	
 scala2_control	pass	-	
 scala2_implicits	pass	-	
+scala2_source_nullary_calls	pass	-	
 scala3_doubleDefinition	pass	-	
 scala3_harmonize	pass	-	
 scala3_i1501a	pass	-	
