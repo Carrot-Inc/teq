@@ -6936,7 +6936,7 @@ pub(super) fn is_id_pattern(ast: &ast::Ast, p: ast::PatId) -> bool {
 }
 
 /// Whether an alias among the enumerators `range` has a pattern that `isNestedGivenPattern` (Desugar.scala 2338).
-fn nested_given_alias(ast: &ast::Ast, range: std::ops::Range<u32>) -> bool {
+pub(super) fn nested_given_alias(ast: &ast::Ast, range: std::ops::Range<u32>) -> bool {
     range.into_iter().any(|i| matches!(ast.enumerators[i as usize], Enumerator::Val(p, _) if is_nested_given_pattern(ast, p)))
 }
 

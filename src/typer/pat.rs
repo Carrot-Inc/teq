@@ -561,6 +561,7 @@ impl<'a> Worker<'a> {
             }
             Pat::Typed(inner, ty) => {
                 if let Some((te, t)) = self.singleton_pattern(ty) {
+                    self.forward_note_singleton_pattern(te, ty, inner);
                     let eq = self.prog.add_pat(TPat::Equals(te, true));
                     return match ast.pat(inner) {
                         Pat::Bind(name, None) => {
@@ -621,6 +622,7 @@ impl<'a> Worker<'a> {
                 // 1382 to 1404; the guards at 1403 to 1404).
                 if !equal && self.quote.level == 0 && self.abstract_pattern_type(t) {
                     if let Some(tp) = self.tag_pattern(p, inner, t, sty, span) {
+                        self.forward_note_typed_pattern(tp, p, ty, inner, t);
                         return tp;
                     }
                 }
@@ -646,7 +648,9 @@ impl<'a> Worker<'a> {
                 let narrowed = if conforms && !equal && !conforms_through_bound { sty } else { self.pattern_binding_type(sty, t) };
                 let tp = self.type_pattern(inner, narrowed);
                 self.last_typed_pattern = Some((p, narrowed));
-                self.prog.add_pat(TPat::Test(test, t, tp))
+                let typed = self.prog.add_pat(TPat::Test(test, t, tp));
+                self.forward_note_typed_pattern(typed, p, ty, inner, t);
+                typed
             }
             Pat::Lit(e) => {
                 let (te, lit) = self.type_expr(e, Some(sty));

@@ -548,7 +548,7 @@ impl<'a> Worker<'a> {
         if self.forward_ahead(file, at) && self.forward_pattern_head(c, span) == Some(m) {
             let place = self.forward_ident_span(span.start, name);
             let here = self.env.file;
-            self.prog.forward.patterns.insert(p, (here, place));
+            self.prog.forward.patterns.insert(p, ForwardPattern { file: here, span: place, typed: None });
             self.forward_unit();
         }
     }
@@ -630,8 +630,145 @@ impl<'a> Worker<'a> {
         if self.forward_ahead(file, at) {
             let place = self.forward_ident_span(span.start, name);
             let here = self.env.file;
-            self.prog.forward.patterns.insert(p, (here, place));
+            self.prog.forward.patterns.insert(p, ForwardPattern { file: here, span: place, typed: None });
             self.forward_unit();
+        }
+    }
+
+    /// A typed pattern (`x: T`, `_: T`, `x @ (_: T)`) written with the type `ty`, which resolved
+    /// to `t`. scalac's check reads the pattern's wildcard, an identifier whose type is the
+    /// written one: its symbol is the class, trait or enum the type is written by, or the type
+    /// alias itself where an alias is written. An applied type, a union, an intersection, a
+    /// refinement, a projection, a member of an object and a type parameter are no such name.
+    #[inline]
+    pub(super) fn forward_note_typed_pattern(&mut self, p: TPatId, pat: ast::PatId, ty: ast::TyExprId, inner: ast::PatId, t: crate::types::TypeId) {
+        if self.local_blocks.is_empty() {
+            return;
+        }
+        let of_block = match self.types.get(self.types.unannotated(t)) {
+            crate::types::Type::Class(c, _) => self.syms.class(c).owner == Owner::Local,
+            _ => false,
+        };
+        if of_block || self.local_blocks.iter().any(|b| !b.alias_sites.is_empty()) {
+            self.forward_note_typed_pattern_of(p, pat, ty, inner);
+        }
+    }
+
+    /// Whether the typed pattern `pat` over `inner` is a `for`'s value definition that scalac's
+    /// tree holds as a plain value definition: an alias that is a typed variable is `val x: T =
+    /// e` there (`Desugar.makeFor` with `makeIdPat` and `makePatDef`'s `IdPattern`), and the
+    /// pattern itself stands in the tree only where its run of aliases is packed with the
+    /// element (`TupleN(P, P_1, ..)`): where a guard follows the run, where an alias of the run
+    /// holds a nested given pattern, and before 3.8.
+    fn forward_plain_for_alias(&self, pat: ast::PatId, inner: ast::PatId) -> bool {
+        let ast = self.cur_ast();
+        if !matches!(ast.pat(inner), ast::Pat::Bind(_, None)) || !super::expr::is_id_pattern(ast, pat) || ast.given_binds.contains(&inner) || ast.given_binds.contains(&pat) {
+            return false;
+        }
+        let Some(at) = ast.enumerators.iter().position(|e| matches!(*e, ast::Enumerator::Val(q, _) if q == pat)) else { return false };
+        let Some((start, end)) = ast.exprs.iter().find_map(|x| match *x {
+            Expr::For(enums, ..) if enums.range().contains(&at) => Some((enums.range().start, enums.range().end)),
+            _ => None,
+        }) else {
+            return false;
+        };
+        let (mut run_start, mut run_end) = (at, at);
+        while run_start > start && matches!(ast.enumerators[run_start - 1], ast::Enumerator::Val(..)) {
+            run_start -= 1;
+        }
+        while run_end < end && matches!(ast.enumerators[run_end], ast::Enumerator::Val(..)) {
+            run_end += 1;
+        }
+        let guard_follows = run_end < end && matches!(ast.enumerators[run_end], ast::Enumerator::Guard(_));
+        ast.source_version.is_at_least(crate::source_version::SourceVersion::V3_8)
+            && !guard_follows
+            && !super::expr::nested_given_alias(ast, run_start as u32..run_end as u32)
+    }
+
+    /// The note of a typed pattern whose written type is a name the scope resolves, where the
+    /// pattern is typed, to a class or a type alias of an open block that stands at or after
+    /// the statement under way; told where scalac's wildcard stands: the `_` where one is
+    /// written, the type's start for a variable.
+    #[cold]
+    #[inline(never)]
+    fn forward_note_typed_pattern_of(&mut self, p: TPatId, pat: ast::PatId, ty: ast::TyExprId, inner: ast::PatId) {
+        use super::resolve::TypeRef;
+        use ast::TyExpr;
+        if self.forward_plain_for_alias(pat, inner) {
+            return;
+        }
+        let here = self.env.file;
+        let (name, place) = {
+            let ast = self.cur_ast();
+            let mut head = ty;
+            loop {
+                match ast.ty(head) {
+                    TyExpr::Annotated(t, _) | TyExpr::Unchecked(t) => head = t,
+                    TyExpr::Tuple(l) if l.len == 1 => head = ast.ty_list(l)[0],
+                    _ => break,
+                }
+            }
+            let TyExpr::Name(name) = ast.ty(head) else { return };
+            let place = self.forward_typed_place(ty, inner);
+            (name, place)
+        };
+        let (file, at, typed) = match self.lookup_type(name) {
+            Some(TypeRef::Class(c)) => {
+                let info = self.syms.class(c);
+                if info.owner != Owner::Local || info.kind == ClassKind::Anon {
+                    return;
+                }
+                (info.file, info.span.start, None)
+            }
+            Some(TypeRef::Alias(a)) => {
+                let info = &self.syms.aliases[a.idx()];
+                let (Owner::Local, Some(d)) = (info.owner, info.def) else { return };
+                if info.file != here {
+                    return;
+                }
+                (here, self.ast(here).def(d).span.start, Some(d))
+            }
+            _ => return,
+        };
+        if self.forward_ahead(file, at) {
+            self.prog.forward.patterns.insert(p, ForwardPattern { file: here, span: place, typed: Some(typed) });
+            self.forward_unit();
+        }
+    }
+
+    /// Where scalac's wildcard of a typed pattern stands, `inner` typed by `ty`: the `_` where one
+    /// is written; else where the written type starts in the syntax: the first token after the
+    /// variable's colon, the type's parentheses included and comments passed over; a given
+    /// pattern's (`given T`) after its keyword.
+    fn forward_typed_place(&self, ty: ast::TyExprId, inner: ast::PatId) -> Span {
+        use super::signature::skip_trivia;
+        let ast = self.cur_ast();
+        let text = &self.source(self.env.file).text;
+        let bytes = text.as_bytes();
+        let written = ast.ty_spans[ty.idx()];
+        let of = ast.pat_spans[inner.idx()];
+        let wildcard = matches!(ast.pat(inner), ast::Pat::Wildcard);
+        if wildcard && bytes.get(of.start as usize) == Some(&b'_') {
+            return of;
+        }
+        let from = if wildcard { (of.start + "given".len() as u32).min(written.start) } else { of.end };
+        let mut at = skip_trivia(text, from, written.start);
+        if bytes.get(at as usize) == Some(&b':') {
+            at = skip_trivia(text, at + 1, written.start);
+        }
+        Span { start: at.min(written.start), end: written.end }
+    }
+
+    /// The path of a singleton typed pattern (`_: a.type`, `x: a.type`) is told where the
+    /// pattern's wildcard stands: scalac's tree holds no identifier of the path there, the
+    /// wildcard has the path's type.
+    pub(super) fn forward_note_singleton_pattern(&mut self, path: TExprId, ty: ast::TyExprId, inner: ast::PatId) {
+        if !self.prog.forward.places.contains_key(&path) {
+            return;
+        }
+        let place = self.forward_typed_place(ty, inner);
+        if let Some(note) = self.prog.forward.places.get_mut(&path) {
+            note.span = place;
         }
     }
 
@@ -1134,6 +1271,11 @@ impl<'a> Worker<'a> {
     }
 
     fn forward_pat(&mut self, w: &mut Walk, p: TPatId) {
+        // A typed pattern written by a type alias of a block names the alias, whatever the
+        // pattern is typed to (a test, or the `TypeTest` an abstract type is tested through).
+        if let Some(ForwardPattern { file, span, typed: Some(Some(d)) }) = self.prog.forward.patterns.get(&p).copied() {
+            self.forward_name(w, Named::Alias(file, d), 0, "pattern", Some((file, span)));
+        }
         match self.prog.pats[p.idx()] {
             TPat::Wildcard => {}
             TPat::Bind(_, inner) => {
@@ -1141,12 +1283,21 @@ impl<'a> Worker<'a> {
                     self.forward_pat(w, inner);
                 }
             }
-            // A typed pattern's type names nothing in scalac's tree, as a type test's (`forward_node`).
-            TPat::Test(_, _, inner) => self.forward_pat(w, inner),
+            // A typed pattern's type is no tree that names; its wildcard is an identifier of the
+            // written type, which the typing noted where that type is a block's class or alias.
+            // The test itself (`forward_node`) and the pattern inside name nothing of their own.
+            TPat::Test(_, t, inner) => {
+                if let Some(ForwardPattern { file, span, typed: Some(None) }) = self.prog.forward.patterns.get(&p).copied() {
+                    if let crate::types::Type::Class(c, _) = self.types.get(self.types.unannotated(t)) {
+                        self.forward_name(w, Named::Class(c), 0, "pattern", Some((file, span)));
+                    }
+                }
+                self.forward_pat(w, inner)
+            }
             TPat::Equals(e, _) => self.forward_expr(w, e),
             // A constructor pattern selects the class's companion (`C.unapply`).
             TPat::Class(c, _, _, subs) => {
-                let place = self.prog.forward.patterns.get(&p).copied();
+                let place = self.prog.forward.patterns.get(&p).map(|n| (n.file, n.span));
                 if w.named.contains_key(&Named::Class(c)) {
                     self.forward_name(w, Named::Class(c), 0, "pattern", place);
                 } else if let Some(m) = self.forward_holder(c) {

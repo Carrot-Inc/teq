@@ -1048,10 +1048,22 @@ pub struct JsImport {
 pub struct ForwardNotes {
     /// By node.
     pub places: FxMap<TExprId, ForwardPlace>,
-    /// By constructor pattern: the place of the constructor it names.
-    pub patterns: FxMap<TPatId, (FileId, Span)>,
+    /// By pattern: a constructor pattern's place of the constructor it names; a typed pattern's
+    /// place and what its written type names.
+    pub patterns: FxMap<TPatId, ForwardPattern>,
     /// The files in whose trees a noted node stands: the units the check walks.
     pub units: Vec<FileId>,
+}
+
+/// A pattern's note.
+#[derive(Clone, Copy)]
+pub struct ForwardPattern {
+    pub file: FileId,
+    pub span: Span,
+    /// A typed pattern's (`x: T`, `_: T`): the type alias of a block its type is written by, or
+    /// none where it is written by the class its test's type is of. Absent for a constructor
+    /// pattern, which names its class.
+    pub typed: Option<Option<crate::ast::DefId>>,
 }
 
 #[derive(Clone)]

@@ -239,9 +239,53 @@ object Test:
     val held: Int = first
     class Later[A, B](val v: Int)
     held
+  // A typed pattern names a later definition of the block only where its type is written by a name the scope
+  // resolves to that definition. An applied type, a union, an intersection, a refinement, a projection, a later
+  // enum's case, a type parameter of the class's name, an alias written before the value and a supertype over a
+  // selector of the later class name nothing.
+  def typedPatternTypes(n: Int): Int =
+    type Short = Later
+    def applied(x: Any): Int = x match { case l: Boxed[?] => 1; case _ => 0 }
+    def either(x: Any): Int = x match { case l: (Later | String) => 1; case _ => 0 }
+    def both(x: Any): Int = x match { case l: (Later & Marked) => 1; case _ => 0 }
+    def refined(x: Any): Int = x match { case _: Later { def more: Int } => 1; case _ => 0 }
+    def projected(x: Any): Int = x match { case _: Later#Inner => 1; case _ => 0 }
+    def enumCase(x: Any): Int = x match { case _: Shade.Dark.type => 1; case _ => 0 }
+    def parameter[Later](x: Later, y: Any): Int = y match { case l: String => 1; case l: Later @unchecked => 0 }
+    def earlierAlias(x: Any): Int = x match { case _: Short => 1; case _ => 0 }
+    def supertype(x: Later): Int = x match { case y: Any => 0 }
+    val held: Int = applied(n) + either(n) + both(n) + refined(n) + projected(n) + parameter(n, n) + earlierAlias(n)
+    class Later { class Inner }
+    class Boxed[A]
+    enum Shade { case Dark, Light }
+    held + supertype(new Later) + enumCase(n) + n
+  // Nor does a typed pattern scalac's tree no longer holds when its check runs (a branch folded away, an inline
+  // match reduced in its expansion), one inside the later class itself, or one with no value between.
+  def typedPatternPlaces(n: Int): Int =
+    def folded(x: Any): Int = if false then (x match { case l: Later => 1; case _ => 0 }) else 0
+    def reduced: Int = kind[Int]
+    val held: Int = folded(n) + reduced
+    class Later { def same(x: Any): Int = x match { case l: Later => 1; case _ => 0 } }
+    inline def kind[T]: Int = inline scala.compiletime.erasedValue[T] match { case _: Later => 1; case _ => 0 }
+    val after: Int = n
+    def plain(x: Any): Int = x match { case l: Unheld => 1; case _ => 0 }
+    class Unheld
+    held + plain(n) + new Later().same(n) + after
+  // A `for`'s value definition by a typed variable is a plain value definition in scalac's tree where its run of
+  // aliases is not packed with the element (no guard follows it): its type names nothing.
+  def typedForAliases(n: Int): Int =
+    def make(y: Any): Word = "t"
+    val last = for (y <- List(n); l: Word = make(y)) yield l.length
+    val before = for (y <- List(n); l: Word = make(y); z <- List(1)) yield z + l.length
+    val two = for (y <- List(n); l: Word = make(y); k: Word = l) yield k.length
+    val none = for (y <- List.empty[Int]; l: Unmade = (null: Unmade)) yield 1
+    type Word = String
+    class Unmade
+    last.sum + before.sum + two.sum + none.sum - 1
   def main(args: Array[String]): Unit =
     println(List(inlineOver(3), lazyBetween(3), lazyAhead(3), noValue(3), new Members(3).first, typeOnly(3), traitParent(3), typeArgument(3), folded(3), recursion(3), wildcard(3)).mkString(" "))
     println(List(aliasEarlier(3), aliasAnonymous(3), aliasOfAlias(3), foldedAnd(3), foldedOr(3), companionAfter(3)).mkString(" "))
     println(List(aliasAfterComment(3), aliasInParentheses(3), aliasInBackquotes(3), aliasAnonymousAfterComment(3), aliasOfAnObject(3), foldedBlocks(3)).mkString(" "))
     println(List(foldedByPurity(3), foldedLevel(3), foldedUnitValue(3), aliasPartial(3), aliasSwapped(3), memberTypes(3)).mkString(" "))
     println(List(traitMemberLater(3), traitMixerBefore(3), projected(3), memberPatternPaths(3)).mkString(" "))
+    println(List(typedPatternTypes(3), typedPatternPlaces(3), typedForAliases(3)).mkString(" "))

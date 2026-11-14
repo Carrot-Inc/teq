@@ -16,8 +16,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   definition, and a quote's copy at the macro's call. Such programs were built before and failed at run time (`the
   local second is not in scope`, a JavaScript `ReferenceError`) or printed what scalac never compiles. Not covered
   yet: a later *value* named ahead and a self constructor call's forward reference are refused with another message
-  (`not found`), as before; a later class or object named by a typed pattern's type (`case x: Later`), which is a
-  reference to scalac, is still built.
+  (`not found`), as before; a later class named by the type of a plain pattern's selector (`(x: Later) match { case
+  y => .. }`), which is a reference to scalac, is still built.
+- A typed pattern is a forward reference too where its type is written by a later class, trait, enum or type alias
+  of the block, or by `T.type` a later object or lazy value (`case x: Later`, `case _: Later`, `case x @ (_: Later)`,
+  `case _: Later.type`), as under scalac (E039, told at the type for a typed variable and at the `_` for a typed
+  wildcard): the pattern's wildcard is an identifier of the written type there. An applied type, a union, an
+  intersection, a member of a later object and an alias written before the value name nothing, as before.
 - A class of a block whose own classes read givens of the block through inline methods takes those captures in
   one order however the program is built: the classes it declares are taken by their place when the captures are
   completed after the inlining phase. A module built alone over the program's own products gave such a class
