@@ -150,7 +150,7 @@ impl<'a> Worker<'a> {
             taken_then_bits: _, taken_else_bits: _, widened_bits: _, opaque_bits: _, spread_bits: _,
             ascribed_bits: _, cast_bits: _, setter_assign_bits: _, tuple_index_bits: _, kept_bits: _, leaf_bits: _,
             leaf_tests: _, stored_tests: _, stored_pats: _, shifts: _, build_start: _, runs: _, lifted_funs: _,
-            block_class_traits: _,
+            block_class_traits: _, forward: _,
         } = &self.prog;
         // A local enum's name is kept by its class, a class of a block: renumbered with the program.
         v.field("the local enums' names (Program::local_enum_names)", |v| {

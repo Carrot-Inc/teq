@@ -1945,6 +1945,7 @@ impl<'a> Worker<'a> {
     /// the class test takes the outer test (`addOuterTest`): `case b.I(n)` on an `a.I` fails.
     fn class_pattern_through(&mut self, c: ClassId, subs: Vec<PatId>, sty: TypeId, written: Option<TypeId>, span: Span) -> TPatId {
         let pat = self.class_pattern_now(c, subs, sty, written, span);
+        self.forward_note_pattern(pat, c, span);
         let TPat::Class(_, class_ty, ..) = self.prog.pats[pat.idx()] else { return pat };
         if !self.is_inner_class(c) {
             return pat;

@@ -435,6 +435,11 @@ pub struct SymInfo {
     /// the passes over the sets pass it by.
     pub superseded: bool,
     /// Set for a method that an overloaded name stands for, in its own class or in a subclass.
+    /// A block's value while its own initialiser is typed: a read of it then stands at its own
+    /// statement, which the forward-reference check tells at the read's place (`typer::forward`).
+    /// Set and cleared by the worker that types the block's statement, within that statement: a
+    /// block's symbols are that worker's alone until its body is published, the statement done.
+    pub initialising: bool,
     pub alternative: bool,
     /// dotty's `Synthetic`: a pattern definition's holder (`Ast::patdef_holders`,
     /// `Desugar.makePatDef`'s `patMods`), or a definition a pickle marks `SYNTHETIC`; a copy
@@ -1460,6 +1465,7 @@ impl Symbols {
             merge_pending: false,
             superseded: false,
             alternative: false,
+            initialising: false,
             synthetic: false,
             dispatch: Dispatch::Unknown,
             completion_noted: false,

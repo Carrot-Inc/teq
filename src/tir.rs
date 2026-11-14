@@ -1039,6 +1039,35 @@ pub struct JsImport {
     pub name: Name,
 }
 
+/// Where the nodes that name a definition of a block from at or before that definition's
+/// statement stand in the source. The typed trees keep a node's source only in a build that
+/// keeps the types, and never as scalac's tree has it (an identifier's own span, a creation's
+/// created type), so the typing notes it for these nodes alone, and the forward-reference
+/// check, which runs after the inlining phase, reads it (`typer::forward`).
+#[derive(Default)]
+pub struct ForwardNotes {
+    /// By node.
+    pub places: FxMap<TExprId, ForwardPlace>,
+    /// By constructor pattern: the place of the constructor it names.
+    pub patterns: FxMap<TPatId, (FileId, Span)>,
+    /// The files in whose trees a noted node stands: the units the check walks.
+    pub units: Vec<FileId>,
+}
+
+#[derive(Clone)]
+pub struct ForwardPlace {
+    pub file: FileId,
+    pub span: Span,
+    /// A creation's: the definitions of blocks its created type names that stood at or after
+    /// the creation's statement (dotty's `ForwardDepChecks.transformNew` over the type's terms).
+    pub parts: Vec<SymId>,
+    /// A creation's: the type alias the typer resolved its written type to, where the creation
+    /// keeps it (it is not the alias's class applied to the alias's own parameters). The
+    /// creation names the alias in its class's place (`tree.tpe.typeSymbol` of dotty's `New`):
+    /// an alias of a block by its definition, any other alias no definition of a level.
+    pub alias: Option<Option<crate::ast::DefId>>,
+}
+
 pub struct Program {
     pub exprs: Arena<TExpr>,
     pub pats: Arena<TPat>,
@@ -1129,6 +1158,8 @@ pub struct Program {
     /// reach walks declares, made or not, as scalac's backend writes the class definitions of
     /// the trees it is given (`reach::Walker::declared`).
     pub block_classes: FxMap<TExprId, Vec<ClassId>>,
+    /// The places the forward-reference check tells its errors at (`typer::forward`).
+    pub forward: ForwardNotes,
     /// What an inline method's call gave, as bits by expression, on every target: the keys of
     /// `expansions` on JavaScript, which a walk tests at every node. Where a chain of `+` ends
     /// is `chain_end_bits`' to say, which a transparent method's call does not set.
@@ -1443,6 +1474,7 @@ impl Program {
             quote_pats: Arena::attach(self.quote_pats.shared_arc(), worker),
             expansions: FxMap::default(),
             block_classes: FxMap::default(),
+            forward: ForwardNotes::default(),
             expansion_bits: Bits::attach(self.expansion_bits.shared_arc(), worker),
             chain_end_bits: Bits::attach(self.chain_end_bits.shared_arc(), worker),
             taken_then_bits: Bits::attach(self.taken_then_bits.shared_arc(), worker),
@@ -1551,6 +1583,7 @@ impl Default for Program {
             quote_pats: Arena::new(),
             expansions: FxMap::default(),
             block_classes: FxMap::default(),
+            forward: ForwardNotes::default(),
             expansion_bits: Bits::default(),
             chain_end_bits: Bits::default(),
             taken_then_bits: Bits::default(),

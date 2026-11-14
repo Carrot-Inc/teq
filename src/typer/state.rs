@@ -1486,6 +1486,10 @@ impl<'a> Worker<'a> {
     /// shares one function among the expansions of one shape, docs/TARGETS.md), its leaf, widening
     /// and opacity marks, its `this` note, its evaluation and the language server's record of it.
     fn move_expansion_marks(&mut self, from: crate::tir::TExprId, to: crate::tir::TExprId) {
+        // What the root names it names from the call's node now, which a call ahead named its callee from.
+        if !self.prog.forward.places.is_empty() {
+            self.forward_move(from, to);
+        }
         // An `erasedValue` the expansion is stands in the call's node now.
         for made in self.erased_values.iter_mut().filter(|m| m.0 == from) {
             made.0 = to;

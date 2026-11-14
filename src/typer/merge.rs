@@ -1458,6 +1458,12 @@ impl Remap {
                 *c = r.class(*c);
             }
         });
+        self.map(&mut p.forward.places, |r, e| r.expr(e), |r, place| {
+            for s in &mut place.parts {
+                *s = r.sym(*s);
+            }
+        });
+        self.map(&mut p.forward.patterns, |r, t| r.pat(t), |_, _| {});
         self.map(&mut p.leaf_tests, |r, t| r.test(t), |_, _| {});
         self.map(&mut p.stored_tests, |r, t| r.test(t), |_, _| {});
         self.map(&mut p.stored_pats, |r, t| r.pat(t), |_, _| {});
@@ -2505,6 +2511,13 @@ impl<'a> Worker<'a> {
         self.prog.overrides.absorb(o.prog.overrides.take_local());
         union(&mut self.prog.expansions, &mut o.prog.expansions);
         union(&mut self.prog.block_classes, &mut o.prog.block_classes);
+        union(&mut self.prog.forward.places, &mut o.prog.forward.places);
+        union(&mut self.prog.forward.patterns, &mut o.prog.forward.patterns);
+        for f in std::mem::take(&mut o.prog.forward.units) {
+            if !self.prog.forward.units.contains(&f) {
+                self.prog.forward.units.push(f);
+            }
+        }
         union(&mut self.prog.leaf_tests, &mut o.prog.leaf_tests);
         union(&mut self.prog.stored_tests, &mut o.prog.stored_tests);
         union(&mut self.prog.stored_pats, &mut o.prog.stored_pats);

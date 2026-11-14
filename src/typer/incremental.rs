@@ -203,6 +203,7 @@ impl<'a> Worker<'a> {
         self.finish_capture_of(Some(&files));
         self.choose_entry_point();
         self.check_deferred_bounds();
+        self.forward_references(Some(&files));
         for (s, old) in constants {
             let ret = self.sig_of(s).ret;
             if self.constant_type(s, ret) != Some(old) {

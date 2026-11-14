@@ -411,7 +411,7 @@ impl Group {
             PHASE_TYPER => Group::Typer,
             PHASE_INLINING => Group::Inlining,
             PHASE_FIRST_TRANSFORM => Group::RefChecks,
-            7 => Group::PatternMatcher,
+            PHASE_FORWARD_DEP_CHECKS | 7 => Group::PatternMatcher,
             8 => Group::CheckUnused,
             9 => Group::ElimOpaque,
             PHASE_TUPLE_OPTIMIZATIONS => Group::PruneErasedDefs,
@@ -733,6 +733,9 @@ pub const PHASE_INLINING: u8 = 4;
 pub const PHASE_FIRST_TRANSFORM: u8 = 5;
 /// `RefChecks`, of the group `CrossVersionChecks` begins.
 pub const PHASE_REFCHECKS: u8 = 5;
+/// `ForwardDepChecks`, of `PatternMatcher`'s group and before it in that group's order: after
+/// `RefChecks`, before a match's warnings, neither hiding the other.
+pub const PHASE_FORWARD_DEP_CHECKS: u8 = 6;
 /// `TupleOptimizations`, before `Erasure`.
 pub const PHASE_TUPLE_OPTIMIZATIONS: u8 = 10;
 pub const PHASE_ERASURE: u8 = 11;

@@ -346,7 +346,7 @@ i14367.scala	marks: no error where 1 are marked
 i14386.scala	marks: 4 errors where 3 are marked: i14386.scala:34:2: The start of this line does not match any of the previous indentation widths.
 i14401.scala	marks: 1 errors where 5 are marked
 i14401b.scala	check: diagnostic 1 of 1: scalac's is error i14401b.scala:5:18 forward reference to x extends over the definition of x (on line 6); teq's is error i14401b.scala:5:18 not found: x
-i14401c.scala	marks: no error where 1 are marked
+i14401c.scala	check: diagnostic 1 of 1: scalac's is error i14401c.scala:5:18 forward reference to g (defined on line 7) extends over the definition of x (on line 6); teq's is error i14401c.scala:5:18 forward reference to g (defined on line 7) extends ove
 i14415.scala	check: diagnostic 1 of 1: scalac's is error i14415.scala:21:7 error overriding method m in trait C of type (a: Int): Int;; teq's is error i14415.scala:21:7 method m is accessed from super in trait C; class X has no concrete m behind that tr
 i14432.scala	check: diagnostic 1 of 1: scalac's is error i14432.scala:13:34 No given instance of type scala.deriving.Mirror.Of[example.Foo] was found for parameter x of method summon in object Predef. Failed to synthesize an instance of type scala.deriv
 i14432a.scala	marks: 2 errors where 1 are marked: i14432a.scala:14:44: No given instance of type Mirror.Of[Foo] was found.
@@ -516,13 +516,11 @@ i19731.scala	check: diagnostic 2 of 3: scalac's is error i19731.scala:7:7 class 
 i19746.scala	marks: error on an unmarked line i19746.scala:10: type mismatch: found Any, required T
 i19762.scala	check: diagnostic 1 of 1: scalac's is error i19762.scala:8:32 Missing return type; teq's is error i19762.scala:8:32 unmatched closing bracket
 i19809.scala	marks: no error where 1 are marked
-i1992.scala	marks: no error where 2 are marked
 i19958.scala	check: diagnostic 1 of 2: scalac's is error i19958.scala:1:9 value unit is not a member of Object - did you mean Object.wait?; teq's is error i19958.scala:1:9 value unit is not a member of AnyRef
 i2000.scala	marks: error on an unmarked line i2000.scala:3: method foo overrides nothing
 i2001.scala	marks: error on an unmarked line i2001.scala:2: recursive use of odd needs an explicit result type
 i2001a.scala	marks: error on an unmarked line i2001a.scala:2: recursive use of odd needs an explicit result type
 i2001b.scala	marks: error on an unmarked line i2001b.scala:2: recursive use of odd needs an explicit result type
-i2005.scala	marks: no error where 1 are marked
 i2006.scala	marks: error on an unmarked line i2006.scala:3: no given instance of type Int was found for parameter of (Int) ?=> Int
 i20105.scala	check: diagnostic 1 of 2: scalac's is warning i20105.scala:6:7 The tail recursive def foo contains a recursive call inside the non-inlined inner def bar; teq's is error i20105.scala:3:5 TailRec optimisation not applicable, method foo contai
 i20127.scala	check: diagnostic 2 of 2: scalac's is error i20127.scala:14:15 foo!; teq's is error i20127.scala:14:15 no given instance of type X was found for parameter x

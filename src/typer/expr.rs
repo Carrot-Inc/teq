@@ -5393,6 +5393,8 @@ impl<'a> Worker<'a> {
                         self.sites.owners.push(SiteOwner::PatternTemp(def.span));
                     } else {
                         self.sites.owners.push(SiteOwner::Sym(sym));
+                        // Until the owners are cut back below: nothing leaves the statement between.
+                        self.syms.sym_mut(sym).initialising = true;
                     }
                     sym
                 }) };
@@ -5450,6 +5452,9 @@ impl<'a> Worker<'a> {
                     }
                 }
                 self.sites.owners.truncate(owners_depth);
+                if let Some(sym) = sym {
+                    self.syms.sym_mut(sym).initialising = false;
+                }
                 match (pat, sym) {
                     (Some(p), _) if def.mods & mods::LAZY != 0 => self.lazy_pattern_val(*p, rhs, init, ity, def.span, out),
                     (Some(p), _) => out.push(self.pattern_val(*p, rhs, init, ity)),

@@ -548,7 +548,7 @@ neg/i14367.scala	same
 neg/i14386.scala	different	The start of this line does not match any of the previous indentation widths.
 neg/i14401.scala	subset	1/5 lines
 neg/i14401b.scala	same	
-neg/i14401c.scala	accepts	
+neg/i14401c.scala	same	
 neg/i14415.scala	same	
 neg/i14432.scala	same	
 neg/i14432a.scala	superset	+1 lines: No given instance of type Mirror.Of[Foo] was found.
@@ -800,14 +800,14 @@ neg/i19746.scala	different	type mismatch
 neg/i19762.scala	syntax	unmatched closing bracket
 neg/i19809.scala	accepts	
 neg/i19888.scala	same	
-neg/i1992.scala	accepts	
+neg/i1992.scala	same	
 neg/i19949.scala	same	
 neg/i19958.scala	same	
 neg/i2000.scala	different	method foo overrides nothing
 neg/i2001.scala	different	recursive use of {} needs an explicit result type
 neg/i2001a.scala	different	recursive use of {} needs an explicit result type
 neg/i2001b.scala	different	recursive use of {} needs an explicit result type
-neg/i2005.scala	accepts	
+neg/i2005.scala	same	
 neg/i2006.scala	subset	1/2 lines
 neg/i20071a.scala	same	
 neg/i20071b	same	

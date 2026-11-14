@@ -669,6 +669,7 @@ impl<'a> Worker<'a> {
             for &j in &written.omitted {
                 let ty = param_types.get(j).copied().unwrap_or(ANY);
                 let d = self.default_application(plan, *recv, &args[..first], first + j, ty);
+                self.forward_note_default(d, span);
                 let d = if plan.param(first + j).is_some_and(|p| p.by_name) { self.by_name_thunk(d) } else { d };
                 args[first + j] = d;
             }

@@ -5676,6 +5676,7 @@ impl<'a> Worker<'a> {
                 }
             }
         };
+        self.forward_note_given(te, g, span);
         let (defaults, lifted) = if omitted.is_empty() {
             (Vec::new(), Vec::new())
         } else {

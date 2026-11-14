@@ -77,6 +77,7 @@ impl Program {
             quote_pats,
             expansions,
             block_classes,
+            forward,
             expansion_bits,
             leaf_bits,
             leaf_tests,
@@ -140,6 +141,9 @@ impl Program {
             + table(expansions)
             + table(block_classes)
             + block_classes.values().map(array).sum::<usize>()
+            + table(&forward.places)
+            + table(&forward.patterns)
+            + array(&forward.units)
             + table(aside_types)
             + expansion_bits.held()
             + leaf_bits.held()

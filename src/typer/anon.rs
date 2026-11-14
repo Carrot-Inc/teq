@@ -910,6 +910,12 @@ impl<'a> Worker<'a> {
     /// local class captures, so each creation passes them the one way (dotty's `LambdaLift.addFreeArgs` at
     /// every application of a constructor, each of which `Dependencies` gives its class's free variables).
     pub(super) fn creation(&mut self, c: ClassId, via: Option<SymId>, args: ast::ListRef, span: Span) -> TExprId {
+        let e = self.creation_node(c, via, args, span);
+        self.forward_note_creation(e, c, span);
+        e
+    }
+
+    fn creation_node(&mut self, c: ClassId, via: Option<SymId>, args: ast::ListRef, span: Span) -> TExprId {
         let made = |args: ast::ListRef| match via {
             Some(s) => TExpr::NewVia(s, args),
             None => TExpr::New(c, args),

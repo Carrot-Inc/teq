@@ -3654,9 +3654,9 @@ impl<'a> Worker<'a> {
                     }
                     Callee::Value(te, ty)
                 } else {
-                    let (kind, lazy, by_name) = {
+                    let (kind, lazy, by_name, initialising) = {
                         let info = self.syms.sym(s);
-                        (info.kind, info.mods & crate::ast::mods::LAZY != 0, info.by_name)
+                        (info.kind, info.mods & crate::ast::mods::LAZY != 0, info.by_name, info.initialising)
                     };
                     match (kind, lazy) {
                         (SymKind::Def, _) => Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None, refined: None },
@@ -3671,6 +3671,7 @@ impl<'a> Worker<'a> {
                                 return Some(Callee::Value(te, ty));
                             }
                             let local = self.prog.add(TExpr::Local(s));
+                            self.forward_note_value(local, s, span, lazy, initialising);
                             let te = if by_name { self.prog.add(TExpr::CallClosure(local, ListRef::EMPTY)) } else { local };
                             Callee::Value(te, ty)
                         }
@@ -5510,6 +5511,7 @@ impl<'a> Worker<'a> {
                             let earlier = args_out[..clause_first].to_vec();
                             let pl = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
                             let d = self.default_application(pl, call.recv, &earlier, clause_first + i, ty);
+                            self.forward_note_default(d, span);
                             args_out.push(if p.by_name { self.by_name_thunk(d) } else { d });
                             continue;
                         }
@@ -5754,6 +5756,11 @@ impl<'a> Worker<'a> {
                 te
             }
         };
+        match (&ctor, targs) {
+            (None, _) if call.recv.is_none() => self.forward_note_call(te, call.sym, span),
+            (Some(_), Some(written)) => self.forward_note_type_args(te, written, span),
+            _ => {}
+        }
         if (self.inline.checking > 0 || self.inline.counting > 0 && !inline_callee) && ctor.is_none() && !sig.tparams.is_empty() {
             self.note_type_args(te, &subst[call.owner_subst.len()..]);
             // A library body's list its pickle inferred is none the source wrote.
@@ -13414,6 +13421,7 @@ impl<'a> Worker<'a> {
                     self.retract(mark);
                     continue;
                 };
+                self.forward_note_extension_given(instance, span);
                 let owner_subst = match self.base_type(inst_ty, b) {
                     Some(bt) => self.owner_subst(bt),
                     None => Vec::new(),

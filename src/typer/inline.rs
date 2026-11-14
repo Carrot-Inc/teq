@@ -2971,7 +2971,11 @@ impl<'a> Worker<'a> {
                 TExpr::Try(self.prog.tries.len() as u32 - 1)
             }
         };
+        let noted = matches!(copied, TExpr::Local(_) | TExpr::CallStatic(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Default(..));
         let id = self.prog.add(copied);
+        if noted && !self.prog.forward.places.is_empty() {
+            self.forward_copy(e, id);
+        }
         if self.profile.on {
             self.profile.inline.copied_nodes += 1;
         }

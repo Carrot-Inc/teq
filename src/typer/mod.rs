@@ -21,6 +21,7 @@ mod exceptions;
 pub mod feature;
 pub mod exports;
 mod expr;
+mod forward;
 mod implicits;
 pub(crate) mod getters;
 mod import_check;
@@ -2897,6 +2898,7 @@ impl<'a> Typer<'a> {
             w.final_passes();
             let p = w.phase(profile::Phase::Final);
             w.check_deferred_bounds();
+            w.forward_references(None);
             w.phase_end(p);
             w.report_unused(None);
             w.register_suppressions();

@@ -1202,6 +1202,45 @@ expect "inline result: the mismatch undone" "$(field ok),$(count error)" 'true,0
 as_fresh "inline result: the mismatch undone" "$ires"
 stop
 
+# A forward reference that extends over a value's definition is refused by a check over the final trees, after the
+# inlining phase, from the places the typing noted: the edit that makes one, the edit of the inline method whose
+# argument holds it, the edit that makes a second and the edit that undoes both each answer as a fresh check does.
+fref=$work/fref && rm -rf "$fref" && mkdir -p "$fref"
+printf 'object Lib:\n  inline def twice(inline x: Int): Int = x + x\n' > "$fref/Lib.scala"
+printf 'object Use:\n  def run(n: Int): Int =\n    def second: Int = n\n    def first: Int = Lib.twice(second)\n    val held: Int = first\n    held\n' > "$fref/Use.scala"
+start "$fref"
+expect "forward reference: the first build" "$(field ok),$(count error)" 'true,0'
+printf 'object Use:\n  def run(n: Int): Int =\n    def first: Int = Lib.twice(second)\n    val held: Int = first\n    def second: Int = n\n    held\n' > "$fref/Use.scala"
+build "$fref/Use.scala"
+expect "forward reference: made by an edit" "$(field ok),$(count error)" 'false,1'
+if has 'forward reference to second'; then ok; else bad "forward reference: the error: $RESULT"; fi
+as_fresh "forward reference: made by an edit" "$fref"
+printf 'object Lib:\n  inline def twice(inline x: Int): Int = x + x + 0\n' > "$fref/Lib.scala"
+build "$fref/Lib.scala"
+expect "forward reference: the inline method edited" "$(field ok),$(count error)" 'false,1'
+as_fresh "forward reference: the inline method edited" "$fref"
+printf 'object Use:\n  def run(n: Int): Int =\n    def first: Int = Lib.twice(second)\n    val held: Int = first\n    def second: Int = third\n    val more: Int = second\n    def third: Int = n\n    held + more\n' > "$fref/Use.scala"
+build "$fref/Use.scala"
+expect "forward reference: a second one" "$(field ok),$(count error)" 'false,2'
+as_fresh "forward reference: a second one" "$fref"
+printf 'object Use:\n  def run(n: Int): Int =\n    def second: Int = n\n    def first: Int = Lib.twice(second)\n    val held: Int = first\n    held\n' > "$fref/Use.scala"
+build "$fref/Use.scala"
+expect "forward reference: undone" "$(field ok),$(count error)" 'true,0'
+as_fresh "forward reference: undone" "$fref"
+# A value whose initialiser does not type is no value under definition once its statement is left: the type error
+# alone; the initialiser mended, the forward reference over the next value is told, and nothing of the mended one.
+printf 'object Use:\n  def run(n: Int): Int =\n    val held: Int = "text"\n    def first: Int = held + second\n    val more: Int = first\n    def second: Int = n\n    more\n' > "$fref/Use.scala"
+build "$fref/Use.scala"
+expect "forward reference: an initialiser that does not type" "$(field ok),$(count error)" 'false,1'
+if has 'type mismatch'; then ok; else bad "forward reference: the type error alone: $RESULT"; fi
+as_fresh "forward reference: an initialiser that does not type" "$fref"
+printf 'object Use:\n  def run(n: Int): Int =\n    val held: Int = n\n    def first: Int = held + second\n    val more: Int = first\n    def second: Int = n\n    more\n' > "$fref/Use.scala"
+build "$fref/Use.scala"
+expect "forward reference: the initialiser mended" "$(field ok),$(count error)" 'false,1'
+if has 'extends over the definition of more'; then ok; else bad "forward reference: over the next value: $RESULT"; fi
+as_fresh "forward reference: the initialiser mended" "$fref"
+stop
+
 sessions_forked check-watch
 echo "$pass passed, $fail failed"
 [ $fail = 0 ]

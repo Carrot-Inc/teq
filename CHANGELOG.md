@@ -7,6 +7,17 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A forward reference that extends over the definition of a value is refused, as scalac refuses it (E039): in a
+  block, a value defined at or before a later method, class, object, given or lazy value that something standing at
+  or before the value names (`def first = second; val held = first; def second = 1`), a value named in its own
+  initialiser, a later class created, extended or matched by a constructor pattern, a default's getter of a later
+  method. The check stands after the inlining phase, as scalac's does: a later inline method called over a value is
+  accepted, what its expansion names is checked, an inline method's own forward reference is told once at its
+  definition, and a quote's copy at the macro's call. Such programs were built before and failed at run time (`the
+  local second is not in scope`, a JavaScript `ReferenceError`) or printed what scalac never compiles. Not covered
+  yet: a later *value* named ahead and a self constructor call's forward reference are refused with another message
+  (`not found`), as before; a later class or object named by a typed pattern's type (`case x: Later`), which is a
+  reference to scalac, is still built.
 - A class of a block whose own classes read givens of the block through inline methods takes those captures in
   one order however the program is built: the classes it declares are taken by their place when the captures are
   completed after the inlining phase. A module built alone over the program's own products gave such a class

@@ -3577,6 +3577,9 @@ impl<'c> Copier<'c> {
     fn expr(&mut self, t: &mut Worker, e: TExprId) -> TExprId {
         let node = self.stored.and_then(|s| s.index.node(e));
         let id = self.expr_node(t, e, node);
+        if id != e && !t.prog.forward.places.is_empty() && matches!(t.prog.expr(e), TExpr::Local(_) | TExpr::CallStatic(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Default(..)) {
+            t.forward_copy(e, id);
+        }
         // An identifier of an own parameter accessor, and an empty anonymous class's creation (`MARK_ANON_PARENT`), stays
         // one in the copy (`into_constr`).
         if id != e && matches!(t.prog.expr(id), TExpr::Field(..) | TExpr::New(..) | TExpr::Block(..)) && t.expr_marks.get(&e).is_some_and(|&m| m & super::MARK_PARAM_IDENT != 0) {
@@ -4300,6 +4303,9 @@ impl<'c> Copier<'c> {
             }
         };
         let id = t.prog.add_pat(copied);
+        if !t.prog.forward.patterns.is_empty() {
+            t.forward_copy_pattern(p, id);
+        }
         if t.capturing() {
             let this = &*self;
             t.capture_copy_pat(p, id, &|w, ty| this.ty(w, ty));

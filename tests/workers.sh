@@ -601,6 +601,14 @@ same_as_one_worker inline_names_split --split tests/workers/inline_names
 # needed inside its caller's, by several workers at once, each for its own record; the JavaScript of several
 # workers is one worker's.
 same_as_one_worker inline_result_ring -o tests/cases/inline_result_ring
+# A forward reference in each of twelve files, told after the inlining phase from the places each worker's typing
+# noted: the diagnostics of several workers are one worker's.
+same_output forward_reference_files 2 compiler check tests/errors/forward_reference_files
+# The same beside files whose typing by several workers gives way to one worker's (an inline method's callee of
+# inferred result checked inside its caller's): the job typed again tells the forward reference once, and a value
+# whose initialiser does not type leaves the type error alone.
+same_output forward_reference_retried 4 compiler check tests/cases/inline_result_ring tests/errors/forward_reference_files/Part01.scala
+same_output forward_reference_unfinished 4 compiler check tests/cases/inline_result_ring tests/errors/forward_reference_unfinished.scala
 # A trait's super accessors stand in the order scalac's `SuperAccessors` makes them, the order of the trait's
 # `super` calls in its source (an application's arguments before its function, an inline call's own
 # arguments where the call stands, a default's getter where the application has it), at every worker count:
