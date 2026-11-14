@@ -271,7 +271,7 @@ impl<'a> Worker<'a> {
                     parents.push(t);
                 }
                 _ if t == ERROR => {}
-                _ => self.error(pspan, "the parents of an anonymous JS object have to be JS traits"),
+                _ => self.error_by(crate::source::Group::PrepJSInterop, pspan, "the parents of an anonymous JS object have to be JS traits"),
             }
         }
         let Some((&first, rest)) = parents.split_first() else { return (self.prog.add(TExpr::Unit), ERROR) };
@@ -303,8 +303,19 @@ impl<'a> Worker<'a> {
                         DefKind::Val { pat: None, ty, rhs: Some(rhs) } if def.mods & mods::LAZY == 0 => {
                             (def.name, *ty, *rhs, def.span, false)
                         }
-                        DefKind::Val { .. } => {
-                            self.error(def.span, "a val of an anonymous JS object needs an initialiser and cannot be lazy");
+                        DefKind::Val { rhs, .. } => {
+                            // The reference has a record of its own there in two of the cases: a val
+                            // without an initialiser is its typer's to refuse (a declaration outside a
+                            // class), a lazy one its overriding checks' (it may not override the
+                            // trait's val); a pattern is refused by teq alone.
+                            let group = if rhs.is_none() {
+                                crate::source::Group::Typer
+                            } else if def.mods & mods::LAZY != 0 {
+                                crate::source::Group::RefChecks
+                            } else {
+                                crate::source::Group::Own
+                            };
+                            self.error_by(group, def.span, "a val of an anonymous JS object needs an initialiser and cannot be lazy");
                             continue;
                         }
                         _ => {
@@ -313,7 +324,7 @@ impl<'a> Worker<'a> {
                                  the vars of its trait; write a class for methods",
                                 self.name_str(def.name)
                             );
-                            self.error(def.span, msg);
+                            self.error_by(crate::source::Group::Own, def.span, msg);
                             continue;
                         }
                     }
@@ -324,7 +335,8 @@ impl<'a> Worker<'a> {
                         (n, None, rhs, ast.expr_span(e), true)
                     }
                     _ => {
-                        self.error(
+                        self.error_by(
+                            crate::source::Group::Own,
                             ast.expr_span(e),
                             "an anonymous JS object holds vals and assignments to the vars of its trait only",
                         );
@@ -332,7 +344,7 @@ impl<'a> Worker<'a> {
                     }
                 },
                 ast::Stmt::Import(_) => {
-                    self.error(span, "imports are not supported in an anonymous JS object");
+                    self.error_by(crate::source::Group::Own, span, "imports are not supported in an anonymous JS object");
                     continue;
                 }
             };
@@ -349,7 +361,7 @@ impl<'a> Worker<'a> {
             };
             if has_params || kind == SymKind::Given {
                 let msg = format!("{} is a method of {}; an anonymous JS object gives vals only", self.name_str(name), self.show(ty));
-                self.error(stmt_span, msg);
+                self.error_by(crate::source::Group::Own, stmt_span, msg);
                 self.type_expr(rhs, None);
                 continue;
             }
@@ -375,7 +387,7 @@ impl<'a> Worker<'a> {
                             self.show(ty),
                             self.show(t)
                         );
-                        self.error(stmt_span, msg);
+                        self.error_by(crate::source::Group::RefChecks, stmt_span, msg);
                     }
                     t
                 }
@@ -418,7 +430,7 @@ impl<'a> Worker<'a> {
         if !missing.is_empty() {
             missing.sort();
             let msg = format!("the anonymous JS object does not implement abstract member(s): {}", missing.join(", "));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::RefChecks, span, msg);
         }
 
         // Scala.js creates the fields of the body's vals before it runs the body's assignments to
@@ -491,7 +503,7 @@ impl<'a> Worker<'a> {
             "the type arguments of {} cannot be inferred here; write them out",
             self.name_str(self.syms.class(c).name)
         );
-        self.error(ast.ty_spans[ty.idx()], msg);
+        self.error_by(crate::source::Group::Own, ast.ty_spans[ty.idx()], msg);
         ERROR
     }
 
@@ -1004,7 +1016,7 @@ impl<'a> Worker<'a> {
         let enclosed = self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) if *k == holder));
         if !inside && !enclosed && !self.new_prefixed && !self.is_library_class(c) {
             let msg = format!("not supported yet: an instance of {}, a class nested in a class, made outside that class", self.name_str(self.syms.class(c).name));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::Own, span, msg);
         }
         if !inside && enclosed {
             return self.this_ref(holder);

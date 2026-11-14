@@ -386,7 +386,9 @@ struct Build {
     scope: ExportScope,
     /// The file of the clauses being processed.
     file: FileId,
-    errors: Vec<(FileId, Span, String)>,
+    /// Each with the phase group of the reference's that reports it (`Group::Unstamped`: the
+    /// typer's own).
+    errors: Vec<(FileId, Span, String, crate::source::Group)>,
     /// A lookup made for it met a table that was itself being built. That is no cycle among
     /// exports when a name lookup lies in between: finding the parents of `object Utils extends
     /// Base` may search `import Prelude.*` while `Prelude` exports `Utils.*`. The outermost build
@@ -405,7 +407,11 @@ struct Build {
 
 impl Build {
     fn error(&mut self, span: Span, msg: String) {
-        self.errors.push((self.file, span, msg));
+        self.error_by(crate::source::Group::Unstamped, span, msg);
+    }
+
+    fn error_by(&mut self, group: crate::source::Group, span: Span, msg: String) {
+        self.errors.push((self.file, span, msg, group));
     }
 }
 
@@ -696,7 +702,7 @@ impl<'a> Worker<'a> {
             if let ExportOwner::Class(c) = owner {
                 self.told_once("exports nested too deeply");
                 let info = self.syms.class(c);
-                self.diags.error(info.file, info.span, "exports are nested too deeply");
+                self.diags.error_by(crate::source::Group::Own, info.file, info.span, "exports are nested too deeply");
             }
             return (None, SourceState::Complete);
         }
@@ -729,7 +735,7 @@ impl<'a> Worker<'a> {
             self.leave_owner(outer, false);
         }
         if let Some(frame) = self.export_stack.pop() {
-            build.errors.extend(frame.cycles);
+            build.errors.extend(frame.cycles.into_iter().map(|(file, span, msg)| (file, span, msg, crate::source::Group::Unstamped)));
         }
         let Build { mut scope, errors, blocked, mut awaited, .. } = build;
         scope.givens.sort();
@@ -755,12 +761,12 @@ impl<'a> Worker<'a> {
         if !errors.is_empty() {
             self.told_once("an export table's conflicts");
         }
-        for (file, span, msg) in errors {
+        for (file, span, msg, group) in errors {
             self.diags.owner = match owner {
                 ExportOwner::Class(c) => self.class_owner(c).unwrap_or(outer),
                 ExportOwner::Pkg(_) => self.top_export_owner(file, span.start).unwrap_or(outer),
             };
-            self.diags.error(file, span, msg);
+            self.diags.error_by(group, file, span, msg);
         }
         self.diags.owner = outer;
         (scope, SourceState::Complete)
@@ -1201,7 +1207,7 @@ impl<'a> Worker<'a> {
                 self.name_str(alias),
                 owner
             );
-            build.error(span, msg);
+            build.error_by(crate::source::Group::RefChecks, span, msg);
         }
     }
 

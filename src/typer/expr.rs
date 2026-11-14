@@ -2165,7 +2165,7 @@ impl<'a> Worker<'a> {
             }
             Expr::Unsupported(what) => {
                 let msg = format!("not supported yet: {}", self.cur_ast().strings[what.idx()]);
-                self.error(span, msg);
+                self.error_by(crate::source::Group::Own, span, msg);
                 (self.prog.add(TExpr::Unit), ERROR)
             }
             Expr::Withheld(msg) => {
@@ -2173,7 +2173,7 @@ impl<'a> Worker<'a> {
                 // Which worker meets a withheld body depends on which typed it (`withheld_met`'s
                 // readers, the lenient retry and a run's halt): on a fork, one worker types the build.
                 self.told_once("a withheld body met");
-                self.error(span, msg);
+                self.error_by(crate::source::Group::Own, span, msg);
                 self.withheld_met += 1;
                 let note = self.diags.items.last().cloned();
                 // What a run that reaches it stops at, in this interpreter or a later one that
@@ -2187,11 +2187,11 @@ impl<'a> Worker<'a> {
                 (te, ERROR)
             }
             Expr::Super(_) => {
-                self.error(span, "super can only be used to select a member");
+                self.error_by(crate::source::Group::Parser, span, "super can only be used to select a member");
                 (self.prog.add(TExpr::Unit), ERROR)
             }
             Expr::NamedArg(_, v) => {
-                self.error(span, "named arguments are only allowed in argument lists");
+                self.error_by(crate::source::Group::Own, span, "named arguments are only allowed in argument lists");
                 self.type_expr(v, expected)
             }
             Expr::Quote(body) => self.type_quote(body, span, expected),
@@ -2284,7 +2284,7 @@ impl<'a> Worker<'a> {
                     // `val attrs: Attr*`), scalac ascribes the read with the repeated type: the
                     // sequence.
                     if !self.is_body_file(self.env.file) {
-                        self.error(span, "a vararg splice is only allowed as the last argument");
+                        self.error_by(crate::source::Group::Parser, span, "a vararg splice is only allowed as the last argument");
                     }
                     // An array spread as it is written (`f(arr*)`): the sequence a conversion
                     // makes of it is the typer's, which a Java parameter takes as the array.
@@ -2869,7 +2869,7 @@ impl<'a> Worker<'a> {
         let part_ids: Vec<_> = ast.str_lists[parts.range()].to_vec();
         let arg_ids: Vec<ExprId> = ast.expr_list(args).to_vec();
         let Some(format) = self.std_def("formatInterpolation") else {
-            self.error(span, "formatInterpolation is missing from the standard library");
+            self.error_by(crate::source::Group::Own, span, "formatInterpolation is missing from the standard library");
             return (self.prog.add(TExpr::Unit), ERROR);
         };
         let mut strs = Vec::with_capacity(part_ids.len());
@@ -2921,7 +2921,7 @@ impl<'a> Worker<'a> {
             ArgList { args: ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect(), using: false, span, fun: ArgList::NO_FUN }
         };
         let Some(class) = self.string_context_class() else {
-            self.error(span, "StringContext is missing from the standard library");
+            self.error_by(crate::source::Group::Own, span, "StringContext is missing from the standard library");
             return (self.prog.add(TExpr::Unit), ERROR);
         };
         self.complete_class(class);
@@ -3071,7 +3071,7 @@ impl<'a> Worker<'a> {
         // The prefix of a `new`'s class is an immutable path (dotty's `checkClassType`, E083).
         if !self.types.is_path(prefix) && !matches!(self.types.get(prefix), Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object) {
             let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(prefix));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::PostTyper, span, msg);
         }
         let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
         self.ctor_prefix = Some(prefix);
@@ -3261,7 +3261,7 @@ impl<'a> Worker<'a> {
         };
         let name = self.interner.intern("newArray");
         let Some(sym) = self.syms.entry_named(self.interner, self.b.scala_pkg, name).and_then(|e| e.term) else {
-            self.error(span, "Array cannot be instantiated without the standard library");
+            self.error_by(crate::source::Group::Own, span, "Array cannot be instantiated without the standard library");
             return (self.prog.add(TExpr::Unit), ERROR);
         };
         if let Some(made) = self.new_array_by_class_tag(elem, len, span) {
@@ -4477,7 +4477,7 @@ impl<'a> Worker<'a> {
     /// `mark` on, quietened in place as `quiet_repeated_matches` does.
     fn match_not_partial(&mut self, m: ExprId, mark: usize) {
         let span = self.cur_ast().expr_span(m);
-        self.warn_as(span, "match expression in result of block will not be used to synthesize partial function", crate::source::Warning::id(crate::warnings::id::MATCH_IS_NOT_PARTIAL_FUNCTION));
+        self.warn_as(span, "match expression in result of block will not be used to synthesize partial function", crate::source::Warning::id(crate::warnings::id::MATCH_IS_NOT_PARTIAL_FUNCTION).by(crate::source::Group::RefChecks));
         let file = self.env.file;
         for d in &mut self.deferred_matches[mark..] {
             if d.file == file && d.span.start >= span.start && d.span.end <= span.end {
@@ -5289,7 +5289,7 @@ impl<'a> Worker<'a> {
         let def = ast.def(d);
         // scalac's E200: `final` says nothing of a local val, var or def (a local class may be final).
         if def.mods & ast::mods::FINAL != 0 && matches!(def.kind, DefKind::Val { .. } | DefKind::Fun(_)) {
-            self.error(def.span, "The final modifier is not allowed on local definitions");
+            self.error_by(crate::source::Group::Parser, def.span, "The final modifier is not allowed on local definitions");
         }
         if !def.annots.is_empty() {
             self.enter_interop_annots(file, Owner::Local, def, None);
@@ -5333,7 +5333,7 @@ impl<'a> Worker<'a> {
                     return;
                 };
                 if ast.default_inits.contains(&rhs) {
-                    self.error(def.span, "Unbound placeholder parameter; incorrect use of _");
+                    self.error_by(crate::source::Group::RefChecks, def.span, "Unbound placeholder parameter; incorrect use of _");
                 }
                 let declared = ty.map(|t| self.resolve_type(t));
                 if let Some(p) = *pat {
@@ -5516,7 +5516,7 @@ impl<'a> Worker<'a> {
                     return;
                 };
                 if !g.clauses.is_empty() || !g.tparams.is_empty() {
-                    self.error(def.span, "local givens cannot take parameters");
+                    self.error_by(crate::source::Group::Own, def.span, "local givens cannot take parameters");
                 }
                 let ty = self.resolve_type(g.ty);
                 // An `inline given`, transparent or not, is an inline method (dotty's
@@ -6226,7 +6226,7 @@ impl<'a> Worker<'a> {
             Enumerator::Gen(pat, source, m) => (pat, source, CheckMode::of(m)),
             Enumerator::CaseGen(pat, source) => (pat, source, CheckMode::FilterAlways),
             _ => {
-                self.error(span, "a for expression has to start with a generator");
+                self.error_by(crate::source::Group::Parser, span, "a for expression has to start with a generator");
                 return (self.prog.add(TExpr::Unit), ERROR);
             }
         };
@@ -6356,7 +6356,7 @@ impl<'a> Worker<'a> {
         }
         let head = finals[0];
         if !finals[1..].iter().all(|&t| self.is_same_type(t, head)) {
-            self.warn(span, "For comprehension with multiple val assignments may change result type in 3.8");
+            self.warn_as(span, "For comprehension with multiple val assignments may change result type in 3.8", crate::source::Warning::plain().by(crate::source::Group::RefChecks));
         }
     }
 
@@ -6655,7 +6655,7 @@ impl<'a> Worker<'a> {
                     (self.prog.add(TExpr::Block(l, tb)), ty)
                 }
                 Enumerator::Guard(_) => {
-                    self.error(span, "a guard directly after a value definition is not supported; move it before the definition");
+                    self.error_by(crate::source::Group::Own, span, "a guard directly after a value definition is not supported; move it before the definition");
                     (self.prog.add(TExpr::Unit), ERROR)
                 }
             },

@@ -569,7 +569,7 @@ impl<'a> Worker<'a> {
         }
         // The std's own syntax warnings are no program's.
         for (span, msg) in errors.errors {
-            self.diags.error(file, span, msg);
+            self.diags.error_by(crate::source::Group::Parser, file, span, msg);
         }
         for (ast, f) in asts.into_iter().zip(std::iter::once(file).chain(blocks)) {
             self.asts.replace(f.0 as usize, ast);

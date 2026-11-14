@@ -213,7 +213,7 @@ impl<'a> Worker<'a> {
             let Some(under) = self.opaque_erasure(ty) else { break };
             ty = self.deref(under);
         }
-        let w = crate::source::Warning::id(crate::warnings::id::FORMAT_INTERPOLATION_ERROR);
+        let w = crate::source::Warning::id(crate::warnings::id::FORMAT_INTERPOLATION_ERROR).by(crate::source::Group::ElimOpaque);
         let t_string = self.b.t_string;
         if self.is_same(ty, t_string) {
             return false;

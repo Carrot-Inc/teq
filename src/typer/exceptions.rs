@@ -14,7 +14,7 @@ impl<'a> Worker<'a> {
         match self.throwable_class() {
             Some(c) => self.types.class(c, &[]),
             None => {
-                self.error(span, "java.lang.Throwable is missing from the standard library");
+                self.error_by(crate::source::Group::Own, span, "java.lang.Throwable is missing from the standard library");
                 ERROR
             }
         }
@@ -52,7 +52,7 @@ impl<'a> Worker<'a> {
         let t = ast.try_expr(index);
         if t.cases.is_empty() && t.handler.is_none() && t.finalizer.is_none() {
             let msg = "A try without catch or finally is equivalent to putting its body in a block; no exceptions are handled.";
-            self.warn_as(span, msg, crate::source::Warning::id(crate::warnings::id::EMPTY_CATCH_AND_FINALLY_BLOCK));
+            self.warn_as(span, msg, crate::source::Warning::id(crate::warnings::id::EMPTY_CATCH_AND_FINALLY_BLOCK).by(crate::source::Group::Parser));
         }
         let exp = self.branch_expected(expected);
         let guide = if exp.is_none() { Some(self.branch_guide(expected)) } else { None };
@@ -340,7 +340,7 @@ impl<'a> Worker<'a> {
     /// sub-patterns, `s` being the std's or an extension's object, as scalac desugars it.
     pub fn interp_pattern(&mut self, kind: Name, parts: ListRef, holes: &[crate::ast::PatId], sty: TypeId, span: Span) -> TPatId {
         let Some(class) = self.string_context_class() else {
-            self.error(span, "StringContext is missing from the standard library");
+            self.error_by(crate::source::Group::Own, span, "StringContext is missing from the standard library");
             return self.prog.add_pat(TPat::Wildcard);
         };
         self.complete_class(class);

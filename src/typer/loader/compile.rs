@@ -377,7 +377,7 @@ impl<'a> Worker<'a> {
             Ok(cc) => cc,
             Err(why) => {
                 let jar = self.source(self.syms.class(root).file).path.clone();
-                self.diags.error(self.syms.class(root).file, Span::default(), format!("not supported yet: {} (in the body of {} of {})", why, path, jar));
+                self.diags.error_by(crate::source::Group::Own, self.syms.class(root).file, Span::default(), format!("not supported yet: {} (in the body of {} of {})", why, path, jar));
                 self.loaded_mut().bodies.refused.push((path, why));
                 return false;
             }
@@ -451,7 +451,7 @@ impl<'a> Worker<'a> {
             Ok(cc) => cc,
             Err(why) => {
                 let path = self.class_path(obj);
-                self.diags.error(self.syms.class(obj).file, Span::default(), format!("not supported yet: {} (in the top-level definitions of {})", why, path));
+                self.diags.error_by(crate::source::Group::Own, self.syms.class(obj).file, Span::default(), format!("not supported yet: {} (in the top-level definitions of {})", why, path));
                 return;
             }
         };
@@ -681,6 +681,7 @@ impl<'a> Worker<'a> {
     /// where it stands.
     pub(in crate::typer) fn outside_inline<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         let outer = self.inline.set_aside();
+        self.diags.context = self.expansion_context();
         // Read as differences around a test or a condition of the expansion under way, which
         // what the body reads must not move.
         let reads = (self.inline.tparam_reads.get(), self.inline.leaf_reads);
@@ -688,6 +689,7 @@ impl<'a> Worker<'a> {
         if let Some(outer) = outer {
             self.inline.restore(outer);
         }
+        self.diags.context = self.expansion_context();
         self.inline.tparam_reads.set(reads.0);
         self.inline.leaf_reads = reads.1;
         result

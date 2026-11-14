@@ -420,7 +420,7 @@ impl<'a> Worker<'a> {
     /// splice and a macro implementation takes one: the one found.
     fn require_quotes(&mut self, span: Span) -> Option<TExprId> {
         let Some(c) = self.quoted_classes().quotes else {
-            self.error(span, "scala.quoted.Quotes is missing from the standard library");
+            self.error_by(crate::source::Group::Own, span, "scala.quoted.Quotes is missing from the standard library");
             return None;
         };
         let ty = self.types.class(c, &[]);
@@ -992,7 +992,7 @@ impl<'a> Worker<'a> {
     fn keep_splice(&mut self, e: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let classes = self.quoted_classes();
         let Some(quotes) = classes.quotes else {
-            self.error(span, "scala.quoted.Quotes is missing from the standard library");
+            self.error_by(crate::source::Group::Own, span, "scala.quoted.Quotes is missing from the standard library");
             return (self.prog.add(TExpr::Unit), ERROR);
         };
         let quotes_ty = self.types.class(quotes, &[]);
@@ -1744,7 +1744,7 @@ impl<'a> Worker<'a> {
     /// build's own once its diagnostics are settled.
     pub(super) fn tell_cacheable_warnings(&mut self) {
         for msg in crate::interp::take_cacheable_warnings() {
-            self.diags.warn(crate::source::NO_FILE, Span::default(), msg);
+            self.diags.warn_by(crate::source::Group::Own, crate::source::NO_FILE, Span::default(), msg);
         }
     }
 
@@ -1769,7 +1769,7 @@ impl<'a> Worker<'a> {
     fn expand_macro_now(&mut self, e: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let classes = self.quoted_classes();
         let Some(quotes) = classes.quotes else {
-            self.error(span, "scala.quoted.Quotes is missing from the standard library");
+            self.error_by(crate::source::Group::Own, span, "scala.quoted.Quotes is missing from the standard library");
             return (self.prog.add(TExpr::Unit), ERROR);
         };
         let quotes_ty = self.types.class(quotes, &[]);
@@ -1845,7 +1845,7 @@ impl<'a> Worker<'a> {
         let MacroRun { quotes: q, code: te, ret, span, mark, t_pre } = run;
         let classes = self.quoted_classes();
         let Some(quotes_impl) = classes.quotes_impl else {
-            self.error(span, "scala.quoted.Quotes is missing from the standard library");
+            self.error_by(crate::source::Group::Own, span, "scala.quoted.Quotes is missing from the standard library");
             return (self.prog.add(TExpr::Unit), ERROR);
         };
         let at = |s: &super::inline::InlineSite| (s.file, if s.at_end { Span { start: s.span.end, end: s.span.end } } else { s.span });

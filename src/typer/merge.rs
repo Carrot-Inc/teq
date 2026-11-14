@@ -3185,7 +3185,7 @@ impl<'a> Worker<'a> {
         self.note_merge_memory("the check", remap.held());
         if let Err(problem) = &checked {
             self.merge_failed = true;
-            self.diags.error(crate::source::NO_FILE, crate::source::Span::default(), problem.clone());
+            self.diags.error_by(crate::source::Group::Own, crate::source::NO_FILE, crate::source::Span::default(), problem.clone());
         }
         let started = std::time::Instant::now();
         // The base's types the promotion made again, which name the workers' ids, retired before

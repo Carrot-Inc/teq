@@ -1078,7 +1078,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
         if more {
             text.push_str("\n(More unmatched cases are elided)");
         }
-        self.t.warn_as(span, text, crate::source::Warning::id(crate::warnings::id::PATTERN_MATCH_EXHAUSTIVITY));
+        self.t.warn_as(span, text, crate::source::Warning::id(crate::warnings::id::PATTERN_MATCH_EXHAUSTIVITY).by(crate::source::Group::PatternMatcher));
     }
 
     /// Whether an earlier unguarded literal case has the same space, which is the one way a
@@ -1307,10 +1307,10 @@ impl<'t, 'a> Spaces<'t, 'a> {
         if !self.had_null_only && self.null_only(clauses, i) {
             self.had_null_only = true;
             let msg = "Unreachable case except for null (if this is intentional, consider writing case null => instead).";
-            self.t.warn_as(pat_span, msg, crate::source::Warning::id(crate::warnings::id::MATCH_CASE_ONLY_NULL));
+            self.t.warn_as(pat_span, msg, crate::source::Warning::id(crate::warnings::id::MATCH_CASE_ONLY_NULL).by(crate::source::Group::PatternMatcher));
             return;
         }
-        self.t.warn_as(pat_span, "unreachable case", crate::source::Warning::id(crate::warnings::id::MATCH_CASE_UNREACHABLE));
+        self.t.warn_as(pat_span, "unreachable case", crate::source::Warning::id(crate::warnings::id::MATCH_CASE_UNREACHABLE).by(crate::source::Group::PatternMatcher));
     }
 
     /// Whether the case `i` is a wildcard (`isWildcardArg`, a binder of one too) on a scrutinee of

@@ -709,7 +709,7 @@ impl<'a> Worker<'a> {
             }
             Pat::Ctor(path, subs) => self.type_ctor_pattern(path, subs, sty, span),
             Pat::Rest(inner) => {
-                self.error(span, "a sequence wildcard can only end a sequence pattern");
+                self.error_by(crate::source::Group::Parser, span, "a sequence wildcard can only end a sequence pattern");
                 self.type_pattern(inner, ERROR)
             }
             Pat::Quote(body) => self.type_quote_pattern(body, sty, span),
@@ -3002,7 +3002,7 @@ impl<'a> Worker<'a> {
                                 "{} is a JS trait, which cannot be tested at runtime; test a native class or a property instead",
                                 self.name_str(self.syms.class(c).name)
                             );
-                            self.error(span, msg);
+                            self.error_by(crate::source::Group::Backend, span, msg);
                             TypeTest::Always
                         }
                         (ClassKind::Trait | ClassKind::Enum, _) => self.boxed_test(c, TypeTest::Trait(c)),
@@ -3039,14 +3039,22 @@ impl<'a> Worker<'a> {
                     }
                     None => {
                         let msg = format!("this type cannot be tested at runtime: {}", self.show(t));
-                        self.error(span, msg);
+                        self.error_by(crate::source::Group::Own, span, msg);
                         TypeTest::Always
                     }
                 }
             }
             _ => {
+                // The reference refuses two of these itself: a test for `Nothing` in its erasure
+                // (`TypeTestsCasts`: the class cannot be used in runtime type tests), a type
+                // lambda after its typer (a type parameter is missing); any other is teq's own.
+                let group = match self.types.get(t) {
+                    Type::Nothing => crate::source::Group::Erasure,
+                    Type::Lambda(..) => crate::source::Group::PostTyper,
+                    _ => crate::source::Group::Own,
+                };
                 let msg = format!("this type cannot be tested at runtime: {}", self.show(t));
-                self.error(span, msg);
+                self.error_by(group, span, msg);
                 TypeTest::Always
             }
         };

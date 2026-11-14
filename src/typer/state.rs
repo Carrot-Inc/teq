@@ -1089,7 +1089,10 @@ impl<'a> Worker<'a> {
                 // What it reports waits for the flush of the call's unit (`PendingInline::held`).
                 if self.diags.items.len() > diags {
                     self.diags_cut_at(diags);
-                    let held = self.diags.items.split_off(diags);
+                    let mut held = self.diags.items.split_off(diags);
+                    for d in &mut held {
+                        d.position.ahead_of_phase();
+                    }
                     if failed.is_none() && !before {
                         failed = held.iter().find(|d| !d.is_warning).map(|d| d.msg.clone());
                     }

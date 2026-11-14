@@ -382,7 +382,7 @@ impl<'a> Worker<'a> {
                 // The compiler's own types are no classes, so nothing else reports them taken.
                 if p == self.b.scala_pkg && matches!(name, names::ANY | names::NOTHING) {
                     let msg = format!("cannot redefine the standard type {}", self.name_str(name));
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::Own, span, msg);
                     return true;
                 }
                 let old = self.syms.entry_at(p, key).and_then(|e| e.class);
@@ -496,7 +496,7 @@ impl<'a> Worker<'a> {
         match &def.kind {
             DefKind::Val { pat, .. } => {
                 if pat.is_some() {
-                    self.error(def.span, "pattern definitions are only supported inside blocks");
+                    self.error_by(crate::source::Group::Own, def.span, "pattern definitions are only supported inside blocks");
                     return;
                 }
                 let kind = if def.mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
@@ -669,7 +669,7 @@ impl<'a> Worker<'a> {
                             clash
                         }
                         Owner::Local => {
-                            self.error(def.span, "local type aliases are not supported");
+                            self.error_by(crate::source::Group::Own, def.span, "local type aliases are not supported");
                             false
                         }
                     };
@@ -726,7 +726,7 @@ impl<'a> Worker<'a> {
                 return;
             }
             _ => {
-                self.error(def.span, "a secondary constructor can only be defined in a class");
+                self.error_by(crate::source::Group::Own, def.span, "a secondary constructor can only be defined in a class");
                 return;
             }
         };
@@ -771,7 +771,7 @@ impl<'a> Worker<'a> {
         let takes_object = self.syms.class(c).kind == ClassKind::Object && !info.is_extension;
         if takes_object && info.intrinsic.as_deref().map_or(false, |t| t.contains("$0")) {
             let span = info.span;
-            self.error(span, "in a member of an object $0 is the object itself; the parameters start at $1");
+            self.error_by(crate::source::Group::Own, span, "in a member of an object $0 is the object itself; the parameters start at $1");
         }
     }
 
@@ -945,7 +945,7 @@ impl<'a> Worker<'a> {
         if def.mods & mods::OVERRIDE != 0 && cls.kind != ast::ClassKind::Object {
             let kind = if cls.kind == ast::ClassKind::Trait { "trait" } else { "class" };
             let msg = format!("{} {} overrides nothing", kind, self.name_str(def.name));
-            self.error(def.span, msg);
+            self.error_by(crate::source::Group::RefChecks, def.span, msg);
         }
         match cls.kind {
             // An object nested in a class or trait is one instance per enclosing instance; the

@@ -217,14 +217,16 @@ impl<'a> Worker<'a> {
         self.check_mixins_over_implementations(c, first);
     }
 
-    /// Reports `msg` at the class `c` unless the rule reported there since `first`.
-    fn report_at_class(&mut self, c: ClassId, first: usize, msg: String) {
+    /// Reports `msg` at the class `c` unless the rule reported there since `first`, as the phase
+    /// group `group` of the reference's does (`Group::Unstamped`: its typer).
+    #[track_caller]
+    fn report_at_class(&mut self, group: crate::source::Group, c: ClassId, first: usize, msg: String) {
         let (file, span) = {
             let i = self.syms.class(c);
             (i.file, i.span)
         };
         if !self.diags.items[first..].iter().any(|d| !d.is_warning && d.file == file && d.span == span) {
-            self.diags.error(file, span, msg);
+            self.diags.error_by(group, file, span, msg);
         }
     }
 
@@ -293,7 +295,7 @@ impl<'a> Worker<'a> {
             self.member_description(chosen.0, None),
             self.show(implemented)
         );
-        self.report_at_class(c, first, msg);
+        self.report_at_class(crate::source::Group::RefChecks, c, first, msg);
     }
 
     /// Whether a member of `c`'s linearization other than `m` implements the deferred given `m`:
@@ -368,7 +370,7 @@ impl<'a> Worker<'a> {
         let what = format!("the deferred given instance {} in {}", self.name_str(name), self.class_description(b));
         if !sig.tparams.is_empty() || !sig.clauses.is_empty() {
             let msg = format!("Cannnot infer the implementation of {}\nsince that given is parameterized. An implementing given needs to be written explicitly.", what);
-            self.report_at_class(c, first, msg);
+            self.report_at_class(crate::source::Group::Unstamped, c, first, msg);
             return;
         }
         let target = self.deferred_target(c, m, owner_ty);
@@ -390,7 +392,7 @@ impl<'a> Worker<'a> {
         // T[Foo]` reaching its own `sh` through the companion): no implementation.
         if self.reads_own_member(e, c, name) {
             let msg = format!("Inferred implementation of {} is self-recursive.\nAn implementing given needs to be written explicitly.", what);
-            self.report_at_class(c, first, msg);
+            self.report_at_class(crate::source::Group::Unstamped, c, first, msg);
             return;
         }
         let s = match self.entered_implementation(c, m) {
@@ -448,7 +450,7 @@ impl<'a> Worker<'a> {
                 let Some((s, b)) = overriding else { continue };
                 if let Some(k) = self.deferred_implemented_above(c, p) {
                     let msg = format!("{} cannot override final member {}", self.member_description(s, Some(b)), self.member_description(p, Some(k)));
-                    self.report_at_class(c, first, msg);
+                    self.report_at_class(crate::source::Group::RefChecks, c, first, msg);
                 }
             }
         }

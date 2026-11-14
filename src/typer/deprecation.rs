@@ -288,7 +288,15 @@ impl<'a> Worker<'a> {
         }
         let (shown, _) = self.shown(Referent::Sym(m));
         let span = self.ast(file).def_range(d);
-        let w = crate::source::Warning { id: crate::warnings::NO_ID, category: crate::warnings::Category::Deprecation, origin: Some("".into()), phase: 0, unplaced: false };
+        // `CrossVersionChecks.checkDeprecatedOvers`.
+        let w = crate::source::Warning {
+            id: crate::warnings::NO_ID,
+            category: crate::warnings::Category::Deprecation,
+            origin: Some("".into()),
+            phase: 0,
+            unplaced: false,
+            group: crate::source::Group::RefChecks,
+        };
         let file_was = std::mem::replace(&mut self.env.file, file);
         self.warn_as(span, format!("{} overrides concrete, non-deprecated definition(s):\n    {}", shown, overridden.join(", ")), w);
         self.env.file = file_was;
@@ -317,8 +325,39 @@ impl<'a> Worker<'a> {
         let since = since.filter(|s| !s.is_empty()).map(|s| format!(" since {}", s)).unwrap_or_default();
         let message = message.filter(|m| !m.is_empty()).map(|m| format!(": {}", m)).unwrap_or_default();
         let origin = self.full_name(r);
-        let w = crate::source::Warning { id: crate::warnings::NO_ID, category: crate::warnings::Category::Deprecation, origin: Some(origin.into_boxed_str()), phase: 0, unplaced: false };
+        // The reference checks a reference in one of three places: a call its typer expands at
+        // the call's `Inlined` node (`PostTyper.transform`), a call its inlining phase expands
+        // where it expands it (`Inlines.inlineCall`, after the typer), any other reference in
+        // `CrossVersionChecks`.
+        let group = match r {
+            // In an inline method's own body no call is expanded (`Inlining.transformMemberDef`
+            // leaves the definition as it is): the reference is `CrossVersionChecks`' like any other.
+            Referent::Sym(s) if self.is_inline_callee(s) && self.in_inline_definition(span) => crate::source::Group::RefChecks,
+            Referent::Sym(s) if self.is_inline_callee(s) && self.syms.sym(s).mods & mods::TRANSPARENT != 0 => crate::source::Group::PostTyper,
+            Referent::Sym(s) if self.is_inline_callee(s) => crate::source::Group::Inlining,
+            _ => crate::source::Group::RefChecks,
+        };
+        let w = crate::source::Warning {
+            id: crate::warnings::NO_ID,
+            category: crate::warnings::Category::Deprecation,
+            origin: Some(origin.into_boxed_str()),
+            phase: 0,
+            unplaced: false,
+            group,
+        };
         self.warn_as(span, format!("{} is deprecated{}{}", located, since, message), w);
+    }
+
+    /// Whether `span` of the file being typed stands in the definition of an inline method.
+    fn in_inline_definition(&self, span: Span) -> bool {
+        let ast = self.ast(self.env.file);
+        ast.defs.iter().enumerate().any(|(i, d)| {
+            if d.mods & mods::INLINE == 0 || !matches!(d.kind, ast::DefKind::Fun(_)) {
+                return false;
+            }
+            let range = ast.def_range(ast::DefId(i as u32));
+            range.start <= span.start && span.end <= range.end
+        })
     }
 
     /// `skipDeprecation`: a definition enclosing the reference is deprecated, or the referent

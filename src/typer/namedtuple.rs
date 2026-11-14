@@ -32,7 +32,7 @@ impl<'a> Worker<'a> {
 
     pub fn named_tuple_type(&mut self, names: &[Name], values: &[TypeId], span: Span) -> TypeId {
         let Some(nt) = self.named_tuple_class() else {
-            self.error(span, "named tuples need the standard library's NamedTuple");
+            self.error_by(crate::source::Group::Own, span, "named tuples need the standard library's NamedTuple");
             return ERROR;
         };
         let lits: Vec<TypeId> = names.iter().map(|&n| self.types.lit(LitVal::Str(n))).collect();

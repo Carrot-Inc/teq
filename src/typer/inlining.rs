@@ -194,6 +194,10 @@ struct PhaseTables {
     /// main worker's does.
     evaluated: FxMap<TExprId, ()>,
     inline_args: FxMap<SymId, super::inline::InlineArg>,
+    /// The units' runs (`Diagnostics::unit_runs`) and the units that left theirs
+    /// (`Diagnostics::suspended_after`), for the records the workers make.
+    unit_runs: FxMap<u32, u8>,
+    suspended_after: FxMap<u32, crate::source::Group>,
 }
 
 impl PhaseTables {
@@ -210,6 +214,8 @@ impl PhaseTables {
             journal: w.inlining.journal.clone(),
             evaluated: w.inline.evaluated.clone(),
             inline_args: w.inline.args.clone(),
+            unit_runs: w.diags.unit_runs.clone(),
+            suspended_after: w.diags.suspended_after.clone(),
         }
     }
 
@@ -225,6 +231,8 @@ impl PhaseTables {
         w.inlining.journal = self.journal.clone();
         w.inline.evaluated = self.evaluated.clone();
         w.inline.args = self.inline_args.clone();
+        w.diags.unit_runs = self.unit_runs.clone();
+        w.diags.suspended_after = self.suspended_after.clone();
     }
 
     /// The entries `w` holds that it was given, dropped: the main worker holds them.
@@ -1431,6 +1439,16 @@ impl<'a> Worker<'a> {
                     self.inline_deps.entry(def_file).or_default().insert(c.env.file, ());
                 }
             }
+            // The phase is not run, so no unit is suspended here; in the reference a unit whose
+            // call runs a macro of the run WOULD leave its run in the inlining phase all the
+            // same, which no later group's error holds back there. The records' positions say
+            // what the reference does: what a later group reported of such a unit is of its next
+            // run (`Diagnostics::suspend_unit`). A macro of a library suspends nothing.
+            let mut memo: FxMap<SymId, bool> = FxMap::default();
+            let leaving: Vec<u32> = self.inlining.kept.iter().filter(|k| k.call.as_ref().is_some_and(|c| self.runs_macro_of_run(c.call.sym, &mut memo))).map(|k| k.at.file).collect();
+            for f in leaving {
+                self.diags.suspend_unit(f, crate::source::Group::Inlining);
+            }
             return;
         }
         self.set_phase_running(true);
@@ -1486,6 +1504,12 @@ impl<'a> Worker<'a> {
             self.inlining.installed = None;
             self.env = outer_env.clone();
             let waiting: FxMap<u32, ()> = self.inlining.suspended.iter().map(|&f| (f, ())).collect();
+            // A unit the round suspended left its run in the inlining phase, whether a further
+            // run takes it up or not (`Diagnostics::suspend_unit`; one a transparent macro
+            // suspended left it in the typer and stays so).
+            for &f in waiting.keys() {
+                self.diags.suspend_unit(f, crate::source::Group::Inlining);
+            }
             // No further run where an error was reported (`Driver.finish`).
             let errored = self.diags.items.iter().filter(|d| !d.is_warning).count() > errors;
             let passed = match self.inlining.current_run.as_deref() {
@@ -1502,6 +1526,10 @@ impl<'a> Worker<'a> {
             self.settle_lifted_captures(Some(&waiting));
             // `Constructors` done with them too, before a macro of the later round runs their constructors.
             self.into_constr_program(Some(&waiting));
+            // The units of the run about to start are in one run more (`Position::run`).
+            for &f in waiting.keys() {
+                self.diags.resume_unit(f);
+            }
             self.inlining.current_run = Some(std::sync::Arc::new(waiting));
             self.prog.runs += 1;
             // The files given up typed again from their trees, their transparent macros run again
@@ -1643,6 +1671,8 @@ impl<'a> Worker<'a> {
             if !self.inlining.suspended.contains(&f) {
                 self.inlining.suspended.push(f);
             }
+            // The unit left its run in the typer (a transparent macro's suspension).
+            self.diags.suspend_unit(f, crate::source::Group::Typer);
         }
     }
 
@@ -1920,7 +1950,7 @@ impl<'a> Worker<'a> {
             _ => format!("among\n\n  {}\n", paths.join(", ")),
         };
         let msg = format!("Cyclic macro dependencies {}\nCompilation stopped since no further progress can be made.\n\nTo fix this, place macros in one set of files and their callers in another.", place);
-        self.diags.error(crate::source::NO_FILE, Span::default(), msg);
+        self.diags.error_by(crate::source::Group::RunEnd, crate::source::NO_FILE, Span::default(), msg);
     }
 
     /// The classes of blocks of the program by file, each with its place, which the walk of a

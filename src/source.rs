@@ -313,8 +313,125 @@ pub struct Diagnostic {
     pub unplaced: bool,
     /// The occurrence's identity (`Ordinal`), which equality and hashing ignore.
     pub ordinal: Ordinal,
+    /// Where a fresh check of the reference makes the record (`Position`), which equality and
+    /// hashing ignore.
+    pub position: Position,
     /// Made by the code a unit's suspension leaves (`Unwound`), which equality and hashing ignore.
     pub unwound: Unwound,
+}
+
+/// The phase group of the reference's that makes a record, in the order of a run's phases (dotty
+/// 3.8.4's `Compiler.phases`, the phases it fuses into one group being one here): a group runs
+/// where no group before it reported an error (`Phase.isRunnable`), the typer whatever the parser
+/// reported.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Group {
+    /// No producer named the record's group yet: the dump says so.
+    #[default]
+    Unstamped,
+    /// teq's own: the reference makes no such record.
+    Own,
+    Parser,
+    Typer,
+    PostTyper,
+    PrepJSInterop,
+    Inlining,
+    /// `CrossVersionChecks`, `InlineVals`, `ExpandSAMs`, `RefChecks`, `DropForMap` and the phases
+    /// fused with them.
+    RefChecks,
+    /// `ForwardDepChecks`, `PatternMatcher` and the phases fused with them.
+    PatternMatcher,
+    /// `CheckUnused.PostPatMat`.
+    CheckUnused,
+    /// `StringInterpolatorOpt` and the phases fused with `ElimOpaque`.
+    ElimOpaque,
+    /// `ResolveSuper`, `TupleOptimizations` and the phases fused with `PruneErasedDefs`.
+    PruneErasedDefs,
+    Erasure,
+    /// `ElimErasedValueType`, `TailRec`, `Mixin`, `NonLocalReturns` and the phases fused with them.
+    TailRec,
+    Backend,
+    /// The run's final report (`Run.runFinished`, `Reporter.finalizeReporting`).
+    RunEnd,
+}
+
+/// What of the expansion under way a record's group turned on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Context {
+    #[default]
+    None,
+    /// Inside an expansion the typer makes (a transparent method's, a forced one).
+    Typing,
+    /// Inside an expansion the inlining phase makes.
+    Phase,
+}
+
+/// Where a fresh check of the reference makes a record: the run of its unit (1 for the first, 0
+/// while no producer said), the phase group that reports it, what of the expansion under way the
+/// group turned on, and the place in teq's source that made the record. Given where the record is
+/// made (`Diagnostics::push`); two facts the producer cannot know then are given where they are
+/// known: a record an expansion ahead of the inlining phase held is the phase's
+/// (`ahead_of_phase`), and a record of a unit that leaves its run, or would where the phase is
+/// not run, is of the unit's next run where its group is after the one the unit left in
+/// (`Diagnostics::suspend_unit`). Nothing reads it
+/// but the dump (`TEQ_POSITIONS=1`, `Diagnostics::trace_positions`): equality and hashing ignore
+/// it, as `Ordinal`'s.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Position {
+    pub run: u8,
+    pub group: Group,
+    /// Whether the record's producer named the group (`Diagnostics::error_by`, `Warning::by`, a
+    /// late error's phase); the typer's reporters name none (`Diagnostics::push`).
+    pub named: bool,
+    pub context: Context,
+    pub site: Option<&'static std::panic::Location<'static>>,
+}
+
+impl Position {
+    /// The position of a record the group `group` makes, named by its producer.
+    pub fn of(group: Group) -> Position {
+        Position { group, named: true, ..Position::default() }
+    }
+
+    /// The record is one an expansion made ahead of the inlining phase, for it (a plain inline
+    /// method's call expanded where its unit's typing flushes it): the phase's record, in the
+    /// phase's expansion, unless its producer named another group.
+    pub fn ahead_of_phase(&mut self) {
+        if !self.named && self.group == Group::Typer {
+            self.group = Group::Inlining;
+        }
+        self.context = Context::Phase;
+    }
+}
+
+impl Group {
+    /// The group of the phase a producer names by its rank (`producer_rank`'s constants).
+    pub fn of_phase(phase: u8) -> Group {
+        match phase {
+            PHASE_TYPER => Group::Typer,
+            PHASE_INLINING => Group::Inlining,
+            PHASE_FIRST_TRANSFORM => Group::RefChecks,
+            7 => Group::PatternMatcher,
+            8 => Group::CheckUnused,
+            9 => Group::ElimOpaque,
+            PHASE_TUPLE_OPTIMIZATIONS => Group::PruneErasedDefs,
+            PHASE_ERASURE => Group::Erasure,
+            PHASE_TAILREC | PHASE_NONLOCAL_RETURNS => Group::TailRec,
+            _ => Group::Unstamped,
+        }
+    }
+}
+
+impl PartialEq for Position {
+    fn eq(&self, _: &Position) -> bool {
+        true
+    }
+}
+
+impl Eq for Position {}
+
+impl std::hash::Hash for Position {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
 }
 
 /// A diagnostic's identity in its build: a number no other record of the build has, given where it
@@ -441,9 +558,17 @@ impl Place {
 }
 
 impl Diagnostic {
+    /// `plain`, of the first run, as the phase group `group` of the reference's makes it
+    /// (`Position`): for a record made outside the store's reporters.
+    pub fn plain_by(group: Group, file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
+        let mut d = Diagnostic::plain(file, span, msg, is_warning, of_body);
+        d.position = Position { run: 1, ..Position::of(group) };
+        d
+    }
+
     /// A diagnostic of nothing but its place, message and severity.
     pub fn plain(file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
-        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, by_phase: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), unwound: Unwound(false) }
+        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, by_phase: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), position: Position::default(), unwound: Unwound(false) }
     }
 
     /// What the reporting policy's filters read of the diagnostic.
@@ -462,6 +587,8 @@ pub struct Warning {
     pub origin: Option<Box<str>>,
     pub phase: u8,
     pub unplaced: bool,
+    /// The group of the reference's that makes it, where its producer names one (`by`).
+    pub group: Group,
 }
 
 impl Warning {
@@ -470,7 +597,7 @@ impl Warning {
     }
 
     pub fn plain() -> Warning {
-        Warning { id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, phase: 0, unplaced: false }
+        Warning { id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, phase: 0, unplaced: false, group: Group::Unstamped }
     }
 
     /// A plain warning of scalac's phase `phase` (`producer_rank`).
@@ -478,9 +605,15 @@ impl Warning {
         Warning { phase, ..Warning::plain() }
     }
 
-    /// An unchecked type test (`UncheckedTypePattern`, an `UncheckedWarning`).
+    /// The warning as the group `group` of the reference makes it (`Position::group`).
+    pub fn by(self, group: Group) -> Warning {
+        Warning { group, ..self }
+    }
+
+    /// An unchecked type test (`UncheckedTypePattern`, an `UncheckedWarning`), which the
+    /// reference's erasure reports (`TypeTestsCasts.interceptTypeApply`).
     pub fn unchecked() -> Warning {
-        Warning { id: crate::warnings::id::UNCHECKED_TYPE_PATTERN, category: crate::warnings::Category::Unchecked, origin: None, phase: 0, unplaced: false }
+        Warning { id: crate::warnings::id::UNCHECKED_TYPE_PATTERN, category: crate::warnings::Category::Unchecked, origin: None, phase: 0, unplaced: false, group: Group::Erasure }
     }
 }
 
@@ -666,16 +799,47 @@ pub struct Diagnostics {
     /// The file of the unit whose suspension at typing the item being typed unwinds from
     /// (`Inlining::unwinding`): a record a definition of it makes is `Unwound`.
     pub unwinding: Option<u32>,
+    /// The group the record being made is of, where its producer names one (`error_by`,
+    /// `Worker::error_by`); `Unstamped` for the typer's reporters.
+    pub producer: Group,
+    /// The run of each unit that a later run of the reference compiles again (`Position::run`),
+    /// by its file: a unit a macro of the build suspended; 1 for every other.
+    pub unit_runs: crate::intern::FxMap<u32, u8>,
+    /// The units that left their run, each with the group it left in (the typer where a
+    /// transparent macro suspended it, the inlining phase for a plain one): the reference's later
+    /// groups do not run on such a unit before its next run, so a record of a later group, made
+    /// before the unit left or after, is of that run (`suspend_unit`).
+    pub suspended_after: crate::intern::FxMap<u32, Group>,
+    /// What of the expansion under way the code being typed stands in (`Position::context`): set by
+    /// the typer where an expansion begins and ends and where a definition's own typing sets the
+    /// expansions aside (`Worker::expansion_context`).
+    pub context: Context,
 }
 
 impl Diagnostics {
-    /// A diagnostic of the definition being typed (`owner`).
+    /// A diagnostic of the definition being typed (`owner`), made by the caller's caller
+    /// (`Position::site`: the reporting helpers pass their own callers on).
+    #[track_caller]
     fn made(&self, file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
         let mut d = Diagnostic::plain(file, span, msg, is_warning, of_body);
         d.owner = self.owner;
+        d.position.site = Some(std::panic::Location::caller());
+        if self.producer != Group::Unstamped {
+            d.position.group = self.producer;
+            d.position.named = true;
+        }
         d
     }
 
+    /// `error` of a record the group `group` of the reference makes (`Position`).
+    #[track_caller]
+    pub fn error_by(&mut self, group: Group, file: FileId, span: Span, msg: impl Into<String>) {
+        let outer = std::mem::replace(&mut self.producer, group);
+        self.error(file, span, msg);
+        self.producer = outer;
+    }
+
+    #[track_caller]
     pub fn error(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
         let d = self.made(file, span, msg.into(), false, self.of_bodies);
         self.push(d);
@@ -691,12 +855,52 @@ impl Diagnostics {
             d.by_phase = true;
         }
         if d.ordinal.0 == 0 {
+            // The record's position, given once: its producer's group, or the typer's for a
+            // record of the typer's reporters (the inlining phase's while it runs); the run of
+            // its unit.
+            if d.position.group == Group::Unstamped {
+                d.position.group = if self.in_phase { Group::Inlining } else { Group::Typer };
+            }
+            if d.position.context == Context::None {
+                d.position.context = self.context;
+            }
+            if d.position.run == 0 {
+                let unit = if d.owner.is_none() { d.file.0 } else { d.owner.file };
+                d.position.run = self.unit_runs.get(&unit).copied().unwrap_or(1);
+                if self.suspended_after.get(&unit).is_some_and(|&left| d.position.group > left) {
+                    d.position.run = d.position.run.saturating_add(1);
+                }
+            }
             d.ordinal = Ordinal(self.made.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1);
             if self.unwinding.is_some_and(|f| !d.owner.is_none() && d.owner.file == f) {
                 d.unwound = Unwound(true);
             }
         }
         self.items.push(d);
+    }
+
+    /// The unit `file` leaves its run in the group `left`, or would in the reference where teq's
+    /// inlining phase is not run (`Worker::inlining_phase`): what a later group reported of it so
+    /// far is of its next run, and so is what one reports of it until that run starts
+    /// (`suspended_after`). Once a unit, until its next run starts (`resume_unit`).
+    pub fn suspend_unit(&mut self, file: u32, left: Group) {
+        if self.suspended_after.contains_key(&file) {
+            return;
+        }
+        self.suspended_after.insert(file, left);
+        for d in &mut self.items {
+            let unit = if d.owner.is_none() { d.file.0 } else { d.owner.file };
+            if unit == file && d.position.group > left && d.position.group != Group::RunEnd {
+                d.position.run = d.position.run.saturating_add(1);
+            }
+        }
+    }
+
+    /// The unit `file` is in a run again: one run more than its last (`Position::run`).
+    pub fn resume_unit(&mut self, file: u32) {
+        let run = self.unit_runs.get(&file).copied().unwrap_or(1).saturating_add(1);
+        self.unit_runs.insert(file, run);
+        self.suspended_after.remove(&file);
     }
 
     /// `push` of each of `ds`.
@@ -707,30 +911,53 @@ impl Diagnostics {
     }
 
     /// An error that depends on malformed syntax (`Diagnostic::dependent`).
+    #[track_caller]
     pub fn dependent_error(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
         let mut d = self.made(file, span, msg.into(), false, self.of_bodies);
         d.dependent = true;
         self.push(d);
     }
 
+    /// `dependent_error`, as the phase group `group` of the reference's reports it.
+    #[track_caller]
+    pub fn dependent_error_by(&mut self, group: Group, file: FileId, span: Span, msg: impl Into<String>) {
+        let outer = std::mem::replace(&mut self.producer, group);
+        self.dependent_error(file, span, msg);
+        self.producer = outer;
+    }
+
     /// A warning of the syntax, a migration warning where `migration` says (`Category::Migration`), with
     /// dotty's message's identity `id`.
+    #[track_caller]
     pub fn syntax_warning(&mut self, file: FileId, span: Span, msg: impl Into<String>, migration: bool, id: u16) {
         let mut d = self.made(file, span, msg.into(), true, false);
         d.id = id;
         if migration {
             d.category = crate::warnings::Category::Migration;
         }
+        // The parser's.
+        d.position.group = Group::Parser;
+        d.position.named = true;
         self.push(d);
     }
 
+    #[track_caller]
     pub fn warn(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
         let d = self.made(file, span, msg.into(), true, self.of_bodies);
         self.push(d);
     }
 
+    /// A warning the phase group `group` of the reference's reports (`Position::group`).
+    #[track_caller]
+    pub fn warn_by(&mut self, group: Group, file: FileId, span: Span, msg: impl Into<String>) {
+        let outer = std::mem::replace(&mut self.producer, group);
+        self.warn(file, span, msg);
+        self.producer = outer;
+    }
+
     /// A warning with its identity (`Diagnostic::id`), depending on malformed syntax where
     /// `dependent` says.
+    #[track_caller]
     pub fn warn_as(&mut self, file: FileId, span: Span, msg: impl Into<String>, w: Warning, dependent: bool) {
         let mut d = self.made(file, span, msg.into(), true, self.of_bodies);
         d.dependent = dependent;
@@ -739,20 +966,32 @@ impl Diagnostics {
         d.origin = w.origin;
         d.phase = w.phase;
         d.unplaced = w.unplaced;
+        // The group its producer named (`Warning::by`), or that of the phase it named by its rank.
+        let group = if w.group != Group::Unstamped { w.group } else { Group::of_phase(w.phase) };
+        if group != Group::Unstamped {
+            d.position.group = group;
+            d.position.named = true;
+        }
         self.push(d);
     }
 
     /// A selector no name resolved through (`typer::unused`): a warning, or a hint.
+    #[track_caller]
     pub fn unnecessary(&mut self, file: FileId, span: Span, msg: impl Into<String>, hint: bool, origin: Option<Box<str>>) {
         let mut d = self.made(file, span, msg.into(), true, true);
         d.hint = hint;
         d.unnecessary = true;
         d.id = crate::warnings::id::UNUSED_SYMBOL;
         d.origin = origin;
+        // The warning is `CheckUnused.PostPatMat`'s; the hint, which stands where no option asks
+        // for the warning, is teq's own.
+        d.position.group = if hint { Group::Own } else { Group::CheckUnused };
+        d.position.named = true;
         self.push(d);
     }
 
     /// An error of a library body's pseudo file placed in the library's source.
+    #[track_caller]
     pub fn error_placed(&mut self, file: FileId, span: Span, msg: impl Into<String>, place: Option<Place>) {
         self.error(file, span, msg);
         if let Some(d) = self.items.last_mut() {
@@ -817,6 +1056,48 @@ impl Diagnostics {
         }
     }
 
+    /// `TEQ_POSITIONS=1`: every record of the build, presented or not, with its position
+    /// (`Position`), one line a record in file and place order, then how many records each group
+    /// has: for a script that applies the reference's gates to them, and for a census of the
+    /// records no producer named a group for.
+    #[cold]
+    fn trace_positions(&self, files: &[SourceFile]) {
+        use crate::warnings::Action;
+        // What the policy makes of a warning, which the reference decides where it issues one:
+        // an `@nowarn` around it, `-Wconf`'s action, a category its option leaves to the summary.
+        let paths: Vec<Option<String>> = files.iter().map(|f| absolute_path(&f.path)).collect();
+        let policy = &*self.policy;
+        let action = |d: &Diagnostic| -> &'static str {
+            if !d.is_warning || d.hint {
+                return "";
+            }
+            let subject = d.subject(paths.get(d.file.0 as usize).and_then(|p| p.as_deref()));
+            let covered = self.suppressions.iter().any(|s| (s.covers(d.file, d.span) || d.inlined_from.is_some_and(|(f, at)| s.covers(f, at))) && s.matches(&subject));
+            match policy.action(&subject) {
+                _ if covered => " nowarn",
+                Action::Silent => " as_silent",
+                Action::Error => " as_error",
+                Action::Info => " as_info",
+                Action::Default if policy.summarizes(d.category) => " summarized",
+                Action::Verbose | Action::Warning | Action::Default => "",
+            }
+        };
+        let mut lines: Vec<(u32, u32, u32, String)> = Vec::new();
+        let mut census: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+        let records = self.syntax.iter().map(|d| ("syntax", d)).chain(self.items.iter().map(|d| ("item", d))).chain(self.suppression_warnings.iter().map(|d| ("suppression", d)));
+        for (kind, d) in records {
+            let p = d.position;
+            *census.entry(format!("{:?}{}", p.group, if p.named { "" } else { " by default" })).or_default() += 1;
+            lines.push((d.file.0, d.span.start, d.ordinal.0 as u32, position_line(files, kind, d, action(d))));
+        }
+        lines.sort();
+        for (_, _, _, l) in &lines {
+            eprintln!("{}", l);
+        }
+        let census: Vec<String> = census.iter().map(|(g, n)| format!("{} {}", g, n)).collect();
+        eprintln!("teq: positions: {} records: {}", lines.len(), census.join(", "));
+    }
+
     /// The errors of inline expansions whose inlined place overlaps that of an earlier one
     /// (`Diagnostic::inlined_from`), by index. An error takes a place only where it is presented
     /// itself: not one left out for what malformed syntax left unknown, nor a late one while an
@@ -851,13 +1132,29 @@ impl Diagnostics {
     }
 
     /// A late error (`Diagnostic::late`), of scalac's `Inlining`.
+    #[track_caller]
     pub fn late_error(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
         self.late_error_of(file, span, msg, PHASE_INLINING);
     }
 
+    /// `late_error`, the record's position that of the phase group `group` of the reference's.
+    #[track_caller]
+    pub fn late_error_by(&mut self, group: Group, file: FileId, span: Span, msg: impl Into<String>) {
+        let outer = std::mem::replace(&mut self.producer, group);
+        self.late_error(file, span, msg);
+        self.producer = outer;
+    }
+
     /// A late error of the phase `phase` (`producer_rank`).
+    #[track_caller]
     pub fn late_error_of(&mut self, file: FileId, span: Span, msg: impl Into<String>, phase: u8) {
+        // The phase names the record's group, unless its producer named another (`error_by`).
+        let outer = self.producer;
+        if outer == Group::Unstamped {
+            self.producer = Group::of_phase(phase);
+        }
         self.error(file, span, msg);
+        self.producer = outer;
         if let Some(d) = self.items.last_mut() {
             d.late = true;
             d.phase = phase;
@@ -899,6 +1196,9 @@ impl Diagnostics {
         if whole && std::env::var_os("TEQ_UNPRESENTED").is_some_and(|v| v == "1") {
             self.trace_unpresented();
         }
+        if whole && std::env::var_os("TEQ_POSITIONS").is_some_and(|v| v == "1") {
+            self.trace_positions(files);
+        }
         let candidates: Vec<&Diagnostic> = self.presented_from(from, whole).chain(extras.iter()).collect();
         // Presented in file and position order, the order they were made in at one place.
         let mut by_place: Vec<usize> = (0..candidates.len()).collect();
@@ -929,8 +1229,14 @@ impl Diagnostics {
             explains[i] = d.is_warning && d.category == Category::Feature && d.origin.as_deref().is_some_and(|site| !sites.contains(&site) && { sites.push(site); true });
         }
         let mut used = vec![0u8; self.suppressions.len()];
-        let mut unreported: Vec<(Category, usize)> = Vec::new();
+        // Each with the position of the first warning it counts: the reference prints the summary
+        // at the run's end whatever was reported (`Run.printSummary`), where a warning it counts
+        // was made at all.
+        let mut unreported: Vec<(Category, usize, Position)> = Vec::new();
         let mut consulted = false;
+        // The position of the first warning the policy was asked about: where the reference parses
+        // its `-Wconf` (`WConf.parsed`, at the first warning it issues) and reports a failure.
+        let mut first_consulted = Position::of(Group::RunEnd);
         let mut shown_at: Vec<(usize, Shown)> = Vec::new();
         let paths: Vec<Option<String>> = if policy.wconf.is_some() || !self.suppressions.is_empty() { files.iter().map(|f| absolute_path(&f.path)).collect() } else { Vec::new() };
         let path_of = |f: FileId| paths.get(f.0 as usize).and_then(|p| p.as_deref());
@@ -966,6 +1272,9 @@ impl Diagnostics {
                 }
                 continue;
             }
+            if !consulted {
+                first_consulted = d.position;
+            }
             consulted = true;
             let level = match policy.action(&subject) {
                 Action::Silent => continue,
@@ -979,9 +1288,9 @@ impl Diagnostics {
                 // A warning summarized is counted whatever place it would take, as scalac counts
                 // it before it hides any (`issueUnconfigured`).
                 Action::Default if policy.summarizes(d.category) => {
-                    match unreported.iter_mut().find(|(c, _)| *c == d.category) {
-                        Some((_, n)) => *n += 1,
-                        None => unreported.push((d.category, 1)),
+                    match unreported.iter_mut().find(|(c, ..)| *c == d.category) {
+                        Some((_, n, _)) => *n += 1,
+                        None => unreported.push((d.category, 1, d.position)),
                     }
                     continue;
                 }
@@ -1013,16 +1322,21 @@ impl Diagnostics {
                 let duplicate = self.suppressions.iter().enumerate().any(|(j, other)| j != i && used[j] == 1 && other.file == sup.file && other.annot == sup.annot);
                 if used[i] != 1 && !duplicate && !sup.invalid() {
                     let more = if used[i] == 2 { " but matches a diagnostic" } else { "" };
-                    late.push(Diagnostic::plain(sup.file, sup.annot, format!("@nowarn annotation does not suppress any warnings{}", more), true, true));
+                    late.push(Diagnostic::plain_by(Group::RunEnd, sup.file, sup.annot, format!("@nowarn annotation does not suppress any warnings{}", more), true, true));
                 }
             }
         }
-        for (category, n) in unreported.into_iter().filter(|_| whole) {
+        for (category, n, first) in unreported.into_iter().filter(|_| whole) {
             if let Some(msg) = crate::warnings::summary(category, n) {
-                late.push(Diagnostic::plain(NO_FILE, Span::default(), msg, true, true));
+                let mut d = Diagnostic::plain(NO_FILE, Span::default(), msg, true, true);
+                d.position = Position { named: true, site: None, ..first };
+                late.push(d);
             }
         }
         for d in late {
+            if !consulted {
+                first_consulted = d.position;
+            }
             consulted = true;
             let level = match policy.action(&d.subject(path_of(d.file))) {
                 Action::Silent => continue,
@@ -1036,7 +1350,14 @@ impl Diagnostics {
         if let (true, Some(msg)) = (consulted, policy.wconf_failure()) {
             let mut d = Diagnostic::plain(NO_FILE, Span::default(), msg, true, true);
             d.category = Category::Configuration;
+            d.position = Position { named: true, site: None, ..first_consulted };
             shown.insert(0, Shown { d: Cow::Owned(d), level: Level::Warning, order: 0 });
+        }
+        if whole && std::env::var_os("TEQ_POSITIONS").is_some_and(|v| v == "1") {
+            // The records made here, which no store holds (never numbered: `Ordinal`).
+            for s in shown.iter().filter(|s| s.d.ordinal.0 == 0 && !self.suppression_warnings.iter().any(|w| std::ptr::eq(w, &*s.d))) {
+                eprintln!("{}", position_line(files, "report", &s.d, ""));
+            }
         }
         let errors = shown.iter().filter(|s| s.level == Level::Error).count();
         let warnings = shown.iter().filter(|s| s.level == Level::Warning).count();
@@ -1147,6 +1468,25 @@ pub fn render_shown(shown: &[Shown], files: &[SourceFile], ranks: &[u32]) -> Str
         record_shown(severity, Some((&f.path, Some((line, col)))), &d.msg, &out[start..]);
     }
     out
+}
+
+/// A record's line of the positions dump (`Diagnostics::trace_positions`): its kind, place and
+/// level, then its position (run, group, context, the site in teq's source that made it), its
+/// flags (`default`: no producer named the group), what the policy makes of it, its first words.
+fn position_line(files: &[SourceFile], kind: &str, d: &Diagnostic, action: &str) -> String {
+    let place = match files.get(d.file.0 as usize) {
+        Some(f) => {
+            let (line, col, _) = locate(&f.text, d.span.start as usize);
+            format!("{}:{}:{}", f.path.rsplit('/').next().unwrap_or(&f.path), line, col)
+        }
+        None => format!("file {}:{}", d.file.0, d.span.start),
+    };
+    let p = d.position;
+    let site = p.site.map_or("?".to_string(), |l| format!("{}:{}", l.file(), l.line()));
+    // `default`: no producer named the record's group (the typer's reporters).
+    let flags: String = [(!p.named, "default"), (d.dependent, "dependent"), (d.unknown, "unknown"), (d.late, "late"), (d.by_phase, "by_phase"), (d.hint, "hint")].iter().filter(|(on, _)| *on).map(|(_, n)| format!(" {}", n)).collect();
+    let msg = d.msg.lines().next().unwrap_or("");
+    format!("teq: position: {} {} {}: run {} {:?} {:?} [{}]{}{} | {}", kind, place, if d.is_warning { "warning" } else { "error" }, p.run, p.group, p.context, site, flags, action, msg)
 }
 
 /// The absolute form of a source's path, which `src=` filters read (scalac's
@@ -1299,5 +1639,123 @@ mod tests {
         assert_eq!(presented(vec![unknown(10, 40, "of an erroneous type"), inlined(10, 40, "a known one")], true), ["a known one"]);
         // without a syntax error the unknown one is shown and takes the place
         assert_eq!(presented(vec![unknown(10, 40, "of an erroneous type"), inlined(10, 40, "a known one")], false), ["of an erroneous type"]);
+    }
+
+    /// A record's position is given where it is made: the group its producer names (by itself, by
+    /// a warning's `by`, by a phase's rank), or the typer's for a reporter that names none, the
+    /// inlining phase's while the phase runs; the run of its unit; the expansion it stands in.
+    #[test]
+    fn a_record_takes_its_position_where_it_is_made() {
+        let at = Span { start: 3, end: 7 };
+        let mut diags = Diagnostics::default();
+        diags.error(FileId(0), at, "of the typer");
+        diags.error_by(Group::RefChecks, FileId(0), at, "of the overriding checks");
+        diags.warn_as(FileId(0), at, "of the pattern matcher", Warning::plain().by(Group::PatternMatcher), false);
+        diags.warn_as(FileId(0), at, "of the erasure by its rank", Warning::of_phase(PHASE_ERASURE), false);
+        diags.late_error_of(FileId(0), at, "of the tail calls' phase", PHASE_TAILREC);
+        diags.late_error_by(Group::Typer, FileId(0), at, "late, and the typer's");
+        diags.error_by(Group::Own, FileId(0), at, "a refusal of teq's own");
+        diags.unnecessary(FileId(0), at, "unused import", false, None);
+        diags.unnecessary(FileId(0), at, "unused import", true, None);
+        let positions: Vec<(Group, bool)> = diags.items.iter().map(|d| (d.position.group, d.position.named)).collect();
+        assert_eq!(
+            positions,
+            [
+                (Group::Typer, false),
+                (Group::RefChecks, true),
+                (Group::PatternMatcher, true),
+                (Group::Erasure, true),
+                (Group::TailRec, true),
+                (Group::Typer, true),
+                (Group::Own, true),
+                (Group::CheckUnused, true),
+                (Group::Own, true),
+            ]
+        );
+        assert!(diags.items.iter().all(|d| d.position.run == 1 && d.position.context == Context::None && d.position.site.is_some()));
+        // a producer's group lasts for its one record
+        assert_eq!(diags.producer, Group::Unstamped);
+        // while the inlining phase runs, in its expansion, on a unit of a later run
+        let mut phase = Diagnostics { in_phase: true, context: Context::Phase, ..Default::default() };
+        phase.unit_runs.insert(4, 2);
+        phase.error(FileId(4), at, "of the phase's expansion");
+        phase.error_by(Group::Erasure, FileId(4), at, "of a check at the phase's end");
+        phase.error(FileId(5), at, "of a unit of the first run");
+        let made: Vec<(u8, Group, Context)> = phase.items.iter().map(|d| (d.position.run, d.position.group, d.position.context)).collect();
+        assert_eq!(made, [(2, Group::Inlining, Context::Phase), (2, Group::Erasure, Context::Phase), (1, Group::Inlining, Context::Phase)]);
+        // in an expansion the typer makes
+        let mut typing = Diagnostics { context: Context::Typing, ..Default::default() };
+        typing.error(FileId(0), at, "of a transparent method's expansion");
+        assert_eq!((typing.items[0].position.group, typing.items[0].position.context), (Group::Typer, Context::Typing));
+    }
+
+    /// What an expansion ahead of the inlining phase reported is the phase's, unless its producer
+    /// named another group; a record pushed again keeps the position it was made with.
+    #[test]
+    fn a_held_record_is_the_inlining_phases() {
+        let at = Span { start: 3, end: 7 };
+        let mut diags = Diagnostics { context: Context::Typing, ..Default::default() };
+        diags.error(FileId(0), at, "of the expansion");
+        diags.error_by(Group::Erasure, FileId(0), at, "of a later group");
+        let mut held = std::mem::take(&mut diags.items);
+        for d in &mut held {
+            d.position.ahead_of_phase();
+        }
+        diags.in_phase = true;
+        diags.context = Context::None;
+        diags.extend(held);
+        let made: Vec<(Group, bool, Context)> = diags.items.iter().map(|d| (d.position.group, d.position.named, d.position.context)).collect();
+        assert_eq!(made, [(Group::Inlining, false, Context::Phase), (Group::Erasure, true, Context::Phase)]);
+    }
+
+    /// A unit that leaves its run (a macro of the run suspends it) is taken up by the reference's
+    /// later groups only in its next run: what a group after the one it left in reported of it,
+    /// before it left or after, is of that run; what the groups up to it reported stays.
+    #[test]
+    fn a_suspended_units_later_groups_are_its_next_runs() {
+        let at = Span { start: 3, end: 7 };
+        let mut diags = Diagnostics::default();
+        diags.error(FileId(2), at, "of the typer, before the unit left");
+        diags.error_by(Group::PostTyper, FileId(2), at, "after the typer, before the phase");
+        diags.error_by(Group::RefChecks, FileId(2), at, "of the overriding checks, before the unit left");
+        diags.error_by(Group::RefChecks, FileId(3), at, "of another unit");
+        diags.suspend_unit(2, Group::Inlining);
+        diags.suspend_unit(2, Group::Typer);
+        diags.error_by(Group::TailRec, FileId(2), at, "of a later group, after it left");
+        diags.error(FileId(2), at, "of the typer, on another unit's demand");
+        let runs = |d: &Diagnostics| d.items.iter().map(|x| x.position.run).collect::<Vec<u8>>();
+        assert_eq!(runs(&diags), [1, 1, 2, 1, 2, 1]);
+        // its next run starts: every record of it made from now on is of that run
+        diags.resume_unit(2);
+        diags.error_by(Group::RefChecks, FileId(2), at, "of the next run");
+        diags.error(FileId(2), at, "of the next run's typer");
+        assert_eq!(runs(&diags), [1, 1, 2, 1, 2, 1, 2, 2]);
+        // one a transparent macro suspended left in the typer: PostTyper's too is the next run's
+        let mut typing = Diagnostics::default();
+        typing.error_by(Group::PostTyper, FileId(2), at, "after the typer");
+        typing.suspend_unit(2, Group::Typer);
+        assert_eq!(runs(&typing), [2]);
+    }
+
+    /// Nothing but the dump reads a position: two records that differ in it alone are equal and
+    /// hash alike, so no presentation and no comparison of two builds' records can turn on it.
+    #[test]
+    fn a_position_is_invisible_to_equality() {
+        use std::hash::{Hash, Hasher};
+        let at = Span { start: 3, end: 7 };
+        let mut diags = Diagnostics::default();
+        diags.error(FileId(0), at, "the same words");
+        diags.error_by(Group::TailRec, FileId(0), at, "the same words");
+        let (a, b) = (&diags.items[0], &diags.items[1]);
+        assert_ne!(a.position.group, b.position.group);
+        assert!(a == b);
+        let hash = |d: &Diagnostic| {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            d.hash(&mut h);
+            h.finish()
+        };
+        assert_eq!(hash(a), hash(b));
+        assert_eq!(Group::of_phase(PHASE_FIRST_TRANSFORM), Group::RefChecks);
+        assert_eq!(Group::of_phase(0), Group::Unstamped);
     }
 }

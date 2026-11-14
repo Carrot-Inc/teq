@@ -3401,7 +3401,17 @@ impl<'a> Worker<'a> {
             // The build's policy, which every decision of its typing reads on any worker
             // (`Diagnostics::policy`), whether what is reported now comes of bodies, and the
             // build's count of its records (`Ordinal`).
-            diags: Diagnostics { policy: self.diags.policy.clone(), of_bodies: self.diags.of_bodies, made: self.diags.made.clone(), syntax_errors: self.diags.syntax_errors, ..Default::default() },
+            // The build's policy, count and units' runs go with it too: the last so that a record a
+            // worker makes takes the run its unit is in (`Position::run`).
+            diags: Diagnostics {
+                policy: self.diags.policy.clone(),
+                of_bodies: self.diags.of_bodies,
+                made: self.diags.made.clone(),
+                syntax_errors: self.diags.syntax_errors,
+                unit_runs: self.diags.unit_runs.clone(),
+                suspended_after: self.diags.suspended_after.clone(),
+                ..Default::default()
+            },
             prog: self.prog.attach(worker),
             b: self.b.clone(),
             env: Env { file: FileId(0), frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None },
@@ -4500,6 +4510,16 @@ impl<'a> Worker<'a> {
         self.is_body_file(self.env.file)
     }
 
+    /// `error` of a record the group `group` of the reference makes (`source::Position`): the
+    /// typer's own records go by `error`.
+    #[track_caller]
+    pub fn error_by(&mut self, group: crate::source::Group, span: Span, msg: impl Into<String>) {
+        let outer = std::mem::replace(&mut self.diags.producer, group);
+        self.error(span, msg);
+        self.diags.producer = outer;
+    }
+
+    #[track_caller]
     pub fn error(&mut self, span: Span, msg: impl Into<String>) {
         let msg = msg.into();
         if self.dependent_checks > 0 {
@@ -4545,6 +4565,7 @@ impl<'a> Worker<'a> {
     /// An error about the types `about`, marked `unknown` where one of them holds the error type,
     /// which stands for what malformed syntax left unknown: a program with a syntax error does
     /// not present it (`Diagnostic::unknown`).
+    #[track_caller]
     pub(super) fn error_unless_unknown(&mut self, span: Span, msg: String, about: &[TypeId]) {
         let unknown = self.recovered && about.iter().any(|&t| self.types.contains_error(t));
         self.error(span, msg);
@@ -4715,11 +4736,13 @@ impl<'a> Worker<'a> {
     /// Warnings concern the program, not the std it is compiled with or the library bodies
     /// scalac checked. A warning is kept whatever `@nowarn` encloses it: the reporting policy
     /// filters it when the build is presented (`warnings.rs`).
+    #[track_caller]
     pub fn warn(&mut self, span: Span, msg: impl Into<String>) {
         self.warn_as(span, msg, crate::source::Warning::plain());
     }
 
     /// A warning with its identity (`Diagnostic::id`).
+    #[track_caller]
     pub fn warn_as(&mut self, span: Span, msg: impl Into<String>, w: crate::source::Warning) {
         if !self.source(self.env.file).is_std && !self.is_body_file(self.env.file) {
             self.diags.warn_as(self.env.file, span, msg, w, self.dependent_checks > 0);
@@ -4729,6 +4752,7 @@ impl<'a> Worker<'a> {
     /// A diagnostic of a row of the migration table at the unit's version (`report.errorOrMigrationWarning`
     /// under `Feature.sourceVersion`): nothing, a warning, a migration warning or an error.
     /// `id` is dotty's message's (`warnings::id`), or `NO_ID` for a message of none.
+    #[track_caller]
     pub fn migration(&mut self, row: crate::source_version::Migration, span: Span, msg: impl Into<String>, id: u16) {
         self.migration_of_phase(row, span, id, 0, || msg.into());
     }
@@ -4736,9 +4760,10 @@ impl<'a> Worker<'a> {
     /// `migration` from scalac's phase `phase` (`source::producer_rank`, 0 the typer's), the message made only
     /// where the row reports: an error of a phase after the typer is a late one, which a typer that reported
     /// one hides (`Phase.isRunnable`).
+    #[track_caller]
     pub fn migration_of_phase(&mut self, row: crate::source_version::Migration, span: Span, id: u16, phase: u8, msg: impl FnOnce() -> String) {
         use crate::source_version::Outcome;
-        let plain = crate::source::Warning { id, phase, ..crate::source::Warning::plain() };
+        let plain = crate::source::Warning { id, phase, group: crate::source::Group::of_phase(phase), ..crate::source::Warning::plain() };
         match row.outcome(self.cur_ast().source_version) {
             Outcome::Silent => {}
             Outcome::Warning => self.warn_as(span, msg(), plain),
@@ -4747,11 +4772,12 @@ impl<'a> Worker<'a> {
                 let file = self.env.file;
                 self.diags.late_error_of(file, span, msg(), phase);
             }
-            Outcome::Error => self.error(span, msg()),
+            Outcome::Error => self.error_by(crate::source::Group::of_phase(phase), span, msg()),
         }
     }
 
     /// `migration_of_phase` at a place of the program's file `file`, by that unit's version.
+    #[track_caller]
     pub fn migration_in(&mut self, file: FileId, row: crate::source_version::Migration, span: Span, id: u16, phase: u8, msg: impl FnOnce() -> String) {
         let saved = std::mem::replace(&mut self.env.file, file);
         self.migration_of_phase(row, span, id, phase, msg);
@@ -5277,7 +5303,7 @@ impl<'a> Worker<'a> {
                 }
                 PathFound::Nothing => format!("--cacheable-state {}: no such object", name),
             };
-            self.diags.error(crate::source::NO_FILE, Span::default(), msg);
+            self.diags.error_by(crate::source::Group::Own, crate::source::NO_FILE, Span::default(), msg);
         }
     }
 

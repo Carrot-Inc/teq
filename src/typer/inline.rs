@@ -855,6 +855,32 @@ struct Scrutinee {
 }
 
 impl<'a> Worker<'a> {
+    /// What of the expansion under way a record made now stands in (`source::Position::context`):
+    /// nothing outside every expansion, the inlining phase's expansion while the phase runs, one
+    /// the typer makes otherwise.
+    pub(super) fn expansion_context(&self) -> crate::source::Context {
+        use crate::source::Context;
+        match (self.inline.depth, self.diags.in_phase) {
+            (0, _) => Context::None,
+            (_, true) => Context::Phase,
+            (_, false) => Context::Typing,
+        }
+    }
+
+    /// The phase group of the reference's that reports what a plain inline method of the library
+    /// reports (`compiletime.error`, `requireConst`, `constValueTuple`, `summonAll`, which teq
+    /// answers itself): its inlining phase, in a transparent method's expansion and in a body
+    /// that is no inline method's too; its typer where the call stands under `Mode.ForceInline`
+    /// (`InlineState::forcing`: an `inline if`'s condition, an `inline match`'s scrutinee) in
+    /// what the typer types.
+    fn intrinsic_group(&self) -> crate::source::Group {
+        if self.inline.forcing > 0 && !self.diags.in_phase {
+            crate::source::Group::Typer
+        } else {
+            crate::source::Group::Inlining
+        }
+    }
+
     pub fn is_inline_callee(&self, sym: SymId) -> bool {
         let info = self.syms.sym(sym);
         info.mods & mods::INLINE != 0 && matches!(info.kind, SymKind::Def | SymKind::Given)
@@ -1142,7 +1168,7 @@ impl<'a> Worker<'a> {
         match entry {
             Err(super::substitution::Fallback::ForwardReference) => {
                 let msg = self.inline.forward_refs[&sym].clone();
-                self.error(span, msg);
+                self.error_by(crate::source::Group::PatternMatcher, span, msg);
                 return Some((self.prog.add(TExpr::Unit), ret_ty));
             }
             // A record the entry decision found failed is the plain call's, never retyped.
@@ -1210,6 +1236,7 @@ impl<'a> Worker<'a> {
         }
         self.part_end(part);
         self.inline.depth += 1;
+        self.diags.context = self.expansion_context();
         if self.inline.sites.is_empty() {
             self.quote.begin_site(site.file, site.span.start);
             if self.index.is_some() {
@@ -1273,6 +1300,7 @@ impl<'a> Worker<'a> {
         }
         self.inline.sites.pop();
         self.inline.depth -= 1;
+        self.diags.context = self.expansion_context();
         // What the expansion inlined counts towards its root's limit (`addInlinedTrees`,
         // `Inliner.scala` 810), by 3.8.4's `treeSize` (765–779), which sums its children's sizes
         // and counts no node of its own: 0 for every tree, so a limit of 0 or more never trips
@@ -1823,7 +1851,7 @@ impl<'a> Worker<'a> {
     fn inline_getter_expansion(&mut self, sym: SymId, sig: &MethodSig, subst: &Subst, body: &InlineBody, bound: Option<&BoundCall>, index: usize, priors: &[TExprId], ty: TypeId, span: Span) -> TExprId {
         let Some(d) = body.defaults.get(index).copied().flatten() else {
             let msg = format!("the default argument of {} has no tree to expand", self.name_str(self.syms.sym(sym).name));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::Own, span, msg);
             return self.prog.add(TExpr::Unit);
         };
         let params: Vec<(ParamSig, bool)> = sig.clauses.iter().flat_map(|c| c.params.iter().map(move |p| (p.clone(), c.is_using))).collect();
@@ -3872,8 +3900,10 @@ impl<'a> Worker<'a> {
                         let (line, _, _) = crate::source::locate(&f.text, span.start as usize);
                         msg.push_str(&format!("\n  inlined from {}:{}", f.path, line));
                         // scalac makes the dispatch method in its `Inlining`, after the typer.
+                        // The record's position is the typer's all the same: the reference reports it
+                        // beside a typer's error of another unit.
                         let file = self.env.file;
-                        self.diags.late_error(file, span, msg);
+                        self.diags.late_error_by(crate::source::Group::Typer, file, span, msg);
                     } else {
                         self.error(span, msg);
                     }
@@ -4012,8 +4042,9 @@ impl<'a> Worker<'a> {
             let f = self.source(self.env.file);
             let (line, _, _) = crate::source::locate(&f.text, span.start as usize);
             msg.push_str(&format!("\n  inlined from {}:{}", f.path, line));
+            // The typer's by its position, as the retained `inline if`'s.
             let file = self.env.file;
-            self.diags.late_error(file, span, msg);
+            self.diags.late_error_by(crate::source::Group::Typer, file, span, msg);
         } else {
             self.error(span, msg);
         }
@@ -4488,7 +4519,7 @@ impl<'a> Worker<'a> {
                 if self.fold_constant(te).is_none() {
                     let (file, at) = self.argument_source(arg);
                     let text = self.source_text(file, at);
-                    self.error(span, format!("expected a constant value but found: {}", text));
+                    self.error_by(self.intrinsic_group(), span, format!("expected a constant value but found: {}", text));
                 }
                 Some((self.prog.add(TExpr::Unit), self.b.t_unit))
             }
@@ -4937,7 +4968,7 @@ impl<'a> Worker<'a> {
                     msg.push_str(&format!("\n  inlined from {}:{}", source.path, line));
                 }
             }
-            self.diags.error(file, span, msg);
+            self.diags.error_by(crate::source::Group::Erasure, file, span, msg);
             if let Some(d) = self.diags.items.last_mut() {
                 d.inlined_from = inlined;
             }
@@ -5003,7 +5034,7 @@ impl<'a> Worker<'a> {
                     Some(e) => (e, ret_ty),
                     None => {
                         let msg = format!("not supported yet: js.constructorOf[{}], the class value of a class teq compiles", self.show(t));
-                        self.error(span, msg);
+                        self.error_by(crate::source::Group::Own, span, msg);
                         (unit(self), ERROR)
                     }
                 }
@@ -5017,7 +5048,7 @@ impl<'a> Worker<'a> {
                 match self.link_time_property(&name) {
                     Some(v) => (self.constant(v).0, ret_ty),
                     None => {
-                        self.error(span, format!("link-time property not found: '{}'", name));
+                        self.error_by(crate::source::Group::Own, span, format!("link-time property not found: '{}'", name));
                         (unit(self), ERROR)
                     }
                 }
@@ -5027,7 +5058,7 @@ impl<'a> Worker<'a> {
                 let some = self.scala_class_named("Some");
                 let none = self.scala_class_named("None");
                 let (Some(some), Some(none)) = (some, none) else {
-                    self.error(span, "Option is missing from the standard library");
+                    self.error_by(crate::source::Group::Own, span, "Option is missing from the standard library");
                     return (unit(self), ERROR);
                 };
                 match self.fold_type(t) {
@@ -5043,7 +5074,7 @@ impl<'a> Worker<'a> {
                 let t = targ(self);
                 let Some(elems) = self.tuple_elements(t) else {
                     let msg = format!("{} is not a tuple type; cannot take constValueTuple", self.show(t));
-                    self.error(span, msg);
+                    self.error_by(self.intrinsic_group(), span, msg);
                     return (unit(self), ERROR);
                 };
                 let mut items = Vec::with_capacity(elems.len());
@@ -5052,7 +5083,7 @@ impl<'a> Worker<'a> {
                         Some(v) => items.push(self.constant(v).0),
                         None => {
                             let msg = format!("{} is not a constant type; cannot take constValue", self.show(e));
-                            self.error(span, msg);
+                            self.error_by(self.intrinsic_group(), span, msg);
                             return (unit(self), ERROR);
                         }
                     }
@@ -5075,7 +5106,7 @@ impl<'a> Worker<'a> {
                 let t = targ(self);
                 let Some(elems) = self.tuple_elements(t) else {
                     let msg = format!("{} is not a tuple type; cannot summonAll", self.show(t));
-                    self.error(span, msg);
+                    self.error_by(self.intrinsic_group(), span, msg);
                     return (unit(self), ERROR);
                 };
                 let mut items = Vec::with_capacity(elems.len());
@@ -5084,7 +5115,7 @@ impl<'a> Worker<'a> {
                         Some((te, _)) => items.push(te),
                         None => {
                             let msg = self.given_ambiguity.take().unwrap_or_else(|| format!("No given instance of type {} was found.", self.show(e)));
-                            self.error(span, msg);
+                            self.error_by(self.intrinsic_group(), span, msg);
                             return (unit(self), ERROR);
                         }
                     }
@@ -5112,13 +5143,16 @@ impl<'a> Worker<'a> {
                         if arg.is_some_and(|a| self.prog.is_tuple_index(a)) {
                             self.diags.late_error_of(file, at, msg, crate::source::PHASE_TUPLE_OPTIMIZATIONS);
                         } else {
-                            self.diags.error(file, at, msg);
+                            // `error` is a plain inline method of the library: the reference reports its
+                            // call where it expands it (`intrinsic_group`).
+                            let group = self.intrinsic_group();
+                            self.diags.error_by(group, file, at, msg);
                         }
                         if late {
                             self.note_late();
                         }
                     }
-                    _ => self.error(span, "A literal string is expected as an argument to `compiletime.error`."),
+                    _ => self.error_by(self.intrinsic_group(), span, "A literal string is expected as an argument to `compiletime.error`."),
                 }
                 (unit(self), NOTHING)
             }
@@ -5143,11 +5177,11 @@ impl<'a> Worker<'a> {
                 if !written.is_empty() && written != "deferred" {
                     msg.push_str(&format!(".\nNote that `deferred` can only be used under its own name when implementing a given in a trait; `{}` is not accepted.", written));
                 }
-                self.error(span, msg);
+                self.error_by(crate::source::Group::Erasure, span, msg);
                 (unit(self), NOTHING)
             }
             Intrinsic::TypeChecks => {
-                self.error(span, "not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)");
+                self.error_by(crate::source::Group::Own, span, "not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)");
                 (unit(self), ERROR)
             }
             // The walk's calls, whose argument is the walked tree (`Worker::code_of_tree`); the
@@ -5162,7 +5196,7 @@ impl<'a> Worker<'a> {
                 if self.constant_tree_value(args[0], ty).is_none() {
                     let text = self.code_of_tree(args[0]);
                     let late = self.reports_late();
-                    self.error(span, format!("expected a constant value but found: {}", text));
+                    self.error_by(self.intrinsic_group(), span, format!("expected a constant value but found: {}", text));
                     if late {
                         self.note_late();
                     }
@@ -5170,7 +5204,7 @@ impl<'a> Worker<'a> {
                 (unit(self), self.b.t_unit)
             }
             Intrinsic::SummonFrom | Intrinsic::CodeOf | Intrinsic::RequireConst => {
-                self.error(span, format!("{} takes its argument as written", self.method_description(sig_sym(self, sig))));
+                self.error_by(crate::source::Group::Own, span, format!("{} takes its argument as written", self.method_description(sig_sym(self, sig))));
                 (unit(self), ERROR)
             }
         }

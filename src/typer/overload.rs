@@ -1117,7 +1117,7 @@ impl<'a> Worker<'a> {
                             self.name_str(theirs.unwrap_or(name)),
                         );
                         let (file, span) = (self.syms.sym(m).file, self.syms.sym(m).span);
-                        self.diags.error(file, span, msg);
+                        self.diags.error_by(crate::source::Group::Own, file, span, msg);
                     }
                     Some(_) => {}
                 }
@@ -1351,7 +1351,7 @@ impl<'a> Worker<'a> {
                             self.name_str(info.name),
                             self.class_description(c)
                         );
-                        self.diags.error(file, span, msg);
+                        self.diags.error_by(crate::source::Group::Own, file, span, msg);
                     }
                     return;
                 }
@@ -1453,7 +1453,7 @@ impl<'a> Worker<'a> {
                     self.name_str(names[i].unwrap_or(name)),
                 );
                 let (file, span) = (self.syms.class(c).file, self.syms.class(c).span);
-                self.diags.error(file, span, msg);
+                self.diags.error_by(crate::source::Group::Own, file, span, msg);
             }
         }
     }

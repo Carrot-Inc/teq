@@ -3174,7 +3174,7 @@ impl<'a> Worker<'a> {
         java_reached.sort_by(|a, b| a.1.cmp(&b.1));
         java_reached.dedup();
         for (file, what) in java_reached {
-            self.diags.error(file, Span::default(), format!("not supported on JavaScript: {} (a Java definition without an implementation in the std's platform layer)", what));
+            self.diags.error_by(crate::source::Group::Own, file, Span::default(), format!("not supported on JavaScript: {} (a Java definition without an implementation in the std's platform layer)", what));
         }
     }
 
@@ -3182,7 +3182,7 @@ impl<'a> Worker<'a> {
     pub fn report_blocked_type(&mut self, t: TypeId, span: Span) {
         if let Some(b) = types::first_blocked(&self.types, t) {
             let msg = format!("not supported yet: {}", self.types.blocked_description(b));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::Own, span, msg);
         }
     }
 
@@ -3191,7 +3191,7 @@ impl<'a> Worker<'a> {
         let Some(b) = self.blocked_in_sig(sym) else { return false };
         let description = self.types.blocked_description(b).to_string();
         let msg = format!("not supported yet: {}", description);
-        self.error(span, msg);
+        self.error_by(crate::source::Group::Own, span, msg);
         true
     }
 

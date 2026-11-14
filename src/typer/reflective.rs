@@ -177,7 +177,7 @@ impl<'a> Worker<'a> {
             let failures = std::mem::take(&mut self.loaded_mut().cp.scan_failures);
             for (f, why) in failures {
                 let file = self.loaded.as_ref().unwrap().jar_files[f.jar as usize];
-                self.diags.error(file, crate::source::Span::default(), why);
+                self.diags.error_by(crate::source::Group::Own, file, crate::source::Span::default(), why);
             }
             let mut fresh: Vec<ClassId> = Vec::new();
             for f in hits {

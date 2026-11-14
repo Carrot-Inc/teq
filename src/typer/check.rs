@@ -1174,7 +1174,7 @@ impl<'a> Worker<'a> {
                             let (file, span) = (self.syms.class(c).file, self.syms.class(c).span);
                             if !told(self) {
                                 self.told_once("a super call's problem");
-                                self.diags.error(file, span, msg);
+                                self.diags.error_by(crate::source::Group::PruneErasedDefs, file, span, msg);
                             }
                         }
                         Some(_) => accessors.push(SuperAccessor { of_trait: tr, member, target, getter: None }),
@@ -1191,7 +1191,10 @@ impl<'a> Worker<'a> {
                             let (file, span) = (self.syms.class(c).file, self.syms.class(c).span);
                             if !told(self) {
                                 self.told_once("a super call's problem");
-                                self.diags.error(file, span, msg);
+                                // The reference refuses such a class in its overriding checks
+                                // (`RefChecks`: an `abstract override` member's rules, conflicting
+                                // members), before `ResolveSuper` reaches it.
+                                self.diags.error_by(crate::source::Group::RefChecks, file, span, msg);
                             }
                         }
                     }
@@ -1328,7 +1331,7 @@ impl<'a> Worker<'a> {
                 let first = candidates.first().map(|&(s, object)| self.entry_point_site(s, object));
                 match first {
                     None => eprintln!("error: {}", msg),
-                    Some((file, span)) => self.diags.error(file, span, msg),
+                    Some((file, span)) => self.diags.error_by(crate::source::Group::Own, file, span, msg),
                 }
                 return;
             }
@@ -1344,7 +1347,7 @@ impl<'a> Worker<'a> {
                 let names: Vec<String> = many.iter().map(|&(s, object)| self.entry_point_name(s, object)).collect();
                 let msg = format!("several entry points: {}; choose one with --main", names.join(", "));
                 let (file, span) = self.entry_point_site(many[0].0, many[0].1);
-                self.diags.error(file, span, msg);
+                self.diags.error_by(crate::source::Group::Own, file, span, msg);
             }
         }
     }
@@ -1522,27 +1525,28 @@ impl<'a> Worker<'a> {
             _ => false,
         };
         let refusal = if !sig.tparams.is_empty() {
-            Some("@main method cannot have type parameters".to_string())
+            Some(("@main method cannot have type parameters".to_string(), crate::source::Group::Typer))
         } else if sig.clauses.iter().any(|c| c.is_using) {
-            Some("@main method cannot have implicit parameters".to_string())
+            Some(("@main method cannot have implicit parameters".to_string(), crate::source::Group::Typer))
         } else if params.iter().rev().skip(1).any(|p| p.repeated) {
-            Some("varargs parameter of @main method must come last".to_string())
+            Some(("varargs parameter of @main method must come last".to_string(), crate::source::Group::Typer))
         } else if let Some(p) = params.iter().find(|p| p.by_name) {
             // The proxy parses a by-name parameter as its by-name type, which has no `FromString`.
-            Some(format!("No given instance of type scala.util.CommandLineParser.FromString[=> {}] was found for parameter fs of method parseArgument in object CommandLineParser", self.show(p.ty)))
+            Some((format!("No given instance of type scala.util.CommandLineParser.FromString[=> {}] was found for parameter fs of method parseArgument in object CommandLineParser", self.show(p.ty)), crate::source::Group::Typer))
         } else if let Some(clash) = self.main_proxy_clash(sym) {
             Some(clash)
         } else if !takes_strings && self.syms.main_adapter(self.interner, sym).is_none() {
-            Some("@main method cannot be run: its proxy is missing".to_string())
+            // teq's own: the reference always makes the proxy.
+            Some(("@main method cannot be run: its proxy is missing".to_string(), crate::source::Group::Own))
         } else {
             None
         };
-        if let Some(msg) = refusal {
+        if let Some((msg, group)) = refusal {
             let (file, span) = {
                 let s = self.syms.sym(sym);
                 (s.file, s.span)
             };
-            self.diags.error(file, span, msg);
+            self.diags.error_by(group, file, span, msg);
             return;
         }
         self.entry_points.push((sym, None));
@@ -1592,7 +1596,9 @@ impl<'a> Worker<'a> {
     /// dotty's proxy of a `@main` method is a class of the method's name in the package of its outermost
     /// object (`MainProxies`): a class of that name there is defined twice, an object's mirror class
     /// overwritten (the backend's refusals).
-    fn main_proxy_clash(&self, sym: SymId) -> Option<String> {
+    /// Each with the phase group of the reference's that reports it: its typer the class defined
+    /// twice, its back end the two that overwrite one another.
+    fn main_proxy_clash(&self, sym: SymId) -> Option<(String, crate::source::Group)> {
         let info = self.syms.sym(sym);
         let mut owner = info.owner;
         while let Owner::Class(c) = owner {
@@ -1602,8 +1608,8 @@ impl<'a> Worker<'a> {
         let entry = self.syms.scoped(self.interner, p, info.name)?;
         let n = self.name_str(info.name);
         match (entry.class, entry.term.map(|t| self.syms.sym(t).kind)) {
-            (Some(c), _) if self.syms.class(c).kind != ClassKind::Object => Some(format!("{n} is already defined as class {n}")),
-            (Some(_), _) | (None, Some(SymKind::Object(_))) => Some(format!("{n} and {n} produce classes that overwrite one another")),
+            (Some(c), _) if self.syms.class(c).kind != ClassKind::Object => Some((format!("{n} is already defined as class {n}"), crate::source::Group::Typer)),
+            (Some(_), _) | (None, Some(SymKind::Object(_))) => Some((format!("{n} and {n} produce classes that overwrite one another"), crate::source::Group::Backend)),
             _ => None,
         }
     }
@@ -4411,7 +4417,7 @@ impl<'a> Worker<'a> {
                 // type found there. An incomplete method's result is unknown unless declared.
                 if ret.is_none() && def.mods & (mods::INLINE | mods::INCOMPLETE) == 0 {
                     if f.body.is_none() {
-                        t.error(def.span, "an abstract def needs a result type");
+                        t.error_by(crate::source::Group::Parser, def.span, "an abstract def needs a result type");
                     } else {
                         let partial = Arc::new(sig.clone());
                         t.set_partial_sig(sym, partial.clone());
@@ -5014,7 +5020,7 @@ impl<'a> Worker<'a> {
             _ => call,
         };
         if !matches!(self.prog.expr(call), TExpr::New(..) | TExpr::NewVia(..)) && !self.history(super::merge::HistoryQuery::AnyError { reports: false }, "a secondary constructor's first call") {
-            self.error(span, "a secondary constructor has to call another constructor of its class first");
+            self.error_by(crate::source::Group::Parser, span, "a secondary constructor has to call another constructor of its class first");
         }
         if let TExpr::NewVia(target, _) = self.prog.expr(call) {
             let position = |t: &Self, s: SymId| t.syms.class(c).ctors.iter().position(|&x| x == s);
@@ -5102,7 +5108,7 @@ impl<'a> Worker<'a> {
     #[inline(never)]
     fn tell_nested_too_deep(&mut self, sym: SymId) -> bool {
         let msg = format!("the definition of {} is nested in the typing of {} other bodies, which is a cycle", self.sym_path(sym), MAX_BODY_DEPTH);
-        self.error(self.syms.sym(sym).span, msg);
+        self.error_by(crate::source::Group::Own, self.syms.sym(sym).span, msg);
         true
     }
 
@@ -6085,7 +6091,7 @@ impl<'a> Worker<'a> {
                     "{} is a member of a JS trait, which can only hold abstract members and vals set to js.undefined",
                     self.name_str(def.name)
                 );
-                self.diags.error(file, def.span, msg);
+                self.diags.error_by(crate::source::Group::PrepJSInterop, file, def.span, msg);
             }
         }
     }
@@ -6767,7 +6773,7 @@ impl<'a> Worker<'a> {
                     "parameterized {} is indirectly implemented, needs to be implemented directly so that arguments can be passed",
                     self.class_description(b)
                 );
-                self.diags.error(file, class_span, msg);
+                self.diags.error_by(crate::source::Group::TailRec, file, class_span, msg);
                 continue;
             }
             // A trait whose type arguments its arguments inferred was applied then.
@@ -7751,13 +7757,13 @@ impl<'a> Worker<'a> {
                     self.member_description(m, None),
                     self.sig_string(m)
                 );
-                self.error_at(m, msg);
+                self.error_at_by(crate::source::Group::RefChecks, m, msg);
             } else if overrides_any && m_mods & mods::OVERRIDE == 0 && !self.is_abstract_member(m) {
                 let msg = format!("method {} needs `override` modifier to override the {} of Any", self.name_str(name), self.name_str(name));
-                self.error_at(m, msg);
+                self.error_at_by(crate::source::Group::RefChecks, m, msg);
             } else if !overrides_any && m_mods & mods::OVERRIDE != 0 {
                 let msg = format!("{} overrides nothing", self.member_description(m, None));
-                self.error_at(m, msg);
+                self.error_at_by(crate::source::Group::RefChecks, m, msg);
             }
         }
         // A pair of members of two bases is checked here only where no one parent derives from
@@ -7902,7 +7908,7 @@ impl<'a> Worker<'a> {
                 m_text
             );
             let span = self.ast(m_file).def(m_def).span;
-            self.diags.error(m_file, span, msg);
+            self.diags.error_by(crate::source::Group::RefChecks, m_file, span, msg);
         }
     }
 
@@ -8423,13 +8429,13 @@ impl<'a> Worker<'a> {
             .replace("{mt}", &self.sig_string(m))
             .replace("{pt}", &self.sig_string(shown_p));
         if own {
-            self.error_at(m, msg);
+            self.error_at_by(crate::source::Group::RefChecks, m, msg);
         } else {
             let (file, span) = {
                 let i = self.syms.class(c);
                 (i.file, i.span)
             };
-            self.diags.error(file, span, msg);
+            self.diags.error_by(crate::source::Group::RefChecks, file, span, msg);
         }
         true
     }
@@ -8453,7 +8459,7 @@ impl<'a> Worker<'a> {
             self.sig_string(m),
             problem
         );
-        self.error_at(m, msg);
+        self.error_at_by(crate::source::Group::RefChecks, m, msg);
         implements
     }
 
@@ -8562,7 +8568,7 @@ impl<'a> Worker<'a> {
             // scalac reads a private member's target name as an override of the inherited one.
             if self.is_private(m) {
                 let msg = format!("private {} cannot override {}", self.member_description(m, None), self.member_description(q, Some(b)));
-                self.error_at(m, msg);
+                self.error_at_by(crate::source::Group::RefChecks, m, msg);
                 return;
             }
             if self.erased_signature(m, true) != self.erased_signature(q, true) || self.erased_result(m, true) != self.erased_result(q, true) {
@@ -8590,7 +8596,7 @@ impl<'a> Worker<'a> {
                 q_sig.trim_start_matches(": "),
             );
             let (file, span) = (self.syms.class(c).file, self.syms.class(c).span);
-            self.diags.error(file, span, msg);
+            self.diags.error_by(crate::source::Group::TailRec, file, span, msg);
             return;
         }
     }
@@ -8647,7 +8653,7 @@ impl<'a> Worker<'a> {
                             self.member_description(p, Some(b)),
                         );
                         let (file, span) = (self.syms.class(c).file, self.syms.class(c).span);
-                        self.diags.error(file, span, msg);
+                        self.diags.error_by(crate::source::Group::RefChecks, file, span, msg);
                         return;
                     }
                 }
@@ -8655,12 +8661,21 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// An error at the member `sym`, of the typer's.
+    #[track_caller]
     fn error_at(&mut self, sym: SymId, msg: String) {
+        self.error_at_by(crate::source::Group::Unstamped, sym, msg);
+    }
+
+    /// An error at the member `sym` that the phase group `group` of the reference's reports (the
+    /// overriding checks': dotty's `RefChecks`).
+    #[track_caller]
+    fn error_at_by(&mut self, group: crate::source::Group, sym: SymId, msg: String) {
         let (file, span) = {
             let s = self.syms.sym(sym);
             (s.file, s.span)
         };
-        self.diags.error(file, span, msg);
+        self.diags.error_by(group, file, span, msg);
     }
 
     /// How a member with the signature `msig` relates to `p`, both in terms of the class `c` that
@@ -9287,7 +9302,7 @@ impl<'a> Worker<'a> {
         }
         // dotty's `abstractErrorMessage`.
         let msg = if errors.len() <= 2 { errors.join(" ") } else { format!("{}:\n{}", errors[0], errors[1..].join("\n")) };
-        self.diags.error(file, span, msg);
+        self.diags.error_by(crate::source::Group::RefChecks, file, span, msg);
     }
 
     /// Whether a var that `c` has implements the abstract setter `m` (`def x_=(v: T): Unit`):
@@ -9375,10 +9390,10 @@ impl<'a> Worker<'a> {
         // unknown (`Diagnostic::unknown`).
         let self_ty = self.syms.class(c).base_types[0].1;
         if unknown || self.incomplete_ancestry(self_ty) {
-            self.diags.dependent_error(file, span, msg);
+            self.diags.dependent_error_by(crate::source::Group::RefChecks, file, span, msg);
         } else {
             let erroneous = self.recovered && missing.iter().any(|&(_, m, _)| self.sig_holds_error(m));
-            self.diags.error(file, span, msg);
+            self.diags.error_by(crate::source::Group::RefChecks, file, span, msg);
             if erroneous {
                 if let Some(d) = self.diags.items.last_mut() {
                     d.unknown = true;
@@ -9743,7 +9758,7 @@ impl<'a> Worker<'a> {
             in_type,
             what
         );
-        self.diags.error(file, span, msg);
+        self.diags.error_by(crate::source::Group::PostTyper, file, span, msg);
     }
 
     /// The first variant type parameter of `t` that stands in a position of another sign, with

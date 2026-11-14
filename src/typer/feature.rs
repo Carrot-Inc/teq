@@ -175,7 +175,7 @@ impl<'a> Worker<'a> {
             "Definition of implicit conversion method {} should be enabled\nby adding the import clause 'import scala.language.implicitConversions'\nor by setting the compiler option --language implicitConversions.",
             self.name_str(def.name)
         );
-        let w = crate::source::Warning { id: crate::warnings::NO_ID, category: crate::warnings::Category::Feature, origin: Some(format!("{}:{}", file.0, use_site).into_boxed_str()), phase: 0, unplaced: false };
+        let w = crate::source::Warning { id: crate::warnings::NO_ID, category: crate::warnings::Category::Feature, origin: Some(format!("{}:{}", file.0, use_site).into_boxed_str()), phase: 0, unplaced: false, group: crate::source::Group::Typer };
         let file_was = std::mem::replace(&mut self.env.file, file);
         self.warn_as(Span::new(def.span.start, def.span.start + 1), msg, w);
         self.env.file = file_was;

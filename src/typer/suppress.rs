@@ -13,7 +13,7 @@
 
 use super::Worker;
 use crate::ast::{self, Annot, DefId, Expr, ExprId};
-use crate::source::{Diagnostic, FileId, Span};
+use crate::source::{Diagnostic, FileId, Group, Span};
 use crate::symbols::Owner;
 use crate::warnings::Suppression;
 
@@ -62,11 +62,11 @@ impl<'a> Worker<'a> {
         // binder's `TypeDef`, its annotations to its bounds.
         for n in self.binder_nowarns.iter().filter(|n| self.program_source(n.file)) {
             if !n.constant {
-                warnings.push(Diagnostic::plain(n.file, n.arg.unwrap_or(n.annot), "filter needs to be a compile-time constant string".to_string(), true, true));
+                warnings.push(Diagnostic::plain_by(Group::Typer, n.file, n.arg.unwrap_or(n.annot), "filter needs to be a compile-time constant string".to_string(), true, true));
             }
             let (sup, warning) = Suppression::new(n.file, n.annot, n.range, &n.conf);
             if let Some(msg) = warning {
-                warnings.push(Diagnostic::plain(n.file, n.arg.unwrap_or(n.annot), msg, true, true));
+                warnings.push(Diagnostic::plain_by(Group::Typer, n.file, n.arg.unwrap_or(n.annot), msg, true, true));
             }
             if sup.start != sup.end {
                 sups.push(sup);
@@ -99,7 +99,7 @@ impl<'a> Worker<'a> {
             (None, Some(arg)) => match self.constant_string(file, arg) {
                 Some(Ok(s)) => s,
                 Some(Err(())) => {
-                    warnings.push(Diagnostic::plain(file, ast.expr_span(arg), "filter needs to be a compile-time constant string".to_string(), true, true));
+                    warnings.push(Diagnostic::plain_by(Group::Typer, file, ast.expr_span(arg), "filter needs to be a compile-time constant string".to_string(), true, true));
                     "none".to_string()
                 }
                 // An argument teq cannot type where the annotation stands (a name local to a
@@ -109,7 +109,7 @@ impl<'a> Worker<'a> {
         };
         let (sup, warning) = Suppression::new(file, annot, range, &conf);
         if let (Some(msg), Some(arg)) = (warning, arg) {
-            warnings.push(Diagnostic::plain(file, ast.expr_span(arg), msg, true, true));
+            warnings.push(Diagnostic::plain_by(Group::Typer, file, ast.expr_span(arg), msg, true, true));
         }
         if sup.start != sup.end {
             sups.push(sup);

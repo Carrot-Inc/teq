@@ -63,7 +63,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Found::Malformed(why) => {
-                self.diags.warn(jar, Span::default(), format!("{}: teq's {} section cannot be read ({}); the pickle is read without it", entry, origins::SECTION, why));
+                self.diags.warn_by(crate::source::Group::Own, jar, Span::default(), format!("{}: teq's {} section cannot be read ({}); the pickle is read without it", entry, origins::SECTION, why));
                 if dump {
                     super::declared::dump_line(format!("origin\t{}\t{}\tmalformed: {}", shown, artifact, why));
                 }

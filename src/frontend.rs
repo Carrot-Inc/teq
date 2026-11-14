@@ -45,7 +45,7 @@ impl Syntactic {
     /// The diagnostics of `file`; a std file's warnings are no program's.
     pub fn report(self, file: FileId, std: bool, diags: &mut Diagnostics) {
         for (span, msg) in self.errors {
-            diags.error(file, span, msg);
+            diags.error_by(crate::source::Group::Parser, file, span, msg);
         }
         if std {
             return;

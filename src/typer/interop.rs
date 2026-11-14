@@ -137,7 +137,8 @@ impl<'a> Worker<'a> {
                         [Some(module), Some(name)] if *module != names::EMPTY && *name != names::EMPTY => {
                             out.import = Some((*module, *name));
                         }
-                        _ => self.diags.error(
+                        _ => self.diags.error_by(
+                            crate::source::Group::PrepJSInterop,
                             file,
                             span,
                             "@JSImport needs a module and a name: @JSImport(\"module\", \"name\"), JSImport.Default or JSImport.Namespace",
@@ -149,23 +150,23 @@ impl<'a> Worker<'a> {
                     match (ast.expr_list(values).len(), strings.first()) {
                         (0, _) => out.global = Some(None),
                         (1, Some(s)) if !s.is_empty() => out.global = Some(Some(self.interner.intern(s))),
-                        _ => self.diags.error(file, span, "@JSGlobal takes a name as a string literal, or nothing"),
+                        _ => self.diags.error_by(crate::source::Group::PrepJSInterop, file, span, "@JSGlobal takes a name as a string literal, or nothing"),
                     }
                 }
                 names::JS_GLOBAL_SCOPE => out.global_scope = true,
                 names::JS_NAME => match strings.as_slice() {
                     [s] if !s.is_empty() => out.js_name = Some(self.interner.intern(s)),
-                    _ => self.diags.error(file, span, "@JSName needs the name as a string literal: @JSName(\"name\")"),
+                    _ => self.diags.error_by(crate::source::Group::PrepJSInterop, file, span, "@JSName needs the name as a string literal: @JSName(\"name\")"),
                 },
                 names::JS_BRACKET_ACCESS => out.bracket = true,
                 names::JS_EXPORT_TOP_LEVEL => match strings.as_slice() {
                     [s] if is_js_identifier(s) => out.export = Some(self.interner.intern(s)),
-                    _ => self.diags.error(file, span, "@JSExportTopLevel needs a valid JS identifier: @JSExportTopLevel(\"name\")"),
+                    _ => self.diags.error_by(crate::source::Group::PrepJSInterop, file, span, "@JSExportTopLevel needs a valid JS identifier: @JSExportTopLevel(\"name\")"),
                 },
                 names::JS_EXPORT_MEMBER => match strings.as_slice() {
                     [] => out.member_export = Some(None),
                     [s] if !s.is_empty() => out.member_export = Some(Some(self.interner.intern(s))),
-                    _ => self.diags.error(file, span, "@JSExport takes the exported name as a string literal, or nothing"),
+                    _ => self.diags.error_by(crate::source::Group::PrepJSInterop, file, span, "@JSExport takes the exported name as a string literal, or nothing"),
                 },
                 _ => {}
             }
@@ -236,7 +237,7 @@ impl<'a> Worker<'a> {
             if self.syms.sym(other).name == self.syms.sym(sym).name && self.syms.sym(other).owner == self.syms.sym(sym).owner {
                 msg.push_str(": JavaScript has one function of that name and nothing chooses between overloaded alternatives at run time, so each one needs a name of its own");
             }
-            self.error(span, msg);
+            self.error_by(crate::source::Group::Backend, span, msg);
         }
         self.prog.js_exports.push((sym, name));
         self.js_exported.store(true, std::sync::atomic::Ordering::Release);
@@ -285,7 +286,7 @@ impl<'a> Worker<'a> {
                 None
             };
             if let Some(msg) = problem {
-                self.error(def.span, msg);
+                self.error_by(crate::source::Group::Own, def.span, msg);
                 continue;
             }
             let Some(sym) = sym else { continue };
@@ -329,6 +330,7 @@ impl<'a> Worker<'a> {
             _ => false,
         };
         let bound = annots.import.is_some() || annots.global.is_some();
+        let mut own = false;
         let problem = if annots.global_scope {
             Some("@JSGlobalScope is only allowed on an object".to_string())
         } else if annots.import.is_some() && annots.global.is_some() {
@@ -346,6 +348,8 @@ impl<'a> Worker<'a> {
         } else if bound && shape.has_scala_default {
             Some("a default argument of a native JS method has to be js.native or js.undefined".to_string())
         } else if bound && def.annots.iter().any(|b| b.name == names::JS || b.name == names::JS_IMPORT) {
+            // Of teq's own annotations: no check of the reference's.
+            own = true;
             Some("@JSImport and @JSGlobal cannot be combined with @js or @jsImport".to_string())
         } else if annots.js_name.is_some() && !in_js_class {
             Some("@JSName is only allowed on a member of a JS type".to_string())
@@ -367,7 +371,7 @@ impl<'a> Worker<'a> {
             None
         };
         if let Some(msg) = problem {
-            self.error(def.span, msg);
+            self.error_by(if own { crate::source::Group::Own } else { crate::source::Group::PrepJSInterop }, def.span, msg);
             return;
         }
         self.mark_js_member(sym, &annots);
@@ -433,11 +437,11 @@ impl<'a> Worker<'a> {
         if let Some(a) = def.annots.iter().find(|a| a.name == names::JS_IMPORT || a.name == names::JS_EXPORT) {
             let label = if a.name == names::JS_IMPORT { "@jsImport" } else { "@jsExport" };
             let msg = format!("{} is only allowed on a def or a val", label);
-            self.error(def.span, msg);
+            self.error_by(crate::source::Group::Own, def.span, msg);
         }
         let bindings = [annots.import.is_some(), annots.global.is_some(), annots.global_scope].iter().filter(|&&b| b).count();
         if bindings > 1 {
-            self.error(def.span, "a class or object can only have one of @JSImport, @JSGlobal and @JSGlobalScope");
+            self.error_by(crate::source::Group::PrepJSInterop, def.span, "a class or object can only have one of @JSImport, @JSGlobal and @JSGlobalScope");
         }
         let binding = self.js_class_binding(&annots, def.name);
         // PrepJSExports: an object is exported as its instance, which a static one alone has.
@@ -464,7 +468,7 @@ impl<'a> Worker<'a> {
             None
         };
         if let Some(msg) = problem {
-            self.error(def.span, msg);
+            self.error_by(crate::source::Group::PrepJSInterop, def.span, msg);
             return;
         }
         if annots.native {
@@ -509,13 +513,13 @@ impl<'a> Worker<'a> {
                 if kind == ClassKind::Object { "object" } else { "class" },
                 self.name_str(self.syms.class(c).name)
             );
-            self.diags.error(file, self.syms.class(c).span, msg);
+            self.diags.error_by(crate::source::Group::PrepJSInterop, file, self.syms.class(c).span, msg);
         }
         for stmt in &cls.body {
             let d: DefId = match stmt {
                 ast::Stmt::Def(d) => *d,
                 ast::Stmt::Expr(e) => {
-                    self.diags.error(file, ast.expr_span(*e), "a native JS type has no initialiser statements");
+                    self.diags.error_by(crate::source::Group::Own, file, ast.expr_span(*e), "a native JS type has no initialiser statements");
                     continue;
                 }
                 ast::Stmt::Import(_) => continue,
@@ -532,11 +536,11 @@ impl<'a> Worker<'a> {
                         "{} is nested in a native JS type, which cannot define classes or objects",
                         self.name_str(member.name)
                     );
-                    self.diags.error(file, member.span, msg);
+                    self.diags.error_by(crate::source::Group::PrepJSInterop, file, member.span, msg);
                     continue;
                 }
                 DefKind::Given(_) => {
-                    self.diags.error(file, member.span, "a native JS type cannot define givens");
+                    self.diags.error_by(crate::source::Group::Own, file, member.span, "a native JS type cannot define givens");
                     continue;
                 }
             };
@@ -549,14 +553,14 @@ impl<'a> Worker<'a> {
                     let primary_arity = cls.clauses.first().map_or(0, |c| c.params.len());
                     let calls_primary = matches!(ast.expr(b), Expr::Apply(f, args) if matches!(ast.expr(f), Expr::This) && ast.expr_list(args).len() == primary_arity);
                     if !calls_primary {
-                        self.diags.error(file, ast.expr_span(b), "A secondary constructor of a native JS class may only call the primary constructor");
+                        self.diags.error_by(crate::source::Group::PrepJSInterop, file, ast.expr_span(b), "A secondary constructor of a native JS class may only call the primary constructor");
                     }
                 } else {
                     let msg = format!(
                         "{} is a member of a native JS type: it has to be abstract or have the body js.native",
                         self.name_str(member.name)
                     );
-                    self.diags.error(file, ast.expr_span(b), msg);
+                    self.diags.error_by(crate::source::Group::PrepJSInterop, file, ast.expr_span(b), msg);
                 }
             }
             if let Some(&sym) = self.def_syms.get(file.0 as usize, &d) {

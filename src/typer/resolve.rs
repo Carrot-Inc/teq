@@ -588,7 +588,7 @@ impl<'a> Worker<'a> {
                 break;
             }
             if matches!(other.sel, ImportSel::Wildcard | ImportSel::Given) {
-                self.error(imp.span, "named imports cannot follow wildcard imports".to_string());
+                self.error_by(crate::source::Group::Parser, imp.span, "named imports cannot follow wildcard imports".to_string());
                 return;
             }
         }
@@ -4279,7 +4279,7 @@ impl<'a> Worker<'a> {
                 // `(=> A)` that no `=>` makes a function's parameters (a self type `self: (=> A) =>`).
                 if let Some(&p) = ast.ty_list(elems).iter().find(|&&p| matches!(ast.ty(p), TyExpr::ByName(_))) {
                     let span = ast.ty_spans[p.idx()];
-                    self.error(span, "a by-name type can only be the type of a parameter");
+                    self.error_by(crate::source::Group::Parser, span, "a by-name type can only be the type of a parameter");
                     return ERROR;
                 }
                 let mut es: Vec<TypeId> =
@@ -4484,7 +4484,7 @@ impl<'a> Worker<'a> {
                 // A refined type projects its refinement's member (`Zippable.Out[A, B, C]#Out`).
                 if !matches!(self.types.get(prefix), Type::Class(..) | Type::Refined(..) | Type::Nested(..) | Type::Rec(_)) {
                     let msg = format!("{} is not a legal path\nsince it is not a concrete type", self.show(prefix));
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::PostTyper, span, msg);
                     return ERROR;
                 }
                 match self.member_type(prefix, n) {
@@ -4608,7 +4608,7 @@ impl<'a> Worker<'a> {
                     Refinement::Term(def.name, sym, self.sig_types(&sig))
                 }
                 _ => {
-                    self.error(def.span, "refinement cannot have a body");
+                    self.error_by(crate::source::Group::Parser, def.span, "refinement cannot have a body");
                     continue;
                 }
             };
@@ -5075,7 +5075,7 @@ impl<'a> Worker<'a> {
             let (def, var) = (info.kind == SymKind::Def, info.kind != SymKind::Def && info.mods & mods::MUTABLE != 0);
             if derives_poly_function && (def || var) {
                 if name != names::APPLY {
-                    self.error(span, "PolyFunction only supports apply method refinements");
+                    self.error_by(crate::source::Group::PostTyper, span, "PolyFunction only supports apply method refinements");
                 } else {
                     let getter = MethodSig::value(sig.ret);
                     self.check_poly_function_apply(if var { &getter } else { &sig }, span);
@@ -5091,7 +5091,7 @@ impl<'a> Worker<'a> {
         let by_name = |w: &Self, p: &ParamSig| p.by_name || matches!(w.types.get(p.ty), Type::Class(c, _) if Some(c) == w.b.by_name);
         let valid = matches!(sig.clauses.as_slice(), [clause] if !clause.params.iter().any(|p| p.repeated || by_name(self, p)));
         if !valid {
-            self.error(span, "Implementation restriction: PolyFunction apply must have exactly one parameter list and optionally type arguments. No by-name nor varags are allowed.");
+            self.error_by(crate::source::Group::PostTyper, span, "Implementation restriction: PolyFunction apply must have exactly one parameter list and optionally type arguments. No by-name nor varags are allowed.");
         }
     }
 
@@ -5519,11 +5519,11 @@ impl<'a> Worker<'a> {
             if !self.is_body_file(file) && !self.refine_scopes.is_empty() && self.types.has_rec_this(a) {
                 if let Some(u) = upper.filter(|&u| !self.is_sub(a, u)) {
                     let msg = format!("type argument {} does not conform to upper bound {}", self.show(a), self.show(u));
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::PostTyper, span, msg);
                 }
                 if let Some(l) = lower.filter(|&l| !self.is_sub(l, a)) {
                     let msg = format!("type argument {} does not conform to lower bound {}", self.show(a), self.show(l));
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::PostTyper, span, msg);
                 }
                 continue;
             }
@@ -5623,13 +5623,13 @@ impl<'a> Worker<'a> {
             if let Some(u) = check.upper.or(later) {
                 if !self.is_sub(check.arg, u) {
                     let msg = format!("type argument {} does not conform to upper bound {}", self.show(check.arg), self.show(u));
-                    self.diags.error(check.file, check.span, msg);
+                    self.diags.error_by(crate::source::Group::PostTyper, check.file, check.span, msg);
                 }
             }
             if let Some(l) = check.lower {
                 if !self.is_sub(l, check.arg) {
                     let msg = format!("type argument {} does not conform to lower bound {}", self.show(check.arg), self.show(l));
-                    self.diags.error(check.file, check.span, msg);
+                    self.diags.error_by(crate::source::Group::PostTyper, check.file, check.span, msg);
                 }
             }
         }
@@ -5777,7 +5777,7 @@ impl<'a> Worker<'a> {
         let value = match ast.expr(e) {
             ast::Expr::IntLit(v) if v >= i32::MIN as i64 && v <= i32::MAX as i64 => LitVal::Int(v as i32),
             ast::Expr::IntLit(_) => {
-                self.error(span, "number too large for Int; use an L suffix for Long");
+                self.error_by(crate::source::Group::Parser, span, "number too large for Int; use an L suffix for Long");
                 return ERROR;
             }
             ast::Expr::LongLit(v) => LitVal::Long(v),
@@ -6029,7 +6029,7 @@ impl<'a> Worker<'a> {
     fn set_opaque_bound(&mut self, c: ClassId, under: TypeId, bound: TypeId, span: Span) {
         if !self.is_sub(under, bound) {
             let msg = format!("the underlying type {} does not conform to the bound {}", self.show(under), self.show(bound));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::PostTyper, span, msg);
         }
         self.syms.class_mut(c).parents = vec![bound];
         let Type::Class(bc, bargs) = self.types.get(bound) else {
@@ -6516,7 +6516,7 @@ impl<'a> Worker<'a> {
         let def = self.ast(file).def(d);
         let DefKind::TypeAlias { rhs, .. } = &def.kind else { return };
         if rhs.is_none() {
-            self.error(def.span, "only classes can have declared but undefined members");
+            self.error_by(crate::source::Group::Own, def.span, "only classes can have declared but undefined members");
             return;
         }
         let a = AliasId(self.syms.aliases.len() as u32);
@@ -6576,7 +6576,7 @@ impl<'a> Worker<'a> {
         let def = self.ast(file).def(d);
         let DefKind::TypeAlias { tparams, rhs, lower, upper } = &def.kind else { return };
         if rhs.is_none() {
-            self.error(def.span, "only classes can have declared but undefined members");
+            self.error_by(crate::source::Group::Own, def.span, "only classes can have declared but undefined members");
             return;
         }
         let a = AliasId(self.syms.aliases.len() as u32);
@@ -7281,7 +7281,7 @@ impl<'a> Worker<'a> {
                         self.show(t),
                         self.name_str(self.syms.sym(p).name)
                     );
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::PostTyper, span, msg);
                 }
             }
         }
@@ -8106,7 +8106,7 @@ impl<'a> Worker<'a> {
                     self.show(required),
                     self.class_description(b)
                 );
-                self.error(span, msg);
+                self.error_by(crate::source::Group::RefChecks, span, msg);
                 return;
             }
         }
@@ -8168,7 +8168,7 @@ impl<'a> Worker<'a> {
                         self.class_description(tr),
                         self.class_description(sc)
                     );
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::PostTyper, span, msg);
                 }
                 None => superclass = Some(sc),
             }
@@ -8945,7 +8945,7 @@ impl<'a> Worker<'a> {
                 self.class_description(c)
             )
         };
-        self.diags.error(file, span, msg);
+        self.diags.error_by(crate::source::Group::RefChecks, file, span, msg);
     }
 
     pub(super) fn class_description(&self, c: ClassId) -> String {

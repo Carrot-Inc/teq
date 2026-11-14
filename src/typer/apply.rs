@@ -1151,14 +1151,19 @@ impl<'a> Worker<'a> {
             if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS | names::CLONE) {
                 return self.apply_super_any_member(c, in_trait, name, targs, lists, span, expected);
             }
-            let msg = match deferred {
-                Some((m, b, _)) => format!(
-                    "{} is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'",
-                    self.member_description(m, Some(b))
+            // The abstract member reached from `super` is the reference's `PostTyper`'s to refuse; a
+            // name no parent has is its typer's.
+            let (msg, group) = match deferred {
+                Some((m, b, _)) => (
+                    format!(
+                        "{} is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'",
+                        self.member_description(m, Some(b))
+                    ),
+                    crate::source::Group::PostTyper,
                 ),
-                None => format!("value {} is not a member of the parents of {}", self.name_str(name), self.class_description(c)),
+                None => (format!("value {} is not a member of the parents of {}", self.name_str(name), self.class_description(c)), crate::source::Group::Unstamped),
             };
-            self.error(span, msg);
+            self.error_by(group, span, msg);
             return failed(self, &lists);
         };
         let first_parent = self.syms.class(c).parents.first().copied();
@@ -1171,12 +1176,12 @@ impl<'a> Worker<'a> {
                 self.class_description(owner),
                 self.class_description(c)
             );
-            self.error(span, msg);
+            self.error_by(crate::source::Group::PostTyper, span, msg);
             return failed(self, &lists);
         }
         if !self.is_method_sym(m) {
             let msg = format!("super may be not be used on {}", self.member_description(m, None));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::PostTyper, span, msg);
             return failed(self, &lists);
         }
         let info = self.syms.class(c);
@@ -1748,7 +1753,7 @@ impl<'a> Worker<'a> {
         }
         let t = self.widen_path(recv_ty);
         let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(t));
-        self.error(span, msg);
+        self.error_by(crate::source::Group::PostTyper, span, msg);
     }
 
     /// Whether the constructor proxy `apply` of the explicit companion `module` of the class `c`
@@ -1874,7 +1879,7 @@ impl<'a> Worker<'a> {
     ) -> (TExprId, TypeId) {
         let Some(written_outer) = self.module_prefix(recv, module) else {
             let msg = format!("not supported yet: the companion of {}, a class nested in a class, applied through no path", self.name_str(self.syms.class(companion).name));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::Own, span, msg);
             return (self.prog.add(TExpr::Unit), ERROR);
         };
         // The class is constructed through the companion's prefix, which is an immutable path
@@ -1886,7 +1891,7 @@ impl<'a> Worker<'a> {
                 _ => self.prog.type_of(written_outer),
             };
             let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(prefix.unwrap_or(recv_ty)));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::PostTyper, span, msg);
         }
         // The companion is the receiver of its `apply` (`EtaExpansion.liftApp`): bound before the
         // arguments where it is not idempotent (`Lifter.liftPrefix`), else evaluated first, as the
@@ -3608,7 +3613,7 @@ impl<'a> Worker<'a> {
                 Some(e) => e,
                 None => {
                     let msg = format!("{} is not accessible from here: it belongs to an instance of its enclosing class", self.name_str(self.syms.class(c).name));
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::Own, span, msg);
                     return None;
                 }
             },
@@ -4547,7 +4552,7 @@ impl<'a> Worker<'a> {
                 _ => "",
             };
             let msg = format!("{} {} cannot be instantiated", self.name_str(info.name), why).replace("  ", " ");
-            self.error(span, msg);
+            self.error_by(crate::source::Group::PostTyper, span, msg);
             self.type_args_for_errors(&lists);
             return (self.prog.add(TExpr::Unit), ERROR);
         }
@@ -4999,14 +5004,14 @@ impl<'a> Worker<'a> {
                 let u = self.types.subst(upper, &subst);
                 if !self.is_sub(var, u) && is_explicit {
                     let msg = format!("type argument {} does not conform to upper bound {}", self.show(var), self.show(u));
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::PostTyper, span, msg);
                 }
             }
             if lower != NOTHING {
                 let l = self.types.subst(lower, &subst);
                 if !self.is_sub(l, var) && is_explicit {
                     let msg = format!("type argument {} does not conform to lower bound {}", self.show(var), self.show(l));
-                    self.error(span, msg);
+                    self.error_by(crate::source::Group::PostTyper, span, msg);
                 }
             }
         }
@@ -9342,7 +9347,7 @@ impl<'a> Worker<'a> {
     /// The first argument list of a dynamic call, typed against `Any`.
     fn dynamic_args(&mut self, lists: &mut Vec<ArgList>, what: &str, span: Span) -> Option<Vec<TExprId>> {
         if lists.is_empty() || lists[0].using {
-            self.error(span, format!("{} needs an argument list", what));
+            self.error_by(crate::source::Group::Own, span, format!("{} needs an argument list", what));
             return None;
         }
         let list = lists.remove(0);
@@ -9382,7 +9387,7 @@ impl<'a> Worker<'a> {
         let mut items = Vec::with_capacity(list.args.len() * 2);
         for a in list.args {
             let (ArgSrc::Ast(e), Expr::NamedArg(n, v)) = (a, a.ast().map(|e| ast.expr(e)).unwrap_or(Expr::Error)) else {
-                self.error(list.span, "js.Dynamic.literal takes either named arguments or pairs, not both");
+                self.error_by(crate::source::Group::Own, list.span, "js.Dynamic.literal takes either named arguments or pairs, not both");
                 if let Some(e) = a.ast() {
                     self.type_expr(e, None);
                 }

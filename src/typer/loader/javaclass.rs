@@ -301,7 +301,7 @@ impl<'a> Worker<'a> {
         let inner = self.loaded.as_ref().and_then(|l| l.java.classes.get(&c)).map_or(false, |j| j.inner && j.companion_of.is_none());
         if inner {
             let msg = format!("not supported yet: inner class {} needs an outer instance (Outer.Inner)", self.class_path(c));
-            self.error(span, msg);
+            self.error_by(crate::source::Group::Own, span, msg);
         }
         inner
     }
@@ -389,7 +389,7 @@ impl<'a> Worker<'a> {
             if let Some(wanted) = wanted {
                 self.java_mut().jdk_missing = true;
                 let msg = format!("no JDK found (JAVA_HOME, /usr/libexec/java_home or java on the PATH) while looking for {}", wanted);
-                self.diags.error(file, Span::default(), msg);
+                self.diags.error_by(crate::source::Group::Own, file, Span::default(), msg);
             }
             return false;
         };
@@ -399,7 +399,7 @@ impl<'a> Worker<'a> {
             Err(e) => {
                 if wanted.is_some() {
                     self.java_mut().jdk_missing = true;
-                    self.diags.error(file, Span::default(), e);
+                    self.diags.error_by(crate::source::Group::Own, file, Span::default(), e);
                 }
                 return false;
             }
@@ -410,7 +410,7 @@ impl<'a> Worker<'a> {
                 if wanted.is_some() {
                     self.java_mut().jdk_missing = true;
                     let msg = format!("{}: release {} is not in it (it holds {} to {})", path.display(), r, ct.releases[0], ct.latest_release());
-                    self.diags.error(file, Span::default(), msg);
+                    self.diags.error_by(crate::source::Group::Own, file, Span::default(), msg);
                 }
                 return false;
             }
