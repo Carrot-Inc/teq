@@ -36,6 +36,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   expansion of an inline method that is not transparent, or of a macro that is not, reports is shown by a watch
   session and by the editor as a fresh check shows it: not beside a syntax error, and again once the syntax error
   is corrected; so is an error a transparent macro reports.
+- A macro whose code uses a `java.util` map or set no longer fails, in rare builds of a session kept open with
+  several workers, with `not supported yet in a macro: no builtin for java.util.Any.storeHas (a @js template
+  without a Scala body)` at a call that built a moment before: the interpreter named the method it runs before its
+  signature had reached the worker that ran it, and kept that name for the worker's later runs.
 
 ## 0.1.10 (2026-11-13)
 

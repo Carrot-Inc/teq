@@ -12,6 +12,18 @@ use crate::typer::{TermRef, TypeRef};
 use crate::tir::*;
 use crate::types::Type;
 
+/// The variation point of `Interp::qualified_name`'s read (`TEQ_QNAME_BEFORE=<method>`): the first
+/// read of the record of a method of that name in a thread is made as a read before its signature
+/// is in the thread's view, as two workers' steps may order them. Off, one load and a branch.
+fn read_before_signature(name: &str) -> bool {
+    static NAMED: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    let Some(named) = NAMED.get_or_init(|| std::env::var("TEQ_QNAME_BEFORE").ok()) else { return false };
+    thread_local! {
+        static MADE: Cell<bool> = const { Cell::new(false) };
+    }
+    named == name && !MADE.with(|made| made.replace(true))
+}
+
 impl<'a, 't> Interp<'a, 't> {
     // ---- TClass access ----
 
@@ -2542,22 +2554,32 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The qualified name a builtin is registered under: the def's path, with the simple name
-    /// of the receiver's class before the name of an extension method.
+    /// of the receiver's class before the name of an extension method. That class is the
+    /// signature's: a record with no signature in this thread's view (one another worker
+    /// completes, its publication not here yet) is asked of the typer as every reader asks, the
+    /// signature completed or its holder's publication waited for (`asked_signature`); a name
+    /// composed without one is not kept, so that the next call asks again.
     pub(super) fn qualified_name(&mut self, s: SymId) -> Rc<str> {
         if let Some(n) = self.qnames.get(&s) {
             return n.clone();
         }
         let info = self.syms().sym(s);
-        let mut path = match info.owner {
+        let (owner, name, is_extension, ext_clauses) = (info.owner, info.name, info.is_extension, info.ext_clauses);
+        let mut sig = info.sig.clone();
+        let mut path = match owner {
             Owner::Package(p) => self.package_path(p),
             Owner::Class(c) => format!("{}.", self.class_path(c)),
             Owner::Local => String::new(),
         };
-        if info.is_extension {
-            let receiver = info
-                .sig
+        let mut kept = true;
+        if is_extension {
+            if sig.is_none() || read_before_signature(self.name(name)) {
+                sig = self.asked_signature(s);
+                kept = sig.is_some();
+            }
+            let receiver = sig
                 .as_ref()
-                .and_then(|sig| sig.clauses.iter().take(info.ext_clauses.max(1) as usize).find(|c| !c.is_using))
+                .and_then(|sig| sig.clauses.iter().take(ext_clauses.max(1) as usize).find(|c| !c.is_using))
                 .and_then(|c| c.params.first())
                 .map(|p| p.ty);
             let class_name = match receiver.map(|t| self.typer.types.get(t)) {
@@ -2571,10 +2593,26 @@ impl<'a, 't> Interp<'a, 't> {
             path.push_str(&class_name);
             path.push('.');
         }
-        path.push_str(self.name(info.name));
+        path.push_str(self.name(name));
         let rc: Rc<str> = Rc::from(path);
-        self.qnames.insert(s, rc.clone());
+        if kept {
+            self.qnames.insert(s, rc.clone());
+        }
         rc
+    }
+
+    /// The signature of the extension method `s` asked of the typer from the interpreter's thread,
+    /// as a run asks for a body: completed where nothing began it, waited for where another worker
+    /// holds it. None where it is this thread's own completion under way, which asking again
+    /// would read as a recursion, or where the typer has none to give.
+    fn asked_signature(&mut self, s: SymId) -> Option<std::sync::Arc<crate::symbols::MethodSig>> {
+        let state = self.syms().sym(s).state();
+        if state.get() == crate::symbols::Completion::InProgress && state.mine() {
+            return None;
+        }
+        let sig = self.typer.sig_arc(s);
+        // An extension method's signature has its receiver's clause; the typer's answer for none has no clause.
+        (!sig.clauses.is_empty()).then_some(sig)
     }
 
     pub(super) fn type_name(&self, v: &Value) -> &'static str {

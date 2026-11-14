@@ -234,6 +234,31 @@ for s in $(seq 1 40); do
 done
 [ -z "$differ" ] && ok || bad "same_ref_shaken: differ from one worker at$differ"
 
+# The interpreter names the builtin of an extension method by the class of its receiver, which it reads off the
+# method's signature: a record read before its signature is in the thread's view is asked of the typer, and a name
+# composed without one is not kept. `TEQ_QNAME_BEFORE=<method>` makes the first read of that method's record in a
+# thread such a read. A macro's run reads it once the workers have joined: the macro's map answers as without the
+# variable (before, "no builtin for java.util.Any.storeHas (a @js template without a Scala body)" at the first
+# expansion and at every later one). A condition folded where its call is typed reads it on every forked worker: the
+# build at eight workers writes the bytes of one worker's without the variable (before, the condition was left
+# unfolded without a word).
+timeout 120 "$TEQ" compiler check tests/cases/macro_kept_map --threads 1 > "$work/kept_map.one" 2>&1
+differ=""
+for t in 1 8; do
+  TEQ_QNAME_BEFORE=storeHas timeout 120 "$TEQ" compiler check tests/cases/macro_kept_map --threads $t > "$work/kept_map.$t" 2>&1
+  cmp -s "$work/kept_map.one" "$work/kept_map.$t" || differ="$differ $t workers;"
+done
+[ -z "$differ" ] && [ ! -s "$work/kept_map.one" ] && ok || bad "macro_kept_map_before_signature: differ from the plain check at$differ"
+timeout 120 "$TEQ" compiler build tests/workers/folded_before_signature -o "$work/folded.one.js" --threads 1 > "$work/folded.one" 2>&1
+differ=""
+for method in toUpperCase contains split; do
+  for t in 1 8; do
+    TEQ_QNAME_BEFORE=$method timeout 120 "$TEQ" compiler build tests/workers/folded_before_signature -o "$work/folded.$t.js" --threads $t > "$work/folded.$t" 2>&1
+    cmp -s "$work/folded.one.js" "$work/folded.$t.js" && cmp -s "$work/folded.one" "$work/folded.$t" || differ="$differ $method at $t workers;"
+  done
+done
+[ -z "$differ" ] && [ -s "$work/folded.one.js" ] && ok || bad "folded_before_signature: the build differs from one worker's without the variable at$differ"
+
 # A function literal against `PartialFunction` is a partial function literal in every worker, the
 # std's `PartialFunction` another worker entered included (`is_partial_function`).
 same_output partial_function_match_body 8 run tests/cases/partial_function_match_body.scala
