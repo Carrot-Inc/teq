@@ -536,7 +536,6 @@ impl Remap {
         clock.part("interning");
         self.registers(&mut w.prog);
         self.program_maps(w);
-        self.map(&mut w.syms.dispatch_names.local, |r, s| r.sym(s), |_, _| {});
         self.map(&mut w.syms.js_export_names.local, |r, s| r.sym(s), |_, _| {});
         self.map(&mut w.syms.context_bounds.local, |r, s| r.sym(s), |_, _| {});
         self.map(&mut w.syms.binder_annots.local, |r, p| r.tparam(p), |_, _| {});

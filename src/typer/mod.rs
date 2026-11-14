@@ -4139,7 +4139,6 @@ impl<'a> Worker<'a> {
         self.derived_opaques.to_shared = on;
         self.derived_aliases.to_shared = on;
         self.derive.to_shared(on);
-        self.syms.dispatch_names.to_shared = on;
         self.syms.js_export_names.to_shared = on;
         self.syms.context_bounds.to_shared = on;
         self.arity_classes.to_shared = on;
@@ -4291,7 +4290,6 @@ impl<'a> Worker<'a> {
         self.poisoned_withheld.apply_pending();
         self.quote.apply_pending();
         self.derive.apply_pending();
-        self.syms.dispatch_names.apply_pending();
         self.syms.js_export_names.apply_pending();
         self.syms.context_bounds.apply_pending();
         self.fun_of_sym.apply_pending();
@@ -4409,7 +4407,6 @@ impl<'a> Worker<'a> {
         self.derived_opaques.fork();
         self.derived_aliases.fork();
         self.derive.fork();
-        self.syms.dispatch_names.fork();
         self.syms.js_export_names.fork();
         self.syms.context_bounds.fork();
         self.arity_classes.fork();

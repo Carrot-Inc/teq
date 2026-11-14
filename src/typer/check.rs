@@ -7604,7 +7604,7 @@ impl<'a> Worker<'a> {
         for (m, p) in pairs {
             let (alternative, meets_inherited, named) = {
                 let inherited = self.syms.sym(p);
-                (inherited.alternative, inherited.meets_inherited, inherited.dispatch == Dispatch::Named)
+                (inherited.alternative, inherited.meets_inherited, inherited.dispatch.is_named())
             };
             if alternative || meets_inherited || self.syms.sym(m).alternative {
                 self.push_override(m, p);
@@ -7680,7 +7680,7 @@ impl<'a> Worker<'a> {
                     overrides |= overridden;
                     let (alternative, meets_inherited, named) = {
                         let inherited = self.syms.sym(p);
-                        (inherited.alternative, inherited.meets_inherited, inherited.dispatch == Dispatch::Named)
+                        (inherited.alternative, inherited.meets_inherited, inherited.dispatch.is_named())
                     };
                     if overridden && (alternative || meets_inherited || self.syms.sym(m).alternative) {
                         self.shared_write(m, |w| w.push_override(m, p));
@@ -7793,7 +7793,7 @@ impl<'a> Worker<'a> {
         for i in 0..self.own_member_count(c) {
             let m = self.own_member(c, i);
             let info = self.syms.sym(m);
-            if info.kind != SymKind::Def || info.is_extension || info.dispatch != Dispatch::Unknown {
+            if info.kind != SymKind::Def || info.is_extension || info.dispatch != Dispatch::UNKNOWN {
                 continue;
             }
             if self.alternatives_named {

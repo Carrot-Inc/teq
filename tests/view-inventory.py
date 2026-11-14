@@ -440,7 +440,7 @@ def loader_sites(src_root):
                 if re.match(r'\s*f\)', body) or 'with_loader_locked' in text:
                     continue
                 patterns = [(name, r'\b' + name + r'\b') for name in LOADER] + [
-                    ('census', r'loaded_mut\(\)'), ('dispatch_name', r'dispatch_names'),
+                    ('census', r'loaded_mut\(\)'), ('dispatch_name', r'dispatch = Dispatch::named'),
                     ('publish_sig', r'sym_mut\(sym\)\.sig = Some\(sig\)'), ('set_partial_sig', r'sig = Some\(partial\)'),
                 ]
                 found = [(m.start(), name) for name, p in patterns for m in [re.search(p, body[:600])] if m]

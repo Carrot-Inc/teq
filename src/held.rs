@@ -202,7 +202,6 @@ impl Symbols {
             + self.pkgs.own().iter().map(|p| table(&p.entries) + array(&p.givens) + array(&p.export_files)).sum::<usize>()
             + self.overloads.held()
             + self.overloads.own().iter().map(|(_, alternatives)| array(alternatives)).sum::<usize>()
-            + self.dispatch_names.held()
             + self.js_export_names.held()
             + self.context_bounds.held()
             + self.class_cells.held()

@@ -445,7 +445,13 @@ fn facts(cx: &Cx, prev: &Snapshot) -> (Digests, Snapshot) {
         h.write_u32(info.erased_tags);
         h.write_u8(info.ext_tparams);
         h.write_u8(info.ext_clauses);
-        h.write_u8(info.dispatch as u8);
+        // The state's byte alone, as it was when the name was kept beside the record.
+        h.write_u8(match info.dispatch {
+            crate::symbols::Dispatch::UNKNOWN => 0,
+            crate::symbols::Dispatch::IN_PROGRESS => 1,
+            crate::symbols::Dispatch::PLAIN => 2,
+            _ => 3,
+        });
         info.impl_class.map(|c| c.0).hash(h);
         info.js_global.hash(h);
         info.js_name.hash(h);

@@ -861,6 +861,14 @@ done
 # and, by the machine's load, in one of three to three of four of the second's.
 same_output value_import_slots 4 run tests/workers/value_import_slots
 TEQ_PHASE_FORK=1 same_output inline_value_import 4 run tests/workers/inline_value_import
+# What a worker settles about a symbol of its own is kept where every worker reads the symbol: a method's name in
+# the output is a state of its record, and a context bound's evidence is known by its parameter's derived name. A
+# macro's run of a body that another worker typed, whose block declares a class with a val beside an inherited
+# method of its name (above one worker the build stopped with `a named method has its name`); and an explicit
+# argument for a context bound's evidence in eight files under `--source 3.5`, whose migration record a worker
+# that had not completed the method's signature left out (48 records at one worker, fewer above it).
+same_output macro_runs_named_val 4 run tests/workers/macro_runs_named_val
+same_output evidence_argument 4 compiler check tests/workers/evidence_argument --source 3.5
 for name in phase_macro_local_trait phase_macro_summoned; do
   TEQ_PHASE_FORK=1 same_output $name 3 run tests/workers/$name
 done

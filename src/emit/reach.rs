@@ -2339,13 +2339,12 @@ impl Walker {
     /// The name a call of `s` is recorded under: that of the output.
     fn output_name(&mut self, cx: Cx, s: SymId) -> Name {
         let info = cx.syms.sym(s);
-        match info.dispatch {
-            Dispatch::Named => {
-                let n = cx.syms.dispatch_name(s);
+        match info.dispatch.name() {
+            Some(n) => {
                 self.overloaded.insert(n, info.name);
                 n
             }
-            _ => info.name,
+            None => info.name,
         }
     }
 

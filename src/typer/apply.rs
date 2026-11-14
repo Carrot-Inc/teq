@@ -13667,13 +13667,22 @@ impl<'a> Worker<'a> {
         clauses
     }
 
+    /// Whether `n` is the derived name of a context bound's evidence (dotty's `ContextBoundParamName`,
+    /// `Interner::unique`): its kind, which no written identifier of the same text has.
+    fn is_evidence_name(&self, n: Name) -> bool {
+        self.interner.get(n).starts_with("evidence$") && self.interner.unique_parts(n).is_some_and(|(separator, _)| separator == "evidence$")
+    }
+
     /// Explicit arguments for an implicit clause, as dotty's `adaptToArgs` migrates them: to a
     /// context bound's evidence (`Migrations.contextBoundParams`, a clause of `implicit` parameters
     /// below 3.6) from 3.4, reported at the function, and to any `implicit` clause
     /// (`Migrations.implicitParams`) from 3.7, at the first argument.
     fn explicit_implicit_args(&mut self, clause: &ClauseSig, list: &ArgList, fun: Span) {
         use crate::source_version::{rewrite_notice, Migration, SourceVersion};
-        let evidence = clause.params.first().is_some_and(|p| self.syms.context_bounds.contains_key(&p.sym));
+        // `isContextBoundParams`: the applied method type's first parameter is named as a context bound's
+        // evidence is (`ContextBoundParamName`), which its signature says to every worker; a library's
+        // evidence named by its text is the table's.
+        let evidence = clause.params.first().is_some_and(|p| self.syms.context_bounds.contains_key(&p.sym) || self.is_evidence_name(p.name));
         if evidence && self.cur_ast().source_version.is_at_least(SourceVersion::V3_4) {
             let notice = if list.args.is_empty() { String::new() } else { rewrite_notice("This code", "3.4-migration") };
             let msg = format!("Context bounds will map to context parameters.\nA `using` clause is needed to pass explicit arguments to them.{}", notice);

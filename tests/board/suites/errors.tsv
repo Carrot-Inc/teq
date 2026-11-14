@@ -116,6 +116,7 @@ conformance_extras	pass	-
 constructor_proxy_prefix	fail	-	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'
 constructor_proxy_shadows	pass	-	
 context_bound_evidence_name	pass	-	
+context_bound_export_argument	pass	-	
 context_bound_merge	pass	-	
 context_function_ascribed_no_given	pass	-	
 context_function_inferred	pass	-	

@@ -195,7 +195,7 @@ impl<'a> Worker<'a> {
             product_class_places,
             // The arenas and layered tables the merge's walk renumbers; the products' places hold files and
             // offsets; the cells are a state by record, placed with the record.
-            syms: _, tparams: _, aliases: _, overloads: _, dispatch_names: _, js_export_names: _,
+            syms: _, tparams: _, aliases: _, overloads: _, js_export_names: _,
             context_bounds: _, binder_annots: _, file_ranks: _, product_places: _, product_sources: _,
             product_files: _, class_cells: _, sym_cells: _, body_cells: _, alias_cells: _, check_cells: _,
         } = &self.syms;

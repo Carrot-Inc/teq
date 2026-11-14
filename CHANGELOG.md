@@ -167,6 +167,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   worker. A build of three small files could stop four times in five on eight workers. Where such overloads'
   signatures depend on each other in a cycle across files, the build is refused with one worker's error at
   every count (`recursive use of at needs an explicit result type`), where it stopped.
+- A class declared inside a method's body with a val beside an inherited method of the same name (`class Pan
+  extends Scale { val weight = 5 }` where `Scale` has `def weight(step: Int)`) no longer stops the build with
+  `a named method has its name`: on several workers where a macro's implementation runs that method, and on any
+  number of workers where the class is declared in an inline method.
+- A call that passes an explicit argument to a context bound's evidence (`stamps.one(Seal[Int]())` for
+  `def one[X: Seal]`) is reported under `-source 3.4` and `3.5` (`Context bounds will map to context parameters`)
+  whatever the number of typing workers; a build typed on more than one worker left the record out for a method
+  whose signature another worker had completed. The same call through an export's forwarder (`export stamps.one`,
+  then `Desk.one(Seal[Int]())`) is reported too, as scalac reports it: it was not, on any number of workers, so a
+  program that passed such an argument under `-source 3.5`, or to a library compiled under it, is now refused.
 
 ## 0.1.10 (2026-11-13)
 

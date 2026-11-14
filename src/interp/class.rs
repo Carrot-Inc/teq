@@ -2184,7 +2184,7 @@ impl<'a, 't> Interp<'a, 't> {
         // yet, and settling it would complete and enter classes no walk asked for.
         let by_signature = {
             let info = self.syms().sym(s);
-            info.alternative || info.dispatch == crate::symbols::Dispatch::Named
+            info.alternative || info.dispatch.is_named()
         };
         let m = if by_signature { self.alternative_member(class, s) } else { self.member(class, name) };
         // A method no overload names apart whose implementation in the receiver's class is one

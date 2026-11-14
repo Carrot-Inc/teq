@@ -364,6 +364,10 @@ pub enum SymKind {
     Overloaded(u32),
 }
 
+/// A symbol's record stays 136 bytes: every symbol of a build is one, in every resident too.
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<SymInfo>() == 136);
+
 #[derive(Clone)]
 pub struct SymInfo {
     pub name: Name,
@@ -445,8 +449,8 @@ pub struct SymInfo {
     /// `Desugar.makePatDef`'s `patMods`), or a definition a pickle marks `SYNTHETIC`; a copy
     /// keeps it, reflection reports it and the pickle writes it.
     pub synthetic: bool,
-    /// Whether the method has a name of its own in the output, which `Symbols::dispatch_names`
-    /// holds: an alternative of an overloaded name.
+    /// Whether the method has a name of its own in the output, and that name: an alternative of an
+    /// overloaded name.
     pub dispatch: Dispatch,
     /// Whether the completion of the signature recorded a demand of another completion or a
     /// report of its own (`DiagOwner::sig`): a later reader depends on what it demanded, as a
@@ -495,12 +499,39 @@ impl SymInfo {
     }
 }
 
+/// Whether a method's name in the output is settled, and what it is where it is not its own: the
+/// name is part of the state, so that every holder of the record, a copy of it among them, has it.
+/// One word, so that the record is no wider for it: three values for the states without a name,
+/// every other a name, which `named` puts above them.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Dispatch {
-    Unknown,
-    InProgress,
-    Plain,
-    Named,
+pub struct Dispatch(u32);
+
+impl Dispatch {
+    pub const UNKNOWN: Dispatch = Dispatch(0);
+    pub const IN_PROGRESS: Dispatch = Dispatch(1);
+    pub const PLAIN: Dispatch = Dispatch(2);
+    /// The first word that is a name's.
+    const NAMES: u32 = 3;
+
+    /// The method goes by `n` in the output. A name is an index into the interner's strings, far
+    /// below the words left; the sum is checked all the same, so that no name is ever read as a
+    /// state without one.
+    #[inline]
+    pub fn named(n: Name) -> Dispatch {
+        Dispatch(n.0.checked_add(Self::NAMES).expect("a name below the state's own words"))
+    }
+
+    /// The name the method goes by in the output, where it is not its own.
+    #[inline]
+    pub fn name(self) -> Option<Name> {
+        self.0.checked_sub(Self::NAMES).map(Name)
+    }
+
+    /// Whether the method goes by a name of its own in the output.
+    #[inline]
+    pub fn is_named(self) -> bool {
+        self.0 >= Self::NAMES
+    }
 }
 
 #[derive(Clone)]
@@ -612,8 +643,6 @@ pub struct Symbols {
     pub pkgs: Arena<PkgInfo>,
     /// Each `SymKind::Overloaded` entry with its alternatives, in the order they were met.
     pub overloads: Arena<(SymId, Vec<SymId>)>,
-    /// The names in the output of the methods whose `dispatch` is `Named`.
-    pub dispatch_names: crate::arena::Layered<SymId, Name>,
     /// `@JSExport` on a member of a Scala class: the name JavaScript calls it by on an instance,
     /// where an exporter (`PrepJSExports.genExportDefs`) dispatches among the alternatives of one
     /// name. Few members have one, and the symbols' records are read by every lookup.
@@ -842,7 +871,6 @@ impl Symbols {
             aliases: Arena::new(),
             pkgs: Arena::from_vec(vec![root]),
             overloads: Arena::new(),
-            dispatch_names: Default::default(),
             js_export_names: Default::default(),
             context_bounds: Default::default(),
             binder_annots: Default::default(),
@@ -890,7 +918,6 @@ impl Symbols {
             aliases: Arena::attach(self.aliases.shared_arc(), worker),
             pkgs: Arena::attach(self.pkgs.shared_arc(), worker),
             overloads: Arena::attach(self.overloads.shared_arc(), worker),
-            dispatch_names: self.dispatch_names.attach(),
             js_export_names: self.js_export_names.attach(),
             context_bounds: self.context_bounds.attach(),
             binder_annots: self.binder_annots.attach(),
@@ -1467,7 +1494,7 @@ impl Symbols {
             alternative: false,
             initialising: false,
             synthetic: false,
-            dispatch: Dispatch::Unknown,
+            dispatch: Dispatch::UNKNOWN,
             completion_noted: false,
         }))
     }
@@ -1489,10 +1516,7 @@ impl Symbols {
     #[inline]
     pub fn dispatch_name(&self, s: SymId) -> Name {
         let info = &self.syms[s.idx()];
-        match info.dispatch {
-            Dispatch::Named => *self.dispatch_names.get(&s).expect("a named method has its name"),
-            _ => info.name,
-        }
+        info.dispatch.name().unwrap_or(info.name)
     }
 
     /// dotty's `fullName` of a class: its owners' names outermost first, joined by `.`, an
@@ -2100,6 +2124,23 @@ mod tests {
             self.syms.view_records(false);
             self.store.leave_overlay();
         }
+    }
+
+    /// The state's one word: the three states without a name, and every name above them.
+    #[test]
+    fn a_dispatch_state_is_a_name_or_one_of_three_without() {
+        for d in [Dispatch::UNKNOWN, Dispatch::IN_PROGRESS, Dispatch::PLAIN] {
+            assert_eq!(d.name(), None);
+            assert!(!d.is_named());
+        }
+        // Every name, the first ones and the last the word can hold, is its own state and none of the three.
+        for n in [0, 1, 2, 3, 70_000, u32::MAX - 3] {
+            let d = Dispatch::named(Name(n));
+            assert_eq!(d.name(), Some(Name(n)));
+            assert!(d.is_named());
+            assert!(d != Dispatch::UNKNOWN && d != Dispatch::IN_PROGRESS && d != Dispatch::PLAIN);
+        }
+        assert_eq!(std::mem::size_of::<Dispatch>(), 4);
     }
 
     /// The worker made `C9` before the holder made the base's: a record the holder publishes

@@ -1158,6 +1158,7 @@ inline_arg_wrapped	pass	-
 inline_argument_constructor_scope	pass	-	
 inline_argument_outer_accessor	pass	-	
 inline_binding_refs	pass	-	
+inline_block_class_named_val	pass	-	
 inline_bodies_scalac_product	pass	-	
 inline_body_constant_operations	pass	-	
 inline_body_import_nested_given	pass	-	

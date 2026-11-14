@@ -1303,7 +1303,6 @@ impl Remap {
             records::overload(&*self, o);
         }
         self.walked += (w.syms.overloads.len() - base) as u64;
-        self.map(&mut w.syms.dispatch_names.local, |r, s| r.sym(s), |_, _| {});
         self.map(&mut w.syms.js_export_names.local, |r, s| r.sym(s), |_, _| {});
         self.map(&mut w.syms.context_bounds.local, |r, s| r.sym(s), |_, _| {});
         self.map(&mut w.syms.binder_annots.local, |r, p| r.tparam(p), |_, _| {});
@@ -2423,7 +2422,6 @@ impl<'a> Worker<'a> {
         self.derived_aliases.absorb(o.derived_aliases.take_local());
         self.arity_classes.absorb(o.arity_classes.take_local());
         self.derive.absorb(&mut o.derive);
-        self.syms.dispatch_names.absorb(o.syms.dispatch_names.take_local());
         self.syms.js_export_names.absorb(o.syms.js_export_names.take_local());
         self.syms.context_bounds.absorb(o.syms.context_bounds.take_local());
         self.syms.binder_annots.absorb(o.syms.binder_annots.take_local());
@@ -3081,7 +3079,6 @@ impl<'a> Worker<'a> {
         self.poisoned_withheld.merge_own();
         self.quote.merge_own();
         self.derive.merge_own();
-        self.syms.dispatch_names.merge_own();
         self.syms.js_export_names.merge_own();
         self.syms.context_bounds.merge_own();
         self.syms.binder_annots.merge_own();

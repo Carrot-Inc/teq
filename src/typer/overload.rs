@@ -478,8 +478,8 @@ impl<'a> Worker<'a> {
                             // Named plain before this join (another completion's naming, on any
                             // worker), it is named again, as the final pass names a root it suffixes:
                             // the name is the join's whichever completion ran first.
-                            if self.syms.sym(method).dispatch == Dispatch::Plain {
-                                self.syms.sym_mut(method).dispatch = Dispatch::Unknown;
+                            if self.syms.sym(method).dispatch == Dispatch::PLAIN {
+                                self.syms.sym_mut(method).dispatch = Dispatch::UNKNOWN;
                             }
                         }
                     }
@@ -517,20 +517,20 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn dispatch_name(&mut self, m: SymId) -> Option<Name> {
-        match self.syms.sym(m).dispatch {
-            Dispatch::Named => return Some(*self.syms.dispatch_names.get(&m).expect("a named method has its name")),
-            Dispatch::Plain | Dispatch::InProgress => return None,
-            Dispatch::Unknown => {}
+        let settled = self.syms.sym(m).dispatch;
+        if settled != Dispatch::UNKNOWN {
+            // Its name where it has one of its own; none where it keeps its own or is being named.
+            return settled.name();
         }
         let (name, owner, overloadable, value_alternative) = {
             let info = self.syms.sym(m);
             (info.name, info.owner, info.kind == SymKind::Def && !info.is_extension, info.kind == SymKind::Val && info.alternative)
         };
         if !(overloadable || value_alternative) || self.nameless_inline(m) {
-            self.syms.sym_mut(m).dispatch = Dispatch::Plain;
+            self.syms.sym_mut(m).dispatch = Dispatch::PLAIN;
             return None;
         }
-        self.syms.sym_mut(m).dispatch = Dispatch::InProgress;
+        self.syms.sym_mut(m).dispatch = Dispatch::IN_PROGRESS;
         let named = match owner {
             Owner::Local => None,
             _ if self.target_name(m).is_some() && self.overrides_nothing(m) => self.target_name(m),
@@ -568,13 +568,7 @@ impl<'a> Worker<'a> {
                 }
             }
         };
-        self.syms.sym_mut(m).dispatch = match named {
-            Some(n) => {
-                self.syms.dispatch_names.insert(m, n);
-                Dispatch::Named
-            }
-            None => Dispatch::Plain,
-        };
+        self.syms.sym_mut(m).dispatch = named.map_or(Dispatch::PLAIN, Dispatch::named);
         named
     }
 
@@ -848,7 +842,7 @@ impl<'a> Worker<'a> {
     /// of the class that a lambda for a trait with one abstract method becomes.
     pub(super) fn name_like(&mut self, m: SymId, root: SymId) {
         let info = self.syms.sym(root);
-        if !(info.alternative || info.meets_inherited || info.dispatch == Dispatch::Named) {
+        if !(info.alternative || info.meets_inherited || info.dispatch.is_named()) {
             return;
         }
         let root = self.std_rooted_beside(m, root).unwrap_or(root);
@@ -895,13 +889,12 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Gives `m` the name `n` in the output: the map's entry and the symbol's flag change
-    /// together, under the loader's lock where `m` is a record of the shared region
-    /// (`shared_write`); the name is computed before, outside it.
+    /// Gives `m` the name `n` in the output, a state of its record: under the loader's lock where
+    /// `m` is a record of the shared region (`shared_write`); the name is computed before,
+    /// outside it.
     fn publish_dispatch_name(&mut self, m: SymId, n: Name) {
         self.shared_write(m, |w| {
-            w.syms.dispatch_names.insert(m, n);
-            w.syms.sym_mut(m).dispatch = Dispatch::Named;
+            w.syms.sym_mut(m).dispatch = Dispatch::named(n);
         });
     }
 
@@ -1091,8 +1084,8 @@ impl<'a> Worker<'a> {
                             self.renamed_roots.push(r);
                         }
                         // A root named plain before its set was merged is named again.
-                        if self.syms.sym(r).dispatch == Dispatch::Plain {
-                            self.syms.sym_mut(r).dispatch = Dispatch::Unknown;
+                        if self.syms.sym(r).dispatch == Dispatch::PLAIN {
+                            self.syms.sym_mut(r).dispatch = Dispatch::UNKNOWN;
                         }
                         changed = true;
                     }
@@ -1119,8 +1112,8 @@ impl<'a> Worker<'a> {
                 let mut k = 0;
                 while let Some(m) = self.own_alternative(d, name, k) {
                     k += 1;
-                    if self.syms.sym(m).dispatch == Dispatch::Plain {
-                        self.syms.sym_mut(m).dispatch = Dispatch::Unknown;
+                    if self.syms.sym(m).dispatch == Dispatch::PLAIN {
+                        self.syms.sym_mut(m).dispatch = Dispatch::UNKNOWN;
                     }
                     if !self.dispatch_pending.contains(&m) {
                         self.dispatch_pending.push(m);
@@ -1544,7 +1537,7 @@ impl<'a> Worker<'a> {
             }
         };
         // An alternative whose name is being computed up the stack has none to compare yet.
-        if alts.iter().any(|&a| self.syms.sym(a).dispatch == Dispatch::InProgress) {
+        if alts.iter().any(|&a| self.syms.sym(a).dispatch == Dispatch::IN_PROGRESS) {
             return;
         }
         for i in 0..alts.len() {
@@ -1641,8 +1634,7 @@ impl<'a> Worker<'a> {
     /// and the program's and the std's once the final pass has named them.
     fn name_apart(&mut self, m: SymId, set: SymId) -> Name {
         let n = self.suffixed_name(m, set);
-        self.syms.dispatch_names.insert(m, n);
-        self.syms.sym_mut(m).dispatch = Dispatch::Named;
+        self.syms.sym_mut(m).dispatch = Dispatch::named(n);
         let name = self.syms.sym(m).name;
         let Owner::Class(owner) = self.syms.sym(m).owner else { return n };
         let classes: Vec<ClassId> = self.syms.classes.entries().map(|(i, _)| ClassId(i)).collect();
@@ -1657,9 +1649,8 @@ impl<'a> Worker<'a> {
             let mut i = 0;
             while let Some(p) = self.own_alternative(k, name, i) {
                 i += 1;
-                if p != m && matches!(self.syms.sym(p).kind, SymKind::Def | SymKind::Val) && self.syms.sym(p).dispatch != Dispatch::Named && self.same_parameters(k, &bases, p, m, owner_ty) {
-                    self.syms.dispatch_names.insert(p, n);
-                    self.syms.sym_mut(p).dispatch = Dispatch::Named;
+                if p != m && matches!(self.syms.sym(p).kind, SymKind::Def | SymKind::Val) && !self.syms.sym(p).dispatch.is_named() && self.same_parameters(k, &bases, p, m, owner_ty) {
+                    self.syms.sym_mut(p).dispatch = Dispatch::named(n);
                 }
             }
         }
@@ -1892,7 +1883,7 @@ impl<'a> Worker<'a> {
         let mut roots: Vec<SymId> = self.suffixed_roots.iter().map(|(&s, _)| s).collect();
         roots.sort_unstable();
         for r in roots {
-            if self.syms.sym(r).dispatch == Dispatch::Unknown {
+            if self.syms.sym(r).dispatch == Dispatch::UNKNOWN {
                 self.dispatch_name(r);
             }
         }
@@ -2023,7 +2014,7 @@ impl<'a> Worker<'a> {
                 if minfo.kind != SymKind::Def || minfo.is_extension || self.is_private(m) {
                     continue;
                 }
-                if !(minfo.alternative || minfo.meets_inherited || minfo.dispatch == Dispatch::Named) {
+                if !(minfo.alternative || minfo.meets_inherited || minfo.dispatch.is_named()) {
                     continue;
                 }
                 let Some(implementation) = self.implementation_of(c, &bases, m) else { continue };
