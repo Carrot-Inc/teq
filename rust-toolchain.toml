@@ -1,2 +1,3 @@
 [toolchain]
-channel = "stable"
+# The ship's rustc (bench/actions/toolchain.sh, `rust=`; bench/ship-qualified.txt).
+channel = "1.98.1"

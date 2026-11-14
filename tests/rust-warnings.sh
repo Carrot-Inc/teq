@@ -7,6 +7,11 @@
 # A check's warnings are printed; the last line says whether both checks were free of them.
 cd "$(dirname "$0")/.."
 fail=0
+# The toolchain the tree names is the one the ship's image installs: a lint of a later release is met when the
+# two move together, not on whichever machine updated first.
+named=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+ship=$(sed -n 's/^rust=//p' bench/actions/toolchain.sh)
+[ -n "$named" ] && [ "$named" = "$ship" ] || { echo "FAIL rust-toolchain.toml names ${named:-no version}, the ship's image $ship"; fail=1; }
 for profile in release checks; do
   if ! out=$(CARGO_TARGET_DIR=target/rust-warnings timeout 1200 cargo check --profile "$profile" --all-targets --message-format short --config 'build.rustflags = ["-D", "warnings"]' 2>&1); then
     echo "$out" | grep -E '^(src/|build\.rs|error)' | head -40

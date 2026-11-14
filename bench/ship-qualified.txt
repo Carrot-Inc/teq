@@ -3,7 +3,7 @@
 # `<tool> <version...>`, and the routes whose binaries have run where they are for, `route <classifier>`.
 # integrations/sbt/binary/check.sh refuses a binary whose manifest records another toolchain or whose route
 # has no line, and every binary while a `pending` line stands; bench/ship.sh stages such a binary and holds
-# it back. rust-toolchain.toml floats on stable, so rustc, LLVM and cargo are the versions it resolved to;
+# it back. rust-toolchain.toml names the rustc of these lines, so rustc, LLVM and cargo are that release's;
 # zig links every binary, qemu-user runs the aarch64 trainer and the Linux aarch64 suite over the sysroot,
 # wine the Windows smoke (the tools of each route: bench/ship-release.sh). The file changes by a commit after
 # a new comparison on the reference machine, or after a route's binary
