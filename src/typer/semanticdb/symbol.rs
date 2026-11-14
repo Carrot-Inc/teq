@@ -373,6 +373,12 @@ impl<'a> Worker<'a> {
                     let info = self.syms.class(c);
                     (info.owner, info.name, info.kind)
                 };
+                // A static member class read from a Java class file is its outer class's companion's; its symbol
+                // names the class it is written in, a type (`java/awt/geom/Point2D#Double#`), as scalac's does.
+                let owner = match self.loaded.as_ref().and_then(|l| l.java.classes.get(&c)).and_then(|j| j.outer) {
+                    Some(written_in) => Owner::Class(written_in),
+                    None => owner,
+                };
                 // A class of the lean std that scala-library has in another package is named as the library names it.
                 let library = match owner {
                     Owner::Package(p) if self.sem_lean_std(self.syms.class(c).file) => crate::tasty::write::std_library_name(&self.pkg_description(p), self.name_ref(name)),

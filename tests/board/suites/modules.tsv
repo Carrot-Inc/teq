@@ -198,6 +198,7 @@ innercreators	pass	-
 intersectionmeet	pass	-	
 jarvalueclass	pass	-	
 java	pass	-	
+javamemberoverload	pass	-	
 javapackagenullary	pass	-	
 javasuperstable	fail	-	javasuperstable bundle
 javavarargs	pass	-	

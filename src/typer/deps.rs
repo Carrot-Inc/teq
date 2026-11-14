@@ -2245,8 +2245,20 @@ impl<'c, 'a> Collector<'c, 'a> {
         self.class_prefix(c);
     }
 
+    /// The class a static member class read from a Java class file is written in.
+    fn java_outer_class(&self, c: ClassId) -> Option<ClassId> {
+        self.w.loaded.as_ref().and_then(|l| l.java.classes.get(&c)).and_then(|j| j.outer)
+    }
+
     fn class_prefix(&mut self, c: ClassId) {
         match self.w.syms.class(c).owner {
+            // A Java static member class, a declaration of its outer class's companion, is named
+            // through the outer class, whose `this` its use depends on.
+            Owner::Class(_) if self.java_outer_class(c).is_some() => {
+                let outer = self.java_outer_class(c).unwrap();
+                let self_type = self.w.syms.this_type(outer);
+                self.type_deps(self_type);
+            }
             Owner::Class(o) if self.w.syms.class(o).kind == ClassKind::Object => {
                 // `O.C`: the object `O`, a module val whose info is its class.
                 if let Some(m) = self.w.syms.class(o).module_sym {

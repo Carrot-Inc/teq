@@ -5615,15 +5615,15 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The companion of the Java class a static nested class is in, which scalac enters it in
     /// reading the class file (`fix.Outer.Nested` the companion's path, `fix.Outer$.Nested` its
-    /// signature name), where the loader entered it in the class.
+    /// signature name): the class's owner, as the loader enters it.
     fn java_static_nested_companion(&self, c: ClassId) -> Option<ClassId> {
         let Owner::Class(o) = self.w.syms.class(c).owner else { return None };
         let java = &self.w.loaded.as_ref()?.java.classes;
         let nested = java.get(&c)?;
-        if nested.inner || nested.companion_of.is_some() || self.w.syms.class(o).kind == ClassKind::Object {
+        if nested.inner || nested.companion_of.is_some() {
             return None;
         }
-        self.w.syms.class(o).companion.filter(|&k| self.w.syms.class(k).kind == ClassKind::Object)
+        nested.outer.map(|_| o)
     }
 
     /// The module class of an object: `TYPEREF X$ prefix`.

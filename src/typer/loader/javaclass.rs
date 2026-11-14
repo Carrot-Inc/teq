@@ -120,6 +120,9 @@ pub struct JClass {
     pub companion_of: Option<ClassId>,
     /// A non-static inner class, whose instances need an outer one.
     pub inner: bool,
+    /// For a static member class: the class it is written in, whose companion owns it (none where the
+    /// class it is written in is that object itself: a stand-in the std declares as an object alone).
+    pub outer: Option<ClassId>,
 }
 
 #[derive(Clone, Copy)]
@@ -763,6 +766,14 @@ impl<'a> Worker<'a> {
         if matches!(cf.name.as_str(), "java/io/Serializable" | "java/lang/Cloneable") {
             m |= mods::UNIVERSAL;
         }
+        // A static member class is a declaration of the outer class's companion, where its own
+        // companion is; an inner class one of the class (`ClassfileParser.getOwner` and `getScope`:
+        // the module class and the static scope for the one, the class and the instance scope for
+        // the other).
+        let (owner, outer) = match (owner, term_owner) {
+            (Owner::Class(written_in), Owner::Class(obj)) if m & mods::JAVA_STATIC != 0 => (Owner::Class(obj), (written_in != obj).then_some(written_in)),
+            _ => (owner, None),
+        };
         let c = match placeholder {
             Some(c) => {
                 let mut info = self.syms.class_mut(c);
@@ -802,16 +813,13 @@ impl<'a> Worker<'a> {
                 Owner::Package(p) => self.syms.enter_scoped(self.interner, p, name).class = Some(c),
                 Owner::Class(o) => {
                     self.syms.class_mut(o).nested.insert(name, c);
-                    if let Some(oc) = self.syms.class(o).companion {
-                        self.syms.class_mut(oc).nested.insert(name, c);
-                    }
                     crate::symbols::type_member_written(name);
                 }
                 Owner::Local => {}
             }
         }
         let inner = cf.inner_outer().is_some();
-        self.java_mut().classes.replace(c, JClass { source, cf: cf.clone(), companion_of: None, inner });
+        self.java_mut().classes.replace(c, JClass { source, cf: cf.clone(), companion_of: None, inner, outer });
         if std::env::var_os("TEQ_CLASSPATH_DETAIL").is_some() {
             eprintln!("enter java {} from {}", self.class_path(c), cf.name);
         }
@@ -835,7 +843,7 @@ impl<'a> Worker<'a> {
         if !std_object {
             self.register_term(term_owner, sym);
         }
-        self.java_mut().classes.replace(obj, JClass { source, cf: cf.clone(), companion_of: Some(c), inner: false });
+        self.java_mut().classes.replace(obj, JClass { source, cf: cf.clone(), companion_of: Some(c), inner: false, outer: None });
         self.java_mut().stats.classes_entered += 1;
         if depth < MAX_NESTING {
             self.enter_java_nested(c, obj, &cf, depth + 1);
@@ -1173,9 +1181,9 @@ impl<'a> Worker<'a> {
         let class = if is_object { companion.unwrap_or(c) } else { c };
         let obj = if is_object { Some(c) } else { companion.filter(|&o| self.syms.class(o).kind == ClassKind::Object) };
         let file = self.syms.class(c).file;
-        self.java_mut().classes.replace(class, JClass { source, cf: cf.clone(), companion_of: None, inner: false });
+        self.java_mut().classes.replace(class, JClass { source, cf: cf.clone(), companion_of: None, inner: false, outer: None });
         if let Some(o) = obj.filter(|&o| o != class) {
-            self.java_mut().classes.replace(o, JClass { source, cf: cf.clone(), companion_of: Some(class), inner: false });
+            self.java_mut().classes.replace(o, JClass { source, cf: cf.clone(), companion_of: Some(class), inner: false, outer: None });
         }
         // The std's members take the JDK's `ACC_ABSTRACT`, as dotty's `ClassfileParser` gives a
         // Java method `Deferred`: one without a body whose template calls a method the JDK
@@ -1294,7 +1302,7 @@ impl<'a> Worker<'a> {
             Err(_) => return false,
         };
         let file = self.java_file(source);
-        self.java_mut().classes.replace(c, JClass { source, cf: cf.clone(), companion_of: None, inner: false });
+        self.java_mut().classes.replace(c, JClass { source, cf: cf.clone(), companion_of: None, inner: false, outer: None });
         // The std's own members come first: a name it defines takes no Java overloads. On the
         // builtin `String` the std's members are its extension methods in package `scala`, the
         // intrinsics the JavaScript target implements: the std files defining one under a
@@ -1344,7 +1352,7 @@ impl<'a> Worker<'a> {
             }
             self.syms.class_mut(c).companion = Some(obj);
             self.syms.enter_scoped(self.interner, scala, name).term = Some(sym);
-            self.java_mut().classes.replace(obj, JClass { source, cf: cf.clone(), companion_of: Some(c), inner: false });
+            self.java_mut().classes.replace(obj, JClass { source, cf: cf.clone(), companion_of: Some(c), inner: false, outer: None });
             for (i, m) in cf.methods.iter().enumerate() {
                 if !visible(m.access) || m.access & ACC_STATIC == 0 {
                     continue;

@@ -40,6 +40,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   several workers, with `not supported yet in a macro: no builtin for java.util.Any.storeHas (a @js template
   without a Scala body)` at a call that built a moment before: the interpreter named the method it runs before its
   signature had reached the worker that ran it, and kept that name for the worker's later runs.
+- A Java class's static member class is a member of the class's companion alone, as scalac enters it: a class
+  below `java.nio.file.WatchEvent` and a class with an inner `Kind` means its own `Kind` in every position (a
+  self type, a pattern, a subclass, an export; one such program computed with the wrong class), a name declared
+  beside it or imported from an instance is not shadowed by the Java one, and `this.Double` below
+  `java.awt.Point` is refused. A library's pickle names such a class in a signature as scalac does
+  (`java.lang.ProcessBuilder$.Redirect`), so that a module compiled by scalac can use an inline method of a
+  teq-built library that calls an overloaded Java method over one.
 
 ## 0.1.10 (2026-11-13)
 

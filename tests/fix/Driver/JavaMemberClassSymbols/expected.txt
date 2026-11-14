@@ -1,0 +1,33 @@
+Driver/JavaMemberClassSymbols/input.scala:8:7: warning: [ClassSymbols.at]: javasymbols/Shapes#
+  class Shapes: // assert: ClassSymbols.at
+        ^^^^^^
+Driver/JavaMemberClassSymbols/input.scala:9:19: warning: [ClassSymbols.at]: java/awt/
+    def point: java.awt.geom.Point2D.Double = new java.awt.geom.Point2D.Double(1.0, 2.0) // assert: ClassSymbols.at
+                    ^^^
+Driver/JavaMemberClassSymbols/input.scala:9:36: warning: [ClassSymbols.at]: java/awt/geom/Point2D#Double#
+    def point: java.awt.geom.Point2D.Double = new java.awt.geom.Point2D.Double(1.0, 2.0) // assert: ClassSymbols.at
+                                     ^^^^^^
+Driver/JavaMemberClassSymbols/input.scala:9:54: warning: [ClassSymbols.at]: java/awt/
+    def point: java.awt.geom.Point2D.Double = new java.awt.geom.Point2D.Double(1.0, 2.0) // assert: ClassSymbols.at
+                                                       ^^^
+Driver/JavaMemberClassSymbols/input.scala:9:71: warning: [ClassSymbols.at]: java/awt/geom/Point2D#Double#
+    def point: java.awt.geom.Point2D.Double = new java.awt.geom.Point2D.Double(1.0, 2.0) // assert: ClassSymbols.at
+                                                                        ^^^^^^
+Driver/JavaMemberClassSymbols/input.scala:10:22: warning: [ClassSymbols.at]: java/awt/
+    def across(p: java.awt.geom.Point2D.Float): Float = p.x // assert: ClassSymbols.at
+                       ^^^
+Driver/JavaMemberClassSymbols/input.scala:10:39: warning: [ClassSymbols.at]: java/awt/geom/Point2D#Float#
+    def across(p: java.awt.geom.Point2D.Float): Float = p.x // assert: ClassSymbols.at
+                                        ^^^^^
+Driver/JavaMemberClassSymbols/input.scala:10:47: warning: [ClassSymbols.at]: scala/Float#
+    def across(p: java.awt.geom.Point2D.Float): Float = p.x // assert: ClassSymbols.at
+                                                ^^^^^
+Driver/JavaMemberClassSymbols/input.scala:10:57: warning: [ClassSymbols.at]: java/awt/geom/Point2D#Float#x.
+    def across(p: java.awt.geom.Point2D.Float): Float = p.x // assert: ClassSymbols.at
+                                                          ^
+Driver/JavaMemberClassSymbols/input.scala:11:20: warning: [ClassSymbols.at]: java/lang/
+    def option: java.lang.invoke.MethodHandles.Lookup.ClassOption = null // assert: ClassSymbols.at
+                     ^^^^
+Driver/JavaMemberClassSymbols/input.scala:11:53: warning: [ClassSymbols.at]: java/lang/invoke/MethodHandles#Lookup#ClassOption#
+    def option: java.lang.invoke.MethodHandles.Lookup.ClassOption = null // assert: ClassSymbols.at
+                                                      ^^^^^^^^^^^
