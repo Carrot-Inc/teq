@@ -88,7 +88,7 @@ mod terminal {
     extern "C" {
         fn signal(sig: i32, handler: usize) -> usize;
         fn raise(sig: i32) -> i32;
-        fn write(fd: i32, bytes: *const u8, count: usize) -> isize;
+        fn write(fd: i32, bytes: *const std::ffi::c_void, count: usize) -> isize;
         fn ioctl(fd: i32, request: std::ffi::c_ulong, ...) -> i32;
     }
     const SIG_DFL: usize = 0;
@@ -122,7 +122,7 @@ mod terminal {
         unsafe {
             ENDING.store(true, Ordering::SeqCst);
             if STATUS_UP.load(Ordering::SeqCst) {
-                write(2, super::ERASE.as_ptr(), super::ERASE.len());
+                write(2, super::ERASE.as_ptr().cast(), super::ERASE.len());
             }
             signal(sig, SIG_DFL);
             raise(sig);
