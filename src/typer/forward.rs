@@ -85,6 +85,8 @@ struct SyntaxDef {
 struct Walk {
     /// Per file its blocks' definitions by position, made when the file's first block asks.
     syntax: FxMap<FileId, Vec<SyntaxDef>>,
+    /// Per file the spans of its quotes and of its inline methods, made with `syntax`.
+    enclosures: FxMap<FileId, (Vec<Span>, Vec<Span>)>,
     levels: Vec<Level>,
     /// The levels under way, innermost last.
     open: Vec<u32>,
@@ -105,6 +107,12 @@ struct Walk {
 }
 
 impl Walk {
+    /// Whether the position `pos` of `file` stands in a quote, and in an inline method.
+    fn syntax_enclosing(&self, file: FileId, pos: u32) -> (bool, bool) {
+        let within = |spans: &[Span]| spans.iter().any(|s| s.start <= pos && pos < s.end);
+        self.enclosures.get(&file).map_or((false, false), |(quotes, inlines)| (within(quotes), within(inlines)))
+    }
+
     fn syntax_at(&self, file: FileId, pos: u32) -> Option<&SyntaxDef> {
         let defs = self.syntax.get(&file)?;
         let i = defs.partition_point(|d| d.start <= pos);
@@ -641,7 +649,7 @@ impl<'a> Worker<'a> {
     /// alias itself where an alias is written. An applied type, a union, an intersection, a
     /// refinement, a projection, a member of an object and a type parameter are no such name.
     #[inline]
-    pub(super) fn forward_note_typed_pattern(&mut self, p: TPatId, pat: ast::PatId, ty: ast::TyExprId, inner: ast::PatId, t: crate::types::TypeId) {
+    pub(super) fn forward_note_typed_pattern(&mut self, p: TPatId, ty: ast::TyExprId, inner: ast::PatId, t: crate::types::TypeId) {
         if self.local_blocks.is_empty() {
             return;
         }
@@ -650,39 +658,8 @@ impl<'a> Worker<'a> {
             _ => false,
         };
         if of_block || self.local_blocks.iter().any(|b| !b.alias_sites.is_empty()) {
-            self.forward_note_typed_pattern_of(p, pat, ty, inner);
+            self.forward_note_typed_pattern_of(p, ty, inner);
         }
-    }
-
-    /// Whether the typed pattern `pat` over `inner` is a `for`'s value definition that scalac's
-    /// tree holds as a plain value definition: an alias that is a typed variable is `val x: T =
-    /// e` there (`Desugar.makeFor` with `makeIdPat` and `makePatDef`'s `IdPattern`), and the
-    /// pattern itself stands in the tree only where its run of aliases is packed with the
-    /// element (`TupleN(P, P_1, ..)`): where a guard follows the run, where an alias of the run
-    /// holds a nested given pattern, and before 3.8.
-    fn forward_plain_for_alias(&self, pat: ast::PatId, inner: ast::PatId) -> bool {
-        let ast = self.cur_ast();
-        if !matches!(ast.pat(inner), ast::Pat::Bind(_, None)) || !super::expr::is_id_pattern(ast, pat) || ast.given_binds.contains(&inner) || ast.given_binds.contains(&pat) {
-            return false;
-        }
-        let Some(at) = ast.enumerators.iter().position(|e| matches!(*e, ast::Enumerator::Val(q, _) if q == pat)) else { return false };
-        let Some((start, end)) = ast.exprs.iter().find_map(|x| match *x {
-            Expr::For(enums, ..) if enums.range().contains(&at) => Some((enums.range().start, enums.range().end)),
-            _ => None,
-        }) else {
-            return false;
-        };
-        let (mut run_start, mut run_end) = (at, at);
-        while run_start > start && matches!(ast.enumerators[run_start - 1], ast::Enumerator::Val(..)) {
-            run_start -= 1;
-        }
-        while run_end < end && matches!(ast.enumerators[run_end], ast::Enumerator::Val(..)) {
-            run_end += 1;
-        }
-        let guard_follows = run_end < end && matches!(ast.enumerators[run_end], ast::Enumerator::Guard(_));
-        ast.source_version.is_at_least(crate::source_version::SourceVersion::V3_8)
-            && !guard_follows
-            && !super::expr::nested_given_alias(ast, run_start as u32..run_end as u32)
     }
 
     /// The note of a typed pattern whose written type is a name the scope resolves, where the
@@ -691,12 +668,9 @@ impl<'a> Worker<'a> {
     /// written, the type's start for a variable.
     #[cold]
     #[inline(never)]
-    fn forward_note_typed_pattern_of(&mut self, p: TPatId, pat: ast::PatId, ty: ast::TyExprId, inner: ast::PatId) {
+    fn forward_note_typed_pattern_of(&mut self, p: TPatId, ty: ast::TyExprId, inner: ast::PatId) {
         use super::resolve::TypeRef;
         use ast::TyExpr;
-        if self.forward_plain_for_alias(pat, inner) {
-            return;
-        }
         let here = self.env.file;
         let (name, place) = {
             let ast = self.cur_ast();
@@ -827,6 +801,7 @@ impl<'a> Worker<'a> {
         }
         let mut w = Walk {
             syntax: FxMap::default(),
+            enclosures: FxMap::default(),
             levels: Vec::new(),
             open: Vec::new(),
             named: FxMap::default(),
@@ -1542,6 +1517,7 @@ impl<'a> Worker<'a> {
             return;
         }
         let mut defs = Vec::new();
+        let mut enclosures: (Vec<Span>, Vec<Span>) = (Vec::new(), Vec::new());
         if (file.0 as usize) < self.asts.len() && self.program_file(file) {
             let ast = self.ast(file);
             let mut quotes: Vec<Span> = Vec::new();
@@ -1576,7 +1552,9 @@ impl<'a> Worker<'a> {
                 }
             }
             defs.sort_by_key(|d| d.start);
+            enclosures = (quotes, inlines);
         }
+        w.enclosures.insert(file, enclosures);
         w.syntax.insert(file, defs);
     }
 
@@ -1628,6 +1606,25 @@ impl<'a> Worker<'a> {
                 if let Some(s) = value_stmt.and_then(|&st| self.forward_stmt_symbol(st)) {
                     let info = self.syms.sym(s);
                     w.lines.push(format!("UNMATCHED\tvalue={}\tat={}:{}\tstatements={}", self.name_str(info.name), self.source(info.file).path, self.forward_line(info.file, info.span.start), typed.len()));
+                }
+            }
+            // A `for`'s alias that is a value definition stands in a block of its own (`{ val x: T = e; rest }`,
+            // `Desugar.makeFor`'s block of its `makePatDef`s) for which the syntax has no block: a level of
+            // that one value, in scope in its own initialiser.
+            if let [TStmt::Val(s, init)] = typed[..] {
+                if let Some((file, at)) = self.forward_alias_value(s) {
+                    self.forward_syntax_of(w, file);
+                    let (quoted, inline_body) = w.syntax_enclosing(file, at);
+                    let level = w.levels.len() as u32;
+                    w.levels.push(Level { max: None, by: None, quoted, inline_body, syntax: (file, ast::ListRef::EMPTY) });
+                    w.open.push(level);
+                    w.named.insert(Named::Term(s), (level, (0, 0)));
+                    self.forward_expr(w, init);
+                    let name = self.name_str(self.syms.sym(s).name);
+                    self.forward_tell(w, level, (0, 0), name, at, Some(s), file);
+                    self.forward_expr(w, value);
+                    w.open.pop();
+                    return;
                 }
             }
             for st in typed {
@@ -1796,6 +1793,24 @@ impl<'a> Worker<'a> {
         w.open.pop();
     }
 
+    /// The place of `s` where it is the variable of a `for`'s alias that is a value definition (`x: T = e`): the
+    /// name of such an alias's pattern among its file's enumerators.
+    fn forward_alias_value(&self, s: SymId) -> Option<(FileId, u32)> {
+        let info = self.syms.sym(s);
+        if !matches!(info.kind, SymKind::Val) || info.mods & (mods::LAZY | mods::LIFTED) != 0 {
+            return None;
+        }
+        let (file, at) = (info.file, info.span.start);
+        if (file.0 as usize) >= self.asts.len() || !self.program_file(file) {
+            return None;
+        }
+        let ast = self.ast(file);
+        ast.enumerators
+            .iter()
+            .any(|e| matches!(*e, ast::Enumerator::Val(p, _) if super::expr::value_alias(ast, p).is_some_and(|(_, binder, _)| binder.start == at)))
+            .then_some((file, at))
+    }
+
     /// The test of a value's definition as the walk passes it: dotty's `transformValDef`.
     #[allow(clippy::too_many_arguments)]
     fn forward_value(&mut self, w: &mut Walk, level: u32, o: Ordinal, st: TStmt, file: FileId, block: ast::ListRef, at: u32, syntax: &[Stmt]) {
@@ -1842,6 +1857,12 @@ impl<'a> Worker<'a> {
             }
             _ => return,
         };
+        self.forward_tell(w, level, o, value, value_at, value_sym, file);
+    }
+
+    /// The value `value` of the level `level`, standing at the ordinal `o` and written at `value_at` of `file`,
+    /// is told where a reference standing at or before it names a definition of the level at or after it.
+    fn forward_tell(&mut self, w: &mut Walk, level: u32, o: Ordinal, value: String, value_at: u32, value_sym: Option<SymId>, file: FileId) {
         let l = &w.levels[level as usize];
         let (Some(max), Some(by)) = (l.max, l.by) else { return };
         if o > max {

@@ -5283,6 +5283,70 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// A value definition of a block entered where its right side is about to be typed: its symbol with the
+    /// declared type (under completion where none is written), the capture's records of it, its name in scope
+    /// from its own initialiser on, and the owner of what the initialiser makes. The caller cuts the owners back
+    /// and ends `initialising` after the right side.
+    fn enter_local_val(&mut self, name: Name, def_mods: ast::Mods, span: Span, holder: bool, declared: Option<TypeId>, ty: Option<TyExprId>) -> SymId {
+        let ast = self.cur_ast();
+        let kind = if def_mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
+        // Its reference is the `TermRef`, which carries no annotation of its type.
+        let sym = self.new_local(name, kind, self.types.unannotated(declared.unwrap_or(ERROR)), span);
+        let mut s = self.syms.sym_mut(sym);
+        s.mods |= def_mods & (mods::LAZY | mods::IMPLICIT | mods::LIFTED);
+        s.synthetic = holder;
+        if declared.is_none() {
+            s.state().set(Completion::InProgress);
+        }
+        let lost = def_mods & !(mods::LAZY | mods::IMPLICIT | mods::MUTABLE | mods::LIFTED);
+        if self.capturing() && lost != 0 {
+            self.capture_local(sym, |l| l.mods = lost);
+        }
+        // A type its pickle inferred is none the source wrote.
+        if let (Some(t), true) = (ty, self.capturing()) {
+            if !(self.in_converted_body() && ast.inferred_types.binary_search(&t.0).is_ok()) {
+                self.capture_local(sym, |l| l.tpt = Some(t));
+            }
+        }
+        self.bind_local(name, sym);
+        if def_mods & mods::IMPLICIT != 0 {
+            self.bind_given(sym);
+        }
+        // A pattern definition's holder is a synthetic owner, which a macro skips.
+        if holder {
+            self.sites.owners.push(SiteOwner::PatternTemp(span));
+        } else {
+            self.sites.owners.push(SiteOwner::Sym(sym));
+            // Until the owners are cut back: nothing leaves the statement between.
+            self.syms.sym_mut(sym).initialising = true;
+        }
+        sym
+    }
+
+    /// The value definition `val name: T = rhs` of a block, `T` written at `ty` and resolved to `declared`: a
+    /// block's own, and a `for`'s alias that is a typed variable (`Desugar.makePatDef`'s `IdPattern`: the same
+    /// `ValDef`). The name is in scope in its own initialiser, the right side is checked against the type.
+    fn type_declared_local_val(&mut self, name: Name, def_mods: ast::Mods, span: Span, holder: bool, ty: TyExprId, declared: TypeId, rhs: ExprId) -> (SymId, TExprId) {
+        let owners_depth = self.sites.owners.len();
+        let sym = self.enter_local_val(name, def_mods, span, holder, Some(declared), Some(ty));
+        // What its written type names is a type tree of the block (`written_paths`).
+        if self.notes_type_trees() {
+            for p in self.written_paths(ty, true) {
+                self.note_pending_tree(p);
+            }
+        }
+        // Its type's annotations, for the pickle (`ANNOTATEDtpt`).
+        if self.capturing() && !self.cur_ast().type_annots.is_empty() {
+            self.capture_type_annotations(ty);
+        }
+        let outer_inline_val = std::mem::replace(&mut self.inline_val_rhs, false);
+        let init = self.check_expr(rhs, declared);
+        self.inline_val_rhs = outer_inline_val;
+        self.sites.owners.truncate(owners_depth);
+        self.syms.sym_mut(sym).initialising = false;
+        (sym, init)
+    }
+
     fn type_local_def(&mut self, d: ast::DefId, out: &mut Vec<TStmt>) {
         let ast = self.cur_ast();
         let file = self.env.file;
@@ -5335,6 +5399,21 @@ impl<'a> Worker<'a> {
                 if ast.default_inits.contains(&rhs) {
                     self.error_by(crate::source::Group::RefChecks, def.span, "Unbound placeholder parameter; incorrect use of _");
                 }
+                // A `for`'s alias in front of its first generator, which the parser makes a value of a block around
+                // the expression (`Desugar.makeFor`'s rule 9): one that is a typed variable is the value definition
+                // `val x: T = e`, as an alias after a generator is. (A block's own `val x: T = e` has no pattern.)
+                if let (Some(p), None) = (*pat, ty) {
+                    if let Some((name, binder, t)) = value_alias(ast, p) {
+                        let declared = self.resolve_definition_type(t);
+                        let (sym, init) = self.type_declared_local_val(name, 0, binder, false, t, declared, rhs);
+                        if self.index.is_some() {
+                            self.index_local_at(sym, binder);
+                        }
+                        self.note_def_at(sym, binder.start);
+                        out.push(TStmt::Val(sym, init));
+                        return;
+                    }
+                }
                 let declared = ty.map(|t| self.resolve_type(t));
                 if let Some(p) = *pat {
                     if declared.is_none() {
@@ -5345,6 +5424,15 @@ impl<'a> Worker<'a> {
                             }
                             return;
                         }
+                    }
+                }
+                // A plain value with its written type: the definition a `for`'s typed alias is too.
+                if let (None, Some(t), Some(declared)) = (pat, ty, declared) {
+                    let inferred = self.in_converted_body() && ast.inferred_types.binary_search(&t.0).is_ok();
+                    if def.mods & (mods::LAZY | mods::INLINE) == 0 && !inferred {
+                        let (sym, init) = self.type_declared_local_val(def.name, def.mods, def.span, ast.patdef_holders.contains(&d), *t, declared, rhs);
+                        out.push(TStmt::Val(sym, init));
+                        return;
                     }
                 }
                 let owners_depth = self.sites.owners.len();
@@ -5363,41 +5451,7 @@ impl<'a> Worker<'a> {
                 if let Some(sym) = early {
                     self.sites.owners.push(SiteOwner::Sym(sym));
                 }
-                let sym = if early.is_some() { early } else { pat.is_none().then(|| {
-                    let kind = if def.mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
-                    // Its reference is the `TermRef`, which carries no annotation of its type.
-                    let sym = self.new_local(def.name, kind, self.types.unannotated(declared.unwrap_or(ERROR)), def.span);
-                    let holder = ast.patdef_holders.contains(&d);
-                    let mut s = self.syms.sym_mut(sym);
-                    s.mods |= def.mods & (mods::LAZY | mods::IMPLICIT | mods::LIFTED);
-                    s.synthetic = holder;
-                    if declared.is_none() {
-                        s.state().set(Completion::InProgress);
-                    }
-                    let lost = def.mods & !(mods::LAZY | mods::IMPLICIT | mods::MUTABLE | mods::LIFTED);
-                    if self.capturing() && lost != 0 {
-                        self.capture_local(sym, |l| l.mods = lost);
-                    }
-                    // A type its pickle inferred is none the source wrote.
-                    if let (Some(&t), true) = (ty.as_ref(), self.capturing()) {
-                        if !(self.in_converted_body() && ast.inferred_types.binary_search(&t.0).is_ok()) {
-                            self.capture_local(sym, |l| l.tpt = Some(t));
-                        }
-                    }
-                    self.bind_local(def.name, sym);
-                    if def.mods & mods::IMPLICIT != 0 {
-                        self.bind_given(sym);
-                    }
-                    // A pattern definition's holder is a synthetic owner, which a macro skips.
-                    if holder {
-                        self.sites.owners.push(SiteOwner::PatternTemp(def.span));
-                    } else {
-                        self.sites.owners.push(SiteOwner::Sym(sym));
-                        // Until the owners are cut back below: nothing leaves the statement between.
-                        self.syms.sym_mut(sym).initialising = true;
-                    }
-                    sym
-                }) };
+                let sym = if early.is_some() { early } else { pat.is_none().then(|| self.enter_local_val(def.name, def.mods, def.span, ast.patdef_holders.contains(&d), declared, *ty)) };
                 let inferred = ty.filter(|t| self.in_converted_body() && pat.is_none() && early.is_none() && ast.inferred_types.binary_search(&t.0).is_ok());
                 // What its written type names is a type tree of the block (`written_paths`).
                 if let (Some(t), None, true) = (ty, inferred, self.notes_type_trees()) {
@@ -6641,17 +6695,33 @@ impl<'a> Worker<'a> {
                 Enumerator::Gen(..) | Enumerator::CaseGen(..) => self.type_for(rest, span, expected),
                 Enumerator::Val(pat, value) => {
                     self.push_scope();
-                    let (init, ity) = self.type_for_val(pat, value);
-                    let stmt = match ast.pat(pat) {
-                        Pat::Bind(name, None) => {
-                            let sym = self.new_local(name, SymKind::Val, ity, span);
+                    let stmt = match value_alias(ast, pat) {
+                        // An alias that is a typed variable is the value definition `val x: T = e` (`Desugar.makeFor`'s
+                        // `makeIdPat` keeps it, `makePatDef` makes its `IdPattern` a `ValDef`): typed as a block's is,
+                        // its type read as a type where the parser read a pattern's.
+                        Some((name, binder, ty)) => {
+                            let declared = self.resolve_definition_type(ty);
+                            let (sym, init) = self.type_declared_local_val(name, 0, binder, false, ty, declared, value);
                             if self.index.is_some() {
-                                self.index_local_at(sym, ast.pat_spans[pat.idx()]);
+                                self.index_local_at(sym, binder);
                             }
-                            self.bind_local(name, sym);
+                            self.note_def_at(sym, binder.start);
                             TStmt::Val(sym, init)
                         }
-                        _ => self.pattern_val(pat, value, init, ity),
+                        None => {
+                            let (init, ity) = self.type_for_val(pat, value);
+                            match ast.pat(pat) {
+                                Pat::Bind(name, None) => {
+                                    let sym = self.new_local(name, SymKind::Val, ity, span);
+                                    if self.index.is_some() {
+                                        self.index_local_at(sym, ast.pat_spans[pat.idx()]);
+                                    }
+                                    self.bind_local(name, sym);
+                                    TStmt::Val(sym, init)
+                                }
+                                _ => self.pattern_val(pat, value, init, ity),
+                            }
+                        }
                     };
                     let inner = ForRest::Rest { idx: idx + 1, end, body, is_yield };
                     let (tb, ty) = self.type_for_rest(inner, span, expected);
@@ -6935,8 +7005,20 @@ pub(super) fn is_id_pattern(ast: &ast::Ast, p: ast::PatId) -> bool {
     }
 }
 
+/// The alias pattern `p` where it is a typed variable (`x: T`, out of parentheses, no given): its name, the name's
+/// span and the written type. `Desugar.makeIdPat` keeps such a pattern as it is (`Typed(id: Ident, _)` with a
+/// variable that is no wildcard) and `makePatDef` makes it the plain `val x: T = e`.
+pub(super) fn value_alias(ast: &ast::Ast, p: ast::PatId) -> Option<(Name, Span, TyExprId)> {
+    let Pat::Typed(inner, ty) = ast.pat(p) else { return None };
+    let Pat::Bind(name, None) = ast.pat(inner) else { return None };
+    if !is_id_pattern(ast, p) || ast.given_binds.contains(&inner) || ast.given_binds.contains(&p) {
+        return None;
+    }
+    Some((name, ast.pat_spans[inner.idx()], ty))
+}
+
 /// Whether an alias among the enumerators `range` has a pattern that `isNestedGivenPattern` (Desugar.scala 2338).
-pub(super) fn nested_given_alias(ast: &ast::Ast, range: std::ops::Range<u32>) -> bool {
+fn nested_given_alias(ast: &ast::Ast, range: std::ops::Range<u32>) -> bool {
     range.into_iter().any(|i| matches!(ast.enumerators[i as usize], Enumerator::Val(p, _) if is_nested_given_pattern(ast, p)))
 }
 

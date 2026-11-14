@@ -7,6 +7,19 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A `for`'s alias with a written type (`for (y <- ys; l: T = e) ..`) is the value definition scalac makes of it,
+  `val l: T = e`, where its run of aliases is not followed by a guard and where it stands before the first
+  generator; teq typed it as a pattern that tests `T`. Three things change for a program. Programs that now
+  compile: the right side is typed against `T`, so a numeric widening (`l: Long = y`), a lambda's parameters
+  (`f: (Int => Int) = _ + y`), `None` and `Nil`, and an implicit conversion are taken as in a `val`, where teq
+  answered `unreachable case` or `missing parameter type`, and the variable has the written type. Programs that
+  now run where they threw: a right side that is null (`l: Item = make(y)`) gave `MatchError: null`, and a
+  converted one failed the same test. Two new refusals, scalac's: a right side that does not conform to the
+  written type (E007; teq warned and built a program that failed) and a use of the variable beyond its written
+  type (`l: Any = "st"` then `l.length`, E008). A lowercase name in the alias's type is the type of that name, not
+  a pattern's type variable, and the variable is in scope in its own initialiser, where reading it is the forward
+  reference scalac tells (E039). Not covered yet: an alias followed by a guard (`..; l: T = e; if c`) is still
+  typed as a pattern.
 - A forward reference that extends over the definition of a value is refused, as scalac refuses it (E039): in a
   block, a value defined at or before a later method, class, object, given or lazy value that something standing at
   or before the value names (`def first = second; val held = first; def second = 1`), a value named in its own

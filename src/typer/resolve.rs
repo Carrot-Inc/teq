@@ -3743,6 +3743,44 @@ impl<'a> Worker<'a> {
 
     pub fn resolve_type(&mut self, id: TyExprId) -> TypeId {
         let t = self.resolve_type_ctor(id);
+        self.resolved_type_at(t, id)
+    }
+
+    /// The type a definition writes at `ty`, read from a node the parser read as a pattern's type: there a
+    /// lowercase type argument is a type variable the pattern would bind (`TyExpr::TypeVar`); in a definition's
+    /// type it is the type of that name, as the reference types a name outside `Mode.Pattern`. Each such node is
+    /// resolved as the name it was written as and stands for that type while the whole is resolved.
+    pub(super) fn resolve_definition_type(&mut self, ty: TyExprId) -> TypeId {
+        let mut vars: Vec<(TyExprId, Name)> = Vec::new();
+        self.pattern_type_vars(ty, &mut vars);
+        let mark = self.case_binders.len();
+        for (id, n) in vars {
+            let span = self.cur_ast().ty_spans[id.idx()];
+            let named = self.resolve_type_name(id, n, span);
+            let t = self.resolved_type_at(named, id);
+            self.case_binders.push((n, t));
+        }
+        let t = self.resolve_type(ty);
+        self.case_binders.truncate(mark);
+        t
+    }
+
+    /// The nodes of the type `ty` that the parser made a pattern's type variables: the lowercase arguments of
+    /// its applications and tuples, at any depth (`Parser::unbind_type_variables`).
+    fn pattern_type_vars(&self, ty: TyExprId, out: &mut Vec<(TyExprId, Name)>) {
+        let ast = self.cur_ast();
+        let (TyExpr::Apply(_, args) | TyExpr::Tuple(args)) = ast.ty(ty) else { return };
+        for &a in ast.ty_list(args) {
+            match ast.ty(a) {
+                TyExpr::TypeVar(n) => out.push((a, n)),
+                TyExpr::Apply(..) | TyExpr::Tuple(..) => self.pattern_type_vars(a, out),
+                _ => {}
+            }
+        }
+    }
+
+    /// What `resolve_type` makes of the constructor-level type `t` resolved for the node `id`.
+    fn resolved_type_at(&mut self, t: TypeId, id: TyExprId) -> TypeId {
         // `adaptType`'s `etaExpand` of a bare binder still under its completer.
         if !self.binder_completing.is_empty() && self.eta_read_at(t, id) {
             return ERROR;
@@ -3979,57 +4017,62 @@ impl<'a> Worker<'a> {
             && super::loader::compile::STD_BINDINGS.iter().any(|&(_, n, to)| to == "scala" && n == self.interner.get(info.name))
     }
 
+    /// The type a name written at the node `id` stands for: a refinement's member, what the scope finds
+    /// (its uses, index and dependency records made), a compiler-defined name, or the error of a name not found.
+    fn resolve_type_name(&mut self, id: TyExprId, n: Name, span: Span) -> TypeId {
+        if !self.refine_scopes.is_empty() {
+            if let Some(t) = self.refinement_member(n, span) {
+                return t;
+            }
+        }
+        if let Some(r) = self.lookup_type_at(n, span) {
+            if self.index.is_some() {
+                self.index_type(id, r);
+            }
+            if super::deprecation::possible() {
+                match r {
+                    TypeRef::Class(c) => self.check_deprecated_class(c, span),
+                    TypeRef::Alias(a) => self.check_deprecated_alias(a, span),
+                    _ => {}
+                }
+            }
+            match r {
+                TypeRef::Class(c) => self.use_class(c, span),
+                TypeRef::Alias(a) => self.use_alias(a, span),
+                _ => {}
+            }
+            if self.deps.is_some() {
+                self.deps_type_ref(r);
+                if n == names::ANY_REF {
+                    self.deps_written_name("AnyRef");
+                }
+            }
+            let t = self.type_ref_to_type(r, span, false);
+            if self.declaring > 0 && matches!(r, TypeRef::Alias(_)) {
+                self.note_declared_alias(id, r);
+            }
+            return t;
+        }
+        match n {
+            names::ANY => ANY,
+            // The compiler-defined `Matchable` stands as `Any` here, as the loader reads a
+            // jar's: every value but an `Any` is one.
+            names::MATCHABLE => ANY,
+            names::NOTHING => NOTHING,
+            _ => {
+                let msg = format!("type {} not found", self.name_str(n));
+                self.not_found_error(n, span, msg, Some(crate::source::MissingKind::Type));
+                ERROR
+            }
+        }
+            
+    }
+
     pub fn resolve_type_ctor(&mut self, id: TyExprId) -> TypeId {
         let ast = self.cur_ast();
         let span = ast.ty_spans[id.idx()];
         match ast.ty(id) {
-            TyExpr::Name(n) => {
-                if !self.refine_scopes.is_empty() {
-                    if let Some(t) = self.refinement_member(n, span) {
-                        return t;
-                    }
-                }
-                if let Some(r) = self.lookup_type_at(n, span) {
-                    if self.index.is_some() {
-                        self.index_type(id, r);
-                    }
-                    if super::deprecation::possible() {
-                        match r {
-                            TypeRef::Class(c) => self.check_deprecated_class(c, span),
-                            TypeRef::Alias(a) => self.check_deprecated_alias(a, span),
-                            _ => {}
-                        }
-                    }
-                    match r {
-                        TypeRef::Class(c) => self.use_class(c, span),
-                        TypeRef::Alias(a) => self.use_alias(a, span),
-                        _ => {}
-                    }
-                    if self.deps.is_some() {
-                        self.deps_type_ref(r);
-                        if n == names::ANY_REF {
-                            self.deps_written_name("AnyRef");
-                        }
-                    }
-                    let t = self.type_ref_to_type(r, span, false);
-                    if self.declaring > 0 && matches!(r, TypeRef::Alias(_)) {
-                        self.note_declared_alias(id, r);
-                    }
-                    return t;
-                }
-                match n {
-                    names::ANY => ANY,
-                    // The compiler-defined `Matchable` stands as `Any` here, as the loader reads a
-                    // jar's: every value but an `Any` is one.
-                    names::MATCHABLE => ANY,
-                    names::NOTHING => NOTHING,
-                    _ => {
-                        let msg = format!("type {} not found", self.name_str(n));
-                        self.not_found_error(n, span, msg, Some(crate::source::MissingKind::Type));
-                        ERROR
-                    }
-                }
-            }
+            TyExpr::Name(n) => self.resolve_type_name(id, n, span),
             TyExpr::Select(q, n) => {
                 if let Some(t) = self.dependent_type(q, n, span) {
                     // `C.this.T` in an inline body is the receiver's `T`, as a library body's

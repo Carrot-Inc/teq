@@ -622,7 +622,7 @@ impl<'a> Worker<'a> {
                 // 1382 to 1404; the guards at 1403 to 1404).
                 if !equal && self.quote.level == 0 && self.abstract_pattern_type(t) {
                     if let Some(tp) = self.tag_pattern(p, inner, t, sty, span) {
-                        self.forward_note_typed_pattern(tp, p, ty, inner, t);
+                        self.forward_note_typed_pattern(tp, ty, inner, t);
                         return tp;
                     }
                 }
@@ -649,7 +649,7 @@ impl<'a> Worker<'a> {
                 let tp = self.type_pattern(inner, narrowed);
                 self.last_typed_pattern = Some((p, narrowed));
                 let typed = self.prog.add_pat(TPat::Test(test, t, tp));
-                self.forward_note_typed_pattern(typed, p, ty, inner, t);
+                self.forward_note_typed_pattern(typed, ty, inner, t);
                 typed
             }
             Pat::Lit(e) => {
