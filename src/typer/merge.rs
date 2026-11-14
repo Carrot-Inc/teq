@@ -50,6 +50,7 @@
 mod parallel;
 mod records;
 mod trace;
+pub(super) mod validate;
 
 pub(super) use records::{Ids, Mapping};
 use records::SigMemo;
@@ -1220,6 +1221,9 @@ impl Remap {
             }
             // The parameter a higher-kinded variable was made for, a worker's own renumbered (`TVarExtra::origin`).
             info.map_origin(|p| r.tparam(p));
+            // The bounds it was declared with, types of the body's as its bounds are (`TVarExtra::declared`): in the
+            // variables' order, after the bounds.
+            info.map_declared(|t| r.ty(t));
         };
         let own = tvars.len();
         let prefix = (prefix as usize).min(own);
@@ -1254,6 +1258,7 @@ impl Remap {
                 info.inst = None;
                 info.lower = Vec::new();
                 info.upper = Vec::new();
+                info.drop_declared();
             }
         }
         let c = &mut self.promoted.get_mut().counts;
@@ -1421,6 +1426,10 @@ impl Remap {
         for (s, _) in &mut p.template_calls {
             *s = self.sym(*s);
         }
+        // A local enum is a class of a block, a worker's own: its name is read by the class's merged number.
+        for (c, _) in &mut p.local_enum_names {
+            *c = self.class(*c);
+        }
         // A template a bundle published (`publish_side_tables`) is a shared entry under the worker's
         // own string, which the merge renumbers as the worker's own entries are: copied into the
         // worker's own under its new string, which `merge_own` keeps beside the stale one, which no
@@ -1430,7 +1439,7 @@ impl Remap {
             p.template_syms.local.insert(s, sym);
         }
         self.map(&mut p.template_syms.local, |r, s| r.ids.string(s), |r, s| *s = r.sym(*s));
-        self.walked += (p.top_funs.own().len() + p.top_vals.own().len() + p.js_exports.len() + p.template_calls.len()) as u64;
+        self.walked += (p.top_funs.own().len() + p.top_vals.own().len() + p.js_exports.len() + p.template_calls.len() + p.local_enum_names.len()) as u64;
     }
 
     /// The program's maps, the capture's tables, the dependency recorder's and the navigation
@@ -1718,6 +1727,12 @@ impl Remap {
                 types.extend(c.expected);
                 types.extend(c.recv_type);
                 types.extend(c.env.imports.iter().filter_map(|i| i.bound));
+                // The call's signature and the one refined at the call, which can be an instance made there: no
+                // record before this one is known to hold its types, so they take their turn with the call's.
+                crate::symbols::sig_each_type(&c.sig, &mut |t| types.push(t));
+                if let Some(refined) = &c.call.refined {
+                    crate::symbols::sig_each_type(refined, &mut |t| types.push(t));
+                }
             }
             ((k.at.clone(), i), types)
         }));
@@ -1798,11 +1813,14 @@ impl Remap {
         }
         if !w.inlining.journal.is_empty() {
             let journal = std::mem::take(&mut w.inlining.journal);
-            w.inlining.journal = journal
+            // In the order of the expressions under the new ids: the types the saved records hand the
+            // promotion follow the expressions, not the map's own order (`entries_in_order`).
+            w.inlining.journal = self
+                .entries_in_order(journal, |e| self.expr(e))
                 .into_iter()
                 .map(|(e, (mut record, t))| {
                     records::texpr(&*self, &mut record);
-                    (self.expr(e), (record, t.map(|t| self.ty(t))))
+                    (e, (record, t.map(|t| self.ty(t))))
                 })
                 .collect();
         }
@@ -3167,6 +3185,7 @@ impl<'a> Worker<'a> {
         self.erroneous_lambdas.clear();
         self.quote.hole_ranges.clear();
         self.inline.settle_merge();
+        self.settle_own_tables(remap.types_from);
         clock.part("cleanup");
         let started = std::time::Instant::now();
         let roots_left = remap.promoted.get_mut().counts.roots_left;
@@ -3211,6 +3230,50 @@ impl<'a> Worker<'a> {
         self.phase_end(p);
     }
 
+    /// The main worker's own tables at a merge's boundary: the ones no worker hands over and the walk has no
+    /// line for. A worker's numbers are given again at the next fork (`Arena::fork`), so an entry left under
+    /// one of them would answer for another record there, and a type made since the fork was made again by
+    /// the promotion. What can be made again loses the entries that hold either, which the next asker fills;
+    /// what a round or a unit of the inlining phase keeps for itself goes whole (`Inlining::settle_round`).
+    /// `types_from` is the first type made after the fork.
+    fn settle_own_tables(&mut self, types_from: u32) {
+        const LOCAL: u32 = crate::arena::LOCAL_BASE;
+        let since_fork = |t: TypeId| t.0 >= types_from;
+        let type_ref = |r: &super::resolve::TypeRef| match *r {
+            super::resolve::TypeRef::Class(c) | super::resolve::TypeRef::Member(c, _) => c.0 >= LOCAL,
+            super::resolve::TypeRef::Alias(a) => a.0 >= LOCAL,
+            super::resolve::TypeRef::Param(p) => p.0 >= LOCAL,
+            super::resolve::TypeRef::ValueMember(_, _) => false,
+        };
+        let import = |i: &super::ResolvedImport| {
+            let target = match i.target {
+                super::ImportTarget::PkgMember(p, _) | super::ImportTarget::PkgAll(p) | super::ImportTarget::PkgGivens(p) => p.0 >= LOCAL,
+                super::ImportTarget::ClassMember(c, _) | super::ImportTarget::ClassAll(c) | super::ImportTarget::ClassGivens(c) => c.0 >= LOCAL,
+                super::ImportTarget::ValueAll(_) | super::ImportTarget::ValueMember(_, _) | super::ImportTarget::ValueGivens(_) => false,
+                super::ImportTarget::UnimportPredef | super::ImportTarget::Unresolved => false,
+            };
+            target || i.bound.is_some_and(since_fork)
+        };
+        let inherited = &mut self.inherited_named;
+        inherited.types.retain(|&(c, _), (_, found)| c.0 < LOCAL && !found.as_ref().is_some_and(type_ref));
+        inherited.nested.retain(|&(c, _), (_, found)| c.0 < LOCAL && !found.is_some_and(|n| n.0 >= LOCAL));
+        inherited.names.retain(|c, _| c.0 < LOCAL);
+        self.conversion_nonvariant.retain(|&t, params| !since_fork(t) && params.iter().all(|p| p.0 < LOCAL));
+        self.receiver_types.retain(|e, &mut t| e.0 < LOCAL && !since_fork(t));
+        self.import_heads.retain(|_, head| {
+            let step = |s: &super::import_check::PathStep| match *s {
+                super::import_check::PathStep::Object(c) | super::import_check::PathStep::This(c) => c.0 >= LOCAL,
+                super::import_check::PathStep::Term(s) => s.0 >= LOCAL,
+            };
+            head.te.0 < LOCAL && !since_fork(head.ty) && !head.steps.iter().any(step)
+        });
+        self.stable_realizable.retain(|s, _| s.0 < LOCAL);
+        // A class's forwarders are keyed by its number beside no package, a package file's by the package's.
+        self.forwarders_completion.retain(|&(p, n), _| if p == u32::MAX { n < LOCAL } else { p < LOCAL });
+        self.unused.settle_merge(import);
+        self.inlining.settle_round();
+    }
+
     /// The merge's check, after the promotion and the
     /// renumbering and before the overlays go and any reader of the merged program runs: the
     /// merge's walk again over every record from the first of each arena, every id kept
@@ -3229,8 +3292,13 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        // What the walk has no line for (`validate`): read before the counts are, which its refusals join.
+        let left = self.validate_merge(&check);
         let mut found: Vec<String> = check.ids.all().iter().filter(|(_, t)| t.refused() > 0).map(|(what, t)| format!("{} ids of {}", t.refused(), what)).collect();
         found.extend(self.loader_left_local());
+        if !left.is_empty() {
+            found.push(format!("in {}", left.join(", in ")));
+        }
         let v = check.checking.take().expect("the check").into_inner();
         if v.overlay_types > 0 {
             found.push(format!("{} overlays' entries", v.overlay_types));

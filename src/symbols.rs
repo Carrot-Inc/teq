@@ -1768,7 +1768,7 @@ pub trait RecordTypes: Clone {
     }
 }
 
-fn sig_each_type(sig: &MethodSig, f: &mut dyn FnMut(TypeId)) {
+pub(crate) fn sig_each_type(sig: &MethodSig, f: &mut dyn FnMut(TypeId)) {
     for c in &sig.clauses {
         for p in &c.params {
             f(p.ty);

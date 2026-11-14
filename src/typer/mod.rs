@@ -575,6 +575,26 @@ impl TVars {
         self.others[tag] = other.own;
     }
 
+    /// The validator's read of the variables (`merge::validate`): the bounds a variable was declared
+    /// with are types of the body's, as its instance and the bounds it has now are, which the walk reads.
+    pub(super) fn left_ids(&self, v: &mut merge::validate::Left) {
+        let others: Box<dyn Iterator<Item = &TVarInfo>> = match &self.kept {
+            Some(kept) => Box::new(kept.values()),
+            None => Box::new(self.others.iter().flatten()),
+        };
+        v.field("a variable's declared bounds (TVarExtra::declared)", |v| {
+            for info in self.own.iter().chain(others) {
+                let TVarInfo { inst: _, lower: _, upper: _, extra, base_shown: _, solving: _, guide: _, name: _, shown_low: _ } = info;
+                let Some(extra) = extra.as_deref() else { continue };
+                let TVarExtra { deps: _, declared, origin: _, fixed: _ } = extra;
+                if let Some((lower, upper)) = *declared {
+                    v.ty(lower);
+                    v.ty(upper);
+                }
+            }
+        });
+    }
+
     /// Every variable's instance and bounds, this worker's and the others' it took over (or
     /// kept of them).
     pub fn each_type(&self, mut f: impl FnMut(TypeId)) -> usize {
@@ -587,6 +607,10 @@ impl TVars {
             n += 1;
             for &t in v.inst.iter().chain(&v.lower).chain(&v.upper) {
                 f(t);
+            }
+            if let Some((lower, upper)) = v.extra.as_deref().and_then(|e| e.declared) {
+                f(lower);
+                f(upper);
             }
         }
         n
@@ -844,6 +868,23 @@ impl TVarInfo {
     pub fn map_origin(&mut self, f: impl Fn(TParamId) -> TParamId) {
         if let Some(e) = self.extra.as_deref_mut() {
             e.origin = e.origin.map(f);
+        }
+    }
+
+    /// The declared bounds through the merge's promotion of the types, the lower first.
+    pub fn map_declared(&mut self, f: impl Fn(TypeId) -> TypeId) {
+        if let Some(e) = self.extra.as_deref_mut() {
+            e.declared = e.declared.map(|(lower, upper)| {
+                let lower = f(lower);
+                (lower, f(upper))
+            });
+        }
+    }
+
+    /// A variable no record reaches after the merge keeps no bound, the declared ones neither.
+    pub fn drop_declared(&mut self) {
+        if let Some(e) = self.extra.as_deref_mut() {
+            e.declared = None;
         }
     }
 

@@ -114,6 +114,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   inside the initialiser of a val that the trait's own methods or vars name (`def fit(a: Yard.held.Label): Int`
   in `Slot`, and `val held = { x match { case _: rack.Slot => … }; new Holder }`) builds as scalac builds it;
   it was refused with `recursive use of fit needs an explicit result type` or `recursive value held needs type`.
+- A local enum's `valueOf` and `fromOrdinal` name the enum in their exceptions on the JVM as scalac does
+  (`enum demo$package$._$Tone has no case with name: mid`, `... has no case with ordinal: 0`: the enum under the
+  object of its file) whatever the number of typing workers; a build typed on more than one worker wrote the bare
+  name (`enum Tone has no case ...`).
 
 ## 0.1.10 (2026-11-13)
 

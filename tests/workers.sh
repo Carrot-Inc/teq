@@ -512,6 +512,26 @@ else
   [ -n "$mirrored" ] && ok
 fi
 
+# A local enum's name in the message of its `fromOrdinal` is kept by the enum's class (`Program::local_enum_names`), a
+# class of a block: the merge numbers the class again, and the JVM's companion reads the name by the new number at
+# every count (dotty's `enumClass.fullName`, under the file's object).
+jars_of tests/workers/local_enum_lookup_message.scala
+if [ -n "$JARS_MISSING" ]; then
+  echo "skip local_enum_lookup_message: not in the coursier cache:$JARS_MISSING"
+  ok
+else
+  named=ok
+  for t in 1 $COUNTS; do
+    got=$(one local_enum_lookup_message "$t" run tests/workers/local_enum_lookup_message.scala --classpath "$JARS_CP" --target jvm 2>&1 | tr '\n' ' ')
+    if [ "$got" != 'enum local_enum_lookup_message$package$._$Tone has no case with ordinal: 0 ' ]; then
+      bad "local_enum_lookup_message: $t workers print $got, not scalac's line"
+      named=
+      break
+    fi
+  done
+  [ -n "$named" ] && ok
+fi
+
 # The same for a trait of the program in a file of its own, which the quoted files' reach does not type before the fork:
 # a macro's runs on several workers make `C`, whose trait `T` calls `super.f`; the call is bound from the class
 # records where `C`'s record has no binding (another worker's class), which is not changed for it, and the trait's
@@ -829,7 +849,8 @@ done
 # line, or a program that names another method's value and dies at run time); and an inline method whose body
 # imports through a value, walked into sixty-four expansions by the forked inlining phase (a given of the value not
 # found, or another expansion's value read). Four trials at each count: a build without the lock differs from one
-# worker's in about one of two at two workers and three of four at sixteen.
+# worker's in nine of ten at eight and at sixteen workers; at two, in three of eight of the first scenario's builds
+# and, by the machine's load, in one of three to three of four of the second's.
 same_output value_import_slots 4 run tests/workers/value_import_slots
 TEQ_PHASE_FORK=1 same_output inline_value_import 4 run tests/workers/inline_value_import
 for name in phase_macro_local_trait phase_macro_summoned; do

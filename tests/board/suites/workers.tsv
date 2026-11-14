@@ -1,5 +1,5 @@
 # test	verdict	the other ways	the first line of the difference
-# passed	670
+# passed	671
 export_export_extension_member_has_defaults	fail	-	2 workers write other products than one: diff: out/workers/export_export_extension_member_has_defaults.one: No such file or directory diff: out/workers/export_export_extension_member_has_defaults.2: N
 export_export_extension_shifted_defaults	fail	-	2 workers write other products than one: diff: out/workers/export_export_extension_shifted_defaults.one: No such file or directory diff: out/workers/export_export_extension_shifted_defaults.2: No such
 phase_fork_export_export_extension_member_has_defaults	fail	-	2 workers write other products than one: diff: out/workers/phase_fork_export_export_extension_member_has_defaults.one: No such file or directory diff: out/workers/phase_fork_export_export_extension_me

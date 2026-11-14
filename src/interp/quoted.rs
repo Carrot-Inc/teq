@@ -73,6 +73,27 @@ fn write<K: std::hash::Hash + Eq, V>(map: &std::sync::RwLock<FxMap<K, V>>, k: K,
 }
 
 impl ReflectMemo {
+    /// The memo at a merge's boundary (`Inlining::settle_round`): every answer goes, the counts stay. The answers
+    /// are by types, classes, symbols and trees of the round, a worker's own among them, which the merge numbers
+    /// again; the main worker keeps its memo through a forked round, so it would hold them under the old numbers.
+    pub(crate) fn settle_merge(&mut self) {
+        let ReflectMemo { shared: _, conforms, fields, members, vals, trees, names, asked: _, answered: _ } = self;
+        conforms.clear();
+        fields.clear();
+        members.clear();
+        vals.clear();
+        trees.clear();
+        names.clear();
+    }
+
+    /// Whether the memo holds no answer, as it does past a merge's boundary (`typer::merge::validate`).
+    pub(crate) fn holds_no_answer(&self) -> bool {
+        let ReflectMemo { shared: _, conforms, fields, members, vals, trees, names, asked: _, answered: _ } = self;
+        conforms.is_empty() && fields.is_empty() && members.is_empty() && vals.is_empty() && trees.is_empty() && names.is_empty()
+    }
+}
+
+impl ReflectMemo {
     /// A query asked: what `look` finds of it, counted.
     fn hit<T>(&mut self, look: impl FnOnce(&Self) -> Option<T>) -> Option<T> {
         self.asked += 1;

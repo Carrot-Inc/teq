@@ -575,6 +575,85 @@ pub(super) fn desugared_order(ast: &crate::ast::Ast) -> Option<Vec<u32>> {
 }
 
 impl Inlining {
+    /// What a forked round or a unit of the phase keeps for itself, dropped at a merge's boundary
+    /// (`Worker::settle_own_tables`): the copies a unit made of typed roots, the classes made executable while
+    /// the bodies were typed (each by its place in the program's list, which the merge lays out again) and the
+    /// answers its reflection memoised go whole; of the functions made executable while workers typed, those of
+    /// a worker's own numbers go, which the next fork gives to other records, and the shared ones stay as they
+    /// were found.
+    pub(super) fn settle_round(&mut self) {
+        const LOCAL: u32 = crate::arena::LOCAL_BASE;
+        self.typed_copies.clear();
+        self.checked_funs_typing.retain(|f, _| f.0 < LOCAL);
+        self.checked_classes_typing.clear();
+        if let Some(memo) = self.reflect.as_mut() {
+            memo.settle_merge();
+        }
+    }
+
+    /// The validator's read of the phase's state (`merge::validate`): the kept calls, and what a round or a
+    /// unit of the phase keeps for itself, which does not stand across a merge: a worker's number is given
+    /// again at the next fork, and an entry left under it would answer for another record.
+    pub(super) fn left_ids(&self, v: &mut super::merge::validate::Left) {
+        let Inlining {
+            kept,
+            typed_copies,
+            checked_funs_typing,
+            checked_classes_typing,
+            template_ranks,
+            reflect,
+            statement_place,
+            rewrite_log,
+            expanding,
+            installed,
+            // The lists the merge's walk renumbers with the kept calls, the phase's switches, counters and
+            // marks, which hold no id, and the tables by a merged index, written where the build is not forked.
+            index: _, typed: _, item_place: _, typing_suspended: _, track_demands: _, track_meetings: _, notes: _,
+            completing_marks: _, demands: _, item_demands: _, last_demand: _, noted: _, completing: _,
+            typing_cuts: _, typing_suspensions: _, sig_marks: _, in_item: _, unwinding: _, run_consumer: _,
+            run_suspended: _, workers: _, next_tag: _, fold_later: _, index_later: _, erased: _, unboxes: _,
+            tailrec: _, lifted: _, deferred_traits: _, suspending: _, suspended_hit: _, suspended: _,
+            suspendable: _, splices_name_run: _, current_run: _, reached_other: _, anon_log: _, round_nodes: _,
+            round_file: _, suspension_reports: _, round_diags: _, suspension_prefix: _, unit_reports: _,
+            journal: _, typed_view: _, shared_reflect: _, running: _, checked_funs: _, checked_classes: _,
+            last_env: _, walk_top: _,
+        } = self;
+        v.field("the calls kept for the inlining phase (Inlining::kept)", |v| {
+            for k in kept.iter() {
+                let Kept { node, typed_as, call, held: _, at: _ } = k;
+                v.expr(*node);
+                v.ty(*typed_as);
+                if let Some(c) = call {
+                    c.left_ids(v);
+                }
+            }
+        });
+        v.field("Inlining::typed_copies", |v| {
+            for (&root, &copy) in typed_copies.iter() {
+                v.expr(root);
+                v.expr(copy);
+            }
+        });
+        v.field("Inlining::checked_funs_typing", |v| checked_funs_typing.keys().for_each(|&f| v.fun(f)));
+        // By a class's place in the program's list, which the merge lays out again.
+        v.empty("Inlining::checked_classes_typing", checked_classes_typing.is_empty());
+        v.field("Inlining::template_ranks", |v| {
+            for (&c, ranks) in template_ranks.iter() {
+                v.class(c);
+                ranks.keys().for_each(|&e| v.expr(e));
+            }
+        });
+        v.empty("Inlining::reflect", reflect.as_ref().is_none_or(|memo| memo.holds_no_answer()));
+        // What a call's typing held of its site is emptied where the call is kept (`Worker::keep_for_phase`).
+        v.empty("a kept call's facts and bodies under way (PendingCall::gadt, bodies_in_progress)", kept.iter().all(|k| k.call.as_ref().is_none_or(|c| c.kept_clean())));
+        v.empty("Inlining::statement_place", statement_place.is_none());
+        v.empty("Inlining::rewrite_log", rewrite_log.is_none());
+        v.empty("Inlining::expanding", expanding.is_empty());
+        v.empty("Inlining::installed", installed.is_none());
+    }
+}
+
+impl Inlining {
     /// Whether nothing waits for the phase.
     pub fn is_empty(&self) -> bool {
         self.kept.is_empty() && self.fold_later.is_empty() && self.index_later.is_empty() && self.erased.is_empty() && self.unboxes.is_empty() && self.tailrec.is_empty() && self.deferred_traits.is_empty()

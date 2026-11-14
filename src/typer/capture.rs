@@ -1401,8 +1401,13 @@ impl super::merge::Remap {
                             T::ClassMember(k, n) => T::ClassMember(self.map_class(k), n),
                             T::ClassAll(k) => T::ClassAll(self.map_class(k)),
                             T::ClassGivens(k) => T::ClassGivens(self.map_class(k)),
-                            other => other,
+                            // A package is made before the fork or under the loader's lock; a value import is an
+                            // index of the imports every worker shares.
+                            T::PkgMember(..) | T::PkgAll(_) | T::PkgGivens(_) | T::ValueAll(_) | T::ValueMember(..) | T::ValueGivens(_) | T::UnimportPredef | T::Unresolved => i.target,
                         };
+                        // The bound the import's type was given is a type of the body's: with the block's other
+                        // types, in the order of the tables' keys.
+                        i.bound = i.bound.map(t);
                     }
                 }
             }

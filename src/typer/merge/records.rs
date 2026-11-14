@@ -247,9 +247,11 @@ pub(in crate::typer) fn class<M: Mapping + ?Sized>(m: &M, c: &mut ClassInfo) {
 fn forwarders<M: Mapping + ?Sized>(m: &M, fwds: &mut [(SymId, Arc<Forward>)]) {
     for (s, fwd) in fwds.iter_mut() {
         *s = m.sym(*s);
-        let target = m.sym(fwd.target);
-        if target != fwd.target {
-            *fwd = Arc::new(Forward { target, ..(**fwd).clone() });
+        // Every field named: the record is made again where an id of it moved, none kept by a copy of the whole.
+        let Forward { path, target, clause, alt, path_method } = **fwd;
+        let (moved_target, moved_path_method) = (m.sym(target), path_method.map(|pm| m.sym(pm)));
+        if moved_target != target || moved_path_method != path_method {
+            *fwd = Arc::new(Forward { path, target: moved_target, clause, alt, path_method: moved_path_method });
         }
     }
 }

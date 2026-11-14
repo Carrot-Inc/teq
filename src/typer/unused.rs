@@ -202,6 +202,42 @@ enum Target {
 }
 
 impl Unused {
+    /// The tables kept by a symbol or by resolved imports at a merge's boundary (`Worker::settle_own_tables`):
+    /// a stand-in's place by a symbol of a worker's goes, and so do the imports resolved for the walks to come
+    /// that `stale` says hold a worker's id or a type made since the fork, and the attributions memoised for a
+    /// target of a worker's, which the next attribution resolves again.
+    pub(super) fn settle_merge(&mut self, stale: impl Fn(&super::ResolvedImport) -> bool) {
+        self.def_at.retain(|s, _| s.0 < crate::arena::LOCAL_BASE);
+        self.quiet.retain(|_, imports| !imports.iter().any(&stale));
+        self.memo.retain(|&(_, target), found| {
+            let own = match target {
+                Target::Sym(s, _, _) => s.0 >= crate::arena::LOCAL_BASE,
+                Target::Class(c) => c.0 >= crate::arena::LOCAL_BASE,
+                Target::Package(p) => p.0 >= crate::arena::LOCAL_BASE,
+            };
+            !own && !found.as_ref().is_some_and(&stale)
+        });
+    }
+
+    /// The validator's read of the tables the unused warnings keep by a symbol or by resolved imports
+    /// (`merge::validate`).
+    pub(super) fn left_ids(&self, v: &mut super::merge::validate::Left) {
+        v.field("Unused::def_at", |v| self.def_at.keys().for_each(|&s| v.sym(s)));
+        v.field("Unused::quiet", |v| self.quiet.values().flat_map(|imports| imports.iter()).for_each(|i| v.import(i)));
+        v.field("Unused::memo", |v| {
+            for (&(_, target), found) in self.memo.iter() {
+                match target {
+                    Target::Sym(s, _, _) => v.sym(s),
+                    Target::Class(c) => v.class(c),
+                    Target::Package(p) => v.pkg(p),
+                }
+                found.iter().for_each(|i| v.import(i));
+            }
+        });
+    }
+}
+
+impl Unused {
     /// Another worker's state at the fork: the mode, nothing marked.
     pub fn attach(&self) -> Unused {
         Unused { mode: self.mode, defs: self.defs, ..Default::default() }

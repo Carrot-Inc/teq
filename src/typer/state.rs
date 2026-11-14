@@ -129,6 +129,64 @@ pub(super) struct PendingInline {
 }
 
 /// What the expansion of a pending call needs of its site.
+impl PendingCall {
+    /// The validator's read of a kept call (`merge::validate`): the ids the merge's walk renumbers, read
+    /// apart from it; the signature and the environment are records of their own, the walk's; the site's facts
+    /// and the bodies under way are emptied where the call is kept (`kept_clean`). The mark of a comprehension's
+    /// trailing `map` is the one field with ids that is not read: the rule that reads it
+    /// (`Worker::transform_inlined_map`) compares its nodes with the call's, and the two are settled together.
+    pub(super) fn left_ids(&self, v: &super::merge::validate::Left) {
+        let PendingCall {
+            call,
+            subst,
+            args,
+            arg_types,
+            ret_ty,
+            expected,
+            recv_type,
+            owners,
+            outer_locals,
+            for_map: _,
+            gadt: _,
+            bodies_in_progress: _,
+            sig: _, span: _, env: _, body_node: _, of_bodies: _, owner: _, completing: _, at_end: _,
+            recv_this_written: _,
+        } = self;
+        let super::apply::MethodCall { recv, sym, owner_subst, ext_recv, prefix, refined: _ } = call;
+        recv.iter().for_each(|&e| v.expr(e));
+        v.sym(*sym);
+        for &(p, t) in owner_subst.iter().chain(subst.iter()) {
+            v.tparam(p);
+            v.ty(t);
+        }
+        if let Some((e, t)) = *ext_recv {
+            v.expr(e);
+            v.ty(t);
+        }
+        prefix.iter().chain(expected.iter()).chain(recv_type.iter()).for_each(|&t| v.ty(t));
+        v.ty(*ret_ty);
+        args.iter().for_each(|&e| v.expr(e));
+        for &(e, t) in arg_types.iter() {
+            v.expr(e);
+            v.ty(t);
+        }
+        for o in owners.iter() {
+            match *o {
+                super::site::SiteOwner::Sym(s) => v.sym(s),
+                super::site::SiteOwner::Dummy(c) => v.class(c),
+                super::site::SiteOwner::Binder(_, _) | super::site::SiteOwner::PatternTemp(_) | super::site::SiteOwner::Lambda(_) => {}
+            }
+        }
+        outer_locals.iter().flatten().for_each(|&s| v.sym(s));
+    }
+
+    /// Whether a kept call holds none of its site's facts and none of the bodies that were under way: both are
+    /// taken where the call is kept, and neither is renumbered.
+    pub(super) fn kept_clean(&self) -> bool {
+        self.gadt.is_empty() && self.bodies_in_progress.is_empty()
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct PendingCall {
     pub(super) call: super::apply::MethodCall,
