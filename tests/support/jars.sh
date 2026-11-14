@@ -48,7 +48,8 @@
 # tests/support/outer_lib.scala compiled the same way; unicode-lib, tests/support/unicode_lib.scala compiled
 # the same way; defaults-lib, tests/support/defaults_lib.scala compiled the same way; stddefaults-lib,
 # tests/support/std_defaults_lib.scala compiled the same way; erasedoverloads-lib, tests/support/erased_overloads_lib.scala
-# compiled the same way; quotenest-lib, tests/support/quote_nest_lib.scala compiled the same way; missingdep-lib,
+# compiled the same way; quotenest-lib, tests/support/quote_nest_lib.scala compiled the same way; aliasval-lib,
+# tests/support/alias_val_lib.scala compiled the same way; missingdep-lib,
 # tests/support/missing_dep/A.scala compiled against dep/B.scala into a jar without it; missingclass-mixed,
 # tests/support/missing_class_mixed's Scala and Java classes compiled against its Gone2 into a jar without it; lazyorder-lib,
 # tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib, tests/support/ctorinit_lib.scala
@@ -596,6 +597,20 @@ quote_nest_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/alias_val_lib.scala compiled by scalac into a jar: a given class typed through the library's alias of a
+# val's singleton type, the val an object's that a program over the jar defines again.
+alias_val_lib_jar() {
+  local src=tests/support/alias_val_lib.scala
+  local jar=$scratch/aliasval-lib.jar
+  local dir=$scratch/aliasval-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/alias_val_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/erased_overloads_lib.scala compiled by scalac into a jar: overloads scala-library's erasure tells apart.
 erased_overloads_lib_jar() {
   local src=tests/support/erased_overloads_lib.scala
@@ -1020,6 +1035,7 @@ jar_of() {
     stddefaults-lib) std_defaults_lib_jar ;;
     erasedoverloads-lib) erased_overloads_lib_jar ;;
     quotenest-lib) quote_nest_lib_jar ;;
+    aliasval-lib) alias_val_lib_jar ;;
     missingdep-lib) missingdep_lib_jar ;;
     missingclass-mixed) missingclass_mixed_jar ;;
     predef-lib) predef_lib_jar ;;

@@ -586,6 +586,18 @@ enum Attempt {
     Ok(TExprId, TypeId),
 }
 
+/// The shape pass of a given class of a products directory, while it runs (`Worker::fits_target_in_pass`).
+#[derive(Clone, Copy, Debug)]
+pub struct FitPass {
+    /// The worker's count of completions under way where the pass began: a read is the pass's own
+    /// at that count, and what a completion the pass started types is not.
+    pub completing: u32,
+    /// The wanted type: a val it names is read by the asking code itself.
+    pub wanted: TypeId,
+    /// Whether the pass read a signature in progress on its thread: the candidate does not fit.
+    pub read_in_progress: bool,
+}
+
 impl<'a> Worker<'a> {
     /// `TEQ_GIVEN_TRACE`: the searches that stop at a limit or a failed inline candidate, on
     /// stderr.
@@ -3427,7 +3439,13 @@ impl<'a> Worker<'a> {
             // a wildcard where the expansion is precise, does not tell: past the class test it
             // is tried.
             let transparent = self.is_inline_callee(given.0) && self.syms.sym(given.0).mods & crate::ast::mods::TRANSPARENT != 0;
-            let (fits, context_free) = if transparent { (true, false) } else { self.fits_target(given, target) };
+            let (fits, context_free) = if transparent {
+                (true, false)
+            } else if self.products_given_class(given.0) {
+                self.fits_target_in_pass(given, target)
+            } else {
+                self.fits_target(given, target)
+            };
             self.profile.try_end(!fits, true);
             self.profile.given.shape_unkept += (self.profile.on && !context_free) as u64;
             self.rollback(&mark);
@@ -3435,6 +3453,43 @@ impl<'a> Worker<'a> {
             (fits, context_free)
         };
         (fits, context_free, how)
+    }
+
+    /// Whether `g` is a given class (`given … with`, an implicit object) of a products directory, the build's
+    /// own by `--products` or one on its class path.
+    fn products_given_class(&self, g: SymId) -> bool {
+        let info = self.syms.sym(g);
+        (info.impl_class.is_some() || matches!(info.kind, SymKind::Object(_))) && self.in_products(info.file)
+    }
+
+    /// The shape pass of a given class of a products directory, under its mark (`FitPass`): where
+    /// it reads the signature, in progress on this thread, of the val in whose own initialiser
+    /// the search stands, and the wanted type does not itself name that val, the candidate does
+    /// not fit, unreported, and the answer is not kept.
+    ///
+    /// The three conditions are one state of the whole build, met where a module is built in
+    /// part: the directory holds an earlier build of sources the program defines again, the
+    /// given's file is not among the sources compiled, and its pickle names a val of an object
+    /// as the program defines it; a search in that val's initialiser meets the given. A
+    /// dependency's pickle names a program's val nowhere else, so the directory is the build's
+    /// own or one on its class path alike. The whole build sets the same given aside by its
+    /// class, which is under completion there because its completion asked the val and has no
+    /// parents yet (the class test for a `given … with`; an implicit object is not among its
+    /// scope's candidates for the wanted class, `index_givens` filing it by its class's
+    /// parents; dotty's `Namer` gives the class a `TempClassInfo` with no parents until they
+    /// are typed), and scalac's reader of a pickle has that state for what it reads
+    /// (`TreeUnpickler.readTemplate`'s `TempClassInfo`, an alias's `TypeBounds.empty`). teq's
+    /// decode asks nothing, so the state is met here, where the comparison reads the val
+    /// (`uncompleted_sig`, `fit_pass_reads`). Outside the state the whole build reports: an
+    /// alias given has no class and its own signature is in progress, a val in progress
+    /// further out is a crossing of two vals, and a jar's pickle is no build of this module.
+    #[cold]
+    #[inline(never)]
+    fn fits_target_in_pass(&mut self, given: GivenRef, target: TypeId) -> (bool, bool) {
+        let outer = self.fit_pass.replace(FitPass { completing: self.completing, wanted: target, read_in_progress: false });
+        let answer = self.fits_target(given, target);
+        let pass = std::mem::replace(&mut self.fit_pass, outer);
+        if pass.is_some_and(|p| p.read_in_progress) { (false, false) } else { answer }
     }
 
     /// Instantiates the candidates that provide `target`, in two passes. The shape pass opens

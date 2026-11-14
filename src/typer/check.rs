@@ -3800,6 +3800,24 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the read of `sym`'s signature, in progress on this thread, is a read of the shape
+    /// pass under way of a given class of a products directory (`fits_target_in_pass`), which notes it:
+    /// the pass's own read (no completion begun since the pass), of the member in whose own
+    /// initialiser the search stands (the one whose signature this thread is completing
+    /// innermost), in the program, that the wanted type does not itself name. A val in progress
+    /// further out is a crossing of two vals, and a val the wanted type names is read by the
+    /// asking code: both are reported as any other.
+    #[cold]
+    #[inline(never)]
+    fn fit_pass_reads(&mut self, sym: SymId, file: FileId) -> bool {
+        let Some(pass) = self.fit_pass else { return false };
+        if pass.completing != self.completing || self.completing_member != Some(sym) || !self.program_file(file) || self.types.names_term(pass.wanted, &[sym]) {
+            return false;
+        }
+        self.fit_pass = Some(super::implicits::FitPass { read_in_progress: true, ..pass });
+        true
+    }
+
     /// The signature's completion, or the wait for it, as a call apart from the check that
     /// most reads end at.
     #[inline(never)]
@@ -3846,6 +3864,12 @@ impl<'a> Worker<'a> {
             }
             Completion::InProgress => {
                 if !self.syms.sym(sym).sig.as_ref().is_some_and(|sig| sig.ret != ERROR) {
+                    // The shape pass of a given class of a products directory reads the signature
+                    // of the val in whose initialiser the search stands: the candidate does not fit
+                    // and nothing is reported (`fits_target_in_pass`).
+                    if self.fit_pass_reads(sym, file) {
+                        return None;
+                    }
                     // Which member of the cycle reports it is the member the walk met first,
                     // which several workers' walks do not keep to.
                     self.need_serial(|| format!("a recursive signature ({})", self.name_str(self.syms.sym(sym).name)));
@@ -3918,6 +3942,9 @@ impl<'a> Worker<'a> {
 
     fn complete_sig(&mut self, sym: SymId, file: FileId, def_id: Option<DefId>, owner: Owner, kind: SymKind, span: Span) -> Arc<MethodSig> {
         self.completing += 1;
+        // The member whose signature this thread is completing innermost (`fit_pass_reads`): a
+        // block's own definitions leave it as it is.
+        let outer_member = (!self.made_in_block(owner)).then(|| self.completing_member.replace(sym));
         // A retype completes again the signatures it opened, those with an inferred result,
         // and with its body what a block defines; any other signature is resolved once.
         let outer = self.diags.of_bodies;
@@ -3960,6 +3987,9 @@ impl<'a> Worker<'a> {
         self.promote_end(promoted);
         self.diags.of_bodies = outer;
         self.leave_completion();
+        if let Some(member) = outer_member {
+            self.completing_member = member;
+        }
         if super::prep::capturing() {
             self.prep_note_member('S', sym);
         }

@@ -76,6 +76,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   `this.tag.type` in a transparent method's body. The val's path is read without its signature, which another
   worker may still be computing, and what the val stands for is asked where a type is compared. A type selected on
   such a val (`Stock.api.Request`) or a products method overloaded on such a parameter can still stop the build.
+- Such a part build answers as the whole module's build where a given class of the products is typed by a val
+  of the sources built again (`given aliasShow: Show[Stock.alias.type] with …`, an implicit object, or through a
+  type alias of the products) and that val's own initialiser searches for a given: the search sets the candidate
+  aside, as the whole build does while the given's class is being completed, and the val is typed. Before, the
+  part build could be refused with `recursive value alias needs type`. An alias given of the products there, or
+  a given typed by another val that is still being typed, is refused as the whole build refuses it.
 
 ## 0.1.10 (2026-11-13)
 

@@ -246,7 +246,8 @@ worker_fields! {
         interp_parts is none,
         macro_targs is none,
         sames is none,
-        simplifying_normal is no
+        simplifying_normal is no,
+        fit_pass is none
     }
     own_waiting {
         retry_depth is none,
@@ -313,7 +314,7 @@ worker_fields! {
         tclasses_in_checks, pending_shared, merging, infos, std_entered_pending, loader_done_pending, kind_walk,
         deferred_classes, declaring, declared_views, sealed_std_files, pending_mirror_parents, late_naming_from,
         dep_depth, dep_budget, dep_root, dep_exhausted, singleton_depth, lookups, matches, same_level,
-        blocked_clauses, importing_files,
+        blocked_clauses, importing_files, completing_member,
     }
     unread {
         app_base, proto_vars, plain_member, kind_only_bound, binop_rhs, ref_exported, naming_late_batch,

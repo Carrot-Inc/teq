@@ -77,6 +77,7 @@ inline_val_operand	pass	-
 interleaved_type_clause	fail	-	< 1
 interp_extension_override_dispatch	pass	-	
 iterable_once_iterator_only	fail	-	< TreeSet(1, 2)
+jar_alias_names_program_val	fail	-	< in:int
 jar_inline_forwarder_argument_order	fail	-	< eval b
 jar_inline_forwarder_inline_param_default	fail	-	< 1279
 java_enum_ordinal_through_enum_js	fail	-	< 4

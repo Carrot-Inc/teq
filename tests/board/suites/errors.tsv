@@ -316,6 +316,7 @@ given_scope_gadt_bounds	fail	-	exit code 0
 given_specificity_alias	pass	-	
 given_syntax_migration	pass	-	
 given_syntax_old_colon	pass	-	
+given_wanted_names_val_in_progress	pass	-	
 givens_ambiguous	pass	-	
 givens_ambiguous_clause_before_missing	pass	-	
 givens_ambiguous_warm	pass	-	

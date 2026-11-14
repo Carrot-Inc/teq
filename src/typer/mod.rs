@@ -2157,6 +2157,12 @@ pub struct Worker<'a> {
     /// `TypeComparer.isSameType`'s nesting (`sameLevel`) and the successes it keeps from level 3 (`sames`).
     pub same_level: u32,
     pub sames: Option<FxMap<TypeId, TypeId>>,
+    /// While the shape pass of a given class of a products directory runs (`fits_target_in_pass`): the pass's mark
+    /// (`implicits::FitPass`), which a read of a signature in progress on this thread answers to.
+    pub fit_pass: Option<implicits::FitPass>,
+    /// The member whose signature this thread is completing innermost (`complete_sig`), a block's own
+    /// definitions apart: the val in whose initialiser a search stands.
+    pub completing_member: Option<SymId>,
     /// The extension method the last extension application applied (`apply_extension`), which a
     /// right-associative selection reads to know which overload it took.
     pub applied_extension: Option<SymId>,
@@ -3352,6 +3358,8 @@ impl<'a> Worker<'a> {
             for_map_watch: None,
             same_level: 0,
             sames: None,
+            fit_pass: None,
+            completing_member: None,
             applied_extension: None,
             quote: quoted::QuoteState::default(),
             macro_files: FxMap::default(),
@@ -3782,6 +3790,8 @@ impl<'a> Worker<'a> {
             for_map_watch: None,
             same_level: 0,
             sames: None,
+            fit_pass: None,
+            completing_member: None,
             applied_extension: None,
             quote: self.quote.attach(),
             macro_files: self.macro_files.clone(),

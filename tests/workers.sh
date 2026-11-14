@@ -1824,5 +1824,110 @@ else
   bad "partial_rebuild_val_now_def: one worker prints $(head -3 "$work/partial_rebuild_val_now_def.one" | tr '\n' ' ' | cut -c1-160), scalac stock-init shelf-init 33"
 fi
 
+# A given class the products hold whose type names a val of the sources built again, searched from that
+# val's own initialiser: the whole build sets the candidate aside there, its class being under
+# completion (dotty's `TempClassInfo`: the class has no parents yet), and the part build answers as
+# the whole does: the candidate, whose comparison reads the val's signature in progress on the same
+# thread, does not fit and nothing is reported (before, "recursive value alias needs type"). scalac's
+# pickle reader has the same state for what it is reading (`TreeUnpickler`: a class's `TempClassInfo`,
+# an alias's empty bounds).
+# rebuilt_by_contract <fixture> <scalac's lines...>: the module built in part as a build does it:
+# tests/workers/<fixture>'s three sources built to products at one worker, then Stock.scala and
+# Use.scala built again into and over a copy of that directory (`--products P --classpath P`: the
+# build's own, read without its entries of the two sources). The part build is accepted at one worker
+# and under the points the typing rows shake, seeds 1 to 12 at two and at eight workers; the directory
+# it leaves is each time the whole build's, file for file; and the whole build's program prints
+# scalac's lines.
+rebuilt_by_contract() {
+  local name=$1_by_contract dir=tests/workers/$1 whole=$work/$1_whole own=$work/$1_own
+  shift
+  rm -rf "$whole"
+  timeout 120 "$TEQ" compiler check --products "$whole" --sourceroot "$dir" "$dir/Stock.scala" "$dir/Counter.scala" "$dir/Use.scala" --threads 1 > /dev/null 2>&1
+  local part=(compiler check --products "$own" --sourceroot "$dir" --classpath "$own" "$dir/Stock.scala" "$dir/Use.scala")
+  local run s t at accepted stopped="" other="" runs="0:1"
+  for s in $(seq 1 12); do
+    runs="$runs $s:2 $s:8"
+  done
+  for run in $runs; do
+    s=${run%:*} t=${run#*:}
+    rm -rf "$own"
+    cp -r "$whole" "$own"
+    if [ $s = 0 ]; then
+      at="one worker"
+      timeout 120 "$TEQ" "${part[@]}" --threads $t > "$work/$name.shaken" 2>&1
+    else
+      at="$t workers under TEQ_SHAKE=$s"
+      TEQ_SHAKE="$s:item,claimed,computed" timeout 120 "$TEQ" "${part[@]}" --threads $t > "$work/$name.shaken" 2>&1
+    fi
+    accepted=$?
+    if [ $accepted = 0 ]; then
+      diff -r "$whole" "$own" > "$work/$name.diff" 2>&1 || other="$other $at ($(head -1 "$work/$name.diff" | cut -c1-80));"
+    else
+      stopped="$stopped $at ($(grep -m1 -E 'error|panicked' "$work/$name.shaken" | cut -c1-80));"
+    fi
+  done
+  [ -z "$stopped" ] && ok || bad "${name}_shaken: the part build fails at$stopped"
+  [ -z "$other" ] && ok || bad "${name}_published: the part build leaves another directory than the whole build's at$other"
+  one "$name" 1 run "$dir/Stock.scala" "$dir/Counter.scala" "$dir/Use.scala" > "$work/$name.whole" 2>&1
+  if [ "$(cat "$work/$name.whole")" = "$(printf '%s\n' "$@")" ]; then
+    ok
+  else
+    bad "${name}_whole: the whole build prints $(head -3 "$work/$name.whole" | tr '\n' ' ' | cut -c1-120), scalac $*"
+  fi
+}
+# The given's type names the val through a products type alias.
+rebuilt_by_contract partial_rebuild_given_through_alias stock-init shelf-init int13
+# The same with the directory on the class path alone: another module's products whose object the
+# program defines again, where a pickle names the program's val in the same way. scalac's own build
+# of the two sources over the classes accepts this one.
+rebuilt_in_part partial_rebuild_given_through_alias stock-init shelf-init int13
+# The given's type names the val itself.
+rebuilt_by_contract partial_rebuild_given_of_val stock-init shelf-init int13
+# The val is no object: a String.
+rebuilt_by_contract partial_rebuild_given_of_plain_val stock-init int1int3p
+# The same given is found where its val is complete: a later search for the val's own instance.
+rebuilt_by_contract partial_rebuild_given_wanted_later stock-init shelf-init alias3int2
+# The given is an implicit object, whose class is under completion in the whole build in the same way.
+rebuilt_by_contract partial_rebuild_given_object stock-init shelf-init int13
+# The search stands in a local method of the val's initialiser: the method's own signature is
+# completed inside the val's, and the val is still the one in whose initialiser the search stands.
+rebuilt_by_contract partial_rebuild_given_in_local_method stock-init shelf-init 3
+
+# That rule stands for one state of the whole build, the given's class under completion while the val
+# its parents name is typed; where the whole build has no such state the part build is refused as the
+# whole is.
+# refused_by_contract <fixture> <words>: tests/workers/<fixture>'s three sources (Stock.scala before
+# its edit) copied to a tree and built to products at one worker, then the tree's Stock.scala
+# replaced by <fixture>/rebuilt/Stock.scala and built again with Use.scala into and over a copy of
+# the directory, at one worker and at eight: refused, the words among what it prints.
+refused_by_contract() {
+  local name=$1_by_contract dir=tests/workers/$1 tree=$work/$1_tree whole=$work/$1_whole own=$work/$1_own t
+  rm -rf "$tree" "$whole"
+  mkdir -p "$tree"
+  cp "$dir/Stock.scala" "$dir/Counter.scala" "$dir/Use.scala" "$tree/"
+  timeout 120 "$TEQ" compiler check --products "$whole" --sourceroot "$tree" "$tree/Stock.scala" "$tree/Counter.scala" "$tree/Use.scala" --threads 1 > /dev/null 2>&1
+  cp "$dir/rebuilt/Stock.scala" "$tree/Stock.scala"
+  for t in 1 8; do
+    rm -rf "$own"
+    cp -r "$whole" "$own"
+    if timeout 120 "$TEQ" compiler check --products "$own" --sourceroot "$tree" --classpath "$own" "$tree/Stock.scala" "$tree/Use.scala" --threads $t > "$work/$name.$t" 2>&1; then
+      bad "$name: the part build is accepted at $t workers"
+      return
+    fi
+    if ! grep -qF "$2" "$work/$name.$t"; then
+      bad "$name: $t workers refuse with other words: $(head -1 "$work/$name.$t" | cut -c1-160)"
+      return
+    fi
+  done
+  ok
+}
+# Two vals, a given class of the products typed by each, each val's initialiser searching: the search
+# in the second's initialiser meets the given of the first, a val in progress further out. A crossing
+# of two vals, which the whole build refuses (scalac: E124).
+refused_by_contract partial_rebuild_two_vals_crossing "error: recursive value first needs type"
+# The products' given is an alias given, which has no class: in the whole build its own signature is
+# in progress there, and the build is refused (scalac: E124).
+refused_by_contract partial_rebuild_alias_given "error: recursive value alias needs type"
+
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass
