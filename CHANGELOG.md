@@ -311,6 +311,15 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - A method that the override check refuses is reported once: `def put(a: String): Int` in a class extending
   `Ops[String]`, whose `put(x: A): Int` and `put(x: String): String` it both overrides, got a second error about its
   name in the JavaScript output after the first.
+- A macro's implementation that runs code which calls the forwarders of an `export` (`class Switch(c: Coil) {
+  export c.{pull, mark} }` with `pull` overloaded, an object's `export base.*`, a trait's `export inner.pull as
+  tug`) or creates a class through a secondary constructor (`new Crate("abc")` for `def this(s: String) = ..`,
+  with or without a default argument) gives the same result on several typing workers as on one. On more than one
+  worker a call of an overloaded forwarder could run another alternative, so the program printed other numbers
+  with no error, and a secondary constructor stopped the build (`value apply is not a member of Crate`).
+  Not yet: an `export` in a trait that stands in a file of its own and is mixed into a class of another file
+  (`trait Geared { export drum.wind }`): a call of an overloaded forwarder there can still run another
+  alternative.
 
 ## 0.1.10 (2026-11-13)
 

@@ -881,6 +881,14 @@ same_output evidence_argument 4 compiler check tests/workers/evidence_argument -
 same_output macro_runs_generic_override 4 run tests/workers/macro_runs_generic_override
 same_output macro_runs_block_members 4 run tests/workers/macro_runs_block_members
 same_output macro_reflects_block_lazy 4 run tests/workers/macro_reflects_block_lazy --retain-trees
+# What a class's check makes for a member that no definition of its own gives (the forwarder of an export, a
+# secondary constructor) is run by every worker from the record the class is registered with, where the worker
+# that checked the class finds it in its own table. A macro's run of a body that calls an export's forwarders
+# through a class, an object and a trait, an overloaded method's among them (above one worker the program printed
+# other numbers, with no error); and one that creates a class through its secondary constructors, one of them
+# with a default argument (above one worker the build was refused, `value apply is not a member of Crate`).
+same_output macro_runs_export_forwarders 4 run tests/workers/macro_runs_export_forwarders
+same_output macro_runs_secondary_constructors 4 run tests/workers/macro_runs_secondary_constructors
 for name in phase_macro_local_trait phase_macro_summoned; do
   TEQ_PHASE_FORK=1 same_output $name 3 run tests/workers/$name
 done

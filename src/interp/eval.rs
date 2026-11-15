@@ -1175,10 +1175,40 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    /// The function of a def, typed now when the standard library deferred it.
+    /// The function another worker's check of a class made for the member `s`, which that worker's
+    /// table alone holds and no body typed on demand gives: a constructor's, or that of a member
+    /// with no definition of its own (an export's forwarder). From the record that worker
+    /// registered for the class (`Program::class_bodies`), among its methods and constructors,
+    /// where a run on that worker finds it through its own table. A program's class, on a fork.
+    fn peer_made_fun(&self, s: SymId) -> Option<FunId> {
+        if !self.typer.forked {
+            return None;
+        }
+        let info = self.syms().sym(s);
+        let Owner::Class(c) = info.owner else { return None };
+        if info.name != crate::names::INIT && info.def.is_some() {
+            return None;
+        }
+        if self.typer.is_library_class(c) || self.typer.source(self.syms().class(c).file).is_std {
+            return None;
+        }
+        let i = *self.typer.prog.class_bodies.get(&c)?;
+        if self.typer.prog.classes.is_own(i) {
+            return None;
+        }
+        crate::typer::bundle::entered_at(&self.typer.prog.classes, i, crate::typer::bundle::Entry::Class);
+        let tc = &self.prog().classes[i as usize];
+        tc.methods.iter().chain(&tc.ctors).copied().find(|&f| self.prog().funs[f.idx()].sym == s)
+    }
+
+    /// The function of a def, typed now when the standard library deferred it; one another
+    /// worker's check of its class made is that worker's record's (`peer_made_fun`).
     pub(super) fn fun_of(&mut self, s: SymId) -> Option<FunId> {
         if let Some(&f) = self.typer.fun_of_sym.get(&s) {
             crate::typer::bundle::entered_at(&self.typer.prog.funs, f.0, crate::typer::bundle::Entry::Fun);
+            return Some(f);
+        }
+        if let Some(f) = self.peer_made_fun(s) {
             return Some(f);
         }
         let body = self.typer.deferred_body(s);
