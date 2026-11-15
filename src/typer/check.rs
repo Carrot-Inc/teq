@@ -5610,6 +5610,7 @@ impl<'a> Worker<'a> {
         let base = self.prog.classes.own_base();
         for k in self.tclasses_to_register() {
             let c = self.prog.classes.own()[k].id;
+            self.publish_members(k, true);
             self.prog.class_bodies.insert_shared(c, base + k as u32);
             if self.class_done.local.contains_key(&c) {
                 self.class_done.insert_shared(c, ());

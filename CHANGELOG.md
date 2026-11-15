@@ -211,6 +211,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   whose signature another worker had completed. The same call through an export's forwarder (`export stamps.one`,
   then `Desk.one(Seal[Int]())`) is reported too, as scalac reports it: it was not, on any number of workers, so a
   program that passed such an argument under `-source 3.5`, or to a library compiled under it, is now refused.
+- A macro's implementation that runs a method whose body declares a class (`def total(n: Int) = { class Tray(..)
+  extends Drawer[Int] { .. }; .. }`, called from the macro) gives the same result on several typing workers as on
+  one. Where the class implemented both alternatives of a generic trait's overloaded method (`def take(k: A)` and
+  `def take(k: String)` for `Drawer[Int]`), a build on more than one worker printed other numbers, with no error;
+  where the class had a lazy val, an object as a member or a class declared in one of its methods, or its members
+  read a val or a var of the method's body, the build stopped (`exception in macro`, `not found: seen`).
 
 ## 0.1.10 (2026-11-13)
 

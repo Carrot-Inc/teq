@@ -287,12 +287,71 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The entries of the members of the worker's own `TClass` at `k`, every worker's with the
+    /// record: a method's and a constructor's function and what it overrides, a field's
+    /// initialiser and what it overrides, each where the member is a symbol of this worker's and
+    /// the worker's table holds an entry (a shared class's members are published by their
+    /// bodies). A worker that runs a body another worker typed reads each member as its typist
+    /// made it, and types none again. A lazy field's initialiser that the typing left in the
+    /// record's list alone (a member object's) has no entry: the interpreter reads it from the
+    /// record (`Interp::lazy_init`). Under the loader's lock (`held`) the entries are the
+    /// release's, as the record's own is.
+    pub(super) fn publish_members(&mut self, k: usize, held: bool) {
+        let own = |s: crate::types::SymId| s.0 >= crate::arena::LOCAL_BASE;
+        let (funs, fields) = {
+            let tc = &self.prog.classes.own()[k];
+            let funs: Vec<crate::tir::FunId> = tc.methods.iter().chain(&tc.ctors).copied().collect();
+            let fields: Vec<crate::types::SymId> = tc.init.iter().filter_map(|i| if let crate::tir::TInit::Field(s, _) = *i { Some(s) } else { None }).collect();
+            (funs, fields)
+        };
+        for f in funs {
+            let s = self.prog.funs[f.idx()].sym;
+            if !own(s) {
+                continue;
+            }
+            if let Some(&f) = self.fun_of_sym.local.get(&s) {
+                if held {
+                    self.fun_of_sym.insert_shared(s, f);
+                } else if self.fun_of_sym.publish(s, f) {
+                    published(Entry::Fun, Carrier::Bundle);
+                }
+            }
+            self.publish_overrides(s, held);
+        }
+        for s in fields {
+            if !own(s) {
+                continue;
+            }
+            if let Some(&e) = self.val_init.local.get(&s) {
+                if held {
+                    self.val_init.insert_shared(s, e);
+                } else if self.val_init.publish(s, e) {
+                    published(Entry::Val, Carrier::Bundle);
+                }
+            }
+            self.publish_overrides(s, held);
+        }
+    }
+
+    /// What the member `s` of a class this worker registers overrides (`Program::overrides`),
+    /// every worker's with the class (`publish_members`).
+    fn publish_overrides(&mut self, s: crate::types::SymId, held: bool) {
+        let Some(bases) = self.prog.overrides.local.get(&s).cloned() else { return };
+        if held {
+            self.prog.overrides.insert_shared(s, bases);
+        } else {
+            self.prog.overrides.publish(s, bases);
+        }
+    }
+
     /// The `TClass`es this worker made since its last publication, every worker's from here, with
-    /// the check of each it checked: what a reader of a body or of a class may enter by.
+    /// the check of each it checked and its members' entries (`publish_members`): what a reader of
+    /// a body or of a class may enter by.
     fn publish_bundle_classes(&mut self) {
         let base = self.prog.classes.own_base();
         for k in self.tclasses_to_register() {
             let c = self.prog.classes.own()[k].id;
+            self.publish_members(k, false);
             self.prog.class_bodies.publish(c, base + k as u32);
             published(Entry::Class, Carrier::Bundle);
             if self.class_done.local.contains_key(&c) && self.class_done.publish(c, ()) {

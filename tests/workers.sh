@@ -869,6 +869,18 @@ TEQ_PHASE_FORK=1 same_output inline_value_import 4 run tests/workers/inline_valu
 # that had not completed the method's signature left out (48 records at one worker, fewer above it).
 same_output macro_runs_named_val 4 run tests/workers/macro_runs_named_val
 same_output evidence_argument 4 compiler check tests/workers/evidence_argument --source 3.5
+# The members of a class declared in a block go to the other workers with their class: a method's function, what
+# it overrides, a val's initialiser; a lazy val's initialiser is read from the record the class is registered
+# with, where a worker's own scan finds it. A macro's run of a body that another worker typed, whose block class
+# implements both alternatives of a generic trait's overloaded method (above one worker the program printed other
+# numbers, with no error); one whose block class has a lazy val, a member object, overloads, a class declared in
+# a method and an anonymous class, over a val and a var of the block (above one worker the macro's run stopped
+# the build); and a macro that reads the trees of a block's lazy vals, a trait's over a val of the block among
+# them, and then runs the method (above one worker the build was refused, `not found: seen`): every worker reads
+# the tree one worker reads, the lazy val's body, and runs what one worker runs.
+same_output macro_runs_generic_override 4 run tests/workers/macro_runs_generic_override
+same_output macro_runs_block_members 4 run tests/workers/macro_runs_block_members
+same_output macro_reflects_block_lazy 4 run tests/workers/macro_reflects_block_lazy --retain-trees
 for name in phase_macro_local_trait phase_macro_summoned; do
   TEQ_PHASE_FORK=1 same_output $name 3 run tests/workers/$name
 done

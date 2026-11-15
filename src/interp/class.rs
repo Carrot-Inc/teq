@@ -2107,6 +2107,24 @@ impl<'a, 't> Interp<'a, 't> {
         Some((self.builtins.get(&*qualified).cloned()?, qualified))
     }
 
+    /// The initialiser of the lazy val `s` of a class another worker checked, which this worker's
+    /// scan of the records' lists (`lazy_init`) does not reach: from the list of the record that
+    /// worker registered with the class (`Program::class_bodies`), the node that worker's own
+    /// scan answers with. A member object's val has its initialiser there alone.
+    fn peer_lazy_init(&self, s: SymId) -> Option<TExprId> {
+        if !self.typer.forked || s.0 < crate::arena::LOCAL_BASE || self.typer.syms.syms.is_own(s.0) {
+            return None;
+        }
+        let Owner::Class(c) = self.syms().sym(s).owner else { return None };
+        let i = *self.typer.prog.class_bodies.get(&c)?;
+        crate::typer::bundle::entered_at(&self.typer.prog.classes, i, crate::typer::bundle::Entry::Class);
+        let listed = self.prog().classes[i as usize].init.iter().find_map(|init| match *init {
+            TInit::Field(f, e) if f == s => Some(e),
+            _ => None,
+        })?;
+        (self.typer.syms.sym(s).mods & mods::LAZY != 0).then_some(listed)
+    }
+
     /// The initialiser of a lazy val of a class, from the `init` list of its class.
     fn lazy_init(&mut self, s: SymId) -> Option<TExprId> {
         if let Some(&(_, e)) = self.lazy_inits.get(&s) {
@@ -2128,6 +2146,9 @@ impl<'a, 't> Interp<'a, 't> {
         self.lazy_seen = marks;
         if let Some(&(_, e)) = self.lazy_inits.get(&s) {
             crate::typer::bundle::cached_at(&self.typer.prog.exprs, e.0);
+            return Some(e);
+        }
+        if let Some(e) = self.peer_lazy_init(s) {
             return Some(e);
         }
         // A library val is a lazy getter whose body the typer holds.
