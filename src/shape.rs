@@ -385,6 +385,7 @@ impl<'a> Cmp<'a> {
             (StringLit(x), StringLit(y)) => self.old.str(x) == self.new.str(y),
             (UnitLit, UnitLit) | (This, This) | (Derived, Derived) | (Error, Error) => true,
             (Ident(x), Ident(y)) | (Super(x), Super(y)) => x == y,
+            (QualThis(x), QualThis(y)) => x == y,
             (Select(e, n), Select(f, m)) => n == m && self.expr_eq(e, f),
             (Apply(e, l), Apply(f, k)) | (UsingApply(e, l), UsingApply(f, k)) => self.expr_eq(e, f) && self.exprs_eq(l, k),
             (NamedArg(n, e), NamedArg(m, f)) => n == m && self.expr_eq(e, f),

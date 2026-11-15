@@ -1086,7 +1086,7 @@ i17525.scala	pass	check:pass
 i1753.scala	fail	check:fail	i1753.scala:20:28: type mismatch: found (BCodeSkelBuilder.this.int : BackendInterface), required (BCodeSkelBuilder.this.bTypes.int : I)
 i1755.scala	pass	check:pass	
 i17556.scala	pass	check:pass	
-i1756.scala	fail	check:fail	i1756.scala:5:20: this can be used only in a class, object, or template
+i1756.scala	pass	check:pass	
 i1757.scala	pass	check:pass	
 i17588.scala	pass	check:pass	
 i17631.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)

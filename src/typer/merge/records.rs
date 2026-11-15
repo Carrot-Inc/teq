@@ -546,7 +546,7 @@ pub(in crate::typer) fn env_moves<M: Mapping + ?Sized>(m: &M, env: &Env) -> bool
                 || classes.iter().any(|&(_, c)| m.class(c) != c)
                 || aliases.iter().any(|&(_, a)| m.alias(a) != a)
         }
-        Frame::Class(c) => m.class(*c) != *c,
+        Frame::Class(c) | Frame::Ctor(c) => m.class(*c) != *c,
     };
     env.frames.iter().any(frame_moves)
         || env.imports.iter().any(|i| {
@@ -580,7 +580,7 @@ pub(in crate::typer) fn env<M: Mapping + ?Sized>(m: &M, env: &mut Env) {
                     *a = m.alias(*a);
                 }
             }
-            Frame::Class(c) => *c = m.class(*c),
+            Frame::Class(c) | Frame::Ctor(c) => *c = m.class(*c),
         }
     }
     for i in &mut env.imports {

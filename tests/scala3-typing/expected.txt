@@ -3118,7 +3118,7 @@ pos/i17525.scala	accepts
 pos/i1753.scala	rejects	type mismatch
 pos/i1755.scala	accepts	
 pos/i17556.scala	accepts	
-pos/i1756.scala	rejects	this can be used only in a class, object, or template
+pos/i1756.scala	accepts	
 pos/i1757.scala	accepts	
 pos/i17588.scala	accepts	
 pos/i17631.scala	accepts	

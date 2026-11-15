@@ -6780,8 +6780,10 @@ impl<'a> Worker<'a> {
 
     /// A trait leaves its parameters to the first class that mixes it in. Using clauses and
     /// context bounds are resolved where the extends clause stands, as scalac types the arguments
-    /// of a parent: in the scope around the class with the constructor parameters visible, not in
-    /// the class body, whose members would be read before they exist. The fields of a trait are
+    /// of every parent in one context (`Contexts.superCallContext`): in the scope around the class
+    /// with the constructor parameters visible, not in the class body, whose members would be read
+    /// before they exist; the code stands in the class's constructor (`Frame::Ctor`), so a member
+    /// of a class around is read from there. The fields of a trait are
     /// set before its body runs: evidence ahead of every trait body, which goes into `tclass`,
     /// while a trait with ordinary parameters takes all of them as the arguments of its body,
     /// evaluated right before it runs as under scalac; those are returned by trait. An enum does
@@ -6797,9 +6799,12 @@ impl<'a> Worker<'a> {
             let i = self.syms.class(c);
             (i.file, i.span, i.kind, i.owner)
         };
+        // The class's frame gives way to its constructor's, which names nothing (`Frame::Ctor`).
         let mut outside = self.env.clone();
-        if matches!(outside.frames.last(), Some(Frame::Class(k)) if *k == c) {
-            outside.frames.pop();
+        if let Some(last) = outside.frames.last_mut() {
+            if matches!(last, Frame::Class(k) if *k == c) {
+                *last = Frame::Ctor(c);
+            }
         }
         let mut names = Vec::new();
         let mut givens = Vec::new();
@@ -6979,8 +6984,9 @@ impl<'a> Worker<'a> {
 
     /// Types the call of the constructor of `parent` that the parent clause `clause` of `c`
     /// stands for; without a clause the constructor gets no arguments. The constructor
-    /// parameters and type parameters of `c` are in scope, its members and `this` are not, unless
-    /// the arguments are evaluated `in_place`, which is where an anonymous class is created.
+    /// parameters and type parameters of `c` are in scope, its members, its types and its body's
+    /// imports are not, and `this` is the class around (`Frame::Ctor`), unless the arguments
+    /// are evaluated `in_place`, which is where an anonymous class is created.
     /// Without `parent_ty` the type arguments of the parent are inferred from the arguments.
     pub(super) fn type_parent_ctor(
         &mut self,
@@ -7063,7 +7069,14 @@ impl<'a> Worker<'a> {
             self.settle_class(c);
             let tparams: Vec<(crate::intern::Name, TParamId)> =
                 self.syms.class(c).tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect();
-            let mut env = self.env_for(file, Owner::Class(c));
+            // The environment at the class's start, no import of its body in it, the class's frame given
+            // way to its constructor's, which names nothing (`Frame::Ctor`).
+            let mut env = self.env_at(file, Owner::Class(c), class_span.start);
+            if let Some(last) = env.frames.last_mut() {
+                if matches!(last, Frame::Class(k) if *k == c) {
+                    *last = Frame::Ctor(c);
+                }
+            }
             env.frames.push(Frame::Locals { names, tparams, givens, classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
             self.with_env(env, |t| {
                 let outer_case = t.parent_args_of.replace(c);

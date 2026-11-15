@@ -496,6 +496,7 @@ impl<'a> Worker<'a> {
                     }
                 }
                 Frame::Class(c) if self.parent_args_of == Some(*c) => {}
+                Frame::Ctor(_) => {}
                 Frame::Class(c) => {
                     let c = *c;
                     self.class_conversions(c, pick, &mut level);

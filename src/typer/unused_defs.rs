@@ -106,7 +106,7 @@ impl<'a> Worker<'a> {
             node = res;
         }
         let TExpr::New(c, args) = self.prog.expr(node) else { return };
-        if !self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == c)) {
+        if !self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) | super::Frame::Ctor(k) if *k == c)) {
             return;
         }
         // The constructor's parameters, a context bound's evidence among them.

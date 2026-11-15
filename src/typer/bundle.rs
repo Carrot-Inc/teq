@@ -477,7 +477,7 @@ impl<'a> Worker<'a> {
             return;
         }
         let enclosing = self.env.frames.iter().find_map(|f| match f {
-            super::Frame::Class(k) if !self.shared_class(*k) && self.prog.classes.own()[(id - self.prog.classes.own_base()) as usize].id != *k && self.syms.check_cells.get(k.0) == crate::symbols::Completion::InProgress && self.syms.check_cells.mine(k.0) => Some(*k),
+            super::Frame::Class(k) | super::Frame::Ctor(k) if !self.shared_class(*k) && self.prog.classes.own()[(id - self.prog.classes.own_base()) as usize].id != *k && self.syms.check_cells.get(k.0) == crate::symbols::Completion::InProgress && self.syms.check_cells.mine(k.0) => Some(*k),
             _ => None,
         });
         if let Some(k) = enclosing {

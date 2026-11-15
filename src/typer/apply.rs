@@ -980,7 +980,12 @@ impl<'a> Worker<'a> {
                     Some(_) => t.this_class().is_some_and(|c| t.has_synthesized_member(c, name)),
                 };
                 if (synthesized || companion_apply(self)) && outside(self) {
-                    if let Some(c) = self.this_class() {
+                    // In a parent's argument the name is the class around's, read from the constructor
+                    // (`this_ref`); a top-level class has none around it and keeps the instance under
+                    // construction.
+                    let in_ctor = self.ctor_context();
+                    let around = self.this_class();
+                    if let Some(c) = around.or(in_ctor) {
                         self.complete_class(c);
                         let self_ty = self.syms.this_type(c);
                         // Inside a function literal of an ordinary method or a field's initialiser
@@ -989,7 +994,7 @@ impl<'a> Worker<'a> {
                         // local that stands for the instance is the receiver, never that class's own `this`
                         // (dotty types the name as a selection on `This(cls)`, and the literal is a closure of
                         // the class until ExpandSAMs). Everywhere else the bare `this`.
-                        let this = if self.in_plain_literal(c) { self.this_ref(c) } else { self.prog.add(TExpr::This) };
+                        let this = if self.in_plain_literal(c) || (in_ctor.is_some() && around.is_some()) { self.this_ref(c) } else { self.prog.add(TExpr::This) };
                         return self.apply_member(this, self_ty, name, targs, lists, span, expected);
                     }
                 }
@@ -1116,7 +1121,9 @@ impl<'a> Worker<'a> {
             t.type_args_for_errors(lists);
             (t.prog.add(TExpr::Unit), ERROR)
         };
-        let Some(c) = self.this_class().filter(|&c| self.parent_args_of != Some(c)) else {
+        // In a parent's argument `super` is the class around's for scalac; no tree here reads the `super` of an
+        // enclosing instance from inside the constructor, so it stays refused there.
+        let Some(c) = self.this_class().filter(|&c| self.parent_args_of != Some(c) && self.ctor_context().is_none()) else {
             self.error(super_span, "super can be used only in a class, object, or template");
             return failed(self, &lists);
         };
@@ -1399,7 +1406,7 @@ impl<'a> Worker<'a> {
                 .iter()
                 .flat_map(|f| match f {
                     super::Frame::Locals { names, .. } => names.as_slice(),
-                    super::Frame::Class(_) => &[],
+                    super::Frame::Class(_) | super::Frame::Ctor(_) => &[],
                 })
                 .map(|&(_, s)| s)
                 .filter(|&s| is_sibling(self, s))
@@ -1790,7 +1797,7 @@ impl<'a> Worker<'a> {
     /// qualifier's scope.
     fn proxy_apply_accessible(&self, c: ClassId, module: ClassId) -> bool {
         let info = self.syms.class(c);
-        let inside = self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == module || *k == c));
+        let inside = self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) | super::Frame::Ctor(k) if *k == module || *k == c));
         // The proxy takes the constructor's access, not the class's own `private` (which the
         // class's name keeps), a private constructor's being the application's own check
         // (`check_ctor_access`); a case class's `apply` is its own synthetic method.
@@ -2398,7 +2405,7 @@ impl<'a> Worker<'a> {
         }
         let companion = self.syms.class(owner).companion.or_else(|| self.inner_companion(owner));
         let inside = self.env.frames.iter().any(|f| match f {
-            super::Frame::Class(c) => *c == owner || Some(*c) == companion,
+            super::Frame::Class(c) | super::Frame::Ctor(c) => *c == owner || Some(*c) == companion,
             _ => false,
         });
         inside || self.in_access_scope(info.file, info.span.start, info.owner)
@@ -2480,7 +2487,7 @@ impl<'a> Worker<'a> {
         // as every top-level term but an object is in dotty (`<file>$package`).
         let package_member = matches!(owner, Owner::Package(_)) && matches!(word, "object" | "class" | "trait");
         let what = if package_member { shown.clone() } else { format!("{} in package {}", shown, self.package_full_name(home)) };
-        let from = self.this_class().map(|k| format!(" from {}", self.class_description(k))).unwrap_or_default();
+        let from = self.owner_class().map(|k| format!(" from {}", self.class_description(k))).unwrap_or_default();
         Some(format!(
             "{} cannot be accessed as a member of {}.type{}.\n  private[{}] {} can only be accessed from package {}.",
             what,
@@ -2528,7 +2535,7 @@ impl<'a> Worker<'a> {
         }
         let companion = self.syms.class(owner).companion;
         self.env.frames.iter().any(|f| match f {
-            super::Frame::Class(c) => Some(*c) == companion || self.derives_or_selects(*c, owner),
+            super::Frame::Class(c) | super::Frame::Ctor(c) => Some(*c) == companion || self.derives_or_selects(*c, owner),
             _ => false,
         })
     }
@@ -2568,7 +2575,7 @@ impl<'a> Worker<'a> {
     /// Whether the site is inside a subclass of the owner of `s`.
     pub(super) fn in_subclass_of_owner(&self, s: SymId) -> bool {
         let Owner::Class(owner) = self.syms.sym(s).owner else { return false };
-        self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(c) if self.derives_or_selects(*c, owner)))
+        self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(c) | super::Frame::Ctor(c) if self.derives_or_selects(*c, owner)))
     }
 
     pub(super) fn derives_or_selects(&self, c: ClassId, owner: ClassId) -> bool {
@@ -2597,7 +2604,7 @@ impl<'a> Worker<'a> {
         let Owner::Class(owner) = info.owner else { return true };
         let companion = self.syms.class(owner).companion;
         let inside = self.env.frames.iter().any(|f| match f {
-            super::Frame::Class(k) => *k == owner || Some(*k) == companion,
+            super::Frame::Class(k) | super::Frame::Ctor(k) => *k == owner || Some(*k) == companion,
             _ => false,
         });
         inside || self.in_access_scope(info.file, info.span.start, info.owner)
@@ -2612,7 +2619,7 @@ impl<'a> Worker<'a> {
         let through_this = matches!(self.prog.expr(recv), TExpr::This | TExpr::Super(_));
         let Some(enclosing_subclass) = self.protected_denied(s, through_this, recv_ty) else { return };
         let Some(owner) = self.access_owner(s, Some(recv_ty)) else { return };
-        let from = match self.this_class() {
+        let from = match self.owner_class() {
             Some(k) => self.class_description(k),
             None => "here".to_string(),
         };
@@ -2645,7 +2652,7 @@ impl<'a> Worker<'a> {
         let derives = |t: &Self, sub: ClassId, sup: ClassId| t.syms.class(sub).base_types.iter().any(|&(b, _)| b == sup);
         let mut enclosing_subclass = None;
         let classes: Vec<ClassId> = self.env.frames.iter().rev().filter_map(|f| match f {
-            super::Frame::Class(k) => Some(*k),
+            super::Frame::Class(k) | super::Frame::Ctor(k) => Some(*k),
             _ => None,
         }).collect();
         for k in classes {
@@ -2732,7 +2739,7 @@ impl<'a> Worker<'a> {
                     let Some(k) = last else { return false };
                     let env = self.anon_env(k);
                     let around = env.frames.iter().rev().find_map(|f| match f {
-                        super::Frame::Class(x) if self.syms.class(*x).name == scope => Some(*x),
+                        super::Frame::Class(x) | super::Frame::Ctor(x) if self.syms.class(*x).name == scope => Some(*x),
                         _ => None,
                     });
                     return match around {
@@ -2759,7 +2766,7 @@ impl<'a> Worker<'a> {
     /// `linkedClass`, the companion module's class of a class and the class of a module class).
     fn site_within_class(&self, c: ClassId) -> bool {
         let companion = self.syms.class(c).companion;
-        self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == c || Some(*k) == companion))
+        self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) | super::Frame::Ctor(k) if *k == c || Some(*k) == companion))
     }
 
     /// A private constructor takes the `apply` and `copy` of a case class with it.
@@ -2771,7 +2778,7 @@ impl<'a> Worker<'a> {
         let msg = if self.syms.class(c).mods & crate::ast::mods::PRIVATE_CTOR != 0 {
             format!("the constructor of {0} is private to {0}", name)
         } else {
-            let from = self.this_class().or(self.parent_args_of).map_or("here".to_string(), |k| self.class_description(k));
+            let from = self.owner_class().or(self.parent_args_of).map_or("here".to_string(), |k| self.class_description(k));
             format!("constructor {0} cannot be accessed as a member of {0} from {1}", name, from)
         };
         self.error(span, msg);
@@ -2795,7 +2802,7 @@ impl<'a> Worker<'a> {
         let companion = info.companion.or_else(|| self.inner_companion(c));
         let derives = |t: &Self, k: ClassId| protected && t.syms.class(k).base_types.iter().any(|&(b, _)| b == c);
         let inside = self.env.frames.iter().any(|f| match f {
-            super::Frame::Class(f) => *f == c || Some(*f) == companion || derives(self, *f),
+            super::Frame::Class(f) | super::Frame::Ctor(f) => *f == c || Some(*f) == companion || derives(self, *f),
             _ => false,
         });
         // The arguments of a parent clause stand outside the class being defined.

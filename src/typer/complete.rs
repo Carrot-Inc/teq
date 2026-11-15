@@ -1511,6 +1511,7 @@ impl<'a> Worker<'a> {
                         }
                     }
                 }
+                Frame::Ctor(_) => {}
                 Frame::Class(c) => {
                     for n in self.class_scope_names(c, types) {
                         note(&mut names, n, Rank::Member);
@@ -2014,7 +2015,7 @@ impl<'a> Worker<'a> {
             }
             let Owner::Class(o) = owner else { return true };
             let companion = self.syms.class(o).companion;
-            return self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) if *k == o || Some(*k) == companion));
+            return self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) | Frame::Ctor(k) if *k == o || Some(*k) == companion));
         }
         mods & crate::ast::mods::PROTECTED == 0 || self.inside_or_derives(owner)
     }
@@ -2024,7 +2025,7 @@ impl<'a> Worker<'a> {
         let Owner::Class(o) = owner else { return true };
         let companion = self.syms.class(o).companion;
         self.env.frames.iter().any(|f| match f {
-            Frame::Class(k) => *k == o || Some(*k) == companion || self.syms.class(*k).base_types.iter().any(|&(b, _)| b == o),
+            Frame::Class(k) | Frame::Ctor(k) => *k == o || Some(*k) == companion || self.syms.class(*k).base_types.iter().any(|&(b, _)| b == o),
             _ => false,
         })
     }
@@ -2273,6 +2274,7 @@ impl<'a> Worker<'a> {
                         }
                     }
                 }
+                Frame::Ctor(_) => {}
                 Frame::Class(c) => {
                     of_class(self, c, &mut names);
                     let givens: Vec<SymId> = self.syms.class_raw(c).givens.clone();

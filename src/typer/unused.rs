@@ -596,6 +596,7 @@ impl<'a> Worker<'a> {
             found.clear();
             match &self.env.frames[i] {
                 Frame::Locals { givens, .. } => found.extend(givens.iter().map(|&g| (g, super::implicits::GivenScope::Lexical))),
+                Frame::Ctor(_) => {}
                 Frame::Class(c) => {
                     let c = *c;
                     if let Some(index) = self.class_given_index(c) {
@@ -1119,6 +1120,7 @@ impl<'a> Worker<'a> {
                     }
                     None
                 }
+                Frame::Ctor(_) => None,
                 Frame::Class(c) => Some(*c),
             };
             let defines = match (class, owner) {

@@ -373,6 +373,15 @@ pub enum Frame {
         owner: u32,
     },
     Class(ClassId),
+    /// The constructor of a class, where an argument of one of its parents is typed (dotty's
+    /// `Contexts.superCallContext`: the owner is the constructor, the outer context the one around the class,
+    /// the scope the constructor's parameters, which the `Locals` frame above this one holds). It stands
+    /// where the class's own frame would and names nothing: no member, type, given, extension, conversion or
+    /// import of the class is found through it, and `this` is the class around. What asks where the code
+    /// stands (the path to an enclosing instance, what a class made here captures, access to a private or
+    /// protected member) reads it as the class's. Everything defined inside the argument is made from this
+    /// environment and so has it too.
+    Ctor(ClassId),
 }
 
 impl Frame {
@@ -5948,7 +5957,7 @@ impl<'a> Worker<'a> {
             .env
             .frames
             .iter()
-            .filter_map(|f| if let Frame::Class(c) = f { Some(*c) } else { None })
+            .filter_map(|f| if let Frame::Class(c) | Frame::Ctor(c) = f { Some(*c) } else { None })
             .collect();
         // A top-level opaque type is transparent to the file's top-level definitions, which its
         // package object holds, an object's to the object's body. The package object holds the

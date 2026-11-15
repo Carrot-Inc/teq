@@ -1198,7 +1198,7 @@ impl<'a> Worker<'a> {
         if name == names::THIS {
             let c = self.this_class()?;
             let this = self.this_prefix(c);
-            return Some((self.prog.add(TExpr::This), this));
+            return Some((self.this_ref(c), this));
         }
         let r = self.resolve_type_path(path)?;
         let span = ast.ty_spans[ty.idx()];

@@ -769,7 +769,7 @@ impl<'a> Worker<'a> {
                     visible.extend(names.iter().map(|&(_, s)| s));
                     visible.extend(givens.iter().copied());
                 }
-                Frame::Class(k) => {
+                Frame::Class(k) | Frame::Ctor(k) => {
                     if let Some(o) = self.outer_class(*k) {
                         visible.push(self.outer_this_sym(o));
                     }
@@ -1337,7 +1337,7 @@ impl<'a> Worker<'a> {
     /// Whether the lifted class `c` is made inside the lifted class `l`, in its body or a
     /// nested class's.
     fn lifted_inside(&self, c: ClassId, l: ClassId) -> bool {
-        self.anon_envs.get(&c).is_some_and(|env| env.frames.iter().any(|f| matches!(f, Frame::Class(k) if *k == l)))
+        self.anon_envs.get(&c).is_some_and(|env| env.frames.iter().any(|f| matches!(f, Frame::Class(k) | Frame::Ctor(k) if *k == l)))
     }
 
     /// The lifted class a class nested in it at any depth reads its captures from.
@@ -2446,7 +2446,7 @@ impl<'a> Worker<'a> {
         let mut through_anon = false;
         let mut depth = 0;
         for frame in self.env.frames.iter().rev() {
-            if let Frame::Class(k) = frame {
+            if let Frame::Class(k) | Frame::Ctor(k) = frame {
                 if *k == c {
                     break;
                 }
@@ -2523,7 +2523,7 @@ impl<'a> Worker<'a> {
     fn frame_inside(&self, c: ClassId) -> Option<ClassId> {
         let mut inner = None;
         for frame in self.env.frames.iter().rev() {
-            if let Frame::Class(k) = frame {
+            if let Frame::Class(k) | Frame::Ctor(k) = frame {
                 if *k == c {
                     return inner;
                 }
@@ -2540,7 +2540,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         for frame in self.env.frames.iter().rev() {
-            if let Frame::Class(k) = frame {
+            if let Frame::Class(k) | Frame::Ctor(k) = frame {
                 if *k == c {
                     return true;
                 }
@@ -2885,7 +2885,7 @@ fn names_own_records(env: &Env) -> bool {
                 || classes.iter().any(|&(_, c)| own(c.0))
                 || aliases.iter().any(|&(_, a)| own(a.0))
         }
-        Frame::Class(c) => own(c.0),
+        Frame::Class(c) | Frame::Ctor(c) => own(c.0),
     }) || env.imports.iter().any(|i| match i.target {
         super::ImportTarget::PkgMember(p, _) | super::ImportTarget::PkgAll(p) | super::ImportTarget::PkgGivens(p) => own(p.0),
         super::ImportTarget::ClassMember(c, _) | super::ImportTarget::ClassAll(c) | super::ImportTarget::ClassGivens(c) => own(c.0),

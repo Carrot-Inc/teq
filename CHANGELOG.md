@@ -7,6 +7,25 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- The arguments a class passes to a trait it extends (`class Mid extends Named(raise(9))` for `trait Named(val
+  name: Int)`) are read from inside that class's constructor: a member of the object, class or trait around the
+  class is that scope's. teq read such a member on the new instance itself, so the build succeeded and the program
+  failed when it ran (JavaScript: `this.raise is not a function`, or `undefined` for a value; the JVM: a
+  ClassCastException; the interpreter: `has no member raise`), for a class, an object and an anonymous class that
+  extends the trait, with the member a method, a value, a `var`, a lazy value or one inherited, written alone or
+  as `Outer.this.raise(9)`, as a `using` argument and inside a lambda; with a class between (a class in a class in
+  the scope) the JavaScript named a local that was not there and the JVM build was refused. A trait whose type
+  arguments the argument infers (`extends Boxed(raise(9))`) was right already.
+  A parent's argument, a class's as a trait's, is now typed as scalac types it, outside the class it is written
+  on, and so is everything the argument defines (a lambda, a local method, a block's class with its own parent
+  call). Four things change with that. A member the class declares no longer shadows a name around it: `object
+  Mid extends Base(size) { val size = 3 }` beside an outer `size` read the object's own value before it was set
+  (`0`; a VerifyError on the JVM). A type or an import of the class's body is not found there: `class Mid extends
+  Base(new Part) { class Part }` and `extends Base(helper(1)) { import Tools.helper }` are refused as scalac
+  refuses them ("type Part not found", "not found: helper"); teq accepted both. `this` in such an argument is the
+  class around, as for scalac (`class Mid extends Base(this.tag)` inside a class or an object): teq refused it in a
+  class parent's argument and read the new instance in a trait parent's; for a top-level class it stays an error.
+  Not covered: `super` in a parent's argument, which scalac reads as the class around's and teq refuses.
 - A case class's name applied without `new`, and its `apply` written, named as a value or reached by a
   placeholder, is its companion's `apply` and nothing else: the primary constructor's parameters, with the primary
   constructor's access. teq took a secondary constructor there too, as a plain class's name does. With

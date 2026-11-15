@@ -932,7 +932,7 @@ impl<'a> Worker<'a> {
                     super::Frame::Locals { names, tparams, givens, classes, aliases, .. } => {
                         names.len() * 8 + tparams.len() * 8 + givens.len() * 4 + classes.len() * 8 + aliases.len() * 8 + 64
                     }
-                    super::Frame::Class(_) => 16,
+                    super::Frame::Class(_) | super::Frame::Ctor(_) => 16,
                 }).sum::<usize>() + c.env.imports.len() * std::mem::size_of::<super::ResolvedImport>() + c.args.len() * 4 + c.arg_types.len() * 8
             });
             super::substitution::counts::kept((std::mem::size_of::<Kept>() + frames) as u64);

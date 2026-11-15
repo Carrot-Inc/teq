@@ -105,7 +105,7 @@ impl<'a> Worker<'a> {
         for f in &self.env.frames[at + 1..] {
             match f {
                 Frame::Locals { .. } => in_block = true,
-                Frame::Class(k) => {
+                Frame::Class(k) | Frame::Ctor(k) => {
                     if self.syms.class(*k).kind == ClassKind::Trait {
                         if !self.dotty_local_trait(*k) {
                             return holder;

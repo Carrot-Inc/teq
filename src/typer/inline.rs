@@ -5197,7 +5197,7 @@ impl<'a> Worker<'a> {
         // The expanded code is the site's owner's, as scalac's inlined trees are.
         let site_owner = env.frames.last().map_or(0, |f| match f {
             Frame::Locals { owner, .. } => *owner,
-            Frame::Class(_) => u32::MAX,
+            Frame::Class(_) | Frame::Ctor(_) => u32::MAX,
         });
         for scope in &scopes {
             env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: scope.givens.clone(), classes: Vec::new(), aliases: Vec::new(), owner: site_owner });

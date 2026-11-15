@@ -169,7 +169,7 @@ impl<'a> Worker<'a> {
             }
         };
         let enclosing = frames.iter().rev().find_map(|f| match f {
-            super::Frame::Class(k) if self.syms.class(*k).owner != Owner::Local => Some(*k),
+            super::Frame::Class(k) | super::Frame::Ctor(k) if self.syms.class(*k).owner != Owner::Local => Some(*k),
             _ => None,
         });
         let local = match enclosing {

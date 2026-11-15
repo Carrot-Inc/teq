@@ -298,7 +298,6 @@ i17394b	teq: jvm backend: two classes are named example/_1$package
 i17465.scala	i17465.scala:3:53: type mismatch: found "Hello", required (StringOps | String){def *(y: Int): StringOps | String}
 i1747.scala	i1747.scala:2:16: method toArray overrides nothing
 i1753.scala	i1753.scala:20:28: type mismatch: found (BCodeSkelBuilder.this.int : BackendInterface), required (BCodeSkelBuilder.this.bTypes.int : I)
-i1756.scala	i1756.scala:5:20: this can be used only in a class, object, or template
 i17631.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17735.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17735a.scala	option: -Wsafe-init with -Werror (teq has no flag for it)

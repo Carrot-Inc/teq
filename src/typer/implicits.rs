@@ -860,7 +860,7 @@ impl<'a> Worker<'a> {
         let mut k = 0;
         for f in 0..n {
             let owner = match &self.env.frames[f] {
-                Frame::Class(_) => (true, f as u32),
+                Frame::Class(_) | Frame::Ctor(_) => (true, f as u32),
                 Frame::Locals { owner, .. } => (false, *owner),
             };
             if self.frame_has_givens(f) {
@@ -908,6 +908,7 @@ impl<'a> Worker<'a> {
         match &self.env.frames[frame] {
             Frame::Locals { givens, .. } => !givens.is_empty(),
             Frame::Class(c) if self.parent_args_of == Some(*c) => self.deferred_impl_of == Some(*c),
+            Frame::Ctor(_) => false,
             Frame::Class(c) => {
                 let c = *c;
                 self.class_given_index(c).is_some()
@@ -955,8 +956,11 @@ impl<'a> Worker<'a> {
                 locals.retain(|&g| !self.is_conversion_def(g));
                 out.extend(locals.into_iter().map(|g| (g, GivenScope::Lexical)))
             }
-            // The arguments of a parent constructor see the constructor parameters alone, and
-            // the implementation of a deferred given the class's using parameters.
+            // A class's constructor frame gives none: the arguments of a parent see the constructor's
+            // parameters, which the frame above it holds.
+            Frame::Ctor(_) => {}
+            // The implementation of a deferred given sees the class's using parameters, a secondary
+            // constructor's own call the constructor's alone.
             Frame::Class(c) if self.parent_args_of == Some(*c) => {
                 if self.deferred_impl_of == Some(*c) {
                     // Its `using` parameters, flagged `Given` as dotty's `implementDeferredGivens`
@@ -1506,7 +1510,7 @@ impl<'a> Worker<'a> {
         };
         let Some(k) = k else { return false };
         let classes: Vec<ClassId> = self.env.frames.iter().filter_map(|f| match f {
-            super::Frame::Class(x) => Some(*x),
+            super::Frame::Class(x) | super::Frame::Ctor(x) => Some(*x),
             _ => None,
         }).collect();
         classes.into_iter().any(|x| x == k || self.derives_from(k, x))
@@ -2783,6 +2787,7 @@ impl<'a> Worker<'a> {
         for f in &self.env.frames {
             match f {
                 Frame::Class(c) => words.extend([1, c.0]),
+                Frame::Ctor(c) => words.extend([8, c.0]),
                 Frame::Locals { givens, owner, .. } => {
                     words.extend([2, *owner, givens.len() as u32]);
                     words.extend(givens.iter().map(|g| g.0));
@@ -5594,7 +5599,7 @@ impl<'a> Worker<'a> {
             // superclass's: its arguments read the class's parameters as locals
             // (`Contexts.superCallContext`). A deferred given's implementation, searched there
             // too, is a member's initialiser, which reads them on `this`.
-            Owner::Class(c) if self.parent_args_of == Some(c) && self.deferred_impl_of != Some(c) => {
+            Owner::Class(c) if (self.parent_args_of == Some(c) || self.in_ctor_of(c)) && self.deferred_impl_of != Some(c) => {
                 self.prog.add(TExpr::Local(g))
             }
             Owner::Package(_) => {

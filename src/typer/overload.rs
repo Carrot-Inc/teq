@@ -334,7 +334,7 @@ impl<'a> Worker<'a> {
             if at == Owner::Local {
                 match t.anon_envs.get(&k) {
                     Some(env) => {
-                        if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) => Some(*x), _ => None }) {
+                        if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) | super::Frame::Ctor(x) => Some(*x), _ => None }) {
                             at = Owner::Class(h);
                         }
                     }
@@ -397,7 +397,7 @@ impl<'a> Worker<'a> {
         if at == Owner::Local {
             match self.anon_envs.get(&k) {
                 Some(env) => {
-                    if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) => Some(*x), _ => None }) {
+                    if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) | super::Frame::Ctor(x) => Some(*x), _ => None }) {
                         at = Owner::Class(h);
                     }
                 }

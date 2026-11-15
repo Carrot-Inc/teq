@@ -2133,7 +2133,13 @@ impl<'a> Worker<'a> {
                     (self.this_ref(c), ty)
                 }
                 None => {
-                    self.error(span, "'this' is not available outside of a class");
+                    // A top-level class's parent's argument has no class around it: scalac's words there.
+                    let msg = if self.env.frames.iter().any(|f| matches!(f, Frame::Ctor(_))) {
+                        "this can be used only in a class, object, or template"
+                    } else {
+                        "'this' is not available outside of a class"
+                    };
+                    self.error(span, msg);
                     (self.prog.add(TExpr::Unit), ERROR)
                 }
             },
@@ -3348,9 +3354,33 @@ impl<'a> Worker<'a> {
 
     /// The innermost class under typing, a SAM lambda's included: whose instance `this` is at
     /// run time.
+    /// The class in whose parent's argument the code stands directly: the innermost frame of a class or of a
+    /// class's constructor is a constructor's (`Frame::Ctor`). A class defined inside the argument has its own
+    /// frame above it and is not in it.
+    pub fn ctor_context(&self) -> Option<ClassId> {
+        self.env.frames.iter().rev().find_map(|f| match f {
+            Frame::Ctor(c) => Some(Some(*c)),
+            Frame::Class(c) if !self.sam_classes.contains_key(c) => Some(None),
+            _ => None,
+        }).flatten()
+    }
+
+    /// The class the code stands in by ownership (`ctx.owner.enclosingClass`): the class in whose parent's
+    /// argument it stands directly, else the class of `this`.
+    pub fn owner_class(&self) -> Option<ClassId> {
+        self.ctor_context().or_else(|| self.this_class())
+    }
+
+    /// Whether the code stands in the constructor of `c`, directly or inside what an argument of one of its
+    /// parents defines.
+    pub fn in_ctor_of(&self, c: ClassId) -> bool {
+        self.env.frames.iter().any(|f| matches!(f, Frame::Ctor(k) if *k == c))
+    }
+
     pub fn innermost_class(&self) -> Option<ClassId> {
         self.env.frames.iter().rev().find_map(|f| match f {
-            Frame::Class(c) => Some(*c),
+            // In a parent's argument the instance under construction is the class's (`Frame::Ctor`).
+            Frame::Class(c) | Frame::Ctor(c) => Some(*c),
             _ => None,
         })
     }

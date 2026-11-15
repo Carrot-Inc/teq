@@ -569,7 +569,7 @@ impl<'a> Worker<'a> {
     pub(super) fn predef_unimported(&mut self) -> bool {
         let n_local = self.env.imports.len();
         let outermost = self.env.frames.iter().find_map(|f| match f {
-            Frame::Class(c) if self.syms.class(*c).file == self.env.file => Some(self.syms.class(*c).span.start),
+            Frame::Class(c) | Frame::Ctor(c) if self.syms.class(*c).file == self.env.file => Some(self.syms.class(*c).span.start),
             _ => None,
         });
         (0..self.import_count()).any(|i| match self.import_at(i).unimports_predef {
@@ -1542,7 +1542,7 @@ impl<'a> Worker<'a> {
             TypeRef::Alias(a) if self.private_alias(a) => {
                 let Owner::Class(owner) = self.syms.aliases[a.idx()].owner else { return true };
                 let companion = self.syms.class(owner).companion;
-                self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) if *k == owner || Some(*k) == companion))
+                self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) | Frame::Ctor(k) if *k == owner || Some(*k) == companion))
             }
             _ => true,
         }
@@ -2571,7 +2571,7 @@ impl<'a> Worker<'a> {
                 }
                 return Some(r);
             }
-            if matches!(self.env.frames[i], Frame::Class(_)) {
+            if matches!(self.env.frames[i], Frame::Class(_) | Frame::Ctor(_)) {
                 innermost_class = false;
             }
             while next < n_local {
@@ -2752,6 +2752,7 @@ impl<'a> Worker<'a> {
         for j in (0..inner).rev() {
             let defined = match &self.env.frames[j] {
                 Frame::Locals { names, .. } => names.iter().any(|&(n, _)| n == name).then(|| "an enclosing scope".to_string()),
+                Frame::Ctor(_) => None,
                 Frame::Class(k) => {
                     let k = *k;
                     let own = self.syms.class(k).members.get(&name).map_or(false, |&s| self.syms.sym(s).owner == Owner::Class(k))
@@ -2780,7 +2781,7 @@ impl<'a> Worker<'a> {
         let Some(span) = span else { return };
         let outer = match outer {
             Bound::Frame(i) => match self.env.frames[i] {
-                Frame::Class(c) => format!("defined in {}", self.class_description(c)),
+                Frame::Class(c) | Frame::Ctor(c) => format!("defined in {}", self.class_description(c)),
                 Frame::Locals { .. } => "defined in an enclosing scope".to_string(),
             },
             Bound::Pkg(p) => format!("defined in package {}", self.pkg_description(p)),
@@ -2925,6 +2926,8 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
+            // A class's constructor frame names nothing: its extensions and its bases' are not in scope.
+            Frame::Ctor(_) => {}
             Frame::Locals { names, .. } => {
                 for &(n, s) in names.iter() {
                     if n == name && self.syms.sym(s).is_extension {
@@ -4787,7 +4790,7 @@ impl<'a> Worker<'a> {
             let depth = self.refine_scopes[k].frame_depth;
             let bound_inside = (depth..upper).any(|i| match &self.env.frames[i] {
                 Frame::Locals { tparams, classes, aliases, .. } => tparams.iter().any(|&(m, _)| m == n) || classes.iter().any(|&(m, _)| m == n) || aliases.iter().any(|&(m, _)| m == n),
-                Frame::Class(_) => false,
+                Frame::Class(_) | Frame::Ctor(_) => false,
             });
             if bound_inside {
                 return None;
@@ -9120,6 +9123,8 @@ impl Binding for TermRef {
                     _ => TermRef::Local(s),
                 })
                 .or_else(|| classes.iter().rev().find(|(n, _)| *n == name).map(|&(_, c)| c).filter(|&c| !t.skip_proxy(c)).map(TermRef::Class)),
+            // A class's constructor frame names nothing: a parent's argument is typed outside the class.
+            Frame::Ctor(_) => None,
             Frame::Class(c) => {
                 let c = *c;
                 if t.syms.class(c).self_alias == name {
@@ -9272,6 +9277,8 @@ impl Binding for TypeRef {
                 .map(|&(_, c)| TypeRef::Class(c))
                 .or_else(|| aliases.iter().rev().find(|(n, _)| *n == name).map(|&(_, a)| TypeRef::Alias(a)))
                 .or_else(|| tparams.iter().rev().find(|(n, _)| *n == name).map(|&(_, p)| TypeRef::Param(p))),
+            // A class's constructor frame names no type.
+            Frame::Ctor(_) => None,
             Frame::Class(c) => {
                 let c = *c;
                 t.class_scope_type(c, name)
