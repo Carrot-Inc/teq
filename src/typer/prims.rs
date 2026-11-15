@@ -152,6 +152,15 @@ enum Binop {
 /// conversion to it is indexed under too (`Integer2int(i).toLong` for `i.toLong`).
 pub(super) const NUMERIC_CONVERSIONS: &[&str] = &["toByte", "toShort", "toChar", "toInt", "toLong", "toFloat", "toDouble"];
 
+/// What the source wrote on the left of a compound assignment `l op= r`: a member named alone (an identifier),
+/// a selection `q.x` with the tree of `q`, or anything else.
+#[derive(Clone, Copy)]
+enum WrittenLeft {
+    Alone,
+    Selected(ExprId),
+    Other,
+}
+
 impl<'a> Worker<'a> {
     /// The name the enum `e`'s lookups give it in their messages, dotty's `enumClass.fullName`:
     /// a local enum's under the class whose body defines it, `_$` before its name
@@ -578,15 +587,25 @@ impl<'a> Worker<'a> {
             None if base.is_some() && matches!(self.cur_ast().expr(l), Expr::Ident(_)) => self.this_receiver(tl),
             receiver => receiver,
         };
+        // What the source wrote on the left of an assignment operator: a member named alone, or a selection
+        // with its prefix.
+        let written = match base {
+            Some(_) => match self.cur_ast().expr(l) {
+                Expr::Ident(_) => WrittenLeft::Alone,
+                Expr::Select(q, _) => WrittenLeft::Selected(q),
+                _ => WrittenLeft::Other,
+            },
+            None => WrittenLeft::Other,
+        };
         if let (Some(base), Some(receiver)) = (base, receiver) {
             let at = self.cur_ast().expr_span(l);
-            if let Some(done) = self.assign_op_through_setter(tl, lty, receiver, op, base, r, op_end, at, span) {
+            if let Some(done) = self.assign_op_through_setter(tl, lty, receiver, written, op, base, r, op_end, at, span) {
                 return done;
             }
         }
-        let Some(d) = declared else { return self.assign_op_or_binop(tl, lty, op, base, r, op_end, span, expected) };
+        let Some(d) = declared else { return self.assign_op_or_binop(tl, lty, written, op, base, r, op_end, span, expected) };
         let outer = self.declared_call.replace((tl, op, d));
-        let typed = self.assign_op_or_binop(tl, lty, op, base, r, op_end, span, expected);
+        let typed = self.assign_op_or_binop(tl, lty, written, op, base, r, op_end, span, expected);
         self.declared_call = outer;
         typed
     }
@@ -695,9 +714,9 @@ impl<'a> Worker<'a> {
 
     /// `q.y op= r` where `y` is a method without parameters and `q` has a setter `y_=`: `q.y_=(q.y
     /// base r)`, `q` evaluated once, unless the value has an `op=` of its own. `receiver` is the
-    /// typed `q` of `tl`, `at` the place of `q.y`.
+    /// typed `q` of `tl`, `at` the place of `q.y`; `written` what the source wrote on the left.
     #[allow(clippy::too_many_arguments)]
-    fn assign_op_through_setter(&mut self, tl: TExprId, lty: TypeId, receiver: (TExprId, TypeId), op: Name, base: Name, r: ExprId, op_end: u32, at: Span, span: Span) -> Option<(TExprId, TypeId)> {
+    fn assign_op_through_setter(&mut self, tl: TExprId, lty: TypeId, receiver: (TExprId, TypeId), written: WrittenLeft, op: Name, base: Name, r: ExprId, op_end: u32, at: Span, span: Span) -> Option<(TExprId, TypeId)> {
         let (tq, qty) = receiver;
         let TExpr::CallMethod(recv, getter, args) = self.prog.expr(tl) else { return None };
         if recv != tq || args.len != 0 || self.syms.sym(getter).kind != SymKind::Def || qty == ERROR {
@@ -727,7 +746,7 @@ impl<'a> Worker<'a> {
         if inline {
             self.drop_pending_copied(&[tl], tq);
         }
-        let tq = if self.is_stable(tq) { tq } else { self.hoist(tq, qty, span) };
+        let tq = self.lift_prefix(tq, qty, getter, written, span);
         let current = if inline {
             self.apply_member(tq, qty, name, None, Vec::new(), at, None).0
         } else {
@@ -742,11 +761,14 @@ impl<'a> Worker<'a> {
     }
 
     /// `l op r` on the typed `l`; `base` is `op` without its trailing `=` when the operator
-    /// is an assignment operator, which stands for `l = l base r` on a var without an `op=`.
+    /// is an assignment operator, which stands for `l = l base r` on a var without an `op=`;
+    /// `written` what the source wrote on the left.
+    #[allow(clippy::too_many_arguments)]
     fn assign_op_or_binop(
         &mut self,
         tl: TExprId,
         lty: TypeId,
+        written: WrittenLeft,
         op: Name,
         base: Option<Name>,
         r: ExprId,
@@ -784,7 +806,7 @@ impl<'a> Worker<'a> {
             }
             if !has_member && target.map_or(false, |s| self.syms.sym(s).kind == SymKind::Var) {
                 let mark = self.hoisted.len();
-                let tl = self.field_target_once(tl, span);
+                let tl = self.field_target_once(tl, written, span);
                 let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, FunEnd::operand_at(op_end), span, None);
                 let value = self.adapt(value, vty, lty, span);
                 let assign = self.assignment(tl, value);
@@ -1045,34 +1067,164 @@ impl<'a> Worker<'a> {
         let mark = self.hoisted.len();
         let (tf, fty) = match self.indexed_target(f, args, span) {
             Ok(target) => target,
-            Err((tl, lty)) => return self.assign_op_or_binop(tl, lty, op, Some(base), r, op_end, span, expected),
+            Err((tl, lty)) => return self.assign_op_or_binop(tl, lty, WrittenLeft::Other, op, Some(base), r, op_end, span, expected),
         };
         let fty = self.solve_in(fty);
-        let tf = self.hoist(tf, fty, span);
-        let mut index = Vec::new();
+        let mut typed = Vec::new();
         for a in self.cur_ast().expr_list(args).to_vec() {
             let (ta, aty) = self.type_expr(a, None);
             let aty = self.solve_in(aty);
-            let ta = self.hoist(ta, aty, span);
-            index.push(ArgSrc::Typed(ta, aty));
+            typed.push((ta, aty));
         }
-        let lists = vec![ArgList { args: index.clone(), using: false, span, fun: ArgList::NO_FUN }];
+        // The application as it is written is typed first, as the reference tries `f(args).op=(r)` before it
+        // comes to `typedOpAssign`: where its result has the operator, that call is the meaning and nothing
+        // is bound.
+        let written: Vec<ArgSrc> = typed.iter().map(|&(ta, aty)| ArgSrc::Typed(ta, aty)).collect();
+        let lists = vec![ArgList { args: written, using: false, span, fun: ArgList::NO_FUN }];
         let (cur, cty) = self.apply_member(tf, fty, names::APPLY, None, lists, span, None);
         let cty = self.solve_in(cty);
         let cty = self.dealias(cty);
         if cty == ERROR {
             return (self.wrap_hoisted(mark, cur), ERROR);
         }
-        let (te, ty) = if self.find_member(cty, op).is_some() || self.has_lexical_extension_for(cty, op) {
+        if self.find_member(cty, op).is_some() || self.has_lexical_extension_for(cty, op) {
             let lists = vec![ArgList { args: self.infix_args(r), using: false, span, fun: FunEnd::operand_at(op_end) }];
-            self.apply_member(cur, cty, op, None, lists, span, expected)
-        } else {
-            let (value, vty) = self.binop_or_member(base, cur, cty, cty, r, FunEnd::operand_at(op_end), span, None);
-            index.push(ArgSrc::Typed(value, vty));
-            let lists = vec![ArgList { args: index, using: false, span, fun: ArgList::NO_FUN }];
-            self.apply_member(tf, fty, names::UPDATE, None, lists, span, None)
-        };
+            let (te, ty) = self.apply_member(cur, cty, op, None, lists, span, expected);
+            return (self.wrap_hoisted(mark, te), ty);
+        }
+        // The assignment form, `f.update(args, f(args) op r)`: `liftAssigned` binds the prefix and each
+        // argument that is no pure path, an argument of a by-name or an `inline` formal of `apply` never
+        // (`liftArgs`); the application read is typed again over what was bound, and the one typed above,
+        // which stands in no tree, gives up its pending call.
+        let exempt = self.apply_formals_left(fty, typed.len());
+        self.drop_pending_copied(&[cur], tf);
+        let tf = if self.named_alone_stays(f, tf) { tf } else { self.lift_assigned(tf, fty, span) };
+        let written: Vec<ExprId> = self.cur_ast().expr_list(args).to_vec();
+        let mut index = Vec::new();
+        for (k, (ta, aty)) in typed.into_iter().enumerate() {
+            let stays = exempt[k] || written.get(k).is_some_and(|&a| self.named_alone_stays(a, ta));
+            let ta = if stays { ta } else { self.lift_assigned(ta, aty, span) };
+            index.push(ArgSrc::Typed(ta, aty));
+        }
+        let lists = vec![ArgList { args: index.clone(), using: false, span, fun: ArgList::NO_FUN }];
+        let (cur, _) = self.apply_member(tf, fty, names::APPLY, None, lists, span, None);
+        let (value, vty) = self.binop_or_member(base, cur, cty, cty, r, FunEnd::operand_at(op_end), span, None);
+        index.push(ArgSrc::Typed(value, vty));
+        let lists = vec![ArgList { args: index, using: false, span, fun: ArgList::NO_FUN }];
+        let (te, ty) = self.apply_member(tf, fty, names::UPDATE, None, lists, span, None);
         (self.wrap_hoisted(mark, te), ty)
+    }
+
+    /// For each of the `n` arguments of `f(args)`, whether the formal of the `apply` that `fty` has is by-name
+    /// or `inline`: `Lifter.liftArgs` (EtaExpansion.scala 100-108) leaves such an argument as it is, whatever
+    /// its purity. An `apply` with alternatives, or one that is an extension, has no one list of formals to
+    /// ask: none is left.
+    fn apply_formals_left(&mut self, fty: TypeId, n: usize) -> Vec<bool> {
+        let mut left = vec![false; n];
+        let Some((m, _)) = self.find_member(fty, names::APPLY) else { return left };
+        if self.syms.alternatives(m).is_some() || self.syms.sym(m).kind != SymKind::Def {
+            return left;
+        }
+        let params: Vec<ParamSig> = match self.sig_of(m).clauses.iter().find(|c| !c.is_using) {
+            Some(clause) => clause.params.clone(),
+            None => return left,
+        };
+        for (k, p) in params.iter().enumerate().take(n) {
+            left[k] = p.by_name || self.is_inline_param(p, Some((m, k)));
+        }
+        left
+    }
+
+    /// `LiftComplex.noLift` (EtaExpansion.scala 185-187): what the lift of a compound assignment's left side
+    /// leaves where it stands: a pure path by the reference's purity. A plain inline call still pending is
+    /// none, as for the operands of a right-associative operator (`lifted_as_impure`).
+    fn assigned_stays(&mut self, te: TExprId) -> bool {
+        use super::elaborate::Purity;
+        !self.is_pending_call(te) && self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE_PATH)
+    }
+
+    /// `Lifter.lift` (EtaExpansion.scala 55-73) for an operand of a compound assignment's left side, which is
+    /// evaluated once and stands on both sides of `lhs = lhs op r` (`Applications.typedOpAssign`,
+    /// `liftAssigned`): bound to a value in front unless it is a pure path. What `hoist` binds is bound by it
+    /// as before, a pending call expanded first. What `hoist` leaves in place and the reference's purity does
+    /// not call a pure path (an `inline` parameter, an object with an initialiser, a lazy value) is bound
+    /// here: a value of the body, noted neither as hoisted nor as an operator's lifted argument, so that an
+    /// expansion copies it and nothing takes it back.
+    fn lift_assigned(&mut self, te: TExprId, ty: TypeId, span: Span) -> TExprId {
+        if self.assigned_stays(te) {
+            return te;
+        }
+        // The binding has the widened type of what it binds (`expr.tpe.widen`): an object's is its class's. A
+        // body written to products is read back with it, so the whole build gives the value that type too.
+        let own = if self.canon(ty) != ANY {
+            ty
+        } else {
+            match (self.prog.type_of(te), self.prog.expr(te)) {
+                (Some(t), _) => t,
+                (None, TExpr::Module(o)) => self.types.class(o, &[]),
+                (None, _) => ty,
+            }
+        };
+        let own = self.widen_type(own);
+        // An object nested in a class or trait, reached by a path, is bound under the path's own type
+        // (`k.Counter.type`): its class through a prefix has no name of its own in a pickle.
+        let own = match self.types.get(own) {
+            Type::Nested(_, k) if matches!(self.types.get(k), Type::Class(c, _) if self.syms.class(c).inner_object.is_some()) => self.path_of(te).unwrap_or(own),
+            _ => own,
+        };
+        if !self.is_stable(te) {
+            return self.hoist(te, own, span);
+        }
+        let tmp = self.indexed_local("h", self.hoisted.len() as u32, own, span);
+        self.hoisted.push(TStmt::Val(tmp, te));
+        self.prog.add(TExpr::Local(tmp))
+    }
+
+    /// An identifier that names a static object's member alone stays an identifier for the reference
+    /// (`TypeAssigner.prefixIsElidable`): its purity is the member's own (`TreeInfo.refPurity`), and the
+    /// object, which the typed node selects it on, is no prefix the source wrote.
+    fn named_alone_stays(&mut self, written: ExprId, te: TExprId) -> bool {
+        use super::elaborate::Purity;
+        if !matches!(self.cur_ast().expr(written), Expr::Ident(_)) {
+            return false;
+        }
+        match self.prog.expr(te) {
+            TExpr::Field(r, s) if matches!(self.prog.expr(r), TExpr::Module(_)) => self.ref_purity(s).at_least(Purity::PURE_PATH),
+            _ => false,
+        }
+    }
+
+    /// Whether `te` is an object nested in a class or trait whose own prefix is no path.
+    fn pathless_inner_object(&mut self, te: TExprId) -> bool {
+        let Some(t) = self.prog.type_of(te) else { return false };
+        let t = self.widen_type(t);
+        let inner = matches!(self.types.get(t), Type::Nested(_, k) if matches!(self.types.get(k), Type::Class(c, _) if self.syms.class(c).inner_object.is_some()));
+        inner && !self.is_stable(te) && self.path_of(te).is_none()
+    }
+
+    /// The prefix `recv` of the member `member` on a compound assignment's left side, lifted
+    /// (`lift_assigned`), with what the reference leaves where it stands. Where the source named the member
+    /// alone and the reference elides its prefix (a static object's: `prefixIsElidable`), `liftAssigned` meets
+    /// an identifier and lifts nothing; where the prefix itself is such an identifier, its purity is the
+    /// member's own (`named_alone_stays`). Where an inline method's body reads the member through an accessor
+    /// of its class on the companion's module, the binding is made and the read stays on the module:
+    /// `PrepareInlineable` rewires the reference to the accessor and drops a qualifier that is no instance of
+    /// the accessor's class (`AccessProxies.rewire`).
+    fn lift_prefix(&mut self, recv: TExprId, ty: TypeId, member: SymId, written: WrittenLeft, span: Span) -> TExprId {
+        let module = matches!(self.prog.expr(recv), TExpr::Module(_));
+        match written {
+            WrittenLeft::Alone if module => return recv,
+            WrittenLeft::Selected(q) if self.named_alone_stays(q, recv) => return recv,
+            _ => {}
+        }
+        let bound = self.lift_assigned(recv, ty, span);
+        let by_accessor = module
+            && bound != recv
+            && self.bodies_in_progress.iter().rev().any(|&b| {
+                let info = self.syms.sym(b);
+                info.mods & crate::ast::mods::INLINE != 0 && matches!(info.owner, Owner::Class(c) if self.needs_inline_accessor(c, member))
+            });
+        if by_accessor { recv } else { bound }
     }
 
     /// The typed `f` of `f(i) op= rhs`, or `Err` with the typed application when `f` is `q.m`
@@ -1097,12 +1249,28 @@ impl<'a> Worker<'a> {
         Ok(self.apply_member(tq, qty, name, None, Vec::new(), ast.expr_span(f), None))
     }
 
-    /// `e.x op= rhs` reads and writes `e.x`, so `e` is evaluated once.
-    fn field_target_once(&mut self, tl: TExprId, span: Span) -> TExprId {
+    /// `e.x op= rhs` reads and writes `e.x`, so `e` is evaluated once (`lift_assigned`). The selection over the
+    /// binding is the one the source wrote: it keeps that node's type and place, which a stored body is
+    /// written to products with.
+    fn field_target_once(&mut self, tl: TExprId, written: WrittenLeft, span: Span) -> TExprId {
         match self.prog.expr(tl) {
-            TExpr::Field(recv, s) if !self.is_stable(recv) => {
-                let recv = self.hoist(recv, ANY, span);
-                self.prog.add(TExpr::Field(recv, s))
+            TExpr::Field(recv, s) => {
+                let bound = self.lift_prefix(recv, ANY, s, written, span);
+                if bound == recv {
+                    return tl;
+                }
+                let field = self.prog.add(TExpr::Field(bound, s));
+                // An object nested in a class or trait behind a prefix that is no path (`make().Bin.n += 1`): no
+                // path's type stands for what was bound and its class through that prefix has no name in a
+                // pickle, so the selection states no type, as before: the body stays out of a pickle, as it did.
+                if self.pathless_inner_object(recv) {
+                    return field;
+                }
+                self.prog.copy_span(tl, field);
+                if let Some(t) = self.prog.type_of(tl) {
+                    self.prog.set_type(field, t);
+                }
+                field
             }
             _ => tl,
         }

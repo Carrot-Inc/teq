@@ -1,0 +1,9 @@
+an inline parameter selected on: 1
+in a transparent method: 1
+two assignments in one body: 11
+an indexed form over inline parameters: 12
+a getter and setter pair: 1gs
+an object with an initializer applied: OIGRS 11
+an index of a by-name parameter: GIRSI
+an operator that is a member: IGRA 1
+a call, an array's element, a path: 112 4

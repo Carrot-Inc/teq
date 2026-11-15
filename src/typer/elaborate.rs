@@ -358,7 +358,7 @@ impl<'a> Worker<'a> {
     /// dotty's `TreeInfo.refPurity` of a reference to `s`: a method that takes parameters, a
     /// reference whose type is a constant, a stable member (a module's by its initialisation, a
     /// lazy one idempotent, an inline parameter impure), else impure.
-    fn ref_purity(&mut self, s: SymId) -> Purity {
+    pub(super) fn ref_purity(&mut self, s: SymId) -> Purity {
         let (kind, mods) = (self.syms.sym(s).kind, self.syms.sym(s).mods);
         // `tree.tpe.isInstanceOf[ConstantType]`: a value declared of a constant type.
         if matches!(kind, SymKind::Val | SymKind::Param) && mods & (mods::MUTABLE | mods::LAZY) == 0 {

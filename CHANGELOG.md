@@ -7,6 +7,19 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A compound assignment on a left side that has no such operator (`s.v += 1`, `xs(i) += 1`, `m.level += 1` over a
+  getter and a setter) evaluates its left side once as scalac's typer arranges it (`typedOpAssign`): what the left
+  side is selected on or applied to, and an indexed form's arguments, are bound ahead of the assignment unless
+  they are a path whose evaluation does nothing. teq decided by another test. An `inline` parameter there was not
+  bound where its method is defined, so its argument ran twice at each call (`inline def raise(inline s: Slot):
+  Unit = s.v += 1` with `raise(make())` called `make()` twice; an indexed form's array and index and a getter and
+  setter pair's receiver the same). An object with an initializer was read after an index with an effect
+  (`Store(next()) += 1` ran `next()` before the object's initializer). An indexed form is now typed first as the
+  application it is: where `f(i)` has the operator itself (`ledger(i) += x` on a result that defines `+=`), that
+  call is made and nothing is bound; and an index passed to a by-name or an inline parameter of `apply` stays an
+  argument of both `apply` and `update`. Programs whose operands there have no effects keep their meaning; the
+  JavaScript and class files of a definition that assigns to a member of an object with an initializer, or
+  through a written cast, gain a temporary.
 - The arguments a class passes to a trait it extends (`class Mid extends Named(raise(9))` for `trait Named(val
   name: Int)`) are read from inside that class's constructor: a member of the object, class or trait around the
   class is that scope's. teq read such a member on the new instance itself, so the build succeeded and the program
