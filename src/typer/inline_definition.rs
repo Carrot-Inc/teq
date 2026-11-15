@@ -34,6 +34,8 @@ pub struct Notes {
     leaf_tests: Vec<TestId>,
     imports: Vec<BlockImport>,
     hoisted: Vec<SymId>,
+    /// `InlineDefinition::lifted_args`.
+    lifted_args: Vec<SymId>,
     /// The imports of the blocks being typed, each with the statement it stands before, until
     /// the block's node is made.
     pending_imports: Vec<(u32, super::ResolvedImport)>,
@@ -353,6 +355,14 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// A temporary `h` the typing bound an argument of a right-associative operator's application of the body
+    /// into (`Worker::lift_impure`).
+    pub(super) fn note_lifted_arg(&mut self, h: SymId) {
+        if let Some(n) = self.level_notes() {
+            n.lifted_args.push(h);
+        }
+    }
+
     /// Whether a class the code being typed makes is the stored body's own (`InlineDefinition::
     /// classes`): in a body under the definition check, at its own level.
     pub(super) fn stores_classes(&self) -> bool {
@@ -625,7 +635,7 @@ impl<'a> Worker<'a> {
         let env = self.env_at(file, owner, span.start);
         let sig = self.sig_arc(sym);
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), lifted_args: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         self.outside_annotation(|t| {
             t.outside_search(|t| {
@@ -659,7 +669,7 @@ impl<'a> Worker<'a> {
         }
         let env = self.env_at(file, owner, span.start);
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), lifted_args: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         let index = self.index.take();
         let ty = self.outside_annotation(|t| {
@@ -888,7 +898,7 @@ impl<'a> Worker<'a> {
         let keeps_index = self.index.is_some() && !library;
         let index = if keeps_index { None } else { self.index.take() };
         let index_mark = self.index_mark();
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), lifted_args: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         // The expansion by substitution reads the type of every node of the stored body, which
         // a build that keeps no types keeps aside for the record alone.
@@ -1056,6 +1066,7 @@ impl<'a> Worker<'a> {
             }
         }
         let hoisted: Vec<SymId> = if body.is_some() { notes.hoisted.iter().copied().filter(|h| binders.contains(h)).collect() } else { Vec::new() };
+        let lifted_args: Vec<SymId> = if body.is_some() { notes.lifted_args.iter().copied().filter(|h| binders.contains(h)).collect() } else { Vec::new() };
         let record = InlineDefinition {
             state,
             body,
@@ -1082,6 +1093,7 @@ impl<'a> Worker<'a> {
             tuple_index,
             erased,
             hoisted,
+            lifted_args,
             imports: if body.is_some() { notes.imports } else { Vec::new() },
             node_types,
             aliases: if body.is_some() { notes.aliases } else { Vec::new() },
@@ -3036,6 +3048,7 @@ impl InlineDefinition {
             written_this: Vec::new(),
             tuple_index: Vec::new(),
             hoisted: Vec::new(),
+            lifted_args: Vec::new(),
             imports: Vec::new(),
             node_types: FxMap::default(),
             aliases: Vec::new(),

@@ -1522,6 +1522,7 @@ impl Remap {
             *t = self.test(*t);
         }
         self.syms_in(&mut d.hoisted);
+        self.syms_in(&mut d.lifted_args);
         for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()).chain(d.ascribed.iter_mut()).chain(d.tuple_index.iter_mut()).chain(d.erased.iter_mut()) {
             *e = self.expr(*e);
         }
@@ -3459,6 +3460,7 @@ mod tests {
             written_this: Vec::new(),
             tuple_index: Vec::new(),
             hoisted: Vec::new(),
+            lifted_args: Vec::new(),
             imports: Vec::new(),
             node_types: FxMap::default(),
             aliases: Vec::new(),

@@ -144,6 +144,9 @@ pub(super) struct Walk {
     by_name: FxMap<SymId, ()>,
     /// The copy's temporaries the definition hoisted operands into.
     hoisted: FxMap<SymId, ()>,
+    /// The copy's temporaries the definition bound a right-associative operator's arguments into
+    /// (`InlineDefinition::lifted_args`).
+    lifted_args: FxMap<SymId, ()>,
     /// The copy's `inline val`s whose value the walk gives (`InlineDefinition::inline_vals`).
     inline_vals: FxMap<SymId, ()>,
     /// The copy's vals whose type the walked initialiser gives (`InlineDefinition::inferred_vals`).
@@ -1001,6 +1004,7 @@ impl<'a> Worker<'a> {
             pruned: 0,
             by_name: FxMap::default(),
             hoisted: FxMap::default(),
+            lifted_args: FxMap::default(),
             inline_vals: FxMap::default(),
             inferred_vals: FxMap::default(),
             class_copies: FxMap::default(),
@@ -1031,6 +1035,7 @@ impl<'a> Worker<'a> {
         w.pruned = 0;
         w.by_name = FxMap::default();
         w.hoisted = FxMap::default();
+        w.lifted_args = FxMap::default();
         w.inline_vals = FxMap::default();
         w.inferred_vals = FxMap::default();
         w.class_copies = FxMap::default();
@@ -1103,6 +1108,11 @@ impl<'a> Worker<'a> {
         for h in &w.def.hoisted {
             if let Some(&f) = inst.renames.get(h) {
                 w.hoisted.insert(f, ());
+            }
+        }
+        for h in &w.def.lifted_args {
+            if let Some(&f) = inst.renames.get(h) {
+                w.lifted_args.insert(f, ());
             }
         }
         for v in &w.def.inline_vals {
@@ -2346,25 +2356,44 @@ impl<'a> Worker<'a> {
 
     /// The statements of a walked block without the temporaries the definition hoisted operands
     /// into where the retype path hoists none: an operand the walk made stable, or any operand
-    /// of a call whose receiver it made stable, which then stands in the call's arguments.
+    /// of a call whose receiver it made stable, which then stands in the call's arguments. A
+    /// temporary the definition bound an argument of a right-associative operator's application
+    /// into (`Walk::lifted_args`) is the reference's lifted value, which stays whatever the walk made of
+    /// its initializer (a given's read after `summonInline`, a selection that can throw): those of a
+    /// block go, all of them or none, only where the walk made the call's receiver one whose
+    /// evaluation can do nothing (`is_inert_path`: the end of an inline recursion, `x :: Nil`), beside
+    /// which the typing writes none either. Each stands again where its reference stood, an argument
+    /// of the call or an element of its repeated argument's sequence; one whose reference stands
+    /// elsewhere, or that the block reads a second time (`read_once`: a later clause's default getter
+    /// takes the earlier arguments), keeps them all, so that none is evaluated after a later one.
     fn unhoist(&mut self, w: &Walk, stmts: crate::ast::ListRef, res: TExprId) -> (crate::ast::ListRef, TExprId) {
-        if w.hoisted.is_empty() || stmts.len == 0 {
+        if (w.hoisted.is_empty() && w.lifted_args.is_empty()) || stmts.len == 0 {
             return (stmts, res);
         }
         let TExpr::CallMethod(recv, _, args) = self.prog.expr(res) else { return (stmts, res) };
         let recv_stable = self.is_stable(recv);
         let items: Vec<TStmt> = self.prog.stmts[stmts.range()].to_vec();
+        let lifted_go = !w.lifted_args.is_empty()
+            && self.is_inert_path(recv)
+            && items.iter().all(|st| match *st {
+                TStmt::Val(h, _) if w.lifted_args.contains_key(&h) => self.lifted_slot(args, h).is_some() && self.read_once(&items, res, h),
+                _ => true,
+            });
         let mut kept = Vec::with_capacity(items.len());
         let mut moved = false;
         for st in items {
             if let TStmt::Val(h, init) = st {
-                if w.hoisted.contains_key(&h) && (recv_stable || self.is_stable(init)) {
-                    let slot = args.range().find(|&i| matches!(self.prog.expr(self.prog.expr_lists[i]), TExpr::Local(s) if s == h));
-                    if let Some(i) = slot {
-                        self.prog.expr_lists[i] = init;
-                        moved = true;
-                        continue;
-                    }
+                let slot = if w.lifted_args.contains_key(&h) {
+                    if lifted_go { self.lifted_slot(args, h) } else { None }
+                } else if w.hoisted.contains_key(&h) && (recv_stable || self.is_stable(init)) {
+                    args.range().find(|&i| matches!(self.prog.expr(self.prog.expr_lists[i]), TExpr::Local(s) if s == h))
+                } else {
+                    None
+                };
+                if let Some(i) = slot {
+                    self.prog.expr_lists[i] = init;
+                    moved = true;
+                    continue;
                 }
             }
             kept.push(st);
@@ -2373,6 +2402,39 @@ impl<'a> Worker<'a> {
             return (stmts, res);
         }
         (self.prog.stmts.push_slice(&kept), res)
+    }
+
+    /// Whether the temporary `h` of a block's statements `items` has one reader in all of the block:
+    /// in its result `res` and in the other statements, a function's body or a default's getter
+    /// that takes it included (`x ++: r` of `def ++:(x: Int)(y: Int = ..)`, whose getter takes `x`).
+    fn read_once(&self, items: &[TStmt], res: TExprId, h: SymId) -> bool {
+        let reads = |e: TExprId| self.prog.descendants(e).filter(|&d| matches!(self.prog.expr(d), TExpr::Local(s) if s == h)).count();
+        let mut n = reads(res);
+        for st in items {
+            n += match *st {
+                TStmt::Expr(e) | TStmt::Val(_, e) | TStmt::Pat(_, e) => reads(e),
+                TStmt::Fun(f) => {
+                    let fun = &self.prog.funs[f.idx()];
+                    fun.body.map_or(0, reads) + fun.defaults.iter().flatten().map(|&d| reads(d)).sum::<usize>()
+                }
+            };
+        }
+        n == 1
+    }
+
+    /// Where the reference of the lifted temporary `h` stands among a call's arguments `args`: an
+    /// argument itself, or an element of a repeated argument's sequence.
+    fn lifted_slot(&self, args: crate::ast::ListRef, h: SymId) -> Option<usize> {
+        let is_ref = |i: usize| matches!(self.prog.expr(self.prog.expr_lists[i]), TExpr::Local(s) if s == h);
+        args.range().find_map(|i| {
+            if is_ref(i) {
+                return Some(i);
+            }
+            match self.prog.expr(self.prog.expr_lists[i]) {
+                TExpr::SeqLit(l) => l.range().find(|&k| is_ref(k)),
+                _ => None,
+            }
+        })
     }
 
     /// A kept call resolved once its receiver and arguments are walked: expanded at the site

@@ -340,6 +340,12 @@ refinement	pass	-
 refinerepeated	pass	-	
 repeatexpand	pass	-	
 returnedfunction	pass	-	
+rightassocextension	pass	-	
+rightassocinline	pass	-	
+rightassockind	pass	-	
+rightassocloaded	pass	-	
+rightassocparam	pass	-	
+rightassocunhoist	pass	-	
 rollbackprefix	pass	-	
 runtimecheckedalias	pass	-	
 runtimecheckedinline	pass	-	

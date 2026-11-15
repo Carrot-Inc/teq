@@ -247,7 +247,9 @@ worker_fields! {
         macro_targs is none,
         sames is none,
         simplifying_normal is no,
-        fit_pass is none
+        fit_pass is none,
+        lifted_list is none,
+        lifted_operand is none
     }
     own_waiting {
         retry_depth is none,
@@ -318,7 +320,7 @@ worker_fields! {
     }
     unread {
         app_base, proto_vars, plain_member, kind_only_bound, binop_rhs, ref_exported, naming_late_batch,
-        spread_arg, spread_was_array, last_unapply, infix_called, infix_passed, infix_universal, denotation_marks,
+        spread_arg, lift_arg, spread_was_array, last_unapply, infix_called, infix_passed, infix_universal, denotation_marks,
         unadapted_call, unadapted_node, ext_undecided, no_receiver_conversion, declared_call, declared_took,
         infix_declared, direct_ext_targs, ctor_prefix, sig_bound_names, copy_application, case_scrutinee,
         apply_seen_from, private_alias_prefix, dropped_type_list, assign_op_receiver, written_qualifier, joint_sig,

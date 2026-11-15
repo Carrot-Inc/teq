@@ -60,6 +60,21 @@ pub enum ForBinder {
     Unpack(u32),
 }
 
+/// What `Typer.typedInfixOp`'s lift does with the argument about to be typed (`Worker::lift_arg`).
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum Lift {
+    /// No argument of an application it lifts, or one of a by-name or an inline parameter.
+    #[default]
+    No,
+    /// Bound ahead of the application unless it is a pure expression (`LiftImpure`).
+    Impure,
+    /// An element of a repeated parameter's sequence. The completed argument is the sequence, which the
+    /// reference binds whole and always (`exprPurity` has no arm for a sequence literal): every element is
+    /// evaluated ahead of the receiver. teq binds the elements, each unless its evaluation can do nothing
+    /// (`Worker::is_inert_path`): the same order with the sequence's shape left as it is.
+    Element,
+}
+
 #[derive(Clone, Copy)]
 pub enum ArgSrc {
     Ast(ExprId),
@@ -263,6 +278,11 @@ impl FunEnd {
 
     pub fn is_operand(self) -> bool {
         self != Self::NONE && self.0 & Self::OPERAND != 0
+    }
+
+    /// A right-associative operator's list (`operand_tree`).
+    pub fn is_right_operand(self) -> bool {
+        self != Self::NONE && (self.0 & (Self::TREE | Self::OPERAND)) == (Self::TREE | Self::OPERAND)
     }
 
     pub fn end(self, ast: &crate::ast::Ast) -> Option<u32> {
@@ -6632,6 +6652,91 @@ impl<'a> Worker<'a> {
         self.prog.add(TExpr::Local(tmp))
     }
 
+    /// Whether dotty's `LiftImpure` binds `te`, a completed argument as typed: it is not `isPureExpr`
+    /// (`TreeInfo.exprPurity` below `Pure`, a cast the source writes impure as there, a case class's creation
+    /// idempotent where its companion has initialisation: `expr_purity_under`). A plain
+    /// inline call still pending is impure whatever it expands to, as the reference's `Apply` of an inline method
+    /// is before the inlining; a transparent call is expanded by its typing there too and is its expansion.
+    pub(crate) fn lifted_as_impure(&mut self, te: TExprId) -> bool {
+        use super::elaborate::Purity;
+        self.is_pending_call(te) || !self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE)
+    }
+
+    /// Whether evaluating `te` can do nothing at all: a pure path by the lift's test (`exprPurity` at `PurePath`)
+    /// that can neither throw nor run an initializer where it is evaluated: a literal, `this`, a local value or a
+    /// parameter, an object without an initializer that no products' record vouches for (`products_vouch`). A
+    /// selection is a pure path too and throws on a null prefix; a member of `this` may be an object a subclass
+    /// implements it with; a value of an object or of a file's top level is read after its owner's initializers,
+    /// which run at its first read wherever that stands. Beside such a receiver of a right-associative operator's
+    /// application the operand runs at the same point bound or not, so no binding is written (the reference's tree
+    /// has one, an emitted program none of its effect); the absence of a binding is what needs the proof, so what
+    /// is not listed here is bound.
+    pub(super) fn is_inert_path(&mut self, te: TExprId) -> bool {
+        use super::elaborate::Purity;
+        if self.is_pending_call(te) || !self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE_PATH) {
+            return false;
+        }
+        match self.prog.expr(te) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null => true,
+            TExpr::This | TExpr::Super(_) | TExpr::Local(_) => true,
+            TExpr::Module(c) => !self.products_vouch(c),
+            _ => false,
+        }
+    }
+
+    /// Whether what says that the object `c` runs no initializer is another module's products: the object or a
+    /// class it extends was read from them. Their record says "no initializer" of an object whose parent's
+    /// constructor takes an argument with an effect and, in the JVM's products, of a file's top level that holds a
+    /// value: no proof that the object's first read does nothing, so such an object is not inert and the same
+    /// program runs its operands in one order whole and over its modules' products.
+    fn products_vouch(&self, c: ClassId) -> bool {
+        self.is_product_class(c) || self.syms.class(c).base_types.iter().any(|&(b, _)| self.is_product_class(b))
+    }
+
+    /// Whether `arg`, about to be typed for the parameter `p` of type `pty` from a list whose function ends as
+    /// `fun`, is an argument `Typer.typedInfixOp` lifts where it is impure: one of the right-associative operator's
+    /// application under way (`lifted_list`, `lifted_operand`) whose parameter is neither by-name (`lifterFor`
+    /// gives `NoLift`) nor inline (`LiftImpure.liftArgs`, EtaExpansion.scala 100-108; `callee` as
+    /// `is_inline_param` takes it).
+    pub(super) fn lifts_arg(&mut self, fun: FunEnd, arg: &ArgSrc, p: &ParamSig, pty: TypeId, callee: Option<(SymId, usize)>) -> bool {
+        let of_lifted = self.lifted_list == Some(fun) || matches!(*arg, ArgSrc::Typed(te, _) | ArgSrc::Named(_, te, _) if self.lifted_operand == Some(te));
+        if !of_lifted || p.by_name || (self.b.by_name.is_some() && self.by_name_arg(pty).is_some()) {
+            return false;
+        }
+        !self.is_inline_param(p, callee)
+    }
+
+    /// dotty's `LiftImpure.liftArgs` for one argument of the application `Typer.typedInfixOp` lifts (Typer.scala
+    /// 3710-3718): `done`, the argument complete (typed as `raw` of type `ty`, then adapted to its parameter's type
+    /// `pty`), is bound to a temporary of the innermost `hoisted` segment, ahead of the application, unless it is
+    /// pure. The decision is made on the argument as typed: a call still pending is not expanded for it, as
+    /// `hoist` expands one, and the binding is recorded apart from `hoist`'s (`note_lifted_arg`), so `unhoist` never
+    /// takes it back for what its initializer became: it stays through the argument's later expansion, as the
+    /// reference's lifted value does. The temporary of an argument its adaptation left as it was has the
+    /// argument's own type.
+    pub(super) fn lift_impure(&mut self, lift: Lift, raw: TExprId, done: TExprId, ty: TypeId, pty: TypeId, span: Span) -> TExprId {
+        let bound = match lift {
+            Lift::No => false,
+            Lift::Impure => self.lifted_as_impure(done),
+            Lift::Element => !self.is_inert_path(done),
+        };
+        if !bound {
+            return done;
+        }
+        let ty = if done == raw { ty } else { pty };
+        let tmp = self.indexed_local("h", self.hoisted.len() as u32, ty, span);
+        if self.capturing() && self.canon(ty) == ANY {
+            if let Some(own) = self.prog.type_of(done) {
+                self.capture_local(tmp, |l| l.ty = Some(own));
+            }
+        }
+        if self.inline.checking > 0 {
+            self.note_lifted_arg(tmp);
+        }
+        self.hoisted.push(TStmt::Val(tmp, done));
+        self.prog.add(TExpr::Local(tmp))
+    }
+
     /// Wraps `te` into a block that evaluates the temporaries hoisted since `mark` first.
     pub fn wrap_hoisted(&mut self, mark: usize, te: TExprId) -> TExprId {
         if self.hoisted.len() == mark {
@@ -6673,16 +6778,20 @@ impl<'a> Worker<'a> {
     ) -> bool {
         let ast = self.cur_ast();
         let n = clause.params.len();
+        // The method the clause is of and where its parameters start among the method's, where the
+        // application's plan says them: `typedInfixOp`'s lift leaves an inline parameter's argument.
+        let callee = plan.as_deref().and_then(|p| p.inherit);
+        let at = |i: usize| callee.map(|(m, from)| (m, from + i));
         if n == 1 && list.args.len() > 1 && !clause.params[0].repeated {
             if let Some(elems) = self.positional_args(&list.args) {
-                out.push(self.type_tupled_args(&clause.params[0], &elems, subst, list.span));
+                out.push(self.type_tupled_args(&clause.params[0], &elems, subst, list.span, list.fun, at(0)));
                 return false;
             }
             // An infix operand's named tuple, which the operation untuples for a method of more than one
             // parameter alone (`Applications.needsTupledDual`): one parameter takes the tuple.
             if let Some(operand) = self.named_operand_of(&list.args) {
                 let pty = self.param_type(clause.params[0].ty, subst);
-                let te = self.type_arg(ArgSrc::Ast(operand), pty, list.span);
+                let te = self.type_arg_for(list.fun, &clause.params[0], at(0), ArgSrc::Ast(operand), pty, list.span, false);
                 out.push(if clause.params[0].by_name { self.by_name_thunk(te) } else { te });
                 return false;
             }
@@ -6702,7 +6811,7 @@ impl<'a> Worker<'a> {
             out.resize(base + n, TExprId(0));
             for i in 0..n {
                 let pty = self.param_type(clause.params[i].ty, subst);
-                out[base + i] = self.type_arg(list.args[i], pty, list.span);
+                out[base + i] = self.type_arg_for(list.fun, &clause.params[i], at(i), list.args[i], pty, list.span, false);
                 if dependent {
                     self.note_param_path(&clause.params[i], out[base + i], pty);
                 }
@@ -6809,7 +6918,7 @@ impl<'a> Worker<'a> {
                     };
                     self.spread_arg = true;
                     self.spread_was_array = false;
-                    let mut spliced = self.type_arg(slots[i][0], seq_ty, list.span);
+                    let mut spliced = self.type_arg_for(list.fun, p, at(i), slots[i][0], seq_ty, list.span, false);
                     self.spread_arg = false;
                     // The JVM's backend passes a Java method an array of its own.
                     if self.java_varargs && !self.spread_was_array && !self.jvm {
@@ -6826,7 +6935,7 @@ impl<'a> Worker<'a> {
                         _ => 0,
                     };
                     let items: Vec<TExprId> =
-                        slots[i].clone().iter().map(|&a| self.type_arg(a, pty, list.span)).collect();
+                        slots[i].clone().iter().map(|&a| self.type_arg_for(list.fun, p, at(i), a, pty, list.span, true)).collect();
                     if !self.jvm {
                         for &item in &items {
                             if self.is_erased_result(item) {
@@ -6917,7 +7026,7 @@ impl<'a> Worker<'a> {
                 ArgSrc::Hoisted(e) if p.by_name || (self.b.by_name.is_some() && self.by_name_arg(pty).is_some()) => ArgSrc::Ast(e),
                 a => a,
             };
-            let te = self.type_arg(arg, pty, list.span);
+            let te = self.type_arg_for(list.fun, p, at(i), arg, pty, list.span, false);
             results[i] = Some(if p.by_name {
                 self.by_name_thunk(te)
             } else {
@@ -7134,21 +7243,23 @@ impl<'a> Worker<'a> {
             .collect()
     }
 
-    /// Auto-tupling: several arguments for a single parameter are passed as one tuple.
-    fn type_tupled_args(&mut self, param: &ParamSig, elems: &[ExprId], subst: &Subst, span: Span) -> TExprId {
+    /// Auto-tupling: several arguments for a single parameter are passed as one tuple, which is the completed
+    /// argument `typedInfixOp` lifts where the list (its function ending as `fun`) is one it lifts.
+    fn type_tupled_args(&mut self, param: &ParamSig, elems: &[ExprId], subst: &Subst, span: Span, fun: FunEnd, callee: Option<(SymId, usize)>) -> TExprId {
         let pty = self.param_type(param.ty, subst);
         let target = self.deref(pty);
         let takes_tuple = matches!(self.types.get(target), Type::Class(c, _) if self.is_tuple_class(c))
             || self.holds_tuple(pty, elems.len());
-        let (te, ty) = self.type_tupled_dual(elems, pty);
+        let (raw, ty) = self.type_tupled_dual(elems, pty);
         self.last_arg_types.clear();
         self.last_arg_types.push(ty);
         let te = if takes_tuple {
-            self.adapt(te, ty, pty, span)
+            self.adapt(raw, ty, pty, span)
         } else {
             self.error(span, "too many arguments: expected 1");
-            te
+            raw
         };
+        let te = if self.lifts_arg(fun, &ArgSrc::Ast(elems[0]), param, pty, callee) { self.lift_impure(Lift::Impure, raw, te, ty, pty, span) } else { te };
         if param.by_name {
             self.by_name_thunk(te)
         } else {
@@ -7319,9 +7430,28 @@ impl<'a> Worker<'a> {
         (s, arg, self.by_name_type(pty))
     }
 
+    /// `type_arg` of an argument of a list whose function ends as `fun`, for its parameter `p`: bound at its exit
+    /// where `typedInfixOp` lifts it (`lifts_arg`, `lift_impure`). Outside a right-associative operator's
+    /// application under way it is `type_arg`.
+    #[inline]
+    fn type_arg_for(&mut self, fun: FunEnd, p: &ParamSig, callee: Option<(SymId, usize)>, arg: ArgSrc, pty: TypeId, span: Span, element: bool) -> TExprId {
+        if self.lifted_list.is_none() && self.lifted_operand.is_none() {
+            return self.type_arg(arg, pty, span);
+        }
+        self.lift_arg = match self.lifts_arg(fun, &arg, p, pty, callee) {
+            false => Lift::No,
+            true if element => Lift::Element,
+            true => Lift::Impure,
+        };
+        let te = self.type_arg(arg, pty, span);
+        self.lift_arg = Lift::No;
+        te
+    }
+
     #[inline]
     fn type_arg_as(&mut self, arg: ArgSrc, pty: TypeId, span: Span) -> TExprId {
         let spread = std::mem::take(&mut self.spread_arg);
+        let lift = std::mem::take(&mut self.lift_arg);
         match arg {
             ArgSrc::Ast(e) | ArgSrc::Hoisted(e) if spread => {
                 // A spliced sequence is typed and adapted against a sequence or an array of the
@@ -7344,7 +7474,8 @@ impl<'a> Worker<'a> {
                     _ => te,
                 };
                 self.mark_spread_array(spread, te, ty);
-                self.typed_arg(te, ty, pty, arg_span)
+                let done = self.typed_arg(te, ty, pty, arg_span);
+                if lift != Lift::No { self.lift_impure(lift, te, done, ty, pty, arg_span) } else { done }
             }
             ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => {
                 // An argument an earlier attempt over the same application typed is adapted, not
@@ -7375,13 +7506,15 @@ impl<'a> Worker<'a> {
                     _ => te,
                 };
                 self.mark_spread_array(spread, te, ty);
-                self.typed_arg(te, ty, pty, arg_span)
+                let done = self.typed_arg(te, ty, pty, arg_span);
+                if lift != Lift::No { self.lift_impure(lift, te, done, ty, pty, arg_span) } else { done }
             }
             ArgSrc::Typed(te, ty) | ArgSrc::Named(_, te, ty) => {
                 self.mark_spread_array(spread, te, ty);
                 // One overload resolution typed ahead is adapted where it was written.
                 let at = self.overload_arg_spans.iter().rev().find(|&&(e, _)| e == te).map_or(span, |&(_, at)| at);
-                self.typed_arg(te, ty, pty, at)
+                let done = self.typed_arg(te, ty, pty, at);
+                if lift != Lift::No { self.lift_impure(lift, te, done, ty, pty, at) } else { done }
             }
             ArgSrc::ForLambda(pat, rest) => {
                 let (te, ty) = self.type_for_lambda(pat, rest, pty, span);
@@ -8739,12 +8872,22 @@ impl<'a> Worker<'a> {
         let open_from = self.conversion_open_vars.len();
         match self.convert_for_member(recv, recv_ty, name, lists, expected, span)? {
             Ok((converted, ty)) => {
-                if let Some(r) = self.prim_op_on(converted, ty, name, targs, lists, span, expected) {
-                    self.interpolate_conversion_vars(open_from, r.1);
-                    return Some(r);
+                // A right-associative operator's application whose receiver is converted: the completed
+                // receiver is the conversion's call, whatever the written one was (a value whose own member
+                // did not take the operand), and `typedInfixOp` lifts the operand's list (`lifted_list`).
+                let operand_list = lists.first().map(|l| l.fun).filter(|f| f.is_right_operand());
+                let outer = self.lifted_list;
+                if operand_list.is_some() && !self.in_quote_pattern() {
+                    self.lifted_list = operand_list;
                 }
-                self.no_receiver_conversion = true;
-                let r = self.apply_member(converted, ty, name, targs, lists.to_vec(), span, expected);
+                let r = match self.prim_op_on(converted, ty, name, targs, lists, span, expected) {
+                    Some(r) => r,
+                    None => {
+                        self.no_receiver_conversion = true;
+                        self.apply_member(converted, ty, name, targs, lists.to_vec(), span, expected)
+                    }
+                };
+                self.lifted_list = outer;
                 self.interpolate_conversion_vars(open_from, r.1);
                 Some(r)
             }
@@ -10864,7 +11007,11 @@ impl<'a> Worker<'a> {
         let written = lists.as_ref()?;
         let first = written.first().filter(|l| !l.using && l.args.len() == 1)?;
         let arg = first.args[0];
-        if !matches!(arg, ArgSrc::Ast(_) | ArgSrc::Typed(..) | ArgSrc::Hoisted(_)) || !retry && (matches!(arg, ArgSrc::Hoisted(_)) || self.has_member_like(recv_ty, name)) {
+        // The operand of a right-associative operator (`a op: q`, the list `typedInfixOp` lifts) apart from the
+        // argument of the selection `q.op:(a)`.
+        let infix = first.fun.is_right_operand();
+        let lifted = self.lifted_list == Some(first.fun) || matches!(arg, ArgSrc::Hoisted(_));
+        if !matches!(arg, ArgSrc::Ast(_) | ArgSrc::Typed(..) | ArgSrc::Hoisted(_)) || !retry && (lifted || self.has_member_like(recv_ty, name)) {
             return None;
         }
         let candidates = self.selection_swaps(name, recv_ty)?;
@@ -10904,12 +11051,12 @@ impl<'a> Worker<'a> {
         }
         let (receiver_name, expected_arg) = receiver?;
         let arg = match arg {
+            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) if lifted && matches!(self.cur_ast().expr(e), Expr::NamedArg(..)) => return None,
             ArgSrc::Ast(e) => match self.cur_ast().expr(e) {
                 Expr::NamedArg(n, inner) if n == receiver_name && n != names::EMPTY => ArgSrc::Ast(inner),
                 Expr::NamedArg(..) => return None,
                 _ => arg,
             },
-            ArgSrc::Hoisted(e) if matches!(self.cur_ast().expr(e), Expr::NamedArg(..)) => return None,
             other => other,
         };
         let written = lists.take().unwrap();
@@ -10928,18 +11075,23 @@ impl<'a> Worker<'a> {
                 // it by value: bound ahead, the application made again over the binding. The
                 // infix `a op q`'s operand `a` is evaluated before the qualifier where the
                 // selected overload's receiver takes it by value, as `typedInfixOp` lifts an
-                // impure argument of a parameter that is no by-name one (`LiftImpure.liftArgs`).
+                // impure argument of a parameter that is neither a by-name nor an inline one
+                // (`LiftImpure.liftArgs`); an infix it does not lift (`lifted_list`) binds nothing.
                 let ext_clauses = self.syms.sym(sym).ext_clauses as usize;
                 let sig = self.sig_arc(sym);
-                let hoisted_arg = matches!(arg, ArgSrc::Hoisted(_));
+                let hoisted_arg = lifted;
                 let strict = if hoisted_arg {
                     let at = (0..ext_clauses).find(|&k| !sig.clauses[k].is_using);
-                    !at.is_some_and(|k| sig.clauses[k].params[0].by_name)
+                    !at.is_some_and(|k| {
+                        let before: usize = sig.clauses[..k].iter().map(|c| c.params.len()).sum();
+                        let p = &sig.clauses[k].params[0];
+                        p.by_name || self.is_inline_param(p, Some((sym, before)))
+                    })
                 } else {
                     !sig.clauses[ext_clauses].params[0].by_name
                 };
-                // The operand's binding is made over again (`hoist` keeps a stable one as it is).
-                let stable = !hoisted_arg && self.is_stable(recv);
+                // The operand's binding is made over again (`lift_impure` keeps a pure one as it is).
+                let stable = !hoisted_arg && (infix || self.is_stable(recv));
                 if !strict || stable {
                     self.close(attempt);
                     return Some(Some((self.wrap_hoisted(mark, te), ty)));
@@ -10948,6 +11100,11 @@ impl<'a> Worker<'a> {
                 self.hoisted.truncate(mark);
                 let attempt = self.attempt();
                 let (q, arg) = match arg {
+                    ArgSrc::Ast(e) if lifted => {
+                        let (ta, aty) = self.type_expr(e, expected_arg);
+                        let a = self.lift_impure(Lift::Impure, ta, ta, aty, aty, self.cur_ast().expr_span(e));
+                        (recv, ArgSrc::Typed(a, aty))
+                    }
                     ArgSrc::Hoisted(e) => {
                         let (ta, aty) = self.type_expr(e, expected_arg);
                         let a = self.hoist(ta, aty, self.cur_ast().expr_span(e));

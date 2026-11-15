@@ -1,0 +1,10 @@
+init main
+start
+left
+init one
+List(0, 1)
+left
+init two
+List(0, 2)
+left
+List(0, 3)

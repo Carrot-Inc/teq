@@ -1,0 +1,14 @@
+init A
+right a
+List(A(1))
+init B
+right b
+List(Some(B(1)))
+init D
+right d
+List((D(1),2))
+init G
+right box
+box
+right n
+List(N(1))

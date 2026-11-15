@@ -1848,7 +1848,9 @@ impl<'w, 'a> P<'w, 'a> {
             if let (Some(r), Some(swapped)) = (receiver, swapped) {
                 order = swapped;
                 let at: usize = clauses[..r].iter().map(|c| c.len()).sum();
-                if clauses[r].len() == 1 && !self.is_pure_operand(args[at]) {
+                // An inline parameter's argument is left as it is by the reference's lift.
+                let inline_param = self.w.is_inline_param(&sig.clauses[r].params[0], Some((s, at)));
+                if clauses[r].len() == 1 && !self.is_pure_operand(args[at], inline_param) {
                     lifted = Some(args[at]);
                 }
             }
@@ -2026,10 +2028,14 @@ impl<'w, 'a> P<'w, 'a> {
         Some((m, args, name))
     }
 
-    /// Whether evaluating an operand later changes nothing: a path or a literal.
-    fn is_pure_operand(&self, e: TExprId) -> bool {
+    /// Whether evaluating an operand later changes nothing: a path or a literal that is a pure expression, as
+    /// `Typer.typedInfixOp`'s lift asks it (`Worker::lifted_as_impure`): a lazy value, an inline or a by-name
+    /// parameter and an object with an initializer are paths' nodes and no pure expressions. The argument of an
+    /// inline parameter (`inline_param`) is asked of its kind alone, as before: that lift leaves it.
+    fn is_pure_operand(&mut self, e: TExprId, inline_param: bool) -> bool {
         self.records(e).is_empty()
             && matches!(self.w.prog.expr(e), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Module(_))
+            && (inline_param || !self.w.lifted_as_impure(e))
     }
 
     fn argument(&mut self, a: TExprId, u: ParamUse) {

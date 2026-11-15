@@ -956,7 +956,14 @@ impl<'a> Worker<'a> {
         None
     }
 
-    /// `l op: r` is `r.op:(l)` with `l` evaluated first. An extension method `op:` takes `l` as
+    /// `l op: r` is `r.op:(l)`, typed as any application and then lifted as `Typer.typedInfixOp` lifts it
+    /// (Typer.scala 3696-3718): each completed argument of the application that is not pure, for a parameter
+    /// neither by-name nor inline, is bound ahead of it (`lifted_list`, `Worker::lift_impure`), in the arguments'
+    /// order; not in a quote pattern, and not beside a receiver whose evaluation can do nothing, where the binding
+    /// could not be told from its absence (`Worker::is_inert_path`). In an inline method's body the receiver is
+    /// what an expansion makes of it (a parameter stands for its argument, `this` for the prefix): the argument is
+    /// bound there whatever the receiver, and the expansion takes the binding back beside an inert one
+    /// (`InlineDefinition::lifted_args`, `unhoist`). An extension method `op:` takes `l` as
     /// its leading parameter and `r` as its argument, and is looked for in scope and in the
     /// implicit scope of `r`.
     fn type_right_assoc(
@@ -978,22 +985,19 @@ impl<'a> Worker<'a> {
         // acc)` settles the element of the improved `acc: List[?X]` rather than the first `::`
         // fixing it to `Nothing`.
         let rty = self.receiver_vars(rty);
+        // `typedInfixOp` lifts nothing under `Mode.QuotedExprPattern`.
+        let lifts = !self.in_quote_pattern();
         if rty == ERROR || self.has_member_or_std_extension(rty, op) || (op == names::CONS_TUPLE && self.tuple_elements(rty).is_some()) {
-            // The order is only observable when both operands have effects.
-            let hoist = !self.is_stable(tr);
-            let args = self
-                .infix_args(l)
-                .into_iter()
-                .map(|a| match a {
-                    ArgSrc::Ast(e) if hoist => ArgSrc::Hoisted(e),
-                    a => a,
-                })
-                .collect();
+            let args = self.infix_args(l);
             // `Desugar.binop`'s `Select(r, op)` of a right-associative operator spans the operator and the right
             // operand, which the left one, its argument, stands before.
-            let mut lists = vec![ArgList { args, using: false, span, fun: FunEnd::operand_tree(r) }];
+            let fun = FunEnd::operand_tree(r);
+            let mut lists = vec![ArgList { args, using: false, span, fun }];
             lists.extend(more);
+            let lifted = (lifts && (self.inline.checking > 0 || !self.is_inert_path(tr))).then_some(fun);
+            let outer = std::mem::replace(&mut self.lifted_list, lifted);
             let (te, ty) = self.apply_member(tr, rty, op, None, lists, span, expected);
+            self.lifted_list = outer;
             return (self.wrap_hoisted(mark, te), ty);
         }
         let (tl, lty) = self.type_expr(l, None);
@@ -1008,10 +1012,15 @@ impl<'a> Worker<'a> {
         if let Some(res) = self.try_extensions(tl, lty, rty, op, None, &mut lists, span, expected) {
             return res;
         }
-        // `r` converted to something with the member (`LazyList`'s `#::` through `toDeferrer`).
+        // `r` converted to something with the member (`LazyList`'s `#::` through `toDeferrer`): the completed
+        // receiver is the conversion's application, no pure path, and the operand, passed typed, is lifted in the
+        // application on it (`lifted_operand`).
         let mut member_lists = vec![ArgList { args: vec![ArgSrc::Typed(tl, lty)], using: false, span, fun: ArgList::NO_FUN }];
         member_lists.extend(more.iter().cloned());
-        if let Some((te, ty)) = self.apply_through_conversion(tr, rty, op, None, &member_lists, span, expected) {
+        let outer = std::mem::replace(&mut self.lifted_operand, lifts.then_some(tl));
+        let converted = self.apply_through_conversion(tr, rty, op, None, &member_lists, span, expected);
+        self.lifted_operand = outer;
+        if let Some((te, ty)) = converted {
             return (self.wrap_hoisted(mark, te), ty);
         }
         let msg = format!("value {} is not a member of {}", self.name_str(op), self.show(self.widen_lit(rty)));

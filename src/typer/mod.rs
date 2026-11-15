@@ -1297,6 +1297,17 @@ pub struct Worker<'a> {
     /// The next argument typed is a varargs spread (`f(xs*)`): an array typed for it is marked
     /// as spread as it is written (`Program::spread_bits`). Taken by the argument it is for.
     pub spread_arg: bool,
+    /// What `Typer.typedInfixOp`'s lift does with the next argument typed (`apply::Lift`, `Worker::lift_impure`):
+    /// set for an argument of the list `lifted_list` or the operand `lifted_operand` whose parameter is neither
+    /// by-name nor inline (`Worker::lifts_arg`). Taken by the argument it is for.
+    pub lift_arg: apply::Lift,
+    /// The operand list (by its `FunEnd::operand_tree`) of a right-associative operator's application under
+    /// typing whose arguments `typedInfixOp` lifts: none in a quote pattern and none beside a receiver whose
+    /// evaluation can do nothing (`Worker::is_inert_path`). It stands while the application's arguments are
+    /// typed, what they hold included: only the list of that `FunEnd` is the one it names.
+    pub lifted_list: Option<apply::FunEnd>,
+    /// The same for the application through a conversion of the receiver, which takes the operand typed: that node.
+    pub lifted_operand: Option<TExprId>,
     /// Whether the last spread argument typed (`spread_arg`) was an array.
     pub spread_was_array: bool,
     /// The arguments typed are a Java method's (`apply_method`), whose varargs take a sequence
@@ -3135,6 +3146,9 @@ impl<'a> Worker<'a> {
             conversion_indexes: FxMap::default(),
             view_compat: false,
             spread_arg: false,
+            lift_arg: apply::Lift::No,
+            lifted_list: None,
+            lifted_operand: None,
             spread_was_array: false,
             java_varargs: false,
             interp_parts: None,
@@ -3597,6 +3611,9 @@ impl<'a> Worker<'a> {
             conversion_indexes: self.conversion_indexes.clone(),
             view_compat: Default::default(),
             spread_arg: false,
+            lift_arg: apply::Lift::No,
+            lifted_list: None,
+            lifted_operand: None,
             spread_was_array: false,
             java_varargs: false,
             interp_parts: None,

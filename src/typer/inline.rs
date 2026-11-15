@@ -886,6 +886,21 @@ impl<'a> Worker<'a> {
         info.mods & mods::INLINE != 0 && matches!(info.kind, SymKind::Def | SymKind::Given)
     }
 
+    /// Whether the parameter `p`, the `at`-th of the method `callee` where the application knows its method
+    /// (`ClauseArgs::inherit`'s count), is an `inline` parameter: by its symbol where the source declares the
+    /// method, by the inline method's body where its signature was loaded, whose parameter symbols carry no
+    /// such modifier.
+    pub(crate) fn is_inline_param(&mut self, p: &ParamSig, callee: Option<(SymId, usize)>) -> bool {
+        let info = self.syms.sym(p.sym);
+        if info.kind == SymKind::Param && info.mods & mods::INLINE != 0 {
+            return true;
+        }
+        match callee {
+            Some((m, at)) if self.is_inline_callee(m) => self.inline_body(m).is_some_and(|b| b.inline_params.get(at).copied().unwrap_or(false)),
+            _ => false,
+        }
+    }
+
     /// An inline method that overrides or implements a member that is not inline keeps a
     /// method of its own for dynamic dispatch, as scalac retains one; its body is typed at the
     /// definition like any other, `inline if` and `inline match` as plain conditionals.
@@ -5391,19 +5406,36 @@ impl<'a> Worker<'a> {
         self.normalize(applied)
     }
 
-    /// `h *: t` on a value whose type is a tuple type: the tuple one longer.
+    /// `h *: t` on a value whose type is a tuple type: the tuple one longer. The head is the argument of the
+    /// operator's application as any method's is: where `typedInfixOp` lifts the list (`lifted_list`) an impure
+    /// head is bound ahead of the tail (`Worker::lift_impure`).
     pub(super) fn tuple_cons(&mut self, tail: TExprId, tail_ty: TypeId, lists: &[ArgList], span: Span) -> Option<(TExprId, TypeId)> {
         let elems = self.tuple_elements(tail_ty)?;
-        let head = match lists {
-            [list] if list.args.len() == 1 && !list.using => list.args[0],
+        let (head, lifted) = match lists {
+            [list] if list.args.len() == 1 && !list.using => (list.args[0], self.lifted_list == Some(list.fun)),
             _ => return None,
         };
-        let (h, hty) = match head {
-            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => self.type_expr(e, None),
-            ArgSrc::Typed(te, ty) | ArgSrc::Named(_, te, ty) => (te, ty),
+        let (h, hty, written) = match head {
+            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => {
+                let (h, hty) = self.type_expr(e, None);
+                (h, hty, Some(self.cur_ast().expr_span(e)))
+            }
+            ArgSrc::Typed(te, ty) | ArgSrc::Named(_, te, ty) => (te, ty, None),
             ArgSrc::ForLambda(..) => return None,
         };
         let hty = self.solve_inferred(hty);
+        let h = match written {
+            Some(at) if lifted => {
+                let bound = self.lift_impure(super::apply::Lift::Impure, h, h, hty, hty, at);
+                // The element the builtin's call is written with (`capture_builtin_call`) is the binding's
+                // reference, of the head's type.
+                if bound != h {
+                    self.prog.set_type(bound, hty);
+                }
+                bound
+            }
+            _ => h,
+        };
         let mut items = vec![h];
         let mut tys = vec![hty];
         let tail_class = self.dealias(tail_ty);

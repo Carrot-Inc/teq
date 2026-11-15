@@ -7,6 +7,27 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- The operands of a right-associative operator (`a :: b`, `a +: b`, `h *: t`, a method `op:` of one's own) are
+  evaluated in scalac's order: the application `b.op(a)` is typed as any application and each of its completed
+  arguments that is no pure expression, for a parameter that is neither by-name nor inline, is evaluated ahead of
+  the receiver, as the reference's typer lifts it (`Typer.typedInfixOp`). teq decided at another place by another
+  test, so the right operand ran first when it was a top-level or local lazy value, a top-level given, an object
+  with an initializer or an inline parameter (`left() :: lazyList` ran the lazy value's initializer before
+  `left()`); for every left operand of a tuple's `*:` (`item(1) *: item(2) *: EmptyTuple` ran `item(2)` first); for
+  an operand passed as an auto-tupled pair, converted by an implicit conversion, or beside a receiver a conversion
+  wraps; and in a whole build of an inline method that conses a `summonInline` onto a call (a derivation made the
+  last field's given first, where a build over the method's products made the first's). The argument of an inline
+  parameter is no longer evaluated once ahead of the call, it is evaluated where the body reads it. A pure operand
+  is no longer bound to a temporary (`p.name :: rest()` reads `p.name` after `rest()`, so with a null `p` the
+  receiver's effects come before the exception, as with scalac), and a cast the source writes is evaluated ahead of
+  the receiver. Beside a receiver whose evaluation can do nothing (a local value, a parameter, `this`, an object
+  without an initializer that is not read from another module's products) the operand runs at the same point bound or not, and no temporary is written; an inline
+  method's body binds the operand whatever its receiver and each expansion keeps or drops the temporary by what
+  the receiver has become there (a build over the method's products keeps it where the whole build drops it: the
+  same order, another text). The pickled body of a right-associative extension method's application now also
+  binds a left operand that is a lazy value, an inline or by-name parameter or an object with an initializer.
+  Programs whose operands have no effects keep their meaning; their JavaScript and class files lose or gain a
+  temporary in the definitions that hold such an application.
 - A `for`'s alias with a written type (`for (y <- ys; l: T = e) ..`) is the value definition scalac makes of it,
   `val l: T = e`, where its run of aliases is not followed by a guard and where it stands before the first
   generator; teq typed it as a pattern that tests `T`. Three things change for a program. Programs that now

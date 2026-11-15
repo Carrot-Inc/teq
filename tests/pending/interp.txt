@@ -208,7 +208,6 @@ sync_exits_jvm	compile
 trait_empty_parameters	compile
 trait_private_public_dispatch	output
 tuple_apply_known_prefix	compile
-tuple_cons_deep	output
 type_checks_nested_package_clauses	compile
 typer_state_early_expansion_warning	output
 typer_state_held_promoted	output

@@ -178,7 +178,23 @@ pub(crate) fn class_no_inits_recorded(syms: &Symbols, k: ClassId) -> bool {
 impl<'a> Worker<'a> {
     /// dotty's `TreeInfo.exprPurity` over the typed IR; a reference as it was written where the
     /// IR's node says otherwise (`Worker::note_written_ref`).
+    #[inline]
     pub(super) fn expr_purity(&mut self, e: TExprId) -> Purity {
+        self.expr_purity_under(e, Purity::PURE)
+    }
+
+    /// `expr_purity` with the purity of a cast the source writes given by the asker. `exprPurity`'s `TypeApply`
+    /// arm calls the compiler's own cast (`Any_typeCast`) pure and a written `asInstanceOf` impure; the typed IR
+    /// keeps a written cast as its node, or, where its erasure makes it redundant, as its operand marked
+    /// (`lower_cast_as`). `Purity::PURE` is what `expr_purity`'s readers ask: the cast's node pure over its
+    /// operand, the marked operand what it is without the mark. `Purity::IMPURE` is the reference's, which the
+    /// lift of a right-associative operator's arguments asks (`Worker::lift_impure`). The erasure's unboxing
+    /// (`CastOp::Adapt`) is pure for either. Any other cast in the IR is read as a written one, the ones the
+    /// typer makes itself too (a mirror's, a tuple element's): the IR does not tell them apart.
+    pub(super) fn expr_purity_under(&mut self, e: TExprId, cast: Purity) -> Purity {
+        if cast != Purity::PURE && self.prog.is_cast(e) {
+            return cast;
+        }
         if let Some(&p) = self.written_purity.get(&e) {
             return p;
         }
@@ -197,52 +213,58 @@ impl<'a> Worker<'a> {
                 self.ref_purity(s).min(owner)
             }
             TExpr::Module(c) => self.module_purity(c),
-            TExpr::Field(r, s) => self.ref_purity(s).min(self.expr_purity(r)),
+            TExpr::Field(r, s) => self.ref_purity(s).min(self.expr_purity_under(r, cast)),
             TExpr::Lambda(..) => Purity::PURE,
             // A constructor of a class without initialisation is stable, as a case class's
             // synthetic `apply` is (`isPureApply`, `isPureSyntheticCaseApply`).
             TExpr::New(c, args) if self.no_inits(c) => {
                 let args = self.prog.expr_list(args).to_vec();
-                args.into_iter().fold(Purity::PURE, |p, a| p.min(self.expr_purity(a)))
+                let own = self.creation_purity_under(c, cast);
+                args.into_iter().fold(own, |p, a| p.min(self.expr_purity_under(a, cast)))
             }
             // `minOf(exprPurity(expr), stats.map(statPurity))`.
             TExpr::Block(stmts, res) => {
-                let mut p = self.expr_purity(res);
+                let mut p = self.expr_purity_under(res, cast);
                 for s in self.prog.stmts[stmts.range()].to_vec() {
-                    p = p.min(self.stat_purity(s));
+                    p = p.min(self.stat_purity_under(s, cast));
                 }
                 p
             }
-            // `e.asInstanceOf[T]`, `Any_typeCast`.
-            TExpr::Cast(r, ..) => Purity::PURE.min(self.expr_purity(r)),
+            // `e.asInstanceOf[T]`: the asker's purity of a written cast; `Any_typeCast`, the erasure's own.
+            TExpr::Cast(r, CastOp::Adapt(..), _) => Purity::PURE.min(self.expr_purity_under(r, cast)),
+            TExpr::Cast(r, ..) => cast.min(Purity::PURE).min(self.expr_purity_under(r, cast)),
             // A primitive or string operation the typer folds to a constant, over operands as pure
             // (`isPureApply`: an application of a known pure operation whose type is a constant).
-            TExpr::Unary(_, a) | TExpr::ToStr(a, _) if self.fold_constant_as_typed(e).is_some() => Purity::PURE.min(self.expr_purity(a)),
-            TExpr::Prim(_, a, b) if self.fold_constant_as_typed(e).is_some() => Purity::PURE.min(self.expr_purity(a)).min(self.expr_purity(b)),
+            TExpr::Unary(_, a) | TExpr::ToStr(a, _) if self.fold_constant_as_typed(e).is_some() => Purity::PURE.min(self.expr_purity_under(a, cast)),
+            TExpr::Prim(_, a, b) if self.fold_constant_as_typed(e).is_some() => Purity::PURE.min(self.expr_purity_under(a, cast)).min(self.expr_purity_under(b, cast)),
             TExpr::StrConcat(l) if self.fold_constant_as_typed(e).is_some() => {
                 let parts = self.prog.expr_list(l).to_vec();
-                parts.into_iter().fold(Purity::PURE, |p, x| p.min(self.expr_purity(x)))
+                parts.into_iter().fold(Purity::PURE, |p, x| p.min(self.expr_purity_under(x, cast)))
             }
             // A lazy val read through its accessor (`fn.symbol.isStableMember`): idempotent, its
             // first read running the initialiser.
             TExpr::CallStatic(s, l) if l.len == 0 && self.lazy_accessor(s) => Purity::IDEMPOTENT,
-            TExpr::CallMethod(r, s, l) if l.len == 0 && self.lazy_accessor(s) => self.expr_purity(r).min(Purity::IDEMPOTENT),
+            TExpr::CallMethod(r, s, l) if l.len == 0 && self.lazy_accessor(s) => self.expr_purity_under(r, cast).min(Purity::IDEMPOTENT),
             // `isPureApply`: a constant expression of a known pure operation (a primitive value
             // class's or `String`'s method, one of `Any`'s `pureMethods`) over pure arguments, and a
             // case class's synthetic `apply` whose class has no initialisation
             // (`isPureSyntheticCaseApply`).
             TExpr::CallStatic(s, l) if self.is_pure_synthetic_case_apply(s) => {
                 let args = self.prog.expr_list(l).to_vec();
-                args.into_iter().fold(Purity::PURE, |p, a| p.min(self.expr_purity(a)))
+                let own = match self.syms.sym(s).owner {
+                    Owner::Class(o) if cast != Purity::PURE => self.module_purity(o).min(Purity::PURE),
+                    _ => Purity::PURE,
+                };
+                args.into_iter().fold(own, |p, a| p.min(self.expr_purity_under(a, cast)))
             }
             TExpr::CallStatic(s, l) if self.is_known_pure_op(s) && self.fold_constant_as_typed(e).is_some() => {
                 let args = self.prog.expr_list(l).to_vec();
-                args.into_iter().fold(Purity::PURE, |p, a| p.min(self.expr_purity(a)))
+                args.into_iter().fold(Purity::PURE, |p, a| p.min(self.expr_purity_under(a, cast)))
             }
             TExpr::CallMethod(r, s, l) if self.is_known_pure_op(s) && self.fold_constant_as_typed(e).is_some() => {
                 let args = self.prog.expr_list(l).to_vec();
-                let p = self.expr_purity(r).min(Purity::PURE);
-                args.into_iter().fold(p, |p, a| p.min(self.expr_purity(a)))
+                let p = self.expr_purity_under(r, cast).min(Purity::PURE);
+                args.into_iter().fold(p, |p, a| p.min(self.expr_purity_under(a, cast)))
             }
             // `scala.quoted.Type.of[T]` and `scala.compiletime.erasedValue[T]` (`exprPurity`'s
             // `TypeApply` cases).
@@ -256,7 +278,7 @@ impl<'a> Worker<'a> {
                 };
                 owner.min(Purity::PURE_PATH)
             }
-            TExpr::CallMethod(r, s, l) if l.len == 0 && self.stable_member_def(s) => self.expr_purity(r).min(Purity::PURE_PATH),
+            TExpr::CallMethod(r, s, l) if l.len == 0 && self.stable_member_def(s) => self.expr_purity_under(r, cast).min(Purity::PURE_PATH),
             _ => Purity::IMPURE,
         }
     }
@@ -270,9 +292,14 @@ impl<'a> Worker<'a> {
     /// dotty's `TreeInfo.statPurity`: a local method is pure, an immutable val its value's purity
     /// capped at `Pure` (no path), a `var` or any other statement impure.
     pub(super) fn stat_purity(&mut self, s: TStmt) -> Purity {
+        self.stat_purity_under(s, Purity::PURE)
+    }
+
+    /// `stat_purity` for `expr_purity_under`'s asker.
+    fn stat_purity_under(&mut self, s: TStmt, cast: Purity) -> Purity {
         match s {
             TStmt::Val(v, _) if self.syms.sym(v).kind == SymKind::Var || self.syms.sym(v).mods & mods::MUTABLE != 0 => Purity::IMPURE,
-            TStmt::Val(_, x) => self.expr_purity(x).min(Purity::PURE),
+            TStmt::Val(_, x) => self.expr_purity_under(x, cast).min(Purity::PURE),
             TStmt::Fun(_) => Purity::PURE,
             TStmt::Expr(_) | TStmt::Pat(..) => Purity::IMPURE,
         }
@@ -386,6 +413,26 @@ impl<'a> Worker<'a> {
             }
             Type::Class(o, _) if self.syms.class(o).kind == ClassKind::Object && self.static_object(o) => self.module_purity(o),
             _ => Purity::IMPURE,
+        }
+    }
+
+    /// The purity of a creation of `c`, a class without initialisation, before its arguments': pure
+    /// (`isPureApply`). For the asker that decides an order of evaluation (`cast` below pure: the
+    /// lift of an operator's arguments), a case class's creation is its companion's `apply`, whose
+    /// qualifier is the companion: idempotent where the companion has initialisation (`refPurity` of
+    /// a module), which every back end runs in front of the creation (`emit::touched_companion`), a
+    /// creation written with `new` included.
+    fn creation_purity_under(&mut self, c: ClassId, cast: Purity) -> Purity {
+        if cast == Purity::PURE {
+            return Purity::PURE;
+        }
+        let info = self.syms.class(c);
+        if info.kind != ClassKind::Class || info.mods & mods::CASE == 0 {
+            return Purity::PURE;
+        }
+        match info.companion {
+            Some(m) if self.syms.class(m).kind == ClassKind::Object => self.module_purity(m).min(Purity::PURE),
+            _ => Purity::PURE,
         }
     }
 

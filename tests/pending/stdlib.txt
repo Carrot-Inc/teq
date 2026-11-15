@@ -459,7 +459,6 @@ time_formatter_value_widths	error: not supported on JavaScript: method from of j
 time_formatter_widths	error: not supported on JavaScript: method from of java.time.LocalDate (a Java definition without an implementation in the std's platform la
 to_string_null	TypeError: Cannot read properties of null (reading 'toString')
 trait_empty_parameters	error: parameterized trait Empty is indirectly implemented, needs to be implemented directly so that arguments can be passed
-tuple_cons_deep	output differs
 tuple_xxl	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
 tuple_xxl_typed	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
 type_checks_nested_package_clauses	error: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)

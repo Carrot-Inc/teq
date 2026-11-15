@@ -613,6 +613,11 @@ pub struct InlineDefinition {
     /// The temporaries the typing hoisted an operand into (`Worker::hoist`), which an expansion
     /// does without where the operand or the call's receiver becomes stable.
     pub hoisted: Vec<SymId>,
+    /// The temporaries the typing bound an argument of a right-associative operator's application into
+    /// (`Worker::lift_impure`, the reference's `typedInfixOp`). Such a binding stays whatever its initializer
+    /// expands to; an expansion does without it only where the call's receiver has become a pure path, beside
+    /// which it cannot be told from its absence.
+    pub lifted_args: Vec<SymId>,
     /// The imports of the body's blocks, each with the block and the statement it stands before
     /// (the block's result where it stands after the last), which an expansion's searches see
     /// from there to the block's end as they saw them at the definition.

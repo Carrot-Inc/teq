@@ -1,0 +1,4 @@
+List(1, 0) l
+List(1) lz
+List(1, 0) l
+acc1 l

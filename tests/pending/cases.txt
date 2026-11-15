@@ -175,7 +175,6 @@ string_constant_fold_surrogates	< folded to the pair
 super_rebind_result	< text
 trait_empty_parameters	< empty
 tuple_apply_known_prefix	< 2
-tuple_cons_deep	< 123
 type_checks_nested_package_clauses	< mine 1
 unused_params_constant_bodies	> tests/cases/unused_params_constant_bodies.scala:18:10: warning: unused explicit parameter
 value_companion_strings	< object scala.Boolean

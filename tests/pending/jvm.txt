@@ -201,7 +201,6 @@ super_rebind_result	verify
 thread_sync_queue_handoff	compile
 toplevel_init_given_objects	output
 trait_empty_parameters	compile
-tuple_cons_deep	output
 type_checks_nested_package_clauses	compile
 typer_state_early_expansion_warning	output
 typer_state_held_promoted	output
