@@ -5831,7 +5831,9 @@ impl<'a> Worker<'a> {
                             continue;
                         }
                         let (ty, by_name) = param_types[i];
+                        let outer = t.enter_ctor_default();
                         let te = t.check_expr(d, ty);
+                        t.leave_ctor_default(outer);
                         tclass.ctor_defaults[lead + i] =
                             Some(if by_name { t.prog.add(TExpr::Lambda(ast::ListRef::EMPTY, te)) } else { te });
                     }

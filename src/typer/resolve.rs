@@ -368,7 +368,7 @@ impl<'a> Worker<'a> {
         let mut info = self.syms.sym_mut(local);
         info.sig = Some(sig);
         info.state().set(crate::symbols::Completion::Done);
-        self.inline.args.insert(local, super::inline::InlineArg { expr: te, ty, source: None });
+        self.bind_inline_arg(local, te, ty);
         self.inline.import_aliases.push(local);
         self.note_import_alias(local, imp);
         self.bind_local(name, local);

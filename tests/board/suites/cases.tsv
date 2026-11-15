@@ -1142,6 +1142,7 @@ inline_accessor_bodies	pass	-
 inline_accessor_constructor_params	pass	-	
 inline_accessor_overloads	pass	-	
 inline_anon_by_name	pass	-	
+inline_anon_class_this_arg	pass	-	
 inline_anon_receiver_this	pass	-	
 inline_anon_shared	pass	-	
 inline_arg_conversion	pass	-	
@@ -1158,6 +1159,7 @@ inline_arg_throwing_branch	pass	-
 inline_arg_wrapped	pass	-	
 inline_argument_constructor_scope	pass	-	
 inline_argument_outer_accessor	pass	-	
+inline_argument_this_under_class	pass	-	
 inline_binding_refs	pass	-	
 inline_block_class_named_val	pass	-	
 inline_bodies_scalac_product	pass	-	

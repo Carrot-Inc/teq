@@ -13,7 +13,7 @@
 
 use super::apply::MethodCall;
 use crate::ast::DefKind as DefKindAst;
-use super::inline::{InlineArg, InlineBody, Intrinsic, Reads};
+use super::inline::{InlineBody, Intrinsic, Reads};
 use super::inline_definition::{Bindings, Demand, Instance, StoredIndex, TreeOf};
 use super::{ResolvedImport, Worker};
 use crate::intern::FxMap;
@@ -1751,7 +1751,9 @@ impl<'a> Worker<'a> {
         }
         for (i, d) in tc.ctor_defaults.iter().enumerate() {
             if let Some(d) = *d {
+                let outer = self.enter_ctor_default();
                 let walked = self.walk(w, d);
+                self.leave_ctor_default(outer);
                 self.prog.classes[index].ctor_defaults[i] = Some(walked);
             }
         }
@@ -2191,7 +2193,7 @@ impl<'a> Worker<'a> {
             let mut sig = (*self.sig_of(local)).clone();
             sig.ret = ty;
             self.syms.sym_mut(local).sig = Some(Arc::new(sig));
-            self.inline.args.insert(local, super::inline::InlineArg { expr: walked, ty, source: None });
+            self.bind_inline_arg(local, walked, ty);
             self.inline.import_aliases.push(local);
             self.bind_walked(local);
         }
@@ -2295,7 +2297,7 @@ impl<'a> Worker<'a> {
         sig.ret = ty;
         self.syms.sym_mut(s).sig = Some(Arc::new(sig));
         self.set_walked_type(w, init, ty);
-        self.inline.args.insert(s, super::inline::InlineArg { expr: init, ty, source: None });
+        self.bind_inline_arg(s, init, ty);
         out.push(s);
     }
 
@@ -2346,7 +2348,13 @@ impl<'a> Worker<'a> {
         for &p in &params {
             self.bind_walked(p);
         }
+        // A secondary constructor's defaults are its class's constructor's.
+        let ctor = self.syms.sym(self.prog.funs[f.idx()].sym).name == crate::names::INIT;
+        let outer = ctor.then(|| self.enter_ctor_default());
         let defaults: Vec<Option<TExprId>> = defaults.into_iter().map(|d| d.map(|x| self.walk(w, x))).collect();
+        if let Some(outer) = outer {
+            self.leave_ctor_default(outer);
+        }
         let body = body.map(|b| self.walk(w, b));
         self.pop_scope();
         let fun = &mut self.prog.funs[f.idx()];
@@ -3419,7 +3427,7 @@ impl<'a> Worker<'a> {
                 match s.constant.filter(|_| !s.erased) {
                     Some(v) => {
                         let (lit, _) = self.constant(v);
-                        self.inline.args.insert(sym, InlineArg { expr: lit, ty, source: None });
+                        self.bind_inline_arg(sym, lit, ty);
                         bound_args.push(sym);
                     }
                     None => {

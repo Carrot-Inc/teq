@@ -2202,11 +2202,12 @@ pub struct Descendants<'a> {
     pats: Vec<TPatId>,
     tests: Vec<TestId>,
     local_defs: bool,
+    patterns: bool,
 }
 
 impl Program {
     pub fn descendants(&self, root: TExprId) -> Descendants<'_> {
-        Descendants { prog: self, exprs: vec![root], pats: Vec::new(), tests: Vec::new(), local_defs: true }
+        Descendants { prog: self, exprs: vec![root], pats: Vec::new(), tests: Vec::new(), local_defs: true, patterns: true }
     }
 }
 
@@ -2214,6 +2215,15 @@ impl<'a> Descendants<'a> {
     /// The walk without the bodies of the local defs, which run apart from their block.
     pub fn without_local_defs(mut self) -> Self {
         self.local_defs = false;
+        self
+    }
+
+    /// The walk over the nodes a copy of a tree makes anew: without the bodies of the local
+    /// defs and the expressions of the patterns and type tests, which the copy has in common
+    /// with the tree it copies (`Worker::copy_expr`).
+    pub fn of_a_copy(mut self) -> Self {
+        self.local_defs = false;
+        self.patterns = false;
         self
     }
 
@@ -2266,6 +2276,10 @@ impl<'a> Iterator for Descendants<'a> {
     type Item = TExprId;
 
     fn next(&mut self) -> Option<TExprId> {
+        if !self.patterns {
+            self.pats.clear();
+            self.tests.clear();
+        }
         if !self.drain_pats_and_tests() {
             return None;
         }

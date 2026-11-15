@@ -217,6 +217,18 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   `def take(k: String)` for `Drawer[Int]`), a build on more than one worker printed other numbers, with no error;
   where the class had a lazy val, an object as a member or a class declared in one of its methods, or its members
   read a val or a var of the method's body, the build stopped (`exception in macro`, `not found: seen`).
+- An argument that an inline method takes in the place of its parameter (a field of the calling class, `this`, a
+  by-name or an inline parameter's code, a lambda) is the caller's where a class declared in the method's body reads
+  the parameter: `inline def over(k: Int) = { class Two { def put = k }; new Two().put }` called as `over(this.n)`
+  inside a class read `n` from the new `Two`, so JavaScript printed `undefined` or `0` without an error, the
+  interpreter `0`, and the JVM threw a `ClassCastException`; with the parameter passed to the class's parent
+  (`class Two extends Base(k)`) JavaScript stopped with `Must call super constructor`. A named or an anonymous
+  class, a lambda for a trait, an object and a given of the body are covered, and a method that passes the
+  parameter on to another inline method. Not yet: the parameter as a constructor's default of such a class
+  (`class Two(val got: Int = k)`), and a class declared inside another class of the body on the JVM. The same
+  holds for a value a block imports from a field of the enclosing instance (`import b.m` in a method of a class
+  with the field `b`) and reads in a class, an object or a lambda for a trait of that block: such a read stopped
+  the program (a `TypeError`, a `NullPointerException`, a `ClassCastException`).
 
 ## 0.1.10 (2026-11-13)
 

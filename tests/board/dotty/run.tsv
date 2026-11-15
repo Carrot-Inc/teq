@@ -378,7 +378,7 @@ i13332anonprod.scala	fail	interp:fail	i13332anonprod.scala:23:81: no given insta
 i13332intersection.scala	fail	interp:fail	i13332intersection.scala:230:54: cannot reduce summonFrom with
 i13332shapeless-b.scala	pass	interp:pass	
 i13332shapeless.scala	fail	interp:fail	i13332shapeless.scala:338:29: type argument CListRefl[tl] does not conform to upper bound CList
-i13334.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class TC$$anon$18h6cdm_170$18h6cdm_223 cannot be cast to class Foo (TC$$anon$18h6cdm_170$18h6cdm_223 and Foo are in unnamed module of loader 'app')
+i13334.scala	pass	interp:pass	
 i13358.scala	pass	interp:pass	
 i13433.scala	fail	interp:fail	i13433.scala:8:10: this type cannot be tested at runtime: Matcher[A]
 i13433b.scala	fail	interp:fail	i13433b.scala:8:10: this type cannot be tested at runtime: Matcher[A]

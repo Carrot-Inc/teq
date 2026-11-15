@@ -60,7 +60,6 @@ hk_param_bare_constructor_bound_kind	< scalac 3.8.4: rejected, 5 error(s)
 hk_param_constructor_arity	< scalac 3.8.4: rejected, 2 error(s)
 hk_pattern_type_variable_capture	< List(1) 1
 inferred_type_bounds_checked	< scalac 3.8.4: rejected, 1 error(s)
-inline_anon_class_this_arg	< 2 3 5 6
 inline_collapsed_primitive_param	< 42,-42,42,0
 inline_collapsed_primitive_select	< 42,42,42
 inline_param_type_prefix	< scalac 3.8.4: rejected, 1 error(s)

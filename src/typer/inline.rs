@@ -676,6 +676,10 @@ pub struct InlineArg {
     pub ty: TypeId,
     /// Where the argument was written, for `codeOf` and `requireConst`.
     pub source: Option<(FileId, Span)>,
+    /// The class whose instance a `this` of the tree is: the one the tree was made in
+    /// (`Worker::frame_class`), which is not the class it is read in where a class of the
+    /// expansion's body stands between (`inline_arg`).
+    pub this_class: Option<ClassId>,
 }
 
 /// The worker's state where a definition is made, beyond its environment: what the definition's check runs under
@@ -740,6 +744,15 @@ pub struct InlineSite {
     /// The class whose `this` the call's arguments read, the call site's, which the body's
     /// environment is not (`call_argument_path`).
     pub this_class: Option<ClassId>,
+    /// The class whose instance `this` is where the expansion stands, a lambda's class included
+    /// (`Worker::frame_class` at the call).
+    pub frame_class: Option<ClassId>,
+    /// The innermost class of the environment the body stands in, its definition's: a class the
+    /// body declares stands between wherever the innermost class is another.
+    pub body_class: Option<ClassId>,
+    /// The walk stands in a constructor's default of a class the body declares
+    /// (`Worker::enter_ctor_default`).
+    pub in_ctor_default: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1216,7 +1229,14 @@ impl<'a> Worker<'a> {
         let at_end = std::mem::replace(&mut self.inline.site_at_end, false);
         let call_node = self.body_node.filter(|n| n.file == self.env.file).map(|n| n.call);
         let this_class = self.this_class();
-        let site = InlineSite { callee: sym, file: self.env.file, span, body_file: body.file, body_span: body.span, at_end, call_node, this_class };
+        let frame_class = self.frame_class();
+        let body_class = env.frames.iter().rev().find_map(|f| match f {
+            Frame::Class(c) => Some(*c),
+            _ => None,
+        });
+        // A call expanded inside a constructor's default stands in that default.
+        let in_ctor_default = self.inline.sites.last().is_some_and(|s| s.in_ctor_default);
+        let site = InlineSite { callee: sym, file: self.env.file, span, body_file: body.file, body_span: body.span, at_end, call_node, this_class, frame_class, body_class, in_ctor_default };
         let outer_site_env = self.inline.site_env.clone();
         let givens_mark = self.inline.outer_scopes.len();
         if self.inline.depth == 0 {
@@ -1648,7 +1668,7 @@ impl<'a> Worker<'a> {
                         self.mark_leaf(r);
                     }
                     if self.is_stable(r) && !widened_this {
-                        self.inline.args.insert(proxy, InlineArg { expr: r, ty: this_ty, source: None });
+                        self.bind_inline_arg(proxy, r, this_ty);
                         if bound.kept {
                             self.inline.bare_trees.insert(r, ());
                             bound.bare.push(r);
@@ -1884,7 +1904,7 @@ impl<'a> Worker<'a> {
                     _ => prior,
                 };
                 let tree = self.own_getter_expansion(sym, sig, subst, body, bound, tree, span);
-                self.inline.args.insert(local, InlineArg { expr: tree, ty: pty, source: None });
+                self.bind_inline_arg(local, tree, pty);
             } else if let Some(bound) = bound.filter(|b| !inline_param && k < b.params.len()) {
                 // The parameter's own binding, which holds the argument's value once.
                 let proxy = bound.params[k].proxy;
@@ -1892,7 +1912,7 @@ impl<'a> Worker<'a> {
                     Some(a) => a.expr,
                     None => self.prog.add(TExpr::Local(proxy)),
                 };
-                self.inline.args.insert(local, InlineArg { expr: value, ty: pty, source: None });
+                self.bind_inline_arg(local, value, pty);
             } else {
                 let value = self.own_getter_expansion(sym, sig, subst, body, bound, prior, span);
                 stmts.push(TStmt::Val(local, value));
@@ -1987,7 +2007,7 @@ impl<'a> Worker<'a> {
             // it. Where its argument stands for it at each use as it is written, the uses copy a
             // tree whose casts say no type (`copy_for_proxy`).
             let expr = if !inline && met_cast && te == written { self.copy_for_proxy(te) } else { te };
-            self.inline.args.insert(proxy, InlineArg { expr, ty, source: None });
+            self.bind_inline_arg(proxy, expr, ty);
             if kept {
                 self.inline.bare_trees.insert(expr, ());
                 bound.bare.push(expr);
@@ -2006,7 +2026,7 @@ impl<'a> Worker<'a> {
                 self.index_unrecord(given);
             }
             let value = if self.inline.args.contains_key(&proxy) { te } else { self.prog.add(TExpr::Local(proxy)) };
-            self.inline.args.insert(given, InlineArg { expr: value, ty: local_ty, source: None });
+            self.bind_inline_arg(given, value, local_ty);
             self.inline.param_bindings.insert(given, (te, declared));
             bound.givens.push(given);
             self.bind_given(given);
@@ -2443,6 +2463,57 @@ impl<'a> Worker<'a> {
         t == NOTHING || matches!(self.types.get(t), Type::Class(c, _) if c == self.b.null)
     }
 
+    /// The class whose instance `this` is here, a lambda's class included (`innermost_class`):
+    /// at the level of an expansion's body, whose environment is its definition's, the class
+    /// of the place the expansion stands in.
+    pub(super) fn frame_class(&self) -> Option<ClassId> {
+        let innermost = self.innermost_class();
+        match self.inline.sites.last() {
+            Some(site) if innermost == site.body_class => site.frame_class,
+            _ => innermost,
+        }
+    }
+
+    /// Enters a constructor's default of a class the body of the expansion under way declares;
+    /// what it gives goes back to `leave_ctor_default`.
+    pub(super) fn enter_ctor_default(&mut self) -> bool {
+        match self.inline.sites.last_mut() {
+            Some(site) => std::mem::replace(&mut site.in_ctor_default, true),
+            None => false,
+        }
+    }
+
+    pub(super) fn leave_ctor_default(&mut self, outer: bool) {
+        if let Some(site) = self.inline.sites.last_mut() {
+            site.in_ctor_default = outer;
+        }
+    }
+
+    /// Binds `s` to the tree that stands for it at each use.
+    pub(super) fn bind_inline_arg(&mut self, s: SymId, expr: TExprId, ty: TypeId) {
+        let this_class = self.frame_class();
+        self.inline.args.insert(s, InlineArg { expr, ty, source: None, this_class });
+    }
+
+    /// Makes each `this` of the tree `e`, a fresh copy, the instance of `k` as a class nested in
+    /// it reads it: the object itself, or the local that stands for it, which the class
+    /// captures (`visible_to_class`, `capture_args`). The bodies of the tree's local methods and
+    /// the expressions of its patterns and type tests are not the copy's own: every copy of
+    /// the tree reads the same ones.
+    fn this_of_class_in(&mut self, e: TExprId, k: ClassId) {
+        let own: Vec<TExprId> = self.prog.descendants(e).of_a_copy().filter(|&x| matches!(self.prog.expr(x), TExpr::This)).collect();
+        if own.is_empty() {
+            return;
+        }
+        let node = match self.syms.class(k).kind {
+            ClassKind::Object => TExpr::Module(k),
+            _ => TExpr::Local(self.outer_this_sym(k)),
+        };
+        for x in own {
+            self.prog.exprs[x.idx()] = node;
+        }
+    }
+
     pub fn inline_arg(&mut self, s: SymId) -> Option<(TExprId, TypeId)> {
         if self.inline.args.is_empty() {
             return None;
@@ -2451,6 +2522,16 @@ impl<'a> Worker<'a> {
         let part = self.body_part(Part::Copy);
         let bare = !self.inline.bare_trees.is_empty() && self.inline.bare_trees.contains_key(&arg.expr);
         let copied = if bare { self.copy_casts_as(arg.expr, CastCopy::Bare) } else { self.copy_expr(arg.expr) };
+        // A `this` of the argument names the instance of the class the argument was made in, as
+        // dotty's `This(K)` names its class wherever the inliner puts the tree: read under a class
+        // of the body it is that instance as the class reaches it.
+        // A constructor's default is no part of the class's instance: its getter is applied where
+        // the class is created and reads an enclosing instance through the constructor's own outer
+        // parameter (`ctor_outer`), not through what the class captures; there the tree stays.
+        let in_default = self.inline.sites.last().is_some_and(|s| s.in_ctor_default);
+        if let Some(k) = arg.this_class.filter(|&k| !in_default && Some(k) != self.frame_class()) {
+            self.this_of_class_in(copied, k);
+        }
         self.part_end(part);
         self.inline.copies.push((copied, s));
         // The copy stands where the proxy stood, so it carries the proxy's type: a mirror
@@ -4124,7 +4205,7 @@ impl<'a> Worker<'a> {
                 match s.constant.filter(|_| !s.erased) {
                     Some(v) => {
                         let (lit, _) = self.constant(v);
-                        self.inline.args.insert(sym, InlineArg { expr: lit, ty, source: None });
+                        self.bind_inline_arg(sym, lit, ty);
                     }
                     None => {
                         let value = self.scrutinee_ref(s, stmts, span);

@@ -66,7 +66,6 @@ hk_param_bare_constructor_bound_kind	fail	-	< scalac 3.8.4: rejected, 5 error(s)
 hk_param_constructor_arity	fail	-	< scalac 3.8.4: rejected, 2 error(s)
 hk_pattern_type_variable_capture	fail	-	< List(1) 1
 inferred_type_bounds_checked	fail	-	< scalac 3.8.4: rejected, 1 error(s)
-inline_anon_class_this_arg	fail	-	< 2 3 5 6
 inline_collapsed_primitive_param	fail	-	< 42,-42,42,0
 inline_collapsed_primitive_select	fail	-	< 42,42,42
 inline_method_default_in_interface	cannot run	-	the JVM's platform

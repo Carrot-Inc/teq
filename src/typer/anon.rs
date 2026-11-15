@@ -788,6 +788,15 @@ impl<'a> Worker<'a> {
         for locals in &self.inline.outer_locals {
             visible.extend(locals.iter().copied());
         }
+        // And the instance each of those expansions stands in (`frame_class`), which is a class
+        // of another expansion's body where the call stands in one: no frame here says it.
+        for site in &self.inline.sites {
+            if let Some(&s) = site.frame_class.and_then(|k| self.outer_this.get(&k)) {
+                if !visible.contains(&s) {
+                    visible.push(s);
+                }
+            }
+        }
         // A class made while a given's search is open reads that given's lazy local (`open_knots`).
         visible.extend(self.open_knots());
         visible
@@ -804,6 +813,9 @@ impl<'a> Worker<'a> {
             let e = match stands_for {
                 _ if inside => TExpr::Local(s),
                 Some(k) if Some(k) == this_class => TExpr::This,
+                // At the level of an expansion's body `this` is the instance of the class the
+                // expansion stands in (`frame_class`), whatever class the body was written in.
+                Some(k) if Some(k) == self.frame_class() => TExpr::This,
                 // The `this` of an enclosing object is the object itself.
                 Some(k) if self.syms.class(k).kind == ClassKind::Object => TExpr::Module(k),
                 Some(k) => match self.inline_this(k) {

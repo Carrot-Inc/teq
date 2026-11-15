@@ -1662,6 +1662,7 @@ impl Remap {
         self.map_sorted(&mut w.inline.args, |r, s| r.sym(s), |r, a| {
             a.expr = r.expr(a.expr);
             a.ty = r.ty(a.ty);
+            a.this_class = a.this_class.map(|c| r.class(c));
         });
         // The types the std's classes give, which a worker finds on its way (`find_std_classes`).
         for t in [&mut w.b.t_product, &mut w.b.t_equals, &mut w.b.t_enum, &mut w.b.t_singleton] {

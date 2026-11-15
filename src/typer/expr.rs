@@ -5499,7 +5499,7 @@ impl<'a> Worker<'a> {
                     let kept = self.checks_inline_definition() && !matches!(self.types.get(ity), Type::Lit(_));
                     match (sym, kept) {
                         (Some(sym), false) => {
-                            self.inline.args.insert(sym, super::inline::InlineArg { expr: init, ty: ity, source: None });
+                            self.bind_inline_arg(sym, init, ity);
                         }
                         (Some(sym), true) => self.note_inline_val(sym),
                         (None, _) => {}
