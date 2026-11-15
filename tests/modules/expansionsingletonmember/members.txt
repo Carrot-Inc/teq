@@ -1,0 +1,3 @@
+# What scalac writes of the class b's expansion of a's inline body makes (tests/modules.sh, "members"): the member
+# declared by the singleton type of the class's own `len` is an `Int`'s, as `len` is.
+b vat/Gauge\$\$anon\$[^$]+\$[^$]+ got()I

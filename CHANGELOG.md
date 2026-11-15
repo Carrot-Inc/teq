@@ -374,6 +374,26 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   Not yet: an `export` in a trait that stands in a file of its own and is mixed into a class of another file
   (`trait Geared { export drum.wind }`): a call of an overloaded forwarder there can still run another
   alternative.
+- A module that calls another module's `transparent inline` method whose body declares a class (`new Rod(n) {
+  override def label = .. }`, a typeclass instance made in the method) writes the same pickles whatever the number
+  of typing workers. With two workers or more the class could be written without its members, and what reads the
+  caller's body from the pickle took it so: a later module's build for JavaScript, the interpreter, and a later
+  module's macro that runs the caller, on the JVM too. Where the class overrides a member the program printed the
+  parent's value with no error (`rod abc` for `got abc`); where it implements an abstract one it stopped (`b.label is
+  not a function`). The module's own class files were right. A module of more than 512 KiB of sources is typed by
+  several workers without `--threads`, so this did not need the flag. With it:
+  a class declared inside such a class (`new Rod(n) { class Notch(val at: Int); .. }`) no longer stops the calling
+  module's build, as it did at one worker (`references to definitions never written`): the module builds and the
+  caller's body alone is left out of its pickles; and a member of such a class declared by the singleton type of a
+  member of the class itself (`val got: this.len.type`) has that member's type in the class file an expansion of a
+  plain `inline` method makes (`int got()`, where teq wrote `Object got()`).
+  Not yet: where the pickle cannot hold a member of such a class yet, the caller's body is left out of the module's
+  pickles (`the body of .. is withheld from the products`, with the reason), now at every number of workers; two
+  workers or more used to write the class without its members, which a later build accepted when it needed none of
+  them. The members that can do this: a class, a trait, an object or a given with a body declared in the class;
+  one declared by the singleton type of a member of the class itself (`val got: this.len.type`); one whose body
+  declares a class (`def spare(k: Int) = { class Notch(val at: Int); .. }`); and a type member that names the
+  method's type parameter (`type Elem = T`).
 
 ## 0.1.10 (2026-11-13)
 

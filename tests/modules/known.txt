@@ -91,3 +91,6 @@ rightassocparam bundle  the same as classes: the two builds' JavaScript differs 
 exportedinnerobject classes  the exporting module b writes an alias for the nested object's class (`type shade`) beside the forwarder only where it reads the object from the upstream's products, none in a whole build, so b's own Board.tasty and Board.class differ split against whole; the downstream's pickles, which the case is for, are the same both ways
 exportedinnerobject subset  the same as classes: b's Board built alone over a's products against the whole build's
 exportedinnerobject check-lean-whole  the same as classes, in the lean check build
+expansionsingletonmember classes  the same as inlinesam: the class b's expansion of a's inline body makes is named at the product's pseudo file's place (`Gauge$$anon$300osidpep0lc_13$1rc96ct_90`), the whole build's at Gauge.scala's (`Gauge$$anon$1wh9xg8_328$1rc96ct_90`); its member is the members leg's
+expansionsingletonmember subset  the same as classes
+expansionsingletonmember bundle  the same as inlinesam bundle

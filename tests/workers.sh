@@ -1853,6 +1853,89 @@ untraced() {
 at_the_lock() {
   grep -q "^teq: a wait under the loader's lock gave way: " "$1"
 }
+
+# A module that calls an upstream module's transparent inline method whose body declares a class: the
+# expansion's copy of the class is written in the calling module's pickles, from which a later
+# module's build and the interpreter take the caller's body.
+# over_products <fixture> <scalac's lines...>: tests/workers/<fixture>/a built to products at one
+# worker, tests/workers/<fixture>/b over them to products of its own at one worker, which succeeds;
+# then the program tests/workers/<fixture>/main built over both prints scalac's lines.
+over_products() {
+  local name=$1 dir=tests/workers/$1 a=$work/$1_a b=$work/$1_b
+  shift
+  rm -rf "$a" "$b"
+  timeout 120 "$TEQ" compiler check --products "$a" --sourceroot "$dir" "$dir"/a/*.scala --threads 1 > /dev/null 2>&1
+  if timeout 120 "$TEQ" compiler check --products "$b" --sourceroot "$dir" "$dir"/b/*.scala --classpath "$a" --threads 1 > "$work/$name.built" 2>&1; then
+    ok
+  else
+    bad "${name}_built: one worker does not build the module: $(grep -m1 -E 'error|never written' "$work/$name.built" | cut -c1-120)"
+    return
+  fi
+  one "${name}_run" 1 run "$dir"/main/*.scala --classpath "$b:$a" > "$work/${name}_run.one" 2>&1
+  if [ "$(cat "$work/${name}_run.one")" = "$(printf '%s\n' "$@")" ]; then
+    ok
+  else
+    bad "${name}_printed: over the module's products the program prints $(head -3 "$work/${name}_run.one" | tr '\n' ' ' | cut -c1-120), scalac $*"
+  fi
+}
+# over_products_at_counts <fixture> <scalac's lines...>: over_products, then b built over a's products
+# at each count of COUNTS under seeds 1 to 12 of the shaker: its products are one worker's file by
+# file, and no build was given to one worker by a wait under the loader's lock.
+over_products_at_counts() {
+  local name=$1 dir=tests/workers/$1 a=$work/$1_a b=$work/$1_b s t differ="" gave=""
+  over_products "$@"
+  [ -d "$b" ] || return
+  for s in $(seq 1 12); do
+    for t in $COUNTS; do
+      rm -rf "$b.$t"
+      TEQ_SERIAL_TRACE=1 TEQ_SHAKE="$s:item,claimed,computed" timeout 120 "$TEQ" compiler check --products "$b.$t" --sourceroot "$dir" "$dir"/b/*.scala --classpath "$a" --threads $t > "$work/$name.shaken" 2>&1
+      diff -rq "$b" "$b.$t" > "$work/$name.diff" 2>&1 || differ="$differ $t workers under TEQ_SHAKE=$s ($(head -1 "$work/$name.diff" | cut -c1-100));"
+      at_the_lock "$work/$name.shaken" && gave="$gave $t workers under TEQ_SHAKE=$s;"
+    done
+  done
+  [ -z "$differ" ] && ok || bad "${name}_counts: the module's products are not one worker's at$differ"
+  [ -z "$gave" ] && ok || bad "${name}_waits_under_lock: a wait under the loader's lock gave the module's build to one worker at$gave"
+}
+# over_products_withheld <fixture> <reason>: a module with one body its pickle cannot hold:
+# tests/workers/<fixture>/a built to products at one worker, tests/workers/<fixture>/b over them at
+# one worker, which succeeds; the program tests/workers/<fixture>/main over both is refused for the
+# body withheld, with the reason; and b's products at each count of COUNTS under seeds 1 to 12 of the
+# shaker are one worker's file by file.
+over_products_withheld() {
+  local name=$1 reason=$2 dir=tests/workers/$1 a=$work/$1_a b=$work/$1_b s t differ=""
+  rm -rf "$a" "$b"
+  timeout 120 "$TEQ" compiler check --products "$a" --sourceroot "$dir" "$dir"/a/*.scala --threads 1 > /dev/null 2>&1
+  if timeout 120 "$TEQ" compiler check --products "$b" --sourceroot "$dir" "$dir"/b/*.scala --classpath "$a" --threads 1 > "$work/$name.built" 2>&1; then
+    ok
+  else
+    bad "${name}_built: one worker does not build the module: $(grep -m1 -E 'error|never written' "$work/$name.built" | cut -c1-120)"
+    return
+  fi
+  one "${name}_run" 1 run "$dir"/main/*.scala --classpath "$b:$a" > "$work/${name}_run.one" 2>&1
+  if grep -q 'is withheld from the products of ' "$work/${name}_run.one" && grep -qF "$reason" "$work/${name}_run.one"; then
+    ok
+  else
+    bad "${name}_withheld: over the module's products the program is not refused for the body withheld ($reason): $(head -3 "$work/${name}_run.one" | tr '\n' ' ' | cut -c1-160)"
+  fi
+  for s in $(seq 1 12); do
+    for t in $COUNTS; do
+      rm -rf "$b.$t"
+      TEQ_SHAKE="$s:item,claimed,computed" timeout 120 "$TEQ" compiler check --products "$b.$t" --sourceroot "$dir" "$dir"/b/*.scala --classpath "$a" --threads $t > "$work/$name.shaken" 2>&1
+      diff -rq "$b" "$b.$t" > "$work/$name.diff" 2>&1 || differ="$differ $t workers under TEQ_SHAKE=$s ($(head -1 "$work/$name.diff" | cut -c1-100));"
+    done
+  done
+  [ -z "$differ" ] && ok || bad "${name}_counts: the module's products are not one worker's at$differ"
+}
+# The anonymous class of the method's body declares a class and a trait, and the caller expands the
+# method twice. The pickle cannot hold the caller's body yet (the writer lists each copy's nested
+# class as another copy's): the body alone is withheld, with its reason, and the module builds
+# (before, its build stopped: "references to definitions never written"), at every count the same.
+over_products_withheld product_body_nested_class "the body does not define"
+# The class overrides a member of its parent (before, above one worker a program over the module's
+# products printed the parent's `rod abc`), and implements its parent's abstract members (before, such
+# a program stopped: the class had no `label`).
+over_products_at_counts product_body_member_override "got abc/rod b1"
+over_products_at_counts product_body_members_implemented "got abc/rod b1"
 # rebuilt_in_part <fixture> <scalac's lines...>: tests/workers/<fixture>'s Stock.scala and
 # Counter.scala built to products at one worker, then Stock.scala and Use.scala over them: the check
 # under the points the typing rows shake, seeds 1 to 12 at two and at eight workers, none of them given

@@ -910,16 +910,30 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
+    /// Whether an owner is a definition's body, or a class declared in one at any depth.
+    fn in_a_body(&self, mut o: Owner) -> bool {
+        loop {
+            match o {
+                Owner::Local => return true,
+                Owner::Class(k) => o = self.w.syms.class(k).owner,
+                _ => return false,
+            }
+        }
+    }
+
     /// Ends a body: kept where nothing failed, else rolled back to its mark, everything it
     /// wrote and defined forgotten, with the reason of its first failure.
     fn body_end(&mut self, m: BodyMark) -> Result<(), String> {
         self.bodies_open -= 1;
-        // A reference to a definition of the body that the body does not write.
+        // A reference to a definition of the body that the body does not write: a local of the
+        // body, or a class or a member of a class the body declares (the class an expansion's
+        // copy has for a definition that the body lists as another copy's). Left pending, such
+        // a reference would stop the whole file's pickle; the body alone is withheld.
         if self.bodies_open == 0 && self.errors.len() == m.errors {
             let dangling = self.undo[m.undo..].iter().find_map(|u| match u {
                 Undo::Place(k, _) if matches!(self.places.get(k), Some(Place::Pending(v)) if !v.is_empty()) => match *k {
-                    Key::Sym(s) if self.w.syms.sym(s).owner == Owner::Local => Some(self.name(self.w.syms.sym(s).name)),
-                    Key::Class(c) if self.w.syms.class(c).owner == Owner::Local => Some(self.name(self.w.syms.class(c).name)),
+                    Key::Sym(s) if self.in_a_body(self.w.syms.sym(s).owner) => Some(self.name(self.w.syms.sym(s).name)),
+                    Key::Class(c) if self.in_a_body(self.w.syms.class(c).owner) => Some(self.name(self.w.syms.class(c).name)),
                     _ => None,
                 },
                 _ => None,

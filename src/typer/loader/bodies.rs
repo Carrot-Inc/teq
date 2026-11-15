@@ -1281,6 +1281,14 @@ impl<'a> Worker<'a> {
                 let this = cv.ty(TyExpr::Name(names::THIS));
                 cv.ty(TyExpr::Singleton(this))
             }
+            // `$anon.this.m.type` for the local class being converted: the path `this.m.type`, as
+            // the source writes it, whatever the member is.
+            TType::TermRef(prefix, n) if matches!(&**prefix, TType::This(inner) if matches!(&**inner, TType::LocalType(addr, _) if cv.local_classes.last() == Some(addr))) => {
+                let this = cv.ty(TyExpr::Name(names::THIS));
+                let name = self.conv_name(cv, *n);
+                let path = cv.ty(TyExpr::Select(this, name));
+                cv.ty(TyExpr::Singleton(path))
+            }
             // `c.Start` for a local `c`: the member type of a path the typer reads.
             // `C.this.m.type`, the singleton of a member: its declared type.
             TType::TermRef(prefix, n) if matches!(&**prefix, TType::This(_)) => {

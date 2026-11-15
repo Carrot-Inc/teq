@@ -105,6 +105,7 @@ erasedcallee	pass	-
 erasureabi	pass	-	
 erasureoverride	pass	-	
 expandanon	pass	-	
+expansionsingletonmember	pass	-	
 export	pass	-	
 export_given_module_reference	pass	-	
 exportbesideimport	pass	-	

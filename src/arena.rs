@@ -3027,9 +3027,14 @@ impl<V: Copy> FileMaps<V> {
         }
     }
 
-    /// Takes over another worker's program-file entries (`take_own`: its copies of the files it
-    /// wrote): the definitions the bodies it typed entered, disjoint from this worker's.
+    /// Takes over another worker's entries (`take_own`: its copies of the files it wrote): the
+    /// definitions the bodies it typed entered, disjoint from this worker's. A file past this
+    /// worker's own, one a body of the other worker opened (a library's class it converted), is
+    /// taken over with the rest.
     pub fn absorb(&mut self, other: Vec<FxMap<crate::ast::DefId, V>>) {
+        if self.own.len() < other.len() {
+            self.own.resize_with(other.len(), FxMap::default);
+        }
         for (mine, theirs) in self.own.iter_mut().zip(other) {
             if theirs.len() > mine.len() {
                 let old = std::mem::replace(mine, theirs);
@@ -3553,6 +3558,23 @@ mod tests {
         for r in readers {
             r.join().unwrap();
         }
+    }
+
+    /// A worker's maps are taken over file by file, those of a file past the absorbing table's
+    /// own among them.
+    #[test]
+    fn a_file_past_the_absorbing_tables_own_is_taken_over() {
+        let d = crate::ast::DefId;
+        let mut first: FileMaps<u32> = FileMaps::new(2);
+        first.insert(0, d(0), 10);
+        first.fork(true);
+        let mut other = first.attach();
+        other.insert(0, d(1), 11);
+        other.insert(2, d(0), 20);
+        first.absorb(other.take_own());
+        assert_eq!(first.get(0, &d(0)), Some(&10));
+        assert_eq!(first.get(0, &d(1)), Some(&11));
+        assert_eq!(first.get(2, &d(0)), Some(&20), "a file the other worker opened");
     }
 
     #[cfg(debug_assertions)]
