@@ -92,7 +92,7 @@ same_dependencies() { for f in $(cd target-stage-sbt && find ./2 -type f); do cm
 out=$(timeout 300 "$TEQ" stage api 2>&1)
 if [ $? = 0 ] && [[ "$out" == *"api: staged "*" under api/target/docker/stage"* ]] &&
   [ "$(cd $stage && find . -type f | sort)" = "$(cd target-stage-sbt && find . -type f ! -name Dockerfile ! -name '*.bat' | sort)" ] && same_dependencies; then
-  pass "teq stage api writes native-packager's tree, the same dependency jars ($(printf '%s' "$out" | grep -o 'in [0-9]* ms (built in [0-9]* ms)'))"
+  pass "teq stage api writes native-packager's tree, the same dependency jars ($(printf '%s' "$out" | grep -oE 'in [0-9.]+ m?s \(built in [0-9.]+ m?s\)'))"
 else
   fail "teq stage api: $out"
 fi

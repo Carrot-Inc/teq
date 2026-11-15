@@ -20,6 +20,7 @@ use super::resident::{Answer, Resident};
 use super::runner::{self, Planned, Ran, Report, Runner, Spec};
 use super::stage;
 use super::suites::{self, Patterns};
+use super::progress::duration_of_ms;
 use super::{paths, Implied, Info, Paths, PROTOCOL};
 use crate::lsp::json::{obj, Json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -214,6 +215,21 @@ impl Reply {
         self.send(obj([("exit", Json::Num(code as f64))]));
     }
 
+    /// Whether the client closed the connection. A client only reads until its request ends, so a read that ends
+    /// at once, or that the system refuses because the connection is no more, says it is gone; any other outcome
+    /// of the look (no byte within its bound, a read that was interrupted) leaves the client there.
+    fn client_gone(&self) -> bool {
+        use std::io::ErrorKind::{BrokenPipe, ConnectionAborted, ConnectionReset, NotConnected};
+        let _ = self.stream.set_read_timeout(Some(Duration::from_millis(1)));
+        let mut byte = [0u8; 1];
+        let gone = match self.stream.peek(&mut byte) {
+            Ok(n) => n == 0,
+            Err(e) => matches!(e.kind(), BrokenPipe | ConnectionAborted | ConnectionReset | NotConnected),
+        };
+        let _ = self.stream.set_read_timeout(None);
+        gone
+    }
+
     /// The request's output as a JavaScript test run writes it, from the runner and from the
     /// threads reading node's output, each text sent whole under one lock.
     fn shared_out(&self) -> jsrunner::Output {
@@ -271,15 +287,32 @@ struct Request {
     /// of a configuration's (`teq: <key>: <why>`, a generator's with its command's output) and what
     /// each passing generator printed recorded there, a JSON line each (`record`).
     diagnostics: Option<PathBuf>,
+    /// Whether that file is the request's own, which its client moves over the file the command names when the
+    /// request ends (`client::Records`).
+    own_records: bool,
 }
 
 fn serve(state: &Arc<State>, stream: TcpStream) {
-    let Ok(read) = stream.try_clone() else { return };
+    // A request that does not read is refused with a line, as one that is no request is: a client that is left
+    // without a line takes the daemon for one that ended. No return below leaves a connection without one.
     let mut line = String::new();
-    if BufReader::new(read).read_line(&mut line).unwrap_or(0) == 0 {
-        return;
-    }
+    let read = stream.try_clone().and_then(|read| BufReader::new(read).read_line(&mut line));
     let mut reply = Reply { stream };
+    match read {
+        Ok(n) if n > 0 => {}
+        Ok(_) => {
+            reply.err("teq: an empty request\n");
+            return reply.exit(2);
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+            reply.err("teq: a request that is not UTF-8\n");
+            return reply.exit(2);
+        }
+        Err(e) => {
+            reply.err(&format!("teq: a request that does not read: {}\n", e));
+            return reply.exit(2);
+        }
+    }
     let Ok(json) = Json::parse(line.trim_end()) else {
         reply.err("teq: a request that is not JSON\n");
         return reply.exit(2);
@@ -291,8 +324,14 @@ fn serve(state: &Arc<State>, stream: TcpStream) {
     let export = match handshake(state, &json) {
         Ok(export) => export,
         Err(why) => {
+            // The daemon is ending and advertises itself no longer before the client reads the answer: the daemon
+            // that client starts next, and any other client, find nothing of this one's to connect to.
+            let first = retire(state, &why);
             reply.send(obj([("restart", why.as_str().into())]));
-            return end(state, &why);
+            if first {
+                finish(state);
+            }
+            return;
         }
     };
     let flight = Flight::enter(state);
@@ -328,13 +367,14 @@ fn serve(state: &Arc<State>, stream: TcpStream) {
         environment: variables("environment"),
         tty: json.get("tty").and_then(Json::bool) == Some(true),
         cwd,
+        own_records: diagnostics.is_some() && json.get("own_records").and_then(Json::bool) == Some(true),
         diagnostics,
     };
     log(&format!("{} {}", request.verb, request.args.join(" ")));
     match request.verb.as_str() {
         "compile" => {
             let (code, _) = compile(state, &export, &request, &mut reply, Summary::Out);
-            reply.exit(code);
+            ended(&request, &mut reply, code);
         }
         // `run`'s compile: the summary on stderr, so that the program's output is alone on
         // stdout, and as data the class directory of the resident that wrote the closure with
@@ -348,15 +388,15 @@ fn serve(state: &Arc<State>, stream: TcpStream) {
                 };
                 reply.send(obj([("data", obj([("classes", export.classes(key).as_str().into()), mains]))]));
             }
-            reply.exit(code);
+            ended(&request, &mut reply, code);
         }
         "stage" => {
             let code = stage(state, &export, &request, &mut reply);
-            reply.exit(code);
+            ended(&request, &mut reply, code);
         }
         "test" => {
             let code = test(state, &export, &request, &mut reply);
-            reply.exit(code);
+            ended(&request, &mut reply, code);
         }
         "stop" => {
             reply.out("teq: stopped the daemon, its residents and its test runners\n");
@@ -369,6 +409,15 @@ fn serve(state: &Arc<State>, stream: TcpStream) {
             reply.exit(2);
         }
     }
+}
+
+/// A request's end: its exit code sent. Records in a file of the request's own wait for its client to move them
+/// over the file the command names; where the client is gone nobody will, and the file is removed.
+fn ended(request: &Request, reply: &mut Reply, code: i32) {
+    if let (true, Some(file)) = (request.own_records && reply.client_gone(), &request.diagnostics) {
+        let _ = std::fs::remove_file(file);
+    }
+    reply.exit(code);
 }
 
 /// The export a request is served from, or why the client is to start a new daemon.
@@ -434,17 +483,33 @@ fn handshake(state: &Arc<State>, json: &Json) -> Result<Arc<Export>, String> {
 /// Ends the daemon once the requests under way are answered: `daemon.json` removed at once, so
 /// that a new client starts the next daemon, which waits for this one's lock.
 fn end(state: &Arc<State>, why: &str) {
+    if retire(state, why) {
+        finish(state);
+    }
+}
+
+/// The daemon is ending from now on, for `why`: it serves no new request and its `daemon.json` is removed. Whether
+/// this call is the one that ended it, which then finishes it (`finish`).
+fn retire(state: &Arc<State>, why: &str) -> bool {
     {
         let mut ending = state.ending.lock().unwrap_or_else(|e| e.into_inner());
         if ending.is_some() {
-            return;
+            return false;
         }
         *ending = Some(why.to_string());
     }
-    log(&format!("ending: {}", why));
+    // The advertisement goes before anything that can wait (the log's line: a log that is not read holds its
+    // writer), so that no client finds this daemon once it is ending.
     if Info::read(&state.paths.info).is_some_and(|i| i.pid == std::process::id()) {
         let _ = std::fs::remove_file(&state.paths.info);
     }
+    log(&format!("ending: {}", why));
+    true
+}
+
+/// The end of a daemon that is ending (`retire`): the requests under way answered, its residents and runners
+/// stopped, the process left.
+fn finish(state: &Arc<State>) {
     let (count, changed) = &state.in_flight;
     let until = Instant::now() + FINISH_BOUND;
     let mut n = count.lock().unwrap_or_else(|e| e.into_inner());
@@ -552,6 +617,53 @@ fn plan_served(export: &Export, running: &[Key], wanted: &[Key]) -> Vec<(Key, Ve
     chosen
 }
 
+/// The projects whose sources hold `file`, a diagnostic's, the one with the innermost source root that holds it
+/// first: several where projects share a source root (a cross-built project's shared sources).
+fn projects_of(export: &Export, file: &str) -> Vec<String> {
+    let file = export.path(file);
+    let mut holders: Vec<(usize, &String)> = export
+        .projects
+        .iter()
+        .flat_map(|(name, p)| p.configurations.values().flat_map(move |c| c.sources.iter().map(move |s| (name, export.path(s)))))
+        .filter(|(_, root)| file.starts_with(root))
+        .map(|(name, root)| (root.components().count(), name))
+        .collect();
+    holders.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut names: Vec<String> = Vec::new();
+    for (_, name) in holders {
+        if !names.contains(name) {
+            names.push(name.clone());
+        }
+    }
+    names
+}
+
+/// The errors of a failed build of `key` that are in no project named on its line, counted by the project whose
+/// sources hold each, in the order met: the build failed, in that share, for what the request did not ask for. An
+/// error in a file that one of the named projects holds, with others or alone, is theirs. Of several projects that
+/// share a file's source root (a cross-built project's shared sources) the place is the one the build itself types;
+/// where it types several of them, or none, the line names no place: it never says more than is true.
+fn elsewhere(export: &Export, key: &Key, answer: &Answer, named: &[String]) -> Vec<(String, usize)> {
+    let mut shares: Vec<(String, usize)> = Vec::new();
+    if answer.ok {
+        return shares;
+    }
+    let typed: Vec<String> = export.closure(key).into_iter().map(|k| k.project).collect();
+    for file in answer.errors.iter().filter_map(|e| e.get("file").and_then(Json::str)) {
+        let holders = projects_of(export, file);
+        if holders.iter().any(|p| named.contains(p)) {
+            continue;
+        }
+        let mut of_the_build = holders.iter().filter(|p| typed.contains(p));
+        let (Some(first), None) = (of_the_build.next(), of_the_build.next()) else { continue };
+        match shares.iter_mut().find(|(p, _)| p == first) {
+            Some((_, n)) => *n += 1,
+            None => shares.push((first.clone(), 1)),
+        }
+    }
+    shares
+}
+
 /// The projects whose compile configuration the resident `key` types, in the export's order: what a build of it
 /// types, whichever of them the request asked for (`served`, which are among them).
 fn typed_projects(export: &Export, key: &Key, served: &[Key]) -> Vec<String> {
@@ -618,7 +730,7 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
     let sink = &sink;
     let progress = |line: &str| sink.line(line);
     let progress = &progress;
-    let results: Vec<(Key, Result<Answer, String>, Vec<String>)> = std::thread::scope(|scope| {
+    let results: Vec<(Key, Result<Answer, Failure>, Vec<String>)> = std::thread::scope(|scope| {
         let handles: Vec<_> = keys
             .iter()
             .map(|key| {
@@ -633,7 +745,7 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
             .cloned()
             .zip(handles)
             .map(|(k, h)| {
-                let (answer, notes) = h.join().unwrap_or_else(|_| (Err("the build's thread panicked".to_string()), Vec::new()));
+                let (answer, notes) = h.join().unwrap_or_else(|_| (Err(Failure::crash("the build's thread panicked")), Vec::new()));
                 (k, answer, notes)
             })
             .collect()
@@ -642,13 +754,33 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
     // The errors the result lines tell, a build that failed otherwise counted as one.
     let mut errors = 0;
     for (key, answer, notes) in results {
+        // The projects asked for that this build covered, in the order asked: the name of its lines.
+        let mut names: Vec<String> = Vec::new();
+        for served in planned.iter().filter(|(k, _)| *k == key).flat_map(|(_, served)| served) {
+            if !names.contains(&served.project) {
+                names.push(served.project.clone());
+            }
+        }
+        if names.is_empty() {
+            names.push(key.project.clone());
+        }
         for note in notes {
             noted(request, &key, &note, reply);
         }
-        match answer {
+        // The build's record, which the client makes its line of (`client::Waiting`): the projects asked for
+        // that this build covered and what of them; whether the build is wider than the request (another
+        // project's resident served it); where it failed, its errors that are in none of them, by project
+        // (`elsewhere`); a build that failed outright has its own line (`failed_as`).
+        let mut built = vec![
+            ("projects", Json::Arr(names.iter().map(|n| Json::from(n.as_str())).collect())),
+            ("test", (key.configuration == "test" && names.contains(&key.project)).into()),
+            ("wider", (!names.contains(&key.project)).into()),
+            ("jvm", export.projects.get(&key.project).is_some_and(|p| p.platform == Platform::Jvm).into()),
+        ];
+        match &answer {
             Ok(a) => {
                 for n in &a.notes {
-                    reply.err(&format!("teq: {}: {}\n", key, n));
+                    told(request, &key, &names, n, reply);
                 }
                 for w in &a.warnings {
                     shown(request, &key, w, "warning", &export.root, reply);
@@ -656,30 +788,29 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
                 for e in &a.errors {
                     shown(request, &key, e, "error", &export.root, reply);
                 }
-                let first = a.fallback.as_deref() == Some("first build");
-                let line = if a.ok {
-                    let jvm = export.projects.get(&key.project).is_some_and(|p| p.platform == Platform::Jvm);
-                    let what = if jvm { format!("{} classes, {} written", a.classes, a.changed.len()) } else { "checked".to_string() };
-                    format!("{}: {} in {}{}\n", key, what, super::progress::duration_of_ms(a.ms), if first { ", the first build" } else { "" })
-                } else {
-                    let n = a.errors.len().max(1);
+                let n = if a.ok { 0 } else { a.errors.len().max(1) };
+                if !a.ok {
                     code = 1;
                     errors += n;
-                    format!("{}: {} error{}\n", key, n, if n == 1 { "" } else { "s" })
-                };
-                match summary {
-                    Summary::Out => reply.out(&line),
-                    // `run` says nothing of a build that wrote nothing: the program's own output follows.
-                    Summary::Err if a.ok && a.changed.is_empty() && !first => {}
-                    Summary::Err => reply.err(&line),
                 }
+                built.extend([
+                    ("ok", a.ok.into()),
+                    ("written", Json::Num(a.changed.len() as f64)),
+                    ("typed", a.typed.into()),
+                    ("ms", Json::Num(a.ms)),
+                    ("errors", Json::Num(n as f64)),
+                    ("in", Json::Arr(elsewhere(export, &key, a, &names).into_iter().map(|(p, n)| Json::Arr(vec![p.as_str().into(), Json::Num(n as f64)])).collect())),
+                ]);
             }
             Err(e) => {
-                failed(request, &key, e, reply);
+                failed_as(request, &key, &names, e, reply);
                 code = 1;
                 errors += 1;
+                built.push(("failed", true.into()));
             }
         }
+        outcome(request, &key, &names, answer.as_ref(), reply);
+        sink.record(obj([("progress", obj([("built", Json::Obj(built.into_iter().map(|(k, v)| (k.to_string(), v)).collect()))]))]));
     }
     if keys.is_empty() {
         match summary {
@@ -687,10 +818,15 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
             Summary::Err => reply.err("teq: nothing to compile\n"),
         }
     }
-    let left = super::left_out(export, "compile", &left_out);
-    match summary {
-        Summary::Out => reply.out(&left),
-        Summary::Err => reply.err(&left),
+    // Each project left out: its lines, and its record (`--diagnostics`, severity `left-out`), which says of the
+    // request that it compiled less than it was asked.
+    for project in &left_out {
+        let left = super::left_out(export, "compile", std::slice::from_ref(project));
+        match summary {
+            Summary::Out => reply.out(&left),
+            Summary::Err => reply.err(&left),
+        }
+        record(request, vec![("severity", "left-out".into()), ("project", project.as_str().into()), ("shown", left.as_str().into())], reply);
     }
     // What the client's last line counts, where it told of the wait: the configurations asked for and the errors.
     sink.record(obj([("progress", obj([("done", obj([("configurations", Json::Num(wanted.len() as f64)), ("errors", Json::Num(errors as f64))]))]))]));
@@ -833,19 +969,19 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     // Held through the run, so that no other build rewrites the class files the run reads.
     let slot = slot(state, &owner);
     let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
-    if !built(state, export, request, &owner, &mut resident, reply, Summary::Err) {
+    if !built(state, export, request, &owner, &key.project, &mut resident, reply, Summary::Err) {
         return 1;
     }
     let built_ms = started.elapsed().as_millis();
     let view = &resident.as_ref().expect("built").analysis;
     if let Some(why) = &view.unreadable {
-        reply.err(&format!("teq: {}: the analysis does not read: {}\n", owner, why));
+        failed(request, key, format!("the analysis does not read: {}", why), reply);
         return 1;
     }
     let conf = export.configuration(key).expect("a test configuration");
     let context = conf.test.clone().unwrap_or_default();
     if context.frameworks.is_empty() {
-        reply.err(&format!("{}: no test framework\n", key));
+        idle(request, key, "no test framework", reply);
         return 0;
     }
     let candidates = view.candidates(&conf.sources);
@@ -855,7 +991,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         if asked.list {
             reply.out(&suites::listing(&vec![Vec::new(); context.groups.len() + 1], &context.groups));
         } else {
-            reply.err(&format!("{}: no suite to run\n", key));
+            idle(request, key, "no suite to run", reply);
         }
         if asked.patterns.is_empty() && !asked.list {
             state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
@@ -904,7 +1040,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         log(&format!("starting the test runner of {}: {}", key, spec.java.display()));
         if context.sandbox {
             if let Err(e) = std::fs::create_dir_all(&spec.directory) {
-                reply.err(&format!("teq: {}: cannot create {}: {}\n", key, spec.directory.display(), e));
+                failed(request, key, format!("cannot create {}: {}", spec.directory.display(), e), reply);
                 return 2;
             }
         }
@@ -954,7 +1090,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     let r = runner.as_mut().expect("started");
     // A framework the export names that does not load leaves its suites unrun: never a pass.
     for (class, why) in &r.missing {
-        reply.err(&format!("teq: {}: the test framework {} does not load: {}\n", key, class, why));
+        failed(request, key, format!("the test framework {} does not load: {}", class, why), reply);
     }
     let incomplete = i32::from(!r.missing.is_empty());
     let defined = suites::defined(&candidates, &r.fingerprints);
@@ -969,7 +1105,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         };
         match (why_every, changes.get(key)) {
             (Some(why), _) => {
-                reply.err(&format!("teq: {}: every suite, {}\n", key, why));
+                told(request, key, std::slice::from_ref(&key.project), &format!("every suite, {}", why), reply);
                 None
             }
             (None, Some(c)) => {
@@ -1032,7 +1168,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         }
         spend(&mut runner, false);
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
-        reply.err(&format!("{}: {}\n", key, why));
+        idle(request, key, why, reply);
         if every && incomplete == 0 {
             state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
         }
@@ -1096,7 +1232,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
                 state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
             }
             let total = Tally::sum(&tallies);
-            reply.err(&summary(key, count, &total, ms, built_ms));
+            summary(request, key, count, &total, ms, built_ms, reply);
             write_events(asked, key, groups, &tallies, reply);
             i32::from(total.failed() > 0).max(incomplete)
         }
@@ -1107,7 +1243,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             spend(&mut runner, false);
             not_completed(request, key, groups, &sizes, &ended, reply);
             let total = Tally::sum(&tallies);
-            reply.err(&summary(key, count, &total, ms, built_ms));
+            summary(request, key, count, &total, ms, built_ms, reply);
             write_events(asked, key, groups, &tallies, reply);
             i32::from(total.failed() > 0).max(incomplete)
         }
@@ -1145,8 +1281,8 @@ fn entered(request: &Request, key: &Key, groups: &[Group], phase: usize, size: u
         return;
     }
     let text = match size {
-        0 => format!("{} {}: no suite to run\n", key, group_label(groups, phase)),
-        n => format!("{} {}: {} suite{}\n", key, group_label(groups, phase), n, if n == 1 { "" } else { "s" }),
+        0 => format!("{} {}: no suite to run\n", key.project, group_label(groups, phase)),
+        n => format!("{} {}: {} suite{}\n", key.project, group_label(groups, phase), n, if n == 1 { "" } else { "s" }),
     };
     group_line(request, key, groups, phase, "group", text, reply);
 }
@@ -1158,7 +1294,7 @@ fn group_summary(request: &Request, key: &Key, groups: &[Group], phase: usize, s
     if groups.is_empty() || size == 0 {
         return;
     }
-    let text = format!("{} {}: {} suite{}, {} passed, {} failed{} in {} ms\n", key, group_label(groups, phase), size, if size == 1 { "" } else { "s" }, tally.passed(), tally.failed(), tally.others(), ms);
+    let text = format!("{} {}: {} suite{}, {} passed, {} failed{} in {}\n", key.project, group_label(groups, phase), size, if size == 1 { "" } else { "s" }, tally.passed(), tally.failed(), tally.others(), duration_of_ms(ms as f64));
     group_line(request, key, groups, phase, "summary", text, reply);
 }
 
@@ -1168,7 +1304,8 @@ fn group_summary(request: &Request, key: &Key, groups: &[Group], phase: usize, s
 /// suites of none.
 #[allow(clippy::too_many_arguments)]
 fn run_failed(request: &Request, key: &Key, groups: &[Group], phase: Option<usize>, why: &str, built_ms: u128, reply: &mut Reply) {
-    let text = format!("{}: the run failed: {} (built in {} ms)\n", key, why, built_ms);
+    let text = format!("{}: the run failed: {} (built in {})\n", key.project, why, duration_of_ms(built_ms as f64));
+    tests_ended(request, key, vec![("run_failed", why.into())], reply);
     if groups.is_empty() {
         reply.err(&text);
         return;
@@ -1177,18 +1314,15 @@ fn run_failed(request: &Request, key: &Key, groups: &[Group], phase: Option<usiz
     group_line(request, key, groups, phase.unwrap_or(groups.len()), "failure", text, reply);
 }
 
-/// A failure of `key`'s runner or node, which ended (`teq: <key>: <why>`), as `failed` shows and records it; where the
+/// A failure of `key`'s runner or node, which ended (`teq: <project>: <why>`), as `failed` shows and records it; where the
 /// configuration has groups, its record carries the group it happened in, as `run_failed`'s does.
-fn failed_in_group(request: &Request, key: &Key, groups: &[Group], phase: Option<usize>, why: impl std::fmt::Display, reply: &mut Reply) {
+fn failed_in_group(request: &Request, key: &Key, groups: &[Group], phase: Option<usize>, why: impl Into<Failure>, reply: &mut Reply) {
     if groups.is_empty() {
         failed(request, key, why, reply);
         return;
     }
-    let why = why.to_string();
-    let text = format!("teq: {}: {}\n", key, why);
-    reply.err(&text);
     let group = phase.and_then(|p| groups.get(p)).map_or(Json::Null, |g| g.name.as_str().into());
-    record(request, vec![("key", key.to_string().as_str().into()), ("severity", "failure".into()), ("group", group), ("message", why.as_str().into()), ("shown", text.as_str().into())], reply);
+    failure_line(request, key, std::slice::from_ref(&key.project), &why.into(), Some(group), reply);
 }
 
 /// The groups a run whose frameworks failed to load, before any suite was discovered, did not start: every group and
@@ -1198,7 +1332,7 @@ fn not_started(request: &Request, key: &Key, groups: &[Group], reply: &mut Reply
         return;
     }
     let names: Vec<String> = (0..=groups.len()).map(|p| group_label(groups, p)).collect();
-    let text = format!("{}: not completed: {}, no suite discovered\n", key, names.join(", "));
+    let text = format!("{}: not completed: {}, no suite discovered\n", key.project, names.join(", "));
     group_line(request, key, groups, 0, "failure", text, reply);
 }
 
@@ -1211,7 +1345,7 @@ fn not_completed(request: &Request, key: &Key, groups: &[Group], sizes: &[usize]
         return;
     }
     let names: Vec<String> = unfinished.iter().map(|&p| group_label(groups, p)).collect();
-    let text = format!("{}: not completed: {}\n", key, names.join(", "));
+    let text = format!("{}: not completed: {}\n", key.project, names.join(", "));
     group_line(request, key, groups, unfinished[0], "failure", text, reply);
 }
 
@@ -1266,7 +1400,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     let conf = export.configuration(key).expect("a test configuration");
     let context = conf.test.clone().unwrap_or_default();
     if context.frameworks.is_empty() {
-        reply.err(&format!("{}: no test framework\n", key));
+        idle(request, key, "no test framework", reply);
         return 0;
     }
     let (module_kind, js_env) = match context.js_test() {
@@ -1277,21 +1411,21 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         }
     };
     let Some(link) = export.test_link(key) else {
-        reply.err(&format!("teq: {}: the export does not say how the build tool runs its tests: export it again\n", key));
+        failed(request, key, "the export does not say how the build tool runs its tests: export it again", reply);
         return 2;
     };
     // The configuration's own resident links its program: held through the run, so that no other
     // build rewrites the link node reads.
     let slot = slot(state, key);
     let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
-    if !built(state, export, request, key, &mut resident, reply, Summary::Err) {
+    if !built(state, export, request, key, &key.project, &mut resident, reply, Summary::Err) {
         return 1;
     }
     let built_ms = started.elapsed().as_millis();
     let r = resident.as_ref().expect("built");
     let view = &r.analysis;
     if let Some(why) = &view.unreadable {
-        reply.err(&format!("teq: {}: the analysis does not read: {}\n", key, why));
+        failed(request, key, format!("the analysis does not read: {}", why), reply);
         return 1;
     }
     let input = match (module_kind, r.es_module == Some(true)) {
@@ -1299,12 +1433,16 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         (ModuleKind::NoModule, false) => jsrunner::Input::Script(link.out.clone()),
         (ModuleKind::CommonJs, false) => jsrunner::Input::CommonJs(link.out.clone()),
         (kind, true) => {
-            reply.err(&format!(
-                "teq: {}: the test link imports or exports JavaScript modules, and the export's module kind is {}: teq writes an ES module for such a program, which a {} run cannot load (set the Test configuration's scalaJSLinkerConfig to ESModule)\n",
+            failed(
+                request,
                 key,
-                kind.name(),
-                kind.name()
-            ));
+                format!(
+                    "the test link imports or exports JavaScript modules, and the export's module kind is {}: teq writes an ES module for such a program, which a {} run cannot load (set the Test configuration's scalaJSLinkerConfig to ESModule)",
+                    kind.name(),
+                    kind.name()
+                ),
+                reply,
+            );
             return 2;
         }
     };
@@ -1362,14 +1500,14 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
             // so one whose jar is Scala 2's IR alone (Scala.js's JUnit runtime, which munit brings)
             // is never in it, and the note says its suites, if any, do not run.
             None => {
-                reply.err(&format!("teq: note: {}: the test framework {} is not in the test link (its jar holds no TASTy): its suites, if any, do not run\n", key, classes[i]));
+                reply.err(&format!("teq: note: {}: the test framework {} is not in the test link (its jar holds no TASTy): its suites, if any, do not run\n", key.project, classes[i]));
             }
         }
     }
     let defined = suites::defined(&candidates, &prints);
     if defined.is_empty() {
         let _ = run.finish();
-        reply.err(&format!("teq: {}: no suite of the test frameworks ({}) among the test sources: a run of nothing is no pass\n", key, classes.join(", ")));
+        failed(request, key, format!("no suite of the test frameworks ({}) among the test sources: a run of nothing is no pass", classes.join(", ")), reply);
         return 1;
     }
     let digests = source_digests(export, view);
@@ -1384,7 +1522,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         };
         match (why_every, changes.get(key)) {
             (Some(why), _) => {
-                reply.err(&format!("teq: {}: every suite, {}\n", key, why));
+                told(request, key, std::slice::from_ref(&key.project), &format!("every suite, {}", why), reply);
                 None
             }
             (None, Some(c)) => {
@@ -1419,7 +1557,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     if count == 0 {
         let _ = run.finish();
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
-        reply.err(&format!("{}: {}\n", key, why));
+        idle(request, key, why, reply);
         if every {
             record(state);
         }
@@ -1517,7 +1655,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
                 record(state);
             }
             let total = Tally::sum(&tallies);
-            reply.err(&summary(key, count, &total, ms, built_ms));
+            summary(request, key, count, &total, ms, built_ms, reply);
             write_events(asked, key, groups, &tallies, reply);
             i32::from(total.failed() > 0)
         }
@@ -1539,57 +1677,75 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     }
 }
 
-/// The line that ends a configuration's run: its suites, the events by status, the run's time
-/// and the build's.
-fn summary(key: &Key, suites: usize, tally: &Tally, ms: u64, built_ms: u128) -> String {
+/// The line that ends a configuration's run, on stderr: its suites, the events by status, the run's time and the
+/// build's; and its record (`tests_ended`), the counts a reader takes.
+fn summary(request: &Request, key: &Key, suites: usize, tally: &Tally, ms: u64, built_ms: u128, reply: &mut Reply) {
+    reply.err(&summary_line(key, suites, tally, ms, built_ms));
+    let mut counts = vec![("suites", Json::Num(suites as f64))];
+    counts.extend(tally.by_status().into_iter().filter(|(_, n)| *n > 0).map(|(status, n)| (status, Json::Num(n as f64))));
+    counts.extend([("ms", Json::Num(ms as f64)), ("built_ms", Json::Num(built_ms as f64))]);
+    tests_ended(request, key, counts, reply);
+}
+
+fn summary_line(key: &Key, suites: usize, tally: &Tally, ms: u64, built_ms: u128) -> String {
     format!(
-        "{}: {} suite{}, {} passed, {} failed{} in {} ms (built in {} ms)\n",
-        key,
+        "{}: {} suite{}, {} passed, {} failed{} in {} (built in {})\n",
+        key.project,
         suites,
         if suites == 1 { "" } else { "s" },
         tally.passed(),
         tally.failed(),
         tally.others(),
-        ms,
-        built_ms
+        duration_of_ms(ms as f64),
+        duration_of_ms(built_ms as f64)
     )
 }
 
-/// The resident's build in its slot, held by the caller, its diagnostics and notes printed, and a
-/// failed build's count where `summary` says (`test`'s on stderr beside its diagnostics, apart
-/// from the run's stream on stdout); whether it passed.
-fn built(state: &State, export: &Export, request: &Request, owner: &Key, resident: &mut Option<Resident>, reply: &mut Reply, summary: Summary) -> bool {
+/// A configuration's tests ended with nothing run (`<project>: <why>`), on stderr, and recorded (`tests_ended`).
+fn idle(request: &Request, key: &Key, why: &str, reply: &mut Reply) {
+    reply.err(&format!("{}: {}\n", key.project, why));
+    tests_ended(request, key, vec![("idle", why.into())], reply);
+}
+
+/// The resident's build in its slot, held by the caller, for the project `name` asked for: its diagnostics
+/// and notes printed, its outcome recorded, and a failed build's count where `summary` says (`test`'s on stderr
+/// beside its diagnostics, apart from the run's stream on stdout); whether it passed.
+#[allow(clippy::too_many_arguments)]
+fn built(state: &State, export: &Export, request: &Request, owner: &Key, name: &str, resident: &mut Option<Resident>, reply: &mut Reply, summary: Summary) -> bool {
+    let named = [name.to_string()];
     let sink = reply.sink();
     let (answer, notes) = build_in(state, export, owner, &request.env, resident, &|line| sink.line(line));
     for note in notes {
         noted(request, owner, &note, reply);
     }
-    let answer = match answer {
-        Ok(a) => a,
+    let passed = match &answer {
         Err(e) => {
-            failed(request, owner, e, reply);
-            return false;
+            failed_as(request, owner, &named, e, reply);
+            false
+        }
+        Ok(a) => {
+            for n in &a.notes {
+                told(request, owner, &named, n, reply);
+            }
+            for w in &a.warnings {
+                shown(request, owner, w, "warning", &export.root, reply);
+            }
+            if !a.ok {
+                for e in &a.errors {
+                    shown(request, owner, e, "error", &export.root, reply);
+                }
+                let n = a.errors.len().max(1);
+                let line = format!("{}\n", super::progress::errors_line(name, n, &elsewhere(export, owner, a, &named)));
+                match summary {
+                    Summary::Out => reply.out(&line),
+                    Summary::Err => reply.err(&line),
+                }
+            }
+            a.ok
         }
     };
-    for n in &answer.notes {
-        reply.err(&format!("teq: {}: {}\n", owner, n));
-    }
-    for w in &answer.warnings {
-        shown(request, owner, w, "warning", &export.root, reply);
-    }
-    if !answer.ok {
-        for e in &answer.errors {
-            shown(request, owner, e, "error", &export.root, reply);
-        }
-        let n = answer.errors.len().max(1);
-        let line = format!("{}: {} error{}\n", owner, n, if n == 1 { "" } else { "s" });
-        match summary {
-            Summary::Out => reply.out(&line),
-            Summary::Err => reply.err(&line),
-        }
-        return false;
-    }
-    true
+    outcome(request, owner, &named, answer.as_ref(), reply);
+    passed
 }
 
 /// `stage [project]`: the project's closure built as `compile` builds it, then its Docker stage
@@ -1645,13 +1801,13 @@ fn stage_project(state: &Arc<State>, export: &Arc<Export>, request: &Request, na
     let Some(owner) = plan(export, &running, std::slice::from_ref(&key)).into_iter().next() else { return 2 };
     let slot = slot(state, &owner);
     let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
-    if !built(state, export, request, &owner, &mut resident, reply, Summary::Out) {
+    if !built(state, export, request, &owner, name, &mut resident, reply, Summary::Out) {
         return 1;
     }
     let built_ms = started.elapsed().as_millis();
     let view = &resident.as_ref().expect("built").analysis;
     if let Some(why) = &view.unreadable {
-        reply.err(&format!("teq: {}: the analysis does not read: {}\n", owner, why));
+        failed_as(request, &owner, &[name.to_string()], &format!("the analysis does not read: {}", why).into(), reply);
         return 1;
     }
     // The class the start script runs: the block's, which the build declared, else the one the
@@ -1679,11 +1835,19 @@ fn stage_project(state: &Arc<State>, export: &Arc<Export>, request: &Request, na
     match stage::write(export, name, &export.path(&export.classes(&owner)), view, &main, in_manifest) {
         Ok(done) => {
             let layers: Vec<String> = done.layers.iter().map(u32::to_string).collect();
-            reply.out(&format!("{}: staged {} files in layers {} under {} in {} ms (built in {} ms)\n", name, done.files, layers.join(", "), done.directory, started.elapsed().as_millis() - built_ms, built_ms));
+            reply.out(&format!(
+                "{}: staged {} files in layers {} under {} in {} (built in {})\n",
+                name,
+                done.files,
+                layers.join(", "),
+                done.directory,
+                duration_of_ms((started.elapsed().as_millis() - built_ms) as f64),
+                duration_of_ms(built_ms as f64)
+            ));
             0
         }
         Err(e) => {
-            reply.err(&format!("teq: {}: {}\n", name, e));
+            failed_as(request, &owner, &[name.to_string()], &e.into(), reply);
             1
         }
     }
@@ -1702,7 +1866,7 @@ impl Drop for Finished {
 /// it.
 /// A runner launched, registered for an ending daemon's kill pass, and its frameworks loaded; `watched`, the client
 /// waiting for it, has it killed when it leaves.
-fn start_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path, watched: Option<(&Reply, &Finished)>) -> Result<Runner, String> {
+fn start_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path, watched: Option<(&Reply, &Finished)>) -> Result<Runner, Failure> {
     launch_runner(state, key, spec, environment, argfile).and_then(|mut r| {
         if let Some((reply, finished)) = watched {
             kill_when_gone(reply, finished, r.process(), key);
@@ -1711,20 +1875,20 @@ fn start_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<Str
             Ok(()) => Ok(r),
             Err(e) => {
                 r.stop();
-                Err(e)
+                Err(e.into())
             }
         }
     })
 }
 
 /// A runner launched and registered for an ending daemon's kill pass.
-fn launch_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path) -> Result<Runner, String> {
+fn launch_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path) -> Result<Runner, Failure> {
     // Launched under the registry's lock, so that an ending daemon's kill pass either sees the
     // process or the launch sees the daemon ending.
     let mut processes = state.runner_processes.lock().unwrap_or_else(|e| e.into_inner());
     match state.ending.lock().unwrap_or_else(|e| e.into_inner()).clone() {
-        Some(why) => Err(format!("the daemon is ending ({})", why)),
-        None => Runner::launch(spec, environment, argfile).inspect(|r| {
+        Some(why) => Err(Failure::crash(format!("the daemon is ending ({})", why))),
+        None => Runner::launch(spec, environment, argfile).map_err(Failure::from).inspect(|r| {
             processes.insert(key.clone(), r.process());
         }),
     }
@@ -1763,7 +1927,7 @@ fn renew(state: &State, spent: Runner, key: &Key, environment: &BTreeMap<String,
         stopped.store(true, Ordering::SeqCst);
     });
     log(&format!("starting the test runner of {} for the next run: {}", key, spec.java.display()));
-    launch_runner(state, key, spec, environment, argfile).inspect_err(|e| log(&format!("the test runner of {} for the next run did not start: {}", key, e))).ok()
+    launch_runner(state, key, spec, environment, argfile).inspect_err(|e| log(&format!("the test runner of {} for the next run did not start: {}", key, e.message()))).ok()
 }
 
 fn kill_when_gone(reply: &Reply, finished: &Finished, process: Arc<Mutex<std::process::Child>>, key: &Key) {
@@ -1826,7 +1990,7 @@ fn run_paths(export: &Export, key: &Key, owner: &Key) -> Result<Vec<PathBuf>, St
 }
 
 /// One resident's build: started when it is not running, its closure's generators run first.
-fn build(state: &Arc<State>, export: &Arc<Export>, key: &Key, env: &BTreeMap<String, String>, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, String>, Vec<String>) {
+fn build(state: &Arc<State>, export: &Arc<Export>, key: &Key, env: &BTreeMap<String, String>, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, Failure>, Vec<String>) {
     let slot = slot(state, key);
     let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
     build_in(state, export, key, env, &mut resident, progress)
@@ -1851,15 +2015,15 @@ fn slot(state: &State, key: &Key) -> Slot {
 /// A build of the resident in its slot, held by the caller; what it wrote is recorded for the
 /// test configurations it serves. A resident started fetches the artifacts its classpath lacks,
 /// telling `progress` of each.
-fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, String>, resident: &mut Option<Resident>, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, String>, Vec<String>) {
+fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, String>, resident: &mut Option<Resident>, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, Failure>, Vec<String>) {
     let closure = export.closure(key);
     let notes = match generators::run(export, &closure, resident_classes(export, key), env) {
         Ok(notes) => notes,
-        Err(e) => return (Err(e), Vec::new()),
+        Err(e) => return (Err(e.into()), Vec::new()),
     };
     if let Some(link) = export.test_link(key) {
         if let Err(e) = export.write_harness(&link) {
-            return (Err(e), notes);
+            return (Err(e.into()), notes);
         }
     }
     let inputs = export.inputs_of(key);
@@ -1879,10 +2043,10 @@ fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, St
         });
         match started {
             Ok(r) => *resident = Some(r),
-            Err(e) => return (Err(e), notes),
+            Err(e) => return (Err(e.into()), notes),
         }
     }
-    let answer = resident.as_mut().expect("started").build();
+    let answer = resident.as_mut().expect("started").build().map_err(Failure::from);
     // What a removal reaches counts whether or not the build passed: the view has dropped it.
     if let Ok(a) = &answer {
         for c in state.changes.lock().unwrap_or_else(|e| e.into_inner()).values_mut().filter(|c| c.resident == *key) {
@@ -1924,9 +2088,9 @@ fn product_mains(export: &Export, view: &View, project: &str) -> Vec<String> {
 fn main_classes(state: &State, export: &Export, owner: &Key, project: &str) -> Result<Vec<String>, String> {
     let slot = slot(state, owner);
     let resident = slot.lock().unwrap_or_else(|e| e.into_inner());
-    let view = &resident.as_ref().ok_or_else(|| format!("{} has no resident", owner))?.analysis;
+    let view = &resident.as_ref().ok_or_else(|| format!("{} has no resident", project))?.analysis;
     if let Some(why) = &view.unreadable {
-        return Err(format!("{}: the analysis does not read: {}", owner, why));
+        return Err(format!("{}: the analysis does not read: {}", project, why));
     }
     Ok(product_mains(export, view, project))
 }
@@ -1965,15 +2129,128 @@ fn shown(request: &Request, key: &Key, d: &Json, severity: &str, root: &Path, re
     record(request, fields, reply);
 }
 
-/// A failure of `key`'s, a build's or a run's (`teq: <key>: <why>`), shown on stderr and recorded
-/// whole where the request names a file for the records (`--diagnostics`, severity `failure`): a
-/// generator's carries its command's whole output, so that a reader takes the failure's extent
-/// from teq, never from the text, whose lines are the command's.
-fn failed(request: &Request, key: &Key, why: impl std::fmt::Display, reply: &mut Reply) {
-    let why = why.to_string();
-    let text = format!("teq: {}: {}\n", key, why);
+/// Why a build or a run ended without its answer: what its record says of it (its `kind`: `crash` for teq's own, a
+/// build's thread that panicked, a compiler that ended, the daemon ending; `generator` for a generator that
+/// failed; `other` for the rest; and its message, which names a configuration by its key) and what its line tells
+/// a person, who asked for projects (`told`).
+struct Failure {
+    kind: &'static str,
+    why: Why,
+}
+
+enum Why {
+    Text(String),
+    Generator(generators::Failed),
+}
+
+impl Failure {
+    fn crash(why: impl Into<String>) -> Failure {
+        Failure { kind: "crash", why: Why::Text(why.into()) }
+    }
+
+    fn message(&self) -> String {
+        match &self.why {
+            Why::Text(t) => t.clone(),
+            Why::Generator(g) => g.to_string(),
+        }
+    }
+
+    /// The failure in a line that names the projects `named`.
+    fn told(&self, named: &[String]) -> String {
+        match &self.why {
+            Why::Text(t) => t.clone(),
+            Why::Generator(g) => g.told(named),
+        }
+    }
+}
+
+impl From<String> for Failure {
+    fn from(why: String) -> Failure {
+        Failure { kind: "other", why: Why::Text(why) }
+    }
+}
+
+impl From<&str> for Failure {
+    fn from(why: &str) -> Failure {
+        why.to_string().into()
+    }
+}
+
+impl From<&String> for Failure {
+    fn from(why: &String) -> Failure {
+        why.clone().into()
+    }
+}
+
+impl From<generators::Failed> for Failure {
+    fn from(why: generators::Failed) -> Failure {
+        Failure { kind: if why.of.is_some() { "generator" } else { "other" }, why: Why::Generator(why) }
+    }
+}
+
+impl From<super::resident::NoAnswer> for Failure {
+    fn from(why: super::resident::NoAnswer) -> Failure {
+        match why {
+            super::resident::NoAnswer::Gone(why) => Failure::crash(why),
+            super::resident::NoAnswer::Unread(why) => why.into(),
+        }
+    }
+}
+
+/// A failure of `key`'s, a build's or a run's (`teq: <project>: <why>`), shown on stderr and recorded
+/// whole where the request names a file for the records (`--diagnostics`, severity `failure`, with
+/// its kind): a generator's carries its command's whole output, so that a reader takes the failure's
+/// extent and what it is from teq, never from the text, whose lines are the command's.
+fn failed(request: &Request, key: &Key, why: impl Into<Failure>, reply: &mut Reply) {
+    failed_as(request, key, std::slice::from_ref(&key.project), &why.into(), reply);
+}
+
+/// `failed` in a line that names the projects asked for that the build of `key` covered.
+fn failed_as(request: &Request, key: &Key, named: &[String], why: &Failure, reply: &mut Reply) {
+    failure_line(request, key, named, why, None, reply);
+}
+
+/// THE ONE WRITER of a failure's line in a project's name (`teq: <projects>: <why>`), on stderr, with its record
+/// (`--diagnostics`, severity `failure`, its kind, its message; its `group` where the failure is a run's of a
+/// configuration with groups): a reader of the records sees every such line, since none is written elsewhere
+/// (`tests::a_line_in_a_project_s_name_has_its_record`).
+fn failure_line(request: &Request, key: &Key, named: &[String], why: &Failure, group: Option<Json>, reply: &mut Reply) {
+    let text = format!("teq: {}: {}\n", named.join(", "), why.told(named));
     reply.err(&text);
-    record(request, vec![("key", key.to_string().as_str().into()), ("severity", "failure".into()), ("message", why.as_str().into()), ("shown", text.as_str().into())], reply);
+    let mut fields = vec![("key", key.to_string().as_str().into()), ("severity", "failure".into()), ("kind", why.kind.into())];
+    fields.extend(group.map(|g| ("group", g)));
+    fields.extend([("message", why.message().as_str().into()), ("shown", text.as_str().into())]);
+    record(request, fields, reply);
+}
+
+/// What teq says of `key`'s build or run that is no failure (`teq: <project>: <note>`: why a run takes every
+/// suite, a build's own note), shown on stderr and recorded (`--diagnostics`, severity `note`).
+fn told(request: &Request, key: &Key, named: &[String], note: &str, reply: &mut Reply) {
+    let text = format!("teq: {}: {}\n", named.join(", "), note);
+    reply.err(&text);
+    record(request, vec![("key", key.to_string().as_str().into()), ("severity", "note".into()), ("message", note.into()), ("shown", text.as_str().into())], reply);
+}
+
+/// A build's outcome recorded (`--diagnostics`, severity `outcome`) after its diagnostics: the configuration built,
+/// the projects asked for that it covered, its errors as its line counts them, whether it ended well, for one that
+/// failed outright the failure's kind and message, and its time. A reader pairs a build with its diagnostics by
+/// these records, never by a line a person reads.
+fn outcome(request: &Request, key: &Key, named: &[String], result: Result<&Answer, &Failure>, reply: &mut Reply) {
+    let key = key.to_string();
+    let line = match result {
+        Ok(a) => crate::source::outcome_record(Some(&key), named, a.ok, if a.ok { 0 } else { a.errors.len().max(1) }, None, Some(a.ms)),
+        Err(why) => crate::source::outcome_record(Some(&key), named, false, 0, Some((why.kind, &why.message())), None),
+    };
+    append(request, &line, reply);
+}
+
+/// The end of a configuration's tests recorded (`--diagnostics`, severity `tests`): `ended` is its summary's counts
+/// (`suites`, each status that has events, `ms`, `built_ms`), `idle` with why nothing ran, or `run_failed` with why
+/// the run failed.
+fn tests_ended(request: &Request, key: &Key, ended: Vec<(&str, Json)>, reply: &mut Reply) {
+    let mut fields = vec![("key", key.to_string().as_str().into()), ("severity", "tests".into())];
+    fields.extend(ended);
+    record(request, fields, reply);
 }
 
 /// What a generator of `key`'s build printed as it passed (`generators::run`'s notes, one a
@@ -1987,9 +2264,14 @@ fn noted(request: &Request, key: &Key, note: &str, reply: &mut Reply) {
 
 /// One record appended to the request's `--diagnostics` file, a JSON line, where it names one.
 fn record(request: &Request, fields: Vec<(&str, Json)>, reply: &mut Reply) {
-    let Some(file) = &request.diagnostics else { return };
     let mut line = Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_text();
     line.push('\n');
+    append(request, &line, reply);
+}
+
+/// A record's line appended to the request's `--diagnostics` file, where it names one.
+fn append(request: &Request, line: &str, reply: &mut Reply) {
+    let Some(file) = &request.diagnostics else { return };
     let written = std::fs::OpenOptions::new().append(true).open(file).and_then(|mut f| f.write_all(line.as_bytes()));
     if let Err(e) = written {
         reply.err(&format!("teq: cannot write {}: {}\n", file.display(), e));
@@ -2160,5 +2442,24 @@ projects:
         assert_eq!(render(&d, "error", Path::new("/b"), Path::new("/elsewhere")).lines().next(), Some(outside.as_str()));
         let bare = Json::parse(r#"{"message":"cannot open x.jar"}"#).unwrap();
         assert_eq!(render(&bare, "error", Path::new("/b"), Path::new("/b")), "teq: error: cannot open x.jar\n");
+    }
+
+    /// A line in a project's name (`teq: <project>: ..`) is written by the two functions that record it: a failure
+    /// by `failure_line`, what is no failure by `told`. One written anywhere else in src/task's daemon would have
+    /// no record, and the gate's parser, which reads the records alone, would never see it. (`render`'s is a
+    /// diagnostic without a file, `teq: <severity>: ..`, recorded by `shown`.)
+    #[test]
+    fn a_line_in_a_project_s_name_has_its_record() {
+        let source = include_str!("daemon.rs");
+        let needle = ["\"teq: ", "{}: "].concat();
+        let writers: Vec<&str> = source
+            .match_indices(&needle)
+            .map(|(at, _)| {
+                let before = &source[..at];
+                let start = before.rfind("\nfn ").map_or(0, |i| i + 4);
+                before[start..].split('(').next().unwrap_or("").trim()
+            })
+            .collect();
+        assert_eq!(writers, ["failure_line", "told", "render"]);
     }
 }

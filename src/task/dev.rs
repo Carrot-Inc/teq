@@ -122,7 +122,7 @@ pub fn run(mut export: Export, args: &[String]) -> i32 {
                 continue;
             }
             last_check = Instant::now();
-            match generators::run(&export, &closure, classes.clone(), &env) {
+            match generators::run(&export, &closure, classes.clone(), &env).map_err(|e| e.to_string()) {
                 Ok(notes) => {
                     generator_error.clear();
                     notes.iter().for_each(|n| eprintln!("{}", n));

@@ -182,8 +182,8 @@ for version in $axes; do
     out=$(timeout 300 ./teq compile 2>&1); code=$?
     if [ $code = 2 ]; then echo "compile: exit 2"; else echo "compile: $code $out"; fi
     out=$(timeout 300 ./teq compile lib app sjs 2>&1); echo "compile lib app sjs: $? $(grep -c error <<< "$out")"
-    out=$(timeout 300 ./teq test lib 2>&1); echo "test lib: $? $(grep -E '^lib/test: ' <<< "$out" | sed 's/ in [0-9].*//')"
-    out=$(timeout 300 ./teq test sjs 2>&1); echo "test sjs: $? $(grep -E '^sjs/test: ' <<< "$out" | sed 's/ in [0-9].*//')"
+    out=$(timeout 300 ./teq test lib 2>&1); echo "test lib: $? $(grep -E '^lib: [0-9]+ suite' <<< "$out" | sed 's/ in [0-9].*//')"
+    out=$(timeout 300 ./teq test sjs 2>&1); echo "test sjs: $? $(grep -E '^sjs: [0-9]+ suite' <<< "$out" | sed 's/ in [0-9].*//')"
     out=$(timeout 300 ./teq run app hello -- one two 2> /dev/null); echo "run app hello: $? $out"
     timeout 60 ./teq stop > /dev/null 2>&1
   ) > "$work/verbs-$version.txt" 2>&1
@@ -192,8 +192,8 @@ first=
 for version in $axes; do
   [ -f "$work/verbs-$version.txt" ] || continue
   if grep -q "^compile gen: refused" "$work/verbs-$version.txt" && grep -q "^compile: exit 2" "$work/verbs-$version.txt" &&
-    grep -q "^compile lib app sjs: 0 0" "$work/verbs-$version.txt" && grep -q "^test lib: 0 lib/test: 1 suite, 2 passed, 0 failed$" "$work/verbs-$version.txt" &&
-    grep -q "^test sjs: 0 sjs/test: 1 suite, 2 passed, 0 failed$" "$work/verbs-$version.txt" &&
+    grep -q "^compile lib app sjs: 0 0" "$work/verbs-$version.txt" && grep -q "^test lib: 0 lib: 1 suite, 2 passed, 0 failed$" "$work/verbs-$version.txt" &&
+    grep -q "^test sjs: 0 sjs: 1 suite, 2 passed, 0 failed$" "$work/verbs-$version.txt" &&
     grep -q "^run app hello: 0 app one two$" "$work/verbs-$version.txt"; then
     pass "teq over equal's export on sbt $version: gen refused, a bare compile exiting 2, lib, app and sjs compiled, lib's suites passing and sjs's under node, app's alias run"
   else

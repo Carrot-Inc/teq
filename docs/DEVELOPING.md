@@ -353,13 +353,15 @@ invocation's two channels are collected apart (`test-<n>.log` its stdout, `test-
 writes its own lines on stderr (a build's diagnostics and count, each summary) and the run's stream on stdout (what
 the suites print and its report of their events). The judgment reads a build's diagnostics from teq's records of them
 (`--diagnostics`: each its whole message and the lines shown for it, the producer's extent, which no message's text
-sets, a macro's info among them, beside each failure of a configuration's whole and what each passing generator
-printed), the counts and
-summaries from stderr past those lines (a one-shot build's `<n> errors found` claiming its errors, which may end its
-output uncounted, every record shown whole either way; a run whose program started, `teq run`'s record of it, has the
-program's output after teq's lines, which is never read for them), and the outcomes and the suites that ran from the events
-(`--events`, a suite that ran no case its own line), never from a stream a run's text shares, nor from a count
-(`Transcript`). Every
+sets, a macro's info among them, beside each failure of a configuration's whole with its kind and what each passing
+generator printed), each build's outcome and each configuration's tests' end from their records too (`outcome`: the
+errors it counts, or the failure's kind and message; `tests`: the summary's counts, why nothing ran, or why the run failed), never from a
+line teq words for a person (a one-shot build that counts its errors, `<n> errors found`, records that outcome too,
+of no configuration, which claims its errors; one that prints no count needs none; every record shown whole either
+way; a run whose program started, `teq
+run`'s record of it, has the program's output after teq's lines, which is never read for them), and the outcomes and
+the suites that ran from the events (`--events`, a suite that ran no case its own line), never from a stream a run's
+text shares (`Transcript`). Every
 build that failed counts (a unit of the oracle's blocked by its own, a configuration of no unit an item of its own),
 every executed case with its framework's status from teq's events (an invocation that wrote none, outcome lines after
 its last summary, a transcript and events counting a unit's outcomes otherwise, a unit's tests completing twice are
@@ -370,7 +372,7 @@ transcript), the transcript complete (the verb's end marker `# exit <status>` af
 diagnostics give; a test's exit but 0 explained by a case that failed or a blocked build, a project's tests completed
 once, no outcome after the last summary), and the observed debt within the record's,
 an item outside it failing the line, printed in full (the first ten), an item gone passing and listed. A crash of
-teq's (a build's thread that panicked, a resident or the daemon that ended, a panic's message), an error counted
+teq's (a build's thread that panicked, a compiler or the daemon that ended, as its failure's record says by its kind; a panic's message), an error counted
 without its diagnostic, a timeout, a cut transcript and a configuration covered twice are no outcome: no record holds
 one (dotty's vulpix keeps a compiler crash apart from a test's expected errors, `ParallelTesting.scala`'s
 `onComplete`). Each verb's `--record` steps its record from a run whose every run and every other check passed (the

@@ -190,7 +190,7 @@ sjudged_and_recorded "a test framework not loading beside the known build error"
 { printf '%s\n' "$blocked_test"; echo "teq: airstream/test: no memory mapping for the type store's overlays; one worker types the build"; echo 'teq: airstream/test: the test framework example.Framework does not load: java.lang.NoClassDefFoundError: NewlyMissing'; } > "$work/transcript.txt"
 sjudged_and_recorded "the overlays' note, then a test framework not loading, beside the known build error" "the test framework example.Framework does not load: java.lang.NoClassDefFoundError: NewlyMissing: a failure of the test run's"
 { printf '%s\n' "$blocked_test"; echo "teq: airstream/test: no memory mapping for the type store's overlays; one worker types the build"; printf '%s\n' 'src/New.scala:7:1: error: Not found: NEW' 'NEW' '^'; } > "$work/transcript.txt"
-sjudged_and_recorded "the overlays' note, then a new error no summary claims, beside the known build error" "1 errors after airstream/test's line of teq's, claimed by no summary"
+sjudged_and_recorded "the overlays' note, then a new error no summary claims, beside the known build error" "1 errors after the last outcome: the records stop within a configuration"
 echo 'airstream/test: 1 suite, 0 passed, 1 failed in 1 ms (built in 1 ms)' > "$work/transcript.txt"
 sjudged_and_recorded "a summary counting a failure no outcome and no event shows" "airstream: its summary counts 1 failed, its events none"
 rm -f "$work/transcript.txt"
@@ -218,8 +218,8 @@ sheld_unchanged() {
     echo "FAIL $what: exits $code and $code2, or the record changed: $(tail -3 "$work/verb.log")"; fail=$((fail + 1)); fi
 }
 printf '%s\n' "$recorded" | events
-for shown in "$printed" 'teq: airstream/test: the test framework example.Framework does not load: expected fixture output' \
-  'airstream/test: 1 error' 'airstream/test: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)' '[fail] com.raquo.airstream.TwoSpec parses: java.lang.AssertionError: printed'; do
+for shown in "$printed" 'teq: airstream: the test framework example.Framework does not load: expected fixture output' \
+  'airstream: 1 error' 'airstream: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)' '[fail] com.raquo.airstream.TwoSpec parses: java.lang.AssertionError: printed'; do
   printed_transcript "$shown"
   expect "a passing test printing \"$shown\", over a record of none" pass
   sheld_unchanged "a passing test printing \"$shown\", over a record of none, judged and recorded" "$shown"
@@ -328,7 +328,7 @@ for sep in lf crlf; do
 done
 # A generator's failure is teq's record of it (`--diagnostics`, `failure`), its command's whole output, whatever the
 # command prints: a real run of a project whose test configuration's command generator prints `generator started`,
-# `helper/test: no suite to run` and `OLD`, and exits 1 (tests/support/probe_run.sh), through the production driver
+# `helper: no suite to run` and `OLD`, and exits 1 (tests/support/probe_run.sh), through the production driver
 # makes a baseline of the whole failure, passes again unchanged, and with `NEW` for `OLD` fails, judged and recorded,
 # the record's bytes unchanged.
 if why=$(probe_checkout "$work/gen-co" airstream "" test); then
@@ -337,7 +337,7 @@ if why=$(probe_checkout "$work/gen-co" airstream "" test); then
   printf '{"suites": {"probes.Named": {"project": "airstream", "cases": ["%s"]}, "probes.Thrown": {"project": "airstream", "cases": ["%s"]}}}\n' "$probe_named" "$probe_thrown" > "$work/gen-tests.json"
   teq_abs=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
   real() { timeout 300 "$TEQ" interp tests/support/reference_test_verb.scala --main referenceTestVerb -- "$work/gen-tests.json" "$work/gen-co" "$work/gen-out" "$teq_abs" "$1" > "$work/verb.log" 2>&1; }
-  whole='teq: command generator 0 of airstream/test: `sh gen.sh` failed (exit status: 1): generator started\nhelper/test: no suite to run\nOLD'
+  whole='teq: command generator 0 of airstream/test: `sh gen.sh` failed (exit status: 1): generator started\nhelper: no suite to run\nOLD'
   real baseline
   c1=$?
   real kept
@@ -395,7 +395,7 @@ git -C "$rc/co" init -q && git -C "$rc/co" add src && git -C "$rc/co" -c user.na
 cat > "$rc/teq" <<SH
 #!/bin/sh
 case \$1 in
-  compile) [ "\$2" != --diagnostics ] || : > "\$3"; cp $rc/gen.txt src/Gen.scala; echo "airstream/compile: checked in \$(cat $rc/took.txt)" ;;
+  compile) [ "\$2" != --diagnostics ] || echo '{"key":"airstream/compile","severity":"outcome","projects":["airstream"],"ok":true,"errors":0,"failed":null,"why":null,"ms":1}' > "\$3"; cp $rc/gen.txt src/Gen.scala; echo "airstream: checked main in \$(cat $rc/took.txt)" ;;
   --version) echo "teq 0.1.8 abcdef123" ;;
 esac
 exit 0
@@ -413,9 +413,9 @@ rverb baseline pass "a baseline of a generated file with wrong bytes"
 grep -q "^error generated src/Gen.scala: $(printf 'A\n' | sha256sum | cut -d' ' -f1), not the pin's bytes$" "$rc/here/errors.txt" && pass=$((pass + 1)) ||
   { echo "FAIL the baseline's item names no digest of the bytes: $(grep '^error' "$rc/here/errors.txt")"; fail=$((fail + 1)); }
 rverb judge pass "the same wrong bytes again"
-# A configuration's summary of ten seconds and more reads in seconds: the same judgment.
+# The build's line with its time in seconds: the same judgment, which reads the outcome's record and no line.
 echo "12.3 s" > "$rc/took.txt"
-rverb judge pass "the same wrong bytes again, a summary in seconds"
+rverb judge pass "the same wrong bytes again, the line's time in seconds"
 echo "1 ms" > "$rc/took.txt"
 echo B > "$rc/gen.txt"
 rverb judge fail "other wrong bytes"

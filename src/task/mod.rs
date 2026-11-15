@@ -32,7 +32,7 @@ use export::{Export, Platform};
 use std::path::{Path, PathBuf};
 
 /// The version of the daemon's line protocol, which the handshake compares.
-pub const PROTOCOL: u32 = 1;
+pub const PROTOCOL: u32 = 2;
 
 /// The daemon's files under the build's `target/teq/`: where it listens, the lock it holds for
 /// its whole life, the lock that serialises its start, its log.
@@ -370,7 +370,7 @@ fn one_project(export: &Export, verb: &str, args: &[String]) -> i32 {
         }
         _ => None,
     };
-    let prepared = generators::run(export, &closure, export.path(&export.classes(&key)), &env).and_then(|notes| {
+    let prepared = generators::run(export, &closure, export.path(&export.classes(&key)), &env).map_err(|e| e.to_string()).and_then(|notes| {
         for note in notes {
             noted(records.as_deref(), &key, &note);
         }

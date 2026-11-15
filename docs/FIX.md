@@ -95,14 +95,14 @@ final class NoPrintln(message: String) extends SyntacticRule("NoPrintln"):
   selector's): the first symbol of the occurrences at exactly that range, `Symbol.None` where no name the typer
   resolved stands there. The symbols are dotty's (`SemanticSymbolBuilder.symbolName`: `scala/Option#get().`,
   `org/http4s/Uri.unsafeFromString().`, a package `java/util/`), computed in-process from what the typer resolved
-  each name to: where a rule that may ask is configured, the round's typing also keeps the records SemanticDB's
+  each name to: where a rule that reads the symbol index is configured, the round's typing also keeps the records SemanticDB's
   occurrences have and navigation does not (the packages a path spells, an import's selector as dotty records it,
   what the arguments of an annotation in a type declare), its typing thread keeps the typer when the documents go to
   the rules, and it answers their questions from that typer until the round's last document is done
   (src/fix/service.rs, src/typer/semanticdb). Nothing is typed a second time, and no answer reads a retained form
   (`--semantic-types`, below): a symbol's information, which would, is not built, and a port of it has to keep those
   forms in the round's typing or type for itself. Such a round is typed by one worker, since the records of a typing
-  of several workers are not yet one worker's; every semantic rule may ask but `NoUnusedImports`,
+  of several workers are not yet one worker's; every semantic rule reads the symbol index but `NoUnusedImports`,
   `EmptyCollectionsUnified` and `TypelevelAs`, which read the typing's unused imports and expansions alone. A round
   whose semantic rules are of those three is typed as compile types it, its typer gone before its rules run, and a
   question about it is refused, whatever count it was typed at: a syntactic rule's document is syntactic, and one
@@ -323,7 +323,7 @@ is the first line alone.
   stderr where each typing begins and each round ends, and the second round as what it is (docs/CLI.md, "teq fix").
 - Each program is typed as `teq compiler check` types it, over compile's workers: `--threads` (or `TEQ_THREADS`), else
   compile's count for that round's text (one under 512 KiB or where one unit holds over half of it, else the cores up
-  to eight), and by one worker where a rule that may ask a symbol is configured ("The rule API"); the unused imports and the expansions are the merged typer's, as one worker's. A parallel attempt that
+  to eight), and by one worker where a rule that reads the symbol index is configured ("The rule API"); the unused imports and the expansions are the merged typer's, as one worker's. A parallel attempt that
   gives way (a macro's run that changed state other runs share, two diagnostics at one place) is the round's: its
   program is typed again by one worker from the round's texts, nothing of the attempt kept and the rules not configured
   again, so that the output is the one-worker run's; the record and the trace say so, and `teq fix`'s line of that

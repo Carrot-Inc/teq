@@ -219,8 +219,8 @@ def timeless(err: String): String =
 /** A run's stderr without the verb's own lines (docs/CLI.md, "teq fix"): where each job's typing begins and its
   * round ends, the line between the rounds, the run's last line. What is left is its lints and messages. */
 def untold(err: String): String =
-  val job = "^[^ :]+/[^ :]+: (typing( again)?( on one worker, since \\S+ may ask a symbol)?( \\(\\d+ of \\d+\\))?|\\d+ files?, \\d+ lints?, \\d+ (more )?to rewrite in .*)$".r
-  val run = "^teq fix( --check)?: .* in (<t>|\\d+ ms|\\d+\\.\\d s)$|^teq fix: \\d+ files? to rewrite; typing again what reads (it|them)$".r
+  val job = "^[^ :]+: (typing( main| main and test)?( again)?( \\(\\d+ of \\d+\\))?|\\d+ files?, \\d+ lints?, \\d+ (more )?to rewrite in .*)$".r
+  val run = "^teq fix( --check)?: .* in (<t>|\\d+ ms|\\d+\\.\\d s)$|^teq fix: \\d+ files? to rewrite; typing again what reads (it|them)$|^teq fix: typing( .*)? on one worker, because .* reads? the symbol index$".r
   err.split("\n", -1).filterNot(l => job.matches(l) || run.matches(l)).mkString("\n")
 
 /** The text without its leading configuration comment. */
@@ -361,7 +361,7 @@ object Told:
       val erase = "\r\u001b[K"
       val stay = timeless(bytes.split("\n", -1).map(l => if l.contains(erase) then l.substring(l.lastIndexOf(erase) + erase.length) else l).mkString("\n"))
       val want = read(told.resolve("clean.txt")).linesIterator.filterNot(_.contains(": typing")).mkString("", "\n", "\n")
-      val statuses = Vector("teq fix: preparing the rules", "a/compile: typing (1 of 3)", "a/compile: rules over 1 of 1 file", "b/compile: typing (3 of 3)").map(erase + _)
+      val statuses = Vector("teq fix: preparing the rules", "a: typing main (1 of 3)", "a: rules over 1 of 1 file", "b: typing main (3 of 3)").map(erase + _)
       val problems = scala.collection.mutable.ListBuffer.empty[String]
       if r.status != 0 then problems += s"exit ${r.status}"
       if stay != want then problems += s"the lines that stay differ from the piped run's without its headers:\n${diff(want, stay)}"
@@ -386,10 +386,10 @@ object Told:
         if r.status != 0 then problems += s"exit ${r.status}"
         if wide.nonEmpty then problems += s"statuses not within the row: ${wide.mkString(" | ")}"
         if timeless(stay.mkString("", "\n", "\n")) != want then problems += s"the lines that stay are not the piped run's whole lines:\n${diff(want, timeless(stay.mkString("", "\n", "\n")))}"
-        if columns == 20 && !statuses.contains("a/compile: typin...") then problems += s"no status cut to the row: ${statuses.mkString(" | ")}"
+        if columns == 20 && !statuses.contains("a: typing main (...") then problems += s"no status cut to the row: ${statuses.mkString(" | ")}"
         if problems.isEmpty then pass += 1 else { fail += 1; bad(s"told/terminal/$columns", problems.mkString("\n  ")) }
       // A project's name longer than the row, and one with a character outside ASCII: cut by whole characters.
-      for (name, cut) <- Vector("a-project-with-a-name-longer-than-the-row" -> "a-project-with-a...", "p\u00e4ckchen" -> "p\u00e4ckchen/compil...") do
+      for (name, cut) <- Vector("a-project-with-a-name-longer-than-the-row" -> "a-project-with-a...", "p\u00e4ckchen" -> "p\u00e4ckchen: typin...") do
         val dir = work.resolve("told-named-" + cut.takeWhile(c => c.isLetterOrDigit && c < 128))
         Sh.remove(dir)
         // A lock's text outside ASCII is written quoted: a key, a value, a list's item.
@@ -405,7 +405,7 @@ object Told:
           Files.writeString(dir.resolve(f), text)
         val r = onTerminal(dir, 20)
         val (statuses, stay) = terminal(r.out)
-        val ok = r.status == 0 && statuses.forall(columnsOf(_) < 20) && statuses.contains(cut) && stay.exists(_.startsWith(s"$name/compile: 1 file, 0 lints, 0 to rewrite in "))
+        val ok = r.status == 0 && statuses.forall(columnsOf(_) < 20) && statuses.contains(cut) && stay.exists(_.startsWith(s"$name: 1 file, 0 lints, 0 to rewrite in "))
         if ok then pass += 1 else { fail += 1; bad(s"told/terminal/name/$name", s"exit ${r.status}; statuses ${statuses.mkString(" | ")}; lines ${stay.mkString(" | ")}") }
       // A signal while a status shows: a rule that takes twenty seconds a document holds the status up.
       def slow(tag: String): Path =
@@ -418,12 +418,12 @@ object Told:
         dir
       for (signal, code) <- Vector("INT" -> 130, "TERM" -> 143) do
         val r = onTerminal(slow(signal), 80, "--signal", signal, "--when", "rules over 0 of 1 file")
-        val ok = r.status == code && r.out.endsWith(erase) && terminal(r.out)._1.lastOption.exists(_.startsWith("kiln/compile: rules over 0 of 1 file"))
+        val ok = r.status == code && r.out.endsWith(erase) && terminal(r.out)._1.lastOption.exists(_.startsWith("kiln: rules over 0 of 1 file"))
         if ok then pass += 1 else { fail += 1; bad(s"told/terminal/$signal", s"exit ${r.status}, expected $code and the status erased last:\n" + r.out.replace("\r", "\\r").replace("\u001b", "\\e")) }
       // Where stderr is a pipe the signal ends the run with nothing written after the whole line that was last.
       for (signal, code) <- Vector("INT" -> 130, "TERM" -> 143) do
-        val piped = Sh("python3", script, "--pipe", "--signal", signal, "--when", "typing (1 of 1)", teq, "fix").in(slow("pipe-" + signal)).timeout(300).check(false).run()
-        if piped.status == code && piped.out.endsWith("kiln/compile: typing (1 of 1)\n") && !piped.out.contains("\u001b") && !piped.out.contains("\r") then pass += 1
+        val piped = Sh("python3", script, "--pipe", "--signal", signal, "--when", "typing main (1 of 1)", teq, "fix").in(slow("pipe-" + signal)).timeout(300).check(false).run()
+        if piped.status == code && piped.out.endsWith("kiln: typing main (1 of 1)\n") && !piped.out.contains("\u001b") && !piped.out.contains("\r") then pass += 1
         else { fail += 1; bad(s"told/pipe/$signal", s"exit ${piped.status}, expected $code and nothing after the whole line:\n" + piped.out.replace("\r", "\\r").replace("\u001b", "\\e")) }
     else println("told/terminal: skipped, no python3 for the pseudo-terminal")
     (pass, fail)
@@ -789,14 +789,18 @@ object Verb:
     val si = build(work, "service-info", "core/src/core/Core.scala" -> plain, "rules/Inform.scala" -> informer, ".scalafix.conf" -> "rules = [\"file:rules/Inform.scala\"]\n")
     val rsi = fix(si, "core")
     expect("service/info refused", rsi.status == 2 && rsi.errAll().contains("the rule Inform failed") && rsi.errAll().contains("informations are not built"), s"exit ${rsi.status}: ${rsi.errAll()}")
-    // A round whose rule may ask is typed by one worker, whatever count is asked for (the suite's switch, `--threads`);
+    // A round whose rule reads the symbol index is typed by one worker, whatever count is asked for (the suite's
+    // switch, `--threads`), and the run says so once, before its first job's line, naming the rule;
     // and a round that was not typed to be asked answers no question, at any count (docs/FIX.md, "The rule API"): the
     // rules that ask nothing are the engine's list, which `TEQ_FIX_PLANT=asks-nothing` takes the asking rule here to
     // be of.
     def typedWith(rec: Vector[String]): Vector[String] = rec.filter(_.startsWith("typing ")).map(Parallel.fieldsOf).map(_.getOrElse("effective", "?"))
     def typings(rec: Vector[String]): String = rec.filter(_.startsWith("typing ")).mkString("\n")
     val (rone, oneRecord) = recorded(sa, Seq("core"), "TEQ_FIX_TYPING_THREADS" -> "4")
-    expect("service/one worker", rone.status == 1 && rone.errAll().contains("[Ask]: symbols core/Core. defined true") && typedWith(oneRecord) == Vector("1"), s"exit ${rone.status}: ${rone.errAll()}\n${typings(oneRecord)}")
+    val oneWorker = "^teq fix: typing on one worker, because the rule \\S+( and \\d+ other rules?)? reads? the symbol index$".r
+    expect("service/one worker", rone.status == 1 && rone.errAll().contains("[Ask]: symbols core/Core. defined true") && typedWith(oneRecord) == Vector("1") &&
+      rone.errAll().linesIterator.count(oneWorker.matches) == 1 && rone.errAll().linesIterator.takeWhile(!oneWorker.matches(_)).forall(!_.contains(": typing")),
+      s"exit ${rone.status}: ${rone.errAll()}\n${typings(oneRecord)}")
     val (rthreads, threadsRecord) = recorded(sa, Seq("--threads", "4", "core"))
     expect("service/one worker under --threads", rthreads.status == 1 && rthreads.errAll().contains("[Ask]: symbols core/Core. defined true") && typedWith(threadsRecord) == Vector("1"),
       s"exit ${rthreads.status}: ${rthreads.errAll()}\n${typings(threadsRecord)}")
@@ -1714,10 +1718,10 @@ object Typing:
     val vOne = verbs.head
     expect("later-job", vOne.status == 0 && vOne.files("a/src/a/A.scala") == "package a\nobject A { val empty: List[Int] = List.empty }\n" && vOne.files("b/src/p/Edit.scala") == editFixed,
       s"exit ${vOne.status}\n${vOne.err}")
-    expect("later-job/told", twice(vOne).isEmpty && vOne.err.linesIterator.contains("b/compile: typing (2 of 2)"), vOne.err)
+    expect("later-job/told", twice(vOne).isEmpty && vOne.err.linesIterator.contains("b: typing main (2 of 2)"), vOne.err)
     for (o, t) <- verbs.zip(counts).drop(1) do
       expect(s"later-job/w$t/bytes", sameBytes(vOne, o).isEmpty, sameBytes(vOne, o).getOrElse(""))
-      expect(s"later-job/w$t/told", twice(o) == Vector("b/compile", "b/compile"), o.err)
+      expect(s"later-job/w$t/told", twice(o) == Vector("b", "b"), o.err)
       // The job b's: the one whose attempts give way.
       val bJob = attemptsOf(o.record).find(_.outcome == "retried").map(_.job).getOrElse(-1)
       typing(s"later-job/w$t/typing", o, t, retried = Set((bJob, 1), (bJob, 2)))

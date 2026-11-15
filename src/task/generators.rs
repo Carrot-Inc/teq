@@ -23,7 +23,7 @@ use std::time::SystemTime;
 /// the verbs that would need them run refuse first (`Export::refusals`). The runs of the build are serialised through `target/teq/generators.lock`: two residents
 /// whose closures share a configuration, or the daemon and the language server, run its
 /// generators one after the other, never into one output at once.
-pub fn run(export: &Export, closure: &[Key], classes: PathBuf, env: &BTreeMap<String, String>) -> Result<Vec<String>, String> {
+pub fn run(export: &Export, closure: &[Key], classes: PathBuf, env: &BTreeMap<String, String>) -> Result<Vec<String>, Failed> {
     let mut notes = Vec::new();
     let ours = |k: &Key| export.configuration(k).filter(|c| !c.generators.iter().any(super::export::by_build_tool));
     if closure.iter().all(|k| ours(k).is_none_or(|c| c.generators.is_empty())) {
@@ -31,27 +31,74 @@ pub fn run(export: &Export, closure: &[Key], classes: PathBuf, env: &BTreeMap<St
     }
     let lock_file = export.path("target/teq/generators.lock");
     if let Some(dir) = lock_file.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {}", dir.display(), e))?;
+        std::fs::create_dir_all(dir).map_err(|e| Failed::before(format!("cannot create {}: {}", dir.display(), e)))?;
     }
-    let lock = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&lock_file).map_err(|e| format!("cannot open {}: {}", lock_file.display(), e))?;
-    lock.lock().map_err(|e| format!("cannot hold {}: {}", lock_file.display(), e))?;
+    let lock = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&lock_file).map_err(|e| Failed::before(format!("cannot open {}: {}", lock_file.display(), e)))?;
+    lock.lock().map_err(|e| Failed::before(format!("cannot hold {}: {}", lock_file.display(), e)))?;
     let teq = std::env::current_exe().map_err(|e| e.to_string());
     for key in closure {
         let Some(conf) = ours(key) else { continue };
         for (i, generator) in conf.generators.iter().enumerate() {
-            let what = format!("{} generator {} of {}", generator.get("kind").and_then(Value::str).unwrap_or("?"), i, key);
+            let failed = |why: String| Failed { of: Some((format!("{} generator {}", generator.get("kind").and_then(Value::str).unwrap_or("?"), i), key.clone())), why };
             match generator.get("kind").and_then(Value::str) {
                 Some("buildInfo") => {
                     let class_directory = |dep: &Key| if closure.contains(dep) { classes.clone() } else { export.path(&export.classes(dep)) };
-                    let (output, text) = build_info(export, generator, env, &class_directory).map_err(|e| format!("{}: {}", what, e))?;
-                    write_if_changed(&output, &text).map_err(|e| format!("{}: {}", what, e))?;
+                    let (output, text) = build_info(export, generator, env, &class_directory).map_err(&failed)?;
+                    write_if_changed(&output, &text).map_err(&failed)?;
                 }
-                Some("command") => notes.extend(command(export, key, i, generator, &teq).map_err(|e| format!("{}: {}", what, e))?),
-                other => return Err(format!("{}: no generator of kind {}", what, other.unwrap_or("missing"))),
+                Some("command") => notes.extend(command(export, key, i, generator, &teq).map_err(&failed)?),
+                other => return Err(failed(format!("no generator of kind {}", other.unwrap_or("missing")))),
             }
         }
     }
     Ok(notes)
+}
+
+/// Why the generators of a closure did not all run: the generator that failed, named by its kind and place
+/// (`buildInfo generator 0`) with its configuration, and why, a command's whole output in it; none named where the
+/// run failed before any (the lock). As text it names the configuration by its key (`<kind> generator <n> of <key>:
+/// <why>`), which a record of the failure keeps; a line for a person names the project (`told`).
+#[derive(Debug)]
+pub struct Failed {
+    pub of: Option<(String, Key)>,
+    pub why: String,
+}
+
+impl Failed {
+    fn before(why: String) -> Failed {
+        Failed { of: None, why }
+    }
+
+    /// The failure for a line that already names the projects `named`: the generator without its configuration
+    /// where that is the compile configuration of one of them, with `(<configuration>)` for another configuration
+    /// of one of them, and `of <project>` for a project the line does not name.
+    pub fn told(&self, named: &[String]) -> String {
+        match &self.of {
+            None => self.why.clone(),
+            Some((what, key)) if !named.contains(&key.project) => format!("{} of {}: {}", what, name_of(key), self.why),
+            Some((what, key)) if key.configuration == "compile" => format!("{}: {}", what, self.why),
+            Some((what, key)) => format!("{} ({}): {}", what, key.configuration, self.why),
+        }
+    }
+}
+
+impl std::fmt::Display for Failed {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match &self.of {
+            Some((what, key)) => write!(f, "{} of {}: {}", what, key, self.why),
+            None => f.write_str(&self.why),
+        }
+    }
+}
+
+/// A configuration as a line names it for a person: its project, with the configuration where it is not the
+/// compile one (`api`, `api (test)`).
+pub fn name_of(key: &Key) -> String {
+    if key.configuration == "compile" {
+        key.project.clone()
+    } else {
+        format!("{} ({})", key.project, key.configuration)
+    }
 }
 
 fn write_if_changed(file: &Path, text: &str) -> Result<(), String> {
@@ -268,9 +315,9 @@ fn command(export: &Export, key: &Key, index: usize, g: &Value, teq: &Result<Pat
     }
     let made: Vec<&str> = listed.iter().copied().filter(|o| present(&export.path(o))).collect();
     let _ = std::fs::write(&record, format!("{}\nmade {}\n{}\n", fingerprint, made.len(), made.join("\n")));
-    // What it printed is one note, its lines each in the configuration's name: the verb shows and
+    // What it printed is one note, its lines each in its project's name (`name_of`): the verb shows and
     // records it whole (`noted`), so no line of the command's is read as one of teq's.
-    let lines: Vec<String> = printed.lines().filter(|l| !l.trim().is_empty()).map(|l| format!("{}: {}", key, l)).collect();
+    let lines: Vec<String> = printed.lines().filter(|l| !l.trim().is_empty()).map(|l| format!("{}: {}", name_of(key), l)).collect();
     Ok((!lines.is_empty()).then(|| lines.join("\n")))
 }
 
@@ -516,7 +563,7 @@ mod tests {
         let key = Key::new("p", "compile");
         let g = &export.configuration(&key).unwrap().generators[0];
         let none = Err("no teq here".to_string());
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: ran"));
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p: ran"));
         let out = dir.join("target/gen/Out.scala");
         assert_eq!(std::fs::read_to_string(&out).unwrap(), "ONE\n");
         assert!(command(&export, &key, 0, g, &none).unwrap().is_none(), "an unchanged fingerprint runs nothing");
@@ -524,10 +571,10 @@ mod tests {
         std::fs::File::options().write(true).open(&out).unwrap().set_modified(old).unwrap();
         // The script changed, its output did not: the output keeps its modification time.
         std::fs::write(dir.join("gen.sh"), "mkdir -p \"$2\" && tr a-z A-Z < \"$1\" > \"$2/Out.scala\" && echo again\n").unwrap();
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: again"));
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p: again"));
         assert_eq!(std::fs::metadata(&out).unwrap().modified().unwrap(), old);
         std::fs::remove_dir_all(dir.join("target/gen")).unwrap();
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: again"), "a missing output runs it");
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p: again"), "a missing output runs it");
         std::fs::write(dir.join("labels.txt"), "three\n").unwrap();
         command(&export, &key, 0, g, &none).unwrap();
         assert_eq!(std::fs::read_to_string(&out).unwrap(), "THREE\n");
@@ -536,11 +583,11 @@ mod tests {
         std::fs::write(dir.join("teq.lock"), lock_of(&format!("projects:\n  p:\n    configurations:\n      compile:\n        generators:\n{}    platform: jvm\n", generator))).unwrap();
         let export = Export::read(&dir.join("teq.lock")).unwrap();
         let g = &export.configuration(&key).unwrap().generators[0];
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: again"), "the changed block runs it");
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p: again"), "the changed block runs it");
         std::fs::create_dir_all(dir.join("target/managed")).unwrap();
         assert!(command(&export, &key, 0, g, &none).unwrap().is_none(), "an output left empty by the run does not run it again");
         std::fs::remove_dir_all(dir.join("target/gen")).unwrap();
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: again"), "an output the run made, gone, runs it");
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p: again"), "an output the run made, gone, runs it");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -569,22 +616,39 @@ mod tests {
         let teq = Ok(binary.clone());
         let missing = command(&export, &key, 0, g, &Err("gone".to_string())).unwrap_err();
         assert!(missing.contains("cannot find the running teq binary") && missing.contains("gone"), "{}", missing);
-        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p/compile: ran interp"));
+        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p: ran interp"));
         let module = dir.join("app/assets/module.js");
         assert_eq!(std::fs::read_to_string(&module).unwrap(), "one\n");
         assert!(command(&export, &key, 0, g, &teq).unwrap().is_none(), "an unchanged fingerprint runs nothing");
         std::fs::remove_file(&module).unwrap();
-        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p/compile: ran interp"), "a listed file deleted alone runs it");
+        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p: ran interp"), "a listed file deleted alone runs it");
         assert!(module.is_file());
         let old = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
         std::fs::File::options().write(true).open(&module).unwrap().set_modified(old).unwrap();
         // The script's modification alone: run again, the module's text the same and its time kept.
         std::fs::File::options().write(true).open(dir.join("scripts/gen.scala")).unwrap().set_modified(old).unwrap();
-        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p/compile: ran interp"), "the script's edit runs it");
+        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p: ran interp"), "the script's edit runs it");
         assert_eq!(std::fs::metadata(&module).unwrap().modified().unwrap(), old);
         std::fs::write(dir.join("scripts/gen.scala"), "two\n").unwrap();
-        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p/compile: ran interp"));
+        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p: ran interp"));
         assert_eq!(std::fs::read_to_string(&module).unwrap(), "two\n");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failure_is_recorded_by_the_configuration_s_key_and_told_by_the_project() {
+        let key = |p: &str, c: &str| Key::new(p, c);
+        let own = Failed { of: Some(("buildInfo generator 0".to_string(), key("api", "compile"))), why: "no git".to_string() };
+        assert_eq!(own.to_string(), "buildInfo generator 0 of api/compile: no git");
+        assert_eq!(own.told(&["api".to_string()]), "buildInfo generator 0: no git");
+        let of_test = Failed { of: Some(("command generator 1".to_string(), key("api", "test"))), why: "exit 1".to_string() };
+        assert_eq!(of_test.to_string(), "command generator 1 of api/test: exit 1");
+        assert_eq!(of_test.told(&["api".to_string()]), "command generator 1 (test): exit 1");
+        // A generator of another project of the closure than those the line names.
+        assert_eq!(of_test.told(&["app".to_string()]), "command generator 1 of api (test): exit 1");
+        assert_eq!(own.told(&["app".to_string(), "web".to_string()]), "buildInfo generator 0 of api: no git");
+        let before = Failed::before("cannot hold the lock".to_string());
+        assert_eq!((before.to_string(), before.told(&[])), ("cannot hold the lock".to_string(), "cannot hold the lock".to_string()));
+        assert_eq!((name_of(&key("api", "compile")), name_of(&key("api", "test"))), ("api".to_string(), "api (test)".to_string()));
     }
 }

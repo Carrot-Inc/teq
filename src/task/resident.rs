@@ -46,14 +46,22 @@ pub struct Answer {
     pub warnings: Vec<Json>,
     /// The class files written, relative to the class directory.
     pub changed: Vec<String>,
-    pub classes: usize,
     pub ms: f64,
-    pub fallback: Option<String>,
+    /// Whether the build typed any file again: every file on the resident's first build, the files the session
+    /// names in `retyped` after it. A build that typed none and wrote nothing found the project up to date.
+    pub typed: bool,
     /// What the build says beside its diagnostics (the overlays' refused mappings).
     pub notes: Vec<String>,
     /// The classes of the source files the build found removed and the classes that depended on
     /// them, by the dependencies before it (`View::removed_reach`).
     pub removed_reach: std::collections::BTreeSet<String>,
+}
+
+/// A build without an answer: the resident ended under it, a crash of teq's own (`Gone`, with the end of what it
+/// wrote on stderr), or its answer could not be read.
+pub enum NoAnswer {
+    Gone(String),
+    Unread(String),
 }
 
 impl Resident {
@@ -94,15 +102,15 @@ impl Resident {
 
     /// A build of every file whose modification time moved; the first answers the resident's
     /// own first build.
-    pub fn build(&mut self) -> Result<Answer, String> {
+    pub fn build(&mut self) -> Result<Answer, NoAnswer> {
         let first = !self.started;
         if self.started {
-            self.stdin.write_all(b"build\n").and_then(|()| self.stdin.flush()).map_err(|_| self.gone())?;
+            self.stdin.write_all(b"build\n").and_then(|()| self.stdin.flush()).map_err(|_| NoAnswer::Gone(self.gone()))?;
         }
         self.started = true;
         let mut line = String::new();
-        if self.stdout.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
-            return Err(self.gone());
+        if self.stdout.read_line(&mut line).map_err(|e| NoAnswer::Unread(e.to_string()))? == 0 {
+            return Err(NoAnswer::Gone(self.gone()));
         }
         let fields = top_level_fields(line.trim_end());
         let parsed = |key: &str| fields.iter().find(|(k, _)| k == key).and_then(|(_, raw)| Json::parse(raw).ok());
@@ -129,9 +137,8 @@ impl Resident {
             errors: parsed("errors").map(|v| v.arr().to_vec()).unwrap_or_default(),
             warnings: parsed("warnings").map(|v| v.arr().to_vec()).unwrap_or_default(),
             changed: strings("changed"),
-            classes: parsed("modules").and_then(|v| v.num()).unwrap_or(0.0) as usize,
             ms: parsed("ms").and_then(|v| v.get("total").and_then(Json::num)).unwrap_or(0.0),
-            fallback: parsed("fallback").and_then(|v| v.str().map(str::to_string)),
+            typed: parsed("incremental").and_then(|v| v.bool()) != Some(true) || parsed("retyped").is_none_or(|v| !v.arr().is_empty()),
             notes: strings("notes"),
             removed_reach,
         })
@@ -142,9 +149,9 @@ impl Resident {
         let _ = self.child.try_wait();
         let tail = self.stderr.lock().unwrap_or_else(|e| e.into_inner()).trim().to_string();
         if tail.is_empty() {
-            format!("the resident of {} ended", self.key)
+            format!("the compiler for {} ended", self.key.project)
         } else {
-            format!("the resident of {} ended: {}", self.key, tail)
+            format!("the compiler for {} ended: {}", self.key.project, tail)
         }
     }
 

@@ -2266,7 +2266,7 @@ impl Server {
         let (Some(file), Some(key)) = (&session.export, &session.key) else { return Ok(()) };
         let Some(Ok(export)) = self.exports.get(file).map(|l| &l.export) else { return Ok(()) };
         let env = std::env::vars().filter(|(k, _)| k == "SOURCE_VERSION").collect();
-        crate::task::generators::run(export, &export.closure(key), export.path(&export.classes(key)), &env).map(|_| ())
+        crate::task::generators::run(export, &export.closure(key), export.path(&export.classes(key)), &env).map(|_| ()).map_err(|e| e.to_string())
     }
 
     /// A session that cannot run: the reason on its anchor, what its last build published
@@ -2453,7 +2453,7 @@ impl Server {
         let events = self.events.clone();
         self.sessions[s].generating = Some(generation);
         crate::alloc::spawn(move || {
-            let result = crate::task::generators::run(&export, &closure, classes, &env).map(|_| ());
+            let result = crate::task::generators::run(&export, &closure, classes, &env).map(|_| ()).map_err(|e| e.to_string());
             let _ = events.send(Event::Generated(s, generation, result));
         });
     }

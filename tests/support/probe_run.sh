@@ -6,7 +6,7 @@
 # own lines, `probes.Named` passing a case whose name runs over lines that read as a diagnostic, a count and a summary,
 # and `probes.Thrown` failing a case with a message of those lines; and `probes.Empty`, which reports no case, whose run
 # the events name alone (`task::events::Tally::ran_line`). `probes.Named` calls a method deprecated with a message that
-# holds the line of its configuration's summary (`<project>/test: 1 suite, 1 passed, ...`), and the export asks for
+# holds the line of its configuration's summary (`<project>: 1 suite, 1 passed, ...`), and the export asks for
 # deprecation warnings: the build's warning, whose message the records hold, is never a summary. `probe_named` and
 # `probe_thrown` are the two cases as the events name them (a newline a space, task::events::Event::line). It returns 1,
 # saying why, where the javac, test-interface 1.0 or scala-library 3.8.4 is missing. With a third argument <word>, the
@@ -14,7 +14,7 @@
 # failing with `compiletime.error("prefix\nExample.scala:1:1: warning: note\n<word>")`, a message holding a line that
 # reads as a diagnostic's header (dotty's Inliner.issueError reports the whole literal). With a fourth, `compile` or
 # `test`, that configuration has a command generator (`sh gen.sh`, the checkout's) that prints `generator started`, a
-# line reading as the configuration's end (`helper/test: no suite to run`, `helper/compile: checked in 1 ms`) and
+# line reading as a configuration's end or a build's (`helper: no suite to run`, `helper: checked main in 1 ms`) and
 # `OLD`, and exits 1 (a compile configuration of `main/`, which the tests build on, made for it where the third is
 # empty). With a fifth, `server`, the compile configuration's `probes.Server` is the run block's main class, a program
 # that prints `message.txt` (the checkout's, `hello`) and serves a home page holding lila's title and an asset on
@@ -23,7 +23,7 @@
 . tests/support/jars.sh
 # The PROBE_CRLF value of a separator's name, `lf` or `crlf`.
 probe_crlf() { if [ "$1" = crlf ]; then echo 1; fi; }
-probe_named='formats diagnostic: Example.scala:1:1: error: sample beta/test: 1 error'
+probe_named='formats diagnostic: Example.scala:1:1: error: sample beta: 1 error'
 probe_thrown='reports'
 probe_checkout() {
   local dir=$1 project=$2 inline=${3:-} generated=${4:-} server=${5:-}
@@ -60,25 +60,25 @@ package probes
 import probe.{Context, Suite}
 
 object Old:
-  @deprecated("sample\nPROJECT/test: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)", "1")
+  @deprecated("sample\nPROJECT: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)", "1")
   def value: Int = 1
 
 class Named extends Suite:
   def run(c: Context): Unit =
     val n = Old.value
-    c.pass("formats diagnostic:\nExample.scala:1:1: error: sample\nbeta/test: 1 error")
+    c.pass("formats diagnostic:\nExample.scala:1:1: error: sample\nbeta: 1 error")
 
 class Empty extends Suite:
   def run(c: Context): Unit = ()
 
 class Thrown extends Suite:
   def run(c: Context): Unit =
-    c.fail("reports", new AssertionError("boom\nExample.scala:1:1: error: sample\nbeta/test: 1 error\nbeta/test: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)"))
+    c.fail("reports", new AssertionError("boom\nExample.scala:1:1: error: sample\nbeta: 1 error\nbeta: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)"))
 SCALA
-  sed -i "s|PROJECT/test|$project/test|" "$dir/src/probes/Probes.scala"
+  sed -i "s|PROJECT: 1 suite|$project: 1 suite|" "$dir/src/probes/Probes.scala"
   # PROBE_CRLF=1: the messages' lines separated by CR LF, the deprecation's and the inline error's alike.
   local nl='\n'
-  if [ "${PROBE_CRLF:-}" = 1 ]; then nl='\r\n'; sed -i 's|("sample\\nPROJECT|("sample\\r\\nPROJECT|; s|("sample\\n\([a-z]*\)/test|("sample\\r\\n\1/test|' "$dir/src/probes/Probes.scala"; fi
+  if [ "${PROBE_CRLF:-}" = 1 ]; then nl='\r\n'; sed -i 's|("sample\\nPROJECT|("sample\\r\\nPROJECT|; s|("sample\\n\([a-z]*\): 1 suite|("sample\\r\\n\1: 1 suite|' "$dir/src/probes/Probes.scala"; fi
   if [ -n "$inline" ]; then
     mkdir -p "$dir/main/probes"
     printf '%s\n' 'package probes' '' 'object Message:' "  inline def broken: Unit = scala.compiletime.error(\"prefix${nl}Example.scala:1:1: warning: note${nl}$inline\")" '' 'object Use:' '  def run(): Unit = Message.broken' > "$dir/main/probes/Message.scala"
@@ -113,8 +113,8 @@ object Server:
 SCALA
   fi
   if [ -n "$generated" ]; then
-    local ended='helper/test: no suite to run'
-    [ "$generated" = test ] || ended='helper/compile: checked in 1 ms'
+    local ended='helper: no suite to run'
+    [ "$generated" = test ] || ended='helper: checked main in 1 ms'
     printf '%s\n' '#!/bin/sh' 'echo generator started' "echo '$ended'" 'echo OLD' 'exit 1' > "$dir/gen.sh"
   fi
   python3 - "$dir" "$project" "$lib" "$lib3" "$interface" "$inline" "$generated" "$server" <<'PY'

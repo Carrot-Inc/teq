@@ -305,7 +305,7 @@ mjudged_and_recorded "a test framework not loading beside the known build error"
 printf '%s\n' "$run_blocked" "teq: core.js/test: no memory mapping for the type store's overlays; one worker types the build" 'teq: core.js/test: the test framework example.Framework does not load: java.lang.NoClassDefFoundError: NewlyMissing' > "$work/transcript.txt"
 mjudged_and_recorded "the overlays' note, then a test framework not loading, beside the known build error" "the test framework example.Framework does not load: java.lang.NoClassDefFoundError: NewlyMissing: a failure of the test run's"
 printf '%s\n' "$run_blocked" "teq: core.js/test: no memory mapping for the type store's overlays; one worker types the build" 'core/test/New.scala:7:1: error: Not found: NEW' 'NEW' '^' > "$work/transcript.txt"
-mjudged_and_recorded "the overlays' note, then a new error no summary claims, beside the known build error" "1 errors after core.js/test's line of teq's, claimed by no summary"
+mjudged_and_recorded "the overlays' note, then a new error no summary claims, beside the known build error" "1 errors after the last outcome: the records stop within a configuration"
 printf '%s\n' 'p.OneSuite:' 'core.js/test: 1 suite, 0 passed, 1 failed in 1 ms (built in 1 ms)' > "$work/transcript.txt"
 mjudged_and_recorded "a summary counting a failure no outcome and no event shows" "core.js: its summary counts 1 failed, its events none"
 rm -f "$work/events-override.txt" "$work/raw"
@@ -387,8 +387,8 @@ mheld_unchanged() {
   if [ $code = 0 ] && [ $code2 = 0 ] && cmp -s "$work/here/deviations.json" "$work/deviations.kept" && grep -q -F "1> $2" "$work/transcript.txt"; then pass=$((pass + 1)); else
     echo "FAIL $what: exits $code and $code2, or the record changed: $(tail -3 "$work/verb.log")"; fail=$((fail + 1)); fi
 }
-for shown in "$printed" 'teq: core.js/test: the test framework example.Framework does not load: expected fixture output' \
-  'core.js/test: 1 error' 'core.js/test: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)' '[fail] p.OneSuite.adds: java.lang.AssertionError: printed'; do
+for shown in "$printed" 'teq: core.js: the test framework example.Framework does not load: expected fixture output' \
+  'core.js: 1 error' 'core.js: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)' '[fail] p.OneSuite.adds: java.lang.AssertionError: printed'; do
   standin "$listing" "$(printed_transcript "$transcript" "$shown")"
   printf '%s\n' "$recorded_inventory" | inventory
   expect "a passing test printing \"$shown\", over a record of none" pass

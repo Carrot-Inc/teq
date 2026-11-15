@@ -224,6 +224,13 @@ impl Tally {
         self.count(Status::Failure) + self.count(Status::Error)
     }
 
+    /// The counts by the words a summary has for them, the failures and errors as one.
+    pub fn by_status(&self) -> Vec<(&'static str, u64)> {
+        let mut out = vec![("passed", self.passed()), ("failed", self.failed())];
+        out.extend([(Status::Ignored, "ignored"), (Status::Skipped, "skipped"), (Status::Pending, "pending"), (Status::Canceled, "canceled")].map(|(status, word)| (word, self.count(status))));
+        out
+    }
+
     pub fn passed(&self) -> u64 {
         self.count(Status::Success)
     }

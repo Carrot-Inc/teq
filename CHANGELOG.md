@@ -189,10 +189,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   such methods that call each other, and one that calls itself, are refused as scalac refuses them (`recursive use
   of outer needs an explicit result type`). Two such methods of one block with a value
   or a given defined between them are not covered yet: that call still builds the program it built before.
-- `teq fix` says where it is and how it ended, on stderr: a line where the typing of each configuration begins
-  (`app/compile: typing (1 of 3)`) and one where its round ends (`app/compile: 12 files, 0 lints, 1 to rewrite in
-  840 ms`), a second round as what it is, and a last line with the result and the time, a clean run's too (`teq fix:
-  3 configurations, 12 files, 0 lints, 0 files rewritten in 2400 ms`; a time of ten seconds or more reads `75.0 s`).
+- `teq fix` says where it is and how it ended, on stderr: a line where the typing of each job begins, named by its
+  project and what it covers (`app: typing main and test (1 of 3)`), and one where its round ends (`app: 12 files, 0
+  lints, 1 to rewrite in 840 ms`), why the rounds are typed by one worker, once (`teq fix: typing on one worker,
+  because the rule OptionGetWarn reads the symbol index`), a second round as what it is, and a last line with the result and the time, a clean run's too (`teq fix:
+  3 projects, 12 files, 0 lints, 0 files rewritten in 2.4 s`; a time under a second reads `840 ms`).
   On a terminal the line of a configuration's start is written over itself with the seconds it has stood
   ([teq fix](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
 - A transparent inline method reads its `inline` parameter's argument where the parameter is read, with a cast
@@ -264,14 +265,35 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   A class's value or method that implements a trait's method which another class joins with an overload answers
   through the trait on JavaScript and in the interpreter (`TypeError: c.size$0 is not a function`), also where a
   `super` call of the name comes before it (`TypeError: o.run$0 is not a function`).
-- `teq compile` and `teq run` say that they wait: a build that has not answered a second after the command began
-  is named on stderr (`app/compile: compiling api, app, core (1 of 2)`; on a terminal a line written over itself
-  with the seconds, `compiling app/compile (3 projects), 14 s`), and the command then ends with its own time (`teq
-  compile: 3 configurations in 14.2 s`; `teq run: 1 configuration compiled in 14.2 s` before the program). A build
-  that answers within the second prints nothing new, and `teq run` no longer prints its build's line when nothing
-  was written: a run with nothing to compile prints the program's output alone. A build's time of ten seconds and
-  more reads in seconds (`12.3 s`)
+- `teq compile` answers by the project asked for and says what the build did: `app: compiled main and test, 31
+  classes written, in 107 ms`; `app: compiled main and test, no class changed, in 87 ms` after an edit that changed
+  no class; `app: up to date` where nothing was typed again; `web: checked main in 4.8 s` for a Scala.js project;
+  `app: 2 errors` after the diagnostics. A project that another project's build served has no count of classes
+  (`core: compiled main in 0.1 s`), and errors outside the project asked for are said (`core: 1 error in app`; `app:
+  5 errors, 2 in core` where only some are).
+  Several projects get a line a build, named by the projects asked for that it covered (`app, core: ..`), those up
+  to date none, and a total on stdout, `teq compile: 7 projects in 0.3 s` (`, 1 error`), or the one line `teq
+  compile: 7 projects, up to date`. The configuration's key (`app/test`) and `the first build` are no longer
+  printed. `teq compile` and `teq run` say that they wait: a build that has not answered a second after the command
+  began is named on stderr (`compiling api, app, core (1 of 2)`; on a terminal a line written over itself with the
+  seconds, `compiling app, web (5 projects), 14 s`). `teq run` prints its build's line only where the build wrote a
+  class or failed: a run with nothing to compile prints the program's output alone. `teq test` and `teq stage` name
+  the project too (`app: 4 suites, 5 passed, 0 failed in 423 ms (built in 3 ms)`, `app [fast]: 2 suites`, `app: no
+  suite to run`, `teq: app: the compiler for app ended: ..`), and a generator's line its project (`browserdemo:
+  images: ..`; `api (test): ..` for one of the test configuration). A time of a second and more reads in seconds
+  (`4.8 s`) in every verb's lines. A script reads the records, not the lines (`--diagnostics`): a build's outcome
+  and a test run's counts are records now, and a failure's record says what kind it is
   ([teq compile and run](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- A command that meets a daemon of another teq binary or of an export that changed no longer ends with `teq: the
+  daemon asked for a restart three times`: it starts the next daemon, never asks the ending one again, and says
+  that it waits for it (`teq compile: waiting for the previous teq daemon to stop, 3 s` on a terminal, `teq: waiting
+  for the previous teq daemon to stop` otherwise). A compile, and the build before a `teq run`, whose daemon ended
+  before it answered anything is sent to the next daemon; `teq test` and `teq stage` still stop there (`teq: the
+  daemon ended without an answer`), since their work may have begun, and so does any command whose daemon said
+  nothing and is still running. A command no daemon served leaves a `--diagnostics` file with that failure's record
+  alone, not the records of an earlier run. The file holds one command's records, whole: it is empty while the
+  command runs and is written when it ends, so two commands that name one file no longer leave both their records
+  in it.
 - A build on several workers no longer stops with `a wait on a cell under the loader's lock` where a method is
   called on an intersection whose two parts overload its name (`x.at("k")` for `x: Reads & Writes`, each trait
   with several `at`) while another worker is still typing what those overloads' signatures name: the overloads

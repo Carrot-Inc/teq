@@ -338,22 +338,38 @@ the daemon compile and runs the program itself, so that it holds the terminal; `
 the client's own. Jars come from coursier's cache when their size and sha1 are the pinned ones, else are
 fetched with curl into teq's cache, each announced on stderr.
 
-**What compile and run print.** `teq compile` ends with a line a resident on stdout, once every resident has
-answered: `app/compile: 41 classes, 3 written in 212 ms` on the JVM (`, the first build` for a resident's first),
-`web/compile: checked in 96 ms` for a Scala.js project, `app/compile: 2 errors` after the diagnostics on stderr; the
-time is the resident's own build, in whole milliseconds below ten seconds and in seconds from there (`12.3 s`).
-`teq run` prints that line on stderr, and only for a build that wrote something or was a resident's first: a run
-with nothing to compile prints nothing of its own, and everything it does print is on stderr before the program
-starts, so that stdout holds the program's output alone. A build that has not answered when the command is one
-second old is told of, on stderr. Where stderr is no terminal, one line a resident still building, once: `app/compile:
-compiling api, app, core (1 of 2)`, the projects it types and its place among the request's residents (`, started
-now` where this request started the resident). On a terminal a line that is written over itself with the seconds
-since the command began, `compiling app/compile, web/compile (5 projects), 14 s`, which a resident leaves as it
-answers (`teq compile: starting, 2 s` while the daemon has not answered yet); it is held within the terminal's
-row, gives its place to every line the command prints, and is erased before the program of `run` starts and where
-an interrupt ends the command. A command that told of its wait ends with a line of its own time on stderr: `teq
-compile: 3 configurations in 14.2 s` (`, 1 error`), `teq run: 1 configuration compiled in 14.2 s` before the program.
-A build that answers within the second prints none of this.
+**What compile and run print.** `teq compile` answers with a line a build on stdout, named by the project asked
+for and saying what of it was covered: `app: compiled main and test, 14 classes written, in 8.4 s` on the JVM (`main`
+alone where the project has no test configuration or another build served it; `no class changed` where the sources
+were typed again and every class file stayed), `web: checked main and test in 4.8 s` for a Scala.js project, `app: up
+to date` where nothing was typed again, `app: 2 errors` after the diagnostics on stderr. Several projects that one
+build holds share its line (`app, core: ..`). A project that another project's build serves has no count of
+classes, which are that build's (`core: compiled main in 0.1 s`). A count says where its errors are when they are
+not the named projects' own: `core: 1 error in app` where every error is in one other project, `app: 5 errors, 2 in
+core` (`, 1 in util`) where only some are or they lie in several; `test` and `stage` count a failed build the same
+way. The time is the build's own, in whole milliseconds below one second and in
+seconds from there. A command over several builds (`teq compile` of every project) prints a line for each build that
+did something and ends with a total of its own time on stdout, `teq compile: 7 projects in 1.2 s` (`, 1 error`), or
+`teq compile: 7 projects, up to date` alone where none did; one build's line is the whole answer.
+`teq run` prints its build's line on stderr, and only for a build that wrote something or failed: a run with nothing
+to compile prints nothing of its own, and everything it does print is on stderr before the program starts, so that
+stdout holds the program's output alone. A build that has not answered when the command is one second old is told
+of, on stderr. Where stderr is no terminal, one line a build still running, once: `compiling api, app, core (1 of
+2)`, the projects it types and its place among the request's builds (`, started now` where this request started
+its compiler). On a terminal a line that is written over itself with the seconds since the command began,
+`compiling app, web (5 projects), 14 s`, which a build leaves as it answers (`teq compile: starting, 2 s` while the
+daemon has not answered yet); it is held within the terminal's row, gives its place to every line the command
+prints, and is erased before the program of `run` starts and where an interrupt ends the command.
+A daemon of another teq binary, or of an export that changed, ends when a command reaches it: the command starts
+the next daemon, which waits for the ending one to finish the work it has, and never asks the ending one again. That
+wait is told the same way, from the first second: `teq compile: waiting for the previous teq daemon to stop, 3 s` on
+a terminal, one line `teq: waiting for the previous teq daemon to stop` where stderr is none. A compile, and the
+build of a `run`, whose daemon ended before it answered anything goes to the next daemon; a `test` or a `stage`
+stops there (`teq: the daemon ended without an answer`), since its suites or the files it writes may have begun.
+A daemon counts as ended where its `daemon.json` is withdrawn or another daemon's, or where no daemon holds the
+lock; one that closed a connection without an answer and is still there is not waited for: the command stops with
+that line at once, whatever the verb. The daemon itself answers a request it cannot read (`teq: a request that is
+not UTF-8`, `teq: an empty request`, `teq: a request that is not JSON`) with exit code 2.
 
 **Run.** `teq run api -- web` runs the main class the build declares (`Compile / run / mainClass`, else
 `Compile / mainClass`), else the single main class among the project's own sources, as sbt's `run` does, and
@@ -429,14 +445,14 @@ threw>`, no framework after it run), the worker also sends as a fork error, whic
 fails its harness at the first: nothing more of the run reaches the client, its runner retired as `ForkTests` leaves
 its worker once it has closed the worker's input (its tasks in flight finish and its frameworks' `done()` runs, what
 it writes drained unread, within the stop bound, past which it is killed), `[error]` lines with the throwable's first
-line and first frame (its whole trace with `--verbose`) and `<project>/test: the run failed: <what was thrown>` stand
+line and first frame (its whole trace with `--verbose`) and `<project>: the run failed: <what was thrown>` stand
 for the summary, `--events` holds the events reported before it, and the exit code is 1. Where reporting such a
 framework's throw itself throws (its `toString()` throwing), the worker writes `Internal error when running tests: <what
 reporting threw>` and sends no fork error, and its run ends there as at its end, which sbt's host takes for a completed
 run: teq's run enters no later group and calls no `done()` of the worker, the host's summaries are shown, the groups
 not completed are named, and the run's outcome and exit code are those of the suites reported, as sbt's host computes
 them (its line counting the suites selected). Of an export of Mill's, whose runner has no host, the internal error,
-there or loading the frameworks, fails the run, `<project>/test: the run failed: Internal error when running tests:
+there or loading the frameworks, fails the run, `<project>: the run failed: Internal error when running tests:
 ...`. A task's error event
 is read as any event is, so that a fingerprint whose getter throws fails the task's future (`Failed to execute task
 <future>`) and no event of it is sent; and the worker's debug lines are made whether shown or not, so that a returned
@@ -459,7 +475,7 @@ sbt-scalajs's test adapter does: the frameworks found by their names, a controll
 suites to run, all made before the first suite runs (sbt's `createTestRunners`), each task run through the continuation
 of `Task.execute` and the tasks it returns after it, then each runner's `done` once every framework's suites have run,
 as sbt calls them in process. A runner, its tasks or its `done` that the bridge fails to make ends the run, as sbt lets
-those failures through (`[error]` lines with what was thrown and `<project>/test: the run failed: <what was thrown>` in
+those failures through (`[error]` lines with what was thrown and `<project>: the run failed: <what was thrown>` in
 the summary's place, the exit code 1), while a suite whose task threw is an `Error` of its own and the run goes on; a
 run passes when every call was answered and node exited with 0, so a node that ends early fails it.
 The export says how sbt-scalajs runs the link (the test configuration's `moduleKind` and `jsEnv`: `Test /
@@ -513,10 +529,27 @@ severity, the file, line and column where it has them, the whole message, and th
 that a reader takes a diagnostic's extent from the build, never from the text, whose message may hold any line;
 a macro's `report.info` is one of them (severity `info`, its whole message), as dotty reports it (`report.echo`, an
 `Info` diagnostic). The daemon's verbs record beside them each failure of a configuration's as shown (`teq:
-<configuration>: ...`, severity `failure`), a generator's with its command's whole output, and what each passing
-generator printed, one record a generator (severity `note`), as `teq build` records its generators' before the
-compiler's records (`--diagnostics-append`); their text is the command's and never one of teq's own lines. What is
-shown does not change.
+<project>: ...`, severity `failure`, with its `kind`: `generator` for a generator's, with its command's whole
+output; `crash` for teq's own, a compiler or the daemon that ended; `other` for the rest), what teq says of a build
+that is no failure and what each passing generator printed, one record a generator (severity `note`), as `teq build`
+records its generators' before the compiler's records (`--diagnostics-append`); their text is the command's and
+never one of teq's own lines. A line names the project a person asked for; a record names the configuration
+(`key`), and a reader pairs builds, diagnostics and counts by the records alone, never by a line: after a build's
+diagnostics its outcome (severity `outcome`: the configuration built, the `projects` asked for that it covered, its
+`errors` as its line counts them, `ok`, for one that failed outright `failed` with the failure's kind and `why`
+with its message, and `ms`); at the end of a configuration's tests their end (severity `tests`: the summary's
+counts, `suites` and each status that has events, with `ms` and `built_ms`; or `idle` with why nothing ran; or
+`run_failed` with why the run failed); for a project a compile left out its lines (severity `left-out`, with the
+`project`). A one-shot build (`teq compiler`, `teq build`) that counts its errors (`<n> errors found`) records its
+outcome too, of no configuration. A request no daemon served (the daemon ended without an answer, or would not
+start) leaves the file with that failure's record alone, never an earlier run's records; where the daemon had begun
+to answer, the failure's record follows its own. What is shown does not change.
+The file holds one request's records, whole. A request of the daemon's verbs empties the file as it starts, writes
+its records to a file of its own beside it (`<file>.teq-<the command's process>`) and moves that over the file when
+the request ends: the file is empty while the request runs, and of two requests that name one file it holds the
+records of the one that ended last, never both and never a part. A command that is killed leaves the file empty;
+the daemon removes the request's own file when its build ends. A file that is no regular file (a pipe, a device)
+is written as the records come.
 Without a project every project's suites run, on either platform, those the export refuses named and the exit
 code 2.
 
@@ -528,11 +561,11 @@ every suite still left, an exclusion leaving the suite to a later group), the gr
 none. The groups are phases of one run, as sbt runs its groups in process (`Defaults.allTestGroupsTask`): one JVM (one
 node on Scala.js), one class loader, one pool and one runner per framework, each group's tasks asked as it is entered
 and every task they return run in it, whatever its name, before the next group starts, and each framework's `done()`
-once, after the last. On stderr each group has its header, `<project>/test [<name>]: <n> suites` (`no suite to run`
-for an empty one), and its summary, `<project>/test [<name>]: <n> suites, <p> passed, <f> failed in <t> ms`, the
+once, after the last. On stderr each group has its header, `<project> [<name>]: <n> suites` (`no suite to run`
+for an empty one), and its summary, `<project> [<name>]: <n> suites, <p> passed, <f> failed in <t>`, the
 suites of none `(ungrouped)`, then the run's line as without groups; the suites' output stays on stdout. A group's
 failing suites do not stop the later groups, and the exit code is the run's. A fork error (above) ends the run once the
-group it happens in has drained, no later group started: `<project>/test: not completed: [<name>], ...` names the
+group it happens in has drained, no later group started: `<project>: not completed: [<name>], ...` names the
 groups it did not complete, and no run's line is printed; a `done()` that throws fails the run after the groups'
 summaries (on Scala.js, a framework's failure of the bridge, above, ends the run so). The worker's internal error
 (above) ends an sbt export's run in the group it happens in, the groups it did not complete named, then the run's line,
@@ -541,14 +574,14 @@ complete named, the events and suites of what ran written to `--events` with the
 under `Group <name>`, an empty group's header alone, and the suites of none, where there are any, under `Ungrouped`.
 Where there are groups, `--events` writes each line's group after its fields (empty for the suites of none), the group
 each suite ran in, and `--diagnostics` records each group's header (severity `group`) and its summary (`summary`) with
-its `group`, null for the suites of none, and for a run that failed its failure (`failure`, the line `<project>/test:
+its `group`, null for the suites of none, and for a run that failed its failure (`failure`, the line `<project>:
 the run failed: ...`) with the group it happened in, null where it happened in no group (loading the frameworks, sbt's
 host's calls before its worker, making the runners and copying the suites' fingerprints among them, the frameworks'
 `done()` once every group has ended and the host's summaries after; on Scala.js, making the runners before the first
 group) or among the suites of none, the worker's runner of a JVM framework being made in the first group; a
-runner or node that ends is recorded so too, as its configuration's failure (`teq: <project>/test: ...`); then one record
+runner or node that ends is recorded so too, as its configuration's failure (`teq: <project>: ...`); then one record
 naming the groups not completed (`failure`), its `group` the first of them. Frameworks that fail to load, before any suite is
-discovered, leave every group and the ungrouped suites not completed (`<project>/test: not completed: [<name>], ...,
+discovered, leave every group and the ungrouped suites not completed (`<project>: not completed: [<name>], ...,
 (ungrouped), no suite discovered`). Without groups there are no headers, no group summaries, no group fields and no
 such records.
 

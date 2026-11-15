@@ -876,7 +876,7 @@ else
   status=1
 fi
 compile() { TEQ=$teq_abs PATH="$sentinels:$PATH" timeout 340 ./teq compile browserdemo >> $glog 2>&1; }
-runs() { grep -c '^browserdemo/compile: images: ' $glog; }
+runs() { grep -c '^browserdemo: images: ' $glog; }
 fresh
 if compile && generated && untouched; then
   echo "generator: teq compile through the launcher runs teq interp by the binary TEQ names, the PATH's teq and scala-cli untouched"

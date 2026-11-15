@@ -2,15 +2,16 @@
 //! `target/teq/daemon.json` names, starting the daemon when none runs (serialised through
 //! `target/teq/task.start.lock`, so that two clients never start two), sends the request with
 //! the token and the handshake and prints what comes back. A daemon that answers `restart` is
-//! ending; the client starts the next one, which waits for the old one's lock.
+//! ending; the client starts the next one, which waits for the old one's lock, and never asks the
+//! ending one again: its advertisement, while it stands, is no daemon's (`connect`).
 
 use super::export::Export;
-use super::progress::{counted, duration, Progress};
+use super::progress::{counted, duration, duration_of_ms, errors_line, Progress};
 use super::{daemon_alive, fetch, paths, Info, Paths, PROTOCOL};
 use crate::lsp::json::{obj, Json};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, TcpStream};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -29,7 +30,7 @@ pub fn request(export: &Export, verb: &str, args: &[String]) -> i32 {
 /// the last line names, `began` when the process started. The answer's `data` lines, in order, with the exit code.
 pub fn request_told(export: &Export, verb: &str, args: &[String], said: &str, began: Instant) -> (i32, Vec<Json>) {
     let mut data = Vec::new();
-    let mut waiting = Waiting::new(Progress::stderr(), said, began, Box::new(Instant::now));
+    let mut waiting = Waiting::new(Progress::stderr(), Box::new(std::io::stdout()), said, began, Box::new(Instant::now));
     let code = exchange_all(export, verb, args, &mut data, Some(&mut waiting));
     waiting.finish();
     (code, data)
@@ -39,6 +40,11 @@ pub fn request_told(export: &Export, verb: &str, args: &[String], said: &str, be
 const QUIET: Duration = Duration::from_secs(1);
 /// How often a waiting client looks at its clock.
 const TICK: Duration = Duration::from_millis(100);
+/// How long a daemon that closed a connection without a line is looked at before it counts as still there
+/// (`ending`).
+const GONE: Duration = Duration::from_millis(300);
+/// What a client says once, where stderr is no terminal, of a daemon it started that waits for the one before it.
+const PREVIOUS: &str = "teq: waiting for the previous teq daemon to stop";
 
 /// A resident of the request's plan that has not answered.
 struct Building {
@@ -51,13 +57,14 @@ struct Building {
     told: bool,
 }
 
-/// What the client of a build tells while it waits (docs/TOOLING.md, "What compile and run print"). Nothing of a
-/// build that answers within a second of the verb's start. Of a resident that has not answered by then: where
-/// stderr is no terminal one line, once, `a/compile: compiling a, b, core (1 of 1)` (`, started now` where the
-/// request started the resident); on a terminal a status line, `compiling a/compile (3 projects), 2 s`, which a
-/// resident leaves as it answers, and `teq compile: starting, 2 s` while the daemon has sent no plan. The status
-/// is erased before anything else is written to either stream. Where it told of the wait the run ends with a
-/// line of the verb's wall time, `teq compile: 3 configurations in 14.2 s` (`, 1 error`).
+/// What the client of a build tells (docs/TOOLING.md, "What compile and run print"): each build's line, composed
+/// from the daemon's record of it and named by the projects asked for (`built`), and over several builds their
+/// total (`done`). Of the wait, nothing for a build that answers within a second of the verb's start; of one that
+/// has not answered by then: where stderr is no terminal one line, once, `compiling a, b, core (1 of 1)` (`, started
+/// now` where the request started its compiler); on a terminal a status line, `compiling a (3 projects), 2 s`,
+/// which a build leaves as it answers, `teq compile: starting, 2 s` while the daemon has sent no plan, and `teq
+/// compile: waiting for the previous teq daemon to stop, 2 s` while the daemon this request started waits for an
+/// ending one. The status is erased before anything else is written to either stream.
 pub struct Waiting {
     progress: Progress,
     said: String,
@@ -68,13 +75,28 @@ pub struct Waiting {
     building: Vec<Building>,
     /// The status line as drawn, none where none shows.
     status: Option<String>,
-    /// Whether a header or a status was shown: the last line is then owed.
-    told: bool,
+    /// Where compile's result lines go: stdout (`run`'s go to stderr with the status).
+    out: Box<dyn Write>,
+    /// How many builds the plan has: several end with a total, one with its own line.
+    builds: usize,
+    /// The projects the builds answered so far covered, and whether any of them typed a file or failed.
+    covered: usize,
+    acted: bool,
+    /// Whether the daemon this client started waits for the one before it to stop, and whether that was said
+    /// (where stderr is no terminal).
+    previous: bool,
+    previous_told: bool,
 }
 
 impl Waiting {
-    pub fn new(progress: Progress, said: &str, began: Instant, now: Box<dyn Fn() -> Instant>) -> Waiting {
-        Waiting { progress, said: said.to_string(), began, now, planned: None, building: Vec::new(), status: None, told: false }
+    pub fn new(progress: Progress, out: Box<dyn Write>, said: &str, began: Instant, now: Box<dyn Fn() -> Instant>) -> Waiting {
+        Waiting { progress, said: said.to_string(), began, now, planned: None, building: Vec::new(), status: None, out, builds: 0, covered: 0, acted: false, previous: false, previous_told: false }
+    }
+
+    /// The daemon started for this request waits for the one before it, which is ending, or no longer does.
+    fn previous(&mut self, waits: bool) {
+        self.previous = waits;
+        self.tick();
     }
 
     /// A `progress` record of the daemon's: the plan, a resident's answer, the end's counts.
@@ -82,6 +104,7 @@ impl Waiting {
         if let Some(plan) = record.get("plan") {
             let residents = plan.arr();
             self.planned = Some(residents.len());
+            self.builds = residents.len();
             self.building = residents
                 .iter()
                 .enumerate()
@@ -99,9 +122,68 @@ impl Waiting {
             if self.status.is_some() {
                 self.draw();
             }
+        } else if let Some(built) = record.get("built") {
+            self.built(built);
         } else if let Some(done) = record.get("done") {
-            let count = |field: &str| done.get(field).and_then(Json::num).unwrap_or(0.0) as usize;
-            self.done(count("configurations"), count("errors"));
+            self.done(done.get("errors").and_then(Json::num).unwrap_or(0.0) as usize);
+        }
+    }
+
+    /// A build's answer (the daemon's record, `daemon::compile`): its line, named by the projects asked for that
+    /// it covered, with what it covered of them. One that typed nothing and wrote nothing found them up to date:
+    /// said where it is the request's one build, left to the total among several. A build wider than the request
+    /// (another project's resident served it) has no count of classes: the classes are the wider build's. `run`
+    /// tells a build only where it wrote something or failed, before the program.
+    fn built(&mut self, built: &Json) {
+        let flag = |field: &str| built.get(field).and_then(Json::bool) == Some(true);
+        let count = |field: &str| built.get(field).and_then(Json::num).unwrap_or(0.0);
+        let names: Vec<&str> = built.get("projects").map_or(&[][..], Json::arr).iter().filter_map(Json::str).collect();
+        self.covered += names.len();
+        // A build that failed outright has the daemon's own line on stderr.
+        if flag("failed") {
+            self.acted = true;
+            return;
+        }
+        let names = names.join(", ");
+        let written = count("written") as usize;
+        let line = if !flag("ok") {
+            self.acted = true;
+            let elsewhere: Vec<(String, usize)> = built
+                .get("in")
+                .map_or(&[][..], Json::arr)
+                .iter()
+                .filter_map(|share| Some((share.arr().first()?.str()?.to_string(), share.arr().get(1)?.num()? as usize)))
+                .collect();
+            Some(errors_line(&names, count("errors") as usize, &elsewhere))
+        } else if !flag("typed") && written == 0 {
+            (self.builds <= 1).then(|| format!("{}: up to date", names))
+        } else {
+            self.acted = true;
+            let covers = if flag("test") { "main and test" } else { "main" };
+            let took = duration_of_ms(count("ms"));
+            Some(if !flag("jvm") {
+                format!("{}: checked {} in {}", names, covers, took)
+            } else if flag("wider") {
+                format!("{}: compiled {} in {}", names, covers, took)
+            } else if written == 0 {
+                format!("{}: compiled {}, no class changed, in {}", names, covers, took)
+            } else {
+                format!("{}: compiled {}, {} written, in {}", names, covers, counted(written, "class", "classes"), took)
+            })
+        };
+        if let Some(line) = line.filter(|_| self.said != "run" || !flag("ok") || written > 0) {
+            self.result(&line);
+        }
+    }
+
+    /// A result line: compile's on stdout, `run`'s on stderr, where the program's own output is not.
+    fn result(&mut self, line: &str) {
+        self.before_output();
+        if self.said == "run" {
+            self.progress.line(line);
+        } else {
+            let _ = writeln!(self.out, "{}", line);
+            let _ = self.out.flush();
         }
     }
 
@@ -115,33 +197,34 @@ impl Waiting {
             self.progress.tick();
             return;
         }
+        if self.previous && !std::mem::replace(&mut self.previous_told, true) {
+            self.progress.line(PREVIOUS);
+        }
         let of = self.planned.unwrap_or(0);
         for b in self.building.iter_mut().filter(|b| !b.told) {
             b.told = true;
-            self.told = true;
-            self.progress.line(&format!("{}: compiling {} ({} of {}){}", b.key, b.projects.join(", "), b.place, of, if b.started { ", started now" } else { "" }));
+            self.progress.line(&format!("compiling {} ({} of {}){}", b.projects.join(", "), b.place, of, if b.started { ", started now" } else { "" }));
         }
     }
 
     /// The status line of what waits now, drawn where it is not the one showing; erased where nothing waits.
     fn draw(&mut self) {
         let text = match self.planned {
+            None if self.previous => Some(format!("teq {}: waiting for the previous teq daemon to stop", self.said)),
             None => Some(format!("teq {}: starting", self.said)),
             Some(_) if self.building.is_empty() => None,
             Some(_) => {
-                let keys: Vec<&str> = self.building.iter().map(|b| b.key.as_str()).collect();
+                // Each build by its project: the configuration is the daemon's matter.
+                let names: Vec<&str> = self.building.iter().map(|b| b.key.split('/').next().unwrap_or(&b.key)).collect();
                 let projects: usize = self.building.iter().map(|b| b.projects.len()).sum();
-                Some(format!("compiling {} ({})", keys.join(", "), counted(projects, "project", "projects")))
+                Some(format!("compiling {} ({})", names.join(", "), counted(projects, "project", "projects")))
             }
         };
         if text == self.status {
             return;
         }
         match &text {
-            Some(text) => {
-                self.told = true;
-                self.progress.status_since(text, self.began);
-            }
+            Some(text) => self.progress.status_since(text, self.began),
             None => self.progress.clear(),
         }
         self.status = text;
@@ -162,31 +245,101 @@ impl Waiting {
         }
     }
 
-    /// The builds have ended: the last line, where the wait was told.
-    fn done(&mut self, configurations: usize, errors: usize) {
+    /// The builds have ended. A request of several builds ends with its total, the command's own time: the
+    /// projects covered and the errors, or that every one was up to date; one build's line is the whole answer.
+    fn done(&mut self, errors: usize) {
         self.before_output();
         self.building.clear();
         self.planned = Some(0);
-        if !self.told {
-            return;
+        if std::mem::take(&mut self.builds) > 1 {
+            let projects = counted(self.covered, "project", "projects");
+            let line = if self.acted {
+                let took = duration((self.now)().saturating_duration_since(self.began));
+                let errors = if errors == 0 { String::new() } else { format!(", {}", counted(errors, "error", "errors")) };
+                format!("teq {}: {} in {}{}", self.said, projects, took, errors)
+            } else {
+                format!("teq {}: {}, up to date", self.said, projects)
+            };
+            self.result(&line);
         }
-        let took = duration((self.now)().saturating_duration_since(self.began));
-        let what = counted(configurations, "configuration", "configurations");
-        let what = if self.said == "run" { format!("{} compiled", what) } else { what };
-        let errors = if errors == 0 { String::new() } else { format!(", {}", counted(errors, "error", "errors")) };
-        self.progress.line(&format!("teq {}: {} in {}{}", self.said, what, took, errors));
-        self.told = false;
     }
 
-    /// The exchange is over, however it ended. Where the wait was told and the daemon sent no counts (it refused
-    /// the request before any build, it ended without an answer, its start failed), the last line still ends the
-    /// run, counting no configuration; where the counts came it is written already.
+    /// The exchange is over, however it ended: the status gives its row back.
     fn finish(&mut self) {
-        self.done(0, 0);
+        self.before_output();
+        self.building.clear();
     }
 }
 
-fn exchange_all(export: &Export, verb: &str, args: &[String], data: &mut Vec<Json>, mut waiting: Option<&mut Waiting>) -> i32 {
+fn exchange_all(export: &Export, verb: &str, args: &[String], data: &mut Vec<Json>, waiting: Option<&mut Waiting>) -> i32 {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| export.root.clone());
+    // The request's records (`--diagnostics`) go to a file of its own, moved over the file the command names when
+    // the request ends, however it ends.
+    let records = Records::of(args, &cwd);
+    let code = match &records {
+        Some((_, sent)) => exchange_tries(export, verb, sent, records.as_ref().map(|(r, _)| r), &cwd, data, waiting),
+        None => exchange_tries(export, verb, args, None, &cwd, data, waiting),
+    };
+    if let Some((r, _)) = &records {
+        r.end();
+    }
+    code
+}
+
+/// Where a request's records go (`--diagnostics <file>`). The file the command names holds one request's records,
+/// whole: the request writes to a file of its own beside it (`own`), which the client moves over the named one when
+/// the request ends. Of two requests that name one file the last to end is the one it holds, and a reader finds
+/// neither two requests' records nor a part of one's. The named file is emptied as the request starts, so a request
+/// that is killed leaves no earlier one's records; its own file the daemon removes (`daemon::ended`). A named file
+/// that is no regular file (a pipe, a device), or beside which no file can be made, is written as it is.
+struct Records {
+    named: PathBuf,
+    own: PathBuf,
+}
+
+impl Records {
+    /// The request's records and the arguments as the daemon gets them, the file's name replaced by the request's
+    /// own; none where the command names no file.
+    fn of(args: &[String], cwd: &Path) -> Option<(Records, Vec<String>)> {
+        let at = args.iter().position(|a| a == "--diagnostics")?;
+        let named = cwd.join(args.get(at + 1)?);
+        // Through a link to the file it stands for; a path that names no file yet is taken as it is written.
+        let named = std::fs::canonicalize(&named).unwrap_or(named);
+        let _ = std::fs::write(&named, "");
+        let regular = std::fs::metadata(&named).map_or(true, |m| m.is_file());
+        let own = match named.file_name().filter(|_| regular) {
+            Some(name) => {
+                let mut own_name = name.to_os_string();
+                own_name.push(format!(".teq-{}", std::process::id()));
+                Some(named.with_file_name(own_name)).filter(|own| std::fs::write(own, "").is_ok())
+            }
+            None => None,
+        };
+        let own = own.unwrap_or_else(|| named.clone());
+        let mut sent = args.to_vec();
+        sent[at + 1] = own.to_string_lossy().into_owned();
+        Some((Records { named, own }, sent))
+    }
+
+    /// The request ended: its records moved over the named file, whole. A move the system refuses (a reader that
+    /// holds the named file open, where that forbids it) is a copy.
+    fn end(&self) {
+        if self.own == self.named || !self.own.exists() {
+            return;
+        }
+        if std::fs::rename(&self.own, &self.named).is_err() {
+            match std::fs::copy(&self.own, &self.named) {
+                Ok(_) => {
+                    let _ = std::fs::remove_file(&self.own);
+                }
+                Err(e) => eprintln!("teq: cannot write {}: {}", self.named.display(), e),
+            }
+        }
+    }
+}
+
+/// The request sent to the export's daemon, to the next one where the daemon asked is ending: up to three.
+fn exchange_tries(export: &Export, verb: &str, args: &[String], records: Option<&Records>, cwd: &Path, data: &mut Vec<Json>, mut waiting: Option<&mut Waiting>) -> i32 {
     let paths = paths(&export.root);
     let identity = match identity() {
         Ok(i) => i,
@@ -195,17 +348,16 @@ fn exchange_all(export: &Export, verb: &str, args: &[String], data: &mut Vec<Jso
             return 2;
         }
     };
-    let cwd = std::env::current_dir().unwrap_or_else(|_| export.root.clone());
     let env = Json::Obj(PASSED_ENV.iter().filter_map(|k| Some((k.to_string(), Json::Str(std::env::var(k).ok()?)))).collect());
     // A test runner starts with the environment of the client that started it.
     let environment = if verb == "test" { Json::Obj(std::env::vars_os().filter_map(|(k, v)| Some((k.into_string().ok()?, Json::Str(v.into_string().ok()?)))).collect()) } else { Json::Obj(Vec::new()) };
     let tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
-    let message = |token: &str| {
+    let message = |token: &str, sha256: &str| {
         obj([
             ("token", token.into()),
             ("protocol", PROTOCOL.into()),
             ("export", export.file.to_string_lossy().as_ref().into()),
-            ("sha256", export.sha256.as_str().into()),
+            ("sha256", sha256.into()),
             ("identity", identity.as_str().into()),
             ("verb", verb.into()),
             ("args", Json::Arr(args.iter().map(|a| a.as_str().into()).collect())),
@@ -213,47 +365,106 @@ fn exchange_all(export: &Export, verb: &str, args: &[String], data: &mut Vec<Jso
             ("environment", environment.clone()),
             ("tty", tty.into()),
             ("cwd", cwd.to_string_lossy().as_ref().into()),
+            ("own_records", records.is_some_and(|r| r.own != r.named).into()),
         ])
     };
+    // The daemons that would not serve this client, by their pids: one that answered `restart` is ending, and is
+    // not asked again while its advertisement stands; the next one is started beside it and waits for its lock.
+    let mut refused: Vec<u32> = Vec::new();
+    // Whether the last daemon asked ended before it sent a line.
+    let mut silent = false;
+    // The export's digest as the file has it now: read again before a new try, since a daemon that serves
+    // another digest answers `restart` to this one.
+    let mut sha256 = export.sha256.clone();
     for _ in 0..3 {
-        let (stream, info) = match connect(&paths) {
+        let (stream, info) = match connect(&paths, &refused) {
             Some(c) => c,
             None if verb == "stop" => {
                 println!("teq: no daemon runs for {}", export.file.display());
                 return 0;
             }
-            None => match start(export, &paths, &identity, waiting.as_deref_mut()) {
+            None => match start(export, &paths, &identity, &refused, waiting.as_deref_mut()) {
                 Ok(c) => c,
-                Err(e) => {
-                    if let Some(w) = waiting.as_deref_mut() {
-                        w.before_output();
-                    }
-                    eprintln!("teq: {}", e);
-                    return 2;
-                }
+                Err(e) => return unserved(records, &format!("teq: {}", e), "other", waiting.as_deref_mut()),
             },
         };
         data.clear();
-        match exchange(stream, &message(&info.token), &paths.log, data, waiting.as_deref_mut()) {
-            Some(code) => return code,
-            None if verb == "stop" => {
+        let answered = exchange(stream, &message(&info.token, &sha256), data, waiting.as_deref_mut());
+        silent = matches!(answered, Answered::Nothing | Answered::Unsent);
+        match answered {
+            Answered::Exit(code) => return code,
+            Answered::Restart if verb == "stop" => {
                 println!("teq: the daemon was of another binary or export, and is ending");
                 return 0;
             }
-            None => continue,
+            // The daemon said it is ending, or that it serves no client of this kind.
+            Answered::Restart => {}
+            // No line of an answer. Only a daemon seen ending or gone (`ending`) is passed by for the next one: one
+            // that is still there keeps its lock for as long as it lives, and the request fails at once. A request
+            // that did not reach an ending daemon whole asked nothing of it and goes to the next whatever its verb;
+            // one that did goes there only where the daemon builds and runs nothing of the user's and rewrites
+            // nothing of the user's under it, so that nothing is done twice: a compile, and the build `run` asks
+            // for before the client starts the program.
+            Answered::Unsent if ending(&paths, info.pid) => {}
+            Answered::Nothing if matches!(verb, "compile" | "classes") && ending(&paths, info.pid) => {}
+            Answered::Unsent | Answered::Nothing | Answered::Ended => return unserved(records, &ended_line(&paths), "crash", waiting.as_deref_mut()),
+        }
+        refused.push(info.pid);
+        if let Ok(now) = Export::read(&export.file) {
+            sha256 = now.sha256;
         }
     }
-    if let Some(w) = waiting.as_deref_mut() {
+    // Three daemons in a row would not serve the request: the last one's way of not serving it is the line's.
+    if silent {
+        return unserved(records, &ended_line(&paths), "crash", waiting.as_deref_mut());
+    }
+    unserved(records, "teq: the daemon asked for a restart three times", "other", waiting.as_deref_mut())
+}
+
+/// Whether the daemon `pid`, which closed a connection without a line of an answer, is ending or gone: its
+/// advertisement withdrawn or another daemon's, or no live daemon holding the lock. A daemon retires before it
+/// closes its connections and a dead one's lock is free, but a dying process may let go of its lock a moment after
+/// its connections: looked at for `GONE` before the daemon counts as still there.
+fn ending(paths: &Paths, pid: u32) -> bool {
+    let until = Instant::now() + GONE;
+    loop {
+        if Info::read(&paths.info).is_none_or(|i| i.pid != pid) || !daemon_alive(&paths.lock) {
+            return true;
+        }
+        if Instant::now() >= until {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn ended_line(paths: &Paths) -> String {
+    format!("teq: the daemon ended without an answer (see {})", paths.log.display())
+}
+
+/// The request ends without a daemon having served it to its end: the line on stderr, and where the request names
+/// a file for the records (`--diagnostics`), the failure's record after what this request's records hold: nothing
+/// where no daemon began to serve it, the daemon's own records where one began. Exits 2.
+fn unserved(records: Option<&Records>, line: &str, kind: &str, waiting: Option<&mut Waiting>) -> i32 {
+    if let Some(w) = waiting {
         w.before_output();
     }
-    eprintln!("teq: the daemon asked for a restart three times");
+    eprintln!("{}", line);
+    if let Some(r) = records {
+        let record = obj([("severity", "failure".into()), ("kind", kind.into()), ("message", line.strip_prefix("teq: ").unwrap_or(line).into()), ("shown", format!("{}\n", line).as_str().into())]);
+        let written = std::fs::OpenOptions::new().create(true).append(true).open(&r.own).and_then(|mut f| f.write_all(format!("{}\n", record.to_text()).as_bytes()));
+        if let Err(e) = written {
+            eprintln!("teq: cannot write {}: {}", r.named.display(), e);
+        }
+    }
     2
 }
 
-/// The running daemon: `daemon.json` read, the lock held by a live daemon, its port answering.
-fn connect(paths: &Paths) -> Option<(TcpStream, Info)> {
+/// The running daemon: `daemon.json` read, the lock held by a live daemon, its port answering. One of `refused`,
+/// which answered `restart` to this client and is ending, is none: it would answer the same again.
+fn connect(paths: &Paths, refused: &[u32]) -> Option<(TcpStream, Info)> {
     let info = Info::read(&paths.info)?;
-    if !daemon_alive(&paths.lock) {
+    if refused.contains(&info.pid) || !daemon_alive(&paths.lock) {
         return None;
     }
     let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, info.port)).ok()?;
@@ -261,13 +472,23 @@ fn connect(paths: &Paths) -> Option<(TcpStream, Info)> {
     Some((stream, info))
 }
 
-/// Sends the request and prints the answer, keeping its data; the exit code, or nothing when the
-/// daemon asked for a new one.
-fn exchange(mut stream: TcpStream, message: &Json, log: &Path, data: &mut Vec<Json>, mut waiting: Option<&mut Waiting>) -> Option<i32> {
+/// How an exchange with a daemon ended: with the request's exit code; with the daemon asking for a new one
+/// (`restart`: it is ending, or of another binary or export); with the request not written whole (`Unsent`); with
+/// the stream closed before any line of an answer (`Nothing`); or closed after some (`Ended`).
+enum Answered {
+    Exit(i32),
+    Restart,
+    Unsent,
+    Nothing,
+    Ended,
+}
+
+/// Sends the request and prints the answer, keeping its data.
+fn exchange(mut stream: TcpStream, message: &Json, data: &mut Vec<Json>, mut waiting: Option<&mut Waiting>) -> Answered {
     let mut line = message.to_text();
     line.push('\n');
     if stream.write_all(line.as_bytes()).is_err() {
-        return None;
+        return Answered::Unsent;
     }
     let mut out = std::io::stdout();
     let mut err = std::io::stderr();
@@ -296,6 +517,7 @@ fn exchange(mut stream: TcpStream, message: &Json, log: &Path, data: &mut Vec<Js
         }
         (!pending.is_empty()).then(|| Some(String::from_utf8_lossy(&std::mem::take(&mut pending)).into_owned()))
     });
+    let mut answered = false;
     for line in lines {
         let Some(line) = line else {
             if let Some(w) = waiting.as_deref_mut() {
@@ -303,6 +525,7 @@ fn exchange(mut stream: TcpStream, message: &Json, log: &Path, data: &mut Vec<Js
             }
             continue;
         };
+        answered = true;
         let Ok(json) = Json::parse(&line) else { continue };
         if let Some(text) = json.get("out").and_then(Json::str) {
             if let Some(w) = waiting.as_deref_mut() {
@@ -319,7 +542,7 @@ fn exchange(mut stream: TcpStream, message: &Json, log: &Path, data: &mut Vec<Js
             if let Some(w) = waiting.as_deref_mut() {
                 w.before_output();
             }
-            return Some(code as i32);
+            return Answered::Exit(code as i32);
         } else if let Some(d) = json.get("data") {
             data.push(d.clone());
         } else if let Some(record) = json.get("progress") {
@@ -330,22 +553,22 @@ fn exchange(mut stream: TcpStream, message: &Json, log: &Path, data: &mut Vec<Js
             if let Some(w) = waiting.as_deref_mut() {
                 w.before_output();
             }
-            return None;
+            return Answered::Restart;
         }
         if let Some(w) = waiting.as_deref_mut() {
             w.after_line();
         }
     }
-    if let Some(w) = waiting.as_deref_mut() {
-        w.before_output();
+    if answered {
+        Answered::Ended
+    } else {
+        Answered::Nothing
     }
-    eprintln!("teq: the daemon ended without an answer (see {})", log.display());
-    Some(2)
 }
 
 /// Starts the daemon unless another client started it meanwhile, and connects to it. Where the wait is told
 /// (`waiting`), the client looks at its clock while it waits for the start's lock and for the daemon to listen.
-fn start(export: &Export, paths: &Paths, identity: &str, mut waiting: Option<&mut Waiting>) -> Result<(TcpStream, Info), String> {
+fn start(export: &Export, paths: &Paths, identity: &str, refused: &[u32], mut waiting: Option<&mut Waiting>) -> Result<(TcpStream, Info), String> {
     if let Some(dir) = paths.info.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {}", dir.display(), e))?;
     }
@@ -363,9 +586,11 @@ fn start(export: &Export, paths: &Paths, identity: &str, mut waiting: Option<&mu
             Err(e) => return Err(format!("cannot hold {}: {:?}", paths.start_lock.display(), e)),
         }
     }
-    if let Some(c) = connect(paths) {
+    if let Some(c) = connect(paths, refused) {
         return Ok(c);
     }
+    // A live daemon holds the lock and is not one to ask: the one started now waits for it to stop.
+    let previous = daemon_alive(&paths.lock);
     let log = log_file(&paths.log)?;
     let exe = std::env::current_exe().map_err(|e| format!("cannot find this teq: {}", e))?;
     let mut command = Command::new(&exe);
@@ -378,12 +603,20 @@ fn start(export: &Export, paths: &Paths, identity: &str, mut waiting: Option<&mu
         .stderr(log);
     detach(&mut command);
     let mut daemon = command.spawn().map_err(|e| format!("cannot start the daemon: {}", e))?;
+    // The wait for the previous daemon is told from the first second: through the reporter where the request has
+    // one, on stderr once where it has none.
     let mut told = false;
     let started = Instant::now();
+    if let (true, Some(w)) = (previous, waiting.as_deref_mut()) {
+        w.previous(true);
+    }
     while Instant::now() < until {
         if let Some(info) = Info::read(&paths.info).filter(|i| i.pid == daemon.id()) {
             if let Ok(stream) = TcpStream::connect((Ipv4Addr::LOCALHOST, info.port)) {
                 let _ = stream.set_nodelay(true);
+                if let Some(w) = waiting.as_deref_mut() {
+                    w.previous(false);
+                }
                 return Ok((stream, info));
             }
         }
@@ -392,11 +625,8 @@ fn start(export: &Export, paths: &Paths, identity: &str, mut waiting: Option<&mu
             let tail: Vec<&str> = tail.lines().rev().take(5).collect();
             return Err(format!("the daemon ended ({}) before it listened: {}", status, tail.into_iter().rev().collect::<Vec<_>>().join(" | ")));
         }
-        if !told && started.elapsed() > Duration::from_secs(3) {
-            if let Some(w) = waiting.as_deref_mut() {
-                w.before_output();
-            }
-            eprintln!("teq: waiting for the previous daemon to finish its work");
+        if previous && waiting.is_none() && !told && started.elapsed() > QUIET {
+            eprintln!("{}", PREVIOUS);
             told = true;
         }
         if let Some(w) = waiting.as_deref_mut() {
@@ -490,7 +720,8 @@ mod tests {
             move || began + Duration::from_millis(*moved.lock().unwrap())
         };
         let progress = Progress::over(Box::new(kept.clone()), terminal, Box::new(clock(&moved)), Box::new(|| 80));
-        (Waiting::new(progress, said, began, Box::new(clock(&moved))), kept, moved)
+        // Both streams in one kept writer: a test reads the result lines in their order among the status's.
+        (Waiting::new(progress, Box::new(kept.clone()), said, began, Box::new(clock(&moved))), kept, moved)
     }
 
     fn plan(residents: &[(&str, Vec<&str>, bool)]) -> Json {
@@ -501,44 +732,114 @@ mod tests {
         obj([("plan", Json::Arr(residents))])
     }
 
-    fn done(configurations: usize, errors: usize) -> Json {
-        obj([("done", obj([("configurations", Json::Num(configurations as f64)), ("errors", Json::Num(errors as f64))]))])
+    fn done(errors: usize) -> Json {
+        obj([("done", obj([("errors", Json::Num(errors as f64))]))])
+    }
+
+    /// A build's record as the daemon sends it: a JVM build of the projects' main and test that wrote `written`
+    /// classes in `ms`, with what `more` says otherwise.
+    fn built(projects: &[&str], written: usize, ms: f64, more: &[(&str, Json)]) -> Json {
+        let mut fields: Vec<(String, Json)> = vec![
+            ("projects".to_string(), Json::Arr(projects.iter().map(|p| (*p).into()).collect())),
+            ("test".to_string(), true.into()),
+            ("wider".to_string(), false.into()),
+            ("jvm".to_string(), true.into()),
+            ("ok".to_string(), true.into()),
+            ("written".to_string(), Json::Num(written as f64)),
+            ("typed".to_string(), true.into()),
+            ("ms".to_string(), Json::Num(ms)),
+            ("errors".to_string(), Json::Num(0.0)),
+        ];
+        for (name, value) in more {
+            fields.retain(|(n, _)| n != name);
+            fields.push((name.to_string(), value.clone()));
+        }
+        obj([("built", Json::Obj(fields))])
     }
 
     #[test]
-    fn a_build_that_answers_within_the_second_is_told_nothing_of() {
+    fn one_build_s_line_is_the_whole_answer() {
         for terminal in [false, true] {
             let (mut w, kept, clock) = waiting(terminal, "compile");
-            w.record(&plan(&[("a/compile", vec!["a", "b", "core"], true)]));
+            w.record(&plan(&[("a/test", vec!["a", "core"], true)]));
             *clock.lock().unwrap() = 900;
             w.tick();
-            w.record(&obj([("answered", "a/compile".into())]));
-            w.before_output();
+            w.record(&obj([("answered", "a/test".into())]));
+            w.record(&built(&["a"], 31, 107.4, &[]));
             *clock.lock().unwrap() = 950;
-            w.record(&done(3, 0));
-            assert_eq!(kept.taken(), "", "terminal: {}", terminal);
+            w.record(&done(0));
+            w.finish();
+            assert_eq!(kept.taken(), "a: compiled main and test, 31 classes written, in 107 ms\n", "terminal: {}", terminal);
         }
     }
 
     #[test]
-    fn off_a_terminal_a_build_over_a_second_gets_its_header_once_and_the_run_its_last_line() {
+    fn a_line_says_what_the_build_covered_and_did() {
+        let line = |record: Json| {
+            let (mut w, kept, _) = waiting(false, "compile");
+            w.record(&plan(&[("a/test", vec!["a"], false)]));
+            w.record(&record);
+            kept.taken()
+        };
+        assert_eq!(line(built(&["a"], 1, 16.0, &[])), "a: compiled main and test, 1 class written, in 16 ms\n");
+        assert_eq!(line(built(&["a"], 0, 87.0, &[])), "a: compiled main and test, no class changed, in 87 ms\n");
+        assert_eq!(line(built(&["a"], 0, 3.0, &[("typed", false.into())])), "a: up to date\n");
+        assert_eq!(line(built(&["util"], 12, 60.0, &[("test", false.into())])), "util: compiled main, 12 classes written, in 60 ms\n");
+        assert_eq!(line(built(&["web"], 0, 4_836.0, &[("jvm", false.into())])), "web: checked main and test in 4.8 s\n");
+        assert_eq!(line(built(&["one"], 0, 5.0, &[("jvm", false.into()), ("test", false.into())])), "one: checked main in 5 ms\n");
+        // Several projects asked for, one build: one line, named by them in the order asked.
+        assert_eq!(line(built(&["a", "core"], 3, 212.0, &[])), "a, core: compiled main and test, 3 classes written, in 212 ms\n");
+        // A build wider than the request has no count of classes.
+        assert_eq!(line(built(&["core"], 2, 104.0, &[("wider", true.into()), ("test", false.into())])), "core: compiled main in 104 ms\n");
+        assert_eq!(line(built(&["core"], 0, 4.0, &[("wider", true.into()), ("test", false.into()), ("typed", false.into())])), "core: up to date\n");
+        // The errors, and the project whose sources they are in where it is none of those asked for.
+        assert_eq!(line(built(&["a"], 0, 9.0, &[("ok", false.into()), ("errors", Json::Num(2.0))])), "a: 2 errors\n");
+        let shares = |shares: &[(&str, f64)]| Json::Arr(shares.iter().map(|(p, n)| Json::Arr(vec![(*p).into(), Json::Num(*n)])).collect());
+        assert_eq!(line(built(&["core"], 0, 9.0, &[("ok", false.into()), ("errors", Json::Num(1.0)), ("wider", true.into()), ("in", shares(&[("a", 1.0)]))])), "core: 1 error in a\n");
+        // Some of the errors the project's own, or the others in several projects: the whole count, then the shares.
+        assert_eq!(line(built(&["a"], 0, 9.0, &[("ok", false.into()), ("errors", Json::Num(5.0)), ("in", shares(&[("core", 2.0)]))])), "a: 5 errors, 2 in core\n");
+        assert_eq!(line(built(&["a"], 0, 9.0, &[("ok", false.into()), ("errors", Json::Num(5.0)), ("in", shares(&[("core", 2.0), ("util", 1.0)]))])), "a: 5 errors, 2 in core, 1 in util\n");
+        assert_eq!(line(built(&["a"], 0, 9.0, &[("ok", false.into()), ("errors", Json::Num(3.0)), ("in", shares(&[("core", 2.0), ("util", 1.0)]))])), "a: 3 errors, 2 in core, 1 in util\n");
+    }
+
+    #[test]
+    fn several_builds_end_with_a_total_and_the_ones_up_to_date_have_no_line() {
         let (mut w, kept, clock) = waiting(false, "compile");
-        w.record(&plan(&[("a/compile", vec!["a", "b", "core"], true), ("d/compile", vec!["d"], false)]));
+        w.record(&plan(&[("a/test", vec!["a", "b", "core"], true), ("d/compile", vec!["d"], false)]));
         *clock.lock().unwrap() = 999;
         w.tick();
         assert_eq!(kept.taken(), "");
         *clock.lock().unwrap() = 1_000;
         w.tick();
-        assert_eq!(kept.taken(), "a/compile: compiling a, b, core (1 of 2), started now\nd/compile: compiling d (2 of 2)\n");
+        assert_eq!(kept.taken(), "compiling a, b, core (1 of 2), started now\ncompiling d (2 of 2)\n");
         *clock.lock().unwrap() = 5_000;
         w.tick();
         w.record(&obj([("answered", "d/compile".into())]));
-        w.record(&obj([("answered", "a/compile".into())]));
-        w.before_output();
+        w.record(&built(&["d"], 0, 2.0, &[("typed", false.into()), ("test", false.into())]));
         assert_eq!(kept.taken(), "");
+        w.record(&obj([("answered", "a/test".into())]));
+        w.record(&built(&["a", "b", "core"], 31, 13_900.0, &[]));
+        assert_eq!(kept.taken(), "a, b, core: compiled main and test, 31 classes written, in 13.9 s\n");
         *clock.lock().unwrap() = 14_230;
-        w.record(&done(4, 0));
-        assert_eq!(kept.taken(), "teq compile: 4 configurations in 14.2 s\n");
+        w.record(&done(0));
+        assert_eq!(kept.taken(), "teq compile: 4 projects in 14.2 s\n");
+        w.finish();
+        assert_eq!(kept.taken(), "");
+        // Every build up to date: the total alone says so.
+        let (mut w, kept, _) = waiting(false, "compile");
+        w.record(&plan(&[("a/test", vec!["a", "core"], false), ("d/compile", vec!["d"], false)]));
+        w.record(&built(&["a", "core"], 0, 3.0, &[("typed", false.into())]));
+        w.record(&built(&["d"], 0, 2.0, &[("typed", false.into()), ("test", false.into())]));
+        w.record(&done(0));
+        assert_eq!(kept.taken(), "teq compile: 3 projects, up to date\n");
+        // An error among them: its line, and the total counts it.
+        let (mut w, kept, clock) = waiting(false, "compile");
+        w.record(&plan(&[("a/test", vec!["a", "core"], false), ("d/compile", vec!["d"], false)]));
+        w.record(&built(&["a", "core"], 0, 9.0, &[("ok", false.into()), ("errors", Json::Num(1.0))]));
+        w.record(&built(&["d"], 0, 2.0, &[("typed", false.into()), ("test", false.into())]));
+        *clock.lock().unwrap() = 400;
+        w.record(&done(1));
+        assert_eq!(kept.taken(), "a, core: 1 error\nteq compile: 3 projects in 400 ms, 1 error\n");
     }
 
     #[test]
@@ -550,80 +851,175 @@ mod tests {
         assert_eq!(kept.taken(), "");
         *clock.lock().unwrap() = 1_300;
         w.after_line();
-        assert_eq!(kept.taken(), "a/compile: compiling a (1 of 1), started now\n");
+        assert_eq!(kept.taken(), "compiling a (1 of 1), started now\n");
         w.after_line();
         assert_eq!(kept.taken(), "");
         w.record(&obj([("answered", "a/compile".into())]));
         *clock.lock().unwrap() = 1_400;
         w.after_line();
-        w.record(&done(1, 0));
-        assert_eq!(kept.taken(), "teq compile: 1 configuration in 1400 ms\n");
-        // No plan has come: a line read (a refusal's) is no look at the clock, and no last line is owed.
+        w.record(&done(0));
+        assert_eq!(kept.taken(), "");
+        // No plan has come: a line read (a refusal's) is no look at the clock.
         let (mut w, kept, clock) = waiting(true, "compile");
         *clock.lock().unwrap() = 1_300;
         w.after_line();
-        w.record(&done(0, 0));
+        w.record(&done(0));
         assert_eq!(kept.taken(), "");
     }
 
     #[test]
-    fn an_exchange_that_ends_without_counts_after_the_wait_was_told_has_its_last_line_once() {
+    fn an_exchange_that_ends_without_an_answer_leaves_no_status_and_no_line() {
         // On a terminal, no plan come: the status, a refusal's line, the end.
         let erase = "\r\x1b[K";
         let (mut w, kept, clock) = waiting(true, "compile");
         *clock.lock().unwrap() = 1_400;
         w.tick();
         assert_eq!(kept.taken(), format!("{}teq compile: starting, 1 s", erase));
-        w.before_output();
-        assert_eq!(kept.taken(), erase);
         *clock.lock().unwrap() = 1_450;
         w.finish();
-        assert_eq!(kept.taken(), "teq compile: 0 configurations in 1450 ms\n");
+        assert_eq!(kept.taken(), erase);
         w.finish();
         assert_eq!(kept.taken(), "");
-        // Off a terminal, a header told and the daemon gone.
+        // Off a terminal, a header told and the daemon gone: nothing more.
         let (mut w, kept, clock) = waiting(false, "run");
         w.record(&plan(&[("a/compile", vec!["a"], false)]));
         *clock.lock().unwrap() = 1_200;
         w.tick();
-        assert_eq!(kept.taken(), "a/compile: compiling a (1 of 1)\n");
+        assert_eq!(kept.taken(), "compiling a (1 of 1)\n");
         *clock.lock().unwrap() = 2_000;
         w.finish();
-        assert_eq!(kept.taken(), "teq run: 0 configurations compiled in 2000 ms\n");
-        // The counts came: the end adds nothing.
-        let (mut w, kept, clock) = waiting(false, "compile");
-        w.record(&plan(&[("a/compile", vec!["a"], false)]));
-        *clock.lock().unwrap() = 1_200;
-        w.tick();
-        w.record(&obj([("answered", "a/compile".into())]));
-        w.record(&done(1, 1));
-        assert_eq!(kept.taken(), "a/compile: compiling a (1 of 1)\nteq compile: 1 configuration in 1200 ms, 1 error\n");
-        w.finish();
         assert_eq!(kept.taken(), "");
-        // Nothing was told: nothing is owed, on a terminal or off one.
-        for terminal in [false, true] {
-            let (mut w, kept, clock) = waiting(terminal, "compile");
-            *clock.lock().unwrap() = 700;
-            w.tick();
-            w.before_output();
-            w.finish();
-            assert_eq!(kept.taken(), "", "terminal: {}", terminal);
-        }
     }
 
     #[test]
-    fn off_a_terminal_a_resident_that_answered_before_the_second_has_no_header() {
-        let (mut w, kept, clock) = waiting(false, "run");
-        w.record(&plan(&[("a/compile", vec!["a"], false), ("d/compile", vec!["d"], false)]));
-        *clock.lock().unwrap() = 400;
-        w.record(&obj([("answered", "a/compile".into())]));
-        *clock.lock().unwrap() = 1_100;
+    fn a_request_s_records_go_to_a_file_of_its_own_and_are_moved_at_its_end() {
+        let dir = std::env::temp_dir().join(format!("teq-records-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let args: Vec<String> = ["app", "--diagnostics", "records.jsonl"].map(str::to_string).to_vec();
+        std::fs::write(dir.join("records.jsonl"), "an earlier run\n").unwrap();
+        let (records, sent) = Records::of(&args, &dir).unwrap();
+        // The named file is emptied as the request starts; the daemon is given the request's own, beside it.
+        assert_eq!(std::fs::read_to_string(&records.named).unwrap(), "");
+        assert_eq!(records.own.parent(), records.named.parent());
+        assert_eq!(records.own.file_name().unwrap().to_string_lossy(), format!("records.jsonl.teq-{}", std::process::id()));
+        assert_eq!(sent, ["app", "--diagnostics", records.own.to_str().unwrap()]);
+        // Another request's records land in the named file while this one runs: this one's replace them whole.
+        std::fs::write(&records.named, "another request\n").unwrap();
+        std::fs::write(&records.own, "this request\n").unwrap();
+        unserved(Some(&records), "teq: the daemon ended without an answer (see log)", "crash", None);
+        records.end();
+        let held = std::fs::read_to_string(&records.named).unwrap();
+        assert_eq!(held.lines().count(), 2, "{held}");
+        assert!(held.starts_with("this request\n{\"severity\":\"failure\",\"kind\":\"crash\","), "{held}");
+        assert!(!records.own.exists());
+        // A command that names no file has no records; one that names what is no regular file writes it as it is.
+        assert!(Records::of(&["app".to_string()], &dir).is_none());
+        let (direct, sent) = Records::of(&["--diagnostics".to_string(), ".".to_string()], &dir).unwrap();
+        assert_eq!(direct.own, direct.named);
+        assert_eq!(sent[1], direct.named.to_str().unwrap());
+        direct.end();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_request_that_is_not_written_is_told_from_one_that_got_no_answer() {
+        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let request = obj([("verb", "compile".into())]);
+        // The connection's writing side closed before the request: nothing of it was sent.
+        let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
+        stream.shutdown(std::net::Shutdown::Write).unwrap();
+        assert!(matches!(exchange(stream, &request, &mut Vec::new(), None), Answered::Unsent));
+        // The request read and the connection closed without a line.
+        let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
+        let served = crate::alloc::spawn(move || {
+            // The first connection, which sent nothing; then this one, read to its request's end and closed.
+            drop(listener.accept().unwrap());
+            let (peer, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            BufReader::new(peer).read_line(&mut line).unwrap();
+            line
+        });
+        assert!(matches!(exchange(stream, &request, &mut Vec::new(), None), Answered::Nothing));
+        assert_eq!(served.join().unwrap().trim_end(), request.to_text());
+    }
+
+    #[test]
+    fn a_daemon_that_said_nothing_is_ending_only_where_it_is_seen_to() {
+        let dir = std::env::temp_dir().join(format!("teq-ending-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let paths = paths(&dir);
+        std::fs::create_dir_all(paths.info.parent().unwrap()).unwrap();
+        let info = |pid: u32| Info { port: 1, token: String::new(), pid, sha256: String::new() };
+        // Its advertisement stands and its lock is held: still there, said after the look's bound.
+        let lock = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&paths.lock).unwrap();
+        lock.lock().unwrap();
+        info(7).write(&paths.info).unwrap();
+        let began = Instant::now();
+        assert!(!ending(&paths, 7));
+        assert!(began.elapsed() >= GONE);
+        // Another daemon's advertisement, or none: it retired.
+        assert!(ending(&paths, 8));
+        std::fs::remove_file(&paths.info).unwrap();
+        assert!(ending(&paths, 7));
+        // Its advertisement left behind and no daemon holding the lock: it is gone.
+        info(7).write(&paths.info).unwrap();
+        lock.unlock().unwrap();
+        assert!(ending(&paths, 7));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_wait_for_the_previous_daemon_is_told_from_the_first_second() {
+        // On a terminal the status says it, until the daemon started listens; then the start's own words.
+        let erase = "\r\x1b[K";
+        let (mut w, kept, clock) = waiting(true, "compile");
+        w.previous(true);
+        assert_eq!(kept.taken(), "");
+        *clock.lock().unwrap() = 3_200;
         w.tick();
-        assert_eq!(kept.taken(), "d/compile: compiling d (2 of 2)\n");
-        *clock.lock().unwrap() = 2_300;
-        w.record(&obj([("answered", "d/compile".into())]));
-        w.record(&done(1, 1));
-        assert_eq!(kept.taken(), "teq run: 1 configuration compiled in 2300 ms, 1 error\n");
+        assert_eq!(kept.taken(), format!("{}teq compile: waiting for the previous teq daemon to stop, 3 s", erase));
+        *clock.lock().unwrap() = 4_100;
+        w.previous(false);
+        assert_eq!(kept.taken(), format!("{}teq compile: starting, 4 s", erase));
+        // Off a terminal one line, once.
+        let (mut w, kept, clock) = waiting(false, "compile");
+        w.previous(true);
+        *clock.lock().unwrap() = 1_000;
+        w.tick();
+        assert_eq!(kept.taken(), "teq: waiting for the previous teq daemon to stop\n");
+        *clock.lock().unwrap() = 9_000;
+        w.tick();
+        w.previous(false);
+        assert_eq!(kept.taken(), "");
+    }
+
+    #[test]
+    fn a_build_that_failed_outright_has_no_line_of_the_client_s_and_counts_in_the_total() {
+        let (mut w, kept, clock) = waiting(false, "compile");
+        w.record(&plan(&[("a/test", vec!["a"], false), ("d/compile", vec!["d"], false)]));
+        w.record(&obj([("built", obj([("projects", Json::Arr(vec!["a".into()])), ("failed", true.into())]))]));
+        assert_eq!(kept.taken(), "");
+        w.record(&built(&["d"], 0, 2.0, &[("typed", false.into()), ("test", false.into())]));
+        *clock.lock().unwrap() = 400;
+        w.record(&done(1));
+        assert_eq!(kept.taken(), "teq compile: 2 projects in 400 ms, 1 error\n");
+    }
+
+    #[test]
+    fn run_tells_a_build_only_where_it_wrote_or_failed() {
+        let line = |record: Json| {
+            let (mut w, kept, _) = waiting(false, "run");
+            w.record(&plan(&[("a/test", vec!["a"], false)]));
+            w.record(&record);
+            w.record(&done(0));
+            kept.taken()
+        };
+        assert_eq!(line(built(&["a"], 1, 16.0, &[])), "a: compiled main and test, 1 class written, in 16 ms\n");
+        assert_eq!(line(built(&["a"], 0, 87.0, &[])), "");
+        assert_eq!(line(built(&["a"], 0, 3.0, &[("typed", false.into())])), "");
+        assert_eq!(line(built(&["a"], 0, 9.0, &[("ok", false.into()), ("errors", Json::Num(1.0))])), "a: 1 error\n");
     }
 
     #[test]
@@ -634,23 +1030,29 @@ mod tests {
         w.tick();
         assert_eq!(kept.taken(), format!("{}teq compile: starting, 1 s", erase));
         *clock.lock().unwrap() = 2_100;
-        w.record(&plan(&[("a/compile", vec!["a", "b", "core"], true), ("d/compile", vec!["d", "e"], false)]));
-        assert_eq!(kept.taken(), format!("{}compiling a/compile, d/compile (5 projects), 2 s", erase));
+        w.record(&plan(&[("a/test", vec!["a", "b", "core"], true), ("d/compile", vec!["d", "e"], false)]));
+        assert_eq!(kept.taken(), format!("{}compiling a, d (5 projects), 2 s", erase));
         *clock.lock().unwrap() = 3_050;
         w.tick();
-        assert_eq!(kept.taken(), format!("{}compiling a/compile, d/compile (5 projects), 3 s", erase));
-        w.record(&obj([("answered", "a/compile".into())]));
-        assert_eq!(kept.taken(), format!("{}compiling d/compile (2 projects), 3 s", erase));
-        // A line of the daemon's for either stream: the status erased before it, drawn again at the next look.
+        assert_eq!(kept.taken(), format!("{}compiling a, d (5 projects), 3 s", erase));
+        w.record(&obj([("answered", "a/test".into())]));
+        assert_eq!(kept.taken(), format!("{}compiling d (2 projects), 3 s", erase));
+        // A result line, and a line of the daemon's for either stream: the status erased before it, drawn again at
+        // the next look.
+        w.record(&built(&["a", "b", "core"], 4, 2_900.0, &[]));
+        assert_eq!(kept.taken(), format!("{}a, b, core: compiled main and test, 4 classes written, in 2.9 s\n", erase));
+        w.tick();
+        assert_eq!(kept.taken(), format!("{}compiling d (2 projects), 3 s", erase));
         w.before_output();
         assert_eq!(kept.taken(), erase);
         w.tick();
-        assert_eq!(kept.taken(), format!("{}compiling d/compile (2 projects), 3 s", erase));
+        assert_eq!(kept.taken(), format!("{}compiling d (2 projects), 3 s", erase));
         w.record(&obj([("answered", "d/compile".into())]));
         assert_eq!(kept.taken(), erase);
+        w.record(&built(&["d", "e"], 0, 2.0, &[("typed", false.into()), ("test", false.into())]));
         *clock.lock().unwrap() = 4_000;
-        w.record(&done(5, 2));
-        assert_eq!(kept.taken(), "teq compile: 5 configurations in 4000 ms, 2 errors\n");
+        w.record(&done(0));
+        assert_eq!(kept.taken(), "teq compile: 5 projects in 4.0 s\n");
     }
 }
 

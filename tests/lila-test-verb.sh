@@ -311,7 +311,7 @@ touch "$work/raw"
 { printf '%s\n' "$alpha_error"; echo 'beta/test: 1 suite, 0 passed, 1 failed in 1 ms (built in 1 ms)'; } | transcript
 fjudged_and_recorded "beta's summary counting a failure no outcome and no event shows" "beta: its summary counts 1 failed, its events none"
 { printf '%s\n' "$alpha_error"; echo "teq: beta/test: no memory mapping for the type store's overlays; one worker types the build"; printf '%s\n' 'beta/New.scala:7:1: error: Not found: NEW' 'NEW' '^' 'beta/test: no suite to run'; } | transcript
-fjudged_and_recorded "the overlays' note, then a new error of beta's no summary claims, beside alpha's known error" "1 errors after beta/test's line of teq's, claimed by no summary"
+fjudged_and_recorded "the overlays' note, then a new error of beta's no summary claims, beside alpha's known error" "1 errors before beta/test's end, claimed by no count"
 { printf '%s\n' "$alpha_error"; echo "teq: beta/test: no memory mapping for the type store's overlays; one worker types the build"; echo 'teq: beta/test: the test framework example.Framework does not load: java.lang.NoClassDefFoundError: NewlyMissing'; echo 'beta/test: no suite to run'; } | transcript
 fjudged_and_recorded "the overlays' note, then beta's framework not loading, beside alpha's known error" "beta/test: teq: the test framework example.Framework does not load: java.lang.NoClassDefFoundError: NewlyMissing: a failure of the test run's"
 rm -f "$work/raw" "$work/exit"
@@ -427,7 +427,7 @@ for lost in missing twice; do
   [ $code != 0 ] && [ ! -e "$work/runrec4/run.json" ] && grep -q "the home page within LILA_READY_SECONDS: \(declared by the checker, and the run shows no outcome of it\|2 outcomes, the checker declaring it 1 times\)" "$work/verb.log" && pass=$((pass + 1)) ||
     { echo "FAIL a baseline of a served run whose outcomes show the readiness assertion $lost: exit $code, or a record written: $(tail -3 "$work/verb.log")"; fail=$((fail + 1)); }
 done
-# teq's informational notes are no failure (`Transcript.notes`): a real run over the overlays' fallback to one worker
+# teq's informational notes are no failure (their records are notes, severity `note`): a real run over the overlays' fallback to one worker
 # (tests/support/fallback-note), its note `teq: alpha/test: no memory mapping for the type store's overlays; one worker
 # types the build` printed before its tests, exit 0, makes a baseline of no departure and passes it again.
 rm -rf "$work/note" && mkdir -p "$work/note"
@@ -488,8 +488,8 @@ held_unchanged() {
   if [ $code = 0 ] && [ $code2 = 0 ] && cmp -s "$here/deviations.json" "$work/deviations.kept" && grep -q -F "1> $3" "$work/transcript.txt"; then pass=$((pass + 1)); else
     echo "FAIL $what: exits $code and $code2, or the record changed: $(tail -3 "$work/verb.log")"; fail=$((fail + 1)); fi
 }
-for shown in "$printed" 'teq: beta/test: the test framework example.Framework does not load: expected fixture output' \
-  'beta/test: 1 error' 'beta/test: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)' '[fail] lila.b.ThreeTest renders: java.lang.AssertionError: printed'; do
+for shown in "$printed" 'teq: beta: the test framework example.Framework does not load: expected fixture output' \
+  'beta: 1 error' 'beta: 1 suite, 1 passed, 0 failed in 1 ms (built in 1 ms)' '[fail] lila.b.ThreeTest renders: java.lang.AssertionError: printed'; do
   printed_run "$recorded" "$shown" | transcript
   held_unchanged "a passing test printing \"$shown\", over the record of none" "$work/here" "$shown"
 done
@@ -595,8 +595,8 @@ for sep in lf crlf; do
 done
 # A generator's failure is teq's record of it (`--diagnostics`, `failure`), its command's whole output, whatever the
 # command prints: real runs of a project whose test configuration's command generator prints `generator started`,
-# `helper/test: no suite to run` and `OLD`, and exits 1, and of one whose compile configuration's prints `helper/compile:
-# checked in 1 ms` in its place (tests/support/probe_run.sh), through the production test and compile paths each make
+# `helper: no suite to run` and `OLD`, and exits 1, and of one whose compile configuration's prints `helper: checked
+# main in 1 ms` in its place (tests/support/probe_run.sh), through the production test and compile paths each make
 # a baseline of the whole failure, covering no helper, pass again unchanged, and with `NEW` for `OLD` fail, judged and
 # recorded, each record's bytes unchanged.
 for path in test:deviations.json compile:errors.txt; do
@@ -609,8 +609,8 @@ for path in test:deviations.json compile:errors.txt; do
       if [ "$conf" = test ]; then timeout 300 "$TEQ" interp tests/support/lila_test_verb.scala --main lilaTestVerb -- "$work/gen-rec" "$work/gen-co" "$work/gen-out" "$teq_abs" ${1#judge} > "$work/verb.log" 2>&1
       else timeout 300 "$TEQ" interp tests/support/lila_compile_verb.scala --main lilaCompileVerb -- "$work/gen-rec" "$work/gen-co" "$work/gen-out" "$teq_abs" "$1" > "$work/verb.log" 2>&1; fi
     }
-    ended='helper/test: no suite to run'
-    [ "$conf" = test ] || ended='helper/compile: checked in 1 ms'
+    ended='helper: no suite to run'
+    [ "$conf" = test ] || ended='helper: checked main in 1 ms'
     whole="teq: command generator 0 of alpha/$conf: \`sh gen.sh\` failed (exit status: 1): generator started\\n$ended\\nOLD"
     real_gen baseline
     c1=$?

@@ -1983,7 +1983,7 @@ fn compile() -> i32 {
             }
         }
         if errors > 0 {
-            eprintln!("{} error{} found", errors, if errors == 1 { "" } else { "s" });
+            source::errors_found(errors);
             std::process::exit(1);
         }
     }
@@ -2103,7 +2103,7 @@ fn compile() -> i32 {
     if typer.merge_failed {
         let (shown, n, _) = typer.report_diags();
         eprint!("{}", shown);
-        eprintln!("{} error{} found", n, if n == 1 { "" } else { "s" });
+        source::errors_found(n);
         std::process::exit(1);
     }
     let t_capture = Instant::now();
@@ -2137,7 +2137,7 @@ fn compile() -> i32 {
     eprint!("{}", shown);
     if typer.diags.has_errors() || errors > 0 || parse_errors > 0 {
         let n = errors + parse_errors;
-        eprintln!("{} error{} found", n, if n == 1 { "" } else { "s" });
+        source::errors_found(n);
         save_jar_caches(&mut typer);
         // The overlays' measurement reads a build that fails, which the part without the
         // crossings' imports can be.
@@ -2272,7 +2272,7 @@ fn compile() -> i32 {
         for c in &collisions {
             eprintln!("error: {}", c);
         }
-        eprintln!("{} error{} found", collisions.len(), if collisions.len() == 1 { "" } else { "s" });
+        source::errors_found(collisions.len());
         answer_failure(&opts);
         std::process::exit(1);
     }
@@ -2679,7 +2679,7 @@ fn build_jvm(
         }
         eprint!("{}", refused.render(&all_sources));
         let n = output.refused.len();
-        eprintln!("{} error{} found", n, if n == 1 { "" } else { "s" });
+        source::errors_found(n);
         for e in &output.errors {
             eprintln!("jvm backend: {}", e);
         }

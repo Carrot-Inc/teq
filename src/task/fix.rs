@@ -161,7 +161,7 @@ fn work(export: &Export, jobs: &[(Key, Vec<String>, Vec<PathBuf>, Option<String>
                 }
             }
             Err(e) => {
-                eprintln!("teq fix: {}: {}", key, e);
+                eprintln!("teq fix: {}: {}", key.project, e.told(std::slice::from_ref(&key.project)));
                 return 2;
             }
         }
@@ -169,7 +169,7 @@ fn work(export: &Export, jobs: &[(Key, Vec<String>, Vec<PathBuf>, Option<String>
         let typing = match export.typing_args_with(key, &|line| progress.line(line)) {
             Ok(t) => t,
             Err(e) => {
-                eprintln!("teq fix: {}: {}", key, e);
+                eprintln!("teq fix: {}: {}", key.project, e);
                 return 2;
             }
         };

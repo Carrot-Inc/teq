@@ -1429,6 +1429,59 @@ pub(crate) fn record_shown(severity: &str, at: Option<(&str, Option<(usize, usiz
     let _ = std::io::Write::write_all(&mut *f, line.as_bytes());
 }
 
+/// A build's outcome as its record (`--diagnostics`, severity `outcome`), a JSON line: the configuration built and
+/// the projects asked for that it covered (the daemon's builds; a one-shot build has neither), whether it ended
+/// well, the errors its line counts, for a build that failed outright the failure's kind and message, and its time.
+/// A reader pairs a build with the diagnostics recorded before it by this record, never by a line.
+pub(crate) fn outcome_record(key: Option<&str>, projects: &[String], ok: bool, errors: usize, failed: Option<(&str, &str)>, ms: Option<f64>) -> String {
+    let mut line = String::from("{");
+    if let Some(key) = key {
+        line.push_str("\"key\":");
+        crate::watch::json_string(key, &mut line);
+        line.push(',');
+    }
+    line.push_str("\"severity\":\"outcome\"");
+    if key.is_some() {
+        line.push_str(",\"projects\":[");
+        for (i, p) in projects.iter().enumerate() {
+            if i > 0 {
+                line.push(',');
+            }
+            crate::watch::json_string(p, &mut line);
+        }
+        line.push(']');
+    }
+    let _ = write!(line, ",\"ok\":{},\"errors\":{}", ok, errors);
+    match failed {
+        Some((kind, why)) => {
+            line.push_str(",\"failed\":");
+            crate::watch::json_string(kind, &mut line);
+            line.push_str(",\"why\":");
+            crate::watch::json_string(why, &mut line);
+        }
+        None => line.push_str(",\"failed\":null,\"why\":null"),
+    }
+    match ms {
+        Some(ms) => {
+            let _ = write!(line, ",\"ms\":{}", ms);
+        }
+        None => line.push_str(",\"ms\":null"),
+    }
+    line.push_str("}\n");
+    line
+}
+
+/// A one-shot build's count of its errors, `<n> errors found` on stderr as scalac ends a failed run, and its
+/// outcome's record where a file is open for the records: the count claims the errors recorded before it.
+pub fn errors_found(n: usize) {
+    eprintln!("{} error{} found", n, if n == 1 { "" } else { "s" });
+    if let Some(file) = RECORDS.get() {
+        let line = outcome_record(None, &[], false, n, None, None);
+        let mut f = file.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = std::io::Write::write_all(&mut *f, line.as_bytes());
+    }
+}
+
 /// The shown diagnostics in the order of `ranks` over the files, a file without a rank by its id,
 /// each recorded as it is shown (`record_shown`).
 pub fn render_shown(shown: &[Shown], files: &[SourceFile], ranks: &[u32]) -> String {

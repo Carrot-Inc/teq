@@ -593,7 +593,7 @@ for what, ok in [("the outside source directory", "/teq-outside-the-root" in com
       stage_out=$(TEQ=$teq timeout 120 ./teq stage 2>&1)
       stage_code=$?
       if [ $code != 2 ] || [[ "$out" != *"teq: test left out api, which needs what sbt alone runs:"* ]] ||
-        [[ "$out" != *"api: Test / testOptions holds a Tests.Setup or Tests.Cleanup"* ]] || [[ "$out" != *"jvmapp/test"* ]] || [[ "$out" == *"api/test:"* ]]; then
+        [[ "$out" != *"api: Test / testOptions holds a Tests.Setup or Tests.Cleanup"* ]] || ! grep -q '^jvmapp: ' <<< "$out" || grep -q '^api: ' <<< "$out"; then
         out="teq test ($code): $out"
       elif [ $stage_code != 2 ] || [[ "$stage_out" != *"teq: stage left out api, which needs what sbt alone runs:"* ]] || [[ "$stage_out" != *"api: the build sets scriptClasspath"* ]]; then
         out="teq stage ($stage_code): $stage_out"
@@ -714,7 +714,7 @@ for what, ok in [("the outside source directory", "/teq-outside-the-root" in com
     out=$(timeout 300 "$teq" test 2>&1)
     code=$?
     # The Scala.js projects with suites, which teq does not run yet, named left out: the run exits 2.
-    if [ $code != 2 ] || [[ "$out" != *"jvmapp/test"* ]] || [[ "$out" != *"api/test"* ]] ||
+    if [ $code != 2 ] || ! grep -q '^jvmapp: ' <<< "$out" || ! grep -q '^api: ' <<< "$out" ||
       [[ "$out" != *"teq: test left out browserdemo is a Scala.js project, whose suites"* ]] || [[ "$out" != *"teq: test left out sjsapp is a Scala.js project, whose suites"* ]]; then
       out="teq test ($code): $out"
     else

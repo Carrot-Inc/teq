@@ -7,11 +7,11 @@ use std::io::Write;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// A duration as a line shows it: whole milliseconds below ten seconds (`355 ms`), seconds with one decimal from ten
-/// seconds up (`75.0 s`).
+/// A duration as a line shows it: whole milliseconds below one second (`355 ms`), seconds with one decimal from one
+/// second up (`4.8 s`, `75.0 s`).
 pub fn duration(d: Duration) -> String {
     let ms = d.as_millis();
-    if ms < 10_000 {
+    if ms < 1_000 {
         format!("{} ms", ms)
     } else {
         format!("{}.{} s", ms / 1000, ms % 1000 / 100)
@@ -19,9 +19,9 @@ pub fn duration(d: Duration) -> String {
 }
 
 /// `duration` of a time a build's answer gives in milliseconds with a fraction: the whole millisecond nearest
-/// below ten seconds (`6 ms`), seconds with one decimal from there (`12.3 s`).
+/// below one second (`6 ms`), seconds with one decimal from there (`12.3 s`).
 pub fn duration_of_ms(ms: f64) -> String {
-    if ms.round() < 10_000.0 {
+    if ms.round() < 1_000.0 {
         format!("{:.0} ms", ms)
     } else {
         duration(Duration::from_millis(ms.round() as u64))
@@ -29,6 +29,18 @@ pub fn duration_of_ms(ms: f64) -> String {
 }
 
 /// `1 file`, `2 files`: a count with its noun, the plural for every count but one.
+/// A failed build's count under the names of the projects asked for, `app: 2 errors`. Where every error is in one
+/// project that is none of them, the line says where, `app: 2 errors in core`; where only some are, or they lie in
+/// several, the whole count and then the others' shares, `app: 5 errors, 2 in core, 1 in util`.
+pub fn errors_line(names: &str, errors: usize, elsewhere: &[(String, usize)]) -> String {
+    let count = counted(errors, "error", "errors");
+    match elsewhere {
+        [] => format!("{}: {}", names, count),
+        [(project, n)] if *n == errors => format!("{}: {} in {}", names, count, project),
+        shares => format!("{}: {}, {}", names, count, shares.iter().map(|(project, n)| format!("{} in {}", n, project)).collect::<Vec<_>>().join(", ")),
+    }
+}
+
 pub fn counted(n: usize, one: &str, many: &str) -> String {
     format!("{} {}", n, if n == 1 { one } else { many })
 }
@@ -329,13 +341,14 @@ mod tests {
     }
 
     #[test]
-    fn a_build_s_milliseconds_read_as_before_below_ten_seconds() {
+    fn a_build_s_milliseconds_read_whole_below_one_second() {
         assert_eq!(duration_of_ms(0.4), "0 ms");
         assert_eq!(duration_of_ms(2.5), "2 ms");
         assert_eq!(duration_of_ms(6.49), "6 ms");
         assert_eq!(duration_of_ms(39.6), "40 ms");
-        assert_eq!(duration_of_ms(9_999.4), "9999 ms");
-        assert_eq!(duration_of_ms(9_999.6), "10.0 s");
+        assert_eq!(duration_of_ms(999.4), "999 ms");
+        assert_eq!(duration_of_ms(999.6), "1.0 s");
+        assert_eq!(duration_of_ms(4_836.0), "4.8 s");
         assert_eq!(duration_of_ms(12_349.0), "12.3 s");
         assert_eq!(duration_of_ms(75_000.0), "75.0 s");
     }
@@ -356,11 +369,13 @@ mod tests {
     }
 
     #[test]
-    fn a_duration_is_milliseconds_below_ten_seconds_and_seconds_from_there() {
+    fn a_duration_is_milliseconds_below_one_second_and_seconds_from_there() {
         let shown = |ms: u64| duration(Duration::from_millis(ms));
         assert_eq!(shown(0), "0 ms");
         assert_eq!(shown(355), "355 ms");
-        assert_eq!(shown(9_999), "9999 ms");
+        assert_eq!(shown(999), "999 ms");
+        assert_eq!(shown(1_000), "1.0 s");
+        assert_eq!(shown(4_956), "4.9 s");
         assert_eq!(shown(10_000), "10.0 s");
         assert_eq!(shown(75_049), "75.0 s");
         assert_eq!(shown(75_950), "75.9 s");

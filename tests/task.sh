@@ -337,7 +337,7 @@ task() { (cd "$b" && timeout 150 "$TEQ" "$@" 2>&1); }
 out=$(task)
 case "$out" in *"projects of $b"*"app (jvm), core (jvm)"*) pass "without a verb, the verbs and the projects" ;; *) fail "the verbs and projects: $out" ;; esac
 out=$(task compile app)
-if [ $? = 0 ] && [[ "$out" == *"app/test: "*" classes, "*"the first build"* ]] && [ -f "$b/target/teq/app/test/classes/app/Main.class" ] && [ -f "$b/target/teq/app/test/classes/core/Core\$.class" ] && [ -f "$b/target/teq/app/test/classes/app/MainTest.class" ]; then
+if [ $? = 0 ] && [[ "$out" == "app: compiled main and test, "*" classes written, in "* ]] && [ -f "$b/target/teq/app/test/classes/app/Main.class" ] && [ -f "$b/target/teq/app/test/classes/core/Core\$.class" ] && [ -f "$b/target/teq/app/test/classes/app/MainTest.class" ]; then
   pass "the first compile: the resident of app/test writes the closure's class files, core's among them"
 else
   fail "the first compile: $out"
@@ -359,9 +359,14 @@ else
 fi
 first=$(last_daemon)
 out=$(task compile app)
-if [ $? = 0 ] && [[ "$out" == *"0 written"* ]] && [ "$(last_daemon)" = "$first" ]; then pass "a warm compile writes nothing, through the same daemon"; else fail "a warm compile: $out"; fi
-out=$(task compile core)
-if [[ "$out" == "app/test: "* ]]; then pass "core is compiled by the resident whose closure holds it"; else fail "core's compile: $out"; fi
+if [ $? = 0 ] && [ "$out" = "app: up to date" ] && [ "$(last_daemon)" = "$first" ]; then pass "a warm compile writes nothing and says the project is up to date, through the same daemon"; else fail "a warm compile: $out"; fi
+# The line names the project asked for; which configuration's build served it is the outcome's record.
+out=$(task compile core --diagnostics "$work/core.records")
+if [ "$out" = "core: up to date" ] && grep '"severity":"outcome"' "$work/core.records" | grep '"key":"app/test"' | grep -q '"projects":\["core"\]'; then
+  pass "core is compiled by the resident whose closure holds it: the line names core, the outcome's record app/test"
+else
+  fail "core's compile: $out // $(cat "$work/core.records")"
+fi
 refused=$(python3 - "$b/target/teq/daemon.json" <<'PY'
 import json, socket, sys
 info = json.load(open(sys.argv[1]))
@@ -403,7 +408,7 @@ cp "$b/app/src/app/Main.scala" "$work/Main.scala"
 echo '  val broken: Int = "no"' >> "$b/app/src/app/Main.scala"
 out=$(task compile app)
 code=$?
-if [ $code = 1 ] && [[ "$out" == *"app/src/app/Main.scala:5:"*"error: "* ]] && [[ "$out" == *"app/test: 1 error"* ]]; then pass "an error fails the compile with its diagnostic"; else fail "the error ($code): $out"; fi
+if [ $code = 1 ] && [[ "$out" == *"app/src/app/Main.scala:5:"*"error: "* ]] && [[ "$out" == *$'\n'"app: 1 error" ]]; then pass "an error fails the compile with its diagnostic, the count under the project's name"; else fail "the error ($code): $out"; fi
 cp "$work/Main.scala" "$b/app/src/app/Main.scala"
 out=$(task compile app)
 if [ $? = 0 ]; then pass "the fix passes it"; else fail "the fix: $out"; fi
@@ -429,7 +434,7 @@ if grep -q 'count: Int = 4' "$b/target/teq/app/compile/src_managed/app/Labels.sc
 
 write_export 0.1.7-check.1 81
 out=$(task compile app)
-if [ $? = 0 ] && [ "$(last_daemon)" = "$first" ] && grep -q '^stopping app/test: the export changed its command line' "$b/target/teq/task.log" && [[ "$out" == *"the first build"* ]]; then
+if [ $? = 0 ] && [ "$(last_daemon)" = "$first" ] && grep -q '^stopping app/test: the export changed its command line' "$b/target/teq/task.log" && [[ "$out" == "app: compiled main and test, "* ]]; then
   pass "an export changed in a project's flags is read again by the same daemon, the project's resident started anew"
 else
   fail "the export read again: $out"
@@ -509,13 +514,13 @@ before=$(daemons)
 (task compile core > "$work/one.out") &
 (task compile core > "$work/two.out") &
 wait
-if [ $(( $(daemons) - before )) = 1 ] && grep -q 'core/compile' "$work/one.out" && grep -q 'core/compile' "$work/two.out"; then pass "two clients starting at once start one daemon"; else fail "two clients: $(cat "$work/one.out" "$work/two.out") ($(( $(daemons) - before )) daemons)"; fi
+if [ $(( $(daemons) - before )) = 1 ] && grep -q '^core: ' "$work/one.out" && grep -q '^core: ' "$work/two.out"; then pass "two clients starting at once start one daemon"; else fail "two clients: $(cat "$work/one.out" "$work/two.out") ($(( $(daemons) - before )) daemons)"; fi
 task stop > /dev/null
 # Where the system gives no mapping for the type store's overlays (an address-space limit here,
 # which the daemon and its resident inherit), one worker types the resident's build and its answer
 # says so, which the client prints: the resident's stderr is kept for its end.
 out=$(ulimit -v 8000000 && TEQ_THREADS=2 task compile core)
-if [ $? = 0 ] && [[ "$out" == *"teq: core/compile: no memory mapping for the type store's overlays; one worker types the build"* ]]; then pass "a refused mapping's note reaches the client"; else fail "the refused mapping's note: $out"; fi
+if [ $? = 0 ] && [[ "$out" == *"teq: core: no memory mapping for the type store's overlays; one worker types the build"* ]]; then pass "a refused mapping's note reaches the client"; else fail "the refused mapping's note: $out"; fi
 task stop > /dev/null
 
 # `test`: app's munit suites on the daemon's runner, a JVM for each run, the next started once a run ends.
@@ -541,7 +546,7 @@ log_count() { grep -c "$1" "$b/target/teq/task.log"; }
 listed=$(next_runner)
 started=$(log_count '^starting the test runner of app/test: ')
 out=$(task test app)
-if [ $? = 0 ] && [[ "$out" == *"app/test: 4 suites, 5 passed, 0 failed in "* ]] && [[ "$out" == *"app.MainTest"* ]] && [[ "$out" != *"excluded"* ]]; then pass "test runs the suites but the excluded one on the runner, the framework's output then the summary"; else fail "test: $out"; fi
+if [ $? = 0 ] && [[ "$out" == *"app: 4 suites, 5 passed, 0 failed in "* ]] && [[ "$out" == *"app.MainTest"* ]] && [[ "$out" != *"excluded"* ]]; then pass "test runs the suites but the excluded one on the runner, the framework's output then the summary"; else fail "test: $out"; fi
 pid=$(next_runner)
 # The spent one quits on the daemon's thread, which reaps it.
 for _ in $(seq 50); do alive "$listed" || break; sleep 0.1; done
@@ -557,7 +562,7 @@ out=$(task test app app.MainTest)
 code=$?
 cp "$work/MainTest.scala" "$b/app/test/app/MainTest.scala"
 again=$(task test app app.MainTest)
-if [ $code = 1 ] && [[ "$out" == *"[fail] app.MainTest.the answer: "* ]] && [[ "$out" == *"app/test: 1 suite, 0 passed, 1 failed"* ]] && [[ "$again" == *"1 suite, 1 passed, 0 failed"* ]]; then
+if [ $code = 1 ] && [[ "$out" == *"[fail] app.MainTest.the answer: "* ]] && [[ "$out" == *"app: 1 suite, 0 passed, 1 failed"* ]] && [[ "$again" == *"1 suite, 1 passed, 0 failed"* ]]; then
   pass "an edit to a suite between two runs changes the outcome, and its revert"
 else
   fail "the edit between runs ($code): $out // $again"
@@ -568,7 +573,7 @@ code=$?
 echo hello > "$b/app/test-resources/greeting.txt"
 if [ $code = 1 ] && [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]]; then pass "a resource of the test configuration is read afresh by the next run"; else fail "the resource: $out"; fi
 out=$(task test app '*Via*' -app.MainTest)
-if [[ "$out" == *"app/test: 1 suite, 1 passed"* ]] && [[ "$out" == *"app.ViaBase"* ]]; then pass "testOnly's patterns select the suites"; else fail "the patterns: $out"; fi
+if [[ "$out" == *"app: 1 suite, 1 passed"* ]] && [[ "$out" == *"app.ViaBase"* ]]; then pass "testOnly's patterns select the suites"; else fail "the patterns: $out"; fi
 out=$(task test app --list '*Via*' -app.MainTest 'app.Excluded')
 if [ "$out" = 'Test app.ViaBase : subclass(false, munit.Suite)' ]; then pass "--list prints what the patterns select, an excluded suite not though a pattern names it"; else fail "--list with patterns: $out"; fi
 TEST_GROUPS='[{"name": "via", "patterns": ["*Via*"]}, {"name": "empty", "patterns": ["none.*"]}, {"name": "rest", "patterns": ["-*Sleeper", "app.*"]}]' write_export 0.1.7-check.9 81
@@ -590,18 +595,18 @@ else
 fi
 task test app > /dev/null
 out=$(task test app --changed)
-if [[ "$out" == "app/test: no suite depends on what changed" ]]; then pass "--changed after a run of every suite, nothing written since: no suite"; else fail "--changed with nothing written: $out"; fi
+if [[ "$out" == "app: no suite depends on what changed" ]]; then pass "--changed after a run of every suite, nothing written since: no suite"; else fail "--changed with nothing written: $out"; fi
 cp "$b/core/src/core/Core.scala" "$work/Core.scala"
 sed -i.bak 's/def answer: Int = 42/def answer: Int = "42".toInt/' "$b/core/src/core/Core.scala"
 listed=$(task test app --list --changed 2> /dev/null)
 task test app --list > /dev/null
 out=$(task test app --changed)
 if [ "$listed" = 'Test app.MainTest : subclass(false, munit.Suite)' ]; then pass "--list --changed prints the suite whose classes depend on the class an edit changed, alone"; else fail "--list --changed after an edit: $listed"; fi
-if [[ "$out" == *"app/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"app.MainTest"* ]]; then pass "--changed runs the suite whose classes depend on the class an edit changed, alone, the listings before it leaving the history alone"; else fail "--changed after an edit: $out"; fi
+if [[ "$out" == *"app: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"app.MainTest"* ]]; then pass "--changed runs the suite whose classes depend on the class an edit changed, alone, the listings before it leaving the history alone"; else fail "--changed after an edit: $out"; fi
 cp "$work/Core.scala" "$b/core/src/core/Core.scala"
 task compile app > /dev/null
 out=$(task test app --changed)
-if [[ "$out" == *"app/test: 1 suite, 1 passed, 0 failed"* ]]; then pass "--changed counts what a compile wrote since the last run of every suite"; else fail "--changed after a compile: $out"; fi
+if [[ "$out" == *"app: 1 suite, 1 passed, 0 failed"* ]]; then pass "--changed counts what a compile wrote since the last run of every suite"; else fail "--changed after a compile: $out"; fi
 changed=$(log_count '^stopping the test runner of app/test: what it was started with changed')
 extra_jar two
 out=$(task test app '*Resources')
@@ -1304,7 +1309,7 @@ PY
   pool_export 2
   out=$(pt 'pool.Pair*' --verbose)
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 4 suites, 4 passed, 0 failed"* ]] && [[ "$out" == *"[debug] Create a test executor with a thread pool of 2 threads."* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 2 2,done 0 0," ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool: 4 suites, 4 passed, 0 failed"* ]] && [[ "$out" == *"[debug] Create a test executor with a thread pool of 2 threads."* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 2 2,done 0 0," ]; then
     pass "a pool of the lock's 2: four suites meeting in pairs, at most 2 at once on 2 threads"
   else
     fail "the pool of 2: $out // $(cat "$pl/record.txt")"
@@ -1312,7 +1317,7 @@ PY
   pool_export 4
   out=$(pt 'pool.Quad*')
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 4 suites, 4 passed, 0 failed"* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 4 4,done 0 0," ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool: 4 suites, 4 passed, 0 failed"* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 4 4,done 0 0," ]; then
     pass "a count changed in the lock is the next run's"
   else
     fail "the changed count: $out // $(cat "$pl/record.txt")"
@@ -1321,7 +1326,7 @@ PY
   out=$(pt pool.Parent pool.Sibling)
   code=$?
   order=$(sed -E 's/ pool-[0-9]+-thread-[0-9]+$//' "$pl/record.txt" | tr '\n' ',')
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 2 suites, 3 passed, 0 failed"* ]] && [ "$order" = "start pool.Parent,end pool.Parent,start pool.Sibling,sibling ends,end pool.Sibling,start pool.Child,end pool.Child,done 1 1,done 0 0," ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool: 2 suites, 3 passed, 0 failed"* ]] && [ "$order" = "start pool.Parent,end pool.Parent,start pool.Sibling,sibling ends,end pool.Sibling,start pool.Child,end pool.Child,done 1 1,done 0 0," ]; then
     pass "one thread: a wave's tasks in order, then the task the first returned"
   else
     fail "one thread's order: $out // $order"
@@ -1331,7 +1336,7 @@ PY
   code=$?
   child=$(grep -n '^start pool.Child ' "$pl/record.txt" | cut -d: -f1)
   ends=$(grep -n '^sibling ends' "$pl/record.txt" | cut -d: -f1)
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 2 suites, 3 passed, 0 failed"* ]] && [ -n "$child" ] && [ -n "$ends" ] && [ "$child" -gt "$ends" ] && grep -q '^start pool.Child pool-[0-9]*-thread-' "$pl/record.txt" && [ "$(tail -1 "$pl/record.txt" | cut -d' ' -f1)" = done ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool: 2 suites, 3 passed, 0 failed"* ]] && [ -n "$child" ] && [ -n "$ends" ] && [ "$child" -gt "$ends" ] && grep -q '^start pool.Child pool-[0-9]*-thread-' "$pl/record.txt" && [ "$(tail -1 "$pl/record.txt" | cut -d' ' -f1)" = done ]; then
     pass "a pool of 3: the task a task returns waits for its whole wave on the pool, a worker free, and done() after it"
   else
     fail "the waves: $out // $(cat "$pl/record.txt")"
@@ -1341,14 +1346,14 @@ PY
   out=$(pt pool.Boom --events "$work/pool-events")
   code=$?
   if [ $code = 1 ] && [[ "$out" == *"[error] Uncaught exception when running pool.Boom: java.lang.RuntimeException: boom"* ]] && [[ "$out" == *"[error] java.lang.RuntimeException: boom"* ]] \
-    && [[ "$out" == *"[error]     at pool.Boom.run("* ]] && [[ "$out" == *"pool/test: the run failed: java.lang.RuntimeException: boom (built in "* ]] && [[ "$out" != *" suite, "* ]] && [ ! -s "$work/pool-events" ]; then
+    && [[ "$out" == *"[error]     at pool.Boom.run("* ]] && [[ "$out" == *"pool: the run failed: java.lang.RuntimeException: boom (built in "* ]] && [[ "$out" != *" suite, "* ]] && [ ! -s "$work/pool-events" ]; then
     pass "a task that reports a success then throws: its error logged, its fork error ending the run as sbt's harness, no summary"
   else
     fail "the throwing task ($code): $out // $(cat "$work/pool-events")"
   fi
   out=$(pt 'pool.Clash*')
   code=$?
-  failed=$(printf '%s\n' "$out" | sed -n 's/^pool\/test: the run failed: \(.*\) (built in .*$/\1/p')
+  failed=$(printf '%s\n' "$out" | sed -n 's/^pool: the run failed: \(.*\) (built in .*$/\1/p')
   frame=$(printf '%s\n' "$out" | grep -A1 "^\[error\] $failed\$" | tail -1)
   case $failed in
     "java.lang.IllegalStateException: one") want="[error]     at pool.Clash1.one(" ;;
@@ -1367,7 +1372,7 @@ PY
   out=$(pt pool.Cleanup)
   code=$?
   for _ in $(seq 100); do [ ! -e "$pl/record.txt.resource" ] && grep -q '^done ' "$pl/record.txt" && break; sleep 0.1; done
-  if [ $code = 1 ] && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: cleanup-error"* ]] && [[ "$out" != *"resource released"* ]] \
+  if [ $code = 1 ] && [[ "$out" == *"pool: the run failed: java.lang.IllegalStateException: cleanup-error"* ]] && [[ "$out" != *"resource released"* ]] \
     && grep -q '^resource acquired' "$pl/record.txt" && [ ! -e "$pl/record.txt.resource" ]; then
     pass "a run that failed at its fork error still has its framework's done() release what the task acquired, out of the client's sight"
   else
@@ -1377,7 +1382,7 @@ PY
   out=$(pt pool.Slow pool.Tracing)
   code=$?
   for _ in $(seq 100); do grep -q '^done ' "$pl/record.txt" && break; sleep 0.1; done
-  if [ $code = 1 ] && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: wave-error"* ]] && [[ "$out" != *"probe: done"* ]] \
+  if [ $code = 1 ] && [[ "$out" == *"pool: the run failed: java.lang.IllegalStateException: wave-error"* ]] && [[ "$out" != *"probe: done"* ]] \
     && grep -q '^slow completed' "$pl/record.txt" && grep -q '^done ' "$pl/record.txt"; then
     pass "a task in flight at another's fork error finishes, and done() runs, after the run's end is reported"
   else
@@ -1386,7 +1391,7 @@ PY
   out=$(pt pool.BadSelector)
   code=$?
   if [ $code = 1 ] && [[ "$out" == *"[error] Uncaught exception when running pool.BadSelector: java.lang.UnsupportedOperationException: Selector implementation must be Serializable, but pool.BadSelector\$\$anon\$"*" is not."* ]] \
-    && [[ "$out" == *"pool/test: the run failed: java.lang.UnsupportedOperationException: Selector implementation must be Serializable"* ]] && [[ "$out" != *"1 passed"* ]]; then
+    && [[ "$out" == *"pool: the run failed: java.lang.UnsupportedOperationException: Selector implementation must be Serializable"* ]] && [[ "$out" != *"1 passed"* ]]; then
     pass "an event of a selector that is not Serializable is refused before it is buffered, its task throwing"
   else
     fail "the refused selector ($code): $out"
@@ -1394,7 +1399,7 @@ PY
   out=$(pt pool.OddKind)
   code=$?
   if [ $code = 0 ] && [[ "$out" == *"[error] Failed to execute task java.util.concurrent.FutureTask@"*"[Completed exceptionally: java.lang.UnsupportedOperationException: cannot serialize pool.OddSelector; did you forget to register a subtype?]"* ]] \
-    && [[ "$out" == *"pool/test: 1 suite, 0 passed, 0 failed"* ]] && [[ "$out" != *"the run failed"* ]] && grep -q '^odd accepted' "$pl/record.txt"; then
+    && [[ "$out" == *"pool: 1 suite, 0 passed, 0 failed"* ]] && [[ "$out" != *"the run failed"* ]] && grep -q '^odd accepted' "$pl/record.txt"; then
     pass "an event of a Serializable selector of an unknown kind is taken, its task's events lost when sent, the run going on to its end"
   else
     fail "the selector of an unknown kind ($code): $out // $(cat "$pl/record.txt")"
@@ -1410,7 +1415,7 @@ PY
     # line of the worker's.
     if [ "$where" = runner ]; then worker=0; else worker=1; fi
     [ $code = 1 ] && [ "$([[ "$out" == *"[error] Uncaught exception when running tests: java.lang.IllegalStateException: $where-error"* ]] && echo 1 || echo 0)" = "$worker" ] \
-      && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: $where-error"* ]] && [ "$(grep -c '^start pool.Pools' "$pl/record.txt")" = "$next" ] || break
+      && [[ "$out" == *"pool: the run failed: java.lang.IllegalStateException: $where-error"* ]] && [ "$(grep -c '^start pool.Pools' "$pl/record.txt")" = "$next" ] || break
     ended="$ended $where"
   done
   if [ "$ended" = " runner tasks done" ]; then
@@ -1421,7 +1426,7 @@ PY
   TWIN=1 pool_export 2
   out=$(pt pool.Child)
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"twin pool.Child"* ]] && [[ "$out" == *"pool/test: 1 suite, 2 passed, 0 failed"* ]] && grep -q '^start pool.Child ' "$pl/record.txt"; then
+  if [ $code = 0 ] && [[ "$out" == *"twin pool.Child"* ]] && [[ "$out" == *"pool: 1 suite, 2 passed, 0 failed"* ]] && grep -q '^start pool.Child ' "$pl/record.txt"; then
     pass "a suite of two frameworks' fingerprint runs on each, as the worker matches them"
   else
     fail "the twin frameworks ($code): $out"
@@ -1430,7 +1435,7 @@ PY
   out=$(pt pool.Traced)
   code=$?
   if [ $code = 1 ] && [[ "$out" == *"[error] java.lang.IllegalStateException: trace-error"* ]] && [[ "$out" == *"[error]     at pool.Traced.run("* ]] \
-    && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: trace-error"* ]] && [[ "$out" != *"1 passed"* ]]; then
+    && [[ "$out" == *"pool: the run failed: java.lang.IllegalStateException: trace-error"* ]] && [[ "$out" != *"1 passed"* ]]; then
     pass "a throwable given to the loggers' trace fails the run, verbose or not, though its suite reported a success"
   else
     fail "the traced throwable ($code): $out"
@@ -1442,7 +1447,7 @@ PY
   # A case's line has five fields, a suite's that ran three (`<project> <suite> ran`, after the cases).
   runs=$(awk -F'\t' 'NF > 3' "$work/pool-events" | cut -f2 | uniq | wc -l | tr -d ' ')
   ran=$(awk -F'\t' 'NF == 3 && $3 == "ran"' "$work/pool-events" | cut -f2 | sort -u | wc -l | tr -d ' ')
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 8 suites, 400 passed, 0 failed"* ]] && [ "$(awk -F'\t' 'NF > 3' "$work/pool-events" | wc -l | tr -d ' ')" = 400 ] && [ "$runs" = 8 ] && [ "$ran" = 8 ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool: 8 suites, 400 passed, 0 failed"* ]] && [ "$(awk -F'\t' 'NF > 3' "$work/pool-events" | wc -l | tr -d ' ')" = 400 ] && [ "$runs" = 8 ] && [ "$ran" = 8 ]; then
     pass "eight suites on 4 threads: the counts whole, each suite's events together, each suite's run named"
   else
     fail "the counts under the pool ($runs runs of suites): $out"
@@ -1480,7 +1485,7 @@ PY
   pool_export absent -XX:ActiveProcessorCount=3
   out=$(pt 'pool.Trio*')
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 6 suites, 6 passed, 0 failed"* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 3 3,done 0 0," ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool: 6 suites, 6 passed, 0 failed"* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 3 3,done 0 0," ]; then
     pass "no parallelism in the lock: the processors the runner's JVM counts, 3"
   else
     fail "the absent field: $out // $(cat "$pl/record.txt")"
@@ -1692,7 +1697,7 @@ PY
   member_loaders=$(grep '^member ' "$ld/record.txt" | cut -d' ' -f3 | sort -u)
   member_ids=$(grep '^member ' "$ld/record.txt" | cut -d' ' -f2 | sort -n | tr '\n' ' ')
   packages=$(cd "$(ld_interface)" 2> /dev/null && find . -name '*.class' | sed 's|/[^/]*$||' | sort -u | tr '\n' ' ')
-  if [ $code = 0 ] && [[ "$out" == *"ld/test: 31 suites, 31 passed, 0 failed"* ]] && [ "$(grep -c '^shared ' "$ld/record.txt")" = 15 ] && [ "$(printf '%s\n' "$shared" | wc -l | tr -d ' ')" = 1 ] \
+  if [ $code = 0 ] && [[ "$out" == *"ld: 31 suites, 31 passed, 0 failed"* ]] && [ "$(grep -c '^shared ' "$ld/record.txt")" = 15 ] && [ "$(printf '%s\n' "$shared" | wc -l | tr -d ' ')" = 1 ] \
     && [[ "$shared" == "shared 1 "* ]] && [ "$members" = 15 ] && [ "$member_loaders" = "${shared#shared 1 }" ] && [ "$member_ids" = "$(seq 1 15 | tr '\n' ' ')" ] \
     && grep -qx 'provider org.slf4j.simple.SimpleLoggerFactory' "$ld/record.txt" && [ "$packages" = "./org/scalatools/testing ./sbt/testing " ]; then
     pass "one class loader for a run's suites: a top-level object made once for fifteen suites, fifteen member objects through that loader, slf4j's provider in the resources found, test-interface alone above"
@@ -1719,7 +1724,7 @@ PY
   LD_DIR=1 ld_export 1
   out=$(lt ld.Shared01)
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]]; then
+  if [ $code = 0 ] && [[ "$out" == *"ld: 1 suite, 1 passed, 0 failed"* ]]; then
     pass "a framework in a directory of the test class path loaded through the run's class loader"
   else
     fail "the framework in a directory ($code): $out"
@@ -1727,7 +1732,7 @@ PY
   LD_UNPRINTED=1 ld_export 1
   out=$(lt ld.Shared01)
   code=$?
-  if [ $code = 1 ] && [[ "$out" == *"ld/test: the run failed: java.lang.reflect.InvocationTargetException"* ]] \
+  if [ $code = 1 ] && [[ "$out" == *"ld: the run failed: java.lang.reflect.InvocationTargetException"* ]] \
     && [[ "$out" != *"Uncaught exception"* ]] && [ ! -s "$ld/record.txt" ]; then
     pass "a framework whose fingerprints cannot be had fails the run as sbt's host's discovery fails, asking them reflectively, no worker's line, no suite run"
   else
@@ -1746,7 +1751,7 @@ PY
   LD_UNSHOWN=1 ld_export 1
   out=$(lt ld.Shared01)
   code=$?
-  if [ $code = 1 ] && [[ "$out" == *"ld/test: the run failed: java.lang.IllegalStateException: shown-error"* ]] && [ ! -s "$ld/record.txt" ]; then
+  if [ $code = 1 ] && [[ "$out" == *"ld: the run failed: java.lang.IllegalStateException: shown-error"* ]] && [ ! -s "$ld/record.txt" ]; then
     pass "a framework whose fingerprint cannot be shown fails discovery, which shows it in a debug line, no suite run"
   else
     fail "the fingerprint that cannot be shown ($code): $out"
@@ -1755,7 +1760,7 @@ PY
   out=$(lt ld.Shared01)
   code=$?
   if [ $code = 1 ] && [[ "$out" != *"Uncaught exception"* ]] \
-    && [[ "$out" == *"ld/test: the run failed: java.lang.reflect.InvocationTargetException"* ]] && [ ! -s "$ld/record.txt" ]; then
+    && [[ "$out" == *"ld: the run failed: java.lang.reflect.InvocationTargetException"* ]] && [ ! -s "$ld/record.txt" ]; then
     pass "a framework whose constructor throws fails the run as sbt's host fails making it, no worker's line, no suite run"
   else
     fail "the framework that cannot be made ($code): $out"
@@ -1769,7 +1774,7 @@ PY
   for _ in $(seq 50); do alive "$warm" || break; sleep 0.1; done
   for _ in $(seq 100); do [ "$(pgrep -f "$ld/target/teq/ld/test/runner.args" | wc -l | tr -d ' ')" = 1 ] && break; sleep 0.1; done
   next=$(ld_runner)
-  if [ $code = 0 ] && [[ "$out" == *"ld/test: no suite to run"* ]] && [ -n "$warm" ] && [ -n "$next" ] && [ "$warm" != "$next" ] && ! alive "$warm"; then
+  if [ $code = 0 ] && [[ "$out" == *"ld: no suite to run"* ]] && [ -n "$warm" ] && [ -n "$next" ] && [ "$warm" != "$next" ] && ! alive "$warm"; then
     pass "a selection of nothing, after the frameworks were loaded, spends the runner as a run does"
   else
     fail "the runner after a selection of nothing ($code; $warm, then $next): $out"
@@ -1777,7 +1782,7 @@ PY
   LD_NO_INTERFACE=1 ld_export 1
   out=$(lt ld.Shared01)
   code=$?
-  if [ $code = 2 ] && [[ "$out" == *"teq: ld/test: no entry of the test class path holds sbt's test interface (sbt/testing/Framework.class), which the test runner runs on"* ]]; then
+  if [ $code = 2 ] && [[ "$out" == *"teq: ld: no entry of the test class path holds sbt's test interface (sbt/testing/Framework.class), which the test runner runs on"* ]]; then
     pass "a test class path without test-interface refused, naming it"
   else
     fail "the class path without test-interface ($code): $out"
@@ -1788,7 +1793,7 @@ PY
     : > "$ld/record.txt"
     (cd "$ld" && timeout 150 "$TEQ" test ld "$@" > "$ld/out.txt" 2> "$ld/err.txt")
     local code=$?
-    grep -E '^(teq: )?ld/test' "$ld/err.txt" | sed -E 's/ in [0-9]+ ms( \(built in [0-9]+ ms\))?$//; s/ \(built in [0-9]+ ms\)$//' > "$ld/groups.txt"
+    grep -E '^(teq: )?ld( \[| \(ungrouped\)|: )' "$ld/err.txt" | sed -E 's/ in ([0-9]+ ms|[0-9]+\.[0-9] s)( \(built in ([0-9]+ ms|[0-9]+\.[0-9] s)\))?$//; s/ \(built in ([0-9]+ ms|[0-9]+\.[0-9] s)\)$//' > "$ld/groups.txt"
     return $code
   }
   # The records of the suites lg ran, their order kept: the start and end lines of each task left out.
@@ -1806,20 +1811,20 @@ Test ld.Shared01 : subclass(false, probe.Suite)'
   : > "$ld/groups.diag"
   lg ld.GroupOne ld.GroupTwo ld.Shared01 --events "$ld/groups.events" --diagnostics "$ld/groups.diag"
   code=$?
-  expected='ld/test [first]: 1 suite
-ld/test [first]: 1 suite, 2 passed, 0 failed
-ld/test [none]: no suite to run
-ld/test [second]: 1 suite
-ld/test [second]: 1 suite, 1 passed, 0 failed
-ld/test (ungrouped): 1 suite
-ld/test (ungrouped): 1 suite, 1 passed, 0 failed
-ld/test: 3 suites, 4 passed, 0 failed'
+  expected='ld [first]: 1 suite
+ld [first]: 1 suite, 2 passed, 0 failed
+ld [none]: no suite to run
+ld [second]: 1 suite
+ld [second]: 1 suite, 1 passed, 0 failed
+ld (ungrouped): 1 suite
+ld (ungrouped): 1 suite, 1 passed, 0 failed
+ld: 3 suites, 4 passed, 0 failed'
   shared=$(grep '^shared ' "$ld/record.txt")
   records="$(ld_records | sed 's/^shared 1 .*/shared 1/' | tr '\n' ',')"
   later=$(awk -F'\t' '$2 == "ld.LaterNamed" {print NF " " $NF}' "$ld/groups.events" | sort -u | tr '\n' ',')
   if [ $code = 0 ] && [ "$out" = "$listed" ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$records" = "one 1,later 1,two 1,shared 1,done 1 1,done 0 0," ] \
     && [ "$later" = "4 first,6 first," ] && grep -q '^ld	ld.Shared01	ran	$' "$ld/groups.events" && grep -q '^ld	ld.GroupTwo	ran	second$' "$ld/groups.events" \
-    && grep -q '"group":"first"' "$ld/groups.diag" && grep -q '"group":null' "$ld/groups.diag" && ! grep -q 'ld/test \[' "$ld/out.txt"; then
+    && grep -q '"group":"first"' "$ld/groups.diag" && grep -q '"group":null' "$ld/groups.diag" && ! grep -q '^ld \[' "$ld/out.txt"; then
     pass "groups: the listing's sections, then the groups run in their order in one run, one object across them, a descendant in its originator's group though a later group names it, the headers, summaries and total on stderr, each event's group, done() once"
   else
     fail "the groups ($code; records $records; LaterNamed $later): $out // $(cat "$ld/groups.txt") // $(cat "$ld/groups.events")"
@@ -1833,11 +1838,11 @@ ld/test: 3 suites, 4 passed, 0 failed'
   LD_GROUPS='[{"name": "first", "patterns": ["ld.Fails"]}, {"name": "second", "patterns": ["ld.GroupTwo"]}]' ld_export 1
   lg ld.Fails ld.GroupTwo
   code=$?
-  expected='ld/test [first]: 1 suite
-ld/test [first]: 1 suite, 0 passed, 1 failed
-ld/test [second]: 1 suite
-ld/test [second]: 1 suite, 1 passed, 0 failed
-ld/test: 2 suites, 1 passed, 1 failed'
+  expected='ld [first]: 1 suite
+ld [first]: 1 suite, 0 passed, 1 failed
+ld [second]: 1 suite
+ld [second]: 1 suite, 1 passed, 0 failed
+ld: 2 suites, 1 passed, 1 failed'
   if [ $code = 1 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$(ld_records | tr '\n' ',')" = "fails,two 1,done 1 1,done 0 0," ]; then
     pass "groups: a first group that fails, the second run after it, the exit the whole run's"
   else
@@ -1848,9 +1853,9 @@ ld/test: 2 suites, 1 passed, 1 failed'
   code=$?
   # The spent runner finishes its phase and its frameworks' done() out of the client's sight: its end waited for.
   for _ in $(seq 100); do [ "$(pgrep -f "$ld/target/teq/ld/test/runner.args" | wc -l | tr -d ' ')" = 1 ] && break; sleep 0.1; done
-  expected='ld/test [first]: 1 suite
-ld/test: the run failed: java.lang.RuntimeException: boom
-ld/test: not completed: [first], [second]'
+  expected='ld [first]: 1 suite
+ld: the run failed: java.lang.RuntimeException: boom
+ld: not completed: [first], [second]'
   if [ $code = 1 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$(ld_records | tr '\n' ',')" = "boom,done 1 1," ]; then
     pass "groups: a task that throws ends the run in its group, the later group never started, the unfinished groups named, no total"
   else
@@ -1860,11 +1865,11 @@ ld/test: not completed: [first], [second]'
   : > "$ld/done.diag"
   lg ld.GroupOne ld.GroupTwo ld.FailingOne --diagnostics "$ld/done.diag"
   code=$?
-  expected='ld/test [first]: 1 suite
-ld/test [first]: 1 suite, 2 passed, 0 failed
-ld/test [second]: 2 suites
-ld/test [second]: 2 suites, 2 passed, 0 failed
-ld/test: the run failed: java.lang.IllegalStateException: done-error'
+  expected='ld [first]: 1 suite
+ld [first]: 1 suite, 2 passed, 0 failed
+ld [second]: 2 suites
+ld [second]: 2 suites, 2 passed, 0 failed
+ld: the run failed: java.lang.IllegalStateException: done-error'
   if [ $code = 1 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] \
     && grep '"severity":"failure"' "$ld/done.diag" | grep '"group":null' | grep -q 'the run failed: java.lang.IllegalStateException: done-error'; then
     pass "groups: a framework's done() that throws once every group has passed fails the invocation after the groups' summaries, recorded as no group's failure"
@@ -1880,7 +1885,7 @@ ld/test: the run failed: java.lang.IllegalStateException: done-error'
     unset "$broken"
     lg ld.GroupOne ld.GroupTwo --diagnostics "$ld/load.diag"
     code=$?
-    [ $code = 1 ] && grep -q '^ld/test: the run failed: java.lang.' "$ld/groups.txt" && grep -qx 'ld/test: not completed: \[first\], \[later\], (ungrouped), no suite discovered' "$ld/groups.txt" \
+    [ $code = 1 ] && grep -q '^ld: the run failed: java.lang.' "$ld/groups.txt" && grep -qx 'ld: not completed: \[first\], \[later\], (ungrouped), no suite discovered' "$ld/groups.txt" \
       && grep '"severity":"failure"' "$ld/load.diag" | grep -q '"group":null' && grep '"severity":"failure"' "$ld/load.diag" | grep -q '"group":"first"' && [ ! -s "$ld/record.txt" ] || break
     broken=
   done
@@ -1899,7 +1904,7 @@ ld/test: the run failed: java.lang.IllegalStateException: done-error'
   LD_IDLE=1 LD_GROUPS='[{"name": "first", "patterns": ["ld.Shared01"]}, {"name": "second", "patterns": ["ld.IdleOne"]}]' ld_export 1
   lg ld.Shared01 ld.IdleOne
   grouped=$(grep -E '^(idle: |probe: done)' "$ld/out.txt" | tr '\n' ',')
-  if [ $code = 0 ] && [[ "$out" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" != *"idle: "* ]] && [ "$idle" = "idle: runner,idle: runner,idle: ran ld.IdleOne,idle: done,idle: done," ] \
+  if [ $code = 0 ] && [[ "$out" == *"ld: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" != *"idle: "* ]] && [ "$idle" = "idle: runner,idle: runner,idle: ran ld.IdleOne,idle: done,idle: done," ] \
     && [ "$grouped" = "idle: runner,idle: runner,idle: ran ld.IdleOne,idle: done,probe: done,idle: done,probe: done," ]; then
     pass "a framework no selected suite is of makes no runner, is asked no tasks and no done(), as sbt's host leaves it out; one of a suite of a later group is the run's from its start, its host's runner and its worker's"
   else
@@ -1910,11 +1915,11 @@ ld/test: the run failed: java.lang.IllegalStateException: done-error'
   LD_BROKEN=1 LD_GROUPS='[{"name": "first", "patterns": ["ld.GroupOne"]}, {"name": "second", "patterns": ["ld.BrokenOne"]}, {"name": "third", "patterns": ["ld.GroupTwo"]}]' ld_export 1
   lg ld.GroupOne ld.BrokenOne ld.GroupTwo
   code=$?
-  expected='ld/test [first]: 1 suite
-ld/test [first]: 1 suite, 2 passed, 0 failed
-ld/test [second]: 1 suite
-ld/test: not completed: [second], [third]
-ld/test: 3 suites, 2 passed, 0 failed'
+  expected='ld [first]: 1 suite
+ld [first]: 1 suite, 2 passed, 0 failed
+ld [second]: 1 suite
+ld: not completed: [second], [third]
+ld: 3 suites, 2 passed, 0 failed'
   if [ $code = 0 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && grep -qx 'Internal error when running tests: java.lang.IllegalArgumentException: report-error' "$ld/out.txt" \
     && grep -qx 'probe: the summary done() returns' "$ld/out.txt" && grep -q '^one 1' "$ld/record.txt" && ! grep -q '^two ' "$ld/record.txt"; then
     pass "groups: the worker's internal error ends the run's phases, no later group run, the outcome and exit the suites reported, sbt's host's summaries shown"
@@ -1926,7 +1931,7 @@ ld/test: 3 suites, 2 passed, 0 failed'
   : > "$ld/null.events"
   out=$(lt ld.NullStatus --events "$ld/null.events")
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]] && grep -q '^ld	ld.NullStatus	test none	null	$' "$ld/null.events"; then
+  if [ $code = 0 ] && [[ "$out" == *"ld: 1 suite, 1 passed, 0 failed"* ]] && grep -q '^ld	ld.NullStatus	test none	null	$' "$ld/null.events"; then
     pass "an event of no status is counted as none, as sbt's host counts it"
   else
     fail "the event of no status ($code): $(cat "$ld/null.events") // $out"
@@ -1964,8 +1969,8 @@ Test ld.Explicit : subclass(false, probe.Suite)" ] && [ "$order" = "two,one,expl
   distinct='A isModule,A superclassName,B isModule,B superclassName,B isModule,A isModule,B superclassName,A superclassName,'
   host='A fingerprints,A isModule,A isModule,A superclassName,A superclassName,B fingerprints,B isModule,A isModule,B superclassName,A superclassName,A isModule,A superclassName,A runner,B runner,A isModule,A superclassName,A requireNoArgConstructor,'
   worker='A made,A fingerprints,A isModule,A superclassName,A runner,A ran ld.CountedOne,B made,B fingerprints,B isModule,B superclassName,B runner,B ran ld.CountedOne,A done,B done,'
-  if [ $code = 0 ] && grep -q 'ld/test: 1 suite, 2 passed, 0 failed' "$ld/counted.out" && [ "$calls" = "$load$distinct$distinct$host${worker}A name,A done,B name,B done," ] \
-    && grep -q 'ld/test: no suite to run' "$ld/counted-none.out" && [ "$none" = "$load$distinct${distinct}A fingerprints,B fingerprints," ]; then
+  if [ $code = 0 ] && grep -q 'ld: 1 suite, 2 passed, 0 failed' "$ld/counted.out" && [ "$calls" = "$load$distinct$distinct$host${worker}A name,A done,B name,B done," ] \
+    && grep -q 'ld: no suite to run' "$ld/counted-none.out" && [ "$none" = "$load$distinct${distinct}A fingerprints,B fingerprints," ]; then
     pass "sbt's host's and worker's calls of the frameworks' code, in sbt's order, for a selected suite and for a selection of none"
   else
     fail "the host's calls ($code): $calls // $none // $(cat "$ld/counted.out")"
@@ -1982,7 +1987,7 @@ Test ld.Explicit : subclass(false, probe.Suite)" ] && [ "$order" = "two,one,expl
   gate=$(lt ld.One ld.One)
   gate_code=$?
   reads=$(printf '%s\n' "$gate" | sed -n 's/^module read //p' | tr '\n' ',')
-  if [ $mutating_code = 0 ] && [[ "$mutating" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]] && [ $gate_code = 0 ] && [[ "$gate" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]] \
+  if [ $mutating_code = 0 ] && [[ "$mutating" == *"ld: 1 suite, 1 passed, 0 failed"* ]] && [ $gate_code = 0 ] && [[ "$gate" == *"ld: 1 suite, 1 passed, 0 failed"* ]] \
     && [ "$reads" = "1,2,3,4,5,6,1," ]; then
     pass "a framework replacing its fingerprint array's entry keeps the one discovered; a suite named twice reads its fingerprint as sbt's host does, the repeated definition the same"
   else
@@ -2000,9 +2005,9 @@ Test ld.Explicit : subclass(false, probe.Suite)" ] && [ "$order" = "two,one,expl
   unset_status=$(lt ld.NullStatus)
   unset_code=$?
   rm -f "$ld/build.mill"
-  if [ $code = 1 ] && [[ "$out" == *"ld/test: the run failed: Internal error when running tests: java.lang.IllegalArgumentException: report-error"* ]] && ! grep -q '^two ' "$ld/record.txt" \
-    && [ $loaded_code = 1 ] && [[ "$loaded" == *"ld/test: the run failed: Internal error when running tests: java.lang.IllegalArgumentException: report-error"* ]] \
-    && [ $unset_code = 1 ] && [[ "$unset_status" == *"ld/test: the run failed: java.lang.NullPointerException"* ]]; then
+  if [ $code = 1 ] && [[ "$out" == *"ld: the run failed: Internal error when running tests: java.lang.IllegalArgumentException: report-error"* ]] && ! grep -q '^two ' "$ld/record.txt" \
+    && [ $loaded_code = 1 ] && [[ "$loaded" == *"ld: the run failed: Internal error when running tests: java.lang.IllegalArgumentException: report-error"* ]] \
+    && [ $unset_code = 1 ] && [[ "$unset_status" == *"ld: the run failed: java.lang.NullPointerException"* ]]; then
     pass "of Mill's export, the worker's internal error fails the run, as one loading the frameworks does, and an event of no status throws, as before"
   else
     fail "Mill's internal error ($code, $loaded_code, $unset_code): $out // $loaded // $unset_status"
@@ -2013,8 +2018,8 @@ Test ld.Explicit : subclass(false, probe.Suite)" ] && [ "$order" = "two,one,expl
   lg ld.GroupOne ld.Exits --events "$ld/exit.events"
   code=$?
   if [ $code = 1 ] && grep -q '^ld	ld.GroupOne	ran	first$' "$ld/exit.events" && grep -q '^ld	ld.GroupOne	test one	Success		first$' "$ld/exit.events" \
-    && grep -q '^ld	ld.LaterNamed	ran	first$' "$ld/exit.events" && grep -qx 'ld/test \[first\]: 1 suite, 2 passed, 0 failed' "$ld/groups.txt" \
-    && grep -qx 'ld/test: not completed: \[second\]' "$ld/groups.txt"; then
+    && grep -q '^ld	ld.LaterNamed	ran	first$' "$ld/exit.events" && grep -qx 'ld \[first\]: 1 suite, 2 passed, 0 failed' "$ld/groups.txt" \
+    && grep -qx 'ld: not completed: \[second\]' "$ld/groups.txt"; then
     pass "groups: a later group's suite ending the JVM fails the run, the earlier group's events and suites written with their group"
   else
     fail "the JVM ended in a later group ($code): $(cat "$ld/groups.txt") // $(cat "$ld/exit.events")"
@@ -2028,13 +2033,13 @@ fi
 run_app() { (cd "$b" && timeout 150 "$TEQ" run app "$@" 2> "$work/run.err"); }
 # What a command says of a build that has not answered within its first second (docs/TOOLING.md, "What compile and
 # run print"), taken out: a machine's speed decides whether those lines are there.
-untold() { grep -v -E '^[^ ]+: compiling .+ \([0-9]+ of [0-9]+\)(, started now)?$|^teq (compile|run): [0-9]+ configurations?( compiled)? in [0-9.]+ m?s(, [0-9]+ errors?)?$'; }
+untold() { grep -v -E '^compiling .+ \([0-9]+ of [0-9]+\)(, started now)?$'; }
 out=$(run_app main)
 code=$?
 first=$(untold < "$work/run.err")
 out2=$(run_app main)
-if [ $code = 0 ] && [[ "$out" =~ ^[0-9]+$ ]] && { [ -z "$first" ] || [[ "$first" =~ ^app/test:\ [0-9]+\ classes,\ [0-9]+\ written\ in\ [0-9.]+\ m?s,\ the\ first\ build$ ]]; } && [ "$out2" = "$out" ] && [ -z "$(untold < "$work/run.err")" ]; then
-  pass "run: an alias's main class, its output alone on stdout; a resident's first build is told on stderr, a run with nothing to compile says nothing there"
+if [ $code = 0 ] && [[ "$out" =~ ^[0-9]+$ ]] && { [ -z "$first" ] || [[ "$first" =~ ^app:\ compiled\ main\ and\ test,\ [0-9]+\ class(es)?\ written,\ in\ [0-9.]+\ m?s$ ]]; } && [ "$out2" = "$out" ] && [ -z "$(untold < "$work/run.err")" ]; then
+  pass "run: an alias's main class, its output alone on stdout; a build that wrote classes is told on stderr, a run with nothing to compile says nothing there"
 else
   fail "run main: $out // $first // $out2 // $(cat "$work/run.err")"
 fi
@@ -2050,7 +2055,7 @@ err=$(cat "$work/run.err")
 out2=$(run_app app.Nope)
 code2=$?
 err2=$(cat "$work/run.err")
-if [ $code = 2 ] && [[ "$err" == *"nope is neither an alias of app nor a main class (aliases: exit (app.Exit), main (app.Main), sleep (app.Sleep), stubborn (app.Stubborn); main classes: app.Exit, app.Main, app.Sleep, app.Stubborn); arguments for the program follow --"* ]] && [[ "$err" != *"app/test: "* ]] &&
+if [ $code = 2 ] && [[ "$err" == *"nope is neither an alias of app nor a main class (aliases: exit (app.Exit), main (app.Main), sleep (app.Sleep), stubborn (app.Stubborn); main classes: app.Exit, app.Main, app.Sleep, app.Stubborn); arguments for the program follow --"* ]] && ! grep -q '^app: ' <<< "$err" &&
   [ $code2 = 2 ] && [[ "$err2" == *"app.Nope is no class of app's build"* ]]; then
   pass "run refuses a word that is neither an alias nor a main class, with the -- hint, and a class the build lacks, naming what there is"
 else
@@ -2088,63 +2093,59 @@ err=$(cat "$work/run.err")
 out2=$(run_in util)
 code2=$?
 err2=$(cat "$work/run.err")
-if [ $code = 2 ] && [ -z "$out" ] && [[ "$err" == *"pair declares no main class and its products hold 2, which sbt's run would ask to choose among: pair.A, pair.b; name one"* ]] && [[ "$err" == *"pair/compile: "* ]] &&
+if [ $code = 2 ] && [ -z "$out" ] && [[ "$err" == *"pair declares no main class and its products hold 2, which sbt's run would ask to choose among: pair.A, pair.b; name one"* ]] && [[ "$err" == *"pair: compiled main, "* ]] &&
   [ $code2 = 2 ] && [[ "$err2" == *"no main class in util's products"* ]]; then
   pass "run refuses a project with two main classes among its products and none declared, naming both after the build, and one whose products hold none"
 else
   fail "run's implied refusals ($code, $code2): $err // $err2"
 fi
-# A build that has not answered a second after the command began is told of on stderr, and the command then
-# ends with its own time (docs/TOOLING.md, "What compile and run print"). app's generator is made to sleep two
-# seconds and its input changed before each command, so that no row hangs on a machine's speed; the times are
-# taken out of the lines. Off a terminal: one line for the resident, once; the result line where it was; the last line.
+# A build that has not answered a second after the command began is told of on stderr (docs/TOOLING.md, "What
+# compile and run print"). app's generator is made to sleep two seconds and its input changed before each command,
+# so that no row hangs on a machine's speed; the times are taken out of the lines. Off a terminal: one line for the
+# build, once; the result line where it was; one build has no total after it.
 cp "$b/gen.sh" "$work/gen.sh.kept"
 { echo 'sleep 2'; cat "$work/gen.sh.kept"; } > "$b/gen.sh"
 timeless() { sed -E 's/ in [0-9]+ ms/ in <t>/; s/ in [0-9]+\.[0-9] s/ in <t>/'; }
 slow() { local words=$1; shift; echo "$words" > "$b/labels.txt"; (cd "$b" && timeout 150 "$TEQ" "$@" 2> "$work/slow.err"); }
 out=$(slow 'one two three four five' compile app | timeless)
 err=$(timeless < "$work/slow.err")
-if [[ "$out" =~ ^app/test:\ [0-9]+\ classes,\ [1-9][0-9]*\ written\ in\ \<t\>$ ]] && [ "$err" = "app/test: compiling app, core (1 of 1)
-teq compile: 1 configuration in <t>" ]; then
-  pass "compile: a build over a second is named on stderr once, its result line stays on stdout, and the command ends with its own time"
+if [[ "$out" =~ ^app:\ compiled\ main\ and\ test,\ [1-9][0-9]*\ class(es)?\ written,\ in\ \<t\>$ ]] && [ "$err" = "compiling app, core (1 of 1)" ]; then
+  pass "compile: a build over a second is named on stderr once by the projects it types, its result line stays on stdout, and one build has no total"
 else
   fail "a slow compile: $out // $err"
 fi
-# Two projects asked for: the same header, the projects the resident types, and the last line counts both.
+# Two projects asked for that one build holds: the same header, one line named by both, no total.
 out=$(slow 'one two three four five six seven eight' compile app core | timeless)
 err=$(timeless < "$work/slow.err")
-if [ "$err" = "app/test: compiling app, core (1 of 1)
-teq compile: 2 configurations in <t>" ]; then
-  pass "compile: two projects of one resident over a second: one header naming both, the last line counting both"
+if [[ "$out" =~ ^app,\ core:\ compiled\ main\ and\ test,\ [1-9][0-9]*\ class(es)?\ written,\ in\ \<t\>$ ]] && [ "$err" = "compiling app, core (1 of 1)" ]; then
+  pass "compile: two projects of one build over a second: one header and one line naming both, no total"
 else
   fail "a slow compile of two projects: $out // $err"
 fi
 out=$(slow 'one two three four five six' run app main)
 code=$?
 err=$(timeless < "$work/slow.err")
-if [ $code = 0 ] && [ "$out" = 48 ] && [ "$(sed -E 's/^app\/test: [0-9]+ classes, [1-9][0-9]* written/app\/test: <n> classes, <m> written/' <<< "$err")" = "app/test: compiling app, core (1 of 1)
-app/test: <n> classes, <m> written in <t>
-teq run: 1 configuration compiled in <t>" ]; then
-  pass "run: a build over a second is named, its line and the command's time are on stderr before the program, whose output is alone on stdout"
+if [ $code = 0 ] && [ "$out" = 48 ] && [ "$(sed -E 's/^app: compiled main and test, [1-9][0-9]* class(es)? written/app: compiled main and test, <m> written/' <<< "$err")" = "compiling app, core (1 of 1)
+app: compiled main and test, <m> written, in <t>" ]; then
+  pass "run: a build over a second is named and its line is on stderr before the program, whose output is alone on stdout"
 else
   fail "a slow run ($code): $out // $err"
 fi
-# The same where the build fails: the diagnostic and the count of errors as they were, the last line with the count.
+# The same where the build fails: the diagnostic, then the count of errors under the project's name.
 { echo 'sleep 2'; echo 'mkdir -p "$2/app"'; echo "printf 'package app\\n\\nobject Labels:\\n  val count: Int = \"no\"\\n' > \"\$2/app/Labels.scala\""; } > "$b/gen.sh"
 out=$(slow 'one two' compile app)
 code=$?
 err=$(timeless < "$work/slow.err")
-if [ $code = 1 ] && [ "$out" = "app/test: 1 error" ] && [ "$(head -1 <<< "$err")" = "app/test: compiling app, core (1 of 1)" ] && [[ "$err" == *"error: type mismatch: found \"no\", required Int"* ]] && [ "$(tail -1 <<< "$err")" = "teq compile: 1 configuration in <t>, 1 error" ]; then
-  pass "compile: a failing build over a second: the diagnostic and the count as before, the last line with the errors"
+if [ $code = 1 ] && [ "$out" = "app: 1 error" ] && [ "$(head -1 <<< "$err")" = "compiling app, core (1 of 1)" ] && [[ "$err" == *"error: type mismatch: found \"no\", required Int"* ]] && [[ "$err" != *"teq compile: "* ]]; then
+  pass "compile: a failing build over a second: the diagnostic on stderr, the count on stdout, no total for one build"
 else
   fail "a slow failing compile ($code): $out // $err"
 fi
 out=$(slow 'one two three' run app main)
 code=$?
 err=$(timeless < "$work/slow.err")
-if [ $code = 1 ] && [ -z "$out" ] && [ "$(head -1 <<< "$err")" = "app/test: compiling app, core (1 of 1)" ] && [ "$(tail -2 <<< "$err")" = "app/test: 1 error
-teq run: 1 configuration compiled in <t>, 1 error" ]; then
-  pass "run: a failing build over a second: no program, the count of errors and the last line on stderr"
+if [ $code = 1 ] && [ -z "$out" ] && [ "$(head -1 <<< "$err")" = "compiling app, core (1 of 1)" ] && [ "$(tail -1 <<< "$err")" = "app: 1 error" ]; then
+  pass "run: a failing build over a second: no program, the count of errors last on stderr"
 else
   fail "a slow failing run ($code): $out // $err"
 fi
@@ -2153,8 +2154,7 @@ fi
 (cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
 out=$(slow 'one two three four' compile app | timeless)
 err=$(timeless < "$work/slow.err")
-if [[ "$out" =~ ^app/test:\ [0-9]+\ classes,\ [0-9]+\ written\ in\ \<t\>(,\ the\ first\ build)?$ ]] && [ "$err" = "app/test: compiling app, core (1 of 1), started now
-teq compile: 1 configuration in <t>" ]; then
+if [[ "$out" =~ ^app:\ compiled\ main\ and\ test,\ ([0-9]+\ class(es)?\ written|no\ class\ changed),\ in\ \<t\>$ ]] && [ "$err" = "compiling app, core (1 of 1), started now" ]; then
   pass "compile: a command that starts the daemon prints the same lines, its resident said to be started now"
 else
   fail "a slow compile that starts the daemon: $out // $err"
@@ -2164,13 +2164,13 @@ fi
 if command -v python3 > /dev/null 2>&1; then
   echo 'one two three four five six seven' > "$b/labels.txt"
   out=$( (cd "$b" && TERM=xterm timeout 150 python3 "$OLDPWD/tests/support/pty_run.py" --columns 80 "$TEQ" compile app) | tr -d '\r' | timeless)
-  if [[ "$out" =~ $'\x1b'\[Kcompiling\ app/test\ \(2\ projects\),\ [0-9]+\ s ]] && [[ "$out" != *"app/test: compiling"* ]] && [[ "$out" == *$'\x1b[Kapp/test: '*' classes, '*$'\nteq compile: 1 configuration in <t>'* ]]; then
-    pass "compile on a terminal: a status written over itself from the second on, the result line and the last line stay"
+  if [[ "$out" =~ $'\x1b'\[Kcompiling\ app\ \(2\ projects\),\ [0-9]+\ s ]] && [[ "$out" != *"compiling app, core (1 of 1)"* ]] && [[ "$out" == *$'\x1b[Kapp: compiled main and test, '*' written, in <t>'* ]] && [[ "$out" != *"teq compile: "[0-9]* ]]; then
+    pass "compile on a terminal: a status written over itself from the second on, the result line stays, no total for one build"
   else
     fail "a slow compile on a terminal: $(sed 's/\x1b/\\e/g' <<< "$out")"
   fi
-  # While the daemon before is finishing a build and the next one starts, no plan has come: the status says so,
-  # and the command ends with its last line, a refused one too.
+  # While the daemon before is finishing a build and the next one, started by this command, waits for it, no plan
+  # has come: the status says what is waited for; the result line, or a refusal's, ends the command.
   starting() {
     echo "$1" > "$b/labels.txt"
     (cd "$b" && timeout 150 "$TEQ" compile app > /dev/null 2>&1) &
@@ -2181,18 +2181,18 @@ if command -v python3 > /dev/null 2>&1; then
     wait
   }
   out=$(starting 'one two three four five six seven eight nine' compile app)
-  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *$'\nteq compile: 1 configuration in <t>'* ]]; then
-    pass "compile on a terminal while the daemon before ends: the status says it is starting, and the last line ends the command"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ waiting\ for\ the\ previous\ teq\ daemon\ to\ stop,\ [0-9]+\ s ]] && [[ "$out" == *$'\x1b[Kapp: '* ]] && [[ "$out" != *"teq compile: "[0-9]* ]]; then
+    pass "compile on a terminal while the daemon before ends: the status says that it waits for the previous daemon, and the result line ends the command"
   else
     fail "a compile on a terminal while the daemon before ends: $(sed 's/\x1b/\\e/g' <<< "$out")"
   fi
   out=$(starting 'one two three four five six seven eight nine ten' compile nosuch)
-  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: no project nosuch in "*$'\nteq compile: 0 configurations in <t>'* ]]; then
-    pass "compile on a terminal while the daemon before ends: a refused command ends with the last line too"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ waiting\ for\ the\ previous\ teq\ daemon\ to\ stop,\ [0-9]+\ s ]] && [[ "$out" == *$'\x1b[Kteq: no project nosuch in '* ]] && [[ "$out" != *"teq compile: "[0-9]* ]]; then
+    pass "compile on a terminal while the daemon before ends: a refused command ends with its refusal, the status erased before it"
   else
     fail "a refused compile on a terminal while the daemon before ends: $(sed 's/\x1b/\\e/g' <<< "$out")"
   fi
-  # However a command ends after its status, the last line ends it: the daemon's start is held past the second
+  # However a command ends after its status, the status is erased and its own line ends it: the daemon's start is held past the second
   # (the start's lock taken for 2.5 s, no process suspended) and the command run on a terminal, or with `pipe`
   # off one, where nothing is shown of a daemon that starts and the bytes are those of a command within the second;
   # with `pty-broken` the export is made unreadable while the start is held, so that the daemon ends before it listens.
@@ -2218,8 +2218,8 @@ PY
   }
   shown() { sed 's/\x1b/\\e/g' <<< "$1"; }
   out=$(held pty compile --diagnostics)
-  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: --diagnostics needs a file"$'\nteq compile: 0 configurations in <t>'* ]]; then
-    pass "compile on a terminal, its start held past the second: a request refused for its arguments ends with the last line"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *$'\x1b[Kteq: --diagnostics needs a file'* ]] && [[ "$out" != *"teq compile: "[0-9]* ]]; then
+    pass "compile on a terminal, its start held past the second: a request refused for its arguments ends with the refusal"
   else
     fail "a compile without its diagnostics file on a terminal, the start held: $(shown "$out")"
   fi
@@ -2230,56 +2230,279 @@ PY
     fail "a compile without its diagnostics file off a terminal, the start held: $(shown "$out")"
   fi
   out=$(held pty compile --diagnostics nosuchdir/d.jsonl)
-  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot write "*"nosuchdir/d.jsonl"*$'\nteq compile: 0 configurations in <t>'* ]]; then
-    pass "compile on a terminal, its start held past the second: a diagnostics file that cannot be written ends with the last line"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot write "*"nosuchdir/d.jsonl"* ]] && [[ "$out" != *"teq compile: "[0-9]* ]]; then
+    pass "compile on a terminal, its start held past the second: a diagnostics file that cannot be written ends with that line"
   else
     fail "a compile whose diagnostics file cannot be written, on a terminal, the start held: $(shown "$out")"
   fi
   out=$(held pty run app main --diagnostics nosuchdir/d.jsonl)
-  if [[ "$out" =~ $'\x1b'\[Kteq\ run:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot write "*"nosuchdir/d.jsonl"*$'\nteq run: 0 configurations compiled in <t>'* ]]; then
-    pass "run on a terminal, its start held past the second: a diagnostics file that cannot be written ends with the last line"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ run:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot write "*"nosuchdir/d.jsonl"* ]] && [[ "$out" != *"teq run: "[0-9]* ]]; then
+    pass "run on a terminal, its start held past the second: a diagnostics file that cannot be written ends with that line"
   else
     fail "a run whose diagnostics file cannot be written, on a terminal, the start held: $(shown "$out")"
   fi
-  # A start that fails after the status (the daemon's log cannot be opened): the client's own line, then the last line.
+  # A start that fails after the status (the daemon's log cannot be opened): the client's own line ends it.
   (cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   mv "$b/target/teq/task.log" "$work/task.log.kept" && mkdir "$b/target/teq/task.log"
   out=$(held pty compile app)
   rmdir "$b/target/teq/task.log" && mv "$work/task.log.kept" "$b/target/teq/task.log"
-  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot "*"task.log"*$'\nteq compile: 0 configurations in <t>'* ]]; then
-    pass "compile on a terminal, its start held past the second: a start that fails ends with the last line"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: cannot "*"task.log"* ]] && [[ "$out" != *"teq compile: "[0-9]* ]]; then
+    pass "compile on a terminal, its start held past the second: a start that fails ends with the client's line"
   else
     fail "a compile whose daemon cannot start, on a terminal, the start held: $(shown "$out")"
   fi
   cp "$b/teq.lock" "$work/teq.lock.kept"
-  out=$(held pty-broken compile app)
+  echo '{"severity":"error","shown":"an earlier run\n"}' > "$work/unserved.records"
+  out=$(held pty-broken compile app --diagnostics "$work/unserved.records")
   cp "$work/teq.lock.kept" "$b/teq.lock"
-  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: the daemon ended ("*") before it listened"*$'\nteq compile: 0 configurations in <t>'* ]]; then
-    pass "compile on a terminal, its start held past the second: a daemon that ends before it listens ends with the last line"
+  if [[ "$out" =~ $'\x1b'\[Kteq\ compile:\ starting,\ [0-9]+\ s ]] && [[ "$out" == *"teq: the daemon ended ("*") before it listened"* ]] && [[ "$out" != *"teq compile: "[0-9]* ]] &&
+    [ "$(wc -l < "$work/unserved.records" | tr -d ' ')" = 1 ] && grep -q '^{"severity":"failure","kind":"other","message":"the daemon ended (.*) before it listened' "$work/unserved.records"; then
+    pass "compile on a terminal, its start held past the second: a daemon that ends before it listens ends with the client's line, the records made afresh with that failure alone"
   else
     fail "a compile whose daemon ends before it listens, on a terminal, the start held: $(shown "$out")"
   fi
 fi
 # A daemon that ends without an answer after its build was named (it is killed while the generator sleeps, which
-# for this row is eight seconds, so that the build cannot answer first): the client's line, then the last line,
-# which counts no configuration.
+# for this row is eight seconds, so that the build cannot answer first): the client's line ends the command, exit 2;
+# the request is not sent to another daemon, since lines of its answer were read.
 { echo 'sleep 8'; cat "$work/gen.sh.kept"; } > "$b/gen.sh"
 echo 'one two three four five six seven eight nine ten eleven' > "$b/labels.txt"
-(cd "$b" && timeout 150 "$TEQ" compile app > "$work/killed.out" 2> "$work/killed.err") &
-for _ in $(seq 1 100); do grep -q "^app/test: compiling" "$work/killed.err" 2> /dev/null && break; sleep 0.1; done
+echo '{"severity":"error","shown":"an earlier run\n"}' > "$work/killed.records"
+(cd "$b" && timeout 150 "$TEQ" compile app --diagnostics "$work/killed.records" > "$work/killed.out" 2> "$work/killed.err"; echo $? > "$work/killed.code") &
+for _ in $(seq 1 100); do grep -q "^compiling app, core" "$work/killed.err" 2> /dev/null && break; sleep 0.1; done
 # The daemon leads its own process group: its generator's sleep goes with it, and writes nothing after.
 daemon=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["pid"])' "$b/target/teq/daemon.json" 2> /dev/null)
 [ -n "$daemon" ] && kill -9 -- "-$daemon" 2> /dev/null
 wait
 err=$(timeless < "$work/killed.err" | sed "s|$b/||")
-if [ ! -s "$work/killed.out" ] && [[ "$err" =~ ^app/test:\ compiling\ app,\ core\ \(1\ of\ 1\)(,\ started\ now)?$'\n'teq:\ the\ daemon\ ended\ without\ an\ answer\ \(see\ target/teq/task.log\)$'\n'teq\ compile:\ 0\ configurations\ in\ \<t\>$ ]]; then
-  pass "compile: a daemon that ends without an answer after its build was named: the client's line, then the last line"
+if [ ! -s "$work/killed.out" ] && [ "$(cat "$work/killed.code")" = 2 ] && [[ "$err" =~ ^compiling\ app,\ core\ \(1\ of\ 1\)(,\ started\ now)?$'\n'teq:\ the\ daemon\ ended\ without\ an\ answer\ \(see\ target/teq/task.log\)$ ]] &&
+  [ "$(wc -l < "$work/killed.records" | tr -d ' ')" = 1 ] && grep -q '^{"severity":"failure","kind":"crash","message":"the daemon ended without an answer (see .*task.log)","shown":"teq: the daemon ended without an answer (see .*task.log)\\n"}$' "$work/killed.records"; then
+  pass "compile: a daemon that ends without an answer after its build was named: the client's line, exit 2, no second try; the records hold that failure, the client's, and nothing of an earlier run"
 else
   fail "a compile whose daemon is killed after its header: $(cat "$work/killed.out") // $err"
 fi
 cp "$work/gen.sh.kept" "$b/gen.sh"
 echo 'one two three four' > "$b/labels.txt"
 (cd "$b" && timeout 150 "$TEQ" compile app > /dev/null 2>&1)
+# The records a reader pairs a request's builds by (`--diagnostics`; docs/TOOLING.md), as the daemon writes them: after
+# a build's diagnostics its outcome; a failed generator's failure with its kind, its message naming the configuration
+# by its key where its line names the project, and the build's outcome of it; a test run's end with its summary's
+# counts, or why nothing ran. No line of the command is read for any of them.
+rec=$work/records.jsonl
+recorded() { (cd "$b" && timeout 150 "$TEQ" "$@" --diagnostics "$rec" 2>&1); }
+out=$(recorded compile app core)
+if [ "$(grep -c . "$rec")" = 1 ] && grep -Eq '^\{"key":"app/test","severity":"outcome","projects":\["app","core"\],"ok":true,"errors":0,"failed":null,"why":null,"ms":[0-9.]+\}$' "$rec"; then
+  pass "records: a build that passed leaves one record, its outcome: the configuration, the projects asked for that it covered, no error, its time"
+else
+  fail "records, a passing build: $out // $(cat "$rec")"
+fi
+cp "$b/app/src/app/Main.scala" "$work/Main.scala.records"
+echo '  val broken: Int = "no"' >> "$b/app/src/app/Main.scala"
+out=$(recorded compile app)
+cp "$work/Main.scala.records" "$b/app/src/app/Main.scala"
+if [ "$(grep -c . "$rec")" = 2 ] && [ "$(head -1 "$rec" | grep -c '^{"key":"app/test","severity":"error","file":"app/src/app/Main.scala"')" = 1 ] &&
+  [ "$(tail -1 "$rec" | grep -Ec '^\{"key":"app/test","severity":"outcome","projects":\["app"\],"ok":false,"errors":1,"failed":null,"why":null,"ms":[0-9.]+\}$')" = 1 ] && [[ "$out" == *$'\n'"app: 1 error" ]]; then
+  pass "records: a build with an error: the error's record, then the outcome that counts it"
+else
+  fail "records, a build with an error: $out // $(cat "$rec")"
+fi
+printf '%s\n' 'echo started' 'exit 3' > "$b/gen.sh"
+echo 'one two three four five six' > "$b/labels.txt"
+out=$(recorded compile app)
+code=$?
+cp "$work/gen.sh.kept" "$b/gen.sh"
+echo 'one two three four' > "$b/labels.txt"
+if [ $code = 1 ] && [[ "$out" == "teq: app: command generator 0: \`sh gen.sh labels.txt "*"\` failed (exit status: 3): started" ]] && [ "$(grep -c . "$rec")" = 2 ] &&
+  [ "$(head -1 "$rec" | grep -c '^{"key":"app/test","severity":"failure","kind":"generator","message":"command generator 0 of app/compile: `sh gen.sh labels.txt .*` failed (exit status: 3): started","shown":"teq: app: command generator 0: ')" = 1 ] &&
+  [ "$(tail -1 "$rec" | grep -c '^{"key":"app/test","severity":"outcome","projects":\["app"\],"ok":false,"errors":0,"failed":"generator","why":"command generator 0 of app/compile: .* failed (exit status: 3): started","ms":null}$')" = 1 ]; then
+  pass "records: a generator that fails: its line names the project, its failure's record the kind and the configuration's key, and the build's outcome says why it failed"
+else
+  fail "records, a failing generator ($code): $out // $(cat "$rec")"
+fi
+(cd "$b" && timeout 150 "$TEQ" compile app > /dev/null 2>&1)
+out=$(recorded test app)
+summary=$(grep -E '^app: [0-9]+ suites?, ' <<< "$out")
+counts=$(sed -E 's/^app: ([0-9]+) suites?, ([0-9]+) passed, .*/"suites":\1,"passed":\2,/' <<< "$summary")
+if [ -n "$summary" ] && grep -q '"key":"app/test","severity":"outcome","projects":\["app"\],"ok":true' "$rec" && [ "$(tail -1 "$rec" | grep -Ec '^\{"key":"app/test","severity":"tests",'"$counts"'"ms":[0-9]+,"built_ms":[0-9]+\}$')" = 1 ]; then
+  pass "records: a test run: its build's outcome, then its tests' end with the summary's counts, the statuses that have events"
+else
+  fail "records, a test run: $summary // $(cat "$rec")"
+fi
+out=$(recorded test app 'app.NoSuchSuite*')
+if [[ "$out" == *"app: no suite to run"* ]] && [ "$(tail -1 "$rec")" = '{"key":"app/test","severity":"tests","idle":"no suite to run"}' ]; then
+  pass "records: a test run with nothing to run: its tests' end says why"
+else
+  fail "records, an idle test run: $out // $(cat "$rec")"
+fi
+# One request's records, whole (`--diagnostics`; src/task/client.rs `Records`): a request writes its records to a file
+# of its own beside the one the command names, and its client moves it over the named file when the request ends. Two
+# compiles at once that name one file (the second starts while the first's generator sleeps): the file holds one
+# request's outcome, not both, and nothing is left beside it. A client killed while its request builds: the file it
+# named is empty (emptied as the request started: not an earlier run's records) and the daemon removes the request's
+# own file at the build's end. Of two requests the last to END is the one the file holds: a refused request that
+# ends while a compile builds leaves its own records (none), the compile's replace them at its end.
+{ echo 'sleep 3'; cat "$work/gen.sh.kept"; } > "$b/gen.sh"
+shared=$work/shared.jsonl
+beside() { ls "$work" | grep -c '^shared\.jsonl\.teq-'; }
+building() { for _ in $(seq 1 100); do grep -q "^compiling app, core" "$1" 2> /dev/null && break; sleep 0.1; done; }
+echo 'one two three four five' > "$b/labels.txt"
+echo '{"severity":"error","shown":"an earlier run\n"}' > "$shared"
+(cd "$b" && timeout 150 "$TEQ" compile app --diagnostics "$shared" > /dev/null 2> "$work/shared1.err"; echo $? > "$work/shared1.code") &
+building "$work/shared1.err"
+(cd "$b" && timeout 150 "$TEQ" compile app --diagnostics "$shared" > /dev/null 2> "$work/shared2.err"; echo $? > "$work/shared2.code") &
+wait
+if [ "$(cat "$work/shared1.code")" = 0 ] && [ "$(cat "$work/shared2.code")" = 0 ] && [ "$(grep -c . "$shared")" = 1 ] &&
+  grep -q '^{"key":"app/test","severity":"outcome","projects":\["app"\],"ok":true' "$shared" && [ "$(beside)" = 0 ]; then
+  pass "records: two compiles at once that name one file: the file holds one request's records, whole, and nothing is left beside it"
+else
+  fail "records, two requests naming one file ($(cat "$work/shared1.code"), $(cat "$work/shared2.code"), beside $(beside)): $(cat "$shared")"
+fi
+echo 'one two three four five six' > "$b/labels.txt"
+echo '{"severity":"error","shown":"an earlier run\n"}' > "$shared"
+(cd "$b" && exec "$TEQ" compile app --diagnostics "$shared" > /dev/null 2> "$work/shared1.err") &
+client=$!
+building "$work/shared1.err"
+during=$(beside)
+kill -9 "$client" 2> /dev/null
+wait "$client" 2> /dev/null
+for _ in $(seq 1 150); do [ "$(beside)" = 0 ] && break; sleep 0.1; done
+if [ "$during" = 1 ] && [ ! -s "$shared" ] && [ "$(beside)" = 0 ]; then
+  pass "records: a client killed while its request builds: the file it named is empty, and the daemon removes the request's own file when the build ends"
+else
+  fail "records, a client killed mid-build (beside $during while it built, $(beside) after): $(cat "$shared")"
+fi
+echo 'one two three four five six seven' > "$b/labels.txt"
+(cd "$b" && timeout 150 "$TEQ" compile app --diagnostics "$shared" > /dev/null 2> "$work/shared1.err"; echo $? > "$work/shared1.code") &
+building "$work/shared1.err"
+out=$( (cd "$b" && timeout 150 "$TEQ" compile nosuch --diagnostics "$shared") 2>&1)
+code=$?
+between=$(grep -c . "$shared")
+wait
+if [ $code != 0 ] && [ "$between" = 0 ] && [ "$(cat "$work/shared1.code")" = 0 ] && [ "$(grep -c . "$shared")" = 1 ] &&
+  grep -q '^{"key":"app/test","severity":"outcome","projects":\["app"\],"ok":true' "$shared" && [ "$(beside)" = 0 ]; then
+  pass "records: of two requests that name one file the last to end is the one it holds: a refused request ends while a compile builds and leaves its own records (none), the compile's replace them at its end"
+else
+  fail "records, the second request ending first ($code, $between between, $(cat "$work/shared1.code")): $out // $(cat "$shared")"
+fi
+cp "$work/gen.sh.kept" "$b/gen.sh"
+echo 'one two three four' > "$b/labels.txt"
+(cd "$b" && timeout 150 "$TEQ" compile app > /dev/null 2>&1)
+# A request the daemon cannot read (src/task/daemon.rs `serve`), sent to the real daemon's port: one byte that is no
+# UTF-8 before the request's newline, and a connection closed with no request. The daemon answers each with a
+# refusal's line and exit code 2 on that connection, never with silence, and is the same daemon after it, serving the
+# next command.
+if command -v python3 > /dev/null 2>&1; then
+  (cd "$b" && timeout 150 "$TEQ" compile app > /dev/null 2>&1)
+  answers=$(timeout 60 python3 - "$b/target/teq/daemon.json" << 'PY'
+import json, socket, sys
+info = json.load(open(sys.argv[1]))
+def answered(request):
+    with socket.create_connection(("127.0.0.1", info["port"]), 10) as s:
+        s.settimeout(10)
+        s.sendall(request)
+        s.shutdown(socket.SHUT_WR)
+        data = b""
+        while True:
+            part = s.recv(65536)
+            if not part:
+                break
+            data += part
+    return data.decode().replace("\n", " ").strip()
+print(info["pid"])
+print(answered(b'{"token":"' + info["token"].encode() + b'","verb":"compile"\xff}\n'))
+print(answered(b""))
+PY
+)
+  out=$(task compile app)
+  after=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["pid"])' "$b/target/teq/daemon.json" 2> /dev/null)
+  if [ "$answers" = "$after"$'\n''{"err":"teq: a request that is not UTF-8\n"} {"exit":2}'$'\n''{"err":"teq: an empty request\n"} {"exit":2}' ] && [ "$out" = "app: up to date" ]; then
+    pass "a request the daemon cannot read, one that is not UTF-8 and an empty one, is refused with a line and exit code 2, and the daemon serves the next command"
+  else
+    fail "a request the daemon cannot read: $answers // daemon $after // $out"
+  fi
+fi
+# The client and a daemon that will not serve it (src/task/client.rs `exchange_tries`), against a stand-in daemon
+# (tests/support/fake_daemon.py: it holds the lock, advertises itself and answers each connection one way). One that
+# answers `restart` and is slow to end is asked ONCE: the next daemon is started beside it and waited for, the wait
+# said, the command served. One that closes before any line of an answer and is STILL THERE (its advertisement
+# standing, its lock held) is no ending daemon: the command fails with the client's line alone, a compile and a
+# test alike, and no daemon is started to wait for its lock (one started would wait, say so, and serve the command). One that is GONE with the connection (its advertisement
+# withdrawn, its lock free), or ENDING (its advertisement withdrawn, its lock held a while): a compile goes to the
+# next daemon; a test does not (its suites may have begun): the client's line, exit 2, and the records hold that
+# failure alone.
+if command -v python3 > /dev/null 2>&1; then
+  standin() {
+    (cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+    : > "$work/standin.log"
+    python3 tests/support/fake_daemon.py "$b" "$1" "$2" "$work/standin.log" &
+    standin_pid=$!
+    for _ in $(seq 50); do grep -q listening "$work/standin.log" && break; sleep 0.1; done
+  }
+  asked() { grep -c ' request ' "$work/standin.log"; }
+  ended_line='teq: the daemon ended without an answer (see '
+  standin restart 3
+  out=$( (cd "$b" && timeout 150 "$TEQ" compile app) 2> "$work/standin.err")
+  code=$?
+  wait $standin_pid 2> /dev/null
+  if [ $code = 0 ] && [ "$(asked)" = 1 ] && [ "$(head -1 "$work/standin.err")" = "teq: waiting for the previous teq daemon to stop" ] && [[ "$out" == "app: "* ]]; then
+    pass "restart: a daemon that answers restart and is slow to end is asked once; the next one is waited for, the wait said, and serves the command"
+  else
+    fail "restart, a slow ending daemon ($code, asked $(asked)): $out // $(cat "$work/standin.err") // $(cat "$work/standin.log")"
+  fi
+  # Still there after the silence: the stand-in keeps its advertisement and its lock for four seconds.
+  standin nothing 4
+  out=$( (cd "$b" && timeout 150 "$TEQ" compile app) 2> "$work/standin.err")
+  code=$?
+  if [ $code = 2 ] && [ "$(asked)" = 1 ] && [ -z "$out" ] && [[ "$(cat "$work/standin.err")" == "$ended_line"*")" ]]; then
+    pass "restart: a compile whose daemon closes before any line of an answer and is still there fails with the client's line alone: no daemon is started to wait for the lock it keeps"
+  else
+    fail "restart, a compile under a daemon that says nothing and stays ($code, asked $(asked)): $out // $(cat "$work/standin.err") // $(cat "$work/standin.log")"
+  fi
+  wait $standin_pid 2> /dev/null
+  standin nothing 4
+  echo '{"severity":"error","shown":"an earlier run\n"}' > "$work/standin.records"
+  out=$( (cd "$b" && timeout 150 "$TEQ" test app --diagnostics "$work/standin.records") 2>&1)
+  code=$?
+  wait $standin_pid 2> /dev/null
+  if [ $code = 2 ] && [ "$(asked)" = 1 ] && [[ "$out" == "$ended_line"*")" ]] &&
+    [ "$(wc -l < "$work/standin.records" | tr -d ' ')" = 1 ] && grep -q '^{"severity":"failure","kind":"crash","message":"the daemon ended without an answer' "$work/standin.records"; then
+    pass "restart: a test whose daemon closes before any line of an answer and is still there fails at once: the client's line, exit 2, its record alone"
+  else
+    fail "restart, a test under a daemon that says nothing and stays ($code, asked $(asked)): $out // $(cat "$work/standin.records")"
+  fi
+  # Gone with the connection.
+  standin gone 0
+  out=$( (cd "$b" && timeout 150 "$TEQ" compile app) 2> "$work/standin.err")
+  code=$?
+  wait $standin_pid 2> /dev/null
+  if [ $code = 0 ] && [ "$(asked)" = 1 ] && [[ "$out" == "app: "* ]] && ! grep -q 'ended without an answer' "$work/standin.err"; then
+    pass "restart: a compile whose daemon ended before any line of an answer is sent to the next daemon"
+  else
+    fail "restart, a compile under a daemon that is gone ($code, asked $(asked)): $out // $(cat "$work/standin.err") // $(cat "$work/standin.log")"
+  fi
+  standin gone 0
+  echo '{"severity":"error","shown":"an earlier run\n"}' > "$work/standin.records"
+  out=$( (cd "$b" && timeout 150 "$TEQ" test app --diagnostics "$work/standin.records") 2>&1)
+  code=$?
+  wait $standin_pid 2> /dev/null
+  if [ $code = 2 ] && [ "$(asked)" = 1 ] && [[ "$out" == "$ended_line"*")" ]] &&
+    [ "$(wc -l < "$work/standin.records" | tr -d ' ')" = 1 ] && grep -q '^{"severity":"failure","kind":"crash","message":"the daemon ended without an answer' "$work/standin.records"; then
+    pass "restart: a test whose daemon ended before any line of an answer is not sent again: the client's line, exit 2, its record alone"
+  else
+    fail "restart, a test under a daemon that is gone ($code, asked $(asked)): $out // $(cat "$work/standin.records")"
+  fi
+  # Ending: the advertisement withdrawn as the connection closes, the lock held three seconds more.
+  standin withdrawn 3
+  out=$( (cd "$b" && timeout 150 "$TEQ" compile app) 2> "$work/standin.err")
+  code=$?
+  wait $standin_pid 2> /dev/null
+  if [ $code = 0 ] && [ "$(asked)" = 1 ] && [ "$(head -1 "$work/standin.err")" = "teq: waiting for the previous teq daemon to stop" ] && [[ "$out" == "app: "* ]]; then
+    pass "restart: a compile whose daemon withdrew its advertisement and closed before any line is sent to the next daemon, which waits for the ending one's lock, the wait said"
+  else
+    fail "restart, a compile under a daemon that is ending ($code, asked $(asked)): $out // $(cat "$work/standin.err") // $(cat "$work/standin.log")"
+  fi
+  (cd "$b" && timeout 150 "$TEQ" compile app > /dev/null 2>&1)
+fi
 # The old shape, an export of a plugin before the block's mainClass and the block for every JVM
 # project: app, four product mains and app.Main declared, is refused naming its own four alone (not
 # core's CoreMain, not the test sources' app.tool); core, without a block, as predating it.
@@ -2874,12 +3097,12 @@ code=$?
 if [ $code = 2 ] && [ "$out" = "teq: cannot compile gen uses, which need what sbt alone runs:
   $generated" ]; then pass "target/teq: a project whose closure holds a generator sbt alone runs is refused, found from below the root, every reason once"; else fail "target/teq, the refused compile ($code): $out"; fi
 out=$(cd "$r/other/src" && timeout 120 "$TEQ" compile other 2>&1)
-if [ $? = 0 ] && [[ "$out" == "other/compile: "*" classes, "* ]] && [ -f "$r/target/teq/other/compile/classes/other/Other.class" ]; then pass "target/teq: the other project compiles, its classes under the build's root"; else fail "target/teq, other's compile: $out"; fi
-out=$(cd "$r" && timeout 120 "$TEQ" compile 2>&1)
+if [ $? = 0 ] && [[ "$out" == "other: compiled main, "*" written, in "* ]] && [ -f "$r/target/teq/other/compile/classes/other/Other.class" ]; then pass "target/teq: the other project compiles, its classes under the build's root"; else fail "target/teq, other's compile: $out"; fi
+out=$(cd "$r" && timeout 120 "$TEQ" compile --diagnostics "$work/left.records" 2>&1)
 code=$?
-if [ $code = 2 ] && [[ "$out" == *"other/compile: "* ]] && [[ "$out" == *"tested/compile: "* ]] && [[ "$out" != *"gen/compile: "* ]] && [[ "$out" == *"teq: compile left out gen, which needs what sbt alone runs:
+if [ $code = 2 ] && [ "$(grep -c '"severity":"left-out"' "$work/left.records")" = 3 ] && grep -q '^{"severity":"left-out","project":"gen","shown":"teq: compile left out gen, ' "$work/left.records" && [[ "$out" == *"tested: compiled main, "* ]] && [[ "$out" != *"gen: "* ]] && [[ "$out" == *"teq compile: "*" projects in "* ]] && [[ "$out" == *"teq: compile left out gen, which needs what sbt alone runs:
   $generated"* ]] && [[ "$out" == *"teq: compile left out uses, which needs"* ]] && [[ "$out" == *"teq: compile left out withkit, which needs"* ]]; then
-  pass "target/teq: a compile of every project compiles the others and names the refused ones left out after, exiting 2"
+  pass "target/teq: a compile of every project compiles the others and names the refused ones left out after, each with its record, exiting 2"
 else
   fail "target/teq, the compile of every project ($code): $out"
 fi
@@ -2887,7 +3110,7 @@ out=$(cd "$r" && timeout 120 "$TEQ" compile tested 2>&1)
 code=$?
 test_out=$(cd "$r" && timeout 120 "$TEQ" test tested 2>&1)
 test_code=$?
-if [ $code = 0 ] && [[ "$out" == "tested/compile: "* ]] && [ $test_code = 2 ] && [ "$test_out" = "teq: cannot test tested, which needs what sbt alone runs:
+if [ $code = 0 ] && [[ "$out" == "tested: "* ]] && [ $test_code = 2 ] && [ "$test_out" = "teq: cannot test tested, which needs what sbt alone runs:
   tested/test has the source generator an unnamed task, which sbt runs and teq cannot: build tested with sbt" ]; then
   pass "target/teq: a Test generator sbt runs leaves the compile running, typed without the test configuration, and refuses the test"
 else
@@ -3009,7 +3232,7 @@ open(os.path.join(mb, "teq.lock"), "w", encoding="utf-8").write(lock.canonical(e
 PY
 mill_command="mill --import mvn:build.teq::mill-teq::$(cat integrations/mill/plugin-version.txt) dev.teq.mill.Teq/teqExportAll"
 out=$(cd "$mb" && timeout 120 "$TEQ" --strict compile core 2>&1)
-if [ $? = 0 ] && [[ "$out" == "core/compile: "*" classes, "* ]] && [[ "$out" != *"written before"* ]]; then pass "mill: an unchanged Mill build's export is current, --strict compiling"; else fail "mill, the current export: $out"; fi
+if [ $? = 0 ] && [[ "$out" == "core: compiled main, "* ]] && [[ "$out" != *"written before"* ]]; then pass "mill: an unchanged Mill build's export is current, --strict compiling"; else fail "mill, the current export: $out"; fi
 cp "$mb/core/package.mill" "$work/package.mill.saved"
 printf '// edited\n' >> "$mb/core/package.mill"
 out=$(cd "$mb" && timeout 120 "$TEQ" compile core 2>&1)
@@ -3043,7 +3266,7 @@ out=$(cd "$mb" && timeout 120 "$TEQ" compile vc 2>&1)
 code=$?
 va=$(cd "$mb" && timeout 120 "$TEQ" compile va 2>&1)
 if [ $code = 2 ] && [ "$out" = "teq: cannot compile vc, which needs what mill alone runs:
-  vc/compile does not see vb/compile, which va/compile builds on: teq types vc/compile as one program with every configuration it builds on, where vb/compile would be seen; compile vc with mill" ] && [[ "$va" == "va/compile: "* ]]; then
+  vc/compile does not see vb/compile, which va/compile builds on: teq types vc/compile as one program with every configuration it builds on, where vb/compile would be seen; compile vc with mill" ] && [[ "$va" == "va: compiled main, "* ]]; then
   pass "mill: a prerequisite out of a configuration's sight (compileModuleDeps, not transitive) refuses its compile, the one that sees it compiling"
 else
   fail "mill, the visibility: ($code) $out; va: $va"
@@ -3052,8 +3275,8 @@ out=$(cd "$mb" && timeout 120 "$TEQ" compile leak 2>&1)
 code=$?
 test_out=$(cd "$mb" && timeout 120 "$TEQ" test leak 2>&1)
 test_code=$?
-if [ $code = 1 ] && [[ "$out" == *"leak/src/leak/Leak.scala:4:33: error: type FunSuite not found"* ]] && [[ "$out" == *"leak/compile: 2 errors"* ]] && [ $test_code = 0 ] &&
-  [[ "$test_out" == *"leak/test: 1 suite, 1 passed, 0 failed"* ]]; then
+if [ $code = 1 ] && [[ "$out" == *"leak/src/leak/Leak.scala:4:33: error: type FunSuite not found"* ]] && [[ "$out" == *"leak: 2 errors"* ]] && [ $test_code = 0 ] &&
+  [[ "$test_out" == *"leak: 1 suite, 1 passed, 0 failed"* ]]; then
   pass "mill: a module's compile is typed alone, never inside its test's resident (whose class path adds munit), and its test, typed there, sees munit as an sbt configuration sees its dependent's union"
 else
   fail "mill, a compile typed inside its test: compile ($code) $out; test ($test_code) $test_out"
@@ -3062,8 +3285,8 @@ out=$(cd "$mb" && timeout 300 "$TEQ" test 2>&1)
 code=$?
 again=$(cd "$mb" && timeout 300 "$TEQ" test core 2>&1)
 again_code=$?
-if [ $code = 2 ] && [[ "$out" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"leak/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"teq: test left out web, which needs what mill alone runs:"*"web: its suites run under jsdom, and the build's root holds no lockfile of npm, yarn or pnpm that installs jsdom"* ]] &&
-  [ $again_code = 0 ] && [[ "$again" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] && [ -f "$mb/target/teq/core/test/sandbox/left-by-the-run.txt" ]; then
+if [ $code = 2 ] && [[ "$out" == *"core: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"leak: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"teq: test left out web, which needs what mill alone runs:"*"web: its suites run under jsdom, and the build's root holds no lockfile of npm, yarn or pnpm that installs jsdom"* ]] &&
+  [ $again_code = 0 ] && [[ "$again" == *"core: 1 suite, 1 passed, 0 failed"* ]] && [ -f "$mb/target/teq/core/test/sandbox/left-by-the-run.txt" ]; then
   pass "mill: the suites run in a sandbox emptied for each run, with Mill's variables and the run classpath; a Scala.js project whose jsdom no lockfile installs named left out, the run exiting 2"
 else
   fail "mill, the test run: ($code) $out; again ($again_code): $again"
@@ -3292,7 +3515,7 @@ oracle_of() { grep "^$1	" "tests/scalajs-test/oracle-${tuple:-1.22.0}.txt" | if 
 inventory() { sed 's/\x1b\[[0-9;]*m//g' "$1" | awk -F'\t' 'NF != 3 || $3 != "ran"' | sort; }
 out=$(jstest suites --events "$js/suites.events")
 code=$?
-if [ $code = 1 ] && [ "$(inventory "$js/suites.events")" = "$(oracle_of suites)" ] && [[ "$out" == *"suites/test: 6 suites, 7 passed, 5 failed, 3 ignored, 1 pending, 1 canceled"* ]] \
+if [ $code = 1 ] && [ "$(inventory "$js/suites.events")" = "$(oracle_of suites)" ] && [[ "$out" == *"suites: 6 suites, 7 passed, 5 failed, 3 ignored, 1 pending, 1 canceled"* ]] \
    && [[ "$out" == *"[fail] fixture.ScalatestNeedsArgument crashed"* ]] && [[ "$out" == *"[fail] fixture.MunitSuite.fails: munit.ComparisonFailException: suites/src/test/scala/fixture/MunitSuite.scala:11"* ]]; then
   pass "scalajs tests: munit, ScalaTest, utest and zio-test suites under node give sbt-scalajs's events, every status, an error for a suite the framework cannot make, the excluded suite and the framework's argument honoured"
 else
@@ -3302,7 +3525,7 @@ fi
 out=$(jstest suites120 --events "$js/suites120.events")
 code=$?
 if [ $code = 1 ] && [ "$(sed 's/^suites120	/suites	/' "$js/suites120.events" | inventory /dev/stdin)" = "$(tuple=1.20.1 oracle_of suites)" ] \
-   && [[ "$out" == *"suites120/test: 5 suites, 6 passed, 4 failed, 2 ignored, 1 pending, 1 canceled"* ]]; then
+   && [[ "$out" == *"suites120: 5 suites, 6 passed, 4 failed, 2 ignored, 1 pending, 1 canceled"* ]]; then
   pass "scalajs tests: munit 1.2.1, ScalaTest and utest, sbt-scalajs 1.20.1's tuple, give its events"
 else
   fail "scalajs tests: suites120 ($code): $(diff <(sed 's/^suites120	/suites	/' "$js/suites120.events" | inventory /dev/stdin) <(tuple=1.20.1 oracle_of suites) | head -10) $out"
@@ -3336,7 +3559,7 @@ else
   fail "scalajs tests: --list: $listed // $(oracle_of suites defined | cut -f2) // $out"
 fi
 out=$(jstest suites fixture.UtestSuite --events "$js/pattern.events")
-if [ $? = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/pattern.events" | cut -f2 | sort -u)" = "fixture.UtestSuite" ] && [[ "$out" == *"suites/test: 1 suite, 2 passed, 1 failed"* ]]; then
+if [ $? = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/pattern.events" | cut -f2 | sort -u)" = "fixture.UtestSuite" ] && [[ "$out" == *"suites: 1 suite, 2 passed, 1 failed"* ]]; then
   pass "scalajs tests: a pattern runs the suites it names"
 else
   fail "scalajs tests: a pattern: $(cat "$js/pattern.events") $out"
@@ -3359,7 +3582,7 @@ jstest removal > /dev/null
 rm "$js/removal/src/test/scala/fixture/Preferred.scala"
 out=$(jstest removal --changed --events "$js/removal.events")
 code=$?
-if [ $code = 1 ] && grep -q "GreetingSuite" "$js/removal.events" && ! grep -q "OtherSuite" "$js/removal.events" && [[ "$out" == *"removal/test: 1 suite, 0 passed, 1 failed"* ]]; then
+if [ $code = 1 ] && grep -q "GreetingSuite" "$js/removal.events" && ! grep -q "OtherSuite" "$js/removal.events" && [[ "$out" == *"removal: 1 suite, 0 passed, 1 failed"* ]]; then
   pass "scalajs tests: --changed after a source is deleted runs the suites that depended on it, the others left"
 else
   fail "scalajs tests: --changed after a deletion ($code): $(cut -f2,4 "$js/removal.events" 2> /dev/null | tr '\n' ' ') $out"
@@ -3367,7 +3590,7 @@ fi
 rm "$js/removal/src/test/scala/fixture/Marked.scala"
 out=$(jstest removal --changed --events "$js/removal2.events")
 code=$?
-if [ $code = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/removal2.events" | cut -f2 | sort -u)" = "fixture.SelectedSuite.selected" ] && [[ "$out" == *"removal/test: 1 suite, 0 passed, 1 failed"* ]]; then
+if [ $code = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/removal2.events" | cut -f2 | sort -u)" = "fixture.SelectedSuite.selected" ] && [[ "$out" == *"removal: 1 suite, 0 passed, 1 failed"* ]]; then
   pass "scalajs tests: --changed after deleting a given a summonFrom found, its case binding none, runs the suite of the inline call"
 else
   fail "scalajs tests: --changed after deleting a summonFrom's given ($code): $(cut -f2,4 "$js/removal2.events" 2> /dev/null | tr '\n' ' ') $out"
@@ -3379,10 +3602,10 @@ listed=$(printf '%s\n' "$out" | sed -E 's/ : .*//' | tr '\n' ',')
 : > "$js/grouped.events"
 (cd "$js" && timeout 300 "$TEQ" test grouped --events "$js/grouped.events" > "$js/grouped.out" 2> "$js/grouped.err")
 code=$?
-summaries=$(grep '^grouped/test' "$js/grouped.err" | sed -E 's/ in [0-9]+ ms( \(built in [0-9]+ ms\))?$//' | tr '\n' ',')
+summaries=$(grep -E '^grouped( \[| \(ungrouped\)|: )' "$js/grouped.err" | sed -E 's/ in ([0-9]+ ms|[0-9]+\.[0-9] s)( \(built in ([0-9]+ ms|[0-9]+\.[0-9] s)\))?$//' | tr '\n' ',')
 order=$(awk -F'\t' 'NF == 6 {print $2 "/" $6}' "$js/grouped.events" | tr '\n' ',')
 if [ $code = 0 ] && [ "$listed" = "Group z,Test fixture.ThirdSuite,Group a,Test fixture.FirstSuite,Ungrouped,Test fixture.SecondSuite," ] \
-  && [ "$summaries" = "grouped/test [z]: 1 suite,grouped/test [z]: 1 suite, 1 passed, 0 failed,grouped/test [a]: 1 suite,grouped/test [a]: 1 suite, 1 passed, 0 failed,grouped/test (ungrouped): 1 suite,grouped/test (ungrouped): 1 suite, 1 passed, 0 failed,grouped/test: 3 suites, 3 passed, 0 failed," ] \
+  && [ "$summaries" = "grouped [z]: 1 suite,grouped [z]: 1 suite, 1 passed, 0 failed,grouped [a]: 1 suite,grouped [a]: 1 suite, 1 passed, 0 failed,grouped (ungrouped): 1 suite,grouped (ungrouped): 1 suite, 1 passed, 0 failed,grouped: 3 suites, 3 passed, 0 failed," ] \
   && [ "$order" = "fixture.ThirdSuite.third/z,fixture.FirstSuite.first/a,fixture.SecondSuite.second/," ]; then
   pass "scalajs tests: groups listed and run in their order in one node, an object shared across them, each group's summary and each event's group"
 else
@@ -3399,11 +3622,11 @@ pj probedtasks
 code_tasks=$?
 pj probeddone
 code_done=$?
-if [ $code = 0 ] && [ "$(probes probed)" = "PROBE CREATE,PROBE TASKS 1,PROBE TASKS 1,PROBE DONE," ] && grep -q '^probed/test \[second\]: 1 suite, 1 passed, 0 failed' "$js/probed.err" \
-  && [ $code_tasks = 1 ] && [ "$(probes probedtasks)" = "PROBE CREATE,PROBE TASKS 1," ] && grep -q '^probedtasks/test: the run failed: org.scalajs.testing.common.RPCCore\$RPCException: ' "$js/probedtasks.err" \
-  && grep -qx 'probedtasks/test: not completed: \[first\], \[second\]' "$js/probedtasks.err" && grep '"severity":"failure"' "$js/probedtasks.diag" | grep 'the run failed' | grep -q '"group":"first"' \
-  && [ $code_done = 1 ] && [ "$(probes probeddone)" = "PROBE CREATE,PROBE TASKS 1,PROBE TASKS 1,PROBE DONE," ] && grep -q '^probeddone/test \[second\]: 1 suite, 1 passed, 0 failed' "$js/probeddone.err" \
-  && grep -q '^probeddone/test: the run failed: ' "$js/probeddone.err" && ! grep -q 'not completed' "$js/probeddone.err" \
+if [ $code = 0 ] && [ "$(probes probed)" = "PROBE CREATE,PROBE TASKS 1,PROBE TASKS 1,PROBE DONE," ] && grep -q '^probed \[second\]: 1 suite, 1 passed, 0 failed' "$js/probed.err" \
+  && [ $code_tasks = 1 ] && [ "$(probes probedtasks)" = "PROBE CREATE,PROBE TASKS 1," ] && grep -q '^probedtasks: the run failed: org.scalajs.testing.common.RPCCore\$RPCException: ' "$js/probedtasks.err" \
+  && grep -qx 'probedtasks: not completed: \[first\], \[second\]' "$js/probedtasks.err" && grep '"severity":"failure"' "$js/probedtasks.diag" | grep 'the run failed' | grep -q '"group":"first"' \
+  && [ $code_done = 1 ] && [ "$(probes probeddone)" = "PROBE CREATE,PROBE TASKS 1,PROBE TASKS 1,PROBE DONE," ] && grep -q '^probeddone \[second\]: 1 suite, 1 passed, 0 failed' "$js/probeddone.err" \
+  && grep -q '^probeddone: the run failed: ' "$js/probeddone.err" && ! grep -q 'not completed' "$js/probeddone.err" \
   && grep '"severity":"failure"' "$js/probeddone.diag" | grep 'the run failed' | grep -q '"group":null'; then
   pass "scalajs tests: a framework's runner made once, its tasks asked per group and its done once; its tasks or its done failing ends the run, the failure recorded with its group"
 else
@@ -3414,8 +3637,8 @@ fi
 : > "$js/unmade.events"
 out=$(jstest unmade fixture.MunitSuite fixture.ScalatestSuite --events "$js/unmade.events")
 code=$?
-if [ $code = 1 ] && [[ "$out" == *"unmade/test: the run failed: org.scalajs.testing.common.RPCCore\$RPCException:"* ]] && [[ "$out" == *"unmade/test: not completed: [first], [second]"* ]] \
-  && [ ! -s "$js/unmade.events" ] && [[ "$out" != *"unmade/test: 2 suites"* ]]; then
+if [ $code = 1 ] && [[ "$out" == *"unmade: the run failed: org.scalajs.testing.common.RPCCore\$RPCException:"* ]] && [[ "$out" == *"unmade: not completed: [first], [second]"* ]] \
+  && [ ! -s "$js/unmade.events" ] && [[ "$out" != *"unmade: 2 suites"* ]]; then
   pass "scalajs tests: a framework whose runner the bridge cannot make ends the run before any group, the groups not completed named"
 else
   fail "scalajs tests: the runner that cannot be made ($code): $out // $(cat "$js/unmade.events")"
@@ -3458,15 +3681,15 @@ fi
 : > "$js/exits.events"
 out=$(jstest exits --events "$js/exits.events")
 code=$?
-if [ $code = 1 ] && [[ "$out" == *"node ended before the run completed"* ]] && [[ "$out" == *"exits/test: not completed: [second]"* ]] \
-  && [[ "$out" == *"exits/test [first]: 1 suite, 1 passed, 0 failed"* ]] \
+if [ $code = 1 ] && [[ "$out" == *"node ended before the run completed"* ]] && [[ "$out" == *"exits: not completed: [second]"* ]] \
+  && [[ "$out" == *"exits [first]: 1 suite, 1 passed, 0 failed"* ]] \
   && grep -q '^exits	fixture.BeforeSuite	ran	first$' "$js/exits.events" && grep -q '^exits	fixture.BeforeSuite.before	.*	Success		first$' "$js/exits.events"; then
   pass "scalajs tests: a later group's suite ending node fails the run, the earlier group's events and suites written with their group"
 else
   fail "scalajs tests: node ended in a later group ($code): $out // $(cat "$js/exits.events")"
 fi
 out=$(jstest missing)
-if [ $? = 0 ] && [[ "$out" == *"note: missing/test: the test framework org.scalatest.tools.Framework is not in the test link"* ]] && [[ "$out" == *"missing/test: 1 suite, 2 passed, 0 failed"* ]]; then
+if [ $? = 0 ] && [[ "$out" == *"note: missing: the test framework org.scalatest.tools.Framework is not in the test link"* ]] && [[ "$out" == *"missing: 1 suite, 2 passed, 0 failed"* ]]; then
   pass "scalajs tests: a framework the link does not hold is left out with a note, as sbt-scalajs leaves it out, the other's suites run"
 else
   fail "scalajs tests: a missing framework: $out"
@@ -3478,7 +3701,7 @@ else
   fail "scalajs tests: jsdom and ESModule: $out"
 fi
 out=$(jstest)
-if [ $? = 2 ] && [[ "$out" == *"cjs/test: 1 suite, 2 passed, 0 failed"* ]] && [[ "$out" == *"suites/test: 6 suites"* ]] && [[ "$out" == *"teq: test left out domesm"* ]]; then
+if [ $? = 2 ] && [[ "$out" == *"cjs: 1 suite, 2 passed, 0 failed"* ]] && [[ "$out" == *"suites: 6 suites"* ]] && [[ "$out" == *"teq: test left out domesm"* ]]; then
   pass "scalajs tests: test over every project runs the Scala.js ones and names the one left out"
 else
   fail "scalajs tests: every project: $out"
@@ -3527,14 +3750,14 @@ open(os.path.join(e, "target/teq/teq.lock"), "w", encoding="utf-8").write(lock.c
 PY
 out=$(cd "$e" && timeout 120 "$TEQ" test quiet1 2>&1)
 code=$?
-if [ $code = 0 ] && [ "$out" = "quiet1/test: no suite to run" ] && ! grep -q '^starting the test runner of quiet1/test' "$e/target/teq/task.log"; then
+if [ $code = 0 ] && [ "$out" = "quiet1: no suite to run" ] && ! grep -q '^starting the test runner of quiet1/test' "$e/target/teq/task.log"; then
   pass "a test configuration with nothing that could be a suite starts no test runner"
 else
   fail "the configuration without suites ($code): $out"
 fi
 out=$(cd "$e" && timeout 120 "$TEQ" test 2>&1)
 code=$?
-if [ $code = 0 ] && [[ "$out" == *"quiet1/test: no suite to run"* ]] && [[ "$out" == *"quiet2/test: no suite to run"* ]] && ! grep -q '^starting the test runner' "$e/target/teq/task.log" \
+if [ $code = 0 ] && [[ "$out" == *"quiet1: no suite to run"* ]] && [[ "$out" == *"quiet2: no suite to run"* ]] && ! grep -q '^starting the test runner' "$e/target/teq/task.log" \
   && grep -q '^stopping quiet2/test: its run of several configurations is done with it' "$e/target/teq/task.log" && ! grep -q '^stopping quiet1/test: its run' "$e/target/teq/task.log"; then
   pass "a test of every project stops the residents it started once done with them, keeping the one running before"
 else

@@ -123,7 +123,7 @@ for v in $versions; do
   gen/compile has the source generator gen.generatedSources, which mill runs and teq cannot"* ]] &&
     [[ "$out" == *"teq: compile left out computed, which needs what mill alone runs:
   computed/compile has the source generator computed.sources, which mill runs and teq cannot (the build computes its sources, which the export does not run)"* ]] &&
-    [[ "$out" == *"core.extras/compile: "* ]] && [[ "$out" == *"pkg/compile: "* ]] && [[ "$out" == *"web/compile: checked"* ]] && [[ "$out" != *"error"* ]]; then
+    [[ "$out" == *"core.extras: compiled "* ]] && [[ "$out" == *"pkg: compiled "* ]] && [[ "$out" == *"web: checked "* ]] && [[ "$out" != *"error"* ]]; then
     pass "Mill $v: a compile of every project builds the others and names c (a dependency it does not see), gen (Mill's generator) and computed (sources the build computes) left out"
   else
     fail "Mill $v: the compile of every project ($code): $out"
@@ -133,7 +133,7 @@ for v in $versions; do
   upstream=$(teq_in "$b" compile upstream)
   upstream_code=$?
   if [ $downstream_code = 2 ] && [[ "$downstream" == *"upstream/compile is typed inside downstream/compile, whose class path lacks com.lihaoyi:sourcecode_3:0.4.2, which upstream/compile's names"* ]] &&
-    [ $upstream_code = 0 ] && [[ "$upstream" == *"upstream/compile: "* ]]; then
+    [ $upstream_code = 0 ] && [[ "$upstream" == *"upstream: "* ]]; then
     pass "Mill $v: downstream's compile, which would type upstream's sources without upstream's compileMvnDeps, refused; upstream's compiles"
   else
     fail "Mill $v: the compile-time dependency: downstream ($downstream_code) $downstream // upstream ($upstream_code) $upstream"
@@ -142,7 +142,7 @@ for v in $versions; do
   first_code=$?
   second=$(teq_in "$b" test harness)
   second_code=$?
-  if [ $first_code = 0 ] && [ $second_code = 0 ] && [[ "$second" == *"harness/test: 1 suite, 2 passed, 0 failed"* ]] && [ -f "$b/target/teq/harness/test/sandbox/written-by-a-run.txt" ]; then
+  if [ $first_code = 0 ] && [ $second_code = 0 ] && [[ "$second" == *"harness: 1 suite, 2 passed, 0 failed"* ]] && [ -f "$b/target/teq/harness/test/sandbox/written-by-a-run.txt" ]; then
     pass "Mill $v: harness's suites run in a sandbox emptied before each run, with Mill's variables and harness's run class path"
   else
     fail "Mill $v: harness's suites ($first_code, $second_code): $first // $second"
@@ -151,7 +151,7 @@ for v in $versions; do
   core_code=$?
   tested=$(teq_in "$b" test tested)
   tested_code=$?
-  if [ $core_code = 0 ] && [[ "$core" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] &&
+  if [ $core_code = 0 ] && [[ "$core" == *"core: 1 suite, 1 passed, 0 failed"* ]] &&
     [ $tested_code = 2 ] && [[ "$tested" == *"tested: its test module tested.test: its sources hold a Java file, which teq does not compile"* ]]; then
     pass "Mill $v: core's test, which shows core's sources munit as sbt's does, runs; tested's, whose test module holds Java sources, refused"
   else
@@ -159,8 +159,8 @@ for v in $versions; do
   fi
   out=$(teq_in "$b" test)
   code=$?
-  if [ $code = 2 ] && [[ "$out" == *"harness/test: 1 suite, 2 passed"* ]] && [[ "$out" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] &&
-    [[ "$out" == *"matrix[3.8.4]/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"teq: test left out tested, which needs"* ]] &&
+  if [ $code = 2 ] && [[ "$out" == *"harness: 1 suite, 2 passed"* ]] && [[ "$out" == *"core: 1 suite, 1 passed, 0 failed"* ]] &&
+    [[ "$out" == *"matrix[3.8.4]: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"teq: test left out tested, which needs"* ]] &&
     [[ "$out" == *"web: its suites run under jsdom, and the build's root holds no lockfile of npm, yarn or pnpm that installs jsdom"* ]]; then
     pass "Mill $v: a test of every project runs the JVM suites it may and names the others left out, exiting 2"
   else
@@ -217,7 +217,7 @@ PY
 if out=$(export_build "$d" 2>&1) && [ -f "$d/teq.lock" ] && [ ! -e "$d/target/teq/teq.lock" ] && [ -x "$d/teq" ] && [ -f "$d/teq.cmd" ] &&
   cmp -s "$d/teq" tools/launcher/teq && [[ "$out" == *"wrote $d/teq"* ]]; then
   out=$(cd "$d" && TEQ=$TEQ timeout 300 ./teq --strict compile b 2>&1)
-  if [ $? = 0 ] && [[ "$out" == "b/compile: "* ]]; then pass "the driver's mode: the lock at the root with the launchers, ./teq running it"; else fail "the driver's mode, ./teq: $out"; fi
+  if [ $? = 0 ] && [[ "$out" == "b: "* ]]; then pass "the driver's mode: the lock at the root with the launchers, ./teq running it"; else fail "the driver's mode, ./teq: $out"; fi
   (cd "$d" && TEQ=$TEQ timeout 60 ./teq stop > /dev/null 2>&1)
 else
   fail "the driver's mode: $out"

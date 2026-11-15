@@ -385,9 +385,13 @@ object Ref:
     recorded.toVector.sortBy(_._1).filter((k, v) => !digests.get(k).contains(v)).map((k, v) => s"generated $k: ${digests.getOrElse(k, "absent")}, generated.json has $v") ++
       digests.keys.toVector.sorted.filter(k => !recorded.contains(k)).map(k => s"generated $k: ${digests(k)}, generated.json has none")
 
-  // A compile's diagnostics by project, from teq's lines `<project>/<configuration>: N errors` and the diagnostics
-  // printed before them.
-  private val summary = "^([^ /]+)/(compile|test): (.*)$".r
+  // A build's outcome as its record has it (`--diagnostics`, severity `outcome`), for the driver's own report.
+  private def outcomeOf(r: Transcript.Shown): String =
+    val errors = r.field("errors").fold(0)(_.int)
+    r.word("failed") match
+      case Some(kind) => s"${r.key}: failed ($kind)"
+      case None if errors > 0 => s"${r.key}: $errors error${if errors == 1 then "" else "s"}"
+      case None => s"${r.key}: built${r.field("ms").fold("")(ms => f" in ${ms.double}%.0f ms")}"
 
   def compile(pin: Pin, dir: Path, out: Path, teq: String, runs: Int, mode: Mode): Unit =
     val lock = exported(pin, dir)
@@ -414,8 +418,8 @@ object Ref:
       // Every compile configuration the export holds sources for covered by the run (`Locks.hold`).
       val observed = Locks.hold(Transcript.compile(text, records, roots), lock)
       val warnings = records.fold(Vector.empty)(Transcript.shown).count(_.severity == "warning")
-      // Each configuration's last line is its outcome (its generators print before it).
-      val outcomes = text.linesIterator.flatMap(l => summary.findFirstMatchIn(l)).map(m => s"${m.group(1)}/${m.group(2)}" -> m.group(3)).toMap.toVector.sorted.map((k, v) => s"$k: $v")
+      // Each configuration's outcome, its build's record.
+      val outcomes = records.fold(Vector.empty)(Transcript.shown).filter(_.outcome).map(outcomeOf).sorted
       println(f"${pin.name}: compile run $i: exit ${r.status}, $wall%.1f s, peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}, ${observed.debt.size} errors, $warnings warnings")
       outcomes.foreach(o => println(s"  $o"))
       // The generated inputs' digests as this run left them: each run's held apart, so that no later run hides an

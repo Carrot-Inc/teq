@@ -63,22 +63,45 @@ impl Told {
     }
 }
 
-/// A job's line where its typing begins: `a/compile: typing (1 of 3)` with its place among the run's jobs, `a/compile:
-/// typing again` in round two. `asker`: the rule that may ask a symbol, for which the round is typed by one worker.
-fn typing_line(key: &str, place: Option<(usize, usize)>, asker: Option<&str>) -> String {
-    let how = match asker {
-        Some(rule) => format!(" on one worker, since {} may ask a symbol", rule),
-        None => String::new(),
-    };
-    match place {
-        Some((k, of)) => format!("{}: typing{} ({} of {})", key, how, k, of),
-        None => format!("{}: typing again{}", key, how),
+/// A job as its lines name it: its project and what the job covers of it, `api` and ` main and test` for the key
+/// `api/test`, ` main` for a compile configuration's; another key as it is. The key itself is the record's.
+fn named(key: &str) -> (&str, &str) {
+    match key.split_once('/') {
+        Some((project, "test")) => (project, " main and test"),
+        Some((project, "compile")) => (project, " main"),
+        _ => (key, ""),
     }
+}
+
+/// A job's line where its typing begins: `api: typing main and test (1 of 3)` with its place among the run's jobs,
+/// `api: typing main and test again` in round two.
+fn typing_line(key: &str, place: Option<(usize, usize)>) -> String {
+    let (project, covers) = named(key);
+    match place {
+        Some((k, of)) => format!("{}: typing{} ({} of {})", project, covers, k, of),
+        None => format!("{}: typing{} again", project, covers),
+    }
+}
+
+/// The run's line, once before its first job's, where its rounds are typed by one worker: `teq fix: typing on one
+/// worker, because the rule OptionGetWarn reads the symbol index`, the first such rule and the count of the others
+/// (`because the rule OptionGetWarn and 2 other rules read the symbol index`); where only some of the run's jobs
+/// have such a rule, the projects it holds for (`teq fix: typing api, core on one worker, because ..`). None where
+/// no job has one.
+fn one_worker_line(rules: &[&str], projects: Option<&[&str]>) -> Option<String> {
+    let (first, others) = rules.split_first()?;
+    let because = match others.len() {
+        0 => format!("the rule {} reads the symbol index", first),
+        1 => format!("the rule {} and 1 other rule read the symbol index", first),
+        n => format!("the rule {} and {} other rules read the symbol index", first, n),
+    };
+    let of = projects.map_or(String::new(), |p| format!(" {}", p.join(", ")));
+    Some(format!("teq fix: typing{} on one worker, because {}", of, because))
 }
 
 /// How far a job's rules have come, the status line of a terminal.
 fn rules_line(key: &str, done: usize, of: usize) -> String {
-    format!("{}: rules over {} of {}", key, done, counted(of, "file", "files"))
+    format!("{}: rules over {} of {}", named(key).0, done, counted(of, "file", "files"))
 }
 
 /// A job's line where its round ends: its documents, their lints, those the rules edit (`more` of round two's), the
@@ -86,7 +109,7 @@ fn rules_line(key: &str, done: usize, of: usize) -> String {
 fn job_line(key: &str, (files, lints, edited): (usize, usize, usize), again: bool, took: std::time::Duration, twice: bool) -> String {
     let more = if again { " more" } else { "" };
     let tail = if twice { " (typed twice: the parallel attempt gave way)" } else { "" };
-    format!("{}: {}, {}, {}{} to rewrite in {}{}", key, counted(files, "file", "files"), counted(lints, "lint", "lints"), edited, more, duration(took), tail)
+    format!("{}: {}, {}, {}{} to rewrite in {}{}", named(key).0, counted(files, "file", "files"), counted(lints, "lint", "lints"), edited, more, duration(took), tail)
 }
 
 /// A round's counts for its line (`job_line`): its documents, their lints as the configuration's filters leave them,
@@ -112,16 +135,25 @@ fn lints_told(errors: usize, warnings: usize, infos: usize) -> String {
     }
 }
 
-/// What the last line tells of a run that came to its end: `3 configurations, 2 files, 1 lint (1 error), 1 file
+/// What the last line tells of a run that came to its end: `3 projects, 2 files, 1 lint (1 error), 1 file
 /// rewritten`, a check's `would be rewritten`.
-fn run_line(jobs: usize, files: usize, lints: &str, written: usize, check: bool) -> String {
+fn run_line(projects: usize, files: usize, lints: &str, written: usize, check: bool) -> String {
     let done = if check { "would be rewritten" } else { "rewritten" };
-    format!("{}, {}, {}, {} {}", counted(jobs, "configuration", "configurations"), counted(files, "file", "files"), lints, counted(written, "file", "files"), done)
+    format!("{}, {}, {}, {} {}", counted(projects, "project", "projects"), counted(files, "file", "files"), lints, counted(written, "file", "files"), done)
+}
+
+/// The projects a run's jobs are of, as its last line counts them: a project typed in two jobs (its main sources
+/// in one, its tests in another that does not type them) is one project.
+fn projects_of<'a>(keys: impl Iterator<Item = &'a str>) -> usize {
+    let mut names: Vec<&str> = keys.map(|k| named(k).0).collect();
+    names.sort_unstable();
+    names.dedup();
+    names.len()
 }
 
 /// What the last line tells of a job that does not type.
 fn untyped_line(key: &str, errors: usize) -> String {
-    format!("{} does not type ({}); nothing rewritten,", key, counted(errors, "error", "errors"))
+    format!("{} does not type ({}); nothing rewritten,", named(key).0, counted(errors, "error", "errors"))
 }
 
 /// Why a round gives no outcomes: what to print, and the count of the program's errors where it does not type (none
@@ -459,12 +491,13 @@ fn asks_service(infos: &[RuleInfo]) -> bool {
     plant().as_deref() != Some("asks-nothing") && infos.iter().any(|i| i.semantic && !(i.shipped && ASK_NOTHING.contains(&i.name.as_str())))
 }
 
-/// The first configured rule that may ask the service (`asks_service`), which a round typed by one worker names.
-fn asking_rule(infos: &[RuleInfo]) -> Option<&str> {
+/// The configured rules that read the symbol index (`asks_service`), for which a round is typed by one worker and
+/// which the run names once (`one_worker_line`).
+fn asking_rules(infos: &[RuleInfo]) -> Vec<&str> {
     if !asks_service(infos) {
-        return None;
+        return Vec::new();
     }
-    infos.iter().find(|i| i.semantic && !(i.shipped && ASK_NOTHING.contains(&i.name.as_str()))).map(|i| i.name.as_str())
+    infos.iter().filter(|i| i.semantic && !(i.shipped && ASK_NOTHING.contains(&i.name.as_str()))).map(|i| i.name.as_str()).collect()
 }
 
 /// What a question gets where its round was not typed to be asked (`ASK_NOTHING`): whatever the count it was typed
@@ -748,6 +781,28 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
         d.infos = infos;
         record(format_args!("run eligible={} workers={} semantic={}", d.pool.eligible as u8, d.pool.limit, d.semantic as u8));
     }
+    // Why rounds are typed by one worker, said once before the first job's line: the rules that read the symbol
+    // index, and the projects it holds for where only some of the run's parts have one.
+    if let Some(t) = told {
+        let (mut rules, mut projects, mut asking) = (Vec::new(), Vec::new(), 0);
+        for d in driven.iter().filter(|d| asks_service(&d.infos)) {
+            asking += 1;
+            for rule in asking_rules(&d.infos) {
+                if !rules.contains(&rule) {
+                    rules.push(rule);
+                }
+            }
+            for job in &d.part.jobs {
+                if !projects.contains(&named(&job.key).0) {
+                    projects.push(named(&job.key).0);
+                }
+            }
+        }
+        let some = (asking < driven.len()).then_some(&projects[..]);
+        if let Some(line) = one_worker_line(&rules, some) {
+            t.progress.line(&line);
+        }
+    }
     let mut base = 0u32;
     let mut gen = 0u32;
     // Round one, every part's jobs over the files as read; the rules' results kept for round two.
@@ -758,7 +813,7 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
             let earlier = Earlier { job: k, results: &HashMap::new(), semantic: &d.semantic_rules };
             let began = std::time::Instant::now();
             if let Some(t) = told {
-                t.progress.begin(&typing_line(&job.key, Some((k + 1, jobs)), asking_rule(&d.infos)));
+                t.progress.begin(&typing_line(&job.key, Some((k + 1, jobs))));
             }
             let mut twice = false;
             match round((k, 1), job, &HashMap::new(), d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, Some(&mut d.kept), told, &mut twice) {
@@ -809,7 +864,7 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
             let earlier = Earlier { job: k, results: &d.kept, semantic: &d.semantic_rules };
             let began = std::time::Instant::now();
             if let Some(t) = told {
-                t.progress.begin(&typing_line(&job.key, None, asking_rule(&d.infos)));
+                t.progress.begin(&typing_line(&job.key, None));
             }
             let mut twice = false;
             match round((k, 2), job, &changed, d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, None, told, &mut twice) {
@@ -885,8 +940,9 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
     print_lints(&shown);
     let of = |s: Severity| shown.iter().filter(|(_, _, l)| l.severity == s).count();
     let errors = of(Severity::Error);
-    // The run's last line: its jobs, the files they edit between them, the lints shown, the files written.
-    let account = run_line(jobs, paths.len(), &lints_told(errors, of(Severity::Warning), of(Severity::Info)), writes.len(), setup.check);
+    // The run's last line: its jobs' projects, the files they edit between them, the lints shown, the files written.
+    let projects = projects_of(driven.iter().flat_map(|d| d.part.jobs.iter().map(|j| j.key.as_str())));
+    let account = run_line(projects, paths.len(), &lints_told(errors, of(Severity::Warning), of(Severity::Info)), writes.len(), setup.check);
     if setup.check {
         for (path, _) in &writes {
             eprintln!("{}: would be rewritten", shown_path(&setup.display, path));
@@ -2338,24 +2394,45 @@ mod tests {
 
     #[test]
     fn a_job_is_told_where_its_typing_begins() {
-        assert_eq!(typing_line("a/compile", Some((1, 3)), None), "a/compile: typing (1 of 3)");
-        assert_eq!(typing_line("a/compile", None, None), "a/compile: typing again");
-        assert_eq!(typing_line("a/compile", Some((2, 3)), Some("Asking")), "a/compile: typing on one worker, since Asking may ask a symbol (2 of 3)");
-        assert_eq!(typing_line("a/compile", None, Some("Asking")), "a/compile: typing again on one worker, since Asking may ask a symbol");
-        assert_eq!(rules_line("a/compile", 12, 40), "a/compile: rules over 12 of 40 files");
-        assert_eq!(rules_line("a/compile", 0, 1), "a/compile: rules over 0 of 1 file");
+        assert_eq!(typing_line("a/compile", Some((1, 3))), "a: typing main (1 of 3)");
+        assert_eq!(typing_line("a/test", Some((2, 3))), "a: typing main and test (2 of 3)");
+        assert_eq!(typing_line("a/compile", None), "a: typing main again");
+        assert_eq!(typing_line("a/test", None), "a: typing main and test again");
+        // A job that names no configuration of a project (`teq compiler fix`'s) by its key.
+        assert_eq!(typing_line("program", Some((1, 1))), "program: typing (1 of 1)");
+        assert_eq!(rules_line("a/compile", 12, 40), "a: rules over 12 of 40 files");
+        assert_eq!(rules_line("a/test", 0, 1), "a: rules over 0 of 1 file");
+    }
+
+    #[test]
+    fn the_reason_for_one_worker_is_told_once_in_plain_words() {
+        assert_eq!(one_worker_line(&[], None), None);
+        assert_eq!(one_worker_line(&["OptionGetWarn"], None).as_deref(), Some("teq fix: typing on one worker, because the rule OptionGetWarn reads the symbol index"));
+        assert_eq!(
+            one_worker_line(&["OptionGetWarn", "Other"], None).as_deref(),
+            Some("teq fix: typing on one worker, because the rule OptionGetWarn and 1 other rule read the symbol index")
+        );
+        assert_eq!(
+            one_worker_line(&["OptionGetWarn", "B", "C"], None).as_deref(),
+            Some("teq fix: typing on one worker, because the rule OptionGetWarn and 2 other rules read the symbol index")
+        );
+        // Only some of the run's jobs have such a rule: the projects it holds for.
+        assert_eq!(
+            one_worker_line(&["OptionGetWarn"], Some(&["api", "core"])).as_deref(),
+            Some("teq fix: typing api, core on one worker, because the rule OptionGetWarn reads the symbol index")
+        );
     }
 
     #[test]
     fn a_job_is_told_where_its_round_ends() {
         let took = Duration::from_millis(68);
-        assert_eq!(job_line("a/compile", (1, 0, 0), false, took, false), "a/compile: 1 file, 0 lints, 0 to rewrite in 68 ms");
-        assert_eq!(job_line("b/compile", (2, 1, 0), false, took, false), "b/compile: 2 files, 1 lint, 0 to rewrite in 68 ms");
-        assert_eq!(job_line("core/compile", (1, 0, 1), false, took, false), "core/compile: 1 file, 0 lints, 1 to rewrite in 68 ms");
-        assert_eq!(job_line("a/compile", (1, 0, 0), true, took, false), "a/compile: 1 file, 0 lints, 0 more to rewrite in 68 ms");
+        assert_eq!(job_line("a/compile", (1, 0, 0), false, took, false), "a: 1 file, 0 lints, 0 to rewrite in 68 ms");
+        assert_eq!(job_line("b/test", (2, 1, 0), false, took, false), "b: 2 files, 1 lint, 0 to rewrite in 68 ms");
+        assert_eq!(job_line("core/compile", (1, 0, 1), false, took, false), "core: 1 file, 0 lints, 1 to rewrite in 68 ms");
+        assert_eq!(job_line("a/compile", (1, 0, 0), true, took, false), "a: 1 file, 0 lints, 0 more to rewrite in 68 ms");
         assert_eq!(
             job_line("a/compile", (40, 3, 2), false, Duration::from_millis(12_340), true),
-            "a/compile: 40 files, 3 lints, 2 to rewrite in 12.3 s (typed twice: the parallel attempt gave way)"
+            "a: 40 files, 3 lints, 2 to rewrite in 12.3 s (typed twice: the parallel attempt gave way)"
         );
     }
 
@@ -2368,11 +2445,14 @@ mod tests {
         assert_eq!(lints_told(1, 2, 0), "3 lints (1 error, 2 warnings)");
         assert_eq!(lints_told(0, 1, 1), "2 lints (1 warning, 1 info)");
         assert_eq!(lints_told(0, 0, 2), "2 lints (2 infos)");
-        assert_eq!(run_line(3, 2, "0 lints", 0, false), "3 configurations, 2 files, 0 lints, 0 files rewritten");
-        assert_eq!(run_line(1, 1, "1 lint (1 error)", 1, false), "1 configuration, 1 file, 1 lint (1 error), 1 file rewritten");
-        assert_eq!(run_line(3, 2, "0 lints", 1, true), "3 configurations, 2 files, 0 lints, 1 file would be rewritten");
-        assert_eq!(run_line(3, 2, "0 lints", 0, true), "3 configurations, 2 files, 0 lints, 0 files would be rewritten");
-        assert_eq!(untyped_line("a/compile", 1), "a/compile does not type (1 error); nothing rewritten,");
-        assert_eq!(untyped_line("a/compile", 4), "a/compile does not type (4 errors); nothing rewritten,");
+        assert_eq!(run_line(3, 2, "0 lints", 0, false), "3 projects, 2 files, 0 lints, 0 files rewritten");
+        assert_eq!(run_line(1, 1, "1 lint (1 error)", 1, false), "1 project, 1 file, 1 lint (1 error), 1 file rewritten");
+        assert_eq!(run_line(3, 2, "0 lints", 1, true), "3 projects, 2 files, 0 lints, 1 file would be rewritten");
+        assert_eq!(run_line(3, 2, "0 lints", 0, true), "3 projects, 2 files, 0 lints, 0 files would be rewritten");
+        // A project whose main sources and whose tests are typed in two jobs is one project of the count.
+        assert_eq!(projects_of(["api/compile", "api/test", "core/test"].into_iter()), 2);
+        assert_eq!(projects_of(["api/test"].into_iter()), 1);
+        assert_eq!(untyped_line("a/compile", 1), "a does not type (1 error); nothing rewritten,");
+        assert_eq!(untyped_line("a/test", 4), "a does not type (4 errors); nothing rewritten,");
     }
 }

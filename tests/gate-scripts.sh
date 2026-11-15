@@ -599,7 +599,7 @@ sed 's/^core\/compile: 2 errors$/core\/compile: 3 errors/' "$work/t-ab" > "$work
 sed 's/^# exit 1$/# exit 0/' "$work/t-ab" > "$work/t-exit"
 missing=
 for t in empty:"no end marker" cut:"no end marker" timeout:"teq timed out" uncovered:"web/compile: not covered" panic:"web/compile: teq crashed: the build's thread panicked" \
-  daemon:"teq.s daemon ended without an answer" twice:"web/compile: covered 2 times" count:"core/compile: 3 errors reported, 2 printed" exit:"teq exits 0, where its diagnostics give 1"; do
+  daemon:"teq crashed: the daemon ended without an answer" twice:"web/compile: covered 2 times" count:"core/compile: 3 errors reported, 2 printed" exit:"teq exits 0, where its diagnostics give 1"; do
   held "$work/t-${t%%:*}" && missing="$missing ${t%%:*}(passed)"
   grep -q "^FAIL p: compile: .*${t#*:}" "$work/records.log" || missing="$missing ${t%%:*}(no '${t#*:}')"
 done

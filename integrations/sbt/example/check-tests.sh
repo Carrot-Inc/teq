@@ -194,7 +194,7 @@ for p in api jvmapp; do
 done
 
 out=$(task test api)
-if [ $? = 0 ] && [[ "$out" == *"api/test: 6 suites, 8 passed, 0 failed in "* ]]; then pass "api's suites run and pass, the excluded one left out"; else fail "api's suites: $out"; fi
+if [ $? = 0 ] && [[ "$out" == *"api: 6 suites, 8 passed, 0 failed in "* ]]; then pass "api's suites run and pass, the excluded one left out"; else fail "api's suites: $out"; fi
 suite=api-test-src/meridian/apitest/MunitSuite.scala
 cp $suite target-MunitSuite.scala
 sed -i.bak 's/"Get")/"Post")/' $suite && rm -f $suite.bak
@@ -202,7 +202,7 @@ out=$(task test api '*MunitSuite')
 code=$?
 cp target-MunitSuite.scala $suite && rm target-MunitSuite.scala
 again=$(task test api '*MunitSuite')
-if [ $code = 1 ] && [[ "$out" == *"[fail] meridian.apitest.MunitSuite"* ]] && [[ "$again" == *"api/test: 1 suite, 2 passed, 0 failed"* ]]; then
+if [ $code = 1 ] && [[ "$out" == *"[fail] meridian.apitest.MunitSuite"* ]] && [[ "$again" == *"api: 1 suite, 2 passed, 0 failed"* ]]; then
   pass "an edit to a suite between two warm runs changes the outcome, its revert changes it back"
 else
   fail "the edit between runs ($code): $out // $again"
@@ -210,6 +210,6 @@ fi
 # The verb through the example's launcher, which runs the binary TEQ names (its override path; the pinned
 # release's path is check.sh's generator section's): jvmapp's suites, as `teq test` runs them.
 out=$(timeout 300 sh ./teq test jvmapp 2>&1)
-if [ $? = 0 ] && [[ "$out" == *"jvmapp/test: 1 suite, 2 passed, 0 failed in "* ]]; then pass "./teq test jvmapp through the launcher, TEQ's binary: its suite passes"; else fail "./teq test jvmapp through the launcher: $out"; fi
+if [ $? = 0 ] && [[ "$out" == *"jvmapp: 1 suite, 2 passed, 0 failed in "* ]]; then pass "./teq test jvmapp through the launcher, TEQ's binary: its suite passes"; else fail "./teq test jvmapp through the launcher: $out"; fi
 [ $status = 0 ] && echo "tests: all passed"
 exit $status

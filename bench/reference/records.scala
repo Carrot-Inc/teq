@@ -295,84 +295,62 @@ object Roots:
     val java = Option(System.getenv("JAVA_HOME")).filter(_.nonEmpty).map(Paths.get(_)).toVector
     Roots(both(cwd, "") ++ both(checkout, "$CHECKOUT") ++ both(out, "$OUT") ++ both(coursier, "$COURSIER") ++ java.flatMap(both(_, "$JAVA_HOME")) ++ both(home, "$HOME"))
 
-// teq's transcripts as observations. A diagnostic is the record teq writes of it (`--diagnostics`: src/task/daemon.rs
-// `shown`, src/source.rs `record_shown`, as dotty's vulpix's `TestReporter` collects the `Diagnostic`s and parses no
-// text): its configuration, its severity, its whole message and the lines shown for it, its header, the message's
-// further lines, the source line and the caret; its identity is that block, whatever its message holds, and in the
-// transcript its lines are the record's, never one of teq's. src/task/daemon.rs's `compile` and `built` print a
-// configuration's notes (`teq: <key>: <note>`), warnings and errors, then its summary: `<key>: <n> errors`, `<key>:
-// checked in <ms> ms`, `<key>: <n> classes, <n> written in <ms> ms` (from ten seconds `in <s>.<d> s`); a build that failed outright `teq: <key>: <why>`
-// and no summary, a generator's failure with its command's whole output, which teq records whole (`failed`, severity
-// `failure`), as it records each line a passing generator printed (`noted`, severity `note`). A summary of n errors
-// claims its configuration's errors recorded before it; a configuration that failed outright is its failure's record,
-// every line of it its identity, whatever the command printed, and a line of teq's no record holds is never one. A
-// one-shot build's `<n> errors found` claims the errors recorded of no configuration's. A compiler's crash is no
-// outcome a record holds: a build's thread that panicked, a resident or the daemon that ended under the build, a
-// panic's message, an error counted without its diagnostic are problems of completeness, as dotty's vulpix keeps a
-// compiler crash apart from a test's expected errors (compiler/test/dotty/tools/vulpix/ParallelTesting.scala,
-// `onComplete`: a `Failure` of the compilation is a fatal crash, whatever errors were expected), and so are a record
-// the output does not show and a run that wrote no records. The verb running teq ends the transcript with `# exit <status>`, the end marker, once teq has exited.
+// teq's transcripts as observations. Everything a run is judged by is a record teq writes of it (`--diagnostics`:
+// src/task/daemon.rs `shown`, `failed`, `told`, `noted`, `outcome`, `tests_ended`; src/task/client.rs `unserved`;
+// src/source.rs `record_shown`), as dotty's vulpix's `TestReporter` collects the `Diagnostic`s and parses no text;
+// no line a person reads is read for any of it, since the lines' words are for people and change with them:
+// - a diagnostic (severity `error`, `warning`): its configuration, its whole message and the lines shown for it, its
+//   header, the message's further lines, the source line and the caret; its identity is that block, whatever its
+//   message holds;
+// - a build's outcome (severity `outcome`), after its diagnostics: the configuration built, the errors its line
+//   counts, whether it ended well, and for a build that failed outright the failure's kind and message. An outcome
+//   of n errors claims its configuration's errors recorded before it; a generator's failure (kind `generator`, its
+//   message `<kind> generator <n> of <key>: <why>` with its command's whole output) is the configuration's debt,
+//   every line of it its identity; a crash of teq's (kind `crash`: a build's thread that panicked, a compiler or
+//   the daemon that ended under the build) and any other failure are problems of completeness, as dotty's vulpix
+//   keeps a compiler crash apart from a test's expected errors (compiler/test/dotty/tools/vulpix/
+//   ParallelTesting.scala, `onComplete`: a `Failure` of the compilation is a fatal crash, whatever errors were
+//   expected);
+// - a failure outside a build (severity `failure` with its `kind`: a test run's, a request no daemon served): a
+//   crash where its kind says so, a problem either way;
+// - a configuration's tests' end (severity `tests`): its summary's counts by status, or why nothing ran (`idle`), or
+//   why the run failed (`run_failed`); it ends what came before it, and errors no outcome claimed by then are a
+//   build's without its end;
+// - a note (severity `note`: what teq says of a build that is no failure, a line a passing generator printed), a
+//   group's lines of a test run (`group`, `summary`), a program `teq run` started (`run`): no outcome;
+// - a project a compile left out (severity `left-out`): the request compiled less than it was asked.
+// A one-shot build (`teq compiler`, `teq build`) records its errors of no configuration's, and where it counts them
+// (`<n> errors found`, src/source.rs `errors_found`) its outcome of no configuration's, which claims them; the
+// errors of the library bodies a program reaches print no count and need none.
+// The transcript's text is read for what no record holds: the end marker the verb's driver writes once teq has
+// exited (`# exit <status>`), output after it, a panic's line, and each record's shown lines where they come, so
+// that a record the output does not show is a problem: the two accounts of the build differ.
 // A test run's output is read by its channels, each for what it carries, as dotty's vulpix keeps the compiler's
 // diagnostics apart from a test program's output (ParallelTesting.scala, `RunTest.verifyOutput`: `runMain`'s output
-// compared on its own): `teq test` writes its own lines on stderr, a build's diagnostics, notes and count, its failures
-// (`teq: <key>: ...`), each configuration's summary or end with nothing run (src/task/daemon.rs `built`,
-// `test_configuration`, `test_js_configuration`); on stdout each run's stream, what the suites, their frameworks, the
-// runner's JVM and node print and teq's report of each event, whose names and messages are the suites'; the builds'
-// diagnostics in their records (`--diagnostics`); and the run's outcomes and the suites that ran in its events
-// (`--events`). The drivers collect each apart and the judgment reads the diagnostics from their records, the counts
-// and summaries from stderr past the records' lines (`scan` with `test`), and the outcomes and the suites from the
-// events, never a stream a run's text shares nor a count: nothing a suite names, throws or prints, and nothing a
-// message holds, is ever a diagnostic, a count or a summary.
+// compared on its own): `teq test` writes its own lines on stderr; on stdout each run's stream, what the suites,
+// their frameworks, the runner's JVM and node print and teq's report of each event, whose names and messages are
+// the suites'; the builds' diagnostics, outcomes and the tests' ends in the records (`--diagnostics`); and the
+// run's outcomes and the suites that ran in its events (`--events`). The drivers collect each apart and the
+// judgment reads the records and the events, never a stream a run's text shares: nothing a suite names, throws or
+// prints, and nothing a message holds, is ever a diagnostic, a count or a summary.
 object Transcript:
   private val ansi = "\u001b\\[[0-9;]*m"
-  private val errorsLine = "^([^ :]+/[^ :]+): ([0-9]+) errors?$".r
-  private val okLine = "^([^ :]+/[^ :]+): (?:checked|[0-9]+ classes, [0-9]+ written) in (?:[0-9]+ ms|[0-9]+\\.[0-9] s)(?:, the first build)?$".r
-  private val teqLine = "^teq: ([^ :]+/[^ :]+): (.*)$".r
-  private val leftOut = "^teq: compile left out ([^ ,]+),.*$".r
   private val endMarker = "^# exit (-?[0-9]+)$".r
   private val panic = "^thread '[^']*' panicked at .*".r
-  // The outright failures that are a crash of teq's (src/task/daemon.rs, src/task/resident.rs).
-  private val crash = "^teq: ([^ :]+/[^ :]+): (the build's thread panicked|the resident of .* ended|the daemon is ending).*".r
-
-  // A build that failed outright in a generator (src/task/generators.rs: `<kind> generator <n> of <key>: <why>`), the
-  // one failure of a configuration's build without a summary a record holds; any other line of teq's of a configuration
-  // that has no summary is a note (a test run's) or a failure no record holds (a compile's).
-  private val generatorFailure = "^[a-z]+ generator [0-9]+ of [^ :]+/[^ :]+: .*".r
-  // A configuration's tests' end (src/task/daemon.rs `test_configuration`, `test_js_configuration`): its run's summary
-  // (`summary`: `<key>: <n> suites, <p> passed, <f> failed[, <n> ignored, ...] in <ms> ms (built in <ms> ms)`), its
-  // runner's failure (`<key>: the run failed: <why>`) or its end with nothing run.
-  val runSummary = "^([^ ]+)/test: ([0-9]+) suites?, ([0-9]+) passed, ([0-9]+) failed".r
-  private val runFailed = "^([^ ]+)/test: the run failed: .*".r
-  val nothingToRun = "^([^ ]+)/test: (?:no suite to run|no suite depends on what changed|no test framework)$".r
-  // A one-shot build's count of its errors (src/main.rs, `teq compiler`'s and `teq build`'s).
-  private val foundLine = "^([0-9]+) errors? found$".r
-  private def testsEnd(line: String): Option[String] =
-    runSummary.findFirstMatchIn(line).orElse(runFailed.findFirstMatchIn(line)).orElse(nothingToRun.findFirstMatchIn(line)).map(_.group(1))
-  // The informational notes teq prints in a configuration's name (`teq: <configuration>: <note>`), each with the line
-  // that emits it; every other line of that shape in a test run is a failure of the run's. The parallel attempt's
-  // giving way to one worker (src/main.rs `give_way_note`, `teq: a parallel attempt gave way to one worker: ...`) names
-  // no configuration and so is never taken for one.
-  val notes: Vector[(scala.util.matching.Regex, String)] = Vector(
-    "^every suite, .*".r -> "src/task/daemon.rs test_configuration and test_js_configuration: why a run takes every suite",
-    "^no memory mapping for the type store's overlays; one worker types the build$".r ->
-      "src/types.rs MAPPING_REFUSED: the overlays' fallback to one worker, carried by the resident's answer (src/watch.rs) and printed by src/task/daemon.rs for a build's notes")
-  def informational(line: String): Boolean = notes.exists(_._1.matches(line))
 
   def mark(status: Int): String = s"# exit $status\n"
 
-  // What a transcript's builds showed: the configurations summarised or failed outright (`scope`), their errors by
-  // configuration (`<key> <block>`) and outright failures (`<key> teq: <its whole block>`), and the problems; with
-  // `test`, a test run's stderr or a run's transcript (`teq run`'s, `teq build`'s): a build's notes are no failure, a
-  // configuration's tests' end ends what came before it.
-  // Beside them, what the run's own lines say past the records' (no diagnostic's message ever one of them): each
-  // configuration's summary with its counts by status (`summaries`), each end with nothing run (`idle`) and teq's
-  // crashes (`crashes`).
+  // What a transcript's builds showed: the configurations whose build ended with an outcome a record may hold
+  // (`scope`), their errors by configuration (`<key> <block>`) and a generator's failure (`<key> teq: <its whole
+  // message>`), and the problems; with `test`, a test run's or a run's transcript (`teq run`'s, `teq build`'s).
+  // Beside them, of a test run: each configuration's summary with its counts by status (`summaries`), each end with
+  // nothing run (`idle`) and teq's crashes (`crashes`).
   final case class Scan(scope: Vector[String], debt: Vector[String], problems: Vector[String], failing: Boolean, ended: Option[Int],
       summaries: Vector[(String, Map[String, Int])] = Vector.empty, idle: Vector[String] = Vector.empty, crashes: Vector[String] = Vector.empty)
 
-  // A `teq compile` transcript: its configurations (each summarised once), its errors by configuration
-  // (`<key> <block>`), a build that failed outright (`<key> teq: <its whole block>`), and the problems of a run that is
-  // no evidence.
+  // A `teq compile` transcript: its configurations (each built once), its errors by configuration
+  // (`<key> <block>`), a build that failed outright in a generator (`<key> teq: <its whole message>`), and the
+  // problems of a run that is no evidence.
   def compile(text: String, records: Option[String], roots: Roots): Observation =
     val s = scan(text, records.fold(Vector.empty)(shown), roots, test = false)
     val problems = Vector.newBuilder[String] ++= s.problems
@@ -392,22 +370,26 @@ object Transcript:
   // A run whose binary wrote no `--diagnostics` file: no evidence of its builds' diagnostics.
   val unrecorded = "teq wrote no diagnostics (--diagnostics): a binary from before the records, or a run cut short"
 
-  // A diagnostic as teq's `--diagnostics <file>` records it (src/task/daemon.rs `shown`, src/source.rs
-  // `record_shown`): the configuration whose build showed it (none for a one-shot build), its severity, and the lines
-  // shown for it, the producer's extent, which its message's text never sets.
-  final case class Shown(key: String, severity: String, text: String):
+  // A record of teq's `--diagnostics <file>`: the configuration it is of (none for a one-shot build's and for a
+  // request's own), its severity, the lines shown for it (none for an outcome and a tests' end, which show
+  // nothing of their own), and its other fields.
+  final case class Shown(key: String, severity: String, text: String, record: Json = Json.Null):
     val lines: Vector[String] = Transcript.lines(text)
     def error: Boolean = severity == "error"
-    // A configuration's failure as teq showed it (src/task/daemon.rs `failed`), a generator's with its command's output.
+    // A failure as teq showed it (src/task/daemon.rs `failed`), a generator's with its command's output.
     def failure: Boolean = severity == "failure"
     // A program `teq run` started once its build passed (src/task/run.rs), its output after teq's own lines.
     def started: Boolean = severity == "run"
+    def outcome: Boolean = severity == "outcome"
+    // A field of the record that is there and not null.
+    def field(name: String): Option[Json] = record.get(name).filter(_ != Json.Null)
+    def word(name: String): Option[String] = field(name).collect { case Json.Str(s) => s }
 
-  // The records of a `--diagnostics` file, in the order shown.
+  // The records of a `--diagnostics` file, in the order written.
   def shown(records: String): Vector[Shown] =
     records.linesIterator.filter(_.trim.nonEmpty).map { line =>
       val j = Json.parse(line)
-      Shown(j.get("key").map(_.str).getOrElse(""), j("severity").str, j("shown").str)
+      Shown(j.get("key").map(_.str).getOrElse(""), j("severity").str, j.get("shown").map(_.str).getOrElse(""), j)
     }.toVector
 
   // A text's lines, a transcript's and a record's payload alike (`Shown.lines`), so that a diagnostic's lines are
@@ -416,156 +398,137 @@ object Transcript:
   // what a run prints (TestReporter.scala, `doReport`).
   def lines(text: String): Vector[String] = text.linesIterator.map(_.replaceAll(ansi, "")).toVector
 
+  // A text as an item holds it: its lines without the blank ones that end it, the roots normalised away.
+  private def whole(lines: Vector[String], roots: Roots): String = roots(lines.reverse.dropWhile(_.trim.isEmpty).reverse.mkString("\n"))
+
   def scan(text: String, records: Vector[Shown], roots: Roots, test: Boolean): Scan =
-    val lines = Transcript.lines(text)
     val scope, debt, problems, idle, crashes = Vector.newBuilder[String]
     val summaries = Vector.newBuilder[(String, Map[String, Int])]
-    // The errors since the last configuration's own lines, each as its first line, its end (exclusive) and its
-    // configuration, the build's record's extent.
-    var pending = Vector.empty[(Int, Int, String)]
-    // The records not met yet, in the order shown; a program's start shows nothing of its own.
-    var expected = records.filterNot(_.started)
-    // The configuration whose line of teq's came last and the line: its block runs on until the next configuration's.
-    var region = Option.empty[(String, Int)]
-    var ended = Option.empty[Int]
-    // Whether teq failed otherwise than by errors it printed: a crash, an error counted without its diagnostic.
+    // Whether teq failed otherwise than by errors it recorded: a crash, an error counted without its diagnostic.
     var failing = false
-    def block(from: Int, until: Int): String = roots(lines.slice(from, until).reverse.dropWhile(_.trim.isEmpty).reverse.mkString("\n"))
-    // The region ends where the next configuration's lines start: a configuration of its own that failed outright, or
-    // a note of a configuration summarised after it (`own`); the errors pending before then are its own, or, without
-    // a region, a problem.
-    // At the output's end (`end`) a one-shot build's errors, recorded of no configuration's, need no count: its count
-    // claims them where it prints one, and the errors of the library bodies a program reaches print none (src/main.rs).
-    def endRegion(at: Int, own: Option[String], where: String, end: Boolean = false): Unit =
-      region match
-        case Some((key, from)) if !own.contains(key) =>
-          val whole = block(from, at).stripPrefix(s"teq: $key: ")
-          // A failure is its record (`failure`), never a line of teq's the text runs on from: a region is a note's.
-          if !test && crash.findFirstIn(lines(from)).isEmpty then
-            problems += s"$key: teq: ${whole.linesIterator.next()}: a line of teq's and no summary, no failure recorded: a note without its build, or a failure no record holds"
+    // The errors recorded that no outcome has claimed yet, each its configuration and its block.
+    var pending = Vector.empty[(String, String)]
+    // A crash of teq's, as a failure's kind says it.
+    def crashed(key: String, why: String): Unit =
+      val said = if key.isEmpty then s"teq crashed: ${roots(why)}" else s"$key: teq crashed: ${roots(why)}"
+      problems += said
+      crashes += said
+      failing = true
+    // A failure that is neither a generator's nor a crash: no outcome a record may hold.
+    def other(key: String, why: String): Unit =
+      val first = roots(why.linesIterator.nextOption().getOrElse(""))
+      val of = if key.isEmpty then "" else s"$key: "
+      problems += (if test then s"${of}teq: $first: a failure of the test run's, no outcome a record holds"
+        else s"${of}teq: $first: a build that failed outright and not in a generator, no outcome a record holds")
+      failing = true
+    // The errors pending are claimed by no outcome where a build's or a tests' end shows none of theirs.
+    def unclaimed(left: Vector[(String, String)], where: String): Unit =
+      if left.nonEmpty then problems += s"${left.size} errors $where"
+    for (r, i) <- records.zipWithIndex do
+      r.severity match
+        case "error" => pending = pending :+ (r.key, whole(r.lines, roots))
+        case "outcome" if r.key.isEmpty =>
+          // A one-shot build's count (`teq compiler`'s, `teq build`'s: src/source.rs `errors_found`) claims the
+          // errors recorded of no configuration's before it, as a configuration's outcome claims its own.
+          val n = r.field("errors").fold(0)(_.int)
+          val (claimed, others) = pending.partition(_._1.isEmpty)
+          if claimed.size != n then
+            problems += s"$n errors counted, ${claimed.size} printed: errors without their diagnostics"
             failing = true
-          // Every error is consumed by a summary that claims it; a region of a note (or any other line of teq's)
-          // closing over errors no summary claimed reports them.
-          val unclaimed = pending.filter(_._1 < at)
-          if unclaimed.nonEmpty then
-            problems += s"${unclaimed.size} errors after $key's line of teq's, claimed by no summary: errors without their configuration's end"
+          pending = others
+        case "outcome" =>
+          val failed = r.word("failed")
+          val why = r.word("why").getOrElse("")
+          val n = r.field("errors").fold(0)(_.int)
+          if failed.contains("generator") then
+            unclaimed(pending, s"before ${r.key}'s failure")
+            pending = Vector.empty
+            scope += r.key
+            debt += s"${r.key} teq: ${whole(Transcript.lines(why), roots)}"
+          else if failed.contains("crash") then
+            unclaimed(pending, s"before ${r.key}'s failure")
+            pending = Vector.empty
+            crashed(r.key, why)
+          else if failed.nonEmpty then
+            unclaimed(pending, s"before ${r.key}'s failure")
+            pending = Vector.empty
+            other(r.key, why)
+          else if n > 0 then
+            // A count claims its configuration's errors recorded before it (a record of no configuration's any
+            // count's).
+            val (claimed, others) = pending.partition(p => p._1 == r.key || p._1.isEmpty)
+            unclaimed(others, s"before ${r.key}'s own")
+            scope += r.key
+            if claimed.size != n then
+              problems += (if claimed.isEmpty then s"${r.key}: $n errors reported without a diagnostic" else s"${r.key}: $n errors reported, ${claimed.size} printed")
+              failing = true
+            claimed.foreach((_, block) => debt += s"${r.key} $block")
+            pending = Vector.empty
+          else if r.field("ok").exists(!_.bool) then
+            // An outcome that neither passed nor says what it failed of: no evidence of its build.
+            unclaimed(pending, s"before ${r.key}'s outcome")
+            pending = Vector.empty
+            problems += s"${r.key}: an outcome that did not pass and counts no error and names no failure"
             failing = true
-          pending = pending.filter(_._1 >= at)
-          region = None
-        case _ =>
-          val before = pending.filter(p => p._1 < at && !(end && p._3.isEmpty))
-          if before.nonEmpty then problems += s"${before.size} errors $where"
-          pending = pending.filter(_._1 >= at)
-          if own.isEmpty then region = None
-    // A crash of teq's a line says (a build's thread that panicked, a resident or the daemon that ended): whether it is one.
-    def crashed(line: String): Boolean =
-      crash.findFirstMatchIn(line).exists { m =>
-        val said = s"${m.group(1)}: teq crashed: ${roots(line.stripPrefix(s"teq: ${m.group(1)}: "))}"
-        problems += said
-        crashes += said
-        failing = true
-        true
-      }
-    // A configuration's failure as teq recorded it (`failure`), its extent the record's, whatever its lines hold: a
-    // crash; a generator's (`<kind> generator <n> of <key>: ...` with its command's whole output), the configuration's
-    // build failed outright, the whole block its identity; or a failure no record holds. It ends what came before it.
-    def failure(r: Shown, at: Int): Unit =
-      val first = r.lines.headOption.getOrElse("")
-      val why = first.stripPrefix(s"teq: ${r.key}: ")
-      endRegion(at, None, s"before ${r.key}'s failure")
-      if !crashed(first) then
-        if generatorFailure.findFirstIn(why).nonEmpty then
-          scope += r.key
-          debt += s"${r.key} teq: ${roots(r.lines.reverse.dropWhile(_.trim.isEmpty).reverse.mkString("\n")).stripPrefix(s"teq: ${r.key}: ")}"
-        else
-          problems += (if test then s"${r.key}: teq: ${roots(why)}: a failure of the test run's, which no record holds"
-            else s"${r.key}: teq: ${roots(why)}: no summary and no generator failing: a failure no record holds")
-          failing = true
-    def step(line: String, i: Int): Unit =
-      if ended.nonEmpty && line.trim.nonEmpty then problems += s"output after the end marker: ${roots(line)}"
-      if panic.findFirstIn(line).nonEmpty then
-        problems += s"teq panicked: ${roots(line)}"
-        crashes += s"teq panicked: ${roots(line)}"
-        failing = true
-      crashed(line)
-      if line.startsWith("teq: the daemon ended without an answer") then crashes += "teq's daemon ended without an answer"
-      line match
-        case endMarker(status) if ended.isEmpty =>
-          endRegion(i, None, "after the last summary: the output stops within a configuration", end = true)
-          ended = Some(status.toInt)
-        case errorsLine(key, n) =>
-          // A count claims its configuration's errors recorded before it (a record of no configuration's any count's).
-          val claimed = pending.filter(p => p._3 == key || p._3.isEmpty)
-          endRegion(claimed.headOption.fold(i)(_._1), Some(key), s"before $key's own")
-          region = None
-          scope += key
-          if claimed.size != n.toInt then
-            problems += (if claimed.isEmpty then s"$key: ${n.toInt} errors reported without a diagnostic" else s"$key: ${n.toInt} errors reported, ${claimed.size} printed")
-            failing = true
-          claimed.foreach((from, until, _) => debt += s"$key ${block(from, until)}")
-          pending = pending.filterNot(claimed.contains)
-        case okLine(key) =>
-          endRegion(i, Some(key), s"before $key's summary of none")
-          region = None
-          scope += key
+          else
+            unclaimed(pending, s"before ${r.key}'s outcome of none")
+            pending = Vector.empty
+            scope += r.key
+        case "failure" =>
+          // A build's own failure is its outcome's, the record after it; any other is judged here.
+          val builds = records.lift(i + 1).exists(o => o.outcome && o.key == r.key && o.field("failed").nonEmpty)
+          if !builds then
+            val why = r.word("message").getOrElse("")
+            if r.word("kind").contains("crash") then crashed(r.key, why) else other(r.key, why)
+        case "tests" =>
+          // A configuration's tests' end: it ends what came before it, and the errors before it no count claimed
+          // are a build's without its end.
+          val unit = r.key.takeWhile(_ != '/')
+          unclaimed(pending, s"before $unit/test's end, claimed by no count: errors without their configuration's end")
           pending = Vector.empty
-        case foundLine(n) =>
-          // A one-shot build's count (`teq compiler`'s, `teq build`'s) claims the errors recorded of no configuration's
-          // before it, as a configuration's count claims its own.
-          val claimed = pending.filter(_._3.isEmpty)
-          endRegion(claimed.headOption.fold(i)(_._1), None, "before the build's count")
-          if claimed.size != n.toInt then
-            problems += s"${n.toInt} errors counted, ${claimed.size} printed: errors without their diagnostics"
-            failing = true
-          pending = pending.filterNot(claimed.contains)
-        case leftOut(project) =>
-          endRegion(i, None, s"before teq left $project out")
+          if r.field("idle").nonEmpty then idle += unit
+          else if r.field("run_failed").isEmpty then
+            val counts = Vector("suites", "passed", "failed", "ignored", "skipped", "pending", "canceled").flatMap(k => r.field(k).map(k -> _.int))
+            summaries += unit -> counts.filter(_._2 > 0).toMap
+        case "left-out" =>
+          val project = r.word("project").getOrElse("")
           problems += s"teq left $project out (a generator only the build tool runs): export again"
-        case _ if test && testsEnd(line).nonEmpty =>
-          // A configuration's tests' end, teq's own line on its stderr as the counts are: it ends the block before it,
-          // and the errors before it no count claimed are a build's without its end.
-          for m <- runSummary.findFirstMatchIn(line) do
-            val others = ", ([0-9]+) (ignored|skipped|pending|canceled)".r.findAllMatchIn(line.drop(m.end)).map(o => o.group(2) -> o.group(1).toInt).toMap
-            summaries += m.group(1) -> (Map("suites" -> m.group(2).toInt, "passed" -> m.group(3).toInt, "failed" -> m.group(4).toInt) ++ others).filter(_._2 > 0)
-          for m <- nothingToRun.findFirstMatchIn(line) do idle += m.group(1)
-          endRegion(i, None, s"before ${testsEnd(line).get}/test's end, claimed by no count: errors without their configuration's end")
-        case teqLine(key, why) =>
-          // In a test run every line of teq's in a configuration's name no record holds is judged on its own, whatever
-          // came before it of the configuration's: an informational note, a crash (judged above), or a failure of the
-          // run's, which no record holds; a generator's failure is its record (`failure`), never this line.
-          if test && !informational(why) && crash.findFirstIn(line).isEmpty then
-            problems += s"$key: teq: $why: a failure of the test run's, which no record holds"
-            failing = true
-          if !region.exists(_._1 == key) then
-            endRegion(i, Some(key), s"before $key's line")
-            region = Some((key, i))
-        case _ =>
-          if line.startsWith("teq: the daemon ended without an answer") then problems += "teq's daemon ended without an answer"
-          else if line == "teq: nothing to compile" then problems += "teq compiled nothing"
+        case _ => ()
+    // The transcript: the end marker, what no record holds, and each record's lines where they come.
+    val lines = Transcript.lines(text)
+    // The records that show lines of their own, in the order shown; a program's start shows nothing of its own.
+    var expected = records.filter(r => r.lines.nonEmpty && !r.started)
+    var ended = Option.empty[Int]
     var i = 0
     while i < lines.length do
-      // The next record's lines where they are shown: a diagnostic, its extent the build's record's, whatever its
-      // message holds; its lines no line of teq's.
       val next = expected.headOption.filter(r => lines.slice(i, i + r.lines.length) == r.lines)
-      for r <- next do
-        if r.error then pending = pending :+ (i, i + r.lines.length, r.key)
-        else if r.failure then failure(r, i)
-        expected = expected.tail
-        i += r.lines.length
-      if next.isEmpty then
-        step(lines(i), i)
-        i += 1
-    if ended.isEmpty then
-      endRegion(lines.size, None, "after the last summary: the output stops within a configuration", end = true)
+      next match
+        case Some(r) =>
+          expected = expected.tail
+          i += r.lines.length
+        case None =>
+          val line = lines(i)
+          if ended.nonEmpty && line.trim.nonEmpty then problems += s"output after the end marker: ${roots(line)}"
+          if panic.findFirstIn(line).nonEmpty then
+            problems += s"teq panicked: ${roots(line)}"
+            crashes += s"teq panicked: ${roots(line)}"
+            failing = true
+          line match
+            case endMarker(status) if ended.isEmpty => ended = Some(status.toInt)
+            case _ => ()
+          i += 1
+    // The errors of no configuration's that no count claimed need none: the errors of the library bodies a program
+    // reaches print no count (src/main.rs).
+    unclaimed(pending.filter(_._1.nonEmpty), "after the last outcome: the records stop within a configuration")
     // A record the output does not show where it comes: the two accounts of the build differ.
     if expected.nonEmpty then
       problems += s"${expected.size} diagnostics the build recorded and its output does not show in their order, the first ${roots(expected.head.lines.head)}"
       failing = true
     Scan(scope.result(), debt.result(), problems.result().distinct, failing, ended, summaries.result(), idle.result(), crashes.result().distinct)
 
-  // A transcript's crashes of teq's: a panic, a build's thread that panicked, a resident or the daemon that ended, as
-  // its own lines say them past its diagnostics' records (`scan`), never a diagnostic's message; none in the
-  // transcript of a program that ran (`ran`), whose output is the program's.
+  // A transcript's crashes of teq's: a panic, and a build's thread that panicked, a compiler or the daemon that
+  // ended, as the failures' records say them (`scan`), never a diagnostic's message; none in the transcript of a
+  // program that ran (`ran`), whose output is the program's.
   def crashes(text: String, records: Option[String], roots: Roots): Vector[String] =
     val all = records.fold(Vector.empty)(shown)
     if ran(all) then Vector.empty else scan(text, all, roots, test = true).crashes
