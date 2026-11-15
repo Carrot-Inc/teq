@@ -358,6 +358,7 @@ scala2source	pass	-
 sealed	pass	-	
 selectorproducts	pass	-	
 selfaliasoverride	pass	-	
+selfthroughval	pass	-	
 selftypecompanion	pass	-	
 seqpattern	pass	-	
 shadowbind	pass	-	

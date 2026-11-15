@@ -165,8 +165,7 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   under the loader's lock` where the products name a val of those sources as a path in one of these ways: an
   export's forwarder of it (`export Stock.*`), a parameter of its singleton type (`def take(x: Stock.alias.type)`),
   `this.tag.type` in a transparent method's body. The val's path is read without its signature, which another
-  worker may still be computing, and what the val stands for is asked where a type is compared. A type selected on
-  such a val (`Stock.api.Request`) or a products method overloaded on such a parameter can still stop the build.
+  worker may still be computing, and what the val stands for is asked where a type is compared.
 - Such a part build answers as the whole module's build where a given class of the products is typed by a val
   of the sources built again (`given aliasShow: Show[Stock.alias.type] with …`, an implicit object, or through a
   type alias of the products) and that val's own initialiser searches for a given: the search sets the candidate
@@ -263,6 +262,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   holds for a value a block imports from a field of the enclosing instance (`import b.m` in a method of a class
   with the field `b`) and reads in a class, an object or a lambda for a trait of that block: such a read stopped
   the program (a `TypeError`, a `NullPointerException`, a `ClassCastException`).
+- A build on several workers no longer stops with `a wait on a cell under the loader's lock` where a library's
+  data names a definition another worker is typing, as the products of a module do when some of its sources are
+  built again over them (`class Sub extends Stock.api.Request` in the products, `Stock` among the sources built
+  again): the build is typed again by one worker, with one worker's output, and says so in one line where the
+  number of workers was automatic.
 
 ## 0.1.10 (2026-11-13)
 

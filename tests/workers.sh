@@ -1834,23 +1834,37 @@ COUNTS=$saved_counts
 # name)`, which forces nothing), and what the val stands for is asked where a type is compared, outside
 # the loader's lock (before, the decode asked for the signature under the lock and the build stopped
 # with "a wait on a cell under the loader's lock": 5 of 12 seeds at two workers for the forwarders).
+# A wait under the lock that is left gives the build to one worker (the scenarios at the end of this file), so
+# a check of exits and output would pass with such a wait back: each shaken check of a scenario whose subject is a
+# wait taken out from under the lock also runs under `TEQ_SERIAL_TRACE=1`, and none may say that one gave way.
+# untraced <file>: the file without the lines `TEQ_SERIAL_TRACE` adds.
+untraced() {
+  grep -v -E "^teq: (typed again by one worker: |a wait under the loader's lock gave way: |a read under the loader's lock refused: )" "$1"
+}
+# at_the_lock <file>: whether a wait under the loader's lock gave the traced build to one worker.
+at_the_lock() {
+  grep -q "^teq: a wait under the loader's lock gave way: " "$1"
+}
 # rebuilt_in_part <fixture> <scalac's lines...>: tests/workers/<fixture>'s Stock.scala and
 # Counter.scala built to products at one worker, then Stock.scala and Use.scala over them: the check
-# under the points the typing rows shake, seeds 1 to 12 at two and at eight workers, and the program
-# the part build makes, which prints scalac's lines at every count.
+# under the points the typing rows shake, seeds 1 to 12 at two and at eight workers, none of them given
+# to one worker by a wait under the lock, and the program the part build makes, which prints scalac's
+# lines at every count.
 rebuilt_in_part() {
   local name=$1 dir=tests/workers/$1 products=$work/$1_products
   shift
   rm -rf "$products"
   timeout 120 "$TEQ" compiler check --products "$products" --sourceroot "$dir" "$dir/Stock.scala" "$dir/Counter.scala" --threads 1 > /dev/null 2>&1
-  local part=("$dir/Stock.scala" "$dir/Use.scala" --classpath "$products") s t stopped=""
+  local part=("$dir/Stock.scala" "$dir/Use.scala" --classpath "$products") s t stopped="" gave=""
   for s in $(seq 1 12); do
     for t in 2 8; do
-      TEQ_SHAKE="$s:item,claimed,computed" timeout 120 "$TEQ" compiler check "${part[@]}" --threads $t > "$work/$name.shaken" 2>&1 ||
+      TEQ_SERIAL_TRACE=1 TEQ_SHAKE="$s:item,claimed,computed" timeout 120 "$TEQ" compiler check "${part[@]}" --threads $t > "$work/$name.shaken" 2>&1 ||
         stopped="$stopped $t workers under TEQ_SHAKE=$s ($(grep -m1 -E 'error|panicked' "$work/$name.shaken" | cut -c1-80));"
+      at_the_lock "$work/$name.shaken" && gave="$gave $t workers under TEQ_SHAKE=$s;"
     done
   done
   [ -z "$stopped" ] && ok || bad "${name}_shaken: the part build fails at$stopped"
+  [ -z "$gave" ] && ok || bad "${name}_waits_under_lock: a wait under the loader's lock gave the part build to one worker at$gave"
   same_output "${name}_run" 2 run "${part[@]}"
   if [ "$(cat "$work/${name}_run.one")" = "$(printf '%s\n' "$@")" ]; then
     ok
@@ -2015,18 +2029,23 @@ COUNTS=$saved_counts
 # waited for under it ("a wait on a cell under the loader's lock": a check of the first program stopped in about
 # half of a hundred schedules at eight workers, and in some with no shaking). Each program's check under twenty
 # schedules at eight and at sixteen workers is one worker's, and its run prints scalac's lines.
+# As above, each shaken check also runs under `TEQ_SERIAL_TRACE=1`, and none may say that a wait under the lock
+# gave way (`at_the_lock`).
 shaken_as_one() {
   local name=$1 program=$2
   shift 2
   timeout 120 "$TEQ" compiler check "$program" --threads 1 > "$work/$name.one" 2>&1
-  local s t differ=""
+  local s t differ="" gave=""
   for s in $(seq 1 20); do
     for t in 8 16; do
-      TEQ_SHAKE=$s timeout 120 "$TEQ" compiler check "$program" --threads $t > "$work/$name.$t" 2>&1
+      TEQ_SERIAL_TRACE=1 TEQ_SHAKE=$s timeout 120 "$TEQ" compiler check "$program" --threads $t > "$work/$name.traced" 2>&1
+      at_the_lock "$work/$name.traced" && gave="$gave $t workers under TEQ_SHAKE=$s;"
+      untraced "$work/$name.traced" > "$work/$name.$t"
       cmp -s "$work/$name.one" "$work/$name.$t" || differ="$differ $t workers under TEQ_SHAKE=$s ($(grep -m1 -E 'error|panicked' "$work/$name.$t" | cut -c1-80));"
     done
   done
   [ -z "$differ" ] && ok || bad "${name}_shaken: the check differs from one worker's at$differ"
+  [ -z "$gave" ] && ok || bad "${name}_waits_under_lock: a wait under the loader's lock gave the check to one worker at$gave"
   one "$name" 1 run "$program" > "$work/$name.run" 2>&1
   if [ "$(cat "$work/$name.run")" = "$(printf '%s\n' "$@")" ]; then
     ok
@@ -2058,16 +2077,176 @@ shaken_refusal() {
   local name=$1 program=$2 text=$3
   timeout 120 "$TEQ" compiler check "$program" --threads 1 > "$work/$name.one" 2>&1
   grep -qF -- "$text" "$work/$name.one" && ok || bad "${name}_refused: one worker does not report $text: $(head -2 "$work/$name.one" | tr '\n' ' ' | cut -c1-120)"
-  local s t differ=""
+  local s t differ="" gave=""
   for s in $(seq 1 20); do
     for t in 8 16; do
-      TEQ_SHAKE=$s timeout 120 "$TEQ" compiler check "$program" --threads $t > "$work/$name.$t" 2>&1
+      TEQ_SERIAL_TRACE=1 TEQ_SHAKE=$s timeout 120 "$TEQ" compiler check "$program" --threads $t > "$work/$name.traced" 2>&1
+      at_the_lock "$work/$name.traced" && gave="$gave $t workers under TEQ_SHAKE=$s;"
+      untraced "$work/$name.traced" > "$work/$name.$t"
       cmp -s "$work/$name.one" "$work/$name.$t" || differ="$differ $t workers under TEQ_SHAKE=$s ($(grep -m1 -E 'error|panicked' "$work/$name.$t" | cut -c1-80));"
     done
   done
   [ -z "$differ" ] && ok || bad "${name}_shaken: the check differs from one worker's at$differ"
+  [ -z "$gave" ] && ok || bad "${name}_waits_under_lock: a wait under the loader's lock gave the check to one worker at$gave"
 }
 shaken_refusal meet_overloads_cycle tests/workers/meet_overloads_cycle "recursive use of at needs an explicit result type"
+
+# A library's data that names the program: the products of a module some of whose sources are built again into and
+# over them (`--products P --classpath P`) hold classes of the sources left alone, and what those classes name of
+# the sources built again is the program's. The thread that reads such a class holds the loader's lock, and what it
+# asks for (the signature of a val on a parent's path, a class's check) another worker may be typing. A wait there
+# would keep the lock from the worker waited for, so it is refused as a wait that would close a cycle is, and the
+# build is typed again by one worker (before, the build stopped: "a wait on a cell under the loader's lock").
+# part_products <name> <dir> "<products' sources>" "<sources built again>": the first sources of <dir> built to
+# products at one worker, then the second built again into and over a copy of that directory at one worker: the
+# exit, the text and the directory every part build of the scenario is held to, the same command into the same path.
+part_products() {
+  local name=$1 dir=$2 f first=()
+  part_whole=$work/$name.products part_own=$work/$name.own part_one=$work/$name.own.one part_kept=0
+  part=(compiler check --products "$part_own" --sourceroot "$dir" --classpath "$part_own")
+  for f in $3; do first+=("$dir/$f.scala"); done
+  for f in $4; do part+=("$dir/$f.scala"); done
+  rm -rf "${part_whole:?}" "${part_own:?}" "${part_one:?}"
+  timeout 120 "$TEQ" compiler check --products "$part_whole" --sourceroot "$dir" "${first[@]}" --threads 1 > "$work/$name.products.out" 2>&1 || return 1
+  cp -r "$part_whole" "$part_own"
+  timeout 120 "$TEQ" "${part[@]}" --threads 1 > "$work/$name.one" 2>&1
+  part_exit=$?
+  mv "$part_own" "$part_one"
+}
+# part_build <name> <workers> <VAR=value...>: one part build at the count, with the variables and the trace, into a
+# fresh copy of the products, its text in $work/<name>.traced. It fails unless its exit, its text without the
+# trace's lines and the directory it leaves are one worker's: what differs is in $part_differs, and the first three
+# such builds' directories and texts are kept beside the scenario's files ($work/<name>.unequal.<n>).
+part_build() {
+  local name=$1 t=$2 code
+  shift 2
+  rm -rf "${part_own:?}"
+  cp -r "$part_whole" "$part_own"
+  env TEQ_SERIAL_TRACE=1 "$@" timeout 120 "$TEQ" "${part[@]}" --threads "$t" > "$work/$name.traced" 2>&1
+  code=$?
+  untraced "$work/$name.traced" > "$work/$name.shaken"
+  part_differs=""
+  if [ $code != "$part_exit" ]; then
+    part_differs="exit $code, one worker's $part_exit: $(grep -m1 -E 'error|panicked' "$work/$name.traced" | cut -c1-80)"
+  elif ! cmp -s "$work/$name.one" "$work/$name.shaken"; then
+    part_differs="another text: $(diff "$work/$name.one" "$work/$name.shaken" | grep -m1 '^[<>]' | cut -c1-80)"
+  elif ! diff -r "$part_one" "$part_own" > "$work/$name.diff" 2>&1; then
+    part_differs="another directory: $(head -1 "$work/$name.diff" | cut -c1-80)"
+  else
+    return 0
+  fi
+  part_kept=$((part_kept + 1))
+  if [ $part_kept -le 3 ]; then
+    cp -r "$part_own" "$work/$name.unequal.$part_kept"
+    cp "$work/$name.traced" "$work/$name.unequal.$part_kept.text"
+  fi
+  return 1
+}
+# part_as_one <name> <dir> <least> "<products' sources>" "<sources built again>" [refused]: one worker accepts the
+# part build (with the word, refuses it), and under the seeds 1 to PART_SEEDS of the shaker at eight and at sixteen
+# workers it is each time one worker's; how many of those builds a wait under the lock gave to one worker is
+# printed, and is <least> at least: a scenario that only compares passes without one such wait, so those in which
+# the wait is frequent say that there was one.
+PART_SEEDS=${PART_SEEDS:-20}
+part_as_one() {
+  local name=$1 dir=$2 least=$3 s t differ="" gave=0 runs=0 want=0
+  [ "$6" = refused ] && want=1
+  if ! part_products "$name" "$dir" "$4" "$5"; then
+    bad "$name: the products' build failed: $(head -1 "$work/$name.products.out" | cut -c1-120)"
+    return
+  fi
+  if [ "$part_exit" != $want ]; then
+    bad "$name: one worker's part build exits $part_exit, not $want: $(head -1 "$work/$name.one" | cut -c1-120)"
+    return
+  fi
+  for s in $(seq 1 "$PART_SEEDS"); do
+    for t in 8 16; do
+      part_build "$name" $t TEQ_SHAKE=$s || differ="$differ $t workers under TEQ_SHAKE=$s ($part_differs);"
+      runs=$((runs + 1))
+      at_the_lock "$work/$name.traced" && gave=$((gave + 1))
+    done
+  done
+  echo "workers: $name: a wait under the loader's lock gave $gave of $runs part builds to one worker"
+  [ -z "$differ" ] && ok || bad "$name: the part build is not one worker's at$differ"
+  [ "$least" = 0 ] && return
+  [ $gave -ge "$least" ] && ok || bad "${name}_gave_way: a wait under the loader's lock gave $gave of $runs part builds to one worker, fewer than $least"
+}
+# padded <fixture> [declared]: the fixture's sources copied to $work/<fixture>.src with its two large ones written
+# beside them (tests/support/padded_part.py); the directory's name.
+padded() {
+  local src=$work/$1.src
+  rm -rf "${src:?}"
+  mkdir -p "$src"
+  cp tests/workers/$1/*.scala "$src/"
+  python3 tests/support/padded_part.py "$src" $2
+  echo "$src"
+}
+# What the products name of the sources built again, by what holds the lock when it is asked for (the three
+# sources are Stock, Counter and Use, the products all three's and Stock and Use built again, but where said).
+# A class's parent on a path through a val, read as the class is completed: `class Sub extends Stock.api.Request`.
+part_as_one partial_rebuild_parent_through_val tests/workers/partial_rebuild_parent_through_val 0 "Stock Counter Use" "Stock Use"
+# A method's parameter and result on such a path, read as its signature is: `def make(n: Int): Stock.api.Request`.
+part_as_one partial_rebuild_member_type_through_val tests/workers/partial_rebuild_member_type_through_val 0 "Stock Counter Use" "Stock Use"
+# An alias's right-hand side: `type Key = Stock.api.Request`.
+part_as_one partial_rebuild_alias_through_val tests/workers/partial_rebuild_alias_through_val 0 "Stock Counter Use" "Stock Use"
+# A type parameter's bound: `class Box[T <: Stock.api.Request]`.
+part_as_one partial_rebuild_bound_through_val tests/workers/partial_rebuild_bound_through_val 0 "Stock Counter Use" "Stock Use"
+# A transparent inline method's body that calls a method of the sources built again with a using clause, read as
+# the products' class is converted for the call.
+part_as_one partial_rebuild_inline_using tests/workers/partial_rebuild_inline_using 0 "Stock Counter Use" "Stock Use"
+# Overloads on the singleton types of two vals, compared as the class is named.
+part_as_one partial_rebuild_overloads_on_singleton tests/workers/partial_rebuild_overloads_on_singleton 0 "Stock Counter Use" "Stock Use"
+# An object of the products that extends a trait of the sources built again: the trait's members, merged into the
+# object's as its inherited alternatives are.
+part_as_one partial_rebuild_class_of_rebuilt_trait tests/workers/partial_rebuild_class_of_rebuilt_trait 0 "Stock Counter Use" "Stock Use"
+# A macro of the products whose implementation calls a method of the sources built again: the method's inferred
+# result, asked for as the implementation's body is read for the macro's run. Such a wait is frequent in this
+# scenario and in the next two, whose holder asks for more than a hundred signatures: the three say that at least
+# one of their builds had one.
+part_as_one partial_rebuild_macro_calls_rebuilt tests/workers/partial_rebuild_macro_calls_rebuilt 1 "Stock Counter" "Stock Use"
+# The same from the initialiser of the val a products class's parent is on the path of: the thread that completes
+# the class types the initialiser under the lock, the macro runs there, and the checks of the classes its run
+# reaches are another worker's.
+part_as_one partial_rebuild_macro_in_initialiser "$(padded partial_rebuild_macro_in_initialiser declared)" 1 "Stock Helper Counter Rack" "Stock Helper Use"
+# The initialiser calls 120 methods of another source built again, their results inferred: the lock's holder types
+# the program on the way, and asks for signatures the workers are inferring.
+part_as_one partial_rebuild_initialiser_reads_files "$(padded partial_rebuild_initialiser_reads_files)" 1 "Stock Helper Counter" "Stock Helper Use"
+# The part build one worker refuses (`def wrong: String = Stock.seed`): every schedule refuses it with one
+# worker's text.
+part_as_one partial_rebuild_refused_use tests/workers/partial_rebuild_refused_use 0 "Stock Counter" "Stock Use" refused
+
+# After a refused wait the lock's holder goes on as after a recursion, to the end of an attempt nothing of which
+# stands. A schedule puts it there at the reads where another worker happens to hold the signature; with
+# `TEQ_REFUSE_READ=<k>` (src/shake.rs) the k-th read of a program's signature under the lock is refused whatever
+# the schedule, so that the path after each read named is walked in every run of the suite.
+# refused_reads_as_one <name> <dir> "<products' sources>" "<sources built again>" <k...>: one worker accepts the
+# part build, and each part build at two workers with its k-th such read refused says that it was (a k past the
+# build's reads fails), is typed again by one worker, and is one worker's by its exit, its text and its directory.
+refused_reads_as_one() {
+  local name=$1_refused dir=$2 k differ=""
+  if ! part_products "$name" "$dir" "$3" "$4"; then
+    bad "$name: the products' build failed: $(head -1 "$work/$name.products.out" | cut -c1-120)"
+    return
+  fi
+  if [ "$part_exit" != 0 ]; then
+    bad "$name: one worker's part build exits $part_exit: $(head -1 "$work/$name.one" | cut -c1-120)"
+    return
+  fi
+  shift 4
+  for k in "$@"; do
+    if ! part_build "$name" 2 TEQ_REFUSE_READ=$k; then
+      differ="$differ read $k ($part_differs);"
+    elif ! grep -q "^teq: a read under the loader's lock refused: read $k, " "$work/$name.traced"; then
+      differ="$differ read $k (not reached);"
+    elif ! grep -q "^teq: typed again by one worker: " "$work/$name.traced"; then
+      differ="$differ read $k (not typed again);"
+    fi
+  done
+  [ -z "$differ" ] && ok || bad "$name: a part build with a read under the loader's lock refused is not one worker's at$differ"
+}
+refused_reads_as_one partial_rebuild_initialiser_reads_files "$work/partial_rebuild_initialiser_reads_files.src" "Stock Helper Counter" "Stock Helper Use" 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987
+refused_reads_as_one partial_rebuild_macro_in_initialiser "$work/partial_rebuild_macro_in_initialiser.src" "Stock Helper Counter Rack" "Stock Helper Use" 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987
+refused_reads_as_one partial_rebuild_member_type_through_val tests/workers/partial_rebuild_member_type_through_val "Stock Counter Use" "Stock Use" 1 2 3
 
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass

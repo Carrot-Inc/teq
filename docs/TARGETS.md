@@ -242,7 +242,9 @@ A transparent macro, which the typer expands, whose run changes state other runs
 attempt to one worker, which types the build again in scalac's order: the output is the same, the attempt's
 time is lost (11 to 22% on the benchmark application), and the build says so in one line. `--cacheable-state`
 declares a module that holds nothing but a cache, after which its changes no longer give the build away,
-`--macro-state per-worker` keeps each run's change to its worker, and `--threads 1` skips the attempt. A plain
+`--macro-state per-worker` keeps each run's change to its worker, and `--threads 1` skips the attempt. A build
+whose library data names what another worker is still typing is typed again by one worker, with the same
+output. A plain
 inline call, a macro's among them, expands in the inlining phase after the merge: where the build types on
 several workers and keeps 256 such calls or more, over the workers again, each taking a member's or a class
 statement's calls whole (a file whose calls may reach a macro of the run, the file's calls whole) and the

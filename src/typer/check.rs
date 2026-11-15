@@ -3767,6 +3767,11 @@ impl<'a> Worker<'a> {
             self.types.count_sig_read(|c| c.reads += 1);
         }
         if self.syms.sym_cells.get(sym.0) == Completion::Done {
+            // The forced refusal (`read_refused`): a complete signature read as one whose wait
+            // was refused, which has none.
+            if crate::shake::refusing() && self.read_refused(sym) {
+                return None;
+            }
             if self.inlining.notes_demands() {
                 self.demand_sig_read(sym);
             }
@@ -3849,6 +3854,7 @@ impl<'a> Worker<'a> {
         // unclaimed, which completes it; another thread finding it claimed waits for the
         // signature, unless the wait would close a cycle, which reads as the recursion it is on one
         // thread.
+        let mut refused = false;
         let state = match state {
             // An inferred one the unwinding typer of its suspended unit would start stays for its
             // readers (`unwinding_from`), and so does a default's getter, whose result its default
@@ -3856,6 +3862,12 @@ impl<'a> Worker<'a> {
             // types no body, and a class checked on the way reads its parents' (`Namer`'s
             // completers complete them alike).
             Completion::NotStarted if self.unwinding_from(sym) && (self.result_inferred(file, def_id, owner, kind) || self.getters.link.contains_key(&sym)) => return None,
+            // The forced refusal (`read_refused`): the read answers as one whose wait was refused,
+            // by the arm below that reports a recursion; the cell is left as it is.
+            Completion::NotStarted | Completion::InProgress if crate::shake::refusing() && !self.syms.sym(sym).state().mine() && self.read_refused(sym) => {
+                refused = true;
+                Completion::InProgress
+            }
             Completion::NotStarted if self.syms.sym_cells.claim(sym.0) => Completion::NotStarted,
             Completion::NotStarted => Completion::InProgress,
             other => other,
@@ -3863,7 +3875,7 @@ impl<'a> Worker<'a> {
         match state {
             Completion::Done => {}
             Completion::Suspended => return self.read_suspended_sig(sym),
-            Completion::InProgress if !self.syms.sym(sym).state().mine() && self.wait_cell(CellKey::new(CELL_SIG, sym.0), |w| w.syms.sym(sym).state().get().is_complete()) => {
+            Completion::InProgress if !refused && !self.syms.sym(sym).state().mine() && self.wait_cell(CellKey::new(CELL_SIG, sym.0), |w| w.syms.sym(sym).state().get().is_complete()) => {
                 if self.syms.sym(sym).state() == Completion::Suspended {
                     return self.read_suspended_sig(sym);
                 }
@@ -4222,15 +4234,20 @@ impl<'a> Worker<'a> {
 
     /// Waits for the cell `key`, claimed by another thread, until `done` holds: `true` once it
     /// does, `false` when the wait would close a cycle through this thread's own cells, which
-    /// the caller treats as the recursion it is on one thread. Never under the loader's lock:
-    /// the lock is held by the std's and the libraries' work alone, whose cells are claimed
-    /// and completed within one hold, so its holder never meets another thread's claim;
-    /// a wait there is an error (`shared::wait_until`).
+    /// the caller treats as the recursion it is on one thread. Under the loader's lock too it
+    /// is `false`, and the build is given to one worker (`gives_way_at_lock`): the lock is held
+    /// by the std's and the libraries' work, whose own cells are claimed and completed within
+    /// one hold, but a library's data may name the program (a part build's products: a parent
+    /// on a path through a val of the sources built again), and the holder then meets a cell
+    /// another worker claimed. Waiting there would keep the lock from the worker waited for.
     pub(super) fn wait_cell(&mut self, key: CellKey, done: impl Fn(&Self) -> bool) -> bool {
         if done(self) {
             return true;
         }
         super::bundle::waited_for(key);
+        if crate::shared::lock_depth() > 0 && self.gives_way_at_lock(key) {
+            return false;
+        }
         let start = std::time::Instant::now();
         let measured = crate::measure::wait_begin();
         let holder = if measured.is_some() { self.cell_owner(key).unwrap_or(0) } else { 0 };
@@ -4249,6 +4266,56 @@ impl<'a> Worker<'a> {
         // What the other worker made on the way to the cell's result is this worker's to see.
         self.refresh_std_if_stale();
         self.sync_arity_if_stale();
+        true
+    }
+
+    /// A wait on `key` with the loader's lock held gives the build to one worker, as a wait that
+    /// would close a cycle does (`need_serial`): `true` where that takes, and the caller's wait
+    /// is refused, so that the holder goes on as after a recursion, over a path the typer walks
+    /// at one worker too, to the end of an attempt nothing of which stands. Where it does not
+    /// take (one worker, where nothing is claimed by another thread) the wait is the error it
+    /// was (`shared::wait_until`). `TEQ_SERIAL_TRACE` prints a line of the wait's own, once a
+    /// build for each kind of cell, since the reason a build keeps is the first one given.
+    #[cold]
+    #[inline(never)]
+    fn gives_way_at_lock(&mut self, key: CellKey) -> bool {
+        let what = match key.kind() {
+            CELL_SIG => "a signature",
+            CELL_BODY => "a body",
+            CELL_CLASS => "a class",
+            CELL_ALIAS => "an alias",
+            _ => "a class's check",
+        };
+        self.need_serial(|| format!("a wait under the loader's lock on {what} another worker is typing"));
+        if !self.serial.is_needed() {
+            return false;
+        }
+        if self.serial.first_lock_wait(key.kind()) && std::env::var_os("TEQ_SERIAL_TRACE").is_some() {
+            eprintln!("teq: a wait under the loader's lock gave way: on {what} another worker is typing");
+        }
+        true
+    }
+
+    /// Whether the forced refusal (`shake::refuse`) refuses this read of `sym`'s signature: a
+    /// read of a program's signature with the loader's lock held, in a build of several workers,
+    /// where a wait gives the build to one worker (`gives_way_at_lock`), as the refusal then
+    /// does. The read's caller answers as after that wait.
+    #[cold]
+    #[inline(never)]
+    fn read_refused(&mut self, sym: SymId) -> bool {
+        if !self.forked || !self.bodies_started || !self.walk_by_size || crate::shared::lock_depth() == 0 || !self.program_file(self.syms.sym(sym).file) {
+            return false;
+        }
+        let refused = crate::shake::refuse(sym.0);
+        if refused == crate::shake::Refused::No {
+            return false;
+        }
+        self.need_serial(|| format!("a read under the loader's lock refused by TEQ_REFUSE_READ ({})", self.name_str(self.syms.sym(sym).name)));
+        if let crate::shake::Refused::First(k) = refused {
+            if std::env::var_os("TEQ_SERIAL_TRACE").is_some() {
+                eprintln!("teq: a read under the loader's lock refused: read {k}, of {}", self.name_str(self.syms.sym(sym).name));
+            }
+        }
         true
     }
 

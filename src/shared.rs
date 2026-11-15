@@ -1342,8 +1342,10 @@ pub fn waiting_on(t: usize) -> Option<CellKey> {
 /// then, and nothing recorded. The check and the edge are one operation under `WAITS`, so that
 /// two threads about to wait on each other's cell cannot both check a clean graph, and the
 /// check runs again on every wake, since a cycle closes when another thread records its edge.
-/// A wait under the loader's lock is an error the caller keeps from happening
-/// (`Worker::wait_cell`).
+/// No wait is made under the loader's lock, where it would keep the lock from the thread
+/// waited for: the typer gives the build to one worker there and does not call
+/// (`Worker::wait_cell`). A call with the lock held is an error: where the build cannot be
+/// given away one thread types, and no cell is another's to wait for.
 pub fn wait_until(cell: CellKey, owner_of: impl Fn(CellKey) -> Option<usize>, done: impl Fn() -> bool) -> bool {
     assert!(lock_depth() == 0, "a wait on a cell under the loader's lock");
     crate::shake::point(crate::shake::Point::Wait);

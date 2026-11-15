@@ -2385,6 +2385,9 @@ pub struct SerialNeed {
     /// worker's walk makes them (`Worker::need_serial_for_diagnostics`): this build's own, which say
     /// nothing of the next build's.
     diagnostics: std::sync::atomic::AtomicBool,
+    /// The kinds of cell a wait under the loader's lock was refused for
+    /// (`Worker::gives_way_at_lock`), a bit each.
+    lock_waits: std::sync::atomic::AtomicU8,
 }
 
 impl SerialNeed {
@@ -2396,6 +2399,13 @@ impl SerialNeed {
     /// session's later full builds keep their workers.
     pub fn of_diagnostics(&self) -> bool {
         self.diagnostics.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Notes a wait under the loader's lock refused for a cell of `kind`: whether it is the
+    /// build's first for that kind, which the trace tells once.
+    pub fn first_lock_wait(&self, kind: u8) -> bool {
+        let bit = 1u8 << (kind & 7);
+        self.lock_waits.fetch_or(bit, std::sync::atomic::Ordering::AcqRel) & bit == 0
     }
 
     pub fn reason(&self) -> Option<String> {
@@ -2711,7 +2721,8 @@ impl<'a> Typer<'a> {
                 let clock = std::time::Instant::now();
                 let overlays = w.types.fork_for(threads, mappings);
                 crate::types::view::forked(overlays);
-                w.profile.sig_hook = w.profile.on || (overlays && (cfg!(debug_assertions) || crate::types::noting()));
+                // The forced refusal refuses a complete signature's read where the reads are hooked.
+                w.profile.sig_hook = w.profile.on || crate::shake::refusing() || (overlays && (cfg!(debug_assertions) || crate::types::noting()));
                 crate::measure::fork_part("the overlays mapped", clock.elapsed());
                 let clock = std::time::Instant::now();
                 let queue = check::Queue::new(w, &order);

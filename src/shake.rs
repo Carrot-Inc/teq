@@ -6,8 +6,17 @@
 //! machine would reach once in thousands of runs. `TEQ_SHAKE=<seed>:<points>` shakes only the
 //! points named, by their names below, separated by commas. Off, a point is one load and a
 //! branch, and only the forked paths have points.
+//!
+//! Beside it the forced refusal: with `TEQ_REFUSE_READ=<k>` the k-th read of a program's
+//! signature made with the loader's lock held, in a build of several workers, is refused as a
+//! wait there is (`Worker::wait_cell`: the build is given to one worker and the read answers as
+//! a recursion's does), and every later such read of the same symbol with it. A wait under the
+//! lock needs a schedule in which another worker holds the cell at that read; the refusal puts
+//! the lock's holder on the same path at a read a scenario names, so that the path after each
+//! read is walked without the schedule. Off, one load and a branch where a signature is
+//! completed or its reads are hooked.
 
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// The places a worker may be held up at.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -103,4 +112,58 @@ fn next() -> u64 {
         s.set(x);
         x
     })
+}
+
+/// The forced refusal: 0 not read yet, 1 off, 2 on.
+static REFUSAL: AtomicU8 = AtomicU8::new(0);
+/// The number of the read refused first.
+static REFUSED_READ: AtomicU64 = AtomicU64::new(0);
+/// The reads counted so far.
+static READS: AtomicU64 = AtomicU64::new(0);
+/// The symbol whose read was refused, every later read of which is refused too.
+static REFUSED_SYM: AtomicU32 = AtomicU32::new(u32::MAX);
+
+/// What the forced refusal says of a read.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Refused {
+    No,
+    /// The read the setting names, by its number.
+    First(u64),
+    /// A later read of the symbol refused first.
+    Again,
+}
+
+/// Whether the forced refusal is on.
+#[inline]
+pub fn refusing() -> bool {
+    match REFUSAL.load(Ordering::Relaxed) {
+        1 => false,
+        2 => true,
+        _ => read_refusal(),
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn read_refusal() -> bool {
+    let k = std::env::var("TEQ_REFUSE_READ").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+    REFUSED_READ.store(k, Ordering::Relaxed);
+    REFUSAL.store(if k == 0 { 1 } else { 2 }, Ordering::Release);
+    k != 0
+}
+
+/// Counts a read of the signature of the symbol `sym` that the refusal may refuse (the caller's
+/// to say: `Worker::read_refused`), and whether it is refused: the one the setting names, or a
+/// later one of the same symbol.
+pub fn refuse(sym: u32) -> Refused {
+    let n = READS.fetch_add(1, Ordering::SeqCst) + 1;
+    if n == REFUSED_READ.load(Ordering::Relaxed) {
+        REFUSED_SYM.store(sym, Ordering::SeqCst);
+        return Refused::First(n);
+    }
+    if REFUSED_SYM.load(Ordering::SeqCst) == sym {
+        Refused::Again
+    } else {
+        Refused::No
+    }
 }

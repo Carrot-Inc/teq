@@ -14,7 +14,11 @@
 #   subset   every module's sources built as one module into its own directory (on its class
 #            path), then each module's sources rebuilt alone into a copy of it: the directory the
 #            whole build's, files and manifest byte for byte, and with run.txt it runs as the
-#            whole program; then the last module's sources removed by the manifest-only operation
+#            whole program; in a case with subset-workers.txt (`<workers> <seeds>`) each module's
+#            sources also rebuilt at that many workers under each seed of the schedule's shaker
+#            (`TEQ_SHAKE`, src/shake.rs), the directory the whole build's each time, and the line
+#            `subset-workers` says how many of those rebuilds a wait under the loader's lock gave
+#            to one worker; then the last module's sources removed by the manifest-only operation
 #            (`--removed`), the directory a whole build's of the other sources (docs/TARGETS.md,
 #            "The contract between the plugin and the compiler"); and, once per run, the own
 #            directory named twice on the class path read once (`own-twice`), a definition
@@ -595,6 +599,8 @@ run_case() {
     sub=$out/$name/subset
     rm -rf "$sub" && mkdir -p "$sub"
     main=$(main_class "${whole_srcs[@]}")
+    shaken_workers="" shaken_seeds=0 shaken_builds=0 shaken_gave=0
+    [ -f "$dir/subset-workers.txt" ] && read -r shaken_workers shaken_seeds < "$dir/subset-workers.txt"
     if "$teq" compiler build --target jvm --products "$sub/whole" --sourceroot "$dir" --classpath "$sub/whole:$SL" "${whole_srcs[@]}" > "$out/$name.subset.log" 2>&1; then
       for m in "${mods[@]}"; do
         srcs=()
@@ -611,7 +617,24 @@ run_case() {
           got=$(timeout 60 java -XX:-UsePerfData -cp "$sub/$m:$SL" "$main" 2>&1)
           [ "$got" = "$(cat "$dir/run.txt")" ] || { ok=0; detail="$detail$m alone runs: $(head -3 <<< "$got")"$'\n'; }
         fi
+        # The same rebuild on several workers, each under a seed of the shaker, into a copy of its own.
+        for ((seed = 1; seed <= shaken_seeds; seed++)); do
+          shaken=$sub/$m.shaken
+          rm -rf "${shaken:?}"
+          cp -R "$sub/whole" "$shaken"
+          shaken_builds=$((shaken_builds + 1))
+          if ! TEQ_SERIAL_TRACE=1 TEQ_SHAKE=$seed "$teq" compiler build --target jvm --products "$shaken" --sourceroot "$dir" --classpath "$shaken:$SL" "${srcs[@]}" --threads "$shaken_workers" > "$out/$name.subset.shaken.log" 2>&1; then
+            ok=0
+            detail="$detail$m alone at $shaken_workers workers under TEQ_SHAKE=$seed: the build failed: $(grep -m1 -E 'error|panicked' "$out/$name.subset.shaken.log" | cut -c1-120)"$'\n'
+            cat "$out/$name.subset.shaken.log" >> "$out/$name.subset.log"
+            continue
+          fi
+          grep -q "^teq: a wait under the loader's lock gave way: " "$out/$name.subset.shaken.log" && shaken_gave=$((shaken_gave + 1))
+          differs=$(diff -rq "$sub/whole" "$shaken" | sed "s|$sub/||g" | head -5)
+          [ -z "$differs" ] || { ok=0; detail="$detail$m alone at $shaken_workers workers under TEQ_SHAKE=$seed: $differs"$'\n'; }
+        done
       done
+      [ -z "$shaken_workers" ] || echo "subset-workers $name: a wait under the loader's lock gave $shaken_gave of $shaken_builds rebuilds at $shaken_workers workers to one worker"
       if [ ${#mods[@]} -gt 1 ]; then
         last=${mods[${#mods[@]}-1]}
         rest=()
