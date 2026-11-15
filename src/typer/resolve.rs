@@ -8795,8 +8795,38 @@ impl<'a> Worker<'a> {
     /// `c`, which gets an entry that joins the alternatives of the two ancestors.
     #[cold]
     fn check_conflicting_members(&mut self, c: ClassId) {
+        for (name, first, second, marked) in self.join_inherited_members(c) {
+            // A member the rule gives the class is its own, which overrides both.
+            if self.record_synthesizes(c, name) {
+                continue;
+            }
+            // A value takes part as a method does: whether it is one member with the other side's
+            // is `inherited_members_match`'s (a value and a method of parameters are two).
+            let is_member = |t: &Self, k: ClassId| {
+                let entry = t.syms.sym(t.syms.class(k).members[&name]);
+                matches!(entry.kind, SymKind::Def | SymKind::Overloaded(_) | SymKind::Val | SymKind::Var)
+            };
+            // A given whose right-hand side is written `deferred` is abstract if that names the
+            // marker, which its signature's completion decides (`Worker::is_deferred_given`).
+            let candidate = |t: &Self, k: ClassId| t.deferred_candidate(t.syms.class(k).members[&name]);
+            if (is_member(self, first) && is_member(self, second)) || candidate(self, first) || candidate(self, second) {
+                self.inherited_pairs.push((c, name, first, second, marked));
+            } else {
+                self.report_conflicting_members(c, name, first, second, marked);
+            }
+        }
+    }
+
+    /// The walk over the bases of `c` for the names two of its unrelated ancestors define and `c`
+    /// does not: such a name is overloaded in `c`, which gets the entry that joins the ancestors'
+    /// alternatives. What it returns is the pairs of ancestors with a concrete member of one name,
+    /// each with whether the earlier one's is marked `override`: `check_conflicting_members`
+    /// checks them for a written class; a class an expansion copies takes the entries alone
+    /// (`Copier::copy_info`).
+    #[cold]
+    pub(super) fn join_inherited_members(&mut self, c: ClassId) -> Vec<(Name, ClassId, ClassId, bool)> {
         if !self.bases_share_a_name(c, false) {
-            return;
+            return Vec::new();
         }
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
         let direct: Vec<ClassId> = self.syms.class(c).parents.clone().iter().filter_map(|&p| self.class_of(p)).collect();
@@ -8857,26 +8887,7 @@ impl<'a> Worker<'a> {
         for like in joined {
             self.add_joined_entry(c, like);
         }
-        for (name, first, second, marked) in conflicts {
-            // A member the rule gives the class is its own, which overrides both.
-            if self.record_synthesizes(c, name) {
-                continue;
-            }
-            // A value takes part as a method does: whether it is one member with the other side's
-            // is `inherited_members_match`'s (a value and a method of parameters are two).
-            let is_member = |t: &Self, k: ClassId| {
-                let entry = t.syms.sym(t.syms.class(k).members[&name]);
-                matches!(entry.kind, SymKind::Def | SymKind::Overloaded(_) | SymKind::Val | SymKind::Var)
-            };
-            // A given whose right-hand side is written `deferred` is abstract if that names the
-            // marker, which its signature's completion decides (`Worker::is_deferred_given`).
-            let candidate = |t: &Self, k: ClassId| t.deferred_candidate(t.syms.class(k).members[&name]);
-            if (is_member(self, first) && is_member(self, second)) || candidate(self, first) || candidate(self, second) {
-                self.inherited_pairs.push((c, name, first, second, marked));
-            } else {
-                self.report_conflicting_members(c, name, first, second, marked);
-            }
-        }
+        conflicts
     }
 
     /// The pairs of methods, and of givens that may be deferred ones, that

@@ -698,6 +698,7 @@ override_class	pass	-
 override_clause_shape	pass	-	
 override_given_final	pass	-	
 override_nullary_loose	pass	-	
+override_refused_once	pass	-	
 override_rules	pass	-	
 package_not_value	pass	-	
 package_private_access	pass	-	

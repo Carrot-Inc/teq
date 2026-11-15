@@ -7694,6 +7694,58 @@ impl<'a> Worker<'a> {
             }
             return;
         }
+        self.check_overrides_of(c, false)
+    }
+
+    /// The override check's pass over `nc`, the copy an expansion made of a class its stored body
+    /// declares, for what the pass settles of a class: the records of what its members override,
+    /// which the bridges and the output's names are made from (the reference's `RefChecks` and
+    /// `Bridges` run on the inlined tree, `Compiler.scala`'s `Inlining` before them), whatever
+    /// file the body is from but the standard library's, whose signatures the check does not
+    /// read (`check_overrides`). What the check would refuse of the copy is not told, nor what it
+    /// would warn of: the copy does not hold every table the check reads of a written class (its
+    /// type members), so a refusal here may be the copy's want and not the program's.
+    pub(super) fn check_copy_overrides(&mut self, nc: ClassId) {
+        let file = self.syms.class(nc).file;
+        if self.std_source(file) || self.from_compiler_library(file) {
+            return;
+        }
+        let mark = self.diags.items.len();
+        let owner = self.diags.owner;
+        self.check_overrides_of(nc, true);
+        // The check's own records leave the list: its refusals (the group `RefChecks`) and its
+        // warnings. What it made of another definition on the way (a signature it completed) stays,
+        // and so does a record of another group made here (the naming's own, where the names are
+        // settled already), told where a fresh build tells it.
+        let group = crate::source::Group::RefChecks;
+        let mark = mark.min(self.diags.items.len());
+        let own = |d: &crate::source::Diagnostic| d.owner.file == owner.file && d.owner.place == owner.place && (d.is_warning || d.position.group == group);
+        let kept: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
+        self.diags.extend(kept);
+    }
+
+    /// Whether the override check refuses the method `m` of the written class `c` over one of
+    /// `over`, each the member it overrides with the ancestor's type it comes from: asked by the
+    /// naming before it tells of `m` (`overridden_dispatch`), which adds nothing to the check's
+    /// record of a method (scalac has the one). Nothing is told here.
+    pub(super) fn override_refused(&mut self, c: ClassId, m: SymId, over: &[(SymId, TypeId)]) -> bool {
+        let mark = self.diags.items.len();
+        let owner = self.diags.owner;
+        for &(p, bt) in over {
+            self.check_override(c, m, None, p, bt);
+        }
+        // The check's own records alone are read and taken off again; one of another definition
+        // made on the way (a signature completed) is that definition's and stays.
+        let mark = mark.min(self.diags.items.len());
+        let own = |d: &crate::source::Diagnostic| d.owner.file == owner.file && d.owner.place == owner.place;
+        let (told, elsewhere): (Vec<crate::source::Diagnostic>, Vec<crate::source::Diagnostic>) = self.diags.items.drain(mark..).partition(own);
+        self.diags.extend(elsewhere);
+        told.iter().any(|d| !d.is_warning)
+    }
+
+    /// `check_overrides` of a class that is checked; `copy` for an expansion's copy, whose pairs
+    /// the index does not enter (its members stand where the original's are written).
+    fn check_overrides_of(&mut self, c: ClassId, copy: bool) {
         let mut inherited: Option<BaseNames> = None;
         let mut targets: Option<Vec<(ClassId, SymId, Name)>> = None;
         for i in 0..self.own_member_count(c) {
@@ -7744,7 +7796,7 @@ impl<'a> Worker<'a> {
                         continue;
                     }
                     let overridden = self.check_override(c, m, None, p, bt);
-                    if overridden && self.index.is_some() {
+                    if overridden && !copy && self.index.is_some() {
                         self.index_override(m, p);
                     }
                     overrides |= overridden;

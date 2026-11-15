@@ -889,6 +889,17 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The local `s` typed `ty`: a copied member's parameter, whose symbol carries the type the
+    /// copy's map gives it, as the member's signature does (`TreeTypeMap.transformDefs` maps the
+    /// parameters' symbols).
+    pub(super) fn set_local_type(&mut self, s: SymId, ty: TypeId) {
+        let mut sig = (*self.sig_of(s)).clone();
+        if sig.ret != ty {
+            sig.ret = ty;
+            self.syms.sym_mut(s).sig = Some(Arc::new(sig));
+        }
+    }
+
     /// The type parameters in the recorded types of a tree.
     fn tree_type_params(&self, e: TExprId, out: &mut Vec<TParamId>) {
         if let Some(t) = self.prog.type_of(e) {
@@ -2716,6 +2727,34 @@ impl<'c> Copier<'c> {
         self.ty_under(t, ty, self.subst)
     }
 
+    /// The type parameter the copy has for `p`, one of a class the stored body declares or of a
+    /// member of one: the fresh one the expansion made for it (`Worker::local_tparams`), its
+    /// bounds the original's in the copy's terms, the classes' copies among them, which have
+    /// their identities by now (`Symbols.mapSymbols` copies a class's type parameters before
+    /// its info is mapped). `p` itself where the expansion made none: a quote's class.
+    fn tparam(&self, t: &mut Worker, p: TParamId) -> TParamId {
+        let Some(stored) = self.stored else { return p };
+        if !stored.index.local_tparams.contains(&p) {
+            return p;
+        }
+        let fresh = self.subst.iter().find(|&&(q, _)| q == p).and_then(|&(_, ty)| match t.types.get(ty) {
+            Type::Param(f) => Some(f),
+            _ => None,
+        });
+        let Some(fresh) = fresh else { return p };
+        let (upper, lower, declared) = {
+            let info = t.syms.tparam(p);
+            (info.upper, info.lower, info.declared_upper)
+        };
+        let (upper, lower) = (self.ty(t, upper), self.ty(t, lower));
+        let declared = if declared == NO_TYPE { declared } else { self.ty(t, declared) };
+        let info = &mut t.syms.tparams[fresh.idx()];
+        info.upper = upper;
+        info.lower = lower;
+        info.declared_upper = declared;
+        fresh
+    }
+
     /// `ty` with `subst` for the copy's type arguments.
     fn ty_under(&self, t: &mut Worker, ty: TypeId, subst: &Subst) -> TypeId {
         let ty = t.types.import(ty);
@@ -3125,6 +3164,16 @@ impl<'c> Copier<'c> {
             copy.companion = companion;
             copy.local_module = local_module;
         }
+        // The type parameters of each, the copy's own, which its members' signatures, its
+        // parents and its base types name.
+        for &k in &graph {
+            let tparams: Vec<TParamId> = t.syms.class(k).tparams.clone();
+            if tparams.is_empty() {
+                continue;
+            }
+            let tparams: Vec<TParamId> = tparams.into_iter().map(|p| self.tparam(t, p)).collect();
+            t.syms.class_mut(self.classes[&k]).tparams = tparams;
+        }
         // The members of each, and the local that stands for an owner's `C.this` in the classes
         // nested in it, the copy's own, which those copies capture and read: what the bodies
         // copied next name.
@@ -3188,6 +3237,15 @@ impl<'c> Copier<'c> {
                 map.part.classes.push((k, nk));
             }
         }
+        // Each copy of the output goes through the override check's pass for its records, what
+        // it extends first, now that every class its signatures name has its copy.
+        if stored.names_classes {
+            for &k in &graph {
+                if self.stored_class_body(k).is_some() {
+                    t.check_copy_overrides(self.classes[&k]);
+                }
+            }
+        }
         self.classes[&c]
     }
 
@@ -3228,11 +3286,20 @@ impl<'c> Copier<'c> {
             for &x in &chain {
                 let info = t.syms.class(x);
                 named.extend(info.companion);
+                // And one a bound of a type parameter names, the class's or a member's, which the
+                // copy's parameter is bounded by.
+                let bounds = |p: &TParamId, named: &mut Vec<ClassId>| {
+                    let tp = t.syms.tparam(*p);
+                    classes_named(&t.types, tp.upper, named);
+                    classes_named(&t.types, tp.lower, named);
+                };
+                info.tparams.iter().for_each(|p| bounds(p, &mut named));
                 for &m in info.member_order.iter().chain(&info.extensions) {
                     if let Some(sig) = t.syms.sym(m).sig.as_deref() {
                         for &ty in sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| &p.ty)).chain(std::iter::once(&sig.ret)) {
                             classes_named(&t.types, ty, &mut named);
                         }
+                        sig.tparams.iter().for_each(|p| bounds(p, &mut named));
                     }
                 }
             }
@@ -3314,6 +3381,27 @@ impl<'c> Copier<'c> {
             members.insert(t.syms.sym(ns).name, ns);
             member_order.push(ns);
         }
+        // A name the class itself overloads: the copy's entry stands for the copies of the
+        // class's own alternatives, as a written class's does once its members are entered
+        // (`Namer`'s). What the original's entry merged in of its ancestors' stays out: that merge
+        // was made in the original's terms, and the copy makes its own where it is first looked
+        // up, its entries marked for it below as a written class's are when its parents are set.
+        for &s in &info.member_order {
+            let name = t.syms.sym(s).name;
+            let Some(&entry) = info.members.get(&name) else { continue };
+            if members.get(&name).is_some_and(|&e| t.syms.alternatives(e).is_some()) {
+                continue;
+            }
+            let own: Vec<SymId> = match t.syms.alternatives(entry) {
+                Some(alts) => alts.iter().copied().filter(|&a| t.syms.sym(a).owner == Owner::Class(c)).filter_map(|a| self.extra.get(&a).copied()).collect(),
+                None => continue,
+            };
+            if own.len() < 2 {
+                continue;
+            }
+            let set = t.syms.new_overloaded(own[0], Owner::Class(nc), own);
+            members.insert(name, set);
+        }
         let extensions: Vec<SymId> = info.extensions.iter().map(|&s| self.member(t, s, nc)).collect();
         // A case class's selectors, members copied above.
         let selectors: Vec<Option<SymId>> = info.selectors.iter().map(|s| s.map(|s| self.sym(s))).collect();
@@ -3382,6 +3470,26 @@ impl<'c> Copier<'c> {
         drop(copy);
         if let Some(sup) = superclass.filter(|&k| Some(k) != info.superclass && !t.syms.class(k).subclasses.contains(&nc)) {
             t.syms.class_mut(sup).subclasses.push(nc);
+        }
+        // The members whose name an ancestor of the copy has a method for meet it in the copy's
+        // own terms (`Worker::merge_inherited` at the first lookup): the original's flags say what
+        // its own merge found. Not for a copy of the standard library's own, whose classes hide an
+        // inherited method by name (`mark_members_meeting_inherited`).
+        if !(t.std_source(info.file) || t.from_compiler_library(info.file)) {
+            for i in 0..t.syms.class(nc).member_order.len() {
+                let m = t.syms.class(nc).member_order[i];
+                let mut flags = t.syms.sym_mut(m);
+                flags.meets_inherited = false;
+                flags.merge_pending = false;
+            }
+            t.mark_members_meeting_inherited(nc);
+            // A name two unrelated ancestors of the copy define and the copy does not is
+            // overloaded in it: the entry that joins their alternatives, which a written class
+            // gets where its parents are set. The pairs that walk finds are a written class's
+            // to check.
+            if t.syms.class(nc).parents.len() > 1 {
+                t.join_inherited_members(nc);
+            }
         }
     }
 
@@ -3522,16 +3630,38 @@ impl<'c> Copier<'c> {
         };
         if let Some(sig) = &info.sig {
             let mut sig = (**sig).clone();
+            for p in &mut sig.tparams {
+                *p = self.tparam(t, *p);
+            }
+            // The paths of the original's parameters, each with its copy's: a type of the
+            // signature that depends on a parameter (`(using p: Mirror.ProductOf[A]): Layer[p.Elems]`)
+            // names the copy's, as `TreeTypeMap` substitutes the parameters' symbols in the
+            // types of the definition it maps.
+            let mut own_paths: Vec<(SymId, TypeId)> = Vec::new();
             for clause in &mut sig.clauses {
                 for p in &mut clause.params {
                     let np = t.clone_local(p.sym);
                     t.subst_local_type(np, self.subst);
+                    own_paths.push((p.sym, t.types.mk(Type::Term(np))));
                     self.extra.insert(p.sym, np);
                     p.sym = np;
+                }
+            }
+            let own = |t: &mut Worker, ty: TypeId| if t.types.has_paths(ty) { t.subst_paths(ty, &own_paths) } else { ty };
+            let mut originals = own_paths.iter().map(|&(old, _)| old);
+            for clause in &mut sig.clauses {
+                for p in &mut clause.params {
+                    // The symbol's own type in the copy's terms, as the signature's is.
+                    let declared = t.sig_of(originals.next().expect("a parameter's original")).ret;
+                    let declared = self.ty(t, declared);
+                    let declared = own(t, declared);
+                    t.set_local_type(p.sym, declared);
                     p.ty = self.ty(t, p.ty);
+                    p.ty = own(t, p.ty);
                 }
             }
             sig.ret = self.ty(t, sig.ret);
+            sig.ret = own(t, sig.ret);
             info.sig = Some(Arc::new(sig));
         }
         let ns = SymId(t.syms.syms.len() as u32);

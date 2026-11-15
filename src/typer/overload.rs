@@ -1138,8 +1138,9 @@ impl<'a> Worker<'a> {
         // type's members are called in the output is no name of its.
         let object_function = bases.iter().any(|&(b, _)| self.syms.class(b).object_function);
         let mut inherited: Option<Option<Name>> = None;
-        // The overridden member `inherited` is the name of.
+        // The overridden member `inherited` is the name of, with the ancestor's type it comes from.
         let mut named_by: Option<SymId> = None;
+        let mut named_at: TypeId = ANY;
         for &(b, bt) in &bases[1..] {
             if object_function && (self.is_function_class(b) || self.is_partial_function(b)) {
                 continue;
@@ -1158,12 +1159,12 @@ impl<'a> Worker<'a> {
                     (theirs, ours) => Some(theirs && !ours),
                 };
                 match inherited {
-                    None => (inherited, named_by) = (Some(theirs), Some(p)),
+                    None => (inherited, named_by, named_at) = (Some(theirs), Some(p), bt),
                     // Beside a member whose root the std declares, the method takes the std's name, which the
                     // runtime calls it by; its class answers the other name through a bridge (`bridges_of`).
                     Some(ours) if ours != theirs && std_named(self, named_by).is_some() => {
                         if std_named(self, named_by) == Some(true) {
-                            (inherited, named_by) = (Some(theirs), Some(p));
+                            (inherited, named_by, named_at) = (Some(theirs), Some(p), bt);
                         }
                     }
                     Some(ours) if ours != theirs && self.is_library_class(c) => {
@@ -1174,6 +1175,10 @@ impl<'a> Worker<'a> {
                     Some(ours) if ours != theirs && (self.link_mode() || self.interp) && self.is_body_file(self.syms.class(c).file) => {
                         self.note_name_clash(c, name);
                     }
+                    // A method of a written class that the override check refuses has that record, the
+                    // one scalac has of it. A class an expansion made is told nothing by the check
+                    // (`check_copy_overrides`) and keeps this one.
+                    Some(ours) if ours != theirs && self.syms.class(c).made_at.is_none() && self.override_refused(c, m, &[(named_by.unwrap_or(p), named_at), (p, bt)]) => {}
                     Some(ours) if ours != theirs => {
                         let msg = format!(
                             "{} in {} overrides methods that are called {} and {} in the JavaScript output, since only one of the ancestors overloads it; declare the alternatives in one trait",

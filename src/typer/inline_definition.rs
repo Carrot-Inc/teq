@@ -2202,10 +2202,26 @@ impl<'a> Worker<'a> {
     }
 
     /// The type parameters the stored body defines, which a copy makes afresh: its local
-    /// methods' and its type patterns' variables.
+    /// methods' and its type patterns' variables, and those of the classes it declares and of
+    /// their members (`Symbols.mapSymbols` copies a class's type parameters with it, and
+    /// `TreeTypeMap.transformAllParamss` a method's).
     pub(super) fn local_tparams(&mut self, def: &InlineDefinition) -> Vec<TParamId> {
         let mut out: Vec<TParamId> = def.binders.iter().flat_map(|&b| self.sig_of(b).tparams.clone()).collect();
         out.extend(def.pattern_tparams.iter().copied());
+        for tc in &def.classes {
+            let info = self.syms.class(tc.id);
+            let mut own: Vec<TParamId> = info.tparams.clone();
+            for &m in info.member_order.iter().chain(&info.extensions).chain(&info.ctors).chain(&info.primary_ctor) {
+                if let Some(sig) = self.syms.sym(m).sig.as_deref() {
+                    own.extend(sig.tparams.iter().copied());
+                }
+            }
+            for p in own {
+                if !out.contains(&p) {
+                    out.push(p);
+                }
+            }
+        }
         out
     }
 

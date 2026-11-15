@@ -1176,6 +1176,7 @@ inline_check_class_in_given	pass	-
 inline_check_conversion_round	pass	-	
 inline_check_getters_and_paths	pass	-	
 inline_check_transparent_member	pass	-	
+inline_class_copy_whole	pass	-	
 inline_collapsed_nullary_plus	pass	-	
 inline_collapsed_plus_over_negation	pass	-	
 inline_conditional_condition	pass	-	

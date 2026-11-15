@@ -267,6 +267,24 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   built again over them (`class Sub extends Stock.api.Request` in the products, `Stock` among the sources built
   again): the build is typed again by one worker, with one worker's output, and says so in one line where the
   number of workers was automatic.
+- A class declared in an inline method's body is a whole class at each call. Its methods that implement a generic
+  parent's are reached through the parent on the JVM too (`class Two extends Op[Int] { def put(x: String) ..; def
+  put(x: Int) .. }` called as an `Op[Int]` threw `AbstractMethodError`); a method whose parameter or result is the
+  class itself, a class nested in it, a sibling of the body or an array of them, and a type parameter bounded by one
+  (`def pick[T <: Two]`, `class Box[T <: A0]`), no longer stop the JVM with `NoClassDefFoundError`. Where a class or
+  trait of the body declares two methods of one name, a class of the body that overrides or implements them is called
+  as scalac calls it: `t.put(1) + t.put("abc")` on such a class printed another number on JavaScript without an
+  error, and the interpreter and the JVM stopped. The same holds where the two methods come from two unrelated
+  traits and the class declares neither (`class Two extends M1 with M2`): the JVM stopped with `VerifyError`, and
+  with the traits declared in the body JavaScript called one of them for both. Not yet: a signature that names a
+  class of the body through another type (`A#In`, `a.In`, `Array[? <: A0]`), and a call whose inferred type argument
+  is such a class, still stop the JVM; over another module's products JavaScript and the interpreter still call both
+  of such a class's own two methods by one name, and a class with the two unrelated traits is refused there or
+  prints another number; and a call whose type arguments make the body's class invalid (its method then overriding
+  an inherited one without `override`) is still built, where scalac refuses the call.
+- A method that the override check refuses is reported once: `def put(a: String): Int` in a class extending
+  `Ops[String]`, whose `put(x: A): Int` and `put(x: String): String` it both overrides, got a second error about its
+  name in the JavaScript output after the first.
 
 ## 0.1.10 (2026-11-13)
 
