@@ -131,7 +131,9 @@ Recording expectations: `tests/run.sh --regen` (the `.expected` files from scala
 `--capture 3.10.0` (each scalac's captures of the source version's runs, pinned apart; 3.10.0's over a coursier cache
 of its own); `tests/lean-expected/<name>.expected` is written by hand, the
 output of JavaScript and the interpreter for a case of a departure they keep (`.expected` stays scalac's, the
-JVM's). A `// teq: <flags>` line in a test passes flags to teq; a
+JVM's). A case whose `.expected` itself is written by hand (teq's lines on every back end, where
+scalac's answer is not taken) carries a `// expected: by hand` line: `tests/run.sh` never has scala-cli write it,
+and `--regen` prints `kept <name>` for it. A `// teq: <flags>` line in a test passes flags to teq; a
 `// os: windows` or `// os: unix` line keeps a case of `run_interp.sh` and `run_jvm.sh` to that system, where
 Git's bash is Windows (the `windows_*` cases are the interpreter's acceptance on Windows, their expectations
 the Windows JDK's); a `// std: <modes>` line names the std modes a case's expectations hold under, which

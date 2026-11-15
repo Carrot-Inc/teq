@@ -1875,7 +1875,11 @@ impl<'a> Worker<'a> {
                 return Ok((te, self.b.t_unit));
             }
         }
-        Err(self.apply_member(tq, qty, name, None, Vec::new(), span, None))
+        // The target stays the selection it is where an expansion's body is typed (`InlineState::selection_target`).
+        self.inline.selection_target = true;
+        let selected = self.apply_member(tq, qty, name, None, Vec::new(), span, None);
+        self.inline.selection_target = false;
+        Err(selected)
     }
 
     /// The application of the synthesized `apply` of `module`, a companion nested in a class, of the
@@ -2901,6 +2905,16 @@ impl<'a> Worker<'a> {
                     te
                 }
                 _ => {
+                    // In the body an expansion types, a projection is its argument (`InlineTyper.typedSelect`); a
+                    // definition's check keeps the selection, as the definition's own tree does, and so does the
+                    // target of an assignment, plain (`InlineState::selection_target`) or compound
+                    // (`assign_op_target`, the left operand of `+=` while it is typed).
+                    let target = std::mem::take(&mut self.inline.selection_target) || self.assign_op_target.is_some();
+                    if !self.inline.sites.is_empty() && self.inline.checking == 0 && !target {
+                        if let Some((reduced, reduced_ty)) = self.reduce_body_selection(recv, s, ty) {
+                            return Callee::Value(reduced, reduced_ty);
+                        }
+                    }
                     let field = self.prog.add(TExpr::Field(recv, s));
                     if self.syms.sym(s).by_name {
                         self.prog.add(TExpr::CallClosure(field, ListRef::EMPTY))

@@ -17,6 +17,30 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   constructor of a class nested in a class (`new api.Second() { .. }`) failed the same way in a whole build too. The
   class file's constructor is the one whose parameters are the selected constructor's, never one that only has as
   many.
+- An inline method's expansion reduces a projection as scalac's inliner does: `new C(args).x`, the creation of a
+  class that initialises nothing (a case class's `C(args)` too) selected for one of its parameters, is that
+  argument. It is so where the selection is the whole right side of a parameter's or a receiver's binding
+  (`pick(new Mid(1).v)`) and where the method's body selects on a creation of its own or on an `inline`
+  parameter's argument (`inline def pick(inline m: Mid) = m.v`), and what a reduction gives is reduced again; the
+  creation's other arguments keep their effects in their order. For a program: the instance is no longer made.
+  Programs that now compile or print scalac's line, the argument's constant being read: `inline if m.v > 0`
+  (teq: "Cannot reduce `inline if`"), a transparent method whose result is such a selection
+  (`val one: 1 = pick(new Mid(1))`) and `inline m.v match` (teq took the other case). New refusals, scalac's
+  (E039): a forward reference to a block's later class through a creation the inliner keeps, which teq accepted
+  inside every expansion: a selection inside an argument (`pick(new Mid(1).v + 1)`), in a lambda, in the argument
+  of a plain call, under an ascription, and a by-name parameter's argument. Kept, as scalac keeps them: a by-name
+  parameter's argument, a by-value parameter bound to the creation, a value of the body, a class with a second
+  parameter list, with a value or a statement in its body or with a parent applied to an argument, and a
+  parameter the method reads through an accessor (a private one outside a final class). Not ported, and
+  temporary: four shapes in which scalac's own reduction gives another value or loses an effect (a case class
+  with two parameter lists, a creation through a secondary constructor, a class whose parent takes a default
+  argument, a parent applied in two clauses): teq makes the instance and prints what it printed, and the check
+  of forward references still accepts a later class created in one of the first three inside an expansion, as
+  scalac does. Two more places where teq does what the program means and scalac does not: an assignment to a
+  `var` parameter of such a creation in the method's body is made, as outside an inline method (scalac refuses it
+  there: "Reassignment to val"), and a class's by-name argument is not run where a reduction drops the creation
+  (scalac runs it once for each reduced selection). Not covered yet: the components of an `inline match` on such
+  a creation.
 - The operands of a right-associative operator (`a :: b`, `a +: b`, `h *: t`, a method `op:` of one's own) are
   evaluated in scalac's order: the application `b.op(a)` is typed as any application and each of its completed
   arguments that is no pure expression, for a parameter that is neither by-name nor inline, is evaluated ahead of

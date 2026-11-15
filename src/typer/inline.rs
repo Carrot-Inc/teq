@@ -239,6 +239,10 @@ pub struct InlineState {
     /// The static types of the arguments typed for an inline callee, which its proxies take.
     pub record_args: bool,
     pub arg_types: Vec<(TExprId, TypeId)>,
+    /// Set for the selection that is the target of the assignment being typed or walked: it stays the
+    /// selection it is, a projection too, since an assignment needs a variable there. The selection's own
+    /// typing takes the mark; its receiver is read before, as any value.
+    pub selection_target: bool,
     /// How many expansions there were so far: a given search whose count moved expanded an
     /// inline given, whose result depends on the site.
     pub expansions: u64,
@@ -303,6 +307,7 @@ pub struct Expanding {
     lenient_match: u32,
     record_args: bool,
     arg_types: Vec<(TExprId, TypeId)>,
+    selection_target: bool,
 }
 
 impl InlineState {
@@ -348,6 +353,7 @@ impl InlineState {
             lenient_match,
             record_args,
             arg_types,
+            selection_target,
             // The build's settings.
             max_depth: _,
             max_trees: _,
@@ -421,6 +427,7 @@ impl InlineState {
             && pending_trees.is_empty()
             && *lenient_match == 0
             && !*record_args
+            && !*selection_target
             && !*site_at_end
             && erased.is_none()
             && site_env.is_none()
@@ -481,6 +488,7 @@ impl InlineState {
             lenient_match: take(lenient_match),
             record_args: take(record_args),
             arg_types: take(arg_types),
+            selection_target: take(selection_target),
         })
     }
 
@@ -521,6 +529,7 @@ impl InlineState {
         self.lenient_match = outer.lenient_match;
         self.record_args = outer.record_args;
         self.arg_types = outer.arg_types;
+        self.selection_target = outer.selection_target;
     }
 }
 
@@ -614,6 +623,7 @@ impl InlineState {
             as_typed: _,
             lenient_match: _,
             record_args: _,
+            selection_target: _,
             // Room for the next walk, whose contents no walk reads from another.
             spare_walks: _,
             stored_lists: _,
@@ -680,6 +690,9 @@ pub struct InlineArg {
     /// (`Worker::frame_class`), which is not the class it is read in where a class of the
     /// expansion's body stands between (`inline_arg`).
     pub this_class: Option<ClassId>,
+    /// Whether the parameter is by-name: the reference binds such an argument to a method, which its
+    /// reductions do not look through as they look through an `inline` parameter's argument.
+    pub by_name: bool,
 }
 
 /// The worker's state where a definition is made, beyond its environment: what the definition's check runs under
@@ -1675,6 +1688,8 @@ impl<'a> Worker<'a> {
                         }
                         bound.this_arg = Some(proxy);
                     } else {
+                        // The receiver's binding is a value binding as a parameter's is (`normalizeBinding`).
+                        let r = self.reduce_binding(r, this_ty);
                         bound.stmts.push((0, TStmt::Val(proxy, r)));
                         // `C.this` in the body's types is the proxy's path.
                         let path = self.types.mk(Type::Term(proxy));
@@ -1904,7 +1919,7 @@ impl<'a> Worker<'a> {
                     _ => prior,
                 };
                 let tree = self.own_getter_expansion(sym, sig, subst, body, bound, tree, span);
-                self.bind_inline_arg(local, tree, pty);
+                self.bind_inline_arg_as(local, tree, pty, true);
             } else if let Some(bound) = bound.filter(|b| !inline_param && k < b.params.len()) {
                 // The parameter's own binding, which holds the argument's value once.
                 let proxy = bound.params[k].proxy;
@@ -1937,6 +1952,9 @@ impl<'a> Worker<'a> {
 
     pub(super) fn bind_parameter(&mut self, bound: &mut BoundCall, at: usize, te: TExprId) {
         let BoundParam { name, proxy, declared, local_ty, by_name, inline, repeated, is_using, is_macro, .. } = bound.params[at];
+        // A value binding's right side that is a projection is the selected argument (`normalizeBinding`); a
+        // by-name parameter's binding is a method, which the reference leaves as it is.
+        let te = if by_name || is_macro { te } else { self.reduce_binding(te, local_ty) };
         // An argument that folds to a constant is bound as that constant, as scalac's
         // inliner binds it, so that a condition on the parameter folds in the body. One
         // the interpreter can evaluate is bound to its value too, marked so that the
@@ -2007,7 +2025,9 @@ impl<'a> Worker<'a> {
             // it. Where its argument stands for it at each use as it is written, the uses copy a
             // tree whose casts say no type (`copy_for_proxy`).
             let expr = if !inline && met_cast && te == written { self.copy_for_proxy(te) } else { te };
-            self.bind_inline_arg(proxy, expr, ty);
+            // An argument that is a by-name parameter's copy stands for that parameter here too.
+            let by_name = by_name || self.by_name_copy(self.creation_under(expr));
+            self.bind_inline_arg_as(proxy, expr, ty, by_name);
             if kept {
                 self.inline.bare_trees.insert(expr, ());
                 bound.bare.push(expr);
@@ -2026,7 +2046,7 @@ impl<'a> Worker<'a> {
                 self.index_unrecord(given);
             }
             let value = if self.inline.args.contains_key(&proxy) { te } else { self.prog.add(TExpr::Local(proxy)) };
-            self.bind_inline_arg(given, value, local_ty);
+            self.bind_inline_arg_as(given, value, local_ty, by_name);
             self.inline.param_bindings.insert(given, (te, declared));
             bound.givens.push(given);
             self.bind_given(given);
@@ -2333,6 +2353,305 @@ impl<'a> Worker<'a> {
             })
     }
 
+    /// What the reference's `NewInstance` (`InlineReducer`, 43-78) takes the receiver `r` of a selection for: the
+    /// class a creation makes, the arguments its one parameter list was written with and the bindings that stand
+    /// in front of it. `new C(args)` and a case class's `C(args)`, through the primary constructor and of a class
+    /// with one parameter list (the reference takes a secondary constructor's arguments and a second list's by
+    /// the first list's positions, which gives another value: such a creation stays); the result of an expansion
+    /// behind its bindings (`Inlined`); a block that is elideable whole. What a creation passes first without
+    /// the program writing it, an enclosing instance and a block's captures, is no argument of the list.
+    fn projection_creation(&mut self, r: TExprId) -> Option<(ClassId, Vec<TExprId>, Vec<TStmt>)> {
+        match self.prog.expr(r) {
+            TExpr::New(c, args) => {
+                // A by-name parameter's copy stands for the reference's method binding, which no reduction
+                // looks through, wherever the copy has come to stand.
+                if self.by_name_copy(r) {
+                    return None;
+                }
+                let info = self.syms.class(c);
+                if info.kind == ClassKind::Anon {
+                    return None;
+                }
+                let written = match info.ctor.as_slice() {
+                    [one] => one.params.len(),
+                    _ => return None,
+                };
+                let args = self.prog.expr_list(args).to_vec();
+                let passed = args.len().checked_sub(written)?;
+                let (first, list) = args.split_at(passed);
+                first.iter().all(|&a| self.is_pure_value(a)).then(|| (c, list.to_vec(), Vec::new()))
+            }
+            TExpr::Block(stmts, res) => {
+                let (c, args, inner) = self.projection_creation(res)?;
+                let mut bindings = self.prog.stmt_list(stmts).to_vec();
+                // A block that is no expansion is taken where it is elideable whole (`isElideableExpr`'s
+                // `Block`): its statements definitions and values that go unevaluated, its creation's
+                // arguments too.
+                if !self.prog.is_expansion(r) {
+                    let elideable = bindings.clone().into_iter().all(|st| match st {
+                        TStmt::Val(s, init) => {
+                            let info = self.syms.sym(s);
+                            info.kind != SymKind::Var && info.mods & mods::MUTABLE == 0 && self.projection_drops(init)
+                        }
+                        TStmt::Fun(_) => true,
+                        _ => false,
+                    });
+                    if !elideable || !inner.is_empty() || !self.projection_class(c) || !args.clone().into_iter().all(|a| self.projection_drops(a)) {
+                        return None;
+                    }
+                }
+                bindings.extend(inner);
+                Some((c, args, bindings))
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether `e` is the copy of a by-name parameter's argument, or of an argument that stands for one
+    /// (`InlineArg::by_name`), made in an expansion under way.
+    pub(super) fn by_name_copy(&self, e: TExprId) -> bool {
+        match self.inline.copies.iter().rev().find(|&&(copy, _)| copy == e) {
+            Some(&(_, proxy)) => self.inline.args.get(&proxy).is_some_and(|a| a.by_name),
+            None => false,
+        }
+    }
+
+    /// The creation at the end of the blocks of `e`, where it has one.
+    fn creation_under(&self, mut e: TExprId) -> TExprId {
+        while let TExpr::Block(_, res) = self.prog.expr(e) {
+            e = res;
+        }
+        e
+    }
+
+    /// Whether a creation of `c` is one a projection drops: a class that initialises nothing
+    /// (`isNoInitsRealClass`), none of whose base classes takes a parameter. A base with parameters that the
+    /// class applies to no written argument is given its defaults and givens where an instance is made, which
+    /// the reference's flag does not see (`TreeInfo.parentsKind` reads the written parents) and its reduction
+    /// loses with the creation.
+    pub(super) fn projection_class(&mut self, c: ClassId) -> bool {
+        if !self.no_inits_real_class(c) {
+            return false;
+        }
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+        bases.into_iter().all(|b| b == c || self.syms.class(b).ctor.iter().all(|clause| clause.params.is_empty()))
+    }
+
+    /// Whether the argument `e` of a creation goes with the creation where another argument is selected
+    /// (`isElideableExpr`, as `elideable_argument` ports it), any creation in it being one a projection drops,
+    /// and every reference it evaluates pure by the reference's purity (`elideable_by_purity`).
+    fn projection_drops(&mut self, e: TExprId) -> bool {
+        if !self.elideable_argument(e) || !self.elideable_by_purity(e) {
+            return false;
+        }
+        let made: Vec<ClassId> = self
+            .prog
+            .descendants(e)
+            .filter_map(|x| match self.prog.expr(x) {
+                TExpr::New(c, _) => Some(c),
+                _ => None,
+            })
+            .collect();
+        made.into_iter().all(|c| self.projection_class(c))
+    }
+
+    /// What `isElideableExpr` asks of the references and creations of an argument `elideable_argument` took
+    /// (`isPureRef` of an `Ident` and a `Select`, `isPureApply` of an application: Inliner.scala 58-75): each is
+    /// pure by the reference's purity (`expr_purity_under`). An object with an initializer, a lazy value, a
+    /// given and a case class's creation through a companion with an initializer are idempotent and no more
+    /// (`refPurity`): their first evaluation runs something, so such an argument is kept where it stands. A
+    /// cast that function took is read for its operand, a creation for its arguments.
+    fn elideable_by_purity(&mut self, e: TExprId) -> bool {
+        use super::elaborate::Purity;
+        match self.prog.expr(e) {
+            TExpr::Cast(a, ..) => self.elideable_by_purity(a),
+            TExpr::New(c, args) => {
+                let args = self.prog.expr_list(args).to_vec();
+                self.creation_purity_under(c, Purity::IMPURE).at_least(Purity::PURE) && args.into_iter().all(|a| self.elideable_by_purity(a))
+            }
+            _ => self.expr_purity_under(e, Purity::IMPURE).at_least(Purity::PURE),
+        }
+    }
+
+    /// The position of the member `f` among the parameters of `c`'s one list, where a selection of it on a
+    /// creation is the reference's projection (`reduceProjection`'s `paramAccessors.indexWhere`, 90-99): a
+    /// parameter of the list, a `var` among them. A parameter the code that wrote the selection reads through
+    /// an accessor (`PrepareInlineable.needsAccessor`: a private, protected or qualified-private one, in an
+    /// inline method that is no block's) is one only where that accessor is the class's own under its plain
+    /// name, an inline method of the parameter's own class which no class extends (`accessorNameOf`,
+    /// `AccessProxies.useAccessor`); `writer` is that method, none for code written where no expansion is under
+    /// way.
+    fn projection_field(&self, c: ClassId, f: SymId, writer: Option<SymId>, outer: bool) -> Option<usize> {
+        let at = self.syms.class(c).ctor_syms.first()?.iter().position(|&p| p == f)?;
+        let info = self.syms.sym(f);
+        if info.by_name {
+            return None;
+        }
+        if info.mods & (mods::PRIVATE | mods::PROTECTED) == 0 && !info.scoped_private && info.mods & mods::FIELD != 0 {
+            return Some(at);
+        }
+        let own = match writer.map(|m| self.syms.sym(m).owner) {
+            None => !outer,
+            Some(Owner::Local) => true,
+            Some(Owner::Class(host)) => host == c && !self.extensible(c),
+            Some(_) => false,
+        };
+        own.then_some(at)
+    }
+
+    /// `InlineReducer.reduceProjection` (86-129) of the selection of `f` on `r`, the member's type there
+    /// `declared`: where `r` is a creation of a class that initialises nothing and `f` a parameter of it, the
+    /// argument in the parameter's place, typed as its own tree is; the creation's other arguments that do not
+    /// go with it in their order, those before it in front, those after it behind a value that holds the
+    /// selected one (none where that is pure); the receiver's bindings in front of all. The nodes are the
+    /// arguments' own.
+    pub(super) fn reduce_projection(&mut self, r: TExprId, f: SymId, declared: TypeId, writer: Option<SymId>, outer: bool) -> Option<(TExprId, TypeId)> {
+        let (c, args, mut stmts) = self.projection_creation(r)?;
+        if !self.projection_class(c) {
+            return None;
+        }
+        let at = self.projection_field(c, f, writer, outer)?;
+        let arg = *args.get(at)?;
+        // The selection's type stays the member's: a value the body binds to it keeps the type its definition
+        // has. A constant of the member's own class is that constant, as the reference's literal is; one of a
+        // narrower class stands as under an ascription to the member's type.
+        let ty = match self.read_constant(arg, Reads::Component).filter(|_| !self.prog.is_widened(arg)) {
+            Some(v) => {
+                let lit = self.types.lit(v);
+                let member = self.dealias(declared);
+                if self.widen_lit(lit) == member || lit == member {
+                    lit
+                } else {
+                    self.prog.mark_widened(arg);
+                    declared
+                }
+            }
+            None => declared,
+        };
+        let kept = |t: &mut Self, items: &[TExprId]| -> Vec<TExprId> { items.iter().copied().filter(|&a| !t.projection_drops(a)).collect() };
+        let leading = kept(self, &args[..at]);
+        let trailing = kept(self, &args[at + 1..]);
+        stmts.extend(leading.into_iter().map(TStmt::Expr));
+        // `letBindUnless(TreeInfo.Pure, arg)`: the selected argument stays in front of the ones behind it
+        // unless it is pure by the reference's purity; an idempotent one is evaluated where it stood.
+        let pure = self.is_pure_value(arg) && self.expr_purity_under(arg, super::elaborate::Purity::IMPURE).at_least(super::elaborate::Purity::PURE);
+        let value = if trailing.is_empty() || pure {
+            arg
+        } else {
+            let span = self.prog.span_of(arg).map_or(Span::default(), |(_, s)| s);
+            let held = self.fresh_local("ev", ty, span);
+            stmts.push(TStmt::Val(held, arg));
+            let read = self.prog.add(TExpr::Local(held));
+            self.prog.copy_span(arg, read);
+            read
+        };
+        stmts.extend(trailing.into_iter().map(TStmt::Expr));
+        if stmts.is_empty() {
+            return Some((value, ty));
+        }
+        let l = self.prog.stmts.push_slice(&stmts);
+        let block = self.prog.add(TExpr::Block(l, value));
+        self.prog.copy_span(arg, block);
+        if self.prog.type_of(arg).is_some() {
+            self.prog.set_type(block, ty);
+        }
+        if self.prog.is_widened(arg) {
+            self.prog.mark_widened(block);
+        }
+        Some((block, ty))
+    }
+
+    /// The selection of `f` on `recv` in the body of the expansion under way, the member's type there `declared`,
+    /// as the reference's `InlineTyper.typedSelect` (Inliner.scala 888-912) leaves it: a projection is its
+    /// argument, and what the reduction gives is typed again, its own projections reduced, the innermost
+    /// first. The receiver is the body's own code or the copy of an `inline` parameter's argument; a by-name
+    /// parameter's copy is none (`projection_creation`).
+    pub(super) fn reduce_body_selection(&mut self, recv: TExprId, f: SymId, declared: TypeId) -> Option<(TExprId, TypeId)> {
+        let writer = self.inline.sites.last().map(|site| site.callee);
+        let (reduced, ty) = self.reduce_projection(recv, f, declared, writer, false)?;
+        let ty = self.reduce_returned(reduced).unwrap_or(ty);
+        Some((reduced, ty))
+    }
+
+    /// The tree a reduction gave, typed again as the reference types it (Inliner.scala 906): each selection in
+    /// it that is a projection stands for its argument in its place, the innermost first. The type of `tree`
+    /// itself where it was one.
+    fn reduce_returned(&mut self, tree: TExprId) -> Option<TypeId> {
+        let nodes: Vec<TExprId> = self.prog.descendants(tree).collect();
+        // The target of an assignment in the tree stays the selection it is, as one the body writes.
+        let targets: Vec<TExprId> = nodes
+            .iter()
+            .filter_map(|&d| match self.prog.expr(d) {
+                TExpr::Assign(target, _) => Some(target),
+                _ => None,
+            })
+            .collect();
+        let mut root = None;
+        for &d in nodes.iter().rev() {
+            let TExpr::Field(r, f) = self.prog.expr(d) else { continue };
+            if targets.contains(&d) {
+                continue;
+            }
+            let declared = self.sig_of(f).ret;
+            let Some((reduced, ty)) = self.reduce_projection(r, f, declared, None, true) else { continue };
+            self.prog.exprs[d.idx()] = self.prog.expr(reduced);
+            if self.prog.type_of(d).is_some() {
+                self.prog.set_type(d, ty);
+            }
+            if let Some(place) = self.prog.forward.places.get(&reduced).cloned() {
+                self.prog.forward.places.insert(d, place);
+            }
+            if d == tree {
+                root = Some(ty);
+            }
+        }
+        root
+    }
+
+    /// The right side `te` of a value binding of an expansion as the reference's `normalizeBinding`
+    /// (`InlineReducer`, 135-146) leaves it: reduced where it is itself a projection, or a block of pure
+    /// bindings that ends in one (`reduceProjection`'s second case), once: what the reduction gives is not
+    /// reduced again. An ascription over the selection and an expansion's own result are no selection there.
+    /// `declared` is the type the binding has for it, the selection's own where the call was typed.
+    pub(super) fn reduce_binding(&mut self, te: TExprId, declared: TypeId) -> TExprId {
+        if self.prog.is_ascribed(te) || self.prog.is_widened(te) || self.prog.is_expansion(te) {
+            return te;
+        }
+        let outer = self.inline.sites.len() > 1;
+        match self.prog.expr(te) {
+            TExpr::Field(r, f) => {
+                match self.reduce_projection(r, f, declared, None, outer) {
+                    Some((reduced, _)) => reduced,
+                    None => te,
+                }
+            }
+            TExpr::Block(stmts, res) => {
+                let pure = self.prog.stmt_list(stmts).to_vec().into_iter().all(|st| match st {
+                    TStmt::Val(s, init) => {
+                        let info = self.syms.sym(s);
+                        info.kind != SymKind::Var && info.mods & (mods::MUTABLE | mods::LAZY) == 0 && self.is_pure_value(init)
+                    }
+                    TStmt::Fun(_) => true,
+                    _ => false,
+                });
+                if !pure {
+                    return te;
+                }
+                let reduced = self.reduce_binding(res, declared);
+                if reduced == res {
+                    return te;
+                }
+                let block = self.prog.add(TExpr::Block(stmts, reduced));
+                self.prog.copy_span(te, block);
+                if let Some(t) = self.prog.type_of(reduced) {
+                    self.prog.set_type(block, t);
+                }
+                block
+            }
+            _ => te,
+        }
+    }
+
     /// Whether an inline method body is a splice: the method is a macro.
     pub(crate) fn is_macro_body(&self, file: FileId, body: ExprId) -> bool {
         let ast = self.ast(file);
@@ -2491,8 +2810,13 @@ impl<'a> Worker<'a> {
 
     /// Binds `s` to the tree that stands for it at each use.
     pub(super) fn bind_inline_arg(&mut self, s: SymId, expr: TExprId, ty: TypeId) {
+        self.bind_inline_arg_as(s, expr, ty, false);
+    }
+
+    /// `bind_inline_arg` for a parameter that may be by-name (`InlineArg::by_name`).
+    pub(super) fn bind_inline_arg_as(&mut self, s: SymId, expr: TExprId, ty: TypeId, by_name: bool) {
         let this_class = self.frame_class();
-        self.inline.args.insert(s, InlineArg { expr, ty, source: None, this_class });
+        self.inline.args.insert(s, InlineArg { expr, ty, source: None, this_class, by_name });
     }
 
     /// Makes each `this` of the tree `e`, a fresh copy, the instance of `k` as a class nested in

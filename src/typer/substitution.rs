@@ -1290,11 +1290,14 @@ impl<'a> Worker<'a> {
                 }
             },
             TExpr::Field(r, s) => {
+                // An assignment's target stays the selection it is (`InlineState::selection_target`).
+                let target = std::mem::take(&mut self.inline.selection_target);
                 let r2 = self.walk(w, r);
                 if r2 != r {
                     self.prog.exprs[e.idx()] = TExpr::Field(r2, s);
                 }
-                self.resolved(w, e)
+                let e = self.resolved(w, e);
+                if target { e } else { self.walked_projection(w, e) }
             }
             TExpr::CallStatic(_, args) | TExpr::Default(_, _, args) => {
                 self.walk_list(w, args);
@@ -1306,7 +1309,8 @@ impl<'a> Worker<'a> {
                     self.prog.exprs[e.idx()] = TExpr::CallMethod(r2, s, args);
                 }
                 self.walk_list(w, args);
-                self.resolved(w, e)
+                let e = self.resolved(w, e);
+                if args.is_empty() { self.walked_projection(w, e) } else { e }
             }
             TExpr::CallClosure(f, args) if args.len == 0 && matches!(self.prog.expr(f), TExpr::Local(s) if w.by_name.contains_key(&s)) => {
                 w.visited += 1;
@@ -1391,7 +1395,9 @@ impl<'a> Worker<'a> {
             }
             TExpr::Block(..) => self.walk_block(w, e),
             TExpr::Assign(a, b) => {
+                self.inline.selection_target = matches!(self.prog.expr(a), TExpr::Field(..));
                 let a2 = self.walk(w, a);
+                self.inline.selection_target = false;
                 let b2 = self.walk(w, b);
                 if (a2, b2) != (a, b) {
                     self.prog.exprs[e.idx()] = TExpr::Assign(a2, b2);
@@ -1473,6 +1479,31 @@ impl<'a> Worker<'a> {
     }
 
     /// The statements that run before a parent's arguments are passed, walked in place.
+    /// The walked selection `e` as the re-typed path's typing of a selection leaves it
+    /// (`Worker::reduce_body_selection`): a projection is its argument. A parent's parameterless member the
+    /// receiver's class implements by a parameter is that parameter here (`retype_member`).
+    fn walked_projection(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
+        if w.failed {
+            return e;
+        }
+        let (r, f) = match self.prog.expr(e) {
+            TExpr::Field(r, f) => (r, f),
+            TExpr::CallMethod(r, f, args) if args.is_empty() => (r, f),
+            _ => return e,
+        };
+        let declared = match self.walked_type(w, e) {
+            ERROR => self.sig_of(f).ret,
+            t => t,
+        };
+        match self.reduce_body_selection(r, f, declared) {
+            Some((reduced, ty)) => {
+                self.set_walked_type(w, reduced, ty);
+                reduced
+            }
+            None => e,
+        }
+    }
+
     fn walk_prelude(&mut self, w: &mut Walk, prelude: crate::ast::ListRef) {
         let stmts: Vec<TStmt> = self.prog.stmt_list(prelude).to_vec();
         for (i, st) in stmts.into_iter().enumerate() {

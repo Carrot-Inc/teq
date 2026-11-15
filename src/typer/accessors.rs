@@ -129,7 +129,7 @@ impl<'a> Worker<'a> {
 
     /// Whether `c` is a class another can extend, whose accessors' names scalac expands by the
     /// class's name (`Symbol.isExtensibleClass`).
-    fn extensible(&self, c: ClassId) -> bool {
+    pub(super) fn extensible(&self, c: ClassId) -> bool {
         let info = self.syms.class(c);
         matches!(info.kind, ClassKind::Class | ClassKind::Trait) && info.mods & mods::FINAL == 0 && !self.name_str(info.name).contains("$anon")
     }

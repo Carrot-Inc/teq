@@ -422,7 +422,7 @@ impl<'a> Worker<'a> {
     /// qualifier is the companion: idempotent where the companion has initialisation (`refPurity` of
     /// a module), which every back end runs in front of the creation (`emit::touched_companion`), a
     /// creation written with `new` included.
-    fn creation_purity_under(&mut self, c: ClassId, cast: Purity) -> Purity {
+    pub(super) fn creation_purity_under(&mut self, c: ClassId, cast: Purity) -> Purity {
         if cast == Purity::PURE {
             return Purity::PURE;
         }

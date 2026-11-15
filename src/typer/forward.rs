@@ -996,18 +996,36 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The arguments of the creation `r` where `r.f` is a projection the inliner reduces: a
-    /// creation of a class without initialisation (`isNoInitsRealClass`), `f` a parameter of it.
-    fn forward_projection(&mut self, r: TExprId, f: SymId) -> Option<ast::ListRef> {
-        let (c, args) = match self.prog.expr(r) {
-            TExpr::New(c, args) => (c, args),
+    /// The arguments of the creation `r` where `r.f` is a projection scalac's inliner reduces and teq's keeps
+    /// (`Worker::projection_creation`, `projection_class`): a creation of a class without initialisation
+    /// (`isNoInitsRealClass`), `f` a parameter of it, through a secondary constructor that has an argument at the
+    /// parameter's place, of a case class with a second parameter list, or of a class one of whose bases takes
+    /// a parameter. scalac's tree holds an argument there and no creation, by a reduction that gives another
+    /// value or loses an effect; teq's tree holds the creation.
+    fn forward_kept_projection(&mut self, r: TExprId, f: SymId) -> Option<ast::ListRef> {
+        let (c, args, via) = match self.prog.expr(r) {
+            TExpr::New(c, args) => (c, args, None),
             TExpr::NewVia(ctor, args) => match self.syms.sym(ctor).owner {
-                Owner::Class(c) => (c, args),
+                Owner::Class(c) => (c, args, Some(ctor)),
                 _ => return None,
             },
             _ => return None,
         };
-        (self.is_own_param_accessor(c, f) && self.no_inits(c)).then_some(args)
+        if !self.is_own_param_accessor(c, f) || !self.no_inits(c) {
+            return None;
+        }
+        let kept = match via {
+            Some(ctor) => {
+                let written: usize = self.sig_of(ctor).clauses.iter().map(|clause| clause.params.len()).sum();
+                let at = self.syms.class(c).ctor_syms.first().and_then(|list| list.iter().position(|&p| p == f));
+                at.is_some_and(|at| at < written)
+            }
+            None => {
+                let info = self.syms.class(c);
+                info.ctor.len() > 1 && info.mods & mods::CASE != 0 || !self.projection_class(c)
+            }
+        };
+        kept.then_some(args)
     }
 
     /// What the class of a block captures.
@@ -1370,11 +1388,11 @@ impl<'a> Worker<'a> {
                     self.forward_name(w, Named::Term(s), 0, "local", place);
                 }
             }
-            // In the code the inliner copies scalac's tree holds the argument where a creation of
-            // a class that initialises nothing is selected for a parameter of its
-            // (`InlineReducer.reduceProjection`): the class is not named there, the arguments are.
-            TExpr::Field(r, f) if !w.expansions.is_empty() && self.forward_projection(r, f).is_some() => {
-                if let Some(args) = self.forward_projection(r, f) {
+            // A projection the inliner reduced is its argument in the tree. Where it keeps one that
+            // scalac's reduces (`forward_kept_projection`), scalac's tree holds the argument: the class
+            // is not named there, the arguments are.
+            TExpr::Field(r, f) if !w.expansions.is_empty() && self.forward_kept_projection(r, f).is_some() => {
+                if let Some(args) = self.forward_kept_projection(r, f) {
                     self.forward_list(w, args);
                 }
             }

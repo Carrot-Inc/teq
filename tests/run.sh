@@ -15,6 +15,9 @@
 # (docs/internal/DIFFERENCES.md: the std's erased `ClassTag` evidence) is compared with
 # tests/lean-expected/<name>.expected here and in tests/run_interp.sh, written by hand; its .expected
 # stays scalac's, which tests/run_jvm.sh compares with.
+# A test whose expectation is not scalac's output carries `// expected: by hand`: teq's lines where scalac's
+# answer is not taken, on every back end. scala-cli never writes it, with --regen or for a missing file; a
+# regeneration prints a line for each such test, and one without its file fails.
 # The cases expected to fail are tests/pending/cases.txt (tests/support/pending.py): the run fails when a listed
 # case passes and when an unlisted one fails; --update takes the cases that pass now out of the list, --add
 # writes the unlisted failures in (for the change that brings the cases), and either writes the suite's row of
@@ -60,7 +63,18 @@ for src in "$dir"/*.scala "$dir"/*/; do
     printf 'skip %s\tno .expected beside it\n' "$name" >> "$out/results.txt"
     continue
   fi
-  if [ $regen = 1 ] || [ ! -f "$expected" ]; then
+  by_hand=0
+  grep -q -h '^// expected: by hand' "$src" "$src"/*.scala 2>/dev/null && by_hand=1
+  if [ $by_hand = 1 ] && [ ! -f "$expected" ]; then
+    echo "REF FAIL $name (its expectation is written by hand and is missing)"
+    fail=$((fail + 1))
+    printf 'fail %s\tno expectation: written by hand and missing\n' "$name" >> "$out/results.txt"
+    continue
+  fi
+  if [ $by_hand = 1 ] && [ $regen = 1 ]; then
+    echo "kept $name: its expectation is written by hand"
+  fi
+  if [ $by_hand = 0 ] && { [ $regen = 1 ] || [ ! -f "$expected" ]; }; then
     limit=120
     grep -q -h '^//> using platform js' "$src" "$src"/*.scala 2>/dev/null && limit=300
     if ! timeout $limit scala-cli run -S "$scala_version" --jvm system "$src" --server=false -q > "$expected" 2> "$out/$name.ref.err"; then
