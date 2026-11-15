@@ -1732,6 +1732,10 @@ async function signatureHelp() {
   const inherited = join(root, "Inherited.scala")
   const t3 = "trait Results:\n  class Status(val code: Int)\n  val Ok = new Status(200)\ntrait CtrlPage extends Results:\n  extension (s: Status) def page(p: String): String = p\nclass Ctrl extends CtrlPage:\n  def show = Ok.page(\"x\")\n"
   writeFileSync(inherited, t3)
+  // A case class with a secondary constructor beside a plain class with one.
+  const creation = join(root, "Creation.scala")
+  const t4 = "case class V(x: Int):\n  def this(a: Int, b: Int) = this(a + b)\nclass W(val x: Int):\n  def this(a: Int, b: Int) = this(a + b)\nobject Creation:\n  val a = V(1)\n  val b = new V(2)\n  val c = W(3)\n"
+  writeFileSync(creation, t4)
   const plain = new Client(root)
   try {
     await plain.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
@@ -1745,6 +1749,16 @@ async function signatureHelp() {
     plain.notify("textDocument/didOpen", { textDocument: { uri: uriOf(inherited), languageId: "scala", version: 1, text: t3 } })
     const ext = await plain.request("textDocument/signatureHelp", { textDocument: { uri: uriOf(inherited) }, position: positionAt(t3, t3.indexOf("page(\"x\")") + "page(".length) }, { timeout: 20000 })
     check("signature help: an inherited extension on a nested class of the enclosing class", ext.result?.signatures?.[0]?.label === "page(p: String): String", ext)
+    // A case class's name applied is its companion's synthesized `apply`, the primary constructor alone, as the
+    // typer takes it; a `new` and a plain class's constructor proxy reach every constructor.
+    plain.notify("textDocument/didOpen", { textDocument: { uri: uriOf(creation), languageId: "scala", version: 1, text: t4 } })
+    const labelsAt = async (needle) => (await plain.request("textDocument/signatureHelp", { textDocument: { uri: uriOf(creation) }, position: positionAt(t4, t4.indexOf(needle) + needle.indexOf("(") + 1) }, { timeout: 20000 })).result?.signatures?.map((s) => s.label)
+    const applied = await labelsAt("V(1)")
+    check("signature help: a case class's name applied offers its synthesized `apply`, the primary constructor alone", same(applied, ["V(x: Int)"]), applied)
+    const created = await labelsAt("new V(2)")
+    check("signature help: a `new` of the case class offers every constructor", same(created, ["V(x: Int)", "V(a: Int, b: Int)"]), created)
+    const proxied = await labelsAt("W(3)")
+    check("signature help: a plain class's name applied offers every constructor", same(proxied, ["W(x: Int)", "W(a: Int, b: Int)"]), proxied)
     await plain.result("shutdown", null)
     plain.notify("exit", null)
   } catch (e) {

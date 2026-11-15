@@ -83,6 +83,7 @@ callsyntax	pass	-
 can_equal_fixed_operands	pass	-	
 canequal_nested_ambiguity	pass	-	
 canequal_nested_ambiguity_warm	pass	-	
+case_apply_primary_alone	pass	-	
 case_class_deferred_synthesized	pass	-	
 case_class_own_deferred	pass	-	
 case_clause_bar_before_case	pass	-	

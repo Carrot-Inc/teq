@@ -183,6 +183,7 @@ capture_w	pass	-
 capture_x	pass	-	
 case_apply_bare_in_companion	pass	-	
 case_apply_beside_curried	pass	-	
+case_apply_primary_alone	pass	-	
 case_class_below_superclass	pass	-	
 case_class_beside_method_of_its_name	pass	-	
 case_class_copy_through_trait	pass	-	

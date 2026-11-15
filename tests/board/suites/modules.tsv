@@ -29,6 +29,8 @@ boundspoly	pass	-
 byname	pass	-	
 caseapply	pass	-	
 caseapplyclauses	pass	-	
+caseapplyprimary	pass	-	
+caseapplyrefused	pass	-	
 caseclass	pass	-	
 caseobject	pass	-	
 castarrays	pass	-	

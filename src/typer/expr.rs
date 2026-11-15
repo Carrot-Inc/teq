@@ -4652,7 +4652,7 @@ impl<'a> Worker<'a> {
     }
 
     /// The class of an enum case with parameters that `callee` names by the case's object: what
-    /// its application constructs (`Callee::Ctor`), a class `constructed_class` leaves out, which
+    /// its application constructs (`Callee::Proxy`), a class `constructed_class` leaves out, which
     /// answers for a companion of a class of kind `Class`. dotty's callee there is the companion's
     /// synthetic `apply` over the case's parameters (`Desugar.classDef`).
     fn enum_case_class(&self, callee: super::resolve::TermRef) -> Option<ClassId> {
@@ -4676,7 +4676,9 @@ impl<'a> Worker<'a> {
     /// Whether an application of the class `c` by its name can be another creator than its primary
     /// constructor: a secondary constructor, or an `apply` its companion has or inherits.
     fn has_other_creators(&mut self, c: ClassId) -> bool {
-        if !self.syms.class(c).ctors.is_empty() {
+        // A case class's name applied is its synthesized `apply`, the primary alone
+        // (`synthesized_apply`, `construct`): its secondary constructors are no creators a name selects.
+        if !self.syms.class(c).ctors.is_empty() && !self.synthesized_apply(c) {
             return true;
         }
         let Some(o) = self.syms.class(c).companion else { return false };

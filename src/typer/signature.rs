@@ -841,7 +841,7 @@ impl<'a> Worker<'a> {
             }
             Head::New { path, anonymous, implied } => match self.new_class_at(path, at) {
                 Some(c) => {
-                    let mut shown = self.constructor_signatures(c, *anonymous);
+                    let mut shown = self.constructor_signatures(c, *anonymous, false);
                     // The empty clause a `new` without a list implies is applied.
                     if *implied {
                         for s in &mut shown {
@@ -1245,19 +1245,20 @@ impl<'a> Worker<'a> {
                     out.push(self.method_shown(crate::names::APPLY, alt, &sig, subst.clone(), false));
                 }
                 if made_up || out.is_empty() {
-                    let mut ctors = self.constructor_signatures(c, false);
+                    let mut ctors = self.constructor_signatures(c, false, true);
                     ctors.append(&mut out);
                     return ctors;
                 }
                 return out;
             }
         }
-        self.constructor_signatures(c, false)
+        self.constructor_signatures(c, false, true)
     }
 
     /// The constructors of a class: its primary one, then its secondary ones, named by the
-    /// class.
-    fn constructor_signatures(&mut self, c: ClassId, anonymous: bool) -> Vec<Shown> {
+    /// class. `applied`: asked for the class's name applied, which for a case class is its
+    /// synthesized `apply`, the primary alone, as the typer takes it (`Worker::construct`).
+    fn constructor_signatures(&mut self, c: ClassId, anonymous: bool, applied: bool) -> Vec<Shown> {
         self.complete_class(c);
         if self.loaded.is_some() {
             self.absorb_java_ctors(c);
@@ -1268,7 +1269,7 @@ impl<'a> Worker<'a> {
         }
         let name = super::complete::spelled(&self.name_str(self.syms.class(c).name));
         let tparams = self.syms.class(c).tparams.clone();
-        let secondaries = self.syms.class(c).ctors.clone();
+        let secondaries = if applied && self.synthesized_apply(c) { Vec::new() } else { self.syms.class(c).ctors.clone() };
         let instance = Some(self.syms.class(c).base_types[0].1);
         let mut out = Vec::new();
         if (secondaries.is_empty() || !self.is_java_class(c)) && self.ctor_accessible(c) {

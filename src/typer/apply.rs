@@ -416,7 +416,14 @@ pub enum Callee {
     /// An overloaded name with the type of the receiver, which the owners of the alternatives
     /// are seen from.
     Overloaded { recv: Option<TExprId>, recv_ty: Option<TypeId>, set: SymId },
+    /// A class a creation names: a `new`, an anonymous class's among them, and a secondary
+    /// constructor's self call. It reaches every constructor, as a parent call does, whose
+    /// constructors `construct_parent_now` gathers.
     Ctor(ClassId),
+    /// A class named where a term is applied, without a `new`: its constructor proxy, which reaches
+    /// every constructor, or a case class's synthesized `apply`, which is the primary alone
+    /// (`Worker::construct`).
+    Proxy(ClassId),
     Value(TExprId, TypeId),
     /// An extension method of a class or an object that the name an application's head writes is
     /// bound to: applied as its selection on that receiver is (`Syntax.tag(x)` for `tag(x)`).
@@ -3748,10 +3755,10 @@ impl<'a> Worker<'a> {
             TermRef::Class(c) if !self.extension_call_head && self.syms.class(c).mods & crate::ast::mods::CASE != 0 && matches!(self.syms.class(c).owner, Owner::Package(_)) => {
                 match self.materialized_companion(c).and_then(|m| self.syms.class(m).module_sym) {
                     Some(s) => return self.term_callee(TermRef::Global(s), name, span),
-                    None => Callee::Ctor(c),
+                    None => Callee::Proxy(c),
                 }
             }
-            TermRef::Class(c) => Callee::Ctor(c),
+            TermRef::Class(c) => Callee::Proxy(c),
             // The imported proxy applies as its selection on the value: `o.Inner(args)`.
             TermRef::ValueClass(v, c) => {
                 let (recv, recv_ty) = self.import_value_ref(v, span)?;
@@ -3998,7 +4005,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
         let case_class = match callee {
-            Callee::Ctor(c) if self.syms.class(c).mods & crate::ast::mods::CASE != 0 || self.syms.class(c).kind == ClassKind::EnumCase => Some(c),
+            Callee::Ctor(c) | Callee::Proxy(c) if self.syms.class(c).mods & crate::ast::mods::CASE != 0 || self.syms.class(c).kind == ClassKind::EnumCase => Some(c),
             _ => None,
         };
         let (te, ty) = self.apply_callee(callee, targs, lists, span, expected);
@@ -4016,6 +4023,8 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
+        // A class named without a `new` (`Callee::Proxy`), not a creation (`Callee::Ctor`).
+        let named = matches!(callee, Callee::Proxy(_));
         match callee {
             // A method whose header the parser could not complete takes any arguments: they are
             // typed on their own and the application has the error type.
@@ -4037,7 +4046,7 @@ impl<'a> Worker<'a> {
                 self.apply_overloaded(recv, recv_ty, set, targs, lists, span, expected)
             }
             Callee::Selection { recv, recv_ty, name } => self.apply_member(recv, recv_ty, name, targs, lists, span, expected),
-            Callee::Ctor(c) => {
+            Callee::Ctor(c) | Callee::Proxy(c) => {
                 // A proxy is the companion's unless a `new` names the class, or it is reached
                 // through an outer instance, which the proxy's application takes in place.
                 if lists.is_empty() && targs.is_none() && expected.is_some() && !self.explicit_new && !self.new_prefixed {
@@ -4063,7 +4072,9 @@ impl<'a> Worker<'a> {
                 let explicit = std::mem::take(&mut self.explicit_new);
                 let outer_seen = self.apply_seen_from;
                 self.apply_seen_from = if explicit { None } else { self.companion_apply_receiver(c).map(|r| (c, r)) };
-                let (te, ty) = self.apply_ctor(c, targs, lists, span, expected);
+                // A name is no creation whatever `explicit_new` says: a `new Array[T](..)` and a
+                // `new String(..)` leave it set for the first class their arguments name.
+                let (te, ty) = self.apply_ctor(c, targs, lists, span, expected, named);
                 self.apply_seen_from = outer_seen;
                 if !explicit && self.capturing() && self.syms.class(c).mods & crate::ast::mods::CASE != 0 && matches!(self.prog.expr(te), TExpr::New(..)) {
                     self.capture_form(te, Form::CaseApply);
@@ -4478,7 +4489,7 @@ impl<'a> Worker<'a> {
             // (`companion_apply_sig`).
             let outer_seen = self.apply_seen_from;
             self.apply_seen_from = self.companion_apply_receiver(c).map(|r| (c, r));
-            let (te, ty) = self.apply_ctor(c, targs, lists, span, expected);
+            let (te, ty) = self.apply_ctor(c, targs, lists, span, expected, true);
             self.apply_seen_from = outer_seen;
             if self.deps.is_some() {
                 self.deps_node(te, super::deps::Node::Apply(c));
@@ -4488,7 +4499,7 @@ impl<'a> Worker<'a> {
             }
             return (te, ty);
         }
-        let (te, ty) = self.construct(c, targs, lists, span, expected, true);
+        let (te, ty) = self.construct(c, targs, lists, span, expected, true, true);
         let Some((params, ret)) = self.as_function(ty) else { return (te, ty) };
         let info = self.syms.class(c);
         let Some(parent) = info.parents.first().copied().filter(|_| info.kind == ClassKind::EnumCase) else {
@@ -4535,10 +4546,15 @@ impl<'a> Worker<'a> {
         lists: Vec<ArgList>,
         span: Span,
         expected: Option<TypeId>,
+        applied: bool,
     ) -> (TExprId, TypeId) {
-        self.construct(c, targs, lists, span, expected, false)
+        self.construct(c, targs, lists, span, expected, false, applied)
     }
 
+    /// The creation of a `c`. `applied`: it is written without a `new`, the class's name applied or
+    /// the companion's `apply` (`apply_companion_apply`, `Callee::Proxy`), not a `new` or a self
+    /// call (`Callee::Ctor`).
+    #[allow(clippy::too_many_arguments)]
     fn construct(
         &mut self,
         c: ClassId,
@@ -4547,6 +4563,7 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
         as_function: bool,
+        applied: bool,
     ) -> (TExprId, TypeId) {
         let prefix = self.ctor_prefix.take();
         self.complete_class(c);
@@ -4566,8 +4583,15 @@ impl<'a> Worker<'a> {
         if self.loaded.is_some() {
             self.absorb_java_ctors(c);
         }
-        let secondaries: Vec<SymId> =
-            self.syms.class(c).ctors.iter().copied().filter(|&s| Some(s) != self.excluded_ctor && self.ctor_callable_here(s)).collect();
+        // A case class has no constructor proxy: written without a `new`, its creation is the
+        // companion's synthesized `apply`, of the primary constructor's parameters and access and
+        // nothing else (`synthesized_apply`), for a class of the build and for one read from a class
+        // path alike. A `new`, a parent call and an anonymous class reach every constructor.
+        let secondaries: Vec<SymId> = if applied && self.synthesized_apply(c) {
+            Vec::new()
+        } else {
+            self.syms.class(c).ctors.iter().copied().filter(|&s| Some(s) != self.excluded_ctor && self.ctor_callable_here(s)).collect()
+        };
         if secondaries.is_empty() {
             self.check_ctor_access(c, span);
         }
@@ -8678,7 +8702,7 @@ impl<'a> Worker<'a> {
             // the class (`NamerOps.typeConstructorCompanion`, `exported_alias_class`): the class's
             // own creator, the receiver only evaluated.
             if let Some(k) = nested.is_none().then(|| self.class_exported_alias_term(c, name)).flatten() {
-                let (te, ty) = self.apply_callee(Callee::Ctor(k), targs, lists, span, expected);
+                let (te, ty) = self.apply_callee(Callee::Proxy(k), targs, lists, span, expected);
                 let case = self.syms.class(k).mods & crate::ast::mods::CASE != 0 || self.syms.class(k).kind == ClassKind::EnumCase;
                 if self.deps.is_some() && case {
                     self.deps_node(te, super::deps::Node::Apply(k));
@@ -8715,7 +8739,7 @@ impl<'a> Worker<'a> {
                         self.bound_once(recv, span)
                     };
                     let outer_creation = std::mem::replace(&mut self.creation_outer, inner.then_some((nested, outer)));
-                    let (te, ty) = self.apply_callee(Callee::Ctor(nested), targs, lists, span, expected);
+                    let (te, ty) = self.apply_callee(Callee::Proxy(nested), targs, lists, span, expected);
                     self.creation_outer = outer_creation;
                     self.ctor_prefix = None;
                     self.new_prefixed = outer_prefixed;
@@ -9027,7 +9051,7 @@ impl<'a> Worker<'a> {
                     if let (Some(ta), true) = (targs, lists.is_empty()) {
                         // `G[Int]` of a case class's companion: its `apply` with the type
                         // arguments, expanded as a method that needs arguments is, as the
-                        // constructor's proxy is (`Callee::Ctor`).
+                        // constructor's proxy is (`Callee::Proxy`).
                         // A written companion's is a summoner's (`summon_type_application`).
                         let cmods = self.syms.class(companion).mods;
                         // The companion `Desugar.classDef` made: the namer's or the parser's.

@@ -564,6 +564,16 @@ impl<'a> Worker<'a> {
         info.kind == ClassKind::Class && info.mods & crate::ast::mods::ABSTRACT == 0 && companion.is_none() && !self.is_opaque_path_class(k)
     }
 
+    /// Whether the class `k` has a synthesized `apply`: a case class that is not abstract, which has
+    /// no constructor proxy (`NamerOps.NoConstructorProxyNeededFlags` holds `Case`). Its name applied,
+    /// and its `apply` written, named as a value or eta-expanded, is the member `Desugar.classDef`
+    /// gives the companion: the primary constructor's parameters and access and nothing else
+    /// (`Worker::construct`).
+    pub fn synthesized_apply(&self, k: ClassId) -> bool {
+        let info = self.syms.class(k);
+        info.kind == ClassKind::Class && info.mods & crate::ast::mods::CASE != 0 && info.mods & crate::ast::mods::ABSTRACT == 0
+    }
+
     /// The path a path stands for: a val declared with a singleton type (`val b: a.type`)
     /// names that path, so `b.T` is `a.T`.
     pub(super) fn stable_root(&mut self, p: TypeId) -> TypeId {

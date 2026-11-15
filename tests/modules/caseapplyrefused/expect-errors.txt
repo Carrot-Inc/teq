@@ -1,0 +1,13 @@
+tests/modules/caseapplyrefused/b/B.scala:6:11: error: too many arguments: expected 1
+    println(V(1, 2))
+            ^^^^^^^
+tests/modules/caseapplyrefused/b/B.scala:7:11: error: missing argument for parameter x
+    println(D.In())
+            ^^^^^^
+tests/modules/caseapplyrefused/b/B.scala:8:21: error: the constructor of S is private to S
+    val g: Int => S = S.apply
+                      ^^^^^^^
+tests/modules/caseapplyrefused/b/B.scala:9:26: error: too many arguments: expected 1
+    println(new Array[Int](V(1, 2).x).length)
+                           ^^^^^^^
+4 errors found

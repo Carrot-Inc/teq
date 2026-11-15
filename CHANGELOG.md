@@ -7,6 +7,32 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A case class's name applied without `new`, and its `apply` written, named as a value or reached by a
+  placeholder, is its companion's `apply` and nothing else: the primary constructor's parameters, with the primary
+  constructor's access. teq took a secondary constructor there too, as a plain class's name does. With
+  `case class V(x: Int) { def this(a: Int, b: Int) = this(a + b) }`, `V(1, 2)`, `V.apply(1, 2)`, `V(a = 1, b = 2)` and
+  `V(_, _)` compiled where scalac refuses them, and where the primary's one parameter takes a tuple the program
+  printed another value: `G(1, 2)` of `case class G[T](x: T)` with `def this(a: T, b: T)` is `G((1,2))` (teq printed
+  `G(1)`), and so for a parameter of type `Any`, `Product`, a tuple type or a union with one, and a repeated one.
+  Arguments that fit the primary and a secondary constructor of the same arity are the primary's too, where teq
+  took the more specific secondary: with `case class A(x: Any) { def this(s: String) = this(s.length) }`, `A("abc")`
+  is `A(abc)` (teq printed `A(3)`); `L(1)` of `case class L(x: Long)` beside `def this(i: Int)`, and `Df(1)` of
+  `case class Df(x: Int, y: Int = 10)` beside `def this(a: Int)`, are the primary's `L(1)` and `Df(1,10)`. A case
+  class with a second parameter list applies with tupled arguments as any other (`Cc(1, 2)(3)` of
+  `case class Cc(x: Any)(val y: Int)` with a secondary constructor was refused). A
+  private primary constructor's `apply` is private too: `val f: Int => V = V.apply` outside the companion and the
+  class is refused. The same for a case class read from a class path (a jar, another module's products): applied by
+  its name, through an import or an export, nested in a trait and reached through an object or an instance that
+  inherits it, or named in the arguments of a `new` of an array. New refusals, scalac's: every such application with a secondary constructor's arguments (teq's words
+  for them are "too many arguments: expected 1", "there is no parameter named a", "the constructor of V is private to
+  V"). A `new`, a parent call (`class Sub extends V(1, 2)`) and an anonymous class (`new V(1, 2) {}`) reach every
+  constructor as before, and so does a plain class's name. A placeholder creation under an open type parameter
+  (`twice(V(_), 3)` for `def twice[A](f: A => V, a: A)`) takes the primary's parameter type, where teq refused it for a
+  case class with a secondary constructor. In the editor, signature help at `V(` offers the primary constructor
+  alone; at `new V(` every constructor. Two programs are refused until tupled arguments are adapted as scalac
+  adapts them: `V(1, 2)` with a `Conversion[(Int, Int), Int]` in scope, and `V(a = 1, b = 2)` for a parameter of type
+  `Any` (scalac tuples the named arguments). teq printed scalac's line for them only where a secondary constructor
+  happened to compute it; without one it refused them already.
 - On the JVM, a class nested in a class that comes from the class path (a jar, another module's products) is
   constructed as its class file declares the constructor: with its enclosing instance first where the constructor
   takes one, without it where it takes none. A class that extends such a class with arguments (`class Level(i: Int,
