@@ -289,6 +289,7 @@ opaquecompanion	pass	-
 opaqueinter	pass	-	
 opaquename	pass	-	
 outerequals	pass	-	
+outersuper	pass	-	
 overload	pass	-	
 overloadexpand	pass	-	
 overloadusing	fail	-	overloadusing js-run

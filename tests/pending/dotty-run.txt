@@ -458,7 +458,6 @@ t8199.scala	teq: This construct can be rewritten automatically under -rewrite -s
 t8346.scala	t8346.scala:5:33: not found: Value
 t8549b.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
 t8601e	java source: teq reads none
-t8611b.scala	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad type on operand stack
 t8803.scala	t8803.scala:20:68: expected an identifier, found 'super'
 t949.scala	t949.scala:6:20: not found: Value
 t9915	java source: teq reads none

@@ -33,6 +33,7 @@ anon_members	pass	-
 anon_parentless_prefixed	pass	-	
 anon_sites	pass	-	
 anon_unused_capture	pass	-	
+anonymous_class_secondary_constructor	pass	-	
 any_equals_method	pass	-	
 any_member_beside	pass	-	
 any_member_beside_override	pass	-	

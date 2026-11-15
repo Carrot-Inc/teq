@@ -234,6 +234,7 @@ jvm/given_deferred_override	pass	-
 jvm/given_objects_layout	pass	-	
 jvm/given_superclass_bridge	pass	-	
 jvm/hidden_owner	pass	-	
+jvm/inner_class_parent_arguments	pass	-	
 jvm/intersection_erasure_abi	pass	-	
 jvm/ioapp_run	pass	-	
 jvm/izumi_refinement_tag	pass	-	

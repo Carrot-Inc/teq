@@ -1518,7 +1518,7 @@ t8601e	fail	-	java source: teq reads none
 t8607.scala	pass	interp:pass	
 t8610.scala	pass	interp:fail	
 t8611a.scala	pass	interp:fail	
-t8611b.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad type on operand stack
+t8611b.scala	pass	interp:fail	
 t8611c.scala	pass	interp:fail	
 t8690.scala	pass	interp:fail	
 t8738.scala	pass	interp:pass	

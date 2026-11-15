@@ -5689,13 +5689,12 @@ impl<'a> Gen<'a> {
     /// types: a class nested in a class takes the enclosing instance first, as every one of its
     /// constructors does (dotty's `ExplicitOuter`, the typer's `new_outer_arg`).
     pub fn via_arguments(&mut self, c: ClassId, s: SymId, args: ListRef) -> Vec<JType> {
-        let cx = self.cx;
+        // A class this build does not write: the secondary as its class file declares it.
+        if let Some(types) = self.unwritten_ctor_arguments(c, Some(s), args) {
+            return types;
+        }
         let params = self.param_types(s);
-        let info = cx.input.syms.class(c);
-        let outer = match info.owner {
-            Owner::Class(o) if matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl) && !matches!(cx.input.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin) && args.len as usize == params.len() + 1 => Some(o),
-            _ => None,
-        };
+        let outer = self.via_outer(c, args.len as usize, params.len());
         // What a local class captures leads every constructor's parameters (dotty's `LambdaLift.addFreeParams`),
         // loaded here as a creation through the primary loads them (`new_arguments`).
         let own = self.via_own_captures(c, s);
@@ -5708,16 +5707,26 @@ impl<'a> Gen<'a> {
             types.extend(params);
             return types;
         }
-        let Some(o) = outer else {
+        let Some(outer_ty) = outer else {
             self.ctor_arguments_of(c, Some(s), args, &params);
             return params;
         };
-        let outer_ty = self.class_type(o);
-        let first = cx.input.prog.expr_list(args)[0];
+        let first = self.cx.input.prog.expr_list(args)[0];
         self.expr(first, &outer_ty);
         let rest = ListRef { start: args.start + 1, len: args.len - 1 };
         self.ctor_arguments_of(c, Some(s), rest, &params);
         std::iter::once(outer_ty).chain(params).collect()
+    }
+
+    /// The type of the enclosing instance a secondary constructor of `c` takes first: a class
+    /// nested in a class, called with one argument more than the secondary declares.
+    fn via_outer(&mut self, c: ClassId, n_args: usize, n_params: usize) -> Option<JType> {
+        let cx = self.cx;
+        let info = cx.input.syms.class(c);
+        match info.owner {
+            Owner::Class(o) if matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl) && !matches!(cx.input.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin) && n_args == n_params + 1 => Some(self.class_type(o)),
+            _ => None,
+        }
     }
 
     /// `new C` with its companion touched first, as an instance creation starts.
@@ -5771,9 +5780,14 @@ impl<'a> Gen<'a> {
             return None;
         }
         let tc = &cx.input.prog.classes[idx as usize];
-        tc.parent_args?;
+        let n_args = tc.parent_args?.len as usize;
         let sup = cx.input.syms.class(c).superclass?;
         let via = tc.parent_via;
+        // A superclass this build does not write: the selected constructor as its class file
+        // declares it, the enclosing instance first where it takes one (`unwritten_ctor_arguments`).
+        if let Some((outer, declared)) = self.unwritten_ctor_layout(sup, via).filter(|(_, declared)| n_args == declared.len() + 1) {
+            return Some((sup, via, outer.into_iter().chain(declared).collect()));
+        }
         let types = match via {
             // A local superclass's second constructor takes its class's captures first (`via_arguments`).
             Some(v) if self.via_own_captures(sup, v).contains(&true) => {
@@ -5781,7 +5795,12 @@ impl<'a> Gen<'a> {
                 types.extend(self.param_types(v));
                 types
             }
-            Some(v) => self.param_types(v),
+            // A secondary constructor of a class nested in a class takes the enclosing instance
+            // first, as every one of its constructors does (`via_arguments`).
+            Some(v) => {
+                let params = self.param_types(v);
+                self.via_outer(sup, n_args, params.len()).into_iter().chain(params).collect()
+            }
             None if self.capture_count(sup) > 0 => {
                 let mut types = self.anon_ctor_params(sup);
                 types.extend(self.ctor_param_types(sup));
@@ -5807,6 +5826,9 @@ impl<'a> Gen<'a> {
                 match via {
                     None if self.capture_count(sup) > 0 => _ = self.new_arguments(sup, rest),
                     Some(v) if self.via_own_captures(sup, v).contains(&true) => _ = self.via_arguments(sup, v, rest),
+                    // A superclass this build does not write: as its class file's constructor
+                    // takes them, an instance it does not take left out (`anon_super_params`).
+                    _ if self.unwritten_ctor_arguments(sup, via, rest).is_some() => {}
                     _ => self.ctor_arguments_of(sup, via, rest, &types),
                 }
                 params.extend(types);
@@ -5827,13 +5849,12 @@ impl<'a> Gen<'a> {
                 params.push(JType::I);
             }
             params
+        } else if let Some(params) = self.unwritten_ctor_arguments(c, None, args) {
+            params
         } else if let Some(outer) = self.outer_of_unwritten(c, args) {
-            // A class of a class that this build does not write (another module's, a jar's)
-            // takes the enclosing instance the typer passes first, as scalac's `ExplicitOuter`
-            // gives its constructor.
-            // Loaded as the whole build loads a captured outer (`load_capture_arg`): a local at
-            // the enclosing class, the capture's type, whatever subclass the instance is of, and
-            // any other value at its own type, so that the two builds' class files agree.
+            // Its class file gives no one answer (two of its constructors fit the primary's
+            // parameters, or it is not read): the enclosing instance the typer passes first is
+            // taken by the owner's kind and the count, loaded as above.
             let first = self.cx.input.prog.expr_list(args)[0];
             if matches!(self.cx.input.prog.expr(first), TExpr::Local(_)) {
                 self.expr(first, &outer);
@@ -5852,8 +5873,9 @@ impl<'a> Gen<'a> {
     }
 
     /// The type of the enclosing instance a `new` of `c` passes first where this build does not
-    /// write `c`: a class, a given's class or an enum's class case nested in a class or trait (a
-    /// class's enum's companion), made with one argument more than its constructor declares.
+    /// write `c` and its class file's constructors do not say (`unwritten_ctor_layout`): a class,
+    /// a given's class or an enum's class case nested in a class or trait (a class's enum's
+    /// companion), made with one argument more than its constructor declares.
     fn outer_of_unwritten(&mut self, c: ClassId, args: ListRef) -> Option<JType> {
         let cx = self.cx;
         if cx.tclass_of[c.idx()] != u32::MAX {
@@ -5866,6 +5888,86 @@ impl<'a> Gen<'a> {
         }
         let declared: usize = info.ctor.iter().map(|cl| cl.params.len()).sum();
         (args.len as usize == declared + 1).then(|| self.class_type(o))
+    }
+
+    /// The constructor of `c` the typer selected, its primary or the secondary `via`, as the class
+    /// file of a class this build does not write declares it (another module's, a jar's): the
+    /// type of the enclosing instance where the constructor takes one first (scalac's
+    /// `ExplicitOuter` gives it to a class that needs its outer; a class private to its owner
+    /// that reads none has no such parameter), and its parameters' types. The alternative is
+    /// the one whose parameters are the selected symbol's, alone or after the owner's instance,
+    /// never one of the same arity; nothing where two of the class file's constructors fit, or
+    /// none does, and for a class of this build or one without a class file (lean products).
+    pub(crate) fn unwritten_ctor_layout(&mut self, c: ClassId, via: Option<SymId>) -> Option<(Option<JType>, Vec<JType>)> {
+        let cx = self.cx;
+        if cx.tclass_of[c.idx()] != u32::MAX {
+            return None;
+        }
+        let cf = cx.class_files.get(&c)?;
+        let own: Vec<JType> = match via {
+            Some(v) => self.param_types(v),
+            None => {
+                let params: Vec<SymId> = cx.input.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
+                params.into_iter().map(|p| self.sym_type(p)).collect()
+            }
+        };
+        let owner = match cx.input.syms.class(c).owner {
+            Owner::Class(o) => Some(self.class_type(o)),
+            _ => None,
+        };
+        let mut found: Option<(Option<JType>, Vec<JType>)> = None;
+        for m in cf.methods.iter().filter(|m| m.name == "<init>" && m.access & (ACC_STATIC | ACC_BRIDGE) == 0) {
+            let (params, _) = parse_method_desc(&m.descriptor);
+            let layout = if params == own {
+                (None, params)
+            } else if params.len() == own.len() + 1 && Some(&params[0]) == owner.as_ref() && params[1..] == own[..] {
+                (Some(params[0].clone()), params[1..].to_vec())
+            } else {
+                continue;
+            };
+            if found.is_some() {
+                return None;
+            }
+            found = Some(layout);
+        }
+        found
+    }
+
+    /// The arguments `args` of that constructor where the typer passed the enclosing instance
+    /// first, one argument more than the constructor declares (`pass_outer`), loaded as the
+    /// class file's constructor takes them, and the types they were loaded as: the instance at
+    /// its parameter's type where the constructor takes one, neither loaded nor evaluated where
+    /// it takes none. Nothing where the layout says nothing (`unwritten_ctor_layout`) or no
+    /// instance was passed: the call is then emitted from the declared parameters.
+    pub(crate) fn unwritten_ctor_arguments(&mut self, c: ClassId, via: Option<SymId>, args: ListRef) -> Option<Vec<JType>> {
+        let (outer, declared) = self.unwritten_ctor_layout(c, via)?;
+        if args.len as usize != declared.len() + 1 {
+            return None;
+        }
+        let rest = ListRef { start: args.start + 1, len: args.len - 1 };
+        let Some(outer) = outer else {
+            self.ctor_arguments_of(c, via, rest, &declared);
+            return Some(declared);
+        };
+        // Loaded as the whole build loads it, so that the two builds' class files agree: through
+        // a secondary constructor at the enclosing class (`via_arguments`); through the primary
+        // as a captured outer is (`load_capture_arg`): a local at the enclosing class, the
+        // capture's type, whatever subclass the instance is of, and any other value at its own
+        // type, cast where the verifier does not take that type for the parameter's (a member of
+        // a generic value, which is an `Object`).
+        let first = self.cx.input.prog.expr_list(args)[0];
+        if via.is_some() || matches!(self.cx.input.prog.expr(first), TExpr::Local(_)) {
+            self.expr(first, &outer);
+        } else {
+            let own = self.expr_static(first);
+            if let (JType::L(from), JType::L(to)) = (&own, &outer) {
+                if from != to && !self.is_subclass(from, to) {
+                    self.checkcast(to);
+                }
+            }
+        }
+        self.ctor_arguments_of(c, via, rest, &declared);
+        Some(std::iter::once(outer).chain(declared).collect())
     }
 
     /// Loads the argument `a` that hands a lifted class or a local trait's lifted member the

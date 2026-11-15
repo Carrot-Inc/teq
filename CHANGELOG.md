@@ -7,6 +7,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM, a class nested in a class that comes from the class path (a jar, another module's products) is
+  constructed as its class file declares the constructor: with its enclosing instance first where the constructor
+  takes one, without it where it takes none. A class that extends such a class with arguments (`class Level(i: Int,
+  name: String) extends Val(i, name)` inside an `Enumeration`; `class Sub(k: Int) extends api.Request(k)` over another
+  module), an anonymous class of one, and a creation of one whose constructor is overloaded were built and then
+  failed at class load with a `VerifyError`; a creation of a class that scalac gave no enclosing instance (a class
+  private to its owner that reads no outer) failed with a `NoSuchMethodError`. An anonymous class through a secondary
+  constructor of a class nested in a class (`new api.Second() { .. }`) failed the same way in a whole build too. The
+  class file's constructor is the one whose parameters are the selected constructor's, never one that only has as
+  many.
 - The operands of a right-associative operator (`a :: b`, `a +: b`, `h *: t`, a method `op:` of one's own) are
   evaluated in scalac's order: the application `b.op(a)` is typed as any application and each of its completed
   arguments that is no pure expression, for a parameter that is neither by-name nor inline, is evaluated ahead of

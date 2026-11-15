@@ -1786,6 +1786,15 @@ impl<'a> Gen<'a> {
                 }
                 types
             }
+            // A superclass this build does not write is called as its class file declares the
+            // selected constructor, the enclosing instance first where it takes one, as a creation
+            // of it is (`ExplicitOuter.OuterOps.args` for `New` and `Super` alike).
+            Some(e) if !is_anon && tc.parent_args.is_some_and(|args| self.unwritten_ctor_layout(e, tc.parent_via).is_some_and(|(_, declared)| args.len as usize == declared.len() + 1)) => {
+                self.m.before_super = true;
+                let types = self.unwritten_ctor_arguments(e, tc.parent_via, tc.parent_args.unwrap()).unwrap();
+                self.m.before_super = false;
+                types
+            }
             // A parent call that goes to a secondary constructor of the superclass, the
             // enclosing instance of an inner superclass first as a secondary `new` passes it
             // (`ExplicitOuter.OuterOps.args` for `New`, `Super` and `This` alike).
