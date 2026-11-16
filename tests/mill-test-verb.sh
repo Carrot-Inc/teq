@@ -463,13 +463,20 @@ standin "$listing" "$(caret_error NEW)"
 sed -i 's|^\(  "test --verbose core.js") .*\) ;;$|\1; exit 1 ;;|' "$work/teq"
 mjudged_and_recorded "the error's message changed after its caret line" "NEW"
 rm -f "$work/events-override.txt"
-# A blocked run's record holds its block and its assertions unexecuted, none allowed to fail: over Tyrian's committed
-# record (its build blocked), a run reaching the counter that goes from 0 to 2 fails, a run holding every assertion
+# A blocked run's record holds its block and its assertions unexecuted, none allowed to fail: over a record of
+# Tyrian's whose build is blocked (the committed record's pin, inputs and assertions under the block and the
+# violations tests/support/tyrian-blocked-run.json keeps: the committed record steps down as the project's errors
+# go, the scenarios stay), a run reaching the counter that goes from 0 to 2 fails, a run holding every assertion
 # passes with the block gone, a build failing in another error and one failing with none each fail. The production
 # `Ref.run` (tests/support/mill_run_verb.scala) under a stand-in teq and a stand-in node for bench/smoke.mjs.
 rv=$work/rv
 mkdir -p "$rv/here/run" "$rv/co/sandbox" "$rv/co/target/teq" "$rv/out" "$rv/bin"
-cp bench/tyrian/pin.json bench/tyrian/generated.json bench/tyrian/run.json "$rv/here/" && cp bench/tyrian/run/tyrianapp.js "$rv/here/run/"
+python3 -c "
+import json, sys
+record = json.load(open('bench/tyrian/run.json'))
+record.update(json.load(open('tests/support/tyrian-blocked-run.json')))
+open(sys.argv[1], 'w').write(json.dumps(record, indent=1, ensure_ascii=False) + '\\n')" "$work/tyrian-blocked-run.json"
+cp bench/tyrian/pin.json bench/tyrian/generated.json "$rv/here/" && cp "$work/tyrian-blocked-run.json" "$rv/here/run.json" && cp bench/tyrian/run/tyrianapp.js "$rv/here/run/"
 printf 'teq: 0.1.8\ninputs:\n  files:\n    teq.mill.json: %s\n  sha256: 1234\nprojects:\n  sandbox.js:\n    base: sandbox\n' \
   "$(python3 -c "import json; print(json.load(open('bench/tyrian/pin.json'))['overlay']['teq.mill.json'])")" > "$rv/co/target/teq/teq.lock"
 echo '<html></html>' > "$rv/co/sandbox/index.html"
@@ -537,7 +544,7 @@ rm -f "$work/events-override.txt"
 # is within the record; printing it and dying by a signal (137) fails, judged and recorded, the record left as it was.
 python3 -c "
 import json
-for v in json.load(open('bench/tyrian/run.json'))['violations']:
+for v in json.load(open('$work/tyrian-blocked-run.json'))['violations']:
     if v.startswith('blocked: teq build sandbox.js: '): print(v[len('blocked: teq build sandbox.js: '):])" > "$rv/build.txt"
 rm -f "$rv/build.exit"
 rrun
