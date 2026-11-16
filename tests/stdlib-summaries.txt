@@ -1,5 +1,10 @@
 bigint_ops: warning: there was 1 deprecation warning; re-run with --deprecation for details
 buffer_append_varargs: warning: there were 2 deprecation warnings; re-run with --deprecation for details
+deprecated_java_mark_silenced_by_text: warning: there was 1 deprecation warning; re-run with --deprecation for details
+deprecated_silenced_by_located_text: warning: there was 1 deprecation warning; re-run with --deprecation for details
+deprecated_silenced_by_nowarn: warning: there was 1 deprecation warning; re-run with --deprecation for details
+deprecated_std_member_alone: warning: there was 1 deprecation warning; re-run with --deprecation for details
+deprecated_std_type_alone: warning: there was 1 deprecation warning; re-run with --deprecation for details
 either_right: warning: there were 10 deprecation warnings; re-run with --deprecation for details
 int_sign: warning: there were 2 deprecation warnings; re-run with --deprecation for details
 iterable_to_iterator: warning: there were 2 deprecation warnings; re-run with --deprecation for details

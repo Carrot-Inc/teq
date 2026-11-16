@@ -19,7 +19,7 @@ use super::Worker;
 use crate::ast::{self, mods};
 use crate::source::Span;
 use crate::symbols::{ClassKind, Owner, SymKind};
-use crate::types::ClassId;
+use crate::types::{ClassId, SymId};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 /// What the reference of a typed expression may need checked (`Worker::check_reference`): a
@@ -57,6 +57,31 @@ pub fn references_checked() -> bool {
 }
 
 impl<'a> Worker<'a> {
+    /// A reference in a program's file names a marked definition: the checks are on from here.
+    /// The lean std's marks turn nothing on when its files enter (`Syntax::std`), so that a
+    /// program naming none pays no check; the reference that names one turns them on, whatever
+    /// was resolved before it and on whichever worker, as `package_term` does for a package's
+    /// term. A reference the std's own code makes checks nothing. Answers whether the file is a
+    /// program's.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn program_names_deprecated(&self) -> bool {
+        if self.source(self.env.file).is_std {
+            return false;
+        }
+        note_deprecated();
+        true
+    }
+
+    /// A member selected or called: a marked one turns the checks on before `type_expr` asks
+    /// whether the reference it stands in is checked.
+    #[inline]
+    pub(super) fn selects_member(&self, s: SymId) {
+        if self.syms.sym(s).mods & mods::DEPRECATED != 0 {
+            self.program_names_deprecated();
+        }
+    }
+
     /// The reference the expression `e` typed as `te` makes: checked for deprecation, and marked
     /// for the unused definitions. Apart from `type_expr`, which tests whether either runs.
     #[inline(never)]
@@ -416,13 +441,28 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// `method m in object Lib`, `class Old`: the referent as `showLocated` shows it, a member
-    /// with the class it is a member of, a top-level definition of a named package with it.
+    /// `method m in object Lib`, `class Old in package scala.collection.immutable`: the referent as
+    /// `showLocated` shows it, a member with the class it is a member of, a top-level definition
+    /// of a named package with the package's full name (`PlainPrinter.locationText`: the owner's
+    /// text, a package's being its full name).
     fn shown_located(&self, r: Referent) -> String {
         let (shown, owner) = self.shown(r);
+        if let Some(declared) = self.library_owner(r) {
+            let (kind, full) = declared.split_once(' ').unwrap_or(("class", &declared));
+            return format!("{} in {} {}", shown, kind, full.rsplit('.').next().unwrap_or(full));
+        }
         match owner {
             Owner::Class(c) if !self.is_package_object(c) => format!("{} in {}", shown, self.class_description(c)),
-            Owner::Package(p) if p != crate::symbols::ROOT_PKG && self.syms.pkg(p).name != crate::names::EMPTY => format!("{} in package {}", shown, self.name_str(self.syms.pkg(p).name)),
+            Owner::Package(p) if p != crate::symbols::ROOT_PKG && self.syms.pkg(p).name != crate::names::EMPTY => {
+                let mut parts = Vec::new();
+                let mut at = Some(p);
+                while let Some(q) = at.filter(|&q| q != crate::symbols::ROOT_PKG) {
+                    parts.push(self.name_str(self.syms.pkg(q).name));
+                    at = self.syms.pkg(q).parent;
+                }
+                parts.reverse();
+                format!("{} in package {}", shown, parts.join("."))
+            }
             _ => shown,
         }
     }
@@ -467,8 +507,24 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The referent's full name (`showFullName`): its owners' names and its own, joined by
-    /// dots, the empty package and a package object left out.
+    /// The owner scala-library declares a definition of the lean std in, where the std declares
+    /// it elsewhere: the std's `@declaredIn("trait scala.collection.IterableOnceOps")` on the
+    /// definition, the owner's kind and full name, which a warning's text and origin name.
+    fn library_owner(&self, r: Referent) -> Option<String> {
+        let Referent::Sym(s) = r else { return None };
+        let info = self.syms.sym(s);
+        let d = info.def.filter(|_| (info.file.0 as usize) < self.files.len() && self.source(info.file).is_std)?;
+        let ast = self.ast(info.file);
+        let a = ast.def(d).annots.iter().find(|a| a.name == crate::names::DECLARED_IN)?;
+        ast.annot_args(a).first().map(|&s| ast.str(s).to_string())
+    }
+
+    /// The referent's full name (`showFullName`, `RefinedPrinter.fullNameString`): its owners'
+    /// names and its own, joined by dots, the empty package and a package object left out; and
+    /// the owners end where a definition that is no package is a member of what the root imports
+    /// bring unqualified, the package `scala`, the object `scala.Predef` or the package
+    /// `java.lang` (`isOmittablePrefix`): `App`, `App.delayedInit`, `language.higherKinds` and
+    /// `StringFormat.formatted`, beside `scala.collection.immutable.Stream`.
     fn full_name(&self, r: Referent) -> String {
         let (name, mut owner) = match r {
             Referent::Sym(s) => {
@@ -479,20 +535,45 @@ impl<'a> Worker<'a> {
             Referent::Class(c) => (self.name_str(self.syms.class(c).name), self.syms.class(c).owner),
             Referent::Alias(a) => (self.name_str(self.syms.alias(a).name), self.syms.alias(a).owner),
         };
+        if let Some(declared) = self.library_owner(r) {
+            let full = declared.split_once(' ').map_or(declared.as_str(), |(_, full)| full);
+            let shown = full.strip_prefix("scala.").filter(|rest| !rest.contains('.')).unwrap_or(full);
+            return format!("{}.{}", shown, name);
+        }
+        let root = |q: Option<crate::types::PkgId>| q.map_or(true, |q| q == crate::symbols::ROOT_PKG);
         let mut parts = vec![name];
+        // Whether the name last taken is a package's: a package keeps every owner.
+        let mut package = false;
         for _ in 0..64 {
             match owner {
                 Owner::Class(c) => {
+                    let info = self.syms.class(c);
                     if !self.is_package_object(c) {
-                        parts.push(self.name_str(self.syms.class(c).name));
+                        // A member of `scala.Predef`.
+                        let predef = info.kind == ClassKind::Object
+                            && info.name == crate::names::PREDEF
+                            && matches!(info.owner, Owner::Package(q) if self.syms.pkg(q).name == crate::names::SCALA && root(self.syms.pkg(q).parent));
+                        if predef {
+                            break;
+                        }
+                        parts.push(self.name_str(info.name));
                     }
-                    owner = self.syms.class(c).owner;
+                    owner = info.owner;
                 }
                 Owner::Package(p) => {
                     let info = self.syms.pkg(p);
                     if p == crate::symbols::ROOT_PKG || info.name == crate::names::EMPTY {
                         break;
                     }
+                    if !package {
+                        let scala = info.name == crate::names::SCALA && root(info.parent);
+                        let java_lang = info.name == crate::names::LANG
+                            && info.parent.is_some_and(|q| self.syms.pkg(q).name == crate::names::JAVA && root(self.syms.pkg(q).parent));
+                        if scala || java_lang {
+                            break;
+                        }
+                    }
+                    package = true;
                     parts.push(self.name_str(info.name));
                     match info.parent {
                         Some(q) => owner = Owner::Package(q),

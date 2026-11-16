@@ -55,7 +55,8 @@ package java.lang:
     final def setName(name: String): Unit =
       if name == null then throw new NullPointerException("'name' is null")
       threadName = name
-    @deprecated def getId(): scala.Long = ident
+    @deprecated("see corresponding Javadoc for more information.", "")
+    def getId(): scala.Long = ident
     final def threadId(): scala.Long = ident
     final def isDaemon(): scala.Boolean = daemon
     final def setDaemon(on: scala.Boolean): Unit =
@@ -269,8 +270,10 @@ package java.lang:
     final def setMaxPriority(pri: Int): Unit =
       if pri >= Thread.MIN_PRIORITY && pri <= Thread.MAX_PRIORITY then
         maxPriority = if parent != null then Math.min(pri, parent.getMaxPriority()) else pri
-    @deprecated final def isDaemon(): scala.Boolean = daemon
-    @deprecated final def setDaemon(on: scala.Boolean): Unit = daemon = on
+    @deprecated("see corresponding Javadoc for more information.", "")
+    final def isDaemon(): scala.Boolean = daemon
+    @deprecated("see corresponding Javadoc for more information.", "")
+    final def setDaemon(on: scala.Boolean): Unit = daemon = on
     final def parentOf(g: ThreadGroup): scala.Boolean =
       var c = g
       while c != null && (c ne this) do c = c.getParent()

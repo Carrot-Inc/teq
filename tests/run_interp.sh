@@ -116,7 +116,7 @@ run_one() {
   timeout 30 "$TEQ" interp "$src" $flags > "$out/$name.actual" 2> "$out/$name.err"
   code=$?
   # On Windows a line ends with CRLF, as the JDK's println ends it there.
-  if [ $code -eq 0 ] && diff -q $([ $HERE_OS = windows ] && echo --strip-trailing-cr) "$expected" "$out/$name.actual" > /dev/null; then
+  if [ $code -eq 0 ] && diff -q $([ $HERE_OS = windows ] && echo --strip-trailing-cr) <(expectation_without_summary "$expected") "$out/$name.actual" > /dev/null; then
     echo "pass $name" > "$out/$name.result"
   elif [ $code -eq 124 ]; then
     echo "timeout $name" > "$out/$name.result"

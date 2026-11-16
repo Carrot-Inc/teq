@@ -149,8 +149,7 @@ done
 # products (every entry point gets scalac's class), the classes the analysis marks `main` are the program's
 # `mains` (scala-cli's `--list-main-classes`), and `java` runs each by its name with arguments as it runs
 # scalac's (launched.expected); then `--main` with each name, and with its last segment, chooses it on each target
-# named, the arguments passed on. tests/classpath/entry-app's `App` runs on the JVM alone: its diagnostics are the
-# deprecation warnings of scala-library's `App`; tests/classpath/entry-root's encoded `@main` has no package.
+# named, the arguments passed on. tests/classpath/entry-root's encoded `@main` has no package.
 entry_points() {
   local entry=$1 targets=$2 name m expected actual target
   name=$(basename "$entry")
@@ -200,7 +199,7 @@ entry_points() {
   done < "$entry/mains"
 }
 entry_points tests/classpath/entry "js jvm interp"
-entry_points tests/classpath/entry-app jvm
+entry_points tests/classpath/entry-app "js jvm interp"
 entry_points tests/classpath/entry-root "js jvm interp"
 # tests/classpath/js/*.scala run under node with teq's std and the jars of their `// jars:` line
 # on the class path: what the std lacks is compiled from the jars' TASTy bodies. A missing

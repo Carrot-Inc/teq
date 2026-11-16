@@ -203,10 +203,9 @@ trait Conversion[-T, +U] extends (T => U):
 @predef
 def identity[A](x: A): A = x
 
-/** scala-library's deprecated `Predef.$conforms`, no longer implicit there: the identity (the
-  * `Function1` evidence is `conforms`, as `<:<.refl` is scala-library's). */
+/** scala-library's `Predef.$conforms`, implicit there: the identity (the `Function1` evidence is
+  * `conforms`, as `<:<.refl` is scala-library's). */
 @predef
-@deprecated("Use `implicitly[T <:< U]` or `identity` instead.", "2.13.0")
 def $conforms[A]: A => A = conforms[A]
 
 /** scala-library's deprecated `Predef.any2stringadd`: `+` with a `String` on any value. The root

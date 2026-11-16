@@ -131,7 +131,7 @@ run_one() {
   # no perf data file: on Linux a JVM whose pid's file another process holds warns about it on stdout
   timeout 30 java -Xss512m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:-UsePerfData -Xshare:auto -cp "$out/$name.jar${cp:+:$cp}" TeqMain > "$out/$name.actual" 2> "$out/$name.err"
   code=$?
-  if [ $code -eq 0 ] && diff -q "$expected" "$out/$name.actual" > /dev/null; then
+  if [ $code -eq 0 ] && diff -q <(expectation_without_summary "$expected") "$out/$name.actual" > /dev/null; then
     echo "pass $name" > "$out/$name.result"
   elif [ $code -eq 124 ]; then
     echo "timeout $name" > "$out/$name.result"

@@ -76,7 +76,9 @@
 #            there, printing nothing;
 #   interp-run  the downstream in the interpreter over the same products and whole, the same
 #            output and exit, which is run.txt's or run.js.txt's (a case without js-errors.txt;
-#            the split programs too, against their .expected);
+#            the split programs too, against their .expected); the interpreter builds and runs
+#            in one process, so a build's summary of unreported warnings is read apart from the
+#            program's lines (the whole build has the upstream's, the products build has not);
 #   bundle   the two JavaScript builds byte-identical, as one file and split, in the development
 #            and the release output, and under each line of bundle-flags.txt; no string of
 #            absent.txt in either;
@@ -871,6 +873,8 @@ PY
       whole_c=$?
       prod_i=$(timeout 60 "$teq" interp --sourceroot "$(sroot "$down")" --classpath "$ldirs" "${down_srcs[@]}" 2>&1)
       prod_c=$?
+      whole_i=$(output_without_summary "$whole_i")
+      prod_i=$(output_without_summary "$prod_i")
       ok=1
       [ "$whole_i" = "$prod_i" ] && [ $whole_c = 0 ] && [ $prod_c = 0 ] || ok=0
       [ "$whole_i" = "$expected" ] || [ "$whole_i" = "$js_expected" ] || ok=0
@@ -1418,6 +1422,8 @@ if [ -n "$every_case" ] || [ -n "$SPLIT_PROGRAMS" ]; then
     whole_c=$?
     prod_i=$(timeout 60 "$teq" interp --sourceroot "$sdir" $flags --classpath "$out/$name/up" "${downs[@]}" 2>&1)
     prod_c=$?
+    whole_i=$(output_without_summary "$whole_i")
+    prod_i=$(output_without_summary "$prod_i")
     ok=1
     [ "$whole_i" = "$prod_i" ] && [ "$whole_i" = "$expected" ] && [ $whole_c = 0 ] && [ $prod_c = 0 ] || ok=0
     result "$name" interp-run $ok "whole (exit $whole_c): $whole_i"$'\n'"products (exit $prod_c): $prod_i"$'\n'"expected: $expected"

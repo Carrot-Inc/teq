@@ -21,7 +21,7 @@ package java.net:
         else i += 1
       i
 
-    @deprecated("use encode(s, charset)", "")
+    @deprecated("see corresponding Javadoc for more information.", "")
     def encode(s: String): String = encode(s, java.nio.charset.StandardCharsets.UTF_8)
 
     def encode(s: String, enc: String): String =
@@ -56,7 +56,7 @@ package java.net:
   // the JDK names the pattern's fault, or writes U+FFFD); `decode(s)` in the default charset, UTF-8.
   @jvmClass("java/net/URLDecoder")
   object URLDecoder:
-    @deprecated("use decode(s, charset)", "")
+    @deprecated("see corresponding Javadoc for more information.", "")
     def decode(s: String): String = decode(s, java.nio.charset.Charset.defaultCharset())
 
     def decode(s: String, enc: String): String =

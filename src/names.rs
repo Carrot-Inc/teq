@@ -120,6 +120,7 @@ well_known! {
     TAILREC = "tailrec",
     NOWARN = "nowarn",
     DEPRECATED = "deprecated",
+    DECLARED_IN = "declaredIn",
     EXPERIMENTAL = "experimental",
     ERROR = "<error>",
     UNUSED = "unused",

@@ -140,6 +140,14 @@ deferred_inline_receiver	pass	-
 dependent_constant_argument	pass	-	
 dependent_function_types	pass	-	
 dependent_override_mismatch	pass	-	
+deprecated_java_marks	pass	-	
+deprecated_parent_unimplemented_with_library	pass	-	
+deprecated_parent_with_library	pass	-	
+deprecated_parents_with_library	pass	-	
+deprecated_std_names	pass	-	
+deprecated_std_type_refused	pass	-	
+deprecated_super_in_trait	pass	-	
+deprecated_super_in_trait_with_library	pass	-	
 derives	pass	-	
 derives_several_param_lists	pass	-	
 dialect_explicit_result_types	pass	-	

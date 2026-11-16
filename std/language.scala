@@ -66,12 +66,12 @@ object language {
     @compileTimeOnly("`strictEqualityPatternMatching` can only be used at compile time in import statements")
     object strictEqualityPatternMatching
     @compileTimeOnly("`fewerBraces` can only be used at compile time in import statements")
-    @deprecated("`fewerBraces` is now standard, no language import is needed", since = "3.3")
+    @deprecated("`fewerBraces` is now standard, no language import is needed", "3.3")
     object fewerBraces
     @compileTimeOnly("`saferExceptions` can only be used at compile time in import statements")
     object saferExceptions
     @compileTimeOnly("`clauseInterleaving` can only be used at compile time in import statements")
-    @deprecated("`clauseInterleaving` is now standard, no language import is needed", since = "3.6")
+    @deprecated("`clauseInterleaving` is now standard, no language import is needed", "3.6")
     object clauseInterleaving
     @compileTimeOnly("`pureFunctions` can only be used at compile time in import statements")
     object pureFunctions
@@ -80,23 +80,23 @@ object language {
     @compileTimeOnly("`separationChecking` can only be used at compile time in import statements")
     object separationChecking
     @compileTimeOnly("`into` can only be used at compile time in import statements")
-    @deprecated("The into language import is no longer needed since the feature is now in preview", since = "3.8")
+    @deprecated("The into language import is no longer needed since the feature is now in preview", "3.8")
     object into
     @compileTimeOnly("`namedTuples` can only be used at compile time in import statements")
-    @deprecated("The experimental.namedTuples language import is no longer needed since the feature is now standard", since = "3.7")
+    @deprecated("The experimental.namedTuples language import is no longer needed since the feature is now standard", "3.7")
     object namedTuples
     @compileTimeOnly("`modularity` can only be used at compile time in import statements")
     object modularity
     @compileTimeOnly("`relaxedExtensionImports` can only be used at compile time in import statements")
-    @deprecated("The experimental.relaxedExtensionImports language import is no longer needed since the feature is now standard", since = "3.4")
+    @deprecated("The experimental.relaxedExtensionImports language import is no longer needed since the feature is now standard", "3.4")
     object relaxedExtensionImports
     @compileTimeOnly("`betterMatchTypeExtractors` can only be used at compile time in import statements")
-    @deprecated("The experimental.betterMatchTypeExtractors language import is no longer needed since the feature is now standard. It now has no effect, including when setting an older source version.", since = "3.6")
+    @deprecated("The experimental.betterMatchTypeExtractors language import is no longer needed since the feature is now standard. It now has no effect, including when setting an older source version.", "3.6")
     object betterMatchTypeExtractors
     @compileTimeOnly("`quotedPatternsWithPolymorphicFunctions` can only be used at compile time in import statements")
     object quotedPatternsWithPolymorphicFunctions
     @compileTimeOnly("`betterFors` can only be used at compile time in import statements")
-    @deprecated("The `experimental.betterFors` language import no longer has any effect, the feature is being stabilised and can be enabled using `-preview` flag", since = "3.7")
+    @deprecated("The `experimental.betterFors` language import no longer has any effect, the feature is being stabilised and can be enabled using `-preview` flag", "3.7")
     object betterFors
     @compileTimeOnly("`packageObjectValues` can only be used at compile time in import statements")
     object packageObjectValues
@@ -135,7 +135,7 @@ object language {
   @compileTimeOnly("`3.0` can only be used at compile time in import statements")
   object `3.0`
   @compileTimeOnly("`3.1-migration` can only be used at compile time in import statements")
-  @deprecated("`3.1-migration` is not valid, use `3.1` instead", since = "3.2")
+  @deprecated("`3.1-migration` is not valid, use `3.1` instead", "3.2")
   object `3.1-migration`
   @compileTimeOnly("`3.1` can only be used at compile time in import statements")
   object `3.1`

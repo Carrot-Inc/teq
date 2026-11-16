@@ -983,7 +983,7 @@ ordered.scala	pass	interp:pass
 ordinal-innerclass.scala	fail	interp:fail	ordinal-innerclass.scala:18:65: value asInstanceOf is not a member of Test.o.T
 outer-accessors.scala	pass	interp:pass	
 outerPatternMatch	pass	interp:pass	
-overload_directly_applicable.scala	pass	interp:fail	
+overload_directly_applicable.scala	pass	interp:pass	
 overload_repeated	fail	-	java source: teq reads none
 overloading-specifity.scala	pass	interp:pass	
 overloads.scala	pass	interp:pass	
@@ -1132,7 +1132,7 @@ t1335.scala	pass	interp:pass
 t13418.scala	pass	interp:pass	
 t1360.scala	pass	interp:pass	
 t1373.scala	pass	interp:pass	
-t1381.scala	pass	interp:fail	
+t1381.scala	pass	interp:pass	
 t1406b.scala	fail	interp:fail	t1406b.scala:23:30: expected ',' or ')', found identifier
 t1423.scala	pass	interp:pass	
 t1434.scala	pass	interp:pass	
@@ -1236,7 +1236,7 @@ t3496.scala	pass	interp:pass
 t3502.scala	fail	interp:fail	t3502.scala:5:18: recursive use of apply needs an explicit result type
 t3508.scala	pass	interp:pass	
 t3509.scala	pass	interp:pass	
-t3516.scala	pass	interp:fail	
+t3516.scala	pass	interp:pass	
 t3529.scala	pass	interp:pass	
 t3540.scala	pass	interp:fail	
 t3563.scala	pass	interp:pass	
@@ -1555,7 +1555,7 @@ test-implicits.scala	pass	interp:pass
 throws-annot.scala	fail	interp:fail	throws-annot.scala:33:34: value getExceptionTypes is not a member of Method
 toList.scala	pass	interp:pass	
 toplevel-defs	pass	interp:pass	
-toplevel-implicits	fail	interp:fail	Test_2.scala:5:12: value pair is not a member of C
+toplevel-implicits	fail	interp:pass	Test_2.scala:5:12: value pair is not a member of C
 toplevel-mixed	fail	interp:fail	A_1.scala:4:7: x is already defined as value x; overloading a value with a method is not supported
 trailingCommas.scala	pass	interp:fail	
 trait-static-forwarder	fail	-	java source: teq reads none

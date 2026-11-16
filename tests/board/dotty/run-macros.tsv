@@ -76,7 +76,7 @@ i13033	pass	interp:pass
 i13183	pass	interp:pass	
 i13230	pass	interp:pass	
 i13947	pass	interp:pass	
-i14902	fail	interp:fail	output: line 2: the .check has 'List(Y, Z, X)', the program printed 'List(Y, Z)'
+i14902	fail	interp:fail	output: line 2: the .check has 'List(Y, Z, X)', the program printed 'List(Z, Y)'
 i15968	fail	interp:fail	output: line 2: the .check has '  type Z = java.lang.String', the program printed '  val arg: Z = "foo"'
 i16734a	fail	interp:fail	Macro_1.scala:3:27: type AnyKind not found
 i16734b	fail	interp:fail	Macro_1.scala:5:31: type AnyKind not found
@@ -277,7 +277,7 @@ tasty-dealiasKeepOpaques	fail	interp:fail	output: line 1: the .check has 'java.l
 tasty-definitions-1	fail	interp:fail	quoted_1.scala:7:7:None:None: the body of Macros.testDefinitionsImpl is withheld from the products of $OUT/run-macros/tasty-definitions-1/jvm.products (elided: unstated the std's defn.FunctionClass$default$3, which scala-library has under a
 tasty-definitions-2	fail	interp:fail	output: line 1: the .check has 'DefDef("foo", Nil, TypeIdent("Int"), Some(Apply(Select(Literal(IntConstant(1)), "+"), List(Literal(IntConstant(2))))))', the program printed 'DefDef("foo", List(), Inferred(TypeRef(ThisType(TypeRef(NoPrefix()
 tasty-definitions-3	fail	interp:fail	output: line 1: the .check has 'DefDef("foo", Nil, TypeIdent("Int"), Some(Apply(Select(Literal(IntConstant(1)), "+"), List(Literal(IntConstant(2))))))', the program printed 'DefDef("foo", List(), Inferred(TypeRef(ThisType(TypeRef(NoPrefix()
-tasty-eval	pass	interp:fail	
+tasty-eval	pass	interp:pass	
 tasty-extractors-3	fail	interp:fail	output: line 3: the .check has 'TermRef(NoPrefix(), "x")', the program printed 'TypeRef(NoPrefix(), "x")'
 tasty-extractors-constants-1	pass	interp:pass	
 tasty-extractors-owners	fail	interp:fail	output: line 2: the .check has 'ValDef("macro", Inferred(), None)', the program printed 'DefDef("main", List(TermParamClause(List(ValDef("args", Inferred(AppliedType(TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Array"), List(TypeRef(Thi
@@ -295,9 +295,9 @@ tasty-location	pass	interp:fail
 tasty-macro-assert	fail	interp:fail	output: line 2: the .check has 'Error left did not equal right:', the program printed 'Condition was false'
 tasty-macro-const	fail	interp:fail	quoted_2.scala:6:13: Parameter must be a known constant
 tasty-macro-positions	fail	interp:fail	quoted_2.scala:27:10: only classes can have declared but undefined members
-tasty-original-source	pass	interp:fail	
+tasty-original-source	pass	interp:pass	
 tasty-overload-secondargs	fail	interp:fail	Test_2.scala:5:14: not supported yet in a macro: the selection of andThen on X.type does not type: Ambiguous overload. The overloaded alternatives of method andThen in object X with types
-tasty-positioned	pass	interp:fail	
+tasty-positioned	pass	interp:pass	
 tasty-seal-method	fail	interp:fail	quoted_1.scala:9:7:None:None: the body of Asserts.zeroLastArgsImpl is withheld from the products of $OUT/run-macros/tasty-seal-method/jvm.products (elided: unstated the std's Function3.apply, which scala-library has under another shape): th
 tasty-simplified	fail	interp:fail	quoted_2.scala:15:23: type argument a does not have the same kind as its bound [_]
 tasty-string-interpolation-reporter-test	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: actual: List((0,252,271,Cannot use #))

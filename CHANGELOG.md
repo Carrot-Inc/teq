@@ -408,9 +408,30 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   the std's now, as for every name the std defines. Its output is smaller, and a block that gives `delayedInit`
   another block while `main` runs them stops with scala-library's `ConcurrentModificationException`, where the
   jar's code over teq's `ListBuffer` went on.
-  Not yet: scalac's deprecation warning for `App` (`trait App in package scala is deprecated since 3.8.0`) is
-  not always given with teq's std: a program that has a `@deprecated` definition of its own gets it, and
-  `object Main extends App` alone builds without it. A build over scala-library gives it always.
+- A deprecation warning for a name of teq's own std is given wherever the name is written, whatever the build
+  named before it and at every `--threads` count: a type (`def size(s: Stream[Int])`), a parent
+  (`object Main extends App`), a member (`xs.toStream`) and a value are each checked by their own definition's
+  mark. Before, a type, a parent or a member of the std was warned of only after a deprecated value or a
+  `@deprecated` definition of the program's own had been met: `def size(s: Stream[Int])` alone built without
+  scalac's warning and passed `--werror`, and with several files the number of warnings turned on which file
+  named the value and on the worker count (three files: scalac's 3 at one worker, 1 or 2 at more).
+  The std's marks are scala-library's in text and origin: the class and the object `Stream` carry its messages
+  (a build that silences one by `--wconf msg=...` no longer fails with the jar on its class path), a warning
+  for `toStream` names `IterableOnceOps`, where scala-library declares it, in its text and in its origin
+  (`--wconf origin=scala.collection.IterableOnceOps.toStream:s`), an origin of a definition directly in
+  package `scala` is spelled as scalac spells it (`App`, `Stream`, `App.delayedInit`), and `$conforms`,
+  which scala-library does not mark, is no longer marked.
+  A warning names a definition of a nested package with the package's full name, as scalac does (`class Stream
+  in package scala.collection.immutable`), and its origin leaves out `scala`, `scala.Predef` and `java.lang`
+  where scalac's does (`StringFormat.formatted`).
+  Not yet, each silent where scalac warns: a deprecated definition reached through an export's qualifier or
+  forwarder, an import's qualifier (`import scala.Stream.*`), an extractor pattern (`case Stream(a, _*)`), a
+  member whose result is applied at once (`xs.toStream(0)`), a given the search selects, an implicit argument
+  or conversion the compiler inserts, an extension method, a `derives` clause, a `for`'s `withFilter`, an
+  interpolator, a member type through a dependent path, a type argument the compiler infers
+  (`List(List(1)).map(_.toStream)`, where scalac warns of the class `Stream` too), a singleton type
+  (`Stream.type`), or a default argument of a method that is deprecated itself; and the definitions
+  scala-library marks that the std does not yet (`toIterator`, `filterKeys`, `replaceAllLiterally` and others).
 
 ## 0.1.10 (2026-11-13)
 

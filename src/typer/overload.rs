@@ -2451,6 +2451,7 @@ impl<'a> Worker<'a> {
                                 if let (Some(_), Some(r)) = (prefix, recv) {
                                     self.note_outer_prefix(alt.sym, r);
                                 }
+                                self.selects_member(alt.sym);
                                 let call = MethodCall { recv, sym: alt.sym, owner_subst: alt.owner_subst.clone(), ext_recv: None, prefix, refined: None };
                                 // An intersection's alternative met with its match: its joint signature.
                                 if let Some(info) = alt.info.clone() {
@@ -2556,6 +2557,7 @@ impl<'a> Worker<'a> {
                     }
                     None => {
                         self.check_access(alt.sym, None, span);
+                        self.selects_member(alt.sym);
                         let call = MethodCall { recv: None, sym: alt.sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
                         self.apply_method(call, None, targs, lists, span, expected, false).unwrap()
                     }

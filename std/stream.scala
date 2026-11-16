@@ -3,7 +3,7 @@ package scala.collection.immutable
 // scala-library's deprecated `Stream`, which libraries built on 2.13 still name (scalacheck shrinks with
 // it): a list whose head is computed when its cell is made and whose tail on first use, remembered; `#::`
 // takes its tail by name through `Stream.toDeferrer`, as scala-library's does.
-@deprecated("Use LazyList instead of Stream", "2.13.0")
+@deprecated("Use LazyListIterable (which is fully lazy) instead of Stream (which has a lazy tail only)", "2.13.0")
 final class Stream[+A] private[immutable] (nonEmpty: Boolean, hd: A, tl: () => Stream[A]) extends scala.collection.AbstractSeq[A], LinearSeq[A], SeqOps[A, Stream, Stream[A]]:
   override def collectionClassName: String = "Stream"
   private var tailValue: Stream[A] = null
@@ -90,7 +90,7 @@ final class Stream[+A] private[immutable] (nonEmpty: Boolean, hd: A, tl: () => S
         go = !cur.isEmpty
     "Stream(" + parts.mkString(", ") + ")"
 
-@deprecated("Use LazyList instead of Stream", "2.13.0")
+@deprecated("Use LazyList (which is fully lazy) instead of Stream (which has a lazy tail only)", "2.13.0")
 object Stream extends SeqFactory[Stream]:
   // scala-library's `LinearSeqIterator`: the tail after the head `next` returns is a call-by-need
   // cell, forced by the next `hasNext` or `next`, never by the `next` that reads the head.

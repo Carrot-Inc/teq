@@ -176,6 +176,19 @@ same_output class_cells 8 interp tests/workers/class_cells
 # one-worker lines at each count.
 same_output app_object_files 4 run tests/workers/app_object_files
 same_output app_object_files_interp 4 interp tests/workers/app_object_files
+# A deprecated definition of the std named in three files, by a term in one and by a type in each of the two
+# others: every name is checked by its own target's mark, so the warnings are scalac's three at each count and
+# whichever file holds the term (before, a type was warned of only once another file's term had turned the checks
+# on: three warnings at one worker with the term in the first file, one with it in the last, one or two above one
+# worker).
+for d in deprecated_names_files deprecated_term_last_files; do
+  same_output $d 8 compiler check tests/workers/$d --deprecation
+  if [ "$(grep -c 'is deprecated since' "$work/$d.one")" = 3 ]; then
+    ok
+  else
+    bad "$d: one worker's warnings are not scalac's three: $(head -2 "$work/$d.one" | tr '\n' ' ' | cut -c1-200)"
+  fi
+done
 
 # A typing of more than 65,535 variables names them by their place in it as any typing does
 # (`TVarInfo::shown`, 24 bits), never by the count of variables its worker made before.

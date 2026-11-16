@@ -367,6 +367,18 @@ PY
   echo "$jar"
 }
 
+# A build's summary of the warnings its flags left unreported, a whole line. tests/run.sh holds it in a case's
+# expectation with the build's other lines; a suite that compares a program's output apart from its build's lines
+# reads the expectation without that line and keeps every other. The line is taken out byte for byte: no locale
+# reads the file, so a line of any bytes stays as it is, and a last line without its newline stays without one. A
+# program that prints such a line itself is read without it too.
+SUMMARY='^warning: there (was|were) [0-9]+ [a-z]+ warnings?; re-run with --[a-z]+ for details$'
+expectation_without_summary() { SUMMARY="$SUMMARY" perl -ne 'print unless /$ENV{SUMMARY}/' "$1"; }
+# The text one process printed that builds a program and runs it, without that line: the program's own output and
+# every other line of the build's.
+output_without_summary() { printf '%s\n' "$1" | SUMMARY="$SUMMARY" perl -ne 'print unless /$ENV{SUMMARY}/'; }
+
+
 abi_callbacks_jar() {
   local src=tests/support/abi_callbacks_lib.scala
   local jar=$scratch/abi-callbacks-lib.jar

@@ -82,6 +82,7 @@ trait IterableOps[+A, +CC[_], +C] extends IterableOnce[A]:
     while it.hasNext do f(it.next())
   def buildC(items: RawBuffer[A]): C = unsafeCast(buildCC(items))
   @deprecated("Use .to(LazyList) instead of .toStream", "2.13.0")
+  @declaredIn("trait scala.collection.IterableOnceOps")
   def toStream: scala.collection.immutable.Stream[A] = scala.collection.immutable.Stream.from(this)
   // The protocol of scala-library's `IterableOps`, which a library's collection class reaches
   // through the bodies of its own traits: the collection as `C`, a builder of it, its name.

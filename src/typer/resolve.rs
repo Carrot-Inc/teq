@@ -4020,6 +4020,19 @@ impl<'a> Worker<'a> {
             && super::loader::compile::STD_BINDINGS.iter().any(|&(_, n, to)| to == "scala" && n == self.interner.get(info.name))
     }
 
+    /// Whether the type a name resolved to is marked `@deprecated` and the name stands in a
+    /// program's file: the name's own target decides that it is checked, where no deprecated
+    /// definition was met before it (`deprecation::possible`), and turns the checks on.
+    #[inline]
+    fn names_deprecated_type(&self, r: TypeRef) -> bool {
+        let marked = match r {
+            TypeRef::Class(c) => self.syms.class(c).mods & crate::ast::mods::DEPRECATED != 0,
+            TypeRef::Alias(a) => self.syms.alias(a).deprecated,
+            _ => false,
+        };
+        marked && self.program_names_deprecated()
+    }
+
     /// The type a name written at the node `id` stands for: a refinement's member, what the scope finds
     /// (its uses, index and dependency records made), a compiler-defined name, or the error of a name not found.
     fn resolve_type_name(&mut self, id: TyExprId, n: Name, span: Span) -> TypeId {
@@ -4032,7 +4045,7 @@ impl<'a> Worker<'a> {
             if self.index.is_some() {
                 self.index_type(id, r);
             }
-            if super::deprecation::possible() {
+            if super::deprecation::possible() || self.names_deprecated_type(r) {
                 match r {
                     TypeRef::Class(c) => self.check_deprecated_class(c, span),
                     TypeRef::Alias(a) => self.check_deprecated_alias(a, span),
@@ -4095,7 +4108,7 @@ impl<'a> Worker<'a> {
                 if let (Some(r), true) = (found, self.index.is_some()) {
                     self.index_type(id, r);
                 }
-                if super::deprecation::possible() {
+                if super::deprecation::possible() || found.is_some_and(|r| self.names_deprecated_type(r)) {
                     match found {
                         Some(TypeRef::Class(c)) => self.check_deprecated_class(c, span),
                         Some(TypeRef::Alias(a)) => self.check_deprecated_alias(a, span),

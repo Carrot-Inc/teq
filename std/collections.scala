@@ -790,7 +790,8 @@ implicit def genericWrapArray[T](xs: Array[T]): ArraySeq[T] = ArraySeq.unsafeWra
   * immutable `IndexedSeq`, `null` for `null`. Not implicit here: scala-library's `genericWrapArray` gives a mutable
   * `ArraySeq`, so that this copy is its one conversion to an immutable `IndexedSeq`; the lean std's gives the
   * immutable `ArraySeq` over the array itself, which a second conversion beside it would make ambiguous. */
-@deprecated("implicit conversions from Array to immutable.IndexedSeq are implemented by copying; use `toIndexedSeq` explicitly if you want to copy, or use the more efficient non-copying ArraySeq.unsafeWrapArray", since = "2.13.0")
+@deprecated("implicit conversions from Array to immutable.IndexedSeq are implemented by copying; use `toIndexedSeq` explicitly if you want to copy, or use the more efficient non-copying ArraySeq.unsafeWrapArray", "2.13.0")
+@declaredIn("class scala.LowPriorityImplicits2")
 def copyArrayToImmutableIndexedSeq[T](xs: Array[T]): IndexedSeq[T] =
   if xs eq null then null else xs.toIndexedSeq
 

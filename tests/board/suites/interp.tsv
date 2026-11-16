@@ -517,6 +517,13 @@ dependent_givens	pass	-
 dependent_override	pass	-	
 dependent_result_alias_through_receiver	pass	-	
 dependent_val_refinement	pass	-	
+deprecated_java_mark_silenced_by_text	pass	-	
+deprecated_silenced_by_located_text	pass	-	
+deprecated_silenced_by_message	pass	-	
+deprecated_silenced_by_nowarn	pass	-	
+deprecated_silenced_by_origin	pass	-	
+deprecated_std_member_alone	pass	-	
+deprecated_std_type_alone	pass	-	
 derive_recursive_enum_shapes	pass	-	
 derive_recursive_list_shapes	pass	-	
 derives_next_line	pass	-	

@@ -810,6 +810,19 @@ def lines_of(text):
     return parts
 
 
+def build_summary():
+    """A build's summary of the warnings its flags left unreported, a whole line: the one pattern the suites read
+    an expectation without (tests/support/jars.sh, SUMMARY), read from there."""
+    with open(os.path.join(REPO, "tests", "support", "jars.sh"), encoding="utf-8") as fh:
+        m = re.search(r"^SUMMARY='(.*)'$", fh.read(), re.M)
+    if not m:
+        die("board: tests/support/jars.sh holds no SUMMARY pattern")
+    return re.compile(m.group(1))
+
+
+BUILD_SUMMARY = build_summary()
+
+
 def java_sources(ctx, test):
     _, platform, _ = ctx.args_of(test)
     other = set(platform.get("scala-js" if test.row.platform == "jvm" else "jvm", []))
@@ -998,10 +1011,14 @@ def run_program(ctx, test, scratch, products):
     return program_outcome(test, status, text, "jvm")
 
 
-def program_outcome(test, status, text, platform):
+def program_outcome(test, status, text, platform, build_lines=None):
+    """A program's run against its .check. `build_lines`: a pattern of whole lines that are the build's and not
+    the program's, where one process does both; every other line is compared."""
     if status == "timeout":
         return "timeout", f"the program: over {RUN_LIMIT} s", []
     got = lines_of(text)
+    if build_lines:
+        got = [l for l in got if not build_lines.match(l)]
     if status != 0:
         why = next((l.strip() for l in got if re.match(r"^(Exception in thread|Caused by:|\w[\w.$]*(Error|Exception)\b)", l.strip())), "")
         if not why:
@@ -1064,7 +1081,10 @@ def run_interp(ctx, test, scratch):
         return "timeout", ""
     if why:
         return "crash", why
-    verdict, line, _ = program_outcome(test, status, text, "jvm")
+    # `teq interp` builds and runs in one process, so the build's summary line stands among the program's lines.
+    # A .check holds the program's output alone, as the legs whose build is a command of its own compare it: that
+    # one line is left out. A warning's own line, an error and every other line of either stream are compared.
+    verdict, line, _ = program_outcome(test, status, text, "jvm", BUILD_SUMMARY)
     return verdict, line
 
 

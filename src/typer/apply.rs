@@ -2814,6 +2814,7 @@ impl<'a> Worker<'a> {
         if let SymKind::Overloaded(_) = self.syms.sym(s).kind {
             return Callee::Overloaded { recv: Some(recv), recv_ty: Some(recv_ty), set: s };
         }
+        self.selects_member(s);
         let owner_subst = match owner_ty {
             Some(t) => self.owner_subst(t),
             None => Vec::new(),

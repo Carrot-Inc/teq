@@ -9,7 +9,8 @@
 # A build's diagnostics go to out/stdlib-tests/<name>.diagnostics and are compared as tests/run.sh compares them
 # (an expectation holds the warnings its case is about) but for the run's summary of the warnings its flags left
 # unreported: scala-library's TASTy marks deprecated what the lean std's sources do not, so scalac's summary under
-# this mode is no line of the lean std's expectation. The summaries of the programs that print scalac's output are
+# this mode is no line of the lean std's expectation, and a summary the expectation holds for the lean std's
+# build is left out of the comparison. The summaries of the programs that print scalac's output are
 # checked against tests/stdlib-summaries.txt instead: scalac 3.8.4's (`scala-cli compile -S 3.8.4`) in teq's
 # spelling, written by hand; a program whose summaries are not scalac's fails.
 cd "$(dirname "$0")/.."
@@ -20,7 +21,6 @@ export LC_COLLATE=C
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
 SUMMARIES=tests/stdlib-summaries.txt
-SUMMARY='^warning: there (was|were) [0-9]+ [a-z]+ warnings?; re-run with --[a-z]+ for details$'
 M2=${COURSIER_CACHE:-$HOME/Library/Caches/Coursier/v1}/https/repo1.maven.org/maven2
 if ! ls "$M2"/org/scala-lang/scala-library/3.*/scala-library-3.*.jar > /dev/null 2>&1; then
   echo "stdlib: skipped, no scala-library 3.x jar in the coursier cache"
@@ -62,7 +62,7 @@ for src in tests/cases/*.scala tests/cases/*/; do
   RUN_DIAGNOSTICS=$out/$name.diagnostics run_js 20 "$out/$name.js" "$src" $flags --std=scala-library > "$out/$name.run" 2>&1
   code=$?
   { grep -v -E "$SUMMARY" "$out/$name.diagnostics" 2> /dev/null; cat "$out/$name.run"; } > "$out/$name.actual"
-  if [ $code = 0 ] && diff -q "$expected" "$out/$name.actual" > /dev/null; then
+  if [ $code = 0 ] && diff -q <(expectation_without_summary "$expected") "$out/$name.actual" > /dev/null; then
     pass=$((pass + 1))
     passing="$passing$name"$'\n'
     printf 'pass %s\n' "$name" >> "$out/results.txt"
