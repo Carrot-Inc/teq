@@ -6,5 +6,9 @@ iterable_to_iterator: warning: there were 2 deprecation warnings; re-run with --
 jar_inner_class_bounds: warning: there was 1 deprecation warning; re-run with --deprecation for details
 mutable_multimap: warning: there were 5 deprecation warnings; re-run with --deprecation for details
 overload_std_collections: warning: there were 3 deprecation warnings; re-run with --deprecation for details
+std_app_block_registers: warning: there were 4 deprecation warnings; re-run with --deprecation for details
+std_app_blocks: warning: there were 3 deprecation warnings; re-run with --deprecation for details
+std_app_body: warning: there were 2 deprecation warnings; re-run with --deprecation for details
+std_app_over_own_other_file: warning: there was 1 deprecation warning; re-run with --deprecation for details
 std_map_set_buffer: warning: there was 1 deprecation warning; re-run with --deprecation for details
 views: warning: there was 1 deprecation warning; re-run with --deprecation for details

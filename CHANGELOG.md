@@ -399,6 +399,18 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   and writes is unchanged, line for line and byte for byte. `--jobs n` runs at most `n` at once, `--jobs 1` one
   after another as before. On a terminal the line that shows where the run is names the projects done, those being
   typed and those whose rules run (`teq fix: 2 of 17 projects done, typing api, core, web, 14 s`).
+- `object Main extends App` builds with teq's own std, for JavaScript and in the interpreter: the std declares
+  `scala.App` and `scala.DelayedInit` as scala-library does. As in Scala 3, the object's body is its initialiser
+  and `main` is the one it inherits, so `args` is `null` while the body runs; a block the program itself gives
+  `delayedInit` is run by `main`. Before, such a program was refused (`type App not found`) unless it was built
+  for the JVM or with `--std=scala-library`, which read scala-library's own `App`.
+  A build with teq's std that has scala-library's jar on its class path used to take `App` from the jar; it takes
+  the std's now, as for every name the std defines. Its output is smaller, and a block that gives `delayedInit`
+  another block while `main` runs them stops with scala-library's `ConcurrentModificationException`, where the
+  jar's code over teq's `ListBuffer` went on.
+  Not yet: scalac's deprecation warning for `App` (`trait App in package scala is deprecated since 3.8.0`) is
+  not always given with teq's std: a program that has a `@deprecated` definition of its own gets it, and
+  `object Main extends App` alone builds without it. A build over scala-library gives it always.
 
 ## 0.1.10 (2026-11-13)
 

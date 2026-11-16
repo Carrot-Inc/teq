@@ -69,7 +69,7 @@ i12188	pass	-
 i12351	fail	-	run-error: Error: AssertionError: assertion failed
 i12352	fail	-	run-error: Error: AssertionError: assertion failed
 i12392	fail	-	wrong-output
-i12417	fail	-	compile-error: type App not found
+i12417	pass	-	
 i12417b	pass	-	
 i13033	pass	-	
 i13183	pass	-	
@@ -145,10 +145,10 @@ i7025	pass	-
 i7025b	pass	-	
 i7048	pass	-	
 i7715	pass	-	
-i7716	fail	-	compile-error: type App not found
+i7716	pass	-	
 i7887	fail	-	compile-error: cannot resolve import: quotes is not an object or a package
 i7898	fail	-	wrong-output
-i7964	fail	-	compile-error: type App not found
+i7964	pass	-	
 i7987	fail	-	wrong-output
 i8007	fail	-	wrong-output
 i8115	pass	-	
@@ -180,7 +180,7 @@ inline-varargs-1	pass	-
 is-in-typer	fail	-	run-error: Error: AssertionError: assertion failed
 lib-StringContext	fail	-	compile-error: expected end of statement, found identifier
 macro-erased	fail	-	compile-error: 'erased' is not part of the supported Scala subset
-macros-in-same-project1	fail	-	compile-error: type App not found
+macros-in-same-project1	pass	-	
 newClass	fail	-	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass)
 newClassAnnotation	fail	-	compile-error: test contains Java sources
 newClassExtends	fail	-	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass)
@@ -202,7 +202,7 @@ quote-and-splice	fail	-	wrong-output
 quote-change-owner	pass	-	
 quote-elide-prefix	pass	-	
 quote-force	pass	-	
-quote-implicitMatch	fail	-	compile-error: type App not found
+quote-implicitMatch	fail	-	wrong-output
 quote-impure-by-name	fail	-	wrong-output
 quote-indexed-map-by-name	pass	-	
 quote-inline-function	fail	-	wrong-output
@@ -230,7 +230,7 @@ quote-sep-comp	pass	-
 quote-sep-comp-2	pass	-	
 quote-simple-macro	pass	-	
 quote-toExprOfSeq	pass	-	
-quote-toExprOfTuple	fail	-	compile-error: type App not found
+quote-toExprOfTuple	pass	-	
 quote-type-matcher	fail	-	compile-error: type QuoteMatching not found
 quote-type-matcher-2	pass	-	
 quote-unrolled-foreach	pass	-	
@@ -239,8 +239,8 @@ quoted-ToExpr-derivation-macro	fail	-	compile-error: type mismatch: found Sum{ty
 quoted-expr-block	pass	-	
 quoted-liftable-derivation-macro	fail	-	compile-error: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
 quoted-liftable-derivation-macro-2	fail	-	compile-error: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
-quoted-matching-docs	fail	-	compile-error: type App not found
-quoted-matching-docs-2	fail	-	compile-error: type App not found
+quoted-matching-docs	fail	-	wrong-output
+quoted-matching-docs-2	fail	-	wrong-output
 quoted-pattern-open-expr	fail	-	compile-error: value apply is not a member of Any
 quoted-pattern-open-expr-0	fail	-	compile-error: value apply is not a member of Any
 quoted-pattern-open-expr-simple-eval	fail	-	compile-error: value apply is not a member of Any

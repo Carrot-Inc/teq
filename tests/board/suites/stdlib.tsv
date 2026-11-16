@@ -2590,6 +2590,13 @@ sorted_set_evidence_ops	pass	-
 specialized_companion_arguments	pass	-	
 splice_conversion	fail	-	output differs
 split_def_beside_class	pass	-	
+std_app_block_before_init	fail	-	output differs
+std_app_block_registers	pass	-	
+std_app_blocks	pass	-	
+std_app_body	pass	-	
+std_app_main_before_init	fail	-	output differs
+std_app_mark_filter	pass	-	
+std_app_over_own_other_file	pass	-	
 std_array_transpose	pass	-	
 std_array_view	pass	-	
 std_byteswap	fail	-	error: not supported on JavaScript: method reverseBytes of java.lang.Long (a Java definition without an implementation in the std's platform

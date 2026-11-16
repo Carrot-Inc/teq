@@ -5,6 +5,7 @@ scala.<:<	fail	-	trait sealed in the std, abstract class sealed in scala-library
 scala.<:<$	pass	-	
 scala.=:=	fail	-	trait sealed in the std, abstract class sealed in scala-library
 scala.=:=$	pass	-	
+scala.App	pass	-	
 scala.Array$	pass	-	
 scala.Byte$	pass	-	
 scala.CanEqual	fail	-	trait in the std, trait sealed in scala-library
@@ -12,6 +13,7 @@ scala.CanEqual$	pass	-
 scala.Char$	pass	-	
 scala.Console$	pass	-	
 scala.Conversion	fail	-	trait in the std, abstract class in scala-library
+scala.DelayedInit	pass	-	
 scala.Double$	pass	-	
 scala.DummyImplicit	pass	-	
 scala.DummyImplicit$	pass	-	

@@ -58,7 +58,7 @@ i12188c	fail	check:fail	Test_2.scala:1:20: not supported yet in a macro: a case 
 i12196	pass	check:pass	
 i12221	pass	check:fail	
 i12253	fail	check:fail	Macro_1.scala:8:7:None:None: the body of MacroUtils.extractNameFromSelectorImpl is withheld from the products of $OUT/pos-macros/i12253/jvm.products (elided: unstated a reference to the body's u$0 the body does not define): the TASTy writer
-i12309	pass	check:fail	
+i12309	pass	check:pass	
 i12343	pass	check:pass	
 i12440.scala	fail	check:fail	i12440.scala:9:10: only classes can have declared but undefined members
 i12498	pass	check:pass	
@@ -339,7 +339,7 @@ i9321	pass	check:pass
 i9360.scala	fail	check:fail	i9360.scala:17:21: only classes can have declared but undefined members
 i9361.scala	fail	check:fail	i9361.scala:9:23: type argument m2 does not have the same kind as its bound [_]
 i9465.scala	pass	check:pass	
-i9484	pass	check:fail	
+i9484	pass	check:pass	
 i9484b	pass	check:pass	
 i9518	fail	check:fail	Macro_1.scala:13:12: type argument [X] =>> CB[X] does not have the same kind as its bound
 i9684	pass	check:pass	

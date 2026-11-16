@@ -17,7 +17,7 @@ newline-braces.scala	fail	check:fail	newline-braces.scala:3:5: missing parameter
 pos-special	fail	check:fail	i871.scala:2:7: an abstract def needs a result type
 spec-doubledef-old.scala	fail	check:fail	spec-doubledef-old.scala:16:85: expected ',' or ']', found identifier
 t1292.scala	fail	check:fail	t1292.scala:2:14: Enum is not a legal path
-t2030.scala	pass	check:fail	
+t2030.scala	pass	check:pass	
 t2994.scala	fail	check:fail	t2994.scala:10:46: n is not a legal path
 t3050.scala	pass	check:pass	
 t3568.scala	fail	check:fail	t3568.scala:28:63: T is not a legal path

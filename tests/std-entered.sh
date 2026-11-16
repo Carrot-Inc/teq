@@ -8,7 +8,8 @@
 # and `scala.runtime.ProductMirror`, as master enters them); one naming `Stream` enters stream.scala; one naming `NumericRange`
 # enters numeric_range.scala and not stream.scala; one naming `Ordering` enters `java.util.Comparator`,
 # its parent, from javalib/comparator.scala, a file of its own as dotty reads the interface's class
-# file alone, not with the rest of java.util.
+# file alone, not with the rest of java.util; one that extends `App` enters app.scala, which the empty
+# object's list does not hold.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 work=$(mktemp -d)
@@ -39,5 +40,7 @@ check "a program naming NumericRange enters numeric_range.scala" "$(echo "$got" 
 check "a program naming NumericRange enters no stream.scala" "$(echo "$got" | grep -x 'stream.scala')" ""
 printf 'object O:\n  val c = Ordering.Int.compare(1, 2)\n' > "$work/ordering.scala"
 check "a program naming Ordering enters Comparator from javalib/comparator.scala" "$("$TEQ" compiler check "$work/ordering.scala" --profile 2>&1 | grep '^std: ' | grep -o 'javalib/[a-z_]*\.scala (as java\.util\.Comparator)')" "javalib/comparator.scala (as java.util.Comparator)"
+printf 'object Shop extends App:\n  println(1)\n' > "$work/app.scala"
+check "a program naming App enters app.scala" "$(entered "$work/app.scala" | grep -x 'app.scala')" "app.scala"
 echo "std-entered: $pass passed, $fail failed"
 [ $fail = 0 ]

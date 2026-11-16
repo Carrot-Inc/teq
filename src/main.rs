@@ -404,6 +404,7 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/numeric_range.scala", include_str!("../std/numeric_range.scala")),
     ("<std>/array_dims.scala", include_str!("../std/array_dims.scala")),
     ("<std>/command_line.scala", include_str!("../std/command_line.scala")),
+    ("<std>/app.scala", include_str!("../std/app.scala")),
 ];
 
 /// The Scala.js facade layer, `scala.scalajs.js` and `org.scalajs.dom` in teq's facade syntax:

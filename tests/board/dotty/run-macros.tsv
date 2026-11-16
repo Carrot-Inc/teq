@@ -70,7 +70,7 @@ i12188	fail	interp:pass	teq: jvm backend: Test_2$package$.Test: the local c is n
 i12351	fail	interp:fail	option: -Xread-docs (teq has no flag for it)
 i12352	fail	interp:fail	option: -Xread-docs (teq has no flag for it)
 i12392	fail	interp:fail	output: line 1: the .check has 'scala.Option[java.lang.String] to scala.Option[scala.Int]', the program printed 'scala.Option[scala.Predef.String] to scala.Option[scala.Predef.String]'
-i12417	pass	interp:fail	
+i12417	pass	interp:pass	
 i12417b	fail	interp:pass	Tuples.scala:247:12:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
 i13033	pass	interp:pass	
 i13183	pass	interp:pass	
@@ -144,10 +144,10 @@ i7025	pass	interp:pass
 i7025b	pass	interp:pass	
 i7048	fail	interp:pass	Lib_1.scala:21:5:None:None: the body of Lib_1$package.mcrImpl is withheld from the products of $OUT/run-macros/i7048/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): the TASTy wr
 i7715	pass	interp:pass	
-i7716	pass	interp:fail	
+i7716	pass	interp:pass	
 i7887	fail	interp:fail	Macro_1.scala:2:10: cannot resolve import: quotes is not an object or a package
 i7898	fail	interp:fail	output: line 1: the .check has 'scala.List.apply[scala.PartialFunction[scala.Int, scala.Predef.String]](((x$1: scala.Int) => x$1 match {', the program printed 'List.apply[scala.collection.immutable.Seq[scala.PartialFunction[scala.Int, scala
-i7964	pass	interp:fail	
+i7964	pass	interp:pass	
 i7987	fail	interp:fail	output: line 1: the .check has 'scala.deriving.Mirror.Product {', the program printed 'Product{type MirroredMonoType = Some[Int]; type MirroredType = Some[Int]; type MirroredLabel = "Some"; type MirroredElemTypes = (Int); type MirroredElemL
 i8007	pass	interp:fail	
 i8115	pass	interp:pass	
@@ -179,7 +179,7 @@ inline-varargs-1	pass	interp:pass
 is-in-typer	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 lib-StringContext	fail	interp:fail	StringContext.scala:92:38: expected end of statement, found identifier
 macro-erased	fail	interp:fail	Macro_1.scala:15:13: 'erased' is not part of the supported Scala subset
-macros-in-same-project1	pass	interp:fail	
+macros-in-same-project1	pass	interp:pass	
 newClass	fail	interp:fail	Test_2.scala:2:13: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
 newClassAnnotation	fail	-	java source: teq reads none
 newClassExtends	fail	interp:fail	Test_2.scala:2:18: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
@@ -229,7 +229,7 @@ quote-sep-comp	pass	interp:pass
 quote-sep-comp-2	pass	interp:pass	
 quote-simple-macro	pass	interp:pass	
 quote-toExprOfSeq	pass	interp:pass	
-quote-toExprOfTuple	pass	interp:fail	
+quote-toExprOfTuple	pass	interp:pass	
 quote-type-matcher	fail	interp:fail	quoted_1.scala:13:38: type mismatch: found Type[?] & AnyRef, required Type[T]
 quote-type-matcher-2	pass	interp:pass	
 quote-unrolled-foreach	pass	interp:pass	

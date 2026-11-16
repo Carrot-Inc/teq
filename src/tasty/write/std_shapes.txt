@@ -15211,6 +15211,13 @@ scala.Any	hashCode	:scala.Int
 scala.Any	isInstanceOf	[1]:scala.Boolean
 scala.Any	toString	:java.lang.String
 scala.AnyVal	<init>	:java.lang.Object
+scala.App	<init>	:scala.App
+scala.App	_args	-:java.lang.String[]
+scala.App	_args_=	java.lang.String[]:scala.Unit
+scala.App	args	-:java.lang.String[]
+scala.App	delayedInit	scala.Function0:scala.Unit
+scala.App	executionStart	-:scala.Long
+scala.App	main	java.lang.String[]:scala.Unit
 scala.Array	apply	scala.Int:java.lang.Object
 scala.Array	clone	:java.lang.Object
 scala.Array	length	-:scala.Int
@@ -15290,6 +15297,8 @@ scala.Console$	withErr	[1],java.io.PrintStream,scala.Function0:java.lang.Object
 scala.Console$	withOut	[1],java.io.PrintStream,scala.Function0:java.lang.Object
 scala.Conversion	<init>	[2]:scala.Conversion
 scala.Conversion	apply	java.lang.Object:java.lang.Object
+scala.DelayedInit	<init>	:scala.DelayedInit
+scala.DelayedInit	delayedInit	scala.Function0:scala.Unit
 scala.Double	<init>	:scala.Double
 scala.Double$	MaxValue	-:scala.Double
 scala.Double$	MinPositiveValue	-:scala.Double

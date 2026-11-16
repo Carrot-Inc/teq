@@ -25,7 +25,8 @@ the original `.check` next to it); every run reports the pending tests that pass
 fixed one can move to `tests/cases/`.
 
 `tests/cases/scala3_*.scala` are tests of the suite that failed only for a construct outside
-the subset (`extends App`, Scala 2 control syntax, `xs map { .. }`), adapted mechanically, and
+the subset then (Scala 2 control syntax, `xs map { .. }`, and `extends App` before the std declared it), adapted
+mechanically, and
 a few tests of `tests/run`, `tests/pos` and `tests/neg` adapted by hand (`tests/errors/scala3_*.scala`
 for the rejected ones); the first line of each names what was replaced. `./tests/run.sh` and
 `./tests/run_errors.sh` run them like every other case.
@@ -38,5 +39,5 @@ output beside such a file (a pending test's `.check`), Copyright 2012-2026 EPFL 
 2012-2026 Lightbend, Inc. dba Akka, licensed under the Apache License, Version 2.0
 (http://www.apache.org/licenses/LICENSE-2.0); the root's `NOTICE` names them by that rule. Most
 are named `scala3_*` (under `tests/cases`, `tests/errors`, `tests/parser/corpus` and
-`tests/scala3/pending`). The adaptations replace constructs outside teq's subset (`extends App`,
-`try`/`catch`, Java calls in printing code, ...) and keep the feature under test.
+`tests/scala3/pending`). The adaptations replace constructs outside teq's subset when they were made
+(`try`/`catch`, Java calls in printing code, `extends App`, ...) and keep the feature under test.

@@ -72,7 +72,6 @@ RULES = [
     ("left out on purpose", "inline/macro/compiletime", None, r"\binline\b|\bmacro\b|'\{|\$\{|\bquoted\b|compiletime|\berased\b|\btransparent\b|\bExpr\[|\bQuotes\b|\bspecialized\b|@spec\b|@static\b|@unroll|\bunroll\b|\bcaps\."),
     ("left out on purpose", "reflection (getClass/classOf/ClassTag/deriving)", r"getClass|classOf|ClassTag|\breflect\b|deriving|Mirror\b|TypeTest|isInstanceOf|asInstanceOf|runtime not found|not found: runtime", None),
     ("left out on purpose", "reflection (getClass/classOf/ClassTag/deriving)", None, r"getClass|classOf|ClassTag|\breflect\b|isInstanceOf|asInstanceOf|scala\.deriving|Mirror\.|runtimeChecked"),
-    ("left out on purpose", "extends App", r"type App not found", None),
     ("left out on purpose", "secondary constructors, value classes, Enumeration, self types", r"a parent has to be a class or a trait|this type cannot be extended|an enum cannot extend a class|AnyVal not found|Enum not found|Enumeration not found|Object not found|Serializable not found|self types are not supported", None),
     ("left out on purpose", "secondary constructors, value classes, Enumeration, self types", None, r"\bthis\(|\bAnyVal\b|= Value\b|\bself:\s*\w"),
     ("left out on purpose", "overloading a value", r"overloading a value with a method is not supported|only methods can be overloaded", None),

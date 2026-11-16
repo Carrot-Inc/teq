@@ -386,6 +386,8 @@ socket_lifecycle	error: not supported on JavaScript: class InetSocketAddress jav
 socket_shutdown_input	error: not supported on JavaScript: class InputStreamReader java.io.InputStreamReader (a Java definition without an implementation in the st
 socket_write_signal	error: not supported on JavaScript: class ServerSocket java.net.ServerSocket (a Java definition without an implementation in the std's platf
 splice_conversion	output differs
+std_app_block_before_init	output differs
+std_app_main_before_init	output differs
 std_byteswap	error: not supported on JavaScript: method reverseBytes of java.lang.Long (a Java definition without an implementation in the std's platform
 std_collection_protocol	output differs
 std_duration_parse	RangeError: Maximum call stack size exceeded

@@ -55,7 +55,6 @@ i12021	compile-error: 'erased' is not part of the supported Scala subset
 i12351	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 i12352	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 i12392	wrong-output
-i12417	compile-error: type App not found
 i14902	wrong-output
 i15968	wrong-output
 i16734a	compile-error: type AnyKind not found
@@ -97,10 +96,8 @@ i6765	wrong-output
 i6765-b	wrong-output
 i6765-c	wrong-output
 i6988	compile-error: not supported yet in a macro: the selection of p1 on scala.Any does not type: value p1 is not a member of Any (called by create in object FirstArg)
-i7716	compile-error: type App not found
 i7887	compile-error: cannot resolve import: quotes is not an object or a package
 i7898	wrong-output
-i7964	compile-error: type App not found
 i7987	wrong-output
 i8007	wrong-output
 i8514	wrong-output
@@ -115,7 +112,6 @@ inline-tuples-1	compile-error: no given instance of type FromExpr[(Int, Int, Int
 is-in-typer	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 lib-StringContext	compile-error: expected end of statement, found identifier
 macro-erased	compile-error: 'erased' is not part of the supported Scala subset
-macros-in-same-project1	compile-error: type App not found
 newClass	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass)
 newClassAnnotation	compile-error: test contains Java sources
 newClassExtends	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass)
@@ -132,7 +128,7 @@ opaque-inline	compile-error: Not a constant
 paramSymss	wrong-output
 pattern-scope-extrusion	compile-error: value apply is not a member of Any
 places-proto	compile-error: exception in macro: scala.MatchError: Apply(TypeApply(Ident("apply"), List(Inferred(TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Int")))), List(Ident("arr")
-quote-implicitMatch	compile-error: type App not found
+quote-implicitMatch	wrong-output
 quote-impure-by-name	wrong-output
 quote-inline-function	wrong-output
 quote-match-more-that-22-splices	compile-error: not supported yet in a macro: a tuple of more than eight results (called by f)
@@ -148,13 +144,12 @@ quote-matching-optimize-2	wrong-output
 quote-matching-optimize-3	wrong-output
 quote-matching-optimize-4	wrong-output
 quote-matching-optimize-5	wrong-output
-quote-toExprOfTuple	compile-error: type App not found
 quote-type-matcher	compile-error: type QuoteMatching not found
 quoted-ToExpr-derivation-macro	compile-error: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
 quoted-liftable-derivation-macro	compile-error: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
 quoted-liftable-derivation-macro-2	compile-error: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
-quoted-matching-docs	compile-error: type App not found
-quoted-matching-docs-2	compile-error: type App not found
+quoted-matching-docs	wrong-output
+quoted-matching-docs-2	wrong-output
 quoted-pattern-open-expr	compile-error: value apply is not a member of Any
 quoted-pattern-open-expr-0	compile-error: value apply is not a member of Any
 quoted-pattern-open-expr-simple-eval	compile-error: value apply is not a member of Any

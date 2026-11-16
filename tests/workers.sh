@@ -171,6 +171,11 @@ same_output constant_ring 4 interp tests/workers/constant_ring
 # A class checked for a macro's run on one worker while its member waits on the other: the
 # check is a cell the other worker waits for, and `class_done` is published with the IR.
 same_output class_cells 8 interp tests/workers/class_cells
+# An object that extends `App` through a trait of another file and reads an object of a third: the entry is
+# the `main` it inherits, its body its initialiser; a build for JavaScript and the interpreter each give their
+# one-worker lines at each count.
+same_output app_object_files 4 run tests/workers/app_object_files
+same_output app_object_files_interp 4 interp tests/workers/app_object_files
 
 # A typing of more than 65,535 variables names them by their place in it as any typing does
 # (`TVarInfo::shown`, 24 bits), never by the count of variables its worker made before.

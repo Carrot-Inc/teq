@@ -149,8 +149,8 @@ done
 # products (every entry point gets scalac's class), the classes the analysis marks `main` are the program's
 # `mains` (scala-cli's `--list-main-classes`), and `java` runs each by its name with arguments as it runs
 # scalac's (launched.expected); then `--main` with each name, and with its last segment, chooses it on each target
-# named, the arguments passed on. tests/classpath/entry-app's `App` runs on the JVM alone: the lean std's `App` has
-# no `args`; tests/classpath/entry-root's encoded `@main` has no package.
+# named, the arguments passed on. tests/classpath/entry-app's `App` runs on the JVM alone: its diagnostics are the
+# deprecation warnings of scala-library's `App`; tests/classpath/entry-root's encoded `@main` has no package.
 entry_points() {
   local entry=$1 targets=$2 name m expected actual target
   name=$(basename "$entry")

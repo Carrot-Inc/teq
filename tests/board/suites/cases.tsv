@@ -2652,6 +2652,13 @@ sourcecode_names	pass	-
 specialized_companion_arguments	pass	-	
 splice_conversion	pass	-	
 split_def_beside_class	pass	-	
+std_app_block_before_init	pass	-	
+std_app_block_registers	pass	-	
+std_app_blocks	pass	-	
+std_app_body	pass	-	
+std_app_main_before_init	pass	-	
+std_app_mark_filter	pass	-	
+std_app_over_own_other_file	pass	-	
 std_array_transpose	pass	-	
 std_array_view	pass	-	
 std_byteswap	pass	-	

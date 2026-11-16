@@ -1,0 +1,8 @@
+before
+body, args null: true
+first block, 1 arguments
+second block
+between 1
+first block, 2 arguments
+second block
+after 2
