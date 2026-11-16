@@ -12,7 +12,9 @@
   the reference projects    bench/<project>/errors.txt, deviations.json and run.json, the gate's records
                             (docs/DEVELOPING.md, "The project records"), with the oracle's inventory tests.json
 
-Columns: total, passing, failing (a failure, a limit reached, a crash), cannot run, and a note. A project's rows
+Columns: total, passing, by marks alone (a neg or warn test of dotty's that holds its marked lines and has no
+.check: no pass and no failure, tests/board/dotty.py), failing (a failure, a limit reached, a crash), cannot run,
+and a note. A project's rows
 are its three lines: compile (the configurations of the record's scope; failing, those with an accepted error),
 test (the oracle's cases; failing, those of a project blocked by its build and those whose outcome departs) and
 run (the named assertions; failing, those violated). A file tests/board/projects/<project>-<line>.today, where
@@ -58,7 +60,7 @@ def list_row(name, path, note=""):
         if v == "pass":
             way[w] += n
     extra += [f"{w}: {n} pass" for w, n in sorted(way.items())]
-    return (name, total, counts["pass"], failing, counts["cannot run"], "; ".join([note] * bool(note) + extra))
+    return (name, total, counts["pass"], counts["marks"], failing, counts["cannot run"], "; ".join([note] * bool(note) + extra))
 
 
 def dotty_rows():
@@ -69,7 +71,7 @@ def dotty_rows():
     for r in ROWS.rows():
         path = os.path.join(HERE, "dotty", r.name + ".tsv")
         if not os.path.exists(path):
-            out.append((f"dotty {r.name}", "-", "-", "-", "-", "no list: tests/board/dotty.py --row " + r.name + " --update --add"))
+            out.append((f"dotty {r.name}", "-", "-", "-", "-", "-", "no list: tests/board/dotty.py --row " + r.name + " --update --add"))
             continue
         out.append(list_row(f"dotty {r.name}", path, f"cannot run: {r.cannot}" if r.cannot else ""))
     return out
@@ -88,7 +90,7 @@ def suite_rows():
                 if line.startswith("#") or not line.strip():
                     continue
                 name, files, note = (line.rstrip("\n").split("\t") + ["", ""])[:3]
-                out.append((name, files + " files", "-", "-", "-", "the branch's checks are not ported: " + note))
+                out.append((name, files + " files", "-", "-", "-", "-", "the branch's checks are not ported: " + note))
     return out
 
 
@@ -114,7 +116,7 @@ def project_rows():
             failing = len([k for k in keys if items[k]])
             n = sum(items.values())
             note = f"{n} accepted {'error' if n == 1 else 'errors'} in the record of {revision}" + today("compile")
-            out.append((f"{p} compile", len(keys), len(keys) - failing, failing, 0, note))
+            out.append((f"{p} compile", len(keys), len(keys) - failing, 0, failing, 0, note))
         tests, deviations = os.path.join(here, "tests.json"), os.path.join(here, "deviations.json")
         if os.path.exists(tests) and os.path.exists(deviations):
             with open(tests, encoding="utf-8") as fh:
@@ -140,14 +142,14 @@ def project_rows():
             total = t.get("cases_count", sum(cases.values()))
             failing = total if blocked and all(p_ in blocked for p_ in cases if cases[p_]) else min(total, sum(cases[b] for b in blocked) + departing)
             note = (f"{len(blocked)} of {len(d['projects'])} projects blocked by their build" if blocked else "") + today("test")
-            out.append((f"{p} test", total, total - failing, failing, 0, note))
+            out.append((f"{p} test", total, total - failing, 0, failing, 0, note))
         run = os.path.join(here, "run.json")
         if os.path.exists(run):
             with open(run, encoding="utf-8") as fh:
                 r = json.load(fh)
             violated = {a for a in r["assertions"] if any(v == a or v.startswith(a + ":") for v in r["violations"])}
             blocked = any(v.startswith("blocked:") for v in r["violations"])
-            out.append((f"{p} run", len(r["assertions"]), len(r["assertions"]) - len(violated), len(violated), 0,
+            out.append((f"{p} run", len(r["assertions"]), len(r["assertions"]) - len(violated), 0, len(violated), 0,
                         ("blocked by its build" if blocked else "") + today("run")))
     return out
 
@@ -178,15 +180,15 @@ def dotty_header():
 def main():
     if "--tsv" not in sys.argv and dotty_header():
         print(dotty_header())
-    rows = [("suite", "total", "pass", "fail", "cannot run", "note")]
+    rows = [("suite", "total", "pass", "marks", "fail", "cannot run", "note")]
     rows += dotty_rows() + suite_rows() + project_rows()
     if "--tsv" in sys.argv:
         for r in rows:
             print("\t".join(str(c) for c in r))
         return 0
-    widths = [max(len(str(r[i])) for r in rows) for i in range(5)]
+    widths = [max(len(str(r[i])) for r in rows) for i in range(6)]
     for i, r in enumerate(rows):
-        print("  ".join(str(c).ljust(widths[j]) if j == 0 else str(c).rjust(widths[j]) for j, c in enumerate(r[:5])) + ("  " + str(r[5]) if r[5] else ""))
+        print("  ".join(str(c).ljust(widths[j]) if j == 0 else str(c).rjust(widths[j]) for j, c in enumerate(r[:6])) + ("  " + str(r[6]) if r[6] else ""))
         if i == 0:
             print("  ".join("-" * w for w in widths))
     return 0

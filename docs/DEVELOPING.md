@@ -113,7 +113,8 @@ only shrinks. `--update` on a runner takes the tests that pass now out of its li
 failures in, and belongs to the change that brings the tests into the tree, never to one that broke a test. Either
 also writes the suite's row of the board (`tests/board/suites/<suite>.tsv`; `tests/board/dotty/<row>.tsv` for
 dotty's suites, whose rows, flags and kinds are `tests/board/rows.py` and whose table of scalac's options is in
-`tests/board/dotty.py`). The runners that take the two flags: `tests/run.sh` (and with `--dir=tests/pending-cases`),
+`tests/board/dotty.py`; there a neg or warn test that holds its marked lines and has no `.check` is `marks`, no
+pass and no failure: only a comparison with scalac's own diagnostics makes it a pass). The runners that take the two flags: `tests/run.sh` (and with `--dir=tests/pending-cases`),
 `run_errors.sh`, `run_jvm.sh`, `run_interp.sh`, `run_stdlib.sh`, `interp-script.sh`, `run_interop.sh`, `parser.sh`,
 `classpath.sh`, `split.sh`, `modules.sh`, `tests/scala3/run.sh`, `tests/board/scripts.sh` and
 `tests/board/dotty.py`. Three suites name their failures on `FAIL` lines and count their passes unnamed

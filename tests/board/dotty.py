@@ -24,9 +24,10 @@ compiler/test/dotty/tools/dotc/transform/PatmatExhaustivityTest.scala):
 
   pos      teq writes the class files of every group (`teq compiler build --target jvm --all-mains`)
   neg      `teq compiler check` reports as many errors as the files carry `// error` marks, each on a marked line
-           (`// nopos-error` for one without a place, `// anypos-error` for one at any place), and where the test
-           has a .check its diagnostics are the .check's
-  warn     no error, the warnings on the `// warn` lines, and the .check
+           (`// nopos-error` for one without a place, `// anypos-error` for one at any place), and its diagnostics
+           are the test's .check; marks that hold without a .check are no pass (`marks`, below)
+  warn     no error, the warnings on the `// warn` lines, and the .check as for neg; a test without a mark and
+           without a .check passes on no diagnostic at all, under options whose warnings teq gives
   run      pos, then `java Test` with dotty's own arguments ends without an exception, its output the .check's
            lines where there is one; the row run-scalajs builds the program for JavaScript against scala-library
            and runs it on node, `<name>.scala-js.check` before `<name>.check`
@@ -38,9 +39,16 @@ A .check of scalac's boxed diagnostics is compared as diagnostics, in order: sev
 the message's lines (teq prints no boxes). neg, warn, patmat and nocrash are judged against scala-library
 (`--std scala-library`, the library dotty's tests are written against).
 
-Verdicts: pass, fail, timeout (a limit of CPU seconds for teq, of wall-clock seconds for java and node), crash
-(a panic, a signal, an exit status teq does not document, the memory cap), cannot run (with its reason class:
-the test needs something no compiler run from the checkout gives). A test with a Java source fails: teq reads
+Verdicts: pass, marks, fail, timeout (a limit of CPU seconds for teq, of wall-clock seconds for java and node),
+crash (a panic, a signal, an exit status teq does not document, the memory cap), cannot run (with its reason
+class: the test needs something no compiler run from the checkout gives). `marks` is a neg or warn test that
+holds its marked lines and has no .check: teq refuses or warns where the test says, and nothing compares its
+diagnostics with scalac's, so it is no pass (an error of another cause on the marked line would hold the marks
+too); it is no failure either: its line is in no pending list, and a test that leaves it for `fail` is a moved
+verdict as any other. A warn test without a single mark needs no .check: dotty's WarnTest fails on an error and
+on a count of warnings other than the marks', so scalac's diagnostics are none, and the test passes where teq's
+are none, but under an option whose warnings teq does not give (`warns` in OPTIONS), where its silence says
+nothing: that test fails as one under a check teq does not perform. A test with a Java source fails: teq reads
 none. An option of the test or of its row is given to teq where teq has the flag, dropped where it is scalac's
 own machinery, and fails the test (`option: <flag>`) where it changes what is accepted, warned or run and teq
 has no flag for it (OPTIONS below).
@@ -910,6 +918,40 @@ def held_to_check(test, diags):
     return None
 
 
+MARKS_ALONE = "the marks hold; scalac's diagnostics are not compared: the test has no .check"
+
+
+def unperformed_warnings(ctx, test):
+    """The test's options whose warnings teq does not give (`warns` in OPTIONS): its row's and each group's."""
+    out = []
+    steps = test.steps or [{} for _ in test.groups]
+    for i in range(len(test.groups)):
+        base = steps[i].get("flags", test.row.flags) if test.steps else test.flags
+        for o in base + group_args(ctx, test, i)[0].get("scalac", []):
+            name = o.partition(":")[0]
+            if name not in OPTIONS and "=" in name:
+                name = o.partition("=")[0]
+            if OPTIONS.get(name, ("semantic", False))[0] == "warns" and o not in out:
+                out.append(o)
+    return out
+
+
+def held_to_scalac(ctx, test, diags, other, rx, prefixes):
+    """A neg or warn test whose marks hold: (verdict, the other ways, first line). A diagnostic on a marked line
+    says only that teq refused or warned there, whatever its reason: the test passes where teq's diagnostics are
+    scalac's (its .check: severity, place and whole message, in order) and is `marks` where nothing in the corpus
+    says what scalac's are. A test without a mark says it: scalac gives none, and neither did teq."""
+    if check_file(test):
+        why = held_to_check(test, diags)
+        return ("fail", other, why) if why else ("pass", other, "")
+    if sum(marks(test.files, rx, prefixes).values()) == 0:
+        unperformed = unperformed_warnings(ctx, test)
+        if unperformed:
+            return "fail", other, f"option: {unperformed[0]} (a check teq does not perform: no warning says nothing)"
+        return "pass", other, ""
+    return "marks", other, MARKS_ALONE
+
+
 PATMAT_KINDS = [
     (re.compile(r"^match may not be exhaustive"), "Pattern Match Exhaustivity"),
     (re.compile(r"^Unreachable case except for null"), "Pattern Match"),
@@ -1087,15 +1129,13 @@ def judge(ctx, test):
         return "pass", other, ""
     if kind == "neg":
         why = held_to_marks(ctx, test, diags, "error", ERROR_MARK, ("nopos", "anypos"), "error")
-        why = why or held_to_check(test, diags)
-        return ("fail", other, why) if why else ("pass", other, "")
+        return ("fail", other, why) if why else held_to_scalac(ctx, test, diags, other, ERROR_MARK, ("nopos", "anypos"))
     if kind == "warn":
         errors = [d for d in diags if d.get("severity") == "error"]
         if errors or outcome == "errors":
             return "fail", other, "marks: an error where warnings are marked: " + (first_error("", errors) or line)
         why = held_to_marks(ctx, test, diags, "warning", WARN_MARK, ("nopos",), "warning")
-        why = why or held_to_check(test, diags)
-        return ("fail", other, why) if why else ("pass", other, "")
+        return ("fail", other, why) if why else held_to_scalac(ctx, test, diags, other, WARN_MARK, ("nopos",))
     if kind == "patmat":
         got = patmat_lines(diags)
         path = check_file(test)
@@ -1217,7 +1257,7 @@ def main():
             for r in sorted(rows_out):
                 fh.write("\t".join(r) + "\n")
         others = collections.Counter(o for _, _, o, _ in rows_out if o != "-")
-        print(f"{row.name}: {len(rows_out)} tests in {elapsed:.0f} s: " + ", ".join(f"{k} {counts[k]}" for k in ("pass", "fail", "timeout", "crash", "cannot run") if counts[k])
+        print(f"{row.name}: {len(rows_out)} tests in {elapsed:.0f} s: " + ", ".join(f"{k} {counts[k]}" for k in ("pass", "marks", "fail", "timeout", "crash", "cannot run") if counts[k])
               + (" (" + ", ".join(f"{k} {n}" for k, n in sorted(others.items())) + ")" if others else ""))
         near = sorted(((s, n) for n, s in times.items() if s * NEAR > CPU_LIMIT), reverse=True)[:10]
         if near:
@@ -1231,9 +1271,9 @@ def main():
         listed = pending.read(suite)
         new = [] if args.add else sorted(n for n in failing if n not in listed)
         fixed = [] if args.update else sorted(n for n in listed if n in ran and n not in failing)
-        held = pending.hold(suite, ran, failing, args.update, args.add)
+        held = pending.hold(suite, ran, failing, args.update, args.add, marks=counts["marks"])
         unlisted += [f"{row.name}/{n} fails and is not in tests/pending/{suite}.txt" for n in new]
-        passing += [f"{row.name}/{n} passes: its line in tests/pending/{suite}.txt must go (--update)" for n in fixed]
+        passing += [f"{row.name}/{n} fails no longer: its line in tests/pending/{suite}.txt must go (--update)" for n in fixed]
         stale = []
         if not (args.update or args.add):
             stale = stale_verdicts(row.name, {n: v for n, v, _, _ in rows_out}, set(new) | set(fixed))
@@ -1276,7 +1316,7 @@ def last_line(problems, totals):
     if not problems:
         failed = totals["fail"] + totals["timeout"] + totals["crash"]
         return (f"board: {totals['rows']} row{'' if totals['rows'] == 1 else 's'} as listed: {sum(totals.values()) - totals['rows']} tests, "
-                f"{totals['pass']} pass, {failed} fail, {totals['cannot run']} cannot run")
+                f"{totals['pass']} pass, " + (f"{totals['marks']} by marks alone, " if totals['marks'] else "") + f"{failed} fail, {totals['cannot run']} cannot run")
     line = f"board: {len(problems)} not as listed: {problems[0]}"
     shown = 1
     for p in problems[1:]:

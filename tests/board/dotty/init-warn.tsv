@@ -143,7 +143,7 @@ t3273.scala	fail	-	marks: 0 warnings where 2 are marked
 trait1.scala	fail	-	marks: 0 warnings where 1 are marked
 trait2.scala	fail	-	marks: 0 warnings where 1 are marked
 trees.scala	fail	-	marks: 0 warnings where 1 are marked
-type-filter.scala	pass	-	
+type-filter.scala	fail	-	option: -Wsafe-init (a check teq does not perform: no warning says nothing)
 type-filter2.scala	fail	-	marks: 0 warnings where 1 are marked
 unsound1.scala	fail	-	marks: 0 warnings where 1 are marked
 unsound2.scala	fail	-	marks: 0 warnings where 1 are marked

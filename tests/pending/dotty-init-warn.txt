@@ -141,6 +141,7 @@ t3273.scala	marks: 0 warnings where 2 are marked
 trait1.scala	marks: 0 warnings where 1 are marked
 trait2.scala	marks: 0 warnings where 1 are marked
 trees.scala	marks: 0 warnings where 1 are marked
+type-filter.scala	option: -Wsafe-init (a check teq does not perform: no warning says nothing)
 type-filter2.scala	marks: 0 warnings where 1 are marked
 unsound1.scala	marks: 0 warnings where 1 are marked
 unsound2.scala	marks: 0 warnings where 1 are marked

@@ -110,10 +110,11 @@ def write_board_list(suite, ran, failing, skipped, passed=None, partial=False):
                 fh.write(rows[n] + "\n")
 
 
-def hold(suite, ran, failing, update=False, add=False, out=sys.stdout):
+def hold(suite, ran, failing, update=False, add=False, out=sys.stdout, marks=0):
     """Holds a run to the suite's list. `ran`: the names the run judged; `failing`: of them, those that failed,
     each with the first line of its difference. Whether the run is the list's, after what --update and --add
-    changed."""
+    changed. `marks`: how many of those that did not fail are no pass either (the board's `marks` verdict), for
+    the count the last line gives."""
     listed = read(suite)
     fixed = sorted(n for n in listed if n in ran and n not in failing)
     new = sorted(n for n in failing if n not in listed)
@@ -140,7 +141,7 @@ def hold(suite, ran, failing, update=False, add=False, out=sys.stdout):
             print(f"  ... and {len(new) - 40} more", file=out)
     still = len([n for n in listed if n in failing])
     if not fixed and not new:
-        print(f"{suite}: {len(ran) - len(failing)} pass, {still} fail as tests/pending/{suite}.txt lists", file=out)
+        print(f"{suite}: {len(ran) - len(failing) - marks} pass, " + (f"{marks} by marks alone, " if marks else "") + f"{still} fail as tests/pending/{suite}.txt lists", file=out)
     return not fixed and not new
 
 
