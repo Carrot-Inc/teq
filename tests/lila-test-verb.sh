@@ -184,8 +184,9 @@ printf '%s\n' "$blocked_run" > "$work/partial.txt"
 sed -i 's/^alpha\/test: /[fail] lila.b.ThreeTest renders: java.lang.Error: boom\n&/' "$work/partial.txt"
 transcript < "$work/partial.txt"
 echo 1 > "$work/exit"
-printf '%s\n' "alpha	lila.a.OneTest	test adds	Success	" "alpha	lila.a.OneTest	test subtracts: twice	Success	" "alpha	lila.a.TwoTest	test parses	Success	" \
-  "beta	lila.b.ThreeTest	test renders	Error	" > "$work/events.new" && mv "$work/events.new" "$work/events-override.txt"
+printf '%s\n' "alpha	lila.a.OneTest.adds	test lila.a.OneTest.adds	Success	" "alpha	lila.a.OneTest.subtracts: twice	test lila.a.OneTest.subtracts: twice	Success	" \
+  "alpha	lila.a.TwoTest.parses	test lila.a.TwoTest.parses	Success	" "alpha	lila.a.OneTest	ran" "alpha	lila.a.TwoTest	ran" \
+  "beta	lila.b.ThreeTest.renders	test lila.b.ThreeTest.renders	Error	" "beta	lila.b.ThreeTest	ran" > "$work/events.new" && mv "$work/events.new" "$work/events-override.txt"
 cp "$work/blocked/deviations.json" "$work/deviations.kept"
 expect "a blocked project's case run as an error" fail "$work/blocked"
 grep -q "beta: a build of its failed and 1 of its cases ran: an execution its build's failure contradicts" "$work/verb.log" && grep -q "beta: lila.b.ThreeTest: renders: Error (tests.json: Success)" "$work/verb.log" && pass=$((pass + 1)) ||
@@ -218,8 +219,9 @@ rm -f "$work/no-events"
 touch "$work/no-diagnostics"
 judged_and_recorded "a run whose binary records no diagnostics" "teq wrote no diagnostics"
 rm -f "$work/no-diagnostics"
-printf '%s\n' "alpha	lila.a.OneTest	test adds	Success	" "alpha	lila.a.OneTest	test subtracts: twice	Success	" "alpha	lila.a.TwoTest	test parses	Success	" \
-  "beta	lila.b.ThreeTest	test renders	Failure	java.lang.Error: newly executed failure" > "$work/events.new" && mv "$work/events.new" "$work/events-override.txt"
+printf '%s\n' "alpha	lila.a.OneTest.adds	test lila.a.OneTest.adds	Success	" "alpha	lila.a.OneTest.subtracts: twice	test lila.a.OneTest.subtracts: twice	Success	" \
+  "alpha	lila.a.TwoTest.parses	test lila.a.TwoTest.parses	Success	" "alpha	lila.a.OneTest	ran" "alpha	lila.a.TwoTest	ran" \
+  "beta	lila.b.ThreeTest.renders	test lila.b.ThreeTest.renders	Failure	java.lang.Error: newly executed failure" "beta	lila.b.ThreeTest	ran" > "$work/events.new" && mv "$work/events.new" "$work/events-override.txt"
 judged_and_recorded "an executed failure after the last summary, in the run's events" "beta: a build of its failed and 1 of its cases ran"
 rm -f "$work/events-override.txt" "$work/exit"
 # The tests a run owes are the export's (`Locks.testUnits`): over an export with alpha's and beta's test configurations,

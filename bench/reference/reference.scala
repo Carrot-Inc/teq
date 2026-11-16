@@ -131,6 +131,41 @@ object Tests:
         case _ => ()
     Tests(suites.toMap.map((key, cases) => key -> Suite(key._1, cases)))
 
+  // The run's events named as sbt's JUnit reports name them (its JUnitXmlTestsListener, whose reports an oracle read by
+  // `fromReports` holds). junit-interface gives an event its test's whole name, `<class>.<test>`, as the event's own
+  // name and in its selector, under sbt as under teq; the report puts the case under the task's suite and names it by
+  // the test without a leading suite name, whole or its last segment, and the dot after it (the listener's own
+  // pattern, the suite's name unquoted in it; `nested <suite> <test>`: the test alone; any other selector: the
+  // listener's own words for what is no test, with the selector's class).
+  // The task of an event is the suite of its project that ran (a `ran` line) and is the event's name or the longest
+  // that prefixes it before a dot; an event of no such suite stays as it is written, and so does a `ran` line.
+  def asReports(text: String): String =
+    val lines = text.linesIterator.toVector
+    val ran = lines.flatMap(_.split("\t", -1) match
+      case Array(project, suite, "ran", _*) => Some(project -> suite)
+      case _ => None)
+    lines.map { line =>
+      line.split("\t", -1) match
+        case Array(project, name, selector, rest*) if selector != "ran" && rest.length >= 2 =>
+          ran.collect { case (`project`, suite) if name == suite || name.startsWith(suite + ".") => suite }.maxByOption(_.length) match
+            case None => line
+            case Some(task) =>
+              val named =
+                if selector.startsWith("test ") then
+                  val test = selector.drop(5)
+                  "test " + test.substring(s"^($task|${task.split('.').last})\\.?".r.findFirstMatchIn(test).fold(0)(_.end))
+                else if selector.startsWith("nested ") then "test " + selector.drop(7).dropWhile(_ != ' ').drop(1)
+                else
+                  val kind = selector.takeWhile(_ != ' ') match
+                    case "suite" => "SuiteSelector"
+                    case "nestedSuite" => "NestedSuiteSelector"
+                    case "wildcard" => "TestWildcardSelector"
+                    case other => other
+                  s"test (It is not a test it is a sbt.testing.$kind)"
+              (Vector(project, task, named) ++ rest).mkString("\t")
+        case _ => line
+    }.map(_ + "\n").mkString
+
   // What the expected inventory and the run's differ in: each suite of either by its project and its name, and each
   // case with its statuses as many times as each side reports it (a case run twice, a case ignored on one side and
   // pending on the other, a case of another project's suite of the name). A suite without a case (a base class

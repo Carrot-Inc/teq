@@ -400,7 +400,9 @@ lila, lichess's server ([lichess-org/lila](https://github.com/lichess-org/lila))
 project: forty sbt modules of Scala 3.8.4 with Play routers, macros (reactivemongo's handlers, play-json's
 formats, macwire's wiring) and a test suite, all of it public, so that what teq compiles, tests and runs of it
 anyone can repeat. `bench/lila/` holds its pin (`pin.json`: the upstream commit, the JDK, sbt, the overlay's
-digests), the oracle's inventory (`tests.json`: the suites and cases `testFull` passes under scalac 3.8.4), the
+digests), the oracle's inventory (`tests.json`: the suites and cases `testFull` passes under scalac 3.8.4, read from
+sbt's JUnit reports, so the run's events are named as a report names them before they are compared:
+`Tests.asReports`), the
 generated inputs' digests (`generated.json`), the overlay sbt's `-addPluginSbtFile` adds to lila's build without
 changing its repository (`overlay/plugins.sbt` and `overlay/LilaTeq.scala`, which declares the generators teq runs
 in the place of sbt's: liplay's routers through its routes compiler under `teq interp` (`routes.scala`) and the

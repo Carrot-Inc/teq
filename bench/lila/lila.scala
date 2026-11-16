@@ -395,7 +395,8 @@ object Lila:
       if unmeasured then failed = true
       // The run held to deviations.json by the records' one judgment of a test run (`Deviations.judge`, the same for
       // every driver): the invocation's channels and events, the oracle's projects and cases.
-      val eventText = Option.when(Files.isRegularFile(events))(Files.readString(events))
+      // tests.json is read from sbt's JUnit reports (`Tests.fromReports`): the run's events are named as a report's.
+      val eventText = Option.when(Files.isRegularFile(events))(Tests.asReports(Files.readString(events)))
       val found = eventText.fold(Tests(Map.empty))(Tests.fromEvents)
       val differences = Tests.compare(expected, found)
       if differences.nonEmpty then
