@@ -388,7 +388,7 @@ i1354.scala	fail	interp:fail	run: exit 1: Exception in thread "main" scala.NotIm
 i1354b.scala	fail	interp:fail	run: exit 1: Exception in thread "main" scala.NotImplementedError: an implementation is missing
 i13630.scala	pass	interp:pass	
 i13691.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.NoClassDefFoundError: scala/ContextFunction1
-i13691b.scala	fail	interp:fail	i13691b.scala:7:15: throws takes 1 type argument(s), 2 given
+i13691b.scala	fail	interp:fail	option: -language:experimental.saferExceptions (a check teq does not perform)
 i13703.scala	fail	interp:fail	i13703.scala:5:3: value i is not a member of Foo{def i_=(x$1: Int): Unit}
 i13747.scala	pass	interp:pass	
 i1386.scala	pass	interp:pass	
@@ -398,7 +398,7 @@ i1392a.scala	pass	interp:pass
 i1392b.scala	pass	interp:pass	
 i1392c.scala	pass	interp:pass	
 i13950.scala	fail	interp:fail	i13950.scala:6:3: value apply is not a member of S
-i13961a.scala	fail	interp:fail	i13961a.scala:6:15: throws takes 1 type argument(s), 2 given
+i13961a.scala	fail	interp:fail	option: -language:experimental.saferExceptions (a check teq does not perform)
 i13968.scala	pass	interp:pass	
 i13986.scala	pass	interp:fail	
 i13987.scala	pass	interp:fail	
@@ -1047,7 +1047,7 @@ runtimeChecked-2.scala	fail	interp:fail	option: -Wsafe-init with -Werror (teq ha
 runtimeChecked.scala	fail	interp:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 safeThrowsStrawman.scala	pass	interp:fail	
 safeThrowsStrawman2.scala	pass	interp:fail	
-saferExceptions.scala	fail	interp:fail	saferExceptions.scala:20:18: throws takes 1 type argument(s), 2 given
+saferExceptions.scala	fail	interp:fail	option: -language:experimental.saferExceptions (a check teq does not perform)
 sammy_repeated.scala	pass	interp:pass	
 scala-tests-typeChecks.scala	fail	interp:fail	scala-tests-typeChecks.scala:13:12: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 scala2-library-test	fail	interp:fail	Main.scala:26:26: value unapply is not a member of Some

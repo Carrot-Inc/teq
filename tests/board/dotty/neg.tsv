@@ -110,11 +110,11 @@ byname-implicits-26.scala	pass	-
 cannot-call-java-enum-constructor.scala	fail	-	marks: no error where 1 are marked
 cannot-reduce-inline-match.scala	fail	-	check: diagnostic 1 of 1: scalac's is error cannot-reduce-inline-match.scala:9:3 cannot reduce inline match with; teq's is error cannot-reduce-inline-match.scala:9:3 cannot reduce inline match with
 cannot-reduce-summonFrom.scala	pass	-	
-capture-vars-subtyping.scala	fail	-	marks: 43 errors where 7 are marked: capture-vars-subtyping.scala:5:11: expected ',' or ']', found identifier
+capture-vars-subtyping.scala	fail	-	option: -language:experimental.captureChecking (a check teq does not perform)
 capture1.scala	fail	-	marks: no error where 1 are marked
 caseclass-access.scala	pass	-	
 cb-companion-leaks.scala	fail	-	marks: 4 errors where 3 are marked: cb-companion-leaks.scala:11:9: expected end of statement, found ':'
-cc-fresh-levels.scala	fail	-	marks: 7 errors where 3 are marked: cc-fresh-levels.scala:9:17: expected ',' or ')', found identifier
+cc-fresh-levels.scala	fail	-	option: -language:experimental.captureChecking (a check teq does not perform)
 cc-only-defs.scala	fail	-	marks: 6 errors where 5 are marked: cc-only-defs.scala:10:11: expected a declaration, found identifier
 checkNoConflict	pass	-	
 clashes.scala	pass	-	
@@ -506,13 +506,13 @@ i13780.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i13780.scala:12:
 i13808.scala	fail	-	marks: 1 errors where 2 are marked
 i13838.scala	fail	-	option: -Ximplicit-search-limit (teq has no flag for it)
 i13838a.scala	pass	-	
-i13846.scala	fail	-	marks: 1 errors where 2 are marked
+i13846.scala	fail	-	option: -language:experimental.saferExceptions (a check teq does not perform)
 i13848.scala	fail	-	marks: no error where 1 are marked
-i13849.scala	fail	-	marks: error on an unmarked line i13849.scala:8: throws takes 1 type argument(s), 2 given
+i13849.scala	fail	-	option: -language:experimental.saferExceptions (a check teq does not perform)
 i13851.scala	pass	-	
 i13851b.scala	pass	-	
 i13852.scala	pass	-	
-i13864.scala	fail	-	marks: 1 errors where 2 are marked
+i13864.scala	fail	-	option: -language:experimental.saferExceptions (a check teq does not perform)
 i1392.scala	pass	-	
 i13946	fail	-	marks: no error where 1 are marked
 i13960.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13960.scala:13:10  [31mA [0m is not a valid result type of an unapply method of an  [35mextractor [0m.; teq's is error i13960.scala:13:10 A is not a case class, so it cannot be used as a pattern
@@ -1449,7 +1449,7 @@ leading-infix-miss.scala	fail	-	marks: error on an unmarked line leading-infix-m
 leak-type.scala	fail	-	marks: no error where 1 are marked
 leaks.scala	fail	-	marks: no error where 2 are marked
 literals.scala	pass	-	
-localReaches.scala	fail	-	marks: 18 errors where 2 are marked: localReaches.scala:7:22: expected a declaration, found identifier
+localReaches.scala	fail	-	option: -language:experimental.captureChecking (a check teq does not perform)
 lucre-23441-min.scala	fail	-	marks: error on an unmarked line lucre-23441-min.scala:6: type argument T does not conform to upper bound Txn[T]
 machine-state-encoding-with-implicit-match.scala	pass	-	
 macro.scala	fail	-	marks: 2 errors where 1 are marked: macro.scala:3:24: expected end of statement, found identifier
@@ -1489,7 +1489,7 @@ missing-implicit5.scala	fail	-	check: diagnostic 1 of 3: scalac's is error missi
 missing-implicit6.scala	fail	-	check: diagnostic 2 of 6: scalac's is error missing-implicit6.scala:33:5 value xxx is not a member of Int, but could be made available as an extension method.; teq's is error missing-implicit6.scala:33:5 value xxx is not a member of Int
 missing-import.scala	pass	-	
 missing-targetName.scala	fail	-	option: -Yrequire-targetName (teq has no flag for it)
-mixed_cc	fail	-	marks: 2 errors where 1 are marked: B.scala:4:16: expected a declaration, found identifier
+mixed_cc	fail	-	option: -language:experimental.captureChecking (a check teq does not perform)
 mixin-class-member-clash.scala	fail	-	marks: no error where 1 are marked
 mixin-forwarder-clash1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error mixin-forwarder-clash1.scala:15:7 Name clash between inherited members:; teq's is error mixin-forwarder-clash1.scala:15:7 class Bar2 inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int)
 mixin-forwarder-clash2	fail	-	marks: no error where 1 are marked
@@ -1630,9 +1630,9 @@ rightassoc-extmethod.scala	fail	-	check: diagnostic 1 of 1: scalac's is error ri
 rootImplicits.scala	pass	-	
 runtimeChecked-2.scala	fail	-	check: diagnostic 1 of 1: scalac's is warning runtimeChecked-2.scala:10:12 Unreachable case; teq's is warning runtimeChecked-2.scala:10:12 unreachable case
 runtimeChecked.scala	pass	-	
-safe-setting.scala	fail	-	marks: no error where 1 are marked
+safe-setting.scala	fail	-	option: -language:experimental.safe (a check teq does not perform)
 safeThrowsStrawman.scala	fail	-	marks: 3 errors where 2 are marked: safeThrowsStrawman.scala:24:5: 'erased' is not part of the supported Scala subset
-saferExceptions.scala	fail	-	marks: 3 errors where 2 are marked: saferExceptions.scala:7:20: throws takes 1 type argument(s), 2 given
+saferExceptions.scala	fail	-	option: -language:experimental.saferExceptions (a check teq does not perform)
 scala-uri.scala	fail	-	check: diagnostic 1 of 1: scalac's is error scala-uri.scala:30:60 No best given instance of type QueryKeyValue[(String, None.type)] was found for parameter x of method summon in object Predef.; teq's is error scala-uri.scala:30:60 ambiguous
 scala2-macro-compat-no-scala3-implementation.scala	fail	-	marks: 3 errors where 1 are marked: scala2-macro-compat-no-scala3-implementation.scala:3:31: expected end of statement, found identifier
 scalaStandardRedefinition.scala	pass	-	

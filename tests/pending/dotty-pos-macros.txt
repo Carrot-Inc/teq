@@ -54,6 +54,7 @@ i18228.scala	i18228.scala:11:11: value value is not a member of Expr[Map[String,
 i18228b.scala	i18228b.scala:11:11: value value is not a member of Expr[Map[String, String]]
 i18353	Macro_1.scala:55:15: value fromTuple is not a member of ProductOf[T]{type MirroredElemTypes = elementTypes}
 i18358	teq: jvm backend: E$1t9g4af_140: the local hole$0 is not in scope of the generated method
+i18855	option: -language:experimental.captureChecking (a check teq does not perform)
 i19191	Macro_1.scala:8:14: cannot resolve import: quotes is not an object or a package
 i19436	Test_2.scala:2:16: No given instance of type Int was found.
 i19526b	Test.scala:16:5: type mismatch: found Dynamic, required Stack

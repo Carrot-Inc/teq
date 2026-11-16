@@ -445,6 +445,7 @@ i25240.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i25250.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i25362	Test_2.scala:13:36: No given instance of type Mirror.ProductOf[BigTuple] was found.
 i25547.scala	i25547.scala:11:50: type mismatch: found (? : Any) @RuntimeChecked, required (Int, String, Double)
+i25634	option: -language:experimental.captureChecking (a check teq does not perform)
 i2570.scala	i2570.scala:17:29: type mismatch: found Int => Int, required (=> Int) => Int
 i2663.scala	i2663.scala:12:31: type mismatch: found Foo[String], required Foo[String] & Tr
 i2673.scala	option: -Wsafe-init with -Werror (teq has no flag for it)

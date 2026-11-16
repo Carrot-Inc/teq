@@ -170,7 +170,7 @@ i18358	fail	check:pass	teq: jvm backend: E$1t9g4af_140: the local hole$0 is not 
 i18393	pass	check:pass	
 i18409.scala	pass	check:pass	
 i18517	pass	check:pass	
-i18855	pass	check:pass	
+i18855	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
 i18911	pass	check:fail	
 i19191	fail	check:fail	Macro_1.scala:8:14: cannot resolve import: quotes is not an object or a package
 i19351	pass	check:pass	

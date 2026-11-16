@@ -195,6 +195,9 @@ def major(cmd, rx):
 # flag: the test fails with `option: <flag>`. `warns`: it turns warnings on that teq does not give; it fails
 # the test only together with -Werror, where the absence of those warnings is what the test holds (a warn
 # test fails for the missing warning itself). An option in none of these is semantic.
+# A language feature that puts a whole unit under a checker teq does not have (CHECKER_FEATURES; pureFunctions is
+# syntax alone and is none) is semantic too, as the row's option, a file's, or an import of the source: such a
+# test holds what the checker says of it.
 # (name, class, takes a value as its next word)
 OPTIONS = {
     "-source": ("map", True), "--source": ("map", True), "-language": ("map", True),
@@ -241,6 +244,31 @@ OPTIONS = {
     "-Ycc-debug": ("semantic", False), "-Ycc-verbose": ("semantic", False), "-Ycc-new": ("semantic", False),
     "-Yflexify-tasty": ("semantic", False), "-from-tasty": ("semantic", False), "-Ybackend-parallelism": ("semantic", False),
 }
+
+
+CHECKER_FEATURES = {"experimental.captureChecking", "experimental.separationChecking", "experimental.safe",
+                    "experimental.saferExceptions"}
+LANGUAGE_IMPORT = re.compile(r"\blanguage\.experimental\.(\{[^}]*\}|\w+)")
+
+
+def checker_imports(lines):
+    """The checker features a source imports (`import language.experimental.captureChecking`, braces or not), as
+    the options that turn them on."""
+    out = []
+    for line in lines:
+        if not line.lstrip().startswith("import "):
+            continue
+        for m in LANGUAGE_IMPORT.finditer(line):
+            for name in re.findall(r"\w+", m.group(1)):
+                if "experimental." + name in CHECKER_FEATURES:
+                    out.append("-language:experimental." + name)
+    return out
+
+
+def option_reason(bad):
+    """The first line of a test an option fails."""
+    unperformed = bad.startswith("-language:") and bad[len("-language:"):] in CHECKER_FEATURES
+    return f"option: {bad} ({'a check teq does not perform' if unperformed else 'teq has no flag for it'})"
 
 
 def tokenize(text):
@@ -295,7 +323,11 @@ def teq_options(options, target):
         if name in ("-source", "--source"):
             flags += ["--source", value]
         elif name == "-language":
-            languages += [l for l in value.split(",") if l]
+            features = [l for l in value.split(",") if l]
+            unchecked = [l for l in features if l in CHECKER_FEATURES]
+            if unchecked:
+                bad = bad or "-language:" + unchecked[0]
+            languages += features
         elif name in ("-Werror", "-Xfatal-warnings"):
             werror = True
             flags.append("--werror")
@@ -349,10 +381,13 @@ def tool_args(files):
     for f in files:
         try:
             with open(f, encoding="utf-8", errors="replace", newline="") as fh:
-                lines = re.split(r"\r\n|\r|\n", fh.read())[:10]
+                text = re.split(r"\r\n|\r|\n", fh.read())
         except OSError as e:
             error = error or str(e)
             continue
+        lines = text[:10]
+        if f.endswith(".scala"):
+            args["scalac"] += checker_imports(text)
         for line in lines:
             m = TOOL_ARG.search(line)
             if m:
@@ -719,7 +754,7 @@ def compile_groups(ctx, test, scratch, target, tag, extra=None):
             cp = [products] + cp
             flags, bad = teq_options(test.flags + options, target)
         if bad:
-            return "option", f"option: {bad} (teq has no flag for it)", all_diags, None
+            return "option", option_reason(bad), all_diags, None
         outs.append(products)
         # One group is one compilation, as scalac's: its class files in a directory. Several are compiled each
         # against the products (class files and TASTy) of those before, which the later ones read.
@@ -948,7 +983,7 @@ def run_js(ctx, test, scratch, std, tag):
     options, _, _ = ctx.args_of(test)
     flags, bad = teq_options([f for f in test.flags if f != "-scalajs"] + options, "js")
     if bad:
-        return "fail", f"option: {bad} (teq has no flag for it)"
+        return "fail", option_reason(bad)
     files = [f for f in test.files if f.endswith(".scala") and f not in ctx.other_platform(test)]
     js = os.path.join(scratch, tag + ".js")
     cmd = ["compiler", "build"] + files + ["-o", js] + (["--std", "scala-library", "--classpath", ctx.lib] if std else []) + flags

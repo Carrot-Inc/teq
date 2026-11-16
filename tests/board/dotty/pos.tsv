@@ -211,9 +211,9 @@ caseaccs.scala	pass	check:pass
 caseclass-access.scala	pass	check:pass	
 cb-companion-joins.scala	fail	check:fail	cb-companion-joins.scala:25:11: expected end of statement, found ':'
 cbproxy-expansion.scala	fail	check:fail	cbproxy-expansion.scala:5:11: a context bound needs a type constructor with one parameter
-cc-backwards-compat	fail	check:fail	Iter.scala:5:13: expected '=>', found identifier
-cc-self-fluid	fail	check:fail	Test_2.scala:8:20: expected '=>', found identifier
-cc-use-alternatives.scala	fail	check:fail	cc-use-alternatives.scala:7:16: expected a declaration, found identifier
+cc-backwards-compat	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
+cc-self-fluid	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
+cc-use-alternatives.scala	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
 cfcrash.scala	pass	check:pass	
 chan.scala	pass	check:pass	
 chang	fail	-	java source: teq reads none
@@ -224,7 +224,7 @@ class-gadt	fail	check:fail	inheritance.scala:12:24: type mismatch: found T, requ
 class-refinement.scala	pass	check:pass	
 classWithCompObj.scala	pass	check:pass	
 classtag-typetest	pass	check:pass	
-clear-retains-for-inferred-types	fail	check:fail	S1.scala:4:58: expected a declaration, found 'this'
+clear-retains-for-inferred-types	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
 closure-args.scala	fail	check:fail	closure-args.scala:10:3: expected a definition, found '('
 cls.scala	pass	check:pass	
 cls1.scala	pass	check:pass	
@@ -746,7 +746,7 @@ i13668.scala	pass	check:pass
 i13669.scala	pass	check:pass	
 i13739.scala	pass	check:pass	
 i1378.scala	pass	check:pass	
-i13816.scala	fail	check:fail	i13816.scala:6:19: throws takes 1 type argument(s), 2 given
+i13816.scala	fail	check:fail	option: -language:experimental.saferExceptions (a check teq does not perform)
 i13820.scala	pass	check:pass	
 i13842.scala	pass	check:pass	
 i13848.scala	pass	check:pass	
@@ -1478,7 +1478,7 @@ i23155b.scala	pass	check:pass
 i23158.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i23194.scala	pass	check:pass	
 i23217.scala	pass	check:pass	
-i23225.scala	fail	check:fail	i23225.scala:5:33: expected ',' or ')', found identifier
+i23225.scala	fail	check:fail	option: -language:experimental.safe (a check teq does not perform)
 i23237a.scala	pass	check:pass	
 i23237b.scala	fail	check:fail	i23237b.scala:11:58: type mismatch: found Unit => Any, required Shader[Unit, Unit]
 i2324.scala	pass	check:pass	
@@ -1511,7 +1511,7 @@ i23773.scala	pass	check:pass
 i23773a.scala	pass	check:pass	
 i23817	pass	check:pass	
 i23817_2	pass	check:pass	
-i23885	fail	check:fail	S_1.scala:4:13: expected ',' or ')', found identifier
+i23885	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
 i23897.scala	pass	check:pass	
 i239-packageObj.scala	pass	check:pass	
 i2390.scala	pass	check:pass	
@@ -1540,7 +1540,7 @@ i24456.scala	pass	check:pass
 i24479.scala	pass	check:pass	
 i24496.scala	pass	check:pass	
 i24507-jframe.scala	fail	check:fail	i24507-jframe.scala:1:59: None of the overloaded alternatives of constructor AccessibleJFrame in class AccessibleJFrame with types
-i24543.scala	fail	check:fail	i24543.scala:7:16: expected ',' or ']', found identifier
+i24543.scala	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
 i24557.scala	pass	check:pass	
 i24571.scala	pass	check:pass	
 i24631	fail	-	java source: teq reads none
@@ -1584,7 +1584,7 @@ i25513.scala	pass	check:pass
 i2554.scala	pass	check:pass	
 i25542.scala	pass	check:pass	
 i25547.scala	fail	check:fail	i25547.scala:11:50: type mismatch: found (? : Any) @RuntimeChecked, required (Int, String, Double)
-i25634	pass	check:fail	
+i25634	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
 i2570.scala	fail	check:fail	i2570.scala:17:29: type mismatch: found Int => Int, required (=> Int) => Int
 i25700.scala	pass	check:pass	
 i2576.scala	pass	check:pass	
@@ -2573,7 +2573,7 @@ rbtree.scala	fail	check:fail	rbtree.scala:28:1: expected a definition, found new
 realizable-mut.scala	fail	check:fail	realizable-mut.scala:8:10: a singleton type needs a val, a parameter or an object
 rebind.scala	fail	check:fail	rebind.scala:11:7: error overriding method foo in class Foo of type Inner: method foo in trait Bar of type Bar.this.Inner has incompatible type
 recursive-opaques.scala	pass	check:pass	
-reference	fail	check:fail	compile-time.scala:14:12: this type cannot be tested at runtime: ?
+reference	fail	check:fail	option: -language:experimental.saferExceptions (a check teq does not perform)
 refinedSubtyping.scala	pass	check:pass	
 refinements.scala	fail	check:fail	refinements.scala:3:3: expected an identifier, found 'type'
 relax_implicit_divergence.scala	pass	check:fail	

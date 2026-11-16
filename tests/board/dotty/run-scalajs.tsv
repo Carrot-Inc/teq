@@ -331,7 +331,7 @@ i13490.min.scala	pass	lean:pass
 i1354b.scala	fail	lean:fail	run: exit 1: NotImplementedError [scala.NotImplementedError]: an implementation is missing
 i13630.scala	pass	lean:pass	
 i13691.scala	pass	lean:fail	
-i13691b.scala	fail	lean:fail	i13691b.scala:7:15: throws takes 1 type argument(s), 2 given
+i13691b.scala	fail	lean:fail	option: -language:experimental.saferExceptions (a check teq does not perform)
 i13703.scala	fail	lean:fail	i13703.scala:5:3: value i is not a member of Foo{def i_=(x$1: Int): Unit}
 i13747.scala	pass	lean:pass	
 i1386.scala	pass	lean:pass	
@@ -340,7 +340,7 @@ i1392a.scala	pass	lean:pass
 i1392b.scala	pass	lean:pass	
 i1392c.scala	pass	lean:pass	
 i13950.scala	fail	lean:fail	i13950.scala:6:3: value apply is not a member of S
-i13961a.scala	fail	lean:fail	i13961a.scala:6:15: throws takes 1 type argument(s), 2 given
+i13961a.scala	fail	lean:fail	option: -language:experimental.saferExceptions (a check teq does not perform)
 i13968.scala	fail	lean:pass	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: ((),())
 i13986.scala	pass	lean:fail	
 i13987.scala	pass	lean:fail	
@@ -880,7 +880,7 @@ runtimeChecked-2.scala	pass	lean:pass
 runtimeChecked.scala	pass	lean:pass	
 safeThrowsStrawman.scala	pass	lean:fail	
 safeThrowsStrawman2.scala	pass	lean:fail	
-saferExceptions.scala	fail	lean:fail	saferExceptions.scala:20:18: throws takes 1 type argument(s), 2 given
+saferExceptions.scala	fail	lean:fail	option: -language:experimental.saferExceptions (a check teq does not perform)
 sammy_repeated.scala	fail	lean:fail	output: line 1: the .check has 'WrappedVarArgs(1)', the program printed 'ArraySeq(1)'
 scala-tests-typeChecks.scala	fail	lean:fail	scala-tests-typeChecks.scala:13:12: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 scala2-library-test	fail	lean:fail	Main.scala:26:26: value unapply is not a member of Some

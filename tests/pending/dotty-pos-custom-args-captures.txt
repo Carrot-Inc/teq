@@ -7,6 +7,9 @@ boxed1.scala	boxed1.scala:9:16: expected a declaration, found identifier
 boxmap-paper.scala	boxmap-paper.scala:3:22: expected an identifier, found '['
 buffers.scala	buffers.scala:16:39: the type arguments of ArrayBuffer cannot be inferred here; write them out
 byname-closure.scala	byname-closure.scala:4:20: expected ',' or ')', found '{'
+byname-getorelse.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+byname-purefuns-adapt	option: -language:experimental.captureChecking (a check teq does not perform)
+byname-varargs.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 byname.scala	byname.scala:4:14: expected end of statement, found identifier
 bynamefun.scala	bynamefun.scala:4:17: expected ',' or ')', found identifier
 cached.scala	cached.scala:6:27: type -> not found
@@ -38,10 +41,12 @@ capt1.scala	capt1.scala:5:13: expected end of statement, found identifier
 capt2.scala	capt2.scala:6:11: expected '=', found identifier
 captureRef-separate-compilation	Future_1.scala:3:36: expected ',' or ')', found identifier
 caseclass.scala	caseclass.scala:4:24: expected ',' or ')', found identifier
+casts.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 cc-cast.scala	cc-cast.scala:11:36: expected '=', found identifier
 cc-def-fresh.scala	cc-def-fresh.scala:4:28: expected '=', found identifier
 cc-dep-param.scala	cc-dep-param.scala:6:20: expected a declaration, found identifier
 cc-expand.scala	cc-expand.scala:12:21: expected a declaration, found identifier
+cc-experimental.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 cc-poly-1.scala	cc-poly-1.scala:10:10: expected ',' or ']', found identifier
 cc-poly-source-capability.scala	cc-poly-source-capability.scala:11:17: expected ',' or ']', found identifier
 cc-poly-varargs-original.scala	cc-poly-varargs-original.scala:1:30: expected ',' or ']', found identifier
@@ -51,9 +56,12 @@ cc-this.scala	cc-this.scala:9:24: expected ',' or ')', found identifier
 cc-use-iterable.scala	cc-use-iterable.scala:4:19: expected ',' or ']', found identifier
 check-override-typebounds-2.scala	check-override-typebounds-2.scala:6:24: expected a declaration, found identifier
 check-override-typebounds.scala	check-override-typebounds.scala:13:13: expected ',' or ']', found identifier
+checkbounds.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 classes.scala	classes.scala:3:13: expected end of statement, found identifier
 closure-avoidance.scala	closure-avoidance.scala:6:16: expected ',' or ')', found identifier
 closure-result-typing.scala	closure-result-typing.scala:4:17: expected a declaration, found identifier
+cmp-singleton-2.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+cmp-singleton.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 colltest.scala	colltest.scala:7:32: expected a declaration, found 'this'
 compare-refined.scala	compare-refined.scala:5:13: expected end of statement, found identifier
 concat-iterator.scala	concat-iterator.scala:4:13: expected '=>', found identifier
@@ -64,8 +72,11 @@ ctest.scala	ctest.scala:3:13: expected end of statement, found identifier
 deep-adapt.scala	deep-adapt.scala:10:10: expected end of statement, found 'def'
 dep-reach.scala	dep-reach.scala:4:15: expected ',' or ']', found identifier
 dependent-pure.scala	dependent-pure.scala:3:26: expected end of statement, found identifier
+disambiguate-select.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 discardUses.scala	discardUses.scala:1:19: expected ',' or ')', found identifier
+dotty-experimental.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 drop-refinement.scala	drop-refinement.scala:3:80: expected ',' or ')', found identifier
+enum-extends.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 erased-methods.scala	erased-methods.scala:11:11: expected ',' or ')', found identifier
 erased-methods2-shared.scala	erased-methods2-shared.scala:12:48: expected ',' or ')', found identifier
 eta-expansions.scala	eta-expansions.scala:6:15: expected ',' or ')', found identifier
@@ -75,9 +86,13 @@ filevar.scala	filevar.scala:9:24: expected ',' or ')', found identifier
 fill-cbn.scala	fill-cbn.scala:5:12: expected '=', found identifier
 filter-iterable.scala	filter-iterable.scala:5:38: expected ',' or ')', found identifier
 flatmapInPlace.scala	flatmapInPlace.scala:5:45: expected ',' or ')', found identifier
+foreach.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+foreach2.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 freeze.scala	freeze.scala:5:28: expected '=', found identifier
+fromJavaObject.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 function-combinators.scala	function-combinators.scala:2:28: expected end of statement, found identifier
 future-traverse.scala	future-traverse.scala:11:55: expected ',' or ')', found identifier
+gadt-ycheck.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 gears-problem-poly.scala	gears-problem-poly.scala:10:21: expected ',' or ']', found identifier
 i13816.scala	i13816.scala:7:50: type ?-> not found
 i15749.scala	i15749.scala:5:15: expected end of statement, found identifier
@@ -85,9 +100,13 @@ i15749a.scala	i15749a.scala:8:15: expected end of statement, found identifier
 i15923-cases.scala	i15923-cases.scala:2:14: expected an identifier, found '['
 i15925.scala	i15925.scala:7:15: expected an identifier, found '['
 i16116.scala	i16116.scala:19:34: expected a declaration, found 'this'
+i16224.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i16226.scala	i16226.scala:4:18: expected a declaration, found identifier
+i16226a.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i16415.scala	i16415.scala:6:16: expected ',' or ')', found identifier
+i16871.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i18699.scala	i18699.scala:7:12: expected ',' or ']', found identifier
+i18909.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i19076.scala	i19076.scala:3:15: expected ',' or ')', found identifier
 i19661.scala	i19661.scala:4:43: expected ',' or ')', found identifier
 i19662.scala	i19662.scala:3:33: expected '=>', found identifier
@@ -100,9 +119,12 @@ i20237-explicit.scala	i20237-explicit.scala:10:50: expected a declaration, found
 i20237.scala	i20237.scala:14:52: expected a declaration, found identifier
 i21313.scala	i21313.scala:4:19: expected ',' or ']', found identifier
 i21347.scala	i21347.scala:5:14: expected ',' or ']', found identifier
+i21390.TrieMap.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i21507.scala	i21507.scala:4:14: expected ',' or ']', found identifier
+i21646.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i21868.scala	i21868.scala:7:9: expected end of statement, found identifier
 i22723.scala	i22723.scala:9:15: expected a declaration, found 'this'
+i23027.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i23170.scala	i23170.scala:5:18: expected a declaration, found identifier
 i23389.scala	i23389.scala:7:12: expected end of statement, found 'def'
 i23421.scala	i23421.scala:5:10: expected end of statement, found 'def'
@@ -113,21 +135,32 @@ i23737.scala	i23737.scala:7:11: expected ',' or ']', found identifier
 i23820.scala	i23820.scala:6:23: expected ',' or ')', found identifier
 i24039.scala	i24039.scala:4:13: expected '=', found identifier
 i24137.scala	i24137.scala:6:17: expected ',' or ')', found identifier
+i24207.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i24309-region.scala	i24309-region.scala:12:17: expected ',' or ']', found identifier
 i24309.scala	i24309.scala:2:15: expected ',' or ']', found identifier
 i24309b.scala	i24309b.scala:2:13: expected ',' or ']', found identifier
 i24334.scala	i24334.scala:3:10: expected ',' or ']', found identifier
 i24372.scala	i24372.scala:2:11: expected end of statement, found 'def'
 i24373b.scala	i24373b.scala:7:18: expected ',' or ')', found identifier
+i24456.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i24543a.scala	i24543a.scala:5:17: expected ',' or ')', found identifier
 i24556.scala	i24556.scala:6:30: expected ',' or ')', found identifier
+i24556a.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i24729.scala	i24729.scala:7:80: expected ',' or ')', found identifier
+i24901.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+i25006	option: -language:experimental.captureChecking (a check teq does not perform)
 i25251.scala	i25251.scala:6:22: expected '=>', found identifier
 i25303.scala	i25303.scala:2:74: expected a declaration, found 'this'
+i25389.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i25460.scala	i25460.scala:23:31: expected ':', found 'val'
+i25497.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i25525.scala	i25525.scala:11:13: expected ',' or ')', found identifier
+i25575.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i25579	a.scala:9:13: expected '=', found identifier
+i25601.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+i25602.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i25630	Test_1.scala:6:32: expected ',' or ')', found identifier
+i25849.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 impurefun.scala	impurefun.scala:3:10: type ImpureFunction1 not found
 infer-exists.scala	infer-exists.scala:8:23: expected a declaration, found identifier
 inferred-type-ok.scala	inferred-type-ok.scala:4:11: expected '=', found identifier
@@ -139,13 +172,17 @@ lazylists-exceptions.scala	lazylists-exceptions.scala:9:25: expected a declarati
 lazylists-mono.scala	lazylists-mono.scala:2:14: expected end of statement, found identifier
 lazylists.scala	lazylists.scala:2:14: expected end of statement, found identifier
 lazylists1.scala	lazylists1.scala:2:14: expected end of statement, found identifier
+lazyref-mutvar.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 lazyref.scala	lazyref.scala:7:18: expected a declaration, found identifier
 leveltest.scala	leveltest.scala:6:16: expected ',' or ')', found identifier
 lists.scala	lists.scala:33:24: expected a declaration, found identifier
 logger-tracked.scala	logger-tracked.scala:6:28: expected ')', found 'val'
 logger.scala	logger.scala:9:18: expected a declaration, found identifier
+mapconserve-capturing.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 mark-free-ro.scala	mark-free-ro.scala:5:31: expected ',' or ']', found identifier
+matchtypes.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 matrix.scala	matrix.scala:10:10: expected end of statement, found 'def'
+mut-arrays.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 mut-collections.scala	mut-collections.scala:7:22: expected '=>', found identifier
 mut-iterator.scala	mut-iterator.scala:5:10: expected end of statement, found 'def'
 mutRef.scala	mutRef.scala:5:10: expected end of statement, found 'def'
@@ -157,9 +194,14 @@ nested-traits.scala	nested-traits.scala:4:18: expected '=>', found identifier
 nicolas1.scala	nicolas1.scala:9:15: expected ',' or ']', found identifier
 no-redundant-capability.scala	no-redundant-capability.scala:15:45: expected a declaration, found identifier
 nonvariant-inf.scala	nonvariant-inf.scala:6:27: expected end of statement, found identifier
+null-logger.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+opaque-cap.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+opaque-inline-problem.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 open-existential.scala	open-existential.scala:5:43: expected ',' or ']', found identifier
 override-adapt-box-pos-alt.scala	override-adapt-box-pos-alt.scala:12:16: expected ',' or ')', found identifier
 override-adapt-box-pos.scala	override-adapt-box-pos.scala:13:16: expected ',' or ')', found identifier
+overrides	option: -language:experimental.captureChecking (a check teq does not perform)
+overrides.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 pairs.scala	pairs.scala:16:21: expected a declaration, found identifier
 path-use.scala	path-use.scala:5:19: expected ',' or ')', found identifier
 paths-simple-suffix-consume.scala	paths-simple-suffix-consume.scala:7:17: expected ',' or ')', found identifier
@@ -177,8 +219,10 @@ restrict-subsumes.scala	restrict-subsumes.scala:7:20: expected a declaration, fo
 restrict-try.scala	restrict-try.scala:14:40: expected a declaration, found identifier
 rinaudo.scala	rinaudo.scala:10:34: type ?-> not found
 ro-array.scala	ro-array.scala:5:28: expected '=', found identifier
+safemode-synthetic	option: -language:experimental.captureChecking (a check teq does not perform)
 saferExceptions.scala	saferExceptions.scala:9:29: type -> not found
 scoped-caps.scala	scoped-caps.scala:6:20: expected ',' or ')', found identifier
+sealed-lowerbound.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 sealed-value-class.scala	sealed-value-class.scala:1:26: expected ',' or ')', found identifier
 secondary-constructors.scala	secondary-constructors.scala:7:28: expected '=>', found identifier
 selftype-alias.scala	selftype-alias.scala:3:42: expected end of statement, found identifier
@@ -190,16 +234,21 @@ sep-pairs.scala	sep-pairs.scala:7:10: expected end of statement, found 'def'
 setup	a_1.scala:5:10: expected ',' or ']', found identifier
 shared-capability.scala	shared-capability.scala:7:28: expected '=', found identifier
 simple-apply.scala	simple-apply.scala:3:20: expected ',' or ')', found identifier
+singleton-conformance.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 singleton-subtyping.scala	singleton-subtyping.scala:3:19: expected ',' or ')', found identifier
 skolems2.scala	skolems2.scala:5:18: expected ':', found identifier
 stack-alloc.scala	stack-alloc.scala:9:10: expected end of statement, found 'def'
 steppers.scala	steppers.scala:8:46: expected ',' or ']', found identifier
+strictlists.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 strip-implied-cs.scala	strip-implied-cs.scala:15:45: expected a declaration, found identifier
 tablediff.scala	tablediff.scala:4:38: expected ',' or ')', found identifier
 trickyTrailingUpArrow.scala	trickyTrailingUpArrow.scala:9:18: expected '=', found identifier
 try.scala	try.scala:7:48: expected ',' or ')', found identifier
 try3.scala	try3.scala:22:60: type mismatch: found -1, required 0
+tuple-ops-2.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+tuple-ops.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 unsafe-captures.scala	unsafe-captures.scala:4:83: expected ',' or ')', found identifier
+unsafe-unbox.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 unsafeAssumePure.scala	unsafeAssumePure.scala:4:13: expected ',' or ')', found identifier
 unscoped-ref-result.scala	unscoped-ref-result.scala:3:10: expected end of statement, found 'def'
 untracked-captures.scala	untracked-captures.scala:3:70: expected ',' or ')', found identifier
@@ -208,3 +257,4 @@ unzip.scala	unzip.scala:2:37: type -> not found
 use-alternatives.scala	use-alternatives.scala:4:10: expected ',' or ']', found identifier
 use.scala	use.scala:6:39: expected ',' or ')', found identifier
 vars.scala	vars.scala:8:17: expected a declaration, found identifier
+vars1.scala	option: -language:experimental.captureChecking (a check teq does not perform)

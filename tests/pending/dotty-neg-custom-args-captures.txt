@@ -33,6 +33,8 @@ capset-members3.scala	marks: 3 errors where 1 are marked: capset-members3.scala:
 capset-members4.scala	marks: 14 errors where 1 are marked: capset-members4.scala:5:13: expected '=', found identifier
 capset-members5.scala	marks: 57 errors where 6 are marked: capset-members5.scala:7:13: expected '=', found identifier
 capset-variance.scala	marks: 14 errors where 4 are marked: capset-variance.scala:4:12: expected ',' or ']', found identifier
+capt-box-env.scala	option: -language:experimental.captureChecking (a check teq does not perform)
+capt-box.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 capt-capability.scala	marks: 2 errors where 1 are marked: capt-capability.scala:7:56: type mismatch: found Capability, required SharedCapability
 capt-depfun.scala	marks: 4 errors where 1 are marked: capt-depfun.scala:11:18: expected a declaration, found identifier
 capt-depfun2.scala	marks: no error where 1 are marked
@@ -43,6 +45,7 @@ capt-wf-typer.scala	marks: 3 errors where 2 are marked: capt-wf-typer.scala:3:13
 capt-wf.scala	marks: 25 errors where 6 are marked: capt-wf.scala:4:13: expected end of statement, found identifier
 capt1.scala	marks: 8 errors where 10 are marked
 capt2.scala	marks: 8 errors where 3 are marked: capt2.scala:3:13: expected end of statement, found identifier
+capt3.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 capture-parameters.scala	marks: 15 errors where 1 are marked: capture-parameters.scala:5:11: expected ',' or ']', found identifier
 capture-poly.scala	marks: 26 errors where 3 are marked: capture-poly.scala:6:9: expected end of statement, found identifier
 capture-vars-subtyping2.scala	marks: 70 errors where 3 are marked: capture-vars-subtyping2.scala:7:17: expected ',' or ')', found identifier
@@ -155,6 +158,7 @@ i22005.scala	marks: 10 errors where 1 are marked: i22005.scala:6:18: expected ',
 i22808.scala	marks: 5 errors where 3 are marked: i22808.scala:3:21: expected ',' or ')', found identifier
 i23207.scala	marks: 8 errors where 4 are marked: i23207.scala:9:20: expected ',' or ')', found identifier
 i23223.scala	marks: 1 errors where 2 are marked
+i23234.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 i23303.scala	marks: 7 errors where 2 are marked: i23303.scala:13:17: expected ',' or ']', found identifier
 i23389-1.scala	marks: 6 errors where 2 are marked: i23389-1.scala:5:10: expected end of statement, found 'def'
 i23389-2.scala	marks: 8 errors where 6 are marked: i23389-2.scala:5:3: expected a definition, found identifier
@@ -189,6 +193,7 @@ implied-ro.scala	marks: 7 errors where 1 are marked: implied-ro.scala:9:13: expe
 impurefuns.scala	marks: error on an unmarked line impurefuns.scala:1: expected ',' or ')', found identifier
 indirect-avoid.scala	marks: 38 errors where 4 are marked: indirect-avoid.scala:6:10: expected end of statement, found 'def'
 inner-classes.scala	marks: 8 errors where 1 are marked: inner-classes.scala:8:26: expected a declaration, found identifier
+io.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 language-imports.scala	marks: no error where 2 are marked
 lazyListState.scala	marks: 5 errors where 1 are marked: lazyListState.scala:5:32: expected '=', found identifier
 lazylist-global.scala	marks: 17 errors where 7 are marked: lazylist-global.scala:4:20: expected '=>', found identifier
@@ -264,6 +269,7 @@ paths-complex-consume.scala	marks: 34 errors where 7 are marked: paths-complex-c
 paths-derivedcaps-consume.scala	marks: 26 errors where 7 are marked: paths-derivedcaps-consume.scala:11:10: expected end of statement, found 'def'
 polyCaptures.scala	marks: 16 errors where 2 are marked: polyCaptures.scala:3:14: a polymorphic function literal takes a function literal after `=>`
 primer-examples.scala	marks: 8 errors where 2 are marked: primer-examples.scala:13:21: expected a declaration, found identifier
+puretest.scala	option: -language:experimental.captureChecking (a check teq does not perform)
 reach-in-results.scala	marks: 14 errors where 1 are marked: reach-in-results.scala:3:26: expected ',' or ')', found identifier
 reaches.scala	marks: 67 errors where 13 are marked: reaches.scala:6:25: expected ',' or ')', found identifier
 reaches2.scala	marks: 7 errors where 1 are marked: reaches2.scala:6:51: expected a declaration, found identifier
