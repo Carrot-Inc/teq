@@ -23,7 +23,7 @@
 //! And a rule's output is its patches alone where it runs on several workers: one that names what writes to the
 //! process's streams or to the file system, what a worker's interpreter keeps a sequence of (a random generator's
 //! next number, an identity hash), or what makes a collection that carries a function (a map's default, a sorted
-//! collection's ordering), is heard and answered in the documents' order on one worker only (`NAMES`).
+//! collection's ordering), is heard and answered in the documents' order on one worker only (`NAMED`).
 
 use crate::ast::{DefKind, Expr, ImportSel, Stmt, TyExpr, NO_END};
 use crate::intern::FxMap;
@@ -247,7 +247,7 @@ pub(crate) fn kept(w: &mut Worker<'_>, files: &[FileId]) -> Option<Kept> {
             }
         }
         for (at, name) in named {
-            if NAMES.contains(&name) && outside.as_ref().is_none_or(|(o, k)| (order, at) < (*o, k.at)) {
+            if why_state(name).is_some() && outside.as_ref().is_none_or(|(o, k)| (order, at) < (*o, k.at)) {
                 outside = Some((order, Kept { file: f, at, name: name.to_string() }));
             }
         }
@@ -259,15 +259,30 @@ pub(crate) fn kept(w: &mut Worker<'_>, files: &[FileId]) -> Option<Kept> {
     }
 }
 
-/// The names that keep a project's rules on one worker wherever its sources write one, whatever it resolves to: what
-/// reaches the process's streams or the file system; what a worker's interpreter keeps a sequence of (a generator's
-/// numbers, the identity hashes); and what makes a collection that carries a function (a map's default, a sorted
-/// collection's ordering).
-const NAMES: [&str; 25] = [
-    "println", "print", "printf", "Console", "System", "Files", "Paths", "File", "PrintWriter", "FileWriter", "FileOutputStream", "printStackTrace",
-    "Random", "random", "ThreadLocalRandom", "SecureRandom", "UUID", "hashCode", "##", "identityHashCode",
-    "withDefault", "SortedSet", "SortedMap", "TreeSet", "TreeMap",
+/// The names that keep a project's rules on one worker, and the run one job at a time, wherever its sources write
+/// one, whatever it resolves to, each with why it is state (`NAMED`). The names are those of the Java classes the
+/// interpreter offers (std/javalib) and of the standard library.
+const NAMED: [(&str, &[&str]); 7] = [
+    // The process's own streams.
+    ("a line written to the process's streams", &["println", "print", "printf", "Console", "System", "printStackTrace"]),
+    // A file written, or a channel opened out of the process.
+    ("a written file or an opened channel", &["Files", "Paths", "File", "PrintWriter", "FileWriter", "FileOutputStream", "PrintStream", "Channels", "Socket", "ServerSocket"]),
+    // A process of the rule's own.
+    ("a started process", &["ProcessBuilder", "Process", "ProcessHandle", "Runtime"]),
+    // A thread of the rule's own, or something of the thread a rule runs on.
+    ("a thread started or changed", &["Thread", "ThreadGroup", "Executors", "ThreadPoolExecutor", "CompletableFuture", "ThreadLocal", "InheritableThreadLocal", "setName", "setDaemon", "setPriority", "setContextClassLoader", "setUncaughtExceptionHandler"]),
+    // A default of the process: the locale's and the time zone's (the system's properties and streams are `System`'s).
+    ("a set default of the process", &["setDefault"]),
+    // What a worker's interpreter keeps a sequence of: a generator's numbers, the identity hashes.
+    ("a sequence each worker keeps", &["Random", "random", "ThreadLocalRandom", "SecureRandom", "UUID", "hashCode", "##", "identityHashCode"]),
+    // What makes a collection that carries a function: a map's default, a sorted collection's ordering.
+    ("a collection that carries a function", &["withDefault", "SortedSet", "SortedMap", "TreeSet", "TreeMap"]),
 ];
+
+/// Why the name `name` is state where a rule's sources write it, if it is (`NAMED`).
+fn why_state(name: &str) -> Option<&'static str> {
+    NAMED.iter().find(|(_, names)| names.contains(&name)).map(|(why, _)| *why)
+}
 
 /// Whether the text spells `name` where the definition stands: the whole name at the span's start, between
 /// backquotes or not.

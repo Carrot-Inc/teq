@@ -185,7 +185,7 @@ CONF
         /^run / { if ($0 !~ "workers=" n "( |$)" || $0 !~ /eligible=1/) bad = "the run line: " $0 }
         /^serial/ { bad = "a serial round: " $0 }
         /^round / { r++ }
-        /^done / { split($4, w, "="); seen[r, w[2]] = 1; done[r]++ }
+        /^done / { for (f = 2; f <= NF; f++) if ($f ~ /^worker=/) { split($f, w, "="); seen[r, w[2]] = 1 }; done[r]++ }
         END {
           if (bad != "") { print bad; exit 1 }
           for (i = 1; i <= r; i++) { k = 0; for (j = 0; j < n; j++) if ((i, j) in seen) k++; if (k < 2) { print "round " i " ran on " k " worker"; exit 1 } }

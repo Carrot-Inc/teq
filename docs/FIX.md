@@ -343,8 +343,8 @@ is the first line alone.
   may, and scalafix gives a rule every document of a run on one instance, one after another. A project's rules are
   taken to keep nothing, and a guard reads their typed sources before any of their code runs: where it sees a
   definition that keeps something between documents, or a name that reaches outside the program, the project's
-  rules run on one worker for all the run's documents, jobs and rounds, as scalafix runs them, and the run says so
-  once, at the definition:
+  rules run on one worker for all the run's documents, jobs and rounds, one job at a time, as scalafix runs them,
+  and the run says so once, at the definition:
 
   ```
   fix/Tally.scala:6:15: note: seen keeps something between documents or reaches outside the program, so the project's rules run on one worker
@@ -371,7 +371,13 @@ is the first line alone.
   (an identifier, a selected member, an infix operator, an extractor), in a type or in an import, whatever it
   resolves to (a method of the sources named `print` too; a string that spells one is none): `println`, `print`,
   `printf`, `Console`, `System`, `Files`, `Paths`, `File`, `PrintWriter`, `FileWriter`, `FileOutputStream` and
-  `printStackTrace`, which reach the process's streams or the file system; `Random`, `random`, `ThreadLocalRandom`,
+  `printStackTrace`, which reach the process's streams or the file system; the names of the Java classes and
+  setters the interpreter offers for four more kinds of state, each of which also keeps the run one job at a time
+  ("Jobs side by side"): A STARTED PROCESS (`ProcessBuilder`, `Runtime`); A WRITTEN FILE OR AN OPENED CHANNEL out of
+  the process (`PrintStream`, a socket); A SET DEFAULT of the process (`setDefault`: the locale's, the time zone's;
+  the system's properties and streams are `System`'s); A THREAD STARTED OR CHANGED (`Thread`, an executor, a
+  thread-local, a thread's name and attributes); src/fix/state.rs holds each name with its kind (`NAMED`);
+  `Random`, `random`, `ThreadLocalRandom`,
   `SecureRandom`, `UUID`, `hashCode`, `##` and `identityHashCode`, a generator's numbers and an identity hash, of
   which every worker's interpreter keeps a sequence of its own; `withDefault`, `SortedSet`, `SortedMap`, `TreeSet`
   and `TreeMap`, by which an immutable collection carries a function.
@@ -380,8 +386,48 @@ is the first line alone.
   costs time and nothing else. And it sees only what the sources write: a rule that keeps state through a
   library's own cache or by reflection, that prints an identity hash by a default `toString`, or that hides a
   mutable value behind a type the guard knows, is not seen, and its output may then differ with the number of
-  workers. Do not rely on the guard to see such a rule: keep a project's rule a function of the document and its
+  workers and of jobs at once ("Jobs side by side"). Do not rely on the guard to see such a rule: keep a project's rule a function of the document and its
   configuration, or give it a member `var`, which the guard sees, to keep the run on one worker.
+
+## Jobs side by side
+
+`teq fix` over a build has one job for each configuration key of the selected projects. The jobs of a run are typed
+and their rules run side by side. Each job's round is a process of its own: the run starts it (`teq compiler fix-job
+<the run's process id>`, the run's own binary), hands it the job as the run resolved it, and reads it to its end;
+the process types the job's program, runs the rules over its documents, hands back each document's edits and lints
+and the round's record, and ends. What a run does once it does once, in its own process and in the jobs' order: the
+generators before any typing, the merge of the jobs' edits by file, the refusals, the choice of round two, the
+warnings of `ForbiddenSymbol`'s entries that name no symbol, the lints' printing and the writes. A job typed again
+in round two is a new process, given the files' new texts and the first round's results of the files that did not
+change.
+
+- The output does not depend on how many jobs ran at once. A job's lines stand together at the job's place: where
+  its typing begins, what its typing and its rules wrote to stderr, its round's line. Every lint and message is the
+  one a run of one job at a time prints, every file is rewritten alike, the exit code is the same, and so are the
+  record's `run`, `typing`, `round`, `serial`, `serve`, `doc` and `lint` lines, their times aside. A job that does
+  not type and a job's process that dies end the run at the first such job in the jobs' order: the jobs before it
+  finish, those after it are stopped, and nothing is written. Where the compiler itself ends a job's build (an
+  input directory it cannot read, a jar that does not open), the run ends at that job's turn with the compiler's
+  line and exit code, as a run of one job at a time does. A rule that fails is refused when every job's round is
+  in, as edits that conflict are.
+- As many jobs run at once as the run has workers (`--threads n` or `TEQ_THREADS`, else the cores), `--jobs n` at
+  most `n`. The workers are one budget for the run. A job is started, in the jobs' order, when the most workers its
+  typing can take are free, or when nothing runs: one where a configured rule reads the symbol index, the count
+  `--threads` names where it is given, else compile's count for the size of the job's program. A large job at the
+  head of the order therefore holds the smaller ones behind it until its workers are free. A typing takes the count
+  a run of one job at a time gives it. A job's rules ask when its typing has ended and get, of the workers free
+  then, the job's share at most (the run's workers over the jobs under way) and never fewer than the one the job
+  holds; when a typing or a job ends, what it frees goes to the jobs whose rules hold fewer than they asked, and
+  their new workers take documents of the round where it stands. Nothing is taken back.
+- A run stays one job at a time, in its own process, as `--jobs 1` asks: where it has one job; where a `file:` rule
+  keeps something between documents (its one instance is given every document of the run, "Patches, suppressions
+  and rounds"); where it writes the typings' dumps (`TEQ_FIX_SEMANTICDB`: two jobs' dumps of one source); and where
+  no two jobs' typings fit the run's workers together (`--threads 4` and typings of four workers). The record's
+  `jobs` line says how many ran at once and why.
+- A job's process ends with its round and never outlives its run: it reads the run's messages on a thread that
+  does nothing else, and the end of that pipe, which is the run's end however the run ended, ends the process at
+  once. It starts no process of its own. The run reads both of its streams from its start, each on a thread of its
+  own, so that a process never waits on a pipe the run does not read.
 
 ## The rules teq ships
 
@@ -456,14 +502,22 @@ with, whether the system refused the overlays' mappings, so that one worker type
 threads (a worker of either phase, a merge thread), so that the attempt was given up and one worker typed the round
 again, whether it forked, its outcome, `one`,
 `joined`, `retried` or `refused`, when it began and ended, why it gave way), each round's `round` (its job, its number,
-its documents and its first generation), a `dispatch` and a `done` line a document (its slot, generation and worker, and
+its documents and its first generation), a `dispatch` and a `done` line a document (its job, slot, generation and worker, and
 when its rules began and ended, in microseconds since the run began, the worker's CPU time between, and the SemanticDB
 questions its rules asked), a `serial` line where a round runs on one worker (its `reason`: `one-worker`,
 `one-document`, or `project-rules` with `state=`, the definition of the `file:` sources in which the guard sees
 something kept between documents), a `serve` line where a semantic rule is
 configured (the round's SemanticDB service: the questions it answered or refused, `typed=0` since it types nothing, when it took the first question and gave its last reply, and `busy_us`, the time it spent on the replies),
 and `round-end` (the round's wall time and the sums of its documents' times and CPU times): the fix suite reads it to tell a parallel
-run from a serial one. A `doc` line names each document of each job's round, with the job's key, the configuration
+run from a serial one. A `jobs` line follows the `run` lines of a run that has jobs: `at_once`, the jobs whose rounds
+ran at once, and `reason`, why that many (`budget`: the run's workers, one at a time too where no two typings fit
+them together; `asked`: `--jobs n`; `one`: a run of one job;
+`state`: a `file:` rule keeps something between documents; `dumps`: `TEQ_FIX_SEMANTICDB`); where they ran side by side
+("Jobs side by side") the record has each job's lines together in the jobs' order, the `worker-start` and `worker`
+lines of a job's process name the job (`job=<n>`; the run's own first workers name none), every time is on the
+run's clock, and an `overdraw` line names a typing that took more workers than its job was started with. `TEQ_FIX_JOBS_SCHEDULE=reverse` or `shuffle:<seed>`, the fix suite's, starts the jobs in another order
+(and, shuffled, has each hand its round over after a delay of its own), and `TEQ_FIX_GRANT=all` gives every job's rules the workers they ask,
+for measuring what the budget's shares cost. A `doc` line names each document of each job's round, with the job's key, the configuration
 file and the number of lints that job gave it, before the jobs' lints of one file are merged into the ones printed,
 each lint a `lint` line (its line, column and byte offsets in the round's text, severity, id, and message as a JSON
 string): a comparison with scalafix, which prints a lint once per task that gave it, counts them there. `TEQ_FIX_INPUTS=<file>` writes each job's inputs as the compiler resolves them (its roots, the links it follows, its

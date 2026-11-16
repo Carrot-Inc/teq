@@ -323,6 +323,7 @@ the others, names each one left out and exits 2.
 | `test [project] [pattern...]` | compiles a project's test configuration and runs its suites, on the JVM or under node |
 | `run <project> [alias or main class] [-- args]` | compiles and runs a JVM project's main class |
 | `stage [project]` | compiles and writes a project's Docker stage |
+| `fix [--check] [--jobs n] [project...] [file...]` | runs the rules of `.scalafix.conf` over the projects' sources and rewrites them in place, the projects' jobs side by side (`--jobs 1`: one after another; docs/CLI.md, "teq fix") |
 | `watch <project> [options]` | becomes the project's resident `teq compiler watch`, for a tool that owns the process |
 | `build <project> [options]` | one `teq compiler build` of a Scala.js project, the production build with `--release` |
 | `dev <project> [-- args]` | a Scala.js project's dev loop |

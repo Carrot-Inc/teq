@@ -23,6 +23,21 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
+mod jobs;
+
+/// `teq compiler fix-job`: a job's round for the fix run that started the process (`jobs`).
+/// The front end's own exit (`crate::exit_failed`): in a job's process it is told to the run (`jobs::leaves`); in a
+/// run's own, the record is written out.
+pub fn job_leaves(code: i32) {
+    // The run's own record keeps the jobs before this end, as the record of a run with its jobs side by side does.
+    record_flush();
+    jobs::leaves(code)
+}
+
+pub fn job_child() -> ! {
+    jobs::child()
+}
+
 /// What a run asks beside its parts: the rules, whether it only checks.
 pub struct Setup<'a> {
     /// `--rules`, which replaces each configuration's `rules`.
@@ -32,6 +47,9 @@ pub struct Setup<'a> {
     pub display: Option<(PathBuf, PathBuf)>,
     /// The verb's lines of the run (`teq fix`); `teq compiler fix` tells none.
     pub told: Option<&'a Told>,
+    /// `--jobs n`: the jobs whose rounds run at once at most, each a process of its own (`jobs`); the run's workers
+    /// where none is asked.
+    pub jobs: Option<usize>,
 }
 
 /// The lines `teq fix` tells of its run (docs/CLI.md, "teq fix"), on the verb's reporter: each job where its typing
@@ -375,8 +393,20 @@ impl<'scope, 'env> Pool<'scope, 'env> {
             .map_err(|e| format!("the system gave the rule worker {} no thread ({})", w, e))?;
         self.to.push(tx);
         self.ready.push(false);
-        record(format_args!("worker-start w={} at_us={}", w, now_us()));
+        record(format_args!("worker-start {}w={} at_us={}", jobs::worker_tag(), w, now_us()));
         Ok(())
+    }
+
+    /// Workers added until there are `want`; where the system refuses one, the rounds after this one keep to the
+    /// workers it gave.
+    fn grow(&mut self, want: usize) {
+        while self.to.len() < want {
+            if let Err(e) = self.add_worker() {
+                record(format_args!("worker-refused w={} why={}", self.to.len(), e));
+                self.limit = self.to.len();
+                break;
+            }
+        }
     }
 }
 
@@ -682,20 +712,34 @@ static EPOCH: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new
 
 /// Microseconds since the run's epoch.
 fn now_us() -> u64 {
-    EPOCH.get_or_init(std::time::Instant::now).elapsed().as_micros() as u64
+    // A job's child counts on from the run's clock where it started.
+    jobs::clock() + EPOCH.get_or_init(std::time::Instant::now).elapsed().as_micros() as u64
 }
 
-thread_local! {
-    /// The execution record, `TEQ_FIX_RECORD=<file>` (docs/FIX.md, "Debugging a rule"): what the run dispatched to
-    /// which worker and when each document's rules began and ended, written by the coordinator alone.
-    static RECORD: std::cell::RefCell<Option<std::io::BufWriter<std::fs::File>>> = const { std::cell::RefCell::new(None) };
+/// The execution record, `TEQ_FIX_RECORD=<file>` (docs/FIX.md, "Debugging a rule"): what the run dispatched to which
+/// worker and when each document's rules began and ended, written by the coordinator alone; the front end, which may
+/// end the process from a typing's thread, writes out what is held of it first (`job_leaves`).
+static RECORD: std::sync::Mutex<Option<std::io::BufWriter<std::fs::File>>> = std::sync::Mutex::new(None);
+
+/// The record's writer, whatever a thread that panicked left of its lock.
+fn record_writer() -> std::sync::MutexGuard<'static, Option<std::io::BufWriter<std::fs::File>>> {
+    RECORD.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// What the record holds unwritten is written to its file: a run that ends before `record_close` keeps the lines of
+/// the jobs before its end.
+fn record_flush() {
+    use std::io::Write;
+    if let Some(w) = record_writer().as_mut() {
+        let _ = w.flush();
+    }
 }
 
 fn record_open() {
     now_us();
     if let Some(path) = std::env::var_os("TEQ_FIX_RECORD") {
         match std::fs::File::create(&path) {
-            Ok(f) => RECORD.with(|r| *r.borrow_mut() = Some(std::io::BufWriter::new(f))),
+            Ok(f) => *record_writer() = Some(std::io::BufWriter::new(f)),
             Err(e) => eprintln!("teq fix: cannot write the record {}: {}", std::path::Path::new(&path).display(), e),
         }
     }
@@ -703,20 +747,20 @@ fn record_open() {
 
 fn record(line: std::fmt::Arguments<'_>) {
     use std::io::Write;
-    RECORD.with(|r| {
-        if let Some(w) = r.borrow_mut().as_mut() {
-            let _ = writeln!(w, "{}", line);
-        }
-    });
+    // A job's child hands its lines to the run, which writes them at the job's place.
+    if jobs::record(&line) {
+        return;
+    }
+    if let Some(w) = record_writer().as_mut() {
+        let _ = writeln!(w, "{}", line);
+    }
 }
 
 fn record_close() {
     use std::io::Write;
-    RECORD.with(|r| {
-        if let Some(mut w) = r.borrow_mut().take() {
-            let _ = w.flush();
-        }
-    });
+    if let Some(mut w) = record_writer().take() {
+        let _ = w.flush();
+    }
 }
 
 fn timed(k: usize, since: std::time::Instant) {
@@ -764,7 +808,9 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
         // may (a count of its visits, a token it kept), and scalafix gives a rule every document on one instance, one
         // after another. A project's rules are taken to keep nothing unless the guard sees otherwise in their sources
         // (`state::kept`): then the run keeps the lead alone, as scalafix runs it, and says so once, at the definition.
-        let seen = infos.iter().find_map(|i| i.state.as_ref());
+        // `TEQ_FIX_PLANT=unguarded`, the fix suite's: what the guard saw is left aside, so that a rule it keeps on one
+        // job at a time reaches the jobs' processes (the row of a rule's own process that outlives its job).
+        let seen = infos.iter().find_map(|i| i.state.as_ref()).filter(|_| plant().as_deref() != Some("unguarded"));
         if let Some(k) = seen {
             say(told, &format!("{}:{}:{}: note: {} keeps something between documents or reaches outside the program, so the project's rules run on one worker\n", shown_path(&setup.display, &k.path), k.line, k.col, k.name));
             if let Some(t) = told {
@@ -805,23 +851,39 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
     }
     let mut base = 0u32;
     let mut gen = 0u32;
+    // How many jobs' rounds run at once, each then a process of its own (`jobs`), and why that many: the record's line.
+    let (at_once, budget, reason, bounds) = jobs_at_once(setup, driven, jobs);
+    if jobs > 0 {
+        record(format_args!("jobs at_once={} reason={}", at_once, reason));
+    }
+    let projects: Vec<&str> = driven.iter().flat_map(|d| d.part.jobs.iter().map(|j| named(&j.key).0)).collect();
+    // Side by side each job's atomic groups are numbered by its own processes: where round two's go on from.
+    let mut bases: Vec<u32> = vec![0; jobs];
     // Round one, every part's jobs over the files as read; the rules' results kept for round two.
+    let children = (at_once > 1).then(|| start_children(setup, driven, 1, &HashMap::new(), &mut gen, &bases, (at_once, budget), &|k| Some(bounds[k])));
     let mut first: Vec<(usize, usize, Vec<Outcome>)> = Vec::new();
     for (p, d) in driven.iter_mut().enumerate() {
         for (j, job) in d.part.jobs.iter().enumerate() {
             let k = d.first_job + j;
-            let earlier = Earlier { job: k, results: &HashMap::new(), semantic: &d.semantic_rules };
             let began = std::time::Instant::now();
-            if let Some(t) = told {
-                t.progress.begin(&typing_line(&job.key, Some((k + 1, jobs))));
-            }
-            let mut twice = false;
-            match round((k, 1), job, &HashMap::new(), d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, Some(&mut d.kept), told, &mut twice) {
+            let (mut twice, mut took) = (false, None);
+            let round = match &children {
+                None => {
+                    let earlier = Earlier { job: k, results: &HashMap::new(), semantic: &d.semantic_rules };
+                    if let Some(t) = told {
+                        t.progress.begin(&typing_line(&job.key, Some((k + 1, jobs))));
+                    }
+                    round((k, 1), job, &HashMap::new(), d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, Some(&mut d.kept), told, &mut twice)
+                }
+                Some((_, Some((at, line)))) if *at == k => unread(job, Some((k + 1, jobs)), told, line),
+                Some((c, _)) => take_round(c, k, job, Some((k + 1, jobs)), &projects, told, &mut d.kept, &mut bases[k], &mut twice, &mut took),
+            };
+            match round {
                 Ok(mut outcomes) => {
                     record_documents((k, 1), job, &d.part.conf.file, &outcomes, &d.lints);
                     d.lints.apply(&mut outcomes);
                     if let Some(t) = told {
-                        t.progress.line(&job_line(&job.key, job_counts(&outcomes), false, began.elapsed(), twice));
+                        t.progress.line(&job_line(&job.key, job_counts(&outcomes), false, took.unwrap_or_else(|| began.elapsed()), twice));
                     }
                     first.push((p, j, outcomes));
                 }
@@ -829,6 +891,7 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
             }
         }
     }
+    drop(children);
     let mut by_path = match merge(first.iter().flat_map(|(.., o)| o.iter())) {
         Ok(m) => m,
         Err(e) => {
@@ -853,21 +916,33 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
         let mut second: Vec<Outcome> = Vec::new();
         // The files whose round-two edit is another rule's than NoUnusedImports, with that rule.
         let mut own: HashMap<String, String> = HashMap::new();
+        // The jobs the round types again: those whose program reads a changed file. One job at a time each is asked
+        // at its turn; side by side all are asked ahead, and one whose inputs do not read is taken as typed again (the
+        // run ends at its turn).
+        let again: Vec<bool> = if at_once > 1 { driven.iter().flat_map(|d| d.part.jobs.iter()).map(|job| try_program_paths(job).map_or(true, |paths| paths.iter().any(|x| changed.contains_key(x)))).collect() } else { Vec::new() };
+        let children = (at_once > 1).then(|| start_children(setup, driven, 2, &changed, &mut gen, &bases, (at_once, budget), &|k| again[k].then_some(0)));
         for (p, j, outcomes) in first {
             let d = &mut driven[p];
             let job = &d.part.jobs[j];
-            if !program_paths(job).iter().any(|x| changed.contains_key(x)) {
+            let k = d.first_job + j;
+            if !again.get(k).copied().unwrap_or_else(|| program_paths(job).iter().any(|x| changed.contains_key(x))) {
                 second.extend(outcomes);
                 continue;
             }
-            let k = d.first_job + j;
-            let earlier = Earlier { job: k, results: &d.kept, semantic: &d.semantic_rules };
             let began = std::time::Instant::now();
-            if let Some(t) = told {
-                t.progress.begin(&typing_line(&job.key, None));
-            }
-            let mut twice = false;
-            match round((k, 2), job, &changed, d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, None, told, &mut twice) {
+            let (mut twice, mut took) = (false, None);
+            let round = match &children {
+                None => {
+                    let earlier = Earlier { job: k, results: &d.kept, semantic: &d.semantic_rules };
+                    if let Some(t) = told {
+                        t.progress.begin(&typing_line(&job.key, None));
+                    }
+                    round((k, 2), job, &changed, d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, None, told, &mut twice)
+                }
+                Some((_, Some((at, line)))) if *at == k => unread(job, None, told, line),
+                Some((c, _)) => take_round(c, k, job, None, &projects, told, &mut HashMap::new(), &mut bases[k], &mut twice, &mut took),
+            };
+            match round {
                 Ok(mut o) => {
                     record_documents((k, 2), job, &d.part.conf.file, &o, &d.lints);
                     for x in &o {
@@ -878,13 +953,14 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
                     }
                     d.lints.apply(&mut o);
                     if let Some(t) = told {
-                        t.progress.line(&job_line(&job.key, job_counts(&o), true, began.elapsed(), twice));
+                        t.progress.line(&job_line(&job.key, job_counts(&o), true, took.unwrap_or_else(|| began.elapsed()), twice));
                     }
                     second.extend(o);
                 }
                 Err(e) => return stop(told, &job.key, e, Some(format!("teq fix: the program does not type after the rules' edits ({}):\n", rules_of(&by_path, &changed)))),
             }
         }
+        drop(children);
         let second = match merge(second.iter()) {
             Ok(m) => m,
             Err(e) => {
@@ -970,11 +1046,216 @@ fn drive_rounds(setup: &Setup<'_>, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
     }
 }
 
+/// The jobs whose rounds run at once and the run's workers they share, with the record's word for why that many: one
+/// job at a time (the loop in this process) for a run of one job, for `--jobs 1`, where a project rule keeps state
+/// between documents (its instance is one across the jobs) and where the typings write their dumps
+/// (`TEQ_FIX_SEMANTICDB`: two jobs' dumps of one source); else as many as the budget lets (`jobs::jobs_at_once`),
+/// with the most workers each job's typing of round one takes (`typing_bound`).
+fn jobs_at_once(setup: &Setup<'_>, driven: &[Driven<'_, '_, '_>], jobs: usize) -> (usize, usize, &'static str, Vec<usize>) {
+    let budget = jobs::budget(driven.iter().flat_map(|d| d.part.jobs.iter()));
+    if jobs <= 1 || setup.told.is_none() {
+        return (1, budget, "one", Vec::new());
+    }
+    if driven.iter().any(|d| !d.pool.eligible) {
+        return (1, budget, "state", Vec::new());
+    }
+    if semanticdb_dump().is_some() {
+        return (1, budget, "dumps", Vec::new());
+    }
+    if setup.jobs == Some(1) {
+        return (1, budget, "asked", Vec::new());
+    }
+    let none = HashMap::new();
+    let bounds: Vec<usize> = driven.iter().flat_map(|d| d.part.jobs.iter().map(|job| typing_bound(job, asks_service(&d.infos), &none))).collect();
+    // What the budget gives, and `--jobs n` where it asks no more than that.
+    let most = jobs::jobs_at_once(budget, None, &bounds).min(jobs);
+    match setup.jobs {
+        Some(n) if n <= most => (n.max(1), budget, "asked", bounds),
+        _ => (most, budget, "budget", bounds),
+    }
+}
+
+/// The most workers the job's typing takes (`attempt`): one where its round's rules read the symbol index or its
+/// options keep the retained forms; the count its options name; else compile's automatic count for the bytes of its
+/// program, `changed` over the disk. (The program's largest unit, known once it is parsed, only lowers that count.)
+fn typing_bound(job: &Job, asks: bool, changed: &HashMap<String, String>) -> usize {
+    let mut args = vec!["compiler".to_string(), "check".to_string()];
+    args.extend(job.args.iter().cloned());
+    let opts = crate::parse_options_from(args.into_iter());
+    if opts.semantic_types || asks {
+        return 1;
+    }
+    // A count the options or a switch name is the bound whatever the program's size.
+    if typing_threads(&opts, 0, 0) == typing_threads(&opts, usize::MAX, 0) {
+        return typing_threads(&opts, 0, 0).max(1);
+    }
+    // Else the bytes are the program's as an attempt reads it (a script's wrapper among them); a program that does
+    // not read is taken at the largest count.
+    let Ok((paths, roots, _)) = crate::try_collect_program_paths_with_roots(&opts) else { return typing_threads(&opts, usize::MAX, 0).max(1) };
+    let bytes = crate::read_program_with(&opts, paths, &roots, |p, disk| changed.get(p).cloned().unwrap_or(disk)).map_or(usize::MAX, |program| program.iter().map(|f| f.text.len()).sum());
+    typing_threads(&opts, bytes, 0).max(1)
+}
+
+/// `program_paths`, an input the job's program cannot read given back as the line a typing of the job ends the run
+/// with (`crate::collect_program_paths_with_roots`).
+fn try_program_paths(job: &Job) -> Result<Vec<String>, String> {
+    let mut args = vec!["compiler".to_string(), "check".to_string()];
+    args.extend(job.args.iter().cloned());
+    crate::try_collect_program_paths_with_roots(&crate::parse_options_from(args.into_iter())).map(|collected| collected.0)
+}
+
+/// The turn of a job whose inputs the run could not read when it counted the round's documents: where its typing
+/// begins, and the end a run of one job at a time has there, in this process (its typing reads the inputs and ends
+/// the process with the line). Inputs that read by now stop the run with the line they gave.
+fn unread(job: &Job, place: Option<(usize, usize)>, told: Option<&Told>, line: &str) -> Result<Vec<Outcome>, Stop> {
+    if let Some(t) = told {
+        t.progress.begin(&typing_line(&job.key, place));
+    }
+    program_paths(job);
+    Err(format!("{}\n", line).into())
+}
+
+/// A round's children started (`jobs::Children`): one for each job `typed` names (with the most workers its typing
+/// takes where the caller has it, else 0), with the round's first generation, which is counted before any types: a
+/// round's documents are the files of the job's program that it edits.
+#[allow(clippy::too_many_arguments)]
+fn start_children(setup: &Setup<'_>, driven: &[Driven<'_, '_, '_>], r: u32, changed: &HashMap<String, String>, gen: &mut u32, bases: &[u32], (at_once, budget): (usize, usize), typed: &dyn Fn(usize) -> Option<usize>) -> (jobs::Children, Option<(usize, String)>) {
+    let clock_us = now_us();
+    let recording = record_writer().is_some();
+    let seed = std::env::var("TEQ_FIX_JOBS_SCHEDULE").ok().and_then(|v| v.strip_prefix("shuffle:").and_then(|s| s.parse::<u64>().ok()));
+    let mut specs = Vec::new();
+    // The first job whose inputs do not read, with the line: the run ends at its turn, and no job after it is started.
+    let mut unread: Option<(usize, String)> = None;
+    for d in driven {
+        let infos = jobs::infos(&d.infos).to_text();
+        let asks = asks_service(&d.infos);
+        for (j, job) in d.part.jobs.iter().enumerate() {
+            let k = d.first_job + j;
+            let Some(known) = typed(k).filter(|_| unread.is_none()) else {
+                specs.push(None);
+                continue;
+            };
+            let paths = match try_program_paths(job) {
+                Ok(paths) => paths,
+                Err(line) => {
+                    unread = Some((k, line));
+                    specs.push(None);
+                    continue;
+                }
+            };
+            let bound = if known > 0 { known } else { typing_bound(job, asks, changed) };
+            let docs = paths.iter().filter(|p| job.edits(p)).count();
+            let kept = if r == 2 { d.kept.iter().filter(|((job, file), _)| *job == k && !changed.contains_key(file)).map(|((_, file), results)| (file.clone(), results.clone())).collect() } else { Vec::new() };
+            let spec = jobs::Spec {
+                job: k,
+                round: r,
+                program: job.clone(),
+                conf: d.part.conf.clone(),
+                config_dir: d.part.config_dir.clone(),
+                rules: setup.rules.clone(),
+                display: setup.display.clone(),
+                first_gen: *gen,
+                base: bases[k],
+                clock_us,
+                // The texts of the files of its program that round one edits.
+                changed: paths.iter().filter_map(|p| changed.get_key_value(p)).map(|(p, text)| (p.clone(), text.clone())).collect(),
+                kept,
+                limit: d.pool.limit,
+                delay_ms: seed.map_or(0, |s| mix(s ^ ((k as u64 + 1) << 8)) % 300),
+                record: recording,
+            };
+            *gen += docs as u32;
+            specs.push(Some(jobs::Start { spec, name: named(&job.key).0.to_string(), infos: infos.clone(), docs, bound }));
+        }
+    }
+    let never = unread.as_ref().map(|(k, _)| *k);
+    (jobs::Children::start(specs, at_once, budget, never), unread)
+}
+
+/// The round of job `k` taken from its child, as `round` gives it in a run of one job at a time: the job's lines
+/// together at its place (where stderr is no terminal its begin line, then what its process wrote by itself; its
+/// result line is the caller's), its record's lines, its round-one results kept, the entries its rules asked about
+/// joined to the run's, in the jobs' order. While it waits, a terminal shows the run's status.
+#[allow(clippy::too_many_arguments)]
+fn take_round(children: &jobs::Children, k: usize, job: &Job, place: Option<(usize, usize)>, projects: &[&str], told: Option<&Told>, kept: &mut HashMap<(usize, String), Results>, base: &mut u32, twice: &mut bool, took: &mut Option<std::time::Duration>) -> Result<Vec<Outcome>, Stop> {
+    let terminal = told.filter(|t| t.progress.is_terminal());
+    if let Some(t) = told.filter(|t| !t.progress.is_terminal()) {
+        t.progress.begin(&typing_line(&job.key, place));
+    }
+    let taken = children.take(k, &mut || {
+        if let Some(t) = terminal {
+            t.progress.status_since(&side_status(&children.phases(), projects, place.is_none()), t.began);
+        }
+    });
+    for line in &taken.records {
+        record(format_args!("{}", line));
+    }
+    // What the job's process wrote by itself goes where it wrote it: to stdout what it wrote there beside its
+    // messages, the rest to stderr.
+    if !taken.out.is_empty() {
+        use std::io::Write;
+        if let Some(t) = told {
+            t.progress.clear();
+        }
+        let mut stdout = std::io::stdout().lock();
+        let _ = stdout.write_all(&taken.out).and_then(|()| stdout.flush());
+    }
+    if !taken.raw.is_empty() {
+        say(told, &taken.raw);
+    }
+    // The job's process ended as the front end ends a build (an input it cannot read, a jar that does not open): a
+    // run of one job at a time ends there, with that code and no line more.
+    if let Some(code) = taken.leave {
+        record_flush();
+        crate::interp::code_stats_report();
+        std::process::exit(code);
+    }
+    let out = taken.result?;
+    (*twice, *took, *base) = (out.twice, Some(out.took), out.base);
+    for (file, results) in out.kept {
+        kept.insert((k, file), results);
+    }
+    let mut entries = ENTRIES.lock().unwrap_or_else(|e| e.into_inner());
+    for (place, written, resolved, why) in out.entries {
+        let known = entries.entry((place, written)).or_insert((false, String::new()));
+        known.0 |= resolved;
+        if known.1.is_empty() {
+            known.1 = why;
+        }
+    }
+    drop(entries);
+    for (i, &t) in out.times.iter().enumerate() {
+        add_time(i, t);
+    }
+    Ok(out.outcomes)
+}
+
+/// The run's status from where its jobs' rounds are (`jobs::status_text`): the round's projects done (a project typed
+/// in two jobs when both are), those typing and those whose rules run, in the jobs' order, and a job that failed
+/// behind one that still runs.
+fn side_status(phases: &[jobs::Phase], projects: &[&str], again: bool) -> String {
+    use jobs::Phase;
+    let mut names: Vec<&str> = Vec::new();
+    for &p in projects {
+        if !names.contains(&p) {
+            names.push(p);
+        }
+    }
+    let of = names.len();
+    let all = |p: &str, what: &dyn Fn(Phase) -> bool| projects.iter().zip(phases).filter(|(q, _)| **q == p).all(|(_, &ph)| what(ph));
+    let some = |p: &str, phase: Phase| projects.iter().zip(phases).any(|(q, &ph)| *q == p && ph == phase);
+    let done = names.iter().filter(|p| all(p, &|ph| ph == Phase::Done)).count();
+    let typing: Vec<&str> = names.iter().copied().filter(|p| some(p, Phase::Typing)).collect();
+    let rules: Vec<&str> = names.iter().copied().filter(|p| some(p, Phase::Rules)).collect();
+    let failed = names.iter().copied().find(|p| some(p, Phase::Failed)).filter(|_| !typing.is_empty() || !rules.is_empty());
+    jobs::status_text(done, of, &typing, &rules, again, failed)
+}
+
 /// The record's `doc` line of each document of a job's round, with the job's key and the configuration file, and a
 /// `lint` line of each lint that job gave it, before the jobs' lints of one file are merged (`merge`), so that a
 /// comparison with scalafix, which prints a lint once per task that gave it, can count them.
 fn record_documents((k, r): (usize, u32), job: &Job, conf: &str, outcomes: &[Outcome], lint_config: &LintConfig) {
-    if !RECORD.with(|w| w.borrow().is_some()) {
+    if record_writer().is_none() {
         return;
     }
     for o in outcomes {
@@ -1117,7 +1398,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
                 if theirs != infos {
                     return Err(format!("teq fix: the rule worker {} configured the rules otherwise than the first\n", w).into());
                 }
-                record(format_args!("worker w={} ready_us={} boot_us={}", w, now_us(), boot));
+                record(format_args!("worker {}w={} ready_us={} boot_us={}", jobs::worker_tag(), w, now_us(), boot));
                 pool.ready[w] = true;
             }
             Ok(FromRules::Ready(_, Err(e), _)) => return Err(format!("{}\n", e.trim_end()).into()),
@@ -1207,6 +1488,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
     if let Some(t) = told {
         t.progress.advance(&rules_line(&job.key, 0, n));
     }
+    jobs::tell_typed(n);
     *gen = first_gen + n as u32;
     record(format_args!("round job={} round={} docs={} first_gen={}", k, r, n, first_gen));
     // The workers this round takes, started now that its typing has ended: no worker's interpreter runs beside a typing
@@ -1220,14 +1502,11 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
             None => record(format_args!("serial reason={}", reason)),
         }
     }
-    while pool.to.len() < want {
-        if let Err(e) = pool.add_worker() {
-            // The rounds after this one keep to the workers the system gave.
-            record(format_args!("worker-refused w={} why={}", pool.to.len(), e));
-            pool.limit = pool.to.len();
-            break;
-        }
-    }
+    // A job's child takes of them what the run grants its rules (`jobs::granted`): the record's `serial` line above is
+    // the round's own, whatever it is granted.
+    let asked = want;
+    let want = if want > 1 { jobs::granted("rules", want, std::env::var_os("TEQ_FIX_RULE_THREADS").is_some()) } else { want };
+    pool.grow(want);
     let schedule = Schedule::of_env();
     let plant = plant();
     let (serial_plant, completion_plant) = (plant.as_deref() == Some("serial"), plant.as_deref() == Some("completion"));
@@ -1251,12 +1530,29 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
             let d = docs[slot].take().expect("a document handed out once");
             let semantic_only = !overrides.contains_key(&d.file) && earlier.of(&d.file).is_some();
             let asker = Asker { job: k as u32, round: r, slot: slot as u32, gen: d.gen, worker: w as u32 };
-            record(format_args!("dispatch slot={} gen={} worker={} at_us={}", slot, d.gen, w, now_us()));
+            record(format_args!("dispatch job={} slot={} gen={} worker={} at_us={}", k, slot, d.gen, w, now_us()));
             let first = !std::mem::replace(&mut handed[w], true);
             pool.to[w].send(ToRules::Doc(Box::new(d), Handout { semantic_only, asker, delay: schedule.delay(slot), first, link: link.clone() })).map_err(|_| ended())?;
             in_flight += 1;
         }
-        match recv_told(&pool.from, told) {
+        // A job's child is given more workers as other jobs' typings and rounds end (`jobs::raised`): they join the
+        // round where it stands, also while every worker it has is at a document.
+        let message = loop {
+            if let Some(more) = jobs::raised() {
+                // No more of them than there are documents not yet handed out.
+                pool.grow(more.min(asked).min(pool.to.len() + pending.len()));
+                handed.resize(pool.to.len(), false);
+            }
+            if !jobs::is_child() {
+                break recv_told(&pool.from, told);
+            }
+            match pool.from.recv_timeout(std::time::Duration::from_millis(100)) {
+                Ok(m) => break Ok(m),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => break Err(mpsc::RecvError),
+            }
+        };
+        match message {
             Ok(FromRules::Done(a)) => {
                 in_flight -= 1;
                 let (w, slot) = (a.asker.worker as usize, a.asker.slot as usize);
@@ -1268,7 +1564,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
                 if a.barrier_timeout {
                     record(format_args!("barrier-timeout worker={}", w));
                 }
-                record(format_args!("done slot={} gen={} worker={} start_us={} finish_us={} cpu_us={} queries={}", slot, a.asker.gen, w, a.start, a.finish, a.cpu, a.queries));
+                record(format_args!("done job={} slot={} gen={} worker={} start_us={} finish_us={} cpu_us={} queries={}", k, slot, a.asker.gen, w, a.start, a.finish, a.cpu, a.queries));
                 let took = a.finish.saturating_sub(a.start);
                 (service, cpu) = (service + took, cpu + a.cpu);
                 add_time(5, took as f64 / 1e6);
@@ -1283,7 +1579,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
                 if theirs != infos {
                     return Err(format!("teq fix: the rule worker {} configured the rules otherwise than the first\n", w).into());
                 }
-                record(format_args!("worker w={} ready_us={} boot_us={}", w, now_us(), boot));
+                record(format_args!("worker {}w={} ready_us={} boot_us={}", jobs::worker_tag(), w, now_us(), boot));
                 pool.ready[w] = true;
                 if !serial_plant {
                     idle.push(w);
@@ -1301,6 +1597,9 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
         }
         if let (Some(t), true) = (told, consumed > before) {
             t.progress.advance(&rules_line(&job.key, consumed, n));
+        }
+        if consumed > before {
+            jobs::tell_rules(consumed, n);
         }
     }
     // The round's last document done, its service ends with the round's link, and the round joins its typing thread.
@@ -1757,6 +2056,9 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks:
     // service (`ASK_NOTHING`): lifted, with that list, when the index and the symbols of a typing of several workers are
     // one worker's, so that a round's answers are the same at any count.
     let asked = forced.unwrap_or_else(|| if opts.semantic_types || asks { 1 } else { typing_threads(&opts, program_bytes, largest_unit) });
+    // A job's child types with the count a run of one job at a time types it with (the job's line says where a
+    // parallel attempt gave way, the record's `typing` line the count): it tells its run, which counts them.
+    jobs::granted("front", asked, true);
     let mut typer = crate::typer::Typer::new(&asts, &sources, &mut interner);
     typer.threads = asked;
     crate::install_std(&mut typer, std, &selected, &blocks_of, scalajs_unlocked);
@@ -1789,7 +2091,7 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, asks:
     let effective = if mapping_refused { 1 } else { asked.clamp(1, crate::typer::MAX_WORKERS) };
     let forked = !mapping_refused && (effective > 1 || std::env::var_os("TEQ_FORK").is_some_and(|v| v == "1"));
     let epoch = *EPOCH.get_or_init(std::time::Instant::now);
-    let at = |t: std::time::Instant| t.saturating_duration_since(epoch).as_micros() as u64;
+    let at = |t: std::time::Instant| jobs::clock() + t.saturating_duration_since(epoch).as_micros() as u64;
     let items = if witness { crate::measure::take_items().into_iter().map(|i| (i.worker, i.index, at(i.start), at(i.end), sources.as_slice()[i.file as usize].path.clone())).collect() } else { Vec::new() };
     let mut a = Attempt { number: attempts.len() as u32 + 1, asked, effective, mapping_refused, worker_refused, forked, outcome: if forked { "joined" } else { "one" }, why: String::new(), start_us, end_us: 0, parts, phases: crate::measure::phase_parts(), items, held: 0, serves: false };
     // Whether the attempt went to the round with its documents (`serving`): it is then in the record already.
@@ -2150,7 +2452,7 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
     static STARTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let temp = std::env::temp_dir().join(format!("teq-fix-{}-{}", std::process::id(), STARTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
     let entry = temp.join("entry.scala");
-    if let Err(e) = std::fs::create_dir_all(&temp).and_then(|_| std::fs::write(&entry, ENTRY)) {
+    if let Err(e) = jobs::held(&temp, || std::fs::create_dir_all(&temp).and_then(|_| std::fs::write(&entry, ENTRY))) {
         let _ = tx.send(FromRules::Ready(worker, Err(format!("teq fix: cannot write {}: {}", entry.display(), e)), since(booting)));
         return;
     }
@@ -2166,7 +2468,7 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
             return;
         }
     };
-    let _ = std::fs::remove_dir_all(&temp);
+    jobs::released(&temp);
     let mut interner = crate::intern::Interner::new();
     let mut diags = crate::source::Diagnostics::default();
     let cp = crate::open_jars(&opts);

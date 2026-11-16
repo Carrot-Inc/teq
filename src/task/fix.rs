@@ -1,4 +1,4 @@
-//! `teq fix [--check] [--rules A,B] [--config <file>] [--threads n] [<module>...] [<file>...]` (docs/CLI.md, "teq fix"): the
+//! `teq fix [--check] [--rules A,B] [--config <file>] [--threads n] [--jobs n] [<module>...] [<file>...]` (docs/CLI.md, "teq fix"): the
 //! rules of `.scalafix.conf` over the lock's modules as `teq compile` reads them. Each project is typed under the keys
 //! `teq compile` types it under (`Export::widest`, and a configuration of its own where that key's closure holds
 //! none of its roots), each key's closure as one program with the resident's typing arguments
@@ -14,7 +14,7 @@ use crate::fix::engine::{self, Job, Part, Setup, Told};
 use std::path::{Path, PathBuf};
 
 pub fn run(export: &Export, args: &[String], began: std::time::Instant) -> i32 {
-    let flags = match crate::fix::cli::flags(args) {
+    let flags = match crate::fix::cli::flags(args, true) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("teq fix: {}", e);
@@ -22,7 +22,7 @@ pub fn run(export: &Export, args: &[String], began: std::time::Instant) -> i32 {
         }
     };
     let threads = flags.threads_args();
-    let crate::fix::cli::Flags { check, rules, config, rest, .. } = flags;
+    let crate::fix::cli::Flags { check, rules, config, jobs: at_once, rest, .. } = flags;
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     // An argument that names a file, or has a path's shape, is a file; any other a module.
     let (mut files, mut modules): (Vec<PathBuf>, Vec<String>) = (Vec::new(), Vec::new());
@@ -141,14 +141,14 @@ pub fn run(export: &Export, args: &[String], began: std::time::Instant) -> i32 {
     // whole lines on a terminal too: a status line would share its row with the switch's.
     let traced = ["TEQ_FIX_TRACE", "TEQ_FIX_TREE", "TEQ_SERIAL_TRACE"].iter().any(|k| std::env::var_os(k).is_some());
     let told = Told::new(if traced { Progress::stderr_lines() } else { Progress::stderr() }, began, check);
-    let code = work(export, &jobs, confs, &files, &cwd, &threads, rules, check, &told);
+    let code = work(export, &jobs, confs, &files, &cwd, &threads, rules, (check, at_once), &told);
     told.stopped_at(code);
     code
 }
 
 /// The planned jobs run: each one's generators and typing arguments, then the one run of all parts (`engine::run`).
 #[allow(clippy::too_many_arguments)]
-fn work(export: &Export, jobs: &[(Key, Vec<String>, Vec<PathBuf>, Option<String>)], confs: Vec<(Option<String>, crate::fix::config::Conf, PathBuf)>, files: &[PathBuf], cwd: &Path, threads: &[String], rules: Option<Vec<String>>, check: bool, told: &Told) -> i32 {
+fn work(export: &Export, jobs: &[(Key, Vec<String>, Vec<PathBuf>, Option<String>)], confs: Vec<(Option<String>, crate::fix::config::Conf, PathBuf)>, files: &[PathBuf], cwd: &Path, threads: &[String], rules: Option<Vec<String>>, (check, at_once): (bool, Option<usize>), told: &Told) -> i32 {
     let progress = &told.progress;
     let env = std::env::vars().filter(|(k, _)| k == "SOURCE_VERSION").collect();
     let mut engine_jobs = Vec::new();
@@ -203,7 +203,7 @@ fn work(export: &Export, jobs: &[(Key, Vec<String>, Vec<PathBuf>, Option<String>
     let display = (export.root != cwd).then(|| (export.root.clone(), cwd.to_path_buf()));
     // One run, each configuration file's jobs a part under its rules.
     let parts = confs.into_iter().map(|(file, conf, config_dir)| Part { conf, config_dir, jobs: engine_jobs.iter().filter(|(f, _)| *f == file).map(|(_, j)| j.clone()).collect() }).collect();
-    engine::run(Setup { rules, check, display, told: Some(told) }, parts)
+    engine::run(Setup { rules, check, display, told: Some(told), jobs: at_once }, parts)
 }
 
 /// The source roots of a project's configuration that are its own: its `sources` less what its generators write.

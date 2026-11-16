@@ -134,12 +134,13 @@ const VERBS: &str = "  compile [project...]       type the projects' closures an
                              block names one; without a word the declared one, else the single
                              main class among the products, as sbt's run) on a JVM of its own
                              with the runtime classpath
-  fix [--check] [--rules A,B] [--config file] [project...] [file...]
+  fix [--check] [--rules A,B] [--config file] [--jobs n] [project...] [file...]
                              the lint and rewrite rules of .scalafix.conf (docs/FIX.md) over
                              the projects' sources as compile types them, the files rewritten
                              in place and the lints printed; --check rewrites nothing and
                              exits 1 where a file would change or a lint is printed; where
-                             the run is and how it ended, with its time, on stderr
+                             the run is and how it ended, with its time, on stderr; the
+                             projects side by side, --jobs n at most n at once
   stage [project]            compile, then write the project's Docker stage (every project's
                              with a stage block without one) as sbt-native-packager's does
   watch <project> [options]  the project's resident on stdin and stdout, options added to its

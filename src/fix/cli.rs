@@ -12,6 +12,8 @@ pub struct Flags {
     /// `--threads n`, compile's option, which both verbs hand to every job they type: its typing's workers, and the
     /// rules' (docs/FIX.md, "Patches, suppressions and rounds").
     pub threads: Option<usize>,
+    /// `--jobs n`, `teq fix`'s: the jobs whose rounds run at once at most (docs/FIX.md, "Jobs side by side").
+    pub jobs: Option<usize>,
     /// The rest, in order.
     pub rest: Vec<String>,
 }
@@ -23,11 +25,13 @@ impl Flags {
     }
 }
 
-/// `teq fix`'s own flags out of `args`: `--check`, `--rules A,B`, `--config <file>`, `--threads n`.
-pub fn flags(args: &[String]) -> Result<Flags, String> {
-    let (mut check, mut rules, mut config, mut threads) = (false, None, None, None);
+/// `teq fix`'s own flags out of `args`: `--check`, `--rules A,B`, `--config <file>`, `--threads n` and, for the verb
+/// (`teq compiler fix`'s program is one job), `--jobs n`.
+pub fn flags(args: &[String], verb: bool) -> Result<Flags, String> {
+    let (mut check, mut rules, mut config, mut threads, mut jobs) = (false, None, None, None, None);
     let mut rest = Vec::new();
     let count = |v: &str| v.parse::<usize>().ok().filter(|&n| n >= 1).ok_or_else(|| format!("--threads takes a number of workers from 1, not {}", v));
+    let at_once = |v: &str| v.parse::<usize>().ok().filter(|&n| n >= 1).ok_or_else(|| format!("--jobs takes a number of jobs from 1, not {}", v));
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -38,6 +42,12 @@ pub fn flags(args: &[String]) -> Result<Flags, String> {
                 i += 1;
             }
             a if a.starts_with("--threads=") => threads = Some(count(&a["--threads=".len()..])?),
+            "--jobs" if verb => {
+                let Some(v) = args.get(i + 1) else { return Err("--jobs needs a value".to_string()) };
+                jobs = Some(at_once(v)?);
+                i += 1;
+            }
+            a if verb && a.starts_with("--jobs=") => jobs = Some(at_once(&a["--jobs=".len()..])?),
             "--rules" | "--config" => {
                 let Some(v) = args.get(i + 1) else { return Err(format!("{} needs a value", args[i])) };
                 if args[i] == "--rules" {
@@ -53,7 +63,7 @@ pub fn flags(args: &[String]) -> Result<Flags, String> {
         }
         i += 1;
     }
-    Ok(Flags { check, rules, config, threads, rest })
+    Ok(Flags { check, rules, config, threads, jobs, rest })
 }
 
 /// The configuration `--config` names, or `.scalafix.conf` in `dir` where there is one, or none; with the directory
@@ -83,7 +93,7 @@ pub fn compiler_fix(args: &[String]) -> ! {
         println!("{}", USAGE);
         std::process::exit(0);
     }
-    let flags = match flags(args) {
+    let flags = match flags(args, false) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("teq compiler fix: {}\n{}", e, USAGE);
@@ -104,7 +114,7 @@ pub fn compiler_fix(args: &[String]) -> ! {
     };
     rest.extend(flags.threads_args());
     let job = Job { key: "compiler".to_string(), args: rest, roots: None, files: None, generated: Vec::new() };
-    let code = engine::run(Setup { rules: flags.rules, check: flags.check, display: None, told: None }, vec![Part { conf, config_dir, jobs: vec![job] }]);
+    let code = engine::run(Setup { rules: flags.rules, check: flags.check, display: None, told: None, jobs: None }, vec![Part { conf, config_dir, jobs: vec![job] }]);
     std::process::exit(code)
 }
 

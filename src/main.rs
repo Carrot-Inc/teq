@@ -948,6 +948,8 @@ fn parse_compiler_options(args: &[String]) -> Options {
     match args.first().map(String::as_str) {
         Some("build" | "check" | "watch") => parse_file_options(&args[0], &args[1..]),
         Some("fix") => fix::cli::compiler_fix(&args[1..]),
+        // One round of one job of a `teq fix` run, started by the run (docs/FIX.md, "Jobs side by side").
+        Some("fix-job") => fix::engine::job_child(),
         Some("--help" | "-h") => compiler_help(),
         _ => usage(),
     }
@@ -1397,14 +1399,19 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
 /// it as the file system does.
 /// Each script a listing found is recorded in `roots` with the directory listed, `root`.
 fn collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(String, bool)>, root: &str, roots: &mut intern::FxMap<String, String>) {
+    if let Err(message) = try_collect_files(opts, path, listed, out, root, roots) {
+        eprintln!("{}", message);
+        exit_failed(opts, 2);
+    }
+}
+
+/// `collect_files`, a directory that cannot be read given back as the line `collect_files` ends the build with.
+fn try_collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(String, bool)>, root: &str, roots: &mut intern::FxMap<String, String>) -> Result<(), String> {
     let p = std::path::Path::new(path);
     if p.is_dir() {
         let mut entries: Vec<_> = match std::fs::read_dir(p) {
             Ok(rd) => rd.filter_map(|e| e.ok()).map(|e| e.path()).collect(),
-            Err(e) => {
-                eprintln!("cannot read {}: {}", path, e);
-                exit_failed(opts, 2);
-            }
+            Err(e) => return Err(format!("cannot read {}: {}", path, e)),
         };
         entries.sort();
         for e in entries {
@@ -1414,7 +1421,7 @@ fn collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(String
             // check, one preprocessing for both (Scala CLI's `ElementsUtils.singleFilesFromDirectory`).
             let scripts = opts.interp || opts.command == "check";
             if s.ends_with(".scala") || (scripts && s.ends_with(".sc")) || (!hidden && e.is_dir()) {
-                collect_files(opts, &s, true, out, root, roots);
+                try_collect_files(opts, &s, true, out, root, roots)?;
             }
         }
     } else {
@@ -1423,6 +1430,7 @@ fn collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(String
         }
         out.push((path.to_string(), listed));
     }
+    Ok(())
 }
 
 /// `teq interp`'s sources of the configurations whose products a script's configuration's classpath holds
@@ -1573,10 +1581,22 @@ pub(crate) type Excluded = std::collections::HashSet<String>;
 /// directory, or one a `using file` names (Scala CLI's input `subPath`, whose directories are the
 /// script's package).
 pub(crate) fn collect_program_paths_with_roots(opts: &Options) -> (Vec<String>, intern::FxMap<String, String>, Excluded) {
+    match try_collect_program_paths_with_roots(opts) {
+        Ok(collected) => collected,
+        Err(message) => {
+            eprintln!("{}", message);
+            exit_failed(opts, 2)
+        }
+    }
+}
+
+/// `collect_program_paths_with_roots`, an input directory that cannot be read given back as the line it ends the build
+/// with: for a caller that is not the build's own turn (`teq fix`'s run, which counts a job's documents ahead).
+pub(crate) fn try_collect_program_paths_with_roots(opts: &Options) -> Result<(Vec<String>, intern::FxMap<String, String>, Excluded), String> {
     let mut paths = Vec::new();
     let mut roots = intern::FxMap::default();
     for input in &opts.inputs {
-        collect_files(opts, input, false, &mut paths, input, &mut roots);
+        try_collect_files(opts, input, false, &mut paths, input, &mut roots)?;
     }
     if opts.interp {
         include_using_files(opts, &mut paths, &mut roots);
@@ -1593,7 +1613,7 @@ pub(crate) fn collect_program_paths_with_roots(opts: &Options) -> (Vec<String>, 
     let keys = program_keys(opts, paths.iter().map(String::as_str));
     let mut order: Vec<usize> = (0..paths.len()).collect();
     order.sort_by(|&a, &b| keys[a].cmp(&keys[b]).then(paths[a].cmp(&paths[b])));
-    (order.into_iter().map(|i| paths[i].clone()).collect(), roots, left_out)
+    Ok((order.into_iter().map(|i| paths[i].clone()).collect(), roots, left_out))
 }
 
 /// A file given twice, given with a directory that holds it, reached through a link or, on a
@@ -1920,7 +1940,8 @@ fn residency(args: &[String], resident_env: Option<&std::ffi::OsStr>) -> (bool, 
     (session, (session || fix_verb(args)) && !resident_env.is_some_and(|v| v == "0"))
 }
 
-/// Whether the command line is `teq fix`'s (after the prefix options a project verb takes) or `teq compiler fix`'s.
+/// Whether the command line is `teq fix`'s (after the prefix options a project verb takes), `teq compiler fix`'s or
+/// that of a run's job (`teq compiler fix-job`).
 fn fix_verb(args: &[String]) -> bool {
     let mut words = args.iter().map(String::as_str);
     loop {
@@ -1930,7 +1951,7 @@ fn fix_verb(args: &[String]) -> bool {
             }
             Some("--strict") => {}
             Some("fix") => return true,
-            Some("compiler") => return words.next() == Some("fix"),
+            Some("compiler") => return matches!(words.next(), Some("fix" | "fix-job")),
             _ => return false,
         }
     }
@@ -2418,6 +2439,8 @@ fn answer_extras() -> String {
 fn exit_failed(opts: &Options, code: i32) -> ! {
     answer_failure(opts);
     interp::code_stats_report();
+    // A job of a `teq fix` run tells its run, which ends as this process does.
+    fix::engine::job_leaves(code);
     std::process::exit(code)
 }
 

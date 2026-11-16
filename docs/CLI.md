@@ -136,7 +136,7 @@ interpreter"). The program ends when its main has returned and no thread but dae
 number), its shutdown hooks run one after another on the main thread while the other threads go on, and then every
 thread stops. A second signal ends the program at once.
 
-`teq fix [--check] [--rules A,B] [--config <file>] [--threads n] [<project>...] [<file>...]` runs lint and rewrite rules over a
+`teq fix [--check] [--rules A,B] [--config <file>] [--threads n] [--jobs n] [<project>...] [<file>...]` runs lint and rewrite rules over a
 build's sources, scalafix's rules and configuration with no sbt and no JVM: the rules are Scala under the
 interpreter, against the API of docs/FIX.md, over the trees and the typer the compiler made of the sources in the same
 process. The configuration is `.scalafix.conf` beside `teq.lock`, or `--config`'s file (its `rules`, each rule's
@@ -190,6 +190,18 @@ it did before, with no last line. `teq compiler fix` prints none of these lines.
 (or `--threads=n`) is compile's option, handed to every program the run types, over a project's own `threads`: the
 workers that type each program and those the rules run on (docs/FIX.md, "Patches, suppressions and rounds"); without
 it `TEQ_THREADS`, then compile's count for each program typed.
+The jobs of a run are typed and their rules run side by side, each job's round in a process of its own that the
+run starts and reads (docs/FIX.md, "Jobs side by side"): as many jobs at once as the run has workers (`--threads n`,
+else `TEQ_THREADS`, else the cores), `--jobs n` (or `--jobs=n`) at most `n`, and `--jobs 1` one job after another in
+the run's own process. However many run at once, the run prints the same lines in the same order, writes the same
+files and exits alike: a job's lines stand together at the job's place, and a job that does not type ends the run
+where a run of one job at a time ends. A run of one job, one whose `file:` rule keeps something between documents,
+one that writes the typings' dumps and one no two of whose typings fit its workers together stay one job at a time.
+Where stderr is a terminal and jobs run side by side, the line written over itself is the run's: `teq fix: 2 of 17
+projects done, typing api, core, web, 14 s`, then the projects whose rules run (`teq fix: 9 of 17 projects done,
+typing admin, running the rules on api, web, 21 s`), a list of more than three as `api, core and 6 others`, round
+two's typing as `typing api again`, and `typing api (core does not type)` where a job failed behind one that still
+runs; each job's round line takes its place above it, in the jobs' order.
 `teq compiler fix <inputs> [compiler options] [--check] [--rules A,B] [--config <file>] [--threads n]` is the same over the files
 and options the compiler takes (`teq compiler check`'s), every file of the program editable, the configuration
 `.scalafix.conf` of the working directory where `--config` names none: a single file on a class path, outside any

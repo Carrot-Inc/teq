@@ -3893,6 +3893,7 @@ mod tests {
         ("src/emit/mod.rs", 1, "alloc::spawn_in"),
         ("src/emit/outline.rs", 1, "alloc::spawn_in"),
         ("src/fix/engine.rs", 2, "a builder for the stacks' size of teq fix's rule workers (`Pool::add_worker`) and typing thread, alloc::enter the first statement of each closure"),
+        ("src/fix/engine/jobs.rs", 5, "alloc::spawn for a job's reader of its stdin, the run's manager of a round's jobs and the readers of each job's two streams; the one process start is a job's (`teq compiler fix-job`)"),
         ("src/frontend.rs", 1, "alloc::spawn_in"),
         ("src/interp/net.rs", 1, "a builder for the connect's waiter, alloc::enter the first statement of its closure"),
         ("src/interp/process.rs", 2, "a builder for the reaper's small stack, alloc::enter the first statement of its closure; the other starts a program's child under teq interp"),

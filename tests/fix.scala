@@ -176,6 +176,9 @@ import scala.jdk.CollectionConverters.*
   if only.forall(o => "typing".startsWith(o) || o.startsWith("typing")) then
     val (tp, _) = Typing.run(teq, work, bad)
     pass += tp
+  if only.forall(o => "jobs".startsWith(o) || o.startsWith("jobs")) then
+    val (jp, _) = SideBySide.run(teq, work, bad)
+    pass += jp
   println(s"fix: $pass passed, $fail failed")
   Script.exit(if fail == 0 then 0 else 1)
 }
@@ -351,12 +354,13 @@ object Told:
         if printed != want then problems += s"stderr differs from $file:\n${diff(want, printed)}"
       if problems.isEmpty then pass += 1 else { fail += 1; bad("told/" + name + suffix, problems.mkString("\n  ")) }
     // On a terminal: each job's first line is a status line, written over itself and replaced by the job's summary;
-    // the lines that stay are the piped run's without those first lines.
+    // the lines that stay are the piped run's without those first lines. One job at a time (`--jobs 1`): the status
+    // of a run with jobs side by side is the run's (`SideBySide`).
     if Sh("python3", "--version").check(false).run().status == 0 then
       val dir = build(work, "clean-terminal", "List.empty", "val")
       val script = Paths.get("tests/support/pty_run.py").toAbsolutePath.toString
       // A terminal that takes the erasing sequence, whatever the suite's own `TERM` is.
-      val r = Sh("python3", script, teq, "fix").in(dir).withEnv("TERM" -> "xterm").timeout(300).check(false).run()
+      val r = Sh("python3", script, teq, "fix", "--jobs", "1").in(dir).withEnv("TERM" -> "xterm").timeout(300).check(false).run()
       val bytes = r.out.replace("\r\n", "\n")
       val erase = "\r\u001b[K"
       val stay = timeless(bytes.split("\n", -1).map(l => if l.contains(erase) then l.substring(l.lastIndexOf(erase) + erase.length) else l).mkString("\n"))
@@ -377,7 +381,7 @@ object Told:
         val parts = rows.map(_.split(java.util.regex.Pattern.quote(erase), -1).toVector)
         (parts.flatMap(p => p.drop(1).dropRight(1)) ++ parts.lastOption.filter(_.size > 1).map(_.last).filter(_.nonEmpty), parts.map(_.last).filter(_.nonEmpty))
       def onTerminal(dir: Path, columns: Int, options: String*): Sh.Result =
-        Sh((Vector("python3", script, "--columns", columns.toString) ++ options ++ Vector(teq, "fix"))*).in(dir).withEnv("TERM" -> "xterm").timeout(300).check(false).run()
+        Sh((Vector("python3", script, "--columns", columns.toString) ++ options ++ Vector(teq, "fix", "--jobs", "1"))*).in(dir).withEnv("TERM" -> "xterm").timeout(300).check(false).run()
       for columns <- Vector(80, 40, 20) do
         val r = onTerminal(build(work, s"clean-$columns", "List.empty", "val"), columns)
         val (statuses, stay) = terminal(r.out)
@@ -1126,6 +1130,10 @@ object Parallel:
         val body = rec.drop(i + 1).takeWhile(l => !l.startsWith("round-end"))
         val where = s"round ${head.getOrElse("job", "?")}/${head.getOrElse("round", "?")}"
         if body.exists(_.startsWith("serial")) && n > 1 && workers > 1 then problems += s"$where: ${body.find(_.startsWith("serial")).get}"
+        // The fields of a document's two lines in their order: the tree's other readers of the record
+        // (tests/split-determinism.sh, bench/fix/record.py) find them by name, and a field moved is said here first.
+        for l <- body if l.startsWith("dispatch ") && !l.matches("dispatch job=\\d+ slot=\\d+ gen=\\d+ worker=\\d+ at_us=\\d+") do problems += s"$where: a dispatch line of another form: $l"
+        for l <- body if l.startsWith("done ") && !l.matches("done job=\\d+ slot=\\d+ gen=\\d+ worker=\\d+ start_us=\\d+ finish_us=\\d+ cpu_us=\\d+ queries=\\d+") do problems += s"$where: a done line of another form: $l"
         val dispatched = body.filter(_.startsWith("dispatch ")).map(fieldsOf)
         val done = body.filter(_.startsWith("done ")).map(fieldsOf)
         for (what, ls) <- Seq("dispatched" -> dispatched, "done" -> done) do
@@ -1441,16 +1449,30 @@ object Typing:
     * `Ready` (its `worker` line) before it, so that no worker's bootstrap, whose one-worker typing writes the interpreter's
     * process-wide watch, runs beside a typing. */
   def barrierProblems(rec: Vector[String]): Vector[String] =
+    val started = rec.count(_.startsWith("worker-start "))
+    if attemptsOf(rec).isEmpty then Vector("no typing line")
+    else if started < 2 then Vector(s"$started worker(s) started: no typing after a later worker's start")
+    else unready(rec)
+
+  /** The typings of `rec`, one process's lines, that began before a worker started earlier was ready. */
+  def unready(rec: Vector[String]): Vector[String] =
     val started = rec.filter(_.startsWith("worker-start ")).map(Parallel.fieldsOf).map(f => f.getOrElse("w", "-1").toInt -> f.getOrElse("at_us", "-1").toLong).toMap
     val ready = rec.filter(_.startsWith("worker ")).map(Parallel.fieldsOf).map(f => f.getOrElse("w", "-1").toInt -> f.getOrElse("ready_us", "-1").toLong).toMap
-    val attempts = attemptsOf(rec)
-    if attempts.isEmpty then Vector("no typing line")
-    else if started.size < 2 then Vector(s"${started.size} worker(s) started: no typing after a later worker's start")
-    else attempts.flatMap { a =>
+    attemptsOf(rec).flatMap { a =>
       started.toVector.sorted.collect {
         case (w, at) if at < a.start && ready.get(w).forall(_ > a.start) =>
           s"job ${a.job} round ${a.round} attempt ${a.attempt} began at ${a.start} us, worker $w (started at $at) ready at ${ready.get(w).fold("never")(_.toString)}"
       }
+    }
+
+  /** `unready` within each job's process of a run with jobs side by side: a process's lines are together in the record,
+    * from its first worker's start (`worker-start job=<k> w=0`) to its round's end. */
+  def readyByJob(rec: Vector[String]): Vector[String] =
+    val starts = rec.indices.filter(i => rec(i).startsWith("worker-start job=") && rec(i).contains(" w=0 ")).toVector
+    if starts.isEmpty then Vector("no job's process in the record")
+    else starts.flatMap { i =>
+      val block = rec.drop(i).takeWhile(l => !l.startsWith("round-end")).toVector
+      if attemptsOf(block).isEmpty then Vector(s"no typing line in the process that begins at line ${i + 1}") else unready(block)
     }
 
   def run(teq: String, work: Path, bad: (String, String) => Unit): (Int, Int) =
@@ -1729,11 +1751,17 @@ object Typing:
         val jobs = attemptsOf(o.record).map(_.job).distinct
         expect(s"later-job/w$t/jobs", jobs.size == 2 && bJob == jobs.max, s"jobs ${jobs.mkString(",")}, the one given way $bJob")
     // A small first job whose round the lead ends alone while the others' bootstraps are held: the later job's typing
-    // waits for every one of them.
+    // waits for every one of them. One job at a time (`--jobs 1`): the workers an earlier job started and a later
+    // job's typing are then one process's. With the jobs side by side each job's workers are its own process's, and
+    // the same holds within each.
     if engineParallelTyping then
-      val held = verb("ready-4", Seq(), "TEQ_THREADS" -> "4", "TEQ_FIX_BOOT_DELAY" -> "1500")
+      val held = verb("ready-4", Seq("--jobs", "1"), "TEQ_THREADS" -> "4", "TEQ_FIX_BOOT_DELAY" -> "1500")
       expect("later-job/ready/bytes", sameBytes(vOne, held).isEmpty, sameBytes(vOne, held).getOrElse(""))
       expect("later-job/ready", barrierProblems(held.record).isEmpty, barrierProblems(held.record).mkString("\n  "))
+      val side = verb("ready-side", Seq(), "TEQ_FIX_BOOT_DELAY" -> "1500")
+      expect("later-job/ready/side/bytes", sameBytes(vOne, side).isEmpty, sameBytes(vOne, side).getOrElse(""))
+      if side.record.exists(_.startsWith("worker-start job=")) then
+        expect("later-job/ready/side", readyByJob(side.record).isEmpty, readyByJob(side.record).mkString("\n  "))
     // `teq fix --threads n`: compile's option, the one request of both counts.
     if engineParallelTyping then
       val flag = verb("flag-8", Seq("--threads", "8"))
@@ -1804,4 +1832,394 @@ object Typing:
       val o = typed(s"getter-$t", getter, unusedConf, t, t)
       expect(s"getter/w$t/bytes", sameBytes(getterOne, o).isEmpty, sameBytes(getterOne, o).getOrElse(""))
       typing(s"getter/w$t/typing", o, t)
+    (pass, fail)
+
+/** The jobs of a run side by side (docs/FIX.md, "Jobs side by side"): `teq fix` over a build of seven projects, `base`,
+  * `left` and `right` over it, `top` over the three, `lone`, and `twin1` and `twin2`, which hold one source root between
+  * them; every project has a file the rules rewrite and round two rewrites again, a lint, an unused import and a file
+  * that reads the projects below. The run of one job at a time (`--jobs 1`) is the reference of every row: at the
+  * default, at `--jobs 2`, under four workers with a rule that reads the symbol index (`--threads 4` and
+  * OptionGetWarn: each typing is one worker's, so every machine has four jobs side by side) and under
+  * shaken schedules of the jobs (`TEQ_FIX_JOBS_SCHEDULE`: the order they are started in, a delay before each hands
+  * its round over) a run exits alike, prints the same stderr, the times aside, leaves the same files and writes the same record
+  * lines that name no worker and no instant (`run`, `typing`, `round`, `serial`, `serve`, `doc`, `lint`), for `teq fix`
+  * and `teq fix --check`; its record says how many jobs ran at once and why, and names the job on every line of a
+  * job's workers. A run that fails is the reference's too: a job that does not type (the first, a later one, one behind
+  * a job that is slower), a rule that throws, edits after which a program does not type, two configurations that edit
+  * a shared file differently. A job's process that dies ends the run at that job, nothing written; one that writes a
+  * megabyte to stderr before anything else is read to its end, what one writes to its stdout beside its messages
+  * is on the run's stdout, and a process a rule leaves behind does not hold the run. Where the compiler itself ends a
+  * job's build (an input directory it cannot read, a class path entry that is no jar) the run ends at that job's turn
+  * with the compiler's line and exit code. Nothing of a job's process is left in the temporary directory. A run whose project rule keeps something between
+  * documents, a run that writes the typings' dumps, a run of one job and a run no two of whose typings fit its workers
+  * together stay one job at a time, and their record says which; typings of several workers are never under way on
+  * more workers than the run has. No process of a job is there a second after its run ended, whatever ended it (an interrupt, a termination,
+  * an abort, a kill), and none starts a process of its own. On a terminal the line written over itself is the run's
+  * (docs/CLI.md, "teq fix"; its texts are `statusOf`'s and `statusCut`), within the row at 80, 40 and 20 columns, the
+  * lines that stay are the piped run's, and an interrupt or a termination while it shows erases it and ends the run by
+  * the signal. */
+object SideBySide:
+  val conf = "rules = [DisableSyntax, EmptyCollectionsUnified, NoUnusedImports]\nDisableSyntax.noVars = true\n"
+  /** With a rule that reads the symbol index: every typing one worker's, whatever `--threads` says. */
+  val asking = "rules = [DisableSyntax, EmptyCollectionsUnified, NoUnusedImports, OptionGetWarn]\nDisableSyntax.noVars = true\n"
+  /** The run's status on a terminal, its seconds aside, for a run of `n` projects; and what 20 columns leave of it. */
+  def statusOf(n: Int): scala.util.matching.Regex =
+    s"teq fix: \\d of $n projects done(, typing [a-z0-9, ]+( and \\d others)?( again)?)?(, running the rules on [a-z0-9, ]+( and \\d others)?)?".r
+  def statusCut(n: Int): String = s"teq fix: \\d of $n \\.\\.\\."
+
+  def lockOf(twins: List[List[String]] = List(Nil, Nil)): String = Verb.lockWith(
+    Verb.project("base", Nil) + Verb.project("left", List("base")) + Verb.project("lone", Nil) + Verb.project("right", List("base")) +
+      Verb.project("top", List("base", "left", "right")) + Verb.project("twin1", Nil, root = "shared/src", scalafix = twins(0)) + Verb.project("twin2", Nil, root = "shared/src", scalafix = twins(1)))
+
+  /** A project's sources: one round two edits again, one with a lint, one with an unused import, one that reads `below`. */
+  def sources(p: String, below: List[String]): Seq[(String, String)] = Seq(
+    s"$p/src/$p/Empty.scala" -> s"package $p\nimport scala.Nil\nobject Empty { val none: List[Int] = Nil }\n",
+    s"$p/src/$p/Count.scala" -> s"package $p\nobject Count { var seen = 0 }\n",
+    s"$p/src/$p/Plain.scala" -> s"package $p\nimport scala.collection.mutable\nobject Plain { val one = 1 }\n",
+    s"$p/src/$p/Reads.scala" -> s"package $p\nobject Reads { val below: Int = ${("0" :: below.map(b => s"$b.Plain.one")).mkString(" + ")} }\n")
+
+  def filesOf(conf: String): Seq[(String, String)] =
+    Seq("teq.lock" -> lockOf(), ".scalafix.conf" -> conf) ++ sources("base", Nil) ++ sources("left", List("base")) ++ sources("lone", Nil) ++ sources("right", List("base")) ++
+      sources("top", List("left", "right")) ++ Seq("shared/src/shared/Both.scala" -> "package shared\nimport scala.Nil\nobject Both { var both: List[Int] = Nil }\n")
+  val files: Seq[(String, String)] = filesOf(conf)
+  val askingFiles: Seq[(String, String)] = filesOf(asking)
+
+  /** The record's lines that name no worker and no instant, the build's directory left out. */
+  def semantic(o: Parallel.Outcome): Vector[String] =
+    o.record.filter(l => Vector("run ", "typing ", "round ", "serial ", "serve ", "doc ", "lint ").exists(l.startsWith)).map(_.split(" ").filterNot(_.matches("[a-z]+_us=\\d+")).mkString(" "))
+
+  /** What `b` has otherwise than the reference `a`. */
+  def same(a: Parallel.Outcome, b: Parallel.Outcome): Option[String] =
+    if a.status != b.status then Some(s"exit ${b.status}, the reference's ${a.status}:\n${b.err}")
+    else if a.out != b.out then Some("stdout differs:\n" + diff(a.out, b.out))
+    else if a.err != b.err then Some("stderr differs:\n" + diff(a.err, b.err))
+    else if semantic(a) != semantic(b) then Some("the record differs:\n" + diff(semantic(a).mkString("\n"), semantic(b).mkString("\n")))
+    else a.files.find((f, t) => b.files.get(f) != Some(t)).map((f, t) => s"$f differs:\n" + diff(t, b.files.getOrElse(f, "")))
+
+  /** The record's `jobs` line: the jobs at once and why. */
+  def atOnce(o: Parallel.Outcome): Option[(Int, String)] =
+    o.record.find(_.startsWith("jobs ")).map(Parallel.fieldsOf).map(f => f.getOrElse("at_once", "0").toInt -> f.getOrElse("reason", ""))
+
+  /** What the record of a run with jobs side by side lacks: each round's documents dispatched and done once by workers
+    * of the round's job, every line of a job's workers naming the job. */
+  def recordProblems(o: Parallel.Outcome): Vector[String] =
+    val rounds = o.record.filter(_.startsWith("round ")).map(Parallel.fieldsOf)
+    val lines = Vector("dispatch ", "done ").map(k => k -> o.record.filter(_.startsWith(k)).map(Parallel.fieldsOf))
+    val unnamed = o.record.filter(l => (l.startsWith("dispatch ") || l.startsWith("done ")) && !l.contains(" job="))
+    val started = o.record.filter(_.startsWith("worker-start job=")).map(Parallel.fieldsOf).map(_.getOrElse("job", "")).distinct
+    (if unnamed.nonEmpty then Vector(s"${unnamed.size} lines of a document name no job") else Vector()) ++
+      o.record.filter(_.startsWith("overdraw ")).map(l => s"a typing over more workers than its job was started with: $l") ++
+      (if started.size < rounds.map(_.getOrElse("job", "")).distinct.size then Vector(s"workers of ${started.size} jobs started, ${rounds.size} rounds") else Vector()) ++
+      rounds.flatMap { r =>
+        val (job, n) = (r.getOrElse("job", "?"), r.getOrElse("docs", "0").toInt)
+        val first = r.getOrElse("first_gen", "0").toInt
+        lines.flatMap { (what, ls) =>
+          val gens = ls.filter(_.get("job") == Some(job)).map(_.getOrElse("gen", "-1").toInt).filter(g => g >= first && g < first + n).sorted
+          if gens != (first until first + n).toVector then Vector(s"round ${job}/${r.getOrElse("round", "?")}: its ${what.trim} lines are of the generations ${gens.mkString(",")}, expected $first until ${first + n}") else Vector()
+        }
+      }
+
+  /** The processes of jobs of the run `pid`, and whether any process has one of them as its parent. */
+  def jobsOf(pid: Long): (Vector[String], Boolean) =
+    val ps = Sh("ps", "-e", "-o", "pid=", "-o", "ppid=", "-o", "args=").check(false).run().outAll().linesIterator.map(_.trim.split("\\s+", 3).toVector).filter(_.size == 3).toVector
+    val mine = ps.filter(_(2).endsWith(s" compiler fix-job $pid"))
+    (mine.map(_(2)), ps.exists(p => mine.exists(_(0) == p(1))))
+
+  /** The most workers the record's typings were under way on at one instant: each attempt's `effective` from its start
+    * to its end. */
+  def typingPeak(o: Parallel.Outcome): Int =
+    val spans = o.record.filter(_.startsWith("typing ")).map(Parallel.fieldsOf).map(f => (f.getOrElse("start_us", "0").toLong, f.getOrElse("end_us", "0").toLong, f.getOrElse("effective", "1").toInt))
+    val events = (spans.map((a, _, w) => (a, w)) ++ spans.map((_, b, w) => (b, -w))).sortBy(e => (e._1, e._2))
+    var (now, peak) = (0, 0)
+    for (_, w) <- events do
+      now += w
+      peak = peak.max(now)
+    peak
+
+  def run(teq: String, work: Path, bad: (String, String) => Unit): (Int, Int) =
+    var pass = 0
+    var fail = 0
+    def expect(name: String, cond: Boolean, why: => String): Unit =
+      if cond then pass += 1 else { fail += 1; bad("jobs/" + name, why) }
+    def go(tag: String, files: Seq[(String, String)], args: Seq[String], env: (String, String)*): Parallel.Outcome =
+      val d = work.resolve("jobs-" + tag)
+      Sh.remove(d)
+      for (f, text) <- files do
+        Files.createDirectories(d.resolve(f).getParent)
+        Files.writeString(d.resolve(f), text)
+      val record = work.resolve(s"jobs-$tag.record")
+      Files.deleteIfExists(record)
+      // The run's workers are the machine's unless a row names them.
+      val r = Sh((Vector(teq, "fix") ++ args)*).in(d).without("TEQ_THREADS", "TEQ_WORKERS").withEnv((Seq("TEQ_FIX_RECORD" -> record.toString) ++ env)*).timeout(300).check(false).run()
+      val lines = if Files.exists(record) then read(record).linesIterator.map(_.replace(d.toString, "")).toVector else Vector()
+      Parallel.Outcome(r.status, r.outAll(), timeless(r.errAll()).replace(d.toString, "<build>"), files.map((f, _) => f -> read(d.resolve(f))).toMap, lines)
+    val shuffles = (1 to 12).map(s => (s"shuffle-$s", Vector[String](), Seq("TEQ_FIX_JOBS_SCHEDULE" -> s"shuffle:$s")))
+    for (verb, flags, exit) <- Vector(("fix", Vector[String](), 1), ("check", Vector("--check"), 1)) do
+      val one = go(s"$verb-one", files, flags ++ Vector("--jobs", "1"))
+      val fixed = verb == "check" || (one.files("top/src/top/Empty.scala") == "package top\nobject Empty { val none: List[Int] = List.empty }\n" && one.files("shared/src/shared/Both.scala") == "package shared\nobject Both { var both: List[Int] = List.empty }\n")
+      expect(s"$verb/one", one.status == exit && fixed && one.err.contains("typing main (7 of 7)") && one.err.contains("typing main again") && atOnce(one) == Some((1, "asked")) && !one.record.exists(_.contains(" job=0 w=")),
+        s"exit ${one.status}, the files rewritten $fixed, the record ${one.record.find(_.startsWith("jobs ")).getOrElse("without a jobs line")}:\n${one.err}")
+      val rows = Vector(("default", Vector[String](), Seq[(String, String)]()), ("two", Vector("--jobs", "2"), Seq[(String, String)]()), ("reverse", Vector[String](), Seq("TEQ_FIX_JOBS_SCHEDULE" -> "reverse"))) ++
+        (if verb == "fix" then shuffles else shuffles.take(1))
+      for (tag, args, env) <- rows do
+        val o = go(s"$verb-$tag", files, flags ++ args, env*)
+        expect(s"$verb/$tag", same(one, o).isEmpty, same(one, o).getOrElse(""))
+        // Side by side where the machine has the workers: the record is then one of jobs' processes.
+        val workers = o.record.find(_.startsWith("run ")).map(Parallel.fieldsOf).flatMap(_.get("workers")).fold(1)(_.toInt)
+        val want = if tag == "two" then (2.min(workers), if workers >= 2 then "asked" else "budget") else (7.min(workers), "budget")
+        expect(s"$verb/$tag/record", atOnce(o) == Some(want) && (want._1 == 1 || recordProblems(o).isEmpty), s"the record's ${o.record.find(_.startsWith("jobs ")).getOrElse("no jobs line")}, expected $want\n  ${recordProblems(o).mkString("\n  ")}")
+      // Four workers asked and every typing one worker's: four jobs at once on any machine.
+      val four = go(s"$verb-four-one", askingFiles, flags ++ Vector("--jobs", "1", "--threads", "4"))
+      expect(s"$verb/four/one", four.status == exit && four.err.startsWith("teq fix: typing on one worker, because the rule OptionGetWarn reads the symbol index\n"), s"exit ${four.status}:\n${four.err}")
+      for (tag, args, env) <- Vector(("four", Vector[String](), Seq[(String, String)]()), ("four-two", Vector("--jobs", "2"), Seq[(String, String)]())) ++ shuffles.take(if verb == "fix" then 4 else 1).map((t, a, e) => ("four-" + t, a, e)) do
+        val o = go(s"$verb-$tag", askingFiles, flags ++ args ++ Vector("--threads", "4"), env*)
+        expect(s"$verb/$tag", same(four, o).isEmpty, same(four, o).getOrElse(""))
+        val want = if tag == "four-two" then (2, "asked") else (4, "budget")
+        expect(s"$verb/$tag/record", atOnce(o) == Some(want) && recordProblems(o).isEmpty, s"the record's ${o.record.find(_.startsWith("jobs ")).getOrElse("no jobs line")}, expected $want\n  ${recordProblems(o).mkString("\n  ")}")
+    // The runs that stay one job at a time, and what the record says of each.
+    val lone = go("one-job", askingFiles, Vector("lone", "--threads", "4"))
+    expect("one job", lone.status == 1 && atOnce(lone) == Some((1, "one")), s"exit ${lone.status}, the record's ${lone.record.find(_.startsWith("jobs "))}:\n${lone.err}")
+    val keeps = "package rules\nimport teq.fix.*\nfinal class Keeps extends SyntacticRule(\"Keeps\"):\n  private var seen = 0\n  override def fix(using doc: SyntacticDocument): Patch =\n    seen += 1\n    Patch.empty\n"
+    val state = go("state", files.filterNot(_._1 == ".scalafix.conf") ++ Seq(".scalafix.conf" -> "rules = [\"file:rules/Keeps.scala\", DisableSyntax, OptionGetWarn]\nDisableSyntax.noVars = true\n", "rules/Keeps.scala" -> keeps), Vector("--threads", "4"))
+    expect("state", state.status == 1 && atOnce(state) == Some((1, "state")) && !state.record.exists(_.startsWith("worker-start job=")), s"exit ${state.status}, the record's ${state.record.find(_.startsWith("jobs "))}:\n${state.err}")
+    val dumps = go("dumps", askingFiles, Vector("--check", "--threads", "4"), "TEQ_FIX_SEMANTICDB" -> work.resolve("jobs-dumps-out").toString)
+    expect("dumps", dumps.status == 1 && atOnce(dumps) == Some((1, "dumps")), s"exit ${dumps.status}, the record's ${dumps.record.find(_.startsWith("jobs "))}:\n${dumps.err}")
+    // Typings of several workers. Four asked for each (`--threads 4`) of a run of four: no two fit together, the run
+    // is one job at a time. Two for each (`TEQ_FIX_TYPING_THREADS`) of a run of at most four (`TEQ_WORKERS`): two jobs
+    // type at once where the machine has the four, never three.
+    val wide = go("typing-four", files, Vector("--check", "--threads", "4"))
+    expect("typing/four", wide.status == 1 && atOnce(wide) == Some((1, "budget")) && typingPeak(wide) == 4, s"exit ${wide.status}, the record's ${wide.record.find(_.startsWith("jobs "))}, ${typingPeak(wide)} typing workers at once")
+    // No count named: compile's own for each program (every program taken as a large one, `TEQ_TYPER_THRESHOLD`), the
+    // one a run of one job at a time types it with, and never more typing workers under way than the run has.
+    val grown = Seq("TEQ_TYPER_THRESHOLD" -> "200")
+    val autoOne = go("typing-auto-one", files, Vector("--check", "--jobs", "1"), grown*)
+    val auto = go("typing-auto", files, Vector("--check"), grown*)
+    val autoWorkers = auto.record.find(_.startsWith("run ")).map(Parallel.fieldsOf).flatMap(_.get("workers")).fold(1)(_.toInt)
+    def untwice(o: Parallel.Outcome): Parallel.Outcome = o.copy(err = o.err.linesIterator.map(_.stripSuffix(typedTwice)).mkString("\n"), record = o.record.filterNot(_.startsWith("typing ")))
+    val counts = (o: Parallel.Outcome) => o.record.filter(_.startsWith("typing ")).map(Parallel.fieldsOf).filter(_.get("attempt") == Some("1")).map(f => (f.getOrElse("job", ""), f.getOrElse("round", ""), f.getOrElse("asked", "")))
+    expect("typing/auto", same(untwice(autoOne), untwice(auto)).isEmpty && counts(autoOne) == counts(auto) && typingPeak(auto) <= autoWorkers.max(counts(auto).map(_._3.toInt).maxOption.getOrElse(1)) && !auto.record.exists(_.startsWith("overdraw ")),
+      same(untwice(autoOne), untwice(auto)).getOrElse(s"the counts ${counts(autoOne).mkString(",")} and ${counts(auto).mkString(",")}; the run's workers $autoWorkers, ${typingPeak(auto)} typing workers at once; ${auto.record.filter(_.startsWith("overdraw ")).mkString("; ")}"))
+    val pairs = go("typing-two", files, Vector("--check"), "TEQ_FIX_TYPING_THREADS" -> "2", "TEQ_WORKERS" -> "4")
+    val pairsWorkers = pairs.record.find(_.startsWith("run ")).map(Parallel.fieldsOf).flatMap(_.get("workers")).fold(1)(_.toInt)
+    val pairsOne = go("typing-two-one", files, Vector("--check", "--jobs", "1"), "TEQ_FIX_TYPING_THREADS" -> "2", "TEQ_WORKERS" -> "4")
+    expect("typing/two", same(pairsOne, pairs).isEmpty && typingPeak(pairs) <= pairsWorkers.max(2) && (pairsWorkers < 4 || (atOnce(pairs) == Some((4, "budget")) && typingPeak(pairs) == 4)),
+      same(pairsOne, pairs).getOrElse(s"the run's workers $pairsWorkers, the record's ${pairs.record.find(_.startsWith("jobs "))}, ${typingPeak(pairs)} typing workers at once"))
+    // The runs that fail: each the reference's, under four workers (side by side on any machine).
+    def against(name: String, files: Seq[(String, String)], exit: Int, said: String, env: (String, String)*): Unit =
+      val one = go(s"$name-one", files, Vector("--jobs", "1", "--threads", "4"))
+      expect(s"$name/one", one.status == exit && one.err.contains(said) && one.err.contains("the rule OptionGetWarn reads the symbol index"), s"exit ${one.status}, expected $exit and `$said`:\n${one.err}")
+      for (tag, more) <- Vector(("side", Seq[(String, String)]()), ("shuffle", Seq("TEQ_FIX_JOBS_SCHEDULE" -> "shuffle:5"))) do
+        val o = go(s"$name-$tag", files, Vector("--threads", "4"), (env ++ more)*)
+        expect(s"$name/$tag", same(one, o).isEmpty && atOnce(o) == Some((4, "budget")), same(one, o).getOrElse(s"the record's ${o.record.find(_.startsWith("jobs "))}"))
+    def broken(ps: String*): Seq[(String, String)] =
+      askingFiles.filterNot((f, _) => ps.exists(p => f == s"$p/src/$p/Plain.scala")) ++ ps.map(p => s"$p/src/$p/Plain.scala" -> s"package $p\nobject Plain { val one: Int = \"no\" }\n")
+    against("untyped-first", broken("base"), 2, "base does not type")
+    against("untyped-later", broken("right"), 2, "right does not type")
+    against("untyped-two", broken("lone", "top"), 2, "lone does not type")
+    // The failing job is done long before the first job's round ends: the run still ends at it, after the jobs before it.
+    against("untyped-behind", broken("lone"), 2, "lone does not type", "TEQ_FIX_JOB_PLANT" -> "slow:0")
+    val throws = "package rules\nimport teq.fix.*\nfinal class Sevens extends SyntacticRule(\"Sevens\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n    if doc.tree.collect { case t: Lit.Int if t.syntax == \"7\" => t }.nonEmpty then throw new IllegalStateException(\"a seven\")\n    Patch.empty\n"
+    against("rule-throws", files.filterNot(_._1 == ".scalafix.conf") ++ Seq(".scalafix.conf" -> "rules = [\"file:rules/Sevens.scala\", DisableSyntax, OptionGetWarn]\n", "rules/Sevens.scala" -> throws, "right/src/right/Seven.scala" -> "package right\nobject Seven { val seven = 7 }\n"),
+      2, "the rule Sevens failed: java.lang.IllegalStateException: a seven")
+    val change = "package rules\nimport teq.fix.*\nfinal class Change extends SyntacticRule(\"Change\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n    doc.tree.collect { case t: Lit.Int if t.syntax == \"1\" => Patch.replaceTree(t, \"\\\"hi\\\"\") }.asPatch\n"
+    against("round-two", files.filterNot(_._1 == ".scalafix.conf") ++ Seq(".scalafix.conf" -> "rules = [\"file:rules/Change.scala\", OptionGetWarn]\n", "rules/Change.scala" -> change), 2, "does not type after the rules' edits")
+    against("shared-otherwise", askingFiles.filterNot(_._1 == "teq.lock") ++ Seq("teq.lock" -> lockOf(List(List("config: a.conf", "skip: false"), List("config: b.conf", "skip: false"))), "a.conf" -> asking, "b.conf" -> "rules = [DisableSyntax, OptionGetWarn]\n"),
+      2, "shared/src/shared/Both.scala: the configurations that share the file edit it differently")
+    // An input directory of a job that cannot be read: the run ends at that job's turn with the compiler's line and
+    // exit code, the jobs before it told, as a run of one job at a time does.
+    if !System.getProperty("os.name").toLowerCase.contains("win") && System.getProperty("user.name") != "root" then
+      val runs = Vector("one" -> Vector("--jobs", "1"), "side" -> Vector[String]()).map { (tag, more) =>
+        val d = work.resolve("jobs-unread-" + tag)
+        Sh.remove(d)
+        for (f, text) <- askingFiles do
+          Files.createDirectories(d.resolve(f).getParent)
+          Files.writeString(d.resolve(f), text)
+        val locked = d.resolve("right/src/locked")
+        Files.createDirectories(locked)
+        Sh("chmod", "000", locked.toString).check(false).run()
+        val r = Sh((Vector(teq, "fix", "--check", "--threads", "4") ++ more)*).in(d).without("TEQ_THREADS", "TEQ_WORKERS").timeout(300).check(false).run()
+        Sh("chmod", "755", locked.toString).check(false).run()
+        (r.status, r.outAll(), timeless(r.errAll()))
+      }
+      expect("unread", runs(0) == runs(1) && runs(0)._1 == 2 && runs(0)._3.contains("lone: 4 files, ") && runs(0)._3.endsWith("right: typing main (4 of 7)\ncannot read right/src/locked: Permission denied (os error 13)\n"),
+        s"exit ${runs(0)._1} and ${runs(1)._1}:\n${diff(runs(0)._3, runs(1)._3)}\n${runs(1)._3}")
+    // A class path entry of a job that is no jar, in the first job, a middle one and the last: the compiler's line and
+    // exit code at that job's turn, as a run of one job at a time has them, and the record keeps the jobs before it
+    // in both.
+    for (at, place) <- Vector("base" -> "1 of 7", "right" -> "4 of 7", "twin2" -> "7 of 7") do
+      def entry(name: String, deps: List[String], root: String = "") = Verb.project(name, deps, files = if name == at then List("bad.jar") else Nil, root = root)
+      val jarLock = Verb.lockWith(entry("base", Nil) + entry("left", List("base")) + entry("lone", Nil) + entry("right", List("base")) + entry("top", List("base", "left", "right")) +
+        entry("twin1", Nil, "shared/src") + entry("twin2", Nil, "shared/src"))
+      val jarFiles = askingFiles.filterNot(_._1 == "teq.lock") ++ Seq("teq.lock" -> jarLock, "bad.jar" -> "this is no jar\n")
+      val jarOne = go(s"leaves-$at-one", jarFiles, Vector("--check", "--jobs", "1", "--threads", "4"))
+      val jarSide = go(s"leaves-$at-side", jarFiles, Vector("--check", "--threads", "4"))
+      val before = semantic(jarOne).count(_.startsWith("round "))
+      expect(s"leaves/$at", jarOne.status == 2 && jarOne.err.trim.endsWith(s"$at: typing main ($place)\n<build>/bad.jar: not a zip archive (no end of central directory)") && (jarSide.status, jarSide.out, jarSide.err) == (jarOne.status, jarOne.out, jarOne.err),
+        s"exit ${jarOne.status} and ${jarSide.status}:\n${diff(jarOne.err, jarSide.err)}\n${jarSide.err}")
+      expect(s"leaves/$at/record", semantic(jarOne) == semantic(jarSide) && before == place.takeWhile(_.isDigit).toInt - 1,
+        s"$before rounds in the record of one job at a time:\n${diff(semantic(jarOne).mkString("\n"), semantic(jarSide).mkString("\n"))}")
+    // Nothing of a job's process is left in the temporary directory: of rounds that end while their later rule
+    // workers are still starting, and of jobs that are ended behind a job that does not type.
+    val tmp = work.resolve("jobs-tmp")
+    Sh.remove(tmp)
+    Files.createDirectories(tmp)
+    val tmpEnv = Seq("TMPDIR" -> tmp.toString, "TMP" -> tmp.toString, "TEMP" -> tmp.toString)
+    for i <- 1 to 3 do go(s"tmp-$i", askingFiles, Vector("--check", "--threads", "4"), tmpEnv*)
+    go("tmp-cut", broken("base"), Vector("--check", "--threads", "4"), tmpEnv*)
+    val leftThere = Files.list(tmp).iterator.asScala.map(_.getFileName.toString).toVector
+    expect("tmp", leftThere.isEmpty, s"left in the temporary directory: ${leftThere.mkString(" ")}")
+    // A job's process that dies, before its documents and after them: the run ends at that job, nothing written.
+    val whole = go("whole", askingFiles, Vector("--jobs", "1", "--threads", "4"))
+    for plant <- Vector("die", "die-late") do
+      val o = go(s"plant-$plant", askingFiles, Vector("--threads", "4"), "TEQ_FIX_JOB_PLANT" -> s"$plant:2")
+      expect(s"plant/$plant", o.status == 2 && o.err.contains("teq fix: the process that typed lone and ran its rules ended early (") && o.err.contains("teq fix: stopped; nothing rewritten") && o.files == askingFiles.toMap,
+        s"exit ${o.status}, the files as they were ${o.files == askingFiles.toMap}:\n${o.err}")
+    // A megabyte on a job's stderr before its first message, in each of its two rounds: read to its end and written at
+    // the job's place.
+    val noise = go("plant-noise", askingFiles, Vector("--threads", "4"), "TEQ_FIX_JOB_PLANT" -> "noise:2")
+    val (xs, rest) = noise.err.split("\n", -1).toVector.partition(l => l.length == 1023 && l.forall(_ == 'x'))
+    expect("plant/noise", xs.size == 2048 && same(whole, noise.copy(err = rest.mkString("\n"))).isEmpty, s"${xs.size} lines of the megabyte of its two rounds; " + same(whole, noise.copy(err = rest.mkString("\n"))).getOrElse("the rest alike"))
+    // The first job two seconds behind the others: its lines still come first.
+    val slow = go("plant-slow", askingFiles, Vector("--threads", "4"), "TEQ_FIX_JOB_PLANT" -> "slow:0")
+    expect("plant/slow", same(whole, slow).isEmpty, same(whole, slow).getOrElse(""))
+    // An entry of the configuration that no job resolves: the run says once why, as the first job in the jobs' order
+    // found it, whichever job's round ended first.
+    val entryFiles = Seq("teq.lock" -> Verb.lockWith(Verb.project("a", Nil) + Verb.project("b", Nil)), ".scalafix.conf" -> "rules = [ForbiddenSymbol]\nForbiddenSymbol.symbols = [\"custom.Box.missing\"]\n",
+      "a/src/A.scala" -> "package custom\nobject Box { val present = 1 }\n", "b/src/B.scala" -> "object B { val x = 1 }\n")
+    for (tag, order, why) <- Vector(("ab", Vector("a", "b"), "custom.Box has no member missing"), ("ba", Vector("b", "a"), "there is no custom")) do
+      val one = go(s"entry-$tag-one", entryFiles, Vector("--check", "--jobs", "1", "--threads", "4") ++ order)
+      expect(s"entry/$tag/one", one.status == 0 && one.err.contains(s"warning: ForbiddenSymbol: custom.Box.missing names no symbol ($why): the entry forbids nothing"), s"exit ${one.status}:\n${one.err}")
+      for (side, env) <- Vector(("side", Seq[(String, String)]()), ("reverse", Seq("TEQ_FIX_JOBS_SCHEDULE" -> "reverse")), ("behind", Seq("TEQ_FIX_JOB_PLANT" -> "slow:0"))) do
+        val o = go(s"entry-$tag-$side", entryFiles, Vector("--check", "--threads", "4") ++ order, env*)
+        expect(s"entry/$tag/$side", same(one, o).isEmpty && atOnce(o) == Some((2, "budget")), same(one, o).getOrElse(s"the record's ${o.record.find(_.startsWith("jobs "))}"))
+    // What a job's process writes to its stdout beside its messages (a line, then text that ends in no newline,
+    // before its first message) is on the run's stdout, in the jobs' order, and no message is lost to it.
+    val quiet = go("prints-one", entryFiles, Vector("--check", "--jobs", "1", "--threads", "4"))
+    for (side, env) <- Vector(("side", Seq[(String, String)]()), ("reverse", Seq("TEQ_FIX_JOBS_SCHEDULE" -> "reverse"))) do
+      val o = go(s"prints-$side", entryFiles, Vector("--check", "--threads", "4"), (Seq("TEQ_FIX_JOB_PLANT" -> "prints:0,prints:1") ++ env)*)
+      expect(s"prints/$side", o.out == "job 0 line\njob 0 partjob 1 line\njob 1 part" && same(quiet, o.copy(out = "")).isEmpty && atOnce(o) == Some((2, "budget")),
+        s"stdout `${o.out}`; " + same(quiet, o.copy(out = "")).getOrElse(s"the rest alike, the record's ${o.record.find(_.startsWith("jobs "))}"))
+    // A rule that leaves a process of its own behind, which holds the streams it was started with for twenty seconds:
+    // the run does not wait for it, as a run of one job at a time does not.
+    val starts = "package rules\nimport teq.fix.*\nfinal class Starts extends SyntacticRule(\"Starts\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n    new ProcessBuilder(\"sleep\", \"20\").inheritIO().start()\n    Patch.empty\n"
+    if Sh("sleep", "0").check(false).run().status == 0 then
+      val heldFiles = entryFiles.filterNot(_._1 == ".scalafix.conf") ++ Seq(".scalafix.conf" -> "rules = [\"file:rules/Starts.scala\", OptionGetWarn]\n", "rules/Starts.scala" -> starts)
+      // The guard keeps a rule that starts a process on one job at a time (`keeps/Disk` below); the suite's switch
+      // lets this one past it, so that the row meets a job's process whose streams another process holds.
+      val heldOne = go("held-one", heldFiles, Vector("--check", "--jobs", "1", "--threads", "4"), "TEQ_FIX_PLANT" -> "unguarded")
+      val began = System.nanoTime
+      val held = go("held-side", heldFiles, Vector("--check", "--threads", "4"), "TEQ_FIX_PLANT" -> "unguarded")
+      val took = (System.nanoTime - began) / 1000000
+      expect("held", heldOne.status == 0 && same(heldOne, held).isEmpty && atOnce(held) == Some((2, "budget")) && took < 10000, same(heldOne, held).getOrElse(s"exit ${heldOne.status}, the record's ${held.record.find(_.startsWith("jobs "))}, the run took $took ms"))
+    // A project's rule that keeps a count where its sources' definitions do not show it: in a file it writes through
+    // a process of its own, in its thread's name, in the process's default time zone. The run stays one job at a
+    // time and says so (`reason=state`): each project's literal is the count of the documents before it, as at
+    // `--jobs 1`.
+    val counting = (from: String) => s"    doc.tree.collect { case t: Lit.Int if t.syntax == \"1\" => Patch.replaceTree(t, (100 + $from).toString) }.asPatch\n"
+    val keepers = Vector(
+      "Disk" -> ("    val p = new ProcessBuilder(\"sh\", \"-c\", \"echo x >> seen.txt; wc -l < seen.txt\").start()\n    val n = new String(p.getInputStream.readAllBytes()).trim.toInt\n    p.waitFor()\n" + counting("n")),
+      "Named" -> ("    val t0 = Thread.currentThread()\n    val n = (if t0.getName.startsWith(\"seen-\") then t0.getName.drop(5).toInt else 0) + 1\n    t0.setName(\"seen-\" + n)\n" + counting("n")),
+      "Zone" -> ("    val id = java.util.TimeZone.getDefault().getID()\n    val n = (if id.startsWith(\"seen-\") then id.drop(5).toInt else 0) + 1\n    java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(\"seen-\" + n))\n" + counting("n")))
+    val fiveLock = Verb.lockWith((1 to 5).map(i => Verb.project(s"q$i", Nil)).mkString)
+    val fiveSources = (1 to 5).map(i => s"q$i/src/q$i/One.scala" -> s"package q$i\nobject One { val one = 1 }\n")
+    for (rule, body) <- keepers if rule != "Disk" || Sh("sh", "-c", "true").check(false).run().status == 0 do
+      val source = s"package rules\nimport teq.fix.*\nfinal class $rule extends SyntacticRule(\"$rule\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n$body"
+      val kFiles = Seq("teq.lock" -> fiveLock, ".scalafix.conf" -> s"rules = [\"file:rules/$rule.scala\"]\n", s"rules/$rule.scala" -> source) ++ fiveSources
+      val one = go(s"keeps-$rule-one", kFiles, Vector("--jobs", "1"), "TZ" -> "UTC")
+      val literals = (o: Parallel.Outcome) => (1 to 5).map(i => o.files(s"q$i/src/q$i/One.scala").linesIterator.toVector.last.filter(_.isDigit)).mkString(" ")
+      expect(s"keeps/$rule/one", one.status == 0 && literals(one) == "101 102 103 104 105" && atOnce(one) == Some((1, "state")), s"exit ${one.status}, the literals ${literals(one)}, the record's ${one.record.find(_.startsWith("jobs "))}:\n${one.err}")
+      for (tag, args) <- Vector(("default", Vector[String]()), ("two", Vector("--jobs", "2")), ("four", Vector("--jobs", "4"))) do
+        val o = go(s"keeps-$rule-$tag", kFiles, args, "TZ" -> "UTC")
+        expect(s"keeps/$rule/$tag", same(one, o).isEmpty && atOnce(o) == Some((1, "state")), same(one, o).getOrElse(s"the literals ${literals(o)}, the record's ${o.record.find(_.startsWith("jobs "))}"))
+    // A raise in the middle of a round. `lone`, two seconds behind, ends while the rules of `base`, on its share of
+    // the run's four workers, are part of the way through its documents (a rule that takes a tenth of a second each):
+    // base's rules take the workers that come free where the round stands, and the run is the reference's.
+    val waits = "package rules\nimport teq.fix.*\nfinal class Waits extends SyntacticRule(\"Waits\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n    val until = java.time.Instant.now().toEpochMilli + 100L\n    while java.time.Instant.now().toEpochMilli < until do ()\n    Patch.empty\n"
+    val raiseFiles = askingFiles.filterNot(_._1 == ".scalafix.conf") ++ Seq(".scalafix.conf" -> "rules = [\"file:rules/Waits.scala\", DisableSyntax, OptionGetWarn]\nDisableSyntax.noVars = true\n", "rules/Waits.scala" -> waits) ++
+      (0 until 160).map(i => f"base/src/base/More$i%03d.scala" -> s"package base\nobject More$i { val more = $i }\n")
+    val raiseOne = go("raise-one", raiseFiles, Vector("--check", "--jobs", "1", "--threads", "4", "base", "lone"))
+    val raised = go("raise-side", raiseFiles, Vector("--check", "--threads", "4", "base", "lone"), "TEQ_FIX_JOB_PLANT" -> "slow:1")
+    val handed = raised.record.filter(_.startsWith("dispatch job=0 ")).map(Parallel.fieldsOf).map(_.getOrElse("at_us", "0").toLong)
+    val finished = raised.record.filter(_.startsWith("done job=0 ")).map(Parallel.fieldsOf).map(_.getOrElse("finish_us", "0").toLong)
+    val joined = raised.record.filter(_.startsWith("worker-start job=0 ")).map(Parallel.fieldsOf).map(f => f.getOrElse("w", "0").toInt -> f.getOrElse("at_us", "0").toLong).filter((w, at) => handed.nonEmpty && at > handed.min && at < finished.max)
+    expect("raise", raiseOne.status == 1 && same(raiseOne, raised).isEmpty && atOnce(raised) == Some((2, "budget")) && joined.nonEmpty && recordProblems(raised).isEmpty,
+      same(raiseOne, raised).getOrElse(s"exit ${raiseOne.status}, the record's ${raised.record.find(_.startsWith("jobs "))}; workers of base started while its round stood: ${joined.mkString(", ")}\n  ${recordProblems(raised).mkString("\n  ")}\n${raised.record.filter(l => l.startsWith("worker-start ") || l.startsWith("round")).mkString("\n")}"))
+    // No process of a job a second after its run ended, whatever ended it; none starts a process of its own.
+    if Sh("ps", "-e", "-o", "pid=").check(false).run().status == 0 then
+      for signal <- Vector("INT", "TERM", "ABRT", "KILL") do
+        val d = work.resolve("jobs-ended-" + signal)
+        Sh.remove(d)
+        for (f, text) <- askingFiles do
+          Files.createDirectories(d.resolve(f).getParent)
+          Files.writeString(d.resolve(f), text)
+        val run = Sh(teq, "fix", "--check", "--threads", "4").in(d).withEnv("TEQ_FIX_JOB_PLANT" -> (0 until 7).map(k => s"slow:$k").mkString(",")).timeout(60).check(false).spawn()
+        val pid = run.process.pid()
+        var seen = jobsOf(pid)
+        val until = System.nanoTime + 5000000000L
+        while seen._1.size < 4 && run.alive && System.nanoTime < until do
+          Thread.sleep(50)
+          seen = jobsOf(pid)
+        Sh("kill", "-" + signal, pid.toString).check(false).run()
+        val ended = run.await()
+        Thread.sleep(1000)
+        val left = jobsOf(pid)._1
+        expect(s"ended/$signal", seen._1.size == 4 && !seen._2 && left.isEmpty && ended.status != 0 && !ended.timedOut,
+          s"${seen._1.size} processes of its jobs seen while it ran (one of them a parent: ${seen._2}), exit ${ended.status}, left a second after: ${left.mkString(" | ")}")
+      // An interrupt between the rounds, as round two's jobs are started (each two seconds before it types): the run
+      // ends by the signal, nothing is written, and no process of a job is left.
+      if Sh("python3", "--version").check(false).run().status == 0 then
+        val d = work.resolve("jobs-ended-between")
+        Sh.remove(d)
+        for (f, text) <- askingFiles do
+          Files.createDirectories(d.resolve(f).getParent)
+          Files.writeString(d.resolve(f), text)
+        val pidFile = work.resolve("jobs-ended-between.pid")
+        val r = Sh("python3", Paths.get("tests/support/pty_run.py").toAbsolutePath.toString, "--pipe", "--pid-file", pidFile.toString, "--signal", "INT", "--when", "typing again what reads them", teq, "fix", "--threads", "4").in(d)
+          .withEnv("TEQ_FIX_JOB_PLANT" -> (0 until 7).map(k => s"slow:$k").mkString(",")).timeout(120).check(false).run()
+        Thread.sleep(1000)
+        val left = jobsOf(read(pidFile).trim.toLong)._1
+        val asWere = askingFiles.forall((f, text) => read(d.resolve(f)) == text)
+        expect("ended/between", r.status == 130 && left.isEmpty && asWere && r.outAll().contains("typing again what reads them") && !r.outAll().contains("rewritten in"),
+          s"exit ${r.status}, the files as they were $asWere, left a second after: ${left.mkString(" | ")}\n${r.outAll()}")
+    else println("jobs/ended: skipped, no ps to list the processes")
+    // On a terminal, a run of three jobs: the run's status, within the row; the lines that stay are the piped run's
+    // without the lines where a typing begins.
+    if Sh("python3", "--version").check(false).run().status == 0 then
+      val script = Paths.get("tests/support/pty_run.py").toAbsolutePath.toString
+      val erase = "\r\u001b[K"
+      val three = Vector("base", "left", "lone", "--threads", "4")
+      val piped = go("terminal-piped", askingFiles, three)
+      val want = piped.err.linesIterator.filterNot(_.contains(": typing main")).mkString("", "\n", "\n")
+      def onTerminal(tag: String, options: Seq[String], env: (String, String)*): (Sh.Result, Vector[String], String) =
+        val d = work.resolve("jobs-terminal-" + tag)
+        Sh.remove(d)
+        for (f, text) <- askingFiles do
+          Files.createDirectories(d.resolve(f).getParent)
+          Files.writeString(d.resolve(f), text)
+        val r = Sh((Vector("python3", script) ++ options ++ Vector(teq, "fix") ++ three)*).in(d).withEnv((Seq("TERM" -> "xterm") ++ env)*).timeout(300).check(false).run()
+        val parts = r.outAll().replace("\r\n", "\n").split("\n", -1).toVector.map(_.split(java.util.regex.Pattern.quote(erase), -1).toVector)
+        val statuses = parts.flatMap(p => p.drop(1).dropRight(1)) ++ parts.lastOption.filter(_.size > 1).map(_.last).filter(_.nonEmpty)
+        (r, statuses, timeless(parts.map(_.last).filter(_.nonEmpty).mkString("", "\n", "\n")))
+      for columns <- Vector(80, 40, 20) do
+        val (r, statuses, stay) = onTerminal(columns.toString, Seq("--columns", columns.toString))
+        val runs = statuses.filterNot(_.startsWith("teq fix: prepar"))
+        val whole = runs.map(_.replaceFirst(", \\d+ s$", ""))
+        val problems = scala.collection.mutable.ListBuffer.empty[String]
+        if r.status != piped.status then problems += s"exit ${r.status}, the piped run's ${piped.status}"
+        if stay != want then problems += s"the lines that stay are not the piped run's:\n${diff(want, stay)}"
+        if statuses.exists(_.length >= columns) then problems += s"statuses not within the row: ${statuses.filter(_.length >= columns).mkString(" | ")}"
+        if runs.isEmpty then problems += "no status of the run"
+        if columns == 80 && !whole.forall(statusOf(3).matches) then problems += s"statuses of another shape: ${whole.filterNot(statusOf(3).matches).mkString(" | ")}"
+        if columns == 20 && !runs.exists(_.matches(statusCut(3))) then problems += s"no status cut to the row: ${runs.mkString(" | ")}"
+        if problems.isEmpty then pass += 1 else { fail += 1; bad(s"jobs/terminal/$columns", problems.mkString("\n  ")) }
+      // A signal while the run's status shows (every job two seconds before it types): the status erased, the run
+      // ended by the signal, no process of a job a second later.
+      for (signal, code) <- Vector("INT" -> 130, "TERM" -> 143) do
+        val pidFile = work.resolve(s"jobs-terminal-$signal.pid")
+        val (r, statuses, _) = onTerminal(signal, Seq("--columns", "80", "--pid-file", pidFile.toString, "--signal", signal, "--when", "projects done"), "TEQ_FIX_JOB_PLANT" -> "slow:0,slow:1,slow:2")
+        Thread.sleep(1000)
+        val left = jobsOf(read(pidFile).trim.toLong)._1
+        val ok = r.status == code && r.outAll().endsWith(erase) && statuses.lastOption.exists(l => statusOf(3).matches(l.replaceFirst(", \\d+ s$", ""))) && left.isEmpty
+        if ok then pass += 1 else { fail += 1; bad(s"jobs/terminal/$signal", s"exit ${r.status}, expected $code and the status erased last; left a second after: ${left.mkString(" | ")}\n" + r.outAll().replace("\r", "\\r").replace("\u001b", "\\e")) }
+    else println("jobs/terminal: skipped, no python3 for the pseudo-terminal")
     (pass, fail)

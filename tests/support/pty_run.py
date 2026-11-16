@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""pty_run.py [--columns N] [--pipe] [--signal INT|TERM --when TEXT] <command...>: the command run with its three
+"""pty_run.py [--columns N] [--pipe] [--pid-file FILE] [--signal INT|TERM --when TEXT] <command...>: the command run with its three
 streams on a pseudo-terminal (of N columns where said), or with --pipe on a pipe; every byte it writes there goes to
 stdout as it wrote it (a terminal's line ends, CR LF, among them). With --signal the command is sent that signal as
 soon as TEXT has appeared among its bytes. The exit code is the command's, 128 and the signal's number where a
-signal ended it. For a test of what a tool writes where its stderr is a terminal (tests/fix.scala, `told`)."""
+signal ended it. With --pid-file the command's process id is written to FILE once it has started. For a test of what
+a tool writes where its stderr is a terminal (tests/fix.scala, `told`)."""
 import fcntl
 import os
 import pty
@@ -14,7 +15,7 @@ import sys
 import termios
 
 args = sys.argv[1:]
-columns, sig, when, pipe = None, None, None, False
+columns, sig, when, pipe, pid_file = None, None, None, False, None
 while args and args[0].startswith("--"):
     option = args.pop(0)
     if option == "--columns":
@@ -25,6 +26,8 @@ while args and args[0].startswith("--"):
         when = args.pop(0).encode()
     elif option == "--pipe":
         pipe = True
+    elif option == "--pid-file":
+        pid_file = args.pop(0)
     else:
         sys.exit("pty_run: no option " + option)
 if pipe:
@@ -36,6 +39,9 @@ else:
         fcntl.ioctl(terminal, termios.TIOCSWINSZ, struct.pack("HHHH", 24, columns, 0, 0))
     child = subprocess.Popen(args, stdin=terminal, stdout=terminal, stderr=terminal)
     os.close(terminal)
+if pid_file is not None:
+    with open(pid_file, "w") as f:
+        f.write(str(child.pid))
 seen, sent = b"", False
 while True:
     try:

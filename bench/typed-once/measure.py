@@ -34,7 +34,7 @@ Scenarios:
                  (the default rule workers; one; the lint-only run)
   fix-asking-projects
                  both projects under the three rules that ask the SemanticDB service (OptionGetWarn, ForbiddenSymbol,
-                 TypelevelHttp4sLiteralsSyntax)
+                 TypelevelHttp4sLiteralsSyntax), one job at a time (`--jobs 1`): the peak is one process's
   check          the session's arguments as a one-shot check: a typing's own peak, nothing kept
   session, session-index, session-index-forms
                  the check session the daemon keeps for web's compile configuration, started by hand from its
@@ -304,7 +304,7 @@ VERBS = {
     "fix-syntactic-phases": lambda s: s.phases("syntactic.conf"),
     "fix-syntactic-phases1": lambda s: s.phases("syntactic.conf", env={"TEQ_FIX_RULE_THREADS": "1"}),
     "fix-lint-phases": lambda s: s.phases("lint.conf"),
-    "fix-asking-projects": lambda s: s.run(["fix", "--check", "--config", "asking.conf", "web", "api"]),
+    "fix-asking-projects": lambda s: s.run(["fix", "--check", "--config", "asking.conf", "--jobs", "1", "web", "api"]),
     "check": lambda s: s.check(),
     "compile": lambda s: s.run(["compile", "web"]),
     "test": lambda s: s.run(["test", "api"]),

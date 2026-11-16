@@ -394,6 +394,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   one declared by the singleton type of a member of the class itself (`val got: this.len.type`); one whose body
   declares a class (`def spare(k: Int) = { class Notch(val at: Int); .. }`); and a type member that names the
   method's type parameter (`type Elem = T`).
+- `teq fix` types the projects of a run and runs their rules side by side, as many at once as the machine has
+  workers (`--threads n` bounds them): each project in a process of its own, and what the run prints
+  and writes is unchanged, line for line and byte for byte. `--jobs n` runs at most `n` at once, `--jobs 1` one
+  after another as before. On a terminal the line that shows where the run is names the projects done, those being
+  typed and those whose rules run (`teq fix: 2 of 17 projects done, typing api, core, web, 14 s`).
 
 ## 0.1.10 (2026-11-13)
 

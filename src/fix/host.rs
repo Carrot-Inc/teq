@@ -108,7 +108,7 @@ pub struct Lint {
     pub group: u32,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Results {
     pub edits: Vec<Edit>,
     pub imports: Vec<ImportOp>,
