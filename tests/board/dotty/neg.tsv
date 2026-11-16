@@ -927,7 +927,7 @@ i2470.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2470.scala:1:8 o
 i24711-java-nested-types.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i24711-java-nested-types.scala:2:21 Found:    java.util.Map.Entry[String, Int]; teq's is error i24711-java-nested-types.scala:2:21 type mismatch: found Entry[String, Int], required Int
 i2473.scala	fail	-	marks: 1 errors where 2 are marked
 i24745.scala	fail	-	marks: 4 errors where 1 are marked: i24745.scala:18:14: expected ',' or ')', found identifier
-i24789.scala	fail	-	marks: 1 errors where 2 are marked
+i24789.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i24789.scala:10:8 Unreachable case; teq's is error i24789.scala:10:8 unreachable case: type A | B and class C are unrelated
 i24825.scala	fail	-	check: diagnostic 4 of 4: scalac's is warning without a place: there were 3 deprecation warnings; re-run with -deprecation for details; teq's is nothing
 i24825b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i24825b.scala:5:3 modifier(s) `abstract override` incompatible with type definition; teq's is error i24825b.scala:5:27 class Blah overrides nothing
 i24825c.scala	fail	-	marks: 7 errors where 3 are marked: i24825c.scala:17:3: modifier override is not allowed for this definition
@@ -1293,9 +1293,9 @@ i8623.scala	fail	-	marks: error on an unmarked line i8623.scala:9: local givens 
 i8623a.scala	fail	-	marks: error on an unmarked line i8623a.scala:14: type mismatch: found Int, required String
 i8632.scala	pass	-	
 i866.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i866.scala:2:16 Found:    ("" : String); teq's is error i866.scala:2:16 type mismatch: found "", required Int
-i8681.scala	fail	-	marks: 2 errors where 3 are marked
+i8681.scala	fail	-	check: diagnostic 1 of 4: scalac's is warning i8681.scala:9:8 Unreachable case; teq's is error i8681.scala:9:8 unreachable case: type A and class B are unrelated
 i871.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i871.scala:2:20 Missing return type; teq's is error i871.scala:2:7 an abstract def needs a result type
-i8711.scala	fail	-	marks: 2 errors where 3 are marked
+i8711.scala	fail	-	check: diagnostic 1 of 5: scalac's is warning i8711.scala:9:10 Unreachable case; teq's is error i8711.scala:9:10 unreachable case: type A and class B are unrelated
 i8715.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i8715.scala:2:47 bad use of `*` - sequence pattern not allowed here; teq's is warning i8715.scala:2:12 match may not be exhaustive.
 i8730.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i8730.scala:15:8 Structural unapply is not supported; teq's is error i8730.scala:15:8 this is not a case class or enum case
 i8731.scala	fail	-	marks: no error where 2 are marked
@@ -1614,7 +1614,7 @@ product-to-tuple.scala	fail	-	check: diagnostic 1 of 2: scalac's is error produc
 publicInBinary-not-accessible.scala	fail	-	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
 publicInBinary.scala	fail	-	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
 publicInBinaryOverride.scala	fail	-	marks: no error where 1 are marked
-pureStatement.scala	fail	-	marks: 2 errors where 3 are marked
+pureStatement.scala	fail	-	check: diagnostic 1 of 7: scalac's is error pureStatement.scala:29:3 missing argument list for value of type IOCapability => Unit; teq's is warning pureStatement.scala:6:3 A pure expression does nothing in statement position
 puretest.scala	fail	-	marks: 3 errors where 2 are marked: puretest.scala:7:3: type argument Int does not conform to upper bound Pure
 quote-MacroOverride.scala	fail	-	marks: no error where 2 are marked
 realizability.scala	fail	-	marks: no error where 2 are marked
@@ -1669,7 +1669,7 @@ stackoverflowmacro	fail	-	check: diagnostic 1 of 1: scalac's is error 2_Use.scal
 static-implements.scala	fail	-	marks: no error where 1 are marked
 static-no-companion.scala	fail	-	marks: no error where 1 are marked
 struct-given.scala	pass	-	
-structural-2.scala	fail	-	marks: 9 errors where 5 are marked: structural-2.scala:56:3: expected an identifier, found 'def'
+structural-2.scala	fail	-	marks: 10 errors where 5 are marked: structural-2.scala:56:3: expected an identifier, found 'def'
 structural-gadt.scala	fail	-	check: diagnostic 1 of 18: scalac's is error structural-gadt.scala:13:18 Found:    (0 : Int); teq's is error structural-gadt.scala:13:18 type mismatch: found 0, required A
 structural-recursive-both1-gadt.scala	fail	-	check: diagnostic 1 of 30: scalac's is error structural-recursive-both1-gadt.scala:30:18 Found:    (0 : Int); teq's is error structural-recursive-both1-gadt.scala:30:18 type mismatch: found 0, required A
 structural-recursive-both2-gadt.scala	fail	-	check: diagnostic 1 of 30: scalac's is error structural-recursive-both2-gadt.scala:30:18 Found:    (0 : Int); teq's is error structural-recursive-both2-gadt.scala:30:18 type mismatch: found 0, required A
@@ -1798,7 +1798,7 @@ typedIdents	fail	-	check: diagnostic 1 of 2: scalac's is error typedIdents.scala
 typedapply.scala	fail	-	marks: 3 errors where 4 are marked
 unary-with-type-params.scala	fail	-	marks: 2 errors where 1 are marked: unary-with-type-params.scala:3:4: expected an expression, found '['
 unboundWildcard.scala	fail	-	marks: no error where 10 are marked
-unchecked-patterns.scala	fail	-	marks: 1 errors where 2 are marked
+unchecked-patterns.scala	fail	-	check: diagnostic 1 of 8: scalac's is error unchecked-patterns.scala:6:34 Found:    Option[Int]; teq's is warning unchecked-patterns.scala:5:25 pattern's type Some[Int] is more specialized than the right hand side expression's type Option[I
 undet-classtag.scala	fail	-	check: diagnostic 1 of 3: scalac's is error undet-classtag.scala:6:9 No ClassTag available for T; teq's is error undet-classtag.scala:6:9 No ClassTag available for Nothing
 unicodeEscapes-interpolations.scala	fail	-	marks: 11 errors where 12 are marked
 unicodeEscapes.scala	fail	-	marks: 3 errors where 7 are marked

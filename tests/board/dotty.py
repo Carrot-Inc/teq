@@ -43,10 +43,10 @@ run of these rows makes first, without a compiler, and ends on: `oracle.py valid
 whose marks hold passes where teq's diagnostics are its entry's, in order: severity, file, line, column and the
 whole message (teq prints no boxes; the entry has scalac's as the reader of its boxes reads them). Both sides are
 read by one rule (`comparable`): an info is part of neither; nor is the error scalac adds under -Werror (`No
-warnings can be incurred under -Werror`, which the runner records for teq's `--werror` failure and the marks
-count); a summary of the warnings a flag left unprinted (`there was 1 deprecation warning; re-run with ...`) is
-its count and its kind, each compiler naming its own flag; any other diagnostic without a place is compared
-whole; an identity hash (`ExprImpl@1562d7e8`) and a colour sequence are no part of a message. scalac ran in the
+warnings can be incurred under -Werror`, which the runner records once a compilation where teq warned under
+`--werror`, an error beside the warning or not, and the marks count); a summary of the warnings a flag left
+unprinted (`there was 1 deprecation warning; re-run with ...`) is its count and its kind, each compiler naming
+its own flag; any other diagnostic without a place is compared whole; an identity hash (`ExprImpl@1562d7e8`) and a colour sequence are no part of a message. scalac ran in the
 corpus and names its files from there, so the corpus' own path is taken out of teq's messages. neg, warn, patmat
 and nocrash are judged against scala-library (`--std scala-library`, the library dotty's tests are written
 against).
@@ -758,6 +758,20 @@ def group_args(ctx, test, i):
 WERROR = "No warnings can be incurred under -Werror"
 
 
+def with_werror(flags, status, text, diags):
+    """A compilation's diagnostics with scalac's -Werror error where scalac tells it: an error of its own, without
+    a place, once a compilation in which a warning was told under -Werror, whatever errors stand beside it
+    (Reporter.werror: `hasWarnings && Werror`; a migration warning and a summary of unprinted warnings are
+    warnings). teq keeps no record of it: it says "errors under --werror" in its summary where warnings alone failed
+    the build, and nothing where an error stands too, so its warnings' records are asked. The record is teq's
+    failed build read in scalac's words, never an error teq did not tell: a build that did not fail (exit 1) gets
+    none, whatever it warned. The marks count the error (`// nopos-error`), a boxed .check does not."""
+    warned = any(d.get("severity") in ("warning", "migration warning") for d in diags) or (status == 1 and "errors under --werror" in text)
+    if "--werror" in flags and warned and status == 1:
+        return diags + [{"severity": "error", "message": WERROR, "werror": True}]
+    return diags
+
+
 def compile_groups(ctx, test, scratch, target, tag, extra=None):
     """Compiles the test's groups in order for `target` (check: `teq compiler check`; jvm: class files), each
     against the products of those before. (outcome, first line, diagnostics, products directory): outcome is
@@ -800,10 +814,7 @@ def compile_groups(ctx, test, scratch, target, tag, extra=None):
         else:
             cmd = ["compiler", "build"] + files + ["--target", "jvm", "--all-mains"] + (["--products", products] if separate else ["-o", products]) + classpath + flags
         status, text, diags, _ = teq(ctx, cmd, scratch, f"{tag}.{i}")
-        if status == 1 and "errors under --werror" in text and not any(d.get("severity") == "error" for d in diags):
-            # scalac's -Werror is an error of its own, without a place, after the warnings (teq says it in its
-            # summary and keeps no record of it): the marks count it (`// nopos-error`), a boxed .check does not
-            diags = diags + [{"severity": "error", "message": WERROR, "werror": True}]
+        diags = with_werror(flags, status, text, diags)
         all_diags += diags
         why = crashed(status, text)
         if status == "timeout":

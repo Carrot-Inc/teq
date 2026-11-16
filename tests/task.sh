@@ -333,14 +333,31 @@ PY
 }
 write_export 0.1.7-check.1 80 || { echo "FAIL: munit's jars are not in the coursier cache (incomplete validation)"; exit 1; }
 task() { (cd "$b" && timeout 150 "$TEQ" "$@" 2>&1); }
+# What a command says on stderr of a build that has not answered within its first second (src/task/client.rs, `tick`;
+# docs/TOOLING.md, "What compile and run print"), taken out: a machine's speed decides whether those lines are there,
+# and `task` gives both streams as one. A check of a build's line reads the output without them, and with every other
+# line it holds: a warning before the result line is still in its way.
+untold() { grep -v -E '^compiling .+ \([0-9]+ of [0-9]+\)(, started now)?$'; }
+first_compile_said() { [[ "$(untold <<< "$1")" == "app: compiled main and test, "*" classes written, in "* ]]; }
 
 out=$(task)
 case "$out" in *"projects of $b"*"app (jvm), core (jvm)"*) pass "without a verb, the verbs and the projects" ;; *) fail "the verbs and projects: $out" ;; esac
 out=$(task compile app)
-if [ $? = 0 ] && [[ "$out" == "app: compiled main and test, "*" classes written, in "* ]] && [ -f "$b/target/teq/app/test/classes/app/Main.class" ] && [ -f "$b/target/teq/app/test/classes/core/Core\$.class" ] && [ -f "$b/target/teq/app/test/classes/app/MainTest.class" ]; then
+if [ $? = 0 ] && first_compile_said "$out" && [ -f "$b/target/teq/app/test/classes/app/Main.class" ] && [ -f "$b/target/teq/app/test/classes/core/Core\$.class" ] && [ -f "$b/target/teq/app/test/classes/app/MainTest.class" ]; then
   pass "the first compile: the resident of app/test writes the closure's class files, core's among them"
 else
   fail "the first compile: $out"
+fi
+# That reading, on what a slow machine and a stale export put before the line (the words are held to teq's own
+# further down: the slow builds' stderr, the changed build definition's warning, the wait for a daemon's end).
+result='app: compiled main and test, 31 classes written, in 75 ms'
+if first_compile_said "$result" && first_compile_said $'compiling app, core (1 of 1), started now\n'"$result" && first_compile_said $'compiling app, core (1 of 1)\n'"$result" &&
+  ! first_compile_said $'teq: warning: teq.lock was written before build.sbt changed; run sbt teqExportAll and commit the file\n'"$result" &&
+  ! first_compile_said $'compiling app\n'"$result" && ! first_compile_said $'compiling app, core (1 of 1), started now\napp: 1 error' &&
+  ! first_compile_said $'teq: waiting for the previous teq daemon to stop\n'"$result"; then
+  pass "a build's line is read after the lines of a build that has not answered, and after no other line"
+else
+  fail "the reading of a build's line past the lines of a build that has not answered"
 fi
 # The resident starts as `teq @<file>` (docs/TARGETS.md, "Argument files"): its class path, past
 # Windows' cap for a few hundred jars, is in target/teq/app/test/resident.args, not on its command line.
@@ -359,10 +376,10 @@ else
 fi
 first=$(last_daemon)
 out=$(task compile app)
-if [ $? = 0 ] && [ "$out" = "app: up to date" ] && [ "$(last_daemon)" = "$first" ]; then pass "a warm compile writes nothing and says the project is up to date, through the same daemon"; else fail "a warm compile: $out"; fi
+if [ $? = 0 ] && [ "$(untold <<< "$out")" = "app: up to date" ] && [ "$(last_daemon)" = "$first" ]; then pass "a warm compile writes nothing and says the project is up to date, through the same daemon"; else fail "a warm compile: $out"; fi
 # The line names the project asked for; which configuration's build served it is the outcome's record.
 out=$(task compile core --diagnostics "$work/core.records")
-if [ "$out" = "core: up to date" ] && grep '"severity":"outcome"' "$work/core.records" | grep '"key":"app/test"' | grep -q '"projects":\["core"\]'; then
+if [ "$(untold <<< "$out")" = "core: up to date" ] && grep '"severity":"outcome"' "$work/core.records" | grep '"key":"app/test"' | grep -q '"projects":\["core"\]'; then
   pass "core is compiled by the resident whose closure holds it: the line names core, the outcome's record app/test"
 else
   fail "core's compile: $out // $(cat "$work/core.records")"
@@ -434,7 +451,7 @@ if grep -q 'count: Int = 4' "$b/target/teq/app/compile/src_managed/app/Labels.sc
 
 write_export 0.1.7-check.1 81
 out=$(task compile app)
-if [ $? = 0 ] && [ "$(last_daemon)" = "$first" ] && grep -q '^stopping app/test: the export changed its command line' "$b/target/teq/task.log" && [[ "$out" == "app: compiled main and test, "* ]]; then
+if [ $? = 0 ] && [ "$(last_daemon)" = "$first" ] && grep -q '^stopping app/test: the export changed its command line' "$b/target/teq/task.log" && [[ "$(untold <<< "$out")" == "app: compiled main and test, "* ]]; then
   pass "an export changed in a project's flags is read again by the same daemon, the project's resident started anew"
 else
   fail "the export read again: $out"
@@ -534,12 +551,16 @@ next_runner() {
   done
   runner_pid
 }
+# This command starts a daemon right after the `stop` of the one before it. Where that one is still there a second
+# later the client says so once on stderr (src/task/client.rs, `PREVIOUS`, told by the same `tick`), then tells of the
+# build as of any slow one: a machine's speed decides both, and here both are taken out. In every other check the
+# line is in the way.
 out=$(task test app --list)
 expected='Test app.MainTest : subclass(false, munit.Suite)
 Test app.Resources : subclass(false, munit.Suite)
 Test app.Sleeper : subclass(false, munit.Suite)
 Test app.ViaBase : subclass(false, munit.Suite)'
-if [ "$out" = "$expected" ]; then pass "test --list: the suites a run would run as sbt's definedTests shows them, a base's subclass among them, the abstract base, a plain class and the excluded suite not"; else fail "test --list: $out"; fi
+if [ "$(grep -v -E '^teq: waiting for the previous teq daemon to stop$' <<< "$out" | untold)" = "$expected" ]; then pass "test --list: the suites a run would run as sbt's definedTests shows them, a base's subclass among them, the abstract base, a plain class and the excluded suite not"; else fail "test --list: $out"; fi
 # The listing's runner, whose class loader holds this build's classes, is spent with the listing: the one launched for
 # the next invocation, with nothing of the class path loaded, runs the suites.
 log_count() { grep -c "$1" "$b/target/teq/task.log"; }
@@ -575,7 +596,7 @@ if [ $code = 1 ] && [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]]; then pass "
 out=$(task test app '*Via*' -app.MainTest)
 if [[ "$out" == *"app: 1 suite, 1 passed"* ]] && [[ "$out" == *"app.ViaBase"* ]]; then pass "testOnly's patterns select the suites"; else fail "the patterns: $out"; fi
 out=$(task test app --list '*Via*' -app.MainTest 'app.Excluded')
-if [ "$out" = 'Test app.ViaBase : subclass(false, munit.Suite)' ]; then pass "--list prints what the patterns select, an excluded suite not though a pattern names it"; else fail "--list with patterns: $out"; fi
+if [ "$(untold <<< "$out")" = 'Test app.ViaBase : subclass(false, munit.Suite)' ]; then pass "--list prints what the patterns select, an excluded suite not though a pattern names it"; else fail "--list with patterns: $out"; fi
 TEST_GROUPS='[{"name": "via", "patterns": ["*Via*"]}, {"name": "empty", "patterns": ["none.*"]}, {"name": "rest", "patterns": ["-*Sleeper", "app.*"]}]' write_export 0.1.7-check.9 81
 out=$(task test app --list)
 expected='Group via
@@ -588,20 +609,20 @@ Ungrouped
 Test app.Sleeper : subclass(false, munit.Suite)'
 listed_groups=$(task test app --list -app.Resources)
 write_export 0.1.7-check.9 81
-if [ "$out" = "$expected" ] && [[ "$listed_groups" != *"app.Resources"* ]] && [[ "$listed_groups" == *"Group rest"* ]]; then
+if [ "$(untold <<< "$out")" = "$expected" ] && [[ "$listed_groups" != *"app.Resources"* ]] && [[ "$listed_groups" == *"Group rest"* ]]; then
   pass "--list with groups: each group's suites under its header in the lock's order, an empty one shown, an exclusion leaving a suite to the ungrouped, the patterns applied first"
 else
   fail "--list with groups: $out // $listed_groups"
 fi
 task test app > /dev/null
 out=$(task test app --changed)
-if [[ "$out" == "app: no suite depends on what changed" ]]; then pass "--changed after a run of every suite, nothing written since: no suite"; else fail "--changed with nothing written: $out"; fi
+if [[ "$(untold <<< "$out")" == "app: no suite depends on what changed" ]]; then pass "--changed after a run of every suite, nothing written since: no suite"; else fail "--changed with nothing written: $out"; fi
 cp "$b/core/src/core/Core.scala" "$work/Core.scala"
 sed -i.bak 's/def answer: Int = 42/def answer: Int = "42".toInt/' "$b/core/src/core/Core.scala"
 listed=$(task test app --list --changed 2> /dev/null)
 task test app --list > /dev/null
 out=$(task test app --changed)
-if [ "$listed" = 'Test app.MainTest : subclass(false, munit.Suite)' ]; then pass "--list --changed prints the suite whose classes depend on the class an edit changed, alone"; else fail "--list --changed after an edit: $listed"; fi
+if [ "$(untold <<< "$listed")" = 'Test app.MainTest : subclass(false, munit.Suite)' ]; then pass "--list --changed prints the suite whose classes depend on the class an edit changed, alone"; else fail "--list --changed after an edit: $listed"; fi
 if [[ "$out" == *"app: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"app.MainTest"* ]]; then pass "--changed runs the suite whose classes depend on the class an edit changed, alone, the listings before it leaving the history alone"; else fail "--changed after an edit: $out"; fi
 cp "$work/Core.scala" "$b/core/src/core/Core.scala"
 task compile app > /dev/null
@@ -1822,7 +1843,7 @@ ld: 3 suites, 4 passed, 0 failed'
   shared=$(grep '^shared ' "$ld/record.txt")
   records="$(ld_records | sed 's/^shared 1 .*/shared 1/' | tr '\n' ',')"
   later=$(awk -F'\t' '$2 == "ld.LaterNamed" {print NF " " $NF}' "$ld/groups.events" | sort -u | tr '\n' ',')
-  if [ $code = 0 ] && [ "$out" = "$listed" ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$records" = "one 1,later 1,two 1,shared 1,done 1 1,done 0 0," ] \
+  if [ $code = 0 ] && [ "$(untold <<< "$out")" = "$listed" ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$records" = "one 1,later 1,two 1,shared 1,done 1 1,done 0 0," ] \
     && [ "$later" = "4 first,6 first," ] && grep -q '^ld	ld.Shared01	ran	$' "$ld/groups.events" && grep -q '^ld	ld.GroupTwo	ran	second$' "$ld/groups.events" \
     && grep -q '"group":"first"' "$ld/groups.diag" && grep -q '"group":null' "$ld/groups.diag" && ! grep -q '^ld \[' "$ld/out.txt"; then
     pass "groups: the listing's sections, then the groups run in their order in one run, one object across them, a descendant in its originator's group though a later group names it, the headers, summaries and total on stderr, each event's group, done() once"
@@ -1942,10 +1963,10 @@ ld: 3 suites, 2 passed, 0 failed'
   expanded=$(lt --list 'ld.Gr...Two' '-ld...One')
   lt ld.GroupTwo 'ld.Group*' ld.Explicit > /dev/null
   order=$(ld_records | sed 's/ .*//' | tr '\n' ',')
-  if [ "$listed" = "Test ld.GroupTwo : subclass(false, probe.Suite)
+  if [ "$(untold <<< "$listed")" = "Test ld.GroupTwo : subclass(false, probe.Suite)
 Test ld.GroupOne : subclass(false, probe.Suite)
 Test ld.Explicit : subclass(false, probe.Suite)" ] && [ "$order" = "two,one,explicit,later,done,done," ] \
-    && [ "$expanded" = "Test ld.GroupTwo : subclass(false, probe.Suite)" ]; then
+    && [ "$(untold <<< "$expanded")" = "Test ld.GroupTwo : subclass(false, probe.Suite)" ]; then
     pass "the suites listed and run in testOnly's order: the patterns' order, each suite at its first, \`...\` a glob's \`**\`"
   else
     fail "testOnly's order: $listed // $order // $expanded"
@@ -2031,9 +2052,6 @@ fi
 
 # `run`: app's main classes on a JVM of their own, through the daemon's compile.
 run_app() { (cd "$b" && timeout 150 "$TEQ" run app "$@" 2> "$work/run.err"); }
-# What a command says of a build that has not answered within its first second (docs/TOOLING.md, "What compile and
-# run print"), taken out: a machine's speed decides whether those lines are there.
-untold() { grep -v -E '^compiling .+ \([0-9]+ of [0-9]+\)(, started now)?$'; }
 out=$(run_app main)
 code=$?
 first=$(untold < "$work/run.err")
@@ -2312,7 +2330,7 @@ out=$(recorded compile app)
 code=$?
 cp "$work/gen.sh.kept" "$b/gen.sh"
 echo 'one two three four' > "$b/labels.txt"
-if [ $code = 1 ] && [[ "$out" == "teq: app: command generator 0: \`sh gen.sh labels.txt "*"\` failed (exit status: 3): started" ]] && [ "$(grep -c . "$rec")" = 2 ] &&
+if [ $code = 1 ] && [[ "$(untold <<< "$out")" == "teq: app: command generator 0: \`sh gen.sh labels.txt "*"\` failed (exit status: 3): started" ]] && [ "$(grep -c . "$rec")" = 2 ] &&
   [ "$(head -1 "$rec" | grep -c '^{"key":"app/test","severity":"failure","kind":"generator","message":"command generator 0 of app/compile: `sh gen.sh labels.txt .*` failed (exit status: 3): started","shown":"teq: app: command generator 0: ')" = 1 ] &&
   [ "$(tail -1 "$rec" | grep -c '^{"key":"app/test","severity":"outcome","projects":\["app"\],"ok":false,"errors":0,"failed":"generator","why":"command generator 0 of app/compile: .* failed (exit status: 3): started","ms":null}$')" = 1 ]; then
   pass "records: a generator that fails: its line names the project, its failure's record the kind and the configuration's key, and the build's outcome says why it failed"
@@ -2415,7 +2433,7 @@ PY
 )
   out=$(task compile app)
   after=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["pid"])' "$b/target/teq/daemon.json" 2> /dev/null)
-  if [ "$answers" = "$after"$'\n''{"err":"teq: a request that is not UTF-8\n"} {"exit":2}'$'\n''{"err":"teq: an empty request\n"} {"exit":2}' ] && [ "$out" = "app: up to date" ]; then
+  if [ "$answers" = "$after"$'\n''{"err":"teq: a request that is not UTF-8\n"} {"exit":2}'$'\n''{"err":"teq: an empty request\n"} {"exit":2}' ] && [ "$(untold <<< "$out")" = "app: up to date" ]; then
     pass "a request the daemon cannot read, one that is not UTF-8 and an empty one, is refused with a line and exit code 2, and the daemon serves the next command"
   else
     fail "a request the daemon cannot read: $answers // daemon $after // $out"
@@ -3097,7 +3115,7 @@ code=$?
 if [ $code = 2 ] && [ "$out" = "teq: cannot compile gen uses, which need what sbt alone runs:
   $generated" ]; then pass "target/teq: a project whose closure holds a generator sbt alone runs is refused, found from below the root, every reason once"; else fail "target/teq, the refused compile ($code): $out"; fi
 out=$(cd "$r/other/src" && timeout 120 "$TEQ" compile other 2>&1)
-if [ $? = 0 ] && [[ "$out" == "other: compiled main, "*" written, in "* ]] && [ -f "$r/target/teq/other/compile/classes/other/Other.class" ]; then pass "target/teq: the other project compiles, its classes under the build's root"; else fail "target/teq, other's compile: $out"; fi
+if [ $? = 0 ] && [[ "$(untold <<< "$out")" == "other: compiled main, "*" written, in "* ]] && [ -f "$r/target/teq/other/compile/classes/other/Other.class" ]; then pass "target/teq: the other project compiles, its classes under the build's root"; else fail "target/teq, other's compile: $out"; fi
 out=$(cd "$r" && timeout 120 "$TEQ" compile --diagnostics "$work/left.records" 2>&1)
 code=$?
 if [ $code = 2 ] && [ "$(grep -c '"severity":"left-out"' "$work/left.records")" = 3 ] && grep -q '^{"severity":"left-out","project":"gen","shown":"teq: compile left out gen, ' "$work/left.records" && [[ "$out" == *"tested: compiled main, "* ]] && [[ "$out" != *"gen: "* ]] && [[ "$out" == *"teq compile: "*" projects in "* ]] && [[ "$out" == *"teq: compile left out gen, which needs what sbt alone runs:
@@ -3110,7 +3128,7 @@ out=$(cd "$r" && timeout 120 "$TEQ" compile tested 2>&1)
 code=$?
 test_out=$(cd "$r" && timeout 120 "$TEQ" test tested 2>&1)
 test_code=$?
-if [ $code = 0 ] && [[ "$out" == "tested: "* ]] && [ $test_code = 2 ] && [ "$test_out" = "teq: cannot test tested, which needs what sbt alone runs:
+if [ $code = 0 ] && [[ "$(untold <<< "$out")" == "tested: "* ]] && [ $test_code = 2 ] && [ "$test_out" = "teq: cannot test tested, which needs what sbt alone runs:
   tested/test has the source generator an unnamed task, which sbt runs and teq cannot: build tested with sbt" ]; then
   pass "target/teq: a Test generator sbt runs leaves the compile running, typed without the test configuration, and refuses the test"
 else
@@ -3232,7 +3250,7 @@ open(os.path.join(mb, "teq.lock"), "w", encoding="utf-8").write(lock.canonical(e
 PY
 mill_command="mill --import mvn:build.teq::mill-teq::$(cat integrations/mill/plugin-version.txt) dev.teq.mill.Teq/teqExportAll"
 out=$(cd "$mb" && timeout 120 "$TEQ" --strict compile core 2>&1)
-if [ $? = 0 ] && [[ "$out" == "core: compiled main, "* ]] && [[ "$out" != *"written before"* ]]; then pass "mill: an unchanged Mill build's export is current, --strict compiling"; else fail "mill, the current export: $out"; fi
+if [ $? = 0 ] && [[ "$(untold <<< "$out")" == "core: compiled main, "* ]] && [[ "$out" != *"written before"* ]]; then pass "mill: an unchanged Mill build's export is current, --strict compiling"; else fail "mill, the current export: $out"; fi
 cp "$mb/core/package.mill" "$work/package.mill.saved"
 printf '// edited\n' >> "$mb/core/package.mill"
 out=$(cd "$mb" && timeout 120 "$TEQ" compile core 2>&1)
@@ -3266,7 +3284,7 @@ out=$(cd "$mb" && timeout 120 "$TEQ" compile vc 2>&1)
 code=$?
 va=$(cd "$mb" && timeout 120 "$TEQ" compile va 2>&1)
 if [ $code = 2 ] && [ "$out" = "teq: cannot compile vc, which needs what mill alone runs:
-  vc/compile does not see vb/compile, which va/compile builds on: teq types vc/compile as one program with every configuration it builds on, where vb/compile would be seen; compile vc with mill" ] && [[ "$va" == "va: compiled main, "* ]]; then
+  vc/compile does not see vb/compile, which va/compile builds on: teq types vc/compile as one program with every configuration it builds on, where vb/compile would be seen; compile vc with mill" ] && [[ "$(untold <<< "$va")" == "va: compiled main, "* ]]; then
   pass "mill: a prerequisite out of a configuration's sight (compileModuleDeps, not transitive) refuses its compile, the one that sees it compiling"
 else
   fail "mill, the visibility: ($code) $out; va: $va"
@@ -3750,7 +3768,7 @@ open(os.path.join(e, "target/teq/teq.lock"), "w", encoding="utf-8").write(lock.c
 PY
 out=$(cd "$e" && timeout 120 "$TEQ" test quiet1 2>&1)
 code=$?
-if [ $code = 0 ] && [ "$out" = "quiet1: no suite to run" ] && ! grep -q '^starting the test runner of quiet1/test' "$e/target/teq/task.log"; then
+if [ $code = 0 ] && [ "$(untold <<< "$out")" = "quiet1: no suite to run" ] && ! grep -q '^starting the test runner of quiet1/test' "$e/target/teq/task.log"; then
   pass "a test configuration with nothing that could be a suite starts no test runner"
 else
   fail "the configuration without suites ($code): $out"

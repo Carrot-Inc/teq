@@ -82,9 +82,10 @@
 #            planted failure, a killed piece, one past the suite's bound and a skip for want of a jar, each failing
 #            the suite, nothing recorded.
 #   board    the conformance board's decision on a neg or warn test (tests/board/dotty.py, neg_or_warn) over made-up
-#            sources, records of teq's and oracles of scalac's, no compiler run: diagnostics equal to scalac's
-#            passing; one word of a message, a later line of it, a line past its end, a column, a severity, a file,
-#            one more, one fewer and another order each failing with its first line; white space inside a line, a
+#            sources, records of teq's and oracles of scalac's, no compiler run but teq's where said: diagnostics
+#            equal to scalac's passing; one word of a message, a later line of it, a line past its end, a column,
+#            a severity, a file, one more, one fewer and another order each failing with its first line; white
+#            space inside a line, a
 #            full stop, a letter's case, a column of 0 and a message of no line each compared; no entry, an entry of
 #            another digest or without one, one not valid and one not stable (or silent on either) `marks` where the
 #            marks hold and a failure where they fail, the digest that of every file's bytes; a summary of unprinted
@@ -105,6 +106,12 @@
 #            test validating, an entry twice, one silent on its validity, its stability or its digest and one of
 #            another scalac than the head's each failing, a run taking those failures, and the runner itself (a
 #            copy of it, with --update --add) ending on such a file with exit 2 and the cause, no list written.
+#            And the record the runner keeps of scalac's -Werror error, by teq run as a test's groups are: added
+#            once a compilation that warned under --werror, an error beside the warning or not (a test marking both
+#            its error and that one holds its marks), a summary of unprinted warnings and a migration warning being
+#            warnings; none for an error alone, for an info, without --werror, or where teq's build did not fail
+#            (a stand-in teq that takes the flag out); two groups, one a compilation, and none for the group that
+#            tells an error alone after one that warned.
 # Every run is bounded; the script exits 1 on a failure. Needs the release binary (TEQ), scala-cli and the coursier
 # cache the suites read.
 cd "$(dirname "$0")/.." || exit 1
@@ -1442,6 +1449,105 @@ print(("ok\t" if ok else "FAIL\t") + "the summary teq prints is one by the judge
 ok = len(printed) == 1 and bool(D.BUILD_SUMMARY.match(printed[0])) and not D.BUILD_SUMMARY.match(SUM % ("was 1 deprecation warning", "-deprecation"))
 print(("ok\t" if ok else "FAIL\t") + "the summary teq prints is the build's line of tests/support/jars.sh, which scalac's message is not" + ("" if ok else f": printed {printed}"))
 
+# scalac's -Werror error, of which teq keeps no record: the runner's record of it, by teq run as a test's groups are
+# (the lean std): once a compilation that warned under --werror, an error beside the warning or not. Beside an error
+# the warning is one scalac's typer tells too (a pure expression as a statement, an implicit conversion's feature)
+ctx.teq, ctx.teq_env, ctx.cache, ctx.other_platform = os.environ["TEQ"], {}, os.path.join(root, "teq-cache"), lambda t: set()
+SEALED = "sealed trait T%s\ncase object P%s extends T%s\ncase object Q%s extends T%s\n"
+MATCH = "  def %s(t: T%s) = t match\n    case P%s => 1\n"
+
+
+def sealed(n=""):
+    return SEALED % (n, n, n, n, n)
+
+
+def match(name="g", n=""):
+    return MATCH % (name, n, n)
+
+
+def compiled(t):
+    scratch = os.path.join(root, "scratch", t.name)
+    os.makedirs(scratch, exist_ok=True)
+    outcome, line, diags, _ = D.compile_groups(ctx, t, scratch, "check", "check")
+    return outcome, line, [d for d in diags if d.get("severity") != "outcome"]
+
+
+def told(diags):
+    return ["the -Werror record" if d.get("werror") else d.get("severity") for d in diags]
+
+
+def same(name, got, want):
+    print(("ok\t" + name) if got == want else f"FAIL\t{name}: wanted {want}, got {got}")
+
+
+def as_scalac(diags):
+    """teq's own records as an entry's diagnostics: the marks are what these scenarios ask, not the words."""
+    return [scalac("error", None, None, D.WERROR, None) if d.get("werror") else
+            scalac(d["severity"], d.get("line"), d.get("col"), d["message"], os.path.basename(d["file"]) if d.get("file") else None) for d in diags]
+
+
+RECORD = "the -Werror record"
+PURE = "  def f: Unit =\n    1\n    ()\n"
+both = test("neg", "wb.scala", "object WB:\n  val x: Int = \"\"  // error\n" + PURE + "// nopos-error\n", ["-Werror"])
+outcome, line, diags = compiled(both)
+same("an error and a warning under --werror: the -Werror record is added, once, after them", told(diags), ["error", "warning", RECORD])
+judged("a test marking its error and the -Werror error holds its marks where teq told an error and a warning", both, as_scalac(diags), diags, "pass", outcome=outcome, built=line)
+judged("without the record such a test is one error short", both, as_scalac(diags), [d for d in diags if not d.get("werror")], "fail", "marks: 1 errors where 2 are marked", outcome=outcome, built=line)
+alone = test("neg", "we.scala", "object WE:\n  val x: Int = \"\"  // error\n", ["-Werror"])
+outcome, line, diags = compiled(alone)
+same("an error alone under --werror: no record is added", told(diags), ["error"])
+judged("a test marking its one error holds its marks under --werror", alone, as_scalac(diags), diags, "pass", outcome=outcome, built=line)
+warned = test("neg", "ww.scala", sealed() + "object WW:\n" + match() + "// nopos-error\n", ["-Werror"])
+outcome, line, diags = compiled(warned)
+same("a warning alone under --werror: the record is added, the build failed by it", (outcome, told(diags)), ("errors", ["warning", RECORD]))
+judged("a test marking the -Werror error alone holds its marks where teq warned", warned, as_scalac(diags), diags, "pass", outcome=outcome, built=line)
+summed = test("neg", "ws.scala", "object WS:\n  val x: Int = \"\"  // error\n  implicit def conv(n: Int): String = n.toString\n// nopos-error\n", ["-Werror"])
+outcome, line, diags = compiled(summed)
+same("an error and a summary of unprinted warnings under --werror: the record is added", told(diags), ["error", "warning", RECORD])
+os.makedirs(os.path.join(root, "tests", "neg", "wg"))
+parts = [os.path.join(root, "tests", "neg", "wg", f) for f in ("A_1.scala", "B_2.scala")]
+with open(parts[0], "w") as fh:
+    fh.write(sealed(1) + "object A1:\n" + match("g", 1) + match("h", 1))
+with open(parts[1], "w") as fh:
+    fh.write(sealed(2) + "object B2:\n" + match("g", 2))
+groups = D.Test(ROWS.Row("neg", "neg", "neg", "made up", ["-Werror"], []), "wg", [[parts[0]], [parts[1]]], [os.path.dirname(parts[0])])
+outcome, line, diags = compiled(groups)
+same("two groups under --werror, the first with two warnings: one record a compilation", told(diags), ["warning", "warning", RECORD, "warning", RECORD])
+os.makedirs(os.path.join(root, "tests", "neg", "wh"))
+parts = [os.path.join(root, "tests", "neg", "wh", f) for f in ("A_1.scala", "B_2.scala")]
+with open(parts[0], "w") as fh:
+    fh.write(sealed(1) + "object A1:\n" + match("g", 1))
+with open(parts[1], "w") as fh:
+    fh.write("object B2:\n  val x: Int = \"\"  // error\n// nopos-error\n")
+halves = D.Test(ROWS.Row("neg", "neg", "neg", "made up", ["-Werror"], []), "wh", [[parts[0]], [parts[1]]], [os.path.dirname(parts[0])])
+outcome, line, diags = compiled(halves)
+same("two groups under --werror, the first warns and the second tells an error alone: one record, the first compilation's", told(diags), ["warning", RECORD, "error"])
+judged("a test of two groups marking its error and the one -Werror error holds its marks", halves, as_scalac(diags), diags, "pass", outcome=outcome, built=line)
+# a teq whose --werror fails no build (the binary, the flag taken out of its arguments): the record is of a build
+# that failed, never an error teq did not tell
+import shlex
+stand_in = os.path.join(root, "teq-without-werror")
+with open(stand_in, "w") as fh:
+    fh.write('#!/bin/bash\nargs=()\nfor a in "$@"; do [ "$a" = "--werror" ] || args+=("$a"); done\nexec ' + shlex.quote(os.environ["TEQ"]) + ' "${args[@]}"\n')
+os.chmod(stand_in, 0o755)
+with_record = as_scalac(compiled(warned)[2])
+ctx.teq = stand_in
+outcome, line, diags = compiled(warned)
+ctx.teq = os.environ["TEQ"]
+same("a teq that warns under --werror and fails no build gets no record", (outcome, told(diags)), ("ok", ["warning"]))
+judged("a test marking the -Werror error fails where teq's build did not fail", warned, with_record, diags, "fail", "marks: no error where 1 are marked", outcome=outcome, built=line)
+plain = test("warn", "wn.scala", sealed() + "object WN:\n" + match())
+outcome, line, diags = compiled(plain)
+same("a warning without --werror: no record, the build passes", (outcome, told(diags)), ("ok", ["warning"]))
+mixed = test("neg", "wm.scala", "object WM:\n  val x: Int = \"\"  // error\n" + PURE)
+outcome, line, diags = compiled(mixed)
+same("an error and a warning without --werror: no record", told(diags), ["error", "warning"])
+same("a migration warning beside an error is a warning told", told(D.with_werror(["--werror"], 1, "1 error found", [{"severity": "error"}, {"severity": "migration warning"}])),
+     ["error", "migration warning", RECORD])
+same("teq's own word that warnings failed the build is a warning told, whatever its records hold",
+     told(D.with_werror(["--werror"], 1, "1 warning found, errors under --werror", [])), [RECORD])
+same("a warning's record under --werror in a build that did not fail is no -Werror error", told(D.with_werror(["--werror"], 0, "", [{"severity": "warning"}])), ["warning"])
+same("an info beside an error is no warning told", told(D.with_werror(["--werror"], 1, "1 error found", [{"severity": "error"}, {"severity": "info"}])), ["error", "info"])
 # the oracle's own validation (tests/board/oracle.py validate, no compiler), over a made-up corpus and a made-up file
 # of a row of the board's: what the judge asks of an entry is asked of the data, and a run of the row is ended by it
 import subprocess
@@ -1517,7 +1623,7 @@ PY
 while IFS=$'\t' read -r said scenario; do
   check "board: $scenario" "$work/board.log" [ "$said" = ok ]
 done < <(grep -E $'^(ok|FAIL)\t' "$work/board.log")
-check "board: every scenario of the judge was held" "$work/board.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board.log")" = 102 ]'
+check "board: every scenario of the judge was held" "$work/board.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board.log")" = 121 ]'
 
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]
