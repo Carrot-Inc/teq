@@ -51,7 +51,9 @@
 #            passing improvement recorded, staged and installed, the check against master's counting it; after it
 #            landed, the error reintroduced failing the run and the record widened back failing the check; a record
 #            widened beside the run that needs it passing the run and failing the check; a baseline over a record
-#            and a migration over unchanged inputs refused; new generated inputs failing the run until a migration,
+#            and a migration over unchanged inputs refused, one that moves an accepted error or words it otherwise
+#            at its place admitted, one that adds an error, or words one otherwise at another line, under another
+#            configuration or twice at one place, refused; new generated inputs failing the run until a migration,
 #            admitted with its reason and evidence; a record removed failing the check and its line, a deliberately
 #            empty one holding a clean run to none; a configuration whose build failed outright one item of its whole
 #            block (a generator's run under teq interp, its diagnostics among it), the next configuration's summary
@@ -526,6 +528,9 @@ diag() {
   case $1 in
     a) printf '%s\n' "$co/modules/a/A.scala:2:15: error: Found:    (\"bad\" : String)" 'Required: Int' '  val a: Int = "bad"' '               ^^^^^' ;;
     a3) printf '%s\n' "$co/modules/a/A.scala:3:15: error: Found:    (\"bad\" : String)" 'Required: Int' '  val a: Int = "bad"' '               ^^^^^' ;;
+    a3w) printf '%s\n' "$co/modules/a/A.scala:3:9: error: type mismatch: found String, required Int" '  val a: Int = "bad"' '         ^^^' ;;
+    a3v) printf '%s\n' "$co/modules/a/A.scala:3:11: error: a String where an Int is required" '  val a: Int = "bad"' '           ^' ;;
+    a4w) printf '%s\n' "$co/modules/a/A.scala:4:9: error: type mismatch: found String, required Int" '  val a: Int = "bad"' '         ^^^' ;;
     b) printf '%s\n' 'modules/b/B.scala:9:3: error: Not found: y' '  y' '  ^' ;;
     c) printf '%s\n' 'modules/c/C.scala:1:1: error: Not found: z' 'z' '^' ;;
   esac
@@ -652,6 +657,34 @@ code2=$?
 check "records: a migration over unchanged inputs is admitted when it moves an error and refused when it adds one" "$work/records.log" eval '[ $code = 0 ] && [ "$moved_kind" = migrate ] &&
   grep -q "modules/a/A.scala:3:15: " "$rec/bench/m/errors.txt" && ! grep -q "modules/a/A.scala:2:15: " "$rec/bench/m/errors.txt" && [ $code2 = 1 ] &&
   grep -q "adds 1 item no lost item matches by its message" "$work/records.log"'
+git -C "$rec" checkout -q bench/m
+# A migration that words an accepted error otherwise at its place (the same line of the same file, another message and
+# column) is admitted: the place was in the debt and stays in it.
+transcript_of "$work/t-a3wb" 1 a3w b
+held "$work/t-a3wb" m --migrate "the error is worded otherwise" && ratchet check HEAD
+code=$?
+placed=$(grep -c "^records: bench/m/errors.txt: 2 errors, a migration (the error is worded otherwise) from master.s 2: 1 added, 0 paired with a lost item by the message, 1 by the place$" "$work/records.log")
+check "records: a migration over unchanged inputs is admitted when it words an error otherwise at its place, the check saying so" "$work/records.log" eval '[ $code = 0 ] && [ "$placed" = 1 ] &&
+  grep -q "modules/a/A.scala:3:9: error: type mismatch: found String, required Int" "$rec/bench/m/errors.txt" && ! grep -q "modules/a/A.scala:3:15: " "$rec/bench/m/errors.txt" &&
+  [ "$(grep -c "^error core/compile " "$rec/bench/m/errors.txt")" = 2 ]'
+git -C "$rec" checkout -q bench/m
+# The place is the line of the file under its configuration, an item once: the new words one line lower, the same line
+# under the other configuration, and a second item at the place of one lost are each refused, and a step of the record
+# (--record) takes no new words at all; the record stays as it was.
+unplaced="adds 1 item no lost item matches by its message or by its place"
+transcript_of "$work/t-a4wb" 1 a4w b
+held "$work/t-a4wb" m --migrate "other words one line lower"
+c1=$?; n1=$(grep -c "$unplaced" "$work/records.log")
+{ echo "core/compile: ran"; diag b; echo "core/compile: 1 error"; echo "web/compile: ran"; diag a3w; echo "web/compile: 1 error"; echo "# exit 1"; } > "$work/t-web-a3w"
+held "$work/t-web-a3w" m --migrate "other words under the other configuration"
+c2=$?; n2=$(grep -c "$unplaced" "$work/records.log")
+transcript_of "$work/t-a3wvb" 1 a3w a3v b
+held "$work/t-a3wvb" m --migrate "two items at the place of one"
+c3=$?; n3=$(grep -c "$unplaced" "$work/records.log")
+held "$work/t-a3wb" m --record
+c4=$?
+check "records: a migration is refused for other words at another line, under another configuration and twice at one place, and a record step for any" "$work/records.log" eval '[ "$c1 $c2 $c3 $c4" = "1 1 1 1" ] &&
+  [ "$n1 $n2 $n3" = "1 1 1" ] && git -C "$rec" diff --quiet -- bench/m && [ ! -e "$rec/bench/m/errors.txt.proposed" ]'
 git -C "$rec" checkout -q bench/m
 echo '{"target/teq/p/compile/src_managed": "1234"}' > "$rec/bench/p/generated.json"
 held "$work/t-b"

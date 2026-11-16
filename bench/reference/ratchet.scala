@@ -91,6 +91,10 @@ object Ratchets:
             case None => s"a ${c.provenance.kind}, master has none"
             case Some(a) if a == c => "as accepted"
             case Some(a) if a.provenance.inputs != c.provenance.inputs => s"a migration (${c.provenance.reason}) from master's ${a.debt.size}"
+            case Some(a) if c.provenance.kind == "migrate" && !Multiset.within(c.debt, a.debt) =>
+              val added = Multiset.minus(c.debt, a.debt)
+              val (_, messages, places) = Ratchet.pairing(added, Multiset.minus(a.debt, c.debt))
+              s"a migration (${c.provenance.reason}) from master's ${a.debt.size}: ${added.size} added, $messages paired with a lost item by the message, $places by the place"
             case Some(a) => s"${a.debt.size - n} fewer than master's ${a.debt.size}"
           println(s"records: $path: ${shape.counted(n)}, $against")
     println(s"records: $records records against $revision, $refused refused")

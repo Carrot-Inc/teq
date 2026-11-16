@@ -220,12 +220,14 @@ object Ratchet:
         val out = Vector.newBuilder[String]
         val wider = Multiset.minus(c.debt, a.debt)
         if c.provenance.kind == "migrate" && wider.nonEmpty then
-          // The compiler now places or prints an accepted error elsewhere: every item the head adds pairs with one it
-          // loses by the message (the position and the printed lines apart), and the debt does not grow.
+          // The compiler now places or prints an accepted error elsewhere, or words it otherwise: every item the head
+          // adds pairs with one it loses, by the message (the position and the printed lines apart) or, its message
+          // another, by its place (the same line of the same file under the same configuration: the place was in the
+          // debt and stays in it), an item once (`pairing`); and the debt does not grow.
           if !evidence then out += "a migration without its evidence beside it"
-          val unmatched = Multiset.minus(wider.map(message), Multiset.minus(a.debt, c.debt).map(message))
+          val unmatched = pairing(wider, Multiset.minus(a.debt, c.debt))._1.map(message).sorted
           if unmatched.nonEmpty then
-            out += s"a migration over the accepted record's inputs adds ${unmatched.size} ${if unmatched.size == 1 then "item" else "items"} no lost item matches by its message:"
+            out += s"a migration over the accepted record's inputs adds ${unmatched.size} ${if unmatched.size == 1 then "item" else "items"} no lost item matches by its message or by its place:"
             unmatched.take(10).foreach(w => out += s"  + ${Records.escape(w)}")
           if c.debt.size > a.debt.size then out += s"a migration over the accepted record's inputs grows the debt from ${a.debt.size} to ${c.debt.size}"
         else if c.provenance.kind != "record" then out += s"a ${c.provenance.kind} over the accepted record's inputs: a step of the record is a record (--record), its debt within the accepted debt"
@@ -244,6 +246,40 @@ object Ratchet:
   // An item's message: its first line without the source position, the key and the printed lines apart.
   def message(item: String): String =
     item.takeWhile(_ != '\n').replaceAll("""\S+:\d+:\d+:\s*""", "").trim
+
+  // An item's place: its first line up to the line of its first diagnostic's position (`<file>:<line>:<column>:
+  // error:`: the configuration or the unit before it, the file, the line; the column and the message apart), none
+  // for an item that is no build's error (a test's deviation, a run's assertion: no name or time in one is a place).
+  def place(item: String): Option[String] =
+    """^(.*?\S+:\d+):\d+: error:""".r.findFirstMatchIn(item.takeWhile(_ != '\n')).map(_.group(1))
+
+  // The pairing of the items a migration adds with those it loses: two items pair when their messages are the same or
+  // their places are, an item of either side once. A largest pairing (augmenting paths), so that what stays unpaired
+  // is no accident of the items' order: what `added` has left, the pairs by the message, the pairs by the place alone.
+  def pairing(added: Vector[String], lost: Vector[String]): (Vector[String], Int, Int) =
+    val lostMessages = lost.map(message)
+    val lostPlaces = lost.map(place)
+    val byMessage = lost.indices.toVector.groupBy(j => lostMessages(j))
+    val byPlace = lost.indices.toVector.filter(j => lostPlaces(j).nonEmpty).groupBy(j => lostPlaces(j).get)
+    val candidates = added.map { item =>
+      val same = byMessage.getOrElse(message(item), Vector.empty)
+      val there = place(item).fold(Vector.empty[Int])(p => byPlace.getOrElse(p, Vector.empty))
+      same.filter(there.contains) ++ same.filterNot(there.contains) ++ there.filterNot(same.contains)
+    }
+    val owner = scala.collection.mutable.Map.empty[Int, Int]
+    def pair(i: Int, seen: scala.collection.mutable.Map[Int, Boolean]): Boolean =
+      candidates(i).exists { j =>
+        if seen.contains(j) then false
+        else
+          seen(j) = true
+          if !owner.contains(j) || pair(owner(j), seen) then
+            owner(j) = i
+            true
+          else false
+      }
+    val left = added.indices.toVector.filterNot(i => pair(i, scala.collection.mutable.Map.empty[Int, Boolean]))
+    val messages = owner.toVector.count((j, i) => lostMessages(j) == message(added(i)))
+    (left.map(i => added(i)), messages, owner.size - messages)
 
   // A run's observation against the head's record.
   def judge(record: Record, seen: Observation): Verdict =
