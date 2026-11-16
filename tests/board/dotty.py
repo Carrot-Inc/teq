@@ -25,9 +25,10 @@ compiler/test/dotty/tools/dotc/transform/PatmatExhaustivityTest.scala):
   pos      teq writes the class files of every group (`teq compiler build --target jvm --all-mains`)
   neg      `teq compiler check` reports as many errors as the files carry `// error` marks, each on a marked line
            (`// nopos-error` for one without a place, `// anypos-error` for one at any place), and its diagnostics
-           are the test's .check; marks that hold without a .check are no pass (`marks`, below)
-  warn     no error, the warnings on the `// warn` lines, and the .check as for neg; a test without a mark and
-           without a .check passes on no diagnostic at all, under options whose warnings teq gives
+           are scalac's own, which the row's oracle holds; marks that hold where the oracle gives no answer are no
+           pass (`marks`, below)
+  warn     no error, the warnings on the `// warn` lines, and scalac's diagnostics as for neg; a test without a
+           mark passes on no diagnostic at all, under options whose warnings teq gives
   run      pos, then `java Test` with dotty's own arguments ends without an exception, its output the .check's
            lines where there is one; the row run-scalajs builds the program for JavaScript against scala-library
            and runs it on node, `<name>.scala-js.check` before `<name>.check`
@@ -35,20 +36,40 @@ compiler/test/dotty/tools/dotc/transform/PatmatExhaustivityTest.scala):
            cases after an exhaustivity warning), are the .check's lines; no .check, no diagnostic
   nocrash  any outcome but a crash or a limit
 
-A .check of scalac's boxed diagnostics is compared as diagnostics, in order: severity, file, line, column and
-the message's lines (teq prints no boxes). neg, warn, patmat and nocrash are judged against scala-library
-(`--std scala-library`, the library dotty's tests are written against).
+scalac's diagnostics of a neg or warn test are the row's oracle, tests/board/dotty/<row>.oracle.jsonl: what scalac
+3.8.4 itself reported for the test, compiled as dotty's runner compiles it, a line a test, captured by
+tests/board/oracle.py (its docstring is the recipe; the tests' .check files are that capture's validation, which a
+run of these rows makes first, without a compiler, and ends on: `oracle.py validate`). A test
+whose marks hold passes where teq's diagnostics are its entry's, in order: severity, file, line, column and the
+whole message (teq prints no boxes; the entry has scalac's as the reader of its boxes reads them). Both sides are
+read by one rule (`comparable`): an info is part of neither; nor is the error scalac adds under -Werror (`No
+warnings can be incurred under -Werror`, which the runner records for teq's `--werror` failure and the marks
+count); a summary of the warnings a flag left unprinted (`there was 1 deprecation warning; re-run with ...`) is
+its count and its kind, each compiler naming its own flag; any other diagnostic without a place is compared
+whole; an identity hash (`ExprImpl@1562d7e8`) and a colour sequence are no part of a message. scalac ran in the
+corpus and names its files from there, so the corpus' own path is taken out of teq's messages. neg, warn, patmat
+and nocrash are judged against scala-library (`--std scala-library`, the library dotty's tests are written
+against).
 
 Verdicts: pass, marks, fail, timeout (a limit of CPU seconds for teq, of wall-clock seconds for java and node),
 crash (a panic, a signal, an exit status teq does not document, the memory cap), cannot run (with its reason
 class: the test needs something no compiler run from the checkout gives). `marks` is a neg or warn test that
-holds its marked lines and has no .check: teq refuses or warns where the test says, and nothing compares its
-diagnostics with scalac's, so it is no pass (an error of another cause on the marked line would hold the marks
-too); it is no failure either: its line is in no pending list, and a test that leaves it for `fail` is a moved
-verdict as any other. A warn test without a single mark needs no .check: dotty's WarnTest fails on an error and
-on a count of warnings other than the marks', so scalac's diagnostics are none, and the test passes where teq's
-are none, but under an option whose warnings teq does not give (`warns` in OPTIONS), where its silence says
-nothing: that test fails as one under a check teq does not perform. A test with a Java source fails: teq reads
+holds its marked lines where the oracle gives no answer to hold its diagnostics to: no entry for the test; an
+entry whose capture did not complete (`valid`); one scalac does not repeat from run to run (`stable`); one made
+from other sources than the test's (an entry carries a digest of the test's files); or one that teq's
+diagnostics equal in all the reader of scalac's boxes reads, while a box of it is one that reader does not read
+(of such a box the severity, the file and the line are compared, and equality in those is no pass: the reader
+cannot decide the test, which may differ from scalac's in that box's column or message). Of these a run meets
+the capture that did not complete, the unrepeated answer and the unread box: an oracle without a test's entry,
+with one of other sources or with one silent on its stability does not validate, and the run ends on it before a
+test is judged; the judge's own answer for them is `marks` all the same (tests/gate-scripts.sh holds it). teq refuses
+or warns where the test says, and nothing compares its diagnostics with scalac's, so it is no pass (an error of
+another cause on the marked line would hold the marks too); it is no failure either: its line is in no pending
+list, and a test that leaves it for `fail` is a moved verdict as any other. A test whose marks fail fails,
+whatever the oracle has. A warn test without a single mark has an entry of no diagnostic (dotty's WarnTest fails
+on an error and on a count of warnings other than the marks'), and passes where teq's are none, but under an
+option whose warnings teq does not give (`warns` in OPTIONS), where its silence says nothing: that test fails as
+one under a check teq does not perform. A test with a Java source fails: teq reads
 none. An option of the test or of its row is given to teq where teq has the flag, dropped where it is scalac's
 own machinery, and fails the test (`option: <flag>`) where it changes what is accepted, warned or run and teq
 has no flag for it (OPTIONS below).
@@ -74,6 +95,7 @@ lingers and starts such a scope, bare where not, which the run's first line then
 """
 import argparse
 import collections
+import hashlib
 import json
 import os
 import re
@@ -89,11 +111,12 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(REPO, "tests", "scala3-typing"))
 sys.path.insert(0, os.path.join(REPO, "tests", "support"))
 sys.path.insert(0, HERE)
-from harness import scalac_diagnostics  # noqa: E402  (the reader of scalac's boxes the warn line has)
+from harness import SUMMARY_COUNT  # noqa: E402  (a summary of unprinted warnings, as the warn line reads it)
 import pending  # noqa: E402
 import rows as ROWS  # noqa: E402
 
 TAG_COMMIT = "7d4833b619d31ea9acac97fccf1e74b42b89c49f"
+SCALAC = "3.8.4"  # the scalac whose diagnostics the rows' oracles hold
 CAPPED = os.path.join(REPO, "tests", "support", "teq-capped.sh")
 LAST_LINE = 280  # the gate's table keeps 300 characters of a line's last line
 SRC = (".scala", ".java")
@@ -381,10 +404,12 @@ USING_SCALA = re.compile(r"//> using (scala) (.*)")
 USING_ANY = re.compile(r"//> using (.*)")
 
 
-def tool_args(files):
+def tool_args(files, imports=True):
     """A test's tool arguments as the tag's runner reads them (compiler/test/dotty/tools/utils.scala,
     toolArgsParse): among each file's first ten lines, `// <tool>: args` and the `//> using` lines that are the
-    whole line. (args by tool, files by platform, error). The error is dotty's own refusal of a line."""
+    whole line. (args by tool, files by platform, error). The error is dotty's own refusal of a line. With
+    `imports`, scalac's hold the options a source's own imports stand for (`checker_imports`), which teq must be
+    told and scalac reads itself."""
     args, platform, error = collections.defaultdict(list), collections.defaultdict(list), None
     for f in files:
         try:
@@ -394,7 +419,7 @@ def tool_args(files):
             error = error or str(e)
             continue
         lines = text[:10]
-        if f.endswith(".scala"):
+        if imports and f.endswith(".scala"):
             args["scalac"] += checker_imports(text)
         for line in lines:
             m = TOOL_ARG.search(line)
@@ -906,32 +931,206 @@ def held_to_marks(ctx, test, diags, severity, rx, prefixes, what):
     return None
 
 
-def as_tuple(d):
-    msg = tuple(l.strip() for l in (d.get("message") or "").split("\n"))
+# ---- scalac's own diagnostics: the rows' oracles ------------------------------------------------------------
+
+# An identity hash after a class name (`ExprImpl@1562d7e8`: `@` and the one to eight digits of Integer.toHexString)
+# differs from run to run, scalac's and teq's alike: either is compared as `@<hash>`, and the oracle is written so.
+MASK = re.compile(r"(?<=\w)@[0-9a-f]{1,8}\b")
+# scalac writes a colour sequence around a word of some messages under -color:never too (`expression expected but
+# <ESC>[31meof<ESC>[0m found`): it is no part of a message.
+COLOUR = re.compile(r"\x1b\[[0-9;]*m")
+MARKS_ALONE = "the marks hold; scalac's diagnostics are not compared: "
+UNREAD = "a box the reader does not read"
+UNDECIDED = "the marks hold; the reader cannot decide: teq's diagnostics equal all it reads of scalac's, and scalac's diagnostic %d is a box it does not read"
+
+
+def digest(root, files):
+    """What an oracle's entry says of the sources it was made from: sha256 over the test's files in the runner's
+    order (`Test.files`), of each its path from the corpus (UTF-8, `/`), a NUL, its length in bytes in decimal, a
+    NUL and its bytes."""
+    h = hashlib.sha256()
+    for f in files:
+        with open(f, "rb") as fh:
+            b = fh.read()
+        h.update(os.path.relpath(f, root).replace(os.sep, "/").encode("utf-8") + b"\0" + str(len(b)).encode() + b"\0" + b)
+    return h.hexdigest()
+
+
+def oracle_path(row):
+    return os.path.join(HERE, "dotty", row + ".oracle.jsonl")
+
+
+def load_oracle(path, row):
+    """A row's oracle, by test: after a head line, a line a test (tests/board/oracle.py writes them). A row without
+    the file has no entry. The head must name the board's corpus commit and scalac, and every line must be an
+    entry of this row once: anything else ends the run, an oracle that is not this board's proving nothing."""
+    out = {}
+    if not os.path.exists(path):
+        return out
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    for n, line in enumerate(lines, 1):
+        try:
+            e = json.loads(line)
+        except ValueError:
+            e = None
+        if not isinstance(e, dict):
+            die(f"{path}:{n}: not a JSON object")
+        if n == 1:
+            if e.get("head") is not True:
+                die(f"{path}: no head line")
+            if e.get("corpus") != TAG_COMMIT or e.get("scalac") != SCALAC:
+                die(f"{path}: the oracle is scalac {e.get('scalac')}'s at the corpus commit {e.get('corpus')}; the board is held "
+                    f"to scalac {SCALAC} at {TAG_COMMIT} (capture it again: tests/board/oracle.py)")
+            continue
+        ds = e.get("diagnostics")
+        formed = e.get("row") == row and isinstance(e.get("test"), str) and e["test"] not in out and isinstance(ds, list) and all(
+            isinstance(d, dict) and isinstance(d.get("severity"), str) and (d.get("file") is None or isinstance(d["file"], str))
+            and isinstance(d.get("message"), list) and all(isinstance(l, str) for l in d["message"]) for d in ds)
+        if not formed:
+            die(f"{path}:{n}: not an entry of the row {row}, an entry of a test twice, or one whose diagnostics are not the tool's")
+        out[e["test"]] = e
+    if not lines:
+        die(f"{path}: no head line")
+    return out
+
+
+def validated(root, rows, held=os.path.join(HERE, "dotty")):
+    """The oracles of the neg- and warn-kind rows a run is about to judge (the rows' files in `held`), held to the
+    corpus by their own tool
+    (`python3 tests/board/oracle.py validate`, no compiler: an entry for each test, once, saying its validity and
+    its digest; every .check reproduced; scalac's diagnostics holding the test's marks): (the line it prints, its
+    failures). A run ends on an oracle that does not validate, before a test is judged or a list written: this is
+    where the gate's lines of these rows hold the data to the corpus."""
+    try:
+        r = subprocess.run([sys.executable, "-B", os.path.join(HERE, "oracle.py"), "validate", "--dir", held, "--row", ",".join(rows), "--corpus", root],
+                           capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as e:
+        return "", [f"it did not run: {e}"]
+    lines = r.stdout.strip().splitlines()
+    fails = [l[len("FAIL "):] for l in lines if l.startswith("FAIL ")]
+    if r.returncode != 0 and not fails:
+        fails = [f"exit {r.returncode}: {(r.stderr.strip().splitlines() or ['no line'])[-1]}"]
+    return (lines[-1] if lines else ""), fails
+
+
+def no_answer(root, test, entry):
+    """Why the oracle gives no answer for the test, or None where its entry is one to compare: only an entry that
+    says its capture completed (`valid`) and that scalac repeated it (`stable`), made from the files the test has
+    now, is scalac's answer."""
+    if entry is None:
+        return "the oracle has no entry for the test"
+    if entry.get("valid") is not True:
+        return "scalac's capture of the test did not complete" + (f" ({entry['why']})" if entry.get("why") else "")
+    if entry.get("stable") is False:
+        return "scalac's answer differs from run to run"
+    if entry.get("stable") is not True:
+        return "scalac's answer was not held to a second capture"
+    try:
+        same = entry.get("digest") == digest(root, test.files)
+    except OSError:
+        same = False
+    return None if same else "the oracle's entry was made from other sources than the test's"
+
+
+def comparable(severity, file, line, col, lines):
+    """One diagnostic as the judge compares it, scalac's and teq's read by this one rule: (what is compared, what
+    a first line shows of it), or None for one that is compared on neither side.
+    A message's lines are compared without a colour sequence, with an identity hash masked, stripped, the blank
+    ones at its end dropped. Of the diagnostics without a place: the error of -Werror is compared on neither side
+    (scalac reports it after any warning, teq's is the runner's record where the build had no error of its own:
+    the marks hold it); a summary of unprinted warnings is its count and its kind (the hint names each compiler's
+    own flag); any other is compared whole."""
+    msg = [MASK.sub("@<hash>", COLOUR.sub("", l)).strip() for l in lines]
     while msg and not msg[-1]:
-        msg = msg[:-1]
-    return (d.get("severity"), os.path.basename(d["file"]) if d.get("file") else None, d.get("line") or 0, d.get("col") or 0, msg)
+        msg.pop()
+    shown = (severity, file, line or 0, col or 0, tuple(msg))
+    if file is None:
+        if severity == "error" and msg == [WERROR]:
+            return None
+        summary = SUMMARY_COUNT.match(msg[0]) if severity == "warning" and len(msg) == 1 else None
+        if summary:
+            return (severity, None, 0, 0, ("a summary", int(summary.group(1)), summary.group(2))), shown
+    return shown, shown
 
 
-def held_to_check(test, diags):
-    """The .check of scalac's boxed diagnostics against teq's, in order. None when held or when there is none."""
-    path = check_file(test)
-    if not path:
-        return None
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        want = [d for d in scalac_diagnostics(fh.read()) if d[0] != "info"]
-    got = [as_tuple(d) for d in diags if d.get("severity") in ("error", "warning", "migration warning") and not d.get("werror")]
+def scalac_sequence(entry):
+    """The entry's diagnostics as compared, in order: (what is compared, what is shown, whether the reader read
+    the box). An info is none of them. An entry flagged by the reader (a box whose own source line has its gutter
+    set right: the reader takes no column and no message of it) is compared by severity, file and line alone."""
+    out = []
+    for d in entry["diagnostics"]:
+        if d["severity"] == "info":
+            continue
+        if d.get("reader"):
+            out.append(((d["severity"], d["file"], d.get("line") or 0), None, False))
+            continue
+        c = comparable(d["severity"], d["file"], d.get("line"), d.get("column"), d["message"])
+        if c:
+            out.append(c + (True,))
+    return out
+
+
+def teq_sequence(root, diags):
+    """teq's records as compared, in order: (what is compared, what is shown). An info is none of them, nor is the
+    record of a build's outcome, which is no diagnostic. The one thing done to teq's side alone: the corpus' own
+    path is taken out of a message, scalac having run in the corpus and named its files from there
+    (`tests/neg/a.scala`), where teq is given their absolute paths."""
+    out = []
+    for d in diags:
+        if d.get("severity") in ("info", "outcome"):
+            continue
+        lines = (d.get("message") or "").replace(root + "/", "").split("\n")
+        c = comparable(d.get("severity"), os.path.basename(d["file"]) if d.get("file") else None, d.get("line"), d.get("col"), lines)
+        if c:
+            out.append(c)
+    return out
+
+
+def difference(i, n, want, got):
+    """The first line of a test whose diagnostic `i` (of scalac's `n`) is not teq's: both sides' severity, place
+    and the message's first line; where those agree, the first line of the message that differs (where one
+    message has ended, the other's next line that is not blank)."""
+    def place(x):
+        return f"{x[0]} {x[1]}:{x[2]}:{x[3]}" if x[1] else f"{x[0]} without a place"
+
+    def show(x):
+        return "nothing" if x is None else place(x) + (":" if not x[1] else "") + f" {x[4][0] if x[4] else ''}"
+    head = f"check: diagnostic {i + 1} of {n}: "
+    w = want[1] if want else None
+    g = got[1] if got else None
+    if want and w is None:
+        return head + f"scalac's is {want[0][0]} {want[0][1]}:{want[0][2]}, {UNREAD}; teq's is {show(g)}"
+    if w and g and w[:4] == g[:4] and w[4][:1] == g[4][:1]:
+        a, b = w[4], g[4]
+        k = next((k for k in range(max(len(a), len(b))) if a[k:k + 1] != b[k:k + 1]), 0)
+        if k >= min(len(a), len(b)):
+            longer = a if len(a) > len(b) else b
+            k = next((j for j in range(k, len(longer)) if longer[j]), k)
+        return head + (f"{place(w)}, line {k + 1} of the message: scalac's is {a[k] or 'a blank line' if k < len(a) else 'nothing'}; "
+                       f"teq's is {b[k] or 'a blank line' if k < len(b) else 'nothing'}")
+    return head + f"scalac's is {show(w)}; teq's is {show(g)}"
+
+
+def held_to_oracle(root, entry, diags):
+    """teq's diagnostics against the entry's, in order: (verdict, first line). `pass` where every one is equal;
+    `fail` at the first that is not; `marks` where all that the reader read is equal and a box of scalac's is one
+    it did not read: the reader cannot decide such a test, whose column or message in that box may be scalac's
+    or not."""
+    want, got = scalac_sequence(entry), teq_sequence(root, diags)
+    unread = 0
     for i in range(max(len(want), len(got))):
         w = want[i] if i < len(want) else None
         g = got[i] if i < len(got) else None
-        if w != g:
-            def show(x):
-                return "nothing" if x is None else f"{x[0]} {x[1] or ''}:{x[2]}:{x[3]} {x[4][0] if x[4] else ''}"
-            return f"check: diagnostic {i + 1} of {len(want)}: scalac's is {show(w)}; teq's is {show(g)}"
-    return None
-
-
-MARKS_ALONE = "the marks hold; scalac's diagnostics are not compared: the test has no .check"
+        if w and g and not w[2] and w[0] == g[1][:3]:
+            unread = unread or i + 1
+        elif not (w and g and w[2] and w[0] == g[0]):
+            return "fail", difference(i, len(want), w, g)
+    if unread:
+        return "marks", UNDECIDED % unread
+    return "pass", ""
 
 
 def unperformed_warnings(ctx, test):
@@ -949,20 +1148,38 @@ def unperformed_warnings(ctx, test):
     return out
 
 
-def held_to_scalac(ctx, test, diags, other, rx, prefixes):
-    """A neg or warn test whose marks hold: (verdict, the other ways, first line). A diagnostic on a marked line
-    says only that teq refused or warned there, whatever its reason: the test passes where teq's diagnostics are
-    scalac's (its .check: severity, place and whole message, in order) and is `marks` where nothing in the corpus
-    says what scalac's are. A test without a mark says it: scalac gives none, and neither did teq."""
-    if check_file(test):
-        why = held_to_check(test, diags)
-        return ("fail", other, why) if why else ("pass", other, "")
+def held_to_scalac(ctx, test, diags, rx, prefixes):
+    """A neg or warn test whose marks hold: (verdict, first line). A diagnostic on a marked line says only that
+    teq refused or warned there, whatever its reason: the test passes where teq's diagnostics are scalac's (its
+    entry of the row's oracle: severity, place and whole message, in order) and is `marks` where the oracle gives
+    no answer. A test that carries no mark, under an option whose warnings teq does not give, fails before the
+    oracle is asked: scalac gives none there, and teq's silence under a check it does not perform says nothing."""
     if sum(marks(test.files, rx, prefixes).values()) == 0:
         unperformed = unperformed_warnings(ctx, test)
         if unperformed:
-            return "fail", other, f"option: {unperformed[0]} (a check teq does not perform: no warning says nothing)"
-        return "pass", other, ""
-    return "marks", other, MARKS_ALONE
+            return "fail", f"option: {unperformed[0]} (a check teq does not perform: no warning says nothing)"
+    entry = ctx.oracle.get(test.name)
+    why = no_answer(ctx.root, test, entry)
+    if why:
+        return "marks", MARKS_ALONE + why
+    return held_to_oracle(ctx.root, entry, diags)
+
+
+def neg_or_warn(ctx, test, outcome, line, diags):
+    """A neg or warn test from what teq's compilations gave (`compile_groups`: their outcome, its first line,
+    their records): (verdict, first line). The whole decision, and a function of the test's files, those records
+    and the row's oracle (`ctx.oracle`) alone: dotty's own rule first, the marks (NegTest, WarnTest), then
+    scalac's diagnostics."""
+    if test.row.kind == "neg":
+        rx, prefixes = ERROR_MARK, ("nopos", "anypos")
+        why = held_to_marks(ctx, test, diags, "error", rx, prefixes, "error")
+    else:
+        rx, prefixes = WARN_MARK, ("nopos",)
+        errors = [d for d in diags if d.get("severity") == "error"]
+        if errors or outcome == "errors":
+            return "fail", "marks: an error where warnings are marked: " + (first_error("", errors) or line)
+        why = held_to_marks(ctx, test, diags, "warning", rx, prefixes, "warning")
+    return ("fail", why) if why else held_to_scalac(ctx, test, diags, rx, prefixes)
 
 
 PATMAT_KINDS = [
@@ -1147,15 +1364,9 @@ def judge(ctx, test):
         return "fail", other, line
     if kind == "nocrash":
         return "pass", other, ""
-    if kind == "neg":
-        why = held_to_marks(ctx, test, diags, "error", ERROR_MARK, ("nopos", "anypos"), "error")
-        return ("fail", other, why) if why else held_to_scalac(ctx, test, diags, other, ERROR_MARK, ("nopos", "anypos"))
-    if kind == "warn":
-        errors = [d for d in diags if d.get("severity") == "error"]
-        if errors or outcome == "errors":
-            return "fail", other, "marks: an error where warnings are marked: " + (first_error("", errors) or line)
-        why = held_to_marks(ctx, test, diags, "warning", WARN_MARK, ("nopos",), "warning")
-        return ("fail", other, why) if why else held_to_scalac(ctx, test, diags, other, WARN_MARK, ("nopos",))
+    if kind in ("neg", "warn"):
+        verdict, why = neg_or_warn(ctx, test, outcome, line, diags)
+        return verdict, other, why
     if kind == "patmat":
         got = patmat_lines(diags)
         path = check_file(test)
@@ -1227,6 +1438,16 @@ def main():
     warm(ctx)
     status = 0
     unlisted, passing, stale_lists = [], [], []  # what was not as listed, in the order the last line names it
+    oracles = [r.name for r in table if r.name in names and r.kind in ("neg", "warn") and not r.cannot]
+    not_scalacs = validated(ctx.root, oracles)[1] if oracles else []
+    if not_scalacs:
+        for f in not_scalacs[1:]:
+            print(f"board: an oracle does not validate: {f}", flush=True)
+        die(f"board: the oracle does not validate (python3 tests/board/oracle.py validate): {len(not_scalacs)} failed, the first: {not_scalacs[0]}")
+    if oracles:
+        # not the tool's own line: its count of the marks it leaves to a capture's directory reads as a skip for
+        # want of something to tests/gate.sh
+        print(f"board: the oracles of {len(oracles)} rows validate against the corpus", flush=True)
     totals = collections.Counter()
     for name in names:
         row = next(r for r in table if r.name == name)
@@ -1235,6 +1456,7 @@ def main():
         if row.kind == "run-js" and not ctx.node:
             die("no node on the PATH: the row run-scalajs needs it")
         tests = tests_of(row, ctx.root)
+        ctx.oracle = load_oracle(oracle_path(row.name), row.name) if row.kind in ("neg", "warn") and not row.cannot else {}
         ctx.tool_args = {t.name: tool_args(t.files) for t in tests}
         ctx.args_of = lambda t: (ctx.tool_args[t.name][0].get("scalac", []), ctx.tool_args[t.name][1], ctx.tool_args[t.name][2])
         ctx.other_platform = lambda t: set(ctx.tool_args[t.name][1].get("scala-js" if t.row.platform == "jvm" else "jvm", []))

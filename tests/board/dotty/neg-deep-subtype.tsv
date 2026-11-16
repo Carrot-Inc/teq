@@ -2,22 +2,22 @@
 # test	verdict	the other ways	the first line of the difference
 i1240.scala	fail	-	marks: 3 errors where 1 are marked: i1240.scala:11:9: Ambiguous overload. The overloaded alternatives of method foo in class C with types
 i12650.scala	fail	-	marks: no error where 1 are marked
-i1650.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
+i1650.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i1650.scala:3:35 Existential types are no longer supported -; teq's is error i1650.scala:3:35 expected ',' or ']', found identifier
 i17435.scala	fail	-	marks: 1 errors where 6 are marked
-i1754.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
-i2002.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
+i1754.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1754.scala:7:26 Found:    (t : T); teq's is error i1754.scala:7:26 type mismatch: found T, required Nothing
+i2002.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2002.scala:3:7 Conflicting definitions:; teq's is error i2002.scala:3:7 foo is already defined as method foo
 i25216.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i25216.scala:9:15 Found:    (z : Z); teq's is error i25216.scala:9:15 type mismatch: found (z : AnyRef{val v: Int}), required Selectable | Dynamic
-i3627.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
-i3882.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
+i3627.scala	fail	-	check: diagnostic 1 of 4: scalac's is error i3627.scala:3:8 Found:    Int => Boolean; teq's is warning i3627.scala:2:31 `_` is deprecated for wildcard arguments of types: use `?` instead
+i3882.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i3882.scala:4:38 Type argument T does not conform to upper bound Ring[T]; teq's is error i3882.scala:4:38 type argument T does not conform to upper bound Ring[T]
 i4372.scala	fail	-	marks: no error where 1 are marked
-i5495.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
-i5826b.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
+i5495.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5495.scala:13:26 value isInstanceof is not a member of List[T] - did you mean x.isInstanceOf?; teq's is error i5495.scala:13:26 value isInstanceof is not a member of List[T]
+i5826b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5826b.scala:5:25 Found:    _; teq's is error i5826b.scala:5:25 type mismatch: found Any, required Int
 i5877.scala	fail	-	marks: 3 errors where 2 are marked: i5877.scala:28:16: type mismatch: found HasThisType[_], required HasThisType[PThis]
 i6300.scala	fail	-	marks: 2 errors where 1 are marked: i6300.scala:5:47: type argument Foo[T] does not conform to upper bound Foo[Foo[T]]
 i8464a.scala	fail	-	marks: 4 errors where 1 are marked: i8464a.scala:16:18: type argument Type does not conform to upper bound Term[Type, Kind]
-i9325.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
+i9325.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i9325.scala:2:40 Found:    (Foo.Blue : Foo[String]); teq's is warning i9325.scala:2:30 Alphanumeric method compareTo is not declared infix; it should not be used as infix operator.
 interop-polytypes.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 matchtype-loop2.scala	fail	-	marks: 2 errors where 1 are marked: matchtype-loop2.scala:5:8: Recursion limit exceeded.
-overloadsOnAbstractTypes.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
-patmat-applied.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
+overloadsOnAbstractTypes.scala	fail	-	check: diagnostic 1 of 4: scalac's is error overloadsOnAbstractTypes.scala:7:7 Conflicting definitions:; teq's is error overloadsOnAbstractTypes.scala:7:7 foo is already defined as method foo
+patmat-applied.scala	fail	-	check: diagnostic 1 of 1: scalac's is error patmat-applied.scala:13:26 value isInstanceof is not a member of List[T] - did you mean x.isInstanceOf?; teq's is error patmat-applied.scala:13:26 value isInstanceof is not a member of List[T]
 test-typers.scala	fail	-	marks: 10 errors where 13 are marked

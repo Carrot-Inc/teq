@@ -113,8 +113,14 @@ only shrinks. `--update` on a runner takes the tests that pass now out of its li
 failures in, and belongs to the change that brings the tests into the tree, never to one that broke a test. Either
 also writes the suite's row of the board (`tests/board/suites/<suite>.tsv`; `tests/board/dotty/<row>.tsv` for
 dotty's suites, whose rows, flags and kinds are `tests/board/rows.py` and whose table of scalac's options is in
-`tests/board/dotty.py`; there a neg or warn test that holds its marked lines and has no `.check` is `marks`, no
-pass and no failure: only a comparison with scalac's own diagnostics makes it a pass). The runners that take the two flags: `tests/run.sh` (and with `--dir=tests/pending-cases`),
+`tests/board/dotty.py`; there a neg or warn test whose marked lines hold passes only where teq's diagnostics are
+scalac's own, in order: severity, file, line, column and the whole message; scalac's are the row's oracle,
+`tests/board/dotty/<row>.oracle.jsonl`, captured and validated by `tests/board/oracle.py`, whose docstring is the
+recipe, and moving only with the scalac version or the corpus; a run of such a row validates its oracle against the
+corpus first, without a compiler, and ends on a failure (a test without an entry, an entry of other sources or
+one silent on its validity among them); a test is `marks`, no pass and no failure, where the oracle gives no
+answer: a capture that did not complete, a diagnostic scalac does not repeat from run to run, or equality in all
+but a box the reader of scalac's boxes does not read, which the reader cannot decide). The runners that take the two flags: `tests/run.sh` (and with `--dir=tests/pending-cases`),
 `run_errors.sh`, `run_jvm.sh`, `run_interp.sh`, `run_stdlib.sh`, `interp-script.sh`, `run_interop.sh`, `parser.sh`,
 `classpath.sh`, `split.sh`, `modules.sh`, `tests/scala3/run.sh`, `tests/board/scripts.sh` and
 `tests/board/dotty.py`. Three suites name their failures on `FAIL` lines and count their passes unnamed
@@ -138,7 +144,13 @@ and `--regen` prints `kept <name>` for it. A `// teq: <flags>` line in a test pa
 `// os: windows` or `// os: unix` line keeps a case of `run_interp.sh` and `run_jvm.sh` to that system, where
 Git's bash is Windows (the `windows_*` cases are the interpreter's acceptance on Windows, their expectations
 the Windows JDK's); a `// std: <modes>` line names the std modes a case's expectations hold under, which
-`run_stdlib.sh` (scala-library's) and the lean std's suites (`run_interp.sh`, `split-watch.sh`) honour. The JVM's
+`run_stdlib.sh` (scala-library's) and the lean std's suites (`run_interp.sh`, `split-watch.sh`) honour. A build's
+one summary line of the warnings its flags left unprinted (`warning: there was 1 deprecation warning; re-run with
+--deprecation for details`) is no line of a program's output: `tests/run.sh` holds it in a case's `.expected` with
+the build's other lines, `run_interp.sh`, `run_jvm.sh` and `run_stdlib.sh` read the `.expected` without it
+(`run_stdlib.sh` the build's own diagnostics too), and where one `teq interp` builds and runs, `tests/modules.sh`'s
+interp-run leg and the board's interpreter leg (`tests/board/dotty.py`) read what that process printed without it;
+every other line is compared, and the line is told by the one pattern `SUMMARY` of `tests/support/jars.sh`. The JVM's
 expectations are JDK 24's; where another major words a JDK message otherwise, `tests/jvm-expected/<name>.jdk<major>.expected`
 holds scalac's output on that major (`run_jvm.sh`'s header). `tests/all.sh` keeps each suite's whole output and time
 under `out/all/`. `bench/budget.sh` and `tests/runtime.sh` skip on any machine but the one that recorded their

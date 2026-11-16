@@ -19,7 +19,7 @@ js-native-val-def-override.scala	fail	-	marks: no error where 6 are marked
 js-native-val-def-wrong-place.scala	fail	-	marks: 11 errors where 27 are marked
 js-native-val-defs.scala	fail	-	marks: 6 errors where 11 are marked
 js-native-wrong-kind.scala	fail	-	marks: 2 errors where 6 are marked
-js-new-target.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
+js-new-target.scala	marks	-	the marks hold; scalac's diagnostics are not compared: scalac's answer differs from run to run
 js-non-native-members-conflicts.scala	fail	-	marks: 1 errors where 2 are marked
 js-non-native-members-overloaded.scala	fail	-	marks: 4 errors where 6 are marked
 js-non-native-members-qualified-private.scala	fail	-	marks: 1 errors where 12 are marked

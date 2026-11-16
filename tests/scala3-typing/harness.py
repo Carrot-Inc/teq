@@ -558,6 +558,10 @@ def scalac_notes(text):
 # scalac's summary of the warnings of a kind its options hide (`there was 1 deprecation warning; re-run with
 # -deprecation for details`), an unplaced warning, which scala-cli prints outside the boxes.
 SUMMARY_NOTE = re.compile(r"^there (was|were) \d+ .* warnings?; re-run with ")
+# The same summary whole, as either compiler's message has it, by what it says: how many warnings (1) of which kind
+# (2). The hint names each compiler's own flag (scalac's `-deprecation`, teq's `--deprecation`), so the board's
+# judge holds a summary on one side to the other's by these two (tests/board/dotty.py).
+SUMMARY_COUNT = re.compile(r"^there (?:was|were) (\d+) ([a-z]+) warnings?; re-run with -{1,2}[a-z]+ for details$")
 # teq names its own flags where scalac names its options.
 WORDING = [("--deprecation", "-deprecation"), ("--feature", "-feature"), ("--source", "-source"), ("--language", "-language")]
 

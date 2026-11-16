@@ -81,6 +81,30 @@
 #            times recorded and the suite's left, then read again by the dealer and the comparison's planner beside a
 #            planted failure, a killed piece, one past the suite's bound and a skip for want of a jar, each failing
 #            the suite, nothing recorded.
+#   board    the conformance board's decision on a neg or warn test (tests/board/dotty.py, neg_or_warn) over made-up
+#            sources, records of teq's and oracles of scalac's, no compiler run: diagnostics equal to scalac's
+#            passing; one word of a message, a later line of it, a line past its end, a column, a severity, a file,
+#            one more, one fewer and another order each failing with its first line; white space inside a line, a
+#            full stop, a letter's case, a column of 0 and a message of no line each compared; no entry, an entry of
+#            another digest or without one, one not valid and one not stable (or silent on either) `marks` where the
+#            marks hold and a failure where they fail, the digest that of every file's bytes; a summary of unprinted
+#            warnings equal by count and kind under either compiler's flag, failing by another count or kind, on one
+#            side alone, out of its place, as an error or with a second line; the -Werror line on both sides passing,
+#            on one side standing for nothing of the other's, and compared where it has a place or more lines; another
+#            diagnostic without a place compared whole, its severity too; an info and a build's outcome record changing nothing, an
+#            unknown severity on either side compared; a box the reader of scalac's did not read `marks` where all it
+#            read is equal (the reader cannot decide), a failure where a read one differs, its own severity, file
+#            or line does, or teq gives nothing against it; an identity hash (after a word character, of eight digits at most), a colour sequence and
+#            the corpus' own path no part of a message, anything else of it compared; a warn test, its build's failure
+#            without a record and an entry of no diagnostic against a warning failing, one without a mark passing on
+#            no diagnostic, and one without a mark under an option whose warnings teq does not give failing before
+#            the oracle is asked, a .check beside it or not; an oracle of another corpus commit or scalac, without a
+#            head, with a test twice, another row's entry or a broken line ending the run; the summary teq itself
+#            prints read as one by the judge's pattern and as the build's line of tests/support/jars.sh; and the
+#            oracle's own validation (tests/board/oracle.py validate) over a made-up corpus: a row's file of its
+#            test validating, an entry twice, one silent on its validity, its stability or its digest and one of
+#            another scalac than the head's each failing, a run taking those failures, and the runner itself (a
+#            copy of it, with --update --add) ending on such a file with exit 2 and the cause, no list written.
 # Every run is bounded; the script exits 1 on a failure. Needs the release binary (TEQ), scala-cli and the coursier
 # cache the suites read.
 cd "$(dirname "$0")/.." || exit 1
@@ -1126,6 +1150,374 @@ check "driver: a failed, a killed, a timed-out and a skipping piece fail the sui
   row "lsp\.4/4" "m[1-5]" "$log" | grep -q " FAIL .*gate: a skip for want of what the machine should hold: skip u4" &&
   [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | grep -c " ok ")" = 3 ] &&
   grep -q "^gate: no times recorded" "$log" && [ "$times_before" = "$times_after" ]'
+
+# The conformance board's judge (tests/board/dotty.py): what it says of a neg or warn test is one function of the
+# test's sources, teq's records and the row's oracle (neg_or_warn), held here over made-up ones. No compiler runs but
+# teq once, on a deprecated call, for the summary it prints of the warnings a flag leaves out.
+mkdir -p "$work/board-teq"
+printf 'object A:\n  @deprecated("no", "1.0") def f = 1\n  val x = f\n' > "$work/board-teq/a.scala"
+TEQ_CACHE_DIR="$work/board-teq/cache" timeout 120 "$TEQ" compiler check "$work/board-teq/a.scala" --diagnostics "$work/board-teq/records" > "$work/board-teq/printed" 2>&1
+python3 -B - "$work/board" "$work/board-teq/printed" "$work/board-teq/records" > "$work/board.log" 2>&1 <<'PY'
+import json, os, sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, "tests/board")
+import dotty as D
+import rows as ROWS
+root, teq_line, teq_records = sys.argv[1:]
+os.makedirs(os.path.join(root, "tests", "neg"))
+os.makedirs(os.path.join(root, "tests", "warn"))
+ctx = D.Ctx()
+ctx.root, ctx.group_args = root, {}
+E = "Found:    (\"\" : String)\nRequired: Int"
+
+
+def several(kind, name, files, flags=()):
+    """A made-up test of a made-up row: sources of the corpus `root`, with the marks their texts carry."""
+    paths = [os.path.join(root, "tests", kind, f) for f, _ in files]
+    for path, (_, text) in zip(paths, files):
+        with open(path, "w") as fh:
+            fh.write(text)
+    return D.Test(ROWS.Row(kind, kind, kind, "made up", list(flags), []), name, [paths], [paths[0][:-len(".scala")]])
+
+
+def test(kind, name, text, flags=()):
+    return several(kind, name, [(name, text)], flags)
+
+
+def scalac(severity, line, column, message, file="a.scala", **more):
+    return dict({"severity": severity, "file": file, "line": line, "column": column, "id": None, "message": message.split("\n")}, **more)
+
+
+def teq(severity, line, col, message, file="a.scala", kind="neg", **more):
+    return dict({"severity": severity, "file": os.path.join(root, "tests", kind, file), "line": line, "col": col, "message": message}, **more)
+
+
+def loose(severity, message, **more):
+    return dict({"severity": severity, "message": message}, **more)
+
+
+def oracle(t, diagnostics, **entry):
+    """The row's oracle as a file of the tool's form, read back by the judge's own loader: one entry, of `t`."""
+    e = dict({"row": t.row.name, "test": t.name, "digest": D.digest(root, t.files), "valid": True, "stable": True, "diagnostics": diagnostics}, **entry)
+    path = os.path.join(root, "oracle.jsonl")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps({"head": True, "scalac": D.SCALAC, "corpus": D.TAG_COMMIT}) + "\n" + json.dumps({k: v for k, v in e.items() if v is not None}) + "\n")
+    return D.load_oracle(path, t.row.name)
+
+
+def said(name, got, verdict, line):
+    ok = got[0] == verdict and (got[1] == line if not line.endswith("...") else got[1].startswith(line[:-3]))
+    print(("ok\t" + name) if ok else f"FAIL\t{name}: wanted {(verdict, line)}, the judge said {got}")
+
+
+def judged(name, t, entry, records, verdict, line="", outcome="errors", built="", then=None, **more):
+    """One scenario: the test, scalac's diagnostics as its entry (None: no entry), teq's records, and what the
+    judge must say. `built`: the first line of teq's failed build; `then`: done once the entry is made."""
+    ctx.oracle = oracle(t, entry, **more) if entry is not None else {}
+    if then:
+        then()
+    said(name, D.neg_or_warn(ctx, t, outcome, built, records), verdict, line)
+
+
+neg = test("neg", "a.scala", "object A:\n  val x: Int = \"\"  // error\n  val y: Int = \"\"  // error\n")
+s2, s3 = scalac("error", 2, 16, E), scalac("error", 3, 16, E)
+t2, t3 = teq("error", 2, 16, E), teq("error", 3, 16, E)
+HOLD = "the marks hold; scalac's diagnostics are not compared: "
+SHOWN = "error a.scala:2:16 Found:    (\"\" : String)"
+judged("teq's diagnostics equal to scalac's pass", neg, [s2, s3], [t2, t3], "pass")
+judged("one word of a message fails", neg, [s2, s3], [teq("error", 2, 16, E.replace("String", "Text")), t3], "fail",
+       f"check: diagnostic 1 of 2: scalac's is {SHOWN}; teq's is {SHOWN.replace('String', 'Text')}")
+judged("a later line of a message fails, the line named", neg, [s2, s3], [t2, teq("error", 3, 16, E.replace("Int", "Long"))], "fail",
+       "check: diagnostic 2 of 2: error a.scala:3:16, line 2 of the message: scalac's is Required: Int; teq's is Required: Long")
+judged("a message that ends early fails at scalac's next line that is not blank", neg, [scalac("error", 2, 16, E + "\n\nlonger"), s3], [t2, t3], "fail",
+       "check: diagnostic 1 of 2: error a.scala:2:16, line 4 of the message: scalac's is longer; teq's is nothing")
+judged("a column fails", neg, [s2, s3], [t2, teq("error", 3, 17, E)], "fail",
+       f"check: diagnostic 2 of 2: scalac's is {SHOWN.replace(':2:', ':3:')}; teq's is {SHOWN.replace(':2:16', ':3:17')}")
+judged("a diagnostic more fails", neg, [s2, s3], [t2, t3, teq("warning", 1, 8, "unused")], "fail",
+       "check: diagnostic 3 of 2: scalac's is nothing; teq's is warning a.scala:1:8 unused")
+judged("a diagnostic fewer fails", neg, [s2, s3, scalac("warning", 1, 8, "unused")], [t2, t3], "fail",
+       "check: diagnostic 3 of 3: scalac's is warning a.scala:1:8 unused; teq's is nothing")
+judged("another order fails", neg, [s2, s3], [t3, t2], "fail",
+       f"check: diagnostic 1 of 2: scalac's is {SHOWN}; teq's is {SHOWN.replace(':2:', ':3:')}")
+judged("a severity fails", neg, [s2, s3, scalac("migration warning", 1, 8, "old")], [t2, t3, teq("warning", 1, 8, "old")], "fail",
+       "check: diagnostic 3 of 3: scalac's is migration warning a.scala:1:8 old; teq's is warning a.scala:1:8 old")
+# no answer: `marks` where the marks hold, a failure where they do not, never a pass
+for name, entry, more, why in [
+        ("no entry", None, {}, "the oracle has no entry for the test"),
+        ("an entry of another digest", [s2, s3], {"digest": "0" * 64}, "the oracle's entry was made from other sources than the test's"),
+        ("an entry without a digest", [s2, s3], {"digest": None}, "the oracle's entry was made from other sources than the test's"),
+        ("an entry that is not valid", [s2, s3], {"valid": False, "why": "the run threw"}, "scalac's capture of the test did not complete (the run threw)"),
+        ("an entry that is not stable", [s2, s3], {"stable": False}, "scalac's answer differs from run to run"),
+        ("an entry that does not say it is stable", [s2, s3], {"stable": None}, "scalac's answer was not held to a second capture"),
+        ("an entry that does not say it is valid", [s2, s3], {"valid": None}, "scalac's capture of the test did not complete")]:
+    judged(name + " is marks where the marks hold", neg, entry, [t2, t3], "marks", HOLD + why, **more)
+    judged(name + " is a failure where the marks fail", neg, entry, [t2], "fail", "marks: 1 errors where 2 are marked", **more)
+judged("equal diagnostics fail where the marks fail", neg, [s2], [t2], "fail", "marks: 1 errors where 2 are marked")
+# rule 3: the diagnostics without a place
+werr = test("neg", "w.scala", "object W:\n  def f = 1  // warn\n// nopos-error\n")
+sw, tw = scalac("warning", 2, 7, "pure", "w.scala"), teq("warning", 2, 7, "pure", "w.scala")
+s_werror, t_werror = scalac("error", None, None, D.WERROR, None), loose("error", D.WERROR, werror=True)
+SUM = "there %s; re-run with %s for details"
+s_sum, t_sum = scalac("warning", None, None, SUM % ("was 1 deprecation warning", "-deprecation"), None), loose("warning", SUM % ("was 1 deprecation warning", "--deprecation"))
+judged("the -Werror line on both sides passes", werr, [sw, s_werror], [tw, t_werror], "pass")
+judged("the -Werror line on scalac's side alone stands for no diagnostic of teq's", werr, [sw, s_werror], [tw, loose("error", "another")], "fail",
+       "check: diagnostic 2 of 1: scalac's is nothing; teq's is error without a place: another")
+judged("the -Werror line on teq's side alone stands for no diagnostic of scalac's", werr, [sw, scalac("error", None, None, "Cyclic macro dependencies", None)], [tw, t_werror], "fail",
+       "check: diagnostic 2 of 2: scalac's is error without a place: Cyclic macro dependencies; teq's is nothing")
+judged("a summary on both sides passes, each compiler's flag in it", neg, [s2, s3, s_sum], [t2, t3, t_sum], "pass")
+judged("a summary of another count fails", neg, [s2, s3, s_sum], [t2, t3, loose("warning", SUM % ("were 2 deprecation warnings", "--deprecation"))], "fail",
+       "check: diagnostic 3 of 3: scalac's is warning without a place: there was 1 deprecation warning; re-run with -deprecation for details; "
+       "teq's is warning without a place: there were 2 deprecation warnings; re-run with --deprecation for details")
+judged("a summary of another kind fails", neg, [s2, s3, s_sum], [t2, t3, loose("warning", SUM % ("was 1 feature warning", "--feature"))], "fail", "check: diagnostic 3 of 3: scalac's is warning without a place: there was 1 deprecation...")
+judged("a summary on scalac's side alone fails", neg, [s2, s3, s_sum], [t2, t3], "fail",
+       "check: diagnostic 3 of 3: scalac's is warning without a place: there was 1 deprecation warning; re-run with -deprecation for details; teq's is nothing")
+judged("a summary on teq's side alone fails", neg, [s2, s3], [t2, t3, t_sum], "fail",
+       "check: diagnostic 3 of 2: scalac's is nothing; teq's is warning without a place: there was 1 deprecation warning; re-run with --deprecation for details")
+judged("a summary before the diagnostics it follows on the other side fails", neg, [s2, s_sum, s3], [t2, t3, t_sum], "fail", "check: diagnostic 2 of 3: scalac's is warning without a place: there was 1...")
+judged("another diagnostic without a place is compared whole: equal passes", werr, [sw, scalac("error", None, None, "Cyclic macro dependencies in tests/neg/w.scala.\n\nTo fix this", None)],
+       [tw, loose("error", f"Cyclic macro dependencies in {root}/tests/neg/w.scala.\n\nTo fix this")], "pass")
+judged("another diagnostic without a place is compared whole: a line of it fails", werr, [sw, scalac("error", None, None, "Cyclic macro dependencies\n\nTo fix this", None)],
+       [tw, loose("error", "Cyclic macro dependencies\n\nTo mend this")], "fail",
+       "check: diagnostic 2 of 2: error without a place, line 3 of the message: scalac's is To fix this; teq's is To mend this")
+judged("an info on either side changes nothing", neg, [scalac("info", None, None, "[log genBCode] a", None), s2, scalac("info", 2, 3, "noted"), s3],
+       [t2, t3, teq("info", 3, 3, "a macro says"), loose("info", "and more")], "pass")
+judged("the record of a build's outcome is no diagnostic", neg, [s2, s3], [t2, t3, {"severity": "outcome", "ok": False, "errors": 2}], "pass")
+judged("a record of a severity the judge does not know is compared", neg, [s2, s3], [t2, t3, loose("failure", "crash")], "fail",
+       "check: diagnostic 3 of 2: scalac's is nothing; teq's is failure without a place: crash")
+# a box the reader did not read
+blind = scalac("error", 2, 0, "", reader="blind", at=[2, 16])
+blind["message"] = []
+judged("a box the reader did not read is marks where all it read is equal: the reader cannot decide", neg, [blind, s3], [t2, t3], "marks", D.UNDECIDED % 1)
+judged("a box the reader did not read is no excuse: a read one that differs fails", neg, [blind, s3], [t2, teq("error", 3, 17, E)], "fail",
+       f"check: diagnostic 2 of 2: scalac's is {SHOWN.replace(':2:', ':3:')}; teq's is {SHOWN.replace(':2:16', ':3:17')}")
+judged("a box the reader did not read is held to its line", neg, [blind, s3], [t3, t2], "fail",
+       f"check: diagnostic 1 of 2: scalac's is error a.scala:2, a box the reader does not read; teq's is {SHOWN.replace(':2:', ':3:')}")
+judged("a box the reader did not read is a failure where the marks fail", neg, [blind, s3], [t2], "fail", "marks: 1 errors where 2 are marked")
+judged("a box read as two is one the reader did not read", neg, [dict(s2, message=[], reader="read 2 boxes in this rendering"), s3], [t2, t3], "marks", D.UNDECIDED % 1)
+judged("the unread box named is the first of them", neg, [s2, dict(blind, line=3, at=[3, 16])], [t2, t3], "marks",
+       "the marks hold; the reader cannot decide: teq's diagnostics equal all it reads of scalac's, and scalac's diagnostic 2 is a box it does not read")
+# what is no part of a message
+judged("an identity hash is masked on both sides", neg, [scalac("error", 2, 16, "MatchError: ExprImpl@<hash> (of class ExprImpl)"), scalac("error", 3, 16, "E$$anon$1@44bf653d")],
+       [teq("error", 2, 16, "MatchError: ExprImpl@1562d7e8 (of class ExprImpl)"), teq("error", 3, 16, "E$$anon$1@1f66")], "pass")
+judged("the mask takes no word that is no hash", neg, [scalac("error", 2, 16, "case x@abc"), s3], [teq("error", 2, 16, "case x@abz"), t3], "fail",
+       "check: diagnostic 1 of 2: scalac's is error a.scala:2:16 case x@<hash>; teq's is error a.scala:2:16 case x@abz")
+judged("a colour sequence is no part of a message", neg, [scalac("error", 2, 16, "expression expected but \x1b[31meof\x1b[0m found"), s3], [teq("error", 2, 16, "expression expected but eof found"), t3], "pass")
+judged("a colour sequence is no part of teq's message either", neg, [scalac("error", 2, 16, "expression expected but eof found"), s3], [teq("error", 2, 16, "expression expected but \x1b[31meof\x1b[0m found"), t3], "pass")
+judged("the corpus' path in teq's message is scalac's path from the corpus", neg, [scalac("error", 2, 16, "x is already defined as method x in tests/neg/a.scala"), s3],
+       [teq("error", 2, 16, f"x is already defined as method x in {root}/tests/neg/a.scala"), t3], "pass")
+judged("another path in teq's message stays", neg, [scalac("error", 2, 16, "x is already defined as method x in tests/neg/a.scala"), s3],
+       [teq("error", 2, 16, "x is already defined as method x in /elsewhere/tests/neg/a.scala"), t3], "fail", "check: diagnostic 1 of 2: scalac's is error a.scala:2:16 x is already defined as method x in tests/neg/a.scala; teq's is ...")
+# each rule once more by a test that only its breaking passes
+one = test("neg", "c.scala", "object C:\n  val x: Int = \"\"  // error\n")
+sc, tc = scalac("error", 2, 16, E, "c.scala"), teq("error", 2, 16, E, "c.scala")
+C = SHOWN.replace("a.scala", "c.scala")
+two = several("neg", "two", [("p.scala", "object P:\n  val x: Int = \"\"  // error\n"), ("q.scala", "object Q:\n  val x: Int = \"\"  // error\n")])
+sp, sq = scalac("error", 2, 16, E, "p.scala"), scalac("error", 2, 16, E, "q.scala")
+tp, tq = teq("error", 2, 16, E, "p.scala"), teq("error", 2, 16, E, "q.scala")
+judged("the same diagnostic in another file of the test fails", two, [sp, sq], [tq, tp], "fail",
+       f"check: diagnostic 1 of 2: scalac's is {SHOWN.replace('a.scala', 'p.scala')}; teq's is {SHOWN.replace('a.scala', 'q.scala')}")
+judged("a line of teq's past the end of scalac's message fails", one, [sc], [teq("error", 2, 16, E + "\n  inlined from c.scala:1", "c.scala")], "fail",
+       "check: diagnostic 1 of 1: error c.scala:2:16, line 3 of the message: scalac's is nothing; teq's is inlined from c.scala:1")
+judged("white space inside a line of a message is compared", one, [sc], [teq("error", 2, 16, E.replace("Found:    ", "Found: "), "c.scala")], "fail",
+       f"check: diagnostic 1 of 1: scalac's is {C}; teq's is {C.replace('Found:    ', 'Found: ')}")
+judged("a full stop at a line's end is compared", one, [scalac("error", 2, 16, "No given instance of type Foo[String] was found", "c.scala")],
+       [teq("error", 2, 16, "No given instance of type Foo[String] was found.", "c.scala")], "fail",
+       "check: diagnostic 1 of 1: scalac's is error c.scala:2:16 No given instance of type Foo[String] was found; teq's is error c.scala:2:16 No given instance of type Foo[String] was found.")
+judged("a letter's case is compared", one, [scalac("error", 2, 16, "Not found: infer", "c.scala")], [teq("error", 2, 16, "not found: infer", "c.scala")], "fail",
+       "check: diagnostic 1 of 1: scalac's is error c.scala:2:16 Not found: infer; teq's is error c.scala:2:16 not found: infer")
+judged("a column of 0 that the reader read is a column", one, [scalac("error", 2, 0, E, "c.scala")], [tc], "fail", f"check: diagnostic 1 of 1: scalac's is {C.replace(':2:16', ':2:0')}; teq's is {C}")
+judged("a message of no line that the reader read is a message", one, [dict(sc, message=[])], [tc], "fail", f"check: diagnostic 1 of 1: scalac's is error c.scala:2:16 ; teq's is {C}")
+judged("`@` and hex digits after no word character are no hash", one, [scalac("error", 2, 16, "annotation @abc is unknown", "c.scala")], [teq("error", 2, 16, "annotation @abd is unknown", "c.scala")], "fail",
+       "check: diagnostic 1 of 1: scalac's is error c.scala:2:16 annotation @abc is unknown; teq's is error c.scala:2:16 annotation @abd is unknown")
+judged("nine hex digits after `@` are no hash", one, [scalac("error", 2, 16, "x@123456789", "c.scala")], [teq("error", 2, 16, "x@223456789", "c.scala")], "fail",
+       "check: diagnostic 1 of 1: scalac's is error c.scala:2:16 x@123456789; teq's is error c.scala:2:16 x@223456789")
+judged("scalac's diagnostic of a severity the judge does not know is compared", one, [sc, scalac("failure", None, None, "crash", None)], [tc], "fail",
+       "check: diagnostic 2 of 2: scalac's is failure without a place: crash; teq's is nothing")
+judged("a path beside the corpus in teq's message stays", one, [scalac("error", 2, 16, "x is already defined as method x in other/tests/neg/c.scala", "c.scala")],
+       [teq("error", 2, 16, f"x is already defined as method x in {os.path.dirname(root)}/other/tests/neg/c.scala", "c.scala")], "fail",
+       "check: diagnostic 1 of 1: scalac's is error c.scala:2:16 x is already defined as method x in other/tests/neg/c.scala; teq's is ...")
+judged("an error with a place whose words are the -Werror line's is compared", one, [scalac("error", 2, 7, D.WERROR, "c.scala"), scalac("error", 2, 16, "x", "c.scala")], [teq("error", 2, 16, "x", "c.scala")], "fail",
+       "check: diagnostic 1 of 2: scalac's is error c.scala:2:7 No warnings can be incurred under -Werror; teq's is error c.scala:2:16 x")
+judged("an error that only begins as the -Werror line is compared", werr, [sw, scalac("error", None, None, D.WERROR + "\nand more", None)], [tw, t_werror], "fail",
+       "check: diagnostic 2 of 2: scalac's is error without a place: No warnings can be incurred under -Werror; teq's is nothing")
+judged("a summary's words as an error are compared whole", werr, [sw, scalac("error", None, None, SUM % ("was 1 deprecation warning", "-deprecation"), None)],
+       [tw, loose("error", SUM % ("was 1 deprecation warning", "--deprecation"))], "fail",
+       "check: diagnostic 2 of 2: scalac's is error without a place: there was 1 deprecation warning; re-run with -deprecation for details; "
+       "teq's is error without a place: there was 1 deprecation warning; re-run with --deprecation for details")
+noline = test("neg", "l.scala", "object L:\n  val x = 1\n// nopos-error\n")
+judged("a line is compared where one side has none", noline, [scalac("error", 2, 7, "M", "l.scala")], [{"severity": "error", "file": noline.files[0], "col": 7, "message": "M"}], "fail",
+       "check: diagnostic 1 of 1: scalac's is error l.scala:2:7 M; teq's is error l.scala:0:7 M")
+judged("a box the reader did not read is held to its file", two, [dict(sp, column=0, message=[], reader="blind", at=[2, 16]), dict(sq, column=0, message=[], reader="blind", at=[2, 16])], [tq, tp], "fail",
+       f"check: diagnostic 1 of 2: scalac's is error p.scala:2, a box the reader does not read; teq's is {SHOWN.replace('a.scala', 'q.scala')}")
+fewer = test("neg", "f.scala", "object F:\n  val x: Int = \"\"  // error\n  def f = 1\n")
+judged("a box the reader did not read against no diagnostic of teq's fails", fewer,
+       [scalac("error", 2, 16, E, "f.scala"), dict(scalac("warning", 3, 0, "", "f.scala"), message=[], reader="blind", at=[3, 7])], [teq("error", 2, 16, E, "f.scala")], "fail",
+       "check: diagnostic 2 of 2: scalac's is warning f.scala:3, a box the reader does not read; teq's is nothing")
+# the entry's digest is of every file's bytes
+
+
+def rewritten(path, text):
+    def write():
+        with open(path, "w") as fh:
+            fh.write(text)
+    return write
+
+
+judged("an entry of the test before a byte of it changed is no answer", one, [sc], [tc], "marks", HOLD + "the oracle's entry was made from other sources than the test's",
+       then=rewritten(one.files[0], "object D:\n  val x: Int = \"\"  // error\n"))
+judged("an entry of the test before its second file changed is no answer", two, [sp, sq], [tp, tq], "marks", HOLD + "the oracle's entry was made from other sources than the test's",
+       then=rewritten(two.files[1], "object R:\n  val x: Int = \"\"  // error\n"))
+# a warn test, and the option whose warnings teq does not give
+warn = test("warn", "b.scala", "object B:\n  def f = 1  // warn\n")
+sb, tb = scalac("warning", 2, 7, "pure", "b.scala"), dict(tw, file=os.path.join(root, "tests", "warn", "b.scala"))
+judged("a warn test's warnings equal to scalac's pass", warn, [sb], [tb], "pass", outcome="ok")
+judged("a warn test's warning in other words fails", warn, [sb], [dict(tb, message="impure")], "fail",
+       "check: diagnostic 1 of 1: scalac's is warning b.scala:2:7 pure; teq's is warning b.scala:2:7 impure", outcome="ok")
+none = test("warn", "c.scala", "object C\n")
+judged("a test without a mark passes on no diagnostic on either side", none, [], [], "pass", outcome="ok")
+judged("a test without a mark and without an entry is marks", none, None, [], "marks", HOLD + "the oracle has no entry for the test", outcome="ok")
+wb = test("warn", "g.scala", "object G:\n  def f = 1  // warn\n  def g = 2\n")
+judged("a box the reader did not read is held to its severity", wb, [dict(scalac("warning", 2, 0, "", "g.scala"), message=[], reader="blind", at=[2, 3])],
+       [teq("migration warning", 2, 3, "x", "g.scala", "warn")], "fail",
+       "check: diagnostic 1 of 1: scalac's is warning g.scala:2, a box the reader does not read; teq's is migration warning g.scala:2:3 x", outcome="ok")
+judged("a migration warning of teq's is no warning of scalac's", warn, [dict(sb, message=["old"])], [dict(tb, severity="migration warning", message="old")], "fail",
+       "check: diagnostic 1 of 1: scalac's is warning b.scala:2:7 old; teq's is migration warning b.scala:2:7 old", outcome="ok")
+judged("an entry without a diagnostic is held to teq's: a warning of teq's fails", warn, [], [tb], "fail",
+       "check: diagnostic 1 of 0: scalac's is nothing; teq's is warning b.scala:2:7 pure", outcome="ok")
+nopos = test("warn", "h.scala", "object H\n// nopos-warn\n")
+judged("a warning without a place that is no summary is compared whole", nopos, [scalac("warning", None, None, "bad option '-Yno-experimental' was ignored", None)],
+       [loose("warning", "Option -source was updated")], "fail",
+       "check: diagnostic 1 of 1: scalac's is warning without a place: bad option '-Yno-experimental' was ignored; teq's is warning without a place: Option -source was updated", outcome="ok")
+judged("a migration warning without a place is no warning of scalac's without one", nopos, [scalac("warning", None, None, "bad option '-Yno-experimental' was ignored", None)],
+       [loose("migration warning", "bad option '-Yno-experimental' was ignored")], "fail",
+       "check: diagnostic 1 of 1: scalac's is warning without a place: bad option '-Yno-experimental' was ignored; "
+       "teq's is migration warning without a place: bad option '-Yno-experimental' was ignored", outcome="ok")
+judged("a warning without a place whose first line alone is a summary is compared whole", nopos, [scalac("warning", None, None, SUM % ("was 1 feature warning", "-feature") + "\nand this", None)],
+       [loose("warning", SUM % ("was 1 feature warning", "--feature") + "\nand that")], "fail",
+       "check: diagnostic 1 of 1: scalac's is warning without a place: there was 1 feature warning; re-run with -feature for details; "
+       "teq's is warning without a place: there was 1 feature warning; re-run with --feature for details", outcome="ok")
+judged("a warn test whose build failed without an error record fails", none, [], [], "fail", "marks: an error where warnings are marked: teq: exit 3", outcome="errors", built="teq: exit 3")
+unperformed = test("warn", "d.scala", "object D\n", ["-Wsafe-init"])
+judged("a test without a mark under an option teq does not perform fails, both sides silent", unperformed, [], [], "fail",
+       "option: -Wsafe-init (a check teq does not perform: no warning says nothing)", outcome="ok")
+with open(os.path.join(root, "tests", "warn", "d.check"), "w") as fh:
+    fh.write("")
+judged("and fails so with a .check beside it", unperformed, [], [], "fail", "option: -Wsafe-init (a check teq does not perform: no warning says nothing)", outcome="ok")
+marked = test("warn", "e.scala", "object E:\n  def f = 1  // warn\n", ["-Wsafe-init"])
+judged("a marked test under such an option is held to scalac's", marked, [dict(sb, file="e.scala")], [dict(tb, file=os.path.join(root, "tests", "warn", "e.scala"))], "pass", outcome="ok")
+judged("a test without a mark under such an option fails before the oracle is asked: without an entry too", unperformed, None, [], "fail",
+       "option: -Wsafe-init (a check teq does not perform: no warning says nothing)", outcome="ok")
+# an oracle that is not this board's ends the run
+entry = json.dumps({"row": "neg", "test": "a.scala", "digest": "", "valid": True, "stable": True, "diagnostics": []})
+for name, text in [
+        ("of another corpus commit", json.dumps({"head": True, "scalac": D.SCALAC, "corpus": "0" * 40}) + "\n" + entry),
+        ("of another scalac", json.dumps({"head": True, "scalac": "3.10.0", "corpus": D.TAG_COMMIT}) + "\n" + entry),
+        ("without a head line", entry),
+        ("that is empty", ""),
+        ("holding a test twice", json.dumps({"head": True, "scalac": D.SCALAC, "corpus": D.TAG_COMMIT}) + "\n" + entry + "\n" + entry),
+        ("holding another row's entry", json.dumps({"head": True, "scalac": D.SCALAC, "corpus": D.TAG_COMMIT}) + "\n" + entry.replace('"neg"', '"warn"')),
+        ("holding a line that is no entry", json.dumps({"head": True, "scalac": D.SCALAC, "corpus": D.TAG_COMMIT}) + "\n{\"row\": \"neg\"")]:
+    path = os.path.join(root, "bad.jsonl")
+    with open(path, "w") as fh:
+        fh.write(text + "\n" if text else "")
+    try:
+        D.load_oracle(path, "neg")
+        ended = None
+    except SystemExit as e:
+        ended = e.code
+    print(("ok\t" if ended == 2 else "FAIL\t") + f"an oracle {name} ends the run" + ("" if ended == 2 else f": it was read ({ended})"))
+print(("ok\t" if D.load_oracle(os.path.join(root, "none.jsonl"), "neg") == {} else "FAIL\t") + "a row without an oracle has no entry")
+# the summary teq itself prints, as the judge reads it
+with open(teq_line) as fh:
+    printed = [l.rstrip("\n") for l in fh if l.startswith("warning: there ")]
+with open(teq_records) as fh:
+    records = [json.loads(l) for l in fh if l.startswith("{")]
+theirs = D.teq_sequence(root, records)
+ours = D.scalac_sequence({"diagnostics": [scalac("warning", None, None, SUM % ("was 1 deprecation warning", "-deprecation"), None)]})
+ok = (len(printed) == 1 and D.SUMMARY_COUNT.match(printed[0][len("warning: "):]) and len(theirs) == 1 and theirs[0][0][4] == ("a summary", 1, "deprecation")
+      and theirs[0][0] == ours[0][0])
+print(("ok\t" if ok else "FAIL\t") + "the summary teq prints is one by the judge's pattern, equal to scalac's of that count and kind" + ("" if ok else f": printed {printed}, read {theirs}"))
+# the line a suite reads a program's output without (tests/support/jars.sh, SUMMARY) is that printed line whole; the
+# judge's pattern is its sentence, as either compiler's message has it
+ok = len(printed) == 1 and bool(D.BUILD_SUMMARY.match(printed[0])) and not D.BUILD_SUMMARY.match(SUM % ("was 1 deprecation warning", "-deprecation"))
+print(("ok\t" if ok else "FAIL\t") + "the summary teq prints is the build's line of tests/support/jars.sh, which scalac's message is not" + ("" if ok else f": printed {printed}"))
+
+# the oracle's own validation (tests/board/oracle.py validate, no compiler), over a made-up corpus and a made-up file
+# of a row of the board's: what the judge asks of an entry is asked of the data, and a run of the row is ended by it
+import subprocess
+corpus, held = os.path.join(root, "corpus"), os.path.join(root, "held")
+os.makedirs(os.path.join(corpus, "tests", "init", "neg"))
+os.makedirs(held)
+with open(os.path.join(corpus, "tests", "init", "neg", "v.scala"), "w") as fh:
+    fh.write("object V:\n  val x: Int = \"\"  // error\n")
+v = D.tests_of(next(r for r in ROWS.rows() if r.name == "init-neg"), corpus)[0]
+good = {"row": "init-neg", "test": "v.scala", "digest": D.digest(corpus, v.files), "scalac": D.SCALAC, "valid": True, "stable": True,
+        "diagnostics": [scalac("error", 2, 16, E, "v.scala")]}
+
+
+def without(key):
+    return {k: x for k, x in good.items() if k != key}
+
+
+def held_file(entries):
+    with open(os.path.join(held, "init-neg.oracle.jsonl"), "w", encoding="utf-8") as fh:
+        fh.write("".join(json.dumps(e) + "\n" for e in [{"head": True, "scalac": D.SCALAC, "corpus": D.TAG_COMMIT}] + entries))
+
+
+def validation(name, entries, failure=None):
+    held_file(entries)
+    r = subprocess.run([sys.executable, "-B", "tests/board/oracle.py", "validate", "--dir", held, "--row", "init-neg", "--corpus", corpus],
+                       capture_output=True, text=True, timeout=60)
+    fails = [l for l in r.stdout.splitlines() if l.startswith("FAIL ")]
+    ok = (r.returncode, fails) == ((1, ["FAIL init-neg/v.scala: " + failure]) if failure else (0, []))
+    print(("ok\t" if ok else "FAIL\t") + name + ("" if ok else f": exit {r.returncode}, {fails} {r.stderr[-300:]}"))
+
+
+validation("validate: a row's file that holds its corpus' test validates", [good])
+validation("validate: an entry twice fails", [good, good], "an entry twice (in init-neg's file)")
+validation("validate: an entry that does not say it is stable fails", [without("stable")], "the entry does not say its `stable`")
+validation("validate: an entry that does not say it is valid fails", [without("valid")], "the entry does not say its `valid`")
+validation("validate: an entry without a digest fails", [without("digest")], "the entry does not say its `digest`")
+validation("validate: an entry of another scalac than its file's head fails", [dict(good, scalac="3.10.0")], "the entry is scalac 3.10.0's, its file's head says 3.8.4")
+held_file([good])
+fine = D.validated(corpus, ["init-neg"], held)
+held_file([dict(good, digest="0" * 64)])
+spoilt = D.validated(corpus, ["init-neg"], held)
+ok = fine[0].startswith("oracle: 1 entries of 1 rows") and fine[1] == [] and spoilt[1] == ["init-neg/v.scala: the digest is not the test's files'"]
+print(("ok\t" if ok else "FAIL\t") + "a run takes the validation's failures of the rows it judges" + ("" if ok else f": {fine}, {spoilt}"))
+
+# the run itself, as a gate line runs it: the runner's `main` in a copy of the runner, the made-up corpus named a
+# checkout at the tag's commit, the row's own lists beside a file of the row that does not validate
+import shutil
+copy = os.path.join(root, "copy")
+for d in ("board/dotty", "support", "scala3-typing", "pending"):
+    os.makedirs(os.path.join(copy, "tests", d))
+for f in ("board/dotty.py", "board/oracle.py", "board/rows.py", "support/pending.py", "support/jars.sh", "support/teq-capped.sh", "scala3-typing/harness.py",
+          "board/dotty/init-neg.tsv", "pending/dotty-init-neg.txt"):
+    shutil.copy(os.path.join("tests", f), os.path.join(copy, "tests", f))
+held_file([dict(good, digest="0" * 64)])
+shutil.copy(os.path.join(held, "init-neg.oracle.jsonl"), os.path.join(copy, "tests", "board", "dotty"))
+subprocess.run(["git", "init", "-q", corpus], capture_output=True, timeout=60)
+with open(os.path.join(corpus, ".git", "HEAD"), "w") as fh:
+    fh.write(D.TAG_COMMIT + "\n")
+
+
+def lists():
+    return {os.path.join(d, f): open(os.path.join(copy, "tests", d, f), "rb").read() for d in ("board/dotty", "pending") for f in sorted(os.listdir(os.path.join(copy, "tests", d)))}
+
+
+before = lists()
+r = subprocess.run([sys.executable, "-B", os.path.join(copy, "tests", "board", "dotty.py"), "--row", "init-neg", "--update", "--add", "--jobs", "2"],
+                   capture_output=True, text=True, timeout=200, env=dict(os.environ, SCALA3_TAG=corpus, BOARD_OUT=os.path.join(root, "copy-out")))
+cause = "board: the oracle does not validate (python3 tests/board/oracle.py validate): 1 failed, the first: init-neg/v.scala: the digest is not the test's files'"
+ok = r.returncode == 2 and cause in r.stderr.splitlines() and lists() == before
+print(("ok\t" if ok else "FAIL\t") + "a run with --update --add ends on a row's file that does not validate: exit 2, the cause named, no list written"
+      + ("" if ok else f": exit {r.returncode}, lists {'as they were' if lists() == before else 'written'}, {(r.stdout + r.stderr)[-400:]}"))
+PY
+while IFS=$'\t' read -r said scenario; do
+  check "board: $scenario" "$work/board.log" [ "$said" = ok ]
+done < <(grep -E $'^(ok|FAIL)\t' "$work/board.log")
+check "board: every scenario of the judge was held" "$work/board.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board.log")" = 102 ]'
 
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]

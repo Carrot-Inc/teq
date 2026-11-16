@@ -12,9 +12,9 @@
   the reference projects    bench/<project>/errors.txt, deviations.json and run.json, the gate's records
                             (docs/DEVELOPING.md, "The project records"), with the oracle's inventory tests.json
 
-Columns: total, passing, by marks alone (a neg or warn test of dotty's that holds its marked lines and has no
-.check: no pass and no failure, tests/board/dotty.py), failing (a failure, a limit reached, a crash), cannot run,
-and a note. A project's rows
+Columns: total, passing, by marks alone (a neg or warn test of dotty's that holds its marked lines where the row's
+oracle of scalac's own diagnostics gives no answer to hold its diagnostics to: no pass and no failure,
+tests/board/dotty.py), failing (a failure, a limit reached, a crash), cannot run, and a note. A project's rows
 are its three lines: compile (the configurations of the record's scope; failing, those with an accepted error),
 test (the oracle's cases; failing, those of a project blocked by its build and those whose outcome departs) and
 run (the named assertions; failing, those violated). A file tests/board/projects/<project>-<line>.today, where
@@ -170,6 +170,8 @@ def dotty_header():
     seen = set()
     d = os.path.join(HERE, "dotty")
     for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if not f.endswith(".tsv"):
+            continue  # a row's oracle stands beside its list
         with open(os.path.join(d, f), encoding="utf-8") as fh:
             m = re.match(r"# (dotty \S+ \(\w+\)).*; (JDK \d+, node \d+)", fh.readline())
             if m:
