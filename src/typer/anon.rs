@@ -12,6 +12,162 @@ use crate::types::*;
 use std::sync::Arc;
 
 impl<'a> Worker<'a> {
+    /// Whether a parent's type as written leaves type parameters to infer, which is where the reference types
+    /// the parent's constructor call ahead of the super call (`Namer.parentType`: `ptype.typeParams` is not
+    /// empty): a generic class or a generic alias named without its type arguments; not an alias of an applied
+    /// type (`type VS = V[String]`), whose arguments are the alias's.
+    fn parent_targs_left(&mut self, ty: ast::TyExprId) -> bool {
+        match self.cur_ast().ty(ty) {
+            TyExpr::Apply(..) => false,
+            TyExpr::Resolved(t) => matches!(self.types.get(t), Type::Ctor(k) if !self.syms.class(k).tparams.is_empty()),
+            // An annotation leaves the type it is written on what it is (`G[T] @uncheckedVariance`).
+            TyExpr::Unchecked(inner) | TyExpr::UncheckedVariance(inner) | TyExpr::Annotated(inner, ..) => self.parent_targs_left(inner),
+            // A name or a path: the constructor it names, nothing of the place's own types read.
+            TyExpr::Name(_) | TyExpr::Select(..) => {
+                let t = self.resolve_type_ctor(ty);
+                match self.types.get(t) {
+                    Type::Ctor(k) => !self.syms.class(k).tparams.is_empty(),
+                    Type::Lambda(..) => true,
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the reference types the parent call of a clause whose type is written `ty` AHEAD of the class's
+    /// parents, the one test of every place that asks (an anonymous class's creation, a class's, object's or
+    /// trait's parent call, the signature help): the type as written leaves type parameters to infer, with or
+    /// without an argument list (`Namer.parentType`: a parent written as a type gets a synthetic application,
+    /// `typedParentType`). `bare_new`: the clause is the bare name of an anonymous class's parent, no argument
+    /// list written, of the class and under the expected type given: `Typer.typedNew` infers such a parent's type
+    /// parameters from the expected type first (`inferTypeParams`), and where that fixes them all there is
+    /// nothing left to type ahead.
+    pub(super) fn parent_typed_ahead(&mut self, ty: ast::TyExprId, bare_new: Option<(ClassId, Option<TypeId>)>) -> bool {
+        if !self.parent_targs_left(ty) {
+            return false;
+        }
+        match bare_new {
+            Some((k, expected)) => !self.expected_gives_parent_targs(k, expected),
+            None => true,
+        }
+    }
+
+    /// Whether the expected type fixes every type parameter of the class `k` named bare as an anonymous class's
+    /// parent, as `Inferencing.inferTypeParams` asks it (`k[vars] <:< pt`, then fully defined with no variable left
+    /// at its bottom): the expected type is the class applied, or a base class of it applied, each parameter of
+    /// `k` stands as an argument there, and the expected argument at that place constrains it: an open variable
+    /// only where it has a bound of its own; under an invariant parameter a type, or a wildcard with a bound that
+    /// says something; under
+    /// a covariant one anything but `Any` (an upper bound of `Any` leaves the variable at `Nothing`); under a
+    /// contravariant one anything (the variable goes up). `Any` and `AnyRef` fix none.
+    fn expected_gives_parent_targs(&mut self, k: ClassId, expected: Option<TypeId>) -> bool {
+        let Some(t) = self.concrete_expected(expected).map(|t| self.dealias(t)) else { return false };
+        // What is solved so far, nothing forced: a variable still open in the expected type is the question.
+        let t = self.zonk(t);
+        let Type::Class(ec, eargs) = self.types.get(self.types.strip_nested(t)) else { return false };
+        let eargs = self.types.items(eargs).to_vec();
+        let tparams = self.syms.class(k).tparams.clone();
+        // `k` as the expected class sees it: the class itself over its own parameters, or its base type.
+        let Some(&(_, seen)) = self.syms.class(k).base_types.iter().find(|&&(b, _)| b == ec) else { return false };
+        let Type::Class(_, sargs) = self.types.get(self.types.strip_nested(seen)) else { return false };
+        let sargs = self.types.items(sargs).to_vec();
+        let variances: Vec<i8> = self.syms.class(ec).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+        if tparams.is_empty() || sargs.len() != eargs.len() {
+            return false;
+        }
+        tparams.iter().all(|&p| {
+            let param = self.types.param(p);
+            sargs.iter().zip(&eargs).zip(&variances).any(|((&sa, &ea), &v)| sa == param && self.argument_fixes(ea, v))
+        })
+    }
+
+    /// Whether the expected type argument `ea`, under a parameter of variance `v`, constrains the variable that
+    /// stands there (`expected_gives_parent_targs`).
+    fn argument_fixes(&mut self, ea: TypeId, v: i8) -> bool {
+        // An open variable (the type parameter of a method being applied) fixes the parameter where an argument
+        // typed before gave it a lower bound (`gen(1, new C {})`); the bound it was declared with says nothing
+        // (`def gen[A <: AnyRef](c: C[A])`: the reference leaves it at its bottom), nor does a variable inside
+        // the argument.
+        if let Type::Var(open) = self.types.get(ea) {
+            return self.bounds_through_vars(open, false).iter().any(|&b| b != NOTHING);
+        }
+        if self.types.has_vars(ea) {
+            return false;
+        }
+        match (self.types.get(ea), v) {
+            (_, v) if v < 0 => true,
+            (Type::Wild, _) => false,
+            (Type::BoundedWild(lo, hi), 0) => lo != NOTHING || hi != ANY,
+            (Type::BoundedWild(_, hi), _) => hi != ANY,
+            (_, 0) => true,
+            _ => ea != ANY,
+        }
+    }
+
+    /// What a class asks of the class it extends, asked where an anonymous class of an empty body is made as its
+    /// parent's creation and no class is (`type_new_anon`): `k` is not final, a value class among the final ones
+    /// (`Namer.checkedParentType`'s `ExtendFinalClass`), nor sealed in another source file
+    /// (`UnableToExtendSealedClass`); by the tests and the words a class with a body is held to (`set_parents`),
+    /// the class described as the reference describes an anonymous one. Both are told at the creation, the
+    /// class's own position for the reference (`cls.srcPos`), as the typer's records they are; a class with a body
+    /// is told of a sealed parent at the parent's name still (`set_parents`). A class of the lean std
+    /// (`std_source`: not a jar's) is asked nothing here: what it declares final, sealed or of a self type is the
+    /// std's own shape and not always its library's (`ArrayBuffer` is final there and open in the library), and
+    /// its creation with an empty body stays what it was.
+    fn check_anon_parent(&mut self, k: ClassId, span: Span) {
+        if self.site_is_typed_body() || self.std_source(self.syms.class(k).file) {
+            return;
+        }
+        if self.final_for_subclasses(k) {
+            let msg = format!("anonymous class {{...}} cannot extend final {}", self.class_description(k));
+            self.error_by(crate::source::Group::Typer, span, msg);
+        } else if self.sealed_in_another_source(k) {
+            let msg = self.sealed_elsewhere_msg(k);
+            self.error_by(crate::source::Group::Typer, span, msg);
+        }
+    }
+
+    /// scalac's E058 for an anonymous class of an empty body made as the creation of `k`, whose type the creation
+    /// has (`this_ty`): what `this` is in that class, the parent's instance and nothing more, has to conform to the
+    /// self type `k` and each of its bases declare, under the creation's type arguments (`check_self_types`, the
+    /// class's own check). A self type that names a path (an enclosing class's member) is left as it was: seen
+    /// from a class that is not made, it has no prefix to be read through.
+    fn check_anon_self_type(&mut self, k: ClassId, this_ty: TypeId, span: Span) {
+        if this_ty == ERROR || self.site_is_typed_body() || self.std_source(self.syms.class(k).file) {
+            return;
+        }
+        if !self.syms.class(k).base_types.iter().any(|&(b, _)| self.syms.class(b).declared_self.is_some()) {
+            return;
+        }
+        let this_ty = self.solve_in(this_ty);
+        let this_class = self.types.strip_nested(this_ty);
+        let Type::Class(tk, targs) = self.types.get(this_class) else { return };
+        if tk != k {
+            return;
+        }
+        let subst: Subst = self.syms.class(k).tparams.iter().copied().zip(self.types.items(targs).iter().copied()).collect();
+        let bases: Vec<(ClassId, TypeId)> = self.syms.class(k).base_types.clone();
+        for (b, bt) in bases {
+            let Some(declared) = self.syms.class(b).declared_self else { continue };
+            let seen = if subst.is_empty() { bt } else { self.types.subst(bt, &subst) };
+            let through = self.owner_subst(seen);
+            let required = self.types.subst(declared, &through);
+            if self.types.has_paths(required) {
+                continue;
+            }
+            let mark = self.snapshot();
+            let ok = self.is_sub(this_ty, required);
+            self.rollback(&mark);
+            if !ok {
+                let described = format!("{} {{...}}", self.show(this_ty));
+                let owner = format!("anonymous class {}", described);
+                self.self_type_refused(&described, &owner, required, b, span, true);
+                return;
+            }
+        }
+    }
+
     pub fn type_new_anon(&mut self, d: DefId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let file = self.env.file;
         let ast = self.cur_ast();
@@ -38,12 +194,30 @@ impl<'a> Worker<'a> {
         let class_parent = match self.plain_class_parent(first.ty) {
             Err(()) => return (self.prog.add(TExpr::Unit), ERROR),
             Ok(Some(k))
-                if cls.parents.len() == 1 && cls.body.is_empty() && self.syms.class(k).mods & mods::ABSTRACT == 0 =>
+                if cls.parents.len() == 1
+                    && cls.body.is_empty()
+                    && self.syms.class(k).mods & mods::ABSTRACT == 0
+                    && !self.guarded_super_ctor(k, first.args.iter().all(|(l, _)| l.is_empty())) =>
             {
                 let first_written = matches!(first.args.as_slice(), [(_, false), _, ..]);
                 let args: Vec<(ast::ListRef, bool, Span, super::apply::FunEnd)> =
                     first.args.iter().enumerate().map(|(k, &(l, using))| (l, using, span, super::apply::FunEnd::at(first.fun_end(ast, k)))).collect();
+                let told = self.diags.items.len();
+                // The creation is this class's parent call: a super call for its constructors' access
+                // (`Worker::construct` knows it by the span), unless the reference types it ahead to infer the
+                // parent's type arguments (`parent_typed_ahead`): a generic parent written without its type
+                // arguments, which the expected type fixes for a bare name alone.
+                let ahead = self.parent_typed_ahead(first.ty, first.args.is_empty().then_some((k, expected)));
+                self.anon_super_call = Some((span, ahead));
                 let typed = self.type_new(first.ty, &args, first_written, span, expected);
+                self.anon_super_call = None;
+                // No class is made, and the creation is still the subclass it stands for: what a class asks of its
+                // parent is asked of it (`check_anon_parent`, `check_anon_self_type`), where the creation itself
+                // stands: one the place may not make is told of that alone, as the reference tells it.
+                if !self.diags.items.iter().skip(told).any(|d| !d.is_warning) {
+                    self.check_anon_parent(k, span);
+                    self.check_anon_self_type(k, typed.1, span);
+                }
                 // The arguments are the anonymous class's parent call, which dotty keeps in the class's definition,
                 // though teq makes no class here: its creation is marked as that call, where the walk of the
                 // constructor's code stops (`MARK_ANON_PARENT`), the block of the temporaries its arguments are
@@ -86,12 +260,20 @@ impl<'a> Worker<'a> {
         // The arguments of the superclass are evaluated here, where the class is created, and
         // fix its type arguments when the parent clause leaves them out.
         let mut parent_args = None;
+        // The clause of a first parent typed ahead and refused for its constructors, here where the class is made:
+        // an error's type for the reference, of which nothing more is asked (`set_parents_of`).
+        let mut refused_ahead = None;
         for (i, p) in cls.parents.iter().enumerate() {
             let written = match ast.ty(p.ty) {
                 TyExpr::Apply(..) => true,
                 TyExpr::Resolved(t) => !matches!(self.types.get(t), Type::Ctor(_)),
                 _ => false,
             };
+            if let (0, Some(k)) = (i, class_parent) {
+                if self.parent_typed_ahead(p.ty, None) && self.ctor_call_refused(k, super::apply::CtorCall::Ahead(None)) {
+                    refused_ahead = Some(ast.ty_spans[p.ty.idx()]);
+                }
+            }
             let infers = i == 0 && !p.args.is_empty() && !written && class_parent.map_or(false, |k| !self.syms.class(k).tparams.is_empty());
             let t = if infers {
                 // `new C(args) { ... }` where a `C[X, Y]` is expected: the expected type fixes
@@ -100,7 +282,8 @@ impl<'a> Worker<'a> {
                     let d = self.dealias(e);
                     matches!(self.types.get(d), Type::Class(k, _) if Some(k) == class_parent).then_some(d)
                 });
-                let typed = self.type_parent_ctor(c, Some(p), class_parent.unwrap(), from_expected, true);
+                let ahead = self.parent_typed_ahead(p.ty, None);
+                let typed = self.type_parent_ctor_at(c, Some(p), class_parent.unwrap(), from_expected, true, Some(ahead));
                 parent_args = typed.map(|(call, _)| call);
                 typed.map_or(ERROR, |(_, ty)| ty)
             } else {
@@ -109,7 +292,7 @@ impl<'a> Worker<'a> {
             };
             parents.push((t, ast.ty_spans[p.ty.idx()]));
         }
-        self.set_parents(c, parents);
+        self.set_parents_of(c, parents, refused_ahead);
         self.syms.class_mut(c).state().set(Completion::Done);
         // Its export clauses, completed where it is made as any class's at its completion
         // (dotty's `Namer.processExports`): the forwarders of a value's members, and the table of
@@ -124,7 +307,9 @@ impl<'a> Worker<'a> {
         let extends_class = class_parent.filter(|&k| self.syms.class(c).superclass == Some(k));
         if let (Some(k), None) = (extends_class, parent_args) {
             let parent_ty = self.syms.class(c).parents.first().copied();
-            parent_args = self.type_parent_ctor(c, Some(first), k, parent_ty, true).map(|(call, _)| call);
+            // A bare generic parent without an argument list came through the expected type or was refused where
+            // it was resolved (`resolve_anon_parent`): nothing of it is typed ahead here.
+            parent_args = self.type_parent_ctor_at(c, Some(first), k, parent_ty, true, Some(false)).map(|(call, _)| call);
         }
         let parent_args = parent_args.filter(|call| extends_class.is_some() && (!call.args.is_empty() || call.via.is_some()));
         let first_expr = self.prog.exprs.len();

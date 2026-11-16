@@ -252,6 +252,17 @@ enum Abstracts {
     OuterAccessors,
 }
 
+/// What the place of a parent call gives its constructors' access (`Worker::construct_parent_now`).
+#[derive(Clone, Copy)]
+pub(super) struct ParentSite {
+    /// The parent is one the class writes: a private primary constructor alone was told of where the parent
+    /// was resolved (`Worker::set_parents`).
+    pub written: bool,
+    /// The call is the class's super call, or one the reference types ahead of it to infer the parent's type
+    /// arguments (`Worker::parent_typed_ahead`).
+    pub call: super::apply::CtorCall,
+}
+
 impl<'a> Worker<'a> {
     /// The eager part of the signature phase: the completion of every class and alias of the
     /// program's files, and the export tables of the packages.
@@ -6723,14 +6734,53 @@ impl<'a> Worker<'a> {
             }
         }
         let superclass = superclass?;
-        if let Some(p) = clause.filter(|p| kind == ClassKind::Trait && !p.args.is_empty()) {
-            let msg = format!(
-                "{} may not call constructor of {}",
-                self.class_description(c),
-                self.class_description(superclass)
-            );
+        // A trait calls no constructor of the class it extends, and the reference still types that class's
+        // application ahead where its type as written leaves type parameters (`Namer.parentType`): refused where
+        // the place may call none of its constructors, as a class's parent call typed ahead is.
+        let ahead_refused = match (kind, clause) {
+            (ClassKind::Trait, Some(p)) => self.parent_ahead_refused(c, p, superclass),
+            _ => false,
+        };
+        // A private primary constructor alone is no alternative of a call typed ahead: whoever sets the parents
+        // tells of it, and asks nothing of a trait (`resolve.rs set_parents_of`).
+        let private_alone = {
+            let info = self.syms.class(superclass);
+            info.mods & mods::PRIVATE_CTOR != 0 && info.ctors.is_empty()
+        };
+        let told_here = match clause.filter(|_| kind == ClassKind::Trait) {
+            Some(p) if !p.args.is_empty() => {
+                // One line: the call typed ahead and refused was told where the trait was completed
+                // (`set_parents`), and the reference tells that alone.
+                if !ahead_refused {
+                    let msg = format!(
+                        "{} may not call constructor of {}",
+                        self.class_description(c),
+                        self.class_description(superclass)
+                    );
+                    let span = self.ast(file).ty_spans[p.ty.idx()];
+                    self.diags.error(file, span, msg);
+                }
+                ahead_refused && private_alone
+            }
+            // Without an argument list nothing typed the call where the trait was completed.
+            Some(_) => ahead_refused,
+            None => false,
+        };
+        if let (true, Some(p)) = (told_here, clause) {
             let span = self.ast(file).ty_spans[p.ty.idx()];
-            self.diags.error(file, span, msg);
+            let outer = self.parent_args_of.replace(c);
+            self.refuse_ctor(superclass, span);
+            self.parent_args_of = outer;
+        }
+        // An anonymous class whose superclass comes through a trait (`new T {}` of `trait T extends P`) calls
+        // that class's constructor as a named one does, which is asked at `type_parent_ctor` below: the creation
+        // is refused where the place may call none (dotty's `ensureConstrCall` on the first parent, Typer.scala).
+        if kind == ClassKind::Anon && clause.is_none() {
+            let ctors: Vec<SymId> = self.syms.class(superclass).ctors.iter().copied().filter(|&s| self.ctor_callable_here(s)).collect();
+            if !self.creation_accessible(superclass, None, true) && !ctors.into_iter().any(|s| self.creation_accessible(superclass, Some(s), true)) {
+                let span = self.syms.class(c).span;
+                self.refuse_ctor(superclass, span);
+            }
         }
         if kind == ClassKind::Anon || kind == ClassKind::Trait {
             return None;
@@ -6741,6 +6791,43 @@ impl<'a> Worker<'a> {
         let parent_ty = self.base_type_of(c, superclass)?;
         let call = self.type_parent_ctor(c, clause, superclass, Some(parent_ty), false).map(|(call, _)| call)?;
         (!call.args.is_empty() || call.via.is_some()).then_some(call)
+    }
+
+    /// Whether the reference types the call of `c`'s class parent `superclass` ahead (the clause's type as written
+    /// leaves type parameters: `Namer.parentType`'s `typedAheadExpr`) and the place may call none of the class's
+    /// constructors there: asked in the parent call's own environment (`type_parent_ctor_at`), the class being
+    /// defined no subclass yet. The parent's type is then an error's for the reference, which asks nothing more of
+    /// the class against it (final, sealed, the self type: `resolve.rs set_parents_of`), and a trait's "may not call
+    /// constructor" is not told beside the refusal (`check_parent_args`).
+    pub(super) fn parent_ahead_refused(&mut self, c: ClassId, p: &'a ast::Parent, superclass: ClassId) -> bool {
+        let (file, class_span) = {
+            let i = self.syms.class(c);
+            (i.file, i.span)
+        };
+        let mut env = self.env_at(file, Owner::Class(c), class_span.start);
+        if let Some(last) = env.frames.last_mut() {
+            if matches!(last, Frame::Class(k) if *k == c) {
+                *last = Frame::Ctor(c);
+            }
+        }
+        self.with_env(env, |t| {
+            // The clause's type is read for the constructor it names alone, and tells nothing here: its own
+            // resolution, where the class's type parameters stand, tells what there is to tell (a deprecated
+            // parent's warning among it, which takes nothing from the answer).
+            let mark = t.diags.items.len();
+            let ahead = t.parent_typed_ahead(p.ty, None);
+            t.drop_reported_since(mark);
+            if !ahead {
+                return false;
+            }
+            t.ctor_call_refused(superclass, super::apply::CtorCall::Ahead(Some(c)))
+        })
+    }
+
+    /// Whether the place may call none of `k`'s constructors by a call of the kind `call`.
+    pub(super) fn ctor_call_refused(&mut self, k: ClassId, call: super::apply::CtorCall) -> bool {
+        let ctors: Vec<SymId> = self.syms.class(k).ctors.iter().copied().filter(|&s| self.ctor_callable_here(s)).collect();
+        !self.creation_accessible(k, None, call) && !ctors.into_iter().any(|s| self.creation_accessible(k, Some(s), call))
     }
 
     /// The trait with using clauses or context bounds that a parent clause of `c` names.
@@ -6996,6 +7083,25 @@ impl<'a> Worker<'a> {
         parent_ty: Option<TypeId>,
         in_place: bool,
     ) -> Option<(ParentCall, TypeId)> {
+        self.type_parent_ctor_at(c, clause, parent, parent_ty, in_place, None)
+    }
+
+    /// `type_parent_ctor`, `ahead` saying whether the reference types this call ahead of the class's parents:
+    /// where the parent's type has type parameters left to infer, `Namer.parentType` types the constructor's
+    /// application to find them (`typedAheadExpr(parent)`; a parent written as a type gets a synthetic one,
+    /// `typedParentType`) while the class has no parents yet, and keeps that tree: the class is no subclass
+    /// for it, so a protected constructor is an alternative only inside another subclass
+    /// (`CtorCall::Ahead`). Without `ahead`: a generic parent typed with no `parent_ty`, or a clause whose type
+    /// as written leaves type parameters (`parent_typed_ahead`).
+    pub(super) fn type_parent_ctor_at(
+        &mut self,
+        c: ClassId,
+        clause: Option<&'a ast::Parent>,
+        parent: ClassId,
+        parent_ty: Option<TypeId>,
+        in_place: bool,
+        ahead: Option<bool>,
+    ) -> Option<(ParentCall, TypeId)> {
         if !in_place {
             self.dump_door("parent's call", super::context::Entered::Class(c));
         }
@@ -7029,6 +7135,13 @@ impl<'a> Worker<'a> {
             None => sig,
         };
         let span = clause.map_or(class_span, |p| ast.ty_spans[p.ty.idx()]);
+        // Typed ahead: what the caller says; else a generic parent typed with no `parent_ty`, or a clause whose
+        // type as written leaves type parameters (`parent_typed_ahead`, asked below in the call's own environment).
+        let ahead_given = ahead.or((parent_ty.is_none() && !self.syms.class(parent).tparams.is_empty()).then_some(true));
+        // The class whose parents are being found is no subclass for a call typed ahead; an anonymous class made in
+        // place has no frame to leave out.
+        let defining = (!in_place).then_some(c);
+        let call_of = |ahead: bool| if ahead { super::apply::CtorCall::Ahead(defining) } else { super::apply::CtorCall::Super };
         let mut lists: Vec<ArgList> = clause
             .map(|p| {
                 p.args
@@ -7054,7 +7167,8 @@ impl<'a> Worker<'a> {
             lists.remove(0);
         }
         let (te, ty) = if in_place {
-            self.construct_parent(parent, sig, owner_subst, prefix, lists, span)
+            let site = ParentSite { written: clause.is_some(), call: call_of(ahead_given.unwrap_or(false)) };
+            self.construct_parent(parent, sig, owner_subst, prefix, lists, span, site)
         } else {
             let mut names = Vec::new();
             let mut givens = Vec::new();
@@ -7080,7 +7194,13 @@ impl<'a> Worker<'a> {
             env.frames.push(Frame::Locals { names, tparams, givens, classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
             self.with_env(env, |t| {
                 let outer_case = t.parent_args_of.replace(c);
-                let r = t.construct_parent(parent, sig, owner_subst, prefix, lists, span);
+                let ahead = match (ahead_given, clause) {
+                    (Some(ahead), _) => ahead,
+                    (None, Some(p)) => t.parent_typed_ahead(p.ty, None),
+                    (None, None) => false,
+                };
+                let site = ParentSite { written: clause.is_some(), call: call_of(ahead) };
+                let r = t.construct_parent(parent, sig, owner_subst, prefix, lists, span, site);
                 t.parent_args_of = outer_case;
                 r
             })
@@ -7101,7 +7221,8 @@ impl<'a> Worker<'a> {
 
     /// The constructor call of a parent clause, an overload resolution where the parent has
     /// secondary constructors: their signatures under the parent's type arguments, as `sig` is.
-    fn construct_parent(&mut self, parent: ClassId, sig: Arc<MethodSig>, owner_subst: Subst, prefix: Option<TypeId>, lists: Vec<ArgList>, span: Span) -> (TExprId, TypeId) {
+    #[allow(clippy::too_many_arguments)]
+    fn construct_parent(&mut self, parent: ClassId, sig: Arc<MethodSig>, owner_subst: Subst, prefix: Option<TypeId>, lists: Vec<ArgList>, span: Span, site: ParentSite) -> (TExprId, TypeId) {
         // A class nested in a class through a path (`extends H.o.I`) takes the path's value as
         // its enclosing instance, as a `new` through it does (dotty's `ExplicitOuter.OuterOps.args`
         // for `Super` as for `New`, the outer from `outerPrefix` of the parent's type); through
@@ -7109,7 +7230,7 @@ impl<'a> Worker<'a> {
         let path = prefix.filter(|&p| !matches!(self.types.get(p), Type::This(_)) && self.outer_class(parent).is_some());
         let prefixed = self.new_prefixed;
         self.new_prefixed |= path.is_some();
-        let r = self.construct_parent_now(parent, sig, owner_subst, prefix, lists, span);
+        let r = self.construct_parent_now(parent, sig, owner_subst, prefix, lists, span, site);
         self.new_prefixed = prefixed;
         if let Some(outer) = path.and_then(|p| self.prefix_value(p)) {
             self.pass_outer(r.0, outer);
@@ -7117,7 +7238,8 @@ impl<'a> Worker<'a> {
         r
     }
 
-    fn construct_parent_now(&mut self, parent: ClassId, sig: Arc<MethodSig>, owner_subst: Subst, prefix: Option<TypeId>, lists: Vec<ArgList>, span: Span) -> (TExprId, TypeId) {
+    #[allow(clippy::too_many_arguments)]
+    fn construct_parent_now(&mut self, parent: ClassId, sig: Arc<MethodSig>, owner_subst: Subst, prefix: Option<TypeId>, lists: Vec<ArgList>, span: Span, site: ParentSite) -> (TExprId, TypeId) {
         // A parent whose header the parser could not complete takes any arguments.
         if self.syms.class(parent).mods & mods::INCOMPLETE != 0 {
             self.type_args_for_errors(&lists);
@@ -7126,9 +7248,25 @@ impl<'a> Worker<'a> {
         if self.loaded.is_some() {
             self.absorb_java_ctors(parent);
         }
-        let secondaries: Vec<SymId> =
+        // A parent call is a super call of the class that makes it, unless the reference types it ahead
+        // (`ParentSite::call`): its alternatives are the constructors that class may call
+        // (`creation_accessible`), a protected one among them, taken before the resolution.
+        let all: Vec<SymId> =
             self.syms.class(parent).ctors.iter().copied().filter(|&s| Some(s) != self.excluded_ctor && self.ctor_callable_here(s)).collect();
+        let secondaries: Vec<SymId> = all.iter().copied().filter(|&s| self.creation_accessible(parent, Some(s), site.call)).collect();
+        let primary_accessible = self.creation_accessible(parent, None, site.call);
         if secondaries.is_empty() {
+            // A private primary constructor alone is told of where the parent is resolved (`set_parents`), which
+            // reads the parents a class writes: a superclass that comes through a trait is asked here.
+            let told = site.written && self.syms.class(parent).mods & mods::PRIVATE_CTOR != 0 && self.syms.class(parent).ctors.is_empty();
+            if !primary_accessible && !told {
+                self.refuse_ctor(parent, span);
+                // Of several constructors, all hidden, none is applied (`Worker::construct`).
+                if !all.is_empty() {
+                    self.type_args_for_errors(&lists);
+                    return (self.prog.add(TExpr::New(parent, ast::ListRef::EMPTY)), sig.ret);
+                }
+            }
             let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             return self.apply_method(call, Some((parent, sig, prefix)), None, lists, span, None, false).unwrap();
         }
@@ -7153,7 +7291,7 @@ impl<'a> Worker<'a> {
                 .collect();
             Arc::new(MethodSig { tparams: own.tparams.clone(), clauses, ret: sig.ret, declared: crate::tir::NO_TYPE })
         };
-        let primary = self.syms.class(parent).primary_ctor.filter(|_| self.ctor_accessible(parent)).map(|s| (s, fix(self, sig.clone(), false)));
+        let primary = self.syms.class(parent).primary_ctor.filter(|_| primary_accessible).map(|s| (s, fix(self, sig.clone(), false)));
         let mut alts = Vec::with_capacity(secondaries.len());
         for s in secondaries {
             let own = self.sig_arc(s);

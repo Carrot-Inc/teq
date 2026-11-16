@@ -715,7 +715,7 @@ impl<'a> Worker<'a> {
             }
             for &j in &written.omitted {
                 let ty = param_types.get(j).copied().unwrap_or(ANY);
-                let d = self.default_application(plan, *recv, &args[..first], first + j, ty);
+                let d = self.default_application(plan, *recv, &args[..first], first + j, ty, span);
                 self.forward_note_default(d, span);
                 let d = if plan.param(first + j).is_some_and(|p| p.by_name) { self.by_name_thunk(d) } else { d };
                 args[first + j] = d;
@@ -853,11 +853,71 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The default getter of a protected constructor is a protected method of the class's companion, and its
+    /// application where the source leaves the argument out is reached by no accessor outside the constructor's
+    /// boundary: the reference's `ProtectedAccessors` (transform/ProtectedAccessors.scala `needsAccessor`, the
+    /// error its `ifNoHost` gives) refuses it where the place is neither inside what the constructor's qualifier
+    /// names nor, for one without a qualifier, inside the package around the class (`insideBoundaryOf`:
+    /// `accessBoundary(enclosingPackageClass)`, inner packages inside), a subclass's parent call and an anonymous
+    /// subclass's creation alike: no class there derives from the companion. A body read from products or a jar is
+    /// asked nothing, nor a std body of a jar's class (`creation_accessible`).
+    fn check_ctor_default_access(&mut self, of: DefaultOf, index: usize, span: Span) {
+        use crate::ast::mods;
+        let site = self.env.file;
+        if self.site_is_typed_body() {
+            return;
+        }
+        let (c, inside) = match of {
+            DefaultOf::Ctor(c) => {
+                if self.syms.class(c).mods & mods::PROTECTED_CTOR == 0 {
+                    return;
+                }
+                let inside = if self.ctor_qualified(c) { self.in_ctor_qualifier(c, true) } else { self.site_in_package_of(c) };
+                (c, inside)
+            }
+            DefaultOf::Method(m) => {
+                let Owner::Class(c) = self.syms.sym(m).owner else { return };
+                if !self.syms.class(c).ctors.contains(&m) || self.is_java_class(c) {
+                    return;
+                }
+                let info = self.syms.sym(m);
+                let within = self.loaded.as_ref().and_then(|l| l.access_within.get(&m).copied());
+                if info.mods & mods::PROTECTED == 0 && !within.is_some_and(|(_, protected)| protected) {
+                    return;
+                }
+                let (file, filed_at, owner) = (info.file, info.span.start, info.owner);
+                let inside = match within {
+                    Some((scope, _)) => self.within_loaded_qualifier(m, scope),
+                    None if self.has_access_scope(file, filed_at) => self.in_access_scope(file, filed_at, owner),
+                    None => self.site_in_package_of(c),
+                };
+                (c, inside)
+            }
+        };
+        if inside || (self.source(site).is_std && self.in_jar(self.syms.class(c).file)) {
+            return;
+        }
+        let from = self.owner_class().or(self.parent_args_of).map_or("here".to_string(), |k| self.class_description(k));
+        let msg = format!(
+            "illegal access to protected method $lessinit$greater$default${} in object {} from {}",
+            index + 1,
+            self.name_str(self.syms.class(c).name),
+            from
+        );
+        // A later phase's record (`ProtectedAccessors`, of the group of `ForwardDepChecks`): told only while the
+        // program has no earlier error. The getters of one application stand at one place, where the reference's
+        // reporter keeps the first (`Diagnostic::yields`).
+        if self.late_error_of(span, msg, crate::source::PHASE_FORWARD_DEP_CHECKS) {
+            self.diags.yielding();
+        }
+    }
+
     /// The application of the default getter of parameter `index` (counted across the
     /// clauses) to the receiver and the arguments of the clauses before it (`spliceMeth`): each
     /// a fresh node, a by-name one a fresh copy of its tree.
-    pub(super) fn default_application(&mut self, plan: &mut CallPlan, recv: Option<TExprId>, earlier: &[TExprId], index: usize, ty: TypeId) -> TExprId {
+    pub(super) fn default_application(&mut self, plan: &mut CallPlan, recv: Option<TExprId>, earlier: &[TExprId], index: usize, ty: TypeId, span: Span) -> TExprId {
         let mut of = plan.of.expect("a callee with defaults");
+        self.check_ctor_default_access(of, index, span);
         let mut recv = recv;
         if let Some((k, outer)) = self.synthetic_apply_class(of, recv) {
             of = DefaultOf::Ctor(k);

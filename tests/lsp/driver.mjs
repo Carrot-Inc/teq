@@ -1734,7 +1734,7 @@ async function signatureHelp() {
   writeFileSync(inherited, t3)
   // A case class with a secondary constructor beside a plain class with one.
   const creation = join(root, "Creation.scala")
-  const t4 = "case class V(x: Int):\n  def this(a: Int, b: Int) = this(a + b)\nclass W(val x: Int):\n  def this(a: Int, b: Int) = this(a + b)\nobject Creation:\n  val a = V(1)\n  val b = new V(2)\n  val c = W(3)\n"
+  const t4 = "case class V(x: Int):\n  def this(a: Int, b: Int) = this(a + b)\nclass W(val x: Int):\n  def this(a: Int, b: Int) = this(a + b)\nclass P(val x: Int):\n  protected def this(a: Int, b: Int) = this(a + b)\nclass Q extends P(4, 5):\n  val d = new P(6)\nobject Creation:\n  val a = V(1)\n  val b = new V(2)\n  val c = W(3)\nclass G[T] protected (val x: T)\nobject Ahead:\n  val e = new G(10) {}\n  val f = new G[Int](9) {}\n  class R extends G(1)\nclass GSub extends G[Int](0):\n  val a = new G(4) {}\n"
   writeFileSync(creation, t4)
   const plain = new Client(root)
   try {
@@ -1759,6 +1759,14 @@ async function signatureHelp() {
     check("signature help: a `new` of the case class offers every constructor", same(created, ["V(x: Int)", "V(a: Int, b: Int)"]), created)
     const proxied = await labelsAt("W(3)")
     check("signature help: a plain class's name applied offers every constructor", same(proxied, ["W(x: Int)", "W(a: Int, b: Int)"]), proxied)
+    // A protected constructor is a super call's: a subclass's parent call offers it, a `new` in that subclass's body does not.
+    const [inParent, inBody] = [await labelsAt("P(4, 5)"), await labelsAt("new P(6)")]
+    check("signature help: a protected constructor is offered to a parent call and not to a `new` in the subclass's body", same(inParent, ["P(x: Int)", "P(a: Int, b: Int)"]) && same(inBody, ["P(x: Int)"]), [inParent, inBody])
+    // A parent call the reference types ahead of the class's parents (the parent's type arguments left to infer) is no
+    // super call: a protected constructor is not offered to it, to an anonymous class's or a named class's, unless
+    // the place is inside another subclass of the parent; with the type arguments written it is the super call.
+    const [ahead, whole, named, inSub] = [await labelsAt("new G(10)"), await labelsAt("new G[Int](9)"), await labelsAt("extends G(1)"), await labelsAt("new G(4)")]
+    check("signature help: a protected constructor is not offered to a parent call typed ahead, but inside another subclass", ahead === undefined && same(whole, ["G[T](x: T)"]) && named === undefined && same(inSub, ["G[T](x: T)"]), [ahead, whole, named, inSub])
     await plain.result("shutdown", null)
     plain.notify("exit", null)
   } catch (e) {
@@ -1859,6 +1867,7 @@ async function completionSnippets() {
     ["an alias of a case class after `new`: its class's constructor", "val a74 = new PointAl|", "PointAlias", ["PointAlias(${1:x}, ${2:y})$0"]],
     ["an argument a trait of one method taking five parameters is expected of", "val a75 = Lib.takeFive(Lib.sum|)", "sum5", [null]],
     ["a nested tuple's element a yield's variable bound expects a function of", "val a76: List[((Int => Int, Int), String)] = for (i <- List(1)) yield ((Lib.in|, i), \"x\")", "inc", [null]],
+    ["a protected constructor after `new` in a subclass's body, which cannot call it: the name alone", "class Sub extends Guard(0) { val g = new Gua| }", "Guard", [null]],
   ]
   const header = [
     "package use",
@@ -1917,6 +1926,7 @@ async function completionSnippets() {
     "type PointAlias = Point",
     "class Plain",
     "class Ctor(a: Int)(using s: String)",
+    "class Guard protected (val a: Int)",
     "",
     "object Test:",
     "  import Lib.*",

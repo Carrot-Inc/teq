@@ -2556,7 +2556,8 @@ impl<'a> Worker<'a> {
                         self.apply_method(call, Some((c, alt.sig.clone(), prefix)), targs, lists, span, expected, false).unwrap()
                     }
                     None => {
-                        self.check_access(alt.sym, None, span);
+                        // A secondary constructor the site may not call is no alternative (`creation_accessible`,
+                        // asked before the resolution): the chosen one needs no check.
                         self.selects_member(alt.sym);
                         let call = MethodCall { recv: None, sym: alt.sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
                         self.apply_method(call, None, targs, lists, span, expected, false).unwrap()

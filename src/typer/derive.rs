@@ -1424,11 +1424,32 @@ Failed to synthesize an instance of type {}:", shown, shown);
     }
 
     /// A case class's companion holds its mirror and reaches its constructor; only where the
-    /// companion is a case object, which cannot, the mirror stands at the call site, which
-    /// scalac refuses when the constructor is out of its reach.
+    /// companion is a case object, which cannot, the mirror is an anonymous one at the call site,
+    /// which calls the constructor from there: dotty's `canAccessCtor` (`SymUtils.whyNotGenericProduct`),
+    /// its own rule and not a creation's: a private or a protected constructor only from inside the
+    /// class or a subclass of it (the companion is none), and a qualified one only from inside what
+    /// its qualifier names.
     fn mirror_ctor_accessible(&mut self, c: ClassId) -> bool {
         let companion_is_case = self.syms.class(c).companion.map_or(false, |k| self.syms.class(k).mods & mods::CASE != 0);
-        !companion_is_case || self.ctor_accessible(c)
+        if !companion_is_case {
+            return true;
+        }
+        // A body another build typed is asked nothing, and the std's bodies reach a jar's classes
+        // (`creation_accessible`).
+        if self.site_is_typed_body() || (self.in_jar(self.syms.class(c).file) && self.source(self.env.file).is_std) {
+            return true;
+        }
+        let m = self.syms.class(c).mods;
+        let qualified = self.ctor_qualified(c);
+        // `!ctor.isOneOf(Private | Protected) || isSub(self)`: the reference's `private[q]` carries no `Private`
+        // (`Parsers.normalize`), its `protected[q]` carries `Protected`.
+        let flagged = m & mods::PROTECTED_CTOR != 0 || (m & mods::PRIVATE_CTOR != 0 && !qualified);
+        let in_subclass = self.env.frames.iter().any(|f| match f {
+            super::Frame::Class(k) | super::Frame::Ctor(k) => *k == c || self.syms.class(*k).base_types.iter().any(|&(b, _)| b == c),
+            _ => false,
+        });
+        // `!ctor.privateWithin.exists || isAccessible(ctor.privateWithin)`: `ctx.owner.isContainedIn`, no companion.
+        (!flagged || in_subclass) && (!qualified || self.in_ctor_qualifier(c, false))
     }
 
     fn why_not_generic_product(&mut self, c: ClassId) -> String {

@@ -30,7 +30,8 @@
 # compiled by that javac; throwsclone-lib, tests/support/hidden_owner/throwsclone compiled by scalac;
 # javadefault-lib, tests/support/hidden_owner/javadefault's Java sources compiled by that javac; nesting-lib,
 # tests/support/hidden_owner/nesting's compiled the same way; stubparent-lib, tests/support/hidden_owner/stubparent's
-# compiled the same way and Gone.class deleted; and
+# compiled the same way and Gone.class deleted; javactors-lib, tests/support/java_ctors's compiled the same way;
+# ctorbodies-lib, tests/support/ctor_bodies compiled by scalac; and
 # genericclone-lib, polyclone-lib, mixedclone-lib and privateclone-lib, tests/support/hidden_owner's
 # genericclone, polyclone, mixedclone and privateclone traits compiled by scalac, and parammeta-lib, its trait
 # and Java annotation compiled by scalac, each but mixedclone's with
@@ -277,6 +278,35 @@ java_default_jar() {
     rm -rf "$work" && mkdir -p "$work"
     timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/jann/*.java > /dev/null 2>&1 \
       && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/java_ctors's Java classes compiled by javac into a jar: public classes with a protected, a
+# package-private and overloaded constructors, called from their package and from another.
+java_ctors_jar() {
+  local src=tests/support/java_ctors
+  local jar=$scratch/javactors-lib.jar
+  local work=$scratch/javactors-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
+    rm -rf "$work" && mkdir -p "$work"
+    timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/jlib/*.java > /dev/null 2>&1 \
+      && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/ctor_bodies's library compiled by scalac into a jar, its class files and TASTy: bodies that create
+# classes with hidden constructors from inside their boundary.
+ctor_bodies_jar() {
+  local src=tests/support/ctor_bodies
+  local jar=$scratch/ctorbodies-lib.jar
+  local work=$scratch/ctorbodies-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.scala')" ]; then
+    rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
+    cp "$src/Paper.scala" "$work/src/"
+    timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" -d "$work/classes" "$work/src/Paper.scala" > /dev/null 2>&1 \
+      && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
     rm -rf "$work"
   fi
   echo "$jar"
@@ -1144,6 +1174,8 @@ jar_of() {
     javadefault-lib) java_default_jar ;;
     javadefault-scalac) scalac_use_jar javadefault javadefault-lib ;;
     nesting-lib) java_nesting_jar ;;
+    javactors-lib) java_ctors_jar ;;
+    ctorbodies-lib) ctor_bodies_jar ;;
     stubparent-lib) java_stub_parent_jar ;;
     genericclone-lib) scalac_trait_jar genericclone ;;
     genericclone-scalac) scalac_use_jar genericclone genericclone-lib ;;

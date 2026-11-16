@@ -18,6 +18,7 @@ jar_givens_by_name	pass	-
 jar_inline_body_missing_class	fail	-	missing 'jar_inline_body_missing_class.scala:21:11: error:'
 jar_param_qualified_refused	pass	-	
 java	pass	-	
+java_constructor_access_refused	pass	-	
 java_dir	pass	-	
 java_errors	pass	-	
 js/alleycats	pass	-	
@@ -46,6 +47,8 @@ js/ci_strings	pass	-
 js/circe_derivation	pass	-	
 js/classpath_first_wins	pass	-	
 js/companion_trait_given	pass	-	
+js/constructor_access_jar_bodies	pass	-	
+js/constructor_access_jar_bodies_workers	pass	-	
 js/control	pass	-	
 js/derive_recursive_enum	pass	-	
 js/derive_recursive_list	pass	-	
@@ -253,6 +256,7 @@ jvm/jar_trait_object_methods	pass	-
 jvm/jar_trait_params	pass	-	
 jvm/jar_value_class_signature	pass	-	
 jvm/java_bounded_wildcards	pass	-	
+jvm/java_constructor_access	pass	-	
 jvm/java_inner_class_inherited	pass	-	
 jvm/java_member_class_intersection	pass	-	
 jvm/java_member_class_scopes	pass	-	

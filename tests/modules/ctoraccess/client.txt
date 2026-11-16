@@ -1,0 +1,5 @@
+primary: 1
+secondary: 7
+protected: 4
+hidden: secondary
+case: K(6)

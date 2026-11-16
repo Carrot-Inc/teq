@@ -7,6 +7,70 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- Which constructors a creation may call is decided before its arguments choose among them, as scalac decides
+  it: a constructor the place cannot reach is no candidate. Three things were wrong before. A hidden constructor
+  could win: for `class C(val x: Any) { protected def this(x: String) = this("secondary") }`, `new
+  C("argument").x` outside the class printed `secondary`, and with a `private` such constructor the creation was
+  refused ("<init> is private to C"); both now take the primary constructor and print `argument`. A protected
+  constructor is one a subclass calls as its parent's (`class D extends P(1)`, `new P(1) { .. }`, and now `new
+  P(1) {}`, which teq refused), and nowhere else: `new P(1)` in the subclass's body, in its companion, in a
+  class nested in it and among the arguments of its parent call was accepted and is refused as scalac refuses it
+  ("constructor P cannot be accessed as a member of P from class D"). And a constructor with a qualifier
+  (`private[p]`, `protected[p]`) of a class another module holds (a module teq built, for JavaScript or the JVM,
+  and a jar scalac compiled) is read with its qualifier: inside `p` it is called (a `private[p]` secondary
+  constructor was refused there, and on the JVM its class file had no such constructor, so a module scalac
+  compiled against it failed with NoSuchMethodError), outside `p` it is refused (it was accepted for a class from
+  a jar scalac compiled and for a `protected[p]` primary of any module).
+  The same holds for what follows a constructor's access. A Java class's protected or package-private constructor
+  is its package's (no subpackage's), a protected one a subclass's parent call's too: teq built such a creation
+  from another package into a program that failed when it ran (IllegalAccessError, VerifyError), and between
+  overloaded Java constructors it now chooses among those the place may call. `new java.util.logging.Level("X",
+  5) {}`, an anonymous subclass of a JDK class through its protected constructor, is accepted (teq refused it)
+  and runs on the JVM. A case class's `apply` and `copy` carry the primary constructor's access as members of the
+  companion and of the class: in a subclass of `case class K protected (x: Int)`, `K(2)` and `K.apply(2)` are
+  refused (the subclass is none of the companion), and `copy` is called on `this` or on an instance of the
+  subclass, not on another `K`; and they are written so for a module scalac compiles against teq's products,
+  where `K(1)` of a `case class K private[p] (x: Int)` was refused inside `p` and a protected one's was accepted
+  in a subclass. A mirror (`Mirror.ProductOf[K]`) of a case class whose companion is a case object follows
+  scalac's own rule: a subclass of a private-constructor class gets it (teq found none), the case-object
+  companion itself and a place outside a qualified constructor's `p` do not (teq gave one). A trait may extend a
+  class whose constructor is private (`trait T extends C`), since a trait calls no constructor (teq refused it);
+  the class that then extends the trait calls it, and is refused where it may not (`class D extends T` outside
+  `C`: teq reported the trait). A companion that extends its own class reaches the private constructor (`class C
+  private (val x: Int); object C extends C(1)`: teq refused it). Where a class has several constructors and all
+  are out of reach, the creation gets that one error and none about its arguments. In the editor, signature help
+  and completion offer the constructors the place may call.
+  One rule of scalac's that surprises is followed: a parent written without its type arguments (`class D extends
+  G("s")`, `new G("s") { .. }` for `class G[T] protected (val x: T)`) is typed ahead of the class to find them,
+  and there the protected constructor is out of reach: scalac refuses it, and for a class with a protected
+  secondary constructor of two parameters takes the primary one with the two arguments as a tuple (`class E
+  extends H("a", "b")` has `x == ("a", "b")`); with the type arguments written (`G[String]("s")`) the protected
+  constructor is called. teq called it in both forms. The same holds where no argument list is written (`class D
+  extends G0`, `object O extends G0`, `trait T extends G0`, `new G0 {}` for `class G0[T] protected ()`), unless the
+  expected type gives a bare parent's type arguments (`val a: G0[Int] = new G0 {}`) or the place is inside another
+  subclass of the parent, where scalac accepts the call typed ahead.
+  An anonymous class written with an empty body (`new C(1) {}`) is held to what every subclass is held to: a final
+  class and a value class are not extended ("anonymous class {...} cannot extend final class C"; `class D extends
+  V(1)` of a value class `V` was accepted too and is refused), nor a sealed class from another source file, and
+  the parent's self type has to be met ("illegal inheritance: self type C {...} of anonymous class C {...} does not
+  conform to self type Need of parent class C"). teq built each of these into a program that ran; with a body
+  written it refused the final, the sealed and the self-typed ones already.
+  A protected constructor's default argument is taken inside the constructor's package (or what its qualifier
+  names) and nowhere else, since its getter is a protected member of the companion: for `class Reg protected (val
+  n: Int = 1)` of another package, `class D extends lib.Reg`, `object O extends lib.Reg` and `new lib.Reg {}` are
+  refused as scalac refuses them ("illegal access to protected method $lessinit$greater$default$1 in object Reg
+  from class D"); teq built them. With the argument written, or inside the package, they stand. The refusal is a
+  later phase's for scalac, and is told as scalac tells it: once the program has no earlier error, and once for
+  an application that leaves several defaults out.
+  Not covered: an empty-bodied anonymous class of a class the lean standard library declares final (`new Some(1)
+  {}`, `new java.lang.StringBuilder() {}`: accepted, as before), since the lean library's `final` is not always its
+  library's; a self type that names a member of an enclosing class (`self: Outer.this.Dep =>`), left unchecked at
+  an empty-bodied anonymous class; `private[this]` on a primary constructor, which teq reads as `private`; a creation through a
+  restricted constructor in an inline method's or a macro's body, which scalac refuses at the definition unless
+  the constructor is marked `@publicInBinary`; a mirror of a protected-constructor case class asked in a
+  subclass of another package, which scalac refuses later ("Cannot use private constructors in inline methods");
+  a constructor named as a function (`C.apply` or `new C(_)` where a function is expected), which still takes
+  the primary constructor's parameters whatever its access.
 - A compound assignment on a left side that has no such operator (`s.v += 1`, `xs(i) += 1`, `m.level += 1` over a
   getter and a setter) evaluates its left side once as scalac's typer arranges it (`typedOpAssign`): what the left
   side is selected on or applied to, and an indexed form's arguments, are bound ahead of the assignment unless

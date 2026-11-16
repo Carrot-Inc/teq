@@ -552,9 +552,9 @@ neg/i14401c.scala	same
 neg/i14415.scala	same	
 neg/i14432.scala	same	
 neg/i14432a.scala	superset	+1 lines: No given instance of type Mirror.Of[Foo] was found.
-neg/i14432b.scala	accepts	
+neg/i14432b.scala	same	
 neg/i14432c.scala	same	
-neg/i14432d.scala	accepts	
+neg/i14432d.scala	same	
 neg/i14507.scala	same	
 neg/i14544.scala	subset	1/2 lines
 neg/i14564.scala	same	
@@ -976,7 +976,7 @@ neg/i2533.scala	same
 neg/i25347.scala	same	
 neg/i25347b	same	
 neg/i2539.scala	same	
-neg/i25442	accepts	
+neg/i25442	same	
 neg/i25456.scala	same	
 neg/i25500.scala	same	
 neg/i25531.scala	same	

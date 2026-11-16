@@ -1837,9 +1837,11 @@ impl<'a> Worker<'a> {
         }
         // The primary constructor, or a Java class's single one, where the site may call it;
         // none where several are overloaded, which no one call stands for.
+        // An abstract class's `new` is an anonymous subclass's creation, a super call (`creation_accessible`).
+        let super_call = self.syms.class(c).mods & crate::ast::mods::ABSTRACT != 0;
         let clauses = match self.syms.class(c).ctors.clone().as_slice() {
-            [] if self.ctor_accessible(c) => self.syms.class(c).ctor.clone(),
-            &[only] if self.is_java_class(c) && self.ctor_callable_here(only) => self.sig_arc(only).clauses.clone(),
+            [] if self.creation_accessible(c, None, super_call) => self.syms.class(c).ctor.clone(),
+            &[only] if self.is_java_class(c) && self.ctor_callable_here(only) && self.creation_accessible(c, Some(only), super_call) => self.sig_arc(only).clauses.clone(),
             _ => return Vec::new(),
         };
         let sig = MethodSig { tparams: Vec::new(), clauses, ret: ERROR, declared: crate::tir::NO_TYPE };

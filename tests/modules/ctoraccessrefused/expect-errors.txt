@@ -1,0 +1,22 @@
+tests/modules/ctoraccessrefused/b/B.scala:5:26: error: constructor Prot cannot be accessed as a member of Prot from class D
+    def body(): ctr.Prot = new ctr.Prot(2)
+                           ^^^^^^^^^^^^^^^
+tests/modules/ctoraccessrefused/b/B.scala:7:32: error: constructor K cannot be accessed as a member of K from class KD
+    def other(k: ctr.K): ctr.K = k.copy(x = 4)
+                                 ^^^^^^^^^^^^^
+tests/modules/ctoraccessrefused/b/B.scala:11:13: error: the constructor of P3 is private to P3
+      println(new ctr.P3(1).x)
+              ^^^^^^^^^^^^^
+tests/modules/ctoraccessrefused/b/B.scala:12:13: error: constructor P4 cannot be accessed as a member of P4 from object Use
+      println(new ctr.P4(2).x)
+              ^^^^^^^^^^^^^
+tests/modules/ctoraccessrefused/b/B.scala:13:13: error: missing argument for parameter x
+      println(new ctr.S().x)
+              ^^^^^^^^^^^
+tests/modules/ctoraccessrefused/b/B.scala:14:23: error: type mismatch: found "s", required Int
+      println(new ctr.S("s").x)
+                        ^^^
+tests/modules/ctoraccessrefused/b/B.scala:15:13: error: constructor K cannot be accessed as a member of K from object Use
+      println(ctr.K(3))
+              ^^^^^^^^
+7 errors found

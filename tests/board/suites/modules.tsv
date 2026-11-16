@@ -56,6 +56,8 @@ concretesetter	pass	-
 constantpickle	pass	-	
 constantproducts	pass	-	
 copyextractors	pass	-	
+ctoraccess	fail	-	ctoraccess bundle
+ctoraccessrefused	pass	-	
 ctordefaultclauses	pass	-	
 ctororder	pass	-	
 custommirror	pass	-	

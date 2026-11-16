@@ -18,6 +18,7 @@ alias_wildcard_refined_member	pass	-
 alternative_mode_completion	pass	-	
 and_base_override_through_instances	fail	-	error: error overriding method unapply in trait Ex of type (x: Any): Option[A]: method unapply of type (x: Any): Option[Int & String] has in
 and_base_three_instances	fail	-	error: type mismatch: found ? >: (Int | String) <: Int & String, required Double
+annotated_generic_parent	pass	-	
 annotated_type_params	pass	-	
 annotation_through_export	pass	-	
 annotations_ignored	pass	-	
@@ -34,6 +35,8 @@ anon_parentless_prefixed	pass	-
 anon_sites	pass	-	
 anon_unused_capture	pass	-	
 anonymous_class_secondary_constructor	pass	-	
+anonymous_subclass_jdk_constructor	pass	-	
+anonymous_subclass_jdk_generic	fail	-	error: not supported on JavaScript: class SimpleFileVisitor java.nio.file.SimpleFileVisitor (a Java definition without an implementation in the std's platform layer)
 any_equals_method	pass	-	
 any_member_beside	pass	-	
 any_member_beside_override	pass	-	
@@ -406,6 +409,8 @@ constant_singleton_inferred	pass	-
 constant_singleton_path	pass	-	
 constant_typed_literal	pass	-	
 constant_union_join	pass	-	
+constructor_access	pass	-	
+constructor_access_anonymous_parent	pass	-	
 constructor_default_synthetic_companion	pass	-	
 constructor_proxy_shadowed_value	pass	-	
 context_arg_applied_to_a_val	pass	-	

@@ -64,6 +64,9 @@ pub struct Loaded {
     /// `privateWithin`, a symbol): a deferred given's implementation keeps its declaration's (`dcl.copy`) wherever
     /// its class is.
     pub access_within_pkg: SharedMap<SymId, Name>,
+    /// A loaded class's primary constructor's qualifier (`private[q]`, `protected[q]`): its simple name and, where
+    /// it names a package, the package's full name, as `access_within` and `access_within_pkg` hold a member's.
+    pub ctor_within: SharedMap<ClassId, (Name, Option<Name>)>,
     /// The library classes whose bridges were computed once their members were named.
     pub bridged: FxMap<ClassId, ()>,
     /// The member returning the enclosing instance of a class or trait nested in a class.
@@ -328,6 +331,7 @@ impl Loaded {
             param_not_found: SharedMap::new(),
             access_within: SharedMap::new(),
             access_within_pkg: SharedMap::new(),
+            ctor_within: SharedMap::new(),
             bridged: FxMap::default(),
             target_names: SharedMap::new(),
             product_target_names: SharedMap::new(),
@@ -1899,7 +1903,7 @@ impl<'a> Worker<'a> {
         }
         if let Some(ctor) = &sig.ctor {
             self.enter_loaded_ctor(c, &mut cx, ctor, &sig.accessors);
-            self.enter_loaded_ctor_access(c, &ctor.mods);
+            self.enter_loaded_ctor_access(c, cx.file, &ctor.mods);
         }
         // A statement of the template, which a construction runs: the class has initialisation,
         // as dotty's `indexStats` clears `NoInits` for one (`no_inits`), as the namer marks a
@@ -2318,11 +2322,22 @@ impl<'a> Worker<'a> {
         self.note_meets(c, &merged);
     }
 
-    /// A jar class's private constructor is one for the program as a source class's is. A
-    /// qualified or protected one stays public.
-    fn enter_loaded_ctor_access(&mut self, c: ClassId, m: &crate::tasty::tree::Mods) {
-        if m.within.is_none() && m.flags.has(tags::PRIVATE) {
+    /// A loaded class's primary constructor has the access its pickle declares, whole, as a source class's has:
+    /// `private`, `protected`, and a qualifier with what it names (`Loaded::ctor_within`), which a creation asks
+    /// (`Worker::creation_accessible`).
+    fn enter_loaded_ctor_access(&mut self, c: ClassId, file: u32, m: &crate::tasty::tree::Mods) {
+        if m.flags.has(tags::PRIVATE) {
             self.syms.class_mut(c).mods |= mods::PRIVATE_CTOR;
+        }
+        if m.flags.has(tags::PROTECTED) {
+            self.syms.class_mut(c).mods |= mods::PROTECTED_CTOR;
+        }
+        if let Some(q) = m.within_name.clone().filter(|_| m.within.is_some()) {
+            let tasty = self.tasty(file);
+            let full = tasty.name(tasty.source_name(q.name));
+            let within = self.interner.intern(full.rsplit('.').next().unwrap_or(&full));
+            let path = q.pkg.then(|| self.interner.intern(&full));
+            self.loaded_mut().ctor_within.insert(c, (within, path));
         }
     }
 
@@ -2808,6 +2823,11 @@ impl<'a> Worker<'a> {
         let sym = self.syms.new_sym(names::INIT, SymKind::Def, m, Owner::Class(c), file_id, None, Span::default());
         self.loaded_mut().syms.insert(sym, LSym { file, addr: e.addr, conversion: false });
         self.loaded_mut().tables[file as usize].terms.insert(e.addr, sym);
+        // Its qualifier, kept as a member's is: what a creation asks (`Worker::creation_accessible`).
+        if let Some(q) = e.access_within.clone() {
+            let tasty = self.tasty(file);
+            self.enter_access_within(&tasty, sym, q, e.qualified_private);
+        }
         self.syms.class_mut(c).ctors.push(sym);
         self.ensure_primary_ctor(c);
     }

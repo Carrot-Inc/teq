@@ -114,6 +114,13 @@ companion_proxy_access	pass	-
 companion_proxy_prefix	pass	-	
 conflicting_bases	pass	-	
 conformance_extras	pass	-	
+constructor_access	pass	-	
+constructor_access_anonymous	pass	-	
+constructor_access_default_getter	pass	-	
+constructor_access_sealed_parent	pass	-	
+constructor_access_self_type_default	pass	-	
+constructor_access_told_once	pass	-	
+constructor_access_trait_parent	pass	-	
 constructor_proxy_prefix	fail	-	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'
 constructor_proxy_shadows	pass	-	
 context_bound_evidence_name	pass	-	

@@ -2050,14 +2050,17 @@ impl<'w, 'a> P<'w, 'a> {
             self.tparams.truncate(tmark);
             self.params.truncate(pmark);
             let si = self.sym_info(s);
+            // A secondary constructor's access is written whole, as a member's is (`member_flags`): a qualified
+            // one by its qualifier (`PRIVATEqualified`, `PROTECTEDqualified`) in place of the plain flag.
             let mut flags = Vec::new();
-            if si.mods & mods::PRIVATE != 0 {
+            if si.mods & mods::PRIVATE != 0 && !si.scoped_private {
                 flags.push(PRIVATE);
             }
-            if si.mods & mods::PROTECTED != 0 {
+            if si.mods & mods::PROTECTED != 0 && !self.has_access_scope(s) {
                 flags.push(PROTECTED);
             }
             self.write_flags(&flags);
+            self.member_access_qualifier(s, &si);
             if let Some(d) = si.def {
                 let annots = self.w.ast(si.file).def(d).annots.clone();
                 self.source_annotations(si.file, &annots, annot::Dest::Any, &mut |_, _| {});
@@ -4870,10 +4873,10 @@ impl<'w, 'a> P<'w, 'a> {
     /// `ordinal`, the `_N` accessors.
     fn case_class_tail(&mut self, c: ClassId, info: &ClassInfo) {
         let repeated = info.ctor.first().map_or(false, |cl| cl.params.last().map_or(false, |p| p.repeated));
-        let private_ctor = info.mods & mods::PRIVATE_CTOR != 0;
+        let access = self.ctor_access_copied(c, info);
         if !repeated && info.mods & mods::ABSTRACT == 0 {
             if !self.user_defines(c, "copy") {
-                self.copy_method(c, info, private_ctor);
+                self.copy_method(c, info, access);
             }
             // The default getters stay when the class defines its own `copy`.
             let tparams: Vec<TParamId> = info.tparams.to_vec();
@@ -4881,7 +4884,7 @@ impl<'w, 'a> P<'w, 'a> {
             let user_copy = self.user_defines(c, "copy");
             for (i, p) in first.iter().enumerate() {
                 let tmark = self.tparams.len();
-                self.default_getter_with(&"copy".to_string(), i as u32, &tparams, p.ty, private_ctor, !user_copy, Synth::Field(c, i as u32));
+                self.default_getter_with(&"copy".to_string(), i as u32, &tparams, p.ty, access, !user_copy, Synth::Field(c, i as u32));
                 self.tparams.truncate(tmark);
             }
         }
@@ -4925,7 +4928,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
-    fn default_getter_with(&mut self, method: &str, index: u32, tparams: &[TParamId], ty: TypeId, private: bool, annotated: bool, body: Synth) {
+    fn default_getter_with(&mut self, method: &str, index: u32, tparams: &[TParamId], ty: TypeId, access: CtorAccess, annotated: bool, body: Synth) {
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
         let len = self.buf.begin_length();
@@ -4944,18 +4947,49 @@ impl<'w, 'a> P<'w, 'a> {
             self.tpt(ty);
         }
         self.synth_rhs("copy default getter", ty, body, &[]);
-        let mut flags = Vec::new();
-        if private {
-            flags.push(PRIVATE);
-            flags.push(LOCAL);
-        }
-        flags.push(SYNTHETIC);
-        self.write_flags(&flags);
+        self.write_copied_access(access);
         self.synthetic_position(addr);
         self.buf.end_length(len);
     }
 
-    fn copy_method(&mut self, c: ClassId, info: &ClassInfo, private: bool) {
+    /// The primary constructor's access as a case class's `apply`, `copy` and `copy`'s default getters carry it:
+    /// dotty's `Desugar` gives `apply` and `copy` the constructor's access flags and `privateWithin` (`applyMeths`,
+    /// `copyMeths`: `constr1.mods.flags & copiedAccessFlags`), and a default getter its method's (`defaultGetters`).
+    /// The qualifier is the one the constructor is written with (`class C private[q] (..)`, filed under the end of
+    /// the class's name).
+    fn ctor_access_copied(&self, c: ClassId, info: &ClassInfo) -> CtorAccess {
+        let (private, protected) = (info.mods & mods::PRIVATE_CTOR != 0, info.mods & mods::PROTECTED_CTOR != 0);
+        let scope = (private || protected)
+            .then(|| info.def.and_then(|_| self.w.ast(info.file).access_scopes.iter().find(|&&(at, _)| at == info.span.end).map(|&(_, n)| n)))
+            .flatten()
+            .and_then(|q| self.enclosing_named(Owner::Class(c), q));
+        CtorAccess { private, protected, scope }
+    }
+
+    /// The modifiers of a synthetic member that copies the primary constructor's access (`ctor_access_copied`),
+    /// written as a member's are (`member_flags`, `member_access_qualifier`): a plain private one `private[this]`,
+    /// a plain protected one `protected`, a qualified one by its qualifier alone.
+    fn write_copied_access(&mut self, access: CtorAccess) {
+        let mut flags = Vec::new();
+        if access.private && access.scope.is_none() {
+            flags.push(PRIVATE);
+            flags.push(LOCAL);
+        }
+        if access.protected && access.scope.is_none() {
+            flags.push(PROTECTED);
+        }
+        flags.push(SYNTHETIC);
+        self.write_flags(&flags);
+        if let Some(q) = access.scope {
+            self.buf.byte(if access.private { PRIVATEQUALIFIED } else { PROTECTEDQUALIFIED });
+            match q {
+                Qualifier::Pkg(p) => self.package_typeref(p),
+                Qualifier::Class(k) => self.class_typeref(k),
+            }
+        }
+    }
+
+    fn copy_method(&mut self, c: ClassId, info: &ClassInfo, access: CtorAccess) {
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
         let len = self.buf.begin_length();
@@ -4977,13 +5011,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.synth_rhs("copy", self_ty, Synth::New(c), &addrs);
         self.tparams.truncate(tmark);
         self.params.truncate(pmark);
-        let mut flags = Vec::new();
-        if private {
-            flags.push(PRIVATE);
-            flags.push(LOCAL);
-        }
-        flags.push(SYNTHETIC);
-        self.write_flags(&flags);
+        self.write_copied_access(access);
         self.synthetic_position(addr);
         self.buf.end_length(len);
     }
@@ -4997,7 +5025,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// source does not write, `toString`, which `Desugar` gives a case class's companion.
     fn case_companion_head(&mut self, c: ClassId, info: &ClassInfo, synthetic_companion: bool) {
         let tparams: Vec<TParamId> = info.tparams.to_vec();
-        let private_ctor = info.mods & mods::PRIVATE_CTOR != 0;
+        let access = self.ctor_access_copied(c, info);
         let abstract_class = info.mods & mods::ABSTRACT != 0;
         let companion = info.companion;
         let ctor_types: Vec<Vec<TypeId>> = info.ctor.iter().map(|cl| cl.params.iter().map(|p| p.ty).collect()).collect();
@@ -5017,13 +5045,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.synth_rhs("companion apply", self_ty, Synth::New(c), &addrs);
             self.tparams.truncate(tmark);
             self.params.truncate(pmark);
-            let mut flags = Vec::new();
-            if private_ctor {
-                flags.push(PRIVATE);
-                flags.push(LOCAL);
-            }
-            flags.push(SYNTHETIC);
-            self.write_flags(&flags);
+            self.write_copied_access(access);
             self.synthetic_position(addr);
             self.buf.end_length(len);
         }
@@ -6970,6 +6992,14 @@ impl<'w, 'a> P<'w, 'a> {
 enum Qualifier {
     Pkg(PkgId),
     Class(ClassId),
+}
+
+/// The primary constructor's access that a case class's synthetic members copy (`P::ctor_access_copied`).
+#[derive(Clone, Copy)]
+struct CtorAccess {
+    private: bool,
+    protected: bool,
+    scope: Option<Qualifier>,
 }
 
 fn strip_length(names: &[u8]) -> &[u8] {

@@ -2436,6 +2436,19 @@ impl<'a> Worker<'a> {
         false
     }
 
+    /// Whether the site is inside the package around the class `c` (its own or an inner one); a class of a
+    /// block is reached from its own file's packages alone.
+    pub(super) fn site_in_package_of(&self, c: ClassId) -> bool {
+        let mut at = self.syms.class(c).owner;
+        loop {
+            match at {
+                Owner::Class(k) => at = self.syms.class(k).owner,
+                Owner::Package(p) => return self.site_in_package(p),
+                Owner::Local => return true,
+            }
+        }
+    }
+
     /// dotty's `CannotBeAccessed` for a private member of the package `pre` selected through it
     /// from outside its boundary: a `private` definition of a package (or of a package object)
     /// is `private[p]` of that package (`Namer`: "widen private to private[p]"), a `private[q]`
@@ -2722,13 +2735,19 @@ impl<'a> Worker<'a> {
     /// and package by identity. A local class's owners past its block are the classes and package around the place
     /// it was made (`anon_env`), where teq's owners stop.
     pub(super) fn within_scope_of(&self, from: Owner, scope: crate::intern::Name) -> bool {
+        self.within_scope(from, scope, true)
+    }
+
+    /// `within_scope_of`, a class's companion counting where `linked` (`accessWithinLinked`); without it the
+    /// bare `ctx.owner.isContainedIn(privateWithin)` that a mirror's `canAccessCtor` asks.
+    fn within_scope(&self, from: Owner, scope: crate::intern::Name, linked: bool) -> bool {
         let mut at = from;
         let mut last = None;
         loop {
             match at {
                 Owner::Class(c) => {
                     if self.syms.class(c).name == scope {
-                        return self.site_within_class(c);
+                        return self.site_within_class(c, linked);
                     }
                     last = Some(c);
                     at = self.syms.class(c).owner;
@@ -2743,7 +2762,7 @@ impl<'a> Worker<'a> {
                         _ => None,
                     });
                     return match around {
-                        Some(x) => self.site_within_class(x),
+                        Some(x) => self.site_within_class(x, linked),
                         None => self.package_named(Some(self.file_pkgs[self.syms.class(k).file.0 as usize]), scope).is_some_and(|pk| self.site_in_package(pk)),
                     };
                 }
@@ -2764,18 +2783,21 @@ impl<'a> Worker<'a> {
 
     /// Whether the site is inside the class `c` or its companion (`accessWithin`, and `accessWithinLinked` through
     /// `linkedClass`, the companion module's class of a class and the class of a module class).
-    fn site_within_class(&self, c: ClassId) -> bool {
-        let companion = self.syms.class(c).companion;
+    fn site_within_class(&self, c: ClassId, linked: bool) -> bool {
+        let companion = self.syms.class(c).companion.filter(|_| linked);
         self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) | super::Frame::Ctor(k) if *k == c || Some(*k) == companion))
     }
 
-    /// A private constructor takes the `apply` and `copy` of a case class with it.
-    pub(super) fn check_ctor_access(&mut self, c: ClassId, span: Span) {
-        if self.ctor_accessible(c) {
-            return;
-        }
+    /// The words of a creation, and of a case class's `apply` and `copy`, that no constructor of `c` serves at the
+    /// site: a class whose primary constructor carries `private`, qualified or not, says so; every other
+    /// restriction is the reference's inaccessible member.
+    pub(super) fn refuse_ctor(&mut self, c: ClassId, span: Span) {
         let name = self.name_str(self.syms.class(c).name);
-        let msg = if self.syms.class(c).mods & crate::ast::mods::PRIVATE_CTOR != 0 {
+        let info = self.syms.class(c);
+        // A Java class's primary is teq's own, private and out of reach (`enter_java_class`): the class's
+        // constructors are its alternatives, each hidden by its own access.
+        let private = info.mods & crate::ast::mods::PRIVATE_CTOR != 0 && (info.ctors.is_empty() || !self.is_java_class(c));
+        let msg = if private {
             format!("the constructor of {0} is private to {0}", name)
         } else {
             let from = self.owner_class().or(self.parent_args_of).map_or("here".to_string(), |k| self.class_description(k));
@@ -2784,30 +2806,175 @@ impl<'a> Worker<'a> {
         self.error(span, msg);
     }
 
-    /// A private constructor is reachable inside its class and companion, a protected one in
-    /// the subclasses as well, and either one inside its `private[scope]`.
-    pub(super) fn ctor_accessible(&mut self, c: ClassId) -> bool {
-        let info = self.syms.class(c);
-        if self.in_jar(info.file) {
-            let file = self.env.file;
-            if self.in_jar(file) || self.is_body_file(file) || self.source(file).is_std {
-                return true;
-            }
-        }
-        let info = self.syms.class(c);
-        let (private, protected) = (info.mods & crate::ast::mods::PRIVATE_CTOR != 0, info.mods & crate::ast::mods::PROTECTED_CTOR != 0);
-        if !private && !protected {
+    /// Whether a constructor of `c` (`ctor`: a secondary, any of a Java class's; `None`: the primary) is an
+    /// alternative of a creation at the site: dotty's `SymDenotation.isAccessibleFrom`, which
+    /// `TypeAssigner.accessibleType` asks of every alternative before the resolution. One with no restriction is.
+    /// One whose access boundary holds the site is: the class for a private and for a protected one, what its
+    /// qualifier names for a qualified one (`accessBoundary`), and that boundary's companion (`accessWithinLinked`).
+    /// A protected one is, besides, in a super call of a subclass (`isProtectedAccessOK`'s `isConstructor &&
+    /// ctx.isSuperCallContext`), which `call` says: a class's parent call and an anonymous subclass's creation,
+    /// and neither a `new` in a subclass's body or companion nor one among a parent call's arguments; a parent
+    /// call the reference types ahead (`CtorCall::Ahead`, `Worker::parent_typed_ahead`) only inside another
+    /// subclass. A Java
+    /// class's protected or package-private constructor is its package's and no subpackage's (`accessWithin` reads
+    /// Java's packages flat). A body read from products or from a jar is asked nothing (`site_is_typed_body`), and
+    /// the std's own bodies call a jar's classes' constructors as public ones.
+    pub(super) fn creation_accessible(&mut self, c: ClassId, ctor: Option<SymId>, call: impl Into<CtorCall>) -> bool {
+        use crate::ast::mods;
+        let call = call.into();
+        let site = self.env.file;
+        if self.site_is_typed_body() {
             return true;
         }
-        let companion = info.companion.or_else(|| self.inner_companion(c));
-        let derives = |t: &Self, k: ClassId| protected && t.syms.class(k).base_types.iter().any(|&(b, _)| b == c);
-        let inside = self.env.frames.iter().any(|f| match f {
-            super::Frame::Class(f) | super::Frame::Ctor(f) => *f == c || Some(*f) == companion || derives(self, *f),
+        // What a protected constructor asks of the call (`isProtectedAccessOK`): a super call of a subclass has it;
+        // one the reference types ahead of the class's parents has it where a class around the one being defined
+        // derives from `c` already (`owner.enclosingSubClass`), the class itself being none yet.
+        let super_call = match call {
+            CtorCall::Plain => false,
+            CtorCall::Super => true,
+            CtorCall::Ahead(defining) => self.site_in_subclass_of(c, defining),
+        };
+        let library_body = self.source(site).is_std;
+        if library_body && self.in_jar(self.syms.class(c).file) {
+            return true;
+        }
+        let Some(s) = ctor else {
+            let info = self.syms.class(c);
+            let (private, protected) = (info.mods & mods::PRIVATE_CTOR != 0, info.mods & mods::PROTECTED_CTOR != 0);
+            if !private && !protected {
+                return true;
+            }
+            return (protected && super_call) || self.site_in_class_or_companion(c) || self.in_ctor_qualifier(c, true);
+        };
+        if let Some(protected) = self.java_ctor_restricted(s) {
+            return library_body || (protected && super_call) || self.package_of_class(c) == self.file_pkgs[site.0 as usize];
+        }
+        let info = self.syms.sym(s);
+        let within = self.loaded.as_ref().and_then(|l| l.access_within.get(&s).copied());
+        let private = info.mods & mods::PRIVATE != 0;
+        let protected = info.mods & mods::PROTECTED != 0 || within.is_some_and(|(_, protected)| protected);
+        if !private && !protected && within.is_none() {
+            return true;
+        }
+        let (file, filed_at, owner) = (info.file, info.span.start, info.owner);
+        (protected && super_call)
+            || self.site_in_class_or_companion(c)
+            || match within {
+                Some((scope, _)) => self.within_loaded_qualifier(s, scope),
+                None => self.in_access_scope(file, filed_at, owner),
+            }
+    }
+
+    /// Whether the site is a body another build typed: one read from products or from a jar. The compiler that
+    /// wrote it asked its creations where they stood, and what a pickle holds of them is not what was written (an
+    /// anonymous class of an empty body is its parent's creation there, a super call no longer): no creation of
+    /// such a body is asked again, whatever the class (the claim's "no creation the compiler makes itself").
+    pub(super) fn site_is_typed_body(&self) -> bool {
+        let site = self.env.file;
+        self.in_jar(site) || self.is_body_file(site)
+    }
+
+    /// Whether a class around the site derives from `c`, the class `defining` apart: dotty's
+    /// `owner.enclosingSubClass` as a parent call typed ahead sees it (`Namer.parentType` in the completion of the
+    /// class `defining`, which has no parents yet and is no subclass of anything). A class whose own parent call's,
+    /// self call's or trait parent's ARGUMENTS hold the site is one of the classes around it: it is complete there.
+    fn site_in_subclass_of(&self, c: ClassId, defining: Option<ClassId>) -> bool {
+        self.env.frames.iter().any(|f| match f {
+            super::Frame::Class(k) | super::Frame::Ctor(k) => Some(*k) != defining && self.syms.class(*k).base_types.iter().any(|&(b, _)| b == c),
             _ => false,
-        });
-        // The arguments of a parent clause stand outside the class being defined.
-        let in_subclass = self.parent_args_of.map_or(false, |k| derives(self, k));
-        inside || in_subclass || self.in_access_scope(info.file, info.span.end, Owner::Class(c))
+        })
+    }
+
+    /// Whether an anonymous class of an empty body with the parent `k` has to be a class of its own for the JVM:
+    /// `k` is a class the JVM itself guards (a Java class; a std class, which stands for a JDK one there) and some
+    /// constructor of it is the place's by a super call alone (a protected one outside its package). Made as its
+    /// parent's creation (`type_new_anon`), the program would call that constructor from a class that is no
+    /// subclass and die when run (IllegalAccessError); a class teq emits has its protected constructors public.
+    /// `nullary`: the creation writes no argument, so that only a constructor that takes none can be the one
+    /// called (a Java class with a public `()` beside a protected `(int)` is created through the public one). A
+    /// class scalac compiled needs no guard: its protected constructors are public in its class file.
+    pub(super) fn guarded_super_ctor(&mut self, k: ClassId, nullary: bool) -> bool {
+        if !(self.is_java_class(k) || self.std_source(self.syms.class(k).file)) {
+            return false;
+        }
+        self.complete_class(k);
+        if self.loaded.is_some() {
+            self.absorb_java_ctors(k);
+        }
+        let ctors: Vec<SymId> = self.syms.class(k).ctors.iter().copied().filter(|&s| self.ctor_callable_here(s)).collect();
+        let super_only = |w: &mut Self, s: Option<SymId>| {
+            (!nullary || w.ctor_takes_none(k, s)) && w.creation_accessible(k, s, true) && !w.creation_accessible(k, s, false)
+        };
+        super_only(self, None) || ctors.into_iter().any(|s| super_only(self, Some(s)))
+    }
+
+    /// Whether a constructor of `k` (`None`: the primary) can be called with no argument written: every parameter
+    /// of its plain clauses has a default or is a repeated one (a Java `String...`).
+    fn ctor_takes_none(&mut self, k: ClassId, ctor: Option<SymId>) -> bool {
+        let clauses: Vec<ClauseSig> = match ctor {
+            None => self.syms.class(k).ctor.clone(),
+            Some(s) => self.sig_arc(s).clauses.clone(),
+        };
+        clauses.iter().filter(|cl| !cl.is_using).all(|cl| cl.params.iter().all(|p| p.has_default || p.repeated))
+    }
+
+    /// Whether the site is inside the class `c` or its companion, a parent call's arguments counting as the class
+    /// that makes the call (`Frame::Ctor`).
+    fn site_in_class_or_companion(&self, c: ClassId) -> bool {
+        let companion = self.syms.class(c).companion.or_else(|| self.inner_companion(c));
+        self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) | super::Frame::Ctor(k) if *k == c || Some(*k) == companion))
+    }
+
+    /// Whether the primary constructor of `c` carries a qualifier (`private[q]`, `protected[q]`): one written,
+    /// which the parser files under the end of the class's name, or one a pickle holds (`Loaded::ctor_within`).
+    pub(super) fn ctor_qualified(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        self.has_access_scope(info.file, info.span.end) || self.loaded.as_ref().is_some_and(|l| l.ctor_within.get(&c).is_some())
+    }
+
+    /// Whether the site is inside what the qualifier of `c`'s primary constructor names: a written one's class or
+    /// package (`within_scope_of`); a pickle's, the package by its full name or the class of that name around `c`,
+    /// as `within_loaded_qualifier` reads a member's. With `linked`, a named class's companion counts.
+    pub(super) fn in_ctor_qualifier(&self, c: ClassId, linked: bool) -> bool {
+        let info = self.syms.class(c);
+        if let Some(&(_, scope)) = self.ast(info.file).access_scopes.iter().find(|&&(at, _)| at == info.span.end) {
+            return self.within_scope(Owner::Class(c), scope, linked);
+        }
+        let Some((scope, path)) = self.loaded.as_ref().and_then(|l| l.ctor_within.get(&c).copied()) else { return false };
+        match path {
+            Some(path) => self.package_at_path(path).is_some_and(|pk| self.site_in_package(pk)),
+            None => self.within_scope(Owner::Class(c), scope, linked),
+        }
+    }
+
+    /// Whether a case class's `copy` may be called at the site on a receiver of type `recv_ty` (`this` or `super`
+    /// when `through_this`). dotty's `copyMeths` (Desugar.scala) gives the case class a method with the primary
+    /// constructor's access flags and `privateWithin`, so it is reached as such a member is: a private one in the
+    /// class and its companion, a qualified one inside what its qualifier names, and a protected one also in a
+    /// subclass's body through `this`, `super` or an instance of that subclass (`isAccessibleFrom` with
+    /// `isProtectedAccessOK`'s `pre.derivesFrom(cls)`; `protected_denied` for a member that has a symbol).
+    fn copy_accessible(&mut self, c: ClassId, through_this: bool, recv_ty: TypeId) -> bool {
+        if self.creation_accessible(c, None, false) {
+            return true;
+        }
+        if self.syms.class(c).mods & crate::ast::mods::PROTECTED_CTOR == 0 {
+            return false;
+        }
+        let classes: Vec<ClassId> = self.env.frames.iter().rev().filter_map(|f| match f {
+            super::Frame::Class(k) | super::Frame::Ctor(k) => Some(*k),
+            _ => None,
+        }).collect();
+        let mut enclosing_subclass = None;
+        for k in classes {
+            if self.syms.class(k).base_types.iter().any(|&(b, _)| b == c) || self.self_type_derives(k, c) {
+                enclosing_subclass = Some(k);
+                break;
+            }
+        }
+        match enclosing_subclass {
+            Some(k) => through_this || self.instance_of_class(recv_ty, k),
+            None => false,
+        }
     }
 
     pub(super) fn member_callee_in(&mut self, recv: TExprId, recv_ty: TypeId, owner_ty: Option<TypeId>, s: SymId) -> Callee {
@@ -4574,6 +4741,15 @@ impl<'a> Worker<'a> {
         applied: bool,
     ) -> (TExprId, TypeId) {
         let prefix = self.ctor_prefix.take();
+        // An anonymous class of an empty body is made as its parent's creation (`type_new_anon`), which is that
+        // class's parent call: a super call, known by the creation's span before anything else is typed.
+        let call = match self.anon_super_call {
+            Some((at, ahead)) if at == span => {
+                self.anon_super_call = None;
+                if ahead { CtorCall::Ahead(None) } else { CtorCall::Super }
+            }
+            _ => CtorCall::Plain,
+        };
         self.complete_class(c);
         // A class whose completion is under way has no parents yet: one constructed from an
         // initialiser that its own completion reads (`class C { val a = new D; import a.*;
@@ -4595,13 +4771,26 @@ impl<'a> Worker<'a> {
         // companion's synthesized `apply`, of the primary constructor's parameters and access and
         // nothing else (`synthesized_apply`), for a class of the build and for one read from a class
         // path alike. A `new`, a parent call and an anonymous class reach every constructor.
-        let secondaries: Vec<SymId> = if applied && self.synthesized_apply(c) {
+        // The alternatives are the constructors the site may call (`creation_accessible`), taken before the
+        // resolution as dotty's `accessibleType` takes them: a hidden one neither wins nor is told of. The
+        // companion's `apply` is a member with the primary's modifiers (`Desugar.applyMeths`), reached as the
+        // primary is by a creation that is no super call: a subclass of the case class is none of its companion.
+        let all: Vec<SymId> = if applied && self.synthesized_apply(c) {
             Vec::new()
         } else {
             self.syms.class(c).ctors.iter().copied().filter(|&s| Some(s) != self.excluded_ctor && self.ctor_callable_here(s)).collect()
         };
-        if secondaries.is_empty() {
-            self.check_ctor_access(c, span);
+        let secondaries: Vec<SymId> = all.iter().copied().filter(|&s| self.creation_accessible(c, Some(s), call)).collect();
+        let primary_accessible = self.creation_accessible(c, None, call);
+        if secondaries.is_empty() && !primary_accessible {
+            self.refuse_ctor(c, span);
+            // Of several constructors, all hidden, none is applied: the refusal is the creation's one line, as
+            // the reference's inaccessible selection gives the application an error's type. A primary alone is
+            // applied on, as before, for what its arguments have to say.
+            if !all.is_empty() {
+                self.type_args_for_errors(&lists);
+                return (self.prog.add(TExpr::Unit), ERROR);
+            }
         }
         let info = self.syms.class(c);
         let kind = info.kind;
@@ -4660,7 +4849,7 @@ impl<'a> Worker<'a> {
             lists.remove(0);
         }
         if !secondaries.is_empty() && !as_function {
-            let primary = self.syms.class(c).primary_ctor.filter(|_| self.ctor_accessible(c)).map(|s| (s, sig));
+            let primary = self.syms.class(c).primary_ctor.filter(|_| primary_accessible).map(|s| (s, sig));
             let secondaries = secondaries
                 .into_iter()
                 .map(|s| {
@@ -5576,7 +5765,7 @@ impl<'a> Worker<'a> {
                             let ty = self.param_type(p.ty, &subst);
                             let earlier = args_out[..clause_first].to_vec();
                             let pl = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
-                            let d = self.default_application(pl, call.recv, &earlier, clause_first + i, ty);
+                            let d = self.default_application(pl, call.recv, &earlier, clause_first + i, ty, span);
                             self.forward_note_default(d, span);
                             args_out.push(if p.by_name { self.by_name_thunk(d) } else { d });
                             continue;
@@ -8806,7 +8995,7 @@ impl<'a> Worker<'a> {
                 }
             }
             if name == names::COPY && self.syms.class(c).mods & crate::ast::mods::CASE != 0 {
-                return self.apply_copy(recv, recv_ty, c, targs, lists, span, expected);
+                return self.apply_copy(recv, recv_ty, recv_ty, c, targs, lists, span, expected);
             }
             // The `copy` of a case class is a member of what extends it too (scalachess's
             // `Glyph.MoveAssessment.good`, a `MoveAssessment` trait extending the case class
@@ -8815,7 +9004,7 @@ impl<'a> Worker<'a> {
                 let case_base = self.syms.class(c).base_types.iter().map(|&(b, _)| b).find(|&b| b != c && self.syms.class(b).mods & crate::ast::mods::CASE != 0);
                 if let Some(b) = case_base {
                     let base_ty = self.base_type(recv_ty, b).unwrap_or(recv_ty);
-                    return self.apply_copy(recv, base_ty, b, targs, lists, span, expected);
+                    return self.apply_copy(recv, recv_ty, base_ty, b, targs, lists, span, expected);
                 }
             }
         }
@@ -10254,9 +10443,13 @@ impl<'a> Worker<'a> {
     /// `c.copy(args)` is a `new` of the case class whose missing arguments are the fields of `c`.
     /// As scalac's `copy[T](...)`, it takes the type parameters of the class afresh, so that an
     /// argument may change a type argument, and a kept field has to conform to its new type.
+    /// `written_ty` is the receiver's type as written, which a protected `copy` is reached through
+    /// (`copy_accessible`); `recv_ty` is that type seen as the case class.
+    #[allow(clippy::too_many_arguments)]
     fn apply_copy(
         &mut self,
         recv: TExprId,
+        written_ty: TypeId,
         recv_ty: TypeId,
         c: ClassId,
         targs: Option<ListRef>,
@@ -10270,7 +10463,10 @@ impl<'a> Worker<'a> {
             self.type_args_for_errors(&lists);
             return (recv, recv_ty);
         }
-        self.check_ctor_access(c, span);
+        let through_this = matches!(self.prog.expr(recv), TExpr::This | TExpr::Super(_));
+        if !self.copy_accessible(c, through_this, written_ty) {
+            self.refuse_ctor(c, span);
+        }
         let tmp = self.fresh_local("c", recv_ty, span);
         let recv_subst = self.owner_subst(recv_ty);
         self.settle_class(c);
@@ -13924,4 +14120,24 @@ impl<'a> Worker<'a> {
 /// `Worker::takes_named` over the symbols alone.
 pub(super) fn takes_named(syms: &Symbols, p: &ParamSig, name: Name) -> bool {
     p.name == name && !(p.sym != SymId(u32::MAX) && syms.context_bounds.contains_key(&p.sym))
+}
+
+
+/// How a constructor is called, for its access (`Worker::creation_accessible`): a plain creation; a super call
+/// (a class's parent call, an anonymous subclass's creation), which a protected constructor serves; a parent call
+/// the reference types AHEAD of the class's parents to infer the parent's type arguments
+/// (`Worker::parent_typed_ahead`), which a protected constructor serves only inside another subclass: the class
+/// named is the one whose parents are being found (none for an anonymous class, which has no frame), no
+/// subclass yet.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(in crate::typer) enum CtorCall {
+    Plain,
+    Super,
+    Ahead(Option<ClassId>),
+}
+
+impl From<bool> for CtorCall {
+    fn from(super_call: bool) -> CtorCall {
+        if super_call { CtorCall::Super } else { CtorCall::Plain }
+    }
 }

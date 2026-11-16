@@ -3,6 +3,7 @@ alias_method_refinement_variance	function $fail(n, m) { const c = $exc[n]; throw
 and_base_override_through_instances	error: error overriding method unapply in trait Ex of type (x: Any): Option[A]: method unapply of type (x: Any): Option[Int & String] has in
 and_base_three_instances	error: type mismatch: found ? >: (Int | String) <: Int & String, required Double
 anon_hidden_generic	output differs
+anonymous_subclass_jdk_generic	error: not supported on JavaScript: class SimpleFileVisitor java.nio.file.SimpleFileVisitor (a Java definition without an implementation in the std's platform layer)
 applied_member_declared_variance	error: type mismatch: found (f : (c: A) => c.FC[c.Ab]), required A => A#FC[String]
 approx_store_application_agree	error: type mismatch: found (f : (c: Am) => Cov[c.FCt[c.T]]), required Am => Cov[Am#FCt[Null]]
 argument_block_ascriptions	output differs

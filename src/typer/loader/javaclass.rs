@@ -11,7 +11,7 @@ use crate::arena::SharedMap;
 use crate::ast::mods;
 use crate::classfile::jdk::{self, CtSym};
 use crate::classfile::sig::{self, ClassType, JType, TypeArg, TypeParam};
-use crate::classfile::{ClassFile, ACC_ABSTRACT, ACC_BRIDGE, ACC_ENUM, ACC_FINAL, ACC_INTERFACE, ACC_PRIVATE, ACC_PROTECTED, ACC_STATIC, ACC_SYNTHETIC, ACC_VARARGS};
+use crate::classfile::{ClassFile, ACC_ABSTRACT, ACC_BRIDGE, ACC_ENUM, ACC_FINAL, ACC_INTERFACE, ACC_PRIVATE, ACC_PROTECTED, ACC_PUBLIC, ACC_STATIC, ACC_SYNTHETIC, ACC_VARARGS};
 use crate::classpath::CpFile;
 use crate::intern::{FxMap, Name};
 use crate::names;
@@ -1091,6 +1091,18 @@ impl<'a> Worker<'a> {
                 self.syms.class_mut(c).ctor.insert(0, ClauseSig { params: Vec::new(), is_using: false, is_implicit: false });
             }
         }
+    }
+
+    /// A Java constructor's access where it is not public: whether it is protected, a package-private one
+    /// otherwise (a private one is not entered); `None` for a public one and for a constructor no class file
+    /// declares. Both are their package's (dotty's `ClassfileParser` sets `privateWithin` to the enclosing
+    /// package), which `Worker::creation_accessible` asks.
+    pub(in crate::typer) fn java_ctor_restricted(&self, s: SymId) -> Option<bool> {
+        let java = &self.loaded.as_ref()?.java;
+        let js = *java.syms.get(&s)?;
+        let JMember::Method(i) = js.member else { return None };
+        let access = java.classes.get(&js.class)?.cf.methods.get(i as usize)?.access;
+        (access & ACC_PUBLIC == 0).then_some(access & ACC_PROTECTED != 0)
     }
 
     /// Whether a constructor may be called here: a JDK one `absorb_java_ctors` added is the

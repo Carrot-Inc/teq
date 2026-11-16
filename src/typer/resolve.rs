@@ -7301,6 +7301,8 @@ impl<'a> Worker<'a> {
 
         let mut parents: Vec<(TypeId, Span)> = Vec::new();
         let mut trait_calls: Vec<(ClassId, crate::tir::ParentCall)> = Vec::new();
+        // The clause of a first parent typed ahead and refused (`first_parent_refused_ahead`).
+        let mut refused_ahead: Option<Span> = None;
         for (i, p) in cls.parents.iter().enumerate() {
             let t = match self.bare_generic_class(p).filter(|_| i == 0 && enum_class.is_none()) {
                 // `extends Box(7)` leaves the type arguments of the superclass to inference.
@@ -7324,7 +7326,11 @@ impl<'a> Worker<'a> {
                     None => self.resolve_type(p.ty),
                 },
             };
-            parents.push((t, self.cur_ast().ty_spans[p.ty.idx()]));
+            let span = self.cur_ast().ty_spans[p.ty.idx()];
+            if i == 0 && enum_class.is_none() && self.first_parent_refused_ahead(c, p, t) {
+                refused_ahead = Some(span);
+            }
+            parents.push((t, span));
         }
         // A parent's type names no constructor parameter (`extends outer.Foo(outer)`), as dotty's
         // `checkParentType` refuses it: the parent is constructed before the parameters are the
@@ -7407,9 +7413,9 @@ impl<'a> Worker<'a> {
             self.syms.class_mut(c).mods |= mods::UNIVERSAL;
         }
         if self.desugared_parents(c, kind, &mut parents) {
-            self.set_deferred_mirror_parent(c, parents);
+            self.set_deferred_mirror_parent(c, parents, refused_ahead);
         } else {
-            self.set_parents(c, parents);
+            self.set_parents_of(c, parents, refused_ahead);
         }
         // The self type may name a class that extends this one (tapir's
         // `EndpointTransputMacros[T] { this: EndpointTransput[T] => }`), so it is resolved once
@@ -7423,7 +7429,7 @@ impl<'a> Worker<'a> {
                 info.declared_self = Some(declared);
                 info.this_type = Some(self.types.inter(self_ty, declared));
             }
-            if self.syms.class(c).base_types.len() > 1 {
+            if self.syms.class(c).base_types.len() > 1 && refused_ahead.is_none() {
                 self.check_self_types(c);
             }
         }
@@ -7735,11 +7741,12 @@ impl<'a> Worker<'a> {
     /// it after typing: the classes of the sealed class's file decide it, and they may look into
     /// the companion (`extends FakeEnumType.Value`) or be under way themselves (`sealed trait S
     /// extends S.Named`), which the written parents serve, the companion in progress until then.
-    fn set_deferred_mirror_parent(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>) {
+    fn set_deferred_mirror_parent(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>, refused_ahead: Option<Span>) {
         let errors = self.diags.error_count();
-        self.set_parents(c, parents.clone());
-        // Parents in error take no mirror, whose second linearisation would report them again.
-        if self.diags.error_count() == errors {
+        self.set_parents_of(c, parents.clone(), refused_ahead);
+        // Parents in error take no mirror, whose second linearisation would report them again: a first parent
+        // refused ahead is in error too.
+        if self.diags.error_count() == errors && refused_ahead.is_none() {
             self.pending_mirror_parents.push((c, parents));
         }
     }
@@ -7876,6 +7883,27 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn set_parents(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>) {
+        self.set_parents_of(c, parents, None)
+    }
+
+    /// Whether the first parent `p` of `c`, resolved to `t`, is a class the reference types ahead and refuses for
+    /// its constructors (`parent_ahead_refused`): a generic class whose type as written leaves its type
+    /// parameters.
+    fn first_parent_refused_ahead(&mut self, c: ClassId, p: &'a ast::Parent, t: TypeId) -> bool {
+        let t = self.deref_alias_canonical(t);
+        let Type::Class(k, _) = self.types.get(self.types.strip_nested(t)) else { return false };
+        let info = self.syms.class(k);
+        if info.kind != ClassKind::Class || info.tparams.is_empty() || matches!(self.cur_ast().ty(p.ty), TyExpr::Apply(..)) {
+            return false;
+        }
+        self.parent_ahead_refused(c, p, k)
+    }
+
+    /// `set_parents`, `refused_ahead` the clause of a first parent typed ahead and refused for its constructors
+    /// (`parent_ahead_refused`): its type is an error's for the reference (`Namer.parentType`), which then asks
+    /// nothing of the class against it: not whether it is final or sealed elsewhere (`checkedParentType`), nor,
+    /// its later phases not run, the self types (`check_self_types`).
+    pub(super) fn set_parents_of(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>, refused_ahead: Option<Span>) {
         // A class linearised again: what `base_type` kept of it goes (dotty invalidates a
         // class's `baseTypeCache` when its parents change).
         if !self.syms.class(c).base_types.is_empty() {
@@ -7967,12 +7995,17 @@ impl<'a> Worker<'a> {
                 continue;
             }
             if is_class {
-                if let Some(problem) = self.class_parent_problem(c, pc, !parent_types.is_empty()) {
-                    let at = if problem.1 { self.syms.class(c).span } else { span };
-                    self.error(at, problem.0);
-                    continue;
+                // A superclass typed ahead and refused is an error's type for the reference, of which it is not asked
+                // whether it is final, or sealed elsewhere (below): the class keeps it, and its parent call is
+                // refused where it is typed.
+                match self.class_parent_problem(c, pc, !parent_types.is_empty()).filter(|_| refused_ahead != Some(span)) {
+                    Some(problem) => {
+                        let at = if problem.1 { self.syms.class(c).span } else { span };
+                        self.error(at, problem.0);
+                        continue;
+                    }
+                    None => superclass = Some(pc),
                 }
-                superclass = Some(pc);
             } else if pinfo.kind == ClassKind::Enum && is_case_of_enum && pinfo.superclass.is_some() {
                 // The cases of an enum that extends a class are subclasses of the enum, which
                 // passes its arguments on to that class.
@@ -7982,10 +8015,21 @@ impl<'a> Worker<'a> {
             }
             let pinfo = self.syms.class(pc);
             let (sealed, pfile) = (pinfo.mods & mods::SEALED != 0, pinfo.file);
-            // A subclass may use a protected constructor; a private one stays with its class.
-            // With secondary constructors the one the parent call picks is checked there.
-            if pinfo.mods & mods::PRIVATE_CTOR != 0 && pinfo.ctors.is_empty() {
-                self.check_ctor_access(pc, span);
+            // A private primary constructor alone stays with its class and is told of here; every other
+            // constructor is an alternative of the parent call or none (`construct_parent_now`). A trait calls
+            // no constructor of the CLASS it extends: no creation is typed and nothing is asked; a trait
+            // parent's constructor is asked of whatever extends it (dotty's `typedClassDef`: `ensureAccessible(
+            // constr.termRef, superAccess = true)` where `psym.is(Trait)`). The place is the extending class's
+            // super call: inside that class, whose constructor makes the call (`Frame::Ctor`), so that a
+            // companion that extends its class reaches the private constructor.
+            let no_call = self.syms.class(c).kind == ClassKind::Trait && pinfo.kind != ClassKind::Trait;
+            if pinfo.mods & mods::PRIVATE_CTOR != 0 && pinfo.ctors.is_empty() && !no_call {
+                self.env.frames.push(Frame::Ctor(c));
+                let accessible = self.creation_accessible(pc, None, true);
+                self.env.frames.pop();
+                if !accessible {
+                    self.refuse_ctor(pc, span);
+                }
             }
             // A std class extending a sealed std class of another std file is a representation
             // the runtime gives the parent (`scala.runtime.TupleXXL` of `NonEmptyTuple`), not
@@ -7994,8 +8038,8 @@ impl<'a> Worker<'a> {
             let representation = sealed && pfile != file && self.source(file).is_std && self.source(pfile).is_std;
             if sealed && !representation {
                 // The classes of one TASTy file are converted one at a time (`compile.rs`).
-                if pfile != file && !self.is_body_file(file) {
-                    let msg = format!("Cannot extend sealed {} in a different source file", self.class_description(pc));
+                if pfile != file && !self.is_body_file(file) && refused_ahead != Some(span) {
+                    let msg = self.sealed_elsewhere_msg(pc);
                     self.error(span, msg);
                 }
                 if !is_anon && !self.syms.class(pc).children.contains(&c) {
@@ -8099,7 +8143,7 @@ impl<'a> Worker<'a> {
             // A base that declares no self type asks nothing of `c`'s; a class declaring a self
             // type of its own is checked once that is resolved (`complete_class_def`), which comes
             // after its parents.
-            if self_typed && !self.self_type_pending(c) {
+            if self_typed && !self.self_type_pending(c) && refused_ahead.is_none() {
                 self.check_self_types(c);
             }
         }
@@ -8156,16 +8200,28 @@ impl<'a> Worker<'a> {
                     self.name_str(self.syms.class(c).name)
                 };
                 let owner = if is_anon { format!("anonymous class {}", described) } else { self.class_description(c) };
-                let msg = format!(
-                    "illegal inheritance: self type {} of {} does not conform to self type {} of parent {}",
-                    described,
-                    owner,
-                    self.show(required),
-                    self.class_description(b)
-                );
-                self.error_by(crate::source::Group::RefChecks, span, msg);
+                self.self_type_refused(&described, &owner, required, b, span, false);
                 return;
             }
+        }
+    }
+
+    /// scalac's E058 in its words: the self type `described` of `owner` is not the self type `required` of the
+    /// parent `b`. `yields`: the record gives way where an error already stands at its place
+    /// (`Worker::error_yielding_by`): the empty-bodied anonymous class's, told at the creation where its other
+    /// refusals are.
+    pub(super) fn self_type_refused(&mut self, described: &str, owner: &str, required: TypeId, b: ClassId, span: Span, yields: bool) {
+        let msg = format!(
+            "illegal inheritance: self type {} of {} does not conform to self type {} of parent {}",
+            described,
+            owner,
+            self.show(required),
+            self.class_description(b)
+        );
+        if yields {
+            self.error_yielding_by(crate::source::Group::RefChecks, span, msg);
+        } else {
+            self.error_by(crate::source::Group::RefChecks, span, msg);
         }
     }
 
@@ -8184,7 +8240,7 @@ impl<'a> Worker<'a> {
         if kind == ClassKind::EnumCase {
             return Some(("an enum case cannot extend a class".to_string(), false));
         }
-        if self.syms.class(pc).mods & mods::FINAL != 0 {
+        if self.final_for_subclasses(pc) {
             return Some((format!("{} cannot extend final {}", self.class_description(c), parent), true));
         }
         let case_ancestor = is_case
@@ -8202,6 +8258,26 @@ impl<'a> Worker<'a> {
             return Some((msg, false));
         }
         None
+    }
+
+    /// scalac's E112 in its words.
+    pub(super) fn sealed_elsewhere_msg(&self, pc: ClassId) -> String {
+        format!("Cannot extend sealed {} in a different source file", self.class_description(pc))
+    }
+
+    /// Whether no class may extend `pc` (`Namer.checkedParentType`'s `pclazz.is(Final)`): a final class, and a
+    /// value class, which the reference makes final where it is defined.
+    pub(super) fn final_for_subclasses(&self, pc: ClassId) -> bool {
+        let info = self.syms.class(pc);
+        info.mods & mods::FINAL != 0 || info.value_class
+    }
+
+    /// Whether the sealed `pc` is of another source file than the site's (`UnableToExtendSealedClass`:
+    /// `pclazz.associatedFile != cls.associatedFile`, a Java sealed class apart: Namer.scala 1691-1693): by the
+    /// sources' paths, a source's package blocks being files of their own here.
+    pub(super) fn sealed_in_another_source(&self, pc: ClassId) -> bool {
+        let pinfo = self.syms.class(pc);
+        pinfo.mods & mods::SEALED != 0 && !self.is_java_class(pc) && self.source(pinfo.file).path != self.source(self.env.file).path
     }
 
     /// A trait that extends a class hands that class on as the superclass of whatever mixes the

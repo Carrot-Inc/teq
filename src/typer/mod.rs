@@ -1413,6 +1413,11 @@ pub struct Worker<'a> {
     /// The prefix of the class the next constructor application makes (`new o.I(a)`, `o.I(a)`),
     /// which its signature is seen from; taken by the application.
     pub ctor_prefix: Option<TypeId>,
+    /// The span of the creation that an anonymous class of an empty body is made as (`type_new_anon`): that
+    /// creation is the class's parent call, a super call for its constructors' access, or one the reference
+    /// types ahead (`true`: `Worker::parent_typed_ahead`); taken by the creation of that span (`construct`), so
+    /// that no creation typed on the way to it takes it.
+    pub anon_super_call: Option<(Span, bool)>,
     /// While the loader reads a jar member's signature, the library classes the std binds to
     /// one of its own under another name, as the pickle named them (`Loaded::declared_names`).
     pub sig_bound_names: Option<Vec<(ClassId, PkgId, Name)>>,
@@ -3200,6 +3205,7 @@ impl<'a> Worker<'a> {
             infix_declared: None,
             direct_ext_targs: false,
             ctor_prefix: None,
+            anon_super_call: None,
             sig_bound_names: None,
             ctor_outer: None,
             creation_outer: None,
@@ -3665,6 +3671,7 @@ impl<'a> Worker<'a> {
             infix_declared: None,
             direct_ext_targs: Default::default(),
             ctor_prefix: None,
+            anon_super_call: None,
             sig_bound_names: None,
             ctor_outer: None,
             creation_outer: None,
@@ -4658,6 +4665,31 @@ impl<'a> Worker<'a> {
         let outer = std::mem::replace(&mut self.diags.producer, group);
         self.error(span, msg);
         self.diags.producer = outer;
+    }
+
+    /// An error of a phase of the reference's after its typer, `phase` (`source::PHASE_REFCHECKS`, ..): a late
+    /// record of the sink (`Diagnostic::late`), presented only while the program has no earlier error, as scalac
+    /// runs no phase after one that reported (`Phase.isRunnable`). Whether the record is the sink's last: where
+    /// the place's errors go elsewhere (a dependent check, a library's body) it is the error it would be there.
+    #[track_caller]
+    pub fn late_error_of(&mut self, span: Span, msg: impl Into<String>, phase: u8) -> bool {
+        if self.dependent_checks > 0 || self.is_body_file(self.env.file) {
+            self.error_by(crate::source::Group::of_phase(phase), span, msg);
+            return false;
+        }
+        self.diags.late_error_of(self.env.file, span, msg, phase);
+        true
+    }
+
+    /// `error_by` of a record that gives way where an error already stands at a position of its span, as the
+    /// reference's reporter hides the second of two at one place (`Diagnostic::yields`).
+    #[track_caller]
+    pub fn error_yielding_by(&mut self, group: crate::source::Group, span: Span, msg: impl Into<String>) {
+        let direct = self.dependent_checks == 0 && !self.is_body_file(self.env.file);
+        self.error_by(group, span, msg);
+        if direct {
+            self.diags.yielding();
+        }
     }
 
     #[track_caller]

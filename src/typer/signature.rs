@@ -841,7 +841,15 @@ impl<'a> Worker<'a> {
             }
             Head::New { path, anonymous, implied } => match self.new_class_at(path, at) {
                 Some(c) => {
-                    let mut shown = self.constructor_signatures(c, *anonymous, false);
+                    // A parent's constructor call is a super call, unless the reference types it ahead
+                    // (`parent_typed_ahead`, the typer's own test): then the class being defined is no subclass yet.
+                    let kind = match (*anonymous).then(|| self.parent_clause_at(call.head_span)).flatten() {
+                        Some((d, ty)) if self.quietly(|w| w.parent_typed_ahead(ty, None).then_some(())).is_some() => {
+                            super::apply::CtorCall::Ahead(self.def_classes.get(self.env.file.0 as usize, &d).copied())
+                        }
+                        _ => super::apply::CtorCall::from(*anonymous),
+                    };
+                    let mut shown = self.constructor_signatures(c, *anonymous, kind, false);
                     // The empty clause a `new` without a list implies is applied.
                     if *implied {
                         for s in &mut shown {
@@ -1245,20 +1253,30 @@ impl<'a> Worker<'a> {
                     out.push(self.method_shown(crate::names::APPLY, alt, &sig, subst.clone(), false));
                 }
                 if made_up || out.is_empty() {
-                    let mut ctors = self.constructor_signatures(c, false, true);
+                    let mut ctors = self.constructor_signatures(c, false, super::apply::CtorCall::Plain, true);
                     ctors.append(&mut out);
                     return ctors;
                 }
                 return out;
             }
         }
-        self.constructor_signatures(c, false, true)
+        self.constructor_signatures(c, false, super::apply::CtorCall::Plain, true)
+    }
+
+    /// The parent clause whose type is written at `span`, with the class definition that holds it (an anonymous
+    /// class's or a named one's): what `Head::New`'s `anonymous` head was read from.
+    fn parent_clause_at(&self, span: Span) -> Option<(crate::ast::DefId, crate::ast::TyExprId)> {
+        let ast = self.cur_ast();
+        ast.defs.iter().enumerate().find_map(|(i, d)| {
+            let crate::ast::DefKind::Class(cls) = &d.kind else { return None };
+            cls.parents.iter().find(|p| ast.ty_spans[p.ty.idx()] == span).map(|p| (crate::ast::DefId(i as u32), p.ty))
+        })
     }
 
     /// The constructors of a class: its primary one, then its secondary ones, named by the
     /// class. `applied`: asked for the class's name applied, which for a case class is its
     /// synthesized `apply`, the primary alone, as the typer takes it (`Worker::construct`).
-    fn constructor_signatures(&mut self, c: ClassId, anonymous: bool, applied: bool) -> Vec<Shown> {
+    fn constructor_signatures(&mut self, c: ClassId, anonymous: bool, call: super::apply::CtorCall, applied: bool) -> Vec<Shown> {
         self.complete_class(c);
         if self.loaded.is_some() {
             self.absorb_java_ctors(c);
@@ -1272,13 +1290,15 @@ impl<'a> Worker<'a> {
         let secondaries = if applied && self.synthesized_apply(c) { Vec::new() } else { self.syms.class(c).ctors.clone() };
         let instance = Some(self.syms.class(c).base_types[0].1);
         let mut out = Vec::new();
-        if (secondaries.is_empty() || !self.is_java_class(c)) && self.ctor_accessible(c) {
+        // The constructors the site may call, as the typer takes a creation's alternatives (`creation_accessible`):
+        // an anonymous class's parent and a class's parent call are super calls, or typed ahead (`call`).
+        if (secondaries.is_empty() || !self.is_java_class(c)) && self.creation_accessible(c, None, call) {
             let clauses = self.syms.class(c).ctor.iter().map(clause_of).collect();
             let sym = self.syms.class(c).primary_ctor;
             out.push(Shown { name: name.clone(), sym, tparams: tparams.clone(), open: tparams.clone(), clauses, ret: None, instance, subst: Vec::new(), pattern: false, of_value: None });
         }
         for s in secondaries {
-            if !self.ctor_callable_here(s) {
+            if !self.ctor_callable_here(s) || !self.creation_accessible(c, Some(s), call) {
                 continue;
             }
             let sig = self.sig_arc(s);

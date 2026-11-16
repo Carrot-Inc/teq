@@ -284,6 +284,12 @@ pub struct Diagnostic {
     /// A macro's failure, which scalac reports at the expansion (an exception, an unsupported
     /// operation): each call's own, whatever place of the inlined code it was found at.
     pub at_expansion: bool,
+    /// An error that gives way where an error already took a position of its span, as scalac's
+    /// reporter hides the second of two at one place (`UniqueMessagePositions.isHidden`,
+    /// reporting/UniqueMessagePositions.scala: an offset of the span, both ends, holds a diagnostic of
+    /// a level at least its own): asked of the errors whose producers say so (`Diagnostics::yielding`),
+    /// teq's other errors not standing where scalac's do (`Occupied::take`).
+    pub yields: bool,
     /// A hint (`is_warning` too): what a language server's session reports outside the flag
     /// that would make it a warning (an unused import), which no count reads: not `--werror`,
     /// not `ok`, not the errors or the warnings of an answer.
@@ -568,7 +574,7 @@ impl Diagnostic {
 
     /// A diagnostic of nothing but its place, message and severity.
     pub fn plain(file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
-        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, by_phase: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), position: Position::default(), unwound: Unwound(false) }
+        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, by_phase: false, inlined_from: None, at_expansion: false, yields: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), position: Position::default(), unwound: Unwound(false) }
     }
 
     /// What the reporting policy's filters read of the diagnostic.
@@ -686,7 +692,7 @@ impl Occupied {
             return false;
         }
         let spans = self.taken.entry(d.file).or_default();
-        if level != Level::Error && spans.iter().any(|&(s, e, l)| l >= w && s <= end && start <= e) {
+        if (level != Level::Error || d.yields) && spans.iter().any(|&(s, e, l)| l >= w && s <= end && start <= e) {
             return false;
         }
         spans.push((start, end, w));
@@ -1132,6 +1138,13 @@ impl Diagnostics {
             }
         }
         hidden
+    }
+
+    /// The record just made gives way where an error already stands at its place (`Diagnostic::yields`).
+    pub fn yielding(&mut self) {
+        if let Some(d) = self.items.last_mut() {
+            d.yields = true;
+        }
     }
 
     /// A late error (`Diagnostic::late`), of scalac's `Inlining`.

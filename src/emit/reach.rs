@@ -1740,7 +1740,8 @@ impl Walker {
             // getters of their defaults on the companion.
             if self.link {
                 for &s in &cx.syms.class(c).ctors {
-                    if cx.syms.sym(s).mods & mods::PRIVATE == 0 {
+                    // A qualified private one (`private[q]`) is its qualifier's: another module inside `q` calls it.
+                    if cx.syms.sym(s).mods & mods::PRIVATE == 0 || cx.syms.sym(s).scoped_private {
                         self.reach_fun_of(cx, s);
                     }
                 }

@@ -538,9 +538,9 @@ i14401c.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14401c.scala:5
 i14415.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14415.scala:21:7 error overriding method m in trait C of type (a: Int): Int;; teq's is error i14415.scala:21:7 method m is accessed from super in trait C; class X has no concrete m behind that tr
 i14432.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14432.scala:13:34 No given instance of type scala.deriving.Mirror.Of[example.Foo] was found for parameter x of method summon in object Predef. Failed to synthesize an instance of type scala.deriv
 i14432a.scala	fail	-	marks: 2 errors where 1 are marked: i14432a.scala:14:44: No given instance of type Mirror.Of[Foo] was found.
-i14432b.scala	fail	-	marks: no error where 1 are marked
+i14432b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14432b.scala:15:44 No given instance of type scala.deriving.Mirror.Of[example.Foo] was found for parameter x of method summon in object Predef. Failed to synthesize an instance of type scala.deri
 i14432c.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i14432c.scala:12:19 constructor Foo cannot be accessed as a member of example.Foo from class Bar.; teq's is error i14432c.scala:12:19 the constructor of Foo is private to Foo
-i14432d.scala	fail	-	marks: no error where 1 are marked
+i14432d.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14432d.scala:17:46 No given instance of type scala.deriving.Mirror.Of[example.Foo] was found for parameter x of method summon in object Predef. Failed to synthesize an instance of type scala.deri
 i14507.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
 i14544.scala	fail	-	marks: 1 errors where 2 are marked
 i14564.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14564.scala:5:27 spread operator `*` not allowed here; must come last in a parameter list; teq's is error i14564.scala:5:19 value * is not a member of List[Int]
@@ -948,7 +948,7 @@ i25248.scala	fail	-	marks: 4 errors where 2 are marked: i25248.scala:2:3: expect
 i25260.scala	fail	-	marks: 2 errors where 1 are marked: i25260.scala:3:31: expected end of statement, found ':'
 i2533.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
 i2539.scala	fail	-	marks: 33 errors where 5 are marked: i2539.scala:2:46: type mismatch: found () => 42, required (() => Int){def foo(): Int}
-i25442	fail	-	marks: no error where 7 are marked
+i25442	fail	-	check: diagnostic 1 of 7: scalac's is error protected-constructors.scala:7:23 constructor A cannot be accessed as a member of protectedCtors.A from class C.; teq's is error protected-constructors.scala:7:19 constructor A cannot be accessed 
 i25456.scala	fail	-	marks: 2 errors where 4 are marked
 i25500.scala	marks	-	the marks hold; scalac's diagnostics are not compared: the test has no .check
 i25531.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i25531.scala:3:7 class Walker needs to be abstract, since:; teq's is error i25531.scala:3:7 class Walker needs to be abstract, since it has 4 unimplemented members: postVisitDirectory, preVisitDir
