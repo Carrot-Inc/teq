@@ -75,7 +75,7 @@ i13033	pass	-
 i13183	pass	-	
 i13230	pass	-	
 i13947	pass	-	
-i14902	fail	-	wrong-output
+i14902	pass	-	
 i15968	fail	-	wrong-output
 i16734a	fail	-	compile-error: type AnyKind not found
 i16734b	fail	-	compile-error: type AnyKind not found

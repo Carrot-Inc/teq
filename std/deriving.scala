@@ -5,15 +5,13 @@ package scala.deriving
 // scala.runtime's mirror classes, typed as `Mirror.Product`/`Mirror.Sum` refined with the
 // members below, exactly as scalac types the mirror it synthesizes.
 
+// `MirroredType` and `MirroredElemTypes` are no members of `Mirror` itself, as in scala-library:
+// a mirror has them by the refinement its type is (`Mirror.Of`, a synthesized mirror's own).
 sealed trait Mirror:
   /** The mirrored type without its type arguments applied. */
   type MirroredMonoType
-  /** The mirrored type as it was asked for. */
-  type MirroredType
   /** The name of the type, as a literal type. */
   type MirroredLabel <: String
-  /** The types of the fields of a product, of the cases of a sum, as a tuple. */
-  type MirroredElemTypes <: Tuple
   /** Their names, as a tuple of literal types. */
   type MirroredElemLabels <: Tuple
 

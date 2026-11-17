@@ -98,7 +98,7 @@ impl<'a> Worker<'a> {
 
     /// The prefix of the type members of `c` inside its body: `C.this`, or the object itself.
     /// Whether the alias `a` is declared private, unqualified, in the program.
-    pub(super) fn private_alias(&self, a: AliasId) -> bool {
+    pub fn private_alias(&self, a: AliasId) -> bool {
         let info = &self.syms.aliases[a.idx()];
         // A library's, as its pickle flags it.
         let Some(d) = info.def else { return self.loaded.as_ref().map_or(false, |l| l.private_aliases.contains_key(&a)) };
@@ -108,6 +108,26 @@ impl<'a> Worker<'a> {
         let ast = self.ast(info.file);
         let def = ast.def(d);
         def.mods & crate::ast::mods::PRIVATE != 0 && !ast.access_scopes.iter().any(|&(at, _)| at == def.span.start)
+    }
+
+    /// Whether the class `c` is declared private, unqualified: a program's by its definition, a
+    /// library's as its pickle flags it, a Java member class as its class file does.
+    pub fn private_class(&self, c: ClassId) -> bool {
+        if self.is_java_class(c) {
+            return self.java_private_member_class(c);
+        }
+        let info = self.syms.class(c);
+        if info.mods & crate::ast::mods::PRIVATE == 0 {
+            return false;
+        }
+        match info.def {
+            Some(d) if !self.in_jar(info.file) && !self.is_body_file(info.file) => {
+                let ast = self.ast(info.file);
+                let at = ast.def(d).span.start;
+                !ast.access_scopes.iter().any(|&(scope, _)| scope == at)
+            }
+            _ => true,
+        }
     }
 
     pub fn this_prefix(&mut self, c: ClassId) -> TypeId {

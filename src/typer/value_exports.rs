@@ -1303,7 +1303,9 @@ impl<'a> Worker<'a> {
         self.syms.alias_cells.set(a.0, Completion::Done);
         match home {
             Home::Class(c) => {
-                self.syms.class_mut(c).type_aliases.insert(alias, a);
+                let mut info = self.syms.class_mut(c);
+                let old = info.type_aliases.insert(alias, a);
+                info.order_alias(old, a);
                 crate::symbols::type_member_written(alias);
             }
             Home::File(p, _) => self.syms.enter_package_object(p, alias).alias = Some(a),

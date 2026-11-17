@@ -657,6 +657,7 @@ mirror_refined_elems	pass	-
 mirror_refusals	pass	-	
 mirror_term_refinement	pass	-	
 mirror_types_after_typer	pass	-	
+mirror_types_of_a_plain_mirror	pass	-	
 modifiers	pass	-	
 modifiers_table	pass	-	
 named_tuple_mismatch	pass	-	

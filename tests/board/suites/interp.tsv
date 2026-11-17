@@ -2355,6 +2355,9 @@ reflect_nested_secondary	pass	-
 reflect_root	pass	-	
 reflect_test_framework	cannot run	-	its expectation is Scala.js's
 reflect_trait_assignable	pass	-	
+reflected_type_lists_in_declared_order	pass	-	
+reflected_type_members_as_lookup_finds	pass	-	
+reflected_type_members_of_a_mirror	pass	-	
 reflective_selectable	pass	-	
 regex_beyond_javascript	pass	-	
 regex_case_properties	fail	-	output

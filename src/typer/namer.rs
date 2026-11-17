@@ -420,7 +420,9 @@ impl<'a> Worker<'a> {
             }
             Owner::Class(c) => {
                 let mut info = self.syms.class_mut(c);
-                let clash = info.nested.insert(name, cid).is_some() || info.type_aliases.contains_key(&name);
+                let old = info.nested.insert(name, cid);
+                info.order_nested(old, cid);
+                let clash = old.is_some() || info.type_aliases.contains_key(&name);
                 crate::symbols::type_member_written(name);
                 clash
             }
@@ -664,7 +666,9 @@ impl<'a> Worker<'a> {
                         }
                         Owner::Class(c) => {
                             let mut info = self.syms.class_mut(c);
-                            let clash = info.type_aliases.insert(def.name, aid).is_some() || info.nested.contains_key(&def.name);
+                            let old = info.type_aliases.insert(def.name, aid);
+                            info.order_alias(old, aid);
+                            let clash = old.is_some() || info.nested.contains_key(&def.name);
                             crate::symbols::type_member_written(def.name);
                             clash
                         }

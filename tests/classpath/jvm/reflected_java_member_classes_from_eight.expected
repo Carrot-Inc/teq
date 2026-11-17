@@ -1,0 +1,3 @@
+Cabinet declaredTypes: Rod, Tray, Bin, Hook, Peg, Rail, Lock, Box, Tin, T
+Cabinet typeMembers: T, Bin, Box, Hook, Lock, Peg, Rail, Rod, Tin, Tray
+Cabinet declarations (classes): Rod, Tray, Bin, Hook, Peg, Rail, Lock, Box, Tin

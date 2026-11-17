@@ -76,7 +76,7 @@ i13033	pass	interp:pass
 i13183	pass	interp:pass	
 i13230	pass	interp:pass	
 i13947	pass	interp:pass	
-i14902	fail	interp:fail	output: line 2: the .check has 'List(Y, Z, X)', the program printed 'List(Z, Y)'
+i14902	pass	interp:pass	
 i15968	fail	interp:fail	output: line 2: the .check has '  type Z = java.lang.String', the program printed '  val arg: Z = "foo"'
 i16734a	fail	interp:fail	Macro_1.scala:3:27: type AnyKind not found
 i16734b	fail	interp:fail	Macro_1.scala:5:31: type AnyKind not found

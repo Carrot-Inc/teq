@@ -9,7 +9,7 @@ use super::value::*;
 use super::*;
 use crate::intern::FxMap;
 use crate::source::{FileId, Span};
-use crate::symbols::{ClassKind, ClauseSig, MethodSig, ParamSig, ROOT_PKG};
+use crate::symbols::{ClassKind, ClauseSig, MethodSig, ParamSig, TypeDecl, ROOT_PKG};
 use std::sync::Arc;
 use crate::tir::*;
 use crate::typer::site::SiteOwner;
@@ -7582,6 +7582,122 @@ impl<'a, 't> Interp<'a, 't> {
         self.typer.class_of(ty)
     }
 
+    /// The nested classes and the type aliases of the class `c` in the order it declares them.
+    fn type_order(&self, c: ClassId) -> Vec<TypeDecl> {
+        let info = self.syms().class(c);
+        debug_assert!(info.type_order_holds(), "the order of a class's type-level declarations is not its maps' values");
+        info.type_order.clone()
+    }
+
+    /// `Symbol.typeMembers` of the class `c` in the reference's order (`QuotesImpl.typeMembers`):
+    /// the class's type parameters in their order; then the type members a lookup finds on the
+    /// class: its own and its bases', a name once, a base's private one left out, and of two
+    /// classes that declare a name the one that defines it before the one that leaves it
+    /// abstract, else the first of the linearization (`Denotations`' `preferSym`); a type
+    /// parameter is the member of its name. They are ordered by owner, the owners as
+    /// `Type.sortedParents` gives them (the class, then each declared parent's own list, depth
+    /// first, a class once), and under one owner by name as `String.compareTo` compares, by
+    /// UTF-16 code units.
+    fn type_members(&mut self, c: ClassId) -> Vec<SymRef> {
+        self.typer.complete_class(c);
+        let mut owners: Vec<ClassId> = Vec::new();
+        let mut work: Vec<ClassId> = vec![c];
+        while let Some(k) = work.pop() {
+            if owners.contains(&k) {
+                continue;
+            }
+            owners.push(k);
+            self.typer.complete_class(k);
+            // Pushed last to first, so that the first declared parent is the next one visited.
+            work.extend(self.declared_parent_classes(k).into_iter().rev());
+        }
+        let params: Vec<TParamId> = self.syms().class(c).tparams.clone();
+        let param_names: Vec<Name> = params.iter().map(|&p| self.syms().tparam(p).name).collect();
+        let linearization: Vec<ClassId> = self.syms().class(c).base_types.iter().map(|&(b, _)| b).collect();
+        let mut found: Vec<TypeMember> = Vec::new();
+        for k in linearization {
+            self.typer.complete_class(k);
+            for e in self.type_order(k) {
+                let (name, module, private, defined) = match e {
+                    TypeDecl::Class(x) => {
+                        let info = self.syms().class(x);
+                        // An object's class: a static object's by its kind, an inner and a local
+                        // object's, ordinary classes, by the value that holds their instance.
+                        let module = info.kind == ClassKind::Object || info.inner_object.is_some() || info.local_module.is_some();
+                        (info.name, module, self.typer.private_class(x), true)
+                    }
+                    TypeDecl::Alias(a) => {
+                        let info = &self.syms().aliases[a.idx()];
+                        (info.name, false, self.typer.private_alias(a), !info.is_abstract())
+                    }
+                };
+                if (k != c && private) || (!module && param_names.contains(&name)) {
+                    continue;
+                }
+                let member = TypeMember { owner: k, name, module, defined, sym: type_decl_ref(e) };
+                // An object's class has a name of its own (`Lamp$`), which no type of the
+                // object's name shares.
+                match found.iter_mut().find(|f| f.name == name && f.module == module) {
+                    None => found.push(member),
+                    Some(f) if defined && !f.defined => *f = member,
+                    Some(_) => {}
+                }
+            }
+        }
+        // A class of the linearization that the parents' walk did not reach keeps its members,
+        // after the others'.
+        for f in &found {
+            if !owners.contains(&f.owner) {
+                owners.push(f.owner);
+            }
+        }
+        let mut out: Vec<SymRef> = params.into_iter().map(SymRef::TParam).collect();
+        for k in owners {
+            let mut own: Vec<(Vec<u16>, SymRef)> = found
+                .iter()
+                .filter(|f| f.owner == k)
+                .map(|f| {
+                    let mut units: Vec<u16> = self.typer.name_ref(f.name).encode_utf16().collect();
+                    if f.module {
+                        units.push(u16::from(b'$'));
+                    }
+                    (units, f.sym)
+                })
+                .collect();
+            own.sort_by(|a, b| a.0.cmp(&b.0));
+            out.extend(own.into_iter().map(|f| f.1));
+        }
+        out
+    }
+
+    /// The classes of the parents the reference declares for the class `k`
+    /// (`Namer.ensureFirstIsClass`): its written parents, each as its class (a parent named
+    /// through an alias its class, `TypeProxy.superType`; an intersection each of its classes in
+    /// turn), with the class a first written trait hands on ahead of them.
+    fn declared_parent_classes(&mut self, k: ClassId) -> Vec<ClassId> {
+        let parents: Vec<TypeId> = self.syms().class(k).parents.clone();
+        let mut out: Vec<ClassId> = Vec::new();
+        for p in parents {
+            self.parent_classes(p, &mut out);
+        }
+        if let Some(s) = self.syms().class(k).superclass {
+            if out.first() != Some(&s) {
+                out.insert(0, s);
+            }
+        }
+        out
+    }
+
+    fn parent_classes(&mut self, p: TypeId, out: &mut Vec<ClassId>) {
+        let p = self.typer.types.strip_nested(p);
+        if let Type::Inter(a, b) = self.typer.types.get(p) {
+            self.parent_classes(a, out);
+            self.parent_classes(b, out);
+        } else if let Some(pc) = self.typer.class_of(p) {
+            out.push(pc);
+        }
+    }
+
     fn class_members(&mut self, c: ClassId, inherited: bool) -> Vec<SymId> {
         self.typer.complete_class(c);
         let mut out: Vec<SymId> = Vec::new();
@@ -8173,9 +8289,12 @@ fn install_symbols(it: &mut Table) {
         let s = it.sym_arg(a, 0)?;
         let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
         it.typer.complete_class(c);
-        let mut out: Vec<SymRef> = it.syms().class(c).tparams.iter().map(|&p| SymRef::TParam(p)).collect();
-        out.extend(it.syms().class(c).nested.values().map(|&k| SymRef::Class(k)));
-        out.extend(it.syms().class(c).type_aliases.values().map(|&al| SymRef::Alias(al)));
+        let params: Vec<SymRef> = it.syms().class(c).tparams.iter().map(|&p| SymRef::TParam(p)).collect();
+        let declared: Vec<SymRef> = it.type_order(c).into_iter().map(type_decl_ref).collect();
+        // A class's scope holds its type parameters first; a Java class file's holds its member
+        // classes first, entered before the signature that names the type parameters is read
+        // (`ClassfileParser`).
+        let out = if it.typer.is_java_class(c) { [declared, params].concat() } else { [params, declared].concat() };
         it.sym_values(out)
     });
     q!(it, "Reflect.SymbolMethods.Symbol.typeMember", |it, a| {
@@ -8191,15 +8310,17 @@ fn install_symbols(it: &mut Table) {
         let s = it.sym_arg(a, 0)?;
         let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
         it.typer.complete_class(c);
-        let mut out: Vec<SymRef> = it.syms().class(c).nested.values().map(|&k| SymRef::Class(k)).collect();
-        out.extend(it.syms().class(c).type_aliases.values().map(|&al| SymRef::Alias(al)));
+        let out = it.type_members(c);
         it.sym_values(out)
     });
     q!(it, "Reflect.SymbolMethods.Symbol.declarations", |it, a| {
         let s = it.sym_arg(a, 0)?;
         let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
         let mut out: Vec<SymRef> = it.memo_members(c, false).into_iter().map(SymRef::Term).collect();
-        out.extend(it.syms().class(c).nested.values().map(|&k| SymRef::Class(k)));
+        out.extend(it.type_order(c).into_iter().filter_map(|e| match e {
+            TypeDecl::Class(k) => Some(SymRef::Class(k)),
+            TypeDecl::Alias(_) => None,
+        }));
         it.sym_values(out)
     });
     q!(it, "Reflect.SymbolMethods.Symbol.paramSymss", |it, a| {
@@ -9553,5 +9674,24 @@ fn install_definition_parts(it: &mut Table) {
 fn refinement_name(r: Refinement) -> crate::intern::Name {
     match r {
         Refinement::Alias(n, _) | Refinement::Bounds(n, ..) | Refinement::Val(n, ..) | Refinement::Term(n, ..) => n,
+    }
+}
+
+/// A type member a lookup finds on a class (`Interp::type_members`): the class that declares
+/// it, its name, whether it is an object's class, whether it is defined (a class, an alias) or
+/// left abstract, and its symbol.
+struct TypeMember {
+    owner: ClassId,
+    name: Name,
+    module: bool,
+    defined: bool,
+    sym: SymRef,
+}
+
+/// A class's type-level declaration as the symbol the reflection API gives.
+fn type_decl_ref(e: TypeDecl) -> SymRef {
+    match e {
+        TypeDecl::Class(k) => SymRef::Class(k),
+        TypeDecl::Alias(a) => SymRef::Alias(a),
     }
 }

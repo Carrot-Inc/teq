@@ -55,7 +55,6 @@ i12021	compile-error: 'erased' is not part of the supported Scala subset
 i12351	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 i12352	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 i12392	wrong-output
-i14902	wrong-output
 i15968	wrong-output
 i16734a	compile-error: type AnyKind not found
 i16734b	compile-error: type AnyKind not found

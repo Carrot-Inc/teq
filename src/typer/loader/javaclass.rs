@@ -280,6 +280,12 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the Java class `c` is a member class its class file's `InnerClasses` entry marks
+    /// private.
+    pub fn java_private_member_class(&self, c: ClassId) -> bool {
+        self.java().classes.get(&c).is_some_and(|j| j.cf.own_inner_entry().is_some_and(|e| e.access & ACC_PRIVATE != 0))
+    }
+
     pub fn is_java_class(&self, c: ClassId) -> bool {
         self.loaded.as_ref().map_or(false, |l| l.java.classes.contains_key(&c))
     }
@@ -812,7 +818,9 @@ impl<'a> Worker<'a> {
             match owner {
                 Owner::Package(p) => self.syms.enter_scoped(self.interner, p, name).class = Some(c),
                 Owner::Class(o) => {
-                    self.syms.class_mut(o).nested.insert(name, c);
+                    let mut info = self.syms.class_mut(o);
+                    let old = info.nested.insert(name, c);
+                    info.order_nested(old, c);
                     crate::symbols::type_member_written(name);
                 }
                 Owner::Local => {}

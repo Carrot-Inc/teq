@@ -1,0 +1,6 @@
+Shelf declaredTypes: Peg, Rail, Lock, Box, Tin, T
+Shelf typeMembers: T, Box, Lock, Peg, Rail, Tin
+Shelf declarations (classes): Peg, Rail, Lock, Box, Tin
+Rack declaredTypes: Label
+Rack typeMembers: Label, Box, Peg, Rail, Tin
+Rack declarations (classes): 

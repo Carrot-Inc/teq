@@ -589,7 +589,7 @@ impl<'a> Worker<'a> {
 
     /// Whether `target` asks of the mirror what the mirror of the class may not have, which
     /// scalac checks: its element types and labels (`Mirror.ProductOf[P] { type
-    /// MirroredElemTypes = E }`) beyond `Mirror`'s own `<: Tuple`, and a mono type other than the
+    /// MirroredElemTypes = E }`) beyond their `<: Tuple`, and a mono type other than the
     /// mirrored one, and a term member. scalac does not check the label, the mirrored type's
     /// bounds or the mono type's.
     pub fn mirror_target_fixes_members(&mut self, target: TypeId) -> bool {

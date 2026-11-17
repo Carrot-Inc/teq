@@ -1248,6 +1248,30 @@ same_output nested_dirty 2 run tests/workers/nested_dirty --cacheable-state Cach
 upstream prefix_touch
 same_output prefix_touch 2 run $(fixture prefix_touch)
 
+# A local class's nested classes and type members as a macro of an upstream module lists them: the
+# class is a worker's own, and its record's order of them takes the merged ids with its two maps
+# (without, the lists named a worker's ids above one worker: `no record .. in an arena of ..`).
+# scalac prints the six lines.
+upstream reflected_local_class
+same_output reflected_local_class 2 run $(fixture reflected_local_class)
+if [ "$(cat "$work/reflected_local_class.one")" = "$(printf '%s\n' "Till declaredTypes: Coin, Drawer, Bill" "Till typeMembers: Bill, Coin, Drawer" "Till declarations (classes): Drawer" "Safe declaredTypes: Door, Key" "Safe typeMembers: Door, Key" "Safe declarations (classes): Door")" ]; then
+  ok
+else
+  bad "reflected_local_class_lines: one worker prints: $(head -3 "$work/reflected_local_class.one" | tr '\n' ' ' | cut -c1-160)"
+fi
+
+# The type members of a trait whose parent trait extends a class, of a class over it and of a class
+# that mixes it in after another trait, the classes read from an upstream module's products: the
+# class the traits hand on stands first among the declared parents (dotty's
+# `Namer.ensureFirstIsClass`), there as from source. scalac prints the three lines.
+upstream reflected_parents_from_products
+same_output reflected_parents_from_products 2 run $(fixture reflected_parents_from_products)
+if [ "$(cat "$work/reflected_parents_from_products.one")" = "$(printf '%s\n' "Spray typeMembers: Bud, Knot, Pith, Twig" "Hedge typeMembers: Thorn, Knot, Pith, Bud, Twig" "Thicket typeMembers: Knot, Pith, Mid, Twig")" ]; then
+  ok
+else
+  bad "reflected_parents_from_products_lines: one worker prints: $(head -3 "$work/reflected_parents_from_products.one" | tr '\n' ' ' | cut -c1-160)"
+fi
+
 # An initialiser (a module's, a file's, an enum value's, a lazy val's or a lazy local's) may make values and change
 # them, and publishes its value in its slot; a change of a container made before it began is state other runs share,
 # which gives the build to one worker: two lazy vals counting in their

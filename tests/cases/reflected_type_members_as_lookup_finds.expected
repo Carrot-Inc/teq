@@ -1,0 +1,13 @@
+Stock declaredTypes: Hidden, Bolted, Kept, Near, Fenced, Guarded, Open, Crate
+Stock typeMembers: Bolted, Crate, Fenced, Guarded, Hidden, Kept, Near, Open
+Stock declarations (classes): Bolted, Fenced, Guarded, Crate
+Outlet declaredTypes: Mine
+Outlet typeMembers: Mine, Crate, Fenced, Guarded, Kept, Near, Open
+Outlet declarations (classes): 
+Desk declaredTypes: 
+Desk typeMembers: Crate, Fenced, Guarded, Kept, Near, Open, Page
+Desk declarations (classes): 
+Annex declaredTypes: Extra
+Annex typeMembers: Extra, Crate, Fenced, Guarded, Kept, Near, Open, Page
+Annex declarations (classes): 
+80-108-97-105-110, 55296-56320, 57344

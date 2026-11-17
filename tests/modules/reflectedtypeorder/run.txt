@@ -1,0 +1,24 @@
+Ground declaredTypes: Soil, Root, Deep, Burrow
+Ground typeMembers: Burrow, Deep, Root, Soil
+Ground declarations (classes): Root, Burrow
+Tree declaredTypes: K, V, Nest2, Moss2, Nest1, Moss1, Soil
+Tree typeMembers: K, V, Moss1, Moss2, Nest1, Nest2, Soil, Root, Edge, Vein, Sap, Ring
+Tree declarations (classes): Nest2, Nest1
+Shrub declaredTypes: Yew, Zest, Wax, Inner2, Inner1
+Shrub typeMembers: Inner1, Inner2, Wax, Yew, Zest, Root, Soil
+Shrub declarations (classes): Inner2, Inner1
+Glade$ declaredTypes: Pond, Nest, Lake, Egg
+Glade$ typeMembers: Egg, Lake, Nest, Pond
+Glade$ declarations (classes): Nest, Egg
+Noon declaredTypes: 
+Noon typeMembers: Dawn, Dusk, Sun
+Noon declarations (classes): 
+Night declaredTypes: 
+Night typeMembers: Dusk, Dawn, Sun
+Night declarations (classes): 
+Board declaredTypes: 
+Board typeMembers: Ab, Cz, Grain, Ac
+Board declarations (classes): 
+Bin declaredTypes: Elem
+Bin typeMembers: Elem, Rest
+Bin declarations (classes): 

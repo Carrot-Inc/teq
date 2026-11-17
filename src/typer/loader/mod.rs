@@ -1418,7 +1418,9 @@ impl<'a> Worker<'a> {
                 Owner::Package(p) => self.syms.enter_scoped(self.interner, p, name).class = Some(cid),
                 Owner::Class(_) if inner_object && companion_class => {}
                 Owner::Class(c) => {
-                    self.syms.class_mut(c).nested.insert(name, cid);
+                    let mut info = self.syms.class_mut(c);
+                    let old = info.nested.insert(name, cid);
+                    info.order_nested(old, cid);
                     crate::symbols::type_member_written(name);
                 }
                 Owner::Local => {}
@@ -1517,7 +1519,9 @@ impl<'a> Worker<'a> {
             match owner {
                 Owner::Package(p) => self.syms.enter_scoped(self.interner, p, name).class = Some(cid),
                 Owner::Class(c) => {
-                    self.syms.class_mut(c).nested.insert(name, cid);
+                    let mut info = self.syms.class_mut(c);
+                    let old = info.nested.insert(name, cid);
+                    info.order_nested(old, cid);
                     crate::symbols::type_member_written(name);
                 }
                 Owner::Local => {}
@@ -1561,7 +1565,9 @@ impl<'a> Worker<'a> {
                 if e.flags.has(tags::EXPORTED) {
                     self.syms.class_mut(c).has_exports = true;
                 }
-                self.syms.class_mut(c).type_aliases.insert(name, aid);
+                let mut info = self.syms.class_mut(c);
+                let old = info.type_aliases.insert(name, aid);
+                info.order_alias(old, aid);
                 crate::symbols::type_member_written(name);
             }
             Owner::Local => {}

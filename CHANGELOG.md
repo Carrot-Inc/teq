@@ -7,6 +7,27 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A macro reads a class's nested classes and type members in the order the class gives them, as under scalac:
+  `Symbol.declaredTypes` lists the type parameters, then the nested classes and the type members as the class
+  declares them (for a Java class its member classes in the class file's order, then its type parameters; scalac's
+  order of the member classes differs where the class file names eight classes or more, by its own table of them);
+  `Symbol.declarations` lists the nested classes in the declared order after the terms; and `Symbol.typeMembers`
+  lists what a selection on the class finds: the class's type parameters, then its own type members and classes
+  and each parent's that are not private, a name once (of several parents that declare it, the one that defines
+  it), the class's own first, then each parent's in turn, the class it extends ahead of the traits, and one
+  class's by name (`class Tree[K, V] extends Ground with Leaf { class Nest2; type Moss2; class Nest1 }` gives `K,
+  V, Nest2, Moss2, Nest1` and `K, V, Moss2, Nest1, Nest2` followed by `Ground`'s and `Leaf`'s). teq listed them in
+  an order that moved with definitions elsewhere in the build (one more `val` in another file) and between a build
+  of the sources and a build over another module's products, and `typeMembers` held the class's own declarations
+  alone, without its type parameters and without what it inherits. A derivation that walks a class's nested
+  classes now follows the declaration, and a library macro that pairs `typeMembers`' type parameters with a type's
+  arguments reaches scalac's verdict (ZIO's `Tag` of a type with an intersection among its arguments,
+  `Tag[List[Wax & Wick]]`, is refused with the library's message "You must not use an intersection type", as under
+  scalac; teq derived a tag there). The lean std's `Mirror` declares the type members scala-library's does,
+  `MirroredMonoType`, `MirroredLabel` and `MirroredElemLabels`: `MirroredType` and `MirroredElemTypes` are members
+  of a mirror's refined type (`Mirror.Of[T]`) and of `Mirror.Singleton`, so `typeMembers` of a case class's
+  companion holds neither, and `m.MirroredElemTypes` of a plain `m: Mirror` is refused in a lean build as under
+  scalac (teq accepted it).
 - On the JVM a type test against an array type looks at the array's element, by `isInstanceOf` as by a typed
   pattern: `x.isInstanceOf[Array[String]]` was true of any array (`Array(1, 2)` among them) where a pattern
   `case _: Array[String]` already told them apart; under a union or an intersection each member is tested by its

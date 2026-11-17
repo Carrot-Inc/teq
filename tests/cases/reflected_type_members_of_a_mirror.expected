@@ -1,0 +1,11 @@
+false
+false
+true
+false
+false
+true
+Mirror declares MirroredMonoType, MirroredLabel, MirroredElemLabels | has MirroredElemLabels, MirroredLabel, MirroredMonoType
+Product declares  | has MirroredElemLabels, MirroredLabel, MirroredMonoType
+Sum declares  | has MirroredElemLabels, MirroredLabel, MirroredMonoType
+Singleton declares MirroredMonoType, MirroredType, MirroredElemTypes, MirroredElemLabels | has MirroredElemLabels, MirroredElemTypes, MirroredMonoType, MirroredType, MirroredLabel
+SingletonProxy declares MirroredMonoType, MirroredType, MirroredElemTypes, MirroredElemLabels | has MirroredElemLabels, MirroredElemTypes, MirroredMonoType, MirroredType, MirroredLabel

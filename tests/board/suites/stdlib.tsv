@@ -2307,6 +2307,9 @@ reflect_dynamic_encoded_parameter	fail	-	function $fail(n, m) { const c = $exc[n
 reflect_encoded_parameter	fail	-	output differs
 reflect_mirror_encoded	pass	-	
 reflect_trait_assignable	pass	-	
+reflected_type_lists_in_declared_order	pass	-	
+reflected_type_members_as_lookup_finds	pass	-	
+reflected_type_members_of_a_mirror	pass	-	
 reflective_selectable	fail	-	output differs
 regex_beyond_javascript	fail	-	throw new PatternSyntaxException(error, regex, -1);
 regex_case_properties	pass	-	

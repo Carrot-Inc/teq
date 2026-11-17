@@ -354,6 +354,7 @@ refinedbounds	pass	-
 refinedmember	pass	-	
 refinement	pass	-	
 refinerepeated	pass	-	
+reflectedtypeorder	pass	-	
 repeatexpand	pass	-	
 returnedfunction	pass	-	
 rightassocextension	pass	-	

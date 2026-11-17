@@ -2407,7 +2407,9 @@ impl<'a> Worker<'a> {
             let a = AliasId(self.syms.aliases.len() as u32);
             self.syms.aliases.push(AliasInfo { name: alias, owner: Owner::Class(c), file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js: false, declared_rhs: crate::tir::NO_TYPE, exported: false, completion_noted: false });
             self.syms.alias_cells.set(a.0, Completion::Done);
-            self.syms.class_mut(c).type_aliases.insert(alias, a);
+            let mut info = self.syms.class_mut(c);
+            let old = info.type_aliases.insert(alias, a);
+            info.order_alias(old, a);
         }
 
         let mname = self.syms.sym(method).name;

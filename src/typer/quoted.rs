@@ -3446,6 +3446,15 @@ impl<'c> Copier<'c> {
         let superclass = info.superclass.map(|k| self.classes.get(&k).copied().unwrap_or(k));
         copy.superclass = superclass;
         copy.nested = info.nested.iter().map(|(&n, &k)| (n, self.classes.get(&k).copied().unwrap_or(k))).collect();
+        // The copy's nested classes in the order of the class copied; it takes no type alias.
+        copy.type_order = info
+            .type_order
+            .iter()
+            .filter_map(|&e| match e {
+                crate::symbols::TypeDecl::Class(k) => Some(crate::symbols::TypeDecl::Class(self.classes.get(&k).copied().unwrap_or(k))),
+                crate::symbols::TypeDecl::Alias(_) => None,
+            })
+            .collect();
         copy.names_mask = names_mask;
         copy.members = members;
         copy.member_order = member_order;

@@ -217,6 +217,11 @@ pub struct ClassInfo {
     pub names_mask: u64,
     pub nested: FxMap<Name, ClassId>,
     pub type_aliases: FxMap<Name, AliasId>,
+    /// The values of `nested` and `type_aliases`, each once, in the order the class declares
+    /// them: the order they were entered in, a source's as its body is walked, a library
+    /// class's as its pickle or its class file lists them. A name entered again keeps its place
+    /// (`order_nested`, `order_alias`).
+    pub type_order: Vec<TypeDecl>,
     pub companion: Option<ClassId>,
     pub module_sym: Option<SymId>,
     pub children: Vec<ClassId>,
@@ -1395,6 +1400,7 @@ impl Symbols {
             names_mask: 0,
             nested: FxMap::default(),
             type_aliases: FxMap::default(),
+            type_order: Vec::new(),
             companion: None,
             module_sym: None,
             children: Vec::new(),
@@ -2471,6 +2477,28 @@ mod tests {
         let store: &TypeStore = &f.store;
         f.syms.each_unpublished_type(&mut |what, t| crate::types::view::published(store, what, t));
     }
+
+    /// A class's order of its type-level declarations holds the values of its two maps, each
+    /// once, in the order their names were first entered: a name entered again keeps its place.
+    #[test]
+    fn a_type_level_declaration_entered_again_keeps_its_place() {
+        let mut syms = Symbols::new();
+        let c = syms.new_class(Name(1), ClassKind::Class, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
+        let mut info = syms.class_mut(c);
+        for (name, k) in [(Name(2), ClassId(7)), (Name(3), ClassId(8))] {
+            let old = info.nested.insert(name, k);
+            info.order_nested(old, k);
+        }
+        let old = info.type_aliases.insert(Name(4), AliasId(5));
+        info.order_alias(old, AliasId(5));
+        assert!(info.type_order_holds());
+        let old = info.nested.insert(Name(2), ClassId(9));
+        info.order_nested(old, ClassId(9));
+        assert_eq!(info.type_order, vec![TypeDecl::Class(ClassId(9)), TypeDecl::Class(ClassId(8)), TypeDecl::Alias(AliasId(5))]);
+        assert!(info.type_order_holds());
+        info.type_order.pop();
+        assert!(!info.type_order_holds());
+    }
 }
 
 /// A name's bit in `ClassInfo::names_mask`.
@@ -2484,5 +2512,43 @@ impl ClassInfo {
     #[inline]
     pub fn may_have(&self, n: Name) -> bool {
         self.names_mask & name_bit(n) != 0
+    }
+}
+
+/// A type-level declaration of a class: a nested class or a type alias (`ClassInfo::type_order`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TypeDecl {
+    Class(ClassId),
+    Alias(AliasId),
+}
+
+impl ClassInfo {
+    /// Records `k`, just entered in `nested` under a name that held `old`: in `old`'s place where
+    /// there was one, else last.
+    pub fn order_nested(&mut self, old: Option<ClassId>, k: ClassId) {
+        self.order_type(old.map(TypeDecl::Class), TypeDecl::Class(k));
+    }
+
+    /// Records `a`, just entered in `type_aliases` under a name that held `old`: in `old`'s place
+    /// where there was one, else last.
+    pub fn order_alias(&mut self, old: Option<AliasId>, a: AliasId) {
+        self.order_type(old.map(TypeDecl::Alias), TypeDecl::Alias(a));
+    }
+
+    /// Whether `type_order` holds the values of `nested` and `type_aliases`, each once.
+    pub fn type_order_holds(&self) -> bool {
+        self.type_order.len() == self.nested.len() + self.type_aliases.len()
+            && self.type_order.iter().all(|e| match e {
+                TypeDecl::Class(k) => self.nested.values().any(|v| v == k),
+                TypeDecl::Alias(a) => self.type_aliases.values().any(|v| v == a),
+            })
+    }
+
+    fn order_type(&mut self, old: Option<TypeDecl>, new: TypeDecl) {
+        if let Some(at) = old.and_then(|o| self.type_order.iter().position(|&e| e == o)) {
+            self.type_order[at] = new;
+        } else if !self.type_order.contains(&new) {
+            self.type_order.push(new);
+        }
     }
 }

@@ -356,6 +356,8 @@ jvm/nested_object_dollar_name	pass	-
 jvm/nonlocal_return_control	pass	-	
 jvm/opaque_tag	pass	-	
 jvm/pureconfig_derived_reader	pass	-	
+jvm/reflected_java_member_classes	pass	-	
+jvm/reflected_java_member_classes_from_eight	pass	-	
 jvm/retained_library_inline_in_quoted_class	pass	-	
 jvm/scala2_case_companion_function	pass	-	
 jvm/scala2_companion_trait_storage	pass	-	
@@ -419,4 +421,5 @@ tuple_head_generic	pass	-
 universal_alias_lib	pass	-	
 zio_json	pass	-	
 zio_package_aliases	pass	-	
+zio_tag_of_intersection	pass	-	
 zio_unsafe_implicit_lambda	pass	-	

@@ -214,6 +214,12 @@ pub(in crate::typer) fn class<M: Mapping + ?Sized>(m: &M, c: &mut ClassInfo) {
     for a in c.type_aliases.values_mut() {
         *a = m.alias(*a);
     }
+    for e in &mut c.type_order {
+        *e = match *e {
+            crate::symbols::TypeDecl::Class(d) => crate::symbols::TypeDecl::Class(m.class(d)),
+            crate::symbols::TypeDecl::Alias(a) => crate::symbols::TypeDecl::Alias(m.alias(a)),
+        };
+    }
     c.companion = c.companion.map(|k| m.class(k));
     c.module_sym = c.module_sym.map(|s| m.sym(s));
     for d in &mut c.children {

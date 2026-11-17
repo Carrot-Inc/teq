@@ -53,7 +53,6 @@ i12351	option: -Xread-docs (teq has no flag for it)
 i12352	option: -Xread-docs (teq has no flag for it)
 i12392	output: line 1: the .check has 'scala.Option[java.lang.String] to scala.Option[scala.Int]', the program printed 'scala.Option[scala.Predef.String] to scala.Option[scala.Predef.String]'
 i12417b	Tuples.scala:247:12:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
-i14902	output: line 2: the .check has 'List(Y, Z, X)', the program printed 'List(Y, Z)'
 i15968	output: line 2: the .check has ' type Z = java.lang.String', the program printed ' val arg: Z = "foo"'
 i16734a	Macro_1.scala:3:27: type AnyKind not found
 i16734b	Macro_1.scala:5:31: type AnyKind not found
