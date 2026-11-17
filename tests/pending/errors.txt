@@ -22,6 +22,9 @@ arity_class_names	missing '31:12: error: type Tuple23 not found'
 array_any_erasure_overloads	missing '12:7: error: Conflicting definitions:'
 bound_check_after_typer_error	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
 bound_member_params_seen_from_prefix	exit code 0
+cases_end_match_after_catch_branch	exit code 0
+cases_end_selection_after_continued_branch	exit code 0
+cases_end_selection_after_operator_line	exit code 0
 collection_seq_not_immutable.check	< tests/errors/collection_seq_not_immutable.scala:5:85: error: Found: (xs : scala.collection.Seq[Int])
 constructor_proxy_prefix	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'
 copy_default_later_clause	missing '7:25: error: value copy$default$2 is not a member of C'

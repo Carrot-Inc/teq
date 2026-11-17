@@ -1,7 +1,7 @@
 # The accepted errors of a reference project's line (bench/reference/records.scala; docs/DEVELOPING.md, "The project records").
 kind record
-revision 861127dd8
-binary teq 0.1.10 861127dd8
+revision 5dc83dd21
+binary teq 0.1.10 5dc83dd21
 pin 6e357eef01b3381d7c45ec8d3e350a230a8736a3
 inputs de4c053de35a32609d28e5030489ccce064b25051b336b6d9ad6cb09c49b3178
 key indigo-extras.js/compile
@@ -13,23 +13,6 @@ key sandbox.js/compile
 key shader.js/compile
 key tyrian-indigo-bridge.js/compile
 key tyrian-sandbox.js/compile
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:35: error: type ReferenceData not found\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n                                  ^^^^^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:5: error: expected extension methods\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n    ^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:25: error: component is a package, not a value\n      c.bounds(context, component)\n                        ^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:7: error: not found: c\n      c.bounds(context, component)\n      ^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:16:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:31: error: type F not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                              ^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:33: error: type ReferenceData not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                                ^^^^^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:30: error: component is a package, not a value\n      c.updateModel(context, component)\n                             ^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:7: error: not found: c\n      c.updateModel(context, component)\n      ^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:21:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:26: error: component is a package, not a value\n      c.present(context, component)\n                         ^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:7: error: not found: c\n      c.present(context, component)\n      ^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:26:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:10: error: type ReferenceData not found\n    ): F[ReferenceData] =\n         ^^^^^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:8: error: type F not found\n    ): F[ReferenceData] =\n       ^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:26: error: component is a package, not a value\n      c.refresh(context, component)\n                         ^^^^^^^^^
-error indigo-extras.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:7: error: not found: c\n      c.refresh(context, component)\n      ^
 error indigo-extras.js/compile indigo/src/indigo/physics/simulation/Collisions.scala:25:23: error: ambiguous given instances for SpatialOps[<error>]: given_SpatialOps_Vertex, given_SpatialOps_Point, given_SpatialOps_BoundingBox, given_SpatialOps_Rectangle, given_SpatialOps_BoundingCircle, given_SpatialOps_Circle, given_SpatialOps_LineSegment\n        .empty(bounds)\n                      ^
 error indigo-extras.js/compile indigo/src/indigo/platform/renderer/RendererInitialiser.scala:230:14: error: method isNaN does not take parameters\n        if (!value.toFloat.isNaN() && value >= min) true\n             ^^^^^^^^^^^^^^^^^^^^^
 error indigo-extras.js/compile indigo/src/indigo/shared/platform/DisplayObjectConversions.scala:174:31: error: type mismatch: found ?, required _\n              n.eventHandler((nn, e)).foreach { ee =>\n                              ^^
@@ -54,23 +37,6 @@ error indigo.js/compile indigo/src/indigo/shared/shader/ToUniformBlock.scala:57:
 error indigo.js/compile indigo/src/indigo/shared/shader/library/Lighting.scala:77:39: error: type mismatch: found syntax.vec3, required syntax.vec2\n        val normal: vec3 = normalize((2.0f * vec3(normalTexture.xy, 1.0f)) - 1.0f)\n                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error indigo.js/compile indigo/src/indigo/shared/utils/Lens.scala:48:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (a, _) => a)\n         ^^^^^^^^^^^^^^^
 error indigo.js/compile indigo/src/indigo/shared/utils/Lens.scala:53:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (_, a) => a)\n         ^^^^^^^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:35: error: type ReferenceData not found\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n                                  ^^^^^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:5: error: expected extension methods\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n    ^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:25: error: component is a package, not a value\n      c.bounds(context, component)\n                        ^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:7: error: not found: c\n      c.bounds(context, component)\n      ^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:16:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:31: error: type F not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                              ^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:33: error: type ReferenceData not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                                ^^^^^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:30: error: component is a package, not a value\n      c.updateModel(context, component)\n                             ^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:7: error: not found: c\n      c.updateModel(context, component)\n      ^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:21:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:26: error: component is a package, not a value\n      c.present(context, component)\n                         ^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:7: error: not found: c\n      c.present(context, component)\n      ^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:26:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:10: error: type ReferenceData not found\n    ): F[ReferenceData] =\n         ^^^^^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:8: error: type F not found\n    ): F[ReferenceData] =\n       ^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:26: error: component is a package, not a value\n      c.refresh(context, component)\n                         ^^^^^^^^^
-error perf.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:7: error: not found: c\n      c.refresh(context, component)\n      ^
 error perf.js/compile indigo/src/indigo/physics/simulation/Collisions.scala:25:23: error: ambiguous given instances for SpatialOps[<error>]: given_SpatialOps_Vertex, given_SpatialOps_Point, given_SpatialOps_BoundingBox, given_SpatialOps_Rectangle, given_SpatialOps_BoundingCircle, given_SpatialOps_Circle, given_SpatialOps_LineSegment\n        .empty(bounds)\n                      ^
 error perf.js/compile indigo/src/indigo/platform/renderer/RendererInitialiser.scala:230:14: error: method isNaN does not take parameters\n        if (!value.toFloat.isNaN() && value >= min) true\n             ^^^^^^^^^^^^^^^^^^^^^
 error perf.js/compile indigo/src/indigo/shared/platform/DisplayObjectConversions.scala:174:31: error: type mismatch: found ?, required _\n              n.eventHandler((nn, e)).foreach { ee =>\n                              ^^
@@ -79,23 +45,6 @@ error perf.js/compile indigo/src/indigo/shared/shader/ToUniformBlock.scala:57:65
 error perf.js/compile indigo/src/indigo/shared/shader/library/Lighting.scala:77:39: error: type mismatch: found syntax.vec3, required syntax.vec2\n        val normal: vec3 = normalize((2.0f * vec3(normalTexture.xy, 1.0f)) - 1.0f)\n                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error perf.js/compile indigo/src/indigo/shared/utils/Lens.scala:48:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (a, _) => a)\n         ^^^^^^^^^^^^^^^
 error perf.js/compile indigo/src/indigo/shared/utils/Lens.scala:53:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (_, a) => a)\n         ^^^^^^^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:35: error: type ReferenceData not found\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n                                  ^^^^^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:5: error: expected extension methods\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n    ^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:25: error: component is a package, not a value\n      c.bounds(context, component)\n                        ^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:7: error: not found: c\n      c.bounds(context, component)\n      ^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:16:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:31: error: type F not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                              ^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:33: error: type ReferenceData not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                                ^^^^^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:30: error: component is a package, not a value\n      c.updateModel(context, component)\n                             ^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:7: error: not found: c\n      c.updateModel(context, component)\n      ^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:21:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:26: error: component is a package, not a value\n      c.present(context, component)\n                         ^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:7: error: not found: c\n      c.present(context, component)\n      ^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:26:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:10: error: type ReferenceData not found\n    ): F[ReferenceData] =\n         ^^^^^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:8: error: type F not found\n    ): F[ReferenceData] =\n       ^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:26: error: component is a package, not a value\n      c.refresh(context, component)\n                         ^^^^^^^^^
-error physics.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:7: error: not found: c\n      c.refresh(context, component)\n      ^
 error physics.js/compile indigo/src/indigo/physics/simulation/Collisions.scala:25:23: error: ambiguous given instances for SpatialOps[<error>]: given_SpatialOps_Vertex, given_SpatialOps_Point, given_SpatialOps_BoundingBox, given_SpatialOps_Rectangle, given_SpatialOps_BoundingCircle, given_SpatialOps_Circle, given_SpatialOps_LineSegment\n        .empty(bounds)\n                      ^
 error physics.js/compile indigo/src/indigo/platform/renderer/RendererInitialiser.scala:230:14: error: method isNaN does not take parameters\n        if (!value.toFloat.isNaN() && value >= min) true\n             ^^^^^^^^^^^^^^^^^^^^^
 error physics.js/compile indigo/src/indigo/shared/platform/DisplayObjectConversions.scala:174:31: error: type mismatch: found ?, required _\n              n.eventHandler((nn, e)).foreach { ee =>\n                              ^^
@@ -104,23 +53,6 @@ error physics.js/compile indigo/src/indigo/shared/shader/ToUniformBlock.scala:57
 error physics.js/compile indigo/src/indigo/shared/shader/library/Lighting.scala:77:39: error: type mismatch: found syntax.vec3, required syntax.vec2\n        val normal: vec3 = normalize((2.0f * vec3(normalTexture.xy, 1.0f)) - 1.0f)\n                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error physics.js/compile indigo/src/indigo/shared/utils/Lens.scala:48:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (a, _) => a)\n         ^^^^^^^^^^^^^^^
 error physics.js/compile indigo/src/indigo/shared/utils/Lens.scala:53:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (_, a) => a)\n         ^^^^^^^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:35: error: type ReferenceData not found\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n                                  ^^^^^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:5: error: expected extension methods\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n    ^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:25: error: component is a package, not a value\n      c.bounds(context, component)\n                        ^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:7: error: not found: c\n      c.bounds(context, component)\n      ^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:16:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:31: error: type F not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                              ^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:33: error: type ReferenceData not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                                ^^^^^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:30: error: component is a package, not a value\n      c.updateModel(context, component)\n                             ^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:7: error: not found: c\n      c.updateModel(context, component)\n      ^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:21:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:26: error: component is a package, not a value\n      c.present(context, component)\n                         ^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:7: error: not found: c\n      c.present(context, component)\n      ^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:26:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:10: error: type ReferenceData not found\n    ): F[ReferenceData] =\n         ^^^^^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:8: error: type F not found\n    ): F[ReferenceData] =\n       ^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:26: error: component is a package, not a value\n      c.refresh(context, component)\n                         ^^^^^^^^^
-error sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:7: error: not found: c\n      c.refresh(context, component)\n      ^
 error sandbox.js/compile indigo/src/indigo/physics/simulation/Collisions.scala:25:23: error: ambiguous given instances for SpatialOps[<error>]: given_SpatialOps_Vertex, given_SpatialOps_Point, given_SpatialOps_BoundingBox, given_SpatialOps_Rectangle, given_SpatialOps_BoundingCircle, given_SpatialOps_Circle, given_SpatialOps_LineSegment\n        .empty(bounds)\n                      ^
 error sandbox.js/compile indigo/src/indigo/platform/renderer/RendererInitialiser.scala:230:14: error: method isNaN does not take parameters\n        if (!value.toFloat.isNaN() && value >= min) true\n             ^^^^^^^^^^^^^^^^^^^^^
 error sandbox.js/compile indigo/src/indigo/shared/platform/DisplayObjectConversions.scala:174:31: error: type mismatch: found ?, required _\n              n.eventHandler((nn, e)).foreach { ee =>\n                              ^^
@@ -129,30 +61,7 @@ error sandbox.js/compile indigo/src/indigo/shared/shader/ToUniformBlock.scala:57
 error sandbox.js/compile indigo/src/indigo/shared/shader/library/Lighting.scala:77:39: error: type mismatch: found syntax.vec3, required syntax.vec2\n        val normal: vec3 = normalize((2.0f * vec3(normalTexture.xy, 1.0f)) - 1.0f)\n                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error sandbox.js/compile indigo/src/indigo/shared/utils/Lens.scala:48:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (a, _) => a)\n         ^^^^^^^^^^^^^^^
 error sandbox.js/compile indigo/src/indigo/shared/utils/Lens.scala:53:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (_, a) => a)\n         ^^^^^^^^^^^^^^^
-error sandbox.js/compile sandbox/src/main/scala/com/example/sandbox/scenes/ComponentUIScene.scala:48:7: error: value update is not a member of ComponentGroup[Int]\n      model.components.update(ctx)(e).map { cl =>\n      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-error sandbox.js/compile sandbox/src/main/scala/com/example/sandbox/scenes/ComponentUIScene.scala:64:5: error: value present is not a member of ComponentGroup[Int]\n    model.components\n    ^^^^^^^^^^^^^^^^
-error sandbox.js/compile sandbox/src/main/scala/com/example/sandbox/scenes/ComponentUIScene2.scala:53:14: error: value update is not a member of ScrollPane[ComponentList[Int], Int]\n        s <- model.scrollPane.update(ctx.moveParentTo(50, 10))(e)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-error sandbox.js/compile sandbox/src/main/scala/com/example/sandbox/scenes/ComponentUIScene2.scala:84:12: error: value present is not a member of ScrollPane[ComponentList[Int], Int]\n      s <- model.scrollPane.present(ctx)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-error sandbox.js/compile sandbox/src/main/scala/com/example/sandbox/scenes/SfxScene.scala:50:7: error: value update is not a member of ComponentGroup[Unit]\n      model.sfxComponents.update(ctx)(e).map { cl =>\n      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-error sandbox.js/compile sandbox/src/main/scala/com/example/sandbox/scenes/SfxScene.scala:66:5: error: value present is not a member of ComponentGroup[Unit]\n    model.sfxComponents\n    ^^^^^^^^^^^^^^^^^^^
 error sandbox.js/compile sandbox/src/main/scala/com/example/sandbox/scenes/WaypointScene.scala:58:20: error: type mismatch: found WaypointPathPosition => _, required WaypointPathPosition => Shape[?]\n    SignalFunction(wpp => g.moveTo(wpp.position.toPoint))\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:35: error: type ReferenceData not found\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n                                  ^^^^^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:5: error: expected extension methods\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n    ^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:25: error: component is a package, not a value\n      c.bounds(context, component)\n                        ^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:7: error: not found: c\n      c.bounds(context, component)\n      ^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:16:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:31: error: type F not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                              ^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:33: error: type ReferenceData not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                                ^^^^^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:30: error: component is a package, not a value\n      c.updateModel(context, component)\n                             ^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:7: error: not found: c\n      c.updateModel(context, component)\n      ^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:21:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:26: error: component is a package, not a value\n      c.present(context, component)\n                         ^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:7: error: not found: c\n      c.present(context, component)\n      ^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:26:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:10: error: type ReferenceData not found\n    ): F[ReferenceData] =\n         ^^^^^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:8: error: type F not found\n    ): F[ReferenceData] =\n       ^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:26: error: component is a package, not a value\n      c.refresh(context, component)\n                         ^^^^^^^^^
-error shader.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:7: error: not found: c\n      c.refresh(context, component)\n      ^
 error shader.js/compile indigo/src/indigo/physics/simulation/Collisions.scala:25:23: error: ambiguous given instances for SpatialOps[<error>]: given_SpatialOps_Vertex, given_SpatialOps_Point, given_SpatialOps_BoundingBox, given_SpatialOps_Rectangle, given_SpatialOps_BoundingCircle, given_SpatialOps_Circle, given_SpatialOps_LineSegment\n        .empty(bounds)\n                      ^
 error shader.js/compile indigo/src/indigo/platform/renderer/RendererInitialiser.scala:230:14: error: method isNaN does not take parameters\n        if (!value.toFloat.isNaN() && value >= min) true\n             ^^^^^^^^^^^^^^^^^^^^^
 error shader.js/compile indigo/src/indigo/shared/platform/DisplayObjectConversions.scala:174:31: error: type mismatch: found ?, required _\n              n.eventHandler((nn, e)).foreach { ee =>\n                              ^^
@@ -173,23 +82,6 @@ error tyrian-indigo-bridge.js/compile indigo/src/indigo/shared/utils/Lens.scala:
 error tyrian-indigo-bridge.js/compile indigo/src/indigo/shared/utils/Lens.scala:53:10: error: value identity is not a member of Predef\n    Lens(Predef.identity, (_, a) => a)\n         ^^^^^^^^^^^^^^^
 error tyrian-indigo-bridge.js/compile tyrian-indigo-bridge/src/tyrian/TyrianIndigoBridge.scala:71:15: error: too many arguments for constructor Event in trait Event: (): Event\n      extends Event(BridgeToIndigo.EventName)\n              ^^^^^
 error tyrian-indigo-bridge.js/compile tyrian-indigo-bridge/src/tyrian/TyrianIndigoBridge.scala:79:15: error: too many arguments for constructor Event in trait Event: (): Event\n      extends Event(BridgeToTyrian.EventName)\n              ^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:35: error: type ReferenceData not found\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n                                  ^^^^^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:12:5: error: expected extension methods\n    def bounds(context: UIContext[ReferenceData]): Bounds =\n    ^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:25: error: component is a package, not a value\n      c.bounds(context, component)\n                        ^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:13:7: error: not found: c\n      c.bounds(context, component)\n      ^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:16:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:31: error: type F not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                              ^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:17:33: error: type ReferenceData not found\n    ): GlobalEvent => Outcome[F[ReferenceData]] =\n                                ^^^^^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:30: error: component is a package, not a value\n      c.updateModel(context, component)\n                             ^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:18:7: error: not found: c\n      c.updateModel(context, component)\n      ^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:21:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:26: error: component is a package, not a value\n      c.present(context, component)\n                         ^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:23:7: error: not found: c\n      c.present(context, component)\n      ^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:26:28: error: type ReferenceData not found\n        context: UIContext[ReferenceData]\n                           ^^^^^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:10: error: type ReferenceData not found\n    ): F[ReferenceData] =\n         ^^^^^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:27:8: error: type F not found\n    ): F[ReferenceData] =\n       ^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:26: error: component is a package, not a value\n      c.refresh(context, component)\n                         ^^^^^^^^^
-error tyrian-sandbox.js/compile indigo-extras/src/indigoextras/ui/package.scala:28:7: error: not found: c\n      c.refresh(context, component)\n      ^
 error tyrian-sandbox.js/compile indigo/src/indigo/physics/simulation/Collisions.scala:25:23: error: ambiguous given instances for SpatialOps[<error>]: given_SpatialOps_Vertex, given_SpatialOps_Point, given_SpatialOps_BoundingBox, given_SpatialOps_Rectangle, given_SpatialOps_BoundingCircle, given_SpatialOps_Circle, given_SpatialOps_LineSegment\n        .empty(bounds)\n                      ^
 error tyrian-sandbox.js/compile indigo/src/indigo/platform/renderer/RendererInitialiser.scala:230:14: error: method isNaN does not take parameters\n        if (!value.toFloat.isNaN() && value >= min) true\n             ^^^^^^^^^^^^^^^^^^^^^
 error tyrian-sandbox.js/compile indigo/src/indigo/shared/datatypes/Matrix3.scala:3:8: error: cannot resolve import: control not found\nimport util.control.Breaks.*\n       ^^^^^^^^^^^^^^^^^^^^^

@@ -78,6 +78,7 @@ binder_simple_member_kind	pass	-
 block_unbound_placeholder	pass	-	
 bound_check_after_typer_error	fail	-	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
 bound_member_params_seen_from_prefix	fail	-	exit code 0
+braced_block_overload	pass	-	
 byname_positions	pass	-	
 byname_types	pass	-	
 cacheable_state_names	pass	-	
@@ -95,6 +96,13 @@ case_clause_guard_colon_lambda_inline	pass	-
 case_clause_in_parens	pass	-	
 case_companion_apply_defaults	pass	-	
 case_copy_clauses	pass	-	
+cases_deeper_line_after_continued_block	pass	-	
+cases_end_match_after_catch_branch	fail	-	exit code 0
+cases_end_selection_after_continued_branch	fail	-	exit code 0
+cases_end_selection_after_operator_line	fail	-	exit code 0
+cases_region_ends_after_line_body	pass	-	
+cases_region_ends_at_width	pass	-	
+cases_region_ends_at_width_tabs	pass	-	
 cast_primitive_conversion	pass	-	
 cast_primitive_deprecated	pass	-	
 check_dir_script	pass	-	
@@ -264,17 +272,24 @@ exports_toplevel	pass	-
 ext_ambiguous	pass	-	
 ext_ambiguous.check	fail	-	< tests/errors/ext_ambiguous.scala:11:14: error: Found: Foo
 ext_param_shadow	pass	-	
+extension_brace_after_blank_line	pass	-	
+extension_brace_left_of_region	pass	-	
+extension_call_at_statement_start	pass	-	
 extension_called_by_name_ambiguous	pass	-	
+extension_clause_after_blank_line	pass	-	
 extension_contextual_given	fail	-	exit code 0
 extension_conversion_same_level	fail	-	exit code 0
 extension_direct_specific_receiver	pass	-	
+extension_header_braces_width	pass	-	
 extension_import_ambiguity	pass	-	
+extension_in_brace_line	pass	-	
 extension_inherited_conversions_ambiguous	fail	-	missing 'error: Found: (a : A)'
 extension_inherited_other_instance	pass	-	
 extension_inner_conversion_method	fail	-	missing 'error: Found: String'
 extension_inner_conversion_outer	fail	-	exit code 0
 extension_instance_overload	pass	-	
 extension_method_modifiers	pass	-	
+extension_methods_at_header_width	pass	-	
 extension_nearest_scope	pass	-	
 extension_private_implicit_scope	pass	-	
 extension_private_same_name_package	pass	-	
@@ -402,6 +417,8 @@ impossible_type_test_typer	pass	-
 impure_function_alias_missing_class	fail	-	missing '7:27: error: Cyclic reference involving type ImpureFunction01'
 incomplete_def_at_eof	pass	-	
 incomplete_local_val	pass	-	
+indented_block_between_widths	pass	-	
+indented_block_bracket_statement	pass	-	
 indirect_member_kind	pass	-	
 inference_details	pass	-	
 inference_direction	pass	-	

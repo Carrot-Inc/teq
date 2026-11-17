@@ -6246,7 +6246,7 @@ warn/sub-cases-reachability.scala	syntax	expected {}, found {}
 warn/supertraits-b.scala	silent	
 warn/suppressed-type-test-warnings.scala	subset	2/3 diagnostics
 warn/switches.scala	different	match may not be exhaustive.
-warn/symbolic-packages.scala	rejects	a package clause after other definitions needs a body: `package p:` or `package p { ... }`	--wconf id=E222:w
+warn/symbolic-packages.scala	silent		--wconf id=E222:w
 warn/t10373.scala	same	
 warn/t11620.scala	rejects	type mismatch
 warn/t11681.scala	silent	

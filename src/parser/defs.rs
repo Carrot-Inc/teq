@@ -75,6 +75,13 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Whether the token is the word `extension` as dotty takes it for the keyword: the identifier unquoted
+    /// (`` `extension`(x) `` is a call of a method of that name).
+    fn at_extension_word(&self) -> bool {
+        let t = self.tok();
+        t.name == names::EXTENSION && self.text.as_bytes().get(t.span.start as usize) != Some(&b'`')
+    }
+
     pub(super) fn at_def_start(&self) -> bool {
         let k = self.kind();
         if is_def_keyword(k) || is_hard_modifier(k) || k == Tok::At {
@@ -82,9 +89,7 @@ impl<'a> Parser<'a> {
         }
         match k {
             Tok::KwCase => matches!(self.kind_at(1), Tok::KwClass | Tok::KwObject),
-            Tok::Ident if self.tok().name == names::EXTENSION => {
-                matches!(self.kind_at(1), Tok::LParen | Tok::LBracket)
-            }
+            Tok::Ident if self.at_extension_word() => matches!(self.kind_at(1), Tok::LParen | Tok::LBracket),
             Tok::Ident => self.soft_modifier_at(0).is_some(),
             _ => false,
         }
@@ -281,7 +286,7 @@ impl<'a> Parser<'a> {
             Tok::KwEnum => access | mods::INFIX,
             Tok::KwType => access | mods::OPAQUE | mods::FINAL | mods::OVERRIDE | mods::INFIX,
             Tok::KwGiven => access | mods::FINAL | mods::OVERRIDE | mods::LAZY | mods::INLINE | mods::TRANSPARENT,
-            Tok::Ident if self.tok().name == names::EXTENSION => 0,
+            Tok::Ident if self.at_extension_word() => 0,
             _ => !0,
         };
         self.reject_modifiers(m, &spans, allowed);
@@ -316,7 +321,7 @@ impl<'a> Parser<'a> {
                 let d = self.parse_given(m, annots);
                 self.push_named(out, d);
             }
-            Tok::Ident if self.tok().name == names::EXTENSION => self.parse_extension(m, out),
+            Tok::Ident if self.at_extension_word() => self.parse_extension(m, out),
             _ => {
                 let (at, found) = self.found();
                 self.error_at(at, format!("expected a definition, found {}", found));

@@ -1,8 +1,7 @@
 # The accepted errors of a reference project's line (bench/reference/records.scala; docs/DEVELOPING.md, "The project records").
-kind migrate
-reason the 0.1.8 record's errors as master words and places them
-revision cb593158c
-binary teq 0.1.10 cb593158c
+kind record
+revision 5dc83dd21
+binary teq 0.1.10 5dc83dd21
 pin c91f1d09d0f72e913a56cb5d2d8225f6c0f8e0a2
 inputs f935ad6b2d522d5ebe0beb18c5735136593a6a27fe229a5677afe8be07900c84
 key lila/test
@@ -56,24 +55,11 @@ error lila/test modules/appeal/src/main/ui/AppealTreeUi.scala:591:39: error: no 
 error lila/test modules/appeal/src/main/ui/AppealTreeUi.scala:592:33: error: no given instance of type Context was found for parameter x$1\n    AppealTopic.close -> altMenu\n                                ^
 error lila/test modules/challenge/src/main/ChallengeGranter.scala:86:34: error: values of types Option[PerfKey] and PerfKey cannot be compared with == or !=\n      case None if dest.isBot && perfKey == PerfKey.ultraBullet => BotUltraBullet.some\n                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error lila/test modules/chat/src/main/ChatApi.scala:82:21: error: type mismatch: found Unit => Future[Unit], required Unit => Unit\n                for _ <- actuallyPersist.so(persistLine(chatId, line))\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-error lila/test modules/clas/src/main/ClasApi.scala:280:7: error: type mismatch: found OptionT[Future, ManagedInfo], required Future[Option[ManagedInfo]]\n      for\n      ^^^
-error lila/test modules/clas/src/main/ClasApi.scala:285:5: error: expected end of statement, found '.'\n    .value\n    ^
-error lila/test modules/clas/src/main/ClasApi.scala:285:6: error: not found: value\n    .value\n     ^^^^^
 error lila/test modules/db/src/main/dsl.scala:318:15: error: type mismatch: found BSONValue => (BSONWriter[BSONValue]) ?=> Future[Option[D]] | Future[Option[D]], required BSONValue => Future[Option[D]]\n              case BSONArray(Seq(id, proj: Bdoc)) => byIdProj[D](id, proj)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error lila/test modules/fishnet/src/main/Cleaner.scala:16:45: error: operator * cannot be applied to Int and FiniteDuration\n  private def analysisTimeout(plies: Int) = plies * Cleaner.timeoutPerPly + 3.seconds\n                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error lila/test modules/fishnet/src/main/JsonApi.scala:104:27: error: type Analysis not found\n  def analysisFromWork(m: Work.Analysis): Analysis =\n                          ^^^^^^^^^^^^^
-error lila/test modules/forum/src/main/ForumPostApi.scala:211:5: error: type mismatch: found OptionT[Future, CategView], required Future[Option[CategView]]\n    for\n    ^^^
-error lila/test modules/forum/src/main/ForumPostApi.scala:216:3: error: expected end of statement, found '.'\n  .value\n  ^
-error lila/test modules/forum/src/main/ForumPostApi.scala:216:4: error: not found: value\n  .value\n   ^^^^^
 error lila/test modules/game/src/main/GameRepo.scala:329:40: error: type mismatch: found BSONDocument => Option[ByColor[HoldAlert]], required BSONDocument => ByColor[Option[HoldAlert]]\n          _.fold(HoldAlert.emptyMap) { doc =>\n                                       ^^^^^^
-error lila/test modules/game/src/main/GameRepo.scala:384:9: error: Ambiguous overload. The overloaded alternatives of method ++ in class BSONDocument with types\n (doc: BSONDocument): BSONDocument\n (seq: BSONElement*): BSONDocument\nboth match arguments (<error>)\n        nonEmptyMod(\n        ^^^^^^^^^^^^
-error lila/test modules/game/src/main/GameRepo.scala:392:14: error: Ambiguous overload. The overloaded alternatives of method bdoc in trait dsl with types\n (elements: Iterable[(String, BSONValue)]): BSONDocument\n (elements: ElementProducer*): BSONDocument\nboth match arguments (<error>)\n        ) ++ bdoc(\n             ^^^^^
-error lila/test modules/game/src/main/GameRepo.scala:393:23: error: Ambiguous overload. The overloaded alternatives of method ++ in class BSONDocument with types\n (doc: BSONDocument): BSONDocument\n (seq: BSONElement*): BSONDocument\nboth match expected type Any\n          "$unset" -> finishUnsets.++ {\n                      ^^^^^^^^^^^^^^^
-error lila/test modules/game/src/main/GameRepo.scala:393:39: error: expected ',' or ')', found '{'\n          "$unset" -> finishUnsets.++ {\n                                      ^
 error lila/test modules/gathering/src/main/Condition.scala:37:9: error: recursive use of name needs an explicit result type\n    def name(pt: PerfType)(using Translate) = name\n        ^^^^
-error lila/test modules/history/src/main/RatingChartApi.scala:35:5: error: type mismatch: found OptionT[Future, SafeJsonStr], required Future[Option[SafeJsonStr]]\n    for\n    ^^^
-error lila/test modules/history/src/main/RatingChartApi.scala:42:3: error: expected end of statement, found '.'\n  .value\n  ^
-error lila/test modules/history/src/main/RatingChartApi.scala:42:4: error: not found: value\n  .value\n   ^^^^^
 error lila/test modules/i18n/src/main/LangPicker.scala:20:16: error: not found: toLang\n      .flatMap(toLang)\n               ^^^^^^
 error lila/test modules/irwin/src/main/IrwinApi.scala:72:15: error: type mismatch: found Unit => Counter, required Unit => Unit\n          for _ <- modApi.autoEngine(report.suspectId, report.note)(using UserId.irwin.into(MyId))\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error lila/test modules/irwin/src/main/IrwinApi.scala:78:13: error: type mismatch: found Unit => Counter, required Unit => Unit\n            _ <- reportApi.create(\n            ^^^^^^^^^^^^^^^^^^^^^^

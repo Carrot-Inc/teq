@@ -934,7 +934,8 @@ pub struct Ast {
     /// The expressions written alone in braces (`{ e }`), which the parser reads as `e`: scalac's
     /// tree is a block whose expression it types and adapts inside it. A bit per expression, by
     /// its id, set by the parser (`mark_braced`): the mark dotty's `Block` node is, read where a
-    /// node is typed.
+    /// node is typed. A case's body of one expression has it too (`caseClause`'s `block()`), and the
+    /// body of a lambda a block starts with; an indented region's one expression has not.
     pub braced: Vec<u64>,
     /// The bodies of the closures whose body dotty's parser makes a `Block`, which is then no
     /// application a parameter's type is read from (`Typer.typedFunctionValue`'s `calleeType`):
@@ -942,7 +943,7 @@ pub struct Ast {
     /// (`Parsers.closureRest`: `if location == Location.InBlock then block()`), and a body
     /// written in braces (`blockExpr`, `block` without `simplify`); an indented body is the
     /// expression itself (`simplify` on `INDENT`). A bit per expression, by its id, set by the
-    /// parser (`mark_block_body`); `braced` is also an indented region's and cannot tell.
+    /// parser (`mark_block_body`).
     pub block_bodies: Vec<u64>,
 }
 
@@ -1381,6 +1382,14 @@ impl Ast {
             self.braced.resize(i / 64 + 1, 0);
         }
         self.braced[i / 64] |= 1 << (i % 64);
+    }
+
+    /// `e` is no block's expression after all: what was read after it continues it (`mark_braced`).
+    pub fn unmark_braced(&mut self, e: ExprId) {
+        let i = e.idx();
+        if let Some(w) = self.braced.get_mut(i / 64) {
+            *w &= !(1 << (i % 64));
+        }
     }
 
     /// Whether a case of the list has a malformed pattern or guard (`broken_cases`).

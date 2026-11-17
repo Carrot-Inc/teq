@@ -93,6 +93,13 @@ pub struct Parser<'a> {
     /// The pattern definitions (`val pat = rhs`) parsed so far: a body or block whose statements
     /// began at the same count holds none, and is not scanned for them (`desugar_pattern_vals_in`).
     pattern_vals: u32,
+    /// The first `case` of each open region of cases that ends at a line of its width, the innermost last: the
+    /// cases of a `match` or a `catch` on lines of their own (`Parser::parse_cases`).
+    case_regions: Vec<u32>,
+    /// While what continues a block is read, an indented block continued on the line that closes it
+    /// (`Parser::parse_block_tail`) or a case's block continued by anything (`Parser::parse_case_body`): the
+    /// token that continues it, by its index.
+    continued_at: Option<usize>,
     ext_groups: u32,
     expr_scratch: Vec<ExprId>,
     pat_scratch: Vec<PatId>,
@@ -230,6 +237,8 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         placeholder_names: Vec::new(),
         fresh_counter: 0,
         pattern_vals: 0,
+        case_regions: Vec::new(),
+        continued_at: None,
         ext_groups: 0,
         expr_scratch: Vec::new(),
         pat_scratch: Vec::new(),
@@ -636,7 +645,7 @@ impl<'a> Parser<'a> {
             return self.parse_case_lambda_in_region();
         }
         let start = self.span();
-        self.parse_block_rest(start)
+        self.parse_block_rest(start, true)
     }
 
     /// After a definition whose annotation dissolved a region: its outdent, where the definition
@@ -1005,11 +1014,13 @@ impl<'a> Parser<'a> {
 
     /// True at `package a.b:` with an indented body, as opposed to a clause for the whole file.
     fn package_block_follows(&self) -> bool {
+        // A part of the name is an identifier of letters or a symbolic one (`package outer.+ { .. }`).
+        let part = |k: Tok| matches!(k, Tok::Ident | Tok::OpIdent);
         let mut i = 1;
-        while self.kind_at(i) == Tok::Ident && self.kind_at(i + 1) == Tok::Dot {
+        while part(self.kind_at(i)) && self.kind_at(i + 1) == Tok::Dot {
             i += 2;
         }
-        self.kind_at(i) == Tok::Ident && self.kind_at(i + 1) == Tok::ColonEol && self.kind_at(i + 2) == Tok::Indent
+        part(self.kind_at(i)) && self.kind_at(i + 1) == Tok::ColonEol && self.kind_at(i + 2) == Tok::Indent
     }
 
     fn parse_file(&mut self) {

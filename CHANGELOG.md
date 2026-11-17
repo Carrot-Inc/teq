@@ -569,6 +569,44 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   (`List(List(1)).map(_.toStream)`, where scalac warns of the class `Stream` too), a singleton type
   (`Stream.type`), or a default argument of a method that is deprecated itself; and the definitions
   scala-library marks that the std does not yet (`toIterator`, `filterKeys`, `replaceAllLiterally` and others).
+- A brace block after a symbolic name selected with a dot belongs to that name, as scalac reads it: the method's
+  argument (`xs.++ { .. }`, `xs.:: { x }`), a type's refinement (`val v: O.+ { def f: Int }`), an instance's body
+  (`new O.+ { .. }`), a package's body (`package outer.+ { .. }`). teq read the brace as an infix operator's right
+  operand and refused the line (`expected ',' or ')', found '{'`, `expected end of statement, found '{'`). An
+  operator between two operands keeps its brace as its right operand (`xs ++ { .. }`).
+- An extension's methods are read from the indented lines after its header wherever the header's last clause
+  closes, as scalac reads them: a header written over several lines (`extension (`, the receiver on a line of its
+  own, `)` on the next, then the methods), a clause broken inside its brackets, a blank line or a comment between
+  the header and the methods, the methods' brace on the line after the header. teq read the methods only where
+  the header's last line began with the word `extension` and refused the rest (`expected extension methods`).
+  In backquotes the word is a name: `` `extension`(1)(2) `` at a statement's start calls a method of that name.
+  Where an extension is written on the line of an opening brace and its header breaks inside its parentheses
+  (`object A { extension (x: Int)(using`, then `y: Int) def ..`), the brace's later lines take their width as
+  scalac gives it: a line teq read as a member of its own can now belong to the statement before it.
+- A line that begins with a `.` after an indented block continues that block, as scalac reads it: `def f =`, an
+  indented `for .. yield ..`, then `.value` at the def's column selects on the whole right side; at an `if`'s
+  column it selects on the else branch alone. The same holds for a `match` and, inside parentheses, a type
+  application on such a line, and for the block that is a case's body (`case 1 =>`, two indented lines,
+  `.reverse` in a match written in braces). teq refused these lines (`expected end of statement, found '.'`,
+  `expected 'case', found '.'`); after the indented else branch of an `inline if` it read a `match` at the `if`'s
+  column on the whole `if`, where scalac matches the else branch; and with cases written at their `match`'s own
+  width, the last one's body a block in braces on its line, it read a `match` further in on the whole match,
+  where scalac matches that block. An argument list on such a line still begins a statement. Where a `match`
+  stands in what continues an indented block or the block of a case's body, its cases at its own width and a
+  line further in than the cases after them, the program is refused at the token that continues the block
+  (`expected end of statement, found 'match'`): scalac reads that line as the last case's second statement,
+  which teq does not yet. Two shapes of it teq read before, by another grouping and with the line as a statement
+  after the match: after the else branch of an `inline if` (the `match` on the whole `if`), and after a case's
+  block in braces with the `match` on the case's line (the `match` on the whole first match). Such a program
+  printed what scalac prints where the grouping did not show (one case, the else branch the one that runs); it
+  is refused now. Not yet as scalac: after a case's block that a selection or an operator continues, a `.` or a
+  `match` on a later line of the cases' width is read on into the continuation, where scalac ends the cases at
+  that line; teq reads such a line the same way after a case's body that is no block.
+- An indented block of one expression is that expression, as scalac's parser makes it; a block in braces stays a
+  block. A selection on the line that closes the indented block chooses among the overloads of the expression's
+  method by the member selected, and `for x <- xs yield` with `x` alone on the indented line after it yields `xs`
+  itself, as `for x <- xs yield x` does (teq read the indented `x` as a block's expression and mapped the
+  collection).
 
 ## 0.1.10 (2026-11-13)
 

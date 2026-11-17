@@ -191,6 +191,7 @@ capture_x	pass	-
 case_apply_bare_in_companion	pass	-	
 case_apply_beside_curried	pass	-	
 case_apply_primary_alone	pass	-	
+case_body_continued	pass	-	
 case_class_below_superclass	pass	-	
 case_class_beside_method_of_its_name	pass	-	
 case_class_copy_through_trait	pass	-	
@@ -244,6 +245,11 @@ case_lambda_parameter	pass	-
 case_lambda_pinned_constructor	pass	-	
 case_lambda_tuples	pass	-	
 case_object_equals_from_superclass_trait	pass	-	
+cases_at_keyword_width	pass	-	
+cases_then_match_after_do	pass	-	
+cases_then_match_after_else	pass	-	
+cases_then_match_after_finally	pass	-	
+cases_then_match_after_yield	pass	-	
 cast_array_kinds	fail	-	output
 cast_array_nothing	pass	-	
 cast_boxed_unit	pass	-	
@@ -732,6 +738,8 @@ extension_conversion_contextual	fail	-	output
 extension_deepened_overload	pass	-	
 extension_direct_targs	pass	-	
 extension_given_type_args	pass	-	
+extension_header_brace	pass	-	
+extension_header_lines	pass	-	
 extension_import_alternatives_inherited	pass	-	
 extension_inherited_this_prefix	pass	-	
 extension_method_value	pass	-	
@@ -756,6 +764,7 @@ extension_type_arguments_over_member	pass	-
 extension_using_skip	pass	-	
 extension_view_after_unrelated	pass	-	
 extension_widening	pass	-	
+extension_word	pass	-	
 extractor_abstract_input	pass	-	
 extractor_abstract_type_input	pass	-	
 extractor_binder_member	pass	-	
@@ -1083,6 +1092,8 @@ import_wildcard_private_member	pass	-
 imports_scoped	pass	-	
 impossible_type_test_bounds	pass	-	
 impure_function_alias	fail	-	compile
+indented_block_continued	pass	-	
+indented_block_expression	pass	-	
 indexed_seq_defaults	pass	-	
 indexed_seq_ops_type	pass	-	
 indexed_seq_view_type	pass	-	
@@ -2631,6 +2642,7 @@ select_overload_member_result	pass	-
 select_overload_nested_selection	pass	-	
 select_overload_paren_receiver	pass	-	
 selectable_anon_members	pass	-	
+selected_operator_brace	pass	-	
 self_alias	pass	-	
 self_alias_anon	pass	-	
 self_alias_forms	pass	-	
@@ -2796,6 +2808,7 @@ super_rebind_result	fail	-	unsupported
 suppression_disabled	pass	-	
 suppression_inheritance	pass	-	
 symbol_name	pass	-	
+symbolic_package_block	pass	-	
 symbolic_type_selection	pass	-	
 sync_break_direct	fail	-	compile
 sync_exits	pass	-	

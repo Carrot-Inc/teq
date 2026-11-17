@@ -87,6 +87,15 @@ java_wildcard_object_bound	fail	-	< 1
 jvm_constant_string_length	cannot run	-	the JVM's platform
 kind_error_argument_in_match_scrutinee	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 lambda_param_refined_type	fail	-	< 2
+layout_cases_deeper_line_after_block	fail	-	< a/a/m
+layout_cases_deeper_line_after_case_block	fail	-	< mx/
+layout_cases_deeper_line_after_case_block_match	fail	-	< one|zz|mx/m
+layout_cases_deeper_line_after_inline_else	fail	-	< t|zz|m
+layout_cases_deeper_line_after_inline_else_one_case	fail	-	< zz|zz/mm
+layout_cases_deeper_line_after_operator	fail	-	< zz|mx|zz/m<zz>m<zz>
+layout_cases_deeper_line_after_operator_block	fail	-	< zz|mx|zz/m<zz>m<zz>
+layout_cases_end_after_continued_block	fail	-	< (1,3,3)
+layout_cases_end_after_selection	fail	-	< (1,3,3)
 lazy_given_forms	cannot run	-	the JVM's platform
 lazy_given_uncached	pass	-	
 lazy_names_arg_class	cannot run	-	the JVM's platform

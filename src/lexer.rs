@@ -3,6 +3,18 @@ use crate::names;
 use crate::source::Span;
 use crate::token::{keyword, Tok, Token};
 
+/// An extension's header as the lexer follows it (dotty's `Parsers.extension` reads the type parameters and the
+/// parameter clauses, then asks the scanner for the indentation that follows them, `observeIndented`): the regions
+/// open at the word `extension`, where its next clause's bracket has to stand among the tokens, whether a clause of
+/// it is open, and the bracket that closed its last one.
+#[derive(Clone, Copy)]
+struct ExtHeader {
+    depth: usize,
+    next: usize,
+    clause: bool,
+    closed: Option<usize>,
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Region {
     Indent(u32),
@@ -99,7 +111,9 @@ struct Lexer<'a> {
     interner: &'a Interner,
     errors: Vec<(Span, String)>,
     end_markers: Vec<Span>,
-    extension_line: bool,
+    /// The headers of the extensions the lexer stands in, each from its word to the end of its last clause, the
+    /// innermost last: one is written inside another's where a default argument's block declares it.
+    ext_headers: Vec<ExtHeader>,
     /// The trivia last skipped held a line with nothing on it.
     blank_line: bool,
     /// Region depths of the parentheses that follow `if`, `while` and `for`; their `)` opens
@@ -188,7 +202,7 @@ pub fn lex_with(text: &str, interner: &Interner, close_parens: &[u32], keywords:
             interner,
             errors: Vec::new(),
             end_markers: Vec::new(),
-            extension_line: false,
+            ext_headers: Vec::new(),
             blank_line: false,
             cond_parens: Vec::new(),
             cond_closed: false,
@@ -490,17 +504,23 @@ impl<'a> Lexer<'a> {
                 }
                 let (next, next_end) = self.peek_kind();
                 let leading_op = !std::mem::take(&mut after_end_marker) && self.leading_operator(next, start, next_end, width);
-                let starts_extension = next == Tok::Ident && &self.text[start..next_end] == "extension";
                 let insert_at = self.tokens.len();
                 let cond_body = self.cond_closed && next.can_start_statement() && !(leading_op && self.infix_fits_region(width));
-                if !(next == Tok::LBrace && (cond_body || self.template_header_open())) {
-                    self.line_break(width, next, leading_op, cond_body, insert_at, start);
+                // An extension's header ends at the line break after its last clause; a parameter clause that begins
+                // the next line, no blank line between, continues it (`termParamClauses`'
+                // `newLineOptWhenFollowedBy(LPAREN)`).
+                let header_end = !self.ext_headers.is_empty() && self.header_line_break(next, insert_at);
+                // A `{` that begins the line after the header, no blank line between, holds its methods
+                // (`newLineOptWhenFollowedBy(LBRACE)`), as one after a template's header holds its body; a line
+                // left of the region the header stands in ends that region first.
+                let body_brace = next == Tok::LBrace
+                    && (cond_body || self.template_header_open() || (header_end && !self.blank_line && self.in_top_region(width)));
+                if !body_brace {
+                    self.line_break(width, next, leading_op, cond_body, header_end, insert_at, start);
                 }
                 if matches!(self.regions.last(), Some(Region::Enclosed(..))) {
                     self.note_boundary(width, start);
                 }
-                // The header of an extension may continue with a parameter clause on the next line.
-                self.extension_line = starts_extension || (self.extension_line && next == Tok::LParen);
             }
             self.lex_token();
         }
@@ -588,6 +608,7 @@ impl<'a> Lexer<'a> {
             }
             self.regions.pop();
             self.cond_parens.retain(|&d| d < e);
+            self.ext_headers.clear();
         }
     }
 
@@ -606,6 +627,7 @@ impl<'a> Lexer<'a> {
         }
         self.open_blocks.pop();
         self.cond_parens.retain(|&d| d < b);
+        self.ext_headers.clear();
         let (next, next_end) = self.peek_kind();
         let found = if next == Tok::Ident { "identifier" } else { next.describe() };
         self.error(start, next_end.min(self.src.len()), &format!("expected '}}', found {}", found));
@@ -763,15 +785,25 @@ impl<'a> Lexer<'a> {
         matches!(kw, Tok::KwGiven | Tok::KwEnum) && self.keywords.migrating_at(at as u32)
     }
 
-    fn line_break(&mut self, width: u32, next: Tok, leading_op: bool, cond_body: bool, at: usize, pos: usize) {
+    #[inline(always)]
+    fn line_break(&mut self, width: u32, next: Tok, leading_op: bool, cond_body: bool, header_end: bool, at: usize, pos: usize) {
         debug_assert_eq!(at, self.tokens.len());
         let last = if at == 0 { Tok::Eof } else { self.tokens[at - 1].kind };
         let top = *self.regions.last().unwrap_or(&Region::Indent(0));
-        let opens_indent = self.keywords.indent
-            && (last.can_start_indent() || cond_body || (self.extension_line && matches!(last, Tok::RParen | Tok::RBracket) && next != Tok::LParen));
+        // `header_end`: the line follows an extension's header, whose methods an indented region holds (dotty's
+        // `observeIndented`: the next token's width against the enclosing region's).
+        let opens_indent = self.keywords.indent && (last.can_start_indent() || cond_body || header_end);
+        // Whether the header alone asks for the region: braces whose width nothing made known yet take it from this
+        // very line first (`handleNewLine`'s `proposeKnownWidth`), and a line no wider than itself opens nothing.
+        let header_alone = header_end && !(last.can_start_indent() || cond_body);
         match top {
             Region::Enclosed(close, known) => {
                 let w = known.unwrap_or_else(|| {
+                    if !self.ext_headers.is_empty() {
+                        if let Some(w) = self.header_bracket_width(last, close) {
+                            return w;
+                        }
+                    }
                     let w = if matches!(last, Tok::LParen | Tok::LBracket) { width } else { self.outer_width() };
                     *self.regions.last_mut().unwrap() = Region::Enclosed(close, Some(w));
                     w
@@ -785,7 +817,7 @@ impl<'a> Lexer<'a> {
             // dotty's `handleNewLine` in `InCase`: no separator and no dedent; an indented region
             // opens where the line goes further in than the case's and the token before opens one.
             Region::Case { width: w, at: case_at, .. } => self.case_line_break(width, w, case_at, opens_indent, pos),
-            Region::Braces(None) if !opens_indent => {
+            Region::Braces(None) if !opens_indent || header_alone => {
                 *self.regions.last_mut().unwrap() = Region::Braces(Some(width));
                 if self.diagnose {
                     self.note_first_brace_line(width, pos);
@@ -849,6 +881,52 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
+    }
+
+    /// The first line break inside a bracket while an extension's header is followed: inside the header the bracket
+    /// takes the width outside it at every line break but the one right after a `(` (`Region.proposeKnownWidth`:
+    /// `lastToken != LPAREN`), and gives that width to the braces around the header too, where nothing made theirs
+    /// known (`useOuterWidth`). The width taken so, none where the bracket takes its width as any other does.
+    #[cold]
+    #[inline(never)]
+    fn header_bracket_width(&mut self, last: Tok, close: u8) -> Option<u32> {
+        let header = self.ext_header().is_some_and(|h| h.clause && self.regions.len() > h.depth);
+        if !header || last == Tok::LParen {
+            return None;
+        }
+        let w = self.outer_width();
+        *self.regions.last_mut().unwrap() = Region::Enclosed(close, Some(w));
+        let below = self.regions.len() - 1;
+        for r in self.regions[..below].iter_mut().rev() {
+            match r {
+                Region::Braces(known @ None) | Region::Enclosed(_, known @ None) => *known = Some(w),
+                _ => break,
+            }
+        }
+        Some(w)
+    }
+
+    /// At a line break while an extension's header is followed: whether the header ends here, the line after its
+    /// last clause. The header goes on inside its own brackets and into a clause on the next line; any other line
+    /// break at its own depth is past it.
+    #[cold]
+    #[inline(never)]
+    fn header_line_break(&mut self, next: Tok, insert_at: usize) -> bool {
+        let header = self.ext_header().filter(|h| self.regions.len() == h.depth);
+        let after_clause = header.is_some_and(|h| insert_at > 0 && h.closed == Some(insert_at - 1));
+        let header_end = after_clause && !(next == Tok::LParen && !self.blank_line);
+        if header.is_some() && !(after_clause && !header_end) {
+            self.ext_headers.pop();
+        }
+        header_end
+    }
+
+    /// Whether a line of `width` stands in the top region: no further left than its lines.
+    fn in_top_region(&self, width: u32) -> bool {
+        self.regions.last().is_none_or(|r| match *r {
+            Region::Indent(w) | Region::Braces(Some(w)) | Region::Enclosed(_, Some(w)) | Region::Case { width: w, .. } => width >= w,
+            _ => true,
+        })
     }
 
     /// A line break in a case region (`line_break`'s arm), recorded among its lines.
@@ -964,14 +1042,109 @@ impl<'a> Lexer<'a> {
             .unwrap_or(0)
     }
 
+    #[inline]
     fn open(&mut self, kind: Tok, close: u8) {
         let last = self.tokens.last().map_or(Tok::Eof, |t| t.kind);
         if kind == Tok::LParen && matches!(last, Tok::KwIf | Tok::KwWhile | Tok::KwFor) {
             self.cond_parens.push(self.regions.len());
         }
+        if !self.ext_headers.is_empty() {
+            self.header_bracket(kind);
+        }
         self.push(kind, self.pos, self.pos + 1);
         self.pos += 1;
         self.regions.push(Region::Enclosed(close, None));
+    }
+
+    /// A bracket opens while an extension's header is followed: the header takes it as its clause where it stands
+    /// right after the word or after the clause before it (a line break between two clauses leaves its separator
+    /// there); type parameters come first.
+    #[cold]
+    #[inline(never)]
+    fn header_bracket(&mut self, kind: Tok) {
+        if let Some(h) = self.ext_header().filter(|h| h.depth == self.regions.len()) {
+            let at = self.tokens.len();
+            let follows = at == h.next || (kind == Tok::LParen && at == h.next + 1 && self.tokens[h.next].kind == Tok::Newline);
+            if follows && !(kind == Tok::LBracket && h.closed.is_some()) {
+                if let Some(top) = self.ext_headers.last_mut() {
+                    top.clause = true;
+                }
+            } else {
+                self.ext_headers.pop();
+            }
+        }
+    }
+
+    /// The identifier just pushed, at `index`, is the word `extension` where an extension may begin: unquoted and
+    /// at a statement's start. It begins one where its next token is a `(` or a `[` (dotty's
+    /// `followingIsExtension`), which `open` sees.
+    #[cold]
+    #[inline(never)]
+    fn open_extension(&mut self, index: usize) {
+        let before = |n: usize| if index < n { Tok::Eof } else { self.tokens[index - n].kind };
+        // A statement begins after a separator, at a region's start or end, and on the line after a `=>` that
+        // ends its line with no region opened: a self type's, and a lambda's whose body is the rest of its block.
+        let begins = match before(1) {
+            Tok::Eof | Tok::Newline | Tok::Indent | Tok::Outdent | Tok::Semi => true,
+            Tok::Arrow | Tok::CtxArrow => self.starts_line(self.tokens[index].span.start as usize),
+            _ => false,
+        };
+        if !begins {
+            return;
+        }
+        // A line that ends in an operator goes on with its operand, no blank line between (`infixOps` passes one
+        // line end, `newLineOpt`): `1 +` / `extension(2)` is a call.
+        if before(1) == Tok::Newline && index >= 2 && !self.blank_line && self.trailing_operator(index - 2) {
+            return;
+        }
+        self.ext_headers.push(ExtHeader { depth: self.regions.len(), next: index + 1, clause: false, closed: None });
+    }
+
+    /// Whether the token at `index`, the last of its line, is a name in an operator's place: the parser passes the
+    /// line's end after one where an operand can follow (`infixOps`' `newLineOptWhenFollowing`). Names take an
+    /// operand's and an operator's place in turn from the start of the run of names the token ends, a prefix
+    /// operator and its operand one place: `1 +` and `a max` go on with the next line; `= ???`, `a + b`, `= -a`,
+    /// `import a.*` and `if (c) a` end theirs.
+    fn trailing_operator(&self, index: usize) -> bool {
+        let name = |k: Tok| matches!(k, Tok::Ident | Tok::OpIdent);
+        if !name(self.tokens[index].kind) {
+            return false;
+        }
+        let mut first = index;
+        while first > 0 && name(self.tokens[first - 1].kind) {
+            first -= 1;
+        }
+        let before = |n: usize| if first < n { Tok::Eof } else { self.tokens[first - n].kind };
+        // What ends an operand before the run puts the run's first name in an operator's place: a literal, `this`,
+        // `_`, a singleton type's `.type`, a closing bracket other than a condition's.
+        let mut operator = match before(1) {
+            Tok::KwReturn | Tok::KwGiven | Tok::Outdent => false,
+            Tok::KwType => before(2) == Tok::Dot,
+            Tok::RParen => !self.closes_condition(first - 1),
+            k => k.can_end_statement(),
+        };
+        for t in &self.tokens[first..index] {
+            let prefix = !operator && t.kind == Tok::OpIdent && matches!(&self.text[t.span.start as usize..t.span.end as usize], "-" | "+" | "!" | "~");
+            if !prefix {
+                operator = !operator;
+            }
+        }
+        operator
+    }
+
+    /// Whether the `)` at `index` closes the condition of an `if` or a `while` or the enumerators of a `for`: what
+    /// follows it is the statement's body.
+    fn closes_condition(&self, index: usize) -> bool {
+        let mut depth = 0usize;
+        for i in (0..=index).rev() {
+            match self.tokens[i].kind {
+                Tok::RParen => depth += 1,
+                Tok::LParen if depth > 1 => depth -= 1,
+                Tok::LParen => return i > 0 && matches!(self.tokens[i - 1].kind, Tok::KwIf | Tok::KwWhile | Tok::KwFor),
+                _ => {}
+            }
+        }
+        false
     }
 
     /// Whether the text from `at` starts, after white space, with `def`, `val`, `var` or `type`.
@@ -995,10 +1168,13 @@ impl<'a> Lexer<'a> {
             return self.open(Tok::LBrace, b'}');
         }
         // After an operator the brace is a block argument (`a + { .. }`), unless the operator
-        // names the class or object whose header this is (`object *: { .. }`).
+        // names the class or object whose header this is (`object *: { .. }`) or is a name
+        // selected with a dot (`xs.++ { .. }`, `O.+ { def f: Int }`), after which a brace reads
+        // as after any selected name (dotty's `simpleExprRest` applies the selection).
         let header_name = last == Tok::OpIdent && self.template_header_open();
+        let selected = last == Tok::OpIdent && self.tokens.len() >= 2 && self.tokens[self.tokens.len() - 2].kind == Tok::Dot;
         let mut enumerations = last == Tok::KwFor;
-        if last.can_end_statement() && (!matches!(last, Tok::KwReturn | Tok::OpIdent) || header_name) {
+        if last.can_end_statement() && (!matches!(last, Tok::KwReturn | Tok::OpIdent) || header_name || selected) {
             enumerations = self.enum_header_before(self.tokens.len());
             self.push(Tok::ColonEol, p, p + 1);
         }
@@ -1260,6 +1436,7 @@ impl<'a> Lexer<'a> {
                 }
                 self.push(kind, p, p + 1);
                 self.pos += 1;
+                self.clause_closed();
             }
             Region::Braces(_) if close == b'}' && !self.diagnose && self.drop_closers.is_empty() => {
                 self.regions.pop();
@@ -1303,6 +1480,35 @@ impl<'a> Lexer<'a> {
         self.close_top(kind, close);
     }
 
+    /// The bracket just pushed closed a region back to where an extension's header stands: a clause of the header
+    /// ends with it, and the header's next clause, or its end, comes after it.
+    #[inline(always)]
+    fn clause_closed(&mut self) {
+        if !self.ext_headers.is_empty() {
+            self.header_clause_closed();
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn header_clause_closed(&mut self) {
+        if self.ext_header().is_some_and(|h| h.clause && h.depth == self.regions.len()) {
+            let closed = self.tokens.len() - 1;
+            if let Some(h) = self.ext_headers.last_mut() {
+                (h.clause, h.closed, h.next) = (false, Some(closed), closed + 1);
+            }
+        }
+    }
+
+    /// The extension's header the lexer stands in: the innermost one begun and not past. One whose regions have
+    /// closed under it is past (a header inside another's default argument, its block closed).
+    fn ext_header(&mut self) -> Option<ExtHeader> {
+        while self.ext_headers.last().is_some_and(|h| h.depth > self.regions.len()) {
+            self.ext_headers.pop();
+        }
+        self.ext_headers.last().copied()
+    }
+
     /// Closes the top region, which the closer `close` closes.
     #[inline]
     fn close_top(&mut self, kind: Tok, close: u8) {
@@ -1338,6 +1544,7 @@ impl<'a> Lexer<'a> {
         }
         self.push(kind, p, p + 1);
         self.pos += 1;
+        self.clause_closed();
     }
 
     fn lex_token(&mut self) {
@@ -1449,9 +1656,6 @@ impl<'a> Lexer<'a> {
         }
         if let Some(kw) = keyword(s) {
             if !self.migrated(kw, start) {
-                if kw == Tok::KwDef {
-                    self.extension_line = false;
-                }
                 self.push(kw, start, self.pos);
                 match kw {
                     Tok::KwCase => self.open_case(start),
@@ -1478,6 +1682,9 @@ impl<'a> Lexer<'a> {
             span: Span::new(start as u32, self.pos as u32),
             name,
         });
+        if s == "extension" {
+            self.open_extension(self.tokens.len() - 1);
+        }
     }
 
     fn lex_op(&mut self) {

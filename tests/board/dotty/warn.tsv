@@ -332,7 +332,7 @@ sub-cases-exhaustivity.scala	fail	-	marks: an error where warnings are marked: s
 supertraits-b.scala	fail	-	marks: 0 warnings where 5 are marked
 suppressed-type-test-warnings.scala	fail	-	marks: 2 warnings where 3 are marked
 switches.scala	fail	-	marks: 2 warnings where 6 are marked
-symbolic-packages.scala	fail	-	marks: an error where warnings are marked: symbolic-packages.scala:7:1: a package clause after other definitions needs a body: `package p:` or `package p { ... }`
+symbolic-packages.scala	fail	-	marks: 0 warnings where 4 are marked
 t10373.scala	pass	-	
 t11620.scala	fail	-	marks: an error where warnings are marked: t11620.scala:8:23: type mismatch: found Any, required X
 t13095.scala	pass	-	

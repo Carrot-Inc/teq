@@ -77,6 +77,15 @@ java_lang_string_type	< a
 java_wildcard_object_bound	< 1
 kind_error_argument_in_match_scrutinee	< scalac 3.8.4: rejected, 1 error(s)
 lambda_param_refined_type	< 2
+layout_cases_deeper_line_after_block	< a/a/m
+layout_cases_deeper_line_after_case_block	< mx/
+layout_cases_deeper_line_after_case_block_match	< one|zz|mx/m
+layout_cases_deeper_line_after_inline_else	< t|zz|m
+layout_cases_deeper_line_after_inline_else_one_case	< zz|zz/mm
+layout_cases_deeper_line_after_operator	< zz|mx|zz/m<zz>m<zz>
+layout_cases_deeper_line_after_operator_block	< zz|mx|zz/m<zz>m<zz>
+layout_cases_end_after_continued_block	< (1,3,3)
+layout_cases_end_after_selection	< (1,3,3)
 local_class_match_scrutinee_avoided	< 1
 local_object_forward	< 2
 macro_annotation_object_member_classes	< 15

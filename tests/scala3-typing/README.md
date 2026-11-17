@@ -686,3 +686,9 @@ refuses, `stripContextBounds`), read a higher-kinded parameter's own parameter's
   test's error.
 - `pos/i22922` to `rejects` (from `syntax`): its `type Const[C] = [_] =>> C` now parses, and the test stops at a proof
   of an intersection's equality (`Cannot prove that ... =:= ...`) teq's typer does not make.
+
+## A brace after a symbolic name selected with a dot (2026-11-16)
+
+A brace block after a symbolic name that a dot selects belongs to that name (`package +.* { .. }`, `xs.++ { .. }`).
+One test moved: `warn/symbolic-packages.scala` to `silent` (from `rejects`): the block of its package `+.*` parses,
+and teq gives none of the four warnings the test marks (E222).
