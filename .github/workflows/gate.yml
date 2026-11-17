@@ -117,8 +117,13 @@ jobs:
             minutes: 35
             jars: true
           - group: modules-2
-            suites: modules.2/2 analysis-bytes gate-scripts
-            minutes: 50
+            suites: modules.2/2 analysis-bytes
+            minutes: 40
+            jars: true
+          # The gate's own scripts apart: beside the modules' second piece they outgrew one job's bound on a slow runner.
+          - group: gate-scripts
+            suites: gate-scripts
+            minutes: 40
             jars: true
           - group: corpus
             suites: app planted asymptotics
