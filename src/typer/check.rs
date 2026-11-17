@@ -7843,9 +7843,37 @@ impl<'a> Worker<'a> {
             if self.is_body_file(self.syms.class(c).file) {
                 self.name_body_overrides(c);
             }
+            // A pickle's class marks the vals its parameters override, as the override check marks them for a
+            // class of the program (`check_override`).
+            self.mark_param_overrides(c);
             return;
         }
         self.check_overrides_of(c, false)
+    }
+
+    /// For each constructor parameter of `c`, a class read from a pickle, that is a member and carries `override`:
+    /// the concrete val or var of a base it overrides is marked (`SymInfo::overridden_by_param`), as `check_override`
+    /// marks it for a class of the program. A parameter named as a base's plain parameter redefines nothing: the
+    /// member carries `override` wherever a concrete val is redefined.
+    fn mark_param_overrides(&mut self, c: ClassId) {
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        for i in 0..self.own_member_count(c) {
+            let m = self.own_member(c, i);
+            let info = self.syms.sym(m);
+            if !matches!(info.kind, SymKind::Val | SymKind::Var) || info.mods & mods::PRIVATE != 0 || info.mods & mods::OVERRIDE == 0 || !self.is_ctor_param(c, m) {
+                continue;
+            }
+            let name = info.name;
+            for &b in &bases {
+                let mut k = 0;
+                while let Some(p) = self.inherited_member(b, name, false, k) {
+                    k += 1;
+                    if p != m && matches!(self.syms.sym(p).kind, SymKind::Val | SymKind::Var) && !self.is_abstract_member(p) && !self.syms.sym(p).overridden_by_param {
+                        self.shared_write(p, |w| w.syms.sym_mut(p).overridden_by_param = true);
+                    }
+                }
+            }
+        }
     }
 
     /// The override check's pass over `nc`, the copy an expansion made of a class its stored body

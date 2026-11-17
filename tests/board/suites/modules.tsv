@@ -308,6 +308,9 @@ outersuper	pass	-
 overload	pass	-	
 overloadexpand	pass	-	
 overloadusing	fail	-	overloadusing js-run
+overrideparamlevels	pass	-	
+overrideparamtrait	pass	-	
+overscalactraitvalwritten	fail	-	overscalactraitvalwritten over-scalac-js
 parentargsread	fail	-	parentargsread classes
 patdefsynthetic	pass	-	
 patdefvalueclass	pass	-	

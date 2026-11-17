@@ -1,0 +1,17 @@
+param-body-param a/a b-body/b-body c/c
+body-param-body a-body/a-body b/b c-body/c-body
+siblings s1/s1 s3-body/s3-body p/p p/p
+trait-param-body k/k l-body/l-body
+trait-body-param m-body/m-body n/n
+trait-under-class kb lb-body/lb-body u3
+abstract av1 av2-body/av2-body av3/av3
+lazy lazy p lazy x lazy lz2-body lz2-lazy p-lazy
+generic Some(g1) Some(g2-body) Some(g3) None
+object oc-arg/oc-arg
+anonymous anon-body/anon-body x/x y/y
+user-chains u1-body/u1-body u2/u2
+param-over-param qu-body/qu-body c/c q
+param-copy saw pb-arg child saw p
+own-read got a got ra-arg/rb-body got ra-arg/c
+trait-own-read got k got k5-arg/l5-body
+local user-loc locb-body lib-loc locb-body

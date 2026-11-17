@@ -28,6 +28,8 @@
 # a file's import of givens and changes it back, through the given search's kept memos; and a session under
 # `future` whose edits of a signature's infix type take its operator's backquotes off and put them back; and one
 # whose edits of a parent argument's comprehension put its pattern in parentheses and its body in braces.
+# And two sessions held as pending (tests/pending/split-watch.txt): the mark of a val a class takes as a constructor
+# parameter outlives its taker, in the sources and in a library's products (`param_mark_sources`, `param_mark_products`).
 # Every session types its full builds at the automatic count and every fresh build it is compared
 # with by one worker (tests/support/sessions.sh); the last line says which sessions forked.
 # Then the representative shapes of
@@ -598,6 +600,68 @@ build "$src/use.scala"
 expect "given_memo: the import changed back" "$(field ok)" 'true'
 same_as_fresh "given_memo: the import changed back" "$src"
 expect "given_memo: the import changed back runs" "$(timeout 20 node "$work/out/main.mjs")" "int string low int"
+stop
+rm -rf "$work/out"
+
+# The mark a val takes where a class takes it as a constructor parameter (`SymInfo::overridden_by_param`) lives
+# as long as the session: once the taker is gone the session's modules keep the guard of the val's own
+# initialisers, which a fresh build no longer writes. With the taker a local class of a source that becomes a
+# plain parameter and is removed (`param_mark_sources`), and with the taker a class of a library's products
+# that a body names and names no more (`param_mark_products`). Each build is to be a fresh one's and prints
+# scalac's line.
+param_mark_main() { printf 'package m\nimport scala.annotation.nowarn\nobject Use:\n  def f(): String =\n%s@main def run(): Unit =\n  println(Use.f() + " " + new b.B().read + " " + new p.P().read + " " + new t.KT().readT)\n' "$1" > "$src/m/Main.scala"; }
+param_mark_step() { # <what> <the body of f> <scalac's line>
+  param_mark_main "$2"
+  build "$src/m/Main.scala"
+  expect "param_mark_sources: $1" "$(field ok)" 'true'
+  same_as_fresh "param_mark_sources: $1" "$src"
+  expect "param_mark_sources: $1 runs" "$(timeout 20 node "$work/out/main.mjs")" "$3"
+}
+src=$work/param_mark
+mkdir -p "$src/p" "$src/b" "$src/t" "$src/m"
+printf 'package p\nclass P { val v: String = "p"; def read: String = v }\n' > "$src/p/P.scala"
+printf 'package b\nclass B extends p.P { override val v: String = "b-body" }\n' > "$src/b/B.scala"
+printf 'package t\ntrait T { val t: String = "t"; def readT: String = t }\nclass KT extends T\n' > "$src/t/T.scala"
+param_mark_main '    new b.B().read
+'
+start "$src" --split "$work/out"
+expect "param_mark_sources: first build" "$(field ok)" 'true'
+same_as_fresh "param_mark_sources: first build" "$src"
+expect "param_mark_sources: first build runs" "$(timeout 20 node "$work/out/main.mjs")" "b-body b-body p t"
+param_mark_step "a local class takes the val as a parameter" '    class Loc(override val v: String) extends p.P
+    new Loc("loc-arg").read
+' "loc-arg b-body p t"
+param_mark_step "the local class under a body's redefinition" '    class Loc(override val v: String) extends b.B
+    new Loc("loc-arg").read
+' "loc-arg b-body p t"
+param_mark_step "the taker a plain parameter" '    class Loc(v: String) extends b.B
+    new Loc("loc-arg").read
+' "b-body b-body p t"
+param_mark_step "the local class removed" '    new b.B().read
+' "b-body b-body p t"
+stop
+rm -rf "$work/out"
+param_lib_main() { printf 'package m\nobject Use:\n  def f(): String =\n    %s\n@main def run(): Unit =\n  println(Use.f() + " " + new lib.P().read)\n' "$1" > "$src/user/m/Main.scala"; }
+src=$work/param_mark_lib
+mkdir -p "$src/lib" "$src/user/u" "$src/user/m"
+printf 'package lib\nimport scala.annotation.nowarn\nclass P { val v: String = "p"; def read: String = v }\nclass A(override val v: String) extends P\n@nowarn class B extends A("lib-a-arg") { override val v: String = "lib-b-body" }\n@nowarn class C(override val v: String) extends B\nobject F { def mk(): P = new A("lib-made") }\n' > "$src/lib/Lib.scala"
+printf 'package u\nclass U extends lib.P\n' > "$src/user/u/U.scala"
+param_lib_main 'new lib.P().read'
+"$TEQ" compiler check --products "$src/libP" "$src/lib/Lib.scala" > /dev/null 2>&1 || bad "param_mark_products: the library's products"
+start "$src/user" --split "$work/out" --classpath "$src/libP"
+expect "param_mark_products: first build" "$(field ok)" 'true'
+same_as_fresh "param_mark_products: first build" "$src/user" --classpath "$src/libP"
+expect "param_mark_products: first build runs" "$(timeout 20 node "$work/out/main.mjs")" "p p"
+param_lib_main 'new lib.A("a-arg").read'
+build "$src/user/m/Main.scala"
+expect "param_mark_products: the library's parameter class named" "$(field ok)" 'true'
+same_as_fresh "param_mark_products: the library's parameter class named" "$src/user" --classpath "$src/libP"
+expect "param_mark_products: the library's parameter class named runs" "$(timeout 20 node "$work/out/main.mjs")" "a-arg p"
+param_lib_main 'new lib.P().read'
+build "$src/user/m/Main.scala"
+expect "param_mark_products: the parameter class named no more" "$(field ok)" 'true'
+same_as_fresh "param_mark_products: the parameter class named no more" "$src/user" --classpath "$src/libP"
+expect "param_mark_products: the parameter class named no more runs" "$(timeout 20 node "$work/out/main.mjs")" "p p"
 stop
 rm -rf "$work/out"
 

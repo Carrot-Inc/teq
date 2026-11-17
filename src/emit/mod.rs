@@ -177,6 +177,8 @@ pub struct Emitter<'a> {
     storage_done: crate::intern::FxMap<ClassId, ()>,
     /// For a class, the classes that extend it (`names_below`), made once.
     below: Option<crate::intern::FxMap<ClassId, Vec<ClassId>>>,
+    /// For a class, its vals whose own initialiser reads a flag (`guarded_vals`), made once.
+    guarded: crate::intern::FxMap<ClassId, Rc<[(Name, SymId)]>>,
     class_quals: crate::intern::FxMap<ClassId, Rc<str>>,
     naming: &'a Naming,
     /// The scope of the module being emitted (`Naming`).
@@ -361,13 +363,23 @@ enum UseForm {
 /// where the constructor writes them (`Emitter::ctor_texts`).
 const CALLABLE: &str = "$callable($f, new.target.prototype);";
 /// A function's own `name` and `length`, deleted where the class has a field of that name: the field's write makes its
-/// own property, and a guard of `OWN_FIELD` (a val a subclass's parameter overrides) reads only the class's writes.
+/// own property, and a guard of `OWN_FIELD` (a JavaScript class's val a subclass's parameter overrides) reads only
+/// the class's writes.
 const DELETE_NAME: &str = " delete $f.name;";
 const DELETE_LENGTH: &str = " delete $f.length;";
 const SUPER_FIELDS: [&str; 3] = ["Object.assign(", ", Reflect.construct(Object.getPrototypeOf(", "), Array.of"];
 pub(super) const OWN_FIELD: &str = "Object.prototype.hasOwnProperty.call(";
 pub(super) const LAZY_FIELD: &str = "Object.defineProperty(this, ";
 const CTOR_TEXTS: [&str; 8] = [CALLABLE, DELETE_NAME, DELETE_LENGTH, SUPER_FIELDS[0], SUPER_FIELDS[1], SUPER_FIELDS[2], OWN_FIELD, LAZY_FIELD];
+
+/// The property that holds, on a class's prototype, the classes above it whose own initialiser of the val of the
+/// field `field` is skipped for its instances: those below which a class of its linearisation takes the val as a
+/// constructor parameter (`Emitter::emit_registration`). Its key is no member's: a member's is an identifier. The
+/// classes are held themselves, so a module of the split output asks the class it defines and another module
+/// names the class it imports.
+fn param_flag(field: &str) -> String {
+    format!("[\"$r:{}\"]", field)
+}
 
 /// A def that cannot be overridden and calls itself in tail position is emitted as
 /// `while (true)`: the JS parameters are named apart, each iteration copies them into `const`s
@@ -997,6 +1009,7 @@ impl<'a> Emitter<'a> {
             storage: Default::default(),
             storage_done: Default::default(),
             below: None,
+            guarded: Default::default(),
             class_quals: Default::default(),
             naming,
             scope: NO_SCOPE,
@@ -1827,6 +1840,49 @@ impl<'a> Emitter<'a> {
             return self.storage_name(s, false).to_string();
         }
         n.to_string()
+    }
+
+    /// The vals of `k` whose own initialiser asks the list (`param_flag`): its marked vals
+    /// (`SymInfo::overridden_by_param`), each alternative of an overloaded name looked at, but its own parameters,
+    /// which are written without the guard, an enum's excepted (`emit_ctor_param_field`'s `enum_init`): no list
+    /// names a class whose guard does not ask.
+    fn guarded_vals(&mut self, k: ClassId) -> Rc<[(Name, SymId)]> {
+        if let Some(vals) = self.guarded.get(&k) {
+            return vals.clone();
+        }
+        let ki = self.syms.class(k);
+        let mut vals: Vec<(Name, SymId)> = Vec::new();
+        for (&n, &entry) in ki.members.iter() {
+            let alternatives: &[SymId] = match self.syms.alternatives(entry) {
+                Some(alts) => alts,
+                None => std::slice::from_ref(&entry),
+            };
+            for &m in alternatives {
+                let own_param = ki.kind != ClassKind::Enum && ki.ctor.iter().any(|cl| cl.params.iter().any(|q| q.sym == m));
+                if self.syms.sym(m).overridden_by_param && !own_param {
+                    vals.push((n, m));
+                }
+            }
+        }
+        let vals: Rc<[(Name, SymId)]> = vals.into();
+        self.guarded.insert(k, vals.clone());
+        vals
+    }
+
+    /// Whether the class `d` takes the val named `n` as a constructor parameter: a parameter that is a val of the
+    /// class (`override val n`: `mods::FIELD`, which a class read from a body's pickle keeps where its `override`
+    /// is not carried), written before the parent's constructor runs. A plain parameter of the name is no member's
+    /// value, and a trait's parameter is written by the trait's initialiser, after the bodies above it: neither
+    /// takes the val.
+    fn takes_as_param(&self, d: ClassId, n: Name) -> bool {
+        let di = self.syms.class(d);
+        di.kind != ClassKind::Trait
+            && di.ctor.iter().any(|cl| {
+                cl.params.iter().any(|q| {
+                    let qi = self.syms.sym(q.sym);
+                    qi.name == n && qi.mods & mods::FIELD != 0
+                })
+            })
     }
 
     /// The `$`-spelled names of the members of every class that extends `c`, and of the classes and traits in their
@@ -3151,9 +3207,12 @@ impl<'a> Emitter<'a> {
         } else if enum_init && self.syms.sym(p).overridden_by_param {
             let field = self.field_name(p);
             let param = self.ctor_param(p);
-            let _ = write!(self.out, "if (!{}{}, ", OWN_FIELD, this);
-            js_string(&field, &mut self.out);
-            let _ = write!(self.out, ")) {}.{} = {};", this, field, param);
+            // The enum's own parameter, unless a case's parameter takes the val (`param_flag`).
+            let at: Rc<str> = match self.syms.sym(p).owner {
+                Owner::Class(k) => self.class_name(k),
+                _ => Rc::from(""),
+            };
+            let _ = write!(self.out, "if (!{0}{3}?.includes({4})) {0}.{1} = {2};", this, field, param, param_flag(&field), at);
         } else {
             let field = self.field_access(p);
             let param = self.ctor_param(p);
@@ -3213,9 +3272,17 @@ impl<'a> Emitter<'a> {
                     let _ = write!(self.out, "let {};", value);
                     self.emit_stmt(*e, &Ctx::Assign(value.clone()));
                     self.line();
-                    let _ = write!(self.out, "if (!{}{}, ", OWN_FIELD, this);
-                    js_string(&field, &mut self.out);
-                    let _ = write!(self.out, ")) {}.{} = {};", this, field, value);
+                    if self.syms.class(tc.id).js == JsKind::Scala {
+                        // Skipped exactly where a class more derived than this one, in the instance's class, takes
+                        // the val as a parameter, which that class's prototype says (`param_flag`).
+                        let at = self.class_name(tc.id);
+                        let _ = write!(self.out, "if (!{0}{3}?.includes({4})) {0}.{1} = {2};", this, field, value, param_flag(&field), at);
+                    } else {
+                        // A JavaScript class's fields are the instance's own once its constructor has run.
+                        let _ = write!(self.out, "if (!{}{}, ", OWN_FIELD, this);
+                        js_string(&field, &mut self.out);
+                        let _ = write!(self.out, ")) {}.{} = {};", this, field, value);
+                    }
                 }
                 TInit::Field(sym, e) => {
                     let field = self.field_access(*sym);
@@ -3644,6 +3711,49 @@ impl<'a> Emitter<'a> {
             }
             _ => info.base_types[..own_len].iter().map(|&(b, _)| b).collect(),
         };
+        // A val a class takes as a constructor parameter keeps the parameter's value whatever lies above the class:
+        // the parameter is written before the parent's constructor runs, and no ancestor's own initialiser of the
+        // val may write over it; a body below runs last and wins by itself. So a class K's own initialiser of a
+        // marked val (`SymInfo::overridden_by_param`) is skipped exactly where a class more derived than K, in the
+        // instance's class, takes the val as a parameter (`takes_as_param`): asked per (val, K) of the list the
+        // instance's prototype holds for the val (`param_flag`). The list is written here whole, K by K in the
+        // linearisation's order, where a class the superclass's prototype does not answer for brings a K; a class
+        // that brings none reads its superclass's. A TRAIT HAS NO LIST: its prototype is in no instance's chain,
+        // and what it holds is copied into the classes that mix it in (`$cls`), where a trait's list would stand
+        // in front of the one their superclass answers with (a trait that extends a parameter class: the class
+        // that mixes it in reads its superclass's list, which names every class above the parameter).
+        if info.kind != ClassKind::Trait {
+            let lin: Vec<ClassId> = info.base_types.iter().map(|&(b, _)| b).collect();
+            let mut lists: Vec<(String, Vec<ClassId>, bool)> = Vec::new();
+            for (at, &k) in lin.iter().enumerate().skip(1) {
+                let guarded = self.guarded_vals(k);
+                for &(n, m) in guarded.iter() {
+                    let below: Vec<ClassId> = lin[..at].iter().copied().filter(|&d| self.takes_as_param(d, n)).collect();
+                    if below.is_empty() {
+                        continue;
+                    }
+                    let brought = below.iter().any(|d| own.contains(d));
+                    let field = self.field_name(m);
+                    match lists.iter_mut().find(|l| l.0 == field) {
+                        Some(l) => {
+                            if !l.1.contains(&k) {
+                                l.1.push(k);
+                            }
+                            l.2 |= brought;
+                        }
+                        None => lists.push((field, vec![k], brought)),
+                    }
+                }
+            }
+            lists.sort_by(|a, b| a.0.cmp(&b.0));
+            for (field, ks, brought) in lists {
+                if !brought {
+                    continue;
+                }
+                let classes: Vec<Rc<str>> = ks.iter().map(|&k| self.class_name(k)).collect();
+                let _ = write!(self.out, "{}.prototype{} = [{}]; ", name, param_flag(&field), classes.join(", "));
+            }
+        }
         // `Memoize`'s getter of a constant val, where a read through a receiver reaches it: the
         // literal on the prototype, for the instances and a trait's classes (before `$cls`,
         // which takes a trait's members).

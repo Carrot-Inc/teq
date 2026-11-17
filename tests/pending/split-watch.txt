@@ -3,5 +3,7 @@ erasure_pure_intersection	first build: cannot resolve import: caps not found
 implemented_method_joined_elsewhere	comment inserted: watch output differs from a fresh build
 jdk_member_missing_class	first build: cannot resolve import: Future is not an object or a package
 lazy_initializer_release	first build: value getDeclaredField is not a member of Class[_]
+param_mark_products	the parameter class named no more: watch output differs from a fresh build
+param_mark_sources	the taker a plain parameter: watch output differs from a fresh build
 poly_function_parent_erasure	first build: type PolyFunction not found
 union_erasure_bases	first build: type Pure not found

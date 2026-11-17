@@ -1514,8 +1514,14 @@ impl<'a> Emitter<'a> {
         for init in &tc.init {
             match init {
                 TInit::Field(s, e) => {
+                    // The guard of such a val's initialiser: a JavaScript class's asks the global's own-property
+                    // test; a Scala class's asks its prototype's list for the class itself (`param_flag`).
                     if self.syms.sym(*s).overridden_by_param {
-                        self.walk_text(w, super::OWN_FIELD);
+                        if self.syms.class(tc.id).js != JsKind::Scala {
+                            self.walk_text(w, super::OWN_FIELD);
+                        } else {
+                            self.walk_class(w, tc.id);
+                        }
                     }
                     self.walk(w, *e);
                 }

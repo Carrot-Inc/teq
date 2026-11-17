@@ -1,0 +1,7 @@
+class c-arg
+object o-arg
+anonymous anon-arg
+trait-below c2-arg
+subclass c-arg
+case cc-arg cc-arg
+trait-val kc-arg

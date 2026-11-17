@@ -842,6 +842,27 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(out)
     }
 
+    /// Whether, for an instance of the class `of`, a class more derived than `at` in its linearisation takes the val
+    /// `s` of `at` as a constructor parameter: a parameter that is a val of the class (`override val`:
+    /// `mods::FIELD`, which a class read from a body's pickle keeps where its `override` is not carried), written
+    /// before the parent's constructor runs, so that `at`'s own initialiser of the val must not write over it. A
+    /// plain parameter of the name is no member's value, and a trait's parameter is written by the trait's
+    /// initialiser after the bodies above it: neither takes the val.
+    fn param_below(&mut self, of: ClassId, at: ClassId, s: SymId) -> bool {
+        let name = self.syms().sym(s).name;
+        let chain: Vec<ClassId> = self.syms().class(of).base_types.iter().map(|&(b, _)| b).take_while(|&b| b != at).collect();
+        chain.into_iter().any(|k| {
+            let ki = self.syms().class(k);
+            ki.kind != ClassKind::Trait
+                && ki.ctor.iter().any(|cl| {
+                    cl.params.iter().any(|q| {
+                        let qi = self.syms().sym(q.sym);
+                        qi.name == name && qi.mods & mods::FIELD != 0
+                    })
+                })
+        })
+    }
+
     /// The field initialisers, statements and trait bodies that the construction of `c` runs.
     fn run_inits(&mut self, obj: &Rc<Object>, c: ClassId, ti: usize, frame: &Rc<Frame>, cx: &Ctx) -> R<()> {
         // Its plain inline calls expanded first, where the inlining phase keeps some still; a
@@ -909,7 +930,12 @@ impl<'a, 't> Interp<'a, 't> {
                     if self.syms().sym(s).mods & mods::LAZY == 0 {
                         let field = self.field_key(s);
                         let v = self.eval(e, frame, cx)?;
-                        if !self.syms().sym(s).overridden_by_param || matches!(self.read_slot(&this, field), Value::Absent) {
+                        // A marked val keeps a parameter's value where a class more derived than this one, in the
+                        // instance's class, takes the val as a parameter; a body below this one runs after it. A
+                        // JavaScript class keeps the test its output has (a field written already stays).
+                        let keeps = self.syms().sym(s).overridden_by_param
+                            && if self.syms().class(c).js == crate::symbols::JsKind::Scala { self.param_below(obj.class, c, s) } else { !matches!(self.read_slot(&this, field), Value::Absent) };
+                        if !keeps {
                             self.write_slot(&this, field, v);
                         }
                     }

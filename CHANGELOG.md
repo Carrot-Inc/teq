@@ -49,6 +49,19 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   and `c(0) foo_= 1`, which was taken for an assignment through `foo_`. Where neither form applies the error is
   the call's (`value += is not a member of Int`, with the right side's own), no longer the assignment's
   (`value update is not a member`).
+- A val that a class takes as a constructor parameter (`class A(override val v: String) extends P`) keeps the
+  parameter's value whatever lies above the class and gives way to a redefinition in the body of a class below it,
+  on JavaScript and in the interpreter as on the JVM. Two things were wrong before. Where a hierarchy mixes the two,
+  the body lost or won at the wrong level: for `class B extends A("a") { override val v = "b" }`, `new B().v` was
+  `a`, and under `class A2 extends P { override val v = "a2" }` with `class B2(override val v: String) extends A2`
+  and `class C2 extends B2("b") { override val v = "c" }`, `new A2().v` was `P`'s value and `new C2().v` was `b`;
+  so with a trait's val in `P`'s place, an abstract val, a generic parent, and a parent that takes the val as a
+  parameter itself. And where the classes come from a library (another module's products, a jar scalac compiled),
+  a parameter lost to the parent's own initialiser: for a library's `class K(override val t: String) extends T`,
+  `new K("k").t` was the trait's value, and a parent's body that reads the val saw the wrong one. A class's own
+  initialiser of such a val is now skipped exactly where a class more derived than it, in the instance's class,
+  takes the val as a parameter. Not yet: a read of the val during the parent's constructor where a body below
+  redefines it (scalac reads `null` there, teq the parent's value).
 - `a ++ b` of two arrays runs in a lean JavaScript build. A program that concatenated two arrays, of any element
   type, stopped at that line unless something else of it had brought the `ClassTag` object in: `ReferenceError:
   ClassTag$ is not defined`, or a `TypeError` on `ClassTag$().apply` or on a tag's `wrap` where only a part of
