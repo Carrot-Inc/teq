@@ -20,6 +20,9 @@ class_tag_pure_intersection	compile
 class_tag_stable_erasure	compile
 class_tag_synthesis	output
 class_tag_synthesis_jvm	output
+class_through_path_generic_equality	output; queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
+class_through_path_generic_method	compile; queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
+class_through_path_inline_parameter	unsupported; queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
 code_of_evaluated_argument	output
 code_of_extension_calls	output
 code_of_extension_clauses	output
@@ -101,6 +104,7 @@ inline_inner_class_quote	unsupported
 inline_outer_private_member	unsupported
 inline_outer_this_in_local_class	unsupported
 inline_outer_through_block_class	unsupported
+inline_parameter_path_pattern	unsupported; queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
 intrinsic_call_records	compile
 intrinsic_call_reflection	compile
 jar_case_class_selectors	unsupported

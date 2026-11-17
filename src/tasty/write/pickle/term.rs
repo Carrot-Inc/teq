@@ -3172,26 +3172,35 @@ impl<'w, 'a> P<'w, 'a> {
                     None => self.fail("the ClassTag of a type parameter of no evidence in scope".to_string()),
                 }
             }
-            Type::Class(c, _) if !matches!(self.w.interner.get(self.w.syms.class(c).name), "Any" | "AnyVal" | "Nothing" | "Null" | "Matchable" | "Singleton") => {
-                self.term_at(None);
-                let l = self.open(APPLY);
-                let ta = self.open(TYPEAPPLY);
-                let sl = self.open(SELECTIN);
-                let n = self.names.signed("apply", None, &[SigParam::Types(1), SigParam::Type("java.lang.Class".into())], "scala.reflect.ClassTag");
-                self.buf.nat(n as u64);
-                self.object_path("scala.reflect", "ClassTag");
-                self.object_class_ref("scala.reflect", "ClassTag");
-                self.buf.end_length(sl);
-                self.tpt(t);
-                self.buf.end_length(ta);
-                self.term_at(None);
-                self.buf.byte(CLASSCONST);
-                let k = self.class_applied_wild(c);
-                self.ty(k);
-                self.buf.end_length(l);
+            Type::Class(c, _) if !matches!(self.w.interner.get(self.w.syms.class(c).name), "Any" | "AnyVal" | "Nothing" | "Null" | "Matchable" | "Singleton") => self.class_tag_of(t, c),
+            // A class named through a path: `ClassTag.apply[p.C](classOf[..])`, the tag's type argument the path
+            // type as scalac's pickle has it, the class constant as a class's is written here.
+            Type::Nested(..) if self.w.tagged_path_class(t).is_some() => {
+                let Some(c) = self.w.tagged_path_class(t) else { unreachable!() };
+                self.class_tag_of(t, c)
             }
             _ => self.fail("the ClassTag of a type of no class".to_string()),
         }
+    }
+
+    /// `ClassTag.apply[T](classOf[C])` for the type `t` that names the class `c`.
+    fn class_tag_of(&mut self, t: TypeId, c: ClassId) {
+        self.term_at(None);
+        let l = self.open(APPLY);
+        let ta = self.open(TYPEAPPLY);
+        let sl = self.open(SELECTIN);
+        let n = self.names.signed("apply", None, &[SigParam::Types(1), SigParam::Type("java.lang.Class".into())], "scala.reflect.ClassTag");
+        self.buf.nat(n as u64);
+        self.object_path("scala.reflect", "ClassTag");
+        self.object_class_ref("scala.reflect", "ClassTag");
+        self.buf.end_length(sl);
+        self.tpt(t);
+        self.buf.end_length(ta);
+        self.term_at(None);
+        self.buf.byte(CLASSCONST);
+        let k = self.class_applied_wild(c);
+        self.ty(k);
+        self.buf.end_length(l);
     }
 
     /// `js.Dynamic.literal(k = v, ..)` as Scala.js's `literal` object takes it, applied

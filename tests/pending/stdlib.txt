@@ -12,6 +12,7 @@ array_index_bounds	output differs
 array_iterator_live	output differs
 array_makers_as_functions	output differs
 array_spread_alias	output differs
+array_spread_repeated_class	the run over scala-library dies; queued: a spread of an array into a repeated parameter on the scala-library JavaScript leg
 arrays_generic	output differs
 bench_strings	RangeError: Maximum call stack size exceeded
 bigdecimal_arith	error: not supported on JavaScript: method getType of java.lang.reflect.Field (a Java definition without an implementation in the std's plat
@@ -32,6 +33,10 @@ class_tag_array_evidence	output differs
 class_tag_stable_erasure	error: No ClassTag available for Array[A] & S
 class_tag_synthesis	ReferenceError: Ids$Id is not defined
 class_tag_synthesis_jvm	output differs
+class_through_path_array_spread	the run over scala-library dies; queued: a spread of an array into a repeated parameter on the scala-library JavaScript leg
+class_through_path_generic_equality	the universal equality's values; queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
+class_through_path_generic_method	refused (type mismatch: found None, required Some[Int]); queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
+class_through_path_inline_parameter	the run over scala-library dies (o$2 is not defined); queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
 code_of_evaluated_argument	output differs
 code_of_extension_calls	output differs
 code_of_extension_clauses	output differs
@@ -154,6 +159,7 @@ inline_inner_class_quote	ReferenceError: $this13zlxbg_473 is not defined
 inline_outer_private_member	ReferenceError: $this1sepepr_560 is not defined
 inline_outer_this_in_local_class	ReferenceError: $thisw13lme_371 is not defined
 inline_outer_through_block_class	ReferenceError: $this1sivzzj_489 is not defined
+inline_parameter_path_pattern	the run over scala-library dies (o$2 is not defined); queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
 inline_phase_wire_siblings	error: cannot resolve import: softwaremill not found
 inline_substitution_classes	RangeError: Maximum call stack size exceeded
 inline_substitution_local_classes	RangeError: Maximum call stack size exceeded

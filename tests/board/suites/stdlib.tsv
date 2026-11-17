@@ -60,6 +60,7 @@ argument_block_ascriptions	fail	-	output differs
 arity	pass	-	
 arity_class_names_found	fail	-	error: type ContextFunction01 not found
 array_as_collection	pass	-	
+array_concat_class	pass	-	
 array_for_guard	pass	-	
 array_index_bounds	fail	-	output differs
 array_iterator_live	fail	-	output differs
@@ -76,6 +77,7 @@ array_overloads_same_simple_name	pass	-
 array_same_elements_wider	pass	-	
 array_sliding_grouped	pass	-	
 array_spread_alias	fail	-	output differs
+array_spread_repeated_class	fail	-	the run over scala-library dies; queued: a spread of an array into a repeated parameter on the scala-library JavaScript leg
 arrays_copy_of	pass	-	
 arrays_generic	fail	-	output differs
 arrays_of_nothing	pass	-	
@@ -323,6 +325,14 @@ class_tag_to_array_evidence	pass	-
 class_tag_unapply	pass	-	
 class_tag_void_array	pass	-	
 class_tags	pass	-	
+class_through_path_array_concat	pass	-	
+class_through_path_array_spread	fail	-	the run over scala-library dies; queued: a spread of an array into a repeated parameter on the scala-library JavaScript leg
+class_through_path_equality	pass	-	
+class_through_path_generic_equality	fail	-	the universal equality's values; queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
+class_through_path_generic_method	fail	-	refused (type mismatch: found None, required Some[Int]); queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
+class_through_path_inline_parameter	fail	-	the run over scala-library dies (o$2 is not defined); queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
+class_through_path_opaque_controls	pass	-	
+class_through_path_tag	pass	-	
 class_tparams_kind_other_file	pass	-	
 classes	pass	-	
 clone_without_parens	pass	-	
@@ -1286,6 +1296,7 @@ inline_parameter_cast_argument	pass	-
 inline_parameter_cast_block	pass	-	
 inline_parameter_cast_forwarded	pass	-	
 inline_parameter_cast_proxy	pass	-	
+inline_parameter_path_pattern	fail	-	the run over scala-library dies (o$2 is not defined); queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
 inline_parameter_pure_block	pass	-	
 inline_parameter_purity	pass	-	
 inline_phase_bridge	pass	-	

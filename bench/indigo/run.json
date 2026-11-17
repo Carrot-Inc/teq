@@ -1,8 +1,8 @@
 {
  "kind": "record",
  "reason": "",
- "revision": "daeb6c167",
- "binary": "teq 0.1.10 daeb6c167",
+ "revision": "861127dd8",
+ "binary": "teq 0.1.10 861127dd8",
  "pin": "6e357eef01b3381d7c45ec8d3e350a230a8736a3",
  "inputs": "de4c053de35a32609d28e5030489ccce064b25051b336b6d9ad6cb09c49b3178",
  "assertions": [
@@ -14,8 +14,6 @@
  "violations": [
   "a frame drawn: not reached",
   "another frame after the scene-switch key: not reached",
-  "blocked: teq build sandbox.js: indigo-extras/src/indigoextras/effectmaterials/shaders/LegacyEffectsShaders.scala:37:8: error: No ClassTag available for syntax.vec2\n        )\n         ^",
-  "blocked: teq build sandbox.js: indigo-extras/src/indigoextras/effectmaterials/shaders/LegacyEffectsShaders.scala:51:10: error: No ClassTag available for syntax.vec2\n          )\n           ^",
   "blocked: teq build sandbox.js: indigo-extras/src/indigoextras/ui/package.scala:12:35: error: type ReferenceData not found\n      def bounds(context: UIContext[ReferenceData]): Bounds =\n                                    ^^^^^^^^^^^^^",
   "blocked: teq build sandbox.js: indigo-extras/src/indigoextras/ui/package.scala:12:5: error: expected extension methods\n      def bounds(context: UIContext[ReferenceData]): Bounds =\n      ^",
   "blocked: teq build sandbox.js: indigo-extras/src/indigoextras/ui/package.scala:13:25: error: component is a package, not a value\n        c.bounds(context, component)\n                          ^^^^^^^^^",
@@ -39,7 +37,6 @@
   "blocked: teq build sandbox.js: indigo/src/indigo/shared/platform/DisplayObjectConversions.scala:183:31: error: type mismatch: found ?, required _\n                n.eventHandler((nn, e)).foreach { ee =>\n                                ^^",
   "blocked: teq build sandbox.js: indigo/src/indigo/shared/shader/ToUniformBlock.scala:57:65: error: type mismatch: found ?, required _\n            .map(p => UBOField(p._2._1, p._2._2.toShaderPrimitive(p._1.asInstanceOf[p._2._2.Out])))\n                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
   "blocked: teq build sandbox.js: indigo/src/indigo/shared/shader/library/Lighting.scala:77:39: error: type mismatch: found syntax.vec3, required syntax.vec2\n          val normal: vec3 = normalize((2.0f * vec3(normalTexture.xy, 1.0f)) - 1.0f)\n                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
-  "blocked: teq build sandbox.js: indigo/src/indigo/shared/shader/library/ShapePolygon.scala:17:54: error: No ClassTag available for syntax.vec2\n      val VERTICES: array[16, vec2] = array[16, vec2]()\n                                                       ^",
   "blocked: teq build sandbox.js: indigo/src/indigo/shared/utils/Lens.scala:48:10: error: value identity is not a member of Predef\n      Lens(Predef.identity, (a, _) => a)\n           ^^^^^^^^^^^^^^^",
   "blocked: teq build sandbox.js: indigo/src/indigo/shared/utils/Lens.scala:53:10: error: value identity is not a member of Predef\n      Lens(Predef.identity, (_, a) => a)\n           ^^^^^^^^^^^^^^^",
   "blocked: teq build sandbox.js: sandbox/src/main/scala/com/example/sandbox/scenes/ComponentUIScene.scala:48:7: error: value update is not a member of ComponentGroup[Int]\n        model.components.update(ctx)(e).map { cl =>\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",

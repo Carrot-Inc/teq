@@ -7,6 +7,22 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A class named through a path has a `ClassTag`: `Array.empty[o.nums.Box]`, `Array(o.nums.Pt(1), o.nums.Pt(2))`,
+  a context bound's `make[o.nums.Box](2)`, a class of a trait named through the object that inherits it
+  (`summon[ClassTag[syntax.vec2]]`), the class's own inner object named inside the class, a projection
+  (`Array.empty[Ops#Top]`), also as a part of a union, an intersection or an array, and `new Array[o.nums.Box](n)`
+  on the JVM. teq refused each with "No ClassTag available for o.nums.Box".
+- An inner class's own `==` and `!=` are called where the class is named through a path: `new o.nums.Money(1) ==
+  new o.nums.Money(1)` with `def ==(o: Money)` answered `false`, the universal equality's answer. Not yet where
+  the class is generic and an operand's type argument has to be inferred from the other operand
+  (`c == new o.Cell(1, None)` for a `c: o.Cell[Option[Int]]`): that comparison is still the universal one. An own
+  `==` that the site may not access (private, protected outside a subclass, private to a scope the site is
+  outside) leaves the universal equality in place, also for a class named plainly, which teq refused with "== is
+  private to C"; of an overloaded `==` the alternative that takes the operand is called (teq refused "values of
+  types C and Int cannot be compared with == or !=").
+- A typed pattern or a case class pattern of a class unrelated to the scrutinee's is refused where the classes are
+  named through a path (`b match { case _: o.nums.Pt => … }` for a `b: o.nums.Box`), as it was for classes named
+  plainly; teq built the match.
 - An object named as a statement is evaluated for its effect on every target (`Registry` alone on a line, to run
   its initialisation). On JavaScript the object was left out where its own body runs nothing, so one whose
   initialisation is its superclass's (`object Registry extends Base("x")`: the superclass's body or a field's

@@ -6565,7 +6565,7 @@ impl<'a> Worker<'a> {
         }
         let Some(&tp) = sig.tparams.first() else { return false };
         let Some(elem) = subst.iter().find(|&&(p, _)| p == tp).map(|&(_, t)| self.zonk(t)) else { return false };
-        if self.stable_erasure(elem).is_none() {
+        if self.tag_erasure(elem).is_none() {
             return false;
         }
         // ClassTag's class and companion, as the build has them, before the standard tag's check reads

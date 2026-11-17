@@ -453,6 +453,35 @@ impl<'a> Worker<'a> {
     /// `ClassTag[T]` as scalac synthesizes it: the tag of `classOf` of the erasure of `T`, which
     /// has to be one that the type alone says (`stable_erasure`), and for an array type the
     /// element's tag, wrapped.
+    /// The class a type names, plainly or through a prefix (`p.C[Ts]`, dotty's `TypeRef(p, C)`, whose
+    /// `classSymbol` is `C` whatever `p`): the class, its own arguments and the prefix it is named through, none
+    /// for a plain class. One place states it for the consumers that ask a type for its class. An opaque type
+    /// named from outside its scope is the same node (`mark_external_opaques`) and names no class; nor does a
+    /// value class through a prefix, which scalac refuses to declare (E075): what is told of one today stays.
+    pub fn named_class(&self, t: TypeId) -> Option<(ClassId, TList, Option<TypeId>)> {
+        match self.types.get(t) {
+            Type::Class(c, args) => Some((c, args, None)),
+            Type::Nested(prefix, inner) => match self.types.get(inner) {
+                Type::Class(c, args) if self.syms.class(c).kind != ClassKind::Opaque && !self.syms.class(c).value_class => Some((c, args, Some(prefix))),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The class a `ClassTag` is made of where `t` names one through a prefix (`Synthesizer.synthesizedClassTag`:
+    /// the erasure of `p.C` is `C`). A class defined in the body of the inline method under check has none here,
+    /// as today: an expansion copies the body's classes, and the array class of the definition's own is not
+    /// there on the JVM (a local class in an inline body, with a tag handed over by hand, fails there the same).
+    pub(crate) fn tagged_path_class(&self, t: TypeId) -> Option<ClassId> {
+        let (c, _, prefix) = self.named_class(t)?;
+        prefix?;
+        if self.inline_under_check().is_some_and(|m| self.defined_in_body_of(c, m)) {
+            return None;
+        }
+        Some(c)
+    }
+
     pub fn class_tag_given(&mut self, class: ClassId, target: TypeId) -> Option<TExprId> {
         if !self.is_class_tag_class(class) {
             return None;
@@ -467,8 +496,10 @@ impl<'a> Worker<'a> {
             Type::Class(c, _) if c == self.b.null => return None,
             Type::Class(c, _) => c,
             Type::Any => self.b.any_ref,
+            // A class named through a path: its class's tag.
+            Type::Nested(..) if self.tagged_path_class(subject).is_some() => self.tagged_path_class(subject)?,
             _ => {
-                let erased = self.stable_erasure(subject)?;
+                let erased = self.tag_erasure(subject)?;
                 return self.tag_of_erased(class, erased, subject);
             }
         };
@@ -590,6 +621,18 @@ impl<'a> Worker<'a> {
     /// proxy of such (a path, `C.this`, a refinement), which erases as what it stands for. A type
     /// parameter, an abstract type and an opaque type have none.
     pub(super) fn stable_erasure(&mut self, t: TypeId) -> Option<Erased> {
+        self.stable_erasure_of(t, false)
+    }
+
+    /// The erasure a `ClassTag` asks for: `stable_erasure`'s, and a class named through a path is its class
+    /// there, alone and as a part of the tag's subject (an array's element, a union's and an intersection's
+    /// parts). The other askers keep `stable_erasure`'s answer for such a class: a structural call's parameter
+    /// (the call on a plain class does not find its method on the JVM) and a double definition's text.
+    pub(super) fn tag_erasure(&mut self, t: TypeId) -> Option<Erased> {
+        self.stable_erasure_of(t, true)
+    }
+
+    fn stable_erasure_of(&mut self, t: TypeId, paths: bool) -> Option<Erased> {
         // The cases `dealias` would see through to a bound: an abstract type and a type parameter
         // have no erasure of their own, a match type one only once it reduces (dotty's
         // `TypeBounds`, `TypeParamRef` and `MatchType` cases), and a path has its underlying
@@ -599,17 +642,17 @@ impl<'a> Worker<'a> {
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => return None,
             Type::Param(_) => {
                 let known = self.dealias(t);
-                return if known == t { None } else { self.stable_erasure(known) };
+                return if known == t { None } else { self.stable_erasure_of(known, paths) };
             }
             Type::Match(..) | Type::Alias(..) => {
                 return match self.reduce_head(t) {
-                    Some(r) if r != t => self.stable_erasure(r),
+                    Some(r) if r != t => self.stable_erasure_of(r, paths),
                     _ => None,
                 };
             }
             Type::This(_) | Type::Term(_) | Type::Select(..) => {
                 let widened = self.widen_path(t);
-                return if widened == t { None } else { self.stable_erasure(widened) };
+                return if widened == t { None } else { self.stable_erasure_of(widened, paths) };
             }
             _ => {}
         }
@@ -620,7 +663,7 @@ impl<'a> Worker<'a> {
             Type::Nothing => Some(Erased::Nothing(0)),
             Type::Class(c, _) if c == self.b.null => Some(Erased::Null(0)),
             Type::Class(c, args) if c == self.b.array => {
-                let element = self.stable_erasure(*self.types.items(args).first()?)?;
+                let element = self.stable_erasure_of(*self.types.items(args).first()?, paths)?;
                 Some(element.with_dims(element.dims() + 1))
             }
             // An opaque type erases to its underlying type, which the erasure alone sees.
@@ -630,24 +673,25 @@ impl<'a> Worker<'a> {
                 let under = info.underlying?;
                 let subst: Subst = info.tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
                 let under = self.types.subst(under, &subst);
-                self.stable_erasure(under)
+                self.stable_erasure_of(under, paths)
             }
             Type::Class(c, _) if c == self.b.any_val => Some(Erased::Of(self.b.any_ref, 0)),
             Type::Class(c, _) => Some(Erased::Of(c, 0)),
+            Type::Nested(..) if paths => self.tagged_path_class(t).map(|c| Erased::Of(c, 0)),
             Type::Lit(_) => match self.types.get(self.widen_lit(t)) {
                 Type::Class(c, _) => Some(Erased::Of(c, 0)),
                 _ => None,
             },
             Type::Union(a, b, _) => {
-                let (a, b) = (self.stable_erasure(a)?, self.stable_erasure(b)?);
+                let (a, b) = (self.stable_erasure_of(a, paths)?, self.stable_erasure_of(b, paths)?);
                 Some(self.erased_lub(a, b))
             }
             Type::Inter(a, b) => {
-                let (a, b) = (self.stable_erasure(a)?, self.stable_erasure(b)?);
+                let (a, b) = (self.stable_erasure_of(a, paths)?, self.stable_erasure_of(b, paths)?);
                 Some(if self.compare_erased(a, b) != std::cmp::Ordering::Greater { a } else { b })
             }
-            Type::Refined(parent, _) => self.stable_erasure(parent),
-            Type::Rec(body) => self.stable_erasure(body),
+            Type::Refined(parent, _) => self.stable_erasure_of(parent, paths),
+            Type::Rec(body) => self.stable_erasure_of(body, paths),
             _ => None,
         }
     }

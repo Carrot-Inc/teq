@@ -3533,6 +3533,10 @@ impl<'a> Worker<'a> {
         if matches!(self.types.get(known), Type::Class(..) | Type::Lit(_) | Type::Any | Type::Nothing) {
             return None;
         }
+        // A class named through a path is a known element class too (scalac's `anewarray` of the class).
+        if matches!(self.types.get(known), Type::Nested(..)) && self.tagged_path_class(known).is_some() {
+            return None;
+        }
         if !self.jvm && !matches!(self.types.get(known), Type::Param(_) | Type::AppParam(..)) {
             return None;
         }

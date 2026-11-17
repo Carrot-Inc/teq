@@ -49,6 +49,8 @@ companionderived	pass	-
 companionmirror	pass	-	
 companionnoinits	pass	-	
 companionnoinitsread	pass	-	
+companionprivateequality	fail	-	classes, subset, jvm-run, scalac-b, scalac-run, over-scalac; queued: a companion's inline call of a private member, over the products and over a scalac-built library
+companionprivatenamed	fail	-	classes, subset, jvm-run, scalac-b, scalac-run, over-scalac; queued: a companion's inline call of a private member, over the products and over a scalac-built library
 companionproducts	pass	-	
 companiontouch	pass	-	
 companionvalue	pass	-	
@@ -198,6 +200,8 @@ inlineinterp	pass	-
 inlinejdkctor	pass	-	
 inlinelocalclass	pass	-	
 inlinematcheffect	pass	-	
+inlineoverloadsequality	fail	-	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
+inlineoverloadsnamed	fail	-	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
 inlinequote	pass	-	
 inlinesam	pass	-	
 inlinetoplevelpath	pass	-	
@@ -304,6 +308,8 @@ overloadusing	fail	-	overloadusing js-run
 parentargsread	fail	-	parentargsread classes
 patdefsynthetic	pass	-	
 patdefvalueclass	pass	-	
+pathclass	pass	-	
+pathequality	pass	-	
 perfile	pass	-	
 pkgobj	pass	-	
 pkgobjgiven	pass	-	

@@ -1381,7 +1381,7 @@ impl<'a> Worker<'a> {
         }
         if numeric.0.is_none() {
             let op = if negate { names::NEQ } else { names::EQEQ };
-            if self.declares_equality_for(lty, op, rty) {
+            if self.declares_equality_for(tl, lty, op, rty) {
                 let lists = vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span, fun: ArgList::NO_FUN }];
                 return self.apply_member(tl, lty, op, None, lists, span, None);
             }
@@ -1440,9 +1440,19 @@ impl<'a> Worker<'a> {
 
     /// A class's own `==` or `!=` that takes the right operand, which overloads `Any`'s and is
     /// the more specific: scala-library's `SizeCompareOps.==(Int)` of `xs.sizeIs == 1`. Numbers
-    /// have none and are not asked.
-    fn declares_equality_for(&mut self, lty: TypeId, op: Name, rty: TypeId) -> bool {
-        let Type::Class(c, _) = self.types.get(lty) else { return false };
+    /// have none and are not asked. The class is the receiver's, named plainly or through a stable path
+    /// (`named_class`), the parameter's type seen from that path; through a type's projection there is no
+    /// path to see it from, and `Any`'s stays. An alternative the site may not access is none (dotty's
+    /// `TypeAssigner.accessibleType`: the accessible alternatives, else the inherited member, here `Any`'s).
+    fn declares_equality_for(&mut self, recv: TExprId, lty: TypeId, op: Name, rty: TypeId) -> bool {
+        let (c, prefix) = match self.types.get(lty) {
+            Type::Class(c, _) => (c, None),
+            Type::Nested(..) => match self.named_class(lty) {
+                Some((c, _, Some(p))) if self.is_stable_type(p) => (c, Some(p)),
+                _ => return false,
+            },
+            _ => return false,
+        };
         // `Any`'s `==` is no member: a completed class that neither declares one nor inherits
         // one is done with here.
         let declared_nowhere = self.syms.class_done(c).map_or(false, |info| {
@@ -1452,20 +1462,42 @@ impl<'a> Worker<'a> {
             return false;
         }
         let Some((m, owner_ty)) = self.find_member(lty, op) else { return false };
-        let sig = self.sig_of(m);
-        // The operand's clause first, using clauses after it (`def ==(i: Int)(using Boolean)`).
-        let Some((clause, rest)) = sig.clauses.split_first() else { return false };
-        if clause.is_using || !rest.iter().all(|c| c.is_using) {
-            return false;
-        }
-        let [param] = clause.params.as_slice() else { return false };
-        let pty = param.ty;
+        let alternatives: Vec<SymId> = match self.syms.alternatives(m) {
+            Some(alts) => alts.to_vec(),
+            None => vec![m],
+        };
+        let through_this = matches!(self.prog.expr(recv), TExpr::This | TExpr::Super(_));
         let subst = self.owner_subst(owner_ty);
-        let pty = self.types.subst(pty, &subst);
-        let mark = self.snapshot();
-        let fits = self.is_sub(rty, pty);
-        self.rollback(&mark);
-        fits
+        alternatives.into_iter().any(|a| {
+            if !self.is_accessible(a) {
+                return false;
+            }
+            if self.syms.sym(a).mods & crate::ast::mods::PROTECTED != 0 {
+                let declared = self.access_declaration_of(a);
+                if self.protected_denied(declared, through_this, lty).is_some() {
+                    return false;
+                }
+            }
+            let pty = {
+                let sig = self.sig_of(a);
+                // The operand's clause first, using clauses after it (`def ==(i: Int)(using Boolean)`).
+                let Some((clause, rest)) = sig.clauses.split_first() else { return false };
+                if clause.is_using || !rest.iter().all(|c| c.is_using) {
+                    return false;
+                }
+                let [param] = clause.params.as_slice() else { return false };
+                param.ty
+            };
+            let pty = self.types.subst(pty, &subst);
+            let pty = match (prefix, self.syms.class(c).owner) {
+                (Some(p), Owner::Class(o)) => self.as_seen_from(pty, p, o),
+                _ => pty,
+            };
+            let mark = self.snapshot();
+            let fits = self.is_sub(rty, pty);
+            self.rollback(&mark);
+            fits
+        })
     }
 
     /// `scala.math.BigInt` and `BigDecimal`, which `BoxesRunTime.equals` lets compare themselves

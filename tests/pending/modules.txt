@@ -1,7 +1,11 @@
+companionprivateequality	classes, subset, jvm-run, scalac-b, scalac-run, over-scalac; queued: a companion's inline call of a private member, over the products and over a scalac-built library
+companionprivatenamed	classes, subset, jvm-run, scalac-b, scalac-run, over-scalac; queued: a companion's inline call of a private member, over the products and over a scalac-built library
 ctoraccess	ctoraccess bundle
 exportinlinedefaults	exportinlinedefaults build
 exporttransparentdefault	exporttransparentdefault build
 functionxxl	functionxxl build
+inlineoverloadsequality	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
+inlineoverloadsnamed	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
 javasuperstable	javasuperstable bundle
 leanaliasowner	leanaliasowner scalac-lean-b
 loadedpackageholders	loadedpackageholders members

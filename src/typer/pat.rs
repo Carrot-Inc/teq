@@ -2639,6 +2639,11 @@ impl<'a> Worker<'a> {
                 return self.check_sensical_test(b, sty, span);
             }
             Type::Class(c, _) => c,
+            // A class named through a path is tested as its class (`TypeTestsCasts`'s `effectiveClass` of the tested type).
+            Type::Nested(..) => match self.named_class(t) {
+                Some((c, ..)) => c,
+                None => return,
+            },
             _ => return,
         };
         // The tested type erases as the scrutinee's does, an opaque type to its alias's class.
