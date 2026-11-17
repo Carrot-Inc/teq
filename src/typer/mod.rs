@@ -1916,8 +1916,11 @@ pub struct Worker<'a> {
     /// warns of nothing, `CAST` for an `asInstanceOf` erased to the expression it casts, which
     /// is no path.
     pub expr_marks: FxMap<TExprId, u8>,
-    /// The lambdas an eta-expansion made, which still convert to a SAM trait where one is expected.
-    pub eta_expansions: FxMap<TExprId, ()>,
+    /// The lambdas the typer made of a method's reference, each with the reference it was made of, the file
+    /// and the span of the name as written (`Worker::typer_eta`; none for one made past an error told of the
+    /// name), and whether it is an application's own expansion, which still converts to a SAM trait where one
+    /// is expected.
+    pub eta_expansions: FxMap<TExprId, (Option<(FileId, Span)>, bool)>,
     /// A constant's selection written as its literal (`C.f` of `final val f = true`), with the
     /// receiver and the member it names: a path still where a singleton type is expected of it
     /// (`def cond(): C.f.type = C.f`), as scalac folds only after typing.

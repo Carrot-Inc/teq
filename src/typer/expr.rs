@@ -590,11 +590,13 @@ impl<'a> Worker<'a> {
     }
 
     /// `check_expr`, with the adapted tree's type (`adapt_typed`'s): what `ConstantTree(Typed(expr, _))` reads of an
-    /// ascription's operand, a constant converted by the adaptation included.
+    /// ascription's operand, a constant converted by the adaptation included. An operand ascribed to `Unit` is
+    /// dropped without the warning, the remedy the warning names (`withDiscardWarnable`'s `isAscribedToUnit`);
+    /// one written in braces is a block, whose result is no ascribed operand and is told as any other.
     pub(super) fn check_expr_adapted(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId) {
         let (te, ty) = self.type_expr(e, Some(expected));
         let discards = self.canon(expected) == self.b.t_unit;
-        if discards {
+        if discards && self.cur_ast().is_braced(e) {
             self.warn_discarded(e, te, ty);
         }
         let span = self.cur_ast().expr_span(e);
@@ -629,17 +631,35 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// scalac's warning for a pure value that a `Unit` swallows: `def f(): Unit = 5`.
+    /// scalac's warning for a pure value that a `Unit` swallows: `def f(): Unit = 5` (`Typer.adaptToSubType`'s
+    /// `checkStatementPurity`). A value of a context function type is applied before it is dropped
+    /// (`adapt_typed`), and the application is no pure value: the value as it stands is not judged.
     pub fn warn_discarded(&mut self, e: ExprId, te: TExprId, ty: TypeId) {
         let ty = self.deref_canonical(ty);
-        let mut value = te;
-        while let TExpr::Block(_, res) = self.prog.expr(value) {
-            value = res;
-        }
-        if ty == self.b.t_unit || ty == NOTHING || ty == ERROR || !self.pure_value(value) {
+        if ty == self.b.t_unit || ty == NOTHING || ty == ERROR {
             return;
         }
-        let span = self.cur_ast().expr_span(self.result_expr(e));
+        if self.as_context_function(ty).is_some() && !self.closure_as_written(te) {
+            return;
+        }
+        let result = self.result_expr(e);
+        if self.refuse_method_value(result, te, ty) {
+            return;
+        }
+        if !self.warnable_pure(result, te) {
+            return;
+        }
+        // A value that conforms to `Unit` where it stands (an opaque alias of it inside its scope, a type
+        // bounded by it) is not dropped: `adaptToSubType` is reached where `tree.tpe <:< pt` fails.
+        if !self.types.has_vars(ty) {
+            let mark = self.snapshot();
+            let conforms = self.is_sub(ty, self.b.t_unit);
+            self.rollback(&mark);
+            if conforms {
+                return;
+            }
+        }
+        let span = self.discard_point(result);
         // The value's type widened (`ValueDiscarding`'s `tp.widen`): `Int` for a `5`.
         let widened = self.widen_path(ty);
         let widened = self.widen_lit(widened);
@@ -655,21 +675,122 @@ impl<'a> Worker<'a> {
     /// tree (a parser's recovery leaves such statements).
     pub fn warn_pure_statement(&mut self, e: ExprId, te: TExprId, ty: TypeId, mark: (usize, u32)) {
         let ty = self.deref_canonical(ty);
-        if ty == self.b.t_unit || ty == ERROR || !self.pure_value(te) || self.failed_since(mark) {
+        if ty == self.b.t_unit || ty == ERROR {
+            return;
+        }
+        if self.as_context_function(ty).is_some() && !self.closure_as_written(te) {
             return;
         }
         let result = self.result_expr(e);
-        let span = self.cur_ast().expr_span(result);
-        if matches!(self.prog.expr(te), TExpr::Lambda(..)) && self.made_by_typer(result) {
+        if matches!(self.prog.expr(te), TExpr::Lambda(..)) && self.typer_eta(result, te).is_some() {
+            if !self.pure_closure(te) || self.failed_since(mark) {
+                return;
+            }
+            let span = self.cur_ast().expr_span(result);
             let msg = format!("missing argument list for value of type {}", self.show(ty));
             self.error(span, msg);
             return;
         }
+        if !self.warnable_pure(e, te) || self.failed_since(mark) {
+            return;
+        }
+        let span = self.statement_point(e);
         self.warn_as(span, "A pure expression does nothing in statement position", crate::source::Warning::id(crate::warnings::id::PURE_EXPRESSION_IN_STATEMENT_POSITION));
     }
 
+    /// A function value the typer made of a method's name is no value to drop: the reference refuses it where
+    /// `Unit` is wanted as it does in statement position (`Typer.adapt`'s check of a closure it synthesized:
+    /// "missing argument list"); a function literal the program wrote is dropped and told. `written` is the
+    /// expression's result as written, `te` its typed tree (the value at the end of its blocks), `ty` the
+    /// value's type. Whether the value is such a closure, refused or not.
+    fn refuse_method_value(&mut self, written: ExprId, te: TExprId, ty: TypeId) -> bool {
+        let Some(value) = self.typer_eta(written, te) else {
+            return false;
+        };
+        if self.pure_closure(value) {
+            let span = self.cur_ast().expr_span(written);
+            let msg = format!("missing argument list for value of type {}", self.show(ty));
+            self.error(span, msg);
+        }
+        true
+    }
+
+    /// The same refusal where a lambda's result or a branch was dropped against a variable that `Unit` bounds
+    /// (`discard_to_unit_bound`): `te` of type `ty`, written `written`, was adapted to `adapted_ty`.
+    fn refuse_method_value_dropped(&mut self, written: ExprId, te: TExprId, ty: TypeId, adapted_ty: TypeId) {
+        let ty = self.deref_canonical(ty);
+        if self.deref_canonical(adapted_ty) != self.b.t_unit || ty == self.b.t_unit || ty == NOTHING || ty == ERROR {
+            return;
+        }
+        if self.as_context_function(ty).is_some() && !self.closure_as_written(te) {
+            return;
+        }
+        let result = self.result_expr(written);
+        self.refuse_method_value(result, te, ty);
+    }
+
+    /// The closure at `te`, the value at the end of its blocks, where it is the eta-expansion the typer made of
+    /// the method's reference written at `written` itself (`closureDef(meth)` with the synthetic span, for an
+    /// `original` that is no function): the node the typer noted where it expanded the name (`eta_expansions`),
+    /// for this place. A closure that an inline call's expansion, a reduced application or a `summon` left
+    /// here was made of no name written here, also where a method's name was expanded inside it: the
+    /// reference holds the call at such a place and refuses nothing.
+    fn typer_eta(&self, written: ExprId, te: TExprId) -> Option<TExprId> {
+        let mut closure = te;
+        while let TExpr::Block(_, res) = self.prog.expr(closure) {
+            closure = res;
+        }
+        if !matches!(self.prog.expr(closure), TExpr::Lambda(..)) {
+            return None;
+        }
+        // The reference as written: inside the parentheses around it and before a trailing ` _`, whose typing
+        // is its operand's (`Migrations.typedAsFunction`); an `apply` selected of a method's name names the
+        // closure made of that name.
+        let ast = self.cur_ast();
+        let mut places = Vec::with_capacity(2);
+        let mut reference = written;
+        loop {
+            match ast.expr(reference) {
+                Expr::Parens(inner) | Expr::AsFunction(inner) => reference = inner,
+                Expr::Select(inner, name) if name == names::APPLY => {
+                    places.push(ast.expr_span(reference));
+                    reference = inner;
+                }
+                _ => {
+                    places.push(ast.expr_span(reference));
+                    break;
+                }
+            }
+        }
+        let file = self.env.file;
+        let mut value = te;
+        loop {
+            if let Some(&(Some((made_in, made_of)), _)) = self.eta_expansions.get(&value) {
+                if made_in == file && places.contains(&made_of) {
+                    return Some(closure);
+                }
+            }
+            match self.prog.expr(value) {
+                TExpr::Block(_, res) => value = res,
+                _ => return None,
+            }
+        }
+    }
+
+    /// The test the two warnings share (`Typer.checkStatementPurity`): the reference's `isPureExpr`, asked of the
+    /// port of `TreeInfo.exprPurity` (`expr_purity_under`, a written cast an effect), a call still pending none
+    /// (an `Apply` to the reference's typer), with `withDiscardWarnable`'s exemption of `this`
+    /// (`isThisTypeResult`), and only of a value the source wrote (`told_as_written`).
+    fn warnable_pure(&mut self, written: ExprId, te: TExprId) -> bool {
+        use super::elaborate::Purity;
+        if matches!(self.prog.expr(te), TExpr::This) || !self.told_as_written(written, te) {
+            return false;
+        }
+        !self.is_pending_call(te) && self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE)
+    }
+
     /// Whether the typed `te` is the value the source wrote at `written`, node for node, which is what the
-    /// reference's `exprPurity` judges: a literal, a name that reads what it names, a selection of a member from such a
+    /// reference judges: a literal, a name that reads what it names, a selection of a member from such a
     /// value, a tuple or a creation (by `new` or by the class's name) of such values, a function literal, an
     /// operation on names and literals. Where the source wrote anything else, the typed tree can be an
     /// expansion's or a reduction's result (an inline call's, `summon`'s, a tuple's element, a function
@@ -684,6 +805,9 @@ impl<'a> Worker<'a> {
         let typed = self.prog.expr(te);
         let literal = matches!(typed, TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null);
         match ast.expr(written) {
+            // A closure under an ascription (a function literal, or the one the ascription made of a method's
+            // name) is a value the reference keeps under its `Typed`.
+            Expr::Typed(..) if matches!(typed, TExpr::Lambda(..)) => true,
             Expr::Parens(inner) | Expr::Typed(inner, _) => self.told_as_written(inner, te),
             Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit | Expr::NullLit => literal,
             Expr::This | Expr::QualThis(_) => matches!(typed, TExpr::This),
@@ -717,7 +841,7 @@ impl<'a> Worker<'a> {
             },
             Expr::Lambda(..) | Expr::PolyLambda(..) => matches!(typed, TExpr::Lambda(..)),
             Expr::New(_, args) => match typed {
-                TExpr::New(_, targs) => self.told_each(args, targs),
+                TExpr::New(c, targs) => self.stable_constructor(c) && self.told_each(args, targs),
                 _ => false,
             },
             Expr::Apply(f, args) | Expr::UsingApply(f, args) => {
@@ -727,14 +851,19 @@ impl<'a> Worker<'a> {
                 };
                 let Expr::Ident(name) = ast.expr(callee) else { return false };
                 match typed {
-                    TExpr::New(c, targs) => self.syms.class(c).name == name && self.told_each(args, targs),
+                    // A creation written without `new`: a case class's is its synthetic `apply`
+                    // (`isPureSyntheticCaseApply`: the class's own purity), any other's the constructor's call.
+                    TExpr::New(c, targs) => {
+                        let made = if self.syms.class(c).mods & mods::CASE != 0 { self.case_apply_judged(c) } else { self.stable_constructor(c) };
+                        self.syms.class(c).name == name && made && self.told_each(args, targs)
+                    }
                     TExpr::CallStatic(s, targs) => {
                         let made = match self.syms.sym(s).owner {
                             Owner::Class(o) => self.syms.class(o).companion,
                             _ => None,
                         };
                         self.is_pure_synthetic_case_apply(s)
-                            && made.is_some_and(|k| self.syms.class(k).name == name)
+                            && made.is_some_and(|k| self.syms.class(k).name == name && self.case_apply_judged(k))
                             && self.told_each(args, targs)
                     }
                     _ => false,
@@ -748,6 +877,33 @@ impl<'a> Worker<'a> {
 
     /// The arguments as written, each the value typed in its place (`told_as_written`); a list the typer
     /// filled or reordered (a default, a capture, an enclosing instance) is not held to the source.
+    /// Whether a creation of `c` can be a pure expression to the reference, whose test is the constructor's
+    /// flag (`TreeInfo.isPureApply`: `fn.symbol.isStableMember && fn.symbol.isConstructor`), by where the class
+    /// comes from: a class of the module's sources has it from `Namer` where it runs no initialiser
+    /// (`SymDenotations.setStableConstructor`: the port's purity of the creation decides); a class read from a
+    /// pickle has it where the pickle marks its constructor `STABLE`; a class of another module's products is
+    /// not told (their pickles write the flag by another rule); of the standard library's own text the
+    /// assured classes alone (`Definitions.isAssuredNoInits`: `Some`, the tuples); a Java class and a facade
+    /// never.
+    fn stable_constructor(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        if info.js != JsKind::Scala {
+            return false;
+        }
+        if self.in_jar(info.file) {
+            return !self.in_products(info.file) && info.read_ctor_stable;
+        }
+        self.is_program_file(info.file) || self.is_assured_no_inits(c)
+    }
+
+    /// Whether a case class's synthetic `apply` is judged by the class's purity as the port has it: not for a
+    /// class of the standard library's own text, whose body is not scala-library's (`::` holds a `var` there),
+    /// but the assured ones.
+    fn case_apply_judged(&self, c: ClassId) -> bool {
+        let file = self.syms.class(c).file;
+        self.in_jar(file) || self.is_program_file(file) || self.is_assured_no_inits(c)
+    }
+
     fn told_each(&mut self, written: ListRef, typed: ListRef) -> bool {
         if written.len != typed.len {
             return false;
@@ -902,44 +1058,89 @@ impl<'a> Worker<'a> {
         self.mark_removed_statement(written, te);
     }
 
-    /// Whether a closure typed of the expression is the typer's, no function literal the program
-    /// wrote (`untpd.isFunction`) nor an ascription, whose typed tree dotty keeps around it.
-    fn made_by_typer(&self, e: ExprId) -> bool {
-        match self.cur_ast().expr(e) {
-            Expr::Lambda(..) | Expr::PolyLambda(..) | Expr::Typed(..) => false,
-            Expr::Parens(inner) => self.made_by_typer(inner),
-            _ => true,
-        }
+    /// A closure the typer made of a method's name is pure as the reference's `Closure` is.
+    fn pure_closure(&mut self, te: TExprId) -> bool {
+        use super::elaborate::Purity;
+        self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE)
     }
 
-    /// Whether evaluating the expression can have no effect: a literal, a value, `this`, a
-    /// function literal, or a tuple or block of such; not a cast written, which dotty's
-    /// `TreeInfo.exprPurity` takes for an effect (an ordinary `TypeApply` is `Impure`) where its
-    /// erasure makes it the value itself.
-    fn pure_value(&self, te: TExprId) -> bool {
-        if self.prog.is_cast(te) {
-            return false;
+    /// A function literal the program wrote, no ascription's closure.
+    fn closure_as_written(&self, te: TExprId) -> bool {
+        matches!(self.prog.expr(te), TExpr::Lambda(..)) && self.expr_marks.get(&te).map_or(true, |&m| m & super::MARK_ASCRIBED_CLOSURE == 0)
+    }
+
+    /// Where scalac's header places a message at the expression `e` as written, its tree's point
+    /// (`report.warning(msg, original.srcPos)`): the bracket that opens an application's arguments, a
+    /// selection's name, the expression's start for any other.
+    fn written_point(&self, e: ExprId) -> Span {
+        let ast = self.cur_ast();
+        let span = ast.expr_span(e);
+        let (from, selection) = match ast.expr(e) {
+            Expr::Apply(f, _) | Expr::UsingApply(f, _) => (ast.expr_span(f).end, false),
+            Expr::Select(q, _) => (ast.expr_span(q).end, true),
+            _ => return span,
+        };
+        let text = self.source(self.env.file).text.as_bytes();
+        let end = (span.end as usize).min(text.len());
+        let mut at = (from as usize).min(end);
+        let skip_space = |at: &mut usize| {
+            while *at < end && text[*at].is_ascii_whitespace() {
+                *at += 1;
+            }
+        };
+        skip_space(&mut at);
+        if selection {
+            // The parentheses that close around the qualifier, then the dot.
+            while at < end && text[at] == b')' {
+                at += 1;
+                skip_space(&mut at);
+            }
+            if at < end && text[at] == b'.' {
+                at += 1;
+                skip_space(&mut at);
+            }
         }
-        match self.prog.expr(te) {
-            TExpr::Int(_)
-            | TExpr::Long(_)
-            | TExpr::Double(_)
-            | TExpr::Bool(_)
-            | TExpr::Char(_)
-            | TExpr::Str(_)
-            | TExpr::Unit
-            | TExpr::This
-            | TExpr::Module(_)
-            | TExpr::Lambda(..) => true,
-            TExpr::Local(s) | TExpr::Static(s) => {
-                let info = self.syms.sym(s);
-                matches!(info.kind, SymKind::Val | SymKind::Var) && info.mods & mods::LAZY == 0
+        Span::new(at as u32, span.end.max(at as u32))
+    }
+
+    /// Where the statement `e` is placed as written (`checkStatementPurity`'s `original.srcPos`): at the
+    /// parenthesis of one written in parentheses, at an infix operation's operator (`Desugar.binop`'s
+    /// `Select(l, op)`), else as `written_point`.
+    fn statement_point(&self, e: ExprId) -> Span {
+        let ast = self.cur_ast();
+        let text = self.source(self.env.file).text.as_bytes();
+        if let Some((outer, _)) = ast.written_arg(e) {
+            if text.get(outer.start as usize) == Some(&b'(') {
+                return outer;
             }
-            TExpr::Block(stmts, res) => stmts.is_empty() && self.pure_value(res),
-            TExpr::New(c, args) => {
-                self.is_tuple_class(c) && self.prog.expr_list(args).iter().all(|&a| self.pure_value(a))
+        }
+        if let Expr::Infix(_, op, _, op_end) = ast.expr(e) {
+            let span = ast.expr_span(e);
+            let start = op_end.wrapping_sub(self.name_str(op).len() as u32);
+            if op_end != crate::ast::NO_END && start >= span.start && op_end <= span.end {
+                return Span::new(start, span.end);
             }
-            _ => false,
+        }
+        self.written_point(e)
+    }
+
+    /// Where a discarded value `e` is placed: the typed tree's point, which for an operation folded to a
+    /// constant is its start as written, its left operand's parentheses included, else as `written_point`.
+    fn discard_point(&self, e: ExprId) -> Span {
+        let ast = self.cur_ast();
+        let mut left = e;
+        let mut start = None;
+        while let Expr::Infix(l, ..) = ast.expr(left) {
+            if let Some((outer, _)) = ast.written_arg(l) {
+                start = Some(outer.start);
+                break;
+            }
+            start = Some(ast.expr_span(l).start);
+            left = l;
+        }
+        match start {
+            Some(start) => Span::new(start.min(ast.expr_span(e).start), ast.expr_span(e).end),
+            None => self.written_point(e),
         }
     }
 
@@ -979,6 +1180,11 @@ impl<'a> Worker<'a> {
             let act = self.deref_canonical(actual);
             if act == self.b.t_unit || act == NOTHING {
                 return (te, expected);
+            }
+            // A context function's value is applied first (`Typer.adaptNoArgsOther` inserts the `apply` before
+            // `adaptToSubType` drops the type): what is dropped is its result.
+            if let Some((applied, ty)) = self.apply_context_function(te, actual, exp, span) {
+                return self.adapt_typed(applied, ty, expected, span);
             }
             let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(te)]);
             let unit = self.prog.add(TExpr::Unit);
@@ -1035,7 +1241,7 @@ impl<'a> Worker<'a> {
         // implements the trait, and so does a function literal an attempt adapts as an earlier
         // one cached it (dotty's `adapt` of a closure); a value of function type does not, as
         // under scalac.
-        let sam_convertible = self.eta_expansions.contains_key(&te) || (self.retry_typed.contains_key(&te) && matches!(self.prog.expr(te), TExpr::Lambda(..)));
+        let sam_convertible = self.eta_expansions.get(&te).is_some_and(|&(_, own)| own) || (self.retry_typed.contains_key(&te) && matches!(self.prog.expr(te), TExpr::Lambda(..)));
         if let (true, Some((params, _))) = (sam_convertible, self.as_function(actual)) {
             if let Some((trait_ty, method, sig, subst)) = self.sam_method(exp, params.len()) {
                 let sam_params: Vec<TypeId> = sig.clauses[0].params.iter().map(|p| self.types.subst(p.ty, &subst)).collect();
@@ -1264,7 +1470,7 @@ impl<'a> Worker<'a> {
         // closure is none (`true: (Int ?=> Boolean)`, `(1: (Int ?=> Int))`): it is applied, and a
         // context function no given applies is an error (E172), not a value that conforms as it
         // stands, reported where the inserted application's arguments go, at the end of the value.
-        if matches!(self.prog.expr(te), TExpr::Lambda(..)) && self.expr_marks.get(&te).map_or(true, |&m| m & super::MARK_ASCRIBED_CLOSURE == 0) {
+        if self.closure_as_written(te) {
             return None;
         }
         let mut args = Vec::with_capacity(ptys.len());
@@ -2774,7 +2980,9 @@ impl<'a> Worker<'a> {
             return (te, ty);
         }
         let span = self.cur_ast().expr_span(e);
-        self.widen_lambda_result(te, ty, expected, span)
+        let adapted = self.widen_lambda_result(te, ty, expected, span);
+        self.refuse_method_value_dropped(e, te, ty, adapted.1);
+        adapted
     }
 
     /// `new p.C(..)` of a library body hands `C` the prefix `p` as its enclosing instance, in
@@ -3972,7 +4180,9 @@ impl<'a> Worker<'a> {
                     let ret = exp_fn.as_ref().map(|&(_, r)| r);
                     let (tb, bty) = self.type_expr(body, ret);
                     let body_span = self.cur_ast().expr_span(body);
-                    self.adapt_open_body(tb, bty, ret, body_span)
+                    let adapted = self.adapt_open_body(tb, bty, ret, body_span);
+                    self.refuse_method_value_dropped(body, tb, bty, adapted.1);
+                    adapted
                 }
             };
             let bty = self.lambda_body_closed(body_mark, bty, body_own, exp_fn.as_ref().map(|&(_, r)| r), &params, span);
@@ -4141,7 +4351,9 @@ impl<'a> Worker<'a> {
                 let (tb, bty) = self.type_expr(body, ret);
                 let (tb, bty) = self.apply_context_to_open_result(body, tb, bty, ret);
                 let body_span = self.cur_ast().expr_span(body);
-                self.adapt_open_body(tb, bty, ret, body_span)
+                let adapted = self.adapt_open_body(tb, bty, ret, body_span);
+                self.refuse_method_value_dropped(body, tb, bty, adapted.1);
+                adapted
             }
         };
         // The parameters, the untupled one's tuple among them.
@@ -4255,7 +4467,9 @@ impl<'a> Worker<'a> {
                 let (tb, bty) = self.type_expr(body, ret);
                 let (tb, bty) = self.apply_context_to_open_result(body, tb, bty, ret);
                 let body_span = self.cur_ast().expr_span(body);
-                self.widen_lambda_result(tb, bty, ret, body_span)
+                let adapted = self.widen_lambda_result(tb, bty, ret, body_span);
+                self.refuse_method_value_dropped(body, tb, bty, adapted.1);
+                adapted
             }
         };
         let bty = self.lambda_body_closed(body_mark, bty, body_own, exp_fn.as_ref().map(|&(_, r)| r), &syms, span);

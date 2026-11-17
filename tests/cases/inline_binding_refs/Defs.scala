@@ -1,3 +1,4 @@
+// teq: --wconf msg=A.pure.expression.does.nothing:s
 // The binding of an inline call's argument that `Inliner.dropUnusedDefs` keeps although the
 // expansion never reads it: its count (`countRefs`, `updateTermRefCounts`) meets the binding's path
 // in a type tree of the expansion. The mirror is the companion of a case class of no initialisers,

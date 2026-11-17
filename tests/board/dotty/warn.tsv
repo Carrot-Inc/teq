@@ -6,7 +6,7 @@
 17284.scala	fail	-	marks: an error where warnings are marked: 17284.scala:4:3: value synchronized is not a member of Int
 1828.scala	fail	-	check: diagnostic 1 of 1: scalac's is warning 1828.scala:5:10 the type test for S cannot be checked at runtime because it refers to an abstract type member or type parameter; teq's is warning 1828.scala:5:10 the type test for S cannot be ch
 18493.scala	fail	-	marks: 0 warnings where 2 are marked
-21557.scala	fail	-	marks: 0 warnings where 4 are marked
+21557.scala	fail	-	marks: 2 warnings where 4 are marked
 21681.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning 21681.scala:3:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681.scala:3:3 Deprecated syntax: since 3.7 this is interpreted a
 21681b.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning 21681b.scala:3:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681b.scala:3:3 Deprecated syntax: since 3.7 this is interpreted
 21681c.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning 21681c.scala:5:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681c.scala:5:3 Deprecated syntax: since 3.7 this is interpreted
@@ -107,7 +107,7 @@ i18559b.scala	fail	-	marks: 0 warnings where 1 are marked
 i18559c.scala	fail	-	marks: 1 warnings where 3 are marked
 i18564.scala	fail	-	marks: 0 warnings where 1 are marked
 i18661.scala	pass	-	
-i18722.scala	fail	-	marks: 3 warnings where 4 are marked
+i18722.scala	fail	-	check: diagnostic 1 of 4: warning i18722.scala:3:16, line 2 of the message: scalac's is ---------------------------------------------------------------------------------------------------------------------; teq's is nothing
 i18862-3.4.scala	pass	-	
 i18862-future-migration.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning i18862-future-migration.scala:4:39 The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead; teq's is warning i18862-future-migration.scala:4:39 The syntax `x: _*
 i18867-3.4.scala	pass	-	
@@ -155,7 +155,7 @@ i20372.scala	pass	-
 i20420.scala	fail	-	marks: an error where warnings are marked: i20420.scala:26:52: ambiguous given instances for ValidatorForPredicate[Int, LessEqual[3]]: validatorForLessEqual, validatorForDescribedOr
 i20520.scala	pass	-	
 i20536.scala	pass	-	
-i20860.scala	fail	-	marks: an error where warnings are marked: No warnings can be incurred under -Werror
+i20860.scala	pass	-	
 i20951.scala	pass	-	
 i21036a.scala	fail	-	marks: 0 warnings where 1 are marked
 i21036b.scala	fail	-	marks: 0 warnings where 1 are marked
@@ -276,7 +276,7 @@ i4812.scala	fail	-	marks: 0 warnings where 7 are marked
 i4936b.scala	fail	-	marks: 0 warnings where 1 are marked
 i4986b.scala	fail	-	marks: 0 warnings where 8 are marked
 i5013.scala	pass	-	
-i5013b.scala	fail	-	marks: 0 warnings where 1 are marked
+i5013b.scala	pass	-	
 i5077.scala	fail	-	marks: an error where warnings are marked: i5077.scala:22:25: value < is not a member of Any
 i5422.scala	pass	-	
 i5826.scala	fail	-	marks: 1 warnings where 5 are marked
@@ -310,7 +310,7 @@ manifest-summoning-b.scala	fail	-	marks: an error where warnings are marked: man
 matchable.scala	fail	-	marks: 0 warnings where 6 are marked
 multiple-entry-points	fail	-	marks: an error where warnings are marked: 1_First.scala:4:7: several entry points: First.main, Second.main; choose one with --main
 newline-braces.scala	fail	-	marks: an error where warnings are marked: newline-braces.scala:5:5: missing parameter type
-nonunit-statement.scala	fail	-	marks: 0 warnings where 20 are marked
+nonunit-statement.scala	fail	-	marks: 1 warnings where 20 are marked
 nowarn.scala	fail	-	marks: 20 warnings where 22 are marked
 old-syntax.scala	fail	-	marks: an error where warnings are marked: old-syntax.scala:5:12: a for expression needs a generator
 opaque-match.scala	fail	-	check: diagnostic 1 of 4: scalac's is warning opaque-match.scala:15:10 the type test for O.T cannot be checked at runtime because it refers to an abstract type member or type parameter; teq's is warning opaque-match.scala:15:10 the type tes

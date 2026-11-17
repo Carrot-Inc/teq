@@ -2287,7 +2287,7 @@ impl<'a> Worker<'a> {
     }
 
     /// `Definitions.isAssuredNoInits`: `Some`, a tuple class, and an object whose companion is one.
-    fn is_assured_no_inits(&self, c: ClassId) -> bool {
+    pub(super) fn is_assured_no_inits(&self, c: ClassId) -> bool {
         let info = self.syms.class(c);
         let assured = |k: ClassId| {
             let path = self.class_path(k);

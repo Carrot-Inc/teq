@@ -410,7 +410,7 @@ i1169.scala	fail	-	marks: no error where 1 are marked
 i11694.scala	fail	-	marks: 9 errors where 6 are marked: i11694.scala:16:51: missing parameter type
 i11719.scala	fail	-	marks: no error where 1 are marked
 i11719a.scala	fail	-	marks: error on an unmarked line i11719a.scala:17: type mismatch: found Sub => Boolean, required Base => Boolean
-i11761.scala	fail	-	marks: 2 errors where 3 are marked
+i11761.scala	pass	-	
 i11781.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11781.scala:4:7 A.this.Foo does not have a constructor; teq's is error i11781.scala:4:3 only classes can be instantiated with new
 i11797.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11797.scala:6:18 Oops; teq's is error i11797.scala:6:18 no given instance of type Bar was found for parameter x
 i1181c.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1181c.scala:19:9 Found:    (Baz.this.x : Foo[Int]); teq's is error i1181c.scala:19:9 type mismatch: found Foo[Int], required M[Int, Int]
@@ -855,7 +855,7 @@ i22333.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22333.scala:5:3
 i22357.scala	fail	-	marks: 2 errors where 1 are marked: i22357.scala:1:2: expected an identifier, found '('
 i22357a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22357a.scala:2:7 [A] =>> Int does not have a constructor; teq's is error i22357a.scala:2:3 Int cannot be instantiated
 i22367.scala	fail	-	marks: no error where 2 are marked
-i22423.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22423.scala:35:3 cannot reduce summonFrom with; teq's is warning i22423.scala:18:5 A pure expression does nothing in statement position
+i22423.scala	fail	-	check: diagnostic 1 of 1: error i22423.scala:35:3, line 2 of the message: scalac's is patterns :  case given reader @ _:ConfigReader[List[String]]; teq's is patterns :  case reader: ConfigReader[A]
 i22439.scala	fail	-	marks: 9 errors where 6 are marked: i22439.scala:7:3: missing argument for parameter i
 i22440.scala	pass	-	
 i22498.scala	fail	-	marks: no error where 1 are marked

@@ -582,7 +582,7 @@ i22991	fail	-	compile-error: test contains Java sources
 i23131	fail	-	compile-error: name is not a field of Some[(name : String)]
 i2314	pass	-	
 i23179	pass	-	
-i23245a	fail	-	compile-error: missing parameter type
+i23245a	pass	-	
 i23245b	pass	-	
 i23245c	pass	-	
 i23245d	pass	-	
@@ -1736,7 +1736,7 @@ tuples	fail	-	compile-error: type mismatch: found (Int, String, Double) => Unit,
 tuples-empty	pass	-	
 tuples1	fail	-	compile-error: type mismatch: found Any, required Head[(x : NonEmptyTuple)]
 tuples1a	pass	-	
-tuples1b	fail	-	wrong-output
+tuples1b	pass	-	
 typable	pass	-	
 type-propagation	fail	-	compile-error: value asInstanceOf is not a member of String
 type-test-binding	pass	-	

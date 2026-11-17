@@ -1388,7 +1388,7 @@ impl<'a> Worker<'a> {
         // member revealed (`deepenProto`): `7.days` for a `FiniteDuration` takes scala's
         // `DurationInt`, whose `days` gives one, over zio's `durationInt`.
         if matches!(picked, Some(Err(()))) {
-            if let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && t != self.b.t_unit) {
+            if let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && self.canon(t) != self.b.t_unit) {
                 let mut deep = |t: &mut Self, to: TypeId| t.result_has_member(to, name, lists, expected) && t.member_result_fits(to, name, lists, exp);
                 if let Some(Ok(found)) = self.pick_conversion(levels.clone(), recv, recv_ty, span, false, &wanted, &provided, &mut deep, false) {
                     picked = Some(Ok(found));

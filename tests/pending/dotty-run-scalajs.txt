@@ -363,7 +363,6 @@ tupled-function-tupled.scala	tupled-function-tupled.scala:10:13: (Int, Int, Int,
 tupled-function-untupled.scala	tupled-function-untupled.scala:8:36: () => Int cannot be tupled as Tuple & EmptyTuple => Int
 tuples-empty.scala	Tuples.scala:350:14:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
 tuples1.scala	tuples1.scala:83:72: type mismatch: found Concat[X, (y : Y)], required Concat[X, Y]
-tuples1b.scala	output: line 4: the .check has '()', the program printed '0'
 type-propagation.scala	type-propagation.scala:3:5: value asInstanceOf is not a member of String
 typeCheckErrors.scala	typeCheckErrors.scala:6:18: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 typealias_overriding.scala	typealias_overriding.scala:17:24: expected an identifier, found 'super'

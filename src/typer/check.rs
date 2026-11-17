@@ -5475,13 +5475,10 @@ impl<'a> Worker<'a> {
         let outer_inline_val = std::mem::replace(&mut self.inline_val_rhs, def.mods & mods::INLINE != 0 && matches!(def.kind, DefKind::Val { .. }));
         let typed = match body {
             Some(b) if !has_intrinsic => Some(match expected {
-                Some(t) if self.canon(t) == self.b.t_unit => {
-                    let (e, ty) = self.type_expr(b, None);
-                    self.warn_discarded(b, e, ty);
-                    body_ty = Some(ty);
-                    e
-                }
-                Some(t) if self.declared_type_inferred(&def.kind) => self.type_inferred_val(b, t).0,
+                // A result of type `Unit`, declared or inferred, is typed against it and adapted as any declared
+                // type is: its value is evaluated and dropped (`Typer.adaptToSubType`, "drop type if prototype is
+                // Unit").
+                Some(t) if self.canon(t) != self.b.t_unit && self.declared_type_inferred(&def.kind) => self.type_inferred_val(b, t).0,
                 Some(t) => {
                     let (e, own) = self.check_expr_own(b, t);
                     body_ty = Some(own);

@@ -7,6 +7,32 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A member whose declared type is `Unit` drops the value of its body, as every other place that expects `Unit`
+  does: `def paid: Unit = bump()`, a `val`, `var`, `lazy val` or `given` of type `Unit`, an override and a
+  local `def`, with the value the whole body or a branch of an `if`, a case, a handler or a block's end, and
+  with `Unit` named through an alias. teq kept the value: JavaScript and the interpreter showed it
+  (`println(paid)` printed `1`), and on the JVM a field of such a member failed when its class loaded
+  (a VerifyError for a primitive, a ClassCastException for a `lazy val` or a `given`) or held `null`. A context
+  function there is applied first and its result dropped (`def run: Unit = ctx` for `def ctx: Int ?=> Int` ran
+  nothing and returned the function); without a given in scope that is now the error it is for scalac. Under
+  `--semantic-types` a generic call whose result is dropped through an alias of `Unit` no longer has its
+  argument turned into `()`, and an overload is no longer chosen by that result.
+  The two warnings about a value nobody uses, "Discarded non-Unit value" and "A pure expression does nothing in
+  statement position", now ask scalac's one test of what is pure, of a value the source writes as one: a
+  literal, a name, a selection from such a value, a tuple, a function literal, a creation, a constant
+  operation. They are told for more of what scalac tells: a value in each branch of such a member, `null`, a
+  field's or a parameter's read, a value class's creation, an arithmetic constant; and no longer for what
+  scalac passes: an inline call with an effect, an object with an initializer or named through another object
+  or a package, `this`, and an ascription to `Unit` (the remedy the warning names: `(e: Unit)` was itself
+  warned about). A call's result is not told, where scalac tells the few whose expansion does nothing
+  (`summon[T]` of a parameter). The warning stands where scalac's does: at a creation's bracket, a selected
+  name, a statement's operator. A build with `--werror` can therefore stop on a warning it did not have, each
+  one scalac gives too.
+  A method named without its arguments where `Unit` is wanted (`def run: Unit = step` for a
+  `def step(i: Int): Int`; a lambda's result and a branch alike) is the error it is for scalac, "missing
+  argument list for value of type Int => Int", where teq warned of a discarded value or said nothing. Only the
+  name written there is refused: a function value that an inline call expands to at such a place, or that an
+  applied function literal returns, is dropped as any value is.
 - An object whose parent is a class nested in a class (`object Entry extends registry.made.Row`) is made with
   that class's instance, and its load evaluates the path to it (`registry.made`: `registry`'s load, a lazy val)
   where Scala does: after an argument that a call binds ahead of itself (on JavaScript), after a

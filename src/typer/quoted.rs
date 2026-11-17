@@ -3474,6 +3474,7 @@ impl<'c> Copier<'c> {
         copy.has_statements = info.has_statements;
         copy.no_inits_recorded = info.no_inits_recorded;
         copy.read_no_inits = info.read_no_inits;
+        copy.read_ctor_stable = info.read_ctor_stable;
         copy.stateful = info.stateful;
         copy.desugared_parents = info.desugared_parents;
         drop(copy);

@@ -241,7 +241,6 @@ i22968	compile-error: cannot resolve import: testing not found
 i22979	compile-error: value getDeclaredField is not a member of Class[Leak]
 i22991	compile-error: test contains Java sources
 i23131	compile-error: name is not a field of Some[(name : String)]
-i23245a	compile-error: missing parameter type
 i23305	compile-error: type Erased not found
 i23440	compile-error: type mismatch: found (<error>, <error>) => Unit, required (a : Int, b : String) => Any
 i23444	run-error: Exception in thread "main" java.lang.AssertionError: bad loop
@@ -712,7 +711,6 @@ tupled-function-tupled	compile-error: TupledFunction is not a member of the pack
 tupled-function-untupled	compile-error: TupledFunction is not a member of the package
 tuples	compile-error: type mismatch: found (Int, String, Double) => Unit, required (Nothing, Nothing) => Any
 tuples1	compile-error: type mismatch: found Any, required Head[(x : NonEmptyTuple)]
-tuples1b	wrong-output
 type-propagation	compile-error: value asInstanceOf is not a member of String
 typeCheckErrors	compile-error: cannot resolve import: testing not found
 typealias_overriding	compile-error: expected an identifier, found 'super'

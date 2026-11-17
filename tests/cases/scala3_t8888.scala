@@ -1,4 +1,5 @@
 // Adapted from scala3 tests/run/t8888.scala (Apache-2.0, see tests/scala3/README.md); replaced: extends App.
+// teq: --wconf msg=Discarded.non-Unit.value:s
 class C {
   final def resume: Unit = (this: Any) match {
     case x : C => (x: Any) match {

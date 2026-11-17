@@ -1,0 +1,58 @@
+tests/errors/unit_discard_warnings.scala:19:33: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def branch: Unit = if flag then 1 else "two"
+                                  ^
+tests/errors/unit_discard_warnings.scala:19:40: warning: Discarded non-Unit value of type String. Add `: Unit` to discard silently.
+  def branch: Unit = if flag then 1 else "two"
+                                         ^^^^^
+tests/errors/unit_discard_warnings.scala:20:47: warning: Discarded non-Unit value of type Double. Add `: Unit` to discard silently.
+  def cases(k: Int): Unit = k match { case 0 => 2.5; case _ => 'c' }
+                                                ^^^
+tests/errors/unit_discard_warnings.scala:20:62: warning: Discarded non-Unit value of type Char. Add `: Unit` to discard silently.
+  def cases(k: Int): Unit = k match { case 0 => 2.5; case _ => 'c' }
+                                                               ^^^
+tests/errors/unit_discard_warnings.scala:21:25: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def handler: Unit = try 3 catch { case _: RuntimeException => null }
+                          ^
+tests/errors/unit_discard_warnings.scala:21:63: warning: Discarded non-Unit value of type Null. Add `: Unit` to discard silently.
+  def handler: Unit = try 3 catch { case _: RuntimeException => null }
+                                                                ^^^^
+tests/errors/unit_discard_warnings.scala:22:36: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def expansion: Unit = if flag then pureCall else loudCall
+                                     ^^^^^^^^
+tests/errors/unit_discard_warnings.scala:23:34: warning: Discarded non-Unit value of type Still. Add `: Unit` to discard silently.
+  def objects: Unit = if flag then Still else Loud
+                                   ^^^^^
+tests/errors/unit_discard_warnings.scala:24:48: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def selection(s: Shelf): Unit = if flag then s.side else new Shelf(5).side
+                                                 ^^^^
+tests/errors/unit_discard_warnings.scala:24:71: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def selection(s: Shelf): Unit = if flag then s.side else new Shelf(5).side
+                                                                        ^^^^
+tests/errors/unit_discard_warnings.scala:26:36: warning: A pure expression does nothing in statement position
+  def statements(s: Shelf): Unit = { 8; s.side; Still; Loud; (9: Unit); () }
+                                     ^
+tests/errors/unit_discard_warnings.scala:26:41: warning: A pure expression does nothing in statement position
+  def statements(s: Shelf): Unit = { 8; s.side; Still; Loud; (9: Unit); () }
+                                          ^^^^
+tests/errors/unit_discard_warnings.scala:26:47: warning: A pure expression does nothing in statement position
+  def statements(s: Shelf): Unit = { 8; s.side; Still; Loud; (9: Unit); () }
+                                                ^^^^^
+tests/errors/unit_discard_warnings.scala:27:45: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def local(s: Shelf): Unit = { val u: Unit = pureCall; u }
+                                              ^^^^^^^^
+tests/errors/unit_discard_warnings.scala:28:44: warning: Discarded non-Unit value of type Shelf. Add `: Unit` to discard silently.
+  def created(s: Shelf): Unit = if flag then new Shelf(s.side) else (s, 11)
+                                             ^^^^^^^^^^^^^^^^^
+tests/errors/unit_discard_warnings.scala:28:67: warning: Discarded non-Unit value of type (Shelf, Int). Add `: Unit` to discard silently.
+  def created(s: Shelf): Unit = if flag then new Shelf(s.side) else (s, 11)
+                                                                    ^^^^^^^
+tests/errors/unit_discard_warnings.scala:29:60: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def blockCondition: Unit = if { println("hi"); flag } then 12 else 13
+                                                             ^^
+tests/errors/unit_discard_warnings.scala:29:68: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def blockCondition: Unit = if { println("hi"); flag } then 12 else 13
+                                                                     ^^
+tests/errors/unit_discard_warnings.scala:30:89: warning: Discarded non-Unit value of type () => (Shelf, Shelf). Add `: Unit` to discard silently.
+  def nested(a: Any): Unit = a match { case s: Shelf => (s: Any) match { case t: Shelf => () => (s, t) } }
+                                                                                          ^^^^^^^^^^^^
+19 warnings found, errors under --werror

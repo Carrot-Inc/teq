@@ -5396,6 +5396,8 @@ impl<'a> Worker<'a> {
         let mut eta_ret_expected = None;
         // The trait with a single abstract method the expansion implements, when one is expected.
         let mut eta_sam = None;
+        // A method of an empty list named bare was told to want its `()`: the reference makes no closure of it.
+        let mut missing_parens = false;
         // A parameter or result type of that method the expansion does not conform to: found
         // and required.
         let mut eta_sam_mismatch: Option<(TypeId, TypeId)> = None;
@@ -5864,6 +5866,7 @@ impl<'a> Worker<'a> {
                     }
                     if bare && ctor.is_none() {
                         self.report_missing_parens(call.sym, span);
+                        missing_parens = true;
                     }
                     // A result that names a parameter names the expansion's own: `depmeth`
                     // for a `depmeth(x: C): x.M` is a `(x: C) => x.M`.
@@ -6095,7 +6098,7 @@ impl<'a> Worker<'a> {
             self.prog.set_type(te, ty);
             te = self.wrap_hoisted(hoist_mark, te);
             if plain_eta {
-                self.eta_expansions.insert(te, ());
+                self.eta_expansions.insert(te, ((!missing_parens).then_some((self.env.file, span)), true));
             }
         }
         let rest: Vec<ArgList> = lists.collect();
@@ -6432,7 +6435,7 @@ impl<'a> Worker<'a> {
     fn constrain_result_by_expected(&mut self, ret: &mut TypeId, expected: Option<TypeId>) -> Option<TVarId> {
         let ret_ty = *ret;
         if let Some(exp) = self.concrete_expected(expected) {
-            if exp != self.b.t_unit && exp != ANY {
+            if self.canon(exp) != self.b.t_unit && exp != ANY {
                 let mark = self.snapshot();
                 let outer = std::mem::replace(&mut self.necessary_either, true);
                 let compared = self.normalized_for_proto(ret_ty, exp);
@@ -7578,6 +7581,7 @@ impl<'a> Worker<'a> {
         self.prog.set_type(lambda, ty);
         let expanded = self.wrap_hoisted(mark, lambda);
         self.prog.set_type(expanded, ty);
+        self.eta_expansions.insert(expanded, (Some((self.env.file, span)), false));
         (expanded, ty)
     }
 
@@ -7617,6 +7621,7 @@ impl<'a> Worker<'a> {
         let ps = self.prog.syms(&[local]);
         let lambda = self.prog.add(TExpr::Lambda(ps, body));
         self.prog.set_type(lambda, ty);
+        self.eta_expansions.insert(lambda, (Some((self.env.file, span)), false));
         Some((lambda, ty))
     }
 
@@ -10215,6 +10220,7 @@ impl<'a> Worker<'a> {
         let ps = self.prog.syms(&[local]);
         let lambda = self.prog.add(TExpr::Lambda(ps, body));
         self.prog.set_type(lambda, ty);
+        self.eta_expansions.insert(lambda, (Some((self.env.file, span)), false));
         Some((lambda, ty))
     }
 

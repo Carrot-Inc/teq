@@ -383,7 +383,6 @@ i1169.scala	marks: no error where 1 are marked
 i11694.scala	marks: 9 errors where 6 are marked: i11694.scala:16:51: missing parameter type
 i11719.scala	marks: no error where 1 are marked
 i11719a.scala	marks: error on an unmarked line i11719a.scala:17: type mismatch: found Sub => Boolean, required Base => Boolean
-i11761.scala	marks: 2 errors where 3 are marked
 i11781.scala	check: diagnostic 1 of 1: scalac's is error i11781.scala:4:7 A.this.Foo does not have a constructor; teq's is error i11781.scala:4:3 only classes can be instantiated with new
 i11797.scala	check: diagnostic 1 of 1: scalac's is error i11797.scala:6:18 Oops; teq's is error i11797.scala:6:18 no given instance of type Bar was found for parameter x
 i1181c.scala	check: diagnostic 1 of 1: scalac's is error i1181c.scala:19:9 Found: (Baz.this.x : Foo[Int]); teq's is error i1181c.scala:19:9 type mismatch: found Foo[Int], required M[Int, Int]

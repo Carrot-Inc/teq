@@ -476,7 +476,6 @@ transparent	teq: jvm backend: Test$.main: the local $thisnbtu8x_616 is not in sc
 transparentProtected.scala	teq: jvm backend: Test$: the local $this1hob1ao_83 is not in scope of the generated method
 triemap-hash.scala	triemap-hash.scala:15:53: reference to Hashing is ambiguous: it is both imported by name by import scala.util.hashing.Hashing and imported subsequently by import scala.collection.*
 try.scala	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad type on operand stack
-tuple-ops.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
 tupled-function-andThen.scala	tupled-function-andThen.scala:10:28: (Int, Int) => (Int, Int, Int) cannot be tupled as Tuple => Tuple
 tupled-function-apply.scala	tupled-function-apply.scala:10:13: too many arguments: expected 0
 tupled-function-compose.scala	tupled-function-compose.scala:9:28: (Int, Int) => (Int, Int, Int) cannot be tupled as Tuple => Tuple
@@ -484,7 +483,6 @@ tupled-function-extension-method.scala	tupled-function-extension-method.scala:18
 tupled-function-tupled.scala	tupled-function-tupled.scala:10:13: (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) => Int cannot be tupled as Tuple => R
 tupled-function-untupled.scala	tupled-function-untupled.scala:8:36: () => Int cannot be tupled as Tuple & EmptyTuple => Int
 tuples1.scala	tuples1.scala:83:72: type mismatch: found Concat[X, (y : Y)], required Concat[X, Y]
-tuples1a.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
 type-propagation.scala	type-propagation.scala:3:5: value asInstanceOf is not a member of String
 typeCheckErrors.scala	typeCheckErrors.scala:6:18: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 typealias_overriding.scala	typealias_overriding.scala:17:24: expected an identifier, found 'super'
@@ -499,7 +497,6 @@ unambiref.scala	unambiref.scala:3:13: Reference to x is ambiguous.
 unapply-tparam.scala	unapply-tparam.scala:26:13: expected '=>', found '['
 unapply.scala	unapply.scala:40:12: wrong number of patterns for an extractor of Product2[Int, String]: found 2
 unicodeEscapes.scala	unicodeEscapes.scala:14:36: not found: ida
-uninitialized-field-values.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 unit-val.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: field foo not erased
 unit-var.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: field foo not erased
 unit_erasure.scala	unit_erasure.scala:15:14: value getGenericReturnType is not a member of Method

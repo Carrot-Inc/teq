@@ -1,0 +1,28 @@
+tests/errors/creation_statement_warnings.scala:8:21: warning: Discarded non-Unit value of type Plain. Add `: Unit` to discard silently.
+  def dropped: Unit = new Plain(2)
+                      ^^^^^^^^^^^^
+tests/errors/creation_statement_warnings.scala:11:3: warning: A pure expression does nothing in statement position
+    new Plain(1)
+    ^^^^^^^^^^^^
+tests/errors/creation_statement_warnings.scala:13:3: warning: A pure expression does nothing in statement position
+    new Record(1)
+    ^^^^^^^^^^^^^
+tests/errors/creation_statement_warnings.scala:14:9: warning: A pure expression does nothing in statement position
+    Record(2)
+          ^^^
+tests/errors/creation_statement_warnings.scala:22:3: warning: A pure expression does nothing in statement position
+    new Some(1)
+    ^^^^^^^^^^^
+tests/errors/creation_statement_warnings.scala:23:3: warning: A pure expression does nothing in statement position
+    new Tuple2(1, 2)
+    ^^^^^^^^^^^^^^^^
+tests/errors/creation_statement_warnings.scala:24:7: warning: A pure expression does nothing in statement position
+    Some(3)
+        ^^^
+tests/errors/creation_statement_warnings.scala:25:3: warning: A pure expression does nothing in statement position
+    (4, 5)
+    ^^^^^^
+tests/errors/creation_statement_warnings.scala:30:40: warning: A pure expression does nothing in statement position
+  inline def inlined(s: Shape): Unit = { new Slot[s.Elems]; () }
+                                         ^^^^^^^^^^^^^^^^^
+9 warnings found, errors under --werror

@@ -3127,7 +3127,7 @@ impl<'a> Worker<'a> {
                 return Ok(*one);
             }
         }
-        let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && t != self.b.t_unit) else {
+        let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && self.canon(t) != self.b.t_unit) else {
             return Err(Failure::Ambiguous(best));
         };
         let conforming: Vec<usize> = pool
@@ -4268,7 +4268,7 @@ impl<'a> Worker<'a> {
         if applicable.len() < 2 {
             return chosen;
         }
-        let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && t != self.b.t_unit) else {
+        let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && self.canon(t) != self.b.t_unit) else {
             return chosen;
         };
         let conforms = |t: &mut Self, i: usize| {

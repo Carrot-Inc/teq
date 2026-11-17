@@ -4514,7 +4514,7 @@ impl<'a> Worker<'a> {
             return;
         }
         if let Some(exp) = self.concrete_expected(expected) {
-            if exp != self.b.t_unit && exp != ANY && exp != ERROR {
+            if self.canon(exp) != self.b.t_unit && exp != ANY && exp != ERROR {
                 let snap = self.snapshot();
                 if !self.is_sub(ty, exp) {
                     self.rollback(&snap);

@@ -97,7 +97,6 @@ i20132.stream-Tuple2.safeNulls.fixed.scala	option: -Yexplicit-nulls (teq has no 
 i20132.stream-Tuple2.safeNulls.scala	option: -Yexplicit-nulls (teq has no flag for it)
 i20132.stream-Tuple2.scala	option: -Yexplicit-nulls (teq has no flag for it)
 i20420.scala	marks: an error where warnings are marked: i20420.scala:26:52: ambiguous given instances for ValidatorForPredicate[Int, LessEqual[3]]: validatorForLessEqual, validatorForDescribedOr
-i20860.scala	marks: an error where warnings are marked: 1 warning found, errors under --werror
 i21036a.scala	marks: 0 warnings where 1 are marked
 i21036b.scala	marks: 0 warnings where 1 are marked
 i21187.scala	marks: an error where warnings are marked: i21187.scala:9:55: missing parameter type
@@ -163,7 +162,6 @@ i4364.scala	marks: 0 warnings where 1 are marked
 i4812.scala	marks: 0 warnings where 7 are marked
 i4936b.scala	marks: 0 warnings where 1 are marked
 i4986b.scala	marks: 0 warnings where 8 are marked
-i5013b.scala	marks: 0 warnings where 1 are marked
 i5077.scala	marks: an error where warnings are marked: i5077.scala:22:25: value < is not a member of Any
 i5826.scala	marks: 1 warnings where 5 are marked
 i7314.scala	check: diagnostic 1 of 1: scalac's is warning i7314.scala:8:13 pattern selector should be an instance of Matchable,; teq's is warning i7314.scala:8:10 unreachable case

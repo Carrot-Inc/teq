@@ -94,4 +94,3 @@ exportedinnerobject check-lean-whole  the same as classes, in the lean check bui
 expansionsingletonmember classes  the same as inlinesam: the class b's expansion of a's inline body makes is named at the product's pseudo file's place (`Gauge$$anon$300osidpep0lc_13$1rc96ct_90`), the whole build's at Gauge.scala's (`Gauge$$anon$1wh9xg8_328$1rc96ct_90`); its member is the members leg's
 expansionsingletonmember subset  the same as classes
 expansionsingletonmember bundle  the same as inlinesam bundle
-objectstatements interp-run  the interpreter's whole output is compared and it carries the pure statement's warning, which the tree's old test gives for every object named as a statement (scalac gives none for these eight): the warning's port is the value-discard part's, which takes this line off

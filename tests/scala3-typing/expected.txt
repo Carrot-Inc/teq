@@ -424,7 +424,7 @@ neg/i1169.scala	accepts
 neg/i11694.scala	different	missing parameter type
 neg/i11719.scala	accepts	
 neg/i11719a.scala	different	type mismatch
-neg/i11761.scala	subset	2/3 lines
+neg/i11761.scala	same	3/3 lines
 neg/i11781.scala	oos	inheritance
 neg/i11797.scala	same	
 neg/i1181c.scala	same	
@@ -5875,7 +5875,7 @@ warn/15981.scala	silent
 warn/17284.scala	rejects	value {} is not a member of {}
 warn/1828.scala	wording	the type test for S cannot be checked at runtime because it refers to a type parameter
 warn/18493.scala	silent	
-warn/21557.scala	silent	
+warn/21557.scala	different	Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
 warn/21681.scala	same	
 warn/21681b.scala	same	
 warn/21681c.scala	same	
@@ -5992,7 +5992,7 @@ warn/i18559b.scala	silent
 warn/i18559c.scala	silent	
 warn/i18564.scala	silent	
 warn/i18661.scala	same	
-warn/i18722.scala	subset	3/4 diagnostics
+warn/i18722.scala	wording	Discarded non-Unit value of type Null. Add `: Unit` to discard silently.
 warn/i18862-3.4.scala	same	
 warn/i18862-future-migration.scala	same	
 warn/i18867-3.4.scala	same	
@@ -6179,7 +6179,7 @@ warn/i4812.scala	rejects	value {} is not a member of {}
 warn/i4936b.scala	silent	
 warn/i4986b.scala	silent	
 warn/i5013.scala	same	
-warn/i5013b.scala	silent	
+warn/i5013b.scala	same	
 warn/i5077.scala	rejects	value {} is not a member of {}
 warn/i5422.scala	same	
 warn/i559.scala	rejects	several entry points: D.main, E.main, F.main, UsesApi.main, Interleaved.main, OnlyDefs.main, UsesArgsInMember.main, OverridesApi.main, SingleLine.main, ExportAfterStmt.main; choose one with --main	--wconf cat=deprecation:s

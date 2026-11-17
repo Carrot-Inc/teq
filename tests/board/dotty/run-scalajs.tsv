@@ -1379,7 +1379,7 @@ tuples-empty.scala	fail	lean:pass	Tuples.scala:350:14:None:None: type mismatch: 
 tuples.scala	pass	lean:fail	
 tuples1.scala	fail	lean:fail	tuples1.scala:83:72: type mismatch: found Concat[X, (y : Y)], required Concat[X, Y]
 tuples1a.scala	pass	lean:pass	
-tuples1b.scala	fail	lean:fail	output: line 4: the .check has '()', the program printed '0'
+tuples1b.scala	pass	lean:pass	
 typable.scala	pass	lean:pass	
 type-propagation.scala	fail	lean:fail	type-propagation.scala:3:5: value asInstanceOf is not a member of String
 type-test-binding.scala	pass	lean:pass	

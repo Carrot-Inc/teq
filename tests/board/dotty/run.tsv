@@ -12,7 +12,7 @@
 9416.scala	fail	interp:fail	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
 CollectionTests.scala	fail	interp:fail	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
 ConfManagement.scala	pass	interp:fail	
-Course-2002-01.scala	pass	interp:fail	
+Course-2002-01.scala	pass	interp:pass	
 Course-2002-02.scala	pass	interp:fail	
 Course-2002-03.scala	pass	interp:fail	
 Course-2002-04.scala	pass	interp:pass	
@@ -215,7 +215,7 @@ erased-machine-state.scala	fail	interp:fail	erased-machine-state.scala:20:20: 'e
 erased-poly-ref.scala	fail	interp:fail	erased-poly-ref.scala:9:11: 'erased' is not part of the supported Scala subset
 errorhandling	fail	interp:fail	Result.scala:45:35: type mismatch: found Err[Any], required Result[*:[T, U], List[E]]
 eta-extension.scala	pass	interp:pass	
-evaluation-order.scala	pass	interp:fail	
+evaluation-order.scala	pass	interp:pass	
 exc.scala	pass	interp:pass	
 exc1.scala	pass	interp:pass	
 exc2.scala	pass	interp:pass	
@@ -486,7 +486,7 @@ i17021.scala	pass	interp:pass
 i17115.scala	fail	interp:fail	i17115.scala:3:7: object creation impossible, since def apply(v1: A[Tail[Tup]]): A[Tup] in trait Function1 is not defined
 i17255	fail	-	java source: teq reads none
 i17317-b.scala	pass	interp:pass	
-i17317.scala	pass	interp:fail	
+i17317.scala	pass	interp:pass	
 i1732.scala	pass	interp:pass	
 i1732_1.scala	pass	interp:pass	
 i17332.scala	pass	interp:pass	
@@ -539,7 +539,7 @@ i2020.scala	pass	interp:pass
 i20225.scala	pass	interp:pass	
 i20284.scala	pass	interp:pass	
 i20395.scala	pass	interp:pass	
-i2077.scala	pass	interp:pass	
+i2077.scala	pass	interp:fail	
 i20856.scala	pass	interp:fail	
 i209.scala	pass	interp:pass	
 i21213-min.scala	fail	interp:fail	i21213-min.scala:4:35: expected ':', found 'val'
@@ -697,7 +697,7 @@ i533	fail	-	java source: teq reads none
 i5340.scala	pass	interp:pass	
 i5350.scala	pass	interp:pass	
 i5350b.scala	pass	interp:pass	
-i5350c.scala	pass	interp:fail	
+i5350c.scala	pass	interp:pass	
 i5350d.scala	pass	interp:pass	
 i5386.scala	pass	interp:pass	
 i5441.scala	pass	interp:pass	
@@ -839,7 +839,7 @@ implied-divergence.scala	pass	interp:pass
 implied-for.scala	pass	interp:pass	
 implied-priority.scala	fail	interp:fail	implied-priority.scala:51:29: ambiguous given instances for E[String]: t1, t2
 implied-specifity-2.scala	fail	interp:fail	implied-specifity-2.scala:61:21: ambiguous given instances for Bam: lo, hi
-imports.scala	pass	interp:fail	
+imports.scala	pass	interp:pass	
 indent.scala	pass	interp:pass	
 indexedSeq-apply.scala	pass	interp:pass	
 indexedSeq.scala	pass	interp:pass	
@@ -888,7 +888,7 @@ junitForwarders	fail	-	java source: teq reads none
 kmpSliceSearch.scala	pass	interp:fail	
 lambda-null.scala	pass	interp:fail	
 lambda-sam-bridge.scala	pass	interp:pass	
-lambda-serialization-gc.scala	fail	interp:fail	lambda-serialization-gc.scala:28:98: ClassLoader is abstract; it cannot be instantiated
+lambda-serialization-gc.scala	fail	interp:fail	lambda-serialization-gc.scala:28:98: constructor ClassLoader cannot be accessed as a member of ClassLoader from object Test
 lambda-serialization-security.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.io.NotSerializableException: Test$$$Lambda/0x…
 lambda-serialization.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.io.NotSerializableException: C$$Lambda/0x…
 lambda-unit.scala	pass	interp:pass	
@@ -963,7 +963,7 @@ nothing-lazy-val.scala	pass	interp:fail
 nothing-val.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: field foo not erased
 nothing-var.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: field foo not erased
 nothingTypeDce.scala	pass	interp:pass	
-nothingTypeNoFramesNoDce.scala	pass	interp:pass	
+nothingTypeNoFramesNoDce.scala	pass	interp:fail	
 nothingTypeNoOpt.scala	pass	interp:pass	
 null-and-intersect.scala	pass	interp:fail	
 null-hash.scala	pass	interp:pass	
@@ -1090,8 +1090,8 @@ structural-contextual.scala	pass	interp:pass
 structural.scala	fail	interp:fail	structural.scala:83:21: missing parameter type
 summonAll.scala	pass	interp:pass	
 summonFrom.scala	pass	interp:fail	
-supercalls-traits-targetname.scala	pass	interp:fail	
-supercalls-traits.scala	pass	interp:fail	
+supercalls-traits-targetname.scala	pass	interp:pass	
+supercalls-traits.scala	pass	interp:pass	
 switches.scala	pass	interp:pass	
 sysprops.scala	pass	interp:fail	
 t0005.scala	pass	interp:pass	
@@ -1163,7 +1163,7 @@ t2087-and-2400.scala	pass	interp:pass
 t2111.scala	fail	interp:fail	t2111.scala:4:28: not found: Value
 t2127.scala	pass	interp:pass	
 t2147.scala	pass	interp:pass	
-t216.scala	pass	interp:fail	
+t216.scala	pass	interp:pass	
 t2175.scala	pass	interp:pass	
 t2176.scala	pass	interp:pass	
 t2177.scala	pass	interp:pass	
@@ -1335,7 +1335,7 @@ t5037.scala	pass	interp:fail
 t5040.scala	fail	interp:fail	t5040.scala:11:3: privateMethod is private to Prova2
 t5045.scala	pass	interp:fail	
 t5053.scala	pass	interp:fail	
-t5105.scala	pass	interp:pass	
+t5105.scala	pass	interp:fail	
 t5158.scala	pass	interp:pass	
 t5162.scala	pass	interp:pass	
 t5171.scala	pass	interp:pass	
@@ -1458,7 +1458,7 @@ t7181.scala	pass	interp:pass
 t7200.scala	fail	interp:fail	t7200.scala:19:9: recursive use of coflatMap needs an explicit result type
 t7214.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
 t7215.scala	pass	interp:pass	
-t7223.scala	pass	interp:fail	
+t7223.scala	pass	interp:pass	
 t7231.scala	pass	interp:pass	
 t7242.scala	pass	interp:pass	
 t7249.scala	pass	interp:pass	
@@ -1503,7 +1503,7 @@ t8199.scala	fail	interp:fail	teq: This construct can be rewritten automatically 
 t8233-bcode.scala	pass	interp:pass	
 t8233.scala	pass	interp:pass	
 t8245.scala	pass	interp:pass	
-t8280.scala	pass	interp:fail	
+t8280.scala	pass	interp:pass	
 t8346.scala	fail	interp:fail	t8346.scala:5:33: not found: Value
 t8395.scala	pass	interp:pass	
 t8428.scala	pass	interp:pass	
@@ -1582,7 +1582,7 @@ transparentProtected.scala	fail	interp:fail	teq: jvm backend: Test$: the local $
 transpose.scala	pass	interp:pass	
 triemap-hash.scala	fail	interp:fail	triemap-hash.scala:15:53: reference to Hashing is ambiguous: it is both imported by name by import scala.util.hashing.Hashing and imported subsequently by import scala.collection.*
 triple-quoted-expr.scala	pass	interp:pass	
-try-2.scala	pass	interp:pass	
+try-2.scala	pass	interp:fail	
 try-catch-unify.scala	pass	interp:fail	
 try.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad type on operand stack
 tryPatternMatch.scala	pass	interp:fail	
@@ -1595,7 +1595,7 @@ tuple-erased.scala	pass	interp:pass
 tuple-for-comprehension.scala	pass	interp:pass	
 tuple-map.scala	pass	interp:fail	
 tuple-match.scala	pass	interp:pass	
-tuple-ops.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
+tuple-ops.scala	pass	interp:fail	
 tuple-patmat-extract.scala	pass	interp:pass	
 tuple-patmat-size.scala	pass	interp:pass	
 tuple-patmat.scala	pass	interp:pass	
@@ -1615,8 +1615,8 @@ tupled-function-untupled.scala	fail	interp:fail	tupled-function-untupled.scala:8
 tuples-empty.scala	pass	interp:pass	
 tuples.scala	pass	interp:fail	
 tuples1.scala	fail	interp:fail	tuples1.scala:83:72: type mismatch: found Concat[X, (y : Y)], required Concat[X, Y]
-tuples1a.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
-tuples1b.scala	pass	interp:fail	
+tuples1a.scala	pass	interp:pass	
+tuples1b.scala	pass	interp:pass	
 typable.scala	pass	interp:pass	
 type-propagation.scala	fail	interp:fail	type-propagation.scala:3:5: value asInstanceOf is not a member of String
 type-test-binding.scala	pass	interp:fail	
@@ -1641,7 +1641,7 @@ unapplyArray.scala	pass	interp:pass
 unboxingBug.scala	pass	interp:pass	
 unchecked-patterns.scala	pass	interp:pass	
 unicodeEscapes.scala	fail	interp:fail	unicodeEscapes.scala:14:36: not found: ida
-uninitialized-field-values.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
+uninitialized-field-values.scala	pass	interp:fail	
 unit-lazy-val.scala	pass	interp:fail	
 unit-val.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: field foo not erased
 unit-var.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: field foo not erased

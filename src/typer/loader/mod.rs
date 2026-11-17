@@ -2002,6 +2002,9 @@ impl<'a> Worker<'a> {
                 && sig.index.members.iter().all(|e| e.tag != tags::VALDEF || !e.has_body || e.flags.has(tags::LAZY) || e.flags.has(tags::OBJECT))
         };
         self.syms.class_mut(c).read_no_inits = read_no_inits;
+        // The primary constructor's `STABLE` as the pickle holds it (`ClassInfo::read_ctor_stable`).
+        let read_ctor_stable = sig.ctor.as_ref().is_some_and(|ctor| ctor.mods.flags.has(tags::STABLE));
+        self.syms.class_mut(c).read_ctor_stable = read_ctor_stable;
         // The emitters' record of a library class (`elaborate::class_no_inits_recorded`): a jar's
         // as its pickle reads; a product's is left to the records, which hold the source rule
         // (`TreeInfo.defKind`: a lazy val or a parameterless given with a right-hand side

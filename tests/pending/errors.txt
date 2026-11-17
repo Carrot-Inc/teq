@@ -159,7 +159,7 @@ trait_indirect_parameters	missing '2 errors found'
 tuple_index_mismatch_place	missing '2:26: error: Found: Int'
 tuple_index_past_elements	missing '1:5: warning: Match type reduction failed since selector EmptyTuple.type'
 tuple_index_past_elements_typed	missing '1:25: error: Found: Tuple.Elem[EmptyTuple.type, (0 : Int)]'
-unit_result_method_value	exit code 0
+unit_result_method_value	missing '15:22: error: missing argument list for value of type String => Tone'
 unreducible_application_placements	exit code 0
 unreducible_wildcard_application_e043	missing '13:12: error: unreducible application of higher-kinded type [X] =>> h.KC[X] to wildcard arguments'
 unresolved_member_qualifier_interpolated	missing '6:29: error: value foo is not a member of C'

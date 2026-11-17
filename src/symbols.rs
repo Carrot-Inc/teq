@@ -277,6 +277,11 @@ pub struct ClassInfo {
     /// finds its `NoInits`: no statement, and each of its terms a method, deferred or lazy (a
     /// module's val is); a class of a source reads its definition instead.
     pub read_no_inits: bool,
+    /// A class read from a pickle whose primary constructor the pickle marks `STABLE`: the flag
+    /// `SymDenotations.setStableConstructor` gave it where it was compiled, which `TreePickler` writes for a
+    /// stable method and `TreeUnpickler` reads back: what the reference asks of a creation of the class
+    /// (`TreeInfo.isPureApply`).
+    pub read_ctor_stable: bool,
     /// `NoInits` as the typer decided it at the class's completion (`Worker::class_no_inits`:
     /// `TreeInfo.parentsKind` and `defKind` over its source, `TreeUnpickler.indexStats` over its
     /// pickle), for the emitters: 0 undecided, 1 none, 2 initialises.
@@ -1452,6 +1457,7 @@ impl Symbols {
             has_imports: false,
             has_statements: false,
             read_no_inits: false,
+            read_ctor_stable: false,
             no_inits_recorded: 0,
             completion_noted: false,
             replaced: false,
