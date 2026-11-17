@@ -132,6 +132,7 @@ block_alias_context	pass	-
 block_import_alias	pass	-	
 block_infix_argument	pass	-	
 block_lambda_stmts	pass	-	
+block_reduced_to_result	pass	-	
 block_statement_lambda	pass	-	
 block_then_select	pass	-	
 body_reads_outer_member	pass	-	
@@ -399,6 +400,7 @@ companion_ref_quoted_class	pass	-
 companion_unapply_through_prefix	pass	-	
 comparable_boxes	pass	-	
 compiletime_string_ops	fail	-	compile
+compound_assignment_lifted	pass	-	
 concat_order	pass	-	
 concat_order_boundary	pass	-	
 concat_order_boundary_macro	pass	-	
@@ -574,8 +576,16 @@ duration_names	pass	-
 duration_syntax_import	pass	-	
 duration_time_unit	pass	-	
 duration_time_unit_constants	pass	-	
+dynamic_assignment_operator	pass	-	
+dynamic_assignment_operator_places	pass	-	
+dynamic_assignments	pass	-	
+dynamic_infix_and_using	fail	-	compile; queued: the row "a dynamic call's infix and using forms as scalac builds them"
+dynamic_members_first	pass	-	
+dynamic_other_places	pass	-	
+dynamic_predef_names	fail	-	compile; queued: the part "the std's Predef extensions are a second attempt after the lexical ones"
+dynamic_rewrites	pass	-	
 dynamic_variable	pass	-	
-dynamic_written_apply	fail	-	compile
+dynamic_written_apply	pass	-	
 early_param_kind	pass	-	
 early_param_kind_defined_first	pass	-	
 early_param_kind_inner_class	pass	-	
@@ -825,6 +835,7 @@ float_strings	pass	-
 fold_targets	pass	-	
 foldleft_empty_lambda	pass	-	
 foldleft_nil_lambda	pass	-	
+for_alias_value	pass	-	
 for_case	pass	-	
 for_check_modes_3_3	pass	-	
 for_check_modes_3_8	pass	-	
@@ -854,6 +865,8 @@ for_yield_view	pass	-
 for_yield_view_chain	pass	-	
 for_yield_view_depth	pass	-	
 for_yield_view_forms	pass	-	
+forward_reference_accepted	pass	-	
+forward_reference_quoted_class	pass	-	
 fractional_equals_method	pass	-	
 frame_layouts	pass	-	
 function_class_name_field	pass	-	
@@ -965,6 +978,8 @@ given_inferred_override_extension_overloaded	pass	-
 given_inferred_override_private_ancestor	pass	-	
 given_inherited_param_result	pass	-	
 given_inline_trait_member	pass	-	
+given_instance_statement_effects	pass	-	
+given_instance_statement_paths	pass	-	
 given_intersection	pass	-	
 given_intersection_bounds	pass	-	
 given_knot_class_function_literal	pass	-	
@@ -1347,11 +1362,17 @@ inline_phase_walk_order	pass	-
 inline_phase_wire_siblings	pass	-	
 inline_poly_member_override	pass	-	
 inline_poly_ref_flip_bottom	pass	-	
+inline_projection_assignment_kept	pass	-	
+inline_projection_by_name_argument	pass	-	
+inline_projection_creation_kept	pass	-	
+inline_projection_kept	pass	-	
+inline_projection_reduced	pass	-	
 inline_recursive_proxies	pass	-	
 inline_reduce_local_extractor	pass	-	
 inline_reduce_local_value	pass	-	
 inline_repeated_named_reorder	pass	-	
 inline_result_block_scope	pass	-	
+inline_result_object_statement	pass	-	
 inline_result_overridden	pass	-	
 inline_result_ring	pass	-	
 inline_result_under_check	pass	-	
@@ -1361,6 +1382,7 @@ inline_retained_match_effects	pass	-
 inline_same_this	pass	-	
 inline_saved	pass	-	
 inline_self_member	pass	-	
+inline_statement_arguments	pass	-	
 inline_substitution_anon_parent_args	pass	-	
 inline_substitution_case_binder_scope	pass	-	
 inline_substitution_class_alias	pass	-	
@@ -1498,12 +1520,14 @@ js_calling_conventions	cannot run	-	its expectation is Scala.js's
 js_cast_opaque_member	cannot run	-	its expectation is Scala.js's
 js_cast_through_alias	cannot run	-	its expectation is Scala.js's
 js_cast_unchecked	cannot run	-	its expectation is Scala.js's
+js_class_scala_dynamic	cannot run	-	its expectation is Scala.js's
 js_closure_null_param	cannot run	-	its expectation is Scala.js's
 js_computed_name	cannot run	-	its expectation is Scala.js's
 js_constructor_of	cannot run	-	its expectation is Scala.js's
 js_ctor_param_jsname_suspended	cannot run	-	its expectation is Scala.js's
 js_dictionary_not_object	cannot run	-	its expectation is Scala.js's
 js_dom_list_foreach	cannot run	-	its expectation is Scala.js's
+js_dynamic_is_scala_dynamic	cannot run	-	its expectation is Scala.js's
 js_dynamic_literal_named	cannot run	-	its expectation is Scala.js's
 js_dynamic_literal_object	cannot run	-	its expectation is Scala.js's
 js_execution_context	cannot run	-	its expectation is Scala.js's
@@ -1597,6 +1621,7 @@ lambda_spread_open_formal_two_params_element	fail	-	compile
 lambda_spread_poly_function_bound	fail	-	compile
 lambda_union_expected	pass	-	
 lambdas	pass	-	
+language_import_from_root	pass	-	
 layout_mixed	pass	-	
 lazy_given_nested_object	pass	-	
 lazy_initializer_release	fail	-	compile
@@ -2090,6 +2115,13 @@ object_inherited_protected	pass	-
 object_member	pass	-	
 object_monitor_one_thread	pass	-	
 object_prefix_framework	pass	-	
+object_statement_discarded_block	pass	-	
+object_statement_effects	pass	-	
+object_statement_java_classes	pass	-	
+object_statement_member_kinds	pass	-	
+object_statement_parent_lists	pass	-	
+object_statement_positions	pass	-	
+object_synchronized_receiver	pass	-	
 objects_deep_equals	pass	-	
 objects_equals_identity	pass	-	
 objects_java_equality	pass	-	
@@ -2204,6 +2236,9 @@ paren_self_type	pass	-
 parens_call_then_using	pass	-	
 parens_op_assign_target	pass	-	
 parent_arg_plain_local	pass	-	
+parent_argument_contents	pass	-	
+parent_argument_enclosing_member	pass	-	
+parent_argument_scope	pass	-	
 parser_combinators_regex	pass	-	
 parser_combinators_sequence	pass	-	
 partial_application_expected_function	pass	-	
@@ -2330,6 +2365,7 @@ prop_nan_bits	pass	-
 prop_repeat_negative	pass	-	
 prop_string_index_unchecked	pass	-	
 prop_trim_control	pass	-	
+protected_member_retried	pass	-	
 proxy_private_import	pass	-	
 proxy_protected_import	pass	-	
 qualified_final	pass	-	

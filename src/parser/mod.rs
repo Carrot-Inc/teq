@@ -1370,9 +1370,11 @@ impl<'a> Parser<'a> {
     /// to the end of the file, or `local`ly to the end of the block or body (`close_language`).
     pub(super) fn open_language_scopes(&mut self, language: &[Import], start: u32, local: bool) {
         for imp in language {
-            let path = match imp.path.split_first() {
-                Some((&names::SCALA, rest)) => rest,
-                _ => &imp.path[..],
+            // `language`, `scala.language` or `_root_.scala.language` (`TreeInfo.languageImport`, as
+            // `ast::is_language_import` reads the clause).
+            let path = match imp.path.as_slice() {
+                [names::ROOT, names::SCALA, rest @ ..] | [names::SCALA, rest @ ..] => rest,
+                rest => rest,
             };
             if path != [names::LANGUAGE] {
                 continue;

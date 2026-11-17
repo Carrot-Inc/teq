@@ -3736,7 +3736,8 @@ impl<'a> Worker<'a> {
             None => match self.nested_class_through(prefix, n) {
                 Some(c) => Some(self.type_ref_to_type(TypeRef::Class(c), span, false)),
                 None => {
-                    let msg = format!("type {} is not a member of {}", self.name_str(n), self.show(prefix));
+                    let hint = self.dynamic_hint(prefix);
+                    let msg = format!("type {} is not a member of {}{}", self.name_str(n), self.show(prefix), hint);
                     self.error(span, msg);
                     Some(ERROR)
                 }
@@ -4547,7 +4548,8 @@ impl<'a> Worker<'a> {
                 match self.member_type(prefix, n) {
                     Some(t) => t,
                     None => {
-                        let msg = format!("type {} is not a member of {}", self.name_str(n), self.show(prefix));
+                        let hint = self.dynamic_hint(prefix);
+                        let msg = format!("type {} is not a member of {}{}", self.name_str(n), self.show(prefix), hint);
                         self.error(span, msg);
                         ERROR
                     }

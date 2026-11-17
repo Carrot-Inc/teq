@@ -64,7 +64,7 @@ abstract-givens	fail	-	compile-error: object creation impossible, since given de
 adding-growing-set	pass	-	
 annotation-info-not-erased	fail	-	compile-error: test contains Java sources
 anon-mirror-gen-local	fail	-	compile-error: not supported yet: an instance of Seed, a class nested in a class, made outside that class
-applydynamic_sip	fail	-	compile-error: type Dynamic not found
+applydynamic_sip	pass	-	
 array-addition	pass	-	
 array-charSeq	fail	-	compile-error: ArrayCharSequence is not a member of the package
 array-erasure	fail	-	compile-error: value apply is not a member of Array[?] & T
@@ -176,8 +176,8 @@ drop-apply-optimization	fail	-	compile-error: value + is not a member of Any
 drop-no-effects	pass	-	
 duplicate-meth	pass	-	
 duration-coarsest	pass	-	
-dynamic-anyval	fail	-	compile-error: type Dynamic not found
-dynamicDynamicTests	fail	-	compile-error: type Dynamic not found
+dynamic-anyval	pass	-	
+dynamicDynamicTests	pass	-	
 eff-dependent	fail	-	compile-error: type mismatch: found A => (f.Eff) ?=> B, required A => B
 elidable-noflags	fail	-	compile-error: cannot resolve import: elidable not found
 empty-array	fail	-	compile-error: value emptyByteArray is not a member of Array
@@ -675,7 +675,7 @@ i389	fail	-	compile-error: test contains Java sources
 i3920	fail	-	compile-error: expected ':', found 'val'
 i3930	pass	-	
 i4037	pass	-	
-i4073	fail	-	compile-error: type Dynamic not found
+i4073	pass	-	
 i4073b	pass	-	
 i4073c	pass	-	
 i4177	pass	-	
@@ -700,7 +700,7 @@ i4557a	pass	-
 i4558	pass	-	
 i4559	pass	-	
 i4563	pass	-	
-i4600	fail	-	compile-error: type Dynamic not found
+i4600	pass	-	
 i4600b	pass	-	
 i4659b	pass	-	
 i4754	pass	-	
@@ -1419,7 +1419,7 @@ t4400	pass	-
 t4415	pass	-	
 t4482	pass	-	
 t4535	fail	-	compile-error: type ArrayStack not found
-t4536	fail	-	compile-error: type Dynamic not found
+t4536	fail	-	run-error: the program has no entry point
 t4537	pass	-	
 t4558	pass	-	
 t4565_1	pass	-	
@@ -1453,7 +1453,7 @@ t498	pass	-
 t4996	pass	-	
 t5009	pass	-	
 t5037	pass	-	
-t5040	fail	-	compile-error: type Dynamic not found
+t5040	pass	-	
 t5045	fail	-	compile-error: UnanchoredRegex is not a member of the package
 t5053	pass	-	
 t5105	pass	-	
@@ -1489,7 +1489,7 @@ t5665	pass	-
 t5680	fail	-	run-error: Exception in thread "main" java.lang.StringIndexOutOfBoundsException: Range [0, -1) out of bounds for length 13
 t5688	pass	-	
 t5729	pass	-	
-t5733	fail	-	compile-error: type Dynamic not found
+t5733	pass	-	
 t5830	pass	-	
 t5856	pass	-	
 t5857	fail	-	run-timeout
@@ -1531,8 +1531,8 @@ t629	pass	-
 t6290	pass	-	
 t6333	fail	-	run-error: Exception in thread "main" java.lang.Exception: Fail!
 t6337a	pass	-	
-t6353	fail	-	compile-error: value apply is not a member of X
-t6355	fail	-	compile-error: type Dynamic not found
+t6353	pass	-	
+t6355	pass	-	
 t6370	pass	-	
 t6380	fail	-	compile-error: value getDeclaredMethods is not a member of Class[Foo]
 t6385	pass	-	
@@ -1559,7 +1559,7 @@ t6634	fail	-	compile-error: too many arguments: expected 1
 t6637	pass	-	
 t6644	pass	-	
 t6646	pass	-	
-t6663	fail	-	compile-error: type Dynamic not found
+t6663	pass	-	
 t6666a	pass	-	
 t6673	pass	-	
 t6706	fail	-	compile-error: value gc is not a member of System

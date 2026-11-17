@@ -16,6 +16,7 @@ mod depfun;
 pub mod deprecation;
 mod deferred;
 mod derive;
+mod dynamic;
 pub(crate) mod elaborate;
 mod exceptions;
 pub mod feature;
@@ -1458,6 +1459,13 @@ pub struct Worker<'a> {
     /// Set for the member selection on a converted receiver, which no second conversion may
     /// serve.
     pub no_receiver_conversion: bool,
+    /// The receiver and the right side of an assignment `q.x = rhs` whose selection is being typed, for
+    /// `updateDynamic` where `q` derives from `scala.Dynamic` and has no `x`: set by `select_for_assignment`
+    /// around its selection, taken by the rewrite for that receiver alone.
+    pub dynamic_assign: Option<(TExprId, crate::ast::ExprId)>,
+    /// The value an `apply` is being inserted on for its argument lists (dotty's `InsertedApply`): on a call of one
+    /// of the four dynamic methods the inserted `apply` is not rewritten again (`Dynamic.isDynamicExpansion`).
+    pub inserted_apply: Option<TExprId>,
     /// The member a library body's selection declares, for the selection of
     /// that name on that typed receiver: it is the member the call takes, not the name's
     /// overloads.
@@ -3274,6 +3282,8 @@ impl<'a> Worker<'a> {
             lexical_selected: None,
             ext_undecided: false,
             no_receiver_conversion: false,
+            dynamic_assign: None,
+            inserted_apply: None,
             declared_call: None,
             declared_took: None,
             infix_declared: None,
@@ -3752,6 +3762,8 @@ impl<'a> Worker<'a> {
             lexical_selected: None,
             ext_undecided: false,
             no_receiver_conversion: Default::default(),
+            dynamic_assign: None,
+            inserted_apply: None,
             declared_call: None,
             declared_took: None,
             infix_declared: None,

@@ -92,7 +92,7 @@ neg/anykind2.scala	std	AnyKind
 neg/anykind3.scala	different	type argument List does not have the same kind as its bound
 neg/anykind4.scala	std	AnyKind
 neg/applied_constructor_types.scala	syntax	expected {}, found {}
-neg/applydynamic_sip.scala	std	Dynamic
+neg/applydynamic_sip.scala	same	
 neg/arg-eof.scala	syntax	expected an expression, found {}
 neg/assignments.scala	same	
 neg/autoTuplingTest.scala	accepts	
@@ -170,38 +170,38 @@ neg/doubleDefinition-late.scala	subset	2/3 lines
 neg/doubleDefinition.scala	same	
 neg/duplicate-enum.scala	subset	1/2 lines
 neg/duplicate-parents.scala	accepts	
-neg/dynamicApplyDynamicTest1.scala	std	Dynamic
-neg/dynamicApplyDynamicTest2.scala	std	Dynamic
-neg/dynamicApplyDynamicTest3.scala	std	Dynamic
-neg/dynamicApplyDynamicTest4.scala	std	Dynamic
-neg/dynamicApplyDynamicTest5.scala	std	Dynamic
-neg/dynamicApplyDynamicTest6.scala	std	Dynamic
-neg/dynamicApplyDynamicTest7.scala	std	Dynamic
-neg/dynamicApplyDynamicTest8.scala	std	Dynamic
-neg/dynamicApplyDynamicTest9.scala	std	Dynamic
-neg/dynamicApplyNamedDynamicTest1.scala	std	Dynamic
-neg/dynamicApplyNamedDynamicTest2.scala	std	Dynamic
-neg/dynamicApplyNamedDynamicTest3.scala	std	Dynamic
-neg/dynamicApplyNamedDynamicTest4.scala	std	Dynamic
-neg/dynamicApplyNamedDynamicTest5.scala	std	Dynamic
-neg/dynamicApplyNamedDynamicTest6.scala	std	Dynamic
-neg/dynamicApplyNamedDynamicTest7.scala	std	Dynamic
-neg/dynamicApplyNamedDynamicTest8.scala	std	Dynamic
-neg/dynamicDynamicImplicitsTest1.scala	std	Dynamic
-neg/dynamicDynamicImplicitsTest2.scala	std	Dynamic
-neg/dynamicDynamicImplicitsTest3.scala	std	Dynamic
-neg/dynamicNoImport.scala	std	Dynamic
-neg/dynamicSelectDynamicTest1.scala	std	Dynamic
-neg/dynamicSelectDynamicTest2.scala	std	Dynamic
-neg/dynamicSelectDynamicTest3.scala	std	Dynamic
-neg/dynamicSelectDynamicTest4.scala	std	Dynamic
-neg/dynamicSelectDynamicTest5.scala	std	Dynamic
-neg/dynamicSelectDynamicTest6.scala	std	Dynamic
-neg/dynamicSelectDynamicTest7.scala	std	Dynamic
-neg/dynamicUpdateDynamicTest1.scala	std	Dynamic
-neg/dynamicUpdateDynamicTest2.scala	std	Dynamic
-neg/dynamicUpdateDynamicTest3.scala	std	Dynamic
-neg/dynamicUpdateDynamicTest4.scala	std	Dynamic
+neg/dynamicApplyDynamicTest1.scala	same	
+neg/dynamicApplyDynamicTest2.scala	same	
+neg/dynamicApplyDynamicTest3.scala	same	
+neg/dynamicApplyDynamicTest4.scala	same	
+neg/dynamicApplyDynamicTest5.scala	same	
+neg/dynamicApplyDynamicTest6.scala	same	
+neg/dynamicApplyDynamicTest7.scala	same	
+neg/dynamicApplyDynamicTest8.scala	same	
+neg/dynamicApplyDynamicTest9.scala	same	
+neg/dynamicApplyNamedDynamicTest1.scala	same	
+neg/dynamicApplyNamedDynamicTest2.scala	same	
+neg/dynamicApplyNamedDynamicTest3.scala	same	
+neg/dynamicApplyNamedDynamicTest4.scala	same	
+neg/dynamicApplyNamedDynamicTest5.scala	same	
+neg/dynamicApplyNamedDynamicTest6.scala	same	
+neg/dynamicApplyNamedDynamicTest7.scala	same	
+neg/dynamicApplyNamedDynamicTest8.scala	same	
+neg/dynamicDynamicImplicitsTest1.scala	same	
+neg/dynamicDynamicImplicitsTest2.scala	same	
+neg/dynamicDynamicImplicitsTest3.scala	same	
+neg/dynamicNoImport.scala	same	
+neg/dynamicSelectDynamicTest1.scala	same	
+neg/dynamicSelectDynamicTest2.scala	same	
+neg/dynamicSelectDynamicTest3.scala	same	
+neg/dynamicSelectDynamicTest4.scala	same	
+neg/dynamicSelectDynamicTest5.scala	same	
+neg/dynamicSelectDynamicTest6.scala	same	
+neg/dynamicSelectDynamicTest7.scala	same	
+neg/dynamicUpdateDynamicTest1.scala	same	
+neg/dynamicUpdateDynamicTest2.scala	same	
+neg/dynamicUpdateDynamicTest3.scala	same	
+neg/dynamicUpdateDynamicTest4.scala	same	
 neg/empty-given.scala	syntax	expected identifier, found {}
 neg/emptyCatch.scala	same	
 neg/endmarkers.scala	std	ArrowAssoc
@@ -1046,7 +1046,7 @@ neg/i3542a.scala	same
 neg/i3557.scala	accepts	
 neg/i3630.scala	accepts	
 neg/i3657.scala	same	
-neg/i3736b.scala	std	Dynamic
+neg/i3736b.scala	same	
 neg/i3745a.scala	accepts	
 neg/i3745b.scala	accepts	
 neg/i3775.scala	same	
@@ -1280,8 +1280,8 @@ neg/i7459.scala	same
 neg/i7526.scala	same	
 neg/i7529.scala	accepts	
 neg/i7567.scala	same	
-neg/i7575.scala	std	Dynamic
-neg/i7575b.scala	std	Dynamic
+neg/i7575.scala	same	
+neg/i7575b.scala	same	
 neg/i7597.scala	same	
 neg/i7613.scala	same	
 neg/i7709.scala	subset	2/8 lines
@@ -1377,10 +1377,10 @@ neg/i9168.scala	syntax	expected an expression, found {}
 neg/i9185.scala	same	
 neg/i9287.scala	different	type mismatch
 neg/i9294.scala	accepts	
-neg/i9295a.scala	std	Dynamic
-neg/i9295b.scala	std	Dynamic
-neg/i9295c.scala	std	Dynamic
-neg/i9295d.scala	std	Dynamic
+neg/i9295a.scala	same	
+neg/i9295b.scala	same	
+neg/i9295c.scala	same	
+neg/i9295d.scala	same	
 neg/i9298.scala	same	
 neg/i9299.scala	different	(foo : => Unit) is not a valid type prefix, since it is not an immutable path
 neg/i9299a.scala	same	
@@ -1861,14 +1861,14 @@ neg/t5702-neg-bad-and-wild.scala	syntax	expected {}, found {}
 neg/t5702-neg-bad-brace.scala	syntax	expected {}, found {}
 neg/t5729.scala	same	
 neg/t6124.scala	subset	7/15 lines
-neg/t6355b.scala	std	Dynamic
+neg/t6355b.scala	same	
 neg/t6455.scala	same	
 neg/t6476.scala	superset	+3 lines: invalid escape sequence
 neg/t6476b.scala	same	
 neg/t6574.scala	different	Cannot rewrite recursive call: it is not in tail position
-neg/t6663.scala	std	Dynamic
+neg/t6663.scala	same	
 neg/t6810.scala	syntax	unclosed string literal
-neg/t6920.scala	std	Dynamic
+neg/t6920.scala	same	
 neg/t7093.scala	same	
 neg/t7239.scala	same	
 neg/t7259.scala	accepts	
@@ -1878,7 +1878,7 @@ neg/t7294.scala	accepts
 neg/t750	oos	java
 neg/t7868.scala	same	
 neg/t8002-nested-scope.scala	same	
-neg/t8006.scala	superset	+1 lines: value {} is not a member of {}
+neg/t8006.scala	same	
 neg/t8300-overloading.scala	accepts	
 neg/t8764.scala	same	
 neg/t9419.scala	accepts	
@@ -2315,7 +2315,7 @@ pos/derives-obj.scala	accepts
 pos/devalify.scala	accepts	
 pos/doWhile.scala	rejects	`do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
 pos/duplicate-parents.scala	accepts	
-pos/dynamicExtendsNoImport.scala	std	Dynamic
+pos/dynamicExtendsNoImport.scala	accepts	
 pos/eff-compose.scala	rejects	type mismatch
 pos/elidable-tparams.scala	rejects	cannot resolve import
 pos/end-given.scala	accepts	
@@ -2522,7 +2522,7 @@ pos/i10927.scala	accepts
 pos/i10929-new-syntax.scala	std	is	--source future --language experimental.modularity
 pos/i10929.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
 pos/i10945	oos	java
-pos/i10951.scala	std	Dynamic
+pos/i10951.scala	accepts	
 pos/i10964.scala	accepts	
 pos/i10964a.scala	accepts	
 pos/i10966.scala	accepts	
@@ -3037,10 +3037,10 @@ pos/i16500.scala	accepts
 pos/i16506.scala	accepts	
 pos/i16539.min.scala	accepts	
 pos/i16539.scala	accepts	
-pos/i16544a.scala	std	Dynamic
-pos/i16544b.scala	std	Dynamic
-pos/i16544c.scala	std	Dynamic
-pos/i16544d.scala	std	Dynamic
+pos/i16544a.scala	accepts	
+pos/i16544b.scala	accepts	
+pos/i16544c.scala	accepts	
+pos/i16544d.scala	accepts	
 pos/i16562.scala	accepts	
 pos/i16590.scala	accepts	
 pos/i16596.more.scala	accepts	
@@ -3080,7 +3080,7 @@ pos/i17052.scala	accepts
 pos/i17064.scala	accepts	
 pos/i17066	oos	java
 pos/i17100.scala	accepts	
-pos/i17100a.scala	std	Dynamic
+pos/i17100a.scala	rejects	type mismatch
 pos/i17135.scala	accepts	
 pos/i17149.scala	accepts	
 pos/i17155.scala	accepts	
@@ -3785,7 +3785,7 @@ pos/i3669.scala	accepts
 pos/i3692.scala	accepts	
 pos/i3702.scala	accepts	
 pos/i3703.scala	accepts	
-pos/i3736.scala	std	Dynamic
+pos/i3736.scala	accepts	
 pos/i3816.scala	accepts	
 pos/i3857.scala	accepts	
 pos/i3873.scala	accepts	
@@ -4074,7 +4074,7 @@ pos/i7515.scala	accepts
 pos/i7516.scala	accepts	
 pos/i7525	oos	java
 pos/i7532.scala	accepts	
-pos/i7575.scala	std	Dynamic	--language dynamics
+pos/i7575.scala	accepts		--language dynamics
 pos/i7586.scala	rejects	Cannot prove that (m4_2 : S[S[S[Nat]]]) <:< S[S[S[S[Z]]]].
 pos/i7602.scala	accepts	
 pos/i7648.scala	accepts	
@@ -4240,10 +4240,10 @@ pos/i9260.scala	accepts
 pos/i9266.scala	syntax	expected a definition, found {}
 pos/i9267.scala	accepts	
 pos/i9290	accepts	
-pos/i9295.scala	std	Dynamic
-pos/i9295b.scala	std	Dynamic
-pos/i9295c.scala	std	Dynamic
-pos/i9295d.scala	std	Dynamic
+pos/i9295.scala	accepts	
+pos/i9295b.scala	accepts	
+pos/i9295c.scala	accepts	
+pos/i9295d.scala	rejects	method apply in trait ContextFunction1 does not take parameters
 pos/i9307.scala	accepts	
 pos/i9314.scala	accepts	
 pos/i9342a.scala	accepts	
@@ -5440,7 +5440,7 @@ pos/t5683.scala	accepts
 pos/t5702-pos-infix-star.scala	std	printf
 pos/t5703	oos	java
 pos/t5720-ownerous.scala	accepts	
-pos/t5726.scala	std	Dynamic
+pos/t5726.scala	accepts	
 pos/t5727.scala	accepts	
 pos/t573.scala	accepts	
 pos/t5760-pkgobj-warn	rejects	several entry points: Test.main, Test.main; choose one with --main
@@ -5477,7 +5477,7 @@ pos/t6022b.scala	accepts
 pos/t6028	accepts	
 pos/t6033.scala	accepts	
 pos/t604.scala	accepts	
-pos/t6040.scala	std	Dynamic
+pos/t6040.scala	accepts	
 pos/t607.scala	accepts	
 pos/t6072.scala	accepts	
 pos/t6084.scala	accepts	
@@ -5519,7 +5519,7 @@ pos/t651.scala	accepts
 pos/t6514.scala	accepts	
 pos/t6537.scala	accepts	
 pos/t6547.scala	accepts	
-pos/t6551.scala	std	Dynamic
+pos/t6551.scala	accepts	
 pos/t6552.scala	accepts	
 pos/t6562.scala	accepts	
 pos/t6575a.scala	accepts	
@@ -5531,7 +5531,7 @@ pos/t6664.scala	accepts
 pos/t6664b.scala	accepts	
 pos/t6675.scala	accepts	
 pos/t6712.scala	accepts	
-pos/t6722.scala	std	Dynamic
+pos/t6722.scala	accepts	
 pos/t6745.scala	accepts	
 pos/t675.scala	accepts	
 pos/t6771.scala	accepts	
@@ -5663,7 +5663,7 @@ pos/t8315b.scala	accepts
 pos/t8324.scala	accepts	
 pos/t8359.scala	accepts	
 pos/t8363.scala	accepts	
-pos/t8364.scala	std	Dynamic
+pos/t8364.scala	accepts	
 pos/t8367.scala	accepts	
 pos/t8369a.scala	accepts	
 pos/t8376	oos	java

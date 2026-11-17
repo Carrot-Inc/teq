@@ -215,8 +215,18 @@ directive_unicode_order	fail	-	exit code 0
 directive_wconf_files	fail	-	exit code 0
 directive_werror_files	fail	-	exit code 0
 duplicates	pass	-	
-dynamic_inserted_apply	fail	-	missing '18:11: error: method apply in trait ContextFunction1 does not take more parameters'
-dynamic_named_missing_given	fail	-	missing '11:27: error:'
+dynamic_applied_assignment_operator	pass	-	
+dynamic_eta_underscore	pass	-	
+dynamic_feature	pass	-	
+dynamic_feature_local_class	pass	-	
+dynamic_inserted_apply	pass	-	
+dynamic_named_missing_given	pass	-	
+dynamic_named_vararg	pass	-	
+dynamic_not_supported_yet	pass	-	
+dynamic_overloaded_apply	pass	-	
+dynamic_overloaded_apply_late	pass	-	
+dynamic_super_extension_first	pass	-	
+dynamic_wrong_signature	pass	-	
 early_param_kind_bound	pass	-	
 early_param_kind_bound_defined_first	pass	-	
 early_param_kind_bound_one_file	pass	-	
@@ -335,6 +345,8 @@ file_module_overrides	fail	-	exit code 0
 final_val_ascribed_constant	pass	-	
 float_decimal_literals	pass	-	
 foldleft_empty_inferred	pass	-	
+for_alias_value_forward	pass	-	
+for_alias_value_types	pass	-	
 for_id_pattern_refutable	pass	-	
 for_id_pattern_types	pass	-	
 for_lambda_selector_checks	pass	-	
@@ -345,6 +357,12 @@ for_tupling_migration	pass	-
 for_unused_generators	pass	-	
 for_xxl_given_3_7	pass	-	
 for_yield_view_refusals	pass	-	
+forward_reference	pass	-	
+forward_reference_files	pass	-	
+forward_reference_patterns	pass	-	
+forward_reference_places	pass	-	
+forward_reference_quoted	pass	-	
+forward_reference_unfinished	pass	-	
 function_parent	pass	-	
 gadt_alternatives	pass	-	
 gadt_bound_after_base_type	fail	-	missing 'gadt_bound_after_base_type.scala:5:17: error: Found: (x : T)'
@@ -440,6 +458,7 @@ impossible_type_test	pass	-
 impossible_type_test_classes	pass	-	
 impossible_type_test_typer	pass	-	
 impure_function_alias_missing_class	fail	-	missing '7:27: error: Cyclic reference involving type ImpureFunction01'
+inaccessible_member_retry_fails	pass	-	
 incomplete_def_at_eof	pass	-	
 incomplete_local_val	pass	-	
 indented_block_between_widths	pass	-	
@@ -517,6 +536,7 @@ inline_phase_macro_cycle.check	pass	-
 inline_phase_transparent_error	pass	-	
 inline_phase_transparent_error_typing	pass	-	
 inline_phase_two_roots	pass	-	
+inline_projection_forward	pass	-	
 inline_result_bindings_avoided	pass	-	
 inline_result_chain	pass	-	
 inline_result_cycle	pass	-	
@@ -720,7 +740,7 @@ new_eta_expanded_opaque	fail	-	missing 'error: [A] =>> O.F[A] does not have a co
 new_written_empty_first_list	pass	-	
 new_written_empty_first_list_anon	pass	-	
 no_entry_point	pass	-	
-nonsensical_hidden	fail	-	present '2:10: error: Only function types can be followed by _'
+nonsensical_hidden	fail	-	missing 'error: Only function types can be followed by _ but the current expression has type <error'
 nonsensical_mismatch_hidden	pass	-	
 not_found_selection_once	pass	-	
 null_equality_value_tparam	pass	-	
@@ -776,6 +796,7 @@ param_bound_refinement_member_argument	pass	-
 param_clause_blank_line	pass	-	
 param_clause_next_line	pass	-	
 parens	pass	-	
+parent_argument_scope	pass	-	
 path_test_of_inline_forwarder	pass	-	
 path_through_nonfinal_lazy_val	fail	-	the path is not refused; queued: the realizability of a path (a lazy val that is not final in a path)
 pattern_binder_types	pass	-	

@@ -325,7 +325,8 @@ worker_fields! {
     unread {
         app_base, proto_vars, plain_member, kind_only_bound, binop_rhs, ref_exported, naming_late_batch,
         spread_arg, lift_arg, spread_was_array, last_unapply, infix_called, infix_passed, infix_universal, denotation_marks,
-        unadapted_call, unadapted_node, ext_undecided, no_receiver_conversion, declared_call, declared_took,
+        unadapted_call, unadapted_node, ext_undecided, no_receiver_conversion, dynamic_assign, inserted_apply,
+        declared_call, declared_took,
         infix_declared, direct_ext_targs, ctor_prefix, anon_super_call, sig_bound_names, copy_application, case_scrutinee,
         apply_seen_from, private_alias_prefix, dropped_type_list, assign_op_receiver, written_qualifier, joint_sig,
         dependent_checks, last_arg_types, eager_inline_conversion, unboxing_after, tested, alias_bound_as_path,

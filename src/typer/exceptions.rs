@@ -741,6 +741,10 @@ impl<'a> Worker<'a> {
             TExpr::Module(_) | TExpr::This | TExpr::Local(_) | TExpr::Static(_) => true,
             TExpr::CallStatic(_, args) => self.prog.expr_list(args).is_empty(),
             TExpr::Field(r, _) => self.stable_receiver(r),
+            // `d.name` of a receiver that derives from `scala.Dynamic`: `d.selectDynamic("name")` (`typer::dynamic`).
+            TExpr::CallMethod(r, m, args) if self.syms.sym(m).name == names::SELECT_DYNAMIC => {
+                matches!(self.prog.expr_list(args), [a] if matches!(self.prog.expr(*a), TExpr::Str(_))) && self.stable_receiver(r)
+            }
             TExpr::CallMethod(r, _, args) => self.prog.expr_list(args).is_empty() && self.stable_receiver(r),
             _ => false,
         }

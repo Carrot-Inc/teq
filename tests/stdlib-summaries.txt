@@ -5,6 +5,7 @@ deprecated_silenced_by_located_text: warning: there was 1 deprecation warning; r
 deprecated_silenced_by_nowarn: warning: there was 1 deprecation warning; re-run with --deprecation for details
 deprecated_std_member_alone: warning: there was 1 deprecation warning; re-run with --deprecation for details
 deprecated_std_type_alone: warning: there was 1 deprecation warning; re-run with --deprecation for details
+dynamic_predef_names: warning: there were 2 deprecation warnings; re-run with --deprecation for details
 either_right: warning: there were 10 deprecation warnings; re-run with --deprecation for details
 int_sign: warning: there were 2 deprecation warnings; re-run with --deprecation for details
 iterable_to_iterator: warning: there were 2 deprecation warnings; re-run with --deprecation for details

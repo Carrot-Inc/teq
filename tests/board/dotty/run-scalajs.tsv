@@ -43,7 +43,7 @@ absoverride.scala	pass	lean:pass
 abstract-givens.scala	fail	lean:fail	abstract-givens.scala:6:8: object creation impossible, since given def z[T](using x$1: T): Seq[T] in trait T is not defined
 adding-growing-set.scala	fail	lean:pass	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 anon-mirror-gen-local.scala	fail	lean:fail	anon-mirror-gen-local.scala:85:47: not supported yet: an instance of Seed, a class nested in a class, made outside that class
-applydynamic_sip.scala	fail	lean:fail	applydynamic_sip.scala:30:3: a member of js.Dynamic takes no type arguments
+applydynamic_sip.scala	pass	lean:pass	
 array-addition.scala	pass	lean:pass	
 array-erasure.scala	fail	lean:fail	array-erasure.scala:27:16: value apply is not a member of Array[?] & T
 array-existential-bound.scala	fail	lean:fail	array-existential-bound.scala:2:18: value length is not a member of Q
@@ -135,8 +135,8 @@ drop-apply-optimization.scala	fail	lean:fail	drop-apply-optimization.scala:15:7:
 drop-no-effects.scala	pass	lean:pass	
 duplicate-meth.scala	pass	lean:pass	
 duration-coarsest.scala	pass	lean:pass	
-dynamic-anyval.scala	fail	lean:fail	run: exit 1: TypeError: x.dingo is not a function
-dynamicDynamicTests.scala	fail	lean:fail	dynamicDynamicTests.scala:69:66: a vararg splice is only allowed as the last argument
+dynamic-anyval.scala	pass	lean:pass	
+dynamicDynamicTests.scala	pass	lean:pass	
 eff-dependent.scala	fail	lean:fail	eff-dependent.scala:22:12: type mismatch: found A => (f.Eff) ?=> B, required A => B
 elidable-noflags.scala	pass	lean:fail	
 empty-array.scala	pass	lean:fail	
@@ -551,7 +551,7 @@ i3624.scala	pass	lean:pass
 i3920.scala	fail	lean:fail	i3920.scala:6:26: expected ':', found 'val'
 i3930.scala	pass	lean:pass	
 i4037.scala	pass	lean:pass	
-i4073.scala	fail	lean:fail	run: exit 1: TypeError: d.some is not a function
+i4073.scala	pass	lean:pass	
 i4073b.scala	pass	lean:pass	
 i4073c.scala	pass	lean:pass	
 i4177.scala	pass	lean:pass	
@@ -570,7 +570,7 @@ i4557a.scala	pass	lean:pass
 i4558.scala	pass	lean:pass	
 i4559.scala	pass	lean:pass	
 i4563.scala	pass	lean:pass	
-i4600.scala	fail	lean:fail	i4600.scala:34:12: values of types Dynamic and String cannot be compared with == or !=
+i4600.scala	pass	lean:pass	
 i4600b.scala	pass	lean:pass	
 i4659b.scala	fail	lean:fail	run: exit 1: RangeError: Maximum call stack size exceeded
 i4754.scala	pass	lean:pass	
@@ -1134,7 +1134,7 @@ t498.scala	pass	lean:pass
 t4996.scala	pass	lean:pass	
 t5009.scala	pass	lean:pass	
 t5037.scala	pass	lean:pass	
-t5040.scala	fail	lean:fail	t5040.scala:11:3: privateMethod is private to Prova2
+t5040.scala	pass	lean:pass	
 t5045.scala	pass	lean:fail	
 t5053.scala	pass	lean:pass	
 t5105.scala	pass	lean:pass	
@@ -1166,7 +1166,7 @@ t5656.scala	pass	lean:fail
 t5665.scala	pass	lean:pass	
 t5688.scala	pass	lean:pass	
 t5729.scala	pass	lean:pass	
-t5733.scala	fail	lean:fail	t5733.scala:20:11: values of types Dynamic and String cannot be compared with == or !=
+t5733.scala	pass	lean:pass	
 t5830.scala	pass	lean:pass	
 t5856.scala	pass	lean:pass	
 t5857.scala	pass	lean:fail	
@@ -1201,8 +1201,8 @@ t629.scala	pass	lean:pass
 t6290.scala	pass	lean:pass	
 t6333.scala	pass	lean:fail	
 t6337a.scala	pass	lean:pass	
-t6353.scala	fail	lean:fail	run: exit 1: TypeError: f.apply is not a function
-t6355.scala	fail	lean:fail	run: exit 1: TypeError: x.bippy is not a function
+t6353.scala	pass	lean:pass	
+t6355.scala	pass	lean:pass	
 t6370.scala	pass	lean:pass	
 t6385.scala	pass	lean:pass	
 t6406-regextract.scala	fail	lean:fail	Regex.scala:341:24:None:None: pattern is private to Matcher (in the body of scala.util.matching.Regex.unapplySeq)
@@ -1225,7 +1225,7 @@ t6632.scala	pass	lean:fail
 t6637.scala	pass	lean:pass	
 t6644.scala	pass	lean:pass	
 t6646.scala	pass	lean:pass	
-t6663.scala	fail	lean:fail	t6663.scala:14:11: a member of js.Dynamic takes no type arguments
+t6663.scala	pass	lean:pass	
 t6666a.scala	pass	lean:pass	
 t6673.scala	pass	lean:pass	
 t6706.scala	fail	lean:fail	lang.scala:1:1: not supported on JavaScript: method gc of java.lang.System (a Java definition without an implementation in the std's platform layer)

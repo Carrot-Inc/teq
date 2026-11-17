@@ -25,7 +25,6 @@ UnrolledBuffer	compile-error: UnrolledBuffer is not a member of the package
 abstract-givens	compile-error: object creation impossible, since given def z[T](using x$1: T): Seq[T] in trait T is not defined
 annotation-info-not-erased	compile-error: test contains Java sources
 anon-mirror-gen-local	compile-error: not supported yet: an instance of Seed, a class nested in a class, made outside that class
-applydynamic_sip	compile-error: type Dynamic not found
 array-charSeq	compile-error: ArrayCharSequence is not a member of the package
 array-erasure	compile-error: value apply is not a member of Array[?] & T
 array-existential-bound	compile-error: value length is not a member of Q
@@ -70,8 +69,6 @@ defaults-serizaliable-with-forwarders	compile-error: ObjectInputStream is not a 
 deriving-interesting-prefixes	compile-error: Test.a.TC1[C] cannot be derived: the companion of the type class has no derived method
 double-pattern-type	compile-error: wrong number of patterns for C2: expected 2, found 3
 drop-apply-optimization	compile-error: value + is not a member of Any
-dynamic-anyval	compile-error: type Dynamic not found
-dynamicDynamicTests	compile-error: type Dynamic not found
 eff-dependent	compile-error: type mismatch: found A => (f.Eff) ?=> B, required A => B
 elidable-noflags	compile-error: cannot resolve import: elidable not found
 empty-array	compile-error: value emptyByteArray is not a member of Array
@@ -278,7 +275,6 @@ i3448	compile-error: missing parameter type
 i3539	compile-error: value asInstanceOf is not a member of Int => ""
 i389	compile-error: test contains Java sources
 i3920	compile-error: expected ':', found 'val'
-i4073	compile-error: type Dynamic not found
 i4192	compile-error: value getEnclosingClass is not a member of Class[_]
 i4364a	compile-error: method f in object Test must be called with () argument
 i4404a	compile-error: Modifier is not a member of the package
@@ -288,7 +284,6 @@ i4446	compile-error: type ObjectOutputStream not found
 i4523	compile-error: value getDeclaredMethods is not a member of Class[C]
 i4528	compile-error: this expression cannot be assigned to
 i4557	compile-error: a parent has to be a class or a trait
-i4600	compile-error: type Dynamic not found
 i4947	run-error: Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 0
 i4947a2	run-error: Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 0
 i4947b	run-error: Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 0
@@ -618,7 +613,6 @@ t4813	compile-error: value transform is not a member of ArrayBuffer[Int]
 t4859	wrong-output
 t4871	compile-error: not found: classOf
 t4930	compile-error: type mismatch: found Iterable[Byte], required Seq[Byte]
-t5040	compile-error: type Dynamic not found
 t5045	compile-error: UnanchoredRegex is not a member of the package
 t5262	compile-error: type ObjectOutputStream not found
 t5377	compile-error: value permutations is not a member of LazyList[Int]
@@ -627,7 +621,6 @@ t5590	compile-error: type ObjectOutputStream not found
 t5612	compile-error: type Enumeration not found
 t5656	compile-error: value addString is not a member of SeqView[List[Char]]
 t5680	run-error: Exception in thread "main" java.lang.StringIndexOutOfBoundsException: Range [0, -1) out of bounds for length 13
-t5733	compile-error: type Dynamic not found
 t5857	run-timeout
 t5866	wrong-output
 t5867	compile-error: UnrolledBuffer is not a member of the package
@@ -644,8 +637,6 @@ t6246	compile-error: value <:< is not a member of ClassTag[_]
 t6260-delambdafy	compile-error: Modifier is not a member of the package
 t6271	compile-error: type mismatch: found Iterable, required Factory[Iterable[Int], Any]
 t6333	run-error: Exception in thread "main" java.lang.Exception: Fail!
-t6353	compile-error: value apply is not a member of X
-t6355	compile-error: type Dynamic not found
 t6380	compile-error: value getDeclaredMethods is not a member of Class[Foo]
 t6406-regextract	run-error: Exception in thread "main" scala.MatchError: 1 (of class scala.util.matching.Regex$Match)
 t6443b	compile-error: object creation impossible, since def foo(d: A.this.D)(d2: (d : A.this.D)): Unit in trait A is not defined
@@ -656,7 +647,6 @@ t6628	compile-error: object creation impossible, since def buildCC[B](items: Arr
 t6632	wrong-output
 t6633	compile-error: value replStringOf is not a member of ScalaRunTime
 t6634	compile-error: too many arguments: expected 1
-t6663	compile-error: type Dynamic not found
 t6706	compile-error: value gc is not a member of System
 t6793	compile-error: value getDeclaredFields is not a member of Class[C2]
 t7120b	wrong-output

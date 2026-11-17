@@ -59,6 +59,42 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   interpreter evaluated them in the order written. An object is written back behind such an argument only where
   its class runs no initialisation and neither it nor a base takes a constructor parameter or has a secondary
   constructor.
+- `scala.Dynamic`: a selection, an application or an assignment of a name that a value whose class derives from
+  `scala.Dynamic` does not have, and that no extension method or conversion gives, is the class's dynamic method's:
+  `d.name` is `d.selectDynamic("name")`, `d.name(a, b)` is `d.applyDynamic("name")(a, b)`, `d.name(x = a, b)` is
+  `d.applyDynamicNamed("name")(("x", a), ("", b))` and `d.name = v` is `d.updateDynamic("name")(v)`, with the
+  type arguments kept; so are a member the site may not access, a right-associative operator whose right operand
+  is the value, `super.name` (where an extension method gives the name scalac calls the extension through
+  `super`, a call teq does not make: the name is refused there as for a class that is no `scala.Dynamic`) and a
+  stable identifier pattern through one (where no conversion gives the name: `case d.ensuring` is refused). teq
+  had no `scala.Dynamic` on its lean
+  standard library ("type Dynamic not found") and refused each of these against scala-library ("value name is not
+  a member of D"). A class that derives from it needs `import scala.language.dynamics` (an error where
+  `scala.Dynamic` is itself a parent, a feature warning otherwise); `applyDynamic` may not be overloaded in one;
+  a name sent to a dynamic method the class lacks is refused with scalac's hint ("possible cause: maybe a wrong
+  Dynamic method signature?"), which a type selected on such a value gets too; `js.Dynamic` is a `scala.Dynamic`,
+  as in Scala.js, and its calls are what they were. A name every value has (`==`, `equals`, `toString`,
+  `asInstanceOf` and the others of `Any` and `AnyRef`) is never a dynamic method's, whatever its form. An
+  assignment operator is the application as written first, as for any class: `d += 1`, `h.cur += 1` and
+  `xs(0) += 1` are `applyDynamic("+=")(1)` on the value where its dynamic method takes the call, and the
+  assignment by the class's own `+` where it does not. Some forms are not sent to a dynamic method yet and are
+  refused ("not supported yet: …"): an infix
+  call with a parenthesised argument list (`d call (1, 2)`, one tuple to the dynamic method under scalac) and a
+  written `using` argument list; and, on the lean standard library, `ensuring`, `formatted` and `→`, which
+  scala-library's `Predef` gives every value before a dynamic method is asked, and every name on a value whose
+  class also extends a class of the standard library (`extends Ordering[Int] with Dynamic`), which may lack there
+  a member scala-library gives it.
+- A name of a case class's default getter written in a source (`x.copy$default$1`, `x.m$default$1`) is no member,
+  as under scalac: teq answered it with the field or the default.
+- A language import written from the root (`import _root_.scala.language.implicitConversions`) enables its
+  feature, as `scala.language.implicitConversions` and `language.implicitConversions` do. teq did not recognise the
+  clause and warned that the feature should be enabled (an error under `--werror`).
+- A protected member that the site may not access is left to an extension method or a conversion of the same
+  name before the access is refused, as a private member already was: `new Guarded().stamp` from outside the class,
+  with a `Conversion[Guarded, Rich]` whose `Rich` has `stamp`, calls the conversion's. teq reported the protected
+  access and refused the program. Where an extension method of the name is not taken for the receiver (its using
+  clause has no given, two imports bring one each, a type parameter's bound is not met) the access is what is
+  reported, as under scalac, for a private member too, where teq told the extension's failure.
 - An assignment operator (`x += e`, `q.x -= e`, `xs(i) *= e`) is typed as scalac types it: first as the call of
   that operator on the left side, the operator found as any member is, and only where that call does not apply as
   the assignment `l = l op e`. Three things were wrong before. An operator that comes from the type's companion,

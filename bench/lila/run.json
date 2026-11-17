@@ -1,8 +1,8 @@
 {
  "kind": "record",
  "reason": "",
- "revision": "6bd3c2a04",
- "binary": "teq 0.1.10 6bd3c2a04",
+ "revision": "356154e12",
+ "binary": "teq 0.1.10 356154e12",
  "pin": "c91f1d09d0f72e913a56cb5d2d8225f6c0f8e0a2",
  "inputs": "f935ad6b2d522d5ebe0beb18c5735136593a6a27fe229a5677afe8be07900c84",
  "assertions": [
@@ -156,7 +156,6 @@
   "blocked: teq run lila: lila/test modules/team/src/main/Team.scala:117:11: error: recursive use of toList needs an explicit result type\n      def toList = idsStr.nonEmpty.so(toArray.toList)\n          ^^^^^^",
   "blocked: teq run lila: lila/test modules/team/src/main/Team.scala:118:11: error: recursive use of toSet needs an explicit result type\n      def toSet = idsStr.nonEmpty.so(toArray.toSet)\n          ^^^^^",
   "blocked: teq run lila: lila/test modules/team/src/main/Team.scala:120:11: error: recursive use of nonEmpty needs an explicit result type\n      def nonEmpty = idsStr.nonEmpty\n          ^^^^^^^^",
-  "blocked: teq run lila: lila/test modules/team/src/main/ui/TeamAdminUi.scala:145:27: error: value copyurl is not a member of ScalatagsTemplate.data\n                          data.copyurl := routeUrl(call)\n                          ^^^^^^^^^^^^",
   "blocked: teq run lila: lila/test modules/tournament/src/main/TournamentApi.scala:236:15: error: type mismatch: found Unit => Future[Unit], required Unit => Unit\n              _ <- winner.so(p => tournamentRepo.setWinnerId(tour.id, p.userId))\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
   "blocked: teq run lila: lila/test modules/tournament/src/main/TournamentApi.scala:74:9: error: missing argument for parameter me\n        join(tour.id, req, asLeader = false)(using _ => fuccess(leaderTeams.map(_.id)))\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
   "blocked: teq run lila: lila/test modules/tournament/src/main/arena/ArenaSheet.scala:30:14: error: value && is not a member of Streakable\n          if streakable && isOnFire then Flag.Double\n             ^^^^^^^^^^^^^^^^^^^^^^",

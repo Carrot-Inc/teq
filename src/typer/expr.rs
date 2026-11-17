@@ -6631,7 +6631,9 @@ impl<'a> Worker<'a> {
             let widened = self.widen_path(recovered);
             let widened = self.widen_lit(widened);
             let deref = self.deref(widened);
-            if !self.is_defn_function_type(deref) {
+            // A message that would show an erroneous type says nothing beside the error that made it (dotty
+            // drops such a message once an error is told: `Message.isNonSensical`).
+            if deref != ERROR && !self.is_defn_function_type(deref) {
                 let shown = self.show(widened);
                 let msg = format!("Only function types can be followed by _ but the current expression has type {}", shown);
                 let row = crate::source_version::Migration::Scala2to3;

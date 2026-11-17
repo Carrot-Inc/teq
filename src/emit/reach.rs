@@ -2718,7 +2718,13 @@ impl Walker {
                 insert_sorted(&mut self.reach.product_hash, c);
             }
         }
+        // `scala.Dynamic` is a marker the typer reads: a JavaScript class, which has it through `js.Dynamic`,
+        // neither reaches it nor has it emitted on its account.
+        let js_class = info.js != JsKind::Scala;
         for &(b, _) in info.base_types.iter().skip(1) {
+            if js_class && cx.typer.is_dynamic_marker(b) {
+                continue;
+            }
             if !(skips_desugared && cx.typer.is_desugared_parent(b)) {
                 self.reach_class(cx, b);
             } else if let Err(at) = self.reach.desugared.binary_search(&b) {

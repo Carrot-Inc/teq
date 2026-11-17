@@ -1,0 +1,4 @@
+call((1,2))
+call(1,2)
+call((1,2))
+apply(a) 1 ctx 7

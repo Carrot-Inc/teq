@@ -1200,6 +1200,26 @@ impl<'a> Worker<'a> {
             if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS | names::CLONE) {
                 return self.apply_super_any_member(c, in_trait, name, targs, lists, span, expected);
             }
+            // A name no parent has, in a class that derives from `scala.Dynamic`: the parents' dynamic method
+            // (`typer::dynamic`), called through `super` as written. An extension method that gives the name
+            // for the class comes first under scalac on `super` too (`Typer.typedSelectWithAdapt`:
+            // `tryExtensionOrConversion` before the Dynamic clause), a call this route does not make: the
+            // name is then refused as it is for a class that does not derive from `scala.Dynamic`.
+            let this_ty = self.types.mk(Type::This(c));
+            let lists = if deferred.is_none() && !self.every_value_has(name, this_ty) && !self.has_lexical_extension_for(this_ty, name) {
+                let spans = self.overload_arg_spans.len();
+                match self.dynamic_call(this_ty, name, lists, span, None) {
+                    Ok(Some((method, lists, span))) => {
+                        let applied = self.apply_super_member(parent, method, targs, lists, super_span, span, expected);
+                        self.overload_arg_spans.truncate(spans);
+                        return applied;
+                    }
+                    Ok(None) => return (self.prog.add(TExpr::Unit), ERROR),
+                    Err(lists) => lists,
+                }
+            } else {
+                lists
+            };
             // The abstract member reached from `super` is the reference's `PostTyper`'s to refuse; a
             // name no parent has is its typer's.
             let (msg, group) = match deferred {
@@ -1906,8 +1926,16 @@ impl<'a> Worker<'a> {
         }
         // The target stays the selection it is where an expansion's body is typed (`InlineState::selection_target`).
         self.inline.selection_target = true;
+        // `q.x = rhs` where `q` derives from `scala.Dynamic` and has no `x`: `q.updateDynamic("x")(rhs)`, whose
+        // value and type the assignment's are (`typedDynamicAssign`).
+        let outer_assign = self.dynamic_assign.replace((tq, rhs));
         let selected = self.apply_member(tq, qty, name, None, Vec::new(), span, None);
+        let updated = self.dynamic_assign.is_none();
+        self.dynamic_assign = outer_assign;
         self.inline.selection_target = false;
+        if updated {
+            return Ok(selected);
+        }
         Err(selected)
     }
 
@@ -2642,6 +2670,45 @@ impl<'a> Worker<'a> {
     /// companion of that, and through a receiver that is an instance of the enclosing class that
     /// inherits the member, a self type counting as inheritance (SLS 5.2).
     #[cold]
+    /// Whether `s` is a protected member that the site may not select on `recv` (`protected_denied`, the rule
+    /// `check_protected_access` reports by).
+    fn protected_denied_at(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId) -> bool {
+        if self.syms.sym(s).mods & crate::ast::mods::PROTECTED == 0 {
+            return false;
+        }
+        let s = self.access_declaration_of(s);
+        let through_this = matches!(self.prog.expr(recv), TExpr::This | TExpr::Super(_));
+        self.protected_denied(s, through_this, recv_ty).is_some()
+    }
+
+    /// Whether one extension method of that name in lexical scope, without a using clause or a type parameter,
+    /// takes such a receiver and no second one does: the extension `try_extensions` selects by its receiver
+    /// alone, whose application's errors are its own (a type parameter's bound the receiver does not meet is
+    /// found only as it is applied).
+    fn extension_taken_alone(&mut self, recv_ty: TypeId, name: Name) -> bool {
+        let (lexical, imports) = self.lexical_extensions_for(name, recv_ty);
+        if imports > 1 {
+            return false;
+        }
+        let mut taken = None;
+        for sym in lexical {
+            let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
+            let mark = self.snapshot();
+            let applicable = self.extension_applicable(&call, recv_ty);
+            self.rollback(&mark);
+            if applicable {
+                if taken.is_some() {
+                    return false;
+                }
+                taken = Some(sym);
+            }
+        }
+        taken.is_some_and(|sym| {
+            let sig = self.sig_of(sym);
+            sig.tparams.is_empty() && !sig.clauses.iter().any(|c| c.is_using)
+        })
+    }
+
     fn check_protected_access(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, span: Span) {
         let s = self.access_declaration_of(s);
         let through_this = matches!(self.prog.expr(recv), TExpr::This | TExpr::Super(_));
@@ -4481,7 +4548,12 @@ impl<'a> Worker<'a> {
                         return (te, ERROR);
                     }
                 }
-                self.apply_member(te, ty, names::APPLY, targs, lists, span, expected)
+                // The inserted `apply` is marked (`inserted_apply`): on a call of one of `scala.Dynamic`'s four
+                // methods none is rewritten after it (`typer::dynamic`).
+                let outer = std::mem::replace(&mut self.inserted_apply, targs.is_none().then_some(te));
+                let applied = self.apply_member(te, ty, names::APPLY, targs, lists, span, expected);
+                self.inserted_apply = outer;
+                applied
             }
         }
     }
@@ -8788,21 +8860,58 @@ impl<'a> Worker<'a> {
             // not fit its argument lists is applied, and gives way only as dotty's retry on the
             // qualifier has it (`retry_on_qualifier`): its arguments are typed against its
             // parameters first.
-            let inaccessible = !declared && !self.is_accessible(sym);
+            // A protected member the site may not access is as good as absent too (dotty's `accessibleFrom`
+            // in `typedSelect` leaves the name to the extension methods and the conversions before the access
+            // is refused): `check_protected_access` reports it below where nothing else gives the name.
+            let inaccessible = !declared && (!self.is_accessible(sym) || self.protected_denied_at(sym, recv, recv_ty));
             let without_lists = lists.iter().all(|l| l.using);
             let unfit = !declared && (inaccessible || (without_lists && !self.member_accepts(sym, &lists, false, expected)));
             // As in scalac, a member that takes the arguments as one tuple wins over extensions.
             if unfit && (inaccessible || !self.member_takes_tuple(sym, owner_ty, &lists)) {
                 if inaccessible || !self.lexical_extensions(name).is_empty() {
-                    let mut opt = Some(lists);
-                    if let Some(r) = self.try_extensions(recv, resolved_ty, resolved_ty, name, targs, &mut opt, span, expected) {
-                        return r;
+                    // An extension method that retries a member the site may not access tells its own errors
+                    // only where it was taken for the receiver (`extension_taken_alone`). Any other is an
+                    // attempt: where it fails it is taken back with what it reported, and the selection goes
+                    // on as where nothing gives the name, to the conversions and then the access's refusal
+                    // (dotty's `tryExtensionOrConversion` gives the selection's own error back where the
+                    // extension does not type).
+                    if inaccessible && !self.extension_taken_alone(resolved_ty, name) {
+                        let kept_hoisted = self.hoisted.len();
+                        let tried = self.attempt();
+                        let mut opt = Some(lists.clone());
+                        match self.try_extensions(recv, resolved_ty, resolved_ty, name, targs, &mut opt, span, expected) {
+                            Some(r) if !self.attempt_failed(&tried) => {
+                                self.close(tried);
+                                return r;
+                            }
+                            Some(_) => {
+                                self.retract(tried);
+                                self.hoisted.truncate(kept_hoisted);
+                            }
+                            None => {
+                                self.close(tried);
+                                lists = opt.unwrap_or_default();
+                            }
+                        }
+                    } else {
+                        let mut opt = Some(lists);
+                        if let Some(r) = self.try_extensions(recv, resolved_ty, resolved_ty, name, targs, &mut opt, span, expected) {
+                            return r;
+                        }
+                        lists = opt.unwrap_or_default();
                     }
-                    lists = opt.unwrap_or_default();
                 }
                 if !converted {
                     if let Some(r) = self.apply_through_conversion(recv, resolved_ty, name, targs, &lists, span, expected) {
                         return r;
+                    }
+                }
+                // A member the site may not access, on a receiver that derives from `scala.Dynamic`: the name
+                // goes to the dynamic methods (`typer::dynamic`).
+                if inaccessible {
+                    match self.dynamic_rewrite(recv, recv_ty, name, targs, lists, span, expected) {
+                        Ok(r) => return r,
+                        Err(l) => lists = l,
                     }
                 }
             }
@@ -9082,16 +9191,20 @@ impl<'a> Worker<'a> {
         }
         // `x.copy$default$n`, the default of the nth parameter of a case class's `copy`, is the
         // field of that parameter.
-        if let Some(field) = self.copy_default_field(recv_ty, name) {
-            return self.apply_member(recv, recv_ty, field, None, lists.unwrap_or_default(), span, expected);
+        // Both names are a pickled body's alone (`in_converted_body`): a source that writes one has no such
+        // member, as under scalac.
+        if self.in_converted_body() {
+            if let Some(field) = self.copy_default_field(recv_ty, name) {
+                return self.apply_member(recv, recv_ty, field, None, lists.unwrap_or_default(), span, expected);
+            }
+            // `x.m$default$n` in a library body: the application of the getter of the nth
+            // parameter of `x.m`, as the plan of a source's call has it (`typer::elaborate`).
+            let l = lists.take().unwrap_or_default();
+            if let Some(r) = self.default_getter_selection(recv, recv_ty, name, targs, &l, span) {
+                return r;
+            }
+            lists = Some(l);
         }
-        // `x.m$default$n` in a library body: the application of the getter of the nth
-        // parameter of `x.m`, as the plan of a source's call has it (`typer::elaborate`).
-        let l = lists.take().unwrap_or_default();
-        if let Some(r) = self.default_getter_selection(recv, recv_ty, name, targs, &l, span) {
-            return r;
-        }
-        lists = Some(l);
         // An enum companion's `valueOf` or `fromOrdinal` referred to without arguments, where nothing else of
         // that name was found: the function of its one argument.
         if matches!(name, names::VALUE_OF | names::FROM_ORDINAL) && targs.is_none() && lists.as_ref().is_some_and(|l| l.is_empty()) {
@@ -9099,8 +9212,16 @@ impl<'a> Worker<'a> {
                 return r;
             }
         }
-        // The receiver shown widened (`NotAMember`'s `site.widen`): `Int` for a `0`.
-        let msg = format!("value {} is not a member of {}", self.name_str(name), self.show(self.widen_lit(recv_ty)));
+        // `scala.Dynamic` (`typer::dynamic`): the name on a receiver that derives from it, once the members, the
+        // extension methods and the conversions have not given it.
+        match self.dynamic_rewrite(recv, recv_ty, name, targs, lists.take().unwrap_or_default(), span, expected) {
+            Ok(r) => return r,
+            Err(l) => lists = Some(l),
+        }
+        // The receiver shown widened (`NotAMember`'s `site.widen`): `Int` for a `0`. A name every value has
+        // gets no hint of a dynamic method's signature.
+        let hint = if self.every_value_has(name, recv_ty) { "" } else { self.dynamic_hint(recv_ty) };
+        let msg = format!("value {} is not a member of {}{}", self.name_str(name), self.show(self.widen_lit(recv_ty)), hint);
         // What a class whose header, or an ancestor's, the parser could not complete lacks is
         // unknown.
         if self.incomplete_ancestry(recv_ty) {

@@ -229,4 +229,6 @@ well_known! {
     NEW_ARRAY = "newArray",
     OBJECT_FUNCTION = "objectFunction",
     RUNTIME_CHECKED_ANNOT = "RuntimeChecked",
+    APPLY_DYNAMIC_NAMED = "applyDynamicNamed",
+    DYNAMICS = "dynamics",
 }

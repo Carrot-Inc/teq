@@ -291,7 +291,7 @@ derives-obj.scala	pass	check:pass
 devalify.scala	pass	check:pass	
 doWhile.scala	fail	check:fail	doWhile.scala:3:3: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
 duplicate-parents.scala	pass	check:pass	
-dynamicExtendsNoImport.scala	pass	check:fail	
+dynamicExtendsNoImport.scala	pass	check:pass	
 eff-compose.scala	fail	check:fail	eff-compose.scala:17:12: type mismatch: found A => (E) ?=> B, required A => B
 elidable-tparams.scala	pass	check:fail	
 end-given.scala	pass	check:pass	
@@ -496,7 +496,7 @@ i10927.scala	pass	check:pass
 i10929-new-syntax.scala	fail	check:fail	i10929-new-syntax.scala:9:9: a parent has to be a class or a trait
 i10929.scala	fail	check:fail	i10929.scala:12:40: expected ':', found 'val'
 i10945	fail	-	java source: teq reads none
-i10951.scala	fail	check:fail	i10951.scala:6:29: a member of js.Dynamic takes no type arguments
+i10951.scala	pass	check:pass	
 i10964.scala	pass	check:pass	
 i10964a.scala	pass	check:pass	
 i10966.scala	pass	check:pass	
@@ -1004,10 +1004,10 @@ i16500.scala	pass	check:pass
 i16506.scala	pass	check:pass	
 i16539.min.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i16539.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
-i16544a.scala	fail	check:fail	i16544a.scala:8:5: type mismatch: found Dynamic, required Foo
-i16544b.scala	fail	check:fail	i16544b.scala:8:5: type mismatch: found Dynamic, required Foo
-i16544c.scala	fail	check:fail	i16544c.scala:8:5: type mismatch: found Dynamic, required Foo
-i16544d.scala	fail	check:fail	i16544d.scala:10:5: type mismatch: found Dynamic, required Foo
+i16544a.scala	pass	check:pass	
+i16544b.scala	pass	check:pass	
+i16544c.scala	pass	check:pass	
+i16544d.scala	pass	check:pass	
 i16562.scala	pass	check:pass	
 i16590.scala	pass	check:pass	
 i16596.more.scala	pass	check:pass	
@@ -1693,7 +1693,7 @@ i3669.scala	pass	check:pass
 i3692.scala	pass	check:pass	
 i3702.scala	pass	check:pass	
 i3703.scala	pass	check:pass	
-i3736.scala	pass	check:fail	
+i3736.scala	pass	check:pass	
 i3816.scala	pass	check:pass	
 i3857.scala	pass	check:pass	
 i3873.scala	pass	check:pass	
@@ -1984,7 +1984,7 @@ i7515.scala	pass	check:pass
 i7516.scala	pass	check:pass	
 i7525	fail	-	java source: teq reads none
 i7532.scala	pass	check:pass	
-i7575.scala	pass	check:fail	
+i7575.scala	pass	check:pass	
 i7586.scala	fail	check:fail	i7586.scala:37:37: Cannot prove that (m4_2 : S[S[S[Nat]]]) <:< S[S[S[S[Z]]]].
 i7602.scala	pass	check:pass	
 i7648.scala	pass	check:pass	
@@ -2151,10 +2151,10 @@ i9260.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag fo
 i9266.scala	fail	check:fail	i9266.scala:3:23: expected a definition, found identifier
 i9267.scala	pass	check:pass	
 i9290	pass	check:pass	
-i9295.scala	fail	check:fail	teq: jvm backend: i9295$package$.baz: JavaScript interop
-i9295b.scala	fail	check:fail	teq: jvm backend: i9295b$package$.baz: JavaScript interop
-i9295c.scala	fail	check:fail	teq: jvm backend: i9295c$package$.baz: JavaScript interop
-i9295d.scala	fail	check:fail	teq: jvm backend: i9295d$package$.baz: JavaScript interop
+i9295.scala	pass	check:pass	
+i9295b.scala	pass	check:pass	
+i9295c.scala	pass	check:pass	
+i9295d.scala	fail	check:fail	i9295d.scala:12:11: method apply in trait ContextFunction1 does not take parameters
 i9307.scala	pass	check:pass	
 i9314.scala	pass	check:pass	
 i9342a.scala	pass	check:pass	
@@ -3198,7 +3198,7 @@ t5683.scala	pass	check:pass
 t5702-pos-infix-star.scala	pass	check:fail	
 t5703	fail	-	java source: teq reads none
 t5720-ownerous.scala	pass	check:pass	
-t5726.scala	fail	check:fail	teq: jvm backend: MyApp$.testing: a JavaScript class
+t5726.scala	pass	check:pass	
 t5727.scala	pass	check:pass	
 t573.scala	pass	check:pass	
 t5760-pkgobj-warn	pass	check:pass	
@@ -3236,7 +3236,7 @@ t6022b.scala	pass	check:pass
 t6028	pass	check:pass	
 t6033.scala	pass	check:pass	
 t604.scala	pass	check:pass	
-t6040.scala	pass	check:fail	
+t6040.scala	pass	check:pass	
 t607.scala	pass	check:pass	
 t6072.scala	pass	check:pass	
 t6084.scala	pass	check:pass	
@@ -3278,7 +3278,7 @@ t651.scala	pass	check:pass
 t6514.scala	pass	check:pass	
 t6537.scala	pass	check:pass	
 t6547.scala	pass	check:pass	
-t6551.scala	fail	check:fail	teq: jvm backend: Test$.main: a JavaScript class
+t6551.scala	pass	check:pass	
 t6552.scala	pass	check:pass	
 t6562.scala	pass	check:pass	
 t6575a.scala	pass	check:pass	
@@ -3290,7 +3290,7 @@ t6664.scala	pass	check:pass
 t6664b.scala	pass	check:pass	
 t6675.scala	pass	check:pass	
 t6712.scala	pass	check:pass	
-t6722.scala	fail	check:fail	t6722.scala:10:3: a member of js.Dynamic takes no type arguments
+t6722.scala	pass	check:pass	
 t6745.scala	pass	check:pass	
 t675.scala	pass	check:pass	
 t6771.scala	pass	check:pass	
@@ -3422,7 +3422,7 @@ t8315b.scala	pass	check:pass
 t8324.scala	pass	check:pass	
 t8359.scala	pass	check:pass	
 t8363.scala	pass	check:pass	
-t8364.scala	fail	check:fail	teq: jvm backend: Test$: JavaScript interop
+t8364.scala	pass	check:pass	
 t8367.scala	pass	check:pass	
 t8369a.scala	pass	check:pass	
 t8376	fail	-	java source: teq reads none

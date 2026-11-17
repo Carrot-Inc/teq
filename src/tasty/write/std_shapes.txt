@@ -15308,6 +15308,7 @@ scala.Double$	NegativeInfinity	-:scala.Double
 scala.Double$	PositiveInfinity	-:scala.Double
 scala.DummyImplicit	<init>	:scala.DummyImplicit
 scala.DummyImplicit$	dummyImplicit	-:scala.DummyImplicit
+scala.Dynamic	<init>	:scala.Dynamic
 scala.EmptyTuple$	canEqual	java.lang.Object:scala.Boolean
 scala.EmptyTuple$	productArity	-:scala.Int
 scala.EmptyTuple$	productElement	scala.Int:java.lang.Object

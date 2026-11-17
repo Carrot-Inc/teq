@@ -4,6 +4,8 @@
 package scala.scalajs.js
 
 import scala.scalajs.js
+// `Dynamic` below extends `scala.Dynamic`, as Scala.js's does.
+import scala.language.dynamics
 
 type Any = scala.Any
 
@@ -382,7 +384,7 @@ object WrappedDictionary:
   implicit def toJSDictionary[A](wrappedDict: WrappedDictionary[A]): Dictionary[A] = wrappedDict.dict
 
 @js.native
-trait Dynamic
+trait Dynamic extends scala.Dynamic
 
 object Dynamic:
   /** Members are bare global identifiers, so a bundler's `define` can replace them. */

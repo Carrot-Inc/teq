@@ -1499,6 +1499,9 @@ impl<'a> Worker<'a> {
         let alts: Vec<SymId> = self.syms.alternatives(set).unwrap_or(&[]).to_vec();
         let mut names: Vec<Option<Name>> = alts.iter().map(|&a| self.dispatch_name(a)).collect();
         self.check_single_default(set, &alts);
+        if self.syms.sym(set).name == names::APPLY_DYNAMIC {
+            self.check_dynamic_overload(set, &alts);
+        }
         if let Owner::Class(c) = self.syms.sym(set).owner {
             match self.syms.class(c).js {
                 JsKind::Scala => {}
@@ -1667,6 +1670,24 @@ impl<'a> Worker<'a> {
     fn names_settled(&self, k: ClassId) -> bool {
         let info = self.syms.class_raw(k);
         info.named_for_output || (self.alternatives_named && !self.in_jar(info.file))
+    }
+
+    /// `RefChecks.checkOverloadedRestrictions`'s "doomed attempt to overload applyDynamic": a class of the program
+    /// that derives from `scala.Dynamic` and whose `applyDynamic` has two alternatives or more, told at the last
+    /// the class declares (the reference groups the alternatives by `symbol.typeParams.length`, which is 0 for
+    /// every method, and tells the first of the member's alternatives: scalac 3.8.4 refuses two alternatives of
+    /// different numbers of type parameters at the second's name).
+    #[cold]
+    #[inline(never)]
+    fn check_dynamic_overload(&mut self, set: SymId, alts: &[SymId]) {
+        let Owner::Class(c) = self.syms.sym(set).owner else { return };
+        if alts.len() < 2 || !self.program_source(self.syms.class(c).file) || !self.class_derives_dynamic(c) {
+            return;
+        }
+        let Some(&last) = alts.iter().filter(|&&a| self.syms.sym(a).owner == Owner::Class(c)).max_by_key(|&&a| self.syms.sym(a).span.start) else { return };
+        let (file, span) = (self.syms.sym(last).file, self.syms.sym(last).span);
+        let msg = "implementation restriction: applyDynamic cannot be overloaded except by methods with different numbers of type parameters, e.g. applyDynamic[T1](method: String)(arg: T1) and applyDynamic[T1, T2](method: String)(arg1: T1, arg2: T2)";
+        self.diags.late_error_of(file, span, msg.to_string(), crate::source::PHASE_REFCHECKS);
     }
 
     /// Default arguments are allowed on one of the alternatives that a scope defines.

@@ -90,6 +90,7 @@ diamond	pass	-
 diamond2	pass	-	
 downstreammirror	pass	-	
 dupnames	pass	-	
+dynamic	pass	-	
 elidedinit	pass	-	
 elidedmethod	pass	-	
 elidedparent	pass	-	

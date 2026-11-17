@@ -38,8 +38,6 @@ directive_scope_main	exit code 0
 directive_unicode_order	exit code 0
 directive_wconf_files	exit code 0
 directive_werror_files	exit code 0
-dynamic_inserted_apply	missing '18:11: error: method apply in trait ContextFunction1 does not take more parameters'
-dynamic_named_missing_given	missing '11:27: error:'
 early_param_kind_inner_bound	exit code 0
 early_param_kind_inner_bound_one_file	exit code 0
 end_marker_duplicate	exit code 0
@@ -114,7 +112,7 @@ method_type_arg_check_bounds	missing '14:13: error: type argument Int does not c
 method_value_as_pattern	exit code 0
 nested_projection_cycle	exit code 0
 new_eta_expanded_opaque	missing 'error: [A] =>> O.F[A] does not have a constructor'
-nonsensical_hidden	present '2:10: error: Only function types can be followed by _'
+nonsensical_hidden	missing 'error: Only function types can be followed by _ but the current expression has type <error'
 opaque_alias_cyclic_applied	exit code 0
 opaque_alias_cyclic_grow	exit code 0
 opaque_alias_cyclic_grow_pair	exit code 0

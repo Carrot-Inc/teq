@@ -1,0 +1,30 @@
+d.select(field)
+d.apply(call)(1,a)
+d.apply(call)()
+d.apply(apply)(1)
+d.apply(apply)()
+d.apply(+)(1)
+d.apply(++)(List(2))
+d.select(unary_-)
+d.named(named)(x=1,y=b)
+d.named(mixed)(=1,y=2)
+d.named(apply)(a=1)
+d.real(3)
+d.update(slot)(7)
+d.select(inner)|d.apply(call)(1)
+d.apply(spread)(1,2)
+d.select(inside) and d.apply(count)(2)
+None
+List(a, b)
+lbl:scaled:40
+lbl:scaled:8
+c.a.b(1).c
+registry.entry
+High.rank
+row1.name
+d.select(field)
+d.select(aliased)
+d.select(single)
+d.select(nullable)
+d.select(lambda)
+lz.select(lazily)

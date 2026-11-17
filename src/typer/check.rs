@@ -5642,6 +5642,10 @@ impl<'a> Worker<'a> {
         } else {
             self.check_class_timed(c);
         }
+        // `Typer.typedClassDef`'s report of a class that derives from `scala.Dynamic` without the feature
+        // (`typer::feature`), once the check has the class's parents: a local class's are not known before it
+        // where the std is scala-library.
+        self.check_dynamic_extension(c);
         self.var_frame_end(frame);
         if let Some(outer) = outer {
             self.deps_leave(outer);

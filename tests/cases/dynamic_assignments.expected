@@ -1,0 +1,12 @@
+update(count)(3)
+select(other)
+List(9, 2)
+apply(update)(0,5)
+update(secret)(2)
+select(secret)
+apply(hidden)()
+select(guarded)
+1 hidden guarded
+guarded
+plus(1)
+2

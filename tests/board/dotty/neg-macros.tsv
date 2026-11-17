@@ -79,7 +79,7 @@ i18677-b	fail	-	marks: no error where 1 are marked
 i18695.scala	fail	-	marks: 2 errors where 1 are marked: i18695.scala:67:57: no given instance of type SumOf[A]{type MirroredElemTypes = m.MirroredElemTypes; type MirroredLabel = m.MirroredLabel} was found for parameter m
 i18825	fail	-	marks: no error where 1 are marked
 i19342.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19342.scala:5:27 Type must be fully defined.; teq's is error i19342.scala:5:26 value apply is not a member of Any
-i19526	fail	-	marks: 2 errors where 1 are marked: Test.scala:12:5: type mismatch: found Dynamic, required Stack
+i19526	fail	-	marks: no error where 1 are marked
 i19601	fail	-	marks: 8 errors where 1 are marked: Macro.scala:27:51: type mismatch: found Int, required A
 i19676	fail	-	marks: no error where 1 are marked
 i19842-a	fail	-	marks: 3 errors where 1 are marked: Macro.scala:17:7: missing parameter type

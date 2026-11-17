@@ -1,0 +1,3 @@
+hook:x
+call:f:3
+hook:written

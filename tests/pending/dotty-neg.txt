@@ -143,35 +143,19 @@ deriving.scala	check: diagnostic 1 of 5: scalac's is error deriving.scala:1:16 v
 doubleDefinition-late.scala	marks: 2 errors where 3 are marked
 doubleDefinition.scala	check: diagnostic 1 of 20: scalac's is error doubleDefinition.scala:14:6 Conflicting definitions:; teq's is error doubleDefinition.scala:14:6 Conflicting definitions:
 duplicate-parents.scala	marks: no error where 2 are marked
-dynamicApplyDynamicTest1.scala	marks: no error where 1 are marked
-dynamicApplyDynamicTest2.scala	marks: no error where 1 are marked
 dynamicApplyDynamicTest3.scala	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest3.scala:6:3 Only function types can be followed by _ but the current expression has type <error value selectDynamic is not a member of Foo; teq's is error dynamicApplyDynami
-dynamicApplyDynamicTest4.scala	marks: no error where 1 are marked
 dynamicApplyDynamicTest5.scala	marks: no error where 3 are marked
 dynamicApplyDynamicTest6.scala	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest6.scala:8:19 Found: String; teq's is error dynamicApplyDynamicTest6.scala:8:19 type mismatch: found Dynamic, required Int
 dynamicApplyDynamicTest7.scala	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest7.scala:8:40 Found: ("bazApply" : String); teq's is error dynamicApplyDynamicTest7.scala:8:22 type mismatch: found Dynamic, required String
-dynamicApplyDynamicTest8.scala	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest8.scala:8:22 value applyDynamic is not a member of Foo; teq's is error dynamicApplyDynamicTest8.scala:8:22 type mismatch: found Dynamic, required String
-dynamicApplyDynamicTest9.scala	marks: no error where 1 are marked
-dynamicApplyNamedDynamicTest1.scala	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest1.scala:6:22: named arguments are only allowed in argument lists
-dynamicApplyNamedDynamicTest2.scala	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest2.scala:9:22: named arguments are only allowed in argument lists
-dynamicApplyNamedDynamicTest3.scala	check: diagnostic 1 of 1: scalac's is error dynamicApplyNamedDynamicTest3.scala:6:3 value applyDynamicNamed is not a member of Foo; teq's is error dynamicApplyNamedDynamicTest3.scala:6:29 named arguments are only allowed in argument lists
-dynamicApplyNamedDynamicTest4.scala	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest4.scala:6:32: named arguments are only allowed in argument lists
 dynamicApplyNamedDynamicTest5.scala	marks: 2 errors where 4 are marked
 dynamicApplyNamedDynamicTest6.scala	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest6.scala:8:32: named arguments are only allowed in argument lists
 dynamicApplyNamedDynamicTest7.scala	marks: 3 errors where 1 are marked: dynamicApplyNamedDynamicTest7.scala:8:19: type mismatch: found Dynamic, required Int
-dynamicApplyNamedDynamicTest8.scala	marks: no error where 1 are marked
 dynamicDynamicImplicitsTest1.scala	check: diagnostic 1 of 1: scalac's is error dynamicDynamicImplicitsTest1.scala:12:21 Found: Int; teq's is error dynamicDynamicImplicitsTest1.scala:12:21 type mismatch: found Dynamic, required String
 dynamicDynamicImplicitsTest2.scala	check: diagnostic 1 of 1: scalac's is error dynamicDynamicImplicitsTest2.scala:12:21 method bazApply in class Bar does not take parameters; teq's is error dynamicDynamicImplicitsTest2.scala:12:21 type mismatch: found Dynamic, required Strin
 dynamicDynamicImplicitsTest3.scala	marks: 2 errors where 1 are marked: dynamicDynamicImplicitsTest3.scala:12:21: type mismatch: found Dynamic, required String
 dynamicNoImport.scala	marks: no error where 6 are marked
-dynamicSelectDynamicTest1.scala	marks: no error where 1 are marked
-dynamicSelectDynamicTest2.scala	marks: no error where 1 are marked
-dynamicSelectDynamicTest3.scala	marks: no error where 1 are marked
 dynamicSelectDynamicTest4.scala	check: diagnostic 1 of 1: scalac's is error dynamicSelectDynamicTest4.scala:9:5 Found: String; teq's is error dynamicSelectDynamicTest4.scala:9:5 type mismatch: found Dynamic, required Int
-dynamicSelectDynamicTest5.scala	marks: no error where 1 are marked
 dynamicSelectDynamicTest6.scala	check: diagnostic 1 of 1: scalac's is error dynamicSelectDynamicTest6.scala:9:24 Found: ("bazSelect" : String); teq's is error dynamicSelectDynamicTest6.scala:9:5 type mismatch: found Dynamic, required String
-dynamicSelectDynamicTest7.scala	marks: no error where 1 are marked
-dynamicUpdateDynamicTest1.scala	marks: no error where 1 are marked
 dynamicUpdateDynamicTest2.scala	marks: no error where 1 are marked
 dynamicUpdateDynamicTest3.scala	check: diagnostic 1 of 1: scalac's is error dynamicUpdateDynamicTest3.scala:8:19 Found: Unit; teq's is error dynamicUpdateDynamicTest3.scala:8:19 type mismatch: found Unit, required Int
 dynamicUpdateDynamicTest4.scala	marks: no error where 1 are marked
@@ -1236,10 +1220,6 @@ i9168.scala	check: diagnostic 1 of 1: scalac's is error i9168.scala:3:29 express
 i9185.scala	check: diagnostic 1 of 3: scalac's is error i9185.scala:7:16 value pure is not a member of String.; teq's is error i9185.scala:7:26 ambiguous given instances for M[<error>]: listMonad, optionMonad
 i9287.scala	marks: error on an unmarked line i9287.scala:2: type mismatch: found Unit, required Int
 i9294.scala	marks: no error where 2 are marked
-i9295a.scala	marks: no error where 1 are marked
-i9295b.scala	marks: no error where 3 are marked
-i9295c.scala	marks: no error where 1 are marked
-i9295d.scala	marks: no error where 1 are marked
 i9298.scala	check: diagnostic 1 of 2: scalac's is error i9298.scala:4:7 Sequence argument type annotation `*` cannot be used here:; teq's is error i9298.scala:3:10 foo is already defined as value foo
 i9299.scala	marks: 1 errors where 2 are marked
 i9299a.scala	check: diagnostic 1 of 2: scalac's is error i9299a.scala:1:11 type a is not a member of Int => Unit; teq's is error i9299a.scala:1:11 (foo : => Unit) is not a valid type prefix, since it is not an immutable path
@@ -1606,7 +1586,6 @@ t5702-neg-bad-and-wild.scala	marks: 10 errors where 12 are marked
 t5702-neg-bad-brace.scala	marks: 4 errors where 2 are marked: t5702-neg-bad-brace.scala:8:21: expected ',' or ')', found identifier
 t5729.scala	check: diagnostic 1 of 2: scalac's is error t5729.scala:5:10 Ambiguous overload. The overloaded alternatives of method join in object C with types; teq's is warning t5729.scala:2:25 `_` is deprecated for wildcard arguments of types: use `?`
 t6124.scala	marks: 8 errors where 16 are marked
-t6355b.scala	marks: no error where 2 are marked
 t6455.scala	check: diagnostic 1 of 1: scalac's is error t6455.scala:5:3 value withFilter is not a member of object O; teq's is error t6455.scala:5:3 value withFilter is not a member of O
 t6476.scala	marks: 4 errors where 1 are marked: t6476.scala:3:7: invalid escape sequence
 t6476b.scala	check: diagnostic 1 of 2: scalac's is error t6476b.scala:2:16 invalid escape at terminal index 0 in "\". Use \\ for literal \.; teq's is error t6476b.scala:2:16 invalid escape sequence

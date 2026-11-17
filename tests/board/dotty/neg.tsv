@@ -85,7 +85,7 @@ anykind2.scala	fail	-	marks: 5 errors where 4 are marked: anykind2.scala:3:14: t
 anykind3.scala	fail	-	marks: 24 errors where 8 are marked: anykind3.scala:5:3: type argument [A] =>> List[A] does not have the same kind as its bound
 anykind4.scala	fail	-	marks: 4 errors where 1 are marked: anykind4.scala:4:18: type AnyKind not found
 applied_constructor_types.scala	fail	-	marks: 6 errors where 3 are marked: applied_constructor_types.scala:8:12: expected '=', found '('
-applydynamic_sip.scala	fail	-	marks: 8 errors where 11 are marked
+applydynamic_sip.scala	fail	-	check: diagnostic 4 of 11: scalac's is error applydynamic_sip.scala:20:11 Found:    ("sel" : String); teq's is error applydynamic_sip.scala:20:3 type mismatch: found "sel", required Int
 arg-eof.scala	fail	-	check: diagnostic 1 of 1: scalac's is error arg-eof.scala:3:32 expression expected but eof found; teq's is error arg-eof.scala:3:32 expected an expression, found end of indented block
 assignments.scala	fail	-	marks: 3 errors where 2 are marked: assignments.scala:16:5: this expression cannot be assigned to
 autoTuplingTest.scala	fail	-	marks: no error where 3 are marked
@@ -159,38 +159,38 @@ deriving.scala	fail	-	check: diagnostic 1 of 5: scalac's is error deriving.scala
 doubleDefinition-late.scala	fail	-	marks: 2 errors where 3 are marked
 doubleDefinition.scala	fail	-	check: diagnostic 1 of 20: error doubleDefinition.scala:14:6, line 4 of the message: scalac's is have the same type (x: List): Function1 after erasure.; teq's is have the same type after erasure.
 duplicate-parents.scala	fail	-	marks: no error where 2 are marked
-dynamicApplyDynamicTest1.scala	fail	-	marks: no error where 1 are marked
-dynamicApplyDynamicTest2.scala	fail	-	marks: no error where 1 are marked
+dynamicApplyDynamicTest1.scala	pass	-	
+dynamicApplyDynamicTest2.scala	pass	-	
 dynamicApplyDynamicTest3.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest3.scala:6:3 Only function types can be followed by _ but the current expression has type <error value selectDynamic is not a member of Foo; teq's is error dynamicApplyDynami
-dynamicApplyDynamicTest4.scala	fail	-	marks: no error where 1 are marked
-dynamicApplyDynamicTest5.scala	fail	-	marks: no error where 3 are marked
-dynamicApplyDynamicTest6.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest6.scala:8:19 Found:    String; teq's is error dynamicApplyDynamicTest6.scala:8:19 type mismatch: found Dynamic, required Int
-dynamicApplyDynamicTest7.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest7.scala:8:40 Found:    ("bazApply" : String); teq's is error dynamicApplyDynamicTest7.scala:8:22 type mismatch: found Dynamic, required String
-dynamicApplyDynamicTest8.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest8.scala:8:22 value applyDynamic is not a member of Foo; teq's is error dynamicApplyDynamicTest8.scala:8:22 type mismatch: found Dynamic, required String
-dynamicApplyDynamicTest9.scala	fail	-	marks: no error where 1 are marked
-dynamicApplyNamedDynamicTest1.scala	fail	-	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest1.scala:6:22: named arguments are only allowed in argument lists
-dynamicApplyNamedDynamicTest2.scala	fail	-	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest2.scala:9:22: named arguments are only allowed in argument lists
-dynamicApplyNamedDynamicTest3.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyNamedDynamicTest3.scala:6:3 value applyDynamicNamed is not a member of Foo; teq's is error dynamicApplyNamedDynamicTest3.scala:6:29 named arguments are only allowed in argument lists
-dynamicApplyNamedDynamicTest4.scala	fail	-	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest4.scala:6:32: named arguments are only allowed in argument lists
-dynamicApplyNamedDynamicTest5.scala	fail	-	marks: 2 errors where 4 are marked
-dynamicApplyNamedDynamicTest6.scala	fail	-	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest6.scala:8:32: named arguments are only allowed in argument lists
-dynamicApplyNamedDynamicTest7.scala	fail	-	marks: 3 errors where 1 are marked: dynamicApplyNamedDynamicTest7.scala:8:19: type mismatch: found Dynamic, required Int
-dynamicApplyNamedDynamicTest8.scala	fail	-	marks: no error where 1 are marked
-dynamicDynamicImplicitsTest1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicDynamicImplicitsTest1.scala:12:21 Found:    Int; teq's is error dynamicDynamicImplicitsTest1.scala:12:21 type mismatch: found Dynamic, required String
-dynamicDynamicImplicitsTest2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicDynamicImplicitsTest2.scala:12:21 method bazApply in class Bar does not take parameters; teq's is error dynamicDynamicImplicitsTest2.scala:12:21 type mismatch: found Dynamic, required Strin
-dynamicDynamicImplicitsTest3.scala	fail	-	marks: 2 errors where 1 are marked: dynamicDynamicImplicitsTest3.scala:12:21: type mismatch: found Dynamic, required String
-dynamicNoImport.scala	fail	-	marks: no error where 6 are marked
-dynamicSelectDynamicTest1.scala	fail	-	marks: no error where 1 are marked
-dynamicSelectDynamicTest2.scala	fail	-	marks: no error where 1 are marked
-dynamicSelectDynamicTest3.scala	fail	-	marks: no error where 1 are marked
-dynamicSelectDynamicTest4.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicSelectDynamicTest4.scala:9:5 Found:    String; teq's is error dynamicSelectDynamicTest4.scala:9:5 type mismatch: found Dynamic, required Int
-dynamicSelectDynamicTest5.scala	fail	-	marks: no error where 1 are marked
-dynamicSelectDynamicTest6.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicSelectDynamicTest6.scala:9:24 Found:    ("bazSelect" : String); teq's is error dynamicSelectDynamicTest6.scala:9:5 type mismatch: found Dynamic, required String
-dynamicSelectDynamicTest7.scala	fail	-	marks: no error where 1 are marked
-dynamicUpdateDynamicTest1.scala	fail	-	marks: no error where 1 are marked
-dynamicUpdateDynamicTest2.scala	fail	-	marks: no error where 1 are marked
+dynamicApplyDynamicTest4.scala	pass	-	
+dynamicApplyDynamicTest5.scala	fail	-	check: diagnostic 1 of 3: scalac's is error dynamicApplyDynamicTest5.scala:8:22 Found:    (1 : Int); teq's is error dynamicApplyDynamicTest5.scala:8:22 type mismatch: found 1, required String
+dynamicApplyDynamicTest6.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest6.scala:8:19 Found:    String; teq's is error dynamicApplyDynamicTest6.scala:8:19 type mismatch: found String, required Int
+dynamicApplyDynamicTest7.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyDynamicTest7.scala:8:40 Found:    ("bazApply" : String); teq's is error dynamicApplyDynamicTest7.scala:8:22 type mismatch: found "bazApply", required Int
+dynamicApplyDynamicTest8.scala	pass	-	
+dynamicApplyDynamicTest9.scala	pass	-	
+dynamicApplyNamedDynamicTest1.scala	pass	-	
+dynamicApplyNamedDynamicTest2.scala	pass	-	
+dynamicApplyNamedDynamicTest3.scala	pass	-	
+dynamicApplyNamedDynamicTest4.scala	pass	-	
+dynamicApplyNamedDynamicTest5.scala	fail	-	check: diagnostic 1 of 4: scalac's is error dynamicApplyNamedDynamicTest5.scala:8:22 Found:    (String, String); teq's is error dynamicApplyNamedDynamicTest5.scala:8:22 type mismatch: found (String, String), required String
+dynamicApplyNamedDynamicTest6.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyNamedDynamicTest6.scala:8:21 Found:    ("bazApply" : String); teq's is error dynamicApplyNamedDynamicTest6.scala:8:3 type mismatch: found "bazApply", required Int
+dynamicApplyNamedDynamicTest7.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicApplyNamedDynamicTest7.scala:8:19 Found:    String; teq's is error dynamicApplyNamedDynamicTest7.scala:8:19 type mismatch: found String, required Int
+dynamicApplyNamedDynamicTest8.scala	pass	-	
+dynamicDynamicImplicitsTest1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicDynamicImplicitsTest1.scala:12:21 Found:    Int; teq's is error dynamicDynamicImplicitsTest1.scala:12:21 type mismatch: found Int, required String
+dynamicDynamicImplicitsTest2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicDynamicImplicitsTest2.scala:12:21 method bazApply in class Bar does not take parameters; teq's is error dynamicDynamicImplicitsTest2.scala:12:21 value apply is not a member of Int
+dynamicDynamicImplicitsTest3.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicDynamicImplicitsTest3.scala:12:21 method bazApply in class Bar does not take parameters; teq's is error dynamicDynamicImplicitsTest3.scala:12:21 value apply is not a member of Int
+dynamicNoImport.scala	fail	-	check: diagnostic 1 of 6: scalac's is error dynamicNoImport.scala:1:1 extension of type scala.Dynamic needs to be enabled; teq's is error dynamicNoImport.scala:1:7 extension of type scala.Dynamic needs to be enabled
+dynamicSelectDynamicTest1.scala	pass	-	
+dynamicSelectDynamicTest2.scala	pass	-	
+dynamicSelectDynamicTest3.scala	pass	-	
+dynamicSelectDynamicTest4.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicSelectDynamicTest4.scala:9:5 Found:    String; teq's is error dynamicSelectDynamicTest4.scala:9:5 type mismatch: found String, required Int
+dynamicSelectDynamicTest5.scala	pass	-	
+dynamicSelectDynamicTest6.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicSelectDynamicTest6.scala:9:24 Found:    ("bazSelect" : String); teq's is error dynamicSelectDynamicTest6.scala:9:5 type mismatch: found "bazSelect", required Int
+dynamicSelectDynamicTest7.scala	pass	-	
+dynamicUpdateDynamicTest1.scala	pass	-	
+dynamicUpdateDynamicTest2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicUpdateDynamicTest2.scala:8:25 Found:    (42 : Int); teq's is error dynamicUpdateDynamicTest2.scala:8:25 type mismatch: found 42, required String
 dynamicUpdateDynamicTest3.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicUpdateDynamicTest3.scala:8:19 Found:    Unit; teq's is error dynamicUpdateDynamicTest3.scala:8:19 type mismatch: found Unit, required Int
-dynamicUpdateDynamicTest4.scala	fail	-	marks: no error where 1 are marked
+dynamicUpdateDynamicTest4.scala	fail	-	check: diagnostic 1 of 1: scalac's is error dynamicUpdateDynamicTest4.scala:8:22 Found:    ("bazUpdate" : String); teq's is error dynamicUpdateDynamicTest4.scala:8:3 type mismatch: found "bazUpdate", required Int
 empty-given.scala	fail	-	marks: error on an unmarked line empty-given.scala:1: expected an identifier, found '{'
 emptyCatch.scala	fail	-	check: diagnostic 1 of 1: scalac's is error emptyCatch.scala:2:10 The catch block does not contain a valid expression, try; teq's is error emptyCatch.scala:2:3 value apply is not a member of Unit
 endmarkers.scala	fail	-	marks: no error where 6 are marked
@@ -220,7 +220,7 @@ erased-case-class.scala	fail	-	marks: 1 errors where 2 are marked
 erased-class.scala	fail	-	marks: no error where 3 are marked
 erased-def-rhs.scala	fail	-	marks: error on an unmarked line erased-def-rhs.scala:4: 'erased' is not part of the supported Scala subset
 erased-if-else.scala	fail	-	marks: 1 errors where 4 are marked
-erased-in-tuples.scala	fail	-	marks: 15 errors where 7 are marked: erased-in-tuples.scala:7:23: expected ',' or ')', found identifier
+erased-in-tuples.scala	fail	-	marks: 14 errors where 7 are marked: erased-in-tuples.scala:7:23: expected ',' or ')', found identifier
 erased-inline-unrealizable-path.scala	fail	-	marks: no error where 1 are marked
 erased-lazy-given.scala	fail	-	marks: no error where 1 are marked
 erased-lazy-val.scala	fail	-	marks: 2 errors where 3 are marked
@@ -1012,7 +1012,7 @@ i3542a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3542a.scala:4:1
 i3557.scala	fail	-	marks: no error where 1 are marked
 i3630.scala	fail	-	marks: no error where 1 are marked
 i3657.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3657.scala:16:12 error overriding type F in trait ModuleSig with bounds[_$1,_$2];; teq's is error i3657.scala:16:12 error overriding type F in trait ModuleSig;
-i3736b.scala	fail	-	marks: no error where 1 are marked
+i3736b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3736b.scala:3:1 extension of type scala.Dynamic needs to be enabled; teq's is error i3736b.scala:3:7 extension of type scala.Dynamic needs to be enabled
 i3745a.scala	fail	-	marks: no error where 1 are marked
 i3745b.scala	fail	-	marks: no error where 1 are marked
 i3775.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3775.scala:6:7 error overriding method next in trait Iterator of type (): T;; teq's is error i3775.scala:6:7 error overriding method next in trait Iterator of type (): A: method next of type T ha
@@ -1232,8 +1232,8 @@ i7459.scala	fail	-	check: diagnostic 1 of 5: scalac's is error i7459.scala:17:37
 i7526.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7526.scala:18:34 Found:    Tr[Nothing, n.Comp, n.Comp]; teq's is error i7526.scala:18:34 type mismatch: found Tr[Nothing, n.Comp, n.Comp], required Tr[Nothing, net.Comp, net.Comp]
 i7529.scala	fail	-	marks: no error where 1 are marked
 i7567.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i7567.scala:6:31 covariant type T occurs in invariant position in type T of variable x; teq's is error i7567.scala:6:35 covariant type T occurs in invariant position in type T of variable x
-i7575.scala	fail	-	marks: no error where 1 are marked
-i7575b.scala	fail	-	marks: no error where 1 are marked
+i7575.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7575.scala:1:1 extension of type scala.Dynamic needs to be enabled; teq's is error i7575.scala:1:7 extension of type scala.Dynamic needs to be enabled
+i7575b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7575b.scala:2:1 extension of type scala.Dynamic needs to be enabled; teq's is error i7575b.scala:2:7 extension of type scala.Dynamic needs to be enabled
 i7597.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i7597.scala:3:5 object creation impossible, since def apply(v1: T1): R in trait Function1 in package scala is not defined; teq's is error i7597.scala:3:5 object creation impossible, since def appl
 i7613.scala	fail	-	marks: 2 errors where 1 are marked: i7613.scala:10:17: no given instance of type Baz[A] was found for parameter x$1
 i7709.scala	fail	-	marks: 2 errors where 8 are marked
@@ -1327,10 +1327,10 @@ i9168.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9168.scala:3:29 
 i9185.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i9185.scala:7:16 value pure is not a member of String.; teq's is error i9185.scala:7:26 ambiguous given instances for M[<error>]: listMonad, optionMonad
 i9287.scala	fail	-	marks: error on an unmarked line i9287.scala:2: type mismatch: found Unit, required Int
 i9294.scala	fail	-	marks: no error where 2 are marked
-i9295a.scala	fail	-	marks: no error where 1 are marked
-i9295b.scala	fail	-	marks: no error where 3 are marked
-i9295c.scala	fail	-	marks: no error where 1 are marked
-i9295d.scala	fail	-	marks: no error where 1 are marked
+i9295a.scala	pass	-	
+i9295b.scala	pass	-	
+i9295c.scala	pass	-	
+i9295d.scala	pass	-	
 i9298.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i9298.scala:4:7 Sequence argument type annotation `*` cannot be used here:; teq's is error i9298.scala:3:10 foo is already defined as value foo
 i9299.scala	fail	-	marks: 1 errors where 2 are marked
 i9299a.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i9299a.scala:1:11 type a is not a member of Int => Unit; teq's is error i9299a.scala:1:11 (foo : => Unit) is not a valid type prefix, since it is not an immutable path
@@ -1717,14 +1717,14 @@ t5702-neg-bad-and-wild.scala	fail	-	marks: 10 errors where 12 are marked
 t5702-neg-bad-brace.scala	fail	-	marks: 4 errors where 2 are marked: t5702-neg-bad-brace.scala:8:21: expected ',' or ')', found identifier
 t5729.scala	fail	-	check: diagnostic 1 of 2: scalac's is error t5729.scala:5:10 Ambiguous overload. The overloaded alternatives of method join in object C with types; teq's is warning t5729.scala:2:25 `_` is deprecated for wildcard arguments of types: use `?`
 t6124.scala	fail	-	marks: 8 errors where 16 are marked
-t6355b.scala	fail	-	marks: no error where 2 are marked
+t6355b.scala	pass	-	
 t6455.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t6455.scala:5:3 value withFilter is not a member of object O; teq's is error t6455.scala:5:3 value withFilter is not a member of O
 t6476.scala	fail	-	marks: 4 errors where 1 are marked: t6476.scala:3:7: invalid escape sequence
 t6476b.scala	fail	-	check: diagnostic 1 of 2: scalac's is error t6476b.scala:2:16 invalid escape at terminal index 0 in "\". Use \\ for literal \.; teq's is error t6476b.scala:2:16 invalid escape sequence
 t6574.scala	fail	-	marks: error on an unmarked line t6574.scala:4: Cannot rewrite recursive call: it is not in tail position
-t6663.scala	fail	-	marks: 2 errors where 1 are marked: t6663.scala:16:11: a member of js.Dynamic takes no type arguments
+t6663.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t6663.scala:16:11 Found:    String; teq's is error t6663.scala:16:11 type mismatch: found String, required Int
 t6810.scala	fail	-	marks: 5 errors where 6 are marked
-t6920.scala	fail	-	marks: 2 errors where 1 are marked: t6920.scala:9:25: named arguments are only allowed in argument lists
+t6920.scala	fail	-	marks: 2 errors where 1 are marked: t6920.scala:9:3: too many arguments: expected 1
 t7093.scala	fail	-	check: diagnostic 2 of 3: scalac's is warning t7093.scala:18:21 Ignoring [this] qualifier.; teq's is error t7093.scala:2:25 covariant type X occurs in contravariant position in type X of parameter x
 t7239.scala	fail	-	check: diagnostic 1 of 4: scalac's is error t7239.scala:20:3 value withFilter is not a member of Test.HasFilter[(Int, String)], but could be made available as an extension method.; teq's is error t7239.scala:20:3 value withFilter is not a m
 t7259.scala	fail	-	marks: no error where 2 are marked
@@ -1733,7 +1733,7 @@ t7292-removal.scala	fail	-	marks: 5 errors where 3 are marked: t7292-removal.sca
 t7294.scala	fail	-	marks: no error where 1 are marked
 t7868.scala	fail	-	check: diagnostic 1 of 2: scalac's is error t7868.scala:5:10 Unreachable case; teq's is error t7868.scala:5:10 unreachable case: type Short is not a subclass of class Int
 t8002-nested-scope.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t8002-nested-scope.scala:16:9 method x cannot be accessed as a member of C from object C.; teq's is error t8002-nested-scope.scala:16:9 x is private to C
-t8006.scala	fail	-	marks: 2 errors where 1 are marked: t8006.scala:3:10: named arguments are only allowed in argument lists
+t8006.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t8006.scala:3:19 Found:    (String, Int); teq's is error t8006.scala:3:3 too many arguments: expected 1
 t8300-overloading.scala	fail	-	marks: no error where 1 are marked
 t8764.scala	fail	-	check: diagnostic 1 of 2: scalac's is error t8764.scala:6:14 Found:    Any; teq's is error t8764.scala:6:14 type mismatch: found Any, required Int
 t9419.scala	fail	-	marks: no error where 2 are marked

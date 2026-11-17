@@ -5,9 +5,6 @@ package scala
 
 import scala.scalajs.js
 
-/** The marker the app names in `js.Object & Dynamic`; teq's only Dynamic is the JS one. */
-type Dynamic = js.Dynamic
-
 extension [A](dict: js.Dictionary[A])
   def get(key: String): Option[A] = if dict.contains(key) then Some(dict(key)) else None
   def getOrElseUpdate(key: String, default: => A): A =

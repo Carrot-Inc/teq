@@ -107,7 +107,6 @@ i21258.scala	marks: 0 warnings where 1 are marked
 i21525.scala	marks: an error where warnings are marked: 3 warnings found, errors under --werror
 i21649.scala	check: diagnostic 1 of 1: warning i21649.scala:11:3, line 3 of the message: scalac's is --------------------------------------------------------------------------------------------------------------------; teq's is nothing
 i21805.scala	marks: an error where warnings are marked: i21805.scala:6:3: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
-i21816.scala	marks: an error where warnings are marked: i21816.scala:13:13: method className in trait Iterable cannot be accessed as a member of CC from object O; protected method className can only be accessed from trait Iterable or one of its subclass
 i21845.orig.scala	marks: 1 warnings where 0 are marked
 i21860.scala	marks: an error where warnings are marked: i21860.scala:5:8: illegal inheritance: self type Triangle of case Triangle does not conform to self type Product of parent trait Product
 i21860.unenum.scala	marks: an error where warnings are marked: i21860.unenum.scala:6:15: illegal inheritance: self type Triangle of object Triangle does not conform to self type Product of parent trait Product

@@ -328,6 +328,7 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/view.scala", include_str!("../std/view.scala")),
     ("<std>/ordering.scala", include_str!("../std/ordering.scala")),
     ("<std>/compat.scala", include_str!("../std/compat.scala")),
+    ("<std>/dynamic.scala", include_str!("../std/dynamic.scala")),
     ("<std>/language.scala", include_str!("../std/language.scala")),
     ("<std>/javalib/string.scala", include_str!("../std/javalib/string.scala")),
     ("<std>/javalib/charset.scala", include_str!("../std/javalib/charset.scala")),

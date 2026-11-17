@@ -59,7 +59,7 @@ abstract-givens.scala	fail	interp:fail	abstract-givens.scala:6:8: object creatio
 adding-growing-set.scala	pass	interp:pass	
 annotation-info-not-erased	fail	-	java source: teq reads none
 anon-mirror-gen-local.scala	fail	interp:fail	anon-mirror-gen-local.scala:85:47: not supported yet: an instance of Seed, a class nested in a class, made outside that class
-applydynamic_sip.scala	fail	interp:fail	applydynamic_sip.scala:30:3: a member of js.Dynamic takes no type arguments
+applydynamic_sip.scala	pass	interp:pass	
 array-addition.scala	pass	interp:fail	
 array-charSeq.scala	pass	interp:fail	
 array-erasure.scala	fail	interp:fail	array-erasure.scala:27:16: value apply is not a member of Array[?] & T
@@ -166,8 +166,8 @@ drop-apply-optimization.scala	fail	interp:fail	drop-apply-optimization.scala:15:
 drop-no-effects.scala	pass	interp:pass	
 duplicate-meth.scala	pass	interp:pass	
 duration-coarsest.scala	pass	interp:pass	
-dynamic-anyval.scala	fail	interp:fail	teq: jvm backend: Test$.DynamicValue2: a JavaScript class
-dynamicDynamicTests.scala	fail	interp:fail	dynamicDynamicTests.scala:69:66: a vararg splice is only allowed as the last argument
+dynamic-anyval.scala	pass	interp:pass	
+dynamicDynamicTests.scala	pass	interp:pass	
 eff-dependent.scala	fail	interp:fail	eff-dependent.scala:22:12: type mismatch: found A => (f.Eff) ?=> B, required A => B
 elidable-noflags.scala	pass	interp:fail	
 empty-array.scala	pass	interp:fail	
@@ -645,7 +645,7 @@ i3624.scala	pass	interp:pass
 i3920.scala	fail	interp:fail	i3920.scala:6:26: expected ':', found 'val'
 i3930.scala	pass	interp:pass	
 i4037.scala	pass	interp:pass	
-i4073.scala	fail	interp:fail	teq: jvm backend: Test$.main: JavaScript interop
+i4073.scala	pass	interp:pass	
 i4073b.scala	pass	interp:pass	
 i4073c.scala	pass	interp:pass	
 i4177.scala	pass	interp:pass	
@@ -670,7 +670,7 @@ i4557a.scala	pass	interp:pass
 i4558.scala	pass	interp:pass	
 i4559.scala	pass	interp:pass	
 i4563.scala	pass	interp:pass	
-i4600.scala	fail	interp:fail	i4600.scala:34:12: values of types Dynamic and String cannot be compared with == or !=
+i4600.scala	pass	interp:pass	
 i4600b.scala	pass	interp:pass	
 i4659b.scala	pass	interp:pass	
 i4754.scala	pass	interp:pass	
@@ -1298,7 +1298,7 @@ t4400.scala	pass	interp:pass
 t4415.scala	pass	interp:pass	
 t4482.scala	pass	interp:pass	
 t4535.scala	pass	interp:fail	
-t4536.scala	fail	interp:fail	t4536.scala:25:7: applyDynamic is a member of a JS trait, which can only hold abstract members and vals set to js.undefined
+t4536.scala	fail	interp:fail	run: exit 1: or a JavaFX application class must extend javafx.application.Application
 t4537	pass	interp:pass	
 t4558.scala	pass	interp:pass	
 t4565_1.scala	pass	interp:pass	
@@ -1332,7 +1332,7 @@ t498.scala	pass	interp:pass
 t4996.scala	pass	interp:pass	
 t5009.scala	pass	interp:pass	
 t5037.scala	pass	interp:fail	
-t5040.scala	fail	interp:fail	t5040.scala:11:3: privateMethod is private to Prova2
+t5040.scala	pass	interp:pass	
 t5045.scala	pass	interp:fail	
 t5053.scala	pass	interp:fail	
 t5105.scala	pass	interp:fail	
@@ -1368,7 +1368,7 @@ t5665.scala	pass	interp:pass
 t5680.scala	pass	interp:fail	
 t5688.scala	pass	interp:fail	
 t5729.scala	pass	interp:pass	
-t5733.scala	fail	interp:fail	t5733.scala:20:11: values of types Dynamic and String cannot be compared with == or !=
+t5733.scala	pass	interp:pass	
 t5830.scala	pass	interp:pass	
 t5856.scala	pass	interp:pass	
 t5857.scala	pass	interp:timeout	
@@ -1410,8 +1410,8 @@ t629.scala	pass	interp:pass
 t6290.scala	pass	interp:pass	
 t6333.scala	pass	interp:fail	
 t6337a.scala	pass	interp:pass	
-t6353.scala	fail	interp:fail	teq: jvm backend: Test$: a JavaScript class
-t6355.scala	fail	interp:fail	teq: jvm backend: Test$.main: JavaScript interop
+t6353.scala	pass	interp:pass	
+t6355.scala	pass	interp:pass	
 t6370.scala	pass	interp:pass	
 t6380.scala	fail	interp:fail	t6380.scala:4:59: value getExceptionTypes is not a member of Method
 t6385.scala	pass	interp:pass	
@@ -1438,7 +1438,7 @@ t6634.scala	pass	interp:fail
 t6637.scala	pass	interp:pass	
 t6644.scala	pass	interp:pass	
 t6646.scala	pass	interp:pass	
-t6663.scala	fail	interp:fail	t6663.scala:14:11: a member of js.Dynamic takes no type arguments
+t6663.scala	pass	interp:pass	
 t6666a.scala	pass	interp:pass	
 t6673.scala	pass	interp:fail	
 t6706.scala	pass	interp:fail	

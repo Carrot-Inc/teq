@@ -148,7 +148,6 @@ i10871.scala	i10871.scala:4:15: expected an identifier, found 'super'
 i10929-new-syntax.scala	i10929-new-syntax.scala:9:9: a parent has to be a class or a trait
 i10929.scala	i10929.scala:12:40: expected ':', found 'val'
 i10945	java source: teq reads none
-i10951.scala	i10951.scala:6:29: a member of js.Dynamic takes no type arguments
 i10980.scala	i10980.scala:2:19: not found: Object
 i10994.scala	i10994.scala:2:20: expected '=>', found ':'
 i11022.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -275,10 +274,6 @@ i16451.default.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i16464.scala	i16464.scala:10:22: operator - cannot be applied to Int and Seq[Int]
 i16539.min.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i16539.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-i16544a.scala	i16544a.scala:8:5: type mismatch: found Dynamic, required Foo
-i16544b.scala	i16544b.scala:8:5: type mismatch: found Dynamic, required Foo
-i16544c.scala	i16544c.scala:8:5: type mismatch: found Dynamic, required Foo
-i16544d.scala	i16544d.scala:10:5: type mismatch: found Dynamic, required Foo
 i16649-irrefutable.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i1665.scala	i1665.scala:3:3: not found: !=
 i16657.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -568,9 +563,6 @@ i9103.scala	i9103.scala:26:36: no given instance of type Permissions was found f
 i9213.scala	teq: jvm backend: O$: no @jvm intrinsic or body for newString of java/lang/String
 i9260.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i9266.scala	i9266.scala:3:23: expected a definition, found identifier
-i9295.scala	teq: jvm backend: i9295$package$.baz: JavaScript interop
-i9295b.scala	teq: jvm backend: i9295b$package$.baz: JavaScript interop
-i9295c.scala	teq: jvm backend: i9295c$package$.baz: JavaScript interop
 i9295d.scala	teq: jvm backend: i9295d$package$.baz: JavaScript interop
 i9392	java source: teq reads none
 i9403.scala	i9403.scala:7:30: type mismatch: found false, required AnyRef{def compareTo(y: Boolean): Int}
@@ -775,7 +767,6 @@ t522.scala	t522.scala:14:5: foo is abstract; it cannot be instantiated
 t5330c.scala	t5330c.scala:3:28: type mismatch: found _, required String | Char
 t5644	java source: teq reads none
 t5703	java source: teq reads none
-t5726.scala	teq: jvm backend: MyApp$.testing: a JavaScript class
 t5886.scala	t5886.scala:8:6: type mismatch: found Class[_], required () => Any
 t5910.java	java source: teq reads none
 t5957	java source: teq reads none
@@ -783,10 +774,8 @@ t6124.scala	t6124.scala:8:18: expected end of statement, found identifier
 t6205.scala	t6205.scala:6:19: type kt not found
 t6245	java source: teq reads none
 t628.scala	t628.scala:15:40: operator * cannot be applied to Double and Unit
-t6551.scala	teq: jvm backend: Test$.main: a JavaScript class
 t6595.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 t661.scala	t661.scala:12:22: expected an identifier, found 'super'
-t6722.scala	t6722.scala:10:3: a member of js.Dynamic takes no type arguments
 t6780.scala	t6780.scala:15:16: recursive value v1 needs type
 t6942	java source: teq reads none
 t6963c.scala	option: -Xmigration:2.9 (teq has no flag for it)
@@ -808,7 +797,6 @@ t8046c.scala	t8046c.scala:10:35: value apply is not a member of Any
 t805.scala	t805.scala:8:27: expected an identifier, found 'super'
 t8207.scala	t8207.scala:2:10: cannot resolve import: me is not an object or a package
 t8244d	java source: teq reads none
-t8364.scala	teq: jvm backend: Test$: JavaScript interop
 t8376	java source: teq reads none
 t9004.scala	t9004.scala:23:32: type mismatch: found _, required ?
 t942	java source: teq reads none

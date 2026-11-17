@@ -45,7 +45,6 @@ i16960	Macro_1.scala:15:14:None:None: extension method tpt is not applicable to 
 i16961	Macro_1.scala:5:5:None:None: the body of Macro_1$package.myMacroImpl is withheld from the products of $OUT/pos-macros/i16961/jvm.products (elided: unstated a type that did not check): the TASTy writer's queue of the shapes it withholds writ
 i16963	Test_2.scala:1:20: exception in macro: scala.MatchError: {
 i17103c	Macro_1.scala:5:5:None:None: the body of Macro_1$package.testExpr is withheld from the products of $OUT/pos-macros/i17103c/jvm.products (elided: unstated the singleton type of the local c): the TASTy writer's queue of the shapes it withhold
-i17434a	Test.scala:5:7: field is a member of a JS trait, which can only hold abstract members and vals set to js.undefined
 i17506	Test_2.scala:5:3: the body of Macro_1$package.regularCurriedCtxFun2BetaReduceTest is withheld from the products of $OUT/pos-macros/i17506/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another
 i17606	Macros_1.scala:8:7:None:None: the body of example.A.impl is withheld from the products of $OUT/pos-macros/i17606/jvm.products (elided: unstated the std's String.newString, which scala-library has under another shape): the TASTy writer's que
 i17610	Macros.scala:7:30: no given instance of type Type[I] was found for parameter evidence$1
@@ -57,10 +56,7 @@ i18358	teq: jvm backend: E$1t9g4af_140: the local hole$0 is not in scope of the 
 i18855	option: -language:experimental.captureChecking (a check teq does not perform)
 i19191	Macro_1.scala:8:14: cannot resolve import: quotes is not an object or a package
 i19436	Test_2.scala:2:16: No given instance of type Int was found.
-i19526b	Test.scala:16:5: type mismatch: found Dynamic, required Stack
 i19767.scala	i19767.scala:7:24: type argument k1 does not conform to upper bound Singleton
-i19909	teq: jvm backend: examples/select/Dynamic0$.runTimeError: JavaScript interop
-i19909b	teq: jvm backend: examples/select/Dynamic0$.runTimeError: JavaScript interop
 i19947	Test_2.scala:1:17: exception in macro: scala.MatchError: Tuple1.apply[scala.Int](1) (of class java.lang.String) (called by expandMacro in object Macro_1$package) (in the body of Macro_1$package.expandMacro)
 i20309	Test_2.scala:7:3: the body of Macros.transformContextLambda is withheld from the products of $OUT/pos-macros/i20309/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): the TASTy wri
 i20471	Main_2.scala:5:9: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by derive in object MacroFlatMap) (in the body of MacroFlatMap.derive)

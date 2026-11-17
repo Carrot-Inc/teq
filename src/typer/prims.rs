@@ -1054,7 +1054,7 @@ impl<'a> Worker<'a> {
         let mark = self.hoisted.len();
         let Some((head_expr, head)) = self.assign_op_head(f) else { return Lowered::Refused };
         let AppliedHead::Value(tf, fty) = head else { return Lowered::Unknown(None) };
-        if fty == ERROR {
+        if fty == ERROR || self.applied_dynamically(fty) {
             return Lowered::Refused;
         }
         let written: Vec<ExprId> = self.cur_ast().expr_list(args).to_vec();
@@ -1153,6 +1153,14 @@ impl<'a> Worker<'a> {
         Lowered::Done(self.assign_op_update(head_expr, head, targs, cur, cty, slots, base, r, op_end, span, mark))
     }
 
+    /// Whether `fn(args)` on a head of type `fty` is a dynamic method's application: the head derives from
+    /// `scala.Dynamic` and has no `apply` (`fn.applyDynamic("apply")(args)`, `typer::dynamic`). The application as
+    /// written is the first try's; the reference makes no `update` of a dynamic application (`typedOpAssign`
+    /// assigns to the application it typed), so there is no assignment form.
+    fn applied_dynamically(&mut self, fty: TypeId) -> bool {
+        fty != ERROR && self.derives_dynamic(fty) && self.find_member(fty, names::APPLY).is_none() && !self.has_lexical_extension_for(fty, names::APPLY)
+    }
+
     /// `fn(i) base= rhs` over the head and the arguments typed alone, as `fn.update(i, fn(i) base rhs)`; `member`
     /// the `apply` the application as written selected, where it told. None where `fn(i)` is no `apply` on a
     /// value.
@@ -1160,6 +1168,9 @@ impl<'a> Worker<'a> {
     fn assign_op_indexed(&mut self, f: ExprId, targs: Option<ListRef>, args: ListRef, member: Option<SymId>, base: Name, r: ExprId, op_end: u32, span: Span) -> Option<(TExprId, TypeId)> {
         let mark = self.hoisted.len();
         let (head_expr, head) = self.assign_op_head(f)?;
+        if matches!(head, AppliedHead::Value(_, fty) if self.applied_dynamically(fty)) {
+            return None;
+        }
         let written: Vec<ExprId> = self.cur_ast().expr_list(args).to_vec();
         let mut typed = Vec::new();
         for &a in &written {
@@ -1647,7 +1658,16 @@ impl<'a> Worker<'a> {
         if let Some((te, ty)) = converted {
             return (self.wrap_hoisted(mark, te), ty);
         }
-        let msg = format!("value {} is not a member of {}", self.name_str(op), self.show(self.widen_lit(rty)));
+        // The right operand derives from `scala.Dynamic` (`typer::dynamic`): the operator is its dynamic method's
+        // name, the left operand, passed typed, lifted in the application as for a converted receiver.
+        let outer = std::mem::replace(&mut self.lifted_operand, lifts.then_some(tl));
+        let rewritten = self.dynamic_rewrite(tr, rty, op, None, member_lists, span, expected);
+        self.lifted_operand = outer;
+        if let Ok((te, ty)) = rewritten {
+            return (self.wrap_hoisted(mark, te), ty);
+        }
+        let hint = self.dynamic_hint(rty);
+        let msg = format!("value {} is not a member of {}{}", self.name_str(op), self.show(self.widen_lit(rty)), hint);
         self.error(span, msg);
         self.type_args_for_errors(&more);
         (self.prog.add(TExpr::Unit), ERROR)
@@ -1780,6 +1800,12 @@ impl<'a> Worker<'a> {
             None => qty != ERROR && self.has_lexical_extension_for(qty, name),
         };
         if method {
+            return None;
+        }
+        // A name the value lacks, on a receiver that derives from `scala.Dynamic`: the application as written is
+        // `q.applyDynamic("name")(args)` (`typer::dynamic`), which the first try typed; there is no value
+        // `q.selectDynamic("name")` to index here, and the reference makes no `update` of a dynamic application.
+        if qty != ERROR && self.find_member(qty, name).is_none() && self.derives_dynamic(qty) {
             return None;
         }
         Some(self.apply_member(tq, qty, name, None, Vec::new(), ast.expr_span(f), None))

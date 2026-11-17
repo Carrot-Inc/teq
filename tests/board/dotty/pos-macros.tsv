@@ -149,7 +149,7 @@ i17293.scala	pass	check:pass
 i17293b.scala	pass	check:pass	
 i17294	pass	check:pass	
 i17409.scala	pass	check:pass	
-i17434a	fail	check:fail	Test.scala:5:7: field is a member of a JS trait, which can only hold abstract members and vals set to js.undefined
+i17434a	pass	check:pass	
 i17434b	pass	check:pass	
 i17434c	pass	check:pass	
 i17434d	pass	check:pass	
@@ -179,13 +179,13 @@ i19369	pass	check:pass
 i19436	fail	check:fail	Test_2.scala:2:16: No given instance of type Int was found.
 i19480	pass	check:pass	
 i19480b	pass	check:pass	
-i19526b	fail	check:fail	Test.scala:16:5: type mismatch: found Dynamic, required Stack
+i19526b	pass	check:pass	
 i19537	pass	check:fail	
 i19539	pass	check:fail	
 i19604	pass	check:pass	
 i19767.scala	fail	check:fail	i19767.scala:7:24: type argument k1 does not conform to upper bound Singleton
-i19909	fail	check:fail	teq: jvm backend: examples/select/Dynamic0$.runTimeError: JavaScript interop
-i19909b	fail	check:fail	teq: jvm backend: examples/select/Dynamic0$.runTimeError: JavaScript interop
+i19909	pass	check:pass	
+i19909b	pass	check:pass	
 i19947	fail	check:fail	Test_2.scala:1:17: exception in macro: scala.MatchError: Tuple1.apply[scala.Int](1) (of class java.lang.String) (called by expandMacro in object Macro_1$package) (in the body of Macro_1$package.expandMacro)
 i20286	pass	check:pass	
 i20309	fail	check:fail	Test_2.scala:7:3: the body of Macros.transformContextLambda is withheld from the products of $OUT/pos-macros/i20309/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): the TASTy wri

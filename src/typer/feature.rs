@@ -181,6 +181,43 @@ impl<'a> Worker<'a> {
         self.env.file = file_was;
     }
 
+    /// `Typer.typedClassDef`'s report of a class that derives from `scala.Dynamic` where the feature `dynamics` is
+    /// not enabled (Typer.scala 3493 to 3501): an error where `scala.Dynamic` itself is one of its parents
+    /// (`isRequired`), a feature warning otherwise; at the class's name, each class a use site of its own, so the
+    /// explanation is in the text. Asked where the class is checked, its parents known (a local class's too).
+    #[inline]
+    pub(super) fn check_dynamic_extension(&mut self, c: crate::types::ClassId) {
+        if self.class_derives_dynamic(c) {
+            self.report_dynamic_extension(c);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn report_dynamic_extension(&mut self, c: crate::types::ClassId) {
+        let (file, start) = {
+            let info = self.syms.class(c);
+            (info.file, info.span.start)
+        };
+        if !self.program_source(file) || self.feature_enabled(file, start, crate::names::DYNAMICS) {
+            return;
+        }
+        let required = self.extends_dynamic_itself(c);
+        let req = if required { "needs to" } else { "should" };
+        let msg = format!(
+            "extension of type scala.Dynamic {req} be enabled\nby adding the import clause 'import scala.language.dynamics'\nor by setting the compiler option --language dynamics.\nSee the Scala docs for value scala.language.dynamics for a discussion\nwhy the feature {req} be explicitly enabled."
+        );
+        let span = Span::new(start, start + 1);
+        let file_was = std::mem::replace(&mut self.env.file, file);
+        if required {
+            self.error(span, msg);
+        } else {
+            let w = crate::source::Warning { id: crate::warnings::NO_ID, category: crate::warnings::Category::Feature, origin: None, phase: 0, unplaced: false, group: crate::source::Group::Typer };
+            self.warn_as(span, msg, w);
+        }
+        self.env.file = file_was;
+    }
+
     /// Whether `feature` is enabled at `pos` of `file`: by the command line, or by the innermost
     /// `scala.language` import in scope there that names it or all features.
     pub(super) fn feature_enabled(&self, file: FileId, pos: u32, feature: Name) -> bool {

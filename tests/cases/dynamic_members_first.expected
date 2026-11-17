@@ -1,0 +1,11 @@
+member
+extension
+implicit class
+given conversion
+p.select(other)
+(p,1)
+true
+p
+true
+Green
+tint.select(other)
