@@ -2400,5 +2400,31 @@ refused_reads_as_one partial_rebuild_initialiser_reads_files "$work/partial_rebu
 refused_reads_as_one partial_rebuild_macro_in_initialiser "$work/partial_rebuild_macro_in_initialiser.src" "Stock Helper Counter Rack" "Stock Helper Use" 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987
 refused_reads_as_one partial_rebuild_member_type_through_val tests/workers/partial_rebuild_member_type_through_val "Stock Counter Use" "Stock Use" 1 2 3
 
+# An assignment operator's first try that is dropped gives back what it advanced (the count of the classes made
+# at a position, which names the next one; the numbers of the JVM's lazy fields): the class the assignment form
+# makes has one name whether a kept answer of the worker's spared the try or not, so the files are one worker's
+# at every count, on JavaScript and on the JVM, and those under the memo's check (TEQ_CHECK_OPMEMO=1: every
+# kept answer's try typed again and dropped) are the files without it.
+same_build assign_op_dropped_count 3 tests/workers/assign_op_dropped_count
+one_jar assign_op_dropped_count "29 4" 3
+TEQ_CHECK_OPMEMO=1 timeout 120 "$TEQ" compiler build tests/workers/assign_op_dropped_count --threads 1 -o "$work/assign_op_dropped_count.checked" > /dev/null 2>&1
+if diff -rq "$work/assign_op_dropped_count.one" "$work/assign_op_dropped_count.checked" > /dev/null 2>&1; then
+  ok
+else
+  bad "assign_op_dropped_count_checked: the files under the memo's check are not the files without it"
+fi
+# The same of the JVM's jars, and of a lazy val of an object nested in a class a dropped try made (the object is
+# owned by the dropped class and carries no mark of its own): one jar at every count and under the check.
+one_jar assign_op_dropped_nested_lazy 3 3
+for dropped in assign_op_dropped_count assign_op_dropped_nested_lazy; do
+  jars_of tests/workers/$dropped
+  TEQ_CHECK_OPMEMO=1 timeout 120 "$TEQ" compiler build tests/workers/$dropped --target jvm --classpath "$JARS_CP" --threads 1 -o "$work/$dropped.checked.jar" > /dev/null 2>&1
+  if cmp -s "$work/$dropped.one.jar" "$work/$dropped.checked.jar"; then
+    ok
+  else
+    bad "${dropped}_checked_jar: the jar under the memo's check is not the jar without it"
+  fi
+done
+
 echo "workers: $pass passed, $fail failed, $known known"
 pending_fails_end $fail $pass

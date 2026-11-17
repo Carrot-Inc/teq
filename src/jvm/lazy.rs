@@ -685,6 +685,9 @@ impl<'a> Gen<'a> {
                         w.expanded.insert(c, ());
                     }
                 }
+                // A class a dropped typing made (`ClassInfo::dropped`) is no class of the file's walk: the one the
+                // kept typing made at its place takes the numbers.
+                Owner::Local if syms.in_dropped_local(c) => {}
                 Owner::Local => w.locals.push((info.span.start, c)),
                 _ => {}
             }
@@ -732,15 +735,19 @@ impl<'a> Gen<'a> {
         }
         // The unit's classes the walk did not meet (a quote's, an expansion's that nothing constructs), after the rest
         // by their binary names: every definition the unit writes has its numbers, the same on every run.
-        let mut rest: Vec<(Rc<str>, ClassId)> = Vec::new();
+        // A class a dropped typing made, and whatever is nested in one however deep (`Symbols::in_dropped_local`:
+        // an object of a dropped local class is owned by it and carries no mark of its own), comes last of all:
+        // it has the binary name of the class the kept typing made at its place, which takes the numbers as
+        // where nothing was typed and dropped.
+        let mut rest: Vec<(bool, Rc<str>, ClassId)> = Vec::new();
         for (i, info) in syms.classes.iter().enumerate() {
             let c = ClassId(i as u32);
             if info.module_file() == file && cx.tclass_of[i] != u32::MAX && !w.walked.contains_key(&c) && !opaque.contains(&c) {
-                rest.push((self.class_name(c), c));
+                rest.push((syms.in_dropped_local(c), self.class_name(c), c));
             }
         }
         rest.sort();
-        for (_, c) in rest {
+        for (_, _, c) in rest {
             self.walk_class_names(&mut w, c);
         }
         w.out

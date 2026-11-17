@@ -252,6 +252,9 @@ impl<'a> Worker<'a> {
         self.note_made_at(c, span, stored);
         if !inlined {
             self.def_classes.insert(file.0 as usize, d, c);
+            if self.made_watch {
+                self.made_local.push(super::Made { file, anon: Some(d), class: c, drop: 0 });
+            }
         }
         self.set_anon_env(c, Arc::new(self.env.clone()));
         self.enter_body(file, c, &cls.body);
@@ -366,6 +369,9 @@ impl<'a> Worker<'a> {
         self.note_made_at(c, span, stored);
         if !inlined {
             self.def_classes.insert(file.0 as usize, d, c);
+            if self.made_watch {
+                self.made_local.push(super::Made { file, anon: Some(d), class: c, drop: 0 });
+            }
         }
         self.set_anon_env(c, Arc::new(self.env.clone()));
         self.enter_body(file, c, &cls.body);
@@ -707,6 +713,9 @@ impl<'a> Worker<'a> {
         if let Some(log) = self.inlining.anon_log.as_mut() {
             log.push((file, span.start, site));
         }
+        if self.made_watch {
+            self.made_counts.push(super::MadeCount { key: (file, span.start, site), drop: 0 });
+        }
         let enclosing = match self.innermost_class() {
             Some(c) => self.name_str(self.syms.class(c).name),
             None => {
@@ -737,6 +746,9 @@ impl<'a> Worker<'a> {
         let repeat = *repeat;
         if let Some(log) = self.inlining.anon_log.as_mut() {
             log.push((file, span.start, site));
+        }
+        if self.made_watch {
+            self.made_counts.push(super::MadeCount { key: (file, span.start, site), drop: 0 });
         }
         let mut text = self.name_str(name);
         if let Some((site_file, site_start)) = site {

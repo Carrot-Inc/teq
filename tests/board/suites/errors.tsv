@@ -57,6 +57,29 @@ array_test_opaque_element	pass	-
 array_test_unchecked	pass	-	
 array_test_wildcard_alias	pass	-	
 ascription_cast_constants	pass	-	
+assign_op_element_case_class_inline	fail	-	missing '1 error found'
+assign_op_element_creation_impossible	pass	-	
+assign_op_element_missing_override	pass	-	
+assign_op_first_failure_told	pass	-	
+assign_op_letter_name	pass	-	
+assign_op_no_assignment_form	pass	-	
+assign_op_operand_body_error	pass	-	
+assign_op_operand_case_class_inline	fail	-	missing '1 error found'
+assign_op_operand_class_needs_abstract	pass	-	
+assign_op_operand_creation_impossible	pass	-	
+assign_op_operand_error_untold	pass	-	
+assign_op_operand_final_overridden	pass	-	
+assign_op_operand_getter_refused	pass	-	
+assign_op_operand_index_out_of_bounds	pass	-	
+assign_op_operand_missing_override	pass	-	
+assign_op_operand_object_needs_abstract	pass	-	
+assign_op_operand_override_type	pass	-	
+assign_op_operand_val_needs_abstract	pass	-	
+assign_op_written_first_extension_using_clause	pass	-	
+assign_op_written_first_inline_error	pass	-	
+assign_op_written_first_lambda_index	pass	-	
+assign_op_written_first_result	pass	-	
+assign_op_written_first_using_clause	pass	-	
 auto_apply	pass	-	
 backquoted_wildcard	pass	-	
 binder_annotation_args	pass	-	

@@ -69,6 +69,7 @@ declaredsignature	pass	-
 deepnesting	pass	-	
 defaults	pass	-	
 defaultsgivenreceiver	pass	-	
+defaultsimpurereceiver	fail	-	defaultsimpurereceiver js-run
 defaultsinline	pass	-	
 defaultslast	pass	-	
 defaultsplan	pass	-	

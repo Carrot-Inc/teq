@@ -244,8 +244,7 @@ fn precedence(op: &str) -> i32 {
     if first.is_alphabetic() || first == '_' || first == '$' {
         return 1;
     }
-    let assignment = op.len() > 1 && op.ends_with('=') && !op.starts_with('=') && !matches!(op, "<=" | ">=" | "!=") && is_operator_part(first);
-    if assignment {
+    if crate::lexer::is_op_assignment_name(op) {
         return 0;
     }
     match first {
@@ -259,11 +258,6 @@ fn precedence(op: &str) -> i32 {
         '*' | '/' | '%' => 9,
         _ => 10,
     }
-}
-
-/// `Chars.isOperatorPart`: an ASCII operator character, or past ASCII one that is no letter or digit.
-fn is_operator_part(c: char) -> bool {
-    if c.is_ascii() { crate::lexer::is_op_char(c as u8) } else { !c.is_alphanumeric() }
 }
 
 /// `Chars.escapedChar` into `out`.
@@ -564,7 +558,7 @@ impl<'p> TreePrinter<'p> {
                 if matches!(ast.ty(t), TyExpr::Repeated(_)) {
                     return text.cat("*");
                 }
-                let colon = if text.last_line().chars().last().is_some_and(is_operator_part) { " :" } else { ":" };
+                let colon = if text.last_line().chars().last().is_some_and(crate::lexer::is_operator_part) { " :" } else { ":" };
                 text.cat(colon).cat(s.ty(t))
             }),
             Expr::SeqLit(items, t) => {
@@ -1020,7 +1014,7 @@ impl<'p> TreePrinter<'p> {
             }
             Pat::Typed(inner, t) => self.change_prec(DOT_PREC, |s| {
                 let text = s.pat(inner);
-                let colon = if text.last_line().chars().last().is_some_and(is_operator_part) { " :" } else { ":" };
+                let colon = if text.last_line().chars().last().is_some_and(crate::lexer::is_operator_part) { " :" } else { ":" };
                 text.cat(colon).cat(s.ty(t))
             }),
             Pat::Lit(e) | Pat::StableId(e) | Pat::Quote(e) => self.expr(e),

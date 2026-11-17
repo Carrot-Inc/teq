@@ -53,6 +53,7 @@ fbound_path_in_type_arg	fail	-	< show
 for_yield_unit_discard_through_var	fail	-	< 1
 forward_tparam_bound	pass	-	
 function_xxl_deep_array_signature	fail	-	< 325
+given_alias_converts_inside_its_own_right_side	fail	-	< in given 2
 given_alias_of_bounded_param_part	fail	-	< 13
 given_block_later_local	fail	-	< 3
 given_double_definition_one_error	fail	-	< scalac 3.8.4: rejected, 1 error(s)
@@ -105,6 +106,7 @@ lazy_names_packages	cannot run	-	the JVM's platform
 lazy_names_sibling	cannot run	-	the JVM's platform
 local_class_match_scrutinee_avoided	fail	-	< 1
 local_def_super	pass	-	
+local_extension_defined_later_applied_before	fail	-	< update 0
 local_object_forward	fail	-	< 2
 macro_annotation_object_member_classes	fail	-	< 15
 macro_under_receiver_class	pass	-	

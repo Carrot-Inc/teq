@@ -1377,6 +1377,7 @@ impl<'a> Worker<'a> {
         if levels.is_empty() {
             return None;
         }
+        self.member_candidates += levels.len() as u32;
         let prof = self.prof(Kind::Conversion, span, About::Member(recv_ty, name));
         let mut accept = |t: &mut Self, to: TypeId| t.result_has_member(to, name, lists, expected);
         let wanted = |t: &mut Self| format!("?{{ {}: ? }}", t.name_str(name));

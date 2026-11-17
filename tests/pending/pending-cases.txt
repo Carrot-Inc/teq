@@ -48,6 +48,7 @@ extension_view_too_unspecific_applied	< scalac 3.8.4: rejected, 2 error(s)
 fbound_path_in_type_arg	< show
 for_yield_unit_discard_through_var	< 1
 function_xxl_deep_array_signature	< 325
+given_alias_converts_inside_its_own_right_side	< in given 2
 given_alias_of_bounded_param_part	< 13
 given_block_later_local	< 3
 given_double_definition_one_error	< scalac 3.8.4: rejected, 1 error(s)
@@ -89,6 +90,7 @@ layout_cases_deeper_line_after_operator_block	< zz|mx|zz/m<zz>m<zz>
 layout_cases_end_after_continued_block	< (1,3,3)
 layout_cases_end_after_selection	< (1,3,3)
 local_class_match_scrutinee_avoided	< 1
+local_extension_defined_later_applied_before	< update 0
 local_object_forward	< 2
 macro_annotation_object_member_classes	< 15
 math_round_overloads	< 2 1234567890123456789

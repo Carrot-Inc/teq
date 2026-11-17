@@ -470,6 +470,29 @@ impl Env {
     }
 }
 
+/// The key of a kept failure of an assignment operator's first try (`Worker::op_memo`): the type, the operator,
+/// the file, how many of its imports the site sees (they are seen in the order written), the given being defined.
+pub type OpMemoKey = (TypeId, Name, FileId, u32, Option<SymId>);
+
+/// A local or anonymous class made while an assignment operator's transaction types (`Worker::made_local`): its
+/// file, the definition of an anonymous one (which `def_classes` records it for), and the drop that took it,
+/// 0 while it stands.
+#[derive(Clone, Copy)]
+pub struct Made {
+    pub file: FileId,
+    pub anon: Option<crate::ast::DefId>,
+    pub class: ClassId,
+    pub drop: u32,
+}
+
+/// A position's count of the classes made there (`Worker::anon_sites`) taken while an assignment operator's
+/// transaction types (`Worker::made_counts`): the count's key and the drop that gave it back, 0 while it stands.
+#[derive(Clone, Copy)]
+pub struct MadeCount {
+    pub key: (FileId, u32, Option<(FileId, u32)>),
+    pub drop: u32,
+}
+
 /// A selection or an operator of a library body being typed: the selection's node, whose tree's
 /// point is its name's, and the application it heads, whose point is the call's (an inline
 /// expansion's diagnostic moves to the call, as scalac's does).
@@ -1372,6 +1395,42 @@ pub struct Worker<'a> {
     /// implicit arguments and the later lists are adapted and applied after it
     /// (`adaptNoArgsImplicitMethod`, the outer `realApply`).
     pub retry_applied: Option<(u32, u32)>,
+    /// The watcher at `retry_depth` is an assignment operator's first try (`Worker::type_assign_op`), this the list
+    /// its operator applies (`FunEnd::operand_at`): only an application of that list is the watched one then (a
+    /// conversion's own application, one deeper as well, is not), and a try of the member's retry that takes the
+    /// application over hands its mark out to it (`retry_taken`).
+    pub op_try: Option<apply::FunEnd>,
+    /// An assignment operator's second try asks for the arguments its left side's `apply` was applied to
+    /// (`Worker::assign_op_by_application`): the depth of the argument caches the member's cache is opened at,
+    /// and the file that asks. `arg_cache_close` hands that cache's typings to `kept_args`, in the order written:
+    /// the argument's tree (a named one's value) and its typing against its formal, unadapted.
+    pub keep_args: Option<(u32, FileId)>,
+    /// The first tries of assignment operators known to fail with nothing to try (`Worker::assign_op_known_failed`):
+    /// the left side's type, the operator, and the implicit context of a site whose frames add nothing to it: the
+    /// file, how many of its imports the site sees and the alias given being defined. Kept only where the member's search met no
+    /// candidate at all (`member_candidates` did not move: no lexical extension of the name, no given of the
+    /// levels with one, none in the type's implicit scope, no conversion to a type with the member), which no
+    /// argument and no expected type changes; one worker's, one typing run's (cleared where the given caches are).
+    pub op_memo: FxMap<OpMemoKey, ()>,
+    /// The operators something is kept for in `op_memo`: an operator of no kept answer is not looked up.
+    pub op_memo_ops: Vec<Name>,
+    /// How many candidates the searches for an extension or a conversion of a missing member have met.
+    pub member_candidates: u32,
+    /// An assignment operator's first try reached the not-a-member error with no candidate met (`op_memo`).
+    pub op_nothing: bool,
+    /// How many assignment operators took the assignment form by a kept answer.
+    pub op_memo_hits: u32,
+    /// Whether an assignment operator's transaction is typing now, and the local and anonymous classes made
+    /// meanwhile (`Made`): a typing of the operands that is dropped for another forgets its own
+    /// (`Worker::drop_made`), since an operand is typed once for the tree that is kept.
+    pub made_watch: bool,
+    pub made_local: Vec<Made>,
+    /// The counts the classes made meanwhile took of their positions (`anon_name`, `local_class_name`): a
+    /// dropped typing gives its own back (`drop_made`), so that the class the kept typing makes at the position
+    /// has the name it has where nothing was dropped.
+    pub made_counts: Vec<MadeCount>,
+    pub made_drops: u32,
+    pub kept_args: Vec<(crate::ast::ExprId, Option<(TExprId, TypeId)>)>,
     /// The typed arguments an attempt adapts as an earlier one typed them (`state::ArgCache`,
     /// dotty's `FunProto` cache), and the tuple a member's retry passes typed: adapted as dotty's
     /// `adapt` adapts a typed tree, never wrapped in a context function, a closure converted to
@@ -3191,6 +3250,18 @@ impl<'a> Worker<'a> {
             denotation_marks: None,
             retry_depth: None,
             retry_applied: None,
+            op_try: None,
+            keep_args: None,
+            op_memo: FxMap::default(),
+            op_memo_ops: Vec::new(),
+            member_candidates: 0,
+            op_nothing: false,
+            op_memo_hits: 0,
+            made_watch: false,
+            made_local: Vec::new(),
+            made_counts: Vec::new(),
+            made_drops: 0,
+            kept_args: Vec::new(),
             retry_typed: FxMap::default(),
             unadapted_call: None,
             unadapted_node: None,
@@ -3657,6 +3728,18 @@ impl<'a> Worker<'a> {
             denotation_marks: None,
             retry_depth: None,
             retry_applied: None,
+            op_try: None,
+            keep_args: None,
+            op_memo: FxMap::default(),
+            op_memo_ops: Vec::new(),
+            member_candidates: 0,
+            op_nothing: false,
+            op_memo_hits: 0,
+            made_watch: false,
+            made_local: Vec::new(),
+            made_counts: Vec::new(),
+            made_drops: 0,
+            kept_args: Vec::new(),
             retry_typed: FxMap::default(),
             unadapted_call: None,
             unadapted_node: None,

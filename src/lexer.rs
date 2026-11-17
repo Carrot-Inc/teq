@@ -322,6 +322,18 @@ pub(crate) fn is_ident_part(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_' || b == b'$' || b >= 0x80
 }
 
+/// `Chars.isOperatorPart`: an ASCII operator character, or past ASCII one that is no letter or digit.
+pub(crate) fn is_operator_part(c: char) -> bool {
+    if c.is_ascii() { is_op_char(c as u8) } else { !c.is_alphanumeric() }
+}
+
+/// The reference's `isOpAssignmentName` (core/NameOps.scala 116-123): a name that ends with `=`, does not start
+/// with one, is none of `<=`, `>=`, `!=`, and whose first code point is an operator's (`foo_=` is a setter's name,
+/// no assignment operator).
+pub(crate) fn is_op_assignment_name(op: &str) -> bool {
+    op.len() > 1 && op.ends_with('=') && !op.starts_with('=') && !matches!(op, "<=" | ">=" | "!=") && op.chars().next().is_some_and(is_operator_part)
+}
+
 #[inline]
 pub(crate) fn is_op_char(b: u8) -> bool {
     matches!(

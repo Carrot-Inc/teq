@@ -126,6 +126,6 @@ impl<'a> Worker<'a> {
     fn assign_op_target_name(&self, ast: &ast::Ast, head: ast::ExprId) -> bool {
         let ast::Expr::Infix(_, op, _, _) = ast.expr(head) else { return false };
         let text = self.name_ref(op);
-        text.len() > 1 && text.ends_with('=') && !text.starts_with('=') && !matches!(text, "<=" | ">=" | "!=")
+        crate::lexer::is_op_assignment_name(text)
     }
 }

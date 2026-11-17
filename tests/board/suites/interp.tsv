@@ -95,9 +95,13 @@ arrays_generic	pass	-
 arrays_of_nothing	pass	-	
 arrays_sort_comparator	pass	-	
 ascription_case	pass	-	
+assign_op_assignment_second	pass	-	
 assign_op_chains	pass	-	
 assign_op_extensions	pass	-	
+assign_op_operands_typed_again	pass	-	
+assign_op_scopes	pass	-	
 assign_op_type_applied	pass	-	
+assign_op_written_first	pass	-	
 assignop	pass	-	
 backquoted_error_name	pass	-	
 base64_mime_custom	pass	-	

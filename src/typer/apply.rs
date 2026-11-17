@@ -1122,7 +1122,7 @@ impl<'a> Worker<'a> {
     /// through the superclass chain when the method is found there, and names the class or trait
     /// that defines it otherwise, which is always the case inside a trait.
     #[inline(never)]
-    fn apply_super_member(
+    pub(super) fn apply_super_member(
         &mut self,
         parent: Name,
         name: Name,
@@ -5041,7 +5041,7 @@ impl<'a> Worker<'a> {
     ) -> Option<(TExprId, TypeId)> {
         let outer = std::mem::replace(&mut self.annotation_args, self.typing_annotation && ctor.is_some());
         self.app_depth += 1;
-        if self.retry_depth.is_some_and(|d| d + 1 == self.app_depth) {
+        if self.retry_depth.is_some_and(|d| d + 1 == self.app_depth) && self.op_try.map_or(true, |own| lists.iter().find(|l| !l.using).is_some_and(|l| l.fun == own)) {
             self.retry_applied = None;
         }
         // The member's application under `apply_member_or_extension` is the first under it, and
@@ -5629,6 +5629,7 @@ impl<'a> Worker<'a> {
             match lists.next() {
                 Some(list) if !list.using || self.is_body_file(self.env.file) => {
                     normal_seen += 1;
+                    let list_fun = list.fun;
                     if constrain_by_expected && explicit_lists > 1 && normal_seen == normal_clauses {
                         open_expected = self.constrain_result_by_expected(&mut ret_ty, expected);
                     }
@@ -5663,7 +5664,7 @@ impl<'a> Worker<'a> {
                         break;
                     }
                     // Applied, it ends what a try of a member's retry decides on (`retry_applied`).
-                    if normal_seen == 1 && self.retry_depth.is_some_and(|d| d + 1 == self.app_depth) {
+                    if normal_seen == 1 && self.retry_depth.is_some_and(|d| d + 1 == self.app_depth) && self.op_try.map_or(true, |own| list_fun == own) {
                         self.retry_applied = Some((self.diags.items.len() as u32, self.error_nodes));
                     }
                 }
@@ -9039,6 +9040,8 @@ impl<'a> Worker<'a> {
             }
         }
         let mut lists = Some(lists);
+        // What the searches below meet, for an assignment operator's first try (`Worker::op_nothing`).
+        let candidates = self.member_candidates;
         if let Some(r) = self.try_extensions_or_conversion(recv, resolved_ty, name, targs, &mut lists, span, expected, converted) {
             return r;
         }
@@ -9101,6 +9104,12 @@ impl<'a> Worker<'a> {
             let made = self.diags.items.len();
             self.error(span, msg);
             self.note_missing(made, name, crate::source::MissingKind::Member);
+        }
+        // An assignment operator's own list, on the receiver as written, and nothing met that could have taken it.
+        if let Some(own) = self.op_try {
+            if !converted && self.member_candidates == candidates && lists.as_ref().is_some_and(|l| l.iter().any(|a| a.fun == own)) {
+                self.op_nothing = true;
+            }
         }
         if let Some(l) = &lists {
             self.type_args_for_errors(l);
@@ -11132,6 +11141,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
         let (lexical, imports) = self.lexical_extensions_for(name, recv_ty);
+        self.member_candidates += lexical.len() as u32;
         self.try_extensions_among(lexical, imports, None, recv, recv_ty, scope_ty, name, targs, lists, span, expected)
     }
 
@@ -11639,7 +11649,7 @@ impl<'a> Worker<'a> {
         // calls left pending in its typings wait for the tree it gives.
         let retry = self.attempt();
         let written = call.written();
-        let outer_depth = (self.retry_depth.replace(self.app_depth), self.retry_applied.take());
+        let outer_depth = (self.retry_depth.replace(self.app_depth), self.retry_applied.take(), self.op_try.take());
         for t in self.retry_tries(sym, &written).into_iter().flatten() {
             let Boundary::Retry(lists) = self.boundary_attempt(sym, owner_ty, &written, t) else { continue };
             // What the test typed alone stays for the tries (`typedArgs`' typings, cached).
@@ -11687,7 +11697,7 @@ impl<'a> Worker<'a> {
                 self.hoisted.truncate(kept_hoisted);
             }
         }
-        (self.retry_depth, self.retry_applied) = outer_depth;
+        (self.retry_depth, self.retry_applied, self.op_try) = outer_depth;
         self.restore(member);
         self.hoisted.extend(member_hoisted);
         self.drop_unheld_typings(r.0);
@@ -11706,8 +11716,15 @@ impl<'a> Worker<'a> {
 
     /// A try of the member's retry, inside the retry's attempt `retry`, took the application
     /// over, giving `r`: the member's application, set aside, goes.
-    fn retry_taken(&mut self, r: (TExprId, TypeId), retry: super::state::Mark, outer_depth: (Option<u32>, Option<(u32, u32)>), call: Box<MemberCall>) -> (TExprId, TypeId) {
-        (self.retry_depth, self.retry_applied) = outer_depth;
+    fn retry_taken(&mut self, r: (TExprId, TypeId), retry: super::state::Mark, outer_depth: (Option<u32>, Option<(u32, u32)>, Option<FunEnd>), call: Box<MemberCall>) -> (TExprId, TypeId) {
+        // Where the try applied the list: its own mark, or here where it reported nothing.
+        let taken = self.retry_applied.unwrap_or((self.diags.items.len() as u32, self.error_nodes));
+        (self.retry_depth, self.retry_applied, self.op_try) = outer_depth;
+        // An assignment operator's first try around the member (`Worker::op_try`): the try applied the operator's
+        // list for it, as the member's own application would have.
+        if self.op_try.is_some() && self.retry_depth == Some(self.app_depth) {
+            self.retry_applied = Some(taken);
+        }
         self.drop_unheld_typings(r.0);
         self.arg_cache_close();
         self.close(retry);
@@ -12982,6 +12999,7 @@ impl<'a> Worker<'a> {
         let (givens, contextual, levels) = self.givens_with_extension_levels(name, scope_ty);
         let modules_mark = self.ext_modules.len();
         let companions = self.implicit_scope_extensions(scope_ty, name);
+        self.member_candidates += (givens.len() + companions.len()) as u32;
         ExtensionsBeyond { givens, contextual, levels, companions, modules_mark, prof: None }
     }
 

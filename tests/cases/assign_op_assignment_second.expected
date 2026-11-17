@@ -1,0 +1,27 @@
+plus
+apply plus update
+get plus set
+6
+plus
+3
+i default apply rhs update:0:1:15
+j i apply
+i j apply rhs update:1:2:17
+apply rhs update:1:2:18
+index apply rhs update:12
+apply-int index index rhs update:12 index
+i papply rhs pupdate:14
+i papply rhs pupdate:14
+i iapply rhs iupdate:7
+i iapply rhs iupdate:7
+apply:2 update:3:12
+apply:2 update:3:12
+index base-apply rhs base-update:12
+index apply rhs plus update
+O
+K
+En
+g
+R
+List(1001, 102, 13, 5)
+9

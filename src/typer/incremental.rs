@@ -111,6 +111,8 @@ impl<'a> Worker<'a> {
             }
         }
         self.given_fast.clear();
+        self.op_memo.clear();
+        self.op_memo_ops.clear();
         self.head_sigs.clear();
         self.clear_base_caches();
         self.target_name_files.clear();
@@ -237,6 +239,8 @@ impl<'a> Worker<'a> {
     pub(super) fn retype_suspended(&mut self, files: &[FileId]) {
         // What reads signatures, whose inferred ones open, is read again.
         self.given_fast.clear();
+        self.op_memo.clear();
+        self.op_memo_ops.clear();
         self.head_sigs.clear();
         self.path_sigs.clear();
         self.erased_results.clear();

@@ -570,7 +570,7 @@ fn link_root_members(typer: &Worker, std_files: &[bool], products: bool) -> (Vec
         // In a module's products a class nested in a local class is the local class's to write with
         // it (`materialised`): a quote's or an inline body's template's nested class is none of the
         // module's.
-        let local = if products { syms.in_local_class(c) } else { info.owner == Owner::Local };
+        let local = if products { syms.in_local_class(c) } else { info.owner == Owner::Local || syms.in_dropped_local(c) };
         let own = (info.def.is_some() || enum_companion)
             && !local
             && (matches!(info.kind, ClassKind::Class | ClassKind::Object | ClassKind::Enum | ClassKind::EnumCase | ClassKind::Trait)

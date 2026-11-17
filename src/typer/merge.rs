@@ -3153,6 +3153,8 @@ impl<'a> Worker<'a> {
         self.roots_memo.clear();
         self.subclasses = super::overload::SubclassIndex::default();
         self.given_fast.clear();
+        self.op_memo.clear();
+        self.op_memo_ops.clear();
         self.given_fits.clear();
         self.head_sigs.clear();
         self.clear_base_caches();

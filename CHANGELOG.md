@@ -33,6 +33,22 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   interpreter evaluated them in the order written. An object is written back behind such an argument only where
   its class runs no initialisation and neither it nor a base takes a constructor parameter or has a secondary
   constructor.
+- An assignment operator (`x += e`, `q.x -= e`, `xs(i) *= e`) is typed as scalac types it: first as the call of
+  that operator on the left side, the operator found as any member is, and only where that call does not apply as
+  the assignment `l = l op e`. Three things were wrong before. An operator that comes from the type's companion,
+  from a given, from a conversion or from an implicit class was passed over on a var, a field and an element:
+  `var e = new E(0); e += 1` assigned `e + 1` where scalac calls the extension's `+=` (wrong values, silently).
+  A program was refused where the left side has an `op=` that does not take the argument but an `op` that does
+  (`+=(s: String)` beside `+(i: Int)`, `e += 1`), and where an applied left side names a method whose result has
+  the operator beside an object of the same name (`data("id") := v`). And the element form, `xs(i) op= e` through
+  `apply` and `update`, lost what the application as written has: an inserted default argument, named arguments,
+  written type arguments (`c[Int](0) += 1`), a function literal typed by its parameter, `super.apply(i) += 1`, a
+  written `c.apply(i) += 1`, and the alternative of an overloaded `apply` that was selected, whose by-name
+  argument was evaluated early. What scalac refuses is refused now: an `apply` that is an extension's, one with a
+  using clause, a structural type's, arguments named out of the parameters' order whose values are bound first,
+  and `c(0) foo_= 1`, which was taken for an assignment through `foo_`. Where neither form applies the error is
+  the call's (`value += is not a member of Int`, with the right side's own), no longer the assignment's
+  (`value update is not a member`).
 - `a ++ b` of two arrays runs in a lean JavaScript build. A program that concatenated two arrays, of any element
   type, stopped at that line unless something else of it had brought the `ClassTag` object in: `ReferenceError:
   ClassTag$ is not defined`, or a `TypeError` on `ClassTag$().apply` or on a tag's `wrap` where only a part of

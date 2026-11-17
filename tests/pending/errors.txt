@@ -20,6 +20,8 @@ approx_store_application_reject	missing '13:28: error: Found: h.KC[?1.A]'
 argument_parenthesized_mismatch.check	< tests/errors/argument_parenthesized_mismatch.scala:3:19: error: Found: (1 : Int)
 arity_class_names	missing '31:12: error: type Tuple23 not found'
 array_any_erasure_overloads	missing '12:7: error: Conflicting definitions:'
+assign_op_element_case_class_inline	missing '1 error found'
+assign_op_operand_case_class_inline	missing '1 error found'
 bound_check_after_typer_error	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
 bound_member_params_seen_from_prefix	exit code 0
 cases_end_match_after_catch_branch	exit code 0

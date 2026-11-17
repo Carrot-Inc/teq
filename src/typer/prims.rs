@@ -1,5 +1,5 @@
 use super::apply::{ArgList, ArgSrc, FrameKind, FunEnd, SelectionFrame};
-use super::Worker;
+use super::{Frame, Worker};
 use crate::ast::{Expr, ExprId, ListRef};
 use crate::intern::Name;
 use crate::names;
@@ -159,6 +159,34 @@ enum WrittenLeft {
     Alone,
     Selected(ExprId),
     Other,
+}
+
+/// Whether a kept failure of an assignment operator's first try is held to the try itself at every use
+/// (`Worker::check_op_memo`): in the unit tests, and under `TEQ_CHECK_OPMEMO`.
+fn op_memo_checked() -> bool {
+    static CHECKED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    cfg!(test) || *CHECKED.get_or_init(|| std::env::var_os("TEQ_CHECK_OPMEMO").is_some_and(|v| !v.is_empty()))
+}
+
+/// What the left side of `fn(args) op= r`, applied as it is written, gives the assignment form
+/// (`Worker::assign_op_by_application`).
+enum Lowered {
+    /// `fn.update(args, fn.apply(args) op r)`.
+    Done((TExprId, TypeId)),
+    /// No assignment form: the reference's `typedAssign` meets no `apply` it lowers.
+    Refused,
+    /// The application gives no argument typings to read (an overloaded `apply`, written type arguments,
+    /// `super`): lowered over the arguments typed alone (`assign_op_indexed`), by the `apply` it selected.
+    Unknown(Option<SymId>),
+}
+
+/// The head `fn` of an applied left side `fn(args)`.
+#[derive(Clone, Copy)]
+enum AppliedHead {
+    /// A value, typed, with its type.
+    Value(TExprId, TypeId),
+    /// `super`, with the parent it names and its place.
+    Super(Name, Span),
 }
 
 impl<'a> Worker<'a> {
@@ -558,56 +586,634 @@ impl<'a> Worker<'a> {
         if op_text.ends_with(':') {
             return self.type_right_assoc(l, op, r, Vec::new(), span, expected);
         }
-        let is_assign_op = op_text.len() > 1
-            && op_text.ends_with('=')
-            && !op_text.starts_with('=')
-            && !matches!(op_text, "<=" | ">=" | "!=");
-        let base_text = is_assign_op.then(|| op_text[..op_text.len() - 1].to_string());
-        let base = base_text.map(|text| self.interner.intern(&text));
-        if let Some(base) = base {
-            let ast = self.cur_ast();
-            if let Expr::Apply(f, args) = ast.expr(l) {
-                let plain = ast.expr_list(args).iter().all(|&a| !matches!(ast.expr(a), Expr::NamedArg(..) | Expr::Typed(..)));
-                if plain && self.is_indexable(f) {
-                    return self.type_indexed_assign_op(f, args, op, base, r, op_end, span, expected);
+        if crate::lexer::is_op_assignment_name(op_text) {
+            return self.type_assign_op(l, op, r, op_end, span, expected, declared);
+        }
+        // The left operand is the qualifier of the operator (dotty's `typedInfixOp` through
+        // `Desugar.binop`), `&&` and `||` alike: their short circuit is a `Boolean`'s
+        // (`binop_or_member`), on anything else they are methods.
+        let frame = SelectionFrame { file: self.env.file, q: l, name: op, at: r, app: span, expected, kind: FrameKind::Operand { more: false } };
+        let (tl, lty) = self.type_selected(l, frame);
+        let Some(d) = declared else { return self.binop_on_typed(tl, lty, op, r, op_end, span, expected) };
+        let outer = self.declared_call.replace((tl, op, d));
+        let typed = self.binop_on_typed(tl, lty, op, r, op_end, span, expected);
+        self.declared_call = outer;
+        typed
+    }
+
+    /// `l op= r` (the reference's `isOpAssign`) as `Applications.typedApply` types it (1523-1533): the application
+    /// as written first (`realApply`), its left side the expression it is and the operator found as any member
+    /// is; only where that fails, the left side typed again by itself and the assignment `l = l op r` made by its
+    /// typed shape (`typedOpAssign`); where both fail the first failure stands (`failedState.commit()`).
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn type_assign_op(&mut self, l: ExprId, op: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>, declared: Option<crate::ast::DeclRef>) -> (TExprId, TypeId) {
+        let base = self.name_ref(op);
+        let base = base[..base.len() - 1].to_string();
+        let base = self.interner.intern(&base);
+        // A first try known to fail with nothing to try (`Worker::op_memo`): the assignment form at once.
+        if self.op_memo_ops.contains(&op) {
+            if let Some(assigned) = self.assign_op_known_failed(l, op, base, r, op_end, span, expected, declared) {
+                return assigned;
+            }
+        }
+        let hoisted = self.hoisted.len();
+        // What a typing of the operands that is dropped made is forgotten (`drop_made`).
+        let outer_watch = std::mem::replace(&mut self.made_watch, true);
+        let made = self.made_local.len();
+        let counts = self.made_counts.len();
+        let first = self.attempt();
+        // The flag is this operation's while its first try types: an operation typed inside its right side has
+        // its own, and gives this one's back.
+        let outer_nothing = std::mem::replace(&mut self.op_nothing, false);
+        let (written, applied) = self.assign_op_written(l, op, r, op_end, span, expected, declared);
+        let nothing = std::mem::replace(&mut self.op_nothing, outer_nothing);
+        // The try's bound is `realApply`'s: it failed only by what it reported before the operator's list was
+        // applied (the left side, the operator's search, an argument that does not fit); what follows (the
+        // operator's own using clauses, the result against the expected type) is told and opens nothing.
+        if !self.attempt_failed(&first) || applied.is_some_and(|(diags, error_nodes)| !self.attempt_failed_before(&first, diags as usize, error_nodes)) {
+            self.close(first);
+            self.made_end(outer_watch);
+            return written;
+        }
+        let first_hoisted = self.hoisted.split_off(hoisted);
+        let first_told = self.attempt_told_error(&first);
+        let aside = self.set_aside(first);
+        let first_made = self.made_local.len();
+        let first_counts = self.made_counts.len();
+        let first_drop = self.drop_made(made, first_made, counts, span);
+        let second = self.attempt();
+        let (assigned, var) = self.assign_op_assigned(l, base, r, op_end, span);
+        match assigned {
+            // The assignment form failed where it TOLD an error of the typer's own (`tryEither`'s
+            // `reporter.hasErrors`, Typer.scala 134-137). An operand that is an error told at its cause alone (a
+            // name of an import that did not resolve: an error type that reports nothing to the reference) or
+            // whose record is a later phase's (a default getter's refusal, a tuple's index) fails nothing where the
+            // first try told its own failure: the form stands as it stood before the first try was asked.
+            Some(assigned) if !self.attempt_failed(&second) || (first_told && !self.attempt_told_error(&second)) => {
+                self.close(second);
+                self.made_end(outer_watch);
+                // The first try met nothing to try and the left side is a var: kept for the var's type here.
+                if let (true, None, Some(lty)) = (nothing, applied, var) {
+                    if let (Some((_, t)), Some((file, limit, defining))) = (self.op_memo_type(lty), self.op_memo_context()) {
+                        self.op_memo.insert((t, op, file, limit, defining), ());
+                        if !self.op_memo_ops.contains(&op) {
+                            self.op_memo_ops.push(op);
+                        }
+                    }
+                }
+                assigned
+            }
+            _ => {
+                // The second try's own go, the first try's stand again.
+                let second_made = self.made_local.len();
+                self.drop_made(first_made, second_made, first_counts, span);
+                self.restore_made(made, first_made, counts, first_drop);
+                self.retract(second);
+                self.hoisted.truncate(hoisted);
+                self.restore(aside);
+                self.hoisted.extend(first_hoisted);
+                self.made_end(outer_watch);
+                written
+            }
+        }
+    }
+
+    /// The typing of an assignment operator's operands that made the classes `made_local[from..to]` is dropped
+    /// for another one: an operand is typed once for the tree that is kept, and what this typing made of the
+    /// operation's own (a class defined inside `span`) is forgotten: an anonymous class is no longer its
+    /// definition's (`def_classes`: the next typing makes it again, its body typed and told again, bound to
+    /// that typing's locals), and each class is marked (`ClassInfo::dropped`: nothing nested in it is a class
+    /// the program's output roots). What the typing ADVANCED goes back with them: each count a class made inside
+    /// `span` took of its position since `counts` (`made_counts`: `anon_name`, `local_class_name`; the place is
+    /// the outermost call site's for a class an expansion made), so that the class the next typing makes there
+    /// takes the name it has where nothing was typed and dropped before it (the bytes do not tell a dropped
+    /// typing; the inliner's own log of the counts, `Inlining::anon_log`, is kept in step). The drop's number,
+    /// for `restore_made`.
+    fn drop_made(&mut self, from: usize, to: usize, counts: usize, span: Span) -> u32 {
+        self.made_drops += 1;
+        let drop = self.made_drops;
+        let here = self.env.file;
+        for i in counts..self.made_counts.len() {
+            let c = self.made_counts[i];
+            let (file, start) = c.key.2.unwrap_or((c.key.0, c.key.1));
+            if c.drop != 0 || file != here || start < span.start || start >= span.end {
+                continue;
+            }
+            self.made_counts[i].drop = drop;
+            if let Some(n) = self.anon_sites.get_mut(&c.key) {
+                *n -= 1;
+                if *n == 0 {
+                    self.anon_sites.remove(&c.key);
+                }
+            }
+            if let Some(log) = self.inlining.anon_log.as_mut() {
+                if let Some(at) = log.iter().rposition(|k| *k == c.key) {
+                    log.remove(at);
                 }
             }
         }
-        let outer_target = std::mem::replace(&mut self.assign_op_target, base.map(|_| l));
-        self.assign_op_receiver = None;
-        // The left operand is the qualifier of the operator (dotty's `typedInfixOp` through
-        // `Desugar.binop`), `&&` and `||` alike: their short circuit is a `Boolean`'s
-        // (`binop_or_member`), on anything else they are methods. An assignment operator is the
-        // member's application first (`typedApply`'s `realApply` before `typedOpAssign`), its
-        // left operand typed under the selection as well.
+        for i in from..to {
+            let m = self.made_local[i];
+            let (at, file) = (self.syms.class(m.class).span, self.syms.class(m.class).file);
+            if m.drop != 0 || m.file != here || file != here || at.start < span.start || at.end > span.end {
+                continue;
+            }
+            self.made_local[i].drop = drop;
+            if let Some(d) = m.anon {
+                if self.def_classes.get(here.0 as usize, &d) == Some(&m.class) {
+                    self.def_classes.remove(here.0 as usize, &d);
+                }
+            }
+            if self.syms.classes.writable(m.class.0) {
+                self.syms.class_mut(m.class).dropped = true;
+            }
+        }
+        drop
+    }
+
+    /// The typing whose classes the drop `drop` took, among `made_local[from..to]`, is the kept one after all
+    /// (the first try, where the assignment form fails too): they stand again, and so do the counts they took
+    /// since `counts`.
+    fn restore_made(&mut self, from: usize, to: usize, counts: usize, drop: u32) {
+        for i in counts..self.made_counts.len() {
+            let c = self.made_counts[i];
+            if c.drop != drop {
+                continue;
+            }
+            self.made_counts[i].drop = 0;
+            *self.anon_sites.entry(c.key).or_insert(0) += 1;
+            if let Some(log) = self.inlining.anon_log.as_mut() {
+                log.push(c.key);
+            }
+        }
+        for i in from..to {
+            let m = self.made_local[i];
+            if m.drop != drop {
+                continue;
+            }
+            self.made_local[i].drop = 0;
+            if let Some(d) = m.anon {
+                self.def_classes.insert(m.file.0 as usize, d, m.class);
+            }
+            if self.syms.classes.writable(m.class.0) {
+                self.syms.class_mut(m.class).dropped = false;
+            }
+        }
+    }
+
+    /// The transaction ends: the classes made are the enclosing transaction's to drop, or nobody's.
+    fn made_end(&mut self, outer_watch: bool) {
+        self.made_watch = outer_watch;
+        if !outer_watch {
+            self.made_local.clear();
+            self.made_counts.clear();
+        }
+    }
+
+    /// The first try of `l op= r`: `l.op=(r)`, the left operand typed under the operator's selection, and where
+    /// the operator's application applied its list (`Worker::retry_applied`, watched for that list alone:
+    /// `Worker::op_try`), None where it did not.
+    #[allow(clippy::too_many_arguments)]
+    fn assign_op_written(&mut self, l: ExprId, op: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>, declared: Option<crate::ast::DeclRef>) -> ((TExprId, TypeId), Option<(u32, u32)>) {
+        // The operation's target, both times it is typed: its own typing marks no use (`use_expr`) and keeps its
+        // selection in an expansion's body (`assign_op_target`).
+        let outer_target = self.assign_op_target.replace(l);
         let frame = SelectionFrame { file: self.env.file, q: l, name: op, at: r, app: span, expected, kind: FrameKind::Operand { more: false } };
         let (tl, lty) = self.type_selected(l, frame);
         self.assign_op_target = outer_target;
+        self.assign_op_receiver = None;
+        let own = FunEnd::operand_at(op_end);
+        // A tree with no place for its operator (one read from TASTy, typed by scalac already) has no list to
+        // tell: nothing is watched and the try stands only where it reported nothing.
+        if own == ArgList::NO_FUN {
+            let outer = declared.map(|d| self.declared_call.replace((tl, op, d)));
+            let typed = self.binop_on_typed(tl, lty, op, r, op_end, span, expected);
+            if let Some(outer) = outer {
+                self.declared_call = outer;
+            }
+            return (typed, None);
+        }
+        let watch = (self.retry_depth.replace(self.app_depth), self.retry_applied.take(), self.op_try.replace(own));
+        let outer = declared.map(|d| self.declared_call.replace((tl, op, d)));
+        let typed = self.binop_on_typed(tl, lty, op, r, op_end, span, expected);
+        if let Some(outer) = outer {
+            self.declared_call = outer;
+        }
+        let applied = self.retry_applied;
+        (self.retry_depth, self.retry_applied, self.op_try) = watch;
+        (typed, applied)
+    }
+
+    /// The second try of `l op= r` (`typedOpAssign`, Applications.scala 1512-1521): the left side typed again by
+    /// itself and the assignment `l = l base r` made by what it is: an element read by `apply` written through
+    /// `update`, a parameterless member through its setter, a `var`. None where it has no such form; with the
+    /// left side's type where it is a `var` assigned as one (`Worker::op_memo`).
+    fn assign_op_assigned(&mut self, l: ExprId, base: Name, r: ExprId, op_end: u32, span: Span) -> (Option<(TExprId, TypeId)>, Option<TypeId>) {
+        if let Expr::Apply(f, args) = self.cur_ast().expr(l) {
+            return (self.assign_op_applied(l, f, args, base, r, op_end, span), None);
+        }
+        let outer_target = self.assign_op_target.replace(l);
+        self.assign_op_receiver = None;
+        let (tl, lty) = self.type_expr(l, None);
+        self.assign_op_target = outer_target;
         let receiver = match self.assign_op_receiver.take() {
-            None if base.is_some() && matches!(self.cur_ast().expr(l), Expr::Ident(_)) => self.this_receiver(tl),
+            None if matches!(self.cur_ast().expr(l), Expr::Ident(_)) => self.this_receiver(tl),
             receiver => receiver,
         };
-        // What the source wrote on the left of an assignment operator: a member named alone, or a selection
-        // with its prefix.
-        let written = match base {
-            Some(_) => match self.cur_ast().expr(l) {
-                Expr::Ident(_) => WrittenLeft::Alone,
-                Expr::Select(q, _) => WrittenLeft::Selected(q),
-                _ => WrittenLeft::Other,
-            },
-            None => WrittenLeft::Other,
+        // What the source wrote on the left: a member named alone, or a selection with its prefix.
+        let written = match self.cur_ast().expr(l) {
+            Expr::Ident(_) => WrittenLeft::Alone,
+            Expr::Select(q, _) => WrittenLeft::Selected(q),
+            _ => WrittenLeft::Other,
         };
-        if let (Some(base), Some(receiver)) = (base, receiver) {
+        if let Some(receiver) = receiver {
             let at = self.cur_ast().expr_span(l);
-            if let Some(done) = self.assign_op_through_setter(tl, lty, receiver, written, op, base, r, op_end, at, span) {
-                return done;
+            if let Some(done) = self.assign_op_through_setter(tl, lty, receiver, written, base, r, op_end, at, span) {
+                return (Some(done), None);
             }
         }
-        let Some(d) = declared else { return self.assign_op_or_binop(tl, lty, written, op, base, r, op_end, span, expected) };
-        let outer = self.declared_call.replace((tl, op, d));
-        let typed = self.assign_op_or_binop(tl, lty, written, op, base, r, op_end, span, expected);
-        self.declared_call = outer;
-        typed
+        let var = self.is_plain_var(tl);
+        let assigned = self.assign_op_to_var(tl, lty, written, base, r, op_end, span);
+        let var = (var && assigned.is_some()).then_some(lty);
+        (assigned, var)
+    }
+
+    /// Whether the typed left side is a `var` read where it stands: a local, a top-level or an object's, a field.
+    fn is_plain_var(&self, tl: TExprId) -> bool {
+        match self.prog.expr(tl) {
+            TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => self.syms.sym(s).kind == SymKind::Var,
+            _ => false,
+        }
+    }
+
+    /// The implicit context a kept failure of an assignment operator's first try holds in (`Worker::op_memo`): the
+    /// file, how many of its imports the site sees (`import_count`: the file's imports written before the site's
+    /// limit) and the alias given being defined; None where the site's environment adds to what the member's search
+    /// reads: an import of its own, a local given (a using parameter is one), an enclosing class with a given
+    /// index, a class's parent arguments.
+    fn op_memo_context(&mut self) -> Option<(crate::source::FileId, u32, Option<SymId>)> {
+        if !self.env.imports.is_empty() {
+            return None;
+        }
+        for f in 0..self.env.frames.len() {
+            let class = match &self.env.frames[f] {
+                Frame::Locals { givens, .. } if givens.is_empty() => continue,
+                Frame::Locals { .. } => return None,
+                Frame::Ctor(_) => continue,
+                Frame::Class(c) => *c,
+            };
+            if self.parent_args_of == Some(class) || self.class_given_index(class).is_some() {
+                return None;
+            }
+        }
+        Some((self.env.file, self.import_count() as u32, self.defining))
+    }
+
+    /// The type a kept failure is for, as the member is sought on it (`binop_on_typed`) and as the memo's key:
+    /// a class type that stands for itself: no path's type, no alias, no opaque or abstract member type, which
+    /// the search goes on from to what they stand for.
+    fn op_memo_type(&mut self, lty: TypeId) -> Option<(TypeId, TypeId)> {
+        let solved = self.solve_in(lty);
+        let solved = self.instantiate_receiver_var(solved);
+        if self.types.is_path(solved) || matches!(self.types.get(solved), Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..)) {
+            return None;
+        }
+        let widened = self.dealias(solved);
+        match self.types.get(widened) {
+            Type::Class(c, _) if self.syms.class(c).kind != ClassKind::Opaque => Some((widened, self.canon(widened))),
+            _ => None,
+        }
+    }
+
+    /// `l op= r` where the first try is known to fail with nothing to try for the left side's type in this
+    /// context (`Worker::op_memo`): the left side, a var named alone or by a path, typed by itself once, and the
+    /// assignment made over that typing. What is not the context's is asked here, at the site: the type's own
+    /// member of the name and the lexical extensions of the name (the application's own gatherer). None where
+    /// nothing is kept for it or the assignment fails: the reference's order runs whole then.
+    #[allow(clippy::too_many_arguments)]
+    fn assign_op_known_failed(&mut self, l: ExprId, op: Name, base: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>, declared: Option<crate::ast::DeclRef>) -> Option<(TExprId, TypeId)> {
+        // A library body's operator is the call scalac typed.
+        if declared.is_some() {
+            return None;
+        }
+        let ast = self.cur_ast();
+        let mut at = l;
+        loop {
+            match ast.expr(at) {
+                Expr::Ident(_) | Expr::This => break,
+                Expr::Select(q, _) => at = q,
+                _ => return None,
+            }
+        }
+        let (file, limit, defining) = self.op_memo_context()?;
+        let hoisted = self.hoisted.len();
+        let outer_watch = std::mem::replace(&mut self.made_watch, true);
+        let made = self.made_local.len();
+        let counts = self.made_counts.len();
+        let pre = self.attempt();
+        let outer_target = self.assign_op_target.replace(l);
+        let (tl, lty) = self.type_expr(l, None);
+        self.assign_op_target = outer_target;
+        self.assign_op_receiver = None;
+        let mut assigned = None;
+        if self.is_plain_var(tl) {
+            if let Some((sought, t)) = self.op_memo_type(lty) {
+                if self.op_memo.contains_key(&(t, op, file, limit, defining)) && self.find_member(sought, op).is_none() && self.lexical_extensions_for(op, sought).0.is_empty() {
+                    if op_memo_checked() {
+                        self.check_op_memo(l, op, r, op_end, span, expected, declared);
+                    }
+                    let written = match self.cur_ast().expr(l) {
+                        Expr::Ident(_) => WrittenLeft::Alone,
+                        Expr::Select(q, _) => WrittenLeft::Selected(q),
+                        _ => WrittenLeft::Other,
+                    };
+                    assigned = self.assign_op_to_var(tl, lty, written, base, r, op_end, span).filter(|_| !self.attempt_failed(&pre));
+                }
+            }
+        }
+        match assigned {
+            Some(assigned) => {
+                self.close(pre);
+                self.op_memo_hits += 1;
+                self.made_end(outer_watch);
+                Some(assigned)
+            }
+            None => {
+                let to = self.made_local.len();
+                self.drop_made(made, to, counts, span);
+                self.retract(pre);
+                self.hoisted.truncate(hoisted);
+                self.made_end(outer_watch);
+                None
+            }
+        }
+    }
+
+    /// The memo's check (`op_memo_checked`): the first try run where a kept answer says it fails, and the answer
+    /// held to it: the try reports before its list is applied and meets no candidate; then taken back.
+    #[allow(clippy::too_many_arguments)]
+    fn check_op_memo(&mut self, l: ExprId, op: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>, declared: Option<crate::ast::DeclRef>) {
+        let hoisted = self.hoisted.len();
+        let made = self.made_local.len();
+        let counts = self.made_counts.len();
+        let tried = self.attempt();
+        let outer_nothing = std::mem::replace(&mut self.op_nothing, false);
+        let (_, applied) = self.assign_op_written(l, op, r, op_end, span, expected, declared);
+        let nothing = std::mem::replace(&mut self.op_nothing, outer_nothing);
+        let failed = self.attempt_failed(&tried) && applied.is_none();
+        let to = self.made_local.len();
+        self.drop_made(made, to, counts, span);
+        self.retract(tried);
+        self.hoisted.truncate(hoisted);
+        assert!(failed && nothing, "the memo of an assignment operator's first try kept a wrong answer: `{}` at {}:{} (failed {}, nothing met {})", self.name_str(op), self.source(self.env.file).path, span.start, failed, nothing);
+    }
+
+    /// `fn(args) base= r`, the left side an application: lowered by the application typed as it is written
+    /// (`assign_op_by_application`), or, where that gives no argument typings, over the arguments typed alone
+    /// (`assign_op_indexed`).
+    #[allow(clippy::too_many_arguments)]
+    fn assign_op_applied(&mut self, l: ExprId, f0: ExprId, args: ListRef, base: Name, r: ExprId, op_end: u32, span: Span) -> Option<(TExprId, TypeId)> {
+        let ast = self.cur_ast();
+        // The written type arguments are `apply`'s and `update`'s (`MaybePoly`).
+        let (f, targs) = match ast.expr(f0) {
+            Expr::TypeApply(f, targs) => (f, Some(targs)),
+            _ => (f0, None),
+        };
+        let hoisted = self.hoisted.len();
+        let made = self.made_local.len();
+        let counts = self.made_counts.len();
+        let inner = self.attempt();
+        let member = match self.assign_op_by_application(l, f0, f, targs, args, base, r, op_end, span) {
+            Lowered::Done(done) => {
+                self.close(inner);
+                return Some(done);
+            }
+            Lowered::Refused => {
+                self.close(inner);
+                return None;
+            }
+            Lowered::Unknown(member) => member,
+        };
+        // The application typed to learn the `apply` goes, with what it made.
+        let trial_made = self.made_local.len();
+        let lspan = self.cur_ast().expr_span(l);
+        self.drop_made(made, trial_made, counts, lspan);
+        self.retract(inner);
+        self.hoisted.truncate(hoisted);
+        let ast = self.cur_ast();
+        if !ast.expr_list(args).iter().all(|&a| !matches!(ast.expr(a), Expr::NamedArg(..) | Expr::Typed(..))) {
+            return None;
+        }
+        self.assign_op_indexed(f, targs, args, member, base, r, op_end, span)
+    }
+
+    /// The head of an applied left side `fn(args)` with the tree that names it: a value, `q` of a written
+    /// `q.apply(args)`, `super` of `super.apply(args)`. None where `fn(args)` is a method's application or a
+    /// constructor's, no `apply` on a value.
+    fn assign_op_head(&mut self, f: ExprId) -> Option<(ExprId, AppliedHead)> {
+        let ast = self.cur_ast();
+        match ast.expr(f) {
+            Expr::Select(q, n) if n == names::APPLY => match ast.expr(q) {
+                Expr::Super(parent) => Some((q, AppliedHead::Super(parent, ast.expr_span(q)))),
+                _ => {
+                    let (tq, qty) = self.type_expr(q, None);
+                    let qty = self.solve_in(qty);
+                    Some((q, AppliedHead::Value(tq, qty)))
+                }
+            },
+            _ => {
+                if !self.is_indexable(f) {
+                    return None;
+                }
+                let (tf, fty) = self.indexed_value(f)?;
+                let fty = self.solve_in(fty);
+                Some((f, AppliedHead::Value(tf, fty)))
+            }
+        }
+    }
+
+    /// The member `name` of the head applied to `lists`.
+    fn apply_on_head(&mut self, head: AppliedHead, name: Name, targs: Option<ListRef>, lists: Vec<ArgList>, span: Span) -> (TExprId, TypeId) {
+        match head {
+            AppliedHead::Value(tf, fty) => self.apply_member(tf, fty, name, targs, lists, span, None),
+            AppliedHead::Super(parent, at) => self.apply_super_member(parent, name, targs, lists, at, span, None),
+        }
+    }
+
+    /// The left side `fn[targs](args)` typed again by itself (`typedExpr(lhs)`, Applications.scala 1514) and
+    /// lowered by what it is (`liftAssigned`, EtaExpansion.scala 77-87; `typedAssign`, Typer.scala 1430-1441):
+    /// a member `apply` applied to its one plain list, the arguments in the parameters' order, is
+    /// `fn.update[targs](args, fn.apply[targs](args) base r)`, `fn` and each argument bound once unless a pure
+    /// path, an argument of a by-name or `inline` parameter of the `apply` selected never (`liftArgs`), an
+    /// inserted default bound like an argument. An `apply` that is an extension's, one with a using clause, a
+    /// structural receiver's `applyDynamic`, arguments the application bound in a block (named out of order),
+    /// a method's result: no assignment form.
+    #[allow(clippy::too_many_arguments)]
+    fn assign_op_by_application(&mut self, l: ExprId, f0: ExprId, f: ExprId, targs: Option<ListRef>, args: ListRef, base: Name, r: ExprId, op_end: u32, span: Span) -> Lowered {
+        let mark = self.hoisted.len();
+        let Some((head_expr, head)) = self.assign_op_head(f) else { return Lowered::Refused };
+        let AppliedHead::Value(tf, fty) = head else { return Lowered::Unknown(None) };
+        if fty == ERROR {
+            return Lowered::Refused;
+        }
+        let written: Vec<ExprId> = self.cur_ast().expr_list(args).to_vec();
+        let lspan = self.cur_ast().expr_span(l);
+        let lists = vec![ArgList { args: written.iter().map(|&a| ArgSrc::Ast(a)).collect(), using: false, span: lspan, fun: FunEnd::tree(f0) }];
+        // The application as it is written: its arguments typed against their formals, their typings asked
+        // back from the member's cache (`Worker::keep_args`).
+        let outer_keep = self.keep_args.replace((self.arg_cache_depth(), self.env.file));
+        let (cur, cty) = self.apply_member(tf, fty, names::APPLY, targs, lists, lspan, None);
+        let handed = std::mem::replace(&mut self.keep_args, outer_keep).is_none();
+        let kept = if handed { std::mem::take(&mut self.kept_args) } else { Vec::new() };
+        let cty = self.solve_in(cty);
+        let cty = self.dealias(cty);
+        if cty == ERROR {
+            return Lowered::Refused;
+        }
+        let (member, nodes) = match self.prog.expr(cur) {
+            // Arguments bound in a block, or an expansion: no `Apply` for `liftAssigned`.
+            TExpr::Block(..) => return Lowered::Refused,
+            TExpr::CallMethod(_, m, list) => (Some(m), self.prog.expr_list(list).to_vec()),
+            _ => (None, Vec::new()),
+        };
+        let mut params: Vec<ParamSig> = Vec::new();
+        // `liftArgs` leaves an argument of a by-name or `inline` parameter only where the method selected is no
+        // polymorphic one (`methRef.widen match case mt: MethodType`): a polymorphic `apply`'s are all bound.
+        let mut leaves = false;
+        if let Some(m) = member {
+            let info = self.syms.sym(m);
+            if info.name != names::APPLY || info.ext_clauses != 0 || info.kind != SymKind::Def {
+                return Lowered::Refused;
+            }
+            let sig = self.sig_arc(m);
+            if sig.clauses.len() != 1 || sig.clauses[0].is_using || sig.clauses[0].is_implicit {
+                return Lowered::Refused;
+            }
+            params = sig.clauses[0].params.clone();
+            leaves = sig.tparams.is_empty();
+        }
+        // The typings of the arguments as written, one each.
+        let ast = self.cur_ast();
+        let keys = written.iter().map(|&a| match ast.expr(a) {
+            Expr::NamedArg(_, v) => v,
+            Expr::Typed(inner, t) if matches!(ast.ty(t), crate::ast::TyExpr::Repeated(_)) => inner,
+            _ => a,
+        });
+        if kept.len() != written.len() || !kept.iter().zip(keys).all(|(&(key, typed), want)| key == want && typed.is_some()) {
+            return Lowered::Unknown(member);
+        }
+        // The parameter each written argument goes to: a named one's by its name, the others in their order.
+        let named = written.iter().any(|&a| matches!(ast.expr(a), Expr::NamedArg(..)));
+        let at: Vec<Option<usize>> = written
+            .iter()
+            .enumerate()
+            .map(|(k, &a)| match ast.expr(a) {
+                Expr::NamedArg(n, _) => params.iter().position(|p| p.name == n),
+                _ => Some(k),
+            })
+            .collect();
+        let defaults = nodes.iter().filter(|&&n| matches!(self.prog.expr(n), TExpr::Default(..))).count();
+        // One node a parameter, the written arguments in their order between the defaults; else (a repeated
+        // parameter's sequence, an intrinsic's node) the arguments as written.
+        let by_parameter = member.is_some() && nodes.len() == kept.len() + defaults && nodes.len() <= params.len();
+        if (defaults > 0 || named) && !by_parameter {
+            return Lowered::Unknown(member);
+        }
+        // Each argument with its type and whether it stays where it stands.
+        let mut slots: Vec<(TExprId, TypeId, bool)> = Vec::new();
+        if by_parameter {
+            let m = member.unwrap();
+            let seen = (defaults > 0).then(|| {
+                let sig = self.sig_arc(m);
+                self.sig_seen_from(sig, fty, m)
+            });
+            for (p, &node) in nodes.iter().enumerate() {
+                if matches!(self.prog.expr(node), TExpr::Default(..)) {
+                    slots.push((node, seen.as_ref().unwrap().clauses[0].params[p].ty, false));
+                    continue;
+                }
+                let Some(k) = at.iter().position(|&x| x == Some(p)) else { return Lowered::Unknown(member) };
+                let (key, typed) = kept[k];
+                let (ta, aty) = typed.unwrap();
+                let aty = self.solve_in(aty);
+                let formal = &params[p];
+                let stays = (leaves && (formal.by_name || self.is_inline_param(formal, Some((m, p))))) || self.named_alone_stays(key, ta);
+                slots.push((ta, aty, stays));
+            }
+        } else {
+            let exempt = self.apply_formals_left(fty, kept.len());
+            for (k, &(key, typed)) in kept.iter().enumerate() {
+                let (ta, aty) = typed.unwrap();
+                let aty = self.solve_in(aty);
+                let stays = exempt[k] || self.named_alone_stays(key, ta);
+                slots.push((ta, aty, stays));
+            }
+        }
+        Lowered::Done(self.assign_op_update(head_expr, head, targs, cur, cty, slots, base, r, op_end, span, mark))
+    }
+
+    /// `fn(i) base= rhs` over the head and the arguments typed alone, as `fn.update(i, fn(i) base rhs)`; `member`
+    /// the `apply` the application as written selected, where it told. None where `fn(i)` is no `apply` on a
+    /// value.
+    #[allow(clippy::too_many_arguments)]
+    fn assign_op_indexed(&mut self, f: ExprId, targs: Option<ListRef>, args: ListRef, member: Option<SymId>, base: Name, r: ExprId, op_end: u32, span: Span) -> Option<(TExprId, TypeId)> {
+        let mark = self.hoisted.len();
+        let (head_expr, head) = self.assign_op_head(f)?;
+        let written: Vec<ExprId> = self.cur_ast().expr_list(args).to_vec();
+        let mut typed = Vec::new();
+        for &a in &written {
+            let (ta, aty) = self.type_expr(a, None);
+            let aty = self.solve_in(aty);
+            typed.push((ta, aty));
+        }
+        let lists = vec![ArgList { args: typed.iter().map(|&(ta, aty)| ArgSrc::Typed(ta, aty)).collect(), using: false, span, fun: ArgList::NO_FUN }];
+        let (cur, cty) = self.apply_on_head(head, names::APPLY, targs, lists, span);
+        let cty = self.solve_in(cty);
+        let cty = self.dealias(cty);
+        if cty == ERROR {
+            return None;
+        }
+        // `liftArgs` leaves an argument of a by-name or an `inline` formal of the `apply` selected.
+        let exempt: Vec<bool> = match (member, head) {
+            (Some(m), _) => {
+                let sig = self.sig_arc(m);
+                let leaves = sig.tparams.is_empty();
+                (0..typed.len()).map(|k| leaves && sig.clauses[0].params.get(k).is_some_and(|p| p.by_name || self.is_inline_param(p, Some((m, k))))).collect()
+            }
+            (None, AppliedHead::Value(_, fty)) => self.apply_formals_left(fty, typed.len()),
+            (None, AppliedHead::Super(..)) => vec![false; typed.len()],
+        };
+        let slots = typed.into_iter().enumerate().map(|(k, (ta, aty))| (ta, aty, exempt[k] || self.named_alone_stays(written[k], ta))).collect();
+        Some(self.assign_op_update(head_expr, head, targs, cur, cty, slots, base, r, op_end, span, mark))
+    }
+
+    /// The assignment form `fn.update(args, fn.apply(args) base r)` over the typed head and the arguments
+    /// (`slots`: each with its type and whether it stays where it stands): `liftAssigned` binds the head and
+    /// each argument that does not stay and is no pure path; the read is applied again over what was bound,
+    /// and `read`, the one typed before, which stands in no tree, gives up its pending call.
+    #[allow(clippy::too_many_arguments)]
+    fn assign_op_update(&mut self, head_expr: ExprId, head: AppliedHead, targs: Option<ListRef>, read: TExprId, cty: TypeId, slots: Vec<(TExprId, TypeId, bool)>, base: Name, r: ExprId, op_end: u32, span: Span, mark: usize) -> (TExprId, TypeId) {
+        let head = match head {
+            AppliedHead::Value(tf, fty) => {
+                self.drop_pending_copied(&[read], tf);
+                let tf = if self.named_alone_stays(head_expr, tf) { tf } else { self.lift_assigned(tf, fty, span) };
+                AppliedHead::Value(tf, fty)
+            }
+            head => head,
+        };
+        let mut index = Vec::new();
+        for (ta, aty, stays) in slots {
+            let ta = if stays { ta } else { self.lift_assigned(ta, aty, span) };
+            index.push(ArgSrc::Typed(ta, aty));
+        }
+        let lists = vec![ArgList { args: index.clone(), using: false, span, fun: ArgList::NO_FUN }];
+        let (cur, _) = self.apply_on_head(head, names::APPLY, targs, lists, span);
+        let (value, vty) = self.binop_or_member(base, cur, cty, cty, r, FunEnd::operand_at(op_end), span, None);
+        index.push(ArgSrc::Typed(value, vty));
+        let lists = vec![ArgList { args: index, using: false, span, fun: ArgList::NO_FUN }];
+        let (te, ty) = self.apply_on_head(head, names::UPDATE, targs, lists, span);
+        (self.wrap_hoisted(mark, te), ty)
     }
 
     /// A union of one primitive class's constants (a join of branches, `0 | 97`) as that class,
@@ -672,7 +1278,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
         let op_text = self.name_ref(op);
-        let assign_op = op_text.len() > 1 && op_text.ends_with('=') && !op_text.starts_with('=') && !matches!(op_text, "<=" | ">=" | "!=");
+        let assign_op = crate::lexer::is_op_assignment_name(op_text);
         if matches!(op, names::EQEQ | names::NEQ) || assign_op {
             return None;
         }
@@ -713,10 +1319,10 @@ impl<'a> Worker<'a> {
     }
 
     /// `q.y op= r` where `y` is a method without parameters and `q` has a setter `y_=`: `q.y_=(q.y
-    /// base r)`, `q` evaluated once, unless the value has an `op=` of its own. `receiver` is the
-    /// typed `q` of `tl`, `at` the place of `q.y`; `written` what the source wrote on the left.
+    /// base r)`, `q` evaluated once. `receiver` is the typed `q` of `tl`, `at` the place of `q.y`;
+    /// `written` what the source wrote on the left.
     #[allow(clippy::too_many_arguments)]
-    fn assign_op_through_setter(&mut self, tl: TExprId, lty: TypeId, receiver: (TExprId, TypeId), written: WrittenLeft, op: Name, base: Name, r: ExprId, op_end: u32, at: Span, span: Span) -> Option<(TExprId, TypeId)> {
+    fn assign_op_through_setter(&mut self, tl: TExprId, lty: TypeId, receiver: (TExprId, TypeId), written: WrittenLeft, base: Name, r: ExprId, op_end: u32, at: Span, span: Span) -> Option<(TExprId, TypeId)> {
         let (tq, qty) = receiver;
         let TExpr::CallMethod(recv, getter, args) = self.prog.expr(tl) else { return None };
         if recv != tq || args.len != 0 || self.syms.sym(getter).kind != SymKind::Def || qty == ERROR {
@@ -727,7 +1333,7 @@ impl<'a> Worker<'a> {
         let widened = self.dealias(solved);
         let keeps_type = self.types.is_path(solved) || matches!(self.types.get(solved), Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..));
         let lty = if keeps_type { solved } else { widened };
-        if lty == ERROR || self.find_member(lty, op).is_some() || self.has_lexical_extension_for(lty, op) {
+        if lty == ERROR {
             return None;
         }
         let name = self.syms.sym(getter).name;
@@ -760,22 +1366,9 @@ impl<'a> Worker<'a> {
         Some((self.wrap_hoisted(mark, call), self.b.t_unit))
     }
 
-    /// `l op r` on the typed `l`; `base` is `op` without its trailing `=` when the operator
-    /// is an assignment operator, which stands for `l = l base r` on a var without an `op=`;
-    /// `written` what the source wrote on the left.
+    /// `l op r` on the typed `l`: a builtin operator of its type, or the member's application.
     #[allow(clippy::too_many_arguments)]
-    fn assign_op_or_binop(
-        &mut self,
-        tl: TExprId,
-        lty: TypeId,
-        written: WrittenLeft,
-        op: Name,
-        base: Option<Name>,
-        r: ExprId,
-        op_end: u32,
-        span: Span,
-        expected: Option<TypeId>,
-    ) -> (TExprId, TypeId) {
+    fn binop_on_typed(&mut self, tl: TExprId, lty: TypeId, op: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let own_ty = lty;
         let solved = self.solve_in(lty);
         let solved = self.instantiate_receiver_var(solved);
@@ -785,34 +1378,6 @@ impl<'a> Worker<'a> {
         // scope its bound lacks; the builtin operators see the type it stands for.
         let keeps_type = self.types.is_path(solved) || matches!(self.types.get(solved), Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..));
         let lty = if keeps_type { solved } else { widened };
-        if let Some(base) = base {
-            let has_member = self.find_member(lty, op).is_some() || self.has_lexical_extension_for(lty, op);
-            let target = match self.prog.expr(tl) {
-                TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => Some(s),
-                _ => None,
-            };
-            // A `var` of the block across a trait a class owns: the setter of the proxy the class
-            // of the block holds, of `l base r` read through its getter (`proxies.rs`), in a program
-            // that has one.
-            if let (false, true, TExpr::CallMethod(recv, g, _)) = (has_member, self.prog.has_block_class_traits(), self.prog.expr(tl)) {
-                if let Some(&super::HeldOf::Get(v)) = self.held_proxy_of.get(&g) {
-                    if self.syms.sym(v).kind == SymKind::Var {
-                        let Owner::Class(holder) = self.syms.sym(g).owner else { unreachable!("a proxy is a member") };
-                        let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, FunEnd::operand_at(op_end), span, None);
-                        let value = self.adapt(value, vty, lty, span);
-                        return (self.held_write(holder, v, recv, value), self.b.t_unit);
-                    }
-                }
-            }
-            if !has_member && target.map_or(false, |s| self.syms.sym(s).kind == SymKind::Var) {
-                let mark = self.hoisted.len();
-                let tl = self.field_target_once(tl, written, span);
-                let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, FunEnd::operand_at(op_end), span, None);
-                let value = self.adapt(value, vty, lty, span);
-                let assign = self.assignment(tl, value);
-                return (self.wrap_hoisted(mark, assign), self.b.t_unit);
-            }
-        }
         // A numeric opaque type has the operators of its bound outside its scope; a binder of
         // an intersection with a primitive (`n: Int & T` of a typed pattern) has the primitive's,
         // and a type parameter bounded by a primitive or `String` its bound's.
@@ -820,6 +1385,43 @@ impl<'a> Worker<'a> {
         let prim_lty = self.canon(prim_lty);
         let (te, ty) = self.binop_or_member(op, tl, prim_lty, lty, r, FunEnd::operand_at(op_end), span, expected);
         (te, self.const_folded(te, ty, op, tl, own_ty))
+    }
+
+    /// `l base= r` on the left side typed by itself as `tl`, a `var`: `l = l base r`, a field's prefix
+    /// evaluated once; `written` what the source wrote on the left. None where `tl` is no `var`.
+    #[allow(clippy::too_many_arguments)]
+    fn assign_op_to_var(&mut self, tl: TExprId, lty: TypeId, written: WrittenLeft, base: Name, r: ExprId, op_end: u32, span: Span) -> Option<(TExprId, TypeId)> {
+        let solved = self.solve_in(lty);
+        let solved = self.instantiate_receiver_var(solved);
+        let widened = self.dealias(solved);
+        let keeps_type = self.types.is_path(solved) || matches!(self.types.get(solved), Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..));
+        let lty = if keeps_type { solved } else { widened };
+        // A `var` of the block across a trait a class owns: the setter of the proxy the class
+        // of the block holds, of `l base r` read through its getter (`proxies.rs`), in a program
+        // that has one.
+        if let (true, TExpr::CallMethod(recv, g, _)) = (self.prog.has_block_class_traits(), self.prog.expr(tl)) {
+            if let Some(&super::HeldOf::Get(v)) = self.held_proxy_of.get(&g) {
+                if self.syms.sym(v).kind == SymKind::Var {
+                    let Owner::Class(holder) = self.syms.sym(g).owner else { unreachable!("a proxy is a member") };
+                    let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, FunEnd::operand_at(op_end), span, None);
+                    let value = self.adapt(value, vty, lty, span);
+                    return Some((self.held_write(holder, v, recv, value), self.b.t_unit));
+                }
+            }
+        }
+        let target = match self.prog.expr(tl) {
+            TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => Some(s),
+            _ => None,
+        };
+        if !target.is_some_and(|s| self.syms.sym(s).kind == SymKind::Var) {
+            return None;
+        }
+        let mark = self.hoisted.len();
+        let tl = self.field_target_once(tl, written, span);
+        let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, FunEnd::operand_at(op_end), span, None);
+        let value = self.adapt(value, vty, lty, span);
+        let assign = self.assignment(tl, value);
+        Some((self.wrap_hoisted(mark, assign), self.b.t_unit))
     }
 
     /// The builtin primitive or `String` that bounds the type parameter `t` from above
@@ -1051,70 +1653,6 @@ impl<'a> Worker<'a> {
         (self.prog.add(TExpr::Unit), ERROR)
     }
 
-    /// `f(i) op= rhs` is `f.update(i, f(i) op rhs)`, `f` and `i` evaluated once, unless the
-    /// element has a member `op=` of its own.
-    fn type_indexed_assign_op(
-        &mut self,
-        f: ExprId,
-        args: ListRef,
-        op: Name,
-        base: Name,
-        r: ExprId,
-        op_end: u32,
-        span: Span,
-        expected: Option<TypeId>,
-    ) -> (TExprId, TypeId) {
-        let mark = self.hoisted.len();
-        let (tf, fty) = match self.indexed_target(f, args, span) {
-            Ok(target) => target,
-            Err((tl, lty)) => return self.assign_op_or_binop(tl, lty, WrittenLeft::Other, op, Some(base), r, op_end, span, expected),
-        };
-        let fty = self.solve_in(fty);
-        let mut typed = Vec::new();
-        for a in self.cur_ast().expr_list(args).to_vec() {
-            let (ta, aty) = self.type_expr(a, None);
-            let aty = self.solve_in(aty);
-            typed.push((ta, aty));
-        }
-        // The application as it is written is typed first, as the reference tries `f(args).op=(r)` before it
-        // comes to `typedOpAssign`: where its result has the operator, that call is the meaning and nothing
-        // is bound.
-        let written: Vec<ArgSrc> = typed.iter().map(|&(ta, aty)| ArgSrc::Typed(ta, aty)).collect();
-        let lists = vec![ArgList { args: written, using: false, span, fun: ArgList::NO_FUN }];
-        let (cur, cty) = self.apply_member(tf, fty, names::APPLY, None, lists, span, None);
-        let cty = self.solve_in(cty);
-        let cty = self.dealias(cty);
-        if cty == ERROR {
-            return (self.wrap_hoisted(mark, cur), ERROR);
-        }
-        if self.find_member(cty, op).is_some() || self.has_lexical_extension_for(cty, op) {
-            let lists = vec![ArgList { args: self.infix_args(r), using: false, span, fun: FunEnd::operand_at(op_end) }];
-            let (te, ty) = self.apply_member(cur, cty, op, None, lists, span, expected);
-            return (self.wrap_hoisted(mark, te), ty);
-        }
-        // The assignment form, `f.update(args, f(args) op r)`: `liftAssigned` binds the prefix and each
-        // argument that is no pure path, an argument of a by-name or an `inline` formal of `apply` never
-        // (`liftArgs`); the application read is typed again over what was bound, and the one typed above,
-        // which stands in no tree, gives up its pending call.
-        let exempt = self.apply_formals_left(fty, typed.len());
-        self.drop_pending_copied(&[cur], tf);
-        let tf = if self.named_alone_stays(f, tf) { tf } else { self.lift_assigned(tf, fty, span) };
-        let written: Vec<ExprId> = self.cur_ast().expr_list(args).to_vec();
-        let mut index = Vec::new();
-        for (k, (ta, aty)) in typed.into_iter().enumerate() {
-            let stays = exempt[k] || written.get(k).is_some_and(|&a| self.named_alone_stays(a, ta));
-            let ta = if stays { ta } else { self.lift_assigned(ta, aty, span) };
-            index.push(ArgSrc::Typed(ta, aty));
-        }
-        let lists = vec![ArgList { args: index.clone(), using: false, span, fun: ArgList::NO_FUN }];
-        let (cur, _) = self.apply_member(tf, fty, names::APPLY, None, lists, span, None);
-        let (value, vty) = self.binop_or_member(base, cur, cty, cty, r, FunEnd::operand_at(op_end), span, None);
-        index.push(ArgSrc::Typed(value, vty));
-        let lists = vec![ArgList { args: index, using: false, span, fun: ArgList::NO_FUN }];
-        let (te, ty) = self.apply_member(tf, fty, names::UPDATE, None, lists, span, None);
-        (self.wrap_hoisted(mark, te), ty)
-    }
-
     /// For each of the `n` arguments of `f(args)`, whether the formal of the `apply` that `fty` has is by-name
     /// or `inline`: `Lifter.liftArgs` (EtaExpansion.scala 100-108) leaves such an argument as it is, whatever
     /// its purity. An `apply` with alternatives, or one that is an extension, has no one list of formals to
@@ -1122,7 +1660,7 @@ impl<'a> Worker<'a> {
     fn apply_formals_left(&mut self, fty: TypeId, n: usize) -> Vec<bool> {
         let mut left = vec![false; n];
         let Some((m, _)) = self.find_member(fty, names::APPLY) else { return left };
-        if self.syms.alternatives(m).is_some() || self.syms.sym(m).kind != SymKind::Def {
+        if self.syms.alternatives(m).is_some() || self.syms.sym(m).kind != SymKind::Def || !self.sig_of(m).tparams.is_empty() {
             return left;
         }
         let params: Vec<ParamSig> = match self.sig_of(m).clauses.iter().find(|c| !c.is_using) {
@@ -1227,13 +1765,13 @@ impl<'a> Worker<'a> {
         if by_accessor { recv } else { bound }
     }
 
-    /// The typed `f` of `f(i) op= rhs`, or `Err` with the typed application when `f` is `q.m`
-    /// for a method `m`: `q.m(i)` is then the receiver of `op=`, as `gen.map(f) >>= g` reads.
-    fn indexed_target(&mut self, f: ExprId, args: ListRef, span: Span) -> Result<(TExprId, TypeId), (TExprId, TypeId)> {
+    /// The typed `f` of `f(i) op= rhs`; None when `f` is `q.m` for a method `m`: `q.m(i)` is that method's
+    /// application, which the operation as written took (`gen.map(f) >>= g`).
+    fn indexed_value(&mut self, f: ExprId) -> Option<(TExprId, TypeId)> {
         let ast = self.cur_ast();
-        let Expr::Select(q, name) = ast.expr(f) else { return Ok(self.type_expr(f, None)) };
+        let Expr::Select(q, name) = ast.expr(f) else { return Some(self.type_expr(f, None)) };
         if self.static_ref(f).is_some() {
-            return Ok(self.type_expr(f, None));
+            return Some(self.type_expr(f, None));
         }
         let (tq, qty) = self.type_expr(q, None);
         let qty = self.solve_in(qty);
@@ -1242,11 +1780,9 @@ impl<'a> Worker<'a> {
             None => qty != ERROR && self.has_lexical_extension_for(qty, name),
         };
         if method {
-            let args = ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect();
-            let lists = vec![ArgList { args, using: false, span, fun: FunEnd::tree(f) }];
-            return Err(self.apply_member(tq, qty, name, None, lists, span, None));
+            return None;
         }
-        Ok(self.apply_member(tq, qty, name, None, Vec::new(), ast.expr_span(f), None))
+        Some(self.apply_member(tq, qty, name, None, Vec::new(), ast.expr_span(f), None))
     }
 
     /// `e.x op= rhs` reads and writes `e.x`, so `e` is evaluated once (`lift_assigned`). The selection over the
@@ -3531,4 +4067,58 @@ fn fold_binop(op: &str, x: FoldConst, y: FoldConst, concat: impl FnOnce(Name, Na
         }
         _ => return None,
     }))
+}
+
+#[cfg(test)]
+mod op_memo_tests {
+    /// What every scenario's program starts with: an extension of `+=` for `Int` to be a given's, an object's to
+    /// import, and a class with the operator to convert to.
+    const PRELUDE: &str = "import scala.language.implicitConversions\ntrait Ops:\n  extension (n: Int) def +=(k: Int): Unit\nobject Provider:\n  extension (n: Int) def +=(k: Int): Unit = ()\nclass Acc(val n: Int):\n  def +=(k: Int): Unit = ()\nobject First:\n  def f(): Int = { var x = 1; x += 1; x }\n";
+
+    /// How many assignment operators of the scenario took the assignment form by a kept answer (`Worker::op_memo`).
+    /// The program must type without an error; under `cfg(test)` every use of a kept answer runs the first try and
+    /// panics where it does not fail with nothing met (`Worker::check_op_memo`), so a count returned is a count of
+    /// answers that held.
+    fn hits(name: &str, body: &str) -> u32 {
+        let text = format!("{}{}", PRELUDE, body);
+        crate::with_typed_program(name, &text, &[], |w| {
+            let errors: Vec<String> = w.diags.items.iter().filter(|d| !d.is_warning).map(|d| d.msg.clone()).collect();
+            assert!(errors.is_empty(), "{}: {:?}", name, errors);
+            w.op_memo_hits
+        })
+    }
+
+    /// The differential test of the memo of an assignment operator's first try: after a first site of the type in
+    /// the file (`First.f`, which keeps the answer for `Int` and `+=`), each thing that can provide the operator
+    /// is brought in the ways a site can come to see it, and the sites that see it take no kept answer (their
+    /// first try applies: the program types), while the sites before and after it do.
+    #[test]
+    fn a_kept_failure_is_used_only_where_nothing_can_provide_the_operator() {
+        // Nothing provides it: every later site of the type takes the kept answer; another type keeps its own.
+        assert_eq!(hits("opmemo-plain", "object A:\n  def g(): Int = { var x = 1; x += 1; x += 2; x }\n  def s(): String = { var t = \"a\"; t += 1; t += 2; t }\n  class C { var n = 0; def bump(): Unit = { n += 1; this.n += 1 } }\n"), 5);
+        // An operation in the right side of another, each by a kept answer: the outer one's first try (run by the
+        // check) types the inner one, whose own flag must not be the outer's. The inner one is counted twice: typed
+        // by the outer's check and by the typing that is kept.
+        assert_eq!(hits("opmemo-nested", "object A:\n  def g(): Int = { var x = 1; var y = 1; x += 1; x += { y += 1; y }; x }\n  def h(): Int = { var t = 0; t += List(1, 2).map(k => { var d = k; d += 1; d }).sum; t }\n"), 7);
+        // A given's extension in a nested frame: the sites before and after the frame, not the one inside.
+        assert_eq!(hits("opmemo-given-frame", "object A:\n  def g(): Int =\n    var x = 1\n    x += 1\n    {\n      given Ops with\n        extension (n: Int) def +=(k: Int): Unit = ()\n      x += 1\n    }\n    x += 1\n    x\n"), 2);
+        // A using parameter of the method is a given of its frame.
+        assert_eq!(hits("opmemo-using-parameter", "object A:\n  def g(using o: Ops): Int = { var x = 1; x += 1; x }\n  def h(): Int = { var x = 1; x += 1; x }\n"), 1);
+        // An enclosing class with a given; an enclosing class whose member is the extension (a lexical one).
+        assert_eq!(hits("opmemo-class-given", "class H:\n  given Ops with\n    extension (n: Int) def +=(k: Int): Unit = ()\n  def run(): Int = { var x = 1; x += 1; x }\nclass P:\n  def run(): Int = { var x = 1; x += 1; x }\n"), 1);
+        assert_eq!(hits("opmemo-class-extension", "class H:\n  extension (n: Int) def +=(k: Int): Unit = ()\n  def run(): Int = { var x = 1; x += 1; x }\nclass P:\n  def run(): Int = { var x = 1; x += 1; x }\n"), 1);
+        // A local import, a local conversion, an implicit class of a block.
+        assert_eq!(hits("opmemo-local-import", "object A:\n  def g(): Int =\n    var x = 1\n    x += 1\n    {\n      import Provider.*\n      x += 1\n    }\n    x += 1\n    x\n"), 2);
+        assert_eq!(hits("opmemo-local-conversion", "object A:\n  def g(): Int =\n    var x = 1\n    {\n      given Conversion[Int, Acc] = n => new Acc(n)\n      x += 1\n    }\n    x += 1\n    x\n"), 1);
+        assert_eq!(hits("opmemo-implicit-class", "object A:\n  def g(): Int =\n    var x = 1\n    {\n      implicit class More(val n: Int) { def +=(k: Int): Unit = () }\n      x += 1\n    }\n    x += 1\n    x\n"), 1);
+        // The file's import written after the first sites: the sites before it take the kept answer, the sites
+        // after it see the import and call the extension.
+        assert_eq!(hits("opmemo-file-import", "object Before:\n  def g(): Int = { var x = 1; x += 1; x }\nimport Provider.*\nobject After:\n  def g(): Int = { var x = 1; x += 1; x }\n"), 1);
+        // A package-level given and conversion of the file, written after the first site: nothing is kept at all
+        // (the first try applies everywhere), and nothing is taken.
+        assert_eq!(hits("opmemo-package-given", "given Ops with\n  extension (n: Int) def +=(k: Int): Unit = ()\nobject A:\n  def g(): Int = { var x = 1; x += 1; x }\n"), 0);
+        // A class type whose companion has the extension: the first try applies, nothing is kept for it; a var of
+        // an alias of Int is not a kept type's.
+        assert_eq!(hits("opmemo-companion", "class E(val n: Int)\nobject E:\n  extension (e: E) def +=(i: Int): Unit = ()\nobject A:\n  type I = Int\n  def g(): Unit = { var e = new E(0); e += 1; e += 2 }\n  def h(): Int = { var i: I = 1; i += 1; i }\n"), 1);
+    }
 }

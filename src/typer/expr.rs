@@ -5213,6 +5213,10 @@ impl<'a> Worker<'a> {
         // The named classes the block defines, which the IR lifts out of it: the pickle writes
         // them among its statements (`Capture::block_classes`).
         let mut classes: Vec<ClassId> = Vec::new();
+        // The objects this pass has entered: one entered ahead of its statement (an enum's companion) is not
+        // entered again there, and one an earlier typing of the block entered (`def_classes` keeps its class
+        // through a retraction) is entered and bound again, as a local class is.
+        let mut entered: Vec<ast::DefId> = Vec::new();
         for s in &items {
             let Stmt::Def(d) = s else { continue };
             let def = ast.def(*d);
@@ -5270,9 +5274,10 @@ impl<'a> Worker<'a> {
                         self.link_local_companion(c, def.name);
                     }
                     // The companion of an enum entered before it already.
-                    ast::ClassKind::Object if self.def_classes.get(file.0 as usize, d).is_some() => {}
+                    ast::ClassKind::Object if entered.contains(d) => {}
                     ast::ClassKind::Object => {
                         self.enter_local_object(file, *d);
+                        entered.push(*d);
                         if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
                             classes.push(c);
                             if stores {
@@ -5284,7 +5289,7 @@ impl<'a> Worker<'a> {
                         // An object of the enum's name written after it is its companion, which
                         // takes the enum's members: entered first.
                         let later = items.iter().find_map(|t| match t {
-                            Stmt::Def(o) if self.def_classes.get(file.0 as usize, o).is_none()
+                            Stmt::Def(o) if !entered.contains(o)
                                 && matches!(&ast.def(*o).kind, DefKind::Class(k) if k.kind == ast::ClassKind::Object)
                                 && ast.def(*o).name == def.name =>
                             {
@@ -5294,6 +5299,7 @@ impl<'a> Worker<'a> {
                         });
                         if let Some(o) = later {
                             self.enter_local_object(file, o);
+                            entered.push(o);
                             if let Some(&c) = self.def_classes.get(file.0 as usize, &o) {
                                 if stores {
                                     self.note_stored_class(c);
@@ -5434,6 +5440,9 @@ impl<'a> Worker<'a> {
         // A call in the block of a local trait's lifted member typed before the trait was
         // lifted, in a local def or a closure, passes its proxies (`LambdaLift.addFreeArgs`).
         self.adapt_block_calls(block);
+        if self.made_watch {
+            self.made_local.extend(classes.iter().map(|&c| super::Made { file, anon: None, class: c, drop: 0 }));
+        }
         if !classes.is_empty() {
             // What a JVM build of products writes of the block (`Program::block_classes`).
             if self.open_world {

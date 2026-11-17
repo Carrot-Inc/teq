@@ -205,6 +205,9 @@ pub struct ClassInfo {
     /// Whether a parent the source writes did not resolve (an error was reported there): what
     /// the class inherits is unknown, so it is not held to implement it.
     pub parent_failed: bool,
+    /// A local or anonymous class made by a typing of an assignment operator's operands that was dropped
+    /// for another (`Worker::drop_made`): it and what is nested in it are no classes of the program.
+    pub dropped: bool,
     /// The class this one extends, directly or through a trait that extends a class.
     pub superclass: Option<ClassId>,
     /// The classes that have this one as their superclass.
@@ -911,6 +914,21 @@ impl Symbols {
         }
     }
 
+    /// Whether class `c` is nested, however deep, in a local class a dropped typing made (`ClassInfo::dropped`).
+    pub fn in_dropped_local(&self, c: ClassId) -> bool {
+        let mut k = c;
+        loop {
+            let info = self.class(k);
+            if info.dropped {
+                return true;
+            }
+            match info.owner {
+                Owner::Class(o) => k = o,
+                _ => return false,
+            }
+        }
+    }
+
     /// Whether class `c` is one of `files`' own: it stands in one, or an expansion at a site in
     /// one made it (`made_at`); what typing the file again makes anew.
     pub fn class_of_files(&self, c: ClassId, files: &[FileId]) -> bool {
@@ -1427,6 +1445,7 @@ impl Symbols {
             rule_prefix: 0,
             post_typer_bases: 0,
             parent_failed: false,
+            dropped: false,
             has_exports: false,
             forwarders_made: false,
             self_alias: crate::names::EMPTY,

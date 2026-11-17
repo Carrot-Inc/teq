@@ -505,8 +505,19 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// How many argument caches are open: where the next member's cache is opened (`Worker::keep_args`).
+    pub(super) fn arg_cache_depth(&self) -> u32 {
+        self.attempt_caches.len() as u32
+    }
+
     pub(super) fn arg_cache_close(&mut self) {
         if let Some(mut c) = self.attempt_caches.pop() {
+            // The cache an assignment operator's second try asked for (`Worker::keep_args`).
+            if self.keep_args == Some((self.attempt_caches.len() as u32, c.file)) {
+                self.keep_args = None;
+                self.kept_args.clear();
+                self.kept_args.extend(c.args.iter().map(|a| (a.key, a.typed)));
+            }
             c.args.clear();
             self.cache_buffers.push(c.args);
         }
@@ -1647,6 +1658,24 @@ impl<'a> Worker<'a> {
         }
         let kept = self.promoted_positions(m, |p| p.diags, m.diags);
         self.diags.items.iter().enumerate().skip(from).any(|(i, d)| !d.is_warning && kept.binary_search(&i).is_err() && !self.attempts.late.contains(&(i as u32)))
+    }
+
+    /// Whether the attempt told an error of the typer's own past `m`: one it reported (`attempt_reported_error`)
+    /// that the reference's typer reports too: no `Diagnostic::dependent` (an error of what an unresolved import or
+    /// malformed syntax left unknown, told at its cause: an error type there that reports nothing) and no record of
+    /// a phase after the reference's typer: one marked so (`Diagnostic::late`: a default getter's refusal, a tuple's
+    /// index) or one whose producer named a later phase's group (`Group::after_typer`: `RefChecks`' "object
+    /// creation impossible", "needs to be abstract", an override's refusal): the reference's typer has typed the
+    /// tree and goes on, and its `tryEither` asks its reporter's errors, where no later phase has reported.
+    pub(super) fn attempt_told_error(&self, m: &Mark) -> bool {
+        let from = m.diags as usize;
+        let told = |d: &crate::source::Diagnostic| !d.is_warning && !d.dependent && !d.late && !d.position.group.after_typer();
+        let reported = self.diags.items.get(from..).is_some_and(|items| items.iter().any(told));
+        if !reported || (self.attempts.promoted.is_empty() && self.attempts.late.is_empty()) {
+            return reported;
+        }
+        let kept = self.promoted_positions(m, |p| p.diags, m.diags);
+        self.diags.items.iter().enumerate().skip(from).any(|(i, d)| told(d) && kept.binary_search(&i).is_err() && !self.attempts.late.contains(&(i as u32)))
     }
 
     /// The attempt goes: what it wrote is taken back, but for what is not its own.

@@ -379,9 +379,10 @@ pub enum Context {
 /// known: a record an expansion ahead of the inlining phase held is the phase's
 /// (`ahead_of_phase`), and a record of a unit that leaves its run, or would where the phase is
 /// not run, is of the unit's next run where its group is after the one the unit left in
-/// (`Diagnostics::suspend_unit`). Nothing reads it
-/// but the dump (`TEQ_POSITIONS=1`, `Diagnostics::trace_positions`): equality and hashing ignore
-/// it, as `Ordinal`'s.
+/// (`Diagnostics::suspend_unit`). The dump reads it
+/// (`TEQ_POSITIONS=1`, `Diagnostics::trace_positions`), and one rule of the typer reads the group: what an
+/// assignment operator's try told of the typer's own (`Worker::attempt_told_error`, `Group::after_typer`).
+/// Equality and hashing ignore it, as `Ordinal`'s.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Position {
     pub run: u8,
@@ -411,6 +412,12 @@ impl Position {
 }
 
 impl Group {
+    /// Whether the group is a phase's after the reference's typer: its records are none of the typer's
+    /// reporter while the typer types (`Typer.tryEither` sees none of them).
+    pub fn after_typer(self) -> bool {
+        !matches!(self, Group::Unstamped | Group::Own | Group::Parser | Group::Typer)
+    }
+
     /// The group of the phase a producer names by its rank (`producer_rank`'s constants).
     pub fn of_phase(phase: u8) -> Group {
         match phase {
