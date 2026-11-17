@@ -62,6 +62,17 @@ arity	pass	-
 arity_class_names_found	fail	-	compile
 array_as_collection	pass	-	
 array_concat_class	pass	-	
+array_concat_in_expansions_of_one_shape	pass	-	
+array_concat_in_expansions_that_share_a_function	pass	-	
+array_concat_of_array_rows_in_a_shared_function	pass	-	
+array_concat_of_two_arrays	pass	-	
+array_concat_summoned_tag_wrapped_in_a_shared_function	pass	-	
+array_concat_tag_from_a_class_in_a_shared_function	pass	-	
+array_concat_tag_from_a_context_bound	pass	-	
+array_concat_tag_given_by_the_program	pass	-	
+array_concat_tag_made_from_another	pass	-	
+array_concat_wrap_of_a_tag_in_a_shared_function	pass	-	
+array_evidence_written_by_the_program	pass	-	
 array_for_guard	pass	-	
 array_index_bounds	pass	-	
 array_iterator_live	pass	-	
@@ -2292,6 +2303,7 @@ process_redirects	pass	-
 process_streams	pass	-	
 product_element_names	pass	-	
 product_iterator	pass	-	
+program_annotations_named_js_and_jvm_evidence	pass	-	
 projection_prefix	pass	-	
 prop_abs_negative_zero	pass	-	
 prop_boolean_and_or_short_circuit	pass	-	
@@ -3058,6 +3070,7 @@ union_wildcard_extractor_inference	pass	-
 unions	pass	-	
 unit_printed	fail	-	output
 unreachable_deep_split	pass	-	
+unread_argument_of_a_library_member	pass	-	
 unreducible_application_in_pattern	pass	-	
 untupled_partial_lambda	pass	-	
 unused_ctor_param_reads	pass	-	

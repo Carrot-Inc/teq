@@ -432,6 +432,10 @@ pub struct SymInfo {
     /// evaluates. Where it is erased the signature has no parameter for it, and the bits name
     /// the type parameters whose tag a call still has to find (`Worker::erased_evidence`).
     pub jvm_evidence: bool,
+    /// `@jvmEvidence` on a definition of the std itself, by the file it stands in: a standard tag
+    /// such a member is passed is bound by no text of the member in the JavaScript output
+    /// (`Program::std_evidence_of`).
+    pub std_evidence: bool,
     pub erased_tags: u32,
     /// Set for the entry of a class member whose name an ancestor has a method for. Whether it
     /// overrides what it meets there or is overloaded with it is settled by the first lookup,
@@ -1493,6 +1497,7 @@ impl Symbols {
             by_name: false,
             java_defined: false,
             jvm_evidence: false,
+            std_evidence: false,
             erased_tags: 0,
             meets_inherited: false,
             merge_pending: false,

@@ -1354,14 +1354,36 @@ impl Program {
     /// member of the std is passed `null` for it outside the JVM, which leaves its array as it is
     /// (`std/buffer.scala`'s `evidenced`).
     pub fn is_standard_class_tag(&self, te: TExprId, syms: &crate::symbols::Symbols, interner: &crate::intern::Interner) -> bool {
+        self.standard_class_tag_where(te, syms, interner, &|_, _| None)
+    }
+
+    /// `is_standard_class_tag` of a tree in which a node may stand for several: `stands(e, test)`
+    /// is `None` for a node that is itself, and for one that stands for others whether `test`
+    /// holds of each of them. The emitter's, while it writes the body of an outlined function
+    /// from one expansion's tree: a parameter of the function stands for the argument of every
+    /// expansion that shares it, wherever on the tag's path it is met (the tag itself, the tag a
+    /// `wrap` is taken of, the class a tag is made from, the companion).
+    pub fn standard_class_tag_where(
+        &self,
+        te: TExprId,
+        syms: &crate::symbols::Symbols,
+        interner: &crate::intern::Interner,
+        stands: &dyn Fn(TExprId, &dyn Fn(TExprId) -> bool) -> Option<bool>,
+    ) -> bool {
+        if let Some(each) = stands(te, &|x| self.is_standard_class_tag(x, syms, interner)) {
+            return each;
+        }
         let Some(m) = self.class_tag_module else { return false };
+        let is = |e: TExprId, test: &dyn Fn(TExprId) -> bool| stands(e, test).unwrap_or_else(|| test(e));
+        let companion = |r: TExprId| is(r, &|x| matches!(self.expr(x), TExpr::Module(c) if c == m));
         match self.expr(te) {
-            TExpr::Field(r, _) => matches!(self.expr(r), TExpr::Module(c) if c == m),
+            TExpr::Field(r, _) => companion(r),
             TExpr::CallMethod(r, s, args) => {
                 let name = interner.get(syms.sym(s).name);
-                match self.expr(r) {
-                    TExpr::Module(c) if c == m => name == "apply" && matches!(self.expr_list(args), [a] if matches!(self.expr(*a), TExpr::ClassOf(..))),
-                    _ => name == "wrap" && args.is_empty() && self.is_standard_class_tag(r, syms, interner),
+                if companion(r) {
+                    name == "apply" && matches!(self.expr_list(args), [a] if is(*a, &|x| matches!(self.expr(x), TExpr::ClassOf(..))))
+                } else {
+                    name == "wrap" && args.is_empty() && self.standard_class_tag_where(r, syms, interner, stands)
                 }
             }
             _ => false,
@@ -1384,6 +1406,32 @@ impl Program {
             },
             _ => return 0,
         };
+        self.evidence_of(s, n, syms)
+    }
+
+    /// Whether the argument `a` at the position `k` of a call is a standard tag in one of the
+    /// call's evidence positions (`evidence`: `evidence_args`, or `std_evidence_of`): what the
+    /// JavaScript output does not evaluate at the call. An ordinary call writes `null` for it,
+    /// a text's placeholder too, and reachability does not visit it.
+    pub fn is_dropped_tag(&self, evidence: u64, k: usize, a: TExprId, syms: &crate::symbols::Symbols, interner: &crate::intern::Interner) -> bool {
+        k < 64 && evidence & 1 << k != 0 && self.is_standard_class_tag(a, syms, interner)
+    }
+
+    /// `evidence_of` for a member the std itself defines, and nothing for any other: the
+    /// positions whose standard tag a text of the member does not bind. A text that names the
+    /// tag writes `null` there and one that leaves it out writes nothing, where an argument a
+    /// program's own text leaves out or names under a condition is evaluated ahead of the text.
+    pub fn std_evidence_of(&self, s: SymId, n: usize, syms: &crate::symbols::Symbols) -> u64 {
+        if syms.sym(s).std_evidence {
+            self.evidence_of(s, n, syms)
+        } else {
+            0
+        }
+    }
+
+    /// `evidence_args` of a call of the member `s` with `n` arguments, a template's receiver
+    /// among them.
+    pub fn evidence_of(&self, s: SymId, n: usize, syms: &crate::symbols::Symbols) -> u64 {
         let info = syms.sym(s);
         let overridable = !info.is_extension
             && match info.owner {

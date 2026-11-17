@@ -569,6 +569,7 @@ impl<'a> Worker<'a> {
                             info.mods |= mods::JAVA_ANNOTATION;
                         } else if a.name == names::JVM_EVIDENCE {
                             info.jvm_evidence = true;
+                            info.std_evidence = is_std;
                         }
                     }
                 }

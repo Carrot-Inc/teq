@@ -588,6 +588,19 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// Whether the argument `a` at the position `k` of a text is a standard tag in one of the
+    /// evidence positions `evidence` (`Program::is_dropped_tag`), which the text does not bind.
+    /// The body of an outlined function is written from one expansion's tree and stands for every
+    /// expansion that shares it, so there the tag is a standard one only where each of them passes
+    /// one: a parameter of the function met on the tag's path is asked of each expansion's
+    /// argument (`Program::standard_class_tag_where`). Where one passes evidence the program
+    /// wrote, the argument is bound and each expansion's evaluated.
+    fn unbound_tag(&self, evidence: u64, k: usize, a: TExprId) -> bool {
+        k < 64
+            && evidence & 1 << k != 0
+            && self.prog.standard_class_tag_where(a, self.syms, self.interner, &|e, test| self.hole_of(e).map(|(n, _)| self.every_site_passes(n, |x| test(x))))
+    }
+
     pub(super) fn template_binds(&self, template: StrRef, args: &[TExprId]) -> u64 {
         let text = &self.prog.strings[template.idx()];
         // The receiver of a member of a static object is no argument: an inline method's body
@@ -596,9 +609,15 @@ impl<'a> Emitter<'a> {
             let info = self.syms.sym(s);
             matches!(info.owner, Owner::Class(_)) && !info.is_extension
         }) && args.first().is_some_and(|&a| matches!(self.peek(a), TExpr::Module(_)));
+        // A standard tag passed as evidence to a `@jvmEvidence` member of the std is evaluated
+        // nowhere: the text binds it no more than its placeholder writes it.
+        let evidence = self.prog.template_syms.get(&template).map_or(0, |&s| self.prog.std_evidence_of(s, args.len(), self.syms));
         let (mut effects, mut impure) = (0u64, 0u64);
         for (k, &a) in args.iter().enumerate().take(64) {
             if k == 0 && static_receiver {
+                continue;
+            }
+            if evidence != 0 && self.unbound_tag(evidence, k, a) {
                 continue;
             }
             match self.arg_purity(a) {
@@ -1122,7 +1141,7 @@ impl<'a> Emitter<'a> {
                             self.out.push_str(&t[start..i]);
                             match args.get(idx) {
                                 // A standard tag a `@jvmEvidence` member is passed (`emit_args_omitting`).
-                                Some(&a) if idx < 64 && evidence & 1 << idx != 0 && self.prog.is_standard_class_tag(a, self.syms, self.interner) => self.out.push_str("null"),
+                                Some(&a) if self.prog.is_dropped_tag(evidence, idx, a, self.syms, self.interner) => self.out.push_str("null"),
                                 Some(&a) if leaving & 1 << idx != 0 => self.emit_leaving_function(a),
                                 Some(&a) if self.arrow_needs_parens(a, &t[..i], &t[i + 2..]) => {
                                     self.out.push('(');

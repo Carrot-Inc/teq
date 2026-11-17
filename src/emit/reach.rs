@@ -3052,7 +3052,7 @@ fn visit_args<M: Meet>(m: &mut M, cx: Cx, call: TExprId, l: ListRef) {
     let evidence = cx.prog.evidence_args(call, cx.syms);
     for (k, &a) in cx.prog.expr_list(l).iter().enumerate() {
         match cx.prog.expr(a) {
-            _ if k < 64 && evidence & 1 << k != 0 && cx.prog.is_standard_class_tag(a, cx.syms, cx.interner) => {}
+            _ if cx.prog.is_dropped_tag(evidence, k, a, cx.syms, cx.interner) => {}
             TExpr::Default(of, at, args) if lowering.as_ref().is_some_and(|l| l.omits(k)) => visit_default_items(m, cx, of, at, args),
             _ => visit(m, cx, a),
         }
@@ -3231,7 +3231,7 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             } else if prog.evidence_args(e, cx.syms) != 0 {
                 let evidence = prog.evidence_args(e, cx.syms);
                 for (k, &a) in list.iter().enumerate() {
-                    if !(k < 64 && evidence & 1 << k != 0 && prog.is_standard_class_tag(a, cx.syms, cx.interner)) {
+                    if !prog.is_dropped_tag(evidence, k, a, cx.syms, cx.interner) {
                         visit(m, cx, a);
                     }
                 }

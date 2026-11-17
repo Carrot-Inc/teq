@@ -7,6 +7,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `a ++ b` of two arrays runs in a lean JavaScript build. A program that concatenated two arrays, of any element
+  type, stopped at that line unless something else of it had brought the `ClassTag` object in: `ReferenceError:
+  ClassTag$ is not defined`, or a `TypeError` on `ClassTag$().apply` or on a tag's `wrap` where only a part of
+  that object was there. The output evaluated the class tag scalac passes the concatenation, which the lean std's
+  concatenation does not read. A tag the compiler makes for the concatenation is no longer evaluated there; one
+  the program writes itself (`a.++(b)(using tag)`) is evaluated at each call, as it was. Where several expansions
+  of an inline method share one function in the output, the tag is left out when every one of them passes a tag
+  the compiler makes, and evaluated as before when one of them passes its own. A program whose concatenations ran
+  prints what it printed; the tag is gone from the JavaScript of the call (`a.concat(b)` where the operands have
+  no effects to order).
 - A macro reads a class's nested classes and type members in the order the class gives them, as under scalac:
   `Symbol.declaredTypes` lists the type parameters, then the nested classes and the type members as the class
   declares them (for a Java class its member classes in the class file's order, then its type parameters; scalac's

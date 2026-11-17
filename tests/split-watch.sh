@@ -498,6 +498,46 @@ expect "object statement over products: evaluated after the upstream's rebuild" 
 stop
 rm -rf "$work/out"
 
+# An inline method of one file concatenates two arrays of arrays with the wrap of its inline tag; two other files
+# call it, one with the tag the compiler makes and one with a tag the program makes, and the output writes their
+# expansions as one function. After an edit of either caller the session's output is a fresh build's, and the
+# program's tag is evaluated where its place passes it and nowhere once that place passes the compiler's.
+src=$work/sharedtag
+mkdir -p "$src/lib" "$src/one" "$src/two" "$src/top"
+printf 'package lib\n\nimport scala.reflect.ClassTag\n\nclass Crate(val n: Int)\n\ndef loudTag: ClassTag[Crate] = { println("tag made"); ClassTag(classOf[Crate]) }\n\ninline def rows[T](a: Array[Array[T]], b: Array[Array[T]])(using inline tag: ClassTag[T]): Int = {\n  val both = a.++(b)(using tag.wrap)\n  val more = both.length * 100 + a.length * 10 + b.length\n  println("rows " + more)\n  more + 1\n}\n' > "$src/lib/Lib.scala"
+shared_one() { printf 'package one\n\nimport lib.*\n\nobject One {\n  def run(): Unit = {\n    val words = Array(Array("x"))\n    println("%s")\n    println(rows(words, words))\n  }\n}\n' "$1" > "$src/one/One.scala"; }
+shared_two() { printf 'package two\n\nimport lib.*\n\nobject Two {\n  def run(): Unit = {\n    val crates = Array(Array(new Crate(1)))\n    println("%s")\n    println(rows(crates, crates)%s)\n  }\n}\n' "$1" "$2" > "$src/two/Two.scala"; }
+shared_one one
+shared_two two '(using loudTag)'
+printf 'package top\n\nobject Main {\n  def main(args: Array[String]): Unit = {\n    println(scala.reflect.ClassTag.Int != null)\n    println(scala.reflect.ClassTag(classOf[String]).wrap != null)\n    one.One.run()\n    two.Two.run()\n  }\n}\n' > "$src/top/Main.scala"
+shared_step() { # <what> <the two lines the callers print first> <whether the program's tag is made>
+  expect "shared tag: $1" "$(field ok)" 'true'
+  same_as_fresh "shared tag: $1" "$src"
+  expect "shared tag: $1: the output" "$(timeout 20 node "$work/out/main.mjs" | tr '\n' '|')" "true|true|${2%%,*}|rows 211|212|${2##*,}|${3}rows 211|212|"
+}
+start "$src" --split "$work/out"
+shared_step "first build" "one,two" "tag made|"
+shared_one 'one!'
+build "$src/one/One.scala"
+shared_step "the caller with the compiler's tag edited" "one!,two" "tag made|"
+shared_two 'two!' '(using loudTag)'
+build "$src/two/Two.scala"
+shared_step "the caller with the program's tag edited" "one!,two!" "tag made|"
+shared_one 'one!!'
+build "$src/one/One.scala"
+shared_step "the first caller edited again" "one!!,two!" "tag made|"
+shared_two two ''
+build "$src/two/Two.scala"
+shared_step "the program's tag taken out" "one!!,two" ""
+shared_two two '(using loudTag)'
+build "$src/two/Two.scala"
+shared_step "the program's tag back" "one!!,two" "tag made|"
+shared_one one
+build "$src/one/One.scala"
+shared_step "the first caller as it was" "one,two" "tag made|"
+stop
+rm -rf "$work/out"
+
 # An upstream's inline body replaced and then put back between requests of a session over its
 # products: the record of the body, made from the product on the first call and kept with the
 # loader (src/typer/inline_definition.rs, `demand_library_definition`), goes with the whole typing

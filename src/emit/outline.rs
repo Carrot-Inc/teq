@@ -548,6 +548,20 @@ impl<'a> super::Emitter<'a> {
         self.outline.funs[f as usize].params.get(&HoleNode::Expr(e)).copied()
     }
 
+    /// Whether `holds` is true of the argument every expansion that shares the function being
+    /// written passes for its parameter `n`: the body is written once, from one expansion's
+    /// tree, and stands for them all.
+    pub(super) fn every_site_passes(&self, n: u32, holds: impl Fn(TExprId) -> bool) -> bool {
+        let Some(f) = self.body else { return false };
+        let outline = self.outline;
+        outline
+            .site_fun
+            .iter()
+            .zip(&outline.site_holes)
+            .filter(|&(&fun, _)| fun == f)
+            .all(|(_, holes)| matches!(holes.get(n as usize), Some(Hole { node: HoleNode::Expr(e), .. }) if holds(*e)))
+    }
+
     #[inline]
     pub(super) fn test_hole(&self, node: HoleNode) -> Option<u32> {
         let f = self.body?;

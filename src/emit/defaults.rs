@@ -515,7 +515,7 @@ impl<'a> super::Emitter<'a> {
             for &item in inlined.unwrap_or(std::slice::from_ref(&a)) {
                 self.out.push_str(separator);
                 separator = ", ";
-                if k < 64 && evidence & 1 << k != 0 && self.prog.is_standard_class_tag(item, self.syms, self.interner) {
+                if self.prog.is_dropped_tag(evidence, k, item, self.syms, self.interner) {
                     self.out.push_str("null");
                 } else {
                     self.emit_value(item);

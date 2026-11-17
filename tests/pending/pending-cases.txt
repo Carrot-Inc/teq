@@ -6,6 +6,8 @@ annotated_primary_constructor	< 1
 annotation_after_ascription_line	< 1
 any_kind_bound	< K1$ K2$
 applied_member_through_subtype_prefix	< ok
+array_concat_null_right_operand	< thrown: null right operand
+array_concat_null_right_operand_beside_a_tag	< thrown: null right operand
 binary_int_literal	< 5
 case_companion_initialising_apply	< k2 |
 classfile_reader_lone_surrogate	< d83d
@@ -147,6 +149,9 @@ select_field_mismatch_point	< scalac 3.8.4: rejected, 2 error(s)
 settings_conflicting_alias	< scalac 3.8.4: rejected, 1 error(s)
 settings_deprecated_alias	< scalac 3.8.4: rejected, 1 error(s)
 settings_unchecked_false	< scalac 3.8.4: accepted, 1 warning
+shared_expansion_program_tag_of_appended_and_map	< token tag
+shared_expansion_sites_differ_in_the_tags_maker	< joined 422
+shared_expansion_tag_of_an_array_of_arrays	< joined 422
 singleton_bounded_given	< ok
 singleton_selector_unreachable	< scalac 3.8.4: rejected, 1 error(s)
 std_known_sizes	> warning: there was 1 deprecation warning; re-run with --deprecation for details

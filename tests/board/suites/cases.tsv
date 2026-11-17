@@ -61,7 +61,18 @@ argument_block_ascriptions	fail	-	> tests/cases/argument_block_ascriptions.scala
 arity	pass	-	
 arity_class_names_found	fail	-	< 23
 array_as_collection	pass	-	
-array_concat_class	fail	-	the lean run dies (ClassTag$ is not defined); queued: the lean std's array ++ with a tag
+array_concat_class	pass	-	
+array_concat_in_expansions_of_one_shape	pass	-	
+array_concat_in_expansions_that_share_a_function	pass	-	
+array_concat_of_array_rows_in_a_shared_function	pass	-	
+array_concat_of_two_arrays	pass	-	
+array_concat_summoned_tag_wrapped_in_a_shared_function	pass	-	
+array_concat_tag_from_a_class_in_a_shared_function	pass	-	
+array_concat_tag_from_a_context_bound	pass	-	
+array_concat_tag_given_by_the_program	pass	-	
+array_concat_tag_made_from_another	pass	-	
+array_concat_wrap_of_a_tag_in_a_shared_function	pass	-	
+array_evidence_written_by_the_program	pass	-	
 array_for_guard	pass	-	
 array_index_bounds	cannot run	-	the JVM's platform
 array_iterator_live	pass	-	
@@ -333,7 +344,7 @@ class_tag_to_array_evidence	pass	-
 class_tag_unapply	pass	-	
 class_tag_void_array	pass	-	
 class_tags	pass	-	
-class_through_path_array_concat	fail	-	the lean run dies (ClassTag$ is not defined); queued: the lean std's array ++ with a tag
+class_through_path_array_concat	pass	-	
 class_through_path_array_spread	pass	-	
 class_through_path_equality	pass	-	
 class_through_path_generic_equality	fail	-	the universal equality's values (false true, false, false); queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
@@ -2292,6 +2303,7 @@ process_redirects	cannot run	-	the JVM's platform
 process_streams	cannot run	-	the JVM's platform
 product_element_names	pass	-	
 product_iterator	pass	-	
+program_annotations_named_js_and_jvm_evidence	pass	-	
 projection_prefix	pass	-	
 prop_abs_negative_zero	pass	-	
 prop_boolean_and_or_short_circuit	pass	-	
@@ -3058,6 +3070,7 @@ union_wildcard_extractor_inference	pass	-
 unions	pass	-	
 unit_printed	pass	-	
 unreachable_deep_split	pass	-	
+unread_argument_of_a_library_member	pass	-	
 unreducible_application_in_pattern	pass	-	
 untupled_partial_lambda	pass	-	
 unused_ctor_param_reads	pass	-	
