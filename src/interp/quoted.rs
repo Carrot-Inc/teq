@@ -978,7 +978,7 @@ impl<'m> Matcher<'m> {
             (TExpr::StrConcat(l1), TExpr::StrConcat(l2)) | (TExpr::SeqLit(l1), TExpr::SeqLit(l2)) | (TExpr::ArrayLit(l1), TExpr::ArrayLit(l2)) => self.list(it, l1, l2),
             (TExpr::ToStr(a1, _), TExpr::ToStr(a2, _)) | (TExpr::Spread(a1), TExpr::Spread(a2)) | (TExpr::Return(a1), TExpr::Return(a2)) | (TExpr::Throw(a1, _), TExpr::Throw(a2, _)) => self.expr(it, a1, a2),
             (TExpr::Js(s1, a1), TExpr::Js(s2, a2)) => it.prog().strings[s1.idx()] == it.prog().strings[s2.idx()] && self.list(it, a1, a2),
-            (TExpr::TypeTest(a1, t1), TExpr::TypeTest(a2, t2)) => self.expr(it, a1, a2) && it.prog().tests[t1.idx()] == it.prog().tests[t2.idx()],
+            (TExpr::TypeTest(a1, t1, _), TExpr::TypeTest(a2, t2, _)) => self.expr(it, a1, a2) && it.prog().tests[t1.idx()] == it.prog().tests[t2.idx()],
             (TExpr::Cast(a1, _, t1), TExpr::Cast(a2, _, t2)) => it.typer.types.same(t1, t2) && self.expr(it, a1, a2),
             (TExpr::Index(a1, i1), TExpr::Index(a2, i2)) => i1 == i2 && self.expr(it, a1, a2),
             (TExpr::Block(st1, r1), TExpr::Block(st2, r2)) => {
@@ -1802,7 +1802,7 @@ impl<'a, 't> Interp<'a, 't> {
                         }
                     }
                 }
-                TExpr::TypeTest(x, test) => {
+                TExpr::TypeTest(x, test, _) => {
                     let ty = self.test_type(test);
                     let name = self.typer.interner.intern("isInstanceOf");
                     let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: vec![ty] });
@@ -3760,7 +3760,7 @@ impl<'a, 't> Interp<'a, 't> {
         match self.prog().expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null => false,
             TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => false,
-            TExpr::Field(x, _) | TExpr::Unary(_, x) | TExpr::ToStr(x, _) | TExpr::TypeTest(x, _) | TExpr::Cast(x, _, _) | TExpr::Index(x, _) => self.expr_mentions(x, s),
+            TExpr::Field(x, _) | TExpr::Unary(_, x) | TExpr::ToStr(x, _) | TExpr::TypeTest(x, _, _) | TExpr::Cast(x, _, _) | TExpr::Index(x, _) => self.expr_mentions(x, s),
             TExpr::JsSelect(x, _) | TExpr::Spread(x) | TExpr::Throw(x, _) | TExpr::Lambda(_, x) => self.expr_mentions(x, s),
             TExpr::CallStatic(f, l) => f == s || any(l),
             TExpr::CallMethod(x, _, l) | TExpr::CallClosure(x, l) => self.expr_mentions(x, s) || any(l),

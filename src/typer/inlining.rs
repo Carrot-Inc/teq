@@ -2212,7 +2212,7 @@ impl<'a> Worker<'a> {
             }
         };
         match self.prog.expr(e) {
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) | TExpr::Lambda(_, r) => self.rank_expr(walk, r),
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) | TExpr::Lambda(_, r) => self.rank_expr(walk, r),
             TExpr::CallStatic(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => list(self, walk, args),
             TExpr::New(c, args) => {
                 // An anonymous class stands where it is made, its template before its creation.

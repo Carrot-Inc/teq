@@ -4094,7 +4094,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 self.throw_ref();
                 self.expr(a);
             }
-            TExpr::TypeTest(a, _) | TExpr::Cast(a, ..) => self.expr(a),
+            TExpr::TypeTest(a, _, _) | TExpr::Cast(a, ..) => self.expr(a),
             TExpr::Js(template, l) => {
                 let sym = self.w.prog.template_syms.get(&template).copied();
                 if let Some(s) = sym {

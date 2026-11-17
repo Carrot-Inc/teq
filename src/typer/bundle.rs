@@ -663,7 +663,7 @@ impl<'a> Worker<'a> {
                                 }
                             }
                         }
-                        TExpr::TypeTest(e, t) | TExpr::Cast(e, crate::tir::CastOp::Check(t, _) | crate::tir::CastOp::Unbox(t, _) | crate::tir::CastOp::Adapt(t, _), _) => {
+                        TExpr::TypeTest(e, t, _) | TExpr::Cast(e, crate::tir::CastOp::Check(t, _) | crate::tir::CastOp::Unbox(t, _) | crate::tir::CastOp::Adapt(t, _), _) => {
                             work.push(Node::Expr(e.0));
                             work.push(Node::Test(t.0));
                         }

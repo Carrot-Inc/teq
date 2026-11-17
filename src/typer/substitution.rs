@@ -1458,7 +1458,7 @@ impl<'a> Worker<'a> {
                 }
                 e
             }
-            TExpr::TypeTest(a, t) => self.walk_one(w, e, a, |x| TExpr::TypeTest(x, t)),
+            TExpr::TypeTest(a, t, tested) => self.walk_one(w, e, a, |x| TExpr::TypeTest(x, t, tested)),
             TExpr::Cast(a, op, to) => self.walk_cast(w, e, a, op, to),
             TExpr::Index(a, i) => self.walk_one(w, e, a, |x| TExpr::Index(x, i)),
             TExpr::JsSelect(a, n) => self.walk_one(w, e, a, |x| TExpr::JsSelect(x, n)),
@@ -1889,7 +1889,7 @@ impl<'a> Worker<'a> {
                 note(s, out);
                 list(self, args, out);
             }
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) | TExpr::Lambda(_, r) => {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) | TExpr::Lambda(_, r) => {
                 self.referenced_in_order(r, origin, key, out)
             }
             TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => list(self, args, out),

@@ -21,6 +21,7 @@ appobjectblock	pass	-
 approxnarrow	pass	-	
 apptraitargs	pass	-	
 apptraitblock	pass	-	
+arraychaininline	fail	-	arraychaininline classes
 basic	pass	-	
 batchremove	pass	-	
 besideany	pass	-	

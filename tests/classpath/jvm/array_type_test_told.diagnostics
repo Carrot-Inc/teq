@@ -1,0 +1,42 @@
+tests/classpath/jvm/array_type_test_told.scala:19:20: warning: the type test for Array[(Int, String)] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("1 " + ones.isInstanceOf[Array[Int *: String *: EmptyTuple]] + " " + strs.isInstanceOf[Array[Int *: String *: EmptyTuple]])
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:19:82: warning: the type test for Array[(Int, String)] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("1 " + ones.isInstanceOf[Array[Int *: String *: EmptyTuple]] + " " + strs.isInstanceOf[Array[Int *: String *: EmptyTuple]])
+                                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:20:20: warning: the type test for Array[(Int)] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("2 " + pairs.isInstanceOf[Array[Int *: EmptyTuple]] + " " + strs.isInstanceOf[Array[Int *: EmptyTuple]])
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:20:73: warning: the type test for Array[(Int)] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("2 " + pairs.isInstanceOf[Array[Int *: EmptyTuple]] + " " + strs.isInstanceOf[Array[Int *: EmptyTuple]])
+                                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:27:20: warning: the type test for Array[Box{def n: Int}] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("1 " + strs.isInstanceOf[Array[Box { def n: Int }]] + " " + ints.isInstanceOf[Array[Box { def n: Int }]] + " " + boxes.isInstanceOf[Array[Box { def n: Int }]])
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:27:73: warning: the type test for Array[Box{def n: Int}] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("1 " + strs.isInstanceOf[Array[Box { def n: Int }]] + " " + ints.isInstanceOf[Array[Box { def n: Int }]] + " " + boxes.isInstanceOf[Array[Box { def n: Int }]])
+                                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:27:126: warning: the type test for Array[Box{def n: Int}] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("1 " + strs.isInstanceOf[Array[Box { def n: Int }]] + " " + ints.isInstanceOf[Array[Box { def n: Int }]] + " " + boxes.isInstanceOf[Array[Box { def n: Int }]])
+                                                                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:28:39: warning: the type test for Array[Box{def n: Int}] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("2 " + (strs match { case _: Array[Box { def n: Int }] => true; case _ => false }))
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:29:20: warning: the type test for Array[AnyRef{def n: Int}] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("3 " + ints.isInstanceOf[Array[{ def n: Int }]])
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:30:20: warning: the type test for Array[[T] => (x$1: T) => T] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("4 " + strs.isInstanceOf[Array[[T] => T => T]])
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:38:18: warning: the type test for Array[Array[Box{def n: Int}]] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("" + s1.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + s2.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + i2.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + b2.isInstanceOf[Array[Array[Box { def n: Int }]]])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:38:76: warning: the type test for Array[Array[Box{def n: Int}]] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("" + s1.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + s2.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + i2.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + b2.isInstanceOf[Array[Array[Box { def n: Int }]]])
+                                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:38:134: warning: the type test for Array[Array[Box{def n: Int}]] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("" + s1.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + s2.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + i2.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + b2.isInstanceOf[Array[Array[Box { def n: Int }]]])
+                                                                                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_type_test_told.scala:38:192: warning: the type test for Array[Array[Box{def n: Int}]] cannot be checked at runtime because its type arguments can't be determined from Any
+      println("" + s1.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + s2.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + i2.isInstanceOf[Array[Array[Box { def n: Int }]]] + " " + b2.isInstanceOf[Array[Array[Box { def n: Int }]]])
+                                                                                                                                                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

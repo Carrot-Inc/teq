@@ -2005,7 +2005,7 @@ impl<'a> Worker<'a> {
         if let Some(callee) = callee {
             self.prog.note_expansion(te, crate::tir::Expansion { callee, replaced: crate::ast::ListRef::EMPTY });
         }
-        if let (true, TExpr::TypeTest(_, t)) = (test, self.prog.expr(te)) {
+        if let (true, TExpr::TypeTest(_, t, _)) = (test, self.prog.expr(te)) {
             self.prog.leaf_tests.insert(t, ());
         }
     }

@@ -170,7 +170,7 @@ impl<'a> Worker<'a> {
             self.push_tree_type(t, out);
         }
         match self.prog.expr(e) {
-            TExpr::Field(x, _) | TExpr::Unary(_, x) | TExpr::ToStr(x, _) | TExpr::TypeTest(x, _) | TExpr::Index(x, _) | TExpr::JsSelect(x, _) => self.tree_types(x, out),
+            TExpr::Field(x, _) | TExpr::Unary(_, x) | TExpr::ToStr(x, _) | TExpr::TypeTest(x, _, _) | TExpr::Index(x, _) | TExpr::JsSelect(x, _) => self.tree_types(x, out),
             TExpr::Spread(x) | TExpr::Return(x) | TExpr::Throw(x, _) | TExpr::Splice(x) => self.tree_types(x, out),
             TExpr::Cast(x, _, ty) => {
                 self.tree_types(x, out);

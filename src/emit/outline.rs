@@ -631,7 +631,7 @@ impl<'a> super::Emitter<'a> {
         let prog = self.prog;
         let test = match node {
             HoleNode::TestExpr(e) => match prog.expr(e) {
-                TExpr::TypeTest(_, t) => t,
+                TExpr::TypeTest(_, t, _) => t,
                 _ => unreachable!("a test argument stands at a type test"),
             },
             HoleNode::TestPat(p) => match prog.pats[p.idx()] {

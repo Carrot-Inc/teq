@@ -754,7 +754,7 @@ impl<'a> Worker<'a> {
             }
         };
         match prog.expr(e) {
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) => {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) => {
                 self.tree_binders(r, out)
             }
             TExpr::Lambda(params, body) => {
@@ -919,7 +919,7 @@ impl<'a> Worker<'a> {
             }
         };
         match prog.expr(e) {
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Lambda(_, r) => {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Lambda(_, r) => {
                 self.tree_type_params(r, out)
             }
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
@@ -4061,9 +4061,10 @@ impl<'c> Copier<'c> {
                     _ => TExpr::Js(s, args),
                 }
             }
-            TExpr::TypeTest(a, test) => {
+            TExpr::TypeTest(a, test, tested) => {
                 let a = self.expr(t, a);
-                TExpr::TypeTest(a, self.test(t, test))
+                let test = self.test(t, test);
+                TExpr::TypeTest(a, test, self.ty(t, tested))
             }
             TExpr::Cast(a, op, to) => {
                 let a = self.expr(t, a);

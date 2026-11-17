@@ -3427,7 +3427,7 @@ impl<'a> Worker<'a> {
             }
             TExpr::ToStr(a, k) => TExpr::ToStr(self.copy_expr(a), k),
             TExpr::Js(s, args) => TExpr::Js(s, self.copy_list(args)),
-            TExpr::TypeTest(a, t) => TExpr::TypeTest(self.copy_expr(a), t),
+            TExpr::TypeTest(a, t, tested) => TExpr::TypeTest(self.copy_expr(a), t, tested),
             TExpr::Cast(a, op, t) => TExpr::Cast(self.copy_expr(a), op, t),
             TExpr::SeqLit(l) => TExpr::SeqLit(self.copy_list(l)),
             TExpr::ArrayLit(l) => TExpr::ArrayLit(self.copy_list(l)),
@@ -4172,7 +4172,7 @@ impl<'a> Worker<'a> {
                 }
                 self.fold_candidate(a, bound, fractional)
             }
-            TExpr::TypeTest(a, _) | TExpr::Cast(a, ..) | TExpr::Index(a, _) => self.fold_candidate(a, bound, fractional),
+            TExpr::TypeTest(a, _, _) | TExpr::Cast(a, ..) | TExpr::Index(a, _) => self.fold_candidate(a, bound, fractional),
             TExpr::StrConcat(l) | TExpr::SeqLit(l) | TExpr::ArrayLit(l) => list(self, l, bound, fractional),
             _ => false,
         }

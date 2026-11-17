@@ -338,7 +338,7 @@ pub(in crate::typer) fn texpr<M: Mapping + ?Sized>(m: &M, e: &mut TExpr) {
         StrConcat(parts) => StrConcat(m.expr_list(parts)),
         ToStr(x, k) => ToStr(m.expr(x), k),
         Js(s, args) => Js(m.string(s), m.expr_list(args)),
-        TypeTest(x, t) => TypeTest(m.expr(x), m.test(t)),
+        TypeTest(x, t, tested) => TypeTest(m.expr(x), m.test(t), m.ty(tested)),
         Cast(x, op, t) => Cast(
             m.expr(x),
             match op {

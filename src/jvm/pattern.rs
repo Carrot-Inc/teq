@@ -265,6 +265,17 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The two members of the tested type where it is a union (`inter`: an intersection) by its form
+    /// (`Gen::tested_form`); the type itself for both sides otherwise.
+    fn tested_members(&mut self, tested: Option<crate::types::TypeId>, inter: bool) -> (Option<crate::types::TypeId>, Option<crate::types::TypeId>) {
+        let Some(t) = tested else { return (None, None) };
+        let form = self.tested_form(t);
+        match (self.cx.input.types.get(form), inter) {
+            (crate::types::Type::Union(a, b, _), false) | (crate::types::Type::Inter(a, b), true) => (Some(a), Some(b)),
+            _ => (tested, tested),
+        }
+    }
+
     /// Jumps to `target` when the test of the reference in `slot` comes out as `jump_if`.
     pub fn test(&mut self, test: TestId, slot: u16, ty: &JType, tested: Option<crate::types::TypeId>, target: Label, jump_if: bool) {
         let cx = self.cx;
@@ -312,14 +323,15 @@ impl<'a> Gen<'a> {
             TypeTest::Bool => Rc::from("java/lang/Boolean"),
             TypeTest::Unit => Rc::from(BOXED_UNIT),
             // A JVM array: its class where the type says which, else scalac's
-            // `ScalaRunTime.isArray(x, 1)`, the lean runtime's outside link mode.
-            TypeTest::Array => match tested.map(|t| self.erase(t)) {
-                Some(JType::L(n)) if n.starts_with('[') => n,
-                _ => {
+            // `ScalaRunTime.isArray(x, ndims)` of a generic element's layers (`Gen::array_test_of`), the lean
+            // runtime's outside link mode.
+            TypeTest::Array => match tested.map_or(Err(1), |t| self.array_test_of(t)) {
+                Ok(n) => n,
+                Err(layers) => {
                     let object = JType::object();
                     self.load(slot, ty);
                     self.adapt(ty, &object);
-                    self.iconst(1);
+                    self.iconst(layers);
                     self.erased_array_call("isArray", &[object, JType::I], JType::Z);
                     return self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
                 }
@@ -351,27 +363,33 @@ impl<'a> Gen<'a> {
                 self.helper_call("equal", 2);
                 return self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
             }
+            // The test of each member of a union, of both of an intersection (`TypeTestsCasts.transformTypeTest`'s
+            // `OrType` and `AndType`): each side with its own member of the tested type, in the order
+            // `Worker::test_for` made the two tests of them; a pair made of another type (a class with its outer
+            // test, a bound's) reads the whole type on both sides.
             TypeTest::Or(a, b) => {
+                let (ta, tb) = self.tested_members(tested, false);
                 if jump_if {
-                    self.test(a, slot, ty, tested, target, true);
-                    self.test(b, slot, ty, tested, target, true);
+                    self.test(a, slot, ty, ta, target, true);
+                    self.test(b, slot, ty, tb, target, true);
                 } else {
                     let yes = self.code.new_label();
-                    self.test(a, slot, ty, tested, yes, true);
-                    self.test(b, slot, ty, tested, target, false);
+                    self.test(a, slot, ty, ta, yes, true);
+                    self.test(b, slot, ty, tb, target, false);
                     self.code.bind(yes);
                 }
                 return;
             }
             TypeTest::And(a, b) => {
+                let (ta, tb) = self.tested_members(tested, true);
                 if jump_if {
                     let no = self.code.new_label();
-                    self.test(a, slot, ty, tested, no, false);
-                    self.test(b, slot, ty, tested, target, true);
+                    self.test(a, slot, ty, ta, no, false);
+                    self.test(b, slot, ty, tb, target, true);
                     self.code.bind(no);
                 } else {
-                    self.test(a, slot, ty, tested, target, false);
-                    self.test(b, slot, ty, tested, target, false);
+                    self.test(a, slot, ty, ta, target, false);
+                    self.test(b, slot, ty, tb, target, false);
                 }
                 return;
             }

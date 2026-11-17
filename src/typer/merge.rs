@@ -1953,7 +1953,7 @@ impl Remap {
             }
         }
         for e in &w.prog.exprs[p.exprs as usize..] {
-            if let TExpr::Cast(_, _, t) = *e {
+            if let TExpr::Cast(_, _, t) | TExpr::TypeTest(_, _, t) = *e {
                 note(t);
             }
         }

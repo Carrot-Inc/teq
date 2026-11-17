@@ -586,7 +586,8 @@ impl<'a> Worker<'a> {
                 }
                 // The JVM's test of an array sees its component's class: the test is checkable
                 // as the written element type says, before the scrutinee fills its wildcards.
-                let unchecked = unchecked || (self.jvm && (self.checkable_array_test(t) || array_element_args_wild(ast, ty)));
+                let unchecked = unchecked
+                    || (self.jvm && (self.checkable_array_test(t, sty) || array_element_args_wild(ast, ty)));
                 let t = self.infer_type_pattern_args(t, sty);
                 self.bound_type_pattern_vars(&binders, t, sty);
                 if ast.reader.is_some() && super::loader::declared::dump_path().is_some() {
@@ -634,7 +635,9 @@ impl<'a> Worker<'a> {
                     self.conforming_test(t, sty, not_null, span, 0)
                 } else {
                     self.check_sensical_test(t, sty, span);
-                    let test = self.test_for(t, sty, span, unchecked);
+                    // A typed pattern's test: its wildcards ask nothing of the JVM's array test, whatever their
+                    // bounds (`test_for_of`).
+                    let test = self.test_for_of(t, sty, span, unchecked, true);
                     self.outer_tested(test, t, span)
                 };
                 self.mark_leaf_test(test, reads);
@@ -2895,6 +2898,14 @@ impl<'a> Worker<'a> {
     }
 
     pub fn test_for(&mut self, t: TypeId, sty: TypeId, span: Span, unchecked: bool) -> TestId {
+        self.test_for_of(t, sty, span, unchecked, false)
+    }
+
+    /// `test_for`, `pattern` saying the type is a typed pattern's: there a wildcard asks nothing of the JVM's array
+    /// test whatever its bounds, alone or under a union (scalac reads a pattern-bound symbol as a wildcard:
+    /// TypeTestsCasts.scala 66-74 `replaceP`, applied at 180), where an `isInstanceOf`'s is asked by its bound. The
+    /// test made and the words told are the written type's either way.
+    fn test_for_of(&mut self, t: TypeId, sty: TypeId, span: Span, unchecked: bool, pattern: bool) -> TestId {
         let t = self.deref_alias(t);
         // An inline body's tests are checked where it expands, with the call's types, as scalac
         // checks them on the inlined code alone; a generator's pattern without `case` reports a
@@ -2927,11 +2938,11 @@ impl<'a> Worker<'a> {
                 return self.bound_test(t, hi, sty, span);
             }
             Type::Union(a, b, _) => {
-                let (x, y) = (self.test_for(a, sty, span, unchecked), self.test_for(b, sty, span, unchecked));
+                let (x, y) = (self.test_for_of(a, sty, span, unchecked, pattern), self.test_for_of(b, sty, span, unchecked, pattern));
                 TypeTest::Or(x, y)
             }
             Type::Inter(a, b) => {
-                let (x, y) = (self.test_for(a, sty, span, unchecked), self.test_for(b, sty, span, unchecked));
+                let (x, y) = (self.test_for_of(a, sty, span, unchecked, pattern), self.test_for_of(b, sty, span, unchecked, pattern));
                 TypeTest::And(x, y)
             }
             // The refinement itself is not checked, as scalac tests the class alone.
@@ -2951,7 +2962,18 @@ impl<'a> Worker<'a> {
                 TypeTest::Value(value)
             }
             Type::Class(c, args) => {
-                if args != EMPTY_LIST && !unchecked && !self.args_determined(c, args, sty) {
+                // The JVM's test of an array reads the element's class (`jvm::Gen::array_test_of`): it is told
+                // uncheckable where the element is (`checkable_array_test`), by a type test and by a pattern
+                // alike, alone or as a member of a union or an intersection. Elsewhere an array carries no
+                // element, and its argument is asked as any class's.
+                let undetermined = match self.jvm && c == self.b.array {
+                    true => {
+                        let asked = if pattern { pattern_wildcards(&self.types.clone(), t) } else { t };
+                        !self.checkable_array_test(asked, sty)
+                    }
+                    false => args != EMPTY_LIST && !self.args_determined(c, args, sty),
+                };
+                if !unchecked && undetermined {
                     let msg = format!(
                         "the type test for {} cannot be checked at runtime because its type arguments can't be determined from {}",
                         self.show(t),
@@ -3035,7 +3057,7 @@ impl<'a> Worker<'a> {
             }
             // A class through its prefix is tested as the class; dotty's matcher adds a test of
             // the instance's outer (`PatternMatcher.addOuterTest`), which teq does not make.
-            Type::Nested(_, class) => return self.test_for(class, sty, span, unchecked),
+            Type::Nested(_, class) => return self.test_for_of(class, sty, span, unchecked, pattern),
             // A singleton type's test is `isInstance` of the singleton (TypeTestsCasts.scala
             // 325-326), the identity test `case _: x.type` makes, the path's value read at the
             // test, an inline forwarder at its end left a member read (`applies_forwarder`); a
@@ -3246,41 +3268,276 @@ impl<'a> Worker<'a> {
         })
     }
 
-    fn checkable_array_test(&mut self, t: TypeId) -> bool {
+    /// Whether the JVM's test against the array type `t` is as much as the type says, for a value of type `sty`:
+    /// scalac's `whyUncheckable` for an array (TypeTestsCasts.scala 142-146, its `recur`): the element asked against the
+    /// scrutinee's element, against `Any` where the scrutinee is no array. Not an array: no.
+    fn checkable_array_test(&mut self, t: TypeId, sty: TypeId) -> bool {
+        // An opaque type that stands for itself is asked nothing (`names_cyclic_opaque`).
+        if self.names_cyclic_opaque(t, &mut Vec::new()) || self.names_cyclic_opaque(sty, &mut Vec::new()) {
+            return false;
+        }
+        match self.aliased_array_element(t) {
+            Some(elem) => {
+                // What the value is already, the test need not see: `X <:< P`, the first thing `recur` asks
+                // (TypeTestsCasts.scala 136), of the value's whole type: a type parameter bounded by the array, an
+                // intersection with it.
+                let mark = self.snapshot();
+                let below = self.is_sub(sty, t);
+                self.rollback(&mark);
+                if below {
+                    return true;
+                }
+                let from = self.scrutinee_element(sty);
+                self.checkable_array_element(elem, from)
+            }
+            None => false,
+        }
+    }
+
+    /// Whether `t` names an opaque type that stands for itself where its scope is open (`opaque type Self = Self |
+    /// Null`, `opaque type Chain = Array[Chain]`, `opaque type Fix[F[_]] = F[Fix[F]]`): scalac refuses the
+    /// definition (E140), the tree does not yet, and neither its subtype check nor the element's reading ends on
+    /// one. `open`: the opaque types whose definitions are being read, each as it is defined (its parameters
+    /// unfilled: an argument that names the type again, `W[W[Int]]`, is no cycle).
+    fn names_cyclic_opaque(&mut self, t: TypeId, open: &mut Vec<ClassId>) -> bool {
+        if let Type::Class(c, _) = self.types.get(t) {
+            if self.syms.class(c).kind == ClassKind::Opaque && self.transparent.contains(&c) {
+                if open.contains(&c) {
+                    return true;
+                }
+                self.complete_class(c);
+                if let Some(under) = self.syms.class(c).underlying {
+                    open.push(c);
+                    let cyclic = self.names_cyclic_opaque(under, open);
+                    open.pop();
+                    if cyclic {
+                        return true;
+                    }
+                }
+            }
+        }
+        let mut parts = Vec::new();
+        self.types.parts(t, &mut parts);
+        parts.into_iter().any(|p| self.names_cyclic_opaque(p, open))
+    }
+
+    /// What a value of the type `sty` holds where it is an array, as far as the type says: its element, a
+    /// wildcard's upper bound (`Array[? <: G[String]]` holds `G[String]`s); `Any` for a type that names no array.
+    fn scrutinee_element(&mut self, sty: TypeId) -> TypeId {
+        match self.aliased_array_element(sty) {
+            Some(e) => match self.types.get(e) {
+                Type::Wild => ANY,
+                Type::BoundedWild(_, hi) => hi,
+                _ => e,
+            },
+            None => ANY,
+        }
+    }
+
+    /// The element of the array type `t`, its aliases read through (`Worker::array_element` reads a variable's
+    /// instance alone).
+    fn aliased_array_element(&mut self, t: TypeId) -> Option<TypeId> {
         let t = self.deref_alias(t);
         match self.types.get(t) {
-            Type::Class(c, args) if c == self.b.array => {
-                let element = self.types.items(args).first().copied();
-                element.map_or(true, |e| self.reified_element(e))
+            Type::Class(c, args) if c == self.b.array => self.types.items(args).first().copied(),
+            _ => None,
+        }
+    }
+
+    /// Whether the JVM's test of an array sees what the element type `elem` says, the scrutinee's element being
+    /// `from`: an array carries its component's class, so a class is seen; an applied class where its arguments
+    /// are determined (`element_args_determinable`); an array of such, against the element of `from`; a type
+    /// parameter and an abstract type are not.
+    fn checkable_array_element(&mut self, elem: TypeId, from: TypeId) -> bool {
+        // A type variable the case binds asks nothing, as a wildcard (a pattern-bound symbol: `replaceP`,
+        // TypeTestsCasts.scala 66-74), at the element as among a class's arguments (`element_args_determinable`).
+        if self.is_case_binder(elem) || {
+            let bound = self.deref_canonical(elem);
+            self.is_case_binder(bound)
+        } {
+            return true;
+        }
+        let elem = self.deref_alias(elem);
+        // A bounded wildcard is as its bound is: nothing to see where the scrutinee's element is within it; else
+        // the test sees a class's bound, and not a type parameter's or an abstract type's (TypeTestsCasts.scala
+        // 64 and 140-141: `isAbstract`; scalac asks it of the bound's symbol as written, an alias's too, and so
+        // warns of `? <: AnyRef`: not followed, tests/errors/array_test_wildcard_alias.scala). A typed pattern's
+        // wildcard asks nothing at all: the array leaf reads its type with plain wildcards (`test_for_of`).
+        if let Type::BoundedWild(_, hi) = self.types.get(elem) {
+            let mark = self.snapshot();
+            let within = self.is_sub(from, hi);
+            self.rollback(&mark);
+            let hi = self.deref_alias(hi);
+            return within || !matches!(self.types.get(hi), Type::Param(_) | Type::AppParam(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_));
+        }
+        // What the scrutinee's element is already, the test need not see (`X <:< P`, TypeTestsCasts.scala 136).
+        let mark = self.snapshot();
+        let conforms = self.is_sub(from, elem);
+        self.rollback(&mark);
+        if conforms {
+            return true;
+        }
+        // A value's element that is a type parameter (a wildcard the receiver's type captured among them) is known by
+        // its bound from here on (`foundClasses`' `effectiveClass`, the constraint of `typeArgsDeterminable`).
+        let from = {
+            let mut from = self.deref_alias(from);
+            let mut seen: Vec<TParamId> = Vec::new();
+            while let Type::Param(p) = self.types.get(from) {
+                // A parameter met again bounds itself through another: nothing more is known of it.
+                if seen.contains(&p) {
+                    break;
+                }
+                seen.push(p);
+                let upper = self.syms.tparam(p).upper;
+                from = self.deref_alias(upper);
             }
+            from
+        };
+        // An opaque type: outside its scope an abstract type, which the test does not see (told as a plain opaque
+        // type's test is, `test_for`; scalac's `isAbstract`, TypeTestsCasts.scala 64 and 140-141); inside it, what
+        // it stands for.
+        if let Type::Class(c, _) = self.types.get(elem) {
+            if self.syms.class(c).kind == ClassKind::Opaque {
+                return match self.opaque_underlying(elem) {
+                    Some(under) => self.checkable_array_element(under, from),
+                    None => false,
+                };
+            }
+        }
+        match self.types.get(elem) {
+            Type::Class(c, args) if c == self.b.array => {
+                let inner = self.scrutinee_element(from);
+                let element = self.types.items(args).first().copied();
+                element.map_or(true, |e| self.checkable_array_element(e, inner))
+            }
+            // A class defined in a block is told uncheckable where a class of the value's own element cannot see it
+            // (TypeTestsCasts.scala 174-176: `P.classSymbol.isLocal`, `foundClasses(X)`, `isInaccessibleChildOf`).
+            Type::Class(c, args) if args == EMPTY_LIST => !(self.defined_in_block(c) && self.has_class_outside_blocks(from)),
+            Type::Class(c, args) => {
+                // Each member of a scrutinee's union by its own (TypeTestsCasts.scala 148-155).
+                let from = self.deref_alias(from);
+                match self.types.get(from) {
+                    Type::Union(x, y, _) => self.checkable_array_element(elem, x) && self.checkable_array_element(elem, y),
+                    _ => self.element_args_determinable(c, args, from),
+                }
+            }
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.checkable_array_element(a, from) && self.checkable_array_element(b, from),
+            // A singleton's test looks at the class the path's value has.
+            Type::Any | Type::Nothing | Type::Lit(_) | Type::Wild | Type::Term(_) | Type::Select(..) | Type::This(_) => true,
             _ => false,
         }
     }
 
-    /// Whether the JVM's test of an array sees what the element type says: an array carries
-    /// its component's class, so a class is seen, with type arguments only where they say
-    /// nothing, and an array of such; a type parameter and an abstract type are not.
-    fn reified_element(&mut self, elem: TypeId) -> bool {
-        let elem = self.deref_alias(elem);
-        match self.types.get(elem) {
-            Type::Class(c, args) if c == self.b.array => {
-                let element = self.types.items(args).first().copied();
-                element.map_or(true, |e| self.reified_element(e))
+    /// Whether `c` is defined in a block, or inside a class that is (dotty's `Symbol.isLocal`).
+    fn defined_in_block(&self, mut c: ClassId) -> bool {
+        loop {
+            match self.syms.class(c).owner {
+                Owner::Local => return true,
+                Owner::Package(_) => return false,
+                Owner::Class(o) => c = o,
             }
-            Type::Class(c, args) => {
-                let items = self.types.items(args).to_vec();
-                let mut all_wild = true;
-                for a in items {
-                    let a = self.deref_canonical(a);
-                    all_wild &= self.types.is_wild(a) || a == ANY;
-                }
-                args == EMPTY_LIST || all_wild || self.args_determined(c, args, ANY)
-            }
-            Type::Union(a, b, _) | Type::Inter(a, b) => self.reified_element(a) && self.reified_element(b),
-            // A singleton's test looks at the class the path's value has.
-            Type::Any | Type::Nothing | Type::Lit(_) | Type::Wild | Type::BoundedWild(..) | Type::Term(_) | Type::Select(..) | Type::This(_) => true,
+        }
+    }
+
+    /// Whether a class of the type `from` (`foundClasses(X)`, TypeTestsCasts.scala 402-407: each part of a union or
+    /// an intersection) is defined outside every block, from where a class defined in one cannot be seen
+    /// (`isInaccessibleChildOf`, SymUtils.scala 338-346: the term nearest around the value's class is not around
+    /// the local class). A value's class of a block is taken as the same block's: teq's owner does not say which.
+    fn has_class_outside_blocks(&mut self, from: TypeId) -> bool {
+        let from = self.deref_alias(from);
+        match self.types.get(from) {
+            Type::Any => true,
+            Type::Class(k, _) => !self.defined_in_block(k),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.has_class_outside_blocks(a) || self.has_class_outside_blocks(b),
             _ => false,
         }
+    }
+
+    /// scalac's `typeArgsDeterminable` (TypeTestsCasts.scala 76-133) for an array's element `c[args]` against the
+    /// scrutinee's element `from`: `c`'s parameters, constrained by `c[..] <: from` and then maximised, give a
+    /// type that conforms to the element asked. Parameter by parameter: a wildcard asks nothing; a covariant one is
+    /// maximised to its upper bound (what `from` gives, else the declared one), which has to conform to the
+    /// argument (`Co[Any]`, not `Co[String]` from `Any`); a contravariant one to its lower bound, which the
+    /// argument has to conform to (`Contra[Nothing]`); an invariant one is only what `from` fixes (`G[String]` of an
+    /// `Array[G[String]]`): `G[Any]` is no `G[?]`.
+    fn element_args_determinable(&mut self, c: ClassId, args: TList, from: TypeId) -> bool {
+        self.settle_class(c);
+        let tparams = self.syms.class(c).tparams.clone();
+        let asked = self.types.items(args).to_vec();
+        if asked.len() != tparams.len() {
+            return false;
+        }
+        let first_var = self.tvars.len();
+        let mark = self.snapshot();
+        let vars: Vec<TypeId> = tparams.iter().map(|_| self.fresh_var()).collect();
+        let applied = self.types.class(c, &vars);
+        // Constrained where the class can be the scrutinee's element at all; unrelated, nothing is known.
+        let inner = self.snapshot();
+        if !self.is_sub(applied, from) {
+            self.rollback(&inner);
+        }
+        let mut determined = true;
+        for (i, &p) in tparams.iter().enumerate() {
+            let a = self.deref_canonical(asked[i]);
+            // A wildcard asks nothing; a bounded one asks what its bounds say of the maximised parameter (`P1 <:< P`).
+            let bounds = match self.types.get(a) {
+                Type::BoundedWild(lo, hi) if !(self.canon(lo) == NOTHING && self.canon(hi) == ANY) => Some((lo, hi)),
+                _ => None,
+            };
+            if (self.types.is_wild(a) && bounds.is_none()) || a == ERROR || self.is_case_binder(a) {
+                continue;
+            }
+            let (inst, lower, upper) = match self.types.get(vars[i]) {
+                Type::Var(v) => {
+                    let info = &self.tvars[v];
+                    (info.inst, info.lower.clone(), info.upper.clone())
+                }
+                _ => (None, Vec::new(), Vec::new()),
+            };
+            let (declared_lower, declared_upper, variance) = {
+                let info = self.syms.tparam(p);
+                (info.lower, info.upper, info.variance)
+            };
+            let one = |w: &mut Self, bounds: &[TypeId]| match bounds {
+                [b] => Some(w.zonk(*b)),
+                _ => None,
+            };
+            let fixed = inst.map(|t| self.zonk(t));
+            let ok = match variance {
+                v if v > 0 => {
+                    let max = fixed.or_else(|| one(self, &upper)).unwrap_or(declared_upper);
+                    upper.len() <= 1 && self.is_sub(max, bounds.map_or(a, |(_, hi)| hi))
+                }
+                v if v < 0 => {
+                    let max = fixed.or_else(|| one(self, &lower)).unwrap_or(declared_lower);
+                    lower.len() <= 1 && self.is_sub(bounds.map_or(a, |(lo, _)| lo), max)
+                }
+                _ => {
+                    // One type under two spellings (an alias) is one: each conforms to the other.
+                    let exact = fixed.or_else(|| match (one(self, &lower), one(self, &upper)) {
+                        (Some(lo), Some(hi)) if self.types.same(lo, hi) || (self.is_sub(lo, hi) && self.is_sub(hi, lo)) => Some(lo),
+                        _ => None,
+                    });
+                    exact.is_some_and(|m| match bounds {
+                        Some((lo, hi)) => self.is_sub(lo, m) && self.is_sub(m, hi),
+                        None => self.types.same(m, a) || (self.is_sub(m, a) && self.is_sub(a, m)),
+                    })
+                }
+            };
+            if !ok {
+                determined = false;
+                break;
+            }
+        }
+        self.rollback(&mark);
+        // The question's own variables are no one's to solve later: each is closed, as a pattern class's are
+        // (`solve_pattern_class_bounded`).
+        for v in first_var..self.tvars.len() {
+            if self.tvars[v].inst.is_none() {
+                self.tvars[v].inst = Some(ANY);
+            }
+        }
+        determined
     }
 
     /// A type variable the pattern of the case binds (`case l: List[t]`), which a type test
@@ -3299,6 +3556,14 @@ fn array_element_args_wild(ast: &crate::ast::Ast, ty: crate::ast::TyExprId) -> b
     let TyExpr::Apply(_, elem_args) = ast.ty(*elem) else { return false };
     let wild = |t: crate::ast::TyExprId| matches!(ast.ty(t), TyExpr::Wildcard | TyExpr::BoundedWildcard(..));
     !ast.ty_list(elem_args).is_empty() && ast.ty_list(elem_args).iter().all(|&a| wild(a))
+}
+
+/// `t` with each bounded wildcard a plain one, at any depth.
+fn pattern_wildcards(types: &TypeStore, t: TypeId) -> TypeId {
+    match types.get(t) {
+        Type::BoundedWild(..) => WILD,
+        _ => types.map_parts(t, &mut |part| pattern_wildcards(types, part)),
+    }
 }
 
 /// `T @unchecked`, or a type with such an argument (`List[T @unchecked]`), which is not warned

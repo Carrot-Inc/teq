@@ -1156,7 +1156,7 @@ impl<'w, 'a> P<'w, 'a> {
                     self.universal("toString", |p| p.term(a), &[], &[])
                 }
             }
-            TExpr::TypeTest(a, _) => match form {
+            TExpr::TypeTest(a, _, _) => match form {
                 Some(Form::Test(t)) => self.universal("isInstanceOf", |p| p.term(a), &[t], &[]),
                 _ => self.fail("a type test without its type".to_string()),
             },
@@ -6123,7 +6123,7 @@ impl<'w, 'a> P<'w, 'a> {
         if self.w.prog.is_leaf(e) {
             self.inlined_leaves.push((inlined, self.buf.addr()));
         }
-        if let TExpr::TypeTest(_, test) = self.w.prog.expr(e) {
+        if let TExpr::TypeTest(_, test, _) = self.w.prog.expr(e) {
             if self.w.prog.leaf_tests.contains_key(&test) {
                 self.inlined_leaf_tests.push((inlined, self.buf.addr()));
             }

@@ -1,0 +1,268 @@
+r01 unrelated false
+r01 same true
+r01 sub-as-base true
+r01 base-as-sub false
+r01 int-as-long false
+r01 int-as-int true
+r01 long-as-int false
+r01 int-as-any false
+r01 int-as-anyref false
+r01 int-as-anyval false
+r01 int-as-integer false
+r01 integer-as-int false
+r01 str-as-anyref true
+r01 str-as-any true
+r01 str-as-string true
+r01 any-as-string false
+r01 anyref-as-string false
+r01 box-as-string false
+r01 case false
+r01 final false
+r01 object false
+r01 trait false
+r01 enum false
+r01 null false
+r01 not-array false
+r01 negated true
+r01 in-if other
+r01 in-and false
+r02 static-str-as-box false
+r02 static-str-as-str true
+r02 static-str-as-anyref true
+r02 static-box-as-box true
+r02 static-int-as-long false
+r02 static-int-as-int true
+r02 anyref-as-box false
+r02 anyref-as-str true
+r02 object-as-int true
+r02 object-as-box false
+r02 wild-as-box false
+r02 wild-as-str true
+r02 serializable-as-box false
+r02 serializable-as-str true
+r02 cloneable-as-box true
+r02 cloneable-as-str false
+r04 int2-as-long2 false
+r04 int2-as-int2 true
+r04 long2-as-long2 true
+r04 str2-as-box2 false
+r04 box2-as-box2 true
+r04 str2-as-anyref2 true
+r04 str2-as-anyref1 true
+r04 int2-as-anyref1 true
+r04 int2-as-any2 false
+r04 str1-as-str2 false
+r04 str3-as-str2 false
+r04 str3-as-str3 true
+r04 str3-as-box3 false
+r05 unit-unrelated false
+r05 unit-same true
+r05 value-unrelated false
+r05 value-same true
+r05 value-int false
+r05 opaque-inside-unrelated false
+r05 opaque-inside-same true
+r05 nothing false
+r05 null-element false
+r05 char true
+r05 char-as-int false
+r05 boolean true
+r05 double-as-float false
+r05 byte-as-short false
+r05 wild-int true
+r05 wild-not-array false
+r06 union-with-class-unrelated false
+r06 union-with-class-str true
+r06 union-with-class-box true
+r06 union-of-arrays-str true
+r06 union-of-arrays-int false
+r06 inter-serializable-unrelated false
+r06 inter-serializable-box true
+r06 inter-cloneable-box true
+r06 element-union true
+r06 element-inter false
+r06 union-of-arrays-other false
+r06 union-array-int-other false
+r06 union-array-int-int true
+r06 union-three false
+r06 pattern-union other box-or-string box-or-string other
+r06 pattern-inter other box-and-serializable
+r07 alias-unrelated false
+r07 alias-same true
+r07 alias-applied-unrelated false
+r07 alias-applied-same true
+r07 inline-unrelated false
+r07 inline-same true
+r07 inline-param-unrelated false
+r07 inline-param-same true
+r07 inline-param-int false
+r07 transparent-unrelated false
+r07 inline-alias-unrelated false
+r07 lambda-unrelated List(false)
+r07 lambda-same List(true)
+r07 function-value false true
+r07 lazy false
+r12 trait-method false true
+r12 field false
+r12 nested-def false true
+r12 by-name false true
+r12 object-val false
+r12 case-class false true
+r12 extension false true
+r12 while 1
+r12 guard other
+r13 list-wild-from-any true
+r13 g-wild-from-any true
+r13 list-string-from-static true
+r13 list-wild-from-static true
+layers-nested s1=false s2=true i1=false i2=true o1=false i3=true str=false
+layers-bound s1=false s2=false i1=false i2=true o1=false i3=false str=false
+layers-member-nested s1=false s2=true i1=false i2=true o1=false i3=true str=false
+layers-union-generic s1=false s2=true i1=true i2=true o1=false i3=true str=false
+layers-member-union s1=false s2=true i1=true i2=false o1=false i3=false str=false
+layers-top-union s1=false s2=true i1=true i2=false o1=false i3=false str=false
+layers-wild2 s1=false s2=true i1=false i2=true o1=false i3=true str=false
+layers-any2 s1=false s2=true i1=false i2=false o1=false i3=true str=false
+layers-three s1=false s2=false i1=false i2=false o1=false i3=true str=false
+layers-inter s1=false s2=false i1=true i2=false o1=false i3=false str=false
+p01 unrelated false
+p01 same true
+p01 sub-as-base true
+p01 base-as-sub false
+p01 int-as-long false
+p01 int-as-int true
+p01 long-as-int false
+p01 int-as-any false
+p01 int-as-anyref false
+p01 int-as-anyval false
+p01 int-as-integer false
+p01 integer-as-int false
+p01 str-as-anyref true
+p01 str-as-any true
+p01 str-as-string true
+p01 any-as-string false
+p01 anyref-as-string false
+p01 box-as-string false
+p01 case false
+p01 final false
+p01 object false
+p01 trait false
+p01 enum false
+p01 null false
+p01 not-array false
+p01 negated true
+p01 in-if other
+p01 in-and false
+p04 int2-as-long2 false
+p04 int2-as-int2 true
+p04 long2-as-long2 true
+p04 str2-as-box2 false
+p04 box2-as-box2 true
+p04 str2-as-anyref2 true
+p04 str2-as-anyref1 true
+p04 int2-as-anyref1 true
+p04 int2-as-any2 false
+p04 str1-as-str2 false
+p04 str3-as-str2 false
+p04 str3-as-str3 true
+p04 str3-as-box3 false
+p06 union-with-class-unrelated false
+p06 union-with-class-str true
+p06 union-with-class-box true
+p06 union-of-arrays-str true
+p06 union-of-arrays-int false
+p06 inter-serializable-unrelated false
+p06 inter-serializable-box true
+p06 inter-cloneable-box true
+p06 element-union true
+p06 element-inter false
+p06 union-of-arrays-other false
+p06 union-array-int-other false
+p06 union-array-int-int true
+p06 union-three false
+p07 alias-unrelated false
+p07 alias-same true
+p07 alias-applied-unrelated false
+p07 alias-applied-same true
+p07 inline-unrelated false
+p07 inline-same true
+p07 inline-param-unrelated false
+p07 inline-param-same true
+p07 inline-param-int false
+p07 transparent-unrelated false
+p07 inline-alias-unrelated false
+p07 lambda-unrelated List(false)
+p07 lambda-same List(true)
+p07 function-value false true
+p07 lazy false
+p13 list-wild-from-any true
+p13 g-wild-from-any true
+layers-nested s1=false s2=true i1=false i2=true o1=false i3=true str=false
+layers-bound s1=false s2=false i1=false i2=true o1=false i3=false str=false
+layers-member-nested s1=false s2=true i1=false i2=true o1=false i3=true str=false
+layers-union-generic s1=false s2=true i1=true i2=true o1=false i3=true str=false
+layers-member-union s1=false s2=true i1=true i2=false o1=false i3=false str=false
+layers-top-union s1=false s2=true i1=true i2=false o1=false i3=false str=false
+layers-wild2 s1=false s2=true i1=false i2=true o1=false i3=true str=false
+layers-any2 s1=false s2=true i1=false i2=false o1=false i3=true str=false
+layers-three s1=false s2=false i1=false i2=false o1=false i3=true str=false
+layers-inter s1=false s2=false i1=true i2=false o1=false i3=false str=false
+review-v-null strs=1 ints=0 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-null-v strs=1 ints=0 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-v-null-union strs=1 ints=1 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-v-tr strs=0 ints=0 vs=1 ws=1 trs=1 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-w strs=0 ints=0 vs=1 ws=1 trs=1 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-box strs=0 ints=0 vs=1 ws=1 trs=1 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-nothing strs=0 ints=0 vs=1 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-int strs=1 ints=0 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-box-null strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=1 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-chain2 strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=1 pairs=1 ones2=0 fns=0 str=0
+review-chain1 strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=1 pairs=1 ones2=0 fns=0 str=0
+review-chain3 strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=1 pairs=1 ones2=0 fns=0 str=0
+review-chain-nested strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=1 pairs=1 ones2=0 fns=0 str=0
+review-chain-layers strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=1 fns=0 str=0
+review-chain-inline strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=1 pairs=1 ones2=0 fns=0 str=0
+review-refined strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=1 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-structural strs=1 ints=0 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-poly-function strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=1 str=0
+review-refined-layers strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=1 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-refined-union strs=0 ints=1 vs=0 ws=0 trs=0 objs=0 boxes=1 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-null strs=1 ints=0 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-null-v strs=1 ints=0 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-v-null-union strs=1 ints=1 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-v-tr strs=0 ints=0 vs=1 ws=1 trs=1 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-w strs=0 ints=0 vs=1 ws=1 trs=1 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-box strs=0 ints=0 vs=1 ws=1 trs=1 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-nothing strs=0 ints=0 vs=1 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-v-int strs=1 ints=0 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-box-null strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=1 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-chain-layers strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=1 fns=0 str=0
+review-refined strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=1 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-structural strs=1 ints=0 vs=1 ws=1 trs=1 objs=1 boxes=1 boxes2=1 strs2=1 ones=1 pairs=1 ones2=1 fns=1 str=0
+review-poly-function strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=1 str=0
+review-refined-layers strs=0 ints=0 vs=0 ws=0 trs=0 objs=0 boxes=0 boxes2=1 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+review-refined-union strs=0 ints=1 vs=0 ws=0 trs=0 objs=0 boxes=1 boxes2=0 strs2=0 ones=0 pairs=0 ones2=0 fns=0 str=0
+tr-null strs=1 ints=0 vs=1 trs=1 objs=1 boxes=1 boxes2=1 tr2s=1
+null-tr strs=1 ints=0 vs=1 trs=1 objs=1 boxes=1 boxes2=1 tr2s=1
+tr-null-pattern strs=1 ints=0 vs=1 trs=1 objs=1 boxes=1 boxes2=1 tr2s=1
+null-tr-pattern strs=1 ints=0 vs=1 trs=1 objs=1 boxes=1 boxes2=1 tr2s=1
+tr-nothing strs=0 ints=0 vs=1 trs=1 objs=0 boxes=0 boxes2=0 tr2s=0
+tr-plain strs=0 ints=0 vs=1 trs=1 objs=0 boxes=0 boxes2=0 tr2s=0
+v-null-pattern strs=1 ints=0 vs=1 trs=1 objs=1 boxes=1 boxes2=1 tr2s=1
+refined-null strs=0 ints=0 vs=0 trs=0 objs=0 boxes=1 boxes2=1 tr2s=0
+refined-inter strs=0 ints=0 vs=0 trs=0 objs=0 boxes=1 boxes2=1 tr2s=0
+refined-union strs=1 ints=0 vs=1 trs=1 objs=1 boxes=1 boxes2=1 tr2s=1
+refined-null-pattern strs=0 ints=0 vs=0 trs=0 objs=0 boxes=1 boxes2=1 tr2s=0
+r20 sig-use 3 3 3 false true arr ints 2
+r20 sig-field-set 1 true 7
+r20 sig-bridge 3 2
+r20 sig-lambda 3 3 4
+r20 sig-universal 2
+r20 sig-members public boolean R20_descriptors$Holder.wparam(java.lang.Object); public int R20_descriptors$Holder.nested(java.lang.Object[][]); public int R20_descriptors$Holder.param(java.lang.Object[]); public int R20_descriptors$Holder.trParam(java.lang.Object[]); public java.lang.Object R20_descriptors$Holder.wresult(); public java.lang.Object R20_descriptors$Holder.wv(); public java.lang.Object[] R20_descriptors$Holder.arr(); public java.lang.Object[] R20_descriptors$Holder.field(); public java.lang.Object[] R20_descriptors$Holder.result(); public java.lang.String R20_descriptors$Holder.over(int[]); public java.lang.String R20_descriptors$Holder.over(java.lang.Object[]); public void R20_descriptors$Holder.field_$eq(java.lang.Object[])
+r20 sig-bridges public int R20_descriptors$Impl.take(java.lang.Object); public int R20_descriptors$Impl.take(java.lang.Object[]); public java.lang.Object R20_descriptors$Impl.give(); public java.lang.Object[] R20_descriptors$Impl.give()
+bind strs=arr1 ints=no vs=arr1 objs=arr1 boxes=arr1 pairs=arr1 ones=arr1
+bind-elem strs=elem true ints=no vs=elem true objs=elem true boxes=elem true pairs=elem true ones=elem true
+test-then-cast strs=len1 ints=no vs=len1 objs=len1 boxes=len1 pairs=len1 ones=len1
+bind-pass strs=pass1 ints=no vs=pass1 objs=pass1 boxes=pass1 pairs=pass1 ones=pass1
+refined strs=no ints=no vs=no objs=no boxes=arr1 1 pairs=no ones=no
+chain strs=no ints=no vs=no objs=no boxes=no pairs=len1 ones=len1

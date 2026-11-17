@@ -756,7 +756,7 @@ impl<'w, 'a> Walk<'w, 'a> {
                 self.expr(a, inner);
             }
             TExpr::Js(s, args) => self.template(e, s, args, form, ctx),
-            TExpr::TypeTest(a, _) => {
+            TExpr::TypeTest(a, _, _) => {
                 let status = if matches!(form, Some(Form::Test(_))) { Status::Captured } else { Status::Missing };
                 self.count("type test", status, Some(e), ctx);
                 self.expr(a, inner);

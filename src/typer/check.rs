@@ -857,7 +857,7 @@ impl<'a> Worker<'a> {
             | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null => {}
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::Index(r, _) | TExpr::Spread(r)
             | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::Lambda(_, r) | TExpr::Splice(r)
-            | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) => out.push(SuperVisit::Expr(r)),
+            | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) => out.push(SuperVisit::Expr(r)),
             TExpr::CallStatic(s, args) | TExpr::NewVia(s, args) => {
                 let sig = self.syms.sym(s).sig.clone();
                 self.super_visit_args(sig.as_deref().map(|g| &g.clauses[..]), args, None, out);
@@ -4611,7 +4611,7 @@ impl<'a> Worker<'a> {
                 self.nonlocal_returns(a, in_lambda, out);
                 self.nonlocal_returns(b, in_lambda, out);
             }
-            TExpr::Field(a, _) | TExpr::Unary(_, a) | TExpr::ToStr(a, _) | TExpr::TypeTest(a, _) | TExpr::Cast(a, ..) | TExpr::Index(a, _)
+            TExpr::Field(a, _) | TExpr::Unary(_, a) | TExpr::ToStr(a, _) | TExpr::TypeTest(a, _, _) | TExpr::Cast(a, ..) | TExpr::Index(a, _)
             | TExpr::Spread(a) | TExpr::JsSelect(a, _) => self.nonlocal_returns(a, in_lambda, out),
             TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
                 self.nonlocal_returns(r, in_lambda, out);

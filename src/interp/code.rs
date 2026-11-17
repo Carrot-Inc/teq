@@ -371,7 +371,7 @@ impl<'a, 't> Interp<'a, 't> {
         w.layout.nodes += 1;
         match self.prog().expr(e) {
             TExpr::Local(s) => w.note(e, s),
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, _, _) | TExpr::Index(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) => self.expr_layout(w, r),
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, _, _) | TExpr::Index(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) => self.expr_layout(w, r),
             TExpr::CallStatic(s, args) => {
                 if self.syms().sym(s).owner == Owner::Local {
                     w.note(e, s);
@@ -1594,7 +1594,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let to = b.here();
                 b.patch(prep, to);
             }
-            TExpr::TypeTest(inner, test) => {
+            TExpr::TypeTest(inner, test, _) => {
                 self.lower(b, inner);
                 b.emit(Op::TypeTest(test));
             }

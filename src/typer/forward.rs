@@ -1401,7 +1401,7 @@ impl<'a> Worker<'a> {
             // nothing there; the test it is lowered to (a singleton's value, an inner class's
             // enclosing instance) is made by phases after the check (`PatternMatcher.addOuterTest`,
             // `TypeTestsCasts`, `Erasure`).
-            TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) => self.forward_expr(w, r),
+            TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) => self.forward_expr(w, r),
             TExpr::CallStatic(s, args) => {
                 if w.named.contains_key(&Named::Term(s)) {
                     let place = self.forward_node_place(e);

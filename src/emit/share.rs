@@ -1246,7 +1246,7 @@ impl<'a> Enc<'a> {
                     self.list(args);
                 }
             }
-            TExpr::TypeTest(a, t) => {
+            TExpr::TypeTest(a, t, _) => {
                 self.tok(T_TYPE_TEST);
                 self.expr(a);
                 if self.ol.is_some() && self.prog.leaf_tests.contains_key(&t) {
@@ -1724,7 +1724,7 @@ impl<'a> Enc<'a> {
                 out.bound.extend_from_slice(prog.sym_list(ps));
                 self.scan(body, out);
             }
-            TExpr::TypeTest(r, t) | TExpr::Cast(r, CastOp::Check(t, _) | CastOp::Unbox(t, _) | CastOp::Adapt(t, _), _) => {
+            TExpr::TypeTest(r, t, _) | TExpr::Cast(r, CastOp::Check(t, _) | CastOp::Unbox(t, _) | CastOp::Adapt(t, _), _) => {
                 self.scan(r, out);
                 self.scan_test(t, out);
             }

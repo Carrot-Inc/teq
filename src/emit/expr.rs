@@ -31,7 +31,7 @@ impl<'a> Emitter<'a> {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_)
             | TExpr::Str(_) | TExpr::Unit | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_)
             | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::Lambda(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => true,
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..)
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..)
             | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::JsSelect(r, _) => self.is_simple(r),
             TExpr::New(c, _) if self.closure_anons.contains_key(&c) => true,
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args)
@@ -1165,13 +1165,13 @@ impl<'a> Emitter<'a> {
                     self.out.push(')');
                 }
             }
-            TExpr::TypeTest(inner, _) if self.test_hole(HoleNode::TestExpr(e)).is_some() => {
+            TExpr::TypeTest(inner, _, _) if self.test_hole(HoleNode::TestExpr(e)).is_some() => {
                 let n = self.test_hole(HoleNode::TestExpr(e)).unwrap();
                 let _ = write!(self.out, "$k{}(", n);
                 self.emit_value(inner);
                 self.out.push(')');
             }
-            TExpr::TypeTest(inner, test) => {
+            TExpr::TypeTest(inner, test, _) => {
                 if let TExpr::Local(s) = self.peek(inner) {
                     let n = self.local_ref(s);
                     self.emit_test_as(test, &n, bare);

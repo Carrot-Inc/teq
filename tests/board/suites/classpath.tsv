@@ -212,7 +212,14 @@ jvm/abi_callbacks	pass	-
 jvm/anyval_primitives	pass	-	
 jvm/app_main	pass	-	
 jvm/app_objects	pass	-	
+jvm/array_erased_class_made_and_cast	fail	-	< 1 [Ljava.lang.Object; [Ljava.lang.Object;
+jvm/array_pattern_union_scrutinee	fail	-	tests/classpath/jvm/array_pattern_union_scrutinee.scala:8:47: warning: match may not be exhaustive.
+jvm/array_pattern_universal_null	pass	-	
 jvm/array_spread_copy	pass	-	
+jvm/array_test_chain_spelling	fail	-	< alias true true false
+jvm/array_test_opaque_cyclic	pass	-	
+jvm/array_type_test	pass	-	
+jvm/array_type_test_told	pass	-	
 jvm/bson_inner_companion	pass	-	
 jvm/cats_eq_narrow_receiver	pass	-	
 jvm/chimney_enum_cases	pass	-	

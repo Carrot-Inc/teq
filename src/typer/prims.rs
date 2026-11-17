@@ -2387,7 +2387,7 @@ impl<'a> Worker<'a> {
         let mut work = vec![cond];
         while let Some(c) = work.pop() {
             match self.prog.expr(c) {
-                TExpr::TypeTest(x, test) => {
+                TExpr::TypeTest(x, test, _) => {
                     if let TExpr::Local(s) = self.prog.expr(x) {
                         let info = self.syms.sym(s);
                         if matches!(info.kind, SymKind::Val | SymKind::Param) && !info.by_name {
@@ -2959,7 +2959,18 @@ impl<'a> Worker<'a> {
                 if self.inline.checking > 0 {
                     self.note_leaf_test(test, t);
                 }
-                let te = self.prog.add(TExpr::TypeTest(recv, test));
+                // The type the JVM's array test erases keeps a `*:` chain as it is spelled, as a cast's does
+                // (`resolve_declared_type`: scalac erases such a chain to `Product`, `TypeErasure.erasePair`),
+                // under `@unchecked` too. Its pickle and its type tree stay the resolved type's, as they were.
+                let written = match self.cur_ast().ty(ids[0]) {
+                    crate::ast::TyExpr::Unchecked(inner) => inner,
+                    _ => ids[0],
+                };
+                let tested = match self.types.get(t) {
+                    Type::Class(c, _) if c == self.b.array => self.spelled_cons(written, t).unwrap_or(t),
+                    _ => t,
+                };
+                let te = self.prog.add(TExpr::TypeTest(recv, test, tested));
                 if self.notes_type_trees() {
                     self.note_type_tree(te, t);
                 }

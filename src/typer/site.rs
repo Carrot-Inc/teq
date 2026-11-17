@@ -214,7 +214,7 @@ impl<'a> Worker<'a> {
             let scrut = typer.prog.add(TExpr::Local(x));
             typer.prog.set_type(scrut, x_ty);
             let test = typer.test_for(t, x_ty, span, false);
-            let cond = typer.prog.add(TExpr::TypeTest(scrut, test));
+            let cond = typer.prog.add(TExpr::TypeTest(scrut, test, t));
             typer.prog.set_type(cond, typer.b.t_boolean);
             let value = typer.prog.add(TExpr::Local(x));
             typer.prog.set_type(value, x_ty);

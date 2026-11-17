@@ -1,0 +1,6 @@
+alias true true false
+alias2 true true false
+member true true false
+pattern true true false
+cast-alias 1 1 CCE
+cast-unchecked 1 1 CCE

@@ -52,7 +52,10 @@ arity_class_names	fail	-	missing '31:12: error: type Tuple23 not found'
 array_any_erasure_overloads	fail	-	missing '12:7: error: Conflicting definitions:'
 array_case_unreachable	pass	-	
 array_literal_spread_mismatch	pass	-	
+array_test_determinable	pass	-	
+array_test_opaque_element	pass	-	
 array_test_unchecked	pass	-	
+array_test_wildcard_alias	pass	-	
 ascription_cast_constants	pass	-	
 auto_apply	pass	-	
 backquoted_wildcard	pass	-	

@@ -988,11 +988,22 @@ impl<'a> Gen<'a> {
 
     fn lub(&mut self, x: Lub, y: Lub) -> Lub {
         let reference = |l: &Lub| !matches!(l, Lub::Erased(j) if !j.is_ref()) && !matches!(l, Lub::Value(..));
+        // `Null | C` is `C`'s where `C` derives from `Object` (`erasedLub`: `tp2.derivesFrom(defn.ObjectClass)`): a
+        // value class kept as its class (an array's element, `boxed`) derives from `AnyVal` and a universal trait
+        // from `Any` alone, and the lub of either with `Null` is what their base classes share, `Object`.
+        let cx = self.cx;
+        let of_object = |l: &Lub| {
+            reference(l)
+                && !matches!(l, Lub::Class(c) if {
+                    let info = cx.input.syms.class(*c);
+                    info.value_class || info.mods & crate::ast::mods::UNIVERSAL != 0
+                })
+        };
         match (&x, &y) {
             (Lub::Nothing, _) => return y,
             (_, Lub::Nothing) => return x,
-            (Lub::Null, y) if reference(y) => return y.clone(),
-            (x, Lub::Null) if reference(x) => return x.clone(),
+            (Lub::Null, y) if of_object(y) => return y.clone(),
+            (x, Lub::Null) if of_object(x) => return x.clone(),
             _ => {}
         }
         // Two parts that erase alike (`Show[Int] | D[Show[Int]]` of an opaque `D[A] = A`); never
@@ -1508,6 +1519,131 @@ impl<'a> Gen<'a> {
     pub fn erased_array_call(&mut self, name: &str, params: &[JType], ret: JType) -> JType {
         self.invoke(Invoke::Static, SCALA_RUNTIME, false, name, params, &ret);
         ret
+    }
+
+    /// `t` as a type test reads it (`Worker::test_for`): a variable's instance, an alias expanded, the parent of a
+    /// refinement, of a recursive and of an annotated type, the class of a type under a prefix.
+    pub fn tested_form(&mut self, t: TypeId) -> TypeId {
+        let cx = self.cx;
+        let mut t = cx.input.types.underlying(t);
+        loop {
+            match cx.input.types.get(t) {
+                Type::Var(v) => match cx.input.insts.inst(v) {
+                    Some(inst) => t = inst,
+                    None => return t,
+                },
+                Type::Alias(a, args) => match self.alias_expansion(a, args) {
+                    Some(x) => t = x,
+                    None => return t,
+                },
+                Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) | Type::Nested(_, parent) => t = parent,
+                _ => return t,
+            }
+        }
+    }
+
+    /// The element of the array type `t` (`tested_form`); None for any other type.
+    pub fn array_elem_of(&mut self, t: TypeId) -> Option<TypeId> {
+        let t = self.tested_form(t);
+        let cx = self.cx;
+        match cx.input.types.get(t) {
+            Type::Class(c, args) if cx.input.syms.class(c).kind == ClassKind::Builtin && cx.input.interner.get(cx.input.syms.class(c).name) == "Array" => cx.input.types.items(args).first().copied(),
+            _ => None,
+        }
+    }
+
+    /// The test of a value against the array type `t`, as scalac's `TypeTestsCasts.transformTypeTest` makes it:
+    /// the erased class of the array (`Ok`), or, where the element at the bottom of its array layers is generic
+    /// (`MultiArrayOf(elem, ndims)` with `isGenericArrayElement(elem)`: the innermost array erases to no array
+    /// class), the number of layers for `ScalaRunTime.isArray(x, ndims)` (`Err`). A type that is an array by its
+    /// erasure alone (an opaque alias of one) is tested by that class; one that erases to no array class, as any
+    /// array.
+    pub fn array_test_of(&mut self, t: TypeId) -> Result<Rc<str>, i32> {
+        // An opaque type that stands for itself has no erasure to read: any array, as before.
+        if self.names_cyclic_opaque(t, &mut Vec::new()) {
+            return Err(1);
+        }
+        let (mut layers, mut cur, mut innermost) = (0, t, None);
+        while let Some(elem) = self.array_elem_of(cur) {
+            layers += 1;
+            innermost = Some(cur);
+            cur = elem;
+        }
+        let erased_array = |g: &mut Self, t: TypeId| match g.erase(t) {
+            JType::L(n) if n.starts_with('[') => Some(n),
+            _ => None,
+        };
+        match innermost {
+            Some(inner) if erased_array(self, inner).is_none() => {
+                // An element that is a refinement, a structural type or a polymorphic function type erases to its
+                // parent's or its function's class for the test (`eraseArray` of scalac's `transformTypeTest`):
+                // the layers around that class. The erasure of the array type itself (a signature's) is not this
+                // leaf's and stays what it is.
+                let elem = self.array_elem_of(inner).expect("an array type");
+                match self.erased_element_form(elem) {
+                    Some(one) => Ok(Rc::from(format!("{}{}", "[".repeat(layers as usize - 1), one))),
+                    None => Err(layers),
+                }
+            }
+            _ => erased_array(self, t).ok_or(1),
+        }
+    }
+
+    /// Whether `t` names an opaque type that stands for itself (`opaque type Chain = Array[Chain]`: scalac refuses
+    /// the definition, E140; the tree does not yet, and the erasure does not end on one). `open`: the opaque types
+    /// whose definitions are being read, each as it is defined.
+    fn names_cyclic_opaque(&self, t: TypeId, open: &mut Vec<ClassId>) -> bool {
+        let cx = self.cx;
+        if let Type::Class(c, _) = cx.input.types.get(t) {
+            let info = cx.input.syms.class(c);
+            if info.kind == ClassKind::Opaque {
+                if open.contains(&c) {
+                    return true;
+                }
+                if let Some(under) = info.underlying {
+                    open.push(c);
+                    let cyclic = self.names_cyclic_opaque(under, open);
+                    open.pop();
+                    if cyclic {
+                        return true;
+                    }
+                }
+            }
+        }
+        let mut parts = Vec::new();
+        cx.input.types.parts(t, &mut parts);
+        parts.into_iter().any(|p| self.names_cyclic_opaque(p, open))
+    }
+
+    /// The class of an array of `elem` for a type test where the element's form hides it from the array's own
+    /// erasure (`array_type`): the array of a refinement's, a recursive or an annotated type's parent, of a
+    /// structural type's `Object`, of a polymorphic function type's function class; None for any other element (a
+    /// type parameter's is asked by its layers).
+    fn erased_element_form(&mut self, elem: TypeId) -> Option<Rc<str>> {
+        let cx = self.cx;
+        let mut t = cx.input.types.underlying(elem);
+        let mut stripped = false;
+        loop {
+            match cx.input.types.get(t) {
+                Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) => {
+                    t = parent;
+                    stripped = true;
+                }
+                Type::Poly(_, body) => {
+                    t = body;
+                    stripped = true;
+                }
+                Type::Alias(a, args) => t = self.alias_expansion(a, args)?,
+                _ => break,
+            }
+        }
+        if !stripped || self.generic_array_element(t) {
+            return None;
+        }
+        match self.array_type(Some(t)) {
+            JType::L(n) if n.starts_with('[') => Some(n),
+            _ => None,
+        }
     }
 
     pub fn array_element(t: &JType) -> Option<JType> {
@@ -6984,14 +7120,15 @@ impl<'a> Gen<'a> {
             TExpr::Prim(op @ (PrimOp::Lt | PrimOp::Le | PrimOp::Gt | PrimOp::Ge | PrimOp::RefEq | PrimOp::RefNe | PrimOp::Same | PrimOp::NotSame), a, b) => {
                 self.compare(op, a, b, target, jump_if)
             }
-            TExpr::TypeTest(inner, test) => {
+            TExpr::TypeTest(inner, test, tested) => {
                 // No cast to the static type: `box.fruit.isInstanceOf[Apple]` asks because the
-                // static type may be wrong.
+                // static type may be wrong. The tested type goes with the test, as a pattern's does:
+                // an array's test reads its element there.
                 let boxed = JType::object();
                 self.expr(inner, &boxed);
                 let mark = self.code.locals_mark();
                 let slot = self.store_new(&boxed);
-                self.test(test, slot, &boxed, None, target, jump_if);
+                self.test(test, slot, &boxed, Some(tested), target, jump_if);
                 self.code.locals_release(mark);
             }
             _ => {

@@ -230,7 +230,9 @@ pub enum TExpr {
     StrConcat(ListRef),
     ToStr(TExprId, StrConv),
     Js(StrRef, ListRef),
-    TypeTest(TExprId, TestId),
+    /// `e.isInstanceOf[T]`: the test of `e`, and the type tested as the typer resolved it, which a
+    /// pattern's test carries too (`TPat::Test`): the JVM's test of an array reads the element there.
+    TypeTest(TExprId, TestId, TypeId),
     /// `e.asInstanceOf[T]` that does something at run time, `T` as written: the operation dotty's
     /// erasure leaves of the cast (`TypeTestsCasts.transformAsInstanceOf`), the operand evaluated
     /// first. A cast its erasure makes redundant is the operand itself, retyped as an ascription is.
@@ -2326,7 +2328,7 @@ impl<'a> Iterator for Descendants<'a> {
             | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::Lambda(_, r) | TExpr::Splice(r) => {
                 self.exprs.push(r)
             }
-            TExpr::TypeTest(r, test) | TExpr::Cast(r, CastOp::Check(test, _) | CastOp::Unbox(test, _) | CastOp::Adapt(test, _), _) => {
+            TExpr::TypeTest(r, test, _) | TExpr::Cast(r, CastOp::Check(test, _) | CastOp::Unbox(test, _) | CastOp::Adapt(test, _), _) => {
                 self.exprs.push(r);
                 self.tests.push(test);
             }

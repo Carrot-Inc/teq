@@ -7,6 +7,20 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM a type test against an array type looks at the array's element, by `isInstanceOf` as by a typed
+  pattern: `x.isInstanceOf[Array[String]]` was true of any array (`Array(1, 2)` among them) where a pattern
+  `case _: Array[String]` already told them apart; under a union or an intersection each member is tested by its
+  own array class (`Array[Int] | Array[String]` was any array); an array of arrays of a type parameter is asked
+  its two layers. Such a test is told uncheckable by what its element is, as scalac decides it:
+  `Array[List[String]]` and `Array[G[Any]]` of an invariant `G` are, `Array[Box]`, `Array[List[Any]]` and
+  `Array[G[?]]` are not (teq warned of every `isInstanceOf` against an array of a class); an opaque type's
+  element is, outside the scope that sees through it. The element's class is the one scalac's erasure names: a
+  value class or a universal trait with `Null` is an `Object` (`Array[V | Null]` is an `Object[]`, and a member
+  whose signature names such a type now has scalac's descriptor, `Object[]` where it was `V[]`), a `*:` chain
+  written out with `EmptyTuple` a `Product`, a refinement its parent, a structural type an `Object`, a polymorphic
+  function type its function class. The descriptors over `X | Null` change with this (a parameter's, a result's,
+  a field's), so a module built for the JVM by an earlier teq must be built again. JavaScript and the
+  interpreter, whose arrays carry no element class, are as they were.
 - A class named through a path has a `ClassTag`: `Array.empty[o.nums.Box]`, `Array(o.nums.Pt(1), o.nums.Pt(2))`,
   a context bound's `make[o.nums.Box](2)`, a class of a trait named through the object that inherits it
   (`summon[ClassTag[syntax.vec2]]`), the class's own inner object named inside the class, a projection

@@ -1392,7 +1392,7 @@ fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, out: &m
     let mut stack: Vec<TExprId> = vec![e];
     while let Some(e) = stack.pop() {
         match prog.expr(e) {
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
             | TExpr::Spread(r) | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::Lambda(_, r) => stack.push(r),
             TExpr::CallStatic(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args)
             | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => stack.extend(prog.expr_list(args).iter().copied()),

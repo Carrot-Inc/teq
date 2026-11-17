@@ -272,7 +272,7 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 self.template(s, args, fr, cx)
             }
-            TExpr::TypeTest(inner, test) => {
+            TExpr::TypeTest(inner, test, _) => {
                 let v = self.eval(inner, fr, cx)?;
                 Ok(Value::Bool(self.type_test(&v, test, fr, cx)?))
             }

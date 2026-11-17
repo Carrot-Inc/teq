@@ -3240,7 +3240,7 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             }
             m.template(cx, template, args);
         }
-        TExpr::TypeTest(inner, test) => {
+        TExpr::TypeTest(inner, test, _) => {
             visit(m, cx, inner);
             visit_test(m, cx, test);
         }

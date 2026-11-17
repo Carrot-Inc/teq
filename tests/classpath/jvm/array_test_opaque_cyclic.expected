@@ -1,0 +1,5 @@
+chain true true false
+self true false
+fix true true false
+pattern 1 0
+outside true false

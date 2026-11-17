@@ -981,11 +981,11 @@ impl<'a> Worker<'a> {
         for (i, &child) in children.iter().enumerate().rev().skip(1) {
             let test = self.class_test(child);
             let a_ref = self.prog.add(TExpr::Local(a));
-            let is_child = self.prog.add(TExpr::TypeTest(a_ref, test));
+            // The case's class, of any arguments (`case _: C[?] => i`).
+            let n = self.syms.class(child).tparams.len();
+            let t = self.types.class(child, &vec![ANY; n]);
+            let is_child = self.prog.add(TExpr::TypeTest(a_ref, test, t));
             if self.capturing() {
-                // The case's class, of any arguments (`case _: C[?] => i`).
-                let n = self.syms.class(child).tparams.len();
-                let t = self.types.class(child, &vec![ANY; n]);
                 self.capture_form(is_child, crate::tir::capture::Form::Test(t));
             }
             let index = self.prog.add(TExpr::Int(i as i32));
@@ -1596,7 +1596,9 @@ Failed to synthesize an instance of type {}:", shown, shown);
             let mut ordinal = self.prog.add(TExpr::Int(children.len() as i32 - 1));
             for (i, &child) in children.iter().enumerate().rev().skip(1) {
                 let test = self.class_test(child);
-                let is_child = self.prog.add(TExpr::TypeTest(a_ref, test));
+                let n = self.syms.class(child).tparams.len();
+                let t = self.types.class(child, &vec![ANY; n]);
+                let is_child = self.prog.add(TExpr::TypeTest(a_ref, test, t));
                 let index = self.prog.add(TExpr::Int(i as i32));
                 ordinal = self.prog.add(TExpr::If(is_child, index, Some(ordinal)));
             }

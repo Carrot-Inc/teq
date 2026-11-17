@@ -1941,7 +1941,7 @@ impl<'a> Worker<'a> {
             }
         };
         match prog.expr(e) {
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) => {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) => {
                 self.region_binders(r, reducible, classes, seen, out)
             }
             // A splice's code is copied whole, nothing left in it for the walk to demand.
@@ -2091,10 +2091,12 @@ impl<'a> Worker<'a> {
                 self.quote.deferred.insert(e, Arc::new(moved));
             }
             match self.prog.expr(e) {
-                TExpr::TypeTest(a, test) => {
+                TExpr::TypeTest(a, test, tested) => {
+                    // The tested type takes the expansion's type arguments, as a pattern's does (`TPat::Test`).
                     let specialised = self.specialise_test(test, subst);
-                    if specialised != test {
-                        self.prog.exprs[e.idx()] = TExpr::TypeTest(a, specialised);
+                    let filled = self.types.subst(tested, subst);
+                    if specialised != test || filled != tested {
+                        self.prog.exprs[e.idx()] = TExpr::TypeTest(a, specialised, filled);
                     }
                 }
                 TExpr::Cast(a, op, to) => {
@@ -2670,7 +2672,7 @@ impl<'a> Worker<'a> {
         let mut pats: Vec<TPatId> = Vec::new();
         for e in self.prog.descendants(root) {
             match self.prog.expr(e) {
-                TExpr::TypeTest(_, t) | TExpr::Cast(_, CastOp::Check(t, _) | CastOp::Unbox(t, _) | CastOp::Adapt(t, _), _) => tests.push(t),
+                TExpr::TypeTest(_, t, _) | TExpr::Cast(_, CastOp::Check(t, _) | CastOp::Unbox(t, _) | CastOp::Adapt(t, _), _) => tests.push(t),
                 TExpr::Match(_, cases) => pats.extend(self.prog.case_list(cases).iter().map(|c| c.pat)),
                 TExpr::Try(i) => pats.extend(self.prog.case_list(self.prog.tries[i as usize].cases).iter().map(|c| c.pat)),
                 TExpr::Block(stmts, _) => pats.extend(self.prog.stmt_list(stmts).iter().filter_map(|s| match *s {

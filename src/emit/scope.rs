@@ -1537,7 +1537,7 @@ impl<'a> Emitter<'a> {
             match (hole.kind, hole.node) {
                 (_, HoleNode::Expr(x)) => self.walk(w, x),
                 (_, HoleNode::TestExpr(e)) => {
-                    if let TExpr::TypeTest(_, t) = self.prog.expr(e) {
+                    if let TExpr::TypeTest(_, t, _) = self.prog.expr(e) {
                         w.bind_fixed("$v");
                         self.walk_test(w, t);
                         w.pop();
@@ -1875,7 +1875,7 @@ impl<'a> Emitter<'a> {
                     w.top = mark;
                 }
             }
-            TExpr::TypeTest(inner, test) => {
+            TExpr::TypeTest(inner, test, _) => {
                 match self.test_hole(HoleNode::TestExpr(e)) {
                     Some(n) => w.name(&format!("$k{}", n)),
                     // A tested value other than a local is passed to `($v) => test`.

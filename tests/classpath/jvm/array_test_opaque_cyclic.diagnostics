@@ -1,0 +1,15 @@
+tests/classpath/jvm/array_test_opaque_cyclic.scala:11:32: warning: the type test for Array[Chain] cannot be checked at runtime because its type arguments can't be determined from Any
+    def chain(x: Any): Boolean = x.isInstanceOf[Array[Chain]]
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_test_opaque_cyclic.scala:12:31: warning: the type test for Array[Self] cannot be checked at runtime because its type arguments can't be determined from Any
+    def self(x: Any): Boolean = x.isInstanceOf[Array[Self]]
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_test_opaque_cyclic.scala:13:30: warning: the type test for Array[Fix[Array]] cannot be checked at runtime because its type arguments can't be determined from Any
+    def fix(x: Any): Boolean = x.isInstanceOf[Array[Fix[Array]]]
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_test_opaque_cyclic.scala:14:45: warning: the type test for Array[Chain] cannot be checked at runtime because its type arguments can't be determined from Any
+    def pattern(x: Any): Int = x match { case _: Array[Chain] => 1; case _ => 0 }
+                                              ^^^^^^^^^^^^^^^
+tests/classpath/jvm/array_test_opaque_cyclic.scala:15:32: warning: the type test for Array[Fix[Array]] cannot be checked at runtime because its type arguments can't be determined from Any
+  def outside(x: Any): Boolean = x.isInstanceOf[Array[Rec.Fix[Array]]]
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
