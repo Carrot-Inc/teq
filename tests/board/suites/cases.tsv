@@ -134,6 +134,8 @@ body_reads_outer_member	pass	-
 boolean_assign_ops	pass	-	
 boolean_strict_operators	pass	-	
 bottom_path_kinds	pass	-	
+bound_argument_object_load_routes	pass	-	
+bound_argument_outer_instance	pass	-	
 bounded_function_copy_default	pass	-	
 bounded_param_operators	pass	-	
 bounded_type_test	pass	-	
@@ -2423,6 +2425,8 @@ right_assoc_lift_repeated_order	pass	-
 right_assoc_lift_toplevel_value	pass	-	
 right_assoc_lift_written_cast	pass	-	
 right_assoc_member_retry	pass	-	
+right_assoc_operand_before_object_load	pass	-	
+right_assoc_operand_object_receivers	pass	-	
 right_assoc_order_concat	pass	-	
 right_assoc_order_cons	pass	-	
 right_assoc_order_extension	pass	-	

@@ -48,6 +48,7 @@ overloads	pass	-
 overloads_rejected	pass	-	
 prelude	pass	-	
 summoner_ctor	pass	-	
+template_object_argument	pass	-	
 template_precedence	pass	-	
 template_precedence_early	fail	-	< 1
 trycatch	pass	-	

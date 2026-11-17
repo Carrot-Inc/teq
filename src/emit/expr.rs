@@ -506,9 +506,10 @@ impl<'a> Emitter<'a> {
         match self.peek(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
             | TExpr::Null | TExpr::This | TExpr::Super(_) | TExpr::ClassOf(..) | TExpr::Lambda(..) => Purity::Pure,
-            // An object's first access runs its initialiser, where it has one (`refPurity`: a
-            // module of a no-inits class is a pure path).
-            TExpr::Module(c) => file_init(if self.has_body.get(c.idx()).copied().unwrap_or(true) { Purity::Idempotent } else { Purity::Pure }),
+            // An object's first access runs whatever its load runs (`elaborate::load_runs_nothing`: its own
+            // initialiser or a base's, an argument or a secondary constructor of a base, a base class's outer
+            // instance).
+            TExpr::Module(c) => file_init(if crate::typer::elaborate::load_runs_nothing(self.syms, self.interner, c) { Purity::Pure } else { Purity::Idempotent }),
             TExpr::Local(s) => reference(s),
             // A constant is a literal (`refPurity`: a constant type is a pure path), whatever the
             // object it is read through.

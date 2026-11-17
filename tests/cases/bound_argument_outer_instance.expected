@@ -1,0 +1,60 @@
+01 a class of an instance: a bound argument
+  effect b
+  H1 loaded
+  outer h1 made
+  pair called
+02 the same: a right-associative operand
+  effect l
+  H2 loaded
+  outer h2 made
+  :: called
+03 a class of an object of an instance: a bound argument
+  effect b
+  H3 loaded
+  outer h3 made
+  pair called
+04 the same: an operand
+  effect l
+  H4 loaded
+  outer h4 made
+  :: called
+05 a class of an instance two parents up: a bound argument
+  effect b
+  H5 loaded
+  outer h5 made
+  pair called
+06 the same: an operand
+  effect l
+  H6 loaded
+  outer h6 made
+  :: called
+07 a trait of an instance: a bound argument
+  effect b
+  pair called
+08 the same: an operand
+  effect l
+  :: called
+09 the prefix a lazy val: a bound argument
+  effect b
+  H9's lazy val made
+  outer h9 made
+  pair called
+10 the parent named through an alias: an operand
+  effect l
+  H10 loaded
+  outer h10 made
+  :: called
+11 a class of an object: a bound argument
+  effect b
+  pair called
+12 the same: an operand
+  effect l
+  :: called
+13 an operand inside a bound argument
+  effect b
+  effect l
+  H11 loaded
+  outer h11 made
+  :: called
+  pair called
+end

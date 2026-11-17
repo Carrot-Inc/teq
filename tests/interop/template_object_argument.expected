@@ -1,0 +1,45 @@
+the text writes the second argument first: a class's default
+  ClassDefault loaded
+  effect b
+2
+a secondary constructor
+  Secondary loaded
+  effect b
+2
+the text never writes the object: a sealed class's default
+  SealedCase loaded
+  effect b
+1
+a parent trait's default, the second argument first
+  TraitDefault loaded
+  effect b
+2
+an object with a statement, never written
+  Statement loaded
+  effect b
+1
+a val initialised by a call
+  ValByCall loaded
+  effect b
+1
+a superclass's statement
+  ClassBody loaded
+  effect b
+1
+an enum's companion: each case runs the class's statement
+  Light case made
+  Light case made
+  effect b
+1
+an object made with an instance its parent is nested in, the second argument first
+  Keeper's instance made
+  effect b
+2
+the same, never written
+  LateKeeper's instance made
+  effect b
+1
+an object that runs nothing
+  effect b
+2
+end

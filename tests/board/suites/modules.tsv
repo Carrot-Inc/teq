@@ -25,6 +25,7 @@ arraychaininline	fail	-	arraychaininline classes
 basic	pass	-	
 batchremove	pass	-	
 besideany	pass	-	
+boundargumentorder	pass	-	
 boundederasure	pass	-	
 bounds	pass	-	
 boundsinferred	pass	-	

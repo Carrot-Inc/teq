@@ -6914,13 +6914,14 @@ impl<'a> Worker<'a> {
 
     /// Whether evaluating `te` can do nothing at all: a pure path by the lift's test (`exprPurity` at `PurePath`)
     /// that can neither throw nor run an initializer where it is evaluated: a literal, `this`, a local value or a
-    /// parameter, an object without an initializer that no products' record vouches for (`products_vouch`). A
-    /// selection is a pure path too and throws on a null prefix; a member of `this` may be an object a subclass
-    /// implements it with; a value of an object or of a file's top level is read after its owner's initializers,
-    /// which run at its first read wherever that stands. Beside such a receiver of a right-associative operator's
-    /// application the operand runs at the same point bound or not, so no binding is written (the reference's tree
-    /// has one, an emitted program none of its effect); the absence of a binding is what needs the proof, so what
-    /// is not listed here is bound.
+    /// parameter, an object whose load runs nothing (`elaborate::load_runs_nothing`: no initializer of its own or
+    /// of a base, no argument or secondary constructor of a base, no outer instance of a base class) and that no
+    /// products' record vouches for (`products_vouch`). A selection is a pure path too and throws on a null
+    /// prefix; a member of `this` may be an object a subclass implements it with; a value of an object or of a
+    /// file's top level is read after its owner's initializers, which run at its first read wherever that
+    /// stands. Beside such a receiver of a right-associative operator's application the operand runs at the
+    /// same point bound or not, so no binding is written (the reference's tree has one, an emitted program none
+    /// of its effect); the absence of a binding is what needs the proof, so what is not listed here is bound.
     pub(super) fn is_inert_path(&mut self, te: TExprId) -> bool {
         use super::elaborate::Purity;
         if self.is_pending_call(te) || !self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE_PATH) {
@@ -6929,7 +6930,7 @@ impl<'a> Worker<'a> {
         match self.prog.expr(te) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null => true,
             TExpr::This | TExpr::Super(_) | TExpr::Local(_) => true,
-            TExpr::Module(c) => !self.products_vouch(c),
+            TExpr::Module(c) => !self.products_vouch(c) && super::elaborate::load_runs_nothing(&self.syms, self.interner, c),
             _ => false,
         }
     }

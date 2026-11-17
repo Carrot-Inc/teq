@@ -1,0 +1,38 @@
+1 an object with an extension after a bound argument
+  effect b
+  Tagged loaded
+  pair called
+2 an object with an export after a bound argument
+  effect b
+  Shared loaded
+  pair called
+3 an object with neither after a bound argument
+  effect b
+  Bare loaded
+  pair called
+4 an object called on after its bound arguments
+  effect b
+  effect a
+  Host loaded
+  take called
+5 an object loaded by its base's secondary constructor after a bound argument
+  effect b
+  Late loaded
+  pair called
+6 a right-associative operator's left operand before the object on its right
+  effect l
+  Cons loaded
+  :: called
+7 the same, the object loaded by its base's secondary constructor
+  effect l
+  LateCons loaded
+  :: called
+8 an object made with an instance its parent is nested in after a bound argument
+  effect b
+  Keeper loaded
+  pair called
+9 the same on the right of a right-associative operator
+  effect l
+  ConsKeeper loaded
+  :: called
+end

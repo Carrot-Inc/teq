@@ -24,6 +24,7 @@ java_errors	pass	-
 js/alleycats	pass	-	
 js/any_equals_null	pass	-	
 js/atto_parsers	pass	-	
+js/bound_argument_over_scalac	pass	-	
 js/cake_fourth	pass	-	
 js/cake_outer	pass	-	
 js/cake_third	pass	-	

@@ -1,0 +1,5 @@
+named arguments out of order, an object last
+  effect b
+  Bare loaded
+  pair called
+end

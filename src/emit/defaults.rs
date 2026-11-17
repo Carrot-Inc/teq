@@ -190,8 +190,9 @@ impl<'a> Defaults<'a> {
                 let info = self.syms.sym(s);
                 matches!(info.kind, SymKind::Val | SymKind::Param) && info.mods & (mods::MUTABLE | mods::LAZY) == 0
             }
-            // An object without initialisation, whose first reference runs nothing.
-            TExpr::Module(c) => crate::typer::elaborate::no_inits(self.syms, self.interner, c),
+            // An object whose first reference runs nothing: no initialisation of its own or of a base, no
+            // argument or secondary constructor of a base, no outer instance of a base class.
+            TExpr::Module(c) => crate::typer::elaborate::load_runs_nothing(self.syms, self.interner, c),
             // A val of `this`.
             TExpr::Field(r, s) => {
                 let info = self.syms.sym(s);

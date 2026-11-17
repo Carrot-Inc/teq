@@ -7,6 +7,32 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An object whose parent is a class nested in a class (`object Entry extends registry.made.Row`) is made with
+  that class's instance, and its load evaluates the path to it (`registry.made`: `registry`'s load, a lazy val)
+  where Scala does: after an argument that a call binds ahead of itself (on JavaScript), after a
+  right-associative operator's left operand (on every target), and among a `@js` template's arguments in their
+  order. The path was evaluated before the argument or the operand, and never where a template's text did not
+  write the object.
+- On JavaScript an object passed to a method written as a `@js` template (the std's intrinsics, a program's own)
+  is loaded where the call's arguments are evaluated. A template that writes its second argument first
+  (`@js("[$1, $0]")`) ran `swapped(Registry, step("b"))`'s `step("b")` before `Registry`'s load, and a template
+  that does not write the object never loaded it, where that load runs an argument of a base's constructor (a
+  class's default, a sealed class's) or a base's secondary constructor.
+- The left operand of a right-associative operator is evaluated before the object on its right is loaded:
+  `step("l") :: Registry` ran `Registry`'s load first, on JavaScript, the JVM and the interpreter, where that
+  load runs an argument of a base's constructor (a parent's default, `trait Listed(n: Int = register())`) or a
+  base's secondary constructor, in the program or in a jar: the operand's binding was left out beside every
+  object whose own class runs no initialisation. It is left out only beside an object whose load runs nothing.
+- On JavaScript an argument that a call binds ahead of itself is evaluated before an object named after it is
+  loaded. Named arguments written out of order and a call that fills a default bind the argument written first
+  (`pair(b = step("b"), a = Registry)`); the emitter wrote it back into the call behind an object it took to
+  run nothing at its load, so an object whose load runs an argument of a base's constructor (a parent's default,
+  `trait Listed(n: Int = register())`, a `using` argument, a context bound's evidence) was loaded before the
+  argument was evaluated, and so was an object of a jar or of another module's products whose load runs a
+  secondary constructor's body or a parent's written argument, which its pickle does not hold. The JVM and the
+  interpreter evaluated them in the order written. An object is written back behind such an argument only where
+  its class runs no initialisation and neither it nor a base takes a constructor parameter or has a secondary
+  constructor.
 - `a ++ b` of two arrays runs in a lean JavaScript build. A program that concatenated two arrays, of any element
   type, stopped at that line unless something else of it had brought the `ClassTag` object in: `ReferenceError:
   ClassTag$ is not defined`, or a `TypeError` on `ClassTag$().apply` or on a tag's `wrap` where only a part of

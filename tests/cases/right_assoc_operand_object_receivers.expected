@@ -1,0 +1,55 @@
+01 an object whose load shows, the flag set
+  effect l
+  Kept1 loaded
+  :: called
+02 an object with a statement
+  effect l
+  Loud2 loaded
+  :: called
+03 an object that runs nothing
+  effect l
+  :: called
+04 a value of an object whose load shows
+  effect l
+  Holder4 loaded
+  +: called
+05 a call as the right operand
+  effect l
+  made r
+  +: called
+06 a literal on the left
+  Kept6 loaded
+  :: called
+07 a chain
+  effect a
+  effect b
+  Kept7 loaded
+  :: called with 1
+  :: called with 1
+08 an extension operator
+  effect l
+  Kept8 loaded
+  +:: called
+09 a repeated parameter: an effect and an object
+  effect a
+  Elem9 loaded
+  Recv9 loaded
+  :: called with 2
+10 in an inline method's body, the object its argument
+  effect l
+  Kept10 loaded
+  :: called
+11 a block on the left
+  block
+  Kept11 loaded
+  :: called
+12 an object on the left
+  Kept12 loaded
+  Arg12 loaded
+  :: called
+13 a by-name parameter
+  Kept13 loaded
+  :: entered
+  effect l
+  :: left
+end

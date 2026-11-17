@@ -128,6 +128,44 @@ pub(crate) fn no_inits(syms: &Symbols, interner: &crate::intern::Interner, c: Cl
     syms.class(c).base_types.iter().all(|&(k, _)| class_no_inits_recorded(syms, k))
 }
 
+/// Whether the first reference of the object `c` runs nothing, for an asker that writes the reference elsewhere
+/// than the order of evaluation put it or leaves a value unbound beside it (the JavaScript lowering of a call's
+/// bound arguments; a template's argument written where its text puts it, the emitter's `arg_purity`; the
+/// typer's receiver of a right-associative operator, `Worker::is_inert_path`): `no_inits`, and no base of its
+/// class takes a constructor parameter or has a secondary constructor, and no base class is made with an outer
+/// instance. An object's load runs its own template and its bases' (`no_inits` asks each), the arguments of its
+/// bases' constructors, the body of a secondary constructor a parent call names, and the path to the outer
+/// instance of a base class (`object Named extends holder.made.Inner` evaluates `holder.made`: the constructor
+/// of a class nested in a class takes it, `ExplicitOuter`; a trait's is a method of the object, evaluated when
+/// it is called). `NoInits` sees a parent's written argument alone
+/// (`TreeInfo.parentsKind`): no default, no `using` argument, and from a pickle no parent call at all
+/// (`TreeUnpickler.indexStats` reads a template's statements, where a constructor is a method). An argument needs
+/// a parameter, and which constructor a parent call names the tables do not say. Where a base has either and
+/// the load runs nothing the answer is still no. A base's parameters are read as the namer entered them
+/// (`ctor_syms`) beside its signature (`ctor`, which a context bound's evidence joins when the class is
+/// completed): the typer may ask of a base whose signature is not completed yet.
+pub(crate) fn load_runs_nothing(syms: &Symbols, interner: &crate::intern::Interner, c: ClassId) -> bool {
+    no_inits(syms, interner, c)
+        && !syms.class(c).base_types.iter().any(|&(k, _)| {
+            let base = syms.class(k);
+            !base.ctors.is_empty() || base.ctor_syms.iter().any(|cl| !cl.is_empty()) || base.ctor.iter().any(|cl| !cl.params.is_empty())
+        })
+        && !syms.class(c).base_types.iter().skip(1).any(|&(k, _)| syms.class(k).kind != ClassKind::Trait && made_with_outer_instance(syms, k))
+}
+
+/// Whether an instance of the class `k` is made with an instance that encloses it: some owner of `k`, up to its
+/// package, is a class or a trait (an object nested in one is such an owner's member), or `k` is a block's.
+fn made_with_outer_instance(syms: &Symbols, k: ClassId) -> bool {
+    let info = syms.class(k);
+    match info.owner {
+        Owner::Package(_) => false,
+        Owner::Local => true,
+        Owner::Class(o) => {
+            (info.mods & mods::JAVA_STATIC == 0 && !matches!(syms.class(o).kind, ClassKind::Object | ClassKind::Builtin)) || made_with_outer_instance(syms, o)
+        }
+    }
+}
+
 /// `Definitions.isAssuredNoInits` over the symbol tables: `scala.Some`, `scala.Tuple1` to
 /// `scala.Tuple22` (`MaxTupleArity`), or an object whose companion is one.
 fn is_assured_no_inits(syms: &Symbols, interner: &crate::intern::Interner, c: ClassId) -> bool {

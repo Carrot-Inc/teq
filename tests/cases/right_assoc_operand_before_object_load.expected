@@ -1,0 +1,5 @@
+a right-associative operator: its left operand, then the object
+  effect l
+  Kept loaded
+  :: called
+end

@@ -41,7 +41,8 @@
 # tests/support/joined_function_lib.scala compiled the same way; regroup-a1, regroup-a2 and regroup-b,
 # tests/support/regroup/ compiled the same way, b against a1; lazyval-lib, tests/support/lazyval_lib.scala
 # compiled the same way; lazy-inline-lib, tests/support/lazy_inline_lib.scala compiled the same way; bodycasts-lib, tests/support/body_casts_lib.scala compiled the same way; extend-lib,
-# tests/support/extend_lib.scala compiled the same way; bundle-lib,
+# tests/support/extend_lib.scala compiled the same way; bound-argument-lib,
+# tests/support/bound_argument_lib.scala compiled the same way; bundle-lib,
 # tests/support/bundle's properties file as a jar (a resource bundle); reflect-lib,
 # tests/support/reflect_lib.scala compiled the same way for Scala.js; erasure-lib,
 # tests/support/erasure_lib.scala compiled the same way for the JVM; vctraits-lib,
@@ -982,6 +983,20 @@ extend_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/bound_argument_lib.scala compiled by scalac into a jar: objects whose loading shows, called
+# with arguments bound before them.
+bound_argument_lib_jar() {
+  local src=tests/support/bound_argument_lib.scala
+  local jar=$scratch/bound-argument-lib.jar
+  local dir=$scratch/bound-argument-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/bound_argument_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/predef_lib.scala compiled by scalac into a jar: bodies through scala-library's Predef.
 predef_lib_jar() {
   local src=tests/support/predef_lib.scala
@@ -1196,6 +1211,7 @@ jar_of() {
     regroup-a2) regroup_jar a_v2 ;;
     regroup-b) regroup_jar b a_v1 ;;
     extend-lib) extend_lib_jar ;;
+    bound-argument-lib) bound_argument_lib_jar ;;
     state-lib) state_lib_jar ;;
     scala2-lib) scala2_lib_jar ;;
     scala2-traits) scala2_traits_jar ;;

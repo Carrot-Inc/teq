@@ -1,0 +1,64 @@
+a class base's default
+  effect b
+  ClassDefault loaded
+  pair called
+an inner argument list
+  effect b
+  InnerList loaded
+  pair called
+a using parameter
+  effect b
+  UsingParam loaded
+  pair called
+a base's own parent call
+  effect b
+  ParentCall loaded
+  pair called
+a base class's statement
+  effect b
+  BaseStatement loaded
+  pair called
+a base trait's val
+  effect b
+  BaseVal loaded
+  pair called
+a parent trait's default
+  effect b
+  TraitDefault loaded
+  pair called
+a base's secondary constructor
+  effect b
+  Secondary loaded
+  pair called
+a secondary constructor's body
+  effect b
+  SecondaryBody loaded
+  pair called
+a context bound
+  effect b
+  ContextBound loaded
+  pair called
+a sealed class's default
+  effect b
+  SealedCase loaded
+  pair called
+a statement of its own
+  effect b
+  OwnStatement loaded
+  pair called
+an empty object
+  effect b
+  pair called
+a plain trait's object
+  effect b
+  pair called
+a lazy val's object
+  effect b
+  pair called
+a method's object
+  effect b
+  pair called
+a nested object
+  effect b
+  pair called
+end

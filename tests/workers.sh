@@ -1018,6 +1018,19 @@ same_output phase_top_level_order 3 run tests/workers/phase_top_level_order --cl
 # 2,1,3 at every count; scalac prints 1,2,3).
 upstream phase_package_object_order
 same_output phase_package_object_order 3 run tests/workers/phase_package_object_order/use --classpath "$work/phase_package_object_order_lib"
+# An argument bound before an object of another module's classes is loaded: the program's build reads the
+# object's class from the upstream's pickle, which holds an extension, an export's forwarder and a constructor
+# as methods and no parent's call: nothing in it says what the load runs, so the bound argument is written
+# before the object at every count (before, JavaScript loaded the object first at every count; scalac prints
+# the effect, then the load).
+rm -rf "$work/bound_argument_lib"
+timeout 120 "$TEQ" compiler check --products "$work/bound_argument_lib" --sourceroot tests/support tests/support/bound_argument_lib.scala --threads 1 > /dev/null 2>&1
+same_output bound_argument_over_products 3 run tests/classpath/js/bound_argument_over_scalac.scala --classpath "$work/bound_argument_lib"
+if cmp -s "$work/bound_argument_over_products.one" tests/classpath/js/bound_argument_over_scalac.expected; then
+  ok
+else
+  bad "bound_argument_over_products: one worker's output is not scalac's: $(diff tests/classpath/js/bound_argument_over_scalac.expected "$work/bound_argument_over_products.one" | grep '^[<>]' | head -2 | tr '\n' ' ' | cut -c1-200)"
+fi
 # A file whose expansion meets a macro of the run through an implicit search gives up its whole round at every count:
 # `A`'s later error goes with it, and `Z`'s error keeps the next round from running (before, the forked round gave up
 # the one unit and reported A_LATE beside Z_ERROR; scalac reports Z_ERROR alone).
