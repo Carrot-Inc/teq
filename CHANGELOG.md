@@ -7,6 +7,28 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An object named as a statement is evaluated for its effect on every target (`Registry` alone on a line, to run
+  its initialisation). On JavaScript the object was left out where its own body runs nothing, so one whose
+  initialisation is its superclass's (`object Registry extends Base("x")`: the superclass's body or a field's
+  initialiser, a mixed-in trait's body, an argument of the parent's constructor) was never initialised; an
+  object of a library named so was left out whatever it runs (of a jar on the JVM and on JavaScript, of another
+  module's products on JavaScript); and the same went for a statement of a class body and for the receiver of
+  `synchronized` on JavaScript. A statement that does nothing is now removed where scalac removes it and nowhere
+  else: a literal, a local value, a function literal, or an object whose class runs no initialiser as scalac
+  judges it, as a statement of a block; so the JVM and the interpreter no longer evaluate an object there whose
+  only effect sits in a secondary constructor's argument or in an omitted default argument. Named through its
+  package (`lib.Registry`) or as a statement of a class body such an object is evaluated, as by scalac. A class
+  is judged as the build reads it: from its source where it is compiled, from its TASTy where it comes from a
+  library or from another module's products. An object whose effect is an argument of its parent's constructor,
+  named as a statement by its bare name, therefore runs in a build of both modules from source and not in a
+  build against the other module's products, exactly as scalac differs between sources compiled together and a
+  jar. What makes a class one that initialises is scalac's list: beside a statement, a `val` with a value, an
+  object and a parameterless given, an `extension`, an export clause and two abstract vals written in one
+  definition (`val a, b: Int`) do; a class of the JDK always does and a Java interface never, whatever the
+  standard library writes for it, and so does a class of a Scala 2 library, a Scala 2 trait where it holds a
+  concrete member. On JavaScript a block whose statements all do nothing is now written as its value would be
+  written in its place: `{ (); () => 1 } != null` was no comparison of the function but a function itself
+  (`() => 1 !== null`).
 - Which constructors a creation may call is decided before its arguments choose among them, as scalac decides
   it: a constructor the place cannot reach is no candidate. Three things were wrong before. A hidden constructor
   could win: for `class C(val x: Any) { protected def this(x: String) = this("secondary") }`, `new

@@ -1,0 +1,16 @@
+1 an empty last list
+2 an argument in the last list
+  A2 last list
+3 a using list left to the compiler
+  A3 before a using list
+4 two lists with arguments
+  A4 first of two
+  A4 second of two
+5 an empty last list and a trait
+6 through a class whose parent has an empty last list
+7 as values
+  A1 first list
+  A5 class with a trait
+  D6 parent made
+  truetruetruetruetruetrue
+end

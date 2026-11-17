@@ -240,7 +240,8 @@ impl<'a, 't> Interp<'a, 't> {
                     return self.eval_tuple_match(c, args, cases, fr, cx, false);
                 }
                 let inner = self.block_frame(stmts, fr, cx)?;
-                let r = self.eval(res, &inner, cx);
+                // The pure result of an ascribed block that is a statement is not evaluated.
+                let r = if self.prog().is_removed(res) { Ok(Value::Unit) } else { self.eval(res, &inner, cx) };
                 self.leave_block(inner, fr);
                 r
             }
@@ -1054,6 +1055,8 @@ impl<'a, 't> Interp<'a, 't> {
         }
         for i in range {
             match self.prog().stmts[i] {
+                // A statement the reference's `PureStats` removes is not run (`Program::runs`).
+                TStmt::Expr(x) if self.prog().is_removed(x) => {}
                 TStmt::Expr(x) => {
                     self.eval(x, &inner, cx)?;
                 }
@@ -1739,7 +1742,7 @@ impl<'a, 't> Interp<'a, 't> {
                     return self.eval_tuple_match(c, args, cases, fr, cx, true);
                 }
                 let inner = self.block_frame(stmts, fr, cx)?;
-                let r = self.eval_tail(res, &inner, cx);
+                let r = if self.prog().is_removed(res) { Ok(Value::Unit) } else { self.eval_tail(res, &inner, cx) };
                 self.leave_block(inner, fr);
                 r
             }

@@ -1,0 +1,9 @@
+1 a given instance with an extension
+2 a given instance without initialiser
+3 a given instance with a statement
+  the statement run
+4 a given instance with a val
+5 a given instance whose parent takes an argument
+  the argument evaluated
+6 a case class's companion
+end

@@ -1,0 +1,9 @@
+1 a local given with a parent's argument
+  argument of local
+2 a local given without initialiser
+3 a top-level given, through an inline parameter
+  argument of top
+4 an object's given by its imported name
+  argument of member
+5 the same through an inline parameter
+end

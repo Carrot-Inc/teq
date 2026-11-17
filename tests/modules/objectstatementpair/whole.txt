@@ -1,0 +1,5 @@
+an object with a parent's argument, by name
+  parent's argument
+an object named through its owner object
+  secondary's argument of the inner object
+end

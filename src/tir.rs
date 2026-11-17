@@ -598,6 +598,9 @@ pub struct InlineDefinition {
     pub spread: Vec<TExprId>,
     /// The body's ascriptions `Program::ascribed_bits` marks, which its copies keep.
     pub ascribed: Vec<TExprId>,
+    /// The body's block statements `Program::removed_bits` marks, which its copies keep where the copy is pure
+    /// by itself (`Worker::removed_copy`).
+    pub removed: Vec<TExprId>,
     /// The body's nodes the inline `this` decision has a note for (`InlineState::this_written`), with whether the type
     /// as written is a `this.type`: a `this`, or a cast of one, that a cast, an ascription or the method's result type
     /// re-typed, and a root that is a deferred inline call; its copies keep them, which the decision reads in an
@@ -1225,6 +1228,11 @@ pub struct Program {
     /// call written `c.x_=(v)` is an application (dotty's `Typer.typedAssign`), which the trees a
     /// macro sees, the pickle and the dependencies tell apart.
     pub setter_assign_bits: Bits,
+    /// The statements of blocks that the reference's `PureStats` removes (`transformBlock`: a pure statement
+    /// of a block; the pure result of an ascribed block that is a statement), as bits by expression: the
+    /// pickle, a quoted tree and every copying walk hold the statement as it was written, which is what the
+    /// reference pickles; what runs a block (`Program::runs`, `Program::run_stmts`) leaves it out.
+    pub removed_bits: Bits,
     /// The messages of the `compiletime.error` calls a definition's check makes of a literal index
     /// past a tuple's elements (`Worker::deferred_index_error`), as bits by expression, which their
     /// copies keep: what reports such a call's error as `TupleOptimizations`', after `Inlining`.
@@ -1465,6 +1473,7 @@ impl Program {
         self.ascribed_bits.fork();
         self.cast_bits.fork();
         self.setter_assign_bits.fork();
+        self.removed_bits.fork();
         self.tuple_index_bits.fork();
         self.kept_bits.fork();
         self.file_tags.fork();
@@ -1482,7 +1491,7 @@ impl Program {
             let own_base = self.exprs.own_base();
             self.expr_types.follow_escapes(marks.clone(), own_base);
             self.expr_spans.follow_escapes(marks.clone(), own_base);
-            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.cast_bits, &mut self.setter_assign_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
+            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.cast_bits, &mut self.setter_assign_bits, &mut self.removed_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
                 bits.follow_escapes(marks.clone(), own_base);
             }
         }
@@ -1561,6 +1570,7 @@ impl Program {
             ascribed_bits: Bits::attach(self.ascribed_bits.shared_arc(), worker),
             cast_bits: Bits::attach(self.cast_bits.shared_arc(), worker),
             setter_assign_bits: Bits::attach(self.setter_assign_bits.shared_arc(), worker),
+            removed_bits: Bits::attach(self.removed_bits.shared_arc(), worker),
             tuple_index_bits: Bits::attach(self.tuple_index_bits.shared_arc(), worker),
             kept_bits: Bits::attach(self.kept_bits.shared_arc(), worker),
             leaf_bits: Bits::attach(self.leaf_bits.shared_arc(), worker),
@@ -1670,6 +1680,7 @@ impl Default for Program {
             ascribed_bits: Bits::default(),
             cast_bits: Bits::default(),
             setter_assign_bits: Bits::default(),
+            removed_bits: Bits::lazy(),
             tuple_index_bits: Bits::default(),
             kept_bits: Bits::default(),
             leaf_bits: Bits::default(),
@@ -1993,6 +2004,28 @@ impl Program {
     #[inline(always)]
     pub fn is_setter_assign(&self, e: TExprId) -> bool {
         self.setter_assign_bits.has(e.0)
+    }
+
+    /// Marks the block statement `e`, or the result `e` of an ascribed block that is a statement, as one
+    /// the reference's `PureStats` removes (`removed_bits`).
+    pub fn mark_removed(&mut self, e: TExprId) {
+        self.removed_bits.set(e.0);
+    }
+
+    #[inline(always)]
+    pub fn is_removed(&self, e: TExprId) -> bool {
+        self.removed_bits.has(e.0)
+    }
+
+    /// Whether a block's statement is run: every one but an expression `PureStats` removes.
+    #[inline(always)]
+    pub fn runs(&self, s: &TStmt) -> bool {
+        !matches!(*s, TStmt::Expr(x) if self.is_removed(x))
+    }
+
+    /// A block's statements as a back end runs them (`runs`).
+    pub fn run_stmts(&self, stmts: ListRef) -> impl Iterator<Item = TStmt> + '_ {
+        self.stmts[stmts.range()].iter().copied().filter(|s| self.runs(s))
     }
 
     /// Marks `e` as `tuple_index_bits` says.

@@ -144,18 +144,30 @@ fn is_assured_no_inits(syms: &Symbols, interner: &crate::intern::Interner, c: Cl
     assured(c)
 }
 
-/// Whether the class `k` runs nothing of its own when an instance is made: as the typer recorded
-/// it at the class's completion (`no_inits_recorded`, `TreeInfo.parentsKind` and `defKind` over its
-/// source, `TreeUnpickler.indexStats` over its pickle), else as its records hold it: no statement,
-/// no val with an initialiser (a module's, an enum case's and a parameterless given's among them),
-/// no companion object made for its nested classes' default getters.
+/// Whether the class `k` runs nothing of its own when an instance is made, for an asker that has no worker
+/// (the emitters): the answer of the one function that judges it (`Worker::class_no_inits`), which the typer
+/// recorded at the class's completion (`no_inits_recorded`); for a class without a record (another module's
+/// product, which keeps the source's rule so that a build over products emits the whole build's text), the
+/// rule over the symbol tables (`no_inits_by_symbols`).
 pub(crate) fn class_no_inits_recorded(syms: &Symbols, k: ClassId) -> bool {
-    let info = syms.class(k);
-    match info.no_inits_recorded {
-        1 => return true,
-        2 => return false,
-        _ => {}
+    match syms.class(k).no_inits_recorded {
+        1 => true,
+        2 => false,
+        _ => no_inits_by_symbols(syms, k),
     }
+}
+
+/// `Worker::class_no_inits`'s arm for a class that has no class definition to walk and no record (an enum value
+/// case's object, a file's package object, a given instance, an opaque type, a class the typer makes; another
+/// module's product for the emitters): as the symbol tables hold it: no statement, no val with an initialiser
+/// (a module's, an enum case's and a parameterless given's among them), no companion object made for its nested
+/// classes' default getters. The tables hold no parent's argument list, extension or export clause, on which
+/// this rule and the source's walk differ (on 1,132 of the 15,655 classes of tests/cases' builds that the walk
+/// answers); a statement's removal never asks this arm of such a class: a package object has no name a
+/// statement writes and a given instance's reference is no object's (of the 77 objects those builds' removed
+/// statements name, none and no base of one is answered here).
+pub(crate) fn no_inits_by_symbols(syms: &Symbols, k: ClassId) -> bool {
+    let info = syms.class(k);
     if info.has_statements {
         return false;
     }
@@ -284,7 +296,7 @@ impl<'a> Worker<'a> {
     }
 
     /// A method that is a stable member (`StableRealizable`): an export's forwarder of a stable path.
-    fn stable_member_def(&self, s: SymId) -> bool {
+    pub(super) fn stable_member_def(&self, s: SymId) -> bool {
         let info = self.syms.sym(s);
         info.kind == SymKind::Def && info.stable
     }
@@ -330,7 +342,7 @@ impl<'a> Worker<'a> {
 
     /// `isPureSyntheticCaseApply`: the synthetic `apply` of a case class's companion whose class
     /// has no initialisation (`isNoInitsRealClass`).
-    fn is_pure_synthetic_case_apply(&mut self, s: SymId) -> bool {
+    pub(super) fn is_pure_synthetic_case_apply(&mut self, s: SymId) -> bool {
         let info = self.syms.sym(s);
         if info.name != crate::names::APPLY || info.def.is_some() {
             return false;

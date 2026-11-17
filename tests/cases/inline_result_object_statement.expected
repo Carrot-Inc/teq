@@ -1,0 +1,7 @@
+a plain inline call's object result
+  in the plain call
+  evaluated: the plain inline call's object
+a transparent inline call's object result
+  in the transparent call
+  evaluated: the transparent inline call's object
+end

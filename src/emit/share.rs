@@ -847,6 +847,7 @@ impl<'a> Enc<'a> {
         }
         for s in stmts {
             match *s {
+                TStmt::Expr(e) if self.prog.is_removed(e) => {}
                 TStmt::Expr(e) => {
                     self.tok(1);
                     self.expr(e);
@@ -1764,6 +1765,7 @@ impl<'a> Enc<'a> {
             TExpr::Block(stmts, res) => {
                 for st in &prog.stmts[stmts.range()] {
                     match *st {
+                        TStmt::Expr(x) if prog.is_removed(x) => {}
                         TStmt::Expr(x) => self.scan(x, out),
                         TStmt::Val(v, x) => {
                             out.bound.push(v);

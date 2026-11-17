@@ -1,0 +1,3 @@
+an object with a parent's argument, by name
+an object named through its owner object
+end

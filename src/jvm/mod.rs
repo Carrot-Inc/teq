@@ -1422,6 +1422,7 @@ fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, out: &m
             TExpr::Block(stmts, res) => {
                 for st in &prog.stmts[stmts.range()] {
                     match *st {
+                        TStmt::Expr(x) if prog.is_removed(x) => {}
                         TStmt::Expr(x) => stack.push(x),
                         TStmt::Pat(p, x) => {
                             stack.push(x);

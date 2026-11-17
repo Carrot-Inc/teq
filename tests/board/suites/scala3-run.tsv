@@ -1579,7 +1579,7 @@ t7181	pass	-
 t7200	fail	-	compile-error: recursive use of coflatMap needs an explicit result type
 t7214	fail	-	compile-error: value getDeclaredFields is not a member of Class[_]
 t7215	pass	-	
-t7223	fail	-	wrong-output
+t7223	pass	-	
 t7231	pass	-	
 t7242	pass	-	
 t7249	pass	-	

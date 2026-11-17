@@ -1,0 +1,58 @@
+01 != null: Boolean true
+02 == null: Boolean false
+03 null != it: Boolean true
+04 eq itself: Boolean true
+05 in a condition: yes
+06 applied: 4
+07 its apply selected: 5
+08 as an argument: Function0 giving 2
+09 in a string: String true
+10 a tuple's element: Function0 giving 3
+11 a conditional's branch: Function0 giving 4
+12 and: Boolean true
+13 an inline parameter, statement then value: Boolean true
+14 an inline parameter after a label: Boolean true
+15 a function's body: Function0 giving 6
+16 a method's reference: Boolean true
+17 type test: Boolean true
+18 a val's value: Function0 giving 7
+21 a receiver: 5
+22 a receiver, negative: -5
+23 a receiver, a Long: 5
+24 a receiver, a Double: 2.5
+25 minus it: 6
+26 it minus: -6
+27 negated: -5
+28 times: 10
+29 an index: 30
+30 its hash: 5
+31 compared: true
+32 max: 6
+41 plus one: 2
+42 as a condition: yes
+43 a receiver: 1
+44 compared: true
+51 a string's length: 3
+52 a creation's field: 3
+53 a creation's method: 4
+54 a local's field: 7
+55 a block with an effect inside: 2
+56 not: false
+57 or: true
+58 an array's element: 20
+59 a string concatenation's length: 2
+60 an assignment's value: Unit
+61 unit: Unit
+62 this: true
+63 an object: true
+64 a tuple's first: 8
+65 a match: 11
+66 a comparison negated: false
+67 a char: 97
+68 in an interpolation: 5s
+69 thrown and caught: boom
+70 a scrutinee: one
+81 unit before a function: Boolean true
+82 an object before a function: Boolean true
+83 unit before a number, a receiver: 5
+end

@@ -46,7 +46,6 @@ enum Event {
     New(Id),
     NewVia(Id),
     Lambda(Option<Id>),
-    Object(Id),
     LocalFun(u32),
     AssignField(Id),
     SeqLit,
@@ -520,14 +519,6 @@ impl<'c> Meet for Recorder<'c> {
     fn lambda(&mut self, _cx: Cx, forwarded: Option<SymId>) {
         let id = forwarded.map(|s| self.sym(s));
         self.events.push(Event::Lambda(id));
-    }
-
-    /// Noted, and visited as the walk visits it where it is not left out: whether it is left out is
-    /// the class's `runs_body`, which its record holds.
-    fn object_left_out(&mut self, c: ClassId) -> bool {
-        let id = Recorder::class(self, c);
-        self.events.push(Event::Object(id));
-        false
     }
 
     fn local_fun(&mut self, _cx: Cx, f: FunId) {

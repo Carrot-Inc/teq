@@ -1304,6 +1304,12 @@ done
 # runs after change (without, the counts restart on the other worker at two and sixteen).
 same_output bind_frame 2 run tests/workers/bind_frame --cacheable-state Cache --cacheable-state Other
 
+# What the reference removes of a block (a pure statement; the pure result of an ascribed block) is marked where
+# a worker types the block and is one mark of the merged program: statements that name another file's objects
+# (removed where the class runs no initialiser, evaluated where a superclass's body does), a value a function
+# literal's Unit result discards and an inline block's statement at its expansion print the same at every count.
+same_output object_statements 3 run tests/workers/object_statements
+
 # A macro's code over the frames the interpreter opens, run by every expansion so that its execution units are
 # promoted and read their locals at the addresses of their layouts (src/interp/code.rs) on each worker: blocks,
 # lambdas, local defs, binding cases, defaults, a catch case, a lazy local, a local class and a case lambda over a

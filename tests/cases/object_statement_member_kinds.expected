@@ -1,0 +1,139 @@
+body: a method
+body: an extension method
+  O_b02 made
+body: a collective extension
+  O_b03 made
+body: a val
+  O_b04 made
+body: a lazy val
+  O_b05 made
+body: a var
+  O_b06 made
+body: an inline val
+  O_b07 made
+body: a pattern val
+  O_b08 made
+body: two vals in one definition
+  O_b09 made
+body: a type alias
+body: an opaque type
+body: a nested class
+body: a nested trait
+body: a nested object
+  O_b16 made
+body: a nested case object
+  O_b17 made
+body: a nested enum
+body: a given alias
+  O_b19 made
+body: a given alias with a using clause
+body: a given instance
+  O_b22 made
+body: an export
+  O_b24 made
+body: an import
+body: an inline method
+body: a method with a default argument
+body: an uninitialized var
+  O_b28 made
+body: an expression statement
+  O_b29 made
+body: a private val
+  O_b30 made
+body: a final def
+body: end
+trait: a method
+trait: an extension method
+  O_t02 made
+trait: a collective extension
+  O_t03 made
+trait: a val
+  O_t04 made
+trait: a lazy val
+  O_t05 made
+trait: a var
+  O_t06 made
+trait: an inline val
+  O_t07 made
+trait: a pattern val
+  O_t08 made
+trait: two vals in one definition
+  O_t09 made
+trait: a type alias
+trait: an opaque type
+trait: a nested class
+trait: a nested trait
+trait: a nested object
+  O_t16 made
+trait: a nested case object
+  O_t17 made
+trait: a nested enum
+trait: a given alias
+  O_t19 made
+trait: a given alias with a using clause
+trait: a given instance
+  O_t22 made
+trait: an export
+  O_t24 made
+trait: an import
+trait: an inline method
+trait: a method with a default argument
+trait: an uninitialized var
+  O_t28 made
+trait: an abstract method, implemented by a method
+trait: an abstract type
+trait: an expression statement
+  O_t31 made
+trait: a private val
+  O_t32 made
+trait: a final def
+trait: an abstract val pair, its values the superclass parameters
+  O_t34 made
+trait: an abstract val, its value the superclass parameter
+trait: end
+superclass: a method
+superclass: an extension method
+  O_c02 made
+superclass: a collective extension
+  O_c03 made
+superclass: a val
+  O_c04 made
+superclass: a lazy val
+  O_c05 made
+superclass: a var
+  O_c06 made
+superclass: an inline val
+  O_c07 made
+superclass: a pattern val
+  O_c08 made
+superclass: two vals in one definition
+  O_c09 made
+superclass: a type alias
+superclass: an opaque type
+superclass: a nested class
+superclass: a nested trait
+superclass: a nested object
+  O_c16 made
+superclass: a nested case object
+  O_c17 made
+superclass: a nested enum
+superclass: a given alias
+  O_c19 made
+superclass: a given alias with a using clause
+superclass: a given instance
+  O_c22 made
+superclass: an export
+  O_c24 made
+superclass: an import
+superclass: an inline method
+superclass: a method with a default argument
+superclass: an uninitialized var
+  O_c28 made
+superclass: a secondary constructor
+superclass: an expression statement
+  O_c30 made
+superclass: a private val
+  O_c31 made
+superclass: a final def
+superclass: end
+end

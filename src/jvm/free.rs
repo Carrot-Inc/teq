@@ -240,6 +240,7 @@ impl Collector<'_, '_> {
             TExpr::Block(stmts, res) => {
                 for s in &prog.stmts[stmts.range()] {
                     match *s {
+                        TStmt::Expr(x) if prog.is_removed(x) => {}
                         TStmt::Expr(x) => self.expr(x),
                         TStmt::Val(sym, init) => {
                             self.declared.push(sym);
@@ -494,6 +495,7 @@ impl CellWalk<'_, '_> {
             TExpr::Block(stmts, res) => {
                 for s in &prog.stmts[stmts.range()] {
                     match *s {
+                        TStmt::Expr(x) if prog.is_removed(x) => {}
                         TStmt::Expr(x) => self.expr(x),
                         TStmt::Val(sym, init) => {
                             if self.cx.input.syms.sym(sym).mods & mods::LAZY != 0 {

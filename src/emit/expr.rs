@@ -49,10 +49,7 @@ impl<'a> Emitter<'a> {
                 }).collect();
                 self.is_simple(res) && sunk.iter().all(|&x| self.is_simple(x))
             }
-            TExpr::Block(stmts, res) => {
-                let stmts = &prog.stmts[stmts.range()];
-                stmts.iter().all(|s| matches!(*s, TStmt::Expr(x) if self.is_simple(x))) && self.is_simple(res)
-            }
+            TExpr::Block(stmts, res) => prog.run_stmts(stmts).all(|s| matches!(s, TStmt::Expr(x) if self.is_simple(x))) && self.is_simple(res),
             TExpr::Null => true,
             TExpr::If(_, _, None) | TExpr::While(..) | TExpr::Assign(..) | TExpr::Match(..) | TExpr::Return(_)
             | TExpr::Throw(..) | TExpr::Try(_) => false,
@@ -686,10 +683,7 @@ impl<'a> Emitter<'a> {
         }
         match self.prog.expr(e) {
             TExpr::Block(_, res) if self.block_moves_all(e) => self.is_statement_node(res),
-            TExpr::Block(stmts, res) => {
-                let stmts = &self.prog.stmts[stmts.range()];
-                !stmts.iter().all(|s| matches!(*s, TStmt::Expr(x) if self.is_simple(x))) || self.is_statement_node(res)
-            }
+            TExpr::Block(stmts, res) => !self.prog.run_stmts(stmts).all(|s| matches!(s, TStmt::Expr(x) if self.is_simple(x))) || self.is_statement_node(res),
             TExpr::If(_, _, None) | TExpr::While(..) | TExpr::Assign(..) | TExpr::Match(..) | TExpr::Return(_)
             | TExpr::Try(_) => true,
             _ => false,
@@ -1010,11 +1004,22 @@ impl<'a> Emitter<'a> {
                     [x] => self.touched_object(*x),
                     _ => None,
                 };
+                // A result `PureStats` removes (an ascribed block's, where the block is a statement) is not
+                // evaluated: the block's statements alone, of no value.
+                let removed = prog.is_removed(res);
                 if effects.is_empty() {
-                    self.emit_expr(res);
+                    if removed {
+                        self.out.push_str("undefined");
+                    } else {
+                        self.emit_expr(res);
+                    }
                 } else if let Some(c) = touched {
                     let touch = self.open_touch(c);
-                    self.emit_expr(res);
+                    if removed {
+                        self.out.push_str("undefined");
+                    } else {
+                        self.emit_expr(res);
+                    }
                     self.close_touch(touch);
                 } else {
                     self.out.push('(');
@@ -1022,7 +1027,11 @@ impl<'a> Emitter<'a> {
                         self.emit_comma_operand(x);
                         self.out.push_str(", ");
                     }
-                    self.emit_comma_operand(res);
+                    if removed {
+                        self.out.push_str("undefined");
+                    } else {
+                        self.emit_comma_operand(res);
+                    }
                     self.out.push(')');
                 }
             }
@@ -1684,14 +1693,12 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// A statement that does nothing: `()`, or a reference to an object whose constructor runs
-    /// no body, which the typer leaves in front of a member reached through the object's exports.
+    /// A statement that is not written: `()`, or one the reference's `PureStats` removes
+    /// (`Program::removed_bits`: a pure statement of a block, the pure result of an ascribed block that is
+    /// a statement). Every other is evaluated, an object's reference by the object's load, whatever the
+    /// object's own body runs: its initialisation can be a superclass's, a parent's argument's, a jar's.
     pub(super) fn is_idle(&self, e: TExprId) -> bool {
-        match self.peek(e) {
-            TExpr::Unit => true,
-            TExpr::Module(c) => !self.has_body[c.idx()],
-            _ => false,
-        }
+        matches!(self.peek(e), TExpr::Unit) || self.prog.is_removed(e)
     }
 
     /// The self call that `e` is, inside a def emitted as a loop.
@@ -1802,6 +1809,7 @@ impl<'a> Emitter<'a> {
             self.mark_stmt();
             match *s {
                 TStmt::Fun(_) => {}
+                TStmt::Expr(x) if self.prog.is_removed(x) => {}
                 TStmt::Expr(x) => self.emit_stmt(x, &Ctx::Discard),
                 TStmt::Val(sym, _) if self.sunk.contains_key(&sym) || self.dropped.contains_key(&sym) => {}
                 TStmt::Val(sym, init) => {

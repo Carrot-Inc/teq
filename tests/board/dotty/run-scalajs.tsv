@@ -1242,7 +1242,7 @@ t7171.scala	pass	lean:pass
 t7181.scala	pass	lean:pass	
 t7200.scala	fail	lean:fail	t7200.scala:19:9: recursive use of coflatMap needs an explicit result type
 t7215.scala	pass	lean:pass	
-t7223.scala	fail	lean:fail	output: line 1: the .check has '0', the program printed nothing
+t7223.scala	pass	lean:pass	
 t7231.scala	pass	lean:pass	
 t7242.scala	pass	lean:pass	
 t7249.scala	pass	lean:pass	

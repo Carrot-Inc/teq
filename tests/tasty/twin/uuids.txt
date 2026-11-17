@@ -121,6 +121,8 @@ recrefine/fix/recrefine/RrBox.tasty 00f9377ea50f7cef001d2e457a66238a
 recrefine/fix/recrefine/RrShapes.tasty 000d1e7515ba76c000b4e0fe1f5d148d
 reflect38/fix/r38/Reflect38.tasty 0097c67127ec76bc0084231dcb5ba9e3
 reflectstats/fix/rstats/StatementKinds.tasty 00b6422b179b5fe500f1a9528e2e8bc7
+removedstat/fix/removedstat/RsQuiet.tasty 00b143a0f71711d600171474ae6a4383
+removedstat/fix/removedstat/RsUse.tasty 00cabe2bcce60ed800ac5c87517835d3
 retain/fix/retain/Fmt.tasty 00a13032ba2bb4eb00fd340b15cb03aa
 retain/fix/retain/Grid.tasty 00a33be49543f0ae0042efc9e4f970d6
 retain/fix/retain/Grids.tasty 00a7f69f9af861ea00728d7e084890b2

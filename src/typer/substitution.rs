@@ -1185,6 +1185,10 @@ impl<'a> Worker<'a> {
         if let Some(ascribed) = ascription {
             walked = self.keep_ascription(w, e, ascribed, walked);
         }
+        // What `PureStats` removes of a block stays removed where what the walk put in its place is pure too.
+        if walked != e && self.prog.is_removed(e) && self.removed_copy(e, walked) {
+            self.prog.mark_removed(walked);
+        }
         if w.settling > 0 && walked != e {
             w.replaced.push((e, walked));
         }

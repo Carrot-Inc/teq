@@ -6800,7 +6800,10 @@ impl<'a> Gen<'a> {
     pub fn block(&mut self, stmts: ListRef, res: TExprId, mode: Mode) {
         let mark = self.code.locals_mark();
         self.block_statements(stmts);
-        self.finish(res, mode);
+        // The pure result of an ascribed block that is a statement is not evaluated (`Program::removed_bits`).
+        if !(matches!(mode, Mode::Value(JType::V)) && self.cx.input.prog.is_removed(res)) {
+            self.finish(res, mode);
+        }
         if matches!(mode, Mode::Value(_)) {
             self.code.locals_release(mark);
         }
@@ -6812,6 +6815,7 @@ impl<'a> Gen<'a> {
         self.hoist_lazy_holders(stmts);
         for s in &prog.stmts[stmts.range()] {
             match *s {
+                TStmt::Expr(x) if prog.is_removed(x) => {}
                 TStmt::Expr(x) => self.statement(x),
                 // Its holder stands at the head of the list.
                 TStmt::Val(sym, _) if self.is_lazy_local(sym) => {}

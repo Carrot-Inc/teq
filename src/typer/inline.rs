@@ -2299,18 +2299,69 @@ impl<'a> Worker<'a> {
         assured(c)
     }
 
-    /// Whether `b` runs no initialiser of its own (`NoInits`): `Any`, `AnyRef` and the parents a
-    /// desugaring gives (`Product`, `Serializable`, `Equals`, the mirrors), which have none; a class
-    /// of the program whose parents are applied to no arguments (`TreeInfo.parentsKind`) and whose
-    /// body holds definitions, types, imports and abstract values alone (`defKind`: an object is a
-    /// module val its body initialises; the givens of a `derives` clause stand apart from it, as
-    /// `Namer` sets `NoInits` from the written body, which `Deriving`'s givens are not part of); a
-    /// class read from a pickle as its template runs (`ClassInfo::read_no_inits`); any other class
-    /// of a library is taken to run one.
+    /// Whether the standard library's own class `b` stands for a class that is Java's to the reference: one it
+    /// marks the JDK's own (`@jvmClass`: the answer is true) or another of a `java`, `javax`, `sun` or `jdk`
+    /// package (false).
+    fn std_java_class(&self, b: ClassId) -> Option<bool> {
+        let info = self.syms.class(b);
+        if !self.source(info.file).is_std || self.in_jar(info.file) {
+            return None;
+        }
+        if info.def.is_some_and(|d| self.ast(info.file).def(d).annots.iter().any(|a| a.name == names::JVM_CLASS)) {
+            return Some(true);
+        }
+        let mut owner = info.owner;
+        loop {
+            match owner {
+                Owner::Class(c) => owner = self.syms.class(c).owner,
+                Owner::Package(p) => {
+                    let pkg = self.syms.pkg(p);
+                    match pkg.parent {
+                        Some(q) if self.syms.pkg(q).parent.is_some() => owner = Owner::Package(q),
+                        _ => return matches!(self.interner.get(pkg.name), "java" | "javax" | "sun" | "jdk").then_some(false),
+                    }
+                }
+                _ => return None,
+            }
+        }
+    }
+
+    /// Whether `b` runs no initialiser of its own (`NoInits`), the one answer every asker takes, by where the
+    /// class comes from:
+    /// - `Any`, `AnyRef` and the parents a desugaring gives (`Product`, `Serializable`, `Equals`, the mirrors)
+    ///   have none;
+    /// - a class that is Java's to the reference, whatever text stands for it here (the standard library's
+    ///   model of a JDK class: `std_java_class`), by the Java convention: a class is never without one, an
+    ///   interface the library marks the JDK's own has none (`Flags.JavaInterface`); an object that stands
+    ///   for a Java class's statics is no class of the reference's and is read as its text, as is a trait
+    ///   of a `java` package without the mark;
+    /// - a class read from a pickle as its template runs (`ClassInfo::read_no_inits`:
+    ///   `TreeUnpickler.indexStats`), one of a Scala 2 jar by `Scala2Unpickler`'s convention (a class always
+    ///   runs one, a trait where its pickle holds a constructor); any other class of a library is taken to
+    ///   run one;
+    /// - a class of the build's sources as `Namer` sets the flag from its written tree
+    ///   (`setNoInitsFlags(parentsKind(parents), bodyKind(rest))`): none of its parents' last argument list
+    ///   holds an argument (`TreeInfo.parentsKind`), and its body holds what `TreeInfo.defKind` calls no
+    ///   initialiser alone: imports, types and classes, methods, and vals without a right-hand side written
+    ///   one a definition. Everything else is one: a statement, a val with a right-hand side, an object (a
+    ///   module val its body initialises), a given without a value clause, and `defKind`'s last case: an
+    ///   `extension`, an export clause, a val definition of several names (`val a, b: T`, a `PatDef`). The
+    ///   givens of a `derives` clause stand apart from the body, which `Deriving` enters;
+    /// - a class with no definition to walk (a companion the desugaring makes) by the rule over the symbol
+    ///   tables (`elaborate::no_inits_by_symbols`), which the emitters ask too for a class that has no record.
     pub(super) fn class_no_inits(&self, b: ClassId) -> bool {
         let info = self.syms.class(b);
         if info.kind == ClassKind::Builtin || b == self.b.any_ref || self.is_desugared_parent(b) {
             return true;
+        }
+        if info.kind != ClassKind::Object {
+            match (self.std_java_class(b), info.kind) {
+                // An interface the standard library marks the JDK's own.
+                (Some(true), ClassKind::Trait) => return true,
+                // A trait of a `java` package without the mark is read as its text.
+                (Some(false), ClassKind::Trait) | (None, _) => {}
+                (Some(_), _) => return false,
+            }
         }
         // A pickle's class as its template runs, whatever definitions the loader made of it.
         if self.in_jar(info.file) {
@@ -2326,17 +2377,18 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        // A class with no definition of its own (a case class's companion `Desugar.classDef`
-        // makes, its `apply` and `unapply` alone) as its records hold it.
         let Some(def) = info.def else { return super::elaborate::class_no_inits_recorded(&self.syms, b) };
         let ast = self.ast(info.file);
         let crate::ast::DefKind::Class(cls) = &ast.def(def).kind else { return super::elaborate::class_no_inits_recorded(&self.syms, b) };
-        cls.parents.iter().all(|p| p.args.iter().all(|&(l, _)| l.len == 0))
+        // `parentsKind`'s `Apply(_, _ :: _)`: a parent's outermost application, its last argument list.
+        cls.parents.iter().all(|p| p.args.last().map_or(true, |&(l, _)| l.len == 0))
+            && cls.exports.len == 0
             && cls.body.iter().all(|st| match st {
                 crate::ast::Stmt::Import(_) => true,
                 crate::ast::Stmt::Expr(_) => false,
                 crate::ast::Stmt::Def(d) => match &ast.def(*d).kind {
-                    crate::ast::DefKind::Fun(_) | crate::ast::DefKind::TypeAlias { .. } => true,
+                    crate::ast::DefKind::Fun(f) => !f.is_extension,
+                    crate::ast::DefKind::TypeAlias { .. } => true,
                     crate::ast::DefKind::Class(k) => match k.kind {
                         crate::ast::ClassKind::Object => false,
                         // An enum's value case is a val of the companion's template
@@ -2345,7 +2397,7 @@ impl<'a> Worker<'a> {
                         crate::ast::ClassKind::EnumCase if k.clauses.is_empty() => info.kind != ClassKind::Object,
                         _ => true,
                     },
-                    crate::ast::DefKind::Val { rhs, .. } => rhs.is_none(),
+                    crate::ast::DefKind::Val { rhs, .. } => rhs.is_none() && !ast.notes.several_names.contains_key(d),
                     // A given with parameters is a method (`Parsers.givenDef`); one without, a lazy
                     // val with a right-hand side (`defKind`'s `ValDef`).
                     crate::ast::DefKind::Given(g) => !g.clauses.is_empty() || ast.derived_givens.binary_search(d).is_ok(),
@@ -3274,7 +3326,14 @@ impl<'a> Worker<'a> {
         if let TExpr::Local(s) = self.prog.expr(e) {
             if let Some(&arg) = self.inline.copy_locals.get(&s) {
                 if arg != e {
-                    return self.copy_expr(arg);
+                    let id = self.copy_expr(arg);
+                    // A parameter's read `PureStats` removes of a block: the argument's copy in its place,
+                    // where that is pure by itself (`removed_copy`); a copy that is the argument's own node
+                    // is left as it is, its other readers evaluating it.
+                    if id != arg && self.prog.is_removed(e) && self.removed_copy(e, id) {
+                        self.prog.mark_removed(id);
+                    }
+                    return id;
                 }
             }
         }
@@ -3444,6 +3503,11 @@ impl<'a> Worker<'a> {
         }
         if self.prog.is_ascribed(e) {
             self.prog.mark_ascribed(id);
+        }
+        // What `PureStats` removes of a block is removed of the block's copy where the copy is pure by itself
+        // (`Program::removed_bits`).
+        if self.prog.is_removed(e) && self.removed_copy(e, id) {
+            self.prog.mark_removed(id);
         }
         if self.prog.is_tuple_index(e) {
             self.prog.mark_tuple_index(id);

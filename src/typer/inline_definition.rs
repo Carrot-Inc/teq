@@ -1009,6 +1009,7 @@ impl<'a> Worker<'a> {
         let mut opaque = Vec::new();
         let mut spread = Vec::new();
         let mut ascribed = Vec::new();
+        let mut removed = Vec::new();
         let mut written_this: Vec<(TExprId, bool)> = Vec::new();
         let mut tuple_index = Vec::new();
         let mut erased = Vec::new();
@@ -1039,6 +1040,8 @@ impl<'a> Worker<'a> {
             spread.sort();
             ascribed = nodes.keys().copied().filter(|&e| self.prog.is_ascribed(e)).collect();
             ascribed.sort();
+            removed = nodes.keys().copied().filter(|&e| self.prog.is_removed(e)).collect();
+            removed.sort();
             written_this = nodes.keys().filter_map(|&e| self.inline.this_written.get(&e).map(|&w| (e, w))).collect();
             written_this.sort();
             tuple_index = nodes.keys().copied().filter(|&e| self.prog.is_tuple_index(e)).collect();
@@ -1089,6 +1092,7 @@ impl<'a> Worker<'a> {
             opaque,
             spread,
             ascribed,
+            removed,
             written_this,
             tuple_index,
             erased,
@@ -1339,6 +1343,9 @@ impl<'a> Worker<'a> {
         }
         for (i, &e) in def.ascribed.iter().enumerate() {
             note(e, Meta::Ascribed(i as u32));
+        }
+        for (i, &e) in def.removed.iter().enumerate() {
+            note(e, Meta::Removed(i as u32));
         }
         for (i, &(e, _)) in def.written_this.iter().enumerate() {
             note(e, Meta::WrittenThis(i as u32));
@@ -1873,6 +1880,13 @@ impl<'a> Worker<'a> {
                 Meta::Opaque(_) => self.prog.mark_opaque(copy),
                 Meta::Spread(_) => self.prog.mark_spread(copy),
                 Meta::Ascribed(_) => self.prog.mark_ascribed(copy),
+                // What `PureStats` removes of the body's blocks, of the copy's where the copy is pure by itself.
+                Meta::Removed(i) => {
+                    let from = def.removed[i as usize];
+                    if self.removed_copy(from, copy) {
+                        self.prog.mark_removed(copy);
+                    }
+                }
                 // The copy's `this` keeps what its cast or ascription wrote, which the inline `this` decision reads.
                 Meta::WrittenThis(i) => {
                     self.inline.this_written.insert(copy, def.written_this[i as usize].1);
@@ -2952,6 +2966,7 @@ enum Meta {
     Opaque(u32),
     Spread(u32),
     Ascribed(u32),
+    Removed(u32),
     WrittenThis(u32),
     TupleIndex(u32),
     Erased(u32),
@@ -3061,6 +3076,7 @@ impl InlineDefinition {
             erased: Vec::new(),
             spread: Vec::new(),
             ascribed: Vec::new(),
+            removed: Vec::new(),
             written_this: Vec::new(),
             tuple_index: Vec::new(),
             hoisted: Vec::new(),

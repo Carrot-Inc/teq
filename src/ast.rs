@@ -605,8 +605,8 @@ pub struct Import {
     pub clause_end: u32,
 }
 
-/// What the parser notes of the syntax where the migration table's checks read it, few files having any: kept
-/// apart from the tree's own tables.
+/// What the parser notes of the syntax where the migration table's checks read it, and the typer where it asks
+/// how a val was written (`several_names`), few files having any: kept apart from the tree's own tables.
 #[derive(Default, Debug)]
 pub struct SyntaxNotes {
     /// The `match` keyword of each match type (`MatchTypeTree`'s point, where an error at the tree stands), by the
@@ -703,6 +703,9 @@ pub struct SyntaxNotes {
     /// `Type.Param.cbounds`), which the parser has made the evidences of a context function, each with the span of
     /// the bound and its `as` name.
     pub binder_cbounds: Vec<(u32, TyExprId, Span)>,
+    /// The definitions a val or var of several names made (`val a, b: T`): one `PatDef` to the reference,
+    /// no `ValDef` (`TreeInfo.defKind` tells them apart).
+    pub several_names: crate::intern::FxMap<DefId, ()>,
 }
 
 /// An annotation of a binder (`SyntaxNotes::binder_annots`): its clause, the binder's place in it, the binder's span

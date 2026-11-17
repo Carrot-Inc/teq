@@ -1,0 +1,39 @@
+a block's statement
+a braced name as a statement
+in a branch's block
+in a case's block
+before a return
+in a try's and a finally's block
+a template's statement, a secondary constructor's block
+  evaluated: a template's statement
+a lambda's body typed Unit
+in a lambda's block
+in a while's body
+a statement of an inline method's block
+a renamed import's name
+an ascribed name
+a by-name argument evaluated
+  evaluated: a by-name argument evaluated
+a val's right-hand side
+  evaluated: a val's right-hand side
+a plain block's result
+  in the block
+  evaluated: a plain block's result
+an if's branch as a statement
+  evaluated: an if's branch as a statement
+a case as a statement
+  evaluated: a case as a statement
+a try's value as a statement
+  evaluated: a try's value as a statement
+a transparent inline call's result
+  in the transparent call
+  evaluated: a transparent inline call's result
+an ascribed block's result
+  in the ascribed block
+a plain inline call's literal result
+  in the inline call with a literal result
+a plain inline call's local result
+  in the inline call with a local result
+an argument
+  evaluated: an argument
+end

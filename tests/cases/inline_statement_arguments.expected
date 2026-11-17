@@ -1,0 +1,47 @@
+a lazy local
+  l1 forced
+a lazy local, twice
+  l2 forced
+a lazy local, an ascribed block's end
+  l3 forced
+a lazy local, through a nested inline call
+  l4 forced
+a lazy local, a Unit body
+  l5 forced
+a lazy local, a transparent method
+  l6 forced
+a lazy local, inside a function literal
+  l7 forced
+a lazy local, an inline parameter
+  l8 forced
+a lazy local, an inline parameter through a nested call
+  l9 forced
+a local given
+  given made
+a local object
+  Local made
+a call
+  called 1
+a call, an inline parameter
+  called 2
+a val and a literal
+an object without initialiser, by its name
+an object without initialiser, through its package
+an object without initialiser, an inline parameter
+an object without initialiser, an inline parameter, through its package
+an object with a body
+  Loud1 made
+an object with a body, an inline parameter
+  Loud2 made
+a statement, then the value: text
+  Quiet5 made
+a statement, then the value, an object without initialiser: Quiet5
+  Loud3 made
+a statement, then the value, an object with a body: Loud3
+a statement, then the value, an inline parameter: inline
+a statement, then a use: 4
+the receiver, a call
+  made once
+  made again
+the receiver as statement and value: true
+end

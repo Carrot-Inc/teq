@@ -1533,6 +1533,7 @@ impl<'a> Gen<'a> {
         }
         for s in prog.stmts[call.prelude.range()].to_vec() {
             match s {
+                TStmt::Expr(x) if prog.is_removed(x) => {}
                 TStmt::Expr(x) => self.statement(x),
                 TStmt::Val(sym, init) => self.local_val(sym, init),
                 _ => {}
@@ -1765,6 +1766,7 @@ impl<'a> Gen<'a> {
         }
         for s in cx.input.prog.stmts[tc.parent_prelude.range()].to_vec() {
             match s {
+                TStmt::Expr(x) if cx.input.prog.is_removed(x) => {}
                 TStmt::Expr(x) => self.statement(x),
                 TStmt::Val(sym, init) => self.local_val(sym, init),
                 _ => {}
@@ -1939,6 +1941,7 @@ impl<'a> Gen<'a> {
         let this = JType::L(owner.clone());
         for s in prelude {
             match *s {
+                TStmt::Expr(x) if prog.is_removed(x) => {}
                 TStmt::Expr(x) => self.statement(x),
                 TStmt::Val(sym, init) => self.local_val(sym, init),
                 _ => {}

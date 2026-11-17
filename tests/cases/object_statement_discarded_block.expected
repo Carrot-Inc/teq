@@ -1,0 +1,11 @@
+1 a function's Unit body, an ascribed block
+  in 1
+2 a local Unit val, an ascribed block
+  in 2
+3 a function's Unit body, the object alone
+4 a function's Unit body, an ascribed block ending in an object with a body
+  in 4
+  Loud1 made
+5 a function's Unit body, an object with a body
+  Loud2 made
+end

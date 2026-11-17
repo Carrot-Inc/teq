@@ -593,21 +593,31 @@ impl<'a> Worker<'a> {
     /// ascription's operand, a constant converted by the adaptation included.
     pub(super) fn check_expr_adapted(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId) {
         let (te, ty) = self.type_expr(e, Some(expected));
-        if self.canon(expected) == self.b.t_unit {
+        let discards = self.canon(expected) == self.b.t_unit;
+        if discards {
             self.warn_discarded(e, te, ty);
         }
         let span = self.cur_ast().expr_span(e);
-        self.adapt_typed(te, ty, expected, span)
+        let adapted = self.adapt_typed(te, ty, expected, span);
+        if discards {
+            self.mark_removed_discard(e, te, adapted.0);
+        }
+        adapted
     }
 
     /// `check_expr`, with the type the expression had before it was adapted.
     pub fn check_expr_own(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId) {
         let (te, ty) = self.type_expr(e, Some(expected));
-        if self.canon(expected) == self.b.t_unit {
+        let discards = self.canon(expected) == self.b.t_unit;
+        if discards {
             self.warn_discarded(e, te, ty);
         }
         let span = self.cur_ast().expr_span(e);
-        (self.adapt(te, ty, expected, span), ty)
+        let adapted = self.adapt(te, ty, expected, span);
+        if discards {
+            self.mark_removed_discard(e, te, adapted);
+        }
+        (adapted, ty)
     }
 
     /// A lambda whose body, typed under the result type the expected type gave (`body_ty`, the
@@ -656,6 +666,240 @@ impl<'a> Worker<'a> {
             return;
         }
         self.warn_as(span, "A pure expression does nothing in statement position", crate::source::Warning::id(crate::warnings::id::PURE_EXPRESSION_IN_STATEMENT_POSITION));
+    }
+
+    /// Whether the typed `te` is the value the source wrote at `written`, node for node, which is what the
+    /// reference's `exprPurity` judges: a literal, a name that reads what it names, a selection of a member from such a
+    /// value, a tuple or a creation (by `new` or by the class's name) of such values, a function literal, an
+    /// operation on names and literals. Where the source wrote anything else, the typed tree can be an
+    /// expansion's or a reduction's result (an inline call's, `summon`'s, a tuple's element, a function
+    /// literal applied), a forwarder's call under a name, an anonymous class's creation or a `copy`, of which
+    /// the reference judges the call it kept: those are not told, as a qualifier or an argument either. Nor
+    /// is an object or its member written as a selection (a selection's purity is its qualifier's too: an
+    /// object that holds a value or another object has an initialiser, and a package is no pure path). What
+    /// the class of an object or of a creation runs is the purity's question (`class_no_inits`), not this
+    /// walk's.
+    fn told_as_written(&mut self, written: ExprId, te: TExprId) -> bool {
+        let ast = self.cur_ast();
+        let typed = self.prog.expr(te);
+        let literal = matches!(typed, TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null);
+        match ast.expr(written) {
+            Expr::Parens(inner) | Expr::Typed(inner, _) => self.told_as_written(inner, te),
+            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit | Expr::NullLit => literal,
+            Expr::This | Expr::QualThis(_) => matches!(typed, TExpr::This),
+            // A pickle's reference to a local or a parameter, by its symbol.
+            Expr::SymRef(s) => matches!(typed, TExpr::Local(l) if l == s),
+            Expr::Ident(name) => match typed {
+                TExpr::Local(_) => true,
+                TExpr::Static(s) | TExpr::Field(_, s) => self.syms.sym(s).name == name,
+                TExpr::Module(_) => true,
+                _ => literal,
+            },
+            Expr::Select(q, name) => match typed {
+                TExpr::Field(tq, s) => self.syms.sym(s).name == name && self.told_as_written(q, tq),
+                // An object named through its owner object (`Outer.Inner`): the selection's purity is its
+                // qualifier's too (`exprPurity`'s `Select`): the owner without initialiser and named by its
+                // own name. Through a package the reference has no pure path.
+                TExpr::Module(c) => match (self.syms.class(c).owner, ast.expr(q)) {
+                    (Owner::Class(o), Expr::Ident(n)) => {
+                        self.syms.class(o).kind == ClassKind::Object
+                            && self.syms.class(o).name == n
+                            && self.syms.class(c).name == name
+                            && self.no_inits(o)
+                    }
+                    _ => false,
+                },
+                _ => false,
+            },
+            Expr::Tuple(elems) => match typed {
+                TExpr::New(c, args) if self.is_tuple_class(c) => self.told_each(elems, args),
+                _ => false,
+            },
+            Expr::Lambda(..) | Expr::PolyLambda(..) => matches!(typed, TExpr::Lambda(..)),
+            Expr::New(_, args) => match typed {
+                TExpr::New(_, targs) => self.told_each(args, targs),
+                _ => false,
+            },
+            Expr::Apply(f, args) | Expr::UsingApply(f, args) => {
+                let callee = match ast.expr(f) {
+                    Expr::TypeApply(g, _) => g,
+                    _ => f,
+                };
+                let Expr::Ident(name) = ast.expr(callee) else { return false };
+                match typed {
+                    TExpr::New(c, targs) => self.syms.class(c).name == name && self.told_each(args, targs),
+                    TExpr::CallStatic(s, targs) => {
+                        let made = match self.syms.sym(s).owner {
+                            Owner::Class(o) => self.syms.class(o).companion,
+                            _ => None,
+                        };
+                        self.is_pure_synthetic_case_apply(s)
+                            && made.is_some_and(|k| self.syms.class(k).name == name)
+                            && self.told_each(args, targs)
+                    }
+                    _ => false,
+                }
+            }
+            Expr::Infix(l, _, r, _) => (literal || matches!(typed, TExpr::Unary(..) | TExpr::Prim(..) | TExpr::StrConcat(..) | TExpr::ToStr(..))) && self.plain_operand(l) && self.plain_operand(r),
+            Expr::Prefix(_, x) => (literal || matches!(typed, TExpr::Unary(..) | TExpr::Prim(..))) && self.plain_operand(x),
+            _ => false,
+        }
+    }
+
+    /// The arguments as written, each the value typed in its place (`told_as_written`); a list the typer
+    /// filled or reordered (a default, a capture, an enclosing instance) is not held to the source.
+    fn told_each(&mut self, written: ListRef, typed: ListRef) -> bool {
+        if written.len != typed.len {
+            return false;
+        }
+        let written: Vec<ExprId> = self.cur_ast().expr_list(written).to_vec();
+        let typed: Vec<TExprId> = self.prog.expr_list(typed).to_vec();
+        written.into_iter().zip(typed).all(|(w, t)| self.told_as_written(w, t))
+    }
+
+    /// An operand that is a literal, a name or an operation on such: what an operation folded to a constant
+    /// was written with where the reference's operands are pure too (a selection's qualifier is judged, a
+    /// call is none).
+    fn plain_operand(&self, e: ExprId) -> bool {
+        let ast = self.cur_ast();
+        match ast.expr(e) {
+            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::Ident(_) => true,
+            Expr::Parens(x) | Expr::Prefix(_, x) => self.plain_operand(x),
+            Expr::Infix(l, _, r, _) => self.plain_operand(l) && self.plain_operand(r),
+            _ => false,
+        }
+    }
+
+    /// Whether the block statement `te`, written `written`, is one the reference's `PureStats` removes
+    /// (`transformBlock`'s `stat if !stat.symbol.isConstructor && isPureExpr(stat)`): pure by the port of
+    /// `exprPurity` and a value the source wrote (`told_as_written`), of a kind whose typed node is the node
+    /// the reference judges: a literal, a local, `this`, a function literal, an object's reference. A creation
+    /// stays (the constructor's guard; a case class's `C(1)`, which the reference removes, is evaluated: no
+    /// effect either way), and so does whatever the walk does not know: evaluated, the safe side for an effect.
+    fn removed_as_written(&mut self, written: ExprId, te: TExprId) -> bool {
+        use super::elaborate::Purity;
+        let removable = matches!(
+            self.prog.expr(te),
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null
+                | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..) | TExpr::Module(_)
+        );
+        removable && !self.is_pending_call(te) && self.told_as_written(written, te) && self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE)
+    }
+
+    /// Marks what `PureStats` removes of the block statement `te`, written `written` (`Program::removed_bits`):
+    /// the statement where it is pure; of an ascribed block (`({ a; b }: T)`, `Typed(Block(stats, expr), _)`)
+    /// its result where that is pure, the block's statements staying.
+    #[inline]
+    pub(super) fn mark_removed_statement(&mut self, written: ExprId, te: TExprId) {
+        // Only a value of these kinds, an expansion's root or a block can be or hold what is removed: a call,
+        // an assignment, a branch leave here.
+        let candidate = matches!(
+            self.prog.expr(te),
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null
+                | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..) | TExpr::Module(_) | TExpr::Block(..)
+        );
+        if candidate || self.prog.is_expansion(te) {
+            self.mark_removed_among(written, te);
+        }
+    }
+
+    fn mark_removed_among(&mut self, written: ExprId, te: TExprId) {
+        if self.removed_as_written(written, te) {
+            self.prog.mark_removed(te);
+            return;
+        }
+        // An inline parameter's read is its argument at each expansion, whose copy decides (`removed_copy`):
+        // the body as it is written is evaluated nowhere.
+        if self.inline_param_read(te) && self.told_as_written(written, te) {
+            self.prog.mark_removed(te);
+            return;
+        }
+        // The expansion of a plain inline method's call is ascribed its declared result
+        // (`PrepareInlineable.wrapRHS`'s `Typed`): the same arm. Its result is a copy of the body's, judged
+        // where the copy alone decides: a literal, a local, `this`, a function literal. An object's reference
+        // there stays evaluated: how the body wrote it is not the copy's to say.
+        if self.prog.is_expansion(te) && self.prog.is_ascribed(te) {
+            use super::elaborate::Purity;
+            let value = match self.prog.expr(te) {
+                TExpr::Block(_, res) => res,
+                _ => te,
+            };
+            let decided = matches!(
+                self.prog.expr(value),
+                TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..)
+            );
+            if decided && !self.is_pending_call(value) && self.expr_purity_under(value, Purity::IMPURE).at_least(Purity::PURE) {
+                self.prog.mark_removed(value);
+            }
+            return;
+        }
+        let ast = self.cur_ast();
+        let Expr::Typed(inner, _) = ast.expr(written) else { return };
+        let Expr::Block(stmts) = ast.expr(inner) else { return };
+        let Some(&Stmt::Expr(last)) = ast.stmt_list(stmts).last() else { return };
+        let TExpr::Block(_, res) = self.prog.expr(te) else { return };
+        if self.removed_as_written(last, res) {
+            self.prog.mark_removed(res);
+        }
+    }
+
+    /// Marks the statement `te` the typer makes in front of a constant where the reference's own test at that
+    /// place is `isPureExpr` (`Erasure.Boxing.constant`: `if isPureExpr(tree) const else Block(tree :: Nil,
+    /// const)`; `TreeInfo.constToLiteral`'s `{ pre; v }`): not evaluated where it is pure, judged where the
+    /// typed node alone decides: a literal, a local, `this`, a function literal.
+    pub(super) fn mark_removed_made(&mut self, te: TExprId) {
+        use super::elaborate::Purity;
+        let decided = matches!(
+            self.prog.expr(te),
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..)
+        );
+        if decided && !self.is_pending_call(te) && self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE) {
+            self.prog.mark_removed(te);
+        }
+    }
+
+    /// Whether `te` reads an inline parameter, which stands for its argument.
+    fn inline_param_read(&self, te: TExprId) -> bool {
+        match self.prog.expr(te) {
+            TExpr::Local(s) => {
+                let info = self.syms.sym(s);
+                info.kind == SymKind::Param && info.mods & mods::INLINE != 0 && !info.by_name
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the copy `to` of the removed statement `from` is removed too. `PureStats` runs on the expansion,
+    /// so the copy is judged by itself, by the port of `exprPurity`: a literal, `this`, a function literal; a
+    /// local, which can be the caller's that an argument put in a parameter's place (a lazy one, a local given
+    /// or object is no pure value: `refPurity`); the body's own object as the body wrote it; an object an
+    /// argument put in a parameter's place, which the reference names by the argument's type (`tpd.ref` of its
+    /// `TermRef`: an `Ident`, whatever the call wrote), unless the argument is ascribed, which the reference
+    /// binds to a val (`Inliner.computeParamBindings`: no singleton type).
+    pub(super) fn removed_copy(&mut self, from: TExprId, to: TExprId) -> bool {
+        use super::elaborate::Purity;
+        // Still an inline parameter (an inline method's body that calls another): its own argument decides.
+        if self.inline_param_read(to) {
+            return true;
+        }
+        let decided = match (self.prog.expr(from), self.prog.expr(to)) {
+            (TExpr::Module(a), TExpr::Module(b)) => a == b,
+            (TExpr::Module(_), _) => false,
+            (_, TExpr::Module(_)) => !self.prog.is_ascribed(to),
+            (_, TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..)) => true,
+            _ => false,
+        };
+        decided && !self.is_pending_call(to) && self.expr_purity_under(to, Purity::IMPURE).at_least(Purity::PURE)
+    }
+
+    /// Marks the value `te`, written `written`, that the adaptation to `Unit` made the one statement of its
+    /// block (`adapted`: `Block(te :: Nil, ())`) where `PureStats` removes it.
+    pub(super) fn mark_removed_discard(&mut self, written: ExprId, te: TExprId, adapted: TExprId) {
+        let TExpr::Block(stmts, res) = self.prog.expr(adapted) else { return };
+        if !matches!(self.prog.expr(res), TExpr::Unit) || !matches!(self.prog.stmt_list(stmts), [TStmt::Expr(x)] if *x == te) {
+            return;
+        }
+        self.mark_removed_statement(written, te);
     }
 
     /// Whether a closure typed of the expression is the typer's, no function literal the program
@@ -5135,6 +5379,7 @@ impl<'a> Worker<'a> {
                     let mark = self.failure_mark();
                     let (te, ty) = self.type_expr(e, None);
                     self.warn_pure_statement(e, te, ty, mark);
+                    self.mark_removed_statement(e, te);
                     out.push(TStmt::Expr(te));
                 }
                 Stmt::Def(d) => {
@@ -5203,7 +5448,8 @@ impl<'a> Worker<'a> {
     pub fn type_expr_adapted(&mut self, e: ExprId, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let Some(exp) = self.concrete_expected(expected) else { return self.type_expr(e, expected) };
         let (te, ty) = self.type_expr(e, Some(exp));
-        if self.canon(exp) == self.b.t_unit {
+        let discards = self.canon(exp) == self.b.t_unit;
+        if discards {
             self.warn_discarded(e, te, ty);
         }
         let span = self.cur_ast().expr_span(e);
@@ -5211,6 +5457,9 @@ impl<'a> Worker<'a> {
         // does (`{ ..; new C }` is a `C`, a throwing branch a `Nothing`, a context function
         // applied its result); an adaptation gives it the expected one.
         let (adapted, ty) = self.adapt_typed(te, ty, exp, span);
+        if discards {
+            self.mark_removed_discard(e, te, adapted);
+        }
         (adapted, if ty == ERROR { exp } else { ty })
     }
 

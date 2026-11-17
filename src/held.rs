@@ -92,6 +92,7 @@ impl Program {
             ascribed_bits,
             cast_bits,
             setter_assign_bits,
+            removed_bits,
             tuple_index_bits,
             kept_bits,
             shifts: _,
@@ -159,6 +160,7 @@ impl Program {
             + ascribed_bits.held()
             + cast_bits.held()
             + setter_assign_bits.held()
+            + removed_bits.held()
             + tuple_index_bits.held()
             + kept_bits.held()
             + capture.as_ref().map_or(0, |c| c.held())

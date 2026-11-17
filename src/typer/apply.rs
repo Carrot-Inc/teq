@@ -1014,7 +1014,22 @@ impl<'a> Worker<'a> {
                     self.type_args_for_errors(&lists);
                     return (self.prog.add(TExpr::Unit), ERROR);
                 };
-                self.apply_named_callee(callee, targs, lists, span, expected)
+                let reference = lists.is_empty() && targs.is_none() && matches!(callee, Callee::Method { .. });
+                let typed = self.apply_named_callee(callee, targs, lists, span, expected);
+                // A stable member's forwarder named alone (an export's, inside its object or through an import)
+                // is an `Ident`, whose purity is its symbol's (`refPurity`): its owner's is the purity of a
+                // selection's qualifier, which the name does not write.
+                if reference {
+                    // The forwarder's call, on the object an import gave or on none: the receiver is the typer's.
+                    let forwarder = match self.prog.expr(typed.0) {
+                        TExpr::CallStatic(s, l) | TExpr::CallMethod(_, s, l) => l.len == 0 && self.stable_member_def(s),
+                        _ => false,
+                    };
+                    if forwarder {
+                        self.written_purity.insert(typed.0, super::elaborate::Purity::PURE_PATH);
+                    }
+                }
+                typed
             }
             Expr::Select(q, name) => {
                 if let Expr::Super(parent) = ast.expr(q) {

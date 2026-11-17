@@ -2420,11 +2420,16 @@ impl<'a> Worker<'a> {
             Some(typed) => typed,
             None => self.type_expr(r, Some(expected)),
         };
-        if cached.is_none() && self.canon(expected) == self.b.t_unit {
+        let discards = cached.is_none() && self.canon(expected) == self.b.t_unit;
+        if discards {
             self.warn_discarded(r, te, ty);
         }
         let span = self.cur_ast().expr_span(r);
-        (self.adapt(te, ty, expected, span), te, ty)
+        let adapted = self.adapt(te, ty, expected, span);
+        if discards {
+            self.mark_removed_discard(r, te, adapted);
+        }
+        (adapted, te, ty)
     }
 
     #[cold]
@@ -2498,6 +2503,7 @@ impl<'a> Worker<'a> {
                     self.prog.mark_cast(unit);
                     unit
                 } else {
+                    self.mark_removed_made(recv);
                     let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
                     self.prog.add(TExpr::Block(l, unit))
                 };
@@ -3077,6 +3083,7 @@ impl<'a> Worker<'a> {
                     // `ConstFold.Apply`'s `getClass` of a primitive value: the class constant (`Constant(qual.tpe.widen)`).
                     let (of, ty) = self.type_class_of(class, span);
                     let ty = self.class_constant_type(ty);
+                    self.mark_removed_made(recv);
                     let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
                     let te = self.prog.add(TExpr::Block(l, of));
                     self.end_chain(te, ty);

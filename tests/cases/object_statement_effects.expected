@@ -1,0 +1,39 @@
+own statement, by name
+  own statement (by name)
+inherited body, by name
+  inherited body (by name)
+parent's argument, by name
+  parent's argument (by name)
+secondary's argument, by name
+omitted default, by name
+quiet, by name
+lazy val, by name
+nested object, by name
+  nested object (by name)
+trait body, by name
+  trait body (by name)
+through a class with the trait, by name
+  trait body (by name)
+case object's argument, by name
+  case object's argument (by name)
+own statement, through the package
+  own statement (through the package)
+inherited body, through the package
+  inherited body (through the package)
+parent's argument, through the package
+  parent's argument (through the package)
+secondary's argument, through the package
+  secondary's argument (through the package)
+omitted default, through the package
+  omitted default (through the package)
+quiet, through the package
+lazy val, through the package
+nested object, through the package
+  nested object (through the package)
+trait body, through the package
+  trait body (through the package)
+through a class with the trait, through the package
+  trait body (through the package)
+case object's argument, through the package
+  case object's argument (through the package)
+end

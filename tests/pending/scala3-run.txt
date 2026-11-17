@@ -681,7 +681,6 @@ t6827	wrong-output
 t7120b	run-error: Error: UnsupportedOperationException: reflection is not available on JavaScript
 t7200	compile-error: recursive use of coflatMap needs an explicit result type
 t7214	compile-error: value getDeclaredFields is not a member of Class[_]
-t7223	wrong-output
 t7269	compile-error: type mismatch: found Iterable[Int], required HashSet[Int]
 t7336	run-error: Node.js v25.9.0
 t7374	compile-error: test contains Java sources

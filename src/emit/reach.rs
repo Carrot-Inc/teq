@@ -3012,8 +3012,6 @@ pub(super) trait Meet {
     fn new(&mut self, cx: Cx, c: ClassId);
     fn new_via(&mut self, cx: Cx, s: SymId);
     fn lambda(&mut self, cx: Cx, forwarded: Option<SymId>);
-    /// Whether an object in statement position is left out.
-    fn object_left_out(&mut self, c: ClassId) -> bool;
     fn local_fun(&mut self, cx: Cx, f: FunId);
     fn assign_field(&mut self, s: SymId);
     fn seq_lit(&mut self, cx: Cx);
@@ -3179,8 +3177,9 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
                     }
                 }
                 match *s {
-                    // An object without a body in statement position is left out of the output.
-                    TStmt::Expr(x) if matches!(prog.expr(x), TExpr::Module(c) if m.object_left_out(c)) => {}
+                    // A statement the reference's `PureStats` removes is not run (`Program::runs`); every other
+                    // is, an object's reference reaching the object.
+                    TStmt::Expr(x) if prog.is_removed(x) => {}
                     TStmt::Expr(x) | TStmt::Val(_, x) => visit(m, cx, x),
                     TStmt::Fun(f) => m.local_fun(cx, f),
                     TStmt::Pat(p, x) => {
@@ -3461,10 +3460,6 @@ impl Meet for Walker {
                 self.reach.forwarded[target.idx()] = true;
             }
         }
-    }
-
-    fn object_left_out(&mut self, c: ClassId) -> bool {
-        !self.layout.has_body(c)
     }
 
     fn local_fun(&mut self, _cx: Cx, f: FunId) {

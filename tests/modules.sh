@@ -64,6 +64,16 @@
 #            (`-from-tasty`, tests/tasty/fromtasty/Gate.scala, all of them in one JVM): every
 #            right-hand side forced and the tree checker run after readTasty (-Ycheck:all), the
 #            upstream modules' products on the class path.
+# A case with whole.txt beside run.txt declares that its whole build prints ANOTHER output than its split one
+# (whole.txt) and that both are the reference's: a statement that names an upstream module's object is judged by
+# the class as the build reads it, its source in the whole build and its pickle over the products, as scalac's
+# build of the sources together and its build over a jar differ. For such a case the whole build's runs are
+# held to whole.txt and the split build's to run.txt (jvm-run, js-run, interp-run, the interpreter's warnings
+# apart); scalac's own two builds print the same two (scalac-whole: the modules' sources together; scalac-apart:
+# each module over scalac's build of the ones before); the checks that hold the split products equal to the
+# whole build's are left out and said so (`left out <case> classes|subset|bundle: whole.txt`); and scalac
+# compiles without -Werror (`left out <case> scalac's -Werror: whole.txt`): the statement such a case is about
+# is one the reference warns of and removes.
 # A case with run.txt has an entry point in its last module, or in `main` over all of them,
 # and each such case is checked by:
 #   jvm-run  the downstream built as a plain JVM program over the upstream products and whole
@@ -475,10 +485,11 @@ view() {
 scalac() {
   local cp=$1 dest=$2
   shift 2
-  local ws
+  local ws werror=(--scalac-option -Werror)
+  [ -n "$whole_file" ] && werror=()
   ws=$(mktemp -d "$out/ws.XXXXXX") && mkdir -p "$dest" || return 1
   (cd "$ws" && COURSIER_MODE=offline timeout 300 scala-cli --power compile -S 3.8.4 --jvm system --server=false --offline -q \
-    --workspace "$ws" --scalac-option -Werror --classpath "$cp" -d "$dest" "$@" 2>&1)
+    --workspace "$ws" "${werror[@]}" --classpath "$cp" -d "$dest" "$@" 2>&1)
 }
 # refused <status> <output>: whether scalac ran and refused the sources, scala-cli's exit 1 after scalac's count of
 # errors ("2 errors found"); not a timeout (124), a signal (128 and over), a launch failure (126, 127) or an exit
@@ -519,6 +530,9 @@ run_case() {
   [ -d "$dir/b" ] && mods+=(b)
   [ -d "$dir/c" ] && mods+=(c)
   expect=$dir/expect-errors.txt
+  # whole.txt: the case's whole build prints another output than its split one (header, `whole.txt`).
+  whole_file=""
+  [ -f "$dir/whole.txt" ] && whole_file=whole.txt
   lean_differs=""
   w=$out/$name/whole
   whole_srcs=()
@@ -577,7 +591,9 @@ run_case() {
       done < <(owned "$out/$name/$m")
     done
     # Modules rooted apart have keys the whole build does not: their products are their own.
-    if [ "$(sroot a)" != "$dir" ]; then
+    if [ -n "$whole_file" ]; then
+      echo "left out $name classes: $whole_file"
+    elif [ "$(sroot a)" != "$dir" ]; then
       echo "ineligible $name classes: its modules are rooted apart, their keys not the whole build's"
     else
       result "$name" classes $ok "$detail"
@@ -660,7 +676,7 @@ run_case() {
       ok=0
       detail="the whole build failed: $(head -5 "$out/$name.subset.log")"
     fi
-    result "$name" subset $ok "$detail"
+    if [ -n "$whole_file" ]; then echo "left out $name subset: $whole_file"; else result "$name" subset $ok "$detail"; fi
     # The Scala.js module's check build over scala-library writes the same pickles.
     ok=1
     detail=""
@@ -816,6 +832,13 @@ PY
     expected=$(cat "$dir/run.txt")
     js_expected=$expected
     [ -f "$dir/run.js.txt" ] && js_expected=$(cat "$dir/run.js.txt")
+    whole_expected=$expected
+    whole_js_expected=$js_expected
+    if [ -n "$whole_file" ]; then
+      whole_expected=$(cat "$dir/$whole_file")
+      whole_js_expected=$whole_expected
+      echo "left out $name scalac's -Werror: $whole_file"
+    fi
     # jvm-run: a plain JVM program over the upstream products, and whole.
     if [ $have_java = 1 ]; then
       ok=1
@@ -825,9 +848,9 @@ PY
       if [ $ok = 1 ]; then
         whole_out=$(timeout 60 java -XX:-UsePerfData -cp "$out/$name/whole.jar:$SL" TeqMain 2>&1)
         split_out=$(timeout 60 java -XX:-UsePerfData -cp "$out/$name/main.jar:$jdirs:$SL" TeqMain 2>&1)
-        if [ "$whole_out" != "$expected" ] || [ "$split_out" != "$expected" ]; then
+        if [ "$whole_out" != "$whole_expected" ] || [ "$split_out" != "$expected" ]; then
           ok=0
-          detail="whole: $whole_out"$'\n'"split: $split_out"$'\n'"expected: $expected"
+          detail="whole: $whole_out"$'\n'"split: $split_out"$'\n'"expected: $expected${whole_file:+$'\n'"whole expected: $whole_expected"}"
         fi
       fi
       result "$name" jvm-run $ok "$detail"
@@ -840,7 +863,7 @@ PY
     "$teq" compiler build --sourceroot "$(sroot "$down")" --classpath "$ldirs" "${down_srcs[@]}" -o "$out/$name/js-prod.js" > "$out/$name.js-prod.log" 2>&1 || js_failed=1
     if [ $ok = 1 ]; then
       whole_out=$(timeout 60 node "$out/$name/js-whole.js" 2>&1)
-      [ "$whole_out" = "$js_expected" ] || { ok=0; detail="whole: $whole_out"$'\n'"expected: $js_expected"; }
+      [ "$whole_out" = "$whole_js_expected" ] || { ok=0; detail="whole: $whole_out"$'\n'"expected: $whole_js_expected"; }
     fi
     if [ -f "$dir/js-errors.txt" ]; then
       # The products build needs a body its upstream withholds, or would declare a name twice.
@@ -868,7 +891,16 @@ PY
     result "$name" js-run $ok "$detail"
     # interp-run: the downstream in the interpreter over the upstream's Scala.js products and
     # whole, the same output and exit, and that output the case's (run.txt, or run.js.txt).
-    if [ ! -f "$dir/js-errors.txt" ]; then
+    if [ ! -f "$dir/js-errors.txt" ] && [ -n "$whole_file" ]; then
+      # Each run to its own file; the warnings, which tell the statement the case is about, are not the output.
+      whole_i=$(timeout 60 "$teq" interp --sourceroot "$dir" "${all_srcs[@]}" 2> /dev/null)
+      whole_c=$?
+      prod_i=$(timeout 60 "$teq" interp --sourceroot "$(sroot "$down")" --classpath "$ldirs" "${down_srcs[@]}" 2> /dev/null)
+      prod_c=$?
+      ok=1
+      [ "$whole_i" = "$whole_expected" ] && [ "$prod_i" = "$expected" ] && [ $whole_c = 0 ] && [ $prod_c = 0 ] || ok=0
+      result "$name" interp-run $ok "whole (exit $whole_c): $whole_i"$'\n'"products (exit $prod_c): $prod_i"$'\n'"expected: $expected"$'\n'"whole expected: $whole_expected"
+    elif [ ! -f "$dir/js-errors.txt" ]; then
       whole_i=$(timeout 60 "$teq" interp --sourceroot "$dir" "${all_srcs[@]}" 2>&1)
       whole_c=$?
       prod_i=$(timeout 60 "$teq" interp --sourceroot "$(sroot "$down")" --classpath "$ldirs" "${down_srcs[@]}" 2>&1)
@@ -881,7 +913,9 @@ PY
       result "$name" interp-run $ok "whole (exit $whole_c): $whole_i"$'\n'"products (exit $prod_c): $prod_i"$'\n'"expected: $expected"
     fi
     # bundle: the whole build's JavaScript and the products build's, byte for byte.
-    if [ -n "$ineligible" ]; then
+    if [ -n "$whole_file" ]; then
+      echo "left out $name bundle: $whole_file"
+    elif [ -n "$ineligible" ]; then
       deferred_count=$((deferred_count + 1))
       echo "ineligible $name bundle: $ineligible"
     elif [ ! -f "$dir/js-errors.txt" ] && [ -z "$js_failed" ]; then
@@ -962,6 +996,32 @@ PY
       [ "$got" = "$expected" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $expected"; }
     fi
     result "$name" scalac-run $ok "$detail"
+  fi
+  # scalac-whole, scalac-apart: (a case with whole.txt) scalac's own two builds print the same two outputs.
+  if [ -n "$whole_file" ] && [ -n "$down" ] && [ $have_java = 1 ]; then
+    main=$(main_class "${down_srcs[@]}")
+    srcs=()
+    for f in "${all_srcs[@]}"; do srcs+=("$(at_root "$f")"); done
+    ok=1
+    detail=$(scalac "$SL" "$out/$name/scalac-whole" "${srcs[@]}") || ok=0
+    if [ $ok = 1 ]; then
+      got=$(timeout 60 java -XX:-UsePerfData -cp "$out/$name/scalac-whole:$SL" "$main" 2>&1)
+      [ "$got" = "$whole_expected" ] && detail="" || { ok=0; detail="$main printed: $got"$'\n'"expected: $whole_expected"; }
+    fi
+    result "$name" scalac-whole $ok "$detail"
+    ok=1
+    cp=$SL
+    for m in "${ups[@]}" "$down"; do
+      srcs=()
+      while IFS= read -r f; do srcs+=("$(at_root "$f")"); done < <(sources "$dir/$m")
+      [ $ok = 1 ] && { detail=$(scalac "$cp" "$out/$name/scalac-apart-$m" "${srcs[@]}") || ok=0; }
+      cp=$out/$name/scalac-apart-$m:$cp
+    done
+    if [ $ok = 1 ]; then
+      got=$(timeout 60 java -XX:-UsePerfData -cp "$cp" "$main" 2>&1)
+      [ "$got" = "$expected" ] && detail="" || { ok=0; detail="$main printed: $got"$'\n'"expected: $expected"; }
+    fi
+    result "$name" scalac-apart $ok "$detail"
   fi
   # over-scalac: teq's downstream modules over scalac's upstream ones.
   if [ -f "$dir/over-scalac.txt" ] && [ ! -f "$expect" ]; then

@@ -890,6 +890,7 @@ impl<'a> Gen<'a> {
         let syms = cx.input.syms;
         for s in prog.stmts[stmts.range()].to_vec() {
             match s {
+                TStmt::Expr(x) if prog.is_removed(x) => {}
                 TStmt::Expr(x) => {
                     if let Some(sp) = self.expr_span(x) {
                         self.walk_local_classes_before(w, sp.start);

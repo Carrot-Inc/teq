@@ -456,6 +456,11 @@ impl<'a> Parser<'a> {
             define(self, name, span, None);
             self.errors.truncate(errors_reported);
         }
+        if out.len() > group_start + 1 {
+            for &d in &out[group_start..] {
+                self.ast.notes.several_names.insert(d, ());
+            }
+        }
         // The copies of an initialiser, typed in this order (`Ast::val_copies`); names without
         // one have nothing to order.
         if matches!(self.ast.def(out[group_start]).kind, DefKind::Val { rhs: Some(_), .. }) {

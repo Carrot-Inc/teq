@@ -544,7 +544,9 @@ impl<'a, 't> Interp<'a, 't> {
         if !declares {
             for i in stmts.range() {
                 if let TStmt::Expr(x) = self.prog().stmts[i] {
-                    self.expr_layout(w, x);
+                    if !self.prog().is_removed(x) {
+                        self.expr_layout(w, x);
+                    }
                 }
             }
             return self.expr_layout(w, res);
@@ -560,6 +562,7 @@ impl<'a, 't> Interp<'a, 't> {
         }
         for i in stmts.range() {
             match self.prog().stmts[i] {
+                TStmt::Expr(x) if self.prog().is_removed(x) => {}
                 TStmt::Expr(x) => self.expr_layout(w, x),
                 TStmt::Fun(_) => {}
                 TStmt::Val(sym, init) => {
@@ -1756,7 +1759,12 @@ impl<'a, 't> Interp<'a, 't> {
             return self.lower_in(b, res, tail);
         }
         let declares = self.lower_stmts(b, stmts);
-        self.lower_in(b, res, tail);
+        // The pure result of an ascribed block that is a statement is not evaluated.
+        if self.prog().is_removed(res) {
+            b.emit(Op::Unit);
+        } else {
+            self.lower_in(b, res, tail);
+        }
         if declares {
             let scope = b.scope(Opener::Block(stmts.start));
             b.emit(Op::PopFrame { scope });
@@ -1778,6 +1786,8 @@ impl<'a, 't> Interp<'a, 't> {
         }
         for i in stmts.range() {
             match self.prog().stmts[i] {
+                // A statement the reference's `PureStats` removes is not run (`Program::runs`).
+                TStmt::Expr(x) if self.prog().is_removed(x) => {}
                 TStmt::Expr(x) => {
                     self.lower(b, x);
                     b.emit_folding(Op::Pop);

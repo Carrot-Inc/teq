@@ -328,7 +328,6 @@ t6663.scala	t6663.scala:14:11: a member of js.Dynamic takes no type arguments
 t6706.scala	lang.scala:1:1: not supported on JavaScript: method gc of java.lang.System (a Java definition without an implementation in the std's platform layer)
 t6827.scala	output: line 1: the .check has 'start at -5: OOB', the program printed 'start at -5: ok'
 t7200.scala	t7200.scala:19:9: recursive use of coflatMap needs an explicit result type
-t7223.scala	output: line 1: the .check has '0', the program printed nothing
 t7396.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 t7992.scala	t7992.scala:9:9: expected an identifier, found 'super'
 t7992b.scala	t7992b.scala:9:9: expected an identifier, found 'super'

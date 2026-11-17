@@ -174,6 +174,23 @@ if piece_has scripted; then
   stop
   rm -rf "$work/out"
 
+  # An object named as a statement is evaluated or removed by its class's initialisation, which another file
+  # holds (tests/split-watch.sh has the JavaScript side and the products'): the object given a statement, the
+  # rebuild evaluates it; the file that names it is never edited.
+  src=$work/objstat
+  mkdir -p "$src"
+  printf 'package ws\nclass Sec(x: Int) { def this() = this({ println("  the secondary argument"); 1 }) }\nobject Named extends Sec()\n' > "$src/Lib.scala"
+  printf 'package ws\nobject Main:\n  def main(args: Array[String]): Unit =\n    println("before")\n    Named\n    println("after")\n' > "$src/Main.scala"
+  start "$src" $PIN
+  same_as_fresh "object statement: first build" "$src" $PIN
+  expect "object statement: removed where the class has no initialiser" "$(run_out ws.Main | tr '\n' '|')" "before|after|"
+  printf 'package ws\nclass Sec(x: Int) { def this() = this({ println("  the secondary argument"); 1 }) }\nobject Named extends Sec() { println("  a statement of the object") }\n' > "$src/Lib.scala"
+  build "$src/Lib.scala"
+  same_as_fresh "object statement: the object gained a statement" "$src" $PIN
+  expect "object statement: evaluated once the class has an initialiser" "$(run_out ws.Main | tr '\n' '|')" "before|  the secondary argument|  a statement of the object|after|"
+  stop
+  rm -rf "$work/out"
+
   # A retype of inline_fold_std folds its arguments through scala-library's bodies: the session's
   # output after it is a fresh build's, whether the reach is kept or walked from the roots again
   # (src/emit/kept.rs; tests/split-watch.sh has a macro's side of what a retype adds outside its units).

@@ -1,0 +1,16 @@
+own statement, by name
+  own statement (by name)
+inherited body, by name
+  inherited body (by name)
+trait body, by name
+  trait body (by name)
+own statement, through the package
+  own statement (through the package)
+inherited body, through the package
+  inherited body (through the package)
+trait body, through the package
+  trait body (through the package)
+omitted default, through the package
+  omitted default (through the package)
+quiet, through the package
+end

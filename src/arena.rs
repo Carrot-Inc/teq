@@ -2417,6 +2417,10 @@ pub struct Bits {
     own: Vec<u64>,
     shared: Option<Arc<SharedBits>>,
     pub alloc_shared: bool,
+    /// A set few workers write: shared, it keeps the words it holds as they are and its directory is mapped by
+    /// the first bit a worker sets (`SharedBits::unmapped`), so that sharing it holds no address space where
+    /// the workers mark nothing.
+    lazy: bool,
     /// The marks of the arena the bits parallel and the reader's own range's base, as
     /// `Parallel`'s (`follow_escapes`).
     #[cfg(debug_assertions)]
@@ -2435,25 +2439,47 @@ fn check_own_entry(marks: &EscapeMarks, own_base: u32, i: u32, what: &str) {
     }
 }
 
-pub struct SharedBits(ChunkDir<[std::sync::atomic::AtomicU64; BIT_CHUNK_WORDS]>);
+pub struct SharedBits {
+    dir: std::sync::OnceLock<ChunkDir<[std::sync::atomic::AtomicU64; BIT_CHUNK_WORDS]>>,
+    /// The words a set that waits held when the workers began to share it (`Bits::fork`): read beside the
+    /// chunks' and never written, so that sharing them maps nothing.
+    base: Vec<u64>,
+}
 
 impl SharedBits {
     pub(crate) fn new() -> SharedBits {
-        SharedBits(ChunkDir::new(BIT_CHUNK_BITS))
+        let bits = SharedBits::unmapped(Vec::new());
+        bits.dir();
+        bits
+    }
+
+    /// The bits with no directory yet, over the words set so far: the first bit set maps it.
+    fn unmapped(base: Vec<u64>) -> SharedBits {
+        SharedBits { dir: std::sync::OnceLock::new(), base }
+    }
+
+    fn dir(&self) -> &ChunkDir<[std::sync::atomic::AtomicU64; BIT_CHUNK_WORDS]> {
+        self.dir.get_or_init(|| ChunkDir::new(BIT_CHUNK_BITS))
     }
 
     #[inline]
     fn word(&self, i: u32) -> Option<&std::sync::atomic::AtomicU64> {
-        self.0.find(i).map(|c| &c[(i as usize >> 6) & (BIT_CHUNK_WORDS - 1)])
+        self.dir.get()?.find(i).map(|c| &c[(i as usize >> 6) & (BIT_CHUNK_WORDS - 1)])
+    }
+
+    /// The word `w` as the workers left it: the base's bits and the chunks'.
+    fn word_now(&self, w: usize) -> u64 {
+        self.base.get(w).copied().unwrap_or(0) | self.word((w * 64) as u32).map_or(0, |a| a.load(Ordering::Relaxed))
     }
 
     #[inline]
     pub(crate) fn has(&self, i: u32) -> bool {
-        self.word(i).map_or(false, |w| w.load(Ordering::Acquire) & (1u64 << (i % 64)) != 0)
+        let bit = 1u64 << (i % 64);
+        self.base.get((i / 64) as usize).is_some_and(|w| w & bit != 0) || self.word(i).map_or(false, |w| w.load(Ordering::Acquire) & bit != 0)
     }
 
     pub(crate) fn set(&self, i: u32) {
-        let c = self.0.get_or_make(i, || Self::chunk(&[]));
+        let c = self.dir().get_or_make(i, || Self::chunk(&[]));
         c[(i as usize >> 6) & (BIT_CHUNK_WORDS - 1)].fetch_or(1u64 << (i % 64), Ordering::AcqRel);
     }
 
@@ -2465,11 +2491,16 @@ impl SharedBits {
     }
 
     fn held(&self) -> usize {
-        self.0.count * std::mem::size_of::<usize>() + self.0.chunks().count() * BIT_CHUNK_WORDS * 8
+        self.base.len() * 8 + self.dir.get().map_or(0, |dir| dir.count * std::mem::size_of::<usize>() + dir.chunks().count() * BIT_CHUNK_WORDS * 8)
     }
 }
 
 impl Bits {
+    /// A set whose shared directory waits for its first bit (`Bits::lazy`).
+    pub fn lazy() -> Bits {
+        Bits { lazy: true, ..Bits::default() }
+    }
+
     #[inline]
     pub fn has(&self, i: u32) -> bool {
         match self.own.get((i / 64) as usize) {
@@ -2516,10 +2547,17 @@ impl Bits {
     /// The bits so far become the shared ones, which every worker reads and sets.
     pub fn fork(&mut self) -> Arc<SharedBits> {
         assert!(self.shared.is_none());
-        let bits = SharedBits::new();
-        for (k, block) in std::mem::take(&mut self.own).chunks(BIT_CHUNK_WORDS).enumerate() {
-            bits.0.get_or_make((k << BIT_CHUNK_BITS) as u32, || SharedBits::chunk(block));
-        }
+        let own = std::mem::take(&mut self.own);
+        let bits = if self.lazy {
+            // The words so far stay as they are, read beside what the workers set.
+            SharedBits::unmapped(own)
+        } else {
+            let bits = SharedBits::new();
+            for (k, block) in own.chunks(BIT_CHUNK_WORDS).enumerate() {
+                bits.dir().get_or_make((k << BIT_CHUNK_BITS) as u32, || SharedBits::chunk(block));
+            }
+            bits
+        };
         let shared = Arc::new(bits);
         self.shared = Some(shared.clone());
         shared
@@ -2534,6 +2572,7 @@ impl Bits {
             own: Vec::new(),
             shared: Some(shared),
             alloc_shared: false,
+            lazy: false,
             #[cfg(debug_assertions)]
             marks: None,
         }
@@ -2558,7 +2597,7 @@ impl Bits {
     pub fn place(&mut self, numbering: &Numbering) {
         let shared = self.shared.take().expect("no shared region");
         let shared = Arc::try_unwrap(shared).unwrap_or_else(|_| panic!("the shared bits are still shared"));
-        let word = |w: usize| shared.word((w * 64) as u32).map_or(0, |a| a.load(Ordering::Relaxed));
+        let word = |w: usize| shared.word_now(w);
         let mut words: Vec<u64> = vec![0; (numbering.len as usize).div_ceil(64)];
         or_bits(&mut words, 0, &word, 0, numbering.shared as usize);
         for r in &numbering.runs {
@@ -3463,46 +3502,50 @@ mod tests {
 
     #[test]
     fn the_side_tables_and_the_bits_follow_their_records() {
-        let (lens, segments) = scattered();
-        let shared_ids = 70;
-        let mut entries: Parallel<u32> = Parallel::new(7);
-        let mut bits = Bits::default();
-        for i in 0..shared_ids as u32 {
-            entries.set(i, i * 3);
-            if i % 3 == 0 {
-                bits.set(i);
-            }
-        }
-        let shared_entries = entries.fork();
-        let shared_bits = bits.fork();
-        let mut want_entries: Vec<u32> = (0..shared_ids as u32).map(|i| i * 3).collect();
-        let mut want_bits: Vec<bool> = (0..shared_ids as u32).map(|i| i % 3 == 0).collect();
-        let own_entry = |k: usize, i: u32| (k as u32 + 1) * 10_000 + i;
-        let own_bit = |k: usize, i: u32| (i + k as u32) % 2 == 0 || i == 11;
-        for (k, &n) in lens.iter().enumerate() {
-            for i in 0..n as u32 {
-                if i != 4 {
-                    shared_entries.set(worker_base(k) + i, own_entry(k, i));
-                }
-                if own_bit(k, i) {
-                    shared_bits.set(worker_base(k) + i);
+        for lazy in [false, true] {
+            let (lens, segments) = scattered();
+            let shared_ids = 70;
+            let mut entries: Parallel<u32> = Parallel::new(7);
+            // A set that waits keeps its words as they are when it is shared; any other moves them to chunks.
+            let mut bits = if lazy { Bits::lazy() } else { Bits::default() };
+            for i in 0..shared_ids as u32 {
+                entries.set(i, i * 3);
+                if i % 3 == 0 {
+                    bits.set(i);
                 }
             }
+            let shared_entries = entries.fork();
+            let shared_bits = bits.fork();
+            assert!((0..shared_ids as u32).all(|i| shared_bits.has(i) == (i % 3 == 0)), "the bits set before the workers share them are read as they were");
+            let mut want_entries: Vec<u32> = (0..shared_ids as u32).map(|i| i * 3).collect();
+            let mut want_bits: Vec<bool> = (0..shared_ids as u32).map(|i| i % 3 == 0).collect();
+            let own_entry = |k: usize, i: u32| (k as u32 + 1) * 10_000 + i;
+            let own_bit = |k: usize, i: u32| (i + k as u32) % 2 == 0 || i == 11;
+            for (k, &n) in lens.iter().enumerate() {
+                for i in 0..n as u32 {
+                    if i != 4 {
+                        shared_entries.set(worker_base(k) + i, own_entry(k, i));
+                    }
+                    if own_bit(k, i) {
+                        shared_bits.set(worker_base(k) + i);
+                    }
+                }
+            }
+            drop((shared_entries, shared_bits));
+            let owns: Vec<Vec<(usize, u32)>> = lens.iter().enumerate().map(|(k, &n)| (0..n as u32).map(|i| (k, i)).collect()).collect();
+            let (order, _) = placed_one_by_one(&[], &owns, &segments);
+            for (k, i) in order {
+                want_entries.push(if i == 4 { 7 } else { own_entry(k, i) });
+                want_bits.push(own_bit(k, i));
+            }
+            crate::crew::Crew::with(4, |crew| {
+                let n = Numbering::of(shared_ids as u32, &segments, covered(&lens, &segments), &lens);
+                entries.place(&n, crew);
+                bits.place(&n);
+            });
+            assert_eq!(entries.own(), &want_entries[..]);
+            assert_eq!((0..want_bits.len() as u32).map(|i| bits.has(i)).collect::<Vec<bool>>(), want_bits);
         }
-        drop((shared_entries, shared_bits));
-        let owns: Vec<Vec<(usize, u32)>> = lens.iter().enumerate().map(|(k, &n)| (0..n as u32).map(|i| (k, i)).collect()).collect();
-        let (order, _) = placed_one_by_one(&[], &owns, &segments);
-        for (k, i) in order {
-            want_entries.push(if i == 4 { 7 } else { own_entry(k, i) });
-            want_bits.push(own_bit(k, i));
-        }
-        crate::crew::Crew::with(4, |crew| {
-            let n = Numbering::of(shared_ids as u32, &segments, covered(&lens, &segments), &lens);
-            entries.place(&n, crew);
-            bits.place(&n);
-        });
-        assert_eq!(entries.own(), &want_entries[..]);
-        assert_eq!((0..want_bits.len() as u32).map(|i| bits.has(i)).collect::<Vec<bool>>(), want_bits);
     }
 
     #[test]

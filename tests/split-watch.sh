@@ -210,6 +210,30 @@ expect "joined_function_local: the join taken out runs" "$(timeout 20 node "$wor
 stop
 rm -rf "$work/out"
 
+# An object named as a statement is evaluated or removed by its class's initialisation, which another file
+# holds (the effect below sits in a secondary constructor's argument, so the class has none to the reference and
+# the statement is removed): when that file gives the object a statement, the rebuild evaluates it, and removes
+# it again when the statement goes: the file that names the object is never edited.
+src=$work/objstat
+mkdir -p "$src"
+printf 'package ws\nclass Sec(x: Int) { def this() = this({ println("  the secondary argument"); 1 }) }\nobject Named extends Sec()\n' > "$src/Lib.scala"
+printf 'package ws\n@main def run(): Unit =\n  println("before")\n  Named\n  println("after")\n' > "$src/Main.scala"
+start "$src" --split "$work/out"
+expect "object statement: first build" "$(field ok)" 'true'
+same_as_fresh "object statement: first build" "$src"
+expect "object statement: removed where the class has no initialiser" "$(timeout 20 node "$work/out/main.mjs" | tr '\n' '|')" "before|after|"
+printf 'package ws\nclass Sec(x: Int) { def this() = this({ println("  the secondary argument"); 1 }) }\nobject Named extends Sec() { println("  a statement of the object") }\n' > "$src/Lib.scala"
+build "$src/Lib.scala"
+expect "object statement: the object gained a statement" "$(field ok)" 'true'
+same_as_fresh "object statement: the object gained a statement" "$src"
+expect "object statement: evaluated once the class has an initialiser" "$(timeout 20 node "$work/out/main.mjs" | tr '\n' '|')" "before|  the secondary argument|  a statement of the object|after|"
+printf 'package ws\nclass Sec(x: Int) { def this() = this({ println("  the secondary argument"); 1 }) }\nobject Named extends Sec()\n' > "$src/Lib.scala"
+build "$src/Lib.scala"
+same_as_fresh "object statement: the statement taken out again" "$src"
+expect "object statement: removed again" "$(timeout 20 node "$work/out/main.mjs" | tr '\n' '|')" "before|after|"
+stop
+rm -rf "$work/out"
+
 # An anonymous JS object edited across rebuilds: leaving an optional member out,
 # giving it with an override val, and leaving it out again.
 src=$work/anon_undefined
@@ -451,6 +475,26 @@ build
 expect "products: a publication killed on the way takes the full path" "$(field incremental)" 'false'
 same_as_fresh "products: a publication killed on the way" "$src/down" --classpath "$src/upP"
 expect "products: a publication killed on the way reads the last whole one" "$(timeout 20 node "$work/out/main.mjs")" "ten!"
+stop
+rm -rf "$work/out"
+
+# The same over an upstream module's products: the downstream's statement names the upstream's object, whose
+# class the session reads from its pickle; the upstream rebuilt with a statement in the object's body, the
+# downstream's next request evaluates the object.
+src=$work/objstat_products
+mkdir -p "$src/up" "$src/down"
+printf 'package up\nclass Sec(x: Int) { def this() = this({ println("  the secondary argument"); 1 }) }\nobject Named extends Sec()\n' > "$src/up/Lib.scala"
+printf 'package down\nimport up.Named\n@main def run(): Unit =\n  println("before")\n  Named\n  println("after")\n' > "$src/down/Main.scala"
+"$TEQ" compiler check --products "$src/upP" "$src/up/Lib.scala" > /dev/null 2>&1 || bad "object statement over products: the upstream's products"
+retype_start "$src/down" --classpath "$src/upP"
+expect "object statement over products: first build" "$(field ok)" 'true'
+same_as_fresh "object statement over products: first build" "$src/down" --classpath "$src/upP"
+expect "object statement over products: removed by the pickle's fact" "$(timeout 20 node "$work/out/main.mjs" | tr '\n' '|')" "before|after|"
+printf 'package up\nclass Sec(x: Int) { def this() = this({ println("  the secondary argument"); 1 }) }\nobject Named extends Sec() { println("  a statement of the object") }\n' > "$src/up/Lib.scala"
+"$TEQ" compiler check --products "$src/upP" "$src/up/Lib.scala" > /dev/null 2>&1 || bad "object statement over products: the upstream rebuilt"
+build
+same_as_fresh "object statement over products: the upstream's object gained a statement" "$src/down" --classpath "$src/upP"
+expect "object statement over products: evaluated after the upstream's rebuild" "$(timeout 20 node "$work/out/main.mjs" | tr '\n' '|')" "before|  the secondary argument|  a statement of the object|after|"
 stop
 rm -rf "$work/out"
 

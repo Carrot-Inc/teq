@@ -458,6 +458,12 @@ impl Loaded {
         })
     }
 
+    /// Whether a class was read from a Scala 2 jar's pickle, which the reference reads by its
+    /// `Scala2Unpickler` (scala-library's own TASTy is read as any TASTy).
+    pub fn is_scala2_pickle_class(&self, c: ClassId) -> bool {
+        self.classes.get(&c).map_or(false, |lc| self.cp.is_scala2(self.file(lc.file).cp))
+    }
+
     /// Whether another module's class is one scalac made (an enum's or a case class's
     /// companion): teq's model of the program has no body for it, often no class at all.
     pub fn is_synthetic_product_class(&self, c: ClassId) -> bool {
@@ -1980,8 +1986,15 @@ impl<'a> Worker<'a> {
         // whole program's do. On the JVM a jar trait's statements are its
         // `$init$`'s, which every class mixing it in calls, as scalac's `Mixin` does.
         // `TreeUnpickler.indexStats`' `NoInits` (`normalizeFlags` makes a module's val lazy).
-        let read_no_inits = !sig.index.statements
-            && sig.index.members.iter().all(|e| e.tag != tags::VALDEF || !e.has_body || e.flags.has(tags::LAZY) || e.flags.has(tags::OBJECT));
+        // A Scala 2 pickle's class by `Scala2Unpickler`'s convention: a class is never without an initialiser; a
+        // trait is where its pickle holds no constructor (`doEnsureConstructor`: "Scala 2 traits have a
+        // constructor iff they have initialization code"), for which the transcoding writes one without a body.
+        let read_no_inits = if self.loaded.as_ref().is_some_and(|l| l.is_scala2_pickle_class(c)) {
+            kind == ClassKind::Trait && sig.ctor.as_ref().map_or(true, |ctor| ctor.body.is_none())
+        } else {
+            !sig.index.statements
+                && sig.index.members.iter().all(|e| e.tag != tags::VALDEF || !e.has_body || e.flags.has(tags::LAZY) || e.flags.has(tags::OBJECT))
+        };
         self.syms.class_mut(c).read_no_inits = read_no_inits;
         // The emitters' record of a library class (`elaborate::class_no_inits_recorded`): a jar's
         // as its pickle reads; a product's is left to the records, which hold the source rule

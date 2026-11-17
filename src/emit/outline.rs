@@ -500,11 +500,32 @@ impl<'a> super::Emitter<'a> {
     /// a parameter there, whatever expression the root's own site passes for it.
     #[inline]
     pub(super) fn peek(&self, e: TExprId) -> TExpr {
-        let e = self.through_same(e);
+        let mut e = self.through_same(e);
+        // A block reduced to its result is written as its result is (`reduced_block`): the structure a
+        // position asks of it is the result's.
+        if matches!(self.prog.expr(e), TExpr::Block(..)) {
+            while let Some(res) = self.reduced_block(e) {
+                e = self.through_same(res);
+            }
+        }
         if self.hole_of(e).is_some() {
             return TExpr::Null;
         }
         self.prog.expr(e)
+    }
+
+    /// The result of the block `e` where the block is written as its result alone: none of its statements
+    /// is written (`is_idle`: `()`, or one `PureStats` removes), no plan moves them (`block_moves_all`), and
+    /// the result is. Every position that decides by an operand's kind how to write it (an arrow function
+    /// next to an operator, a number or a template as a receiver, a conditional's condition, a statement's
+    /// start) decides by this result's, as it would for the result standing there itself.
+    pub(super) fn reduced_block(&self, e: TExprId) -> Option<TExprId> {
+        let TExpr::Block(stmts, res) = self.prog.expr(e) else { return None };
+        if self.is_opaque(e) || self.prog.is_removed(res) {
+            return None;
+        }
+        let idle = self.prog.stmts[stmts.range()].iter().all(|s| matches!(*s, TStmt::Expr(x) if self.is_idle(x)));
+        (idle && !self.block_moves_all(e)).then_some(res)
     }
 
     /// `e` under the widenings that leave a JavaScript number as it is (`UnOp::same_number`):
