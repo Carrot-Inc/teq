@@ -218,6 +218,20 @@ impl<'a> Worker<'a> {
         self.env.file = file_was;
     }
 
+    /// `feature_enabled` of a feature named by its text, for one no well-known name holds (a name added to that table
+    /// moves the ids of every name after it): `noAutoTupling`.
+    pub(super) fn feature_named_enabled(&self, file: FileId, pos: u32, feature: &str) -> bool {
+        if self.diags.policy.language.iter().any(|l| l == feature) {
+            return true;
+        }
+        let ast = self.ast(file);
+        ast.language_scopes
+            .iter()
+            .filter(|(n, _, scope)| scope.start <= pos && pos < scope.end && self.name_str(*n) == feature)
+            .max_by_key(|(_, _, scope)| scope.start)
+            .is_some_and(|&(_, enables, _)| enables)
+    }
+
     /// Whether `feature` is enabled at `pos` of `file`: by the command line, or by the innermost
     /// `scala.language` import in scope there that names it or all features.
     pub(super) fn feature_enabled(&self, file: FileId, pos: u32, feature: Name) -> bool {

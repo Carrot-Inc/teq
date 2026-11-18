@@ -36,7 +36,7 @@ anon_sites	pass	-
 anon_unused_capture	pass	-	
 anonymous_class_secondary_constructor	pass	-	
 anonymous_subclass_jdk_constructor	pass	-	
-anonymous_subclass_jdk_generic	fail	-	error: not supported on JavaScript: class SimpleFileVisitor java.nio.file.SimpleFileVisitor (a Java definition without an implementation in the std's platform layer)
+anonymous_subclass_jdk_generic	fail	-	error: not supported on JavaScript: class SimpleFileVisitor java.nio.file.SimpleFileVisitor (a Java definition without an implementation in
 any_equals_method	pass	-	
 any_member_beside	pass	-	
 any_member_beside_override	pass	-	
@@ -88,7 +88,7 @@ array_overloads_same_simple_name	pass	-
 array_same_elements_wider	pass	-	
 array_sliding_grouped	pass	-	
 array_spread_alias	fail	-	output differs
-array_spread_repeated_class	fail	-	the run over scala-library dies; queued: a spread of an array into a repeated parameter on the scala-library JavaScript leg
+array_spread_repeated_class	fail	-	TypeError: Cannot read properties of undefined (reading 'v')
 arrays_copy_of	pass	-	
 arrays_generic	fail	-	output differs
 arrays_of_nothing	pass	-	
@@ -131,12 +131,16 @@ block_alias_context	pass	-
 block_import_alias	pass	-	
 block_infix_argument	pass	-	
 block_lambda_stmts	pass	-	
+block_reduced_to_result	pass	-	
 block_statement_lambda	pass	-	
 block_then_select	pass	-	
+block_value_type_application	pass	-	
 body_reads_outer_member	pass	-	
 boolean_assign_ops	pass	-	
 boolean_strict_operators	pass	-	
 bottom_path_kinds	pass	-	
+bound_argument_object_load_routes	pass	-	
+bound_argument_outer_instance	pass	-	
 bounded_function_copy_default	pass	-	
 bounded_param_operators	pass	-	
 bounded_type_test	pass	-	
@@ -149,7 +153,9 @@ boxed_numeric_conversions	pass	-
 boxed_operators	pass	-	
 boxed_widening	pass	-	
 brace_assign_update	pass	-	
+brace_block_first_line_width	pass	-	
 brace_first_line_statements	pass	-	
+brace_lambda_body_lines	pass	-	
 brace_next_line	pass	-	
 brace_self_type_parent	pass	-	
 braces	pass	-	
@@ -205,6 +211,8 @@ capture_x	pass	-
 case_apply_bare_in_companion	pass	-	
 case_apply_beside_curried	pass	-	
 case_apply_primary_alone	pass	-	
+case_body_continued	pass	-	
+case_body_lines	pass	-	
 case_class_below_superclass	pass	-	
 case_class_beside_method_of_its_name	pass	-	
 case_class_copy_through_trait	pass	-	
@@ -258,6 +266,11 @@ case_lambda_parameter	pass	-
 case_lambda_pinned_constructor	pass	-	
 case_lambda_tuples	pass	-	
 case_object_equals_from_superclass_trait	pass	-	
+cases_at_keyword_width	pass	-	
+cases_then_match_after_do	pass	-	
+cases_then_match_after_else	pass	-	
+cases_then_match_after_finally	pass	-	
+cases_then_match_after_yield	pass	-	
 cast_array_kinds	fail	-	output differs
 cast_array_nothing	pass	-	
 cast_boxed_unit	pass	-	
@@ -342,11 +355,11 @@ class_tag_unapply	pass	-
 class_tag_void_array	pass	-	
 class_tags	pass	-	
 class_through_path_array_concat	pass	-	
-class_through_path_array_spread	fail	-	the run over scala-library dies; queued: a spread of an array into a repeated parameter on the scala-library JavaScript leg
+class_through_path_array_spread	fail	-	TypeError: Cannot read properties of undefined (reading 'v')
 class_through_path_equality	pass	-	
-class_through_path_generic_equality	fail	-	the universal equality's values; queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
-class_through_path_generic_method	fail	-	refused (type mismatch: found None, required Some[Int]); queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
-class_through_path_inline_parameter	fail	-	the run over scala-library dies (o$2 is not defined); queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
+class_through_path_generic_equality	fail	-	output differs
+class_through_path_generic_method	fail	-	error: type mismatch: found None, required Some[Int]
+class_through_path_inline_parameter	fail	-	ReferenceError: o$2 is not defined
 class_through_path_opaque_controls	pass	-	
 class_through_path_tag	pass	-	
 class_tparams_kind_other_file	pass	-	
@@ -392,6 +405,7 @@ companion_ref_quoted_class	pass	-
 companion_unapply_through_prefix	pass	-	
 comparable_boxes	pass	-	
 compiletime_string_ops	fail	-	error: type mismatch: found "urge", required Substring["hamburger", 4, 8]
+compound_assignment_lifted	pass	-	
 concat_order	pass	-	
 concat_order_boundary	pass	-	
 concat_order_boundary_macro	pass	-	
@@ -406,6 +420,7 @@ concat_order_long	pass	-
 concat_order_macro	pass	-	
 concat_order_transparent	pass	-	
 concurrent_hash_map_views	fail	-	error: Ambiguous overload. The overloaded alternatives of method append in class StringBuilder with types
+condition_then_bracket_line	pass	-	
 conditional_precedence	pass	-	
 conformance_extras	pass	-	
 cons_pattern_binders	fail	-	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
@@ -660,7 +675,7 @@ duration_time_unit_constants	pass	-
 dynamic_assignment_operator	pass	-	
 dynamic_assignment_operator_places	pass	-	
 dynamic_assignments	pass	-	
-dynamic_infix_and_using	fail	-	refused (not supported yet: an infix call with a parenthesised argument list on a value whose class derives from scala.Dynamic); queued: the row "a dynamic call's infix and using forms as scalac builds them"
+dynamic_infix_and_using	fail	-	error: not supported yet: an infix call with a parenthesised argument list on a value whose class derives from scala.Dynamic
 dynamic_members_first	pass	-	
 dynamic_other_places	pass	-	
 dynamic_predef_names	pass	-	
@@ -725,6 +740,8 @@ enum_value_receiver_effects	fail	-	output differs
 enum_value_singleton_test	pass	-	
 enumvalues	pass	-	
 equality_default	pass	-	
+equality_selection	pass	-	
+equality_selection_alternatives	pass	-	
 equals_trait	fail	-	TypeError: e.canEqual is not a function
 erased_primitive_bound_matrix	pass	-	
 erased_primitive_result	pass	-	
@@ -844,6 +861,8 @@ extension_conversion_contextual	fail	-	output differs
 extension_deepened_overload	pass	-	
 extension_direct_targs	pass	-	
 extension_given_type_args	pass	-	
+extension_header_brace	pass	-	
+extension_header_lines	pass	-	
 extension_import_alternatives_inherited	pass	-	
 extension_inherited_this_prefix	pass	-	
 extension_method_value	pass	-	
@@ -868,6 +887,7 @@ extension_type_arguments_over_member	pass	-
 extension_using_skip	pass	-	
 extension_view_after_unrelated	pass	-	
 extension_widening	pass	-	
+extension_word	pass	-	
 extractor_abstract_input	pass	-	
 extractor_abstract_type_input	pass	-	
 extractor_binder_member	pass	-	
@@ -913,6 +933,7 @@ float_strings	pass	-
 fold_targets	pass	-	
 foldleft_empty_lambda	pass	-	
 foldleft_nil_lambda	pass	-	
+for_alias_value	pass	-	
 for_case	pass	-	
 for_check_modes_3_3	pass	-	
 for_check_modes_3_8	pass	-	
@@ -920,6 +941,7 @@ for_deep_equals_3_3	pass	-
 for_deep_equals_3_8	pass	-	
 for_drop_map_3_8	pass	-	
 for_drop_map_lifted_receiver	pass	-	
+for_enumerators_over_lines	pass	-	
 for_generator_callee_guard	fail	-	error: cannot infer the element type of this generator
 for_generator_callee_parameter	fail	-	error: cannot infer the element type of this generator
 for_generator_converted_receiver	pass	-	
@@ -942,6 +964,9 @@ for_yield_view	pass	-
 for_yield_view_chain	pass	-	
 for_yield_view_depth	pass	-	
 for_yield_view_forms	pass	-	
+forms_after_bracket_on_its_line	pass	-	
+forward_reference_accepted	pass	-	
+forward_reference_quoted_class	pass	-	
 fractional_equals_method	pass	-	
 frame_layouts	pass	-	
 function_class_name_field	pass	-	
@@ -1053,6 +1078,8 @@ given_inferred_override_extension_overloaded	pass	-
 given_inferred_override_private_ancestor	pass	-	
 given_inherited_param_result	pass	-	
 given_inline_trait_member	pass	-	
+given_instance_statement_effects	pass	-	
+given_instance_statement_paths	pass	-	
 given_intersection	pass	-	
 given_intersection_bounds	pass	-	
 given_knot_class_function_literal	pass	-	
@@ -1198,6 +1225,12 @@ import_wildcard_private_member	pass	-
 imports_scoped	pass	-	
 impossible_type_test_bounds	pass	-	
 impure_function_alias	fail	-	error: type ImpureFunction1 not found
+indentation_case_after_multiline_string	pass	-	
+indentation_runs_after_the_second	pass	-	
+indentation_tab_on_first_line	pass	-	
+indentation_tabs_comparable	pass	-	
+indented_block_continued	pass	-	
+indented_block_expression	pass	-	
 indexed_seq_defaults	pass	-	
 indexed_seq_ops_type	pass	-	
 indexed_seq_view_type	pass	-	
@@ -1414,7 +1447,7 @@ inline_parameter_cast_argument	pass	-
 inline_parameter_cast_block	pass	-	
 inline_parameter_cast_forwarded	pass	-	
 inline_parameter_cast_proxy	pass	-	
-inline_parameter_path_pattern	fail	-	the run over scala-library dies (o$2 is not defined); queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
+inline_parameter_path_pattern	fail	-	ReferenceError: o$1 is not defined
 inline_parameter_pure_block	pass	-	
 inline_parameter_purity	pass	-	
 inline_phase_bridge	pass	-	
@@ -1436,11 +1469,17 @@ inline_phase_walk_order	pass	-
 inline_phase_wire_siblings	fail	-	error: cannot resolve import: softwaremill not found
 inline_poly_member_override	pass	-	
 inline_poly_ref_flip_bottom	pass	-	
+inline_projection_assignment_kept	pass	-	
+inline_projection_by_name_argument	pass	-	
+inline_projection_creation_kept	pass	-	
+inline_projection_kept	pass	-	
+inline_projection_reduced	pass	-	
 inline_recursive_proxies	pass	-	
 inline_reduce_local_extractor	pass	-	
 inline_reduce_local_value	pass	-	
 inline_repeated_named_reorder	pass	-	
 inline_result_block_scope	pass	-	
+inline_result_object_statement	pass	-	
 inline_result_overridden	pass	-	
 inline_result_ring	pass	-	
 inline_result_under_check	pass	-	
@@ -1450,6 +1489,7 @@ inline_retained_match_effects	pass	-
 inline_same_this	pass	-	
 inline_saved	pass	-	
 inline_self_member	pass	-	
+inline_statement_arguments	pass	-	
 inline_substitution_anon_parent_args	pass	-	
 inline_substitution_case_binder_scope	pass	-	
 inline_substitution_class_alias	pass	-	
@@ -1624,6 +1664,7 @@ lambda_param_from_callee_type_argument	pass	-
 lambda_param_ordered_vars	pass	-	
 lambda_param_overload_same_count	pass	-	
 lambda_param_spread_argument	pass	-	
+lambda_result_recovered	pass	-	
 lambda_spread_bounded_formal_anyref	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
 lambda_spread_bounded_formal_case_class	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
 lambda_spread_bounded_formal_constructor_variable	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
@@ -1654,6 +1695,15 @@ lambda_spread_poly_function_bound	fail	-	error: type mismatch: found Any, requir
 lambda_union_expected	pass	-	
 lambdas	pass	-	
 language_import_from_root	pass	-	
+layout_cases_deeper_line_after_block	pass	-	
+layout_cases_deeper_line_after_case_block	pass	-	
+layout_cases_deeper_line_after_case_block_match	pass	-	
+layout_cases_deeper_line_after_inline_else	pass	-	
+layout_cases_deeper_line_after_inline_else_one_case	pass	-	
+layout_cases_deeper_line_after_operator	pass	-	
+layout_cases_deeper_line_after_operator_block	pass	-	
+layout_cases_end_after_continued_block	pass	-	
+layout_cases_end_after_selection	pass	-	
 layout_mixed	pass	-	
 lazy_given_nested_object	pass	-	
 lazy_initializer_release	fail	-	TypeError: $getClass(...).getDeclaredField is not a function
@@ -1723,6 +1773,7 @@ library_type_pattern_from_above	fail	-	error: cannot resolve import: qnest not f
 library_val_overridden	fail	-	error: cannot resolve import: lvlib not found
 lifted_block_arguments	pass	-	
 lifted_receiver_default	pass	-	
+line_continued_by_bracket	pass	-	
 list_class_ancestors	pass	-	
 list_fill_order	pass	-	
 list_map_conserve	pass	-	
@@ -2002,6 +2053,7 @@ maps	pass	-
 marker_traits	pass	-	
 match_abstract_member_type	pass	-	
 match_alias_declared_bound	pass	-	
+match_cases_in_interpolation_braces	pass	-	
 match_nested_bound	pass	-	
 match_reduction_stack	pass	-	
 match_type_case_and_line	pass	-	
@@ -2142,6 +2194,13 @@ object_inherited_protected	pass	-
 object_member	pass	-	
 object_monitor_one_thread	pass	-	
 object_prefix_framework	pass	-	
+object_statement_discarded_block	pass	-	
+object_statement_effects	pass	-	
+object_statement_java_classes	pass	-	
+object_statement_member_kinds	pass	-	
+object_statement_parent_lists	pass	-	
+object_statement_positions	pass	-	
+object_synchronized_receiver	pass	-	
 objects_deep_equals	pass	-	
 objects_equals_identity	pass	-	
 objects_java_equality	pass	-	
@@ -2178,6 +2237,8 @@ ordered_comparable	pass	-
 ordering_ordered_evidence	pass	-	
 ordering_tuples_large	pass	-	
 outer_setter_assign	pass	-	
+outermost_region_after_script_header	pass	-	
+outermost_region_narrows_after_separator	pass	-	
 outline_widened_operand	pass	-	
 overload_alias_by_name_lambda	pass	-	
 overload_apply	pass	-	
@@ -2256,6 +2317,9 @@ paren_self_type	pass	-
 parens_call_then_using	pass	-	
 parens_op_assign_target	pass	-	
 parent_arg_plain_local	pass	-	
+parent_argument_contents	pass	-	
+parent_argument_enclosing_member	pass	-	
+parent_argument_scope	pass	-	
 parser_combinators_regex	fail	-	error: cannot resolve import: parsing not found
 parser_combinators_sequence	fail	-	error: cannot resolve import: parsing not found
 partial_application_expected_function	pass	-	
@@ -2337,6 +2401,7 @@ poly_function_union_erasure	pass	-
 poly_functions	pass	-	
 poly_named_params	pass	-	
 polyfunction_gadt_scope	pass	-	
+polymorphic_literal_at_brace_start	pass	-	
 polymorphic_result_applied	pass	-	
 postfix_import_scoped	pass	-	
 postfix_operators	pass	-	
@@ -2380,6 +2445,7 @@ process_streams	fail	-	error: not supported on JavaScript: class BufferedReader 
 product_element_names	pass	-	
 product_iterator	pass	-	
 projection_prefix	pass	-	
+projection_sign_at_line_end	pass	-	
 prop_abs_negative_zero	pass	-	
 prop_boolean_and_or_short_circuit	pass	-	
 prop_double_text_subnormal	pass	-	
@@ -2422,6 +2488,10 @@ random_subclass	pass	-
 range_bounds_and_sum	pass	-	
 reader_utf8_boundary	fail	-	error: not supported on JavaScript: class InputStreamReader java.io.InputStreamReader (a Java definition without an implementation in the st
 reader_utf8_pipe	fail	-	error: not supported on JavaScript: class InputStreamReader java.io.InputStreamReader (a Java definition without an implementation in the st
+receiver_own_type	pass	-	
+receiver_own_type_given	pass	-	
+receiver_own_type_instance	pass	-	
+receiver_reference_forms	pass	-	
 receiver_type_args_from_expected	pass	-	
 recursive_hk_after_join	pass	-	
 reducer_literal_bound	fail	-	error: type mismatch: found ReducerLiteralC[[X] =>> 1, _, _], required ReducerLiteralC[[X] =>> 1, ?, ? <: 1]
@@ -2494,6 +2564,8 @@ right_assoc_lift_repeated_order	pass	-
 right_assoc_lift_toplevel_value	pass	-	
 right_assoc_lift_written_cast	pass	-	
 right_assoc_member_retry	pass	-	
+right_assoc_operand_before_object_load	pass	-	
+right_assoc_operand_object_receivers	pass	-	
 right_assoc_order_concat	pass	-	
 right_assoc_order_cons	pass	-	
 right_assoc_order_extension	pass	-	
@@ -2714,6 +2786,7 @@ select_overload_member_result	pass	-
 select_overload_nested_selection	pass	-	
 select_overload_paren_receiver	pass	-	
 selectable_anon_members	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+selected_operator_brace	pass	-	
 self_alias	pass	-	
 self_alias_anon	pass	-	
 self_alias_forms	pass	-	
@@ -2877,6 +2950,7 @@ super_rebind_result	fail	-	TypeError: this.choose$Any$super1 is not a function
 suppression_disabled	pass	-	
 suppression_inheritance	pass	-	
 symbol_name	fail	-	error: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition withou
+symbolic_package_block	pass	-	
 symbolic_type_selection	pass	-	
 sync_break_direct	pass	-	
 sync_exits	pass	-	
@@ -3001,6 +3075,7 @@ transparent_match_constant_branch	pass	-
 transparent_widened_ascription	pass	-	
 try_collect_lazy_zip	pass	-	
 try_handler_finally	pass	-	
+try_handler_typed_first	pass	-	
 try_without_handlers	pass	-	
 tuple_applied_values_xxl	pass	-	
 tuple_apply_known_prefix	pass	-	
@@ -3123,7 +3198,9 @@ union_widening_kinds	pass	-
 union_widening_local	pass	-	
 union_wildcard_extractor_inference	pass	-	
 unions	pass	-	
+unit_member_value_discarded	pass	-	
 unit_printed	fail	-	output differs
+unit_wanted_function_not_written	pass	-	
 unreachable_deep_split	pass	-	
 unread_argument_of_a_library_member	pass	-	
 unreducible_application_in_pattern	pass	-	

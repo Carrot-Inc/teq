@@ -9210,6 +9210,16 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
+            // A class's own `==` or `!=` stands beside `Any`'s. One argument goes to `Any`'s where none of the class's
+            // alternatives takes it (`p.==(p)` beside a `def ==(x: String, y: String)`). Several are tupled for
+            // `Any`'s only where every alternative is unary and none takes the tuple (`isUnary`, `needsTupledDual`,
+            // Applications.scala 1651-1678); otherwise the class's own are applied as before, and where none takes
+            // them the receiver goes to an extension or a conversion.
+            if (name == names::EQEQ || name == names::NEQ) && targs.is_none() {
+                if let Some(r) = self.own_or_any_equality(recv, recv_ty, sym, name, &lists, span, expected) {
+                    return r;
+                }
+            }
             if self.syms.alternatives(sym).is_some() {
                 self.no_receiver_conversion = converted;
                 return self.apply_overloaded_member(recv, recv_ty, sym, name, targs, lists, span, expected);
@@ -9446,6 +9456,13 @@ impl<'a> Worker<'a> {
                 if let Some(r) = self.eta_builtin_operator(recv, recv_ty, name, span, expected) {
                     return r;
                 }
+            }
+        }
+        // `==` and `!=` are members of `Any` (final), which the lookup finds before an extension or a conversion is
+        // tried (`x.==(y)`).
+        if targs.is_none() && (name == names::EQEQ || name == names::NEQ) {
+            if let Some(r) = self.any_equality(recv, recv_ty, name, &lists, span) {
+                return r;
             }
         }
         let mut lists = Some(lists);
@@ -10824,6 +10841,58 @@ impl<'a> Worker<'a> {
             (Some(clause), Some(list)) => clause_accepts(clause, list.args.len(), tupled),
             _ => true,
         }
+    }
+
+    /// `Any`'s `==` or `!=` applied to one positional argument list (`x.==(y)`): the operator, one argument compared as
+    /// `x == y` is (`typed_equality`, the comparison's own refusal), several auto-tupled into its one `Any` parameter
+    /// where auto-tupling is on (`Feature.autoTuplingEnabled`, off under `scala.language.noAutoTupling`). None for
+    /// another name or another shape of the lists, and for several arguments without auto-tupling: then nothing
+    /// applies, and the receiver goes to an extension or a conversion.
+    #[cold]
+    #[inline(never)]
+    fn any_equality(&mut self, recv: TExprId, recv_ty: TypeId, name: Name, lists: &[ArgList], span: Span) -> Option<(TExprId, TypeId)> {
+        if !(name == names::EQEQ || name == names::NEQ) || lists.len() != 1 || lists[0].using {
+            return None;
+        }
+        let args = self.positional_args(&lists[0].args)?;
+        if args.is_empty() || args.len() > 1 && self.feature_named_enabled(self.env.file, span.start, "noAutoTupling") {
+            return None;
+        }
+        let (tr, rty) = if let [one] = args[..] { self.type_expr(one, None) } else { self.type_tuple(&args, Some(ANY)) };
+        let (te, ty) = self.typed_equality(recv, recv_ty, tr, rty, name == names::NEQ, span);
+        Some((te, self.const_folded_binary(te, ty, name, (recv, recv_ty), (tr, rty))))
+    }
+
+    /// `x.==(args)` where the class of `x` has its own `==` or `!=` (`sym`, overloaded or not) beside `Any`'s: `Any`'s
+    /// for one argument none of the class's alternatives takes, and for several only where every alternative is
+    /// unary and none takes their tuple (`isUnary`, `needsTupledDual`, Applications.scala 1651-1678); None where the
+    /// class's own are applied as before, and where none takes the arguments the receiver goes to an extension or a
+    /// conversion.
+    #[cold]
+    #[inline(never)]
+    fn own_or_any_equality(&mut self, recv: TExprId, recv_ty: TypeId, sym: SymId, name: Name, lists: &[ArgList], span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
+        if lists.len() != 1 || lists[0].using {
+            return None;
+        }
+        let alts: Vec<SymId> = match self.syms.alternatives(sym) {
+            Some(a) => a.to_vec(),
+            None => vec![sym],
+        };
+        let to_any = if lists[0].args.len() > 1 {
+            alts.iter().all(|&a| self.is_unary_method(a)) && !alts.iter().any(|&a| self.member_accepts(a, lists, true, expected))
+        } else {
+            !alts.iter().any(|&a| self.member_accepts(a, lists, false, expected))
+        };
+        if to_any { self.any_equality(recv, recv_ty, name, lists, span) } else { None }
+    }
+
+    /// dotty's `isUnary` of one alternative: its first parameter list holds one parameter, not a repeated one.
+    fn is_unary_method(&mut self, sym: SymId) -> bool {
+        if self.syms.sym(sym).kind != SymKind::Def {
+            return false;
+        }
+        let sig = self.sig_of(sym);
+        sig.clauses.iter().find(|c| !c.is_using).is_some_and(|c| c.params.len() == 1 && !c.params[0].repeated)
     }
 
     pub(super) fn member_accepts(&mut self, sym: SymId, lists: &[ArgList], tupled: bool, expected: Option<TypeId>) -> bool {

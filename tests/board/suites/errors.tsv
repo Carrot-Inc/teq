@@ -258,6 +258,7 @@ enum_checks	fail	-	missing '40:41: error: no given instance of type Show[Boolean
 enum_parent_recovery	fail	-	missing 'extends enum Choice, but extending enums is prohibited.'
 enum_value_case_prefix	pass	-	
 equality	pass	-	
+equality_selection_compared	pass	-	
 erased_use_definition_tie	fail	-	missing 'inlined from tests/errors/erased_use_definition_tie.scala:5'
 erased_use_definition_tie.check	fail	-	< tests/errors/erased_use_definition_tie.scala:7:14: error: method erasedValue is declared as `erased`, but is in fact used
 erased_value_binder	pass	-	
@@ -805,8 +806,8 @@ override_given_final	pass	-
 override_nullary_loose	pass	-	
 override_refused_once	pass	-	
 override_rules	pass	-	
-own_equality_clash_with_any	fail	-	the declaration is not refused; queued: the part "a member that clashes with an inherited member after erasure is refused at its declaration (E120)"
-own_equality_set_clash_with_any	fail	-	the declaration is not refused; queued: the part "a member that clashes with an inherited member after erasure is refused at its declaration (E120)"
+own_equality_clash_with_any	fail	-	exit code 0
+own_equality_set_clash_with_any	fail	-	exit code 0
 package_not_value	pass	-	
 package_private_access	pass	-	
 param_bound_refinement_member	pass	-	
@@ -816,7 +817,7 @@ param_clause_next_line	pass	-
 parens	pass	-	
 parent_argument_scope	pass	-	
 path_test_of_inline_forwarder	pass	-	
-path_through_nonfinal_lazy_val	fail	-	the path is not refused; queued: the realizability of a path (a lazy val that is not final in a path)
+path_through_nonfinal_lazy_val	fail	-	exit code 0
 pattern_binder_types	pass	-	
 pattern_binding_refutable	pass	-	
 pattern_binding_refutable_future	pass	-	

@@ -22,7 +22,7 @@ def uses(a: Typed, o: Ordered): Unit =
 // `ensuring`, `formatted` and `→` are `scala.Predef`'s for every value, by a conversion scalac tries before the
 // dynamic methods, and the lean std does not hold them. `a("x") += 1` is refused by scalac too: the application as
 // written finds no `+=` on what the dynamic `apply` gives, and no `update` is made of a dynamic `apply`. A name
-// every value has is the member's whatever its form (`a.==(a)` is refused for every class). An infix operation's
+// every value has is the member's whatever its form (`a.==(a)` is `Any`'s, compared). An infix operation's
 // parenthesised list (one tuple under scalac) and a written `using` list (the arguments under scalac) are not
 // built as an ordinary call's. On the lean std a class that also extends a library class may lack a member
 // scala-library gives it.
@@ -31,11 +31,10 @@ def uses(a: Typed, o: Ordered): Unit =
 // expect: 14:11: error: not supported yet: formatted, which scala.Predef gives every value, on a value whose class derives from scala.Dynamic
 // expect: 15:11: error: not supported yet: →, which scala.Predef gives every value, on a value whose class derives from scala.Dynamic
 // expect: 16:3: error: value += is not a member of Shown
-// expect: 17:11: error: value == is not a member of Typed
 // expect: 18:11: error: not supported yet: an infix call with a parenthesised argument list on a value whose class derives from scala.Dynamic
 // expect: 19:11: error: not supported yet: a `using` argument list on a name sent to a dynamic method
 // expect: 20:11: error: not supported yet: other, a name sent to a dynamic method on a value whose class also extends Ordering, on the lean standard library
-// expect: 9 errors found
+// expect: 8 errors found
 // absent: possible cause
 // absent: missing parameter type
 // absent: the assignment operator

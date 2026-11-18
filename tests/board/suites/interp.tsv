@@ -140,6 +140,8 @@ body_reads_outer_member	pass	-
 boolean_assign_ops	pass	-	
 boolean_strict_operators	pass	-	
 bottom_path_kinds	pass	-	
+bound_argument_object_load_routes	pass	-	
+bound_argument_outer_instance	pass	-	
 bounded_function_copy_default	pass	-	
 bounded_param_operators	pass	-	
 bounded_type_test	pass	-	
@@ -357,9 +359,9 @@ class_tags	pass	-
 class_through_path_array_concat	pass	-	
 class_through_path_array_spread	pass	-	
 class_through_path_equality	pass	-	
-class_through_path_generic_equality	fail	-	output; queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
-class_through_path_generic_method	fail	-	compile; queued: the part "a generic class created through a path leaves its type variable open, as the plain creation does"
-class_through_path_inline_parameter	fail	-	unsupported; queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
+class_through_path_generic_equality	fail	-	output
+class_through_path_generic_method	fail	-	compile
+class_through_path_inline_parameter	fail	-	unsupported
 class_through_path_opaque_controls	pass	-	
 class_through_path_tag	pass	-	
 class_tparams_kind_other_file	pass	-	
@@ -675,10 +677,10 @@ duration_time_unit_constants	pass	-
 dynamic_assignment_operator	pass	-	
 dynamic_assignment_operator_places	pass	-	
 dynamic_assignments	pass	-	
-dynamic_infix_and_using	fail	-	compile; queued: the row "a dynamic call's infix and using forms as scalac builds them"
+dynamic_infix_and_using	fail	-	compile
 dynamic_members_first	pass	-	
 dynamic_other_places	pass	-	
-dynamic_predef_names	fail	-	compile; queued: the part "the std's Predef extensions are a second attempt after the lexical ones"
+dynamic_predef_names	fail	-	compile
 dynamic_rewrites	pass	-	
 dynamic_variable	pass	-	
 dynamic_written_apply	pass	-	
@@ -740,6 +742,8 @@ enum_value_receiver_effects	fail	-	output
 enum_value_singleton_test	pass	-	
 enumvalues	pass	-	
 equality_default	pass	-	
+equality_selection	pass	-	
+equality_selection_alternatives	pass	-	
 equals_trait	pass	-	
 erased_primitive_bound_matrix	pass	-	
 erased_primitive_result	pass	-	
@@ -1446,7 +1450,7 @@ inline_parameter_cast_argument	pass	-
 inline_parameter_cast_block	pass	-	
 inline_parameter_cast_forwarded	pass	-	
 inline_parameter_cast_proxy	pass	-	
-inline_parameter_path_pattern	fail	-	unsupported; queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
+inline_parameter_path_pattern	fail	-	unsupported
 inline_parameter_pure_block	pass	-	
 inline_parameter_purity	pass	-	
 inline_phase_bridge	pass	-	
@@ -1698,6 +1702,7 @@ lambda_param_from_callee_type_argument	pass	-
 lambda_param_ordered_vars	pass	-	
 lambda_param_overload_same_count	pass	-	
 lambda_param_spread_argument	pass	-	
+lambda_result_recovered	pass	-	
 lambda_spread_bounded_formal_anyref	fail	-	compile
 lambda_spread_bounded_formal_case_class	fail	-	compile
 lambda_spread_bounded_formal_constructor_variable	fail	-	compile
@@ -2529,6 +2534,10 @@ random_subclass	pass	-
 range_bounds_and_sum	pass	-	
 reader_utf8_boundary	pass	-	
 reader_utf8_pipe	pass	-	
+receiver_own_type	pass	-	
+receiver_own_type_given	pass	-	
+receiver_own_type_instance	pass	-	
+receiver_reference_forms	pass	-	
 receiver_type_args_from_expected	pass	-	
 recursive_hk_after_join	pass	-	
 reducer_literal_bound	fail	-	compile
@@ -2606,6 +2615,8 @@ right_assoc_lift_repeated_order	pass	-
 right_assoc_lift_toplevel_value	pass	-	
 right_assoc_lift_written_cast	pass	-	
 right_assoc_member_retry	pass	-	
+right_assoc_operand_before_object_load	pass	-	
+right_assoc_operand_object_receivers	pass	-	
 right_assoc_order_concat	pass	-	
 right_assoc_order_cons	pass	-	
 right_assoc_order_extension	pass	-	
@@ -3130,6 +3141,7 @@ transparent_match_constant_branch	pass	-
 transparent_widened_ascription	pass	-	
 try_collect_lazy_zip	pass	-	
 try_handler_finally	pass	-	
+try_handler_typed_first	pass	-	
 try_without_handlers	pass	-	
 tuple_applied_values_xxl	pass	-	
 tuple_apply_known_prefix	fail	-	compile
@@ -3253,7 +3265,9 @@ union_widening_kinds	pass	-
 union_widening_local	pass	-	
 union_wildcard_extractor_inference	pass	-	
 unions	pass	-	
+unit_member_value_discarded	pass	-	
 unit_printed	fail	-	output
+unit_wanted_function_not_written	pass	-	
 unreachable_deep_split	pass	-	
 unread_argument_of_a_library_member	pass	-	
 unreducible_application_in_pattern	pass	-	

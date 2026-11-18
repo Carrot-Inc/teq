@@ -49,6 +49,14 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   shout is not a member of Nothing"), as scalac refuses it, through an object's import, a value's wildcard or a local
   def alike. teq took `T` to be `Rich` and called the conversion. A lower bound or a using argument that fixes the
   parameter still gives the member, and the conversion is still taken for an expected type (`val r: Rich = true`).
+- `==` and `!=` written as a selection are `Any`'s members, as the operators are: `k.==(k)`, `true.==(false)`,
+  `1.!=(2)` and `"a".==("a")` compile and compare as `k == k` does, on a class deriving from `scala.Dynamic` too.
+  teq refused them ("value == is not a member of K"), or took an extension method named `==` in scope. One argument
+  that a class's own `==` does not take (`p.==(p)` beside a `def ==(x: String, y: String)`) is `Any`'s. Several
+  arguments are tupled into `Any`'s one parameter where every `==` of the receiver takes one parameter and
+  auto-tupling is on: `true.==("a", "b")` is refused as scalac refuses it ("values of types Boolean and (String,
+  String) cannot be compared"), also where a conversion in scope gives a class with an `==` of two parameters,
+  which teq took and called.
 - A class's own constructor parameter named by an import inside its parent's argument, or inside a default of a
   later parameter clause, is read as the constructor's argument, as the parameter's name itself is read there (a
   context bound's evidence, `[T: {Show as sh}]`, among them): `class Named(d: Dsl) extends Base({ import d.*;
