@@ -7,6 +7,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A build at several workers (`--threads`, or the count teq picks for a large program) could stop with the
+  compiler's own "index out of bounds" in the place of its result, about one build in two of such a program:
+  where an inline method's body calls a member that the platform gives an `Array` or a `String` (`a.length`,
+  `a(0)`, `s.length`) and the program has enough inline calls for their expansion to take several workers. A
+  build that completed was right, and one worker (`--threads 1`) never stopped. The same stop could take a
+  `teq compiler watch` session at its second request, and stand in the place of a program's own error. What
+  such a call records while an inline method is checked no longer outlives the workers that typed it.
 - On the JVM a lambda whose parameters are untupled from a tuple that holds a value class reads the element as
   the value class: `pairs.map((code, text) => code.value)` with `Code(value: Int) extends AnyVal` threw a
   ClassCastException (`Code` cannot be cast to `Integer`), whichever parameter the body used.

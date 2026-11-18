@@ -500,6 +500,26 @@ expect "object statement over products: evaluated after the upstream's rebuild" 
 stop
 rm -rf "$work/out"
 
+# A first build leaves a template's registration waiting (an inline method typed last, whose body calls an
+# array's member; one unit with a call to expand, so the phase stays with one worker). The next request's text
+# has two such units: its phase forks, and publishes nothing of the first build: the answer is incremental and
+# the output a fresh build's.
+src=$work/queuedtemplate
+mkdir -p "$src"
+queued_text() { printf 'inline def first(a: Array[Int]): Int = a.length + 1\ndef bodyOne(a: Array[Int]): Int = first(a)\ndef bodyTwo(a: Array[Int]): Int = %s\nobject Main:\n  def main(args: Array[String]): Unit =\n    println(bodyOne(new Array[Int](2)) + bodyTwo(new Array[Int](3)))\ninline def last(a: Array[Int]): Int = %s\n' "$1" "$2" > "$src/prog.scala"; }
+queued_text 'a.length * 0' 'a.length'
+TEQ_IDLE_WORKERS=1 TEQ_PHASE_FORK=1 start "$src" --split "$work/out" --threads 2 --no-cache
+expect "queued template: first build" "$(field ok)" 'true'
+expect "queued template: first build: the output" "$(timeout 20 node "$work/out/main.mjs")" "3"
+queued_text 'first(a) + 1' '7'
+build
+expect "queued template: the second text" "$(field ok)" 'true'
+expect "queued template: the second text is typed again in the session" "$(field incremental)" 'true'
+same_as_fresh "queued template: the second text" "$src"
+expect "queued template: the second text: the output" "$(timeout 20 node "$work/out/main.mjs")" "8"
+stop
+rm -rf "$work/out"
+
 # An inline method of one file concatenates two arrays of arrays with the wrap of its inline tag; two other files
 # call it, one with the tag the compiler makes and one with a tag the program makes, and the output writes their
 # expansions as one function. After an edit of either caller the session's output is a fresh build's, and the

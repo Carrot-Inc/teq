@@ -4529,6 +4529,11 @@ impl<'a> Worker<'a> {
     /// With `attaching`, other workers will attach: the tables they share are kept as the fork
     /// leaves them (`FileMaps::snapshot`, `ExportTables::fork`).
     pub fn fork(&mut self, attaching: bool) {
+        // No registration of an earlier fork waits here: a merge ended them (`merge_with`). One that does was
+        // queued on a path that met no merge, which the builds that check the merge stop at.
+        if merge::sweep_wanted() {
+            assert!(self.pending_shared.is_empty(), "a fork begins with {} registrations of an earlier fork still queued (pending_shared)", self.pending_shared.len());
+        }
         self.forget_local_memos();
         // The fresh own chunk publishes and registers its classes from its start: what the
         // previous fork's chunk published says nothing of it (`publish_class_bodies`).

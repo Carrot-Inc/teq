@@ -285,6 +285,9 @@ impl<'a> Worker<'a> {
         v.empty("Worker::forwarders_completion (a completion under way)", self.forwarders_completion.values().all(|&made| made));
         // Methods queued for a class that is not made yet: appended when it is, in the same typing.
         v.empty("Worker::pending_held", self.pending_held.is_empty());
+        // A registration queued for the next publication ends at the merge where the worker's own map holds
+        // its entry (`merge_with`): one that stands here was queued without that entry.
+        v.empty("Worker::pending_shared (a registration queued without the worker's own entry)", self.pending_shared.is_empty());
         // By where they are written: a class of the std, a jar or the loader, or what the phases around the
         // bodies fill.
         v.field("Worker::arity_classes", |v| self.arity_classes.iter().for_each(|(_, &c)| v.class(c)));

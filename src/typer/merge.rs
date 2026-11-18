@@ -3096,6 +3096,18 @@ impl<'a> Worker<'a> {
         self.file_imports.merge_own();
         self.file_opaques.merge_own();
         self.prog.file_tags.merge_own();
+        // A registration still waiting for a publication (`pending_shared`) ends with its fork. The worker's
+        // own entry, made on the line before it was queued, is in the merged map, which the renumbering below
+        // takes; the queued copy names this fork's ids, and a later fork that published it would hand its
+        // merge a key of no string it holds. One without its own entry stays queued: the check names it
+        // (`validate_merge`).
+        {
+            let (templates, variance) = (&self.prog.template_syms.local, &self.unchecked_variance.local);
+            self.pending_shared.retain(|p| match p {
+                super::PendingShared::Template(s, _) => !templates.contains_key(s),
+                super::PendingShared::Variance(k, _) => !variance.contains_key(k),
+            });
+        }
         self.forked = false;
         self.types.set_exclusive(true);
         self.interner.set_exclusive(true);

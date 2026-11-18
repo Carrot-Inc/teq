@@ -753,6 +753,16 @@ for c in inline_phase_scopes inline_phase_bridge inline_phase_transparent_nested
   if [ -d "tests/cases/$c" ]; then src="tests/cases/$c"; else src="tests/cases/$c.scala"; fi
   same_output "phase_fork_$c" 3 run "$src"
 done
+# A template's registration still queued when the body phase's workers are merged (an inline method whose check
+# is the last thing the first worker types, the other workers idle) ends there: the forked phase publishes none
+# of it. `inline_template_queued_before_a_typed_body` is the twin: its bodies, of declared result, are typed
+# after that method and take the registration out in their own fork. The three with `codeOf` make strings while
+# the calls are expanded, among which a key of the earlier fork would land (one, two) or find no place (three).
+for c in inline_template_queued_last inline_template_queued_before_a_typed_body inline_template_queued_code_of_one inline_template_queued_code_of_two inline_template_queued_code_of_three; do
+  TEQ_IDLE_WORKERS=1 same_output "phase_fork_$c" 1 run "tests/workers/$c.scala"
+done
+# The same beside a macro that refuses one of the two calls: the program's error is reported at every count.
+TEQ_IDLE_WORKERS=1 same_output phase_fork_inline_template_queued_refused_expansion 1 compiler check tests/workers/inline_template_queued_refused_expansion
 same_output phase_fork_macro_counter_plain 2 run tests/workers/macro_counter_plain
 if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/macro_counter_plain -o "$work/phase_fork_counter.js" --threads 16 2>&1 | grep -q 'typed again'; then
   ok
