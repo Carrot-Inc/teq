@@ -124,6 +124,14 @@
 #            warnings; none for an error alone, for an info, without --werror, or where teq's build did not fail
 #            (a stand-in teq that takes the flag out); two groups, one a compilation, and none for the group that
 #            tells an error alone after one that warned.
+#   tools    bench/actions/tools.sh, the gate's cs and scala-cli at pinned versions by their digests, the workflow taking
+#            them from it and never from coursier/setup-action (whose apps channel was resolved on Maven Central in every
+#            job), its three tries a download 10 s apart and each bounded at 120 s within the step's 900 s: against a
+#            stand-in curl, two 429s and then the archives served (both unpacked and runnable, the pinned releases asked
+#            again after each refusal, the directory added to GITHUB_PATH), three 429s the bound, cs of another digest
+#            refused, scala-cli of another digest refused after a good cs, a try that hangs given up at its bound and tried
+#            again, the tries a delay apart, another system refused, and a directory where a tool goes refused (each
+#            refusal exit 1, said, nothing of it installed and nothing added to GITHUB_PATH).
 # Every run is bounded; the script exits 1 on a failure. Needs the release binary (TEQ), scala-cli and the coursier
 # cache the suites read.
 cd "$(dirname "$0")/.." || exit 1
@@ -1788,6 +1796,87 @@ check "outcomes: identity counts no program identical whose runs did not run on 
 ) > "$oc/workers.log" 2>&1
 check "outcomes: a workers check whose command did not run fails, with its reason" "$oc/workers.log" eval '
   grep -q -x "counts: pass=0 fail=6" "$oc/workers.log" && [ "$(grep -c "(its command did not run: exit 137)$" "$oc/workers.log")" = 6 ]'
+
+# The gate's cs and scala-cli (bench/actions/tools.sh), never coursier/setup-action, which resolved its apps channel on
+# Maven Central in every job: copies of the script whose digests are stand-in archives' (both, or cs's alone), against a
+# curl answering 429 for its first tries (or hanging on its first) and then serving the archive its URL names, uname's
+# stand-in an x86-64 Linux (or another system).
+check "tools: the workflow without coursier/setup-action" /dev/null eval '! grep -q coursier/setup-action .github/workflows/gate.yml'
+check "tools: three tries a download, 10 s apart, each bounded at 120 s, within the workflow's 900 s" /dev/null \
+  eval 'grep -qx "attempts=3" bench/actions/tools.sh && grep -qxF "delay=\${TOOLS_RETRY_DELAY:-10}" bench/actions/tools.sh &&
+    grep -qxF "try=\${TOOLS_TRY_SECONDS:-120}" bench/actions/tools.sh && [ "$(grep -c "run: timeout 900 bench/actions/tools.sh" .github/workflows/gate.yml)" = 2 ]'
+t=$work/tools
+mkdir -p "$t/bin" "$t/other" "$t/files"
+printf '#!/bin/sh\necho cs stand-in\n' | gzip > "$t/files/cs.gz"
+printf '#!/bin/sh\necho scala-cli stand-in\n' | gzip > "$t/files/scala-cli.gz"
+digest() { python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
+cs_stand_in="s/^cs_sha256=.*/cs_sha256=$(digest "$t/files/cs.gz")/"
+sed -e "$cs_stand_in" -e "s/^scala_cli_sha256=.*/scala_cli_sha256=$(digest "$t/files/scala-cli.gz")/" bench/actions/tools.sh > "$t/tools.sh"
+sed -e "$cs_stand_in" bench/actions/tools.sh > "$t/cs-only.sh"
+cp bench/actions/tools.sh "$t/pinned.sh"
+check "tools: the copies differ from the script by their stand-in digests alone (two, one)" /dev/null \
+  eval '[ "$(diff bench/actions/tools.sh "$t/tools.sh" | grep -c "^> ") $(diff bench/actions/tools.sh "$t/cs-only.sh" | grep -c "^> ")" = "2 1" ]'
+printf '#!/bin/sh\ncase "$1" in -m) echo x86_64 ;; -s) echo Linux ;; *) exec %s "$@" ;; esac\n' "$(command -v uname)" > "$t/bin/uname"
+printf '#!/bin/sh\ncase "$1" in -m) echo arm64 ;; -s) echo Darwin ;; *) exec %s "$@" ;; esac\n' "$(command -v uname)" > "$t/other/uname"
+cat > "$t/bin/curl" << 'EOF'
+#!/bin/bash
+out= url=
+while [ $# -gt 0 ]; do case $1 in -*o) out=$2; shift 2 ;; -*) shift ;; *) url=$1; shift ;; esac; done
+echo "$url" >> "$TOOLS_T/urls"
+python3 -c 'import time; print(time.time())' >> "$TOOLS_T/times"
+if [ -e "$TOOLS_T/hang" ]; then rm -f "$TOOLS_T/hang"; exec sleep 300; fi
+n=$(cat "$TOOLS_T/fails")
+if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$TOOLS_T/fails"; echo "curl: (22) The requested URL returned error: 429" >&2; exit 22; fi
+case $url in
+  */cs-x86_64-pc-linux.gz) cp "$TOOLS_T/files/cs.gz" "$out" ;;
+  */scala-cli-x86_64-pc-linux.gz) cp "$TOOLS_T/files/scala-cli.gz" "$out" ;;
+  *) exit 22 ;;
+esac
+EOF
+cp "$t/bin/curl" "$t/other/curl"
+chmod +x "$t/bin/uname" "$t/bin/curl" "$t/other/uname" "$t/other/curl" "$t/tools.sh" "$t/cs-only.sh" "$t/pinned.sh"
+# tools_run <script> <429s before a serve> <dir>: the script's exit in $code, its stderr in $t/err, the URLs asked in
+# $t/urls and the times of the asks in $t/times, the lines added to GITHUB_PATH in $t/path; the delay between tries
+# $run_delay (0), each try's bound $run_try (30), the stand-ins of $run_bin ($t/bin).
+tools_run() {
+  echo "$2" > "$t/fails"
+  : > "$t/urls"
+  : > "$t/times"
+  : > "$t/path"
+  PATH="${run_bin:-$t/bin}:$PATH" TOOLS_T=$t TOOLS_RETRY_DELAY=${run_delay:-0} TOOLS_TRY_SECONDS=${run_try:-30} GITHUB_PATH=$t/path \
+    timeout 60 "$1" "$3" > /dev/null 2> "$t/err"
+  code=$?
+}
+pinned_urls="https://github.com/VirtusLab/scala-cli/releases/download/v$(sed -n 's/^scala_cli_version=//p' bench/actions/tools.sh)/scala-cli-x86_64-pc-linux.gz https://github.com/coursier/coursier/releases/download/v$(sed -n 's/^cs_version=//p' bench/actions/tools.sh)/cs-x86_64-pc-linux.gz "
+tools_run "$t/tools.sh" 2 "$t/d1"
+check "tools: two 429s, then both served and unpacked, runnable" "$t/err" \
+  eval '[ $code = 0 ] && [ "$("$t/d1/cs") / $("$t/d1/scala-cli")" = "cs stand-in / scala-cli stand-in" ]'
+check "tools: the pinned releases asked, four times (the two refused asked again)" "$t/urls" \
+  eval '[ "$(sort -u "$t/urls" | tr "\n" " ")" = "$pinned_urls" ] && [ "$(wc -l < "$t/urls" | tr -d " ")" = 4 ]'
+check "tools: the directory added to GITHUB_PATH" "$t/path" eval '[ "$(cat "$t/path")" = "$(cd "$t/d1" && pwd)" ]'
+tools_run "$t/tools.sh" 3 "$t/d2"
+check "tools: three 429s, the bound: exit 1, said, nothing installed nor added to GITHUB_PATH" "$t/err" \
+  eval '[ $code = 1 ] && grep -q "cs-x86_64-pc-linux.gz could not be fetched in 3 attempts" "$t/err" && [ -z "$(ls "$t/d2")" ] && [ ! -s "$t/path" ]'
+tools_run "$t/pinned.sh" 0 "$t/d3"
+check "tools: cs of another digest refused, said, nothing installed nor added" "$t/err" \
+  eval '[ $code = 1 ] && grep -qF "cs-x86_64-pc-linux.gz'"'"'s digest is not the pinned $(sed -n "s/^cs_sha256=//p" bench/actions/tools.sh)" "$t/err" && [ -z "$(ls "$t/d3")" ] && [ ! -s "$t/path" ]'
+tools_run "$t/cs-only.sh" 0 "$t/d4"
+check "tools: cs served, scala-cli of another digest refused, said, nothing of it installed nor added" "$t/err" \
+  eval '[ $code = 1 ] && grep -qF "scala-cli-x86_64-pc-linux.gz'"'"'s digest is not the pinned $(sed -n "s/^scala_cli_sha256=//p" bench/actions/tools.sh)" "$t/err" && [ "$(ls "$t/d4")" = cs ] && [ ! -s "$t/path" ]'
+touch "$t/hang"
+run_try=2 tools_run "$t/tools.sh" 0 "$t/d5"
+check "tools: a try that hangs is given up at its bound and tried again" "$t/err" \
+  eval '[ $code = 0 ] && grep -q "cs-x86_64-pc-linux.gz not fetched (attempt 1 of 3)" "$t/err" && [ "$(wc -l < "$t/urls" | tr -d " ")" = 3 ] && [ -x "$t/d5/scala-cli" ]'
+run_delay=1 tools_run "$t/tools.sh" 2 "$t/d6"
+check "tools: the tries a delay apart" "$t/times" \
+  eval '[ $code = 0 ] && python3 -c "import sys; t = [float(l) for l in open(sys.argv[1])]; sys.exit(0 if len(t) == 4 and t[1] - t[0] >= 0.9 and t[2] - t[1] >= 0.9 else 1)" "$t/times"'
+run_bin=$t/other tools_run "$t/tools.sh" 0 "$t/d7"
+check "tools: another system refused, said, nothing asked, installed nor added" "$t/err" \
+  eval '[ $code = 1 ] && grep -q "for x86-64 Linux alone, not Darwin arm64" "$t/err" && [ ! -s "$t/urls" ] && [ ! -e "$t/d7" ] && [ ! -s "$t/path" ]'
+mkdir -p "$t/d8/scala-cli"
+tools_run "$t/tools.sh" 0 "$t/d8"
+check "tools: a directory where a tool goes refused, said, nothing asked, installed nor added" "$t/err" \
+  eval '[ $code = 1 ] && grep -q "d8/scala-cli is a directory, where the scala-cli binary goes" "$t/err" && [ ! -s "$t/urls" ] && [ "$(ls "$t/d8")" = scala-cli ] && [ -z "$(ls "$t/d8/scala-cli")" ] && [ ! -s "$t/path" ]'
 
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]

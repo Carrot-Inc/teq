@@ -7,7 +7,9 @@
 # every Maven jar tests/support/jars.sh names, restored from the cache that file keys or fetched from Maven
 # Central (bench/actions/jars.sh fetch), and the jars it builds, built with scala-cli and handed on as an
 # artifact (bench/actions/jars.sh pack), which each job that reads jars restores in the place of building
-# them; a jar neither has fails the job, so that no suite counts a case of a missing jar as passed. Each job
+# them; a jar neither has fails the job, so that no suite counts a case of a missing jar as passed. That job and
+# each job that reads jars take cs and scala-cli from their release archives at pinned versions by their digests
+# (bench/actions/tools.sh), never from a resolution on Maven Central, which answers the runners 429. Each job
 # keeps its suites' whole output and times (tests/all.sh's out/all) as an artifact, whether they passed or not.
 #
 # excluded: budget   bench/budgets.txt's instruction counts are the recording machine's, which the suite skips elsewhere
@@ -68,9 +70,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: coursier/setup-action@039f736548afa5411c1382f40a5bd9c2d30e0383 # v1.3.9
-        with:
-          apps: scala-cli
+      - run: timeout 900 bench/actions/tools.sh "$RUNNER_TEMP/tools"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/coursier/v1
@@ -180,9 +180,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - if: matrix.jars
-        uses: coursier/setup-action@039f736548afa5411c1382f40a5bd9c2d30e0383 # v1.3.9
-        with:
-          apps: scala-cli
+        run: timeout 900 bench/actions/tools.sh "$RUNNER_TEMP/tools"
       - if: matrix.jars
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

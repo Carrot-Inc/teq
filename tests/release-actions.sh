@@ -8,7 +8,8 @@
 # bench/ship-publish.sh --step through bench/actions/release-step.sh with stand-ins of the GitHub release, the
 # smoke, the plugin's publish and the Portal, its records carried to another runner where a job is lost, its
 # conclusion and the pin's push onto a moving master; the landing's guard (bench/actions/before-landing.sh); the
-# restore of the built jars; the credentials, with a key made for the run. Each check prints FAIL with what it saw;
+# restore of the built jars; the gate's steps of cs and scala-cli (bench/actions/tools.sh) and its scala-cli the image's; the
+# credentials, with a key made for the run. Each check prints FAIL with what it saw;
 # the script exits 1 on a failure. Every command is bounded; KEEP=1 keeps the scratch directory.
 cd "$(dirname "$0")/.." || exit 1
 root=$PWD
@@ -44,6 +45,13 @@ done
 check ".github/workflows/gate.yml: no pull_request_target" "$(grep -c 'pull_request_target' .github/workflows/gate.yml)" 0
 gate_jobs=$(sed -n '/^jobs:$/,$p' .github/workflows/gate.yml | grep -cE '^  [a-z][a-z0-9_-]*:$')
 check ".github/workflows/gate.yml: each job reads the contents alone" "$(grep -c '^    permissions:$' .github/workflows/gate.yml) $(grep -c '^      contents: read$' .github/workflows/gate.yml) $(grep -cE '^      [a-z-]+: (read|write)$' .github/workflows/gate.yml)" "$gate_jobs $gate_jobs $gate_jobs"
+# The gate's cs and scala-cli from the tree's script, at pinned versions by their digests (its fetches and refusals, and
+# the workflow without coursier/setup-action, are tests/gate-scripts.sh's `tools`).
+check ".github/workflows/gate.yml: cs and scala-cli by bench/actions/tools.sh in the jars job and, under matrix.jars, the suites'" \
+  "$(grep -cE '^ *(- )?run: timeout [0-9]+ bench/actions/tools.sh "\$RUNNER_TEMP/tools"$' .github/workflows/gate.yml) $(grep -B1 'run: timeout [0-9]* bench/actions/tools.sh' .github/workflows/gate.yml | grep -c '^      - if: matrix.jars$')" "2 1"
+check "bench/actions/tools.sh: scala-cli at the image's version and digest (bench/actions/toolchain.sh)" \
+  "$(sed -n 's/^scala_cli_version=//p; s/^scala_cli_sha256=//p' bench/actions/tools.sh | tr '\n' ' ')" \
+  "$(sed -n 's/^scala_cli_version=//p' bench/actions/toolchain.sh) $(sed -n 's/^ *scala_cli_arch=x86_64 scala_cli_sha256=\([0-9a-f]\{64\}\).*/\1/p' bench/actions/toolchain.sh) "
 if command -v actionlint > /dev/null; then
   check "actionlint" "$(timeout 120 actionlint .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml 2>&1)" ""
 else

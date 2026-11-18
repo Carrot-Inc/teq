@@ -345,7 +345,9 @@ machines. It needs nothing
 of the maintainers' machines: one job builds the release binary, one prepares the jars once (the Maven ones from
 the cache `tests/support/jars.sh` keys or from Maven Central, the built ones handed on as an artifact,
 `bench/actions/jars.sh`), the scala3 checkout is fetched at the commit the harnesses' baselines name, and each
-job keeps its suites' output and times (`out/all/`) as an artifact. Its runners hold Temurin 21 and node 22.
+job keeps its suites' output and times (`out/all/`) as an artifact. Its runners hold Temurin 21 and node 22, and the
+jobs that read jars cs and scala-cli at pinned versions from their release archives by their digests
+(`bench/actions/tools.sh`), never resolved on Maven Central, which answers the runners 429.
 
 ### The project records
 
