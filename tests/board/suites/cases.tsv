@@ -1107,6 +1107,10 @@ import_object_forwarder_implements	pass	-
 import_object_inherited_alias	pass	-	
 import_object_val	pass	-	
 import_object_val_given	pass	-	
+import_own_parameter_captured	pass	-	
+import_own_parameter_context_bound	pass	-	
+import_own_parameter_controls	pass	-	
+import_own_parameter_parent_argument	pass	-	
 import_path_realizability_accepted	pass	-	
 import_private_nested	pass	-	
 import_selector_nested_through_bound	pass	-	

@@ -4076,6 +4076,12 @@ impl<'a> Worker<'a> {
         info.owner == Owner::Class(c) && info.kind == SymKind::Val && self.syms.class(c).ctor_syms.iter().any(|cl| cl.contains(&s))
     }
 
+    /// Whether `s` is a parameter of `c`'s primary constructor, as the class's parent call and the defaults of its
+    /// later clauses see them: an accessor of one of its parameters or a context bound's evidence.
+    fn is_primary_ctor_param(&self, c: ClassId, s: SymId) -> bool {
+        self.syms.class(c).ctor.iter().any(|clause| clause.params.iter().any(|p| p.sym == s))
+    }
+
     /// The value an import selects members of (`import v.*`, `import o.v.x`): a local, a
     /// member of an object or a package's val, read as its name reads it.
     pub(super) fn import_value_ref(&mut self, value: super::ValueImport, span: Span) -> Option<(TExprId, TypeId)> {
@@ -4093,6 +4099,12 @@ impl<'a> Worker<'a> {
             // A val of an enclosing class is read on that class's instance.
             (Some(c), _) if self.syms.class(c).kind != ClassKind::Object => TermRef::This(c, v),
             (Some(m), _) => TermRef::ModuleMember(m, v),
+            // A class's own parameter found as a local, as its name is found in the class's parent call and in a
+            // default of a later clause (`static_import_val` keeps no module for it): the constructor's parameter
+            // there, which no module holds (dotty's `superCallContext` sees the parameter accessors as locals of
+            // the primary constructor, `Constructors.intoConstr` reads them as its parameters). A context bound's
+            // evidence is one of them (`Desugar` makes it a parameter accessor of the primary constructor).
+            (None, Owner::Class(c)) if self.is_primary_ctor_param(c, v) => TermRef::Local(v),
             (None, Owner::Class(c)) => TermRef::ModuleMember(c, v),
             (None, Owner::Local) => TermRef::Local(v),
             (None, Owner::Package(_)) => TermRef::Global(v),

@@ -7,6 +7,14 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A class's own constructor parameter named by an import inside its parent's argument, or inside a default of a
+  later parameter clause, is read as the constructor's argument, as the parameter's name itself is read there (a
+  context bound's evidence, `[T: {Show as sh}]`, among them): `class Named(d: Dsl) extends Base({ import d.*;
+  true.shout })`, whatever the import brings (a conversion, a given, a method, a val, an extension, a class's
+  constructor proxy, a trait's members) and also from a closure, a local class or method made there that outlives
+  the construction. teq read the parameter on a module of the class, which has none: the JavaScript build panicked
+  or its run failed (`Nam$ is not defined`), the interpreter threw a NullPointerException and the JVM's class a
+  NoSuchFieldError.
 - A build at several workers (`--threads`, or the count teq picks for a large program) could stop with the
   compiler's own "index out of bounds" in the place of its result, about one build in two of such a program:
   where an inline method's body calls a member that the platform gives an `Array` or a `String` (`a.length`,
