@@ -20,7 +20,7 @@
 # names_parsed_on_threads beside a generated file large enough for the parser's threads runs as
 # alone, its names and the std's read where those threads wrote them. A
 # program's `// jars:` line puts those jars on its class path (tests/support/jars.sh); without
-# one of them in the coursier cache it counts as passed. `--piece <k>/<n>` runs piece k of n alone
+# one of them in the coursier cache it is not run: its skip line (which the gate fails) and no pass. `--piece <k>/<n>` runs piece k of n alone
 # (tests/support/pieces.sh), into out/split.<k>of<n>: a unit is a program of the first two loops (its build, its
 # runs and those of its packages per file), or one of the sections after them; whether the modules parse is a
 # verdict of the whole suite's then, each piece's of its own programs' modules.
@@ -86,8 +86,16 @@ pending_begin split "$so" "${pending_args[@]}"
 [ -z "$PIECE" ] || PENDING_PARTIAL=1
 # The program of tests/split whose checks are running, and each such program's first failure.
 own=
-declare -A own_seen own_failed
+declare -A own_seen own_failed own_skipped
+skipped=0
 ok() { pass=$((pass + 1)); }
+# not_run <name> <why>: a program whose prerequisite is absent before anything is tried (a jar not in the coursier
+# cache): its skip line, which the gate fails, and no pass; a program of tests/split is `skip` to its list.
+not_run() {
+  echo "skip $1: $2"
+  skipped=$((skipped + 1))
+  [ -z "$own" ] || own_skipped[$own]=$2
+}
 bad() {
   if [ -n "$own" ]; then
     [ -n "${own_failed[$own]:-}" ] || own_failed[$own]=$1
@@ -125,8 +133,7 @@ for src in $(split_programs); do
   flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
-    echo "skip $name: not in the coursier cache:$JARS_MISSING"
-    ok
+    not_run "$name" "not in the coursier cache:$JARS_MISSING"
     continue
   fi
   [ -n "$JARS_CP" ] && flags="$flags --classpath $JARS_CP"
@@ -156,6 +163,8 @@ for src in tests/split/*/; do
   [ -f "$expected" ] || continue
   piece_holds "split/$name" || continue
   piece_ran "split/$name" hot || continue
+  # a program not run for want of its jars is not run here either
+  [ -z "${own_skipped[$name]:-}" ] || continue
   own=$name
   own_seen[$name]=1
   flags=$(grep -h -o '^// teq: .*' "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
@@ -536,8 +545,7 @@ if piece_has exports-order; then
     name=$(basename "$prog" .scala)
     jars_of "$prog"
     if [ -n "$JARS_MISSING" ]; then
-      echo "skip $name: not in the coursier cache:$JARS_MISSING"
-      ok
+      not_run "$name" "not in the coursier cache:$JARS_MISSING"
       continue
     fi
     cp=""
@@ -727,7 +735,8 @@ fi
 
 # A jar object's lazy vals are declared in its template's order whatever order the program reads
 # them in (tests/support/lazyorder_lib.scala): two programs reading them in other orders print what
-# scalac's do and write the library's module byte for byte alike. Without the jar it counts as passed.
+# scalac's do and write the library's module byte for byte alike. Without scala-cli, which builds the jar, it is not
+# run; a jar scala-cli did not build is a failure.
 if piece_has lazy-order; then
   piece_ran lazy-order
   lib=$(lazyorder_lib_jar)
@@ -741,8 +750,10 @@ if piece_has lazy-order; then
     done
     check "$work/abc/lazyorderlib.mjs" "$work/cab/lazyorderlib.mjs" "lazy order: the library's module differs with the order the program reads its vals in"
     rm -rf "$work"
+  elif ! command -v scala-cli > /dev/null; then
+    not_run lazy-order "no scala-cli to build tests/support/lazyorder_lib.scala's jar"
   else
-    ok
+    bad "lazy order: scala-cli did not build tests/support/lazyorder_lib.scala's jar"
   fi
 fi
 
@@ -826,12 +837,16 @@ if piece_has parser-threads; then
 fi
 
 # The programs of tests/split this run held, against the list of those expected to fail.
+# One outcome a program: a failure, then not run, then a pass.
 for name in "${!own_seen[@]}"; do
-  if [ -n "${own_failed[$name]:-}" ]; then pending_fail "$name" "${own_failed[$name]}"; else pending_pass "$name"; fi
+  if [ -n "${own_failed[$name]:-}" ]; then pending_fail "$name" "${own_failed[$name]}"
+  elif [ -n "${own_skipped[$name]:-}" ]; then pending_skip "$name" "${own_skipped[$name]}"
+  else pending_pass "$name"; fi
 done
 pending_end || fail=$((fail + 1))
-echo "$pass passed, $fail failed"
+echo "$pass passed, $fail failed$([ $skipped = 0 ] || echo ", $skipped not run")"
 # Whether the modules parse is a verdict of the whole suite's, apart from the counts.
 if [ $parsed = ok ]; then counts="passed=$((pass - 1)) failed=$fail"; else counts="passed=$pass failed=$((fail - 1))"; fi
+[ $skipped = 0 ] || counts="$counts not_run=$skipped"
 pieces_end $((fail > 0)) $counts and:parse-modules=$parsed
 [ $fail = 0 ]

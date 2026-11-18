@@ -4,8 +4,9 @@
 # TASTy) and compared with its .expected file (scalac's, a lean departure's tests/lean-expected aside).
 # The programs expected to fail under the mode are tests/pending/stdlib.txt (tests/support/pending.py): the run
 # fails when a listed program passes and when an unlisted one fails; --update takes the programs that pass now out
-# of the list, --add writes the unlisted failures in, and either writes the suite's row of the board. Skips, and
-# counts as passed, without the jar in the cache. STDLIB_REASONS=1 prints the first error of each failure.
+# of the list, --add writes the unlisted failures in, and either writes the suite's row of the board. Without the jar in
+# the cache it is not run: its skip line, which the gate fails, every program it would run a skip (`cannot run` on the
+# board under --update, none of an earlier run's verdicts kept), and no pass. STDLIB_REASONS=1 prints the first error of each failure.
 # A build's diagnostics go to out/stdlib-tests/<name>.diagnostics and are compared as tests/run.sh compares them
 # (an expectation holds the warnings its case is about) but for the run's summary of the warnings its flags left
 # unreported: scala-library's TASTy marks deprecated what the lean std's sources do not, so scalac's summary under
@@ -22,9 +23,10 @@ TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
 SUMMARIES=tests/stdlib-summaries.txt
 M2=${COURSIER_CACHE:-$HOME/Library/Caches/Coursier/v1}/https/repo1.maven.org/maven2
+nojar=
 if ! ls "$M2"/org/scala-lang/scala-library/3.*/scala-library-3.*.jar > /dev/null 2>&1; then
   echo "stdlib: skipped, no scala-library 3.x jar in the coursier cache"
-  exit 0
+  nojar=1
 fi
 out=out/stdlib-tests
 mkdir -p "$out"
@@ -56,6 +58,10 @@ for src in tests/cases/*.scala tests/cases/*/; do
   fi
   # sourcecode comes from its jar, which this runner does not put on the class path.
   if grep -q -h '^import sourcecode\|sourcecode\.' "$src" "$src"/*.scala 2>/dev/null; then
+    continue
+  fi
+  if [ -n "$nojar" ]; then
+    printf 'skip %s\tno scala-library 3.x jar in the coursier cache\n' "$name" >> "$out/results.txt"
     continue
   fi
   flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
@@ -91,6 +97,6 @@ comm -3 <(of_passing "$SUMMARIES") <(of_passing "$out/summaries.txt") | sed -e $
 awk 'FILENAME == ARGV[1] { d[$1]; next }
   $1 == "pass" && ($2 in d) { print "fail " $2 "\tits summaries of hidden warnings are not scalac'"'"'s (tests/stdlib-summaries.txt)"; next }
   { print }' "$out/summaries-differ.txt" "$out/results.txt" > "$out/results.judged"
-echo "stdlib: $(grep -c '^pass ' "$out/results.judged") passed, $(grep -c '^fail ' "$out/results.judged") failed"
+echo "stdlib: $(grep -c '^pass ' "$out/results.judged") passed, $(grep -c '^fail ' "$out/results.judged") failed$([ -z "$nojar" ] || echo ", $(grep -c '^skip ' "$out/results.judged") not run")"
 # The run held to the list of the programs expected to fail (tests/support/pending.py).
 python3 tests/support/pending.py stdlib "$out/results.judged" $update $add

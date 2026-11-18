@@ -12,6 +12,9 @@
   --add               also write the failures the pending list lacks into it (the part that brings tests in)
   --show TEST         run one test of the rows named and print what teq and the program printed
   --rows              print the rows and where dotty's sources name them
+  --self-checks       print how many tests of the rows that run carry each of scalac's checks of its own trees
+                      and output (SELF_CHECKS), the row's flags or their own, no compiler run; with --update write
+                      them to tests/board/dotty/self-checks.tsv, which the board's header names
 
 The rows are rows.py's: one per directory dotty's test sources compile or run at the tag (a fixed list, drawn
 from those sources), each with dotty's flags and its kind. A test is vulpix's unit
@@ -250,6 +253,7 @@ OPTIONS = {
     "-sourceroot": ("neutral", True), "-Yprint-pos": ("neutral", False), "-Yprint-pos-syms": ("neutral", False),
     "-Ydebug": ("neutral", False), "-Yshow-suppressed-errors": ("neutral", False), "-V": ("neutral", False),
     "-verbose": ("neutral", False), "-Ylog-classpath": ("neutral", False), "-usejavacp": ("neutral", False),
+    # (SELF_CHECKS below: those of them that check scalac's own trees and output, which the board names)
     # teq keeps no experimental restriction: every definition is usable, as under scalac's -experimental
     "-experimental": ("neutral", False),
     # warnings teq does not give
@@ -394,6 +398,40 @@ def teq_options(options, target):
         # `teq interp` takes the typer's settings and the warnings' but no --source
         flags = [f for j, f in enumerate(flags) if f != "--source" and (j == 0 or flags[j - 1] != "--source")]
     return flags, bad
+
+
+# scalac's checks of its own trees and of its own output, dropped as `neutral`: a test that carries one passes under
+# dotty's runner where the program compiles (and runs), which is what teq's pass says; no check of teq's stands for
+# them (-Xverify-signatures checks the generic signatures scalac writes, which teq's class files do not carry). The
+# board names them once, with the count of tests that carry each (tests/board/dotty/self-checks.tsv).
+SELF_CHECKS = ("-Ycheck", "-Ycheck-constraint-deps", "-Yno-double-bindings", "-Yno-deep-subtypes", "-Xcheck-macros",
+               "-Xverify-signatures", "-Vprint")
+
+
+def option_name(o):
+    """An option's name as OPTIONS keys it: before `:`, else before `=` for a name OPTIONS lacks."""
+    name = o.partition(":")[0]
+    return o.partition("=")[0] if name not in OPTIONS and "=" in name else name
+
+
+def self_check_counts(root):
+    """How many tests of the rows that run carry each of SELF_CHECKS, among the row's flags or their own
+    (`// scalac:` and `//> using options`), the tests the board drops from a row (run-scalajs's --skip) left out."""
+    counts = collections.Counter()
+    for row in ROWS.rows():
+        if row.cannot:
+            continue
+        for t in tests_of(row, root):
+            args = tool_args(t.files)[0]
+            if row.kind == "run-js" and "--skip" in args.get("scalajs", []):
+                continue
+            names = {option_name(o) for o in list(t.flags) + args.get("scalac", [])}
+            counts.update(f for f in SELF_CHECKS if f in names)
+    return counts
+
+
+def self_checks_path():
+    return os.path.join(HERE, "dotty", "self-checks.tsv")
 
 
 TOOL_ARG = re.compile(r"(?://|/\*| \*) ?(?i:(scala|scalac|java|javac|scalajs|test|target)):((?:[^*]|\*(?!/))*)")
@@ -828,6 +866,9 @@ def compile_groups(ctx, test, scratch, target, tag, extra=None):
             if status == 3:
                 line = "teq: " + (line or "exit 3")
         # dotty compiles every group whatever the one before gave
+    if all(o is None for o in outs):
+        # every group's files are the other platform's or none: nothing was compiled, so nothing passes
+        return "nothing", "no source of this platform: nothing compiled", all_diags, None
     return outcome, line, all_diags, products
 
 
@@ -1347,7 +1388,7 @@ def judge(ctx, test):
         outcome, line, diags, products = compile_groups(ctx, test, scratch, "jvm", "jvm")
         if kind == "pos":
             c_outcome, c_line, _, _ = compile_groups(ctx, test, scratch, "check", "check")
-            other = "check:" + {"ok": "pass", "errors": "fail", "refused": "fail", "option": "fail"}.get(c_outcome, c_outcome)
+            other = "check:" + {"ok": "pass", "errors": "fail", "refused": "fail", "option": "fail", "nothing": "cannot run"}.get(c_outcome, c_outcome)
         else:
             i_verdict, _ = run_interp(ctx, test, scratch)
             other = "interp:" + i_verdict
@@ -1355,6 +1396,8 @@ def judge(ctx, test):
             return "timeout", other, line
         if outcome == "crash":
             return "crash", other, line
+        if outcome == "nothing":
+            return "cannot run", other, line
         if outcome != "ok":
             return "fail", other, line
         if kind == "pos":
@@ -1371,6 +1414,8 @@ def judge(ctx, test):
         return "timeout", other, line
     if outcome == "crash":
         return "crash", other, line
+    if outcome == "nothing":
+        return "cannot run", other, line
     if outcome in ("option", "refused"):
         return "fail", other, line
     if kind == "nocrash":
@@ -1419,9 +1464,18 @@ def main():
     ap.add_argument("--add", action="store_true")
     ap.add_argument("--show")
     ap.add_argument("--rows", action="store_true")
+    ap.add_argument("--self-checks", action="store_true")
     args = ap.parse_args()
 
     table = ROWS.rows()
+    if args.self_checks:
+        counts = self_check_counts(corpus())
+        text = "# option\ttests carrying it (tests/board/dotty.py --self-checks --update)\n" + "".join(f"{f}\t{counts[f]}\n" for f in SELF_CHECKS)
+        if args.update:
+            with open(self_checks_path(), "w", encoding="utf-8") as fh:
+                fh.write(text)
+        print(text, end="")
+        return 0
     if args.rows:
         for r in table:
             print(f"{r.name}\t{r.kind}\t{r.path}\t{r.source}\t{'cannot run: ' + r.cannot if r.cannot else ' '.join(r.flags)}")
@@ -1460,6 +1514,7 @@ def main():
         # want of something to tests/gate.sh
         print(f"board: the oracles of {len(oracles)} rows validate against the corpus", flush=True)
     totals = collections.Counter()
+    selected = 0
     for name in names:
         row = next(r for r in table if r.name == name)
         if not row.cannot and row.kind in ("pos", "run") and not ctx.jdk:
@@ -1467,6 +1522,9 @@ def main():
         if row.kind == "run-js" and not ctx.node:
             die("no node on the PATH: the row run-scalajs needs it")
         tests = tests_of(row, ctx.root)
+        # a row with no test in the corpus proves nothing: a moved or empty checkout fails
+        if not tests and not row.cannot:
+            die(f"board: no test of the row {row.name} in the corpus at {ctx.root}")
         ctx.oracle = load_oracle(oracle_path(row.name), row.name) if row.kind in ("neg", "warn") and not row.cannot else {}
         ctx.tool_args = {t.name: tool_args(t.files) for t in tests}
         ctx.args_of = lambda t: (ctx.tool_args[t.name][0].get("scalac", []), ctx.tool_args[t.name][1], ctx.tool_args[t.name][2])
@@ -1477,6 +1535,7 @@ def main():
         if args.only:
             rx = re.compile(args.only)
             tests = [t for t in tests if rx.search(t.name)]
+        selected += len(tests) if not args.show else len([t for t in tests if t.name == args.show])
         if args.show:
             tests = [t for t in tests if t.name == args.show]
             for t in tests:
@@ -1541,6 +1600,9 @@ def main():
             shutil.copyfile(fresh, os.path.join(HERE, "dotty", row.name + ".tsv"))
         totals.update(counts)
         totals["rows"] += 1
+    if (args.only or args.show) and not selected:
+        # a selection that keeps no test checks nothing: it fails, never "0 tests"
+        die(f"board: no test of the rows {', '.join(names)} matches {'--only ' + args.only if args.only else '--show ' + args.show}: nothing ran")
     if not (args.only or args.show):
         print(last_line(unlisted + passing + stale_lists, totals))
     return status

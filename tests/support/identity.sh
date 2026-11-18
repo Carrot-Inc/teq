@@ -58,6 +58,10 @@ export TEQ_NO_CACHE=1
 [ -z "$across" ] || . "$(dirname "$0")/identity-across.sh"
 [ $# -ge 3 ] || { echo "usage: tests/support/identity.sh <reference teq> <teq> <out dir> [js,jvm,diags,flagged] | --produce <teq> <bundle dir> [kinds] | --compare <bundle dir> <teq> <out dir>" >&2; exit 2; }
 ref=$(absolute "$1") new=$(absolute "$2") out=$(absolute "$3")
+# what every comparison runs: without it nothing is compared, which is no identity
+for tool in timeout cmp diff; do
+  command -v $tool > /dev/null || { echo "identity: no $tool on the PATH: nothing compared" >&2; exit 2; }
+done
 kinds=${4:-js,jvm,diags,flagged}
 kinds=${kinds//link/jvm}
 cd "$(dirname "$0")/../.."
@@ -78,7 +82,8 @@ one() {
   [ "${src#tests/errors/}" != "$src" ] && name=errors-$name
   . tests/support/jars.sh
   jars_of "$src"
-  [ -z "$JARS_MISSING" ] || return 0
+  # not run: no program of identical outputs, counted apart
+  [ -z "$JARS_MISSING" ] || { echo "$name" >> "$out/$kind.notrun"; return 0; }
   local flags
   flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2> /dev/null | head -1 | sed 's|^// teq: ||')
   local cp=$JARS_CP
@@ -86,7 +91,7 @@ one() {
     jvm) cp=$sl${cp:+:$cp}; flags="$flags --std=scala-library" ;;
   esac
   [ -n "$cp" ] && flags="$flags --classpath $cp"
-  local side bin dir own
+  local side bin dir own code launch=
   for side in ref new; do
     bin=${!side}
     dir=$out/$kind/$side/$name
@@ -108,11 +113,16 @@ one() {
         [ -f "$dir/out.jar" ] && jar_entries "$dir/out.jar" "$dir/entries.txt" ;;
       diags | flagged) timeout 60 "$bin" $(compiler_words "$bin") check "$src" $flags $own > "$dir/log" 2>&1 ;;
     esac
-    echo "exit $?" >> "$dir/log"
+    code=$?
+    echo "exit $code" >> "$dir/log"
+    # a launch that failed (126, 127), a limit (124, 125) or a signal (128 and up) ran no build: never identical
+    case $code in 124 | 125 | 126 | 127 | 1[3-9][0-9] | 2[0-9][0-9]) launch="$launch $side:$code" ;; esac
     compare_form "$dir/log" "$dir/log.cmp"
     rm "$dir/log"
   done
-  if ! diff -rq "$out/$kind/ref/$name" "$out/$kind/new/$name" > /dev/null 2>&1; then
+  if [ -n "$launch" ]; then
+    echo "$kind $name (did not run:$launch)"
+  elif ! diff -rq "$out/$kind/ref/$name" "$out/$kind/new/$name" > /dev/null 2>&1; then
     echo "$kind $name"
   fi
 }
@@ -128,7 +138,9 @@ for kind in ${kinds//,/ }; do
   echo "$srcs" | xargs -P "$JOBS" -I{} bash -c "one $kind {}" > "$out/$kind.differ"
   d=$(wc -l < "$out/$kind.differ" | tr -d ' ')
   sort "$out/$kind.differ" | sed 's/^/differs: /'
-  echo "identity $kind: $((n - d)) of $n programs identical"
+  nr=$(cat "$out/$kind.notrun" 2> /dev/null | wc -l | tr -d ' ')
+  [ "$nr" = 0 ] || echo "skip $nr programs of $kind: their jars are not in the coursier cache"
+  echo "identity $kind: $((n - d - nr)) of $n programs identical$([ "$nr" = 0 ] || echo ", $nr not run")"
   [ "$d" = 0 ] || status=1
 done
 exit $status

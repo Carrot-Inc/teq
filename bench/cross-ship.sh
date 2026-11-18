@@ -494,7 +494,7 @@ linux_arm() {
   compare_suites out/tests-arm || return 1
   [ "$(manifest_sha256 "$binary")" = "$sha" ] || { echo "cross-ship: $binary changed while its suite ran"; return 1; }
   local counts
-  counts="$(tail -1 <<< "$smoke"), $skipped of them skipped for missing jars, outputs $same of $total as the native suite's, under qemu-user $manifest_qemu sysroot $manifest_sysroot"
+  counts="$(tail -1 <<< "$smoke"), $skipped not run (skip lines), outputs $same of $total as the native suite's, under qemu-user $manifest_qemu sysroot $manifest_sysroot"
   echo "cross-ship: tests/run.sh under qemu-user over $sysroot_deb: $counts"
   ship guided-linux-arm $linux_arm_target "$guided_flags" "$training" "${linux_arm_lines[@]}" "suite $sha tests/run.sh passed: $counts"
 }
@@ -564,7 +564,7 @@ linux_arm_suite() {
   compare_suites out/tests-arm || return 1
   [ "$(manifest_sha256 "$binary")" = "$sha" ] || { echo "cross-ship: $binary changed while its suite ran"; return 1; }
   {
-    echo "suite $sha tests/run.sh passed: $(tail -1 <<< "$smoke"), $skipped of them skipped for missing jars, outputs $same of $total as the native suite's, natively in $floor_image over $sysroot_deb $sysroot_sha256"
+    echo "suite $sha tests/run.sh passed: $(tail -1 <<< "$smoke"), $skipped not run (skip lines), outputs $same of $total as the native suite's, natively in $floor_image over $sysroot_deb $sysroot_sha256"
     echo "suite-tuple floor-aarch64 $floor_image"
     echo "suite-tuple sysroot-aarch64 $sysroot_deb $sysroot_sha256"
     echo "suite-tuple node-aarch64 $floor_node_version $floor_node_sha256"

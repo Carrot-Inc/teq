@@ -18,7 +18,7 @@ anonargument	pass	-
 anonspan	pass	-	
 anonusing	pass	-	
 appobjectblock	pass	-	
-approxnarrow	pass	-	
+approxnarrow	fail	-	known over-scalac: scalac flattens a context function result that a context closure gives into the method's parameters (dotty's `ContextFunctionResults.annotateContextResults`: `widen(Function1, Strin
 apptraitargs	pass	-	
 apptraitblock	pass	-	
 arraychaininline	fail	-	arraychaininline classes
@@ -32,12 +32,13 @@ boundsinferred	pass	-
 boundslower	pass	-	
 boundspoly	pass	-	
 byname	pass	-	
+captureorder	pass	-	
 caseapply	pass	-	
 caseapplyclauses	pass	-	
 caseapplyprimary	pass	-	
 caseapplyrefused	pass	-	
 caseclass	pass	-	
-caseobject	pass	-	
+caseobject	fail	-	known classes: `b`'s `List(Stop, Go, Lights.Amber)` takes the element type `Signal & Mirror.Singleton` over `a`'s products and `Signal` whole, as scalac's own two builds do (its whole pickle `List[Sig
 castarrays	pass	-	
 castfolds	pass	-	
 castinline	pass	-	
@@ -47,15 +48,17 @@ cloneoverload	pass	-
 clonespecialized	pass	-	
 clonewide	pass	-	
 collide	pass	-	
-companionderived	pass	-	
+companionderived	fail	-	known bundle: the anonymous class an inline expansion makes in an upstream body (`Codec.derived`'s `new Codec[A]:` in `derived$Codec`) is named by the source's places in the whole build (`Codec$$anon$
 companionmirror	pass	-	
 companionnoinits	pass	-	
-companionnoinitsread	pass	-	
-companionprivateequality	fail	-	classes, subset, jvm-run, scalac-b, scalac-run, over-scalac; queued: a companion's inline call of a private member, over the products and over a scalac-built library
-companionprivatenamed	fail	-	classes, subset, jvm-run, scalac-b, scalac-run, over-scalac; queued: a companion's inline call of a private member, over the products and over a scalac-built library
+companionnoinitsread	fail	-	known classes: a companion whose body holds a given alias or a nested object runs an initialiser in its source's judgement (`TreeInfo.defKind`: a val with a right-hand side) and none in its pickle's (
+companionprivateequality	fail	-	companionprivateequality classes
+companionprivatenamed	fail	-	companionprivatenamed classes
 companionproducts	pass	-	
 companiontouch	pass	-	
 companionvalue	pass	-	
+compoundlift	pass	-	
+compoundpaths	pass	-	
 concretesetter	pass	-	
 constantpickle	pass	-	
 constantproducts	pass	-	
@@ -74,18 +77,18 @@ defaultsinline	pass	-
 defaultslast	pass	-	
 defaultsplan	pass	-	
 defaultspurity	pass	-	
-denotmeet	pass	-	
-denotpoly	pass	-	
+denotmeet	fail	-	known readtasty-b: scalac's own pickle of the downstream fails the same read (`-from-tasty` with `-Ycheck` after readTasty: "Type Mismatch (while checking adapt): Found Any, Required String" at `x.g(1
+denotpoly	fail	-	known js-run: on master already for any class that overloads a trait's method it implements across products (`trait R { def f(x: String): String }`, `class Both extends C with R` beside `C.f(x: Any)`)
 depcross	pass	-	
 dependent	pass	-	
 depfn	pass	-	
-depinherited	pass	-	
+depinherited	fail	-	known classes: the whole build's mirror class `dib/Impl` has no static forwarder `inferred()` for the val it inherits from `dia.Derived`, which the split build's and scalac's have: master the same for
 depnested	pass	-	
 depparamonly	pass	-	
 depsameclause	pass	-	
 depsameparamonly	pass	-	
 deptypes	pass	-	
-derivedmirror	pass	-	
+derivedmirror	fail	-	deferred scalac-lean-b: the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone ("Macro code depends on object Email found on
 diamond	pass	-	
 diamond2	pass	-	
 downstreammirror	pass	-	
@@ -116,13 +119,14 @@ erasedcallee	pass	-
 erasureabi	pass	-	
 erasureoverride	pass	-	
 expandanon	pass	-	
-expansionsingletonmember	pass	-	
+expansionsingletonmember	fail	-	known classes: the same as inlinesam: the class b's expansion of a's inline body makes is named at the product's pseudo file's place (`Gauge$$anon$300osidpep0lc_13$1rc96ct_90`), the whole build's at G
 export	pass	-	
 export_given_module_reference	pass	-	
 exportbesideimport	pass	-	
 exportcompanionapply	pass	-	
 exportcoreprelude	pass	-	
 exportdependent	pass	-	
+exportedinnerobject	fail	-	known classes: the exporting module b writes an alias for the nested object's class (`type shade`) beside the forwarder only where it reads the object from the upstream's products, none in a whole bui
 exportflags	pass	-	
 exportgeneric	pass	-	
 exportgiven	pass	-	
@@ -134,7 +138,7 @@ exportinheritedbound	pass	-
 exportinheritedclass	pass	-	
 exportinline	pass	-	
 exportinlinedefaults	fail	-	exportinlinedefaults build
-exportinlinevalue	pass	-	
+exportinlinevalue	fail	-	known classes: a nested transparent expansion over the products keeps the inner body's positions for what it folds (`7` at the member's literal, the receiver it binds at the call), where the whole bui
 exportorder	pass	-	
 exportoverdefault	pass	-	
 exportpackagealias	pass	-	
@@ -154,10 +158,10 @@ extractorclash	pass	-
 filemoduleidentity	pass	-	
 forwardersingleton	pass	-	
 functionxxl	fail	-	functionxxl build
-genericdefaults	pass	-	
+genericdefaults	fail	-	known bundle: the bundle over the lean products types `Defs.e`'s `x.size` from the pickle as a library body, through scala-library's `Option.option2Iterable` (the lean std's `Option.size` is no member
 given	pass	-	
 givenabstract	pass	-	
-givenbridge	pass	-	
+givenbridge	fail	-	known js-run: JavaScript reads a superclass's val, var or given that a generic trait declares as a def through a property where the call is to a method (`c.g is not a function` whole, `c.x is not a fu
 givenclassouter	pass	-	
 givenclassread	pass	-	
 givendeferred	pass	-	
@@ -197,17 +201,18 @@ initdef	pass	-
 initread	pass	-	
 initwrite	pass	-	
 inline	pass	-	
-inlinebodies	pass	-	
+inlinebodies	fail	-	known classes: the same as ledgerlocalclass: the classes the two expansions of the upstream's inline body make carry the pseudo file's SourceFile and line numbers (`a!iba.Bodies`, line 4), the whole b
 inlinecaseblock	pass	-	
-inlinecopymembers	pass	-	
+inlinecopymembers	fail	-	known classes: the same as inlinesam: the classes b's expansions of a's inline bodies make are named at the product's pseudo file's places (`Mac$$anon$iw5fyuj19dac_11$1rc96ct_139`), the whole build's
 inlineinterp	pass	-	
-inlinejdkctor	pass	-	
-inlinelocalclass	pass	-	
+inlinejdkctor	fail	-	known classes: a downstream's expansion of the product's inline body constructs the std's `Exception` with its default cause passed (`Exception(String, Throwable)`, the arguments through locals), wher
+inlinelocalclass	fail	-	known classes: the same as ledgerlocalclass: each expansion's copy of the upstream inline body's local class carries the pseudo file's SourceFile and line numbers (`a!ilca.API`), the whole build's Lib
 inlinematcheffect	pass	-	
-inlineoverloadsequality	fail	-	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
-inlineoverloadsnamed	fail	-	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
-inlinequote	pass	-	
-inlinesam	pass	-	
+inlineoverloadsequality	fail	-	inlineoverloadsequality classes
+inlineoverloadsnamed	fail	-	inlineoverloadsnamed classes
+inlinequote	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the upstream macro's implementations in teq's class files, which do not have them, the JVM prerequisite, queued
+inlinesam	fail	-	known classes: the expansion's copy of the SAM class `Eqv.derived`'s and `Eqv.by`'s inline bodies make is named at the product's pseudo file's place (`Eqv$$anon$29nea2pclhon2_36$1rc96ct_84`, `a!isa.Eq
+inlinestatementargs	pass	-	
 inlinetoplevelpath	pass	-	
 inner	pass	-	
 innercreators	pass	-	
@@ -218,11 +223,11 @@ javamemberoverload	pass	-
 javapackagenullary	pass	-	
 javasuperstable	fail	-	javasuperstable bundle
 javavarargs	pass	-	
-joinedfunction	pass	-	
+joinedfunction	fail	-	known classes: the JVM class files of the library trait and of the class that adds a third `apply` differ between the whole build and the build in part (jfa/Measure.class, jfb/Wider.class): a class be
 leanaliasowner	fail	-	leanaliasowner scalac-lean-b
-ledgerlocalclass	pass	-	
+ledgerlocalclass	fail	-	known classes: the class an expansion of the product's inline body makes carries the pseudo file's SourceFile and line numbers (`a!lla.Lib$package`, line 6), the whole build's Lib.scala's: the JVM pro
 ledgeroverride	pass	-	
-ledgerreceiver	pass	-	
+ledgerreceiver	fail	-	deferred classes: an expansion of the upstream's inline methods over the products makes its anonymous classes and the upstream file's `$package` holder where the whole build places them otherwise (`$a
 ledgerwrapped	pass	-	
 loaded_member_alias_override	pass	-	
 loadedfilegivens	pass	-	
@@ -232,36 +237,36 @@ loadednestedkind	pass	-
 loadednestedkindok	pass	-	
 loadedopaquekind	pass	-	
 loadedpackageholders	fail	-	loadedpackageholders members
-localcaseapply	pass	-	
+localcaseapply	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the macro's implementation in teq's class files, which do not have it, the JVM prerequisite
 localclass	pass	-	
 localclasstrait	pass	-	
 localcompanion	pass	-	
 localdispatch	pass	-	
-localenum	pass	-	
+localenum	fail	-	known classes: the same as ledgerlocalclass: the copy of the upstream inline body's local enum, its companion and its cases, made at the downstream's site, carries the pseudo file's SourceFile (`a!lea
 localobject	pass	-	
-localtrait	pass	-	
+localtrait	fail	-	known classes: the same as ledgerlocalclass: the copies of the upstream inline body's local trait and class, made at the downstream's site, carry the pseudo file's SourceFile and line numbers (`a!lta.
 macroclausekinds	fail	-	macroclausekinds build
-macroderive	pass	-	
-macrofresh	pass	-	
+macroderive	fail	-	known classes: the same as macroquote: the quote's copies made at the downstream's site carry the pseudo file's SourceFile and line numbers (`a!idlib.Macros`)
+macrofresh	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the middle module calls the upstream macro's implementation in teq's class files, which do not have it, the JVM prerequisite, queued
 macrohelper	pass	-	
 macroinlinearg	fail	-	macroinlinearg build
-macroliteral	pass	-	
-macronamedarg	pass	-	
-macropattern	pass	-	
-macroposition	pass	-	
-macroquote	pass	-	
-macroseqpattern	pass	-	
+macroliteral	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream expands the upstream's interpolator by calling its implementation in teq's class files, which do not have it (`mla/Lit
+macronamedarg	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the macros' implementations in teq's class files, which do not have them, the JVM prerequisite
+macropattern	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the macros' implementations in teq's class files, which do not have them: the JVM backend emitting the quoted la
+macroposition	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the upstream macros' implementations in teq's class files, which do not have them, the JVM prerequisite, queued
+macroquote	fail	-	known classes: the same as ledgerlocalclass: a quote's copy of the upstream's anonymous class, made at the downstream's site, carries the pseudo file's SourceFile and line numbers (`a!mqa.Mac`, line 1
+macroseqpattern	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the macro's implementation in teq's class files, which do not have it, the JVM prerequisite
 macrosuperseen	fail	-	macrosuperseen build
-macrotransparent	pass	-	
+macrotransparent	fail	-	known classes: the same as macroquote: the copies the middle module's expansions hold carry `a!mta.T`, line 5, the whole build's T.scala, line 15
 macrousingoverload	fail	-	macrousingoverload scalac-b
-macrowithheld	pass	-	
-macrowithheldretry	pass	-	
+macrowithheld	fail	-	known scalac-lean-b: scalac runs the downstream's macro on the JVM, and the Scala.js check build's products are TASTy alone, with no class file for the macro's call of the upstream ("Macro code depend
+macrowithheldretry	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream expands the upstream's interpolator by calling its implementation in teq's class files, which do not have it (`Could n
 manyblocks	pass	-	
 matchtype	pass	-	
 matchtypeinferred	fail	-	matchtypeinferred build
 memberobjecttostring	pass	-	
-memberunion	pass	-	
-mirroroverride	pass	-	
+memberunion	fail	-	known readtasty-b: the same as denotmeet readtasty-b, scalac's own pickle of the downstream failing the same read ("Found: Serializable, Required: Product & Serializable" at `r.f("m")` of an `A & B` w
+mirroroverride	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream expands the upstream's macro by calling its implementation in teq's class files, which do not have it (`Could not find
 mirrorparent	pass	-	
 mirrorproducttyped	pass	-	
 mirrorshapes	pass	-	
@@ -284,26 +289,28 @@ nesteddefaultsoverload	pass	-
 nesteddefaultsparent	pass	-	
 nesteddefaultsplain	pass	-	
 nesteddefaultsreceiver	pass	-	
-nesteddefaultssecondary	pass	-	
+nesteddefaultssecondary	fail	-	known bundle: the same as nestedprefixlast's secondary constructor: the bundle over the lean products lowers a secondary constructor that delegates to the primary as a primary call and an empty `$init
 nesteddefaultstrait	pass	-	
 nesteddefaultstraitplain	pass	-	
 nesteddefaultswritten	pass	-	
 nestedenum	pass	-	
 nestedhidden	pass	-	
 nestedprefix	pass	-	
-nestedprefixlast	pass	-	
+nestedprefixlast	fail	-	known bundle: the bundle over the lean products keeps the companion of a case class nested in a class (`get J()`, `O$J$`, with `Mirror` and `Mirror$Product`) that the whole build drops, and lowers a s
 nestedprefixmirror	pass	-	
 nestedprefixmisuse	pass	-	
 nestedprefixparents	pass	-	
 objectprefix	pass	-	
+objectstatementpair	pass	-	
+objectstatements	pass	-	
 objectthistype	pass	-	
 objinit	pass	-	
 opaque	pass	-	
 opaque_export_apply	pass	-	
 opaquebound	pass	-	
 opaquecompanion	pass	-	
-opaqueinter	pass	-	
-opaquename	pass	-	
+opaqueinter	fail	-	known classes: an opaque type read from the upstream's products erases to its underlying class (`oia/Item`), which nothing of the downstream completes, so the JVM backend finds no base types for it an
+opaquename	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the macro's implementation in teq's class files, which do not have it, the JVM prerequisite
 outerequals	pass	-	
 outersuper	pass	-	
 overload	pass	-	
@@ -319,13 +326,13 @@ pathclass	pass	-
 pathequality	pass	-	
 perfile	pass	-	
 pkgobj	pass	-	
-pkgobjgiven	pass	-	
-pkgobjname	pass	-	
+pkgobjgiven	fail	-	known classes: the split build's signature of the package object's given class names it through the file's object (`listTC([1], pga.TC): pga.inner.Lib$package$.listTC`), the whole build's through the
+pkgobjname	fail	-	known js-run: the split build reads the product's object `Token$package`, a name of a package object's form, as the package `pon.foreign` (`_root_ is a package, not a value`): the reader's rule for a
 pkgobjparents	pass	-	
 pkgobjplain	pass	-	
 placeholderparallel	pass	-	
 polycontext	pass	-	
-polycurried	pass	-	
+polycurried	fail	-	known js-run: the same as depfn js-run: the lean products withhold `P.both`'s body, which applies the context function `f[Int, String]`
 polydep	pass	-	
 polyfunction	pass	-	
 polygiven	pass	-	
@@ -336,19 +343,19 @@ polymemberdep	pass	-
 polynamed	pass	-	
 polyplain	pass	-	
 polyunused	pass	-	
-polyval	pass	-	
+polyval	fail	-	known check-lean: teq's lean std has no `scala.PolyFunction`, so the Scala.js check build of `PolyFunction { def apply[A](a: A): A; val tag: Int }` reports `type PolyFunction not found`: master (`488d
 privatealias	pass	-	
 privatealiasmisuse	pass	-	
 privatepkg	pass	-	
 products_inline_match_case_block	pass	-	
 productserrorcall	fail	-	productserrorcall diags
-productshapes	pass	-	
+productshapes	fail	-	known readtasty-b: scalac's tree checker refuses teq's pickle of a polymorphic function value's application in the downstream (`poly(List(7))`: a selection of `apply` with no denotation), as it does o
 productwiden	pass	-	
 purealias	fail	-	purealias check-lean
 qualifiedprivateimport	pass	-	
 quote_pattern_outer_variable	fail	-	quote_pattern_outer_variable subset
-quotecopymembers	pass	-	
-reabstractoverload	pass	-	
+quotecopymembers	fail	-	known classes: the same as macroquote: the classes b's expansions make (the quote's copies, its local class, object and given) carry the pseudo file's SourceFile and line numbers (`a!ema.Macros`, `a!e
+reabstractoverload	fail	-	known readtasty-b: teq's pickle writes `o.toString` of a name overloaded beside `toString(n: Int)` as the selection of the `()` method without its application, which scalac's reader refuses as an inva
 receiverowner	pass	-	
 recmacro	pass	-	
 recrefine	pass	-	
@@ -363,15 +370,15 @@ refinerepeated	pass	-
 reflectedtypeorder	pass	-	
 repeatexpand	pass	-	
 returnedfunction	pass	-	
-rightassocextension	pass	-	
+rightassocextension	fail	-	known classes: the downstream's class differs where the upstream inline body applies the right-associative extension: the product's tree is the reference's `+::(r)(l)` with the left operand bound ahea
 rightassocinline	pass	-	
-rightassockind	pass	-	
+rightassockind	fail	-	known classes: the downstream's class differs where the whole build's expansion of the upstream's inline body took a right-associative operator's binding back (the call's receiver became a pure path:
 rightassocloaded	pass	-	
-rightassocparam	pass	-	
+rightassocparam	fail	-	known classes: the downstream's class differs where the whole build's expansion of the upstream's inline body took a right-associative operator's binding back (`onList(plain)`, `acc.pre()`: the parame
 rightassocunhoist	pass	-	
 rollbackprefix	pass	-	
 runtimecheckedalias	pass	-	
-runtimecheckedinline	pass	-	
+runtimecheckedinline	fail	-	known classes: the call of `runtimeChecked` inside the upstream's transparent expansion is positioned at the downstream's call site (Main.scala, a zero span), the whole build's at the body's place in
 runtimecheckedresult	pass	-	
 runtimecheckedstacked	pass	-	
 runtimewhole	pass	-	
@@ -381,7 +388,7 @@ sealed	pass	-
 selectorproducts	pass	-	
 selfaliasoverride	pass	-	
 selfthroughval	pass	-	
-selftypecompanion	pass	-	
+selftypecompanion	fail	-	known js-run: teq's pickle of a creation through a self type's part (`this.Cfg(n, ..)` under `this: Base =>`) writes `new Base#Cfg(..)`, a projection, which the downstream's products build refuses as
 seqpattern	pass	-	
 shadowbind	pass	-	
 shadowlocal	pass	-	
@@ -393,7 +400,7 @@ stableproductparent	fail	-	stableproductparent classes
 stale	pass	-	
 stdbinding	pass	-	
 stdfacadename	pass	-	
-stdforms	pass	-	
+stdforms	fail	-	known bundle: the split build's bundle differs in what it reaches, master's binary the same for the first: a product body that calls a member of a `java.util.List` (`l.size()`, `asScala`'s conversion)
 stdformsuser	pass	-	
 structoverload	pass	-	
 summonerbody	pass	-	
@@ -412,7 +419,7 @@ traitfieldkinds	pass	-
 traitfields	pass	-	
 traitgivendef	pass	-	
 traitinit	pass	-	
-traitparams	pass	-	
+traitparams	fail	-	known classes: the pickle of a class whose parent is a product's trait of a using clause alone (`Sorted[Int]`) writes the parent as its type where the whole build writes the constructor call with the
 traitparentinfer	pass	-	
 traitsuper	pass	-	
 traitsuperinlinedefault	fail	-	traitsuperinlinedefault build
@@ -426,8 +433,9 @@ typenamedbinding	pass	-
 typeselecttrees	pass	-	
 unionarrays	fail	-	unionarrays scalac-run
 unionlub	fail	-	unionlub check
+unitmembers	pass	-	
 universalalias	pass	-	
-untupledplaceholder	pass	-	
+untupledplaceholder	fail	-	known bundle: an untupled placeholder lambda (`xs.map(_ + _)` over pairs) reads each element as `(t$0._1 ?? 0)` in the split bundle, as `t$0._1` in the whole build's (master's, met by the gate of ed4d
 unused	pass	-	
 upstreaminline	pass	-	
 userextractor	pass	-	

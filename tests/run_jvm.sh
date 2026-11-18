@@ -24,7 +24,8 @@
 #   output    the program ran and printed something else
 #   timeout   the program ran too long
 # A `// jars: <names>` line puts those jars on the class path (tests/support/jars.sh); a test with
-# one of them missing from the coursier cache counts as passed.
+# one of them missing from the coursier cache is not run: no pass, `cannot run` on the board, and a line
+# naming it that the gate fails.
 # Several tests run at once (JOBS, by default the number of cores).
 # `--java-output-version=N` writes the class files for that Java release in the place of the
 # default, against the same list.
@@ -112,7 +113,7 @@ run_one() {
   . tests/support/jars.sh
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
-    echo "pass $name" > "$out/$name.result"
+    echo "nojar $name" > "$out/$name.result"
     echo "$name" > "$out/$name.nojar"
     return
   fi
@@ -155,7 +156,7 @@ for kind in backend compile verify exception output timeout; do
   [ -n "$names" ] && echo "$kind: $names"
 done
 nojar=$(cat "$out"/*.nojar 2> /dev/null | tr '\n' ' ')
-[ -n "$nojar" ] && echo "counted as passed, a jar of theirs not in the coursier cache: $nojar"
+[ -n "$nojar" ] && echo "not run, a jar of theirs not in the coursier cache: $nojar"
 cat "$out"/*.otheros 2> /dev/null | sort > "$out/otheros.txt"
 skipped=$(grep '^skip ' "$out/results.txt" | cut -d' ' -f2 | sort | comm -23 - "$out/otheros.txt" | tr '\n' ' ')
 [ -n "$skipped" ] && echo "skipped (expectations from Scala.js): $skipped"
@@ -163,7 +164,7 @@ otheros=$(tr '\n' ' ' < "$out/otheros.txt")
 [ -n "$otheros" ] && echo "skipped (another system's): $otheros"
 grep '^pass ' "$out/results.txt" | cut -d' ' -f2 | sort > "$out/passing.txt"
 # The run held to the list of the cases expected to fail (tests/support/pending.py): a case that is skipped, or
-# counted as passed for a jar the cache lacks, is not judged, and its place in the list stands.
+# not run for a jar the cache lacks, is not judged, and its place in the list stands.
 cat "$out"/*.nojar 2> /dev/null | sort > "$out/nojar.txt"
 : > "$out/otherstd.txt"
 awk 'FILENAME == ARGV[1] { os[$1]; next } FILENAME == ARGV[2] { nojar[$1]; next } FILENAME == ARGV[3] { std[$1]; next }
@@ -175,12 +176,20 @@ awk 'FILENAME == ARGV[1] { os[$1]; next } FILENAME == ARGV[2] { nojar[$1]; next 
   { print "fail " $2 "\t" $1 }' "$out/otheros.txt" "$out/nojar.txt" "$out/otherstd.txt" "$out/results.txt" > "$out/pending.txt"
 python3 tests/support/pending.py jvm "$out/pending.txt" $update $add || status=1
 
+# aux_not_run <check> <why>: an auxiliary check below whose prerequisite is absent before anything is tried (a tool
+# or a jar not in the coursier cache): its skip line, which the gate fails, and the count of checks not run; never
+# a success.
+aux_not_run=0
+aux_not_run() {
+  echo "skip $1: $2"
+  aux_not_run=$((aux_not_run + 1))
+}
 same_jars() {
   . tests/support/jars.sh
   local cp="" name path
   for name in scala-library cats-kernel cats-core sourcecode; do
     path=$(jar_of "$name")
-    [ -e "$path" ] || return 0
+    [ -e "$path" ] || { aux_not_run "the corpus's determinism" "not in the coursier cache: $name"; return 0; }
     cp="$cp:$path"
   done
   cp=${cp#:}
@@ -205,7 +214,7 @@ same_jars() {
   fi
 }
 forwarder_order() {
-  command -v javap > /dev/null || return 0
+  command -v javap > /dev/null || { aux_not_run forwarder_order "no javap"; return 0; }
   local work=$out/forwarders
   if ! timeout 60 "$TEQ" compiler build tests/support/forwarders/forwarders.scala --target jvm --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" -o "$work" > "$work.log" 2>&1; then
     echo "FORWARDERS: the fixture does not build (see $work.log)"
@@ -219,7 +228,7 @@ forwarder_order() {
   fi
 }
 anon_final() {
-  command -v python3 > /dev/null || return 0
+  command -v python3 > /dev/null || { aux_not_run anon_final "no python3"; return 0; }
   local work=$out/anon_final
   rm -rf "$work"
   if ! timeout 60 "$TEQ" compiler build tests/support/anon_final/Mac.scala tests/support/anon_final/Use.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
@@ -234,7 +243,7 @@ anon_final() {
   fi
 }
 trait_inits() {
-  command -v javap > /dev/null || return 0
+  command -v javap > /dev/null || { aux_not_run trait_inits "no javap"; return 0; }
   local work=$out/trait_inits
   rm -rf "$work"
   if ! timeout 60 "$TEQ" compiler build tests/support/trait_inits/trait_inits.scala --target jvm --products "$work" > "$work.log" 2>&1; then
@@ -249,7 +258,7 @@ trait_inits() {
   fi
 }
 inline_bindings() {
-  command -v javap > /dev/null || return 0
+  command -v javap > /dev/null || { aux_not_run inline_bindings "no javap"; return 0; }
   local work=$out/inline_bindings
   rm -rf "$work"
   if ! timeout 60 "$TEQ" compiler build tests/cases/inline_binding_refs/*.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
@@ -264,11 +273,11 @@ inline_bindings() {
   fi
 }
 jar_companion_touch() {
-  command -v javap > /dev/null || return 0
+  command -v javap > /dev/null || { aux_not_run jar_companion_touch "no javap"; return 0; }
   local src=tests/support/jar_companion_touch/jar_companion_touch.scala work=$out/jar_companion_touch
   . tests/support/jars.sh
   jars_of "$src"
-  [ -z "$JARS_MISSING" ] || return 0
+  [ -z "$JARS_MISSING" ] || { aux_not_run jar_companion_touch "not in the coursier cache:$JARS_MISSING"; return 0; }
   rm -rf "$work"
   if ! timeout 120 "$TEQ" compiler build "$src" --target jvm --products "$work" --classpath "$JARS_CP" > "$work.log" 2>&1; then
     echo "JAR COMPANION TOUCH: the fixture does not build (see $work.log)"
@@ -282,7 +291,7 @@ jar_companion_touch() {
   fi
 }
 final_select() {
-  command -v javap > /dev/null || return 0
+  command -v javap > /dev/null || { aux_not_run final_select "no javap"; return 0; }
   local work=$out/final_select
   rm -rf "$work"
   if ! timeout 60 "$TEQ" compiler build tests/support/final_select/final_select.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
@@ -297,7 +306,7 @@ final_select() {
   fi
 }
 byname_ctor() {
-  command -v javap > /dev/null || return 0
+  command -v javap > /dev/null || { aux_not_run byname_ctor "no javap"; return 0; }
   local work=$out/byname_ctor
   rm -rf "$work"
   if ! timeout 60 "$TEQ" compiler build tests/support/byname_ctor/byname_ctor.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
@@ -312,7 +321,7 @@ byname_ctor() {
   fi
 }
 synchronized_shape() {
-  command -v javap > /dev/null || return 0
+  command -v javap > /dev/null || { aux_not_run synchronized_shape "no javap"; return 0; }
   local work=$out/synchronized
   rm -rf "$work"
   if ! timeout 60 "$TEQ" compiler build tests/support/synchronized/synchronized.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
@@ -327,7 +336,7 @@ synchronized_shape() {
   fi
 }
 abi_layout() {
-  command -v python3 > /dev/null || return 0
+  command -v python3 > /dev/null || { aux_not_run abi_layout "no python3"; return 0; }
   local f name work fails=0
   mkdir -p "$out/abi"
   : > "$out/abi/results.txt"
@@ -365,5 +374,5 @@ if [ -z "$VERSION" ]; then
   abi_layout || status=1
 fi
 count() { grep -c "^$1 " "$out/results.txt"; }
-echo "$(count pass) passed, $(count backend) backend, $(count compile) compile, $(count verify) verify, $(count exception) exception, $(count output) output, $(count timeout) timeout, $(count skip) skipped"
+echo "$(count pass) passed, $(count backend) backend, $(count compile) compile, $(count verify) verify, $(count exception) exception, $(count output) output, $(count timeout) timeout, $(count nojar) not run for a jar, $aux_not_run checks not run, $(count skip) skipped"
 exit $status

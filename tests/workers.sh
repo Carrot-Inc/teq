@@ -8,6 +8,11 @@
 # the parallel merge against the serial walk's order (`TEQ_MERGE_TRACE=1`).
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
+# what every check runs: without one, no check runs and none passes
+for tool in timeout cmp diff node java; do
+  command -v $tool > /dev/null || { echo "workers: no $tool on the PATH: no check run"; echo "workers: 0 passed, 1 failed"; exit 1; }
+done
+[ -x "$TEQ" ] || { echo "workers: no binary at $TEQ: no check run"; echo "workers: 0 passed, 1 failed"; exit 1; }
 COUNTS=${WORKERS_COUNTS:-2 16}
 export TEQ_MERGE_SWEEP=${TEQ_MERGE_SWEEP:-1}
 export TEQ_MERGE_TRACE=${TEQ_MERGE_TRACE:-1}
@@ -15,9 +20,35 @@ export TEQ_MERGE_TRACE=${TEQ_MERGE_TRACE:-1}
 pass=0
 fail=0
 ok() { pass=$((pass + 1)); }
+# not_run <check> <why>: a check whose prerequisite is absent before anything is tried (a jar not in the coursier
+# cache): its skip line, which the gate fails, no pass, and `cannot run` on the board.
+skipped=0
+not_run() {
+  echo "skip $1: $2"
+  skipped=$((skipped + 1))
+  pending_skip "$1" "$2"
+}
 bad() {
-  said_fail "$1"
+  said_fail "$1${said_why:-}"
+  said_why=
   fail=$((fail + 1))
+}
+# saw <pattern> <command...>: whether the command's output holds the pattern a check refuses (its then-branch fails
+# the check). A command that did not run (a launch failure 126 or 127, a limit 124 or 125, a signal 128 and up) counts
+# as seen, the check's failure with its reason added to the line: the pattern's absence says nothing of a command that
+# did not run.
+# not_ran <code>: whether a run's status says it did not run (a launch failure, a limit, a signal)
+not_ran() { case $1 in 124 | 125 | 126 | 127 | 1[3-9][0-9] | 2[0-9][0-9]) return 0 ;; esac; return 1; }
+said_why=
+saw() {
+  local pat=$1 said code
+  shift
+  said=$("$@" 2>&1)
+  code=$?
+  case $code in
+    124 | 125 | 126 | 127 | 1[3-9][0-9] | 2[0-9][0-9]) said_why=" (its command did not run: exit $code)"; return 0 ;;
+  esac
+  grep -q -- "$pat" <<< "$said"
 }
 work=out/workers
 rm -rf "$work"
@@ -73,9 +104,12 @@ classpath_of() {
 # same_output <name> <trials> <teq arguments...>: the program's output at each count of COUNTS,
 # each trial, against its output at one.
 same_output() {
-  local name=$1 trials=$2
+  local name=$1 trials=$2 code
   shift 2
   one "$name" 1 "$@" > "$work/$name.one" 2>&1
+  code=$?
+  # outputs alike from runs that did not run compare nothing
+  if not_ran $code; then bad "$name: the one-worker run did not run (exit $code)"; return; fi
   local i t
   for i in $(seq 1 "$trials"); do
     for t in $COUNTS; do
@@ -94,9 +128,11 @@ same_output() {
 # printed with its mechanism while the counts of COUNTS print otherwise than one, a pass once they do not.
 known=0
 known() {
-  local name=$1 mechanism=$2 trials=$3
+  local name=$1 mechanism=$2 trials=$3 code
   shift 3
   one "$name" 1 "$@" > "$work/$name.one" 2>&1
+  code=$?
+  if not_ran $code; then bad "$name: the one-worker run did not run (exit $code)"; return; fi
   local i t
   for i in $(seq 1 "$trials"); do
     for t in $COUNTS; do
@@ -136,6 +172,8 @@ same_build() {
   local name=$1 trials=$2
   shift 2
   timeout 120 "$TEQ" compiler build "$@" --threads 1 -o "$work/$name.one" > /dev/null 2>&1
+  local code=$?
+  if not_ran $code; then bad "$name: the one-worker build did not run (exit $code)"; return; fi
   local i t
   for i in $(seq 1 "$trials"); do
     for t in $COUNTS; do
@@ -308,7 +346,7 @@ same_output class_made_in_merge 4 interp tests/workers/class_made_in_merge
 # worker. One busy worker (`TEQ_IDLE_WORKERS=1`) keeps the order that met it.
 same_output class_under_merge 2 interp tests/workers/class_under_merge
 for t in $COUNTS; do
-  if TEQ_IDLE_WORKERS=1 TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" interp tests/workers/class_under_merge --threads $t 2>&1 | grep -q 'typed again'; then
+  if TEQ_IDLE_WORKERS=1 TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" interp tests/workers/class_under_merge --threads $t; then
     bad "class_under_merge: a publication inside a merge gave the build to one worker at $t workers"
   else
     ok
@@ -400,8 +438,7 @@ same_output cast_target 3 run tests/workers/cast_target
 # are read again (without, "value Macros is not a member of sourcecode" at sixteen workers).
 jars_of tests/workers/package_reread
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip package_reread: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "package_reread" "not in the coursier cache:$JARS_MISSING"
 else
   same_output package_reread 4 run tests/workers/package_reread --classpath "$JARS_CP"
 fi
@@ -412,8 +449,7 @@ fi
 # sixteen workers, on master as well).
 jars_of tests/workers/type_reread
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip type_reread: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "type_reread" "not in the coursier cache:$JARS_MISSING"
 else
   same_output type_reread 4 check tests/workers/type_reread --std=scala-library --classpath "$JARS_CP"
 fi
@@ -425,8 +461,7 @@ one_jar() {
   local name=$1 want=$2 trials=$3 t i said
   jars_of tests/workers/$name
   if [ -n "$JARS_MISSING" ]; then
-    echo "skip $name: not in the coursier cache:$JARS_MISSING"
-    ok
+    not_run "$name" "not in the coursier cache:$JARS_MISSING"
     return
   fi
   said=$(timeout 120 "$TEQ" compiler build tests/workers/$name --target jvm --classpath "$JARS_CP" --threads 1 -o "$work/$name.one.jar" 2>&1)
@@ -475,8 +510,7 @@ one_jar jdk_parent_program_class "1 jdkparent.Spot java.awt.Point" 5
 # defaultValueAnns is not in scope" when another worker runs the macro, at two workers and on master).
 jars_of tests/cases/bson_macros.scala
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip library_block_retyped: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "library_block_retyped" "not in the coursier cache:$JARS_MISSING"
 else
   same_output library_block_retyped 2 interp tests/cases/bson_macros.scala --classpath "$JARS_CP"
 fi
@@ -489,8 +523,7 @@ fi
 # then "no builtin for the template $quoted" in magnolia's `Macro.isObject`).
 jars_of tests/workers/jar_module_wait/zio30.scala
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip jar_module_wait: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "jar_module_wait" "not in the coursier cache:$JARS_MISSING"
 else
   same_output jar_module_wait 4 run tests/workers/jar_module_wait --classpath "$JARS_CP"
 fi
@@ -502,8 +535,7 @@ fi
 # met in izumi's `Tag`).
 jars_of tests/workers/mixin_supers
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip mixin_supers: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "mixin_supers" "not in the coursier cache:$JARS_MISSING"
 else
   same_output mixin_supers 4 check tests/workers/mixin_supers --std=scala-library --classpath "$JARS_CP"
 fi
@@ -515,8 +547,7 @@ fi
 # `ChronoUnit`'s in the application's export, other ones at another count; scalac's classes have it, 16 and 3).
 jars_of tests/workers/enum_singleton_mirror
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip enum_singleton_mirror: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "enum_singleton_mirror" "not in the coursier cache:$JARS_MISSING"
 else
   mirrored=ok
   for t in 1 $COUNTS; do
@@ -535,8 +566,7 @@ fi
 # every count (dotty's `enumClass.fullName`, under the file's object).
 jars_of tests/workers/local_enum_lookup_message.scala
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip local_enum_lookup_message: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "local_enum_lookup_message" "not in the coursier cache:$JARS_MISSING"
 else
   named=ok
   for t in 1 $COUNTS; do
@@ -679,7 +709,7 @@ same_output match_hierarchy 3 run tests/workers/match_hierarchy --werror
 upstream macro_counter
 same_output macro_counter 2 run tests/workers/macro_counter/use --classpath "$work/macro_counter_lib"
 same_output macro_counter_plain 2 run tests/workers/macro_counter_plain
-if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/macro_counter_plain -o "$work/macro_counter_plain.js" --threads 16 2>&1 | grep -q 'typed again'; then
+if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler build tests/workers/macro_counter_plain -o "$work/macro_counter_plain.js" --threads 16; then
   bad "macro_counter_plain: a plain macro's runs gave the build to one worker"
 else
   ok
@@ -713,7 +743,7 @@ macro_run_class() {
   fi
   for t in $COUNTS; do
     for i in 1 2; do
-      if TEQ_PHASE_FORK=1 TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler check "$@" --threads $t 2>&1 | grep -q 'typed again'; then
+      if TEQ_PHASE_FORK=1 TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler check "$@" --threads $t; then
         bad "${name}_phase_fork: a definition a macro's run needed first gave the build to one worker at $t workers"
         return
       fi
@@ -785,7 +815,7 @@ if [ "$(cat "$work/phase_fork_macro_reach.one")" = "$(printf 'Code(ABC)\nCode(XY
 else
   bad "phase_fork_macro_reach: one worker's output is not scalac's: $(head -3 "$work/phase_fork_macro_reach.one" | tr '\n' ' ' | cut -c1-200)"
 fi
-if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/phase_fork_macro_reach -o "$work/phase_fork_macro_reach.js" --threads 8 2>&1 | grep -q 'typed again'; then
+if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler build tests/workers/phase_fork_macro_reach -o "$work/phase_fork_macro_reach.js" --threads 8; then
   bad "phase_fork_macro_reach: a macro's run reaching another file's kept calls gave the build to one worker"
 else
   ok
@@ -798,8 +828,7 @@ fi
 # worker at two, eight and sixteen). One worker prints scalac's output.
 jars_of tests/workers/phase_fork_receiver
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip phase_fork_receiver: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "phase_fork_receiver" "not in the coursier cache:$JARS_MISSING"
 else
   same_output phase_fork_receiver 3 run tests/workers/phase_fork_receiver --classpath "$JARS_CP"
   if [ "$(cat "$work/phase_fork_receiver.one")" = "$(printf '2\n3\nP(1)')" ]; then
@@ -807,7 +836,7 @@ else
   else
     bad "phase_fork_receiver: one worker's output is not scalac's: $(head -3 "$work/phase_fork_receiver.one" | tr '\n' ' ' | cut -c1-200)"
   fi
-  if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/phase_fork_receiver --classpath "$JARS_CP" -o "$work/phase_fork_receiver.js" --threads 8 2>&1 | grep -q 'typed again'; then
+  if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler build tests/workers/phase_fork_receiver --classpath "$JARS_CP" -o "$work/phase_fork_receiver.js" --threads 8; then
     bad "phase_fork_receiver: a library macro's run made an expansion's receiver and gave the build to one worker"
   else
     ok
@@ -1186,8 +1215,7 @@ for c in cases/macro_suspended_after_std_demand classpath/js/macro_suspended_lib
   name=phase_fork_$(basename $c)
   jars_of tests/$c
   if [ -n "$JARS_MISSING" ]; then
-    echo "skip $name: not in the coursier cache:$JARS_MISSING"
-    ok
+    not_run "$name" "not in the coursier cache:$JARS_MISSING"
     continue
   fi
   same_output $name 6 run tests/$c ${JARS_CP:+--classpath "$JARS_CP"}
@@ -1212,8 +1240,8 @@ for name in scala-library cats-kernel cats-core sourcecode; do
 done
 app_cp=${app_cp#:}
 if [ "$app_cp" = missing ]; then
-  echo "skip phase_fork_app_frontend: the application corpus's jars are not in the coursier cache"
-  ok
+  not_run "phase_fork_app_frontend" "the application corpus's jars are not in the coursier cache"
+  not_run "phase_fork_app_api" "the application corpus's jars are not in the coursier cache"
 elif timeout 120 python3 bench/app/gen.py "$work/app" > /dev/null; then
   same_output phase_fork_app_frontend 3 compiler check "$work/app/shared" "$work/app/frontend" --classpath "$app_cp" --cacheable-state meridian.web.css.Catalog
   same_output phase_fork_app_api 2 compiler check "$work/app/shared" "$work/app/api" --classpath "$app_cp"
@@ -1321,7 +1349,7 @@ done
 # changing what they make (`init_fresh`).
 for name in init_run_own init_fresh; do
   same_output $name 2 run tests/workers/$name
-  if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/$name -o "$work/$name.js" --threads 16 2>&1 | grep -q 'typed again'; then
+  if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler build tests/workers/$name -o "$work/$name.js" --threads 16; then
     bad "$name: an initialiser's change of what the run or the initialiser made gave the build to one worker"
   else
     ok
@@ -1362,7 +1390,7 @@ same_output object_statements 3 run tests/workers/object_statements
 # lambdas, local defs, binding cases, defaults, a catch case, a lazy local, a local class and a case lambda over a
 # tuple, which change nothing other runs share and keep the build on the workers.
 same_output frame_layouts 2 run tests/workers/frame_layouts
-if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/frame_layouts -o "$work/frame_layouts.js" --threads 16 2>&1 | grep -q 'typed again'; then
+if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler build tests/workers/frame_layouts -o "$work/frame_layouts.js" --threads 16; then
   bad "frame_layouts: the macro's runs gave the build to one worker"
 else
   ok
@@ -1376,7 +1404,7 @@ fi
 # to one worker, and a lazy slot hashed once read gave the workers' runs a hash of their own).
 for name in hash_array init_hash hash_values hash_lazy; do
   same_output $name 2 run tests/workers/$name
-  if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/$name -o "$work/$name.js" --threads 16 2>&1 | grep -q 'typed again'; then
+  if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler build tests/workers/$name -o "$work/$name.js" --threads 16; then
     bad "$name: an identity hash gave the build to one worker"
   else
     ok
@@ -1388,17 +1416,17 @@ done
 # caches off as well, its plain macro's runs being the inlining phase's on one worker after the merge.
 jars_of tests/workers/pool_buffers
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip pool_buffers: not in the coursier cache:$JARS_MISSING"
+  not_run pool_buffers "not in the coursier cache:$JARS_MISSING"
 else
   same_output pool_buffers 2 run tests/workers/pool_buffers --classpath "$JARS_CP" --std scala-library --target jvm
   for t in 2 4; do
-    if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler check tests/workers/pool_buffers --classpath "$JARS_CP" --std scala-library --target jvm --threads $t 2>&1 | grep -q 'typed again'; then
+    if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler check tests/workers/pool_buffers --classpath "$JARS_CP" --std scala-library --target jvm --threads $t; then
       bad "pool_buffers: a run's write of a pooled buffer gave the build to one worker at $t workers"
     else
       ok
     fi
   done
-  if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler check tests/workers/pool_buffers --classpath "$JARS_CP" --std scala-library --target jvm --threads 4 --no-known-caches 2>&1 | grep -q 'typed again'; then
+  if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler check tests/workers/pool_buffers --classpath "$JARS_CP" --std scala-library --target jvm --threads 4 --no-known-caches; then
     bad "pool_buffers: with the known caches off, the inlining phase's runs gave the build to one worker"
   else
     ok
@@ -1429,7 +1457,7 @@ fi
 # A macro memoising into a map of an object declared as cacheable state: its changes are a
 # cache's, no state another run reads differently, and the build stays on its workers.
 same_output macro_cache 2 run tests/workers/macro_cache --cacheable-state p.Squares
-if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/macro_cache -o "$work/macro_cache.js" --cacheable-state p.Squares --threads 16 2>&1 | grep -q 'typed again'; then
+if TEQ_SERIAL_TRACE=1 saw 'typed again' timeout 120 "$TEQ" compiler build tests/workers/macro_cache -o "$work/macro_cache.js" --cacheable-state p.Squares --threads 16; then
   bad "macro_cache: a cacheable state's changes gave the build to one worker"
 else
   ok
@@ -1674,7 +1702,7 @@ COUNTS=4
 same_output default_getter_sealed 1 compiler check tests/workers/default_getter_sealed
 same_output local_enum_sealed 1 compiler check tests/cases/enum_case_defaults.scala
 for c in tests/workers/default_getter_sealed tests/cases/enum_case_defaults.scala; do
-  if TEQ_IDLE_WORKERS=0 timeout 120 "$TEQ" compiler check "$c" --threads 4 2>&1 | grep -q 'after a publication sealed it'; then
+  if TEQ_IDLE_WORKERS=0 saw 'after a publication sealed it' timeout 120 "$TEQ" compiler check "$c" --threads 4; then
     bad "$c: a record changed after its publication sealed it, under the hook"
   else
     ok
@@ -1690,11 +1718,10 @@ COUNTS=$saved_counts
 # release builds carry no such check, so the case proves nothing there.
 jars_of tests/classpath/jvm/nested_object_codec.scala
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip base_memo_view: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "base_memo_view" "not in the coursier cache:$JARS_MISSING"
 else
   for t in 2 8; do
-    if TEQ_IDLE_WORKERS=0 timeout 120 "$TEQ" compiler check tests/classpath/jvm/nested_object_codec.scala --classpath "$JARS_CP" --target jvm --std scala-library --threads $t 2>&1 | grep -q 'view check'; then
+    if TEQ_IDLE_WORKERS=0 saw 'view check' timeout 120 "$TEQ" compiler check tests/classpath/jvm/nested_object_codec.scala --classpath "$JARS_CP" --target jvm --std scala-library --threads $t; then
       bad "base_memo_view: a view check under the hook at $t workers"
     else
       ok
@@ -1711,7 +1738,7 @@ fi
 # two under the hook at eight workers. Under the hook at two and eight workers.
 for p in tests/cases/charsequence_release.scala tests/workers/string_builder_view tests/cases/std_maps_sets.scala; do
   for t in 2 8; do
-    if TEQ_IDLE_WORKERS=0 timeout 120 "$TEQ" compiler check "$p" --std scala-library --target jvm --threads $t 2>&1 | grep -q 'view check'; then
+    if TEQ_IDLE_WORKERS=0 saw 'view check' timeout 120 "$TEQ" compiler check "$p" --std scala-library --target jvm --threads $t; then
       bad "base_cache_view: a view check in $p under the hook at $t workers"
     else
       ok
@@ -2436,5 +2463,5 @@ for dropped in assign_op_dropped_count assign_op_dropped_nested_lazy; do
   fi
 done
 
-echo "workers: $pass passed, $fail failed, $known known"
+echo "workers: $pass passed, $fail failed, $known known$([ $skipped = 0 ] || echo ", $skipped not run")"
 pending_fails_end $fail $pass

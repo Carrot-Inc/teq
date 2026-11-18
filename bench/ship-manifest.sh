@@ -243,9 +243,10 @@ manifest_check() {
       # held to its list (tests/support/pending.py) ends `cases: <n> pass, <m> fail as tests/pending/cases.txt
       # lists`: n passed and no failure the list lacks, read here as the counts of a run with no list.
       suite=$(manifest_get "$manifest" suite)
-      local listed='^(.* tests/run\.sh passed: )cases: ([0-9]+) pass, [0-9]+ fail as tests/pending/cases\.txt lists(, .*)$'
-      [[ $suite =~ $listed ]] && suite="${BASH_REMATCH[1]}${BASH_REMATCH[2]} passed, 0 failed${BASH_REMATCH[3]}"
-      local counts='([0-9]+) passed, 0 failed, ([0-9]+) of them skipped for missing jars' same='outputs ([0-9]+) of ([0-9]+) as the native suite'\''s'
+      # Its own count of the tests not run (`, <k> not run`) is the skip lines' the manifest gives after it.
+      local listed='^(.* tests/run\.sh passed: )cases: ([0-9]+) pass, [0-9]+ fail as tests/pending/cases\.txt lists(, [0-9]+ not run)?(, .*)$'
+      [[ $suite =~ $listed ]] && suite="${BASH_REMATCH[1]}${BASH_REMATCH[2]} passed, 0 failed${BASH_REMATCH[4]}"
+      local counts='([0-9]+) passed, 0 failed, ([0-9]+) not run \(skip lines\)' same='outputs ([0-9]+) of ([0-9]+) as the native suite'\''s'
       if [ "$classifier" = linux-aarch_64 ]; then
         # Emulated, under the qemu-user and over the sysroot the build's toolchain records; or natively, in the
         # floor's container and over its glibc package as the suite's environment records them.

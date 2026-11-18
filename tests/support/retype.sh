@@ -568,8 +568,8 @@ retype_jar_state() {
   local jar src=$work/jarstate declared n
   jar=$(jar_of state-lib)
   if [ ! -f "$jar" ]; then
-    echo "skip the jar's state: state-lib was not built"
-    ok
+    # scala-cli builds the jar: without it the check is not run, a jar it did not build is a failure
+    if command -v scala-cli > /dev/null; then bad "jar state: scala-cli did not build state-lib (tests/support/state_lib.scala)"; else not_run "the jar's state" "no scala-cli to build state-lib" "jar state ()" "jar state (--cacheable-state statelib.Counter)"; fi
     return
   fi
   for declared in "" "--cacheable-state statelib.Counter"; do
@@ -595,7 +595,7 @@ retype_jar_state() {
 }
 
 # retype_sweep <flags>: the realistic frontend of bench/app, generated here, over the jars it
-# reads (counted as passed without them). A comment goes onto the second line of a file, which
+# reads (not run without them: a skip line, no pass). A comment goes onto the second line of a file, which
 # moves every position of the file and types all of it again: of the first file in the order
 # of the paths, the entry file, and every eighth after it, or every `RETYPE_SWEEP_EVERY`th (1
 # for all of them, a thousand builds); then of the entry file and every thirty-seventh after
@@ -610,8 +610,7 @@ retype_sweep() {
   for name in scala-library cats-kernel cats-core sourcecode; do
     path=$(jar_of "$name")
     if [ ! -e "$path" ]; then
-      echo "skip the sweep: $name is not in the coursier cache"
-      ok
+      not_run "the sweep" "$name is not in the coursier cache" sweep
       return
     fi
     cp="$cp:$path"

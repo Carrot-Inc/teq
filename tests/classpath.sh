@@ -2,7 +2,8 @@
 # Every tests/classpath/*.scala is checked with `--std=scala-library` against the jars its `// jars:` line
 # names (tests/support/jars.sh). A program without
 # `// expect:` lines has to check without an error; one with them has to be rejected with all
-# of them. The suite skips, and counts as passed, when a jar is not in the cache.
+# of them. A program whose jar is not in the cache is not run: its skip line, which the gate fails, counted apart
+# from the passes.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh

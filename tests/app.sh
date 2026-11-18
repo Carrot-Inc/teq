@@ -13,7 +13,7 @@
 # answers its first build, two retypes, a build that takes the full path again and the queries after
 # each as the session at one worker does (tests/support/session.py). Missing expectations are produced with
 # scala-cli (--regen redoes them; the corpus pins Scala 3.8.4 in its project.scala); without the
-# jars in the coursier cache the suite skips and counts as passed. SCALE scales the corpus
+# jars in the coursier cache the suite is not run: its skip line, which the gate fails, and no pass. SCALE scales the corpus
 # (default 1, the scale the expectations are recorded at).
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}

@@ -81,6 +81,18 @@
 #            times recorded and the suite's left, then read again by the dealer and the comparison's planner beside a
 #            planted failure, a killed piece, one past the suite's bound and a skip for want of a jar, each failing
 #            the suite, nothing recorded.
+#   outcomes the board counts no check that did not run (docs/DEVELOPING.md): tests/support/pending.py over a copy of
+#            its lists, a skipped listed check kept on the list, no pass and `cannot run`; one outcome a test (a
+#            failure, then not run, then a pass), a `known` one a failure on the board held by its own list; another
+#            system's test not run, no earlier machine's pass kept; tests/board/board.py's project rows over a
+#            made-up record, an ignored test not run; tests/modules.sh's known list held both ways (a listed check that
+#            passes fails the run, under --update it leaves the list); the split watch's opening check failing on a
+#            type error and not run without the jar; tests/run_jvm.sh's checks without javap or their jars a skip
+#            line each, not run; an empty selection of tests/scala3/run.py and of tests/board/dotty.py failing; an
+#            empty results file taking no entry out of a fails-only list (a line naming the check passing does);
+#            tests/run_stdlib.sh --update without its jar writing every case cannot run; tests/support/identity.sh
+#            counting no program identical whose runs were killed on both sides; tests/workers.sh's checks whose
+#            command was killed failing with that reason.
 #   board    the conformance board's decision on a neg or warn test (tests/board/dotty.py, neg_or_warn) over made-up
 #            sources, records of teq's and oracles of scalac's, no compiler run but teq's where said: diagnostics
 #            equal to scalac's passing; one word of a message, a later line of it, a line past its end, a column,
@@ -289,6 +301,14 @@ admitted|skip anyval_extractor_view: its std is scala-library
 admitted|skip jvm_only_case: the JVM's alone
 refused|skip x: not in the coursier cache: cats-core
 refused|counted as passed, a jar of theirs not in the coursier cache: x
+refused|not run, a jar of theirs not in the coursier cache: x
+admitted|2954 passed, 10 backend, 108 compile, 10 verify, 11 exception, 81 output, 0 timeout, 0 not run for a jar, 0 checks not run, 71 skipped
+admitted|cases: 2879 pass, 188 fail as tests/pending/cases.txt lists, 178 not run
+admitted|modules: 367 pass, 31 fail as tests/pending/modules.txt lists, 57 fail as the suite's own lists of checks hold them
+admitted|workers: 756 passed, 0 failed, 4 known
+refused|skip forwarder_order: no javap
+refused|skip the corpus's determinism: not in the coursier cache: cats-core
+refused|skip the classpath session: not in the coursier cache: scala-library
 refused|stdlib: skipped, no scala-library 3.x jar in the coursier cache
 refused|app: skipped, not in the coursier cache: cats-core
 refused|analysis-bytes: skipped, no scala-library jar
@@ -1624,6 +1644,150 @@ while IFS=$'\t' read -r said scenario; do
   check "board: $scenario" "$work/board.log" [ "$said" = ok ]
 done < <(grep -E $'^(ok|FAIL)\t' "$work/board.log")
 check "board: every scenario of the judge was held" "$work/board.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board.log")" = 121 ]'
+
+# The board counts no check that did not run: a test's one outcome (a failure, then not run, then a pass) through
+# tests/support/pending.py in a copy of the tree's lists, tests/board/board.py's project rows over a made-up record,
+# the modules' known and deferred lists held both ways, a watch session's opening check that fails, and the JVM
+# runner's checks without their tool or jar.
+oc=$work/outcomes
+mkdir -p "$oc/r/tests/support" "$oc/r/tests/pending" "$oc/r/tests/board/suites" "$oc/r/tests/board/dotty" "$oc/r/bench/probe"
+cp tests/support/pending.py "$oc/r/tests/support/"
+cp tests/board/board.py tests/board/rows.py "$oc/r/tests/board/"
+pend() { (cd "$oc" && timeout 60 python3 -B r/tests/support/pending.py "$@") > "$oc/pending.log" 2>&1; }
+printf 'package_reread\tearlier mismatch\n' > "$oc/r/tests/pending/w.txt"
+printf 'skip package_reread\tnot in the coursier cache: sourcecode\n' > "$oc/skip.txt"
+pend w skip.txt --fails-only --passed=0 --update
+code=$?
+check "outcomes: a skipped listed check is not run: the list keeps it, no pass, cannot run on the board" "$oc/pending.log" eval '[ $code = 0 ] &&
+  [ "$(cat "$oc/r/tests/pending/w.txt")" = "$(printf "package_reread\tearlier mismatch")" ] &&
+  grep -q -x "w: 0 pass, 0 fail as tests/pending/w.txt lists, 1 not run" "$oc/pending.log" &&
+  grep -q -x "$(printf "package_reread\tcannot run\t-\tnot in the coursier cache: sourcecode")" "$oc/r/tests/board/suites/w.tsv"'
+printf 'b\tolder\nc\tolder\n' > "$oc/r/tests/pending/v.txt"
+printf 'pass a\nskip a\tno jar\nknown b\tknown classes: a reason\nfail c\twhy\nskip c\tno jar\npass d\n' > "$oc/one.txt"
+pend v one.txt --update
+code=$?
+check "outcomes: one outcome a test, a failure before not run before a pass; a known one fails on the board, held by its own list" "$oc/pending.log" eval '[ $code = 0 ] &&
+  [ "$(cat "$oc/r/tests/pending/v.txt")" = "$(printf "c\tolder")" ] &&
+  grep -q -x "v: 1 pass, 1 fail as tests/pending/v.txt lists, 1 fail as the suite.s own lists of checks hold them, 1 not run" "$oc/pending.log" &&
+  [ "$(grep -v "^#" "$oc/r/tests/board/suites/v.tsv" | cut -f1,2 | tr "\t\n" ": ")" = "a:cannot run b:fail c:fail d:pass " ]'
+printf '# test\tverdict\tthe other ways\tthe first line of the difference\nwin\tpass\t-\t\n' > "$oc/r/tests/board/suites/u.tsv"
+printf "skip win\tanother system's\n" > "$oc/os.txt"
+pend u os.txt --update
+check "outcomes: another system's test is not run on this one, no earlier machine's pass kept" "$oc/pending.log" \
+  grep -q -x "$(printf "win\tcannot run\t-\tanother system's")" "$oc/r/tests/board/suites/u.tsv"
+# a project's test the oracle's run ignored: not run, no pass
+printf '{}\n' > "$oc/r/bench/probe/pin.json"
+printf '{"cases_count":2,"modules":{"probe.js":{"cases":{"Success":["p.Ran.a"],"Ignored":["p.Unrun.b"]}}}}\n' > "$oc/r/bench/probe/tests.json"
+printf '{"projects":["probe.js"],"deviations":[]}\n' > "$oc/r/bench/probe/deviations.json"
+(cd "$oc/r" && timeout 60 python3 -B tests/board/board.py --tsv) > "$oc/board.log" 2>&1
+check "outcomes: a project's test its oracle ignored is not run: 2 tests, 1 pass, 1 cannot run" "$oc/board.log" \
+  grep -q -x "$(printf "probe test\t2\t1\t0\t0\t1\t")" "$oc/board.log"
+# the modules' lists, both ways: a listed check that passes fails the run, or under --update leaves its list
+(
+  out=$oc/m; mkdir -p "$out/results"; pass=0; fail=0; stale=0; known_count=0; deferred_count=0
+  known=$oc/known.txt deferred=$oc/deferred.txt
+  printf 'ledgerlocalclass classes  a reason\nother subset  another\n' > "$known"; : > "$deferred"
+  source <(sed -n '/^is_known() {/p; /^is_deferred() {/p; /^listed_passes() {/,/^}/p; /^result() {/,/^}/p' tests/modules.sh)
+  result ledgerlocalclass classes 1 ""
+  echo "counts: pass=$pass fail=$fail stale=$stale known=$known_count"
+  result ledgerlocalclass classes 0 ""
+  echo "counts: pass=$pass fail=$fail stale=$stale known=$known_count"
+  MODULES_LISTS_UPDATE=1 result ledgerlocalclass classes 1 ""
+  echo "counts: pass=$pass fail=$fail stale=$stale known=$known_count"
+  cat "$out/results/lists-off.txt"
+) > "$oc/modules.log" 2>&1
+check "outcomes: a known check that passes fails the run; under --update it leaves the list as a pass" "$oc/modules.log" eval '
+  grep -q -x "FAIL ledgerlocalclass classes: listed in $oc/known.txt and passes now (take it off: --update)" "$oc/modules.log" &&
+  [ "$(grep "^counts: " "$oc/modules.log" | tr "\n" " ")" = "counts: pass=0 fail=0 stale=1 known=0 counts: pass=0 fail=0 stale=1 known=1 counts: pass=1 fail=0 stale=1 known=1 " ] &&
+  grep -q -x "$oc/known.txt ledgerlocalclass classes" "$oc/modules.log"'
+# a watch session's opening check: the jar there, a type error in the source is a failure, never a skip
+(
+  pass=0; fail=0; skipped=0
+  bad() { echo "FAIL $1"; fail=$((fail + 1)); }
+  not_run() { echo "skip $1: $2"; skipped=$((skipped + 1)); }
+  start() { echo "started"; }
+  src=$oc/bad; work=$oc; mkdir -p "$src"; printf 'object Bad { val n: Int = "wrong" }\n' > "$src/Bad.scala"
+  . tests/support/jars.sh
+  # the jar there whatever the machine's cache holds: the check that opens the session runs and fails
+  : > "$oc/stand-in.jar"
+  jar_of() { echo "$oc/stand-in.jar"; }
+  eval "$(sed -n '/^# The session needs the scala-library jar/,/^  start "\$src" --split/p' tests/split-watch.sh | sed '$d'; echo '  :'; echo 'fi')"
+  echo "counts: pass=$pass fail=$fail skipped=$skipped"
+  jar_of() { echo "$oc/no-such.jar"; }
+  eval "$(sed -n '/^# The session needs the scala-library jar/,/^  start "\$src" --split/p' tests/split-watch.sh | sed '$d'; echo '  :'; echo 'fi')"
+  echo "counts: pass=$pass fail=$fail skipped=$skipped"
+) > "$oc/watch.log" 2>&1
+check "outcomes: a watch session's opening check that fails is a failure; without the jar it is not run" "$oc/watch.log" eval '
+  grep -q "^FAIL classpath: the check over scala-library that opens the session failed: " "$oc/watch.log" &&
+  grep -q -x "skip the classpath session: not in the coursier cache: scala-library" "$oc/watch.log" &&
+  [ "$(grep "^counts: " "$oc/watch.log" | tr "\n" " ")" = "counts: pass=0 fail=1 skipped=0 counts: pass=0 fail=1 skipped=1 " ] &&
+  ! grep -q "^started" "$oc/watch.log"'
+# the JVM runner's own checks without javap, and its determinism check without its jars: a skip line each, not run
+(
+  out=$oc/jvm; mkdir -p "$out"
+  source <(sed -n '/^# aux_not_run <check> <why>/,/^}/p; /^same_jars() {/,/^}/p; /^forwarder_order() {/,/^}/p' tests/run_jvm.sh)
+  PATH=$oc/empty-path forwarder_order; echo "forwarder_order exit $?"
+  COURSIER_CACHE=$oc/empty-cache same_jars; echo "same_jars exit $?"
+  echo "not run: $aux_not_run"
+) > "$oc/jvm.log" 2>&1
+check "outcomes: the JVM runner's checks without javap or their jars print a skip line each and are not run" "$oc/jvm.log" eval '
+  grep -q -x "skip forwarder_order: no javap" "$oc/jvm.log" && grep -q -x "skip the corpus.s determinism: not in the coursier cache: scala-library" "$oc/jvm.log" &&
+  grep -q -x "not run: 2" "$oc/jvm.log" && [ -z "$(lacking "$oc/jvm.log" | grep -v "^skip")" ] && [ -n "$(lacking "$oc/jvm.log")" ]'
+
+# The fix round's five: a check that ran nothing passes nowhere.
+# an empty selection fails, the dotty run suites' and the board's
+mkdir -p "$oc/s3/tests/run" && printf 'object Test { def main(a: Array[String]): Unit = println(1) }\n' > "$oc/s3/tests/run/one.scala" && printf '1\n' > "$oc/s3/tests/run/one.check"
+SCALA3=$oc/s3 timeout 120 python3 -B tests/scala3/run.py --only '^no_such_test$' --out "$oc/s3out" > "$oc/s3-empty.log" 2>&1
+code=$?
+check "outcomes: the dotty run suite's empty selection fails, never 0 pass" "$oc/s3-empty.log" eval '[ $code = 2 ] && grep -q "^no test of the selection: nothing ran$" "$oc/s3-empty.log"'
+mkdir -p "$oc/corpus/tests/pos" "$oc/corpus/compiler/test/dotc" && printf 'object P\n' > "$oc/corpus/tests/pos/p.scala"
+: > "$oc/corpus/compiler/test/dotc/pos-linting.allowlist"
+: > "$oc/corpus/compiler/test/dotc/scala2-library-tasty.excludelist"
+timeout 60 git init -q "$oc/corpus" && printf '%s\n' "$(python3 -B -c 'import sys; sys.path.insert(0, "tests/board"); import dotty; print(dotty.TAG_COMMIT)')" > "$oc/corpus/.git/HEAD"
+SCALA3_TAG=$oc/corpus BOARD_OUT=$oc/board-out timeout 200 python3 -B tests/board/dotty.py --row pos --only '^no_such_test$' > "$oc/dotty-empty.log" 2>&1
+code=$?
+check "outcomes: the board's empty selection fails, never 0 tests" "$oc/dotty-empty.log" eval '[ $code = 2 ] && grep -q "^board: no test of the rows pos matches --only .*: nothing ran$" "$oc/dotty-empty.log"'
+# an empty results file takes no entry out of a fails-only list
+printf 'never_executed\told failure\n' > "$oc/r/tests/pending/e.txt"
+: > "$oc/empty.txt"
+pend e empty.txt --fails-only --passed=0 --update
+code=$?
+check "outcomes: an empty results file takes no entry out of a fails-only list, the run fails on it" "$oc/pending.log" eval '[ $code = 1 ] &&
+  [ "$(cat "$oc/r/tests/pending/e.txt")" = "$(printf "never_executed\told failure")" ] && grep -q "named neither failing, skipped nor passing (kept" "$oc/pending.log"'
+printf 'pass never_executed\n' > "$oc/named.txt"
+pend e named.txt --fails-only --passed=1 --update
+code=$?
+check "outcomes: a fails-only entry leaves its list by a line naming it passing" "$oc/pending.log" eval '[ $code = 0 ] && [ ! -s "$oc/r/tests/pending/e.txt" ]'
+# the stdlib suite without the jar: every case cannot run on the board under --update, no earlier pass kept
+st=$oc/st; mkdir -p "$st/tests/support" "$st/tests/cases" "$st/tests/pending" "$st/tests/board/suites"
+cp tests/run_stdlib.sh "$st/tests/" && cp tests/support/jars.sh tests/support/pending.py "$st/tests/support/"
+printf '@main def m() = println(1)\n' > "$st/tests/cases/one.scala"; printf '1\n' > "$st/tests/cases/one.expected"; : > "$st/tests/stdlib-summaries.txt"
+printf '# test\tverdict\tthe other ways\tthe first line of the difference\none\tpass\t-\t\n' > "$st/tests/board/suites/stdlib.tsv"
+(cd "$st" && COURSIER_CACHE=$oc/empty-cache timeout 120 bash tests/run_stdlib.sh --update) > "$oc/stdlib.log" 2>&1
+code=$?
+check "outcomes: the stdlib suite without its jar writes every case cannot run, no earlier pass kept" "$oc/stdlib.log" eval '[ $code = 0 ] &&
+  grep -q "^stdlib: skipped, no scala-library 3.x jar in the coursier cache$" "$oc/stdlib.log" &&
+  grep -q -x "$(printf "one\tcannot run\t-\tno scala-library 3.x jar in the coursier cache")" "$st/tests/board/suites/stdlib.tsv"'
+# identity: a launch that did not run on both sides is no identical program
+mkdir -p "$oc/killed-teq" && printf '#!/bin/bash\n[ "$1" = --help ] && exit 0\nkill -9 $$\n' > "$oc/killed-teq/teq" && chmod +x "$oc/killed-teq/teq"
+id=$oc/id; mkdir -p "$id/tests/support" "$id/tests/cases"
+cp tests/support/identity.sh tests/support/identity-across.sh tests/support/jars.sh tests/support/compiler-words.sh "$id/tests/support/" 2> /dev/null
+printf 'object Main { def main(args: Array[String]): Unit = println("hello") }\n' > "$id/tests/cases/hello.scala"
+timeout 200 bash "$id/tests/support/identity.sh" "$oc/killed-teq/teq" "$oc/killed-teq/teq" "$oc/id-out" js > "$oc/identity.log" 2>&1
+code=$?
+check "outcomes: identity counts no program identical whose runs did not run on both sides" "$oc/identity.log" eval '[ $code = 1 ] &&
+  grep -q "^differs: js hello (did not run: ref:137 new:137)$" "$oc/identity.log" && grep -q "^identity js: 0 of 1 programs identical$" "$oc/identity.log"'
+# workers: a check whose command did not run fails it, never an absent pattern's pass
+(
+  pass=0; fail=0
+  said_fail() { echo "FAIL $1"; }
+  source <(sed -n '/^bad() {/,/^}/p; /^# not_ran <code>/,/^not_ran/p; /^said_why=$/p; /^saw() {/,/^}/p' tests/workers.sh)
+  TEQ=$oc/killed-teq/teq
+  source <(sed -n '/^for p in tests\/cases\/charsequence_release.scala/,/^done/p' tests/workers.sh)
+  echo "counts: pass=$pass fail=$fail"
+) > "$oc/workers.log" 2>&1
+check "outcomes: a workers check whose command did not run fails, with its reason" "$oc/workers.log" eval '
+  grep -q -x "counts: pass=0 fail=6" "$oc/workers.log" && [ "$(grep -c "(its command did not run: exit 137)$" "$oc/workers.log")" = 6 ]'
 
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]

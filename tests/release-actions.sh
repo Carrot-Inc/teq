@@ -365,7 +365,7 @@ case $1 in
     { printf 'binary %s\nversion teq 0.1.7 abc pgo\ncommit %s\n' "$(sha256sum < out/cross/teq-guided-linux-arm | cut -c1-64)" "$(git rev-parse HEAD)"; cat target/cross/arm.training; } > out/cross/teq-guided-linux-arm.manifest
     echo "teq 0.1.7 abc pgo" > out/cross/teq-guided-linux-arm.version ;;
   linux-arm-suite) need out/cross/teq-guided-linux-arm; need out/tests/a.js; need out/tests-jars.tgz; make target/cross/guided-linux-arm.suite suite
-    printf "suite %s tests/run.sh passed: 1 passed, 0 failed, 0 of them skipped for missing jars, outputs 1 of 1 as the native suite's, natively in floor over deb\nsuite-tuple floor-aarch64 floor\n" \
+    printf "suite %s tests/run.sh passed: 1 passed, 0 failed, 0 not run (skip lines), outputs 1 of 1 as the native suite's, natively in floor over deb\nsuite-tuple floor-aarch64 floor\n" \
       "${STUB_SUITE_SHA:-$(sha256sum < out/cross/teq-guided-linux-arm | cut -c1-64)}" > out/cross/teq-guided-linux-arm.suite ;;
   windows) binary out/cross/teq-windows-x86_64.exe windows; make target/cross/windows.smoke smoke ;;
 esac
@@ -663,7 +663,7 @@ check "linux-arm-suite: no Rust asked, the floor's image run, its package instal
   "0/docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f/1"
 check "linux-arm-suite: the suite in the floor's container leaves its list to this machine" "$(grep -c '^suite list later$' "$work/x.log")" 1
 check "linux-arm-suite: its record" "$(cat "$x/out/cross/teq-guided-linux-arm.suite" 2> /dev/null | tr '\n' '|')" \
-  "suite $lsha tests/run.sh passed: cases: 1 pass, 0 fail as tests/pending/cases.txt lists, 0 of them skipped for missing jars, outputs 1 of 1 as the native suite's, natively in docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f over libc6_2.28-10+deb10u1_arm64.deb $debsha|suite-tuple floor-aarch64 docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f|suite-tuple sysroot-aarch64 libc6_2.28-10+deb10u1_arm64.deb $debsha|suite-tuple node-aarch64 24.21.0 $(sed -n 's/^floor_node_sha256=//p' "$x/bench/cross-ship.sh")|"
+  "suite $lsha tests/run.sh passed: cases: 1 pass, 0 fail as tests/pending/cases.txt lists, 0 not run (skip lines), outputs 1 of 1 as the native suite's, natively in docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f over libc6_2.28-10+deb10u1_arm64.deb $debsha|suite-tuple floor-aarch64 docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f|suite-tuple sysroot-aarch64 libc6_2.28-10+deb10u1_arm64.deb $debsha|suite-tuple node-aarch64 24.21.0 $(sed -n 's/^floor_node_sha256=//p' "$x/bench/cross-ship.sh")|"
 cross STUB_ARCH=aarch64 STUB_SUITE_DIFF=1 timeout 120 bench/cross-ship.sh linux-arm-suite
 check "linux-arm-suite with an output not the native suite's: refused, no record" "$?/$([ -e "$x/out/cross/teq-guided-linux-arm.suite" ] && echo record)" "1/"
 cross STUB_ARCH=aarch64 STUB_SUITE_UNLISTED=1 timeout 120 bench/cross-ship.sh linux-arm-suite
@@ -723,14 +723,14 @@ check "qualified: a training under qemu-user, the file naming it" "$(qualified m
 check "qualified: a training under qemu-user, the file not naming it" "$(qualified mac-qemu qualified-no-qemu osx-aarch_64)" 1
 manifest mac-qemu-earlier aarch64-apple-darwin "training release 0.1.6 $(printf '%040d' 3)" "training trainer aarch64-unknown-linux-musl under qemu-user 9.0 old" "training tuple qemu-user 9.0 old" "training tuple rustc 1.98.1 c1"
 check "qualified: an earlier release's profile trained under a qemu-user the file no longer names" "$(qualified mac-qemu-earlier qualified-no-qemu osx-aarch_64)" 0
-native_suite=("glibc 2.28 needs libc.so.6" "suite $msha tests/run.sh passed: 3 passed, 0 failed, 0 of them skipped for missing jars, outputs 3 of 3 as the native suite's, natively in floor@sha256:f over libc6.deb s"
+native_suite=("glibc 2.28 needs libc.so.6" "suite $msha tests/run.sh passed: 3 passed, 0 failed, 0 not run (skip lines), outputs 3 of 3 as the native suite's, natively in floor@sha256:f over libc6.deb s"
   "suite-tuple floor-aarch64 floor@sha256:f" "suite-tuple sysroot-aarch64 libc6.deb s" "suite-tuple node-aarch64 24.21.0 n")
 manifest linux-native aarch64-unknown-linux-gnu "$own" "${native_env[@]}" "training tuple image-aarch64 img-arm" "${native_suite[@]}"
 check "qualified: a Linux aarch64 binary of the native route" "$(qualified linux-native qualified-no-qemu linux-aarch_64)" 0
 sed 's/^suite-tuple floor-aarch64 .*/suite-tuple floor-aarch64 floor@sha256:other/' "$m/linux-native" > "$m/linux-native-floor"
 check "qualified: a native suite in another floor" "$(qualified linux-native-floor qualified linux-aarch_64)" 1
 emulated_suite=("glibc 2.28 needs libc.so.6" "tuple qemu-user 10.2.1 q" "tuple sysroot-aarch64 libc6.deb s"
-  "suite $msha tests/run.sh passed: 3 passed, 0 failed, 0 of them skipped for missing jars, outputs 3 of 3 as the native suite's, under qemu-user 10.2.1 q sysroot libc6.deb s")
+  "suite $msha tests/run.sh passed: 3 passed, 0 failed, 0 not run (skip lines), outputs 3 of 3 as the native suite's, under qemu-user 10.2.1 q sysroot libc6.deb s")
 manifest linux-emulated aarch64-unknown-linux-gnu "$own" "training trainer aarch64-unknown-linux-musl under qemu-user 10.2.1 q" "training tuple qemu-user 10.2.1 q" "${emulated_suite[@]}"
 check "qualified: a Linux aarch64 binary of the emulated route, as before" "$(qualified linux-emulated qualified linux-aarch_64)" 0
 # manifest_check, the binary's own readers stood in for.
@@ -757,14 +757,14 @@ checked_x64() {
   (. bench/ship-manifest.sh && manifest_header() { echo linux-x86_64; } && manifest_glibc() { echo "2.28 needs libc.so.6"; } && manifest_carries() { :; } &&
     manifest_check "$m/teq" "$m/$1" linux-x86_64 "$head_") > "$m/out" 2>&1; echo $?
 }
-manifest linux-x64 x86_64-unknown-linux-gnu "$own" "glibc 2.28 needs libc.so.6" "suite $msha tests/run.sh passed: 3 passed, 0 failed, 0 of them skipped for missing jars"
+manifest linux-x64 x86_64-unknown-linux-gnu "$own" "glibc 2.28 needs libc.so.6" "suite $msha tests/run.sh passed: 3 passed, 0 failed, 0 not run (skip lines)"
 check "manifest_check: a Linux x86-64 binary's suite" "$(checked_x64 linux-x64)" 0
 sed 's/passed: 3 passed, 0 failed,/passed: cases: 3 pass, 2 fail as tests\/pending\/cases.txt lists,/' "$m/linux-x64" > "$m/linux-x64-listed"
 check "manifest_check: a Linux x86-64 binary's suite held to its list" "$(checked_x64 linux-x64-listed)" 0
 grep -v '^suite ' "$m/linux-x64" > "$m/linux-x64-none"
 check "manifest_check: a Linux x86-64 binary with no suite recorded" "$(checked_x64 linux-x64-none)" 1
 grep -v '^suite ' "$m/linux-native" > "$m/linux-built"
-printf 'suite %s tests/run.sh passed: 3 passed, 0 failed, 0 of them skipped for missing jars, outputs 3 of 3 as the native suite'"'"'s, natively in floor@sha256:f over libc6.deb s\n' "$msha" > "$m/record"
+printf 'suite %s tests/run.sh passed: 3 passed, 0 failed, 0 not run (skip lines), outputs 3 of 3 as the native suite'"'"'s, natively in floor@sha256:f over libc6.deb s\n' "$msha" > "$m/record"
 cp "$m/teq" "$m/b" && grep -v '^suite' "$m/linux-native" > "$m/b.manifest"
 check "manifest_attest: the record given to the manifest" "$( (. bench/ship-manifest.sh && manifest_attest "$m/b" "$m/record") > /dev/null 2>&1; echo $?)/$(grep -c '^suite ' "$m/b.manifest")" "0/1"
 check "manifest_attest: a second record refused" "$( (. bench/ship-manifest.sh && manifest_attest "$m/b" "$m/record") > /dev/null 2>&1; echo $?)" 1

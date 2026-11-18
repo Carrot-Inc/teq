@@ -3,14 +3,16 @@
 # one piece as `modules.1/2`), and
 # ends with one line per suite; exits non-zero when any failed or a name is unknown. The
 # output of a failing suite is printed in full, a passing one is summed up by its last line. The
-# scala3 harnesses fail without a checkout in $SCALA3. These skip and count as passed then: the
+# scala3 harnesses fail without a checkout in $SCALA3. These leave checks not run then, which pass nothing: the
 # classpath suite without its jars in the coursier cache, parts of the classfile suite without a JDK
 # or javap, the app suite without the jars its corpus reads, and the budget and
 # runtime suites on a machine other than the one that recorded bench/budgets.txt and
 # bench/runtime-budgets.txt, the prop suite without the crates of proptests/ fetched, and the
-# test runner's classes without a javac (a javac other than 17's only notes a difference). Each suite's whole
+# test runner's classes without a javac (a javac other than 17's only notes a difference). Such a suite exits 0, and
+# its line here is `part` with the first line that says what did not run (tests/gate.sh's want-of rule, which fails
+# it at the gate), not `ok`. Each suite's whole
 # output goes to out/all/<suite>.log as it runs, and its time and verdict to a line of out/all/times.txt
-# (`<suite> <seconds> ok|FAIL`), which a run on another machine keeps (the GitHub workflow's artifacts).
+# (`<suite> <seconds> ok|part|FAIL`), which a run on another machine keeps (the GitHub workflow's artifacts).
 cd "$(dirname "$0")/.."
 # The compiler the suites test, target/release/teq unless TEQ names another; the repository's launcher runs
 # the suites written in Scala (./teq interp tests/x.scala) under it too, so that they run under the binary they
@@ -22,6 +24,8 @@ if [ -z "$SCALA3" ] && common=$(git rev-parse --path-format=absolute --git-commo
 fi
 status=0
 summary=()
+# lacking <log>: the first line of the log that says a check did not run for want of something (tests/gate.sh's rule)
+source <(sed -n '/^skips=/,/^lacking()/p' tests/gate.sh)
 logs=out/all
 mkdir -p "$logs"
 rm -f "$logs/times.txt"
@@ -68,6 +72,9 @@ suite() {
     echo "$out"
     summary+=("FAIL  $label: $last")
     echo "$label $((SECONDS - start)) FAIL" >> "$logs/times.txt"
+  elif lack=$(lacking "$log") && [ -n "$lack" ]; then
+    summary+=("part  $label: $last; not run: $lack")
+    echo "$label $((SECONDS - start)) part" >> "$logs/times.txt"
   else
     summary+=("ok    $label: $last")
     echo "$label $((SECONDS - start)) ok" >> "$logs/times.txt"

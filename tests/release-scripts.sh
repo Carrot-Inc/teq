@@ -401,7 +401,7 @@ stage() {
       sed -n '/^#/d; /^route /d; /^[a-z]/s/^/tuple /p' "$qualified"
       case $c in
         windows-x86_64) echo "smoke $sha tests/wine.sh passed: 1 of 1 under $(sed -n 's/^wine //p' "$qualified")" ;;
-        linux-aarch_64) echo "suite $sha tests/run.sh passed: 1 passed, 0 failed, 0 of them skipped for missing jars, outputs 1 of 1 as the native suite's, under qemu-user $(sed -n 's/^qemu-user //p' "$qualified") sysroot $(sed -n 's/^sysroot-aarch64 //p' "$qualified")" ;;
+        linux-aarch_64) echo "suite $sha tests/run.sh passed: 1 passed, 0 failed, 0 not run (skip lines), outputs 1 of 1 as the native suite's, under qemu-user $(sed -n 's/^qemu-user //p' "$qualified") sysroot $(sed -n 's/^sysroot-aarch64 //p' "$qualified")" ;;
       esac
     } > "$binaries/$c/teq.manifest"
   done

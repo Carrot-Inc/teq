@@ -41,6 +41,13 @@ TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
 pass=0
 fail=0
 ok() { pass=$((pass + 1)); }
+# not_run <what> <why>: a check whose prerequisite is absent before anything is tried (a jar not in the coursier
+# cache, another std's or platform's case): its skip line (the gate fails those for want of something) and no pass.
+skipped=0
+not_run() {
+  echo "skip $1: $2"
+  skipped=$((skipped + 1))
+}
 bad() {
   echo "FAIL $1"
   fail=$((fail + 1))
@@ -1083,7 +1090,13 @@ stop
 # --- A JVM program ------------------------------------------------------------------------------
 rm -rf "$src"
 cp -r tests/split/classpath "$src"
-if "$TEQ" compiler check "$src" --std=scala-library > "$work/jar.log" 2>&1; then
+# The session needs the scala-library jar, told before anything is built; with it, the check that opens it is the
+# session's first check, and its failure a failure.
+if [ ! -e "$(jar_of scala-library)" ]; then
+  not_run "the jvm session" "not in the coursier cache: scala-library"
+elif ! "$TEQ" compiler check "$src" --std=scala-library > "$work/jar.log" 2>&1; then
+  bad "jvm: the check over scala-library that opens the session failed: $(tail -1 "$work/jar.log")"
+else
   start "$src" --target jvm
   expect "jvm: first build" "$(field ok),$(field incremental),$(field diagnostics)" 'true,false,[]'
   sed -i.bak 's/mkString("\[", ",", "\]")/mkString("[", 1, "]")/' "$src/util.scala"
@@ -1094,8 +1107,6 @@ if "$TEQ" compiler check "$src" --std=scala-library > "$work/jar.log" 2>&1; then
   build "$src/util.scala"
   expect "jvm: fix" "$(field ok),$(field incremental),$(field diagnostics)" 'true,true,[]'
   stop
-else
-  echo "skip the jvm session: $(tail -1 "$work/jar.log")"
 fi
 
 # --- Unused imports without the index -------------------------------------------------------------
@@ -1242,5 +1253,5 @@ as_fresh "forward reference: the initialiser mended" "$fref"
 stop
 
 sessions_forked check-watch
-echo "$pass passed, $fail failed"
+echo "$pass passed, $fail failed$([ $skipped = 0 ] || echo ", $skipped not run")"
 [ $fail = 0 ]

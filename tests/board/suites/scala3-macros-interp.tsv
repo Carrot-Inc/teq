@@ -2,8 +2,8 @@
 BigFloat	fail	-	compile-error: FromDigits is not a member of the package
 TypeRepr-isTupleN	fail	-	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 ValDef-let-flags	fail	-	compile-error: None of the overloaded alternatives of method let in object ValDef with types
-Xmacro-settings-compileTimeEnv	fail	-	wrong-output
-Xmacro-settings-simple	fail	-	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+Xmacro-settings-compileTimeEnv	fail	-	compile-error: option: -Xmacro-settings:a,b=1,c.b.a=x.y.z=1,myLogger.level=INFO
+Xmacro-settings-simple	fail	-	compile-error: option: -Xmacro-settings:one,two,three
 annot-add-global-class	fail	-	compile-error: MacroAnnotation is not a member of the package
 annot-add-global-object	fail	-	compile-error: MacroAnnotation is not a member of the package
 annot-add-local-class	fail	-	compile-error: MacroAnnotation is not a member of the package
@@ -66,8 +66,8 @@ i11856	pass	-
 i12021	fail	-	compile-error: 'erased' is not part of the supported Scala subset
 i12163	pass	-	
 i12188	pass	-	
-i12351	fail	-	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
-i12352	fail	-	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+i12351	fail	-	compile-error: option: -Xread-docs
+i12352	fail	-	compile-error: option: -Xread-docs
 i12392	fail	-	wrong-output
 i12417	pass	-	
 i12417b	pass	-	
@@ -102,7 +102,7 @@ i22395	fail	-	wrong-output
 i22616c	pass	-	
 i24006	fail	-	compile-error: not supported yet in a macro: println is an effect, which a compile-time evaluation cannot have (called by eval in object Eval)
 i25245	pass	-	
-i26626	fail	-	compile-error: cannot resolve import: testing not found
+i26626	fail	-	compile-error: option: -Yexplicit-nulls
 i4431-b	pass	-	
 i4455	pass	-	
 i4492	pass	-	
@@ -265,7 +265,7 @@ requiredSymbols	fail	-	compile-error: exception in macro: java.util.NoSuchElemen
 self	fail	-	wrong-output
 simple-interpreter	pass	-	
 simple-switch	fail	-	compile-error: not supported yet in a macro: a case whose pattern is no pattern tree (called by switch)
-splice-position	fail	-	compile-error: missing parameter type
+splice-position	fail	-	compile-error: value apply is not a member of Array[StackTraceElement]
 string-context-implicits	fail	-	compile-error: expected '}', found ';'
 summonIgnoring	fail	-	wrong-output
 summonIgnoring-nonrecursive	pass	-	

@@ -8,17 +8,24 @@ and when an unlisted test fails. Every runner calls this with what it ran and wh
   python3 tests/support/pending.py <suite> <results> [--update] [--add]
 
 <results> has a line per test of the run: `pass <name>`, `fail <name>` and, after a tab, the first line of the
-difference, or `skip <name>` and, after a tab, why the run did not judge it (another system's, a jar not in the
-cache): a skipped test's place in the list stands. --update takes out of the list the tests that pass now, and
+difference, `skip <name>` and, after a tab, why the run did not judge it (another system's, a jar not in the
+cache), or `known <name>` and, after a tab, the first line of a failure the suite holds to a list of its own checks
+(tests/modules/known.txt and deferred.txt) instead of this one. A test has one outcome: a failure, then a skip,
+then a pass. A skipped test is not run: it is in no count of passes or failures, and its place in the list stands
+(it is never fixed, never taken out). A `known` one is a failure on the board and in no count of passes, and this
+list neither holds it nor takes it in. --update takes out of the list the tests that pass now, and
 nothing else: a test that fails unlisted still fails the run. --add also writes the unlisted failures in, for
 the part that brings the tests into the tree; it is never the answer to a test that stopped passing. --fails-only is for a
-suite that names its failures alone (tests/support/pending.sh, said_fail): a listed check with no failure line
-passes now; --passed=<n> is its count of the checks that passed, for the board. --partial is for one piece of a
+suite that names its failures alone (tests/support/pending.sh, said_fail): a listed check leaves the list only where
+a line names it passing (`pass <name>`, said_pass); one named neither failing, skipped nor passing is unaccounted:
+the run fails on it and no --update takes it out (an aggregate count names no check, and an empty or cut results
+file is no evidence that anything ran); --passed=<n> is its count of the checks that passed, for the board. --partial is for one piece of a
 suite run in pieces: the board's list keeps the rows of the tests the piece did not run.
 
 Under --update or --add a run that is then the list's also writes tests/board/suites/<suite>.tsv, the suite's
 row of the board (tests/board/board.py): test, verdict (pass, fail, cannot run for a skipped one), the first
-line. A test skipped as another system's keeps the line it had. `passing <suite>` prints the tests that list
+line. A test skipped as another system's is `cannot run` with that reason: no other machine's verdict is copied
+into this one's list. `passing <suite>` prints the tests that list
 says pass, for the scripts that run over what a suite passes (tests/jvm-watch.sh); `listed <suite> <name>`
 writes a new test into that list as passing, at its place, for the script that brings a case it has just run
 (tests/prop-known.sh).
@@ -80,10 +87,12 @@ def passing(suite):
     return out
 
 
-def write_board_list(suite, ran, failing, skipped, passed=None, partial=False):
-    """The suite's list for the board: every test of the run with its verdict; one skipped as another system's
-    keeps the line an earlier run on that system wrote. `passed`: for a suite that names its failures alone, how
-    many checks it counted as passed, kept on a line `# passed <n>` in the place of their rows."""
+def write_board_list(suite, ran, failing, skipped, passed=None, partial=False, known=None):
+    """The suite's list for the board: every test of the run with its verdict, a skipped one `cannot run` with why
+    it did not run (another system's included: no earlier machine's line is kept), a `known` one `fail`.
+    `passed`: for a suite that names its failures alone, how many checks it counted as passed, kept on a line
+    `# passed <n>` in the place of their rows."""
+    known = known or {}
     old = {}
     if os.path.exists(board_list(suite)):
         with open(board_list(suite), encoding="utf-8") as fh:
@@ -95,11 +104,10 @@ def write_board_list(suite, ran, failing, skipped, passed=None, partial=False):
     for n in ran:
         note = clean(failing.get(n, ""))
         rows[n] = f"{n}\t{'fail' if n in failing else 'pass'}\t-\t{note}"
+    for n, why in known.items():
+        rows[n] = f"{n}\tfail\t-\t{clean(why)}"
     for n, why in skipped.items():
-        if "another system" in why and n in old and "\tcannot run\t" not in old[n]:
-            rows[n] = old[n]
-        else:
-            rows[n] = f"{n}\tcannot run\t-\t{clean(why)}"
+        rows[n] = f"{n}\tcannot run\t-\t{clean(why)}"
     os.makedirs(os.path.dirname(board_list(suite)), exist_ok=True)
     with open(board_list(suite), "w", encoding="utf-8") as fh:
         fh.write("# test\tverdict\tthe other ways\tthe first line of the difference\n")
@@ -110,13 +118,15 @@ def write_board_list(suite, ran, failing, skipped, passed=None, partial=False):
                 fh.write(rows[n] + "\n")
 
 
-def hold(suite, ran, failing, update=False, add=False, out=sys.stdout, marks=0):
+def hold(suite, ran, failing, update=False, add=False, out=sys.stdout, marks=0, known=(), skipped=0):
     """Holds a run to the suite's list. `ran`: the names the run judged; `failing`: of them, those that failed,
     each with the first line of its difference. Whether the run is the list's, after what --update and --add
     changed. `marks`: how many of those that did not fail are no pass either (the board's `marks` verdict), for
-    the count the last line gives."""
+    the count the last line gives. `known`: the names whose failure the suite holds to a list of its own checks:
+    no name of this list's (a listed one is fixed here, its failure now the other list's), no pass. `skipped`: how
+    many tests did not run, counted apart."""
     listed = read(suite)
-    fixed = sorted(n for n in listed if n in ran and n not in failing)
+    fixed = sorted(n for n in listed if (n in ran and n not in failing) or n in known)
     new = sorted(n for n in failing if n not in listed)
     changed = False
     if update and fixed:
@@ -141,7 +151,9 @@ def hold(suite, ran, failing, update=False, add=False, out=sys.stdout, marks=0):
             print(f"  ... and {len(new) - 40} more", file=out)
     still = len([n for n in listed if n in failing])
     if not fixed and not new:
-        print(f"{suite}: {len(ran) - len(failing) - marks} pass, " + (f"{marks} by marks alone, " if marks else "") + f"{still} fail as tests/pending/{suite}.txt lists", file=out)
+        print(f"{suite}: {len(ran) - len(failing) - marks} pass, " + (f"{marks} by marks alone, " if marks else "") + f"{still} fail as tests/pending/{suite}.txt lists"
+              + (f", {len(known)} fail as the suite's own lists of checks hold them" if known else "")
+              + (f", {skipped} not run" if skipped else ""), file=out)
     return not fixed and not new
 
 
@@ -170,7 +182,7 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     suite, results = args
-    ran, failing, skipped = set(), {}, {}
+    ran, failing, skipped, known = set(), {}, {}, {}
     with open(results, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             line = line.rstrip("\n")
@@ -178,22 +190,39 @@ def main(argv):
                 continue
             head, _, note = line.partition("\t")
             verdict, _, name = head.partition(" ")
-            if verdict not in ("pass", "fail", "skip") or not name:
-                print(f"pending.py: a line that is none of `pass <name>`, `fail <name>`, `skip <name>`: {line[:120]}", file=sys.stderr)
+            if verdict not in ("pass", "fail", "skip", "known") or not name:
+                print(f"pending.py: a line that is none of `pass <name>`, `fail <name>`, `skip <name>`, `known <name>`: {line[:120]}", file=sys.stderr)
                 return 2
             if verdict == "skip":
-                skipped[name] = note
-                continue
-            ran.add(name)
-            if verdict == "fail":
-                failing.setdefault(name, note)
+                skipped.setdefault(name, note)
+            elif verdict == "known":
+                known.setdefault(name, note)
+            else:
+                ran.add(name)
+                if verdict == "fail":
+                    failing.setdefault(name, note)
+    # one outcome a test: a failure (this list's), then a failure the suite holds to its own lists, then a skip
+    # (not run), then a pass
+    for name in failing:
+        known.pop(name, None)
+        skipped.pop(name, None)
+    for name in known:
+        skipped.pop(name, None)
+        ran.discard(name)
+    for name in skipped:
+        ran.discard(name)
+    unaccounted = []
     if "--fails-only" in flags:
-        # a suite that names its failures alone: a listed check it named no failure for passes now
-        ran |= set(read(suite))
+        # a suite that names its failures alone: a listed check leaves the list by a line naming it passing alone; one
+        # named neither failing, skipped nor passing is unaccounted, the run's failure, kept on the list
+        unaccounted = sorted(set(read(suite)) - ran - set(skipped) - set(known))
     update, add = "--update" in flags, "--add" in flags
-    held = hold(suite, ran, failing, update, add)
+    held = hold(suite, ran, failing, update, add, known=known, skipped=len(skipped))
+    if unaccounted:
+        print(f"{suite}: {len(unaccounted)} listed in tests/pending/{suite}.txt named neither failing, skipped nor passing (kept: no line names its check passing): {' '.join(unaccounted[:40])}{' ...' if len(unaccounted) > 40 else ''}")
+        held = False
     if held and (update or add):
-        write_board_list(suite, ran, failing, skipped, passed, "--partial" in flags)
+        write_board_list(suite, ran, failing, skipped, passed, "--partial" in flags, known)
     return 0 if held else 1
 
 

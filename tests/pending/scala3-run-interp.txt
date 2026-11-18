@@ -159,6 +159,7 @@ i13087	compile-error: expected an expression, found end of indented block
 i13131	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 i13146poly	compile-error: type argument m.MirroredElemTypes does not have the same kind as its bound [_]
 i13181	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+i13215	compile-error: option: -WunstableInlineAccessors with -Werror
 i13332	compile-error: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
 i13332a	compile-error: no given instance of type Mirror{type MirroredType[X] = Scope.this.IList[X]; type MirroredMonoType = Scope.this.IList[?]; type MirroredElemTypes <: [_] =>> Tupl
 i13332anonprod	compile-error: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
@@ -728,6 +729,7 @@ unroll-classMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is al
 unroll-clause-interleaving	compile-error: expected '=', found '['
 unroll-curriedMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-curriedMethod-integration/UnrollTestPlatformS
 unroll-genericMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-genericMethod-integration/UnrollTestPlatformS
+unroll-inferredFinal	compile-error: option: -preview
 unroll-methodWithImplicit-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-methodWithImplicit-integration/UnrollTestPlat
 unroll-multiple	run-error: Exception in thread "main" java.lang.IndexOutOfBoundsException: 1
 unroll-objectMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-objectMethod-integration/UnrollTestPlatformSp

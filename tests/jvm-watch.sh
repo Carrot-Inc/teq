@@ -2,7 +2,7 @@
 # The JVM build under watch (`teq compiler watch --target jvm -o dir`): a session is driven over stdin
 # and the class files after every build are compared byte for byte with a fresh
 # `teq compiler build --target jvm --all-mains` of the same sources, every build linked against
-# scala-library's jar, pinned on the class path (which the suite skips without). First the
+# scala-library's jar, pinned on the class path (without which the suite does not run: a skip line, no pass). First the
 # scripted scenarios on a copy of tests/split/classpath: a session whose every second build takes the full path for the session's memory
 # (the analysis of every owned file in its answer), the first build's analysis, a body edit
 # (one class rewritten), a build that changed
@@ -21,7 +21,7 @@
 # printing scalac's output (`WATCH_ONLY`), gets a comment inserted and its first string literal
 # changed, each followed by an incremental build and the comparison; a program's `// jars:`
 # line puts those jars on its class path, and without one of them in the coursier cache it
-# counts as passed. Last the sessions of tests/support/retype.sh, in which one file is typed
+# is not run (a skip line, no pass). Last the sessions of tests/support/retype.sh, in which one file is typed
 # again after another. Every session types its full builds at the automatic count and every fresh
 # build it is compared with by one worker (tests/support/sessions.sh); the last line says which
 # sessions forked. `--piece <k>/<n>` runs piece k of n alone (tests/support/pieces.sh): a unit is a section of the
@@ -49,6 +49,13 @@ SL=$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar
 pass=0
 fail=0
 ok() { pass=$((pass + 1)); }
+# not_run <what> <why>: a check whose prerequisite is absent before anything is tried (a jar not in the coursier
+# cache): its skip line (the gate fails those for want of something) and no pass.
+skipped=0
+not_run() {
+  echo "skip $1: $2"
+  skipped=$((skipped + 1))
+}
 bad() {
   echo "FAIL $1"
   fail=$((fail + 1))
@@ -864,7 +871,7 @@ program_case() {
   flags=$(grep -h -o '^// teq: .*' "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
-    ok
+    not_run "$(basename "$case" .scala)" "not in the coursier cache:$JARS_MISSING"
     return
   fi
   flags="$flags --classpath $SL${JARS_CP:+:$JARS_CP}"
@@ -909,6 +916,6 @@ for name in $RETYPES; do
 done
 
 sessions_forked jvm-watch
-echo "$pass passed, $fail failed"
+echo "$pass passed, $fail failed$([ $skipped = 0 ] || echo ", $skipped not run")"
 pieces_end $((fail > 0)) passed=$pass failed=$fail
 [ $fail = 0 ]

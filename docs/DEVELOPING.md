@@ -131,6 +131,19 @@ what that one expects to fail (`split.sh`, `split-watch.sh`, `analysis-bytes.sh`
 `jvm-watch.sh` runs the cases `tests/board/suites/jvm.tsv` says pass. `tests/board/copied.tsv` names the stopped
 branch's fixtures whose scenarios are not ported yet.
 
+The board counts no check that did not run. A test or check has one outcome: a failure, where a check ran and did
+not hold (the check that opens a session included); not run, where a prerequisite was absent before anything was
+tried (a jar not in the coursier cache, a tool not on the PATH, another system's or another std's case, a project's
+test its oracle's run ignored or skipped); a pass, where every check it names ran and held; a failure before not run
+before a pass. A test not run is in no count of passes or failures: `cannot run` on the board with its reason, apart
+in a suite's line, and its skip line fails the gate where it is for want of something. No list keeps a verdict of
+another machine's. A check `tests/modules/known.txt` or `deferred.txt` lists fails its case on the board, and the
+two lists are held as the pending lists are: a listed check that passes fails the run until `--update` takes its
+line out. dotty's rows drop scalac's checks of its own trees and output (`-Ycheck`, `-Xverify-signatures` and the
+others of `SELF_CHECKS` in `tests/board/dotty.py`), which no check of teq's stands for; the board names them once
+with the count of tests that carry each (`tests/board/dotty/self-checks.tsv`, `tests/board/dotty.py --self-checks
+--update`), and an option teq has no flag for fails a test of `tests/scala3/run.py` as it fails one of dotty's rows.
+
 Recording expectations: `tests/run.sh --regen` (the `.expected` files from scala-cli),
 `--update` on `tests/scala3-typing/harness.py` (its record of each test's category), `SIZE_RECORD=1 ./teq interp tests/size.scala`,
 `BUDGET_RECORD=1 bench/budget.sh`, `RUNTIME_RECORD=1 tests/runtime.sh`,

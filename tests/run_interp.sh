@@ -19,7 +19,8 @@
 #   output      the program ran and printed something else
 #   timeout     the program ran too long
 # A `// jars: <names>` line puts those jars on the class path (tests/support/jars.sh); a test with
-# one of them missing from the coursier cache counts as passed.
+# one of them missing from the coursier cache is not run: no pass, `cannot run` on the board, and a line
+# naming it that the gate fails.
 # The tests of the JVM's platform (`//> using platform jvm`: files, the process) run here as the
 # others do, from the repository's root, where their files go under target/. One of them,
 # sys_exit_status, runs a second time with an argument, where it calls `sys.exit(2)`: the status
@@ -108,7 +109,7 @@ run_one() {
     JARS_CP="${JARS_CP:+$JARS_CP:}$DEPS_CP"
   fi
   if [ -n "$JARS_MISSING" ]; then
-    echo "pass $name" > "$out/$name.result"
+    echo "nojar $name" > "$out/$name.result"
     echo "$name" > "$out/$name.nojar"
     return
   fi
@@ -142,7 +143,7 @@ for kind in unsupported compile exception output timeout; do
   [ -n "$names" ] && echo "$kind: $names"
 done
 nojar=$(cat "$out"/*.nojar 2> /dev/null | tr '\n' ' ')
-[ -n "$nojar" ] && echo "counted as passed, a jar of theirs not in the coursier cache: $nojar"
+[ -n "$nojar" ] && echo "not run, a jar of theirs not in the coursier cache: $nojar"
 cat "$out"/*.otheros 2> /dev/null | sort > "$out/otheros.txt"
 otherstd=$(cat "$out"/*.otherstd 2> /dev/null | sort)
 skipped=$(grep '^skip ' "$out/results.txt" | cut -d' ' -f2 | sort | comm -23 - "$out/otheros.txt" | comm -23 - <(printf '%s\n' "$otherstd") | tr '\n' ' ')
@@ -152,7 +153,7 @@ otheros=$(tr '\n' ' ' < "$out/otheros.txt")
 [ -n "$otheros" ] && echo "skipped (another system's): $otheros"
 grep '^pass ' "$out/results.txt" | cut -d' ' -f2 | sort > "$out/passing.txt"
 # The run held to the list of the cases expected to fail (tests/support/pending.py): a case that is skipped, or
-# counted as passed for a jar the cache lacks, is not judged, and its place in the list stands.
+# not run for a jar the cache lacks, is not judged, and its place in the list stands.
 cat "$out"/*.nojar 2> /dev/null | sort > "$out/nojar.txt"
 printf '%s\n' "$otherstd" | grep . > "$out/otherstd.txt"
 awk 'FILENAME == ARGV[1] { os[$1]; next } FILENAME == ARGV[2] { nojar[$1]; next } FILENAME == ARGV[3] { std[$1]; next }

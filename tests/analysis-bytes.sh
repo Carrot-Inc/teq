@@ -40,7 +40,7 @@
 #             the file puts first, at one thread and at four (scalac's collector meets the body
 #             in its class's tree).
 # Needs scala-library's jar in the coursier cache (tests/support/jars.sh), without which it
-# counts as passed.
+# is not run: its skip line, which the gate fails, and no pass.
 cd "$(dirname "$0")/.."
 root=$PWD
 TEQ=${TEQ:-./target/release/teq}

@@ -3,7 +3,10 @@
 #   pending_begin <suite> <a directory of the run's own> "$@"   before the tests; reads --update and --add from
 #                                                              the runner's arguments
 #   pending_listed <test>     whether the test is on the list (a runner prints no difference of a listed one)
-#   pending_pass <test>, pending_fail <test> <why>, pending_skip <test> <why>   each test's outcome, once
+#   pending_pass <test>, pending_fail <test> <why>, pending_skip <test> <why>   each test's outcome, once (a skip:
+#                             not run, a prerequisite absent before anything was tried; in no count of passes)
+#   pending_known <test> <why>   a failure the runner holds to a list of its own checks (tests/modules/known.txt):
+#                             a failure on the board, held by that list and not by this one
 #   pending_end               after the tests: the run held to the list, its status (PENDING_PARTIAL=1 for one
 #                             piece of a suite: the board's list keeps the other pieces' rows)
 PENDING_SUITE=
@@ -28,6 +31,7 @@ pending_listed() { [ -n "${PENDING_LISTED[$1]:-}" ]; }
 pending_pass() { printf 'pass %s\n' "$1" >> "$PENDING_RESULTS"; }
 pending_fail() { printf 'fail %s\t%s\n' "$1" "$(printf '%s' "$2" | tr '\t\n' '  ' | cut -c1-200)" >> "$PENDING_RESULTS"; }
 pending_skip() { printf 'skip %s\t%s\n' "$1" "$(printf '%s' "$2" | tr '\t\n' '  ' | cut -c1-200)" >> "$PENDING_RESULTS"; }
+pending_known() { printf 'known %s\t%s\n' "$1" "$(printf '%s' "$2" | tr '\t\n' '  ' | cut -c1-200)" >> "$PENDING_RESULTS"; }
 pending_end() { python3 tests/support/pending.py "$PENDING_SUITE" "$PENDING_RESULTS" ${PENDING_PARTIAL:+--partial} $PENDING_FLAGS; }
 
 # For a suite of checks that names each failure on a line `FAIL <check>[: <why>]` and counts its passes without
@@ -68,6 +72,9 @@ pending_fails_end() {
   fi
   return $status
 }
+# said_pass "<check>": a listed check that ran and held, by the name its FAIL line gives it: the only evidence that takes
+# it out of the list (a count of passes names none).
+said_pass() { pending_pass "$1"; }
 # said_fails_of <check> <text>: the failures a tool of the suite named itself on `FAIL` lines of its output, each
 # as said_fail takes it; where it named none, the check with the output's first line.
 said_fails_of() {

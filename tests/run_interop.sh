@@ -46,7 +46,6 @@ for src in tests/interop/*.scala tests/interop/*/; do
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $name: not in the coursier cache:$JARS_MISSING"
-    pass=$((pass + 1))
     pending_skip "$name" "not in the coursier cache:$JARS_MISSING"
     continue
   fi

@@ -12,7 +12,7 @@
 # among them builds with no count, the one the binary selects by itself. With REF=<binary> the builds are compared with that binary's build
 # at one worker as well, which stands for the reference. A program's `// teq:` line gives its flags and its `// jars:` line puts those jars on
 # its class path (tests/support/jars.sh); without one of them in the coursier cache the program
-# counts as passed, and so does the corpus without the jars it reads. Every forked build sweeps
+# is not run (a skip line, which the gate fails, and no pass), nor is the corpus without the jars it reads. Every forked build sweeps
 # its merged program for a worker's id left (`TEQ_MERGE_SWEEP=1`), and
 # the assertion-enabled build checks the parallel merge against the serial walk's order
 # (`TEQ_MERGE_TRACE=1`), which the release build ignores. `teq fix`'s rules' phase over the frontend is
@@ -32,6 +32,13 @@ mkdir -p "$work"
 pass=0
 fail=0
 ok() { pass=$((pass + 1)); }
+# not_run <what> <why>: a check whose prerequisite is absent before anything is tried (a jar not in the coursier
+# cache, another std's or platform's case): its skip line (the gate fails those for want of something) and no pass.
+skipped=0
+not_run() {
+  echo "skip $1: $2"
+  skipped=$((skipped + 1))
+}
 bad() {
   echo "FAIL $1"
   fail=$((fail + 1))
@@ -122,8 +129,7 @@ for src in tests/split/*/; do
   flags=$(grep -h -o '^// teq: .*' "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
-    echo "skip $name: not in the coursier cache:$JARS_MISSING"
-    ok
+    not_run "$name" "not in the coursier cache:$JARS_MISSING"
     continue
   fi
   [ -n "$JARS_CP" ] && flags="$flags --classpath $JARS_CP"
@@ -142,8 +148,7 @@ if [ -e "$(jar_of scala-library)" ]; then
   builds classpath-jvm jvm tests/split/classpath --std=scala-library --classpath "$(jar_of scala-library)"
   builds owned-jvm jvm tests/split/owned/main tests/split/owned/test --std=scala-library --classpath "$(jar_of scala-library)" --all-mains
 else
-  echo "skip classpath-jvm and owned-jvm: scala-library is not in the coursier cache"
-  ok
+  not_run "classpath-jvm and owned-jvm" "scala-library is not in the coursier cache"
 fi
 
 # `teq compiler fix --check` over the frontend with every shipped rule (DisableSyntax with most of its settings on), at one
@@ -206,8 +211,7 @@ for jar in scala-library cats-kernel cats-core sourcecode; do
 done
 cp=${cp#:}
 if [ -n "$missing" ]; then
-  echo "skip the application corpus: not in the coursier cache:$missing"
-  ok
+  not_run "the application corpus" "not in the coursier cache:$missing"
 elif ! timeout 120 python3 bench/app/gen.py "$work/src" > "$work/gen.log" 2>&1; then
   bad "the corpus did not generate: $(tail -1 "$work/gen.log")"
 else
@@ -220,5 +224,5 @@ else
   fixes "$work/src/shared" "$work/src/frontend" --classpath "$cp" --cacheable-state meridian.web.css.Catalog
 fi
 
-echo "split-determinism: $pass passed, $fail failed"
+echo "split-determinism: $pass passed, $fail failed$([ $skipped = 0 ] || echo ", $skipped not run")"
 [ $fail -eq 0 ]

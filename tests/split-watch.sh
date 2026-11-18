@@ -39,7 +39,7 @@
 # tests/interop gets a comment inserted (which moves every position in the file) and its first
 # string literal changed, each followed by an incremental build and the comparison; a program's
 # `// jars:` line puts those jars on its class path (tests/support/jars.sh), and without one of
-# them in the coursier cache it counts as passed; one whose header includes sources (`//> using
+# them in the coursier cache it is not run (a skip line, no pass); one whose header includes sources (`//> using
 # file`, which teq interp alone follows) is left out. Last the sessions of tests/support/retype.sh,
 # in which one file is typed again after another, and every file of the realistic frontend in
 # turn.
@@ -57,6 +57,18 @@ fail=0
 . tests/support/pending.sh
 pending_fails_begin split-watch out/split-watch-pending "$@"
 ok() { pass=$((pass + 1)); }
+# not_run <what> <why> [<check>...]: a check whose prerequisite is absent before anything is tried (a jar not in the
+# coursier cache, another std's or platform's case): its skip line (the gate fails those for want of something), no
+# pass, and the checks it leaves undone, by the names their FAIL lines give them, skipped to the list (never
+# "passes now" for a listed one).
+skipped=0
+not_run() {
+  local what=$1 why=$2 check
+  shift 2
+  echo "skip $what: $why"
+  skipped=$((skipped + 1))
+  for check in "$@"; do pending_skip "$check" "$why"; done
+}
 bad() {
   said_fail "$1"
   fail=$((fail + 1))
@@ -1522,7 +1534,13 @@ rm -rf "$work/out"
 # cache.
 rm -rf "$work/out" "$src"
 cp -r tests/split/classpath "$src"
-if "$TEQ" compiler check "$src" --std=scala-library > "$work/jar.log" 2>&1; then
+# The session needs the scala-library jar, told before anything is built; with it, the check that opens it is the
+# session's first check, and its failure a failure.
+if [ ! -e "$(jar_of scala-library)" ]; then
+  not_run "the classpath session" "not in the coursier cache: scala-library" classpath
+elif ! "$TEQ" compiler check "$src" --std=scala-library > "$work/jar.log" 2>&1; then
+  bad "classpath: the check over scala-library that opens the session failed: $(tail -1 "$work/jar.log")"
+else
   start "$src" --split "$work/out" --std=scala-library
   expect "classpath: first build" "$(field ok),$(field incremental)" 'true,false'
   same_as_fresh "classpath: first build" "$src" --std=scala-library
@@ -1544,8 +1562,6 @@ if "$TEQ" compiler check "$src" --std=scala-library > "$work/jar.log" 2>&1; then
   "$TEQ" compiler build "$src" --std=scala-library $ONE --split "$work/fresh" > "$work/fresh.log" 2>&1
   expect "classpath: more of the library as fresh" "$(timeout 20 node "$work/fresh/main.mjs")" "$(timeout 20 node "$work/out/main.mjs")"
   stop
-else
-  echo "skip the classpath session: $(tail -1 "$work/jar.log")"
 fi
 
 # A session over monocle's jar (tests/split/retype_bridges): a body edit of the file that uses the
@@ -1561,8 +1577,7 @@ rm -rf "$work/out" "$src"
 cp -r tests/split/retype_bridges "$src"
 jars_of "$src/lib"
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip the retype_bridges sessions: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "the retype_bridges sessions" "not in the coursier cache:$JARS_MISSING" "retype_bridges (lib page)" "retype_bridges (page lib)"
 else
   for order in "lib page" "page lib"; do
     inputs=""
@@ -1591,8 +1606,7 @@ rm -rf "$work/out" "$src"
 cp -r tests/split/reader "$src"
 jars_of "$src"
 if [ -n "$JARS_MISSING" ]; then
-  echo "skip the reader session: not in the coursier cache:$JARS_MISSING"
-  ok
+  not_run "the reader session" "not in the coursier cache:$JARS_MISSING" reader
 else
   start "$src" --classpath "$JARS_CP" --split "$work/out"
   expect "reader: first build" "$(field ok),$(field incremental)" 'true,false'
@@ -1634,15 +1648,13 @@ for case in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/inter
   # std's, has no build here (tests/run_stdlib.sh leaves out `// std: lean` the same way).
   modes=$(grep -h -o '^// std: .*' "$case" "$case"/*.scala 2> /dev/null | head -1 | sed 's|^// std: ||')
   if [ -n "$modes" ] && [[ " $modes " != *" lean "* ]]; then
-    echo "skip $name: its std is $modes"
-    ok
+    not_run "$name" "its std is $modes" "$name"
     continue
   fi
   # A case only the JVM builds (`// split-watch: jvm`: library bodies compiled against scala-library, or
   # the JDK's members the std leaves out) is tests/run_jvm.sh's.
   if grep -q -h '^// split-watch: jvm' "$case" "$case"/*.scala 2> /dev/null; then
-    echo "skip $name: the JVM's alone"
-    ok
+    not_run "$name" "the JVM's alone" "$name"
     continue
   fi
   rm -rf "$src" "$work/out"
@@ -1656,8 +1668,7 @@ for case in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/inter
   flags=$(grep -h -o '^// teq: .*' "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
-    echo "skip $name: not in the coursier cache:$JARS_MISSING"
-    ok
+    not_run "$name" "not in the coursier cache:$JARS_MISSING" "$name"
     continue
   fi
   [ -n "$JARS_CP" ] && flags="$flags --classpath $JARS_CP"
@@ -1706,5 +1717,5 @@ retype_quotes
 retype_sweep
 
 sessions_forked split-watch
-echo "$pass passed, $fail failed"
+echo "$pass passed, $fail failed$([ $skipped = 0 ] || echo ", $skipped not run")"
 pending_fails_end $fail $pass

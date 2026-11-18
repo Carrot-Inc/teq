@@ -124,7 +124,11 @@
 # A check listed in tests/modules/deferred.txt (`<case> <check>  <reason>`) is one this stage
 # leaves to a later one: run and reported, not counted as passed or failed.
 # A check listed in tests/modules/known.txt (`<case> <check>  <reason>`) is a known departure:
-# it is run and reported, and does not fail the suite. Without scala-cli the scalac checks are
+# it is run and reported, and does not fail the suite. Both lists are held as tests/pending's are: a listed check
+# that passes fails the run until --update takes its line out, in the same run; a check off the lists fails as any
+# other. A case's verdict on the board is one outcome: a failure of a check off the lists, then a failure of a
+# listed one (`fail`, its line and reason: tests/support/pending.sh pending_known), then a check not run (a
+# bundle leg deferred as ineligible, the scalac checks without scala-cli: `cannot run`), then a pass. Without scala-cli the scalac checks are
 # not made, which fails the suite as incomplete validation. tests/modules.sh <case>... runs only
 # those cases. The cases run JOBS at a time (by default the machine's processors), each in a process of its own,
 # their lines in the cases' order, the same as one at a time; the checks once per run, the split programs and the
@@ -142,6 +146,12 @@ plain_args=()
 for arg in "$@"; do
   case $arg in --update | --add) pending_args+=("$arg") ;; *) plain_args+=("$arg") ;; esac
 done
+# --update takes the lines of known.txt and deferred.txt whose checks pass now out, as it takes tests/pending's (a
+# case's worker, tests/modules.sh --worker, takes the run's word from its environment)
+if [ "${1:-}" != --worker ]; then
+  unset MODULES_LISTS_UPDATE
+  for arg in "${pending_args[@]}"; do [ "$arg" != --update ] || export MODULES_LISTS_UPDATE=1; done
+fi
 set -- "${plain_args[@]}"
 . tests/support/pieces.sh
 suite_units() {
@@ -184,6 +194,8 @@ fail=0
 known_count=0
 deferred_count=0
 skipped=0
+stale=0
+not_run=0
 scalac_ok=0
 scalac_refused=0
 have_scalac=1
@@ -195,6 +207,19 @@ command -v node > /dev/null 2>&1 || have_node=0
 
 is_known() { [ -f "$known" ] && grep -q "^$1 $2 " "$known"; }
 is_deferred() { [ -f "$deferred" ] && grep -q "^$1 $2 " "$deferred"; }
+# listed_passes <case> <check> <list>: a check listed in known.txt or deferred.txt passed. Under --update its line
+# goes (out/results/lists-off.txt, taken out of the list after the cases) and it is a pass; else the run fails on it
+# (`stale`, counted apart from the case's own failures: the case's checks hold, its list does not).
+listed_passes() {
+  if [ -n "${MODULES_LISTS_UPDATE:-}" ]; then
+    pass=$((pass + 1))
+    echo "$1 $2 passes now: taken off $3"
+    printf '%s %s %s\n' "$3" "$1" "$2" >> "$out/results/lists-off.txt"
+  else
+    stale=$((stale + 1))
+    echo "FAIL $1 $2: listed in $3 and passes now (take it off: --update)"
+  fi
+}
 result() {
   local name=$1 check=$2 ok=$3 detail=$4
   # What a class must declare is never a known departure: a waived member is a missing one.
@@ -204,21 +229,33 @@ result() {
     return
   fi
   if is_deferred "$name" "$check"; then
+    if [ "$ok" = 1 ]; then listed_passes "$name" "$check" "$deferred"; return; fi
     deferred_count=$((deferred_count + 1))
-    if [ "$ok" = 1 ]; then echo "deferred $name $check passes now: take it off $deferred"; else echo "deferred $name $check"; fi
+    echo "deferred $name $check"
+    [ -z "$detail" ] || printf '  %s\n' "$(printf '%s\n' "$detail" | grep -m1 .)"
     return
   fi
   if [ "$ok" = 1 ]; then
+    if is_known "$name" "$check"; then listed_passes "$name" "$check" "$known"; return; fi
     pass=$((pass + 1))
-    if is_known "$name" "$check"; then echo "known $name $check passes now: take it off $known"; fi
   elif is_known "$name" "$check"; then
     known_count=$((known_count + 1))
     echo "known $name $check"
+    [ -z "$detail" ] || printf '  %s\n' "$(printf '%s\n' "$detail" | grep -m1 .)"
   else
     fail=$((fail + 1))
     echo "FAIL $name $check"
     [ -n "$detail" ] && printf '%s\n' "$detail" | head -30
   fi
+}
+
+# listed_failure <case> <out>: the first listed check of the case that failed, `known <check>: <reason>` or
+# `deferred <check>: <reason>`, its reason the list's.
+listed_failure() {
+  local kind check list
+  read -r kind _ check < <(grep -m1 -E "^(known|deferred) $1 [^ ]+\$" "$2")
+  [ "$kind" = known ] && list=$known || list=$deferred
+  echo "$kind $check: $(grep -m1 "^$1 $check " "$list" | sed 's/^[^ ]* [^ ]* *//')"
 }
 
 # The sources of a module, sorted.
@@ -917,6 +954,7 @@ PY
       echo "left out $name bundle: $whole_file"
     elif [ -n "$ineligible" ]; then
       deferred_count=$((deferred_count + 1))
+      not_run=$((not_run + 1))
       echo "ineligible $name bundle: $ineligible"
     elif [ ! -f "$dir/js-errors.txt" ] && [ -z "$js_failed" ]; then
       ok=1
@@ -1141,7 +1179,7 @@ PY
 # <out>/fromtasty.d/<index>.
 if [ -n "$worker" ]; then
   run_case "$1" > "$out/results/$worker.out" 2>&1
-  echo "$pass $fail $known_count $deferred_count $skipped $scalac_ok $scalac_refused" > "$out/results/$worker.counts.part"
+  echo "$pass $fail $known_count $deferred_count $skipped $scalac_ok $scalac_refused $stale $not_run" > "$out/results/$worker.counts.part"
   mv "$out/results/$worker.counts.part" "$out/results/$worker.counts"
   exit 0
 fi
@@ -1163,13 +1201,21 @@ dealer=$!
 i=0
 for name in "${cases[@]}"; do
   while [ ! -e "$out/results/$i.counts" ] && kill -0 $dealer 2> /dev/null; do sleep 1; done
-  if pending_listed "$name"; then grep -v '^FAIL ' "$out/results/$i.out" 2> /dev/null; else cat "$out/results/$i.out" 2> /dev/null; fi
-  if [ -e "$out/results/$i.counts" ] && read -r p f k d s so sr < "$out/results/$i.counts"; then
+  # a listed case's failures are not printed; a stale line of known.txt or deferred.txt is, whatever the case
+  if pending_listed "$name"; then grep -v '^FAIL ' "$out/results/$i.out" 2> /dev/null; grep ' and passes now (take it off: --update)$' "$out/results/$i.out" 2> /dev/null; else cat "$out/results/$i.out" 2> /dev/null; fi
+  if [ -e "$out/results/$i.counts" ] && read -r p f k d s so sr st nr < "$out/results/$i.counts"; then
     pass=$((pass + p)) known_count=$((known_count + k)) deferred_count=$((deferred_count + d))
     skipped=$((skipped + s)) scalac_ok=$((scalac_ok + so)) scalac_refused=$((scalac_refused + sr))
+    stale=$((stale + st)) not_run=$((not_run + nr))
+    # one outcome a case: a failure, then a listed check's failure, then a check not run, then a pass
     if [ "$f" -gt 0 ]; then
       pending_listed "$name" || fail=$((fail + f))
-      pending_fail "$name" "$(grep -m1 '^FAIL ' "$out/results/$i.out" | sed 's/^FAIL //')"
+      pending_fail "$name" "$(grep '^FAIL ' "$out/results/$i.out" | grep -v ' and passes now (take it off: --update)$' | head -1 | sed 's/^FAIL //')"
+    elif [ "$k" -gt 0 ] || [ "$((d - nr))" -gt 0 ]; then
+      # (an ineligible bundle leg is counted deferred too, and is not run: `nr`)
+      pending_known "$name" "$(listed_failure "$name" "$out/results/$i.out")"
+    elif [ "$nr" -gt 0 ] || [ "$s" -gt 0 ]; then
+      pending_skip "$name" "$(grep -m1 -E '^ineligible ' "$out/results/$i.out" || echo "no scala-cli: scalac checked none of its modules")"
     else
       pending_pass "$name"
     fi
@@ -1525,6 +1571,9 @@ if [ $have_scalac = 1 ] && [ -s "$out/fromtasty.jobs" ]; then
     jcheck=${job#* }
     if grep -qxF "ok $job" "$out/fromtasty.out"; then
       result "$jcase" "$jcheck" 1 ""
+    elif is_known "$jcase" "$jcheck" || is_deferred "$jcase" "$jcheck"; then
+      result "$jcase" "$jcheck" 0 "$(awk -v j="FAIL $job" '$0 == j { on = 1; next } /^(ok|FAIL) / { on = 0 } on' "$out/fromtasty.out")"
+      pending_listed "$jcase" || pending_known "$jcase" "$(grep -qE "^$jcase $jcheck " "$known" && echo known || echo deferred) $jcheck: $(cat "$known" "$deferred" | grep -m1 "^$jcase $jcheck " | sed 's/^[^ ]* [^ ]* *//')"
     else
       detail=$(awk -v j="FAIL $job" '$0 == j { on = 1; next } /^(ok|FAIL) / { on = 0 } on' "$out/fromtasty.out")
       [ -n "$detail" ] || detail="no answer from the reader of scalac: $(grep -v hint "$out/fromtasty.err" | head -3)"
@@ -1543,6 +1592,14 @@ note=""
 if [ $skipped -gt 0 ]; then
   note=" (incomplete validation: no scala-cli, so scalac checked none of $skipped cases)"
   fail=$((fail + 1))
+fi
+# a line of known.txt or deferred.txt whose check passes now: the run's failure, or under --update the line goes
+fail=$((fail + stale))
+if [ -s "$out/results/lists-off.txt" ]; then
+  for list in "$known" "$deferred"; do
+    awk -v list="$list" 'NR == FNR { if ($1 == list) off[$2 " " $3] = 1; next } !(($1 " " $2) in off)' "$out/results/lists-off.txt" "$list" > "$list.next" && mv "$list.next" "$list"
+  done
+  echo "modules: $(wc -l < "$out/results/lists-off.txt" | tr -d ' ') listed checks that pass now taken out of $known and $deferred"
 fi
 # an unlisted failure is counted above, once; a listed case that passes now is the run's failure where there is no other
 pending_end || [ $fail -gt 0 ] || fail=1

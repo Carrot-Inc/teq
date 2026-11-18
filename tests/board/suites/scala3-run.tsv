@@ -157,7 +157,7 @@ deadlock	fail	-	run-error: Node.js v25.9.0
 decorators	fail	-	compile-error: value mkString is not a member of Array[?] & A
 dedented-string-literals	fail	-	compile-error: expected ',' or ')', found literal
 defaultGetters	pass	-	
-defaults-serizaliable-no-forwarders	fail	-	compile-error: ObjectInputStream is not a member of the package
+defaults-serizaliable-no-forwarders	fail	-	compile-error: option: -Xmixin-force-forwarders:false
 defaults-serizaliable-with-forwarders	fail	-	compile-error: ObjectInputStream is not a member of the package
 defunctionalized	pass	-	
 delambdafy-dependent-on-param-subst	pass	-	
@@ -178,7 +178,7 @@ duplicate-meth	pass	-
 duration-coarsest	pass	-	
 dynamic-anyval	pass	-	
 dynamicDynamicTests	pass	-	
-eff-dependent	fail	-	compile-error: type mismatch: found A => (f.Eff) ?=> B, required A => B
+eff-dependent	fail	-	compile-error: values of types (CanThrow) ?=> (CanIO) ?=> Int and Int cannot be compared with == or !=
 elidable-noflags	fail	-	compile-error: cannot resolve import: elidable not found
 empty-array	fail	-	compile-error: value emptyByteArray is not a member of Array
 emptypf	pass	-	
@@ -223,7 +223,7 @@ erased-inline-vals	fail	-	compile-error: value getDeclaredMethods is not a membe
 erased-lambdas	fail	-	compile-error: expected ',' or ')', found identifier
 erased-machine-state	fail	-	compile-error: 'erased' is not part of the supported Scala subset
 erased-poly-ref	fail	-	compile-error: 'erased' is not part of the supported Scala subset
-errorhandling	fail	-	compile-error: expected ',' or ')', found identifier
+errorhandling	fail	-	compile-error: option: -language:experimental.captureChecking
 escaped-space	fail	-	compile-error: invalid escape sequence
 eta-extension	pass	-	
 evaluation-order	pass	-	
@@ -373,10 +373,10 @@ i13096	pass	-
 i13131	pass	-	
 i13146	pass	-	
 i13146a	pass	-	
-i13146poly	fail	-	compile-error: type argument m.MirroredElemTypes does not have the same kind as its bound [_]
+i13146poly	fail	-	compile-error: type argument Mono does not have the same kind as its bound [_]
 i13181	fail	-	run-error: Error: AssertionError: assertion failed
 i13183	pass	-	
-i13215	pass	-	
+i13215	fail	-	compile-error: option: -WunstableInlineAccessors with -Werror
 i13216	pass	-	
 i13228	pass	-	
 i13252a	pass	-	
@@ -543,7 +543,7 @@ i19629	pass	-
 i19641	pass	-	
 i19711	pass	-	
 i19724	pass	-	
-i1990b	fail	-	run-error: ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor
+i1990b	fail	-	run-error: ReferenceError: $thisr0jxdn_6 is not defined
 i1991	pass	-	
 i2004	pass	-	
 i2004b	pass	-	
@@ -1022,7 +1022,7 @@ nested-object-implements-val	pass	-
 nestedEq	pass	-	
 no-init-enclosing-static-objects	pass	-	
 no-unused-nested-object-field	fail	-	compile-error: value getDeclaredFields is not a member of Class[_]
-no-useless-forwarders	fail	-	compile-error: value getDeclaredMethods is not a member of Class[_]
+no-useless-forwarders	fail	-	compile-error: option: -Xmixin-force-forwarders:false
 noProtectedSuper	pass	-	
 non-jvm-sam-non-apply	pass	-	
 nonLocalReturns	pass	-	
@@ -1071,7 +1071,7 @@ patmat-spec	fail	-	compile-error: FirstChars is not a case class, so it cannot b
 patmatch-classtag	fail	-	compile-error: no given instance of type ClassTag[CaseDef] was found for parameter x
 pf-sub-cases	fail	-	compile-error: expected '=>', found 'match'
 phantomValueClass	pass	-	
-pkgobjvals	fail	-	compile-error: a singleton type needs a val, a parameter or an object
+pkgobjvals	fail	-	compile-error: option: -preview
 planets	fail	-	compile-error: no given instance of type ValueOf[T] was found for parameter vt
 poly-kinded-derives	fail	-	compile-error: Show[Mono] cannot be derived: the companion of the type class has no derived method
 polymorphic-functions	fail	-	compile-error: expected ']', found '='
@@ -1084,7 +1084,7 @@ properties-version-string	fail	-	compile-error: value Properties is not a member
 protectedSuper	pass	-	
 protectedacc	fail	-	compile-error: FileWriter is not a member of the package
 proxy	fail	-	compile-error: type Proxy not found
-publicInBinary	fail	-	compile-error: expected 'extends' or a template body, found '@'
+publicInBinary	fail	-	compile-error: option: -WunstableInlineAccessors with -Werror
 pure-args-byname-noinline	pass	-	
 puzzle	pass	-	
 puzzler54	pass	-	
@@ -1131,7 +1131,7 @@ serialization-new-legacy	fail	-	compile-error: type ObjectOutputStream not found
 serialize	fail	-	compile-error: type ObjectOutputStream not found
 serialize-stream	fail	-	compile-error: type ObjectOutputStream not found
 simpleClass	pass	-	
-single-case-expr	fail	-	compile-error: expected an expression, found 'case'
+single-case-expr	fail	-	compile-error: option: -preview
 singleQuoteStrings	fail	-	compile-error: expected end of statement, found literal
 singletons	pass	-	
 sip23-valueof	pass	-	
@@ -1492,7 +1492,7 @@ t5729	pass	-
 t5733	pass	-	
 t5830	pass	-	
 t5856	pass	-	
-t5857	fail	-	run-error: Error: AssertionError: assertion failed: 8959
+t5857	fail	-	run-error: Error: AssertionError: assertion failed: 11628
 t5866	fail	-	wrong-output
 t5867	fail	-	compile-error: UnrolledBuffer is not a member of the package
 t5879	fail	-	compile-error: value merged is not a member of HashMap[Int, String]
@@ -1769,20 +1769,20 @@ unit-volatile-var	fail	-	compile-error: value getDeclaredFields is not a member 
 unittest_collection	fail	-	compile-error: type mismatch: found ListBuffer[String], required ArrayBuffer[String]
 unittest_iterator	pass	-	
 unreachable	pass	-	
-unroll-caseclass-integration	fail	-	compile-error: wrong number of patterns for Unrolled: expected 4, found 2
-unroll-classMethod-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-classMethod-integration/UnrollTestPlatformSpe
-unroll-clause-interleaving	fail	-	compile-error: expected '=', found '['
-unroll-curriedMethod-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-curriedMethod-integration/UnrollTestPlatformS
-unroll-genericMethod-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-genericMethod-integration/UnrollTestPlatformS
-unroll-inferredFinal	pass	-	
-unroll-methodWithImplicit-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-methodWithImplicit-integration/UnrollTestPlat
-unroll-multiple	fail	-	run-error: Error: IndexOutOfBoundsException: 1
-unroll-objectMethod-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-objectMethod-integration/UnrollTestPlatformSp
-unroll-primaryConstructor-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-primaryConstructor-integration/UnrollTestPlat
-unroll-secondParameterList-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-secondParameterList-integration/UnrollTestPla
-unroll-secondaryConstructor-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-secondaryConstructor-integration/UnrollTestPl
-unroll-traitMethod-integration	fail	-	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-traitMethod-integration/UnrollTestPlatformSpe
-unroll-value-class	fail	-	compile-error: type Unrolled is already defined
+unroll-caseclass-integration	fail	-	compile-error: option: -preview
+unroll-classMethod-integration	fail	-	compile-error: option: -preview
+unroll-clause-interleaving	fail	-	compile-error: option: -preview
+unroll-curriedMethod-integration	fail	-	compile-error: option: -preview
+unroll-genericMethod-integration	fail	-	compile-error: option: -preview
+unroll-inferredFinal	fail	-	compile-error: option: -preview
+unroll-methodWithImplicit-integration	fail	-	compile-error: option: -preview
+unroll-multiple	fail	-	compile-error: option: -preview
+unroll-objectMethod-integration	fail	-	compile-error: option: -preview
+unroll-primaryConstructor-integration	fail	-	compile-error: option: -preview
+unroll-secondParameterList-integration	fail	-	compile-error: option: -preview
+unroll-secondaryConstructor-integration	fail	-	compile-error: option: -preview
+unroll-traitMethod-integration	fail	-	compile-error: option: -preview
+unroll-value-class	fail	-	compile-error: option: -preview
 value-class-extractor	fail	-	compile-error: type Product3 not found
 value-class-extractor-2	fail	-	compile-error: this is not a case class or enum case
 value-class-extractor-seq	fail	-	compile-error: value stringOf is not a member of ScalaRunTime

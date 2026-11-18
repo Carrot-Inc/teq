@@ -293,7 +293,7 @@ selected() {
 }
 # A suite that skips for want of something the machine or the reference machine should hold says so in one of these
 # lines and exits 0; the gate fails it: a jar not in the coursier cache ("skip <x>: not in the coursier cache",
-# "<suite>: skipped, ...", "counted as passed, a jar of theirs not in the coursier cache", "skip the jvm session: ..."
+# "<suite>: skipped, ...", "not run, a jar of theirs not in the coursier cache", "skip the jvm session: ..."
 # and the like), a tool ("skip ...: no javap", "esbuild not found", "skip: scala-cli not found"), the scala3
 # checkout, or a check a tool's absence leaves undone ("note: no wine here, teq.cmd not run", "note: no shellcheck
 # here, ...", "note: no npm here, ...", runner-classes' "not checked" without a javac 17). What is skipped by design

@@ -1,0 +1,8 @@
+# option	tests carrying it (tests/board/dotty.py --self-checks --update)
+-Ycheck	11626
+-Ycheck-constraint-deps	223
+-Yno-double-bindings	11628
+-Yno-deep-subtypes	11536
+-Xcheck-macros	965
+-Xverify-signatures	11628
+-Vprint	4

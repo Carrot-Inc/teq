@@ -11,7 +11,11 @@ purpose and gaps.
 
 A test's options are read as tests/scala3-typing/harness.py reads them (`scalac_options`, `teq_flags`): its
 `-source` and `-language` reach teq as flags, recorded with the test's result; files naming two source versions
-are left out (a compile-error of the topic "conflicting options"), never compiled under one of them.
+are left out (a compile-error of the topic "conflicting options"), never compiled under one of them. Every other
+option takes the board's one rule (tests/board/dotty.py `teq_options`): one teq has a flag for reaches teq by it
+(`-Werror`, `-Wtostring-interpolated`, `-Yretain-trees`, ...), so its check runs; one of scalac's own machinery is
+dropped; one teq has no flag for, or a warning teq does not give under -Werror, fails the test unrun (a
+compile-error of the topic "option"), never a pass without it.
 
 Writes results.json and summary.md. The run is held to the list of the tests expected to fail,
 tests/pending/scala3-run.txt (scala3-interp, scala3-macros, scala3-macros-interp for the other target and suite;
@@ -38,6 +42,23 @@ sys.path.insert(0, os.path.join(REPO, "tests", "scala3-typing"))
 sys.path.insert(0, os.path.join(REPO, "tests", "support"))
 from harness import scalac_options, teq_flags  # noqa: E402
 import pending  # noqa: E402
+sys.path.insert(0, os.path.join(REPO, "tests", "board"))
+import dotty  # noqa: E402
+
+
+def board_flags(options, target):
+    """The options as the board's rule takes them (tests/board/dotty.py `teq_options`), beside the `-source`,
+    `-language` and `-Wconf` ones `teq_flags` reads: (the flags of the other options teq has, the first option
+    that fails the test, or None)."""
+    mapped, why_not = dotty.teq_options(options, "interp" if target == "interp" else "js")
+    flags, i = [], 0
+    while i < len(mapped):
+        if mapped[i] in ("--source", "--language", "--wconf"):
+            i += 2
+            continue
+        flags.append(mapped[i])
+        i += 1
+    return flags, why_not
 
 
 def default_scala3():
@@ -183,11 +204,17 @@ def run_one(test, teq, out_dir, compile_timeout, run_timeout, target="js"):
         result.update(status="compile-error", bucket="left out on purpose", topic="Java", error="test contains Java sources")
         return result
     # The test's options as teq's flags, recorded; files naming two source versions are no test of one.
-    flags, conflict = teq_flags(scalac_options(files))
+    options = scalac_options(files)
+    flags, conflict = teq_flags(options)
+    extra, why_not = board_flags(options, target)
+    flags += extra
     if flags:
         result["flags"] = " ".join(flags)
     if conflict:
         result.update(status="compile-error", bucket="left out on purpose", topic="conflicting options", error=conflict)
+        return result
+    if why_not:
+        result.update(status="compile-error", bucket="left out on purpose", topic="option", error=f"option: {why_not}")
         return result
     if target == "interp":
         return run_one_interp(test, teq, result, compile_timeout + run_timeout, flags)
@@ -367,6 +394,10 @@ def main():
     if args.listed:
         listed = set(pending.passing("scala3-" + ("run" if args.suite == "run" else "macros")))
         tests = [t for t in tests if t[0] in listed]
+    # Nor does a selection that keeps none (--only, --listed, --no-dirs): it fails, never "0 pass"
+    if not tests:
+        print("no test of the selection: nothing ran", file=sys.stderr)
+        return 2
     os.makedirs(args.out, exist_ok=True)
     t0 = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:

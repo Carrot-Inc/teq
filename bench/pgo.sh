@@ -244,10 +244,11 @@ use() {
   local smoke_status=$?
   echo "$smoke" > "$dir/suite.log"
   [ $smoke_status -eq 0 ] || echo "$smoke"
-  # tests/run.sh counts a test whose jars are missing as passed; the manifest says how many.
+  # tests/run.sh counts a test whose jars are missing, or of the JVM's platform, as not run, apart from the passes; the
+  # manifest says how many.
   local skipped
   skipped=$(grep -c '^skip ' <<< "$smoke")
-  echo "pgo: tests/run.sh on $binary: $(tail -1 <<< "$smoke"), $skipped of them skipped for missing jars"
+  echo "pgo: tests/run.sh on $binary: $(tail -1 <<< "$smoke"), $skipped not run (skip lines)"
   [ $smoke_status -eq 0 ] || return 1
   [ "$(manifest_sha256 $binary)" = "$sha" ] || { echo "pgo: $binary changed while its suite ran"; return 1; }
   local floor=()
@@ -260,7 +261,7 @@ use() {
     floor=("glibc $glibc")
   fi
   manifest_write $binary "$host" "$(echo $flags)" "$training" "profile $(manifest_sha256 "$use_profile") ${use_profile#$PWD/}" \
-    "suite $sha tests/run.sh passed: $(tail -1 <<< "$smoke"), $skipped of them skipped for missing jars" "${floor[@]}" || return 1
+    "suite $sha tests/run.sh passed: $(tail -1 <<< "$smoke"), $skipped not run (skip lines)" "${floor[@]}" || return 1
   echo "pgo: $binary.manifest"
 }
 

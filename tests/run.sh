@@ -6,7 +6,7 @@
 # redo all.
 # A `// teq: <flags>` line in a test passes those flags to teq, a `// jars: <names>` line puts
 # those jars on its class path (tests/support/jars.sh); without one of them in the coursier cache
-# the test is skipped and counts as passed. A test whose output depends on
+# the test is not run: its skip line, which the gate fails, and no pass. A test whose output depends on
 # the platform (doubles print as in Scala.js) carries `//> using platform js`, which scala-cli
 # honours; linking takes longer than a JVM run, the first time by a download. A test of the JVM's
 # platform, the files and the process JavaScript has none of, carries `//> using platform jvm`:
@@ -88,7 +88,6 @@ for src in "$dir"/*.scala "$dir"/*/; do
   [ -f "tests/lean-expected/$name.expected" ] && expected="tests/lean-expected/$name.expected"
   if grep -q -h '^//> using platform jvm' "$src" "$src"/*.scala 2>/dev/null; then
     echo "skip $name: the JVM's platform"
-    pass=$((pass + 1))
     printf 'skip %s\tthe JVM'"'"'s platform\n' "$name" >> "$out/results.txt"
     continue
   fi
@@ -96,7 +95,6 @@ for src in "$dir"/*.scala "$dir"/*/; do
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $name: not in the coursier cache:$JARS_MISSING"
-    pass=$((pass + 1))
     printf 'skip %s\tnot in the coursier cache:%s\n' "$name" "$JARS_MISSING" >> "$out/results.txt"
     continue
   fi

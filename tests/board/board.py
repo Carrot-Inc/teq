@@ -16,8 +16,10 @@ Columns: total, passing, by marks alone (a neg or warn test of dotty's that hold
 oracle of scalac's own diagnostics gives no answer to hold its diagnostics to: no pass and no failure,
 tests/board/dotty.py), failing (a failure, a limit reached, a crash), cannot run, and a note. A project's rows
 are its three lines: compile (the configurations of the record's scope; failing, those with an accepted error),
-test (the oracle's cases; failing, those of a project blocked by its build and those whose outcome departs) and
-run (the named assertions; failing, those violated). A file tests/board/projects/<project>-<line>.today, where
+test (the oracle's cases; failing, those of a project blocked by its build and those whose outcome departs; cannot
+run, those the oracle's own run did not run, Ignored, Skipped, Pending or Canceled, which no run of teq's passes
+either; a pass, a case the oracle ran that teq's run ran as it did) and run (the named assertions; failing, those
+violated). A file tests/board/projects/<project>-<line>.today, where
 there is one, adds what a judge run of master gave beside the record (items outside the record, items gone).
 """
 import collections
@@ -28,6 +30,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 FAILING = ("fail", "timeout", "crash")
+# The statuses of an oracle's case that say it did not run (sbt.testing.Status; the sbt inventories' keys are the
+# lowercase words, tests/support's and bench/reference's writers): no pass and no failure, `cannot run`.
+NOT_RUN = ("ignored", "skipped", "pending", "canceled")
 
 
 def read_list(path):
@@ -123,14 +128,21 @@ def project_rows():
                 t = json.load(fh)
             with open(deviations, encoding="utf-8") as fh:
                 d = json.load(fh)
-            cases = collections.Counter()
+            # every case of the inventory by its project, and those the oracle's run did not run: (project, name)
+            cases, unrun = collections.Counter(), []
             if "suites" in t:
                 for s in t["suites"].values():
-                    cases[s["project"]] += len(s["cases"])
+                    for status, names in s.items():
+                        if status == "project":
+                            continue
+                        cases[s["project"]] += len(names)
+                        unrun += [(s["project"], n) for n in names if status.lower() in NOT_RUN]
             else:
                 for m, v in t["modules"].items():
-                    cases[m] += sum(len(c) for c in v["cases"].values())
-            blocked, departing = set(), 0
+                    for status, names in v["cases"].items():
+                        cases[m] += len(names)
+                        unrun += [(m, n) for n in names if status.lower() in NOT_RUN]
+            blocked, departing, heads = set(), 0, []
             for item in d["deviations"]:
                 head = item.split("\n")[0]
                 project, _, rest = head.partition(": ")
@@ -138,11 +150,18 @@ def project_rows():
                     blocked.add(project)
                 elif project in cases and project not in blocked and rest.count(": ") >= 2:
                     departing += 1
+                    heads.append((project, rest))
+            # a case the oracle did not run is not run on any line, unless teq's run ran it otherwise (a departure
+            # that names it: then it is that failure)
+            # (bench/reference/reference.scala's compare: `<suite>: case "<name>" ...`, the name whole and quoted)
+            unrun = [(pr, n) for pr, n in unrun if not any(pr == hp and f'case "{n}"' in rest for hp, rest in heads)]
+            not_run = len(unrun)
             # the inventory's own count is the total: a case it holds twice is two
             total = t.get("cases_count", sum(cases.values()))
-            failing = total if blocked and all(p_ in blocked for p_ in cases if cases[p_]) else min(total, sum(cases[b] for b in blocked) + departing)
+            failing = total - not_run if blocked and all(p_ in blocked for p_ in cases if cases[p_]) else \
+                min(total - not_run, sum(cases[b] for b in blocked) - sum(pr in blocked for pr, _ in unrun) + departing)
             note = (f"{len(blocked)} of {len(d['projects'])} projects blocked by their build" if blocked else "") + today("test")
-            out.append((f"{p} test", total, total - failing, 0, failing, 0, note))
+            out.append((f"{p} test", total, total - failing - not_run, 0, failing, not_run, note))
         run = os.path.join(here, "run.json")
         if os.path.exists(run):
             with open(run, encoding="utf-8") as fh:
@@ -179,9 +198,23 @@ def dotty_header():
     return "dotty's suites: " + "; ".join(sorted(seen)) if seen else ""
 
 
+def self_checks_header():
+    """scalac's checks of its own trees and output that dotty's rows drop (tests/board/dotty.py SELF_CHECKS), with
+    how many tests carry each (tests/board/dotty/self-checks.tsv): named once, no verdict of a test moved by them."""
+    path = os.path.join(HERE, "dotty", "self-checks.tsv")
+    if not os.path.exists(path):
+        return ""
+    with open(path, encoding="utf-8") as fh:
+        rows = [l.rstrip("\n").split("\t") for l in fh if l.strip() and not l.startswith("#")]
+    return ("dotty's rows drop scalac's checks of its own trees and output, for which no check of teq's stands: "
+            + ", ".join(f"{o} ({int(n):,} tests)" for o, n in rows))
+
+
 def main():
     if "--tsv" not in sys.argv and dotty_header():
         print(dotty_header())
+    if "--tsv" not in sys.argv and self_checks_header():
+        print(self_checks_header())
     rows = [("suite", "total", "pass", "marks", "fail", "cannot run", "note")]
     rows += dotty_rows() + suite_rows() + project_rows()
     if "--tsv" in sys.argv:
