@@ -1,0 +1,103 @@
+== p1
+tick
+Cell(())
+== p2
+tick
+Cell(())
+== p3
+Cell(())
+== p7
+tick
+Cell(())
+== p8
+tick
+Cell(())
+== site binding
+tick
+Cell(())
+== site block
+block
+tick
+Cell(())
+== site context
+tick
+Cell(())
+== site eta
+tick
+Cell(())
+== site guard
+tick
+Cell(())
+== site if
+tick
+Cell(())
+== site match
+tick
+Cell(())
+== site nested lambda
+Cell(())
+== site nil
+Cell(())
+== site none
+Cell(())
+== site partial
+tick
+Cell(())
+== site pattern
+tick
+Cell(())
+== site pure
+Cell(())
+== site try
+tick
+finally
+Cell(())
+== bound alias
+tick
+Cell(())
+== bound intersection
+tick
+Cell(())
+== nested unit depth
+Cell(())
+== nested numeric depth
+Cell(5)
+== twice
+tick
+Cell(Cell(()))
+== risk late unit
+tick
+Cell(())
+== struct box
+tick
+Cell(())
+== struct function
+tick
+Cell(())
+== struct union
+tick
+Cell(())
+== higher kind
+tick
+Cell(())
+== ascribed recovery
+Cell(())
+== explicit recovery
+Cell(())
+== declared view
+tick
+view
+Cell(())
+== view unit
+tick
+view
+Cell(())
+== declared after unit
+tick
+Cell(())
+== branches in order
+tick
+tick
+tick
+tick
+branches done

@@ -38,6 +38,17 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - Two values of a class that `derives CanEqual` compare where their type arguments compare pairwise, as the
   instance scalac derives has it: `x == y` for `x: Box[A]` with `type A <: String` and `y: Box[String]`
   compiles. teq refused it.
+- A lambda's result that does not fit the type variable it is typed against is adapted again once that variable
+  can be defined, as scalac does it: `for { _ <- o; _ <- o } yield meter.tick()` for a `Cell[Unit]`, and
+  `o.flatMap(_ => o.map(_ => meter.tick()))`, now compile, the value evaluated and dropped where the variable
+  becomes `Unit` (with scalac's warning where the value is a pure one: `yield 5`). teq said "type mismatch:
+  found Int => Meter, required Int => Unit". The same holds for a result that is a branch, a case, a handler, a
+  block's end or a nested lambda, for `Unit` named through an alias or an intersection, and for a view to the
+  variable's bound in scope, which is applied (`given Conversion[Meter, Unit]`). A type parameter DECLARED below
+  `Unit` (`def f[B <: Unit](g: Int => B)`) no longer takes any value and drops it: `f(_ => 5)` is the mismatch it
+  is for scalac, told at the lambda ("found Int => 5, required Int => Unit"), so a build that leaned on it stops
+  there; so does a branch that does not fit before the one that would bound the variable (`if c then tick() else
+  ()`), which no later branch recovers.
 - A member whose declared type is `Unit` drops the value of its body, as every other place that expects `Unit`
   does: `def paid: Unit = bump()`, a `val`, `var`, `lazy val` or `given` of type `Unit`, an override and a
   local `def`, with the value the whole body or a branch of an `if`, a case, a handler or a block's end, and

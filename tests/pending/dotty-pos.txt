@@ -73,7 +73,6 @@ depmet_implicit_norm_ret.scala	depmet_implicit_norm_ret.scala:29:42: type mismat
 depmet_implicit_tpbetareduce.scala	depmet_implicit_tpbetareduce.scala:9:10: covariant type x occurs in invariant position in type = List[x] of type m
 deprecated-no-kind-polymorphism-anykind.scala	deprecated-no-kind-polymorphism-anykind.scala:5:16: type AnyKind not found
 doWhile.scala	doWhile.scala:3:3: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
-eff-compose.scala	eff-compose.scala:17:12: type mismatch: found A => (E) ?=> B, required A => B
 enum-refinement.scala	enum-refinement.scala:9:19: expected ':', found 'val'
 enum-widen.scala	enum-widen.scala:14:8: type mismatch: found Option[Nothing], required Some[Int]
 erased-24.scala	erased-24.scala:11:11: 'erased' is not part of the supported Scala subset

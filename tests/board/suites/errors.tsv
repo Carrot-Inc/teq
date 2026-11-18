@@ -628,6 +628,7 @@ lambda_param_callee_spread_enum_case	pass	-
 lambda_param_callee_spread_later_list	pass	-	
 lambda_param_callee_spread_method	pass	-	
 lambda_param_callee_spread_two_params	pass	-	
+lambda_result_not_recovered	pass	-	
 language_import_intersection	pass	-	
 leading_infix_operand_placement	pass	-	
 lexical_extension_failure_beside_scope	pass	-	
@@ -770,6 +771,7 @@ opaque_scope	pass	-
 opaque_trait_prefix	pass	-	
 opaque_trait_prefix.check	fail	-	< tests/errors/opaque_trait_prefix.scala:12:24: error: Found: (h : Html.Tag[Node])
 opaque_union_argument	pass	-	
+open_variable_both_variances	pass	-	
 overload_arg_position	pass	-	
 overload_common_formal_function	pass	-	
 overload_definitions	pass	-	
@@ -843,6 +845,8 @@ proxy_apply_access	pass	-
 proxy_private_apply	pass	-	
 pure_intersection_double_definition	fail	-	missing 'Conflicting definitions:'
 qualified_this_not_enclosing	pass	-	
+recovered_discard_warnings	pass	-	
+recovered_discard_warnings.check	pass	-	
 refinement_converted_receiver_not_narrowed	pass	-	
 refinement_cyclic_alias	pass	-	
 refinement_erased_signature	pass	-	

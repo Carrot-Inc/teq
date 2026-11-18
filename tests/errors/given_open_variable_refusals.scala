@@ -47,7 +47,7 @@ object Main:
 // expect: 40:38: error: type mismatch: found Window[Unit, Nothing], required Window[Unit, Unit]
 // expect: 41:35: error: type mismatch: found Window[Unit, String], required Window[Unit, Unit]
 // expect: 42:37: error: type mismatch: found Window[Unit, CharSequence], required Window[Unit, Unit]
-// expect: 43:36: error: type mismatch: found Window[Unit, Nothing], required Window[Int, Unit]
+// expect: 43:36: error: type mismatch: found Window[Unit, R], required Window[Int, Unit]
 // expect: 44:14: error: None of the overloaded alternatives of method f in object F with types
 // expect: match arguments (Window[Unit, Nothing], true)
 // expect: 45:19: error: Ambiguous overload. The overloaded alternatives of method g in object F with types

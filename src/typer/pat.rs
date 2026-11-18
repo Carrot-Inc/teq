@@ -81,7 +81,7 @@ impl<'a> Worker<'a> {
                 Some(t) => self.type_expr_adapted(c.body, Some(t)),
                 None => {
                     let (te, ty) = self.type_expr(c.body, guide);
-                    let r = self.branch_to_var_bound(te, ty, expected, c.body);
+                    let r = self.branch_to_var_bound(te, ty, expected, c.body, guide);
                     self.guide_with(guide.unwrap(), r.1);
                     r
                 }

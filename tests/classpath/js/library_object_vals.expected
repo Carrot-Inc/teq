@@ -1,0 +1,42 @@
+01 its own val
+  OwnVal: its val
+02 its own private val
+  OwnPrivateVal: its private val
+03 its own var
+  OwnVar: its var
+04 its own pattern val
+  OwnPattern: its pattern val
+05 its own statement
+  OwnStatement: its statement
+06 its own lazy val
+07 a trait's val
+  TraitVal: the trait's val
+08 a trait's private val
+  TraitPrivateVal: the trait's private val
+09 a trait's var
+  TraitVar: the trait's var
+10 a trait's statement
+  TraitStatement: the trait's statement
+11 a class's val
+  ClassVal: the class's val
+12 a class's statement
+  ClassStatement: the class's statement
+13 a trait's val two levels up
+  TraitUp: a trait's val two levels up
+14 an overriding val
+  Overrider: its overriding val
+15 a trait's argument
+  TraitParam: the trait's argument
+16 an enum's val
+  Shade: an enum's val, each case
+  Shade: an enum's val, each case
+17 a given
+18 its own val, read after the load
+  LateRead: its val, read after the load
+  named
+  7
+19 a trait's val, read after the load
+  LateTraitRead: the trait's val, read after the load
+  named
+  7
+end

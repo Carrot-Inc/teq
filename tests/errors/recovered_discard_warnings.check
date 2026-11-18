@@ -1,0 +1,19 @@
+tests/errors/recovered_discard_warnings.scala:15:69: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    def chain(o: Shelf[Int]): Shelf[Unit] = o.flatMap(_ => o.map(_ => 5))
+                                                                      ^
+tests/errors/recovered_discard_warnings.scala:16:72: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    def named(o: Shelf[Int]): Shelf[Unit] = for { a <- o; b <- o } yield 6
+                                                                         ^
+tests/errors/recovered_discard_warnings.scala:17:71: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    def wild(o: Shelf[Int]): Shelf[Unit] = for { _ <- o; _ <- o } yield 7
+                                                                        ^
+tests/errors/recovered_discard_warnings.scala:18:86: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    def branch(o: Shelf[Int]): Shelf[Unit] = o.flatMap(_ => o.map(_ => if o.a > 0 then 8 else 9))
+                                                                                       ^
+tests/errors/recovered_discard_warnings.scala:18:93: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    def branch(o: Shelf[Int]): Shelf[Unit] = o.flatMap(_ => o.map(_ => if o.a > 0 then 8 else 9))
+                                                                                              ^
+tests/errors/recovered_discard_warnings.scala:20:42: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    val first: Unit => Unit = pinned(() => 1)
+                                           ^
+6 warnings found, errors under --werror

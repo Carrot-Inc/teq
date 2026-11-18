@@ -2316,7 +2316,7 @@ pos/devalify.scala	accepts
 pos/doWhile.scala	rejects	`do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
 pos/duplicate-parents.scala	accepts	
 pos/dynamicExtendsNoImport.scala	accepts	
-pos/eff-compose.scala	rejects	type mismatch
+pos/eff-compose.scala	accepts	
 pos/elidable-tparams.scala	rejects	cannot resolve import
 pos/end-given.scala	accepts	
 pos/end-nested.scala	accepts	

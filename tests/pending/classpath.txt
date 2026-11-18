@@ -11,6 +11,7 @@ js/jar_opaque_constructor_argument	js run, --std=lean: tests/classpath/js/jar_op
 js/jar_parent_call_inferred_arguments	js run, --std=lean: tests/classpath/js/jar_parent_call_inferred_arguments.scala:10:17: error: type HeldHook not found
 js/jar_splice_self_given	js run, --std=lean: tests/classpath/js/jar_splice_self_given.scala:8:11: error: not found: Sized
 js/java_interface_abstract_call	js run, --std=scala-library: tests/classpath/js/java_interface_abstract_call.scala:7:16: error: method read overrides nothing
+js/library_object_vals	js run, --std=lean: < OwnVal: its val
 js/nul_identifier	js run, --std=lean: tests/classpath/js/nul_identifier.scala:13:13: error: value getDeclaredMethods is not a member of Class[_]
 jvm/array_erased_class_made_and_cast	< 1 [Ljava.lang.Object; [Ljava.lang.Object;
 jvm/array_pattern_union_scrutinee	tests/classpath/jvm/array_pattern_union_scrutinee.scala:8:47: warning: match may not be exhaustive.

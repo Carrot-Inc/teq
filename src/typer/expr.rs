@@ -715,18 +715,15 @@ impl<'a> Worker<'a> {
         true
     }
 
-    /// The same refusal where a lambda's result or a branch was dropped against a variable that `Unit` bounds
-    /// (`discard_to_unit_bound`): `te` of type `ty`, written `written`, was adapted to `adapted_ty`.
-    fn refuse_method_value_dropped(&mut self, written: ExprId, te: TExprId, ty: TypeId, adapted_ty: TypeId) {
+    /// The same refusal, and the discard's warning, where a lambda's result or a branch was dropped against a
+    /// variable that became `Unit` (`recover_to_instance`): `te` of type `ty`, written `written`, was adapted
+    /// to `adapted_ty`.
+    pub(super) fn refuse_method_value_dropped(&mut self, written: ExprId, te: TExprId, ty: TypeId, adapted_ty: TypeId) {
         let ty = self.deref_canonical(ty);
         if self.deref_canonical(adapted_ty) != self.b.t_unit || ty == self.b.t_unit || ty == NOTHING || ty == ERROR {
             return;
         }
-        if self.as_context_function(ty).is_some() && !self.closure_as_written(te) {
-            return;
-        }
-        let result = self.result_expr(written);
-        self.refuse_method_value(result, te, ty);
+        self.warn_discarded(written, te, ty);
     }
 
     /// The closure at `te`, the value at the end of its blocks, where it is the eta-expansion the typer made of
@@ -1290,11 +1287,6 @@ impl<'a> Worker<'a> {
         if let Type::Var(v) = self.types.get(exp) {
             if let Some(converted) = self.widen_to_bound(te, act, v, expected) {
                 return (converted, expected);
-            }
-            // dotc discards the value where the expected type derives from `Unit`, which a
-            // variable bounded by it does (`eff { flyway.migrate() }` for a `Task[Unit]`).
-            if let Some((discarded, _)) = self.discard_to_unit_bound(te, actual, v, exp, span) {
-                return (discarded, expected);
             }
             if let Some(converted) = self.convert_to_var_bound(te, actual, v, expected, span) {
                 return (converted, expected);
@@ -2951,10 +2943,10 @@ impl<'a> Worker<'a> {
                 let mark = self.push_tested(tc);
                 let (tt, ty1) = self.type_expr(t, Some(guide));
                 self.pop_tested(mark);
-                let (tt, ty1) = self.branch_to_var_bound(tt, ty1, expected, t);
+                let (tt, ty1) = self.branch_to_var_bound(tt, ty1, expected, t, Some(guide));
                 self.guide_with(guide, ty1);
                 let (te, ty2) = self.type_expr(els, Some(guide));
-                let (te, ty2) = self.branch_to_var_bound(te, ty2, expected, els);
+                let (te, ty2) = self.branch_to_var_bound(te, ty2, expected, els, Some(guide));
                 let mut branches = [(tt, ty1), (te, ty2)];
                 self.harmonize_literals(&mut branches);
                 // The variables the branches left open for the join are settled by it, as a
@@ -2975,12 +2967,37 @@ impl<'a> Worker<'a> {
     /// A branch expected to be an open variable is converted into the variable's bound where it
     /// does not conform, as a single expression would be (`getOrElse(if c then u else n)` with
     /// the result expected to be a `Node` and a conversion of `u` to `Node`).
-    pub(super) fn branch_to_var_bound(&mut self, te: TExprId, ty: TypeId, expected: Option<TypeId>, e: ExprId) -> (TExprId, TypeId) {
+    /// The reference types every branch against the one `?B` in the branches' order, an earlier branch's type
+    /// becoming its lower bound (`typedIf`, `typedMatch`'s cases, `typedTry`: the body then the handlers): a later
+    /// branch that does not fit is adapted again where that bound defines the variable (`f(x => if x > 0 then ()
+    /// else tick())` for `f[B <: Unit]`: the `else` dropped to `Unit`), where the first such branch is refused.
+    /// The branches' guide (`branch_guide`) is that variable here: it holds the expected variable's bounds and the
+    /// types `guide_with` gave it of the branches typed before.
+    pub(super) fn branch_to_var_bound(&mut self, te: TExprId, ty: TypeId, expected: Option<TypeId>, e: ExprId, guide: Option<TypeId>) -> (TExprId, TypeId) {
+        let expected = match guide {
+            Some(g) if matches!(expected.map(|t| self.types.get(t)), Some(Type::Var(_))) => Some(g),
+            _ => expected,
+        };
         if !matches!(expected.map(|t| self.deref(t)).map(|t| self.types.get(t)), Some(Type::Var(_))) {
+            // A variable that the adaptation of an earlier branch defined: this branch is adapted against what
+            // the variable is now, as each branch is adapted against the expected type as it stands.
+            if let Some(exp) = expected.filter(|&t| matches!(self.types.get(t), Type::Var(_))) {
+                // A written branch construct had its own branches adapted against the variable.
+                if self.written_branches(e) {
+                    return (te, ty);
+                }
+                let span = self.cur_ast().expr_span(e);
+                let instance = self.zonk(exp);
+                let m = self.attempt();
+                let adapted = self.adapt_typed(te, ty, instance, span);
+                let Some(adapted) = self.kept_if_recovered(m, adapted, instance) else { return (te, ty) };
+                self.refuse_method_value_dropped(e, te, ty, adapted.1);
+                return adapted;
+            }
             return (te, ty);
         }
         let span = self.cur_ast().expr_span(e);
-        let adapted = self.widen_lambda_result(te, ty, expected, span);
+        let adapted = self.widen_lambda_result(te, ty, expected, Some(e), span);
         self.refuse_method_value_dropped(e, te, ty, adapted.1);
         adapted
     }
@@ -3151,7 +3168,7 @@ impl<'a> Worker<'a> {
             let (te, ty) = match exp.and_then(|x| self.concrete_expected(Some(x))) {
                 Some(x) => (self.adapt(te, ty, x, self.cur_ast().expr_span(id)), x),
                 None => {
-                    let (te, ty) = self.branch_to_var_bound(te, ty, exp, id);
+                    let (te, ty) = self.branch_to_var_bound(te, ty, exp, id, None);
                     // The element is `Tuple2.apply`'s argument, its type the lower bound of the
                     // parameter's variable, which is instantiated widened (`widenInferred`):
                     // `(1, "a")` is an `(Int, String)` unless the expected element keeps the constant.
@@ -4180,7 +4197,7 @@ impl<'a> Worker<'a> {
                     let ret = exp_fn.as_ref().map(|&(_, r)| r);
                     let (tb, bty) = self.type_expr(body, ret);
                     let body_span = self.cur_ast().expr_span(body);
-                    let adapted = self.adapt_open_body(tb, bty, ret, body_span);
+                    let adapted = self.adapt_open_body(tb, bty, ret, Some(body), body_span);
                     self.refuse_method_value_dropped(body, tb, bty, adapted.1);
                     adapted
                 }
@@ -4351,7 +4368,7 @@ impl<'a> Worker<'a> {
                 let (tb, bty) = self.type_expr(body, ret);
                 let (tb, bty) = self.apply_context_to_open_result(body, tb, bty, ret);
                 let body_span = self.cur_ast().expr_span(body);
-                let adapted = self.adapt_open_body(tb, bty, ret, body_span);
+                let adapted = self.adapt_open_body(tb, bty, ret, Some(body), body_span);
                 self.refuse_method_value_dropped(body, tb, bty, adapted.1);
                 adapted
             }
@@ -4467,7 +4484,7 @@ impl<'a> Worker<'a> {
                 let (tb, bty) = self.type_expr(body, ret);
                 let (tb, bty) = self.apply_context_to_open_result(body, tb, bty, ret);
                 let body_span = self.cur_ast().expr_span(body);
-                let adapted = self.widen_lambda_result(tb, bty, ret, body_span);
+                let adapted = self.widen_lambda_result(tb, bty, ret, Some(body), body_span);
                 self.refuse_method_value_dropped(body, tb, bty, adapted.1);
                 adapted
             }
@@ -4486,8 +4503,8 @@ impl<'a> Worker<'a> {
     /// closure's right-hand side is adapted to its result type tree (`Typer.adapt`: a numeric
     /// widening, a discarded value, the view into the variable's bounds; `widen_lambda_result`);
     /// given no result, its unions are widened as an inferred result's are.
-    pub(in crate::typer) fn adapt_open_body(&mut self, tb: TExprId, bty: TypeId, ret: Option<TypeId>, body_span: Span) -> (TExprId, TypeId) {
-        let (tb, bty) = self.widen_lambda_result(tb, bty, ret, body_span);
+    pub(in crate::typer) fn adapt_open_body(&mut self, tb: TExprId, bty: TypeId, ret: Option<TypeId>, written: Option<ExprId>, body_span: Span) -> (TExprId, TypeId) {
+        let (tb, bty) = self.widen_lambda_result(tb, bty, ret, written, body_span);
         (tb, if ret.is_none() { self.widen_unions(bty) } else { bty })
     }
 
@@ -4560,7 +4577,8 @@ impl<'a> Worker<'a> {
     /// that the expected type put on the variable, as an argument would: `o.map(_.value)` for an
     /// `Option[Long]` maps an `Int` field to a `Long`; and converts into a class bound the
     /// variable has, as scalac adapts the body: `one(x => "s")` against a `Shown`.
-    pub(in crate::typer) fn widen_lambda_result(&mut self, te: TExprId, ty: TypeId, expected: Option<TypeId>, span: Span) -> (TExprId, TypeId) {
+    /// `written` is the expression `te` was typed from, where it was written so.
+    pub(in crate::typer) fn widen_lambda_result(&mut self, te: TExprId, ty: TypeId, expected: Option<TypeId>, written: Option<ExprId>, span: Span) -> (TExprId, TypeId) {
         // The closure's result is the body's primitive type: an erased result is unboxed there,
         // as its method's (`(x: String): Int`) is.
         let Some(exp) = expected else { return (self.unbox_erased(te, ty), ty) };
@@ -4592,33 +4610,58 @@ impl<'a> Worker<'a> {
                 return (widened, self.numeric_upper_bound(v, true).unwrap_or(ty));
             }
         }
-        if let Some(discarded) = self.discard_to_unit_bound(te, ty, v, exp, span) {
-            return discarded;
+        if let Some(converted) = self.convert_to_var_bound_typed(te, ty, v, exp, span) {
+            return converted;
         }
-        match self.convert_to_var_bound_typed(te, ty, v, exp, span) {
-            Some(converted) => converted,
-            None => (te, ty),
+        // An `if`, a `match` or a `try` had each branch adapted against the variable, as the reference adapts
+        // each branch against `?B` and never the construct again: one that does not fit holds a branch that was
+        // not recovered.
+        if written.is_some_and(|w| self.written_branches(w)) {
+            return (te, ty);
         }
+        // Nothing recovers it: the value stays as typed, its mismatch told where its type meets the variable
+        // later (the lambda's function type, the branches' join).
+        self.recover_to_instance(te, ty, exp, span).unwrap_or((te, ty))
     }
 
-    /// A variable bounded above by `Unit` is instantiated to it, and the result discarded, as
-    /// scalac adapts the body again once the variable is `Unit`: `req(s => s.isEmpty)` for a
-    /// `Box[Unit]` of a `req[A](run: String => A): Box[A]`.
-    fn discard_to_unit_bound(&mut self, te: TExprId, ty: TypeId, v: TVarId, exp: TypeId, span: Span) -> Option<(TExprId, TypeId)> {
-        let unit = self.b.t_unit;
-        let bounded = (0..self.tvars[v].upper.len()).any(|i| {
-            let u = self.tvars[v].upper[i];
-            self.deref_canonical(u) == unit
-        });
-        if !bounded {
+    /// Whether the written `e`, through its parentheses and the blocks it ends, is an `if` with an `else`, a
+    /// `match` or a `try`: a value whose branches were adapted one by one (`branch_to_var_bound`).
+    fn written_branches(&self, e: ExprId) -> bool {
+        let e = self.result_expr(e);
+        matches!(self.cur_ast().expr(e), Expr::If(_, _, Some(_)) | Expr::Match(..) | Expr::Try(_))
+    }
+
+    /// `adaptToSubType`'s `recover` for a value that does not conform to an expected type that is an open
+    /// variable, where neither a constant's conversion nor a view applied: the value's type, then the variable,
+    /// is defined further (`canDefineFurther`: the whole type or nothing) and the value adapted again against
+    /// what the variable now is: an instance that is `Unit` takes the `Unit` adaptation whole (the value
+    /// evaluated and dropped, the discard's warning, the refusal of a function value the typer made), a
+    /// numeric one the widening, any other a conformance or a view. A value that does not fit the instance is
+    /// not recovered: the variable stays as it was and the value as typed (`None`).
+    fn recover_to_instance(&mut self, te: TExprId, ty: TypeId, exp: TypeId, span: Span) -> Option<(TExprId, TypeId)> {
+        let m = self.attempt();
+        if !(self.can_define_further(ty) || self.can_define_further(exp)) {
+            self.retract(m);
             return None;
         }
-        let mark = self.snapshot();
-        if !self.is_sub(unit, exp) {
-            self.rollback(&mark);
+        let ty = self.zonk(ty);
+        let instance = self.zonk(exp);
+        let adapted = self.adapt_typed(te, ty, instance, span);
+        self.kept_if_recovered(m, adapted, instance)
+    }
+
+    /// The adaptation of a value against the instance of its variable, begun at `m`, stands where it recovered the
+    /// value: an instance that is `Unit` always (the value dropped, what that adaptation refuses told; `Unit` as
+    /// `adapt_typed` reads it, so that an abstract type `Unit` bounds is none), any other where it told no error.
+    /// Otherwise it is retracted, and the value's mismatch is told where its type meets the variable later, as
+    /// where no recovery was tried.
+    fn kept_if_recovered(&mut self, m: super::state::Mark, adapted: (TExprId, TypeId), instance: TypeId) -> Option<(TExprId, TypeId)> {
+        if self.deref_canonical(instance) != self.b.t_unit && self.attempt_failed(&m) {
+            self.retract(m);
             return None;
         }
-        Some((self.adapt(te, ty, unit, span), unit))
+        self.close(m);
+        Some(adapted)
     }
 
     /// The body of an eta-expansion converted to the result type a function type expects
@@ -5764,15 +5807,28 @@ impl<'a> Worker<'a> {
             let (lower, upper) = (self.tvars[v].lower.clone(), self.tvars[v].upper.clone());
             self.tvars[gv].lower = lower;
             self.tvars[gv].upper = upper;
+            // The bounds the variable's parameter declares are the guide's too: a bound taken over is no
+            // narrowing of them (`instDirection` of a branch typed against the variable itself).
+            let (declared_lower, declared_upper) = self.tvars[v].declared();
+            self.tvars[gv].set_declared(declared_lower, declared_upper);
         }
         self.tvars[gv].guide = true;
         g
     }
 
+    /// A branch's type becomes a lower bound of the branches' guide where it conforms to it: a branch not
+    /// recovered (`widen_lambda_result`) leaves the guide as it was, as the reference's failed comparison of
+    /// the branch with `?B` leaves the constraint as it was.
     pub fn guide_with(&mut self, guide: TypeId, branch_ty: TypeId) {
         let Type::Var(g) = self.types.get(guide) else { return };
         let branch_ty = self.zonk(branch_ty);
-        if branch_ty != ERROR && !self.tvars[g].lower.contains(&branch_ty) {
+        if branch_ty == ERROR || self.tvars[g].lower.contains(&branch_ty) {
+            return;
+        }
+        let mark = self.snapshot();
+        let fits = self.is_sub(branch_ty, guide);
+        self.rollback(&mark);
+        if fits {
             self.tvars[g].lower.push(branch_ty);
         }
     }

@@ -6135,7 +6135,7 @@ impl<'a> Worker<'a> {
             te = self.wrap_hoisted(hoist_mark, te);
             ty = self.skolemized_annotated_result(call.sym, ty);
         } else {
-            (te, ty) = self.widen_lambda_result(te, ty, eta_ret_expected, span);
+            (te, ty) = self.widen_lambda_result(te, ty, eta_ret_expected, None, span);
             if let (Some(ret), true, 1) = (eta_ret_expected, eta_sam.is_some(), eta.len()) {
                 if self.canon(ret) != self.b.t_unit && eta_sam_mismatch.is_none() && !self.fits_lambda_result(ty, ret) {
                     eta_sam_mismatch = Some((ty, ret));
@@ -8258,6 +8258,9 @@ impl<'a> Worker<'a> {
         // The closure's parameters and their types (`makeClosure`).
         let mut params: Vec<SymId> = Vec::with_capacity(1);
         let mut param_tys: Vec<TypeId> = Vec::with_capacity(1);
+        // The tree of what the comprehension's rest gives, where the lambda's body wraps it (a tuple unpacked, a
+        // pattern matched): what a dropped yield is told by.
+        let mut yielded: Option<TExprId> = None;
         let (tb, bty) = match binder {
             ForBinder::Unpack(id) => {
                 let sym = self.fresh_local("u", ANY, span);
@@ -8284,6 +8287,7 @@ impl<'a> Worker<'a> {
                     stmts.push(TStmt::Val(local, self.prog.add(TExpr::Index(packed, i as u32))));
                 }
                 let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
+                yielded = Some(tb);
                 let l = self.prog.stmts.push_slice(&stmts);
                 let unpacked = self.prog.add(TExpr::Block(l, tb));
                 if let Some(t) = tuple {
@@ -8360,6 +8364,7 @@ impl<'a> Worker<'a> {
                     self.check_irrefutable(tp, pat, sty, Some(Span::new(at, at)));
                 }
                 let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
+                yielded = Some(tb);
                 let mut cases = vec![TCase { pat: tp, guard: None, body: tb }];
                 if filter {
                     let wildcard = self.prog.add_pat(TPat::Wildcard);
@@ -8372,7 +8377,20 @@ impl<'a> Worker<'a> {
         };
         let (tb, bty) = match ret_expected {
             Some(_) => (tb, bty),
-            None => self.adapt_open_body(tb, bty, Some(ret), lambda_span),
+            None => {
+                // The value a comprehension yields is the written expression the body ends with.
+                let yield_written = match rest {
+                    ForRest::Rest { idx, end, body, is_yield: true } if idx == end => Some(body),
+                    _ => None,
+                };
+                let adapted = self.adapt_open_body(tb, bty, Some(ret), yield_written, lambda_span);
+                // The value a comprehension yields, dropped against a result that became `Unit`, is told as a
+                // lambda's result is.
+                if let Some(body) = yield_written {
+                    self.refuse_method_value_dropped(body, yielded.unwrap_or(tb), bty, adapted.1);
+                }
+                adapted
+            }
         };
         let bty = self.lambda_body_closed(body_mark, bty, None, Some(ret), &params, lambda_span);
         self.for_bases.pop();

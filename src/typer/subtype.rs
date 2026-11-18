@@ -4373,48 +4373,106 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// dotty's `canDefineFurther`: the open variables of `t` instantiated as `isFullyDefined` does
-    /// under `ForceDegree.failBottom`, true where every one could be and one was; none of them
-    /// where one held covariantly or nonvariantly has nothing below it.
+    /// dotty's `canDefineFurther`: `isFullyDefined(t, ForceDegree.failBottom)` and "the constraint changed". The
+    /// reference runs it in a typer state of its own that is kept only where the answer is true: the open
+    /// variables of `t` are instantiated all or none. A pass decides each variable where it is met
+    /// (`fully_define`); the variables it puts off are then instantiated from above in the order met and the
+    /// whole type is passed again, since their instances may hold variables of their own
+    /// (`IsFullyDefinedAccumulator.process`).
     pub fn can_define_further(&mut self, t: TypeId) -> bool {
         let t = self.zonk(t);
         if !self.types.has_vars(t) {
             return false;
         }
         let mark = self.snapshot();
-        let mut maximize = Vec::new();
         let mut changed = false;
-        for (v, s) in self.var_variances(t) {
-            if self.tvars[v].inst.is_some() {
+        loop {
+            let mut maximize = Vec::new();
+            if !self.fully_define(t, 1, t, &mut maximize, &mut changed) {
+                self.rollback(&mark);
+                return false;
+            }
+            if maximize.is_empty() {
+                break;
+            }
+            for v in maximize {
+                if self.tvars[v].inst.is_none() {
+                    self.instantiate_from(v, false, t);
+                    changed = true;
+                }
+            }
+        }
+        let defined = self.zonk(t);
+        if self.types.has_vars(defined) {
+            self.rollback(&mark);
+            return false;
+        }
+        changed
+    }
+
+    /// `IsFullyDefinedAccumulator.apply` under `ForceDegree.failBottom` over the type `ty` met at the variance
+    /// `sign` inside `root` (the reference fails on a prototype's unknown, `WildcardType`, which a type here
+    /// never holds; a wildcard argument is passed over as `foldOver` does its bounds): a variable still open is
+    /// decided at EACH place it is met, by
+    /// that place's variance (`instDecision`): by the direction its bounds give, else from below where something
+    /// bounds it below and the place is no contravariant one, else put off to be maximized (a contravariant
+    /// place), else (nothing below it, a covariant or invariant place) the whole fails. A variable put off at a
+    /// contravariant place is so decided again at a later covariant one. The instance a decision makes is
+    /// passed in its turn, and so is the instance of a variable met again after it was instantiated.
+    fn fully_define(&mut self, ty: TypeId, sign: i8, root: TypeId, maximize: &mut Vec<TVarId>, changed: &mut bool) -> bool {
+        let ty = self.zonk(ty);
+        for (v, s) in self.var_occurrences(ty, sign) {
+            if let Some(inst) = self.tvars[v].inst {
+                if !self.fully_define(inst, s, root, maximize, changed) {
+                    return false;
+                }
                 continue;
             }
             let direction = self.inst_direction(v);
-            if direction != 0 {
-                self.instantiate_from(v, direction < 0, t);
-                changed = true;
-                continue;
-            }
-            if self.has_lower_bound(v) {
-                if s >= 0 {
-                    self.instantiate_from(v, true, t);
-                    changed = true;
-                } else {
-                    maximize.push(v);
+            let from_below = if direction != 0 {
+                direction < 0
+            } else if self.has_lower_bound_but_itself(v) {
+                if s < 0 {
+                    if !maximize.contains(&v) {
+                        maximize.push(v);
+                    }
+                    continue;
                 }
+                true
             } else if s >= 0 {
-                self.rollback(&mark);
                 return false;
             } else {
-                maximize.push(v);
+                if !maximize.contains(&v) {
+                    maximize.push(v);
+                }
+                continue;
+            };
+            self.instantiate_from(v, from_below, root);
+            *changed = true;
+            if let Some(inst) = self.tvars[v].inst {
+                if !self.fully_define(inst, s, root, maximize, changed) {
+                    return false;
+                }
             }
         }
-        for v in maximize {
-            if self.tvars[v].inst.is_none() {
-                self.instantiate_from(v, false, t);
-                changed = true;
+        true
+    }
+
+    /// `TypeVar.hasLowerBound` for a variable met while a type is defined further: `v` itself is no bound of
+    /// `v`: a variable below it that was instantiated to it in the same pass (`?B <: ?A`, `?B := ?A`) leaves
+    /// `?A >: ?A`, which the reference's constraint does not keep.
+    fn has_lower_bound_but_itself(&mut self, v: TVarId) -> bool {
+        for k in 0..self.tvars[v].lower.len() {
+            let l = self.tvars[v].lower[k];
+            if self.is_var_itself(l, v) {
+                continue;
+            }
+            let d = self.deref(l);
+            if self.canon(d) != NOTHING {
+                return true;
             }
         }
-        changed
+        false
     }
 
     /// Whether something other than `Nothing` bounds `v` below (`TypeVar.hasLowerBound`).
@@ -5385,6 +5443,20 @@ impl<'a> Worker<'a> {
     }
 
     fn collect_var_variances(&mut self, t: TypeId, sign: i8, out: &mut Vec<(TVarId, i8)>) {
+        self.walk_var_variances(t, sign, out, false)
+    }
+
+    /// The variables of `t` in the order a walk of `t` meets them, each once for every variance it is met with
+    /// (`1`, `-1`, `0`): what a decision taken at each occurrence reads (`fully_define`).
+    fn var_occurrences(&mut self, t: TypeId, sign: i8) -> Vec<(TVarId, i8)> {
+        let mut out = Vec::new();
+        self.walk_var_variances(t, sign, &mut out, true);
+        out
+    }
+
+    /// The walk behind `var_variances` (a variable's variances merged into one entry) and behind
+    /// `var_occurrences` (`each`: an entry a variance, in the order met).
+    fn walk_var_variances(&mut self, t: TypeId, sign: i8, out: &mut Vec<(TVarId, i8)>, each: bool) {
         // A part that mentions no variable holds none (the store's flag, read once).
         if !self.types.has_vars(t) {
             return;
@@ -5394,13 +5466,21 @@ impl<'a> Worker<'a> {
         // over.
         if self.semantic {
             if let Some((under, r)) = self.types.form_of(t) {
-                return self.collect_var_variances_form(t, sign, out, under, r);
+                return self.collect_var_variances_form(t, sign, out, under, r, each);
             }
         }
-        let note = |out: &mut Vec<(TVarId, i8)>, v: TVarId, sign: i8| match out.iter_mut().find(|(w, _)| *w == v) {
-            Some((_, s)) if *s != sign => *s = 0,
-            Some(_) => {}
-            None => out.push((v, sign)),
+        let note = |out: &mut Vec<(TVarId, i8)>, v: TVarId, sign: i8| {
+            if each {
+                if !out.contains(&(v, sign)) {
+                    out.push((v, sign));
+                }
+                return;
+            }
+            match out.iter_mut().find(|(w, _)| *w == v) {
+                Some((_, s)) if *s != sign => *s = 0,
+                Some(_) => {}
+                None => out.push((v, sign)),
+            }
         };
         match self.types.get(t) {
             Type::Var(v) => note(out, v, sign),
@@ -5417,20 +5497,20 @@ impl<'a> Worker<'a> {
                         -1 => -sign,
                         _ => 0,
                     };
-                    self.collect_var_variances(a, inner, out);
+                    self.walk_var_variances(a, inner, out, each);
                 }
             }
             Type::AppVar(w, args) => {
                 note(out, w, sign);
                 let items = self.types.items(args).to_vec();
                 for a in items {
-                    self.collect_var_variances(a, 0, out);
+                    self.walk_var_variances(a, 0, out, each);
                 }
             }
             Type::AppParam(_, args) => {
                 let items = self.types.items(args).to_vec();
                 for a in items {
-                    self.collect_var_variances(a, 0, out);
+                    self.walk_var_variances(a, 0, out, each);
                 }
             }
             // An abstract type member's arguments at its declared variances (`type T[+A]`), as a
@@ -5445,39 +5525,39 @@ impl<'a> Worker<'a> {
                         -1 => -sign,
                         _ => 0,
                     };
-                    self.collect_var_variances(a, inner, out);
+                    self.walk_var_variances(a, inner, out, each);
                 }
             }
-            Type::Lambda(_, b) => self.collect_var_variances(b, sign, out),
+            Type::Lambda(_, b) => self.walk_var_variances(b, sign, out, each),
             Type::Union(a, b, _) | Type::Inter(a, b) => {
-                self.collect_var_variances(a, sign, out);
-                self.collect_var_variances(b, sign, out);
+                self.walk_var_variances(a, sign, out, each);
+                self.walk_var_variances(b, sign, out, each);
             }
             Type::Alias(..) => {
                 let e = self.deref_alias(t);
                 if e != t {
-                    self.collect_var_variances(e, sign, out);
+                    self.walk_var_variances(e, sign, out, each);
                 }
             }
             // A refinement's members count as the member types they are: a `val` and a method's
             // result where the refinement stands, a method's parameters and a lower bound the
             // other way, an alias both ways.
             Type::Refined(parent, r) => {
-                self.collect_var_variances(parent, sign, out);
+                self.walk_var_variances(parent, sign, out, each);
                 match self.types.refinement(r) {
-                    Refinement::Alias(_, ty) => self.collect_var_variances(ty, 0, out),
+                    Refinement::Alias(_, ty) => self.walk_var_variances(ty, 0, out, each),
                     Refinement::Bounds(_, lo, hi) => {
-                        self.collect_var_variances(lo, -sign, out);
-                        self.collect_var_variances(hi, sign, out);
+                        self.walk_var_variances(lo, -sign, out, each);
+                        self.walk_var_variances(hi, sign, out, each);
                     }
-                    Refinement::Val(_, _, ty) => self.collect_var_variances(ty, sign, out),
+                    Refinement::Val(_, _, ty) => self.walk_var_variances(ty, sign, out, each),
                     Refinement::Term(_, _, l) => {
                         let items = self.types.items(l).to_vec();
                         if let Some((&ret, params)) = items.split_last() {
                             for &p in params {
-                                self.collect_var_variances(p, -sign, out);
+                                self.walk_var_variances(p, -sign, out, each);
                             }
-                            self.collect_var_variances(ret, sign, out);
+                            self.walk_var_variances(ret, sign, out, each);
                         }
                     }
                 }
@@ -5488,13 +5568,13 @@ impl<'a> Worker<'a> {
 
     #[cold]
     #[inline(never)]
-    fn collect_var_variances_form(&mut self, t: TypeId, sign: i8, out: &mut Vec<(TVarId, i8)>, under: TypeId, r: crate::types::RetainId) {
+    fn collect_var_variances_form(&mut self, t: TypeId, sign: i8, out: &mut Vec<(TVarId, i8)>, under: TypeId, r: crate::types::RetainId, each: bool) {
         let types = self.types.clone();
-        types.in_pass(&[super::FORM_VAR_VARIANCES, sign as u32], t, || {
+        types.in_pass(&[super::FORM_VAR_VARIANCES, sign as u32, each as u32], t, || {
             for (x, w) in self.form_parts_at(r) {
-                self.collect_var_variances(x, sign * w, out);
+                self.walk_var_variances(x, sign * w, out, each);
             }
-            self.collect_var_variances(under, sign, out);
+            self.walk_var_variances(under, sign, out, each);
             0
         });
     }

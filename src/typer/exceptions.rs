@@ -56,18 +56,25 @@ impl<'a> Worker<'a> {
         }
         let exp = self.branch_expected(expected);
         let guide = if exp.is_none() { Some(self.branch_guide(expected)) } else { None };
+        // The body, then each handler, against the branches' guide, as `branch_to_var_bound` adapts an `if`'s and a
+        // `match`'s branches.
         let branch = |this: &mut Self, e: ExprId| -> (TExprId, TypeId) {
             match exp {
                 Some(t) => (this.check_expr(e, t), t),
                 None => {
-                    let r = this.type_expr(e, guide);
+                    let (te, ty) = this.type_expr(e, guide);
+                    let r = this.branch_to_var_bound(te, ty, expected, e, guide);
                     this.guide_with(guide.unwrap(), r.1);
                     r
                 }
             }
         };
-        let (body, bty) = branch(self, t.body);
         let throwable = self.throwable_type(span);
+        // A handler that is an expression is typed first, against `Throwable => pt`, and made the one case; then
+        // the body and the cases (`Typer.typedTry(untpd.ParsedTry)`): its result bounds the variable the body is
+        // then adapted against (`catch handle` with a `handle` of `Unit`).
+        let handler = t.handler.map(|h| self.handler_case(h, throwable, exp, guide, span));
+        let (body, bty) = branch(self, t.body);
         let mut cases: Vec<TCase> = Vec::with_capacity(t.cases.len as usize + 1);
         let mut branches: Vec<(TExprId, TypeId)> = vec![(body, bty)];
         let mut caught_all = false;
@@ -87,10 +94,12 @@ impl<'a> Worker<'a> {
             cases.push(TCase { pat, guard, body: te });
             branches.push((te, ty));
         }
-        if let Some(h) = t.handler {
-            let (case, ty) = self.handler_case(h, throwable, exp, guide, span);
+        // A handler told at its place (`handler_case`'s refusal) is no branch the try's type joins.
+        if let Some((case, ty, refused)) = handler {
             cases.push(case);
-            branches.push((case.body, ty));
+            if !refused {
+                branches.push((case.body, ty));
+            }
         }
         let finalizer = t.finalizer.map(|f| self.check_expr(f, self.b.t_unit));
         let result_ty = match exp {
@@ -125,7 +134,7 @@ impl<'a> Worker<'a> {
 
     /// `catch handler` with an expression: a case that takes every `Throwable` and applies the
     /// handler to it, through `applyOrElse` with a rethrow for a partial function, as scalac
-    /// desugars it.
+    /// desugars it. With the case its type, and whether the handler was refused at its place.
     fn handler_case(
         &mut self,
         handler: ExprId,
@@ -133,13 +142,26 @@ impl<'a> Worker<'a> {
         exp: Option<TypeId>,
         guide: Option<TypeId>,
         span: Span,
-    ) -> (TCase, TypeId) {
+    ) -> (TCase, TypeId, bool) {
         let ex = self.fresh_local("e", throwable, span);
         let test = self.prog.add_test(TypeTest::Always);
         let bind = self.prog.add_pat(TPat::Bind(ex, None));
         let pat = self.prog.add_pat(TPat::Test(test, throwable, bind));
-        let expected_fn = exp.map(|r| self.fun_type(&[throwable], r));
+        let expected_fn = exp.or(guide).map(|r| self.fun_type(&[throwable], r));
         let (th, hty) = self.type_expr(handler, expected_fn);
+        // Against the branches' guide a handler that is a function is adapted to `Throwable => pt`, as the
+        // reference types it: its result bounds the variable, and one that does not fit is told at the handler.
+        let (th, refused) = match (exp, expected_fn) {
+            (None, Some(f)) if self.function_base(hty).is_some() => {
+                let hspan = self.cur_ast().expr_span(handler);
+                let m = self.attempt();
+                let th = self.adapt(th, hty, f, hspan);
+                let refused = self.attempt_failed(&m);
+                self.close(m);
+                (th, refused)
+            }
+            _ => (th, false),
+        };
         let hty = self.solve_in(hty);
         let arg = self.prog.add(TExpr::Local(ex));
         self.prog.set_type(arg, throwable);
@@ -160,12 +182,13 @@ impl<'a> Worker<'a> {
         let (body, ty) = self.apply_member(th, hty, method, None, lists, span, exp.or(guide));
         let (body, ty) = match exp {
             Some(t) => (self.adapt(body, ty, t, span), t),
+            None if refused => (body, ty),
             None => {
                 self.guide_with(guide.unwrap(), ty);
                 (body, ty)
             }
         };
-        (TCase { pat, guard: None, body }, ty)
+        (TCase { pat, guard: None, body }, ty, refused)
     }
 
     /// Whether a case could take a `JavaScriptException`, so that a caught value that is no

@@ -112,6 +112,7 @@ js/kittens_derive	pass	-
 js/kittens_shapes	pass	-	
 js/library_forwarder_path_value	pass	-	
 js/library_forwarder_singleton_type	pass	-	
+js/library_object_vals	fail	-	js run, --std=lean: < OwnVal: its val
 js/macro_suspended_after_library_demand	pass	-	
 js/macro_suspended_library_demand_no_final_newline	pass	-	
 js/macro_suspended_library_demand_reaches_output	pass	-	

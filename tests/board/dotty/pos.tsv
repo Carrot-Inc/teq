@@ -292,7 +292,7 @@ devalify.scala	pass	check:pass
 doWhile.scala	fail	check:fail	doWhile.scala:3:3: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
 duplicate-parents.scala	pass	check:pass	
 dynamicExtendsNoImport.scala	pass	check:pass	
-eff-compose.scala	fail	check:fail	eff-compose.scala:17:12: type mismatch: found A => (E) ?=> B, required A => B
+eff-compose.scala	pass	check:pass	
 elidable-tparams.scala	pass	check:fail	
 end-given.scala	pass	check:pass	
 end-nested.scala	pass	check:pass	
