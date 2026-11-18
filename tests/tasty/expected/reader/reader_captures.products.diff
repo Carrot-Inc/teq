@@ -26,15 +26,13 @@
 > origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
-87,94c87,97
+87,92c87,95
 < origin	fix.rjava.RdSub	decl.jar	key reader_java.scala	token 108331611 recorded	definitions v1 (1 definitions)
 < select	fix.rdecl.RdBox	def put	reader_decl.scala:11:27	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 < select	fix.rdecl.RdBox	def put	reader_decl.scala:12:51	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 < select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:35	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 < select	fix.rdecl.RdCustom	def toString	reader_decl.scala:82:37	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 < select	fix.rdecl.RdF1	def toString	reader_decl.scala:21:35	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
-< select	fix.rdecl.RdFooBox	def put	reader_decl.scala:25:24	scala.Int.+(scala.Int): scala.Int	by name (a builtin's member)	: Int
-< select	fix.rdecl.RdInBox	def put	reader_decl.scala:71:27	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 ---
 > origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
 > select	fix.rdecl.RdBox	def put	reader_decl.scala:11:37	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
@@ -45,5 +43,7 @@
 > select	fix.rdecl.RdCustom	def toString	reader_decl.scala:82:52	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 > select	fix.rdecl.RdF1	def toString	reader_decl.scala:21:43	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 > select	fix.rdecl.RdF1	def toString	reader_decl.scala:21:47	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
-> select	fix.rdecl.RdFooBox	def put	reader_decl.scala:25:30	scala.Int.+(scala.Int): scala.Int	by name (a builtin's member)	: Int
+94c97
+< select	fix.rdecl.RdInBox	def put	reader_decl.scala:71:27	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+---
 > select	fix.rdecl.RdInBox	def put	reader_decl.scala:71:34	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String

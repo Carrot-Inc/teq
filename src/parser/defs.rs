@@ -525,7 +525,7 @@ impl<'a> Parser<'a> {
             if !self.at(Tok::LParen) {
                 break;
             }
-            self.bump();
+            let open = self.bump().span;
             let mut clause = ParamClause::default();
             let mut cut = false;
             if self.at_soft(names::USING) && self.kind_at(1) != Tok::Colon {
@@ -541,6 +541,7 @@ impl<'a> Parser<'a> {
                 clause.is_implicit = true;
             }
             while !self.at(Tok::RParen) && !self.at(Tok::Eof) {
+                let param_start = self.span();
                 let annots = if self.at(Tok::At) {
                     let annots = self.parse_annots();
                     push_list(&mut self.ast.param_annots, &annots)
@@ -619,7 +620,8 @@ impl<'a> Parser<'a> {
                     self.ast.access_scopes.push((span.start, within));
                 }
                 if name != names::EMPTY {
-                    clause.params.push(Param { name, span, ty, default, mods: pm, annots });
+                    let full = param_start.to(self.prev_span());
+                    clause.params.push(Param { name, span, full, ty, default, mods: pm, annots });
                 }
                 if !self.list_continues(Tok::RParen, &mut cut) {
                     break;
@@ -629,6 +631,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect(Tok::RParen);
+            clause.span = open.to(self.prev_span());
             let last = clause.is_implicit;
             lead += clause.params.len();
             clauses.push(clause);
@@ -664,9 +667,10 @@ impl<'a> Parser<'a> {
             .clauses
             .iter()
             .map(|c| ParamClause {
-                params: c.params.iter().map(|p| Param { mods: 0, annots: ListRef::EMPTY, ..*p }).collect(),
+                params: c.params.iter().map(|p| Param { mods: 0, annots: ListRef::EMPTY, full: Span::default(), ..*p }).collect(),
                 is_using: c.is_using,
                 is_implicit: c.is_implicit,
+                span: Span::default(),
             })
             .collect();
         let mut ty = self.ast.add_ty(TyExpr::Name(name), span);
@@ -1910,7 +1914,7 @@ impl<'a> Parser<'a> {
                 self.bump();
                 let n = clauses.iter().map(|c: &ParamClause| c.params.len()).sum::<usize>() + 1;
                 let name = self.interner.intern(&format!("x${}", n));
-                clauses.push(ParamClause { params: vec![Param { name, span, ty: t, default: None, mods: 0, annots: ListRef::EMPTY }], is_using: true, is_implicit: false });
+                clauses.push(ParamClause { params: vec![Param { name, span, full: Span::default(), ty: t, default: None, mods: 0, annots: ListRef::EMPTY }], is_using: true, is_implicit: false, span: Span::default() });
                 ty_start = self.span();
             }
         };

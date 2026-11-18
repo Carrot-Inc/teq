@@ -24,9 +24,7 @@
 > origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
-48,49c48,49
+48c48
 < origin	fix.rjava.RdSub	decl.jar	key reader_java.scala	token 108331611 recorded	definitions v1 (1 definitions)
-< select	fix.rdecl.RdTraces	def base	reader_decl.scala:33:27	scala.Int.*(scala.Int): scala.Int	by name (a builtin's member)	: Int
 ---
 > origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
-> select	fix.rdecl.RdTraces	def base	reader_decl.scala:33:29	scala.Int.*(scala.Int): scala.Int	by name (a builtin's member)	: Int

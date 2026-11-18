@@ -161,6 +161,11 @@ fn skip(r: &mut Reader) {
     }
 }
 
+/// The end of the tree at `addr` of `file`'s trees: the address after it.
+pub fn file_tree_end(file: &TastyFile, addr: Addr) -> Addr {
+    tree_end(&file.bytes[file.asts.clone()], addr)
+}
+
 /// What a tree's reconstruction gave it.
 #[derive(Clone, Copy, Debug)]
 pub struct Placed {

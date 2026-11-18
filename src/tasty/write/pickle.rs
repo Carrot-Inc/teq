@@ -181,6 +181,9 @@ struct Pos {
     point: Option<u32>,
     def: bool,
     switch: bool,
+    /// Where the origins' kind 1 places the definition where its point is not its name (a module val's, at the
+    /// object's start as `Desugar.moduleDef` puts it): the name, which the origins have always named it by.
+    origin: Option<u32>,
 }
 
 /// What the pickler looks up across the program, built once for all its files.
@@ -364,6 +367,44 @@ struct P<'w, 'a> {
     /// The address of the result type's tree of the definition being written, which an inline
     /// method's body is ascribed by sharing it, as scalac does.
     result_tpt: Option<usize>,
+    /// The position the next type tree written takes for its top node, where its definition gives it one
+    /// (`mark_tree`): a written type's span, an inferred one's empty span after the token before it.
+    next_tree_pos: Option<(Span, Option<u32>)>,
+    /// The span the template being written gives its primary constructor (`template_layout`), which the
+    /// constructor takes with its type tree.
+    ctor_span: Option<Span>,
+    /// The written parameters of a source file by the start of their name: the whole parameter as written and its
+    /// type's span (`param_layout`), made once per file.
+    param_layouts: FxMap<FileId, FxMap<u32, (Span, Span)>>,
+    /// A source file's definitions by their name's start, for a local whose symbol records no definition.
+    defs_by_name: FxMap<FileId, FxMap<u32, crate::ast::DefId>>,
+    /// A source file's case clauses by their body's span: the `CaseDef`'s span (from `case`) and the pattern.
+    case_index: FxMap<FileId, FxMap<(u32, u32), (Span, crate::ast::PatId)>>,
+    /// The written pattern the pattern about to be written stands for (`term::pattern`).
+    pat_next: Option<(FileId, crate::ast::PatId)>,
+    /// An operator's selection as written, which `prim` hands `universal`.
+    op_select: Option<(Span, u32)>,
+    /// The span and the type tree's span the next local parameter written takes (`closure`'s lambda's).
+    param_layout_next: Option<(Span, Span)>,
+    /// The point of the parameter `param_layout_next` places, where a pickle gives it (`pickled_lambda_layout`).
+    param_point_next: Option<u32>,
+    /// The place of the qualifier of the selection being written, where a pickle gives it (`CallLayout::qual`): its
+    /// first tree's, where that tree has none of its own.
+    qual_place_next: Option<(Span, Option<u32>)>,
+    /// The points of the written parameters' type trees, as `param_layouts` (`param_type_point`).
+    param_type_points: FxMap<FileId, FxMap<u32, Option<u32>>>,
+    /// The layout of the call being written (`call_layout`), which its application and selection take.
+    call_layout_next: Option<term::CallLayout>,
+    /// The span of the parent call being written and of its type as the source writes them (`parent_layouts`).
+    parent_layout: Option<(Span, Span)>,
+    /// The spans of the type parameters about to be written as the source writes them, in order (`type_param_def`).
+    tparam_spans: std::collections::VecDeque<Span>,
+    /// A source file's applications, selections, operators and lambdas by their span (`expr_at`).
+    expr_index: FxMap<FileId, FxMap<(u32, u32), crate::ast::ExprId>>,
+    /// A source file's ascriptions by their expression's span: the ascription's and its type's (`typed_layout`).
+    typed_index: FxMap<FileId, FxMap<(u32, u32), (Span, Span)>>,
+    /// The points of those ascriptions' type trees (`typed_point`).
+    typed_points: FxMap<FileId, FxMap<(u32, u32), Option<u32>>>,
     /// The parameters of the retained body being written, each read an `INLINED` of no call.
     retained_params: Vec<SymId>,
     /// The type the context expects of the anonymous class instance about to be written, which
@@ -444,6 +485,8 @@ struct P<'w, 'a> {
     /// The places the pickle a method converted from a product gives its term parameters, in
     /// order, for the method being written; the next one taken by `method_param`.
     param_places: Vec<Option<(String, crate::tasty::positions::Pos)>>,
+    /// The places of those parameters' type trees.
+    param_type_places: Vec<Option<crate::tasty::positions::Pos>>,
     param_place_next: usize,
     /// The method being written is a synthetic one (an export's forwarder), whose parameters are
     /// placed as its other synthetic trees, not where the method it forwards to has its own.
@@ -551,6 +594,23 @@ impl<'w, 'a> P<'w, 'a> {
             inline_body: None,
             inline_owner: None,
             result_tpt: None,
+            next_tree_pos: None,
+            ctor_span: None,
+            param_layouts: FxMap::default(),
+            defs_by_name: FxMap::default(),
+            case_index: FxMap::default(),
+            pat_next: None,
+            op_select: None,
+            param_layout_next: None,
+            param_point_next: None,
+            qual_place_next: None,
+            param_type_points: FxMap::default(),
+            call_layout_next: None,
+            parent_layout: None,
+            tparam_spans: std::collections::VecDeque::new(),
+            expr_index: FxMap::default(),
+            typed_index: FxMap::default(),
+            typed_points: FxMap::default(),
             retained_params: Vec::new(),
             expected_anon: None,
             forwarder_name: None,
@@ -576,6 +636,7 @@ impl<'w, 'a> P<'w, 'a> {
             select_receiver: None,
             call_evidence: Vec::new(),
             param_places: Vec::new(),
+            param_type_places: Vec::new(),
             param_place_next: 0,
             synthetic_params: false,
             package_object_terms: FxMap::default(),
@@ -638,8 +699,8 @@ pub fn pickle_unit(w: &mut Worker, index: &Index, lines: &Lines, unit: &Unit, so
         UnitKind::Package { pkg, name, defs } => p.package_object(*pkg, name, defs),
     }
     p.buf.end_length(len);
-    let text_len = p.w.files.as_slice()[unit.file.0 as usize].text.len() as u32;
-    p.positions.insert(0, Pos { addr: root, file: unit.file, span: Span { start: 0, end: text_len }, point: None, def: false, switch: true });
+    let (span, point) = p.root_span(unit.file);
+    p.positions.insert(0, Pos { addr: root, file: unit.file, span, point, def: false, switch: true, origin: None });
     let pending: Vec<String> = p
         .places
         .iter()
@@ -666,6 +727,37 @@ pub fn pickle_unit(w: &mut Worker, index: &Index, lines: &Lines, unit: &Unit, so
 }
 
 impl<'w, 'a> P<'w, 'a> {
+    /// The span of the unit's `PackageDef` as scalac's parser gives it (`Parsers.compilationUnit`): under a package
+    /// clause `makePackaging`'s, `atSpan(start, pointOffset(pkg))` from the `package` keyword to the last token read,
+    /// the end of the last statement, its point the package's name; without one `PackageDef(Ident(EMPTY_PACKAGE),
+    /// stats)`, which has no span of its own and takes its children's envelope (`Positioned.envelope`): from the
+    /// first top-level statement's start to the last's end, with no point of its own.
+    fn root_span(&self, file: FileId) -> (Span, Option<u32>) {
+        let ast = self.w.ast(file);
+        let text = &self.w.files.as_slice()[file.0 as usize].text;
+        let (mut start, mut end) = (u32::MAX, 0u32);
+        for &d in &ast.top_level {
+            let s = ast.def_range(d);
+            start = start.min(s.start);
+            end = end.max(s.end);
+        }
+        for i in ast.imports.iter().chain(ast.language_imports.iter()).chain(ast.top_exports.iter()) {
+            start = start.min(i.tree_start);
+            end = end.max(i.span.end);
+        }
+        if start == u32::MAX {
+            return (Span { start: 0, end: text.len() as u32 }, None);
+        }
+        if !ast.package_clauses.is_empty() {
+            if let Some((keyword, name)) = first_package_clause(text) {
+                if keyword <= start {
+                    return (Span { start: keyword, end }, Some(name));
+                }
+            }
+        }
+        (Span { start, end }, None)
+    }
+
     fn approximated(&mut self, kind: &str) {
         *self.approximated.entry(kind.to_string()).or_insert(0) += 1;
     }
@@ -1024,8 +1116,21 @@ impl<'w, 'a> P<'w, 'a> {
             // A definition of a body takes the source of the tree it stands in (an expansion of
             // another file's method).
             let file = self.src_ctx;
-            self.positions.push(Pos { addr, file, span, point: Some(point), def: true, switch: false });
+            self.positions.push(Pos { addr, file, span, point: Some(point), def: true, switch: false, origin: None });
         }
+    }
+
+    /// `position` at `span`, the origins' definition registered as `position` registers it for `old`, the input it
+    /// had before its position moved: whether one is, and its point (`Pos.origin`).
+    fn position_as(&mut self, addr: usize, span: Span, name_at: u32, old: Span) {
+        let valid = |s: Span| s.end >= s.start && s != Span::default();
+        if !valid(span) {
+            return self.position(addr, old, name_at);
+        }
+        let point = if (span.start..=span.end).contains(&name_at) { name_at } else { span.start };
+        let origin = if (old.start..=old.end).contains(&name_at) { name_at } else { old.start };
+        let file = self.src_ctx;
+        self.positions.push(Pos { addr, file, span, point: Some(point), def: valid(old), switch: false, origin: Some(origin) });
     }
 
     /// A definition's span as `position` gives it, or where it stands for a definition of a
@@ -1043,13 +1148,13 @@ impl<'w, 'a> P<'w, 'a> {
         let file = self.pickled_source(path);
         let switch = file != self.src_ctx;
         let point = pos.point.unwrap_or(pos.start);
-        self.positions.push(Pos { addr, file, span: Span { start: pos.start, end: pos.end }, point: Some(point), def: true, switch });
+        self.positions.push(Pos { addr, file, span: Span { start: pos.start, end: pos.end }, point: Some(point), def: true, switch , origin: None });
         Some(Span { start: point, end: pos.end })
     }
 
     fn synthetic_position(&mut self, addr: usize) {
         let s = self.synth_span;
-        self.positions.push(Pos { addr, file: self.file, span: Span { start: s.start, end: s.start }, point: None, def: false, switch: false });
+        self.positions.push(Pos { addr, file: self.file, span: Span { start: s.start, end: s.start }, point: None, def: false, switch: false , origin: None });
     }
 
     /// A leaf tree starts here (a type tree, `ELIDED`, a literal): scalac's unpickler gives a
@@ -1057,6 +1162,10 @@ impl<'w, 'a> P<'w, 'a> {
     /// its checker asserts a span on every tree it types.
     fn mark_tree(&mut self) {
         let addr = self.buf.addr();
+        if let Some((span, point)) = self.next_tree_pos.take() {
+            self.positions.push(Pos { addr, file: self.src_ctx, span, point, def: false, switch: false, origin: None });
+            return;
+        }
         self.synthetic_position(addr);
     }
 
@@ -1602,15 +1711,19 @@ impl<'w, 'a> P<'w, 'a> {
     fn template(&mut self, c: ClassId, synth_of: Option<ClassId>) {
         let info = self.class_info(c);
         self.note_class_param_annotations(&info);
+        let layout = if synth_of.is_none() { self.template_layout(c) } else { None };
+        let taddr = self.buf.addr();
         self.buf.byte(TEMPLATE);
         let len = self.buf.begin_length();
         let tmark = self.tparams.len();
         let own: Vec<TParamId> = info.tparams.to_vec();
+        self.tparam_spans = self.class_tparam_spans(c, own.len()).into();
         for &tp in &own {
             let at = self.buf.addr();
             self.tparams.push((tp, TpRef::InClass(at, c)));
             self.type_param_def(tp, &[PRIVATE, LOCAL], None);
         }
+        self.tparam_spans.clear();
         let ctor_syms: Vec<Vec<SymId>> = info.ctor_syms.clone();
         let ctor: Vec<ClauseSig> = info.ctor.clone();
         let is_case = info.mods & mods::CASE != 0;
@@ -1632,6 +1745,8 @@ impl<'w, 'a> P<'w, 'a> {
             let n = self.names.simple("_");
             self.buf.nat(n as u64);
             self.buf.byte(SINGLETONTPT);
+            // `Desugar.moduleDef`'s self, `withSpan(impl.self.span.orElse(impl.span.startPos))`.
+            self.next_tree_pos = layout.map(|(t, _)| (Span { start: t.start, end: t.start }, Some(t.start)));
             self.mark_tree();
             match synth_of {
                 Some(k) => self.def_termref(Key::SynthModule(k), info.owner),
@@ -1645,7 +1760,9 @@ impl<'w, 'a> P<'w, 'a> {
             self.mark_tree();
             self.local_ref(m);
         }
+        self.ctor_span = layout.map(|(_, k)| k);
         self.constructor(c, &info);
+        self.ctor_span = None;
         self.param_setters(&info);
         self.secondary_constructors(c, &info);
         self.count_template_roots(c);
@@ -1669,6 +1786,9 @@ impl<'w, 'a> P<'w, 'a> {
         self.value_forwarder_defs(c);
         self.enclosing.pop();
         self.tparams.truncate(tmark);
+        if let Some((t, _)) = layout {
+            self.positions.push(Pos { addr: taddr, file: self.src_ctx, span: t, point: None, def: false, switch: false, origin: None });
+        }
         self.buf.end_length(len);
     }
 
@@ -1696,7 +1816,11 @@ impl<'w, 'a> P<'w, 'a> {
         let len = self.buf.begin_length();
         let n = self.param_name(param.sym, param.name);
         self.buf.nat(n as u64);
+        let layout = sym.or(Some(param.sym)).filter(|&s| s != SymId(u32::MAX)).and_then(|s| self.param_layout(s));
+        let point = sym.or(Some(param.sym)).filter(|&s| s != SymId(u32::MAX)).and_then(|s| self.param_type_point(s));
+        self.next_tree_pos = layout.map(|(_, t)| (t, point.or(Some(t.start))));
         self.param_type(param);
+        self.next_tree_pos = None;
         let smods = sym.map_or(0, |s| self.w.syms.sym(s).mods);
         let scoped = sym.map_or(false, |s| self.w.syms.sym(s).scoped_private);
         let mut flags = Vec::new();
@@ -1731,7 +1855,10 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.param_source_annotations(param.sym, annot::Dest::Accessor);
         let span = sym.map_or(Span::default(), |s| self.w.syms.sym(s).span);
-        self.position(addr, span, span.start);
+        // The parameter as written, from its modifiers through its type (`Parsers.param`).
+        let full = layout.map_or(span, |(f, _)| f);
+        // Its definition point registered as the symbol's span registers it (`position_as`).
+        self.position_as(addr, full, span.start, span);
         self.buf.end_length(len);
         let _ = c;
     }
@@ -1799,17 +1926,20 @@ impl<'w, 'a> P<'w, 'a> {
         let parents: Vec<TypeId> = written.iter().copied().filter(|&p| self.w.types.underlying(p) != self.w.b.t_any_ref).collect();
         let first_is_class = parents.first().map_or(false, |&p| !self.is_trait_type(p));
         let calls = info.kind != ClassKind::Trait;
+        // A parent Typer adds stands at the class's name (`parentTrees`' `cdef.nameSpan.focus`), wherever the class
+        // stands (a local one's enclosing tree is no place of it).
+        let name_at = Span { start: info.span.start, end: info.span.start };
         if info.value_class && !parents.iter().any(|&p| self.w.types.underlying(p) == self.w.b.t_any_val) {
             if calls {
                 let t = self.w.b.t_any_val;
-                self.parent_call(c, t);
+                self.at_class_name(c, name_at, |p| p.parent_call(c, t));
             } else {
                 self.external_tpt("scala", "AnyVal");
             }
         } else if !first_is_class {
             if calls {
                 let t = self.w.b.t_any_ref;
-                self.parent_call(c, t);
+                self.at_class_name(c, name_at, |p| p.parent_call(c, t));
             } else if info.mods & mods::UNIVERSAL != 0 {
                 // A universal trait's first parent is `Any` (dotty's `Namer.ensureFirstIsClass`
                 // keeps it), which a reader takes for the trait's being no `AnyRef`.
@@ -1818,17 +1948,25 @@ impl<'w, 'a> P<'w, 'a> {
                 self.external_tpt("java.lang", "Object");
             }
         }
+        let layouts = self.parent_layouts(c, parents.len());
         for (i, &p) in parents.iter().enumerate() {
             if info.kind == ClassKind::Enum && self.is_scala_class(p, "Enum") {
                 continue;
             }
+            let layout = layouts.as_ref().and_then(|l| l.get(i).copied());
             if calls && i == 0 && first_is_class {
+                self.parent_layout = layout;
                 self.parent_or_elided(|w| w.parent_call(c, p));
+                self.parent_layout = None;
             } else if let Some((args, via, prelude)) = self.trait_args(c, p).filter(|_| calls) {
                 // A trait parent the class passes arguments to: its constructor call.
+                self.parent_layout = layout;
                 self.parent_or_elided(|w| w.trait_parent_call(p, &args, via, prelude));
+                self.parent_layout = None;
             } else {
+                self.next_tree_pos = layout.map(|(_, t)| (t, Some(t.start)));
                 self.tpt(p);
+                self.next_tree_pos = None;
             }
         }
         if info.kind == ClassKind::Enum {
@@ -1840,12 +1978,100 @@ impl<'w, 'a> P<'w, 'a> {
             self.mirror_parent("Sum");
         }
         if info.mods & mods::CASE != 0 && info.kind == ClassKind::Class {
+            // `Desugar.classDef`'s parents of a case class, which have no span: after the child before them, the last
+            // written parent or the constructor (`Positioned.envelope`).
+            let after = layouts.as_ref().and_then(|l| l.last().map(|(f, _)| f.end)).or_else(|| self.written_ctor_end(c));
             if !parents.iter().any(|&p| self.is_scala_class(p, "Product")) {
+                self.next_tree_pos = after.map(|a| (Span { start: a, end: a }, None));
                 self.external_tpt("scala", "Product");
             }
+            self.next_tree_pos = after.map(|a| (Span { start: a, end: a }, None));
             self.external_tpt("java.io", "Serializable");
+            self.next_tree_pos = None;
         }
         let _ = c;
+    }
+
+    /// Writes `f` with its synthetic trees at a class's name (no enclosing tree's span in force).
+    /// A class an expansion brings from another unit (`is_unit_source`) has its name in that unit's source: its parent
+    /// stands as the build that reads the unit's pickle places it.
+    fn at_class_name(&mut self, c: ClassId, at: Span, f: impl FnOnce(&mut Self)) {
+        if !self.is_unit_source(self.w.syms.class(c).file) {
+            return f(self);
+        }
+        let saved = (self.synth_span, self.span_ctx);
+        self.synth_span = at;
+        self.span_ctx = None;
+        f(self);
+        self.synth_span = saved.0;
+        self.span_ctx = saved.1;
+    }
+
+    /// The written type parameters of a source class, `n` of them as the writer has them: each one's span.
+    fn class_tparam_spans(&self, c: ClassId, n: usize) -> Vec<Span> {
+        let info = self.w.syms.class(c);
+        let Some(def) = info.def.filter(|_| self.is_unit_source(info.file)) else { return Vec::new() };
+        let ast = self.w.ast(info.file);
+        match &ast.def(def).kind {
+            crate::ast::DefKind::Class(cd) if cd.tparams.len() == n => cd.tparams.iter().map(|t| t.span).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// A local's definition as written: its symbol's, else the definition of its name at its symbol's span (a block's
+    /// local, which the typer makes at its definition's name, `new_local`).
+    pub(super) fn local_def_of(&mut self, s: SymId) -> Option<crate::ast::DefId> {
+        let info = self.w.syms.sym(s);
+        let (file, def, at, name) = (info.file, info.def, info.span.start, info.name);
+        if def.is_some() || !self.is_own_source(file) {
+            return def;
+        }
+        if !self.defs_by_name.contains_key(&file) {
+            let ast = self.w.ast(file);
+            let mut m: FxMap<u32, crate::ast::DefId> = FxMap::default();
+            for (i, d) in ast.defs.iter().enumerate() {
+                if d.span != Span::default() {
+                    m.entry(d.span.start).or_insert(crate::ast::DefId(i as u32));
+                }
+            }
+            self.defs_by_name.insert(file, m);
+        }
+        let d = self.defs_by_name[&file].get(&at).copied()?;
+        (self.w.ast(file).def(d).name == name).then_some(d)
+    }
+
+    /// The written type parameters of a source method, `n` of them as its signature has them: each one's span
+    /// (`Parsers.typeParam`), for `type_param_def`.
+    pub(super) fn def_tparam_spans(&self, file: FileId, def: Option<crate::ast::DefId>, n: usize) -> Vec<Span> {
+        let Some(d) = def.filter(|_| n > 0 && self.is_unit_source(file)) else { return Vec::new() };
+        match &self.w.ast(file).def(d).kind {
+            crate::ast::DefKind::Fun(f) if f.tparams.len() == n => f.tparams.iter().map(|t| t.span).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Where a source class's constructor as written ends (`Parsers.classConstr`): its last clause's `)` or its type
+    /// parameters' `]`.
+    /// Whether a definition's source is the unit this pickle writes, whose layouts (a class's constructor, parents and
+    /// template, a method's clauses) place its trees. A definition an expansion brings from another unit (the class
+    /// of a transparent body or a quote of an upstream module) is placed as the build that reads its pickle places it,
+    /// with no layout: the same tree has the same position however its unit was reached.
+    pub(super) fn is_unit_source(&self, file: FileId) -> bool {
+        file == self.file && self.is_own_source(file)
+    }
+
+    fn written_ctor_end(&self, c: ClassId) -> Option<u32> {
+        let info = self.w.syms.class(c);
+        let def = info.def.filter(|_| self.is_unit_source(info.file))?;
+        let ast = self.w.ast(info.file);
+        let crate::ast::DefKind::Class(cd) = &ast.def(def).kind else { return None };
+        cd.clauses.iter().rev().map(|c| c.span).find(|s| *s != Span::default()).map(|s| s.end).or_else(|| {
+            if cd.tparams.is_empty() {
+                None
+            } else {
+                ast.tparam_clauses.iter().find(|s| s.start >= info.span.end).map(|s| s.end)
+            }
+        })
     }
 
     /// A parent's constructor call, or, where its arguments cannot be stated, the call with
@@ -1936,17 +2162,33 @@ impl<'w, 'a> P<'w, 'a> {
         let pmark = self.params.len();
         let own: Vec<TParamId> = info.tparams.to_vec();
         let ids = self.bind_tparams(&own);
+        let tspans = self.class_tparam_spans(c, own.len());
+        let last_tparam = tspans.last().map(|s| s.end);
+        self.tparam_spans = tspans.into();
         self.write_bound_tparams(&own, &ids, false);
+        self.tparam_spans.clear();
         let ctor = info.ctor.clone();
         let syms = info.ctor_syms.clone();
         if ctor.is_empty() {
             self.buf.byte(EMPTYCLAUSE);
         }
+        let ctor_span = self.ctor_span.take();
         let outer = std::mem::replace(&mut self.source_params, true);
         self.clauses(&ctor, Some(&syms), None);
         self.source_params = outer;
         let unit = self.w.b.t_unit;
+        // `makeConstructor`'s result type tree has no span of its own: the envelope puts it after the child before
+        // it, the last parameter written, or at the constructor's start.
+        let last_param = ctor.iter().rev().flat_map(|c| c.params.iter().rev()).find_map(|p| {
+            let s = syms.iter().flatten().copied().find(|&s| s == p.sym).unwrap_or(p.sym);
+            (s != SymId(u32::MAX)).then(|| self.param_layout(s)).flatten().map(|(f, _)| f.end)
+        });
+        self.next_tree_pos = ctor_span.map(|k| {
+            let at = last_param.or(last_tparam).unwrap_or(k.start);
+            (Span { start: at, end: at }, None)
+        });
         self.tpt(unit);
+        self.next_tree_pos = None;
         self.tparams.truncate(tmark);
         self.params.truncate(pmark);
         let mut flags = Vec::new();
@@ -1976,8 +2218,117 @@ impl<'w, 'a> P<'w, 'a> {
                 Qualifier::Class(k) => self.class_typeref(k),
             }
         }
-        self.synthetic_position(addr);
+        match ctor_span {
+            Some(k) => self.positions.push(Pos { addr, file: self.src_ctx, span: k, point: None, def: false, switch: false, origin: None }),
+            None => self.synthetic_position(addr),
+        }
         self.buf.end_length(len);
+    }
+
+    /// The source's parents of a class, `n` of them as the writer has them: per parent the span of its call (its type
+    /// through its last `)`) and of its type, `None` where the source does not write the `n` (a class the program did
+    /// not write, or parents the desugaring added among them).
+    fn parent_layouts(&self, c: ClassId, n: usize) -> Option<Vec<(Span, Span)>> {
+        let info = self.w.syms.class(c);
+        let def = info.def?;
+        if !self.is_unit_source(info.file) {
+            return None;
+        }
+        let ast = self.w.ast(info.file);
+        let crate::ast::DefKind::Class(cd) = &ast.def(def).kind else { return None };
+        if cd.parents.len() != n {
+            return None;
+        }
+        Some(
+            cd.parents
+                .iter()
+                .map(|p| {
+                    let t = ast.ty_spans[p.ty.idx()];
+                    let end = p.ends.last().map_or(t.end, |&e| e);
+                    (Span { start: t.start, end }, t)
+                })
+                .collect(),
+        )
+    }
+
+    /// The spans scalac's parser gives a source class's template and its primary constructor, where the class writes
+    /// no parameters (whose constructor is `Parsers.classConstr`'s, from the name's end through the clauses):
+    /// the constructor has no span of its own, and the template, made with no span, takes its children's envelope
+    /// (`Positioned.envelope`): the union of its written parents' and statements' spans, the constructor in its second
+    /// pass the empty span at that union's start (`includeChildren(span1.startPos, 0)`). `None` where the class
+    /// writes nothing in its template, or writes parameters (their clauses' spans are not in the syntax tree yet).
+    fn template_layout(&self, c: ClassId) -> Option<(Span, Span)> {
+        let info = self.w.syms.class(c);
+        let def = info.def?;
+        if !self.is_unit_source(info.file) {
+            return None;
+        }
+        let ast = self.w.ast(info.file);
+        let crate::ast::DefKind::Class(cd) = &ast.def(def).kind else { return None };
+        if cd.self_type.is_some() || cd.self_alias != crate::names::EMPTY {
+            return None;
+        }
+        // `Parsers.classConstr`, `atSpan(in.lastOffset)` after the name through its clauses: from the name's end to
+        // the last clause's `)`, or the type parameters' `]`, a span of its own where the class writes either.
+        let name_end = info.span.end;
+        let last_clause = cd.clauses.iter().rev().map(|c| c.span).find(|s| *s != Span::default());
+        let tclause = if cd.tparams.is_empty() { None } else { ast.tparam_clauses.iter().copied().find(|s| s.start >= name_end) };
+        let written_ctor = match (last_clause, tclause) {
+            (Some(c), _) => Some(Span { start: name_end, end: c.end }),
+            (None, Some(t)) => Some(Span { start: name_end, end: t.end }),
+            (None, None) if !cd.clauses.is_empty() || !cd.tparams.is_empty() => return None,
+            (None, None) => None,
+        };
+        let mut u: Option<Span> = written_ctor;
+        let mut add = |s: Span| u = Some(u.map_or(s, |v| Span { start: v.start.min(s.start), end: v.end.max(s.end) }));
+        for p in &cd.parents {
+            let t = ast.ty_spans[p.ty.idx()];
+            let end = p.ends.last().map_or(t.end, |&e| e);
+            add(Span { start: t.start, end });
+        }
+        for st in &cd.body {
+            match *st {
+                crate::ast::Stmt::Expr(e) => add(ast.expr_span(e)),
+                crate::ast::Stmt::Def(d) => add(ast.def_range(d)),
+                crate::ast::Stmt::Import(i) => {
+                    let r = ast.import_stmts[i as usize];
+                    for k in r.start..r.start + r.len {
+                        let im = &ast.local_imports[k as usize];
+                        add(Span { start: im.tree_start, end: im.span.end });
+                    }
+                }
+            }
+        }
+        let t = u?;
+        let ctor = written_ctor.unwrap_or(Span { start: t.start, end: t.start });
+        // An anonymous class's template in braces is `Parsers.newExpr`'s, repositioned to `Span(start, in.lastOffset)`:
+        // from its `new` through its `}` (one whose body is indented keeps its envelope).
+        if let Some(whole) = self.braced_anon_span(c) {
+            return Some((whole, ctor));
+        }
+        Some((t, ctor))
+    }
+
+    /// An anonymous class of this source whose template is in braces: its span, from `new` through `}`
+    /// (`Parsers.newExpr`'s `reposition`).
+    pub(super) fn braced_anon_span(&self, c: ClassId) -> Option<Span> {
+        let info = self.w.syms.class(c);
+        let def = info.def.filter(|_| self.is_unit_source(info.file))?;
+        let ast = self.w.ast(info.file);
+        let d = ast.def(def);
+        let crate::ast::DefKind::Class(cd) = &d.kind else { return None };
+        if d.name != crate::names::DOLLAR_ANON {
+            return None;
+        }
+        let whole = ast.def_range(def);
+        let text = self.w.files.as_slice()[info.file.0 as usize].text.as_bytes();
+        // After the last parent as written, else after `new`: the template's opening `{`.
+        let after = cd.parents.last().map_or(whole.start + 3, |p| p.ends.last().copied().unwrap_or(ast.ty_spans[p.ty.idx()].end));
+        let mut i = after as usize;
+        while i < whole.end as usize && text.get(i).is_some_and(|b| b.is_ascii_whitespace()) {
+            i += 1;
+        }
+        (text.get(i) == Some(&b'{') && text.get(whole.end as usize - 1) == Some(&b'}')).then_some(whole)
     }
 
     /// Puts type parameters in scope as direct references, each to a binding of its own that
@@ -2032,11 +2383,14 @@ impl<'w, 'a> P<'w, 'a> {
             self.clauses(&sig.clauses, None, None);
             self.source_params = outer;
             let unit = self.w.b.t_unit;
+            let layout = self.secondary_layout(s);
+            self.next_tree_pos = layout.map(|l| (Span { start: l.rhs.start, end: l.rhs.start }, Some(l.rhs.start)));
             self.tpt(unit);
+            self.next_tree_pos = None;
             match f {
                 Some(f) => {
                     let mark = self.body_begin();
-                    self.secondary_body(c, f);
+                    self.secondary_body(c, f, layout);
                     match self.body_end(mark) {
                         Ok(()) => self.count_body(Producer::Source),
                         Err(reason) => {
@@ -2069,6 +2423,43 @@ impl<'w, 'a> P<'w, 'a> {
             self.position_def(addr, span, si.span.start, si.file, si.def);
             self.buf.end_length(len);
         }
+    }
+
+    /// A source secondary constructor as `Parsers` makes it (`makeConstructor`, `constrBlock`, `selfInvocation`), the
+    /// unpositioned trees placed as `Positioned.setChildSpans` fits them, each at the empty span at the start of
+    /// its next positioned sibling or its parent's end: the result type at the right side's start, `<init>` and its
+    /// `this` at the first argument's start (the call's end without one); a block the braces, its unit result after
+    /// its last statement (`Span(in.lastOffset)`).
+    pub(super) fn secondary_layout(&self, s: SymId) -> Option<term::SecondaryLayout> {
+        let si = self.w.syms.sym(s);
+        let d = si.def.filter(|_| self.is_unit_source(si.file))?;
+        let ast = self.w.ast(si.file);
+        let DefKind::Fun(f) = &ast.def(d).kind else { return None };
+        let body = f.body?;
+        let rhs = ast.expr_span(body);
+        let (block, first) = match ast.expr(body) {
+            crate::ast::Expr::Block(l) => {
+                let stmts = ast.stmt_list(l);
+                let last = stmts.iter().rev().find_map(|st| match *st {
+                    crate::ast::Stmt::Expr(e) => Some(ast.expr_span(e).end),
+                    crate::ast::Stmt::Def(d) => Some(ast.def_range(d).end),
+                    crate::ast::Stmt::Import(_) => None,
+                });
+                let first = match stmts.first() {
+                    Some(&crate::ast::Stmt::Expr(e)) => Some(e),
+                    _ => None,
+                };
+                (last.map(|u| (rhs, u)), first)
+            }
+            _ => (None, Some(body)),
+        };
+        let init_at = first.and_then(|e| match ast.expr(e) {
+            crate::ast::Expr::Apply(_, args) => {
+                Some(ast.expr_list(args).first().map_or(ast.expr_span(e).end, |&a| ast.expr_span(a).start))
+            }
+            _ => None,
+        });
+        Some(term::SecondaryLayout { rhs, block, init_at })
     }
 
     fn clauses(&mut self, clauses: &[ClauseSig], syms: Option<&[Vec<SymId>]>, _owner: Option<SymId>) {
@@ -2122,6 +2513,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.reflect_scopes.push((q, self.splice_params.len()));
         }
         let inline = sym.map_or(false, |s| self.w.syms.sym(s).mods & mods::INLINE != 0);
+        let layout = if self.synthetic_params { None } else { sym.or(Some(p.sym)).filter(|&s| s != SymId(u32::MAX)).and_then(|s| self.param_layout(s)) };
         // A forwarder's inline parameter has the type scalac's `Exporter` copies, annotated.
         if self.synthetic_params && inline && !p.by_name && !p.repeated {
             self.mark_tree();
@@ -2131,7 +2523,15 @@ impl<'w, 'a> P<'w, 'a> {
             self.annotation_tree("scala.annotation.internal", "InlineParam");
             self.buf.end_length(l);
         } else {
+            let point = sym.or(Some(p.sym)).filter(|&s| s != SymId(u32::MAX)).and_then(|s| self.param_type_point(s));
+            // A parameter of a method converted from a product's pickle: its type tree where that pickle places it.
+            let pickled = if layout.is_none() && !self.synthetic_params { self.param_type_places.get(self.param_place_next).copied().flatten() } else { None };
+            self.next_tree_pos = match pickled {
+                Some(t) => Some((Span { start: t.start, end: t.end }, Some(t.point.unwrap_or(t.start)))),
+                None => layout.map(|(_, t)| (t, point.or(Some(t.start)))),
+            };
             self.param_type(p);
+            self.next_tree_pos = None;
         }
         self.reflect_scopes.truncate(scopes);
         let mut flags = Vec::new();
@@ -2162,14 +2562,59 @@ impl<'w, 'a> P<'w, 'a> {
             Some((path, pos)) => {
                 let file = self.pickled_source(path);
                 let switch = file != self.src_ctx;
-                self.positions.push(Pos { addr, file, span: Span { start: pos.start, end: pos.end }, point: Some(pos.point.unwrap_or(pos.start)), def: true, switch });
+                self.positions.push(Pos { addr, file, span: Span { start: pos.start, end: pos.end }, point: Some(pos.point.unwrap_or(pos.start)), def: true, switch , origin: None });
             }
             None => {
                 let span = sym.map_or(Span::default(), |s| self.w.syms.sym(s).span);
-                self.position(addr, span, span.start);
+                // The parameter as written, from its modifiers through its type (`Parsers.param`).
+                let full = layout.map_or(span, |(f, _)| f);
+                // Its definition point registered as the symbol's span registers it (`position_as`).
+                self.position_as(addr, full, span.start, span);
             }
         }
         self.buf.end_length(len);
+    }
+
+    /// A parameter the source writes, by its symbol: the whole parameter (from its first annotation or modifier
+    /// through its type and default, `Parsers.param`'s span) and its type's span.
+    fn param_layout(&mut self, s: SymId) -> Option<(Span, Span)> {
+        let info = self.w.syms.sym(s);
+        let (file, at) = (info.file, info.span.start);
+        if !self.is_own_source(file) {
+            return None;
+        }
+        if !self.param_layouts.contains_key(&file) {
+            let ast = self.w.ast(file);
+            let mut m: FxMap<u32, (Span, Span)> = FxMap::default();
+            let mut points: FxMap<u32, Option<u32>> = FxMap::default();
+            for d in &ast.defs {
+                let clauses: &[crate::ast::ParamClause] = match &d.kind {
+                    crate::ast::DefKind::Fun(f) => &f.clauses,
+                    crate::ast::DefKind::Class(c) => &c.clauses,
+                    crate::ast::DefKind::Given(g) => &g.clauses,
+                    _ => &[],
+                };
+                for c in clauses {
+                    for p in &c.params {
+                        if p.full != Span::default() {
+                            m.insert(p.span.start, (p.full, ast.ty_spans[p.ty.idx()]));
+                            points.insert(p.span.start, self.written_ty_pos(file, p.ty).1);
+                        }
+                    }
+                }
+            }
+            self.param_layouts.insert(file, m);
+            self.param_type_points.insert(file, points);
+        }
+        self.param_layouts[&file].get(&at).copied()
+    }
+
+    /// The point of a written parameter's type tree (`written_ty_pos`), by the parameter's symbol.
+    fn param_type_point(&mut self, s: SymId) -> Option<u32> {
+        let info = self.w.syms.sym(s);
+        let (file, at) = (info.file, info.span.start);
+        self.param_layout(s)?;
+        self.param_type_points.get(&file).and_then(|m| m.get(&at).copied()).flatten()
     }
 
     /// A parameter's type: `=> T` as `BYNAMEtpt`, `T*` as `Seq[T] @Repeated`.
@@ -2248,12 +2693,20 @@ impl<'w, 'a> P<'w, 'a> {
         let in_template = extra.contains(&LOCAL) || extra.contains(&VARIANCE_MARK);
         let extra: Vec<u8> = extra.iter().copied().filter(|&t| t != VARIANCE_MARK).collect();
         let extra = extra.as_slice();
+        // The parameter as written (`Parsers.typeParam`): its span, its bounds' tree at its start.
+        let written = self.tparam_spans.pop_front().filter(|s| *s != Span::default());
+        let addr = self.buf.addr();
         self.buf.byte(TYPEPARAM);
         let len = self.buf.begin_length();
         let n = self.derived_or_simple(info.name);
         self.buf.nat(n as u64);
+        self.next_tree_pos = written.map(|sp| (Span { start: sp.start, end: sp.start }, None));
         self.mark_tree();
+        self.next_tree_pos = None;
         self.bounds(&info);
+        if let Some(sp) = written {
+            self.positions.push(Pos { addr, file: self.src_ctx, span: sp, point: Some(sp.start), def: false, switch: false, origin: None });
+        }
         let mut flags: Vec<u8> = extra.to_vec();
         if in_template && info.variance > 0 {
             flags.push(COVARIANT);
@@ -2786,6 +3239,7 @@ impl<'w, 'a> P<'w, 'a> {
         if is_def {
             let tree = info.def.and_then(|d| self.w.loaded.as_ref()?.product_def_trees.get(&(info.file, d)).copied());
             self.param_places = tree.map_or(Vec::new(), |(f, a)| self.w.pickled_param_places(f, a));
+            self.param_type_places = tree.map_or(Vec::new(), |(f, a)| self.w.pickled_param_type_places(f, a));
             self.param_place_next = 0;
             // A forwarder's parameters are the copies `Namer.addForwarder` makes of the member's:
             // positioned at the forwarder, an inline one's type annotated `@InlineParam`.
@@ -2793,10 +3247,13 @@ impl<'w, 'a> P<'w, 'a> {
             self.method_params(&info, &sig);
             self.synthetic_params = outer;
             self.param_places.clear();
+            self.param_type_places.clear();
         }
         let ret = if is_def { sig.ret } else { self.constant_type(s, sig.ret).unwrap_or(sig.ret) };
         self.result_tpt = Some(self.buf.addr());
+        self.next_tree_pos = if self.is_unit_source(info.file) { self.result_tpt_pos(info.file, info.def, info.span.start) } else { None };
         self.tpt(self.declared_or(s, ret));
+        self.next_tree_pos = None;
         // `abstract override` has an implementation, which calls the member it overrides.
         let stackable = info.mods & (mods::ABSTRACT | mods::OVERRIDE) == mods::ABSTRACT | mods::OVERRIDE;
         let abstract_member = info.mods & mods::ABSTRACT != 0 && !stackable || self.is_abstract(s);
@@ -2864,7 +3321,9 @@ impl<'w, 'a> P<'w, 'a> {
         let ext = (info.is_extension && !name_text.ends_with(':')).then_some((ext_tparams, ext_clauses));
         let source = !self.synthetic_params && self.note_method_param_annotations(info, sig);
         let outer = std::mem::replace(&mut self.source_params, source);
+        self.tparam_spans = self.def_tparam_spans(info.file, info.def, sig.tparams.len()).into();
         self.def_params(&sig.tparams, &clauses, ext);
+        self.tparam_spans.clear();
         self.source_params = outer;
     }
 
@@ -3259,7 +3718,7 @@ impl<'w, 'a> P<'w, 'a> {
             let j = i + quals[i..].iter().take_while(|q| q.0 == qual).count();
             let addr = self.buf.addr();
             match span {
-                Some(s) => self.positions.push(Pos { addr, file: self.file, span: s, point: Some(s.start), def: false, switch: self.file != self.src_ctx }),
+                Some(s) => self.positions.push(Pos { addr, file: self.file, span: s, point: Some(s.start), def: false, switch: self.file != self.src_ctx, origin: None }),
                 None => self.mark_tree(),
             }
             self.buf.byte(IMPORT);
@@ -3774,6 +4233,10 @@ impl<'w, 'a> P<'w, 'a> {
             return;
         }
         let ty = self.w.sig_of(s).ret;
+        // `Desugar.valDef`'s setter, `cpy.DefDef(vdef)`: the var's span and point, its synthetic parameter, type and
+        // body at the var's start (their envelope).
+        let span = self.own_def_span(info.file, info.def).filter(|_| self.is_unit_source(info.file));
+        let saved_synth = span.map(|sp| std::mem::replace(&mut self.synth_span, Span { start: sp.start, end: sp.start }));
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
         let len = self.buf.begin_length();
@@ -3811,8 +4274,24 @@ impl<'w, 'a> P<'w, 'a> {
             let annots = self.w.ast(info.file).def(d).annots.clone();
             self.source_annotations(info.file, &annots, annot::Dest::Setter, &mut |_, _| {});
         }
-        self.synthetic_position(addr);
+        match span {
+            Some(sp) => self.positions.push(Pos { addr, file: info.file, span: sp, point: Some(info.span.start), def: false, switch: false, origin: None }),
+            None => self.synthetic_position(addr),
+        }
+        if let Some(saved) = saved_synth {
+            self.synth_span = saved;
+        }
         self.buf.end_length(len);
+    }
+
+    /// A definition's span where the program writes it, `None` for one it does not.
+    fn own_def_span(&self, file: FileId, def: Option<crate::ast::DefId>) -> Option<Span> {
+        let d = def?;
+        if !self.is_own_source(file) {
+            return None;
+        }
+        let r = self.w.ast(file).def_range(d);
+        (r != crate::ast::NO_RANGE).then_some(r)
     }
 
     /// A type alias, an abstract type member, or a match type's alias.
@@ -3850,7 +4329,14 @@ impl<'w, 'a> P<'w, 'a> {
             self.alias_rhs(&info);
             self.buf.end_length(l);
         } else {
+            // The right-hand side's type tree where the source writes it: the written type's span.
+            let written = match info.def.filter(|_| self.is_own_source(info.file)).map(|d| &self.w.ast(info.file).def(d).kind) {
+                Some(DefKind::TypeAlias { rhs: Some(t), lower: None, upper: None, .. }) => Some(*t),
+                _ => None,
+            };
+            self.next_tree_pos = written.map(|t| self.written_ty_pos(info.file, t));
             self.alias_rhs(&info);
+            self.next_tree_pos = None;
         }
         self.tparams.truncate(tmark);
         let mut flags = Vec::new();
@@ -4013,7 +4499,9 @@ impl<'w, 'a> P<'w, 'a> {
                     companion,
                     name: self.name(info.name),
                     owner: info.owner,
-                    span: Span { start: ki.span.start, end: ki.span.start },
+                    // `Desugar.companionDefs`' `withSpan(cdef.span)`: the class's span, its name the point.
+                    span: self.own_def_span(ki.file, ki.def).filter(|_| self.is_unit_source(ki.file)).unwrap_or(Span { start: ki.span.start, end: ki.span.start }),
+                    origin_span: Span { start: ki.span.start, end: ki.span.start },
                     name_at: ki.span.start,
                     synthetic: true,
                     mods: ki.mods & mods::PRIVATE,
@@ -4025,6 +4513,7 @@ impl<'w, 'a> P<'w, 'a> {
                 name: self.name(info.name),
                 owner: info.owner,
                 span: self.def_span(info.file, info.def, info.span),
+                origin_span: self.def_span(info.file, info.def, info.span),
                 name_at: info.span.start,
                 synthetic: info.def.is_none() || made_companion || info.synthetic_companion,
                 mods: info.mods | access,
@@ -4051,7 +4540,9 @@ impl<'w, 'a> P<'w, 'a> {
             companion: Some(c),
             name: self.name(info.name),
             owner: info.owner,
-            span: Span { start: info.span.start, end: info.span.start },
+            // `Desugar.companionDefs`' `withSpan(cdef.span)`: the class's span, its name the point.
+            span: self.own_def_span(info.file, info.def).filter(|_| self.is_unit_source(info.file)).unwrap_or(Span { start: info.span.start, end: info.span.start }),
+            origin_span: Span { start: info.span.start, end: info.span.start },
             name_at: info.span.start,
             synthetic: true,
             mods: info.mods & mods::PRIVATE,
@@ -4084,7 +4575,10 @@ impl<'w, 'a> P<'w, 'a> {
     fn object_unit_now(&mut self, obj: &Obj) {
         let top = matches!(obj.owner, Owner::Package(_)) && !self.in_package_object;
         let (vkey, ckey) = (Self::module_key(obj), Self::module_class_key(obj));
-        // The module val.
+        // The module val, at the object's start with no extent (`Desugar.moduleDef`'s `withSpan(mdef.span.startPos)`),
+        // its type tree and its `New` with it.
+        let val_span = Span { start: obj.span.start, end: obj.span.start };
+        let saved_synth = std::mem::replace(&mut self.synth_span, val_span);
         let vaddr = self.buf.addr();
         self.define(vkey, vaddr);
         if let Some(ms) = obj.class.and_then(|o| self.w.syms.class(o).module_sym) {
@@ -4136,8 +4630,16 @@ impl<'w, 'a> P<'w, 'a> {
         if let Some(o) = obj.class {
             self.class_source_annotations(o);
         }
-        self.position(vaddr, obj.span, obj.name_at);
+        // A companion the desugaring made: `moduleDef` of a module the class's span, its point the name.
+        let (vspan, vpoint) = if obj.synthetic && obj.span.end > obj.span.start { (obj.span, obj.name_at) } else { (val_span, val_span.start) };
+        // The definition point the origins record is the one `position` gives the object's span and name, as before
+        // the val's own position moved: none where that span is empty.
+        let o = obj.origin_span;
+        let recorded = o.end >= o.start && o != Span::default();
+        let origin = if (o.start..=o.end).contains(&obj.name_at) { obj.name_at } else { o.start };
+        self.positions.push(Pos { addr: vaddr, file: self.src_ctx, span: vspan, point: Some(vpoint), def: recorded, switch: false, origin: Some(origin) });
         self.buf.end_length(vlen);
+        self.synth_span = saved_synth;
         // The module class.
         let caddr = self.buf.addr();
         self.define(ckey, caddr);
@@ -4145,7 +4647,12 @@ impl<'w, 'a> P<'w, 'a> {
         let len = self.buf.begin_length();
         self.buf.nat(cn as u64);
         let saved = self.synth_span;
-        self.synth_span = obj.span;
+        // An object's synthetic trees stand at its name's point, as the parents Typer adds (`parentTrees`'
+        // `cdef.nameSpan.focus`) and the members `Desugar` and `PostTyper` give it. An object the source writes with
+        // nothing in its template has no positioned child there: `Positioned.setChildSpans` gives its template, its
+        // constructor and every tree in it the object's start (`case object Empty`).
+        let empty = !obj.synthetic && obj.class.is_some_and(|o| self.template_layout(o).is_none());
+        self.synth_span = if empty { obj.span } else { Span { start: obj.name_at, end: obj.name_at } };
         let appended = self.object_template(obj);
         if appended > 0 {
             self.appended_parents.push((caddr, appended));
@@ -4196,8 +4703,20 @@ impl<'w, 'a> P<'w, 'a> {
         // A sealed class's companion that is its mirror (`Worker::mirror_parent`).
         let companion_sum = obj.companion.filter(|&k| self.w.syms.class(k).kind != ClassKind::Enum && obj.class.is_some_and(|o| self.w.extends_sum_mirror(o)));
         let case_object = obj.mods & mods::CASE != 0;
+        let layout = match obj.class.filter(|_| !obj.synthetic) {
+            Some(o) => self.template_layout(o),
+            None => obj.companion.and_then(|k| self.case_member_layout(k)).map(|(t, _)| (t, Span { start: t.start, end: t.start })),
+        };
+        let taddr = self.buf.addr();
         self.buf.byte(TEMPLATE);
         let len = self.buf.begin_length();
+        // A companion the desugaring made has its parents at the class's start (`companionDefs`' template within the
+        // class's span, its parents without spans of their own).
+        let made = obj.synthetic && obj.span.end > obj.span.start;
+        let saved_parents_synth = self.synth_span;
+        if made {
+            self.synth_span = Span { start: obj.span.start, end: obj.span.start };
+        }
         // Parents.
         // The parents the desugaring gave the object are appended below, in scalac's spelling.
         let declared: Vec<TypeId> = obj
@@ -4247,11 +4766,13 @@ impl<'w, 'a> P<'w, 'a> {
             self.mirror_parent("Sum");
             appended += 1;
         }
-        // Self.
+        self.synth_span = saved_parents_synth;
+        // Self, `Desugar.moduleDef`'s `withSpan(impl.self.span.orElse(impl.span.startPos))`.
         self.buf.byte(SELFDEF);
         let us = self.names.simple("_");
         self.buf.nat(us as u64);
         self.buf.byte(SINGLETONTPT);
+        self.next_tree_pos = layout.map(|(t, _)| (Span { start: t.start, end: t.start }, Some(t.start)));
         self.mark_tree();
         let mut self_type = None;
         if matches!(obj.owner, Owner::Class(o) if self.w.syms.class(o).kind != ClassKind::Object) {
@@ -4279,11 +4800,16 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.nat(init as u64);
         self.buf.byte(EMPTYCLAUSE);
         let unit = self.w.b.t_unit;
+        self.next_tree_pos = layout.map(|(_, k)| (k, None));
         self.tpt(unit);
+        self.next_tree_pos = None;
         if !self.is_static(obj.owner) || case_object {
             self.buf.byte(STABLE);
         }
-        self.synthetic_position(ia);
+        match layout {
+            Some((_, k)) => self.positions.push(Pos { addr: ia, file: self.src_ctx, span: k, point: None, def: false, switch: false, origin: None }),
+            None => self.synthetic_position(ia),
+        }
         self.buf.end_length(il);
         if let Some(o) = obj.class {
             self.count_template_roots(o);
@@ -4349,6 +4875,9 @@ impl<'w, 'a> P<'w, 'a> {
             self.inline_accessor_defs(o);
             self.value_forwarder_defs(o);
             self.enclosing.pop();
+        }
+        if let Some((t, _)) = layout {
+            self.positions.push(Pos { addr: taddr, file: self.src_ctx, span: t, point: None, def: false, switch: false, origin: None });
         }
         self.buf.end_length(len);
         appended
@@ -4882,9 +5411,17 @@ impl<'w, 'a> P<'w, 'a> {
             let tparams: Vec<TParamId> = info.tparams.to_vec();
             let first: Vec<ParamSig> = info.ctor.first().map(|c| c.params.clone()).unwrap_or_default();
             let user_copy = self.user_defines(c, "copy");
+            let first_syms: Vec<SymId> = info.ctor_syms.first().cloned().unwrap_or_default();
             for (i, p) in first.iter().enumerate() {
                 let tmark = self.tparams.len();
+                // `copy`'s default getter of a parameter, at the parameter's end.
+                let end = first_syms.get(i).and_then(|&s| self.param_layout(s)).map(|(f, _)| f.end);
+                let saved_synth = self.synth_span;
+                if let Some(e) = end {
+                    self.synth_span = Span { start: e, end: e };
+                }
                 self.default_getter_with(&"copy".to_string(), i as u32, &tparams, p.ty, access, !user_copy, Synth::Field(c, i as u32));
+                self.synth_span = saved_synth;
                 self.tparams.truncate(tmark);
             }
         }
@@ -4893,10 +5430,17 @@ impl<'w, 'a> P<'w, 'a> {
             self.synth_def("ordinal", &[], false, int, &[SYNTHETIC], Synth::Int(info.ordinal as i32));
         }
         let first: Vec<ParamSig> = info.ctor.first().map(|c| c.params.clone()).unwrap_or_default();
+        let first_syms: Vec<SymId> = info.ctor_syms.first().cloned().unwrap_or_default();
         for (i, p) in first.iter().enumerate() {
             let name = format!("_{}", i + 1);
             if self.user_defines(c, &name) {
                 continue;
+            }
+            // `Desugar.classDef`'s `_N`: the parameter's type's span, its type tree that one, its body at its end.
+            let ty_span = first_syms.get(i).and_then(|&s| self.param_layout(s)).map(|(_, t)| t);
+            let saved_synth = self.synth_span;
+            if let Some(t) = ty_span {
+                self.synth_span = Span { start: t.end, end: t.end };
             }
             let addr = self.buf.addr();
             self.buf.byte(DEFDEF);
@@ -4919,11 +5463,17 @@ impl<'w, 'a> P<'w, 'a> {
                     }
                 }
             } else {
+                self.next_tree_pos = ty_span.map(|t| (t, Some(t.start)));
                 self.tpt(p.ty);
+                self.next_tree_pos = None;
                 self.synth_rhs("case class _N", p.ty, Synth::Field(c, i as u32), &[]);
             }
             self.write_flags(&[SYNTHETIC]);
-            self.synthetic_position(addr);
+            match ty_span {
+                Some(t) => self.positions.push(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
+                None => self.synthetic_position(addr),
+            }
+            self.synth_span = saved_synth;
             self.buf.end_length(len);
         }
     }
@@ -4990,6 +5540,12 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     fn copy_method(&mut self, c: ClassId, info: &ClassInfo, access: CtorAccess) {
+        // `Desugar.classDef`'s `copy`, placed as the companion's `apply` (`case_member_layout`).
+        let members = self.case_member_layout(c);
+        let saved_synth = self.synth_span;
+        if let Some((t, _)) = members {
+            self.synth_span = Span { start: t.start, end: t.start };
+        }
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
         let len = self.buf.begin_length();
@@ -5006,13 +5562,19 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.def_params(&tparams, &clauses, None);
         let self_ty = self.class_applied(c, &tparams);
+        self.next_tree_pos = members.map(|(t, _)| (Span { start: t.end, end: t.end }, None));
         self.tpt(self_ty);
+        self.next_tree_pos = None;
         let addrs: Vec<usize> = self.param_addrs(pmark, &clauses).concat();
         self.synth_rhs("copy", self_ty, Synth::New(c), &addrs);
         self.tparams.truncate(tmark);
         self.params.truncate(pmark);
         self.write_copied_access(access);
-        self.synthetic_position(addr);
+        match members {
+            Some((t, _)) => self.positions.push(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
+            None => self.synthetic_position(addr),
+        }
+        self.synth_span = saved_synth;
         self.buf.end_length(len);
     }
 
@@ -5030,7 +5592,14 @@ impl<'w, 'a> P<'w, 'a> {
         let companion = info.companion;
         let ctor_types: Vec<Vec<TypeId>> = info.ctor.iter().map(|cl| cl.params.iter().map(|p| p.ty).collect()).collect();
         let clashes = |p: &mut Self, name: &str, params: &[Vec<TypeId>]| companion.map_or(false, |co| p.clashing_member(co, name, &tparams, params));
+        // The members `Desugar.classDef` gives a case class's companion: `apply` from the class's start through its
+        // parameters, `unapply` at the class's start, a made companion's `toString` after the parameters.
+        let members = self.case_member_layout(c);
+        let saved_synth = self.synth_span;
         if !abstract_class && !clashes(self, "apply", &ctor_types) {
+            if let Some((_, at)) = members {
+                self.synth_span = Span { start: at.start, end: at.start };
+            }
             let addr = self.buf.addr();
             self.buf.byte(DEFDEF);
             let len = self.buf.begin_length();
@@ -5040,19 +5609,28 @@ impl<'w, 'a> P<'w, 'a> {
             let pmark = self.params.len();
             self.def_params(&tparams, &info.ctor, None);
             let self_ty = self.class_applied(c, &tparams);
+            self.next_tree_pos = members.map(|(t, _)| (Span { start: t.end, end: t.end }, None));
             self.tpt(self_ty);
+            self.next_tree_pos = None;
             let addrs: Vec<usize> = self.param_addrs(pmark, &info.ctor).concat();
             self.synth_rhs("companion apply", self_ty, Synth::New(c), &addrs);
             self.tparams.truncate(tmark);
             self.params.truncate(pmark);
             self.write_copied_access(access);
-            self.synthetic_position(addr);
+            match members {
+                Some((t, _)) => self.positions.push(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
+                None => self.synthetic_position(addr),
+            }
+            self.synth_span = saved_synth;
             self.buf.end_length(len);
         }
         let repeated = info.ctor.first().map_or(false, |cl| cl.params.last().map_or(false, |p| p.repeated));
         let unapply = if repeated { "unapplySeq" } else { "unapply" };
         // Withdrawn as the typer withdrew it for the program's patterns, by dotty's rule.
         if !self.w.synthetic_unapply_retracted(c) {
+            if let Some((t, _)) = members {
+                self.synth_span = Span { start: t.start, end: t.start };
+            }
             let addr = self.buf.addr();
             self.buf.byte(DEFDEF);
             let len = self.buf.begin_length();
@@ -5076,12 +5654,30 @@ impl<'w, 'a> P<'w, 'a> {
             self.tparams.truncate(tmark);
             self.write_flags(&[SYNTHETIC]);
             self.synthetic_position(addr);
+            self.synth_span = saved_synth;
             self.buf.end_length(len);
         }
         if synthetic_companion {
+            if let Some((t, _)) = members {
+                self.synth_span = Span { start: t.end, end: t.end };
+            }
             let string = self.w.b.t_string;
             self.synth_def("toString", &[], false, string, &[OVERRIDE, SYNTHETIC], Synth::Name(c));
+            self.synth_span = saved_synth;
         }
+    }
+
+    /// Where a source case class's companion members stand (`case_companion_head`): from the class's start through
+    /// its constructor's last parameter (`apply`'s span), and the class's span.
+    fn case_member_layout(&mut self, c: ClassId) -> Option<(Span, Span)> {
+        let (file, def, syms): (FileId, Option<crate::ast::DefId>, Vec<SymId>) = {
+            let info = self.w.syms.class(c);
+            (info.file, info.def, info.ctor_syms.iter().flatten().copied().collect())
+        };
+        let range = self.own_def_span(file, def).filter(|_| self.is_unit_source(file))?;
+        let last = syms.iter().rev().find_map(|&s| self.param_layout(s).map(|(f, _)| f.end));
+        let end = last.unwrap_or(range.start);
+        Some((Span { start: range.start, end }, range))
     }
 
     /// `type MirroredMonoType = C` and `def fromProduct(x$0: Product): MirroredMonoType`.
@@ -6618,6 +7214,66 @@ impl<'w, 'a> P<'w, 'a> {
     // ---- spans ----------------------------------------------------------------------------
 
     /// A definition's span in characters, from its modifiers to its end, or its name's.
+    /// Where a definition's result type tree stands, as scalac's parser places it (`Parsers.typedOpt`): a written
+    /// type at its span; an inferred one `TypeTree().withSpan(Span(in.lastOffset))`, the empty span after the
+    /// token before it, a val's name or a def's name where it has no parameters. `None` where the source gives none
+    /// here (a definition the program did not write) or the place is not known yet (a def's last clause).
+    fn result_tpt_pos(&self, file: FileId, def: Option<crate::ast::DefId>, name_start: u32) -> Option<(Span, Option<u32>)> {
+        let d = def?;
+        if !self.is_own_source(file) {
+            return None;
+        }
+        let ast = self.w.ast(file);
+        let def = ast.def(d);
+        let name_end = self.name_end(file, name_start, def.name);
+        let (written, after) = match &def.kind {
+            crate::ast::DefKind::Val { ty, .. } => (*ty, name_end),
+            crate::ast::DefKind::Fun(f) => {
+                // After the last clause: a term clause's `)`, else the type parameters' `]`, else the name.
+                let last = f.clauses.iter().rev().map(|c| c.span).find(|s| *s != Span::default());
+                let tclause = if f.tparams.is_empty() { None } else { ast.tparam_clauses.iter().copied().find(|s| s.start >= name_end) };
+                let after = match (last, tclause) {
+                    (Some(c), _) => c.end,
+                    (None, Some(t)) => t.end,
+                    (None, None) if !f.clauses.is_empty() || !f.tparams.is_empty() => return None,
+                    (None, None) => name_end,
+                };
+                (f.ret, after)
+            }
+            _ => return None,
+        };
+        if let Some(t) = written {
+            return Some(self.written_ty_pos(file, t));
+        }
+        Some((Span { start: after, end: after }, Some(after)))
+    }
+
+    /// A written type tree's span and point: a selection `p.T`'s point its name's start (`Parsers`' `selector`), any
+    /// other's its start.
+    fn written_ty_pos(&self, file: FileId, t: crate::ast::TyExprId) -> (Span, Option<u32>) {
+        let ast = self.w.ast(file);
+        let span = ast.ty_spans[t.idx()];
+        if let crate::ast::TyExpr::Select(_, name) = ast.ty(t) {
+            let text = &self.w.files.as_slice()[file.0 as usize].text;
+            let n = self.w.interner.get(name);
+            let end = span.end as usize;
+            if end >= n.len() && text.get(end - n.len()..end) == Some(n) && (end - n.len()) as u32 >= span.start {
+                return (span, Some((end - n.len()) as u32));
+            }
+        }
+        (span, Some(span.start))
+    }
+
+    /// The end of a definition's name in the source: a backquoted name's closing quote, else its text's length.
+    fn name_end(&self, file: FileId, start: u32, name: Name) -> u32 {
+        let text = &self.w.files.as_slice()[file.0 as usize].text;
+        let rest = text.get(start as usize..).unwrap_or("");
+        if rest.starts_with('`') {
+            return rest[1..].find('`').map_or(start, |i| start + i as u32 + 2);
+        }
+        start + self.w.interner.get(name).len() as u32
+    }
+
     fn def_span(&self, file: FileId, def: Option<crate::ast::DefId>, fallback: Span) -> Span {
         match def {
             Some(d) => self.w.ast(file).def_range(d),
@@ -6841,7 +7497,7 @@ impl<'w, 'a> P<'w, 'a> {
             if let Some(p) = point {
                 super::buf::write_long_int(&mut out, chars(self, e.file, p) - start);
                 if e.def && e.file == self.file {
-                    self.definitions.push((a as u32, p));
+                    self.definitions.push((a as u32, e.origin.unwrap_or(p)));
                 }
             }
             last_addr = a;
@@ -6899,6 +7555,9 @@ struct Obj {
     name: String,
     owner: Owner,
     span: Span,
+    /// The span the origins' definition point is taken from, as before the module val's position moved (`Pos.origin`):
+    /// a definition point is an input of names, not a position.
+    origin_span: Span,
     /// Where its name is.
     name_at: u32,
     synthetic: bool,
@@ -7164,3 +7823,71 @@ fn js_class_alias(name: &str) -> bool {
 
 /// The lean std's traits scala-library declares as abstract classes.
 const STD_TRAITS_LIBRARY_CLASSES: &[&str] = &["scala.Conversion"];
+
+/// The file's first package clause, which only comments and blanks precede (`Parsers.compilationUnit`): its
+/// `package` keyword's offset and its last name's (`makePackaging`'s point, `pointOffset(pkg)`). None where the file
+/// starts otherwise, or with `package object`.
+fn first_package_clause(text: &str) -> Option<(u32, u32)> {
+    let b = text.as_bytes();
+    let mut i = 0usize;
+    loop {
+        while i < b.len() && (b[i] as char).is_whitespace() {
+            i += 1;
+        }
+        if b[i..].starts_with(b"//") {
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+        } else if b[i..].starts_with(b"/*") {
+            // Scala's block comments nest.
+            let mut depth = 0usize;
+            while i < b.len() {
+                if b[i..].starts_with(b"/*") {
+                    depth += 1;
+                    i += 2;
+                } else if b[i..].starts_with(b"*/") {
+                    depth -= 1;
+                    i += 2;
+                    if depth == 0 {
+                        break;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    let keyword = i;
+    if !b[i..].starts_with(b"package") || b.get(i + 7).is_none_or(|c| !(*c as char).is_whitespace()) {
+        return None;
+    }
+    i += 7;
+    while i < b.len() && (b[i] == b' ' || b[i] == b'\t') {
+        i += 1;
+    }
+    if b[i..].starts_with(b"object") && b.get(i + 6).is_some_and(|c| !(*c as char).is_alphanumeric() && *c != b'_') {
+        return None;
+    }
+    // The qualified name: its components, `.`-separated, the last one's start the point.
+    let mut last = i;
+    while i < b.len() {
+        let c = b[i];
+        if c == b'.' {
+            last = i + 1;
+            i += 1;
+        } else if c == b'`' {
+            i += 1;
+            while i < b.len() && b[i] != b'`' {
+                i += 1;
+            }
+            i += 1;
+        } else if (c as char).is_alphanumeric() || c == b'_' || c == b'$' || c >= 0x80 {
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    (last < i).then_some((keyword as u32, last as u32))
+}

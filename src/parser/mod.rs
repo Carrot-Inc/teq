@@ -1154,10 +1154,10 @@ impl<'a> Parser<'a> {
             let targs = push_list(&mut self.ast.ty_lists, &[string]);
             let array_of_string = self.ast.add_ty(TyExpr::Apply(array, targs), span);
             let unit = self.ast.add_ty(TyExpr::Name(names::UNIT), span);
-            let param = Param { name: args_name, span, ty: array_of_string, default: None, mods: 0, annots: ListRef::EMPTY };
+            let param = Param { name: args_name, span, full: Span::default(), ty: array_of_string, default: None, mods: 0, annots: ListRef::EMPTY };
             let fun = FunDef {
                 tparams: Vec::new(),
-                clauses: vec![ParamClause { params: vec![param], is_using: false, is_implicit: false }],
+                clauses: vec![ParamClause { params: vec![param], is_using: false, is_implicit: false, span: Span::default() }],
                 ret: Some(unit),
                 body: Some(body),
                 ext_tparams: 0,

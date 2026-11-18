@@ -116,6 +116,9 @@ def roundtrip(teq, source, pickles):
         # The definitions' addresses: the trees whose points the section's kind 1 records, apart
         # from the expressions' points.
         defs = set()
+        # A module val's position is `Desugar.moduleDef`'s, at the object's start: its name is its module class's
+        # point (the `TYPEDEF` of its name and `$` written after it), which the record holds.
+        vals, module_of = {}, {}
         section = None
         for line in dump.splitlines():
             if line.startswith('Trees'):
@@ -124,6 +127,11 @@ def roundtrip(teq, source, pickles):
                 m = re.match(r'\s*(\d+):\s*(VALDEF|DEFDEF|TYPEDEF|PARAM|TYPEPARAM)\b', line)
                 if m:
                     defs.add(int(m.group(1)))
+                    n = re.search(r'\[([^\]]*)\]\s*$', line)
+                    if n and m.group(2) == 'VALDEF':
+                        vals[n.group(1)] = int(m.group(1))
+                    elif n and m.group(2) == 'TYPEDEF' and n.group(1).endswith('$') and n.group(1)[:-1] in vals:
+                        module_of[vals.pop(n.group(1)[:-1])] = int(m.group(1))
                 continue
             if line.startswith('Positions:'):
                 section = 'positions'
@@ -149,6 +157,9 @@ def roundtrip(teq, source, pickles):
             bad += 1
             continue
         want = {a: to_bytes[u] for a, u in points.items() if a in defs}
+        for val, cls in module_of.items():
+            if val in want and cls in points:
+                want[val] = to_bytes[points[cls]]
         if want != origins or not origins:
             print(f'FAIL roundtrip {p}: definitions {sorted(origins.items())}, the points give {sorted(want.items())}')
             bad += 1

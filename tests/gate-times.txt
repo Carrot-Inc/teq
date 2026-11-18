@@ -25,6 +25,7 @@ lsp.2/4 240
 lsp.3/4 218
 lsp.4/4 207
 tasty 130
+init-view 120
 modules 392
 modules.1/2 362
 modules.2/2 330

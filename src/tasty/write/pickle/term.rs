@@ -238,8 +238,14 @@ impl<'w, 'a> P<'w, 'a> {
         // expansion it makes. A node of no span (a search's result two sites share) keeps the
         // enclosing tree's, whatever site it was made at first.
         let own = own.or_else(|| spanned.and(e).and_then(|e| self.inline_site(e)));
+        let qual_place = self.qual_place_next.take();
         let addr = self.buf.addr();
         let (file, span, point) = match (own, self.span_ctx) {
+            // A selection's qualifier converted from a pickle with no place of its own: the pickle's (`CallLayout::qual`).
+            (None, _) if qual_place.is_some() => {
+                let (s, p) = qual_place.unwrap_or_default();
+                (self.src_ctx, s, p)
+            }
             // A tree without a point of its own in the converted pickle has none here either,
             // as a node the typer made on the side has none in the whole build.
             (Some((f, s)), _) => (f, s, match pickled {
@@ -254,7 +260,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.other_lines.insert(file, lines);
         }
         let switch = file != self.src_ctx;
-        self.positions.push(Pos { addr, file, span, point, def: false, switch });
+        self.positions.push(Pos { addr, file, span, point, def: false, switch, origin: None });
         own
     }
 
@@ -318,7 +324,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.other_lines.insert(file, lines);
         }
         let switch = file != self.src_ctx;
-        self.positions.push(Pos { addr, file, span, point: Some(span.start), def: false, switch });
+        self.positions.push(Pos { addr, file, span, point: Some(span.start), def: false, switch, origin: None });
         let (src, ctx) = (self.src_ctx, self.span_ctx);
         self.src_ctx = file;
         self.span_ctx = Some((file, span));
@@ -455,7 +461,7 @@ impl<'w, 'a> P<'w, 'a> {
             Some((file, span)) => {
                 let addr = self.buf.addr();
                 let l = self.open(INLINED);
-                self.positions.push(Pos { addr, file, span, point: None, def: false, switch: false });
+                self.positions.push(Pos { addr, file, span, point: None, def: false, switch: false, origin: None });
                 self.term_node(e);
                 self.buf.end_length(l);
             }
@@ -674,6 +680,9 @@ impl<'w, 'a> P<'w, 'a> {
         };
         match outer {
             Wrap::Ascribed(t) => self.within(Some(e), |p| {
+                // `(e: T)` as written: its span, its type tree the written type's (`Parsers`' `Typed`).
+                let layout = p.typed_layout(e);
+                p.place_typed(layout);
                 let l = p.open(TYPED);
                 // A literal is a constant of the type it is ascribed (`(0: Short)`).
                 let literal = p.numeric_class(t).filter(|_| inner.is_empty() && matches!(p.w.prog.expr(e), TExpr::Int(_)));
@@ -681,7 +690,10 @@ impl<'w, 'a> P<'w, 'a> {
                     (Some(c), TExpr::Int(i)) => p.within(Some(e), |p| p.int_constant(i, c)),
                     _ => p.wrapped(e, inner, recs),
                 }
+                let point = p.typed_point(e);
+                p.next_tree_pos = layout.map(|(_, ty)| (ty, point.or(Some(ty.start))));
                 p.written_tpt(t);
+                p.next_tree_pos = None;
                 p.buf.end_length(l);
             }),
             Wrap::Cast(t) => self.within(Some(e), |p| p.cast_to(t, |p| p.wrapped(e, inner, recs))),
@@ -710,9 +722,16 @@ impl<'w, 'a> P<'w, 'a> {
             }),
             Wrap::Unchecked => self.within(Some(e), |p| {
                 let t = p.node_type(e).unwrap_or(ANY);
+                let layout = p.typed_layout(e);
+                p.place_typed(layout);
                 let l = p.open(TYPED);
                 p.wrapped(e, inner, recs);
-                p.term_at(None);
+                match layout {
+                    Some((_, ty)) => p.place_here(ty, Some(ty.start)),
+                    None => {
+                        p.term_at(None);
+                    }
+                }
                 let a = p.open(ANNOTATEDTPT);
                 p.tpt(t);
                 p.annotation_tree("scala", "unchecked");
@@ -847,6 +866,8 @@ impl<'w, 'a> P<'w, 'a> {
                     if self.is_std_quotes(s) {
                         return self.quotes_call(e, &args);
                     }
+                    // Where the source writes the call's name and arguments (`call_layout`).
+                    self.call_layout_next = self.call_layout_of(e, s);
                     if self.names_unqualified(e, s) {
                         return self.applied(s, recs.targs, &args, |p| p.identifier(s), Some(Qual::Owner));
                     }
@@ -907,6 +928,8 @@ impl<'w, 'a> P<'w, 'a> {
                     if self.is_outer_accessor(s) {
                         return self.outer_this(e, s);
                     }
+                    // Where the source writes the call's selection and its arguments (`call_layout`).
+                    self.call_layout_next = self.call_layout_of(e, s);
                     // A member called on the `this` the typer made for an unqualified name.
                     if matches!(self.w.prog.expr(r), TExpr::This) && self.w.prog.span_of(r).is_none() && self.names_unqualified(e, s) {
                         return self.applied(s, recs.targs, &args, |p| p.identifier(s), Some(Qual::Expr(r)));
@@ -1073,6 +1096,12 @@ impl<'w, 'a> P<'w, 'a> {
                 if cases.iter().any(|c| self.refines_type_parameter(scrut, c.pat)) {
                     return self.fail("a match whose cases refine a type parameter".to_string());
                 }
+                if let Some(point) = self.match_point(e) {
+                    let here = self.buf.addr();
+                    if let Some(p) = self.positions.iter_mut().rev().find(|p| p.addr == here) {
+                        p.point = Some(point);
+                    }
+                }
                 let l = self.open(MATCH);
                 match self.reducible(e) {
                     // `summonFrom`: no scrutinee, each case a search for its type.
@@ -1226,6 +1255,9 @@ impl<'w, 'a> P<'w, 'a> {
             return self.fail(format!("the template {}", text));
         };
         let total: usize = self.w.sig_of(s).clauses.iter().map(|c| c.params.len()).sum();
+        // Where the source writes the call's selection and its arguments (`call_layout`), as for the member's call
+        // that is no template: the member of teq's std and scala-library's or the JDK's are one tree.
+        self.call_layout_next = self.call_layout_of(e, s);
         // An extension of a class's instance, selected on the instance the typer left out.
         if let (Some(r), true, Owner::Class(_)) = (receiver, self.w.syms.sym(s).is_extension, self.w.syms.sym(s).owner) {
             return self.call_with(s, |p| p.term(r), targs, args, Some(e));
@@ -1331,7 +1363,7 @@ impl<'w, 'a> P<'w, 'a> {
             let l = self.open(INLINED);
             if let Some((file, span, point)) = at {
                 let switch = file != self.src_ctx;
-                self.positions.push(Pos { addr: self.buf.addr(), file, span, point, def: false, switch });
+                self.positions.push(Pos { addr: self.buf.addr(), file, span, point, def: false, switch, origin: None });
             } else {
                 self.term_at(None);
             }
@@ -1467,15 +1499,30 @@ impl<'w, 'a> P<'w, 'a> {
             if !self.std_shape(&format!("{}.{}$", pkg, object), &name, &super::shapes::by_name_shape(&r)) {
                 return;
             }
+            self.point_at_name(self.w.syms.sym(s).name);
             self.buf.byte(SELECT);
             let n = self.names.simple(&name);
             self.buf.nat(n as u64);
             return self.object_path(pkg, object);
         }
+        // A top-level val, an object's val: the selection's point its name's start, as `field`'s.
+        self.point_at_name(self.w.syms.sym(s).name);
         self.buf.byte(SELECT);
         let n = self.term_name(s);
         self.buf.nat(n as u64);
         self.owner_path(s);
+    }
+
+    /// The selection about to be written at the position its node has: its point its name's start where the source
+    /// writes the name at the span's end (`Parsers`' `selector`, `atSpan(start, nameStart)`).
+    fn point_at_name(&mut self, name: crate::intern::Name) {
+        let here = self.buf.addr();
+        if let Some(i) = self.positions.iter().rposition(|p| p.addr == here) {
+            let p = self.positions[i];
+            if let Some(point) = self.name_point(p.file, p.span, name) {
+                self.positions[i].point = Some(point);
+            }
+        }
     }
 
     fn field(&mut self, r: TExprId, s: SymId, targs: Option<TList>) {
@@ -1496,6 +1543,8 @@ impl<'w, 'a> P<'w, 'a> {
         if !self.std_member_shape(s, &None, receiver) {
             return;
         }
+        // The selection's point is its name's start (`Parsers`' `selector`, `atSpan(start, nameStart)`).
+        self.point_at_name(self.w.syms.sym(s).name);
         self.buf.byte(SELECT);
         let n = self.term_name(s);
         self.buf.nat(n as u64);
@@ -1645,7 +1694,12 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The identifier of a member, placed as the tree it stands in.
     fn identifier(&mut self, s: SymId) {
-        self.term_at(None);
+        match self.call_layout_next.as_mut().and_then(|l| l.select.take()) {
+            Some((span, point)) => self.place_here(span, Some(point)),
+            None => {
+                self.term_at(None);
+            }
+        }
         self.member_termref(s);
     }
 
@@ -1763,7 +1817,13 @@ impl<'w, 'a> P<'w, 'a> {
             targs,
             args,
             |p| {
-                p.term_at(None);
+                // The local method's identifier as written.
+                match p.call_layout_next.as_mut().and_then(|l| l.select.take()) {
+                    Some((span, point)) => p.place_here(span, Some(point)),
+                    None => {
+                        p.term_at(None);
+                    }
+                }
                 p.buf.byte(TERMREFDIRECT);
                 p.def_ref(Key::Sym(s));
             },
@@ -1796,7 +1856,10 @@ impl<'w, 'a> P<'w, 'a> {
         let appended = self.appended_varargs(s, receiver.map(|(c, _)| c));
         if let Some(target) = self.std_target(s) {
             self.written_targs = written;
-            return self.std_call(s, target, targs, args, qual, &evidence);
+            self.std_call(s, target, targs, args, qual, &evidence);
+            // The call's layout is spent here too: none of it stays for a later tree.
+            self.call_layout_next = None;
+            return;
         }
         // The evidence the lean std leaves out of the member's signature, scalac's last clause.
         let tags = self.erased_tag_count(s);
@@ -1899,10 +1962,63 @@ impl<'w, 'a> P<'w, 'a> {
             b
         });
         let mut lifted_ref = None;
-        let opens: Vec<crate::tasty::write::buf::Slot> = layers.iter().rev().map(|l| self.open(if matches!(l, Layer::Types(_)) { TYPEAPPLY } else { APPLY })).collect();
+        // The application's point, its `(` (`Parsers.simpleExprRest`'s `atSpan(startOffset(t), in.offset)`), where
+        // the call's layout gives it and the tree's position is the call's.
+        // The application of the last clause the source writes takes it; an application the typer adds after it (an
+        // inferred `using` clause, `Typer.adaptNoArgs`'s `Apply(tree, args)` with the tree's span) keeps its start.
+        let apply_at = self.buf.addr();
+        let written_lists = self.call_layout_next.as_ref().map_or(0, |l| l.written as usize);
+        let apply_point = self.call_layout_next.as_ref().and_then(|l| l.apply_point);
+        // Per layer, innermost first: how many clauses up to it.
+        let mut ordinal = Vec::with_capacity(layers.len());
+        let mut k = 0usize;
+        for l in &layers {
+            if matches!(l, Layer::Clause(_)) {
+                k += 1;
+            }
+            ordinal.push(k);
+        }
+        // More lists written than this call's clauses (`f(1)(2)` of a function's `apply`): its last clause is written.
+        let written_lists = written_lists.min(k);
+        let written_layer = layers.iter().enumerate().position(|(i, l)| matches!(l, Layer::Clause(_)) && ordinal[i] == written_lists);
+        let call_span = self.positions.iter().rev().find(|p| p.addr == apply_at).map(|p| p.span);
+        if let (Some(point), Some(i)) = (apply_point, written_layer) {
+            if i + 1 == layers.len() {
+                if let Some(p) = self.positions.iter_mut().rev().find(|p| p.addr == apply_at) {
+                    if (p.span.start..=p.span.end).contains(&point) {
+                        p.point = Some(point);
+                    }
+                }
+            }
+        }
+        // A `TypeApply` and its inferred type arguments stand where its function does (`Typer`'s
+        // `typedTypeApply` of an inferred instantiation, `TypeTree`s with the function's span).
+        let fun_span = self.call_layout_next.as_ref().and_then(|l| l.select).map(|(sp, _)| sp);
+        let mut opens: Vec<crate::tasty::write::buf::Slot> = Vec::new();
+        for (i, l) in layers.iter().enumerate().rev() {
+            if matches!(l, Layer::Types(_)) {
+                if let Some(fs) = fun_span {
+                    self.place_here(fs, Some(fs.start));
+                }
+                opens.push(self.open(TYPEAPPLY));
+            } else {
+                // The last written clause's application inside the typer's: the call's span, its point the `(`.
+                if Some(i) == written_layer && i + 1 < layers.len() {
+                    if let (Some(sp), Some(point)) = (call_span, apply_point) {
+                        if (sp.start..=sp.end).contains(&point) {
+                            self.place_here(sp, Some(point));
+                        }
+                    }
+                }
+                opens.push(self.open(APPLY));
+            }
+        }
         self.select_receiver = receiver;
         self.varargs_head = appended.is_some();
         head(self);
+        // The call's layout is spent (its selection taken by the head, its point and function read above): none of it
+        // stays for a later tree that sets none.
+        self.call_layout_next = None;
         self.varargs_head = false;
         self.select_receiver = None;
         let starts: Vec<usize> = clauses.iter().scan(0, |acc, c| {
@@ -1917,7 +2033,9 @@ impl<'w, 'a> P<'w, 'a> {
                         if written {
                             self.written_tpt(t);
                         } else {
+                            self.next_tree_pos = fun_span.map(|fs| (fs, Some(fs.start)));
                             self.tpt(t);
+                            self.next_tree_pos = None;
                         }
                     }
                 }
@@ -2045,19 +2163,36 @@ impl<'w, 'a> P<'w, 'a> {
         }
         match (self.w.prog.expr(a), recs.form) {
             (TExpr::Lambda(ps, body), Some(Form::ByName)) if ps.len == 0 => self.term(body),
-            (TExpr::SeqLit(l), Some(Form::Repeated(t))) if recs.wraps.is_empty() => self.within(Some(a), |p| {
-                let items = p.w.prog.expr_list(l).to_vec();
-                let tl = p.open(TYPED);
-                p.term_at(None);
-                let r = p.open(REPEATED);
-                p.tpt(t);
-                for i in items {
-                    p.term(i);
+            (TExpr::SeqLit(l), Some(Form::Repeated(t))) if recs.wraps.is_empty() => {
+                // The arguments a repeated parameter takes as written (`Applications`' `makeVarArg`): the
+                // `Typed` and its `SeqLiteral` their union, the type trees at its end.
+                let items = self.w.prog.expr_list(l).to_vec();
+                let union = self.written_union(&items);
+                if let Some(u) = union {
+                    self.place_here(u, Some(u.start));
                 }
-                p.buf.end_length(r);
-                p.repeated_tpt(t);
-                p.buf.end_length(tl);
-            }),
+                let end = union.map(|u| (Span { start: u.end, end: u.end }, Some(u.end)));
+                self.within(Some(a), |p| {
+                    let tl = p.open(TYPED);
+                    if let Some(u) = union {
+                        p.place_here(u, Some(u.start));
+                    }
+                    p.term_at(None);
+                    let r = p.open(REPEATED);
+                    p.next_tree_pos = end;
+                    p.tpt(t);
+                    p.next_tree_pos = None;
+                    for i in items {
+                        p.term(i);
+                    }
+                    p.buf.end_length(r);
+                    if let Some((sp, pt)) = end {
+                        p.place_here(sp, pt);
+                    }
+                    p.repeated_tpt(t);
+                    p.buf.end_length(tl);
+                })
+            }
             // A sequence passed to a repeated parameter as its arguments, which scalac writes
             // `xs*` (an eta-expansion's `eta$0`).
             (_, None) if u.repeated && recs.wraps.is_empty() && !matches!(self.w.prog.expr(a), TExpr::SeqLit(_)) => self.within(Some(a), |p| {
@@ -2440,6 +2575,28 @@ impl<'w, 'a> P<'w, 'a> {
         let original = match forwarder {
             Some(f) => self.simple_name(f),
             None => self.sym_name(s),
+        };
+        // The selection as written: from its qualifier's start to its name's end, its point the name's start
+        // (`Parsers`' `selector`, `atSpan(start, nameStart)`; `Desugar.binop`'s `Select(l, op)`).
+        let mut implicit_qual = None;
+        if let Some(l) = self.call_layout_next.as_mut() {
+            if let Some((span, point)) = l.select.take() {
+                // `f(args)` of a value `f`: `f.apply(args)`, its qualifier the written `f` (`Applications`'
+                // `typedApply` of a function value, the `apply` selected on the tree as written).
+                if l.fun_name.is_some_and(|n| n != name) {
+                    implicit_qual = Some(span);
+                }
+                let q = l.qual.take();
+                self.place_here(span, Some(point));
+                self.qual_place_next = q;
+            }
+        }
+        let qual = |p: &mut Self| {
+            if let Some(q) = implicit_qual {
+                p.place_here(q, Some(q.start));
+            }
+            qual(p);
+            p.qual_place_next = None;
         };
         let Some((params, result)) = sig else {
             self.buf.byte(SELECT);
@@ -3529,7 +3686,7 @@ impl<'w, 'a> P<'w, 'a> {
             }
         };
         if unparenthesised {
-            self.positions.push(Pos { addr: self.buf.addr(), point: None, def: false, switch: false, ..call });
+            self.positions.push(Pos { addr: self.buf.addr(), point: None, def: false, switch: false, origin: None, ..call });
         }
     }
 
@@ -3577,10 +3734,42 @@ impl<'w, 'a> P<'w, 'a> {
             None => vec![false; args.len()],
         };
         let call_at = self.buf.addr();
-        let opens: Vec<crate::tasty::write::buf::Slot> = clauses.iter().map(|_| self.open(APPLY)).collect();
+        // The call as the source writes it, placed as `applied_args` places a call of a member the loader read: the
+        // last written clause's application with its `(` for a point, the type application and the selection at the
+        // function. A member of teq's std and the same member of scala-library's or the JDK's are one tree.
+        let layout = self.call_layout_next.take();
+        let written_lists = layout.as_ref().map_or(0, |l| l.written as usize).min(clauses.len());
+        let apply_point = layout.as_ref().and_then(|l| l.apply_point);
+        let call_span = self.positions.iter().rev().find(|p| p.addr == call_at).map(|p| p.span);
+        let mut opens: Vec<crate::tasty::write::buf::Slot> = Vec::with_capacity(clauses.len());
+        for i in 0..clauses.len() {
+            // `opens[i]` is the application of clause `clauses.len() - 1 - i`.
+            let clause = clauses.len() - 1 - i;
+            if let (Some(point), true) = (apply_point, written_lists > 0 && clause + 1 == written_lists) {
+                if i == 0 {
+                    if let Some(p) = self.positions.iter_mut().rev().find(|p| p.addr == call_at) {
+                        if (p.span.start..=p.span.end).contains(&point) {
+                            p.point = Some(point);
+                        }
+                    }
+                } else if let Some(sp) = call_span.filter(|sp| (sp.start..=sp.end).contains(&point)) {
+                    self.place_here(sp, Some(point));
+                }
+            }
+            opens.push(self.open(APPLY));
+        }
+        let fun = layout.and_then(|l| l.select);
+        if !targs.is_empty() {
+            if let Some((fs, _)) = fun {
+                self.place_here(fs, Some(fs.start));
+            }
+        }
         let ta = (!targs.is_empty()).then(|| self.open(TYPEAPPLY));
         if auto_applied && ta.is_none() {
             self.mark_auto_applied(call_at);
+        }
+        if let Some((span, point)) = fun.filter(|_| self.positions.last().map_or(true, |p| p.addr != self.buf.addr())) {
+            self.place_here(span, Some(point));
         }
         if by_name {
             self.buf.byte(SELECT);
@@ -3600,7 +3789,10 @@ impl<'w, 'a> P<'w, 'a> {
                 if written {
                     self.written_tpt(t);
                 } else {
+                    // An inferred type argument stands where its function does, as `applied_args` places it.
+                    self.next_tree_pos = fun.map(|(fs, _)| (fs, Some(fs.start)));
                     self.tpt(t);
+                    self.next_tree_pos = None;
                 }
             }
             self.buf.end_length(l);
@@ -3960,15 +4152,38 @@ impl<'w, 'a> P<'w, 'a> {
         if self.is_std_class(c) && !self.std_shape(&owner, "apply", &super::shapes::sig_text(&sig, &result)) {
             return;
         }
+        // As the source writes the call (`call_layout`): the application's point its `(`, and the selection of
+        // `apply` the typer inserts, its type application and the companion's path where the name is written
+        // (`Typer.adapt`'s `.apply` insertion keeps the function's span).
+        let class_name = self.w.syms.class(c).name;
+        let layout = self.call_layout(e).filter(|l| l.fun_name.map_or(true, |n| n == class_name));
+        if let Some(point) = layout.as_ref().and_then(|l| l.apply_point) {
+            let here = self.buf.addr();
+            if let Some(q) = self.positions.iter_mut().rev().find(|q| q.addr == here) {
+                if (q.span.start..=q.span.end).contains(&point) {
+                    q.point = Some(point);
+                }
+            }
+        }
+        let fun = layout.and_then(|l| l.select);
         let a = self.open(APPLY);
+        if let Some((sp, _)) = fun {
+            self.place_here(sp, Some(sp.start));
+        }
         self.term_at(None);
         let ta = (!targs.is_empty()).then(|| self.open(TYPEAPPLY));
         if ta.is_some() {
+            if let Some((sp, pt)) = fun {
+                self.place_here(sp, Some(pt));
+            }
             self.term_at(None);
         }
         let s = self.open(SELECTIN);
         let n = self.names.signed("apply", None, &sig, &result);
         self.buf.nat(n as u64);
+        if let Some((sp, pt)) = fun {
+            self.place_here(sp, Some(pt));
+        }
         self.companion_path(c);
         self.companion_class_ref(c);
         self.buf.end_length(s);
@@ -4009,7 +4224,41 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let targs: Vec<TypeId> = targs.map(|l| self.w.types.items(l).to_vec()).unwrap_or_default();
         let ty = self.w.types.class(c, &targs);
+        // `new T(args)` as written: its `Select(New(T), <init>)` and its `New` at the type's span.
+        self.parent_layout = self.new_layout(e);
         self.ctor_call(c, via, &targs, args, ty, None);
+        self.parent_layout = None;
+    }
+
+    /// The `new T(args)` the source writes at the node's span: its span and its type's.
+    fn new_layout(&mut self, e: TExprId) -> Option<(Span, Span)> {
+        let (file, span) = match self.w.prog.span_of(e) {
+            Some((f, sp)) if self.is_own_source(f) => (f, sp),
+            _ => return self.pickled_new_layout(e),
+        };
+        let id = self.expr_at(file, span)?;
+        let ast = self.w.ast(file);
+        match ast.expr(id) {
+            crate::ast::Expr::New(t, _) => Some((span, ast.ty_spans[t.idx()])),
+            _ => None,
+        }
+    }
+
+    /// Where the source writes the `match` of the match at the node's span: the keyword after the scrutinee, the
+    /// match's point (`Parsers`' `matchClause`, `atSpan(startOffset(t), in.skipToken())`).
+    fn match_point(&mut self, e: TExprId) -> Option<u32> {
+        let (file, span) = self.w.prog.span_of(e)?;
+        if !self.is_own_source(file) {
+            return None;
+        }
+        let id = self.expr_at(file, span)?;
+        let ast = self.w.ast(file);
+        let crate::ast::Expr::Match(scrut, _) = ast.expr(id) else { return None };
+        let after = ast.expr_spans[scrut.idx()].end;
+        let text = &self.w.files.as_slice()[file.0 as usize].text;
+        let rest = text.get(after as usize..span.end as usize)?;
+        let i = rest.find(|c: char| !c.is_whitespace() && c != ')')?;
+        rest[i..].starts_with("match").then(|| after + i as u32)
     }
 
     /// The call of a constructor of `c`, `via` a secondary one, on `NEW` of `new_ty`, the
@@ -4139,10 +4388,20 @@ impl<'w, 'a> P<'w, 'a> {
                 return;
             }
         }
+        // A written parent's `Select(New(T), <init>)` and its `New` take its type's span (`parent_layouts`).
+        let written = self.parent_layout.take().map(|(_, t)| t);
+        if let Some(t) = written {
+            self.place_here(t, Some(t.start));
+        }
         let sl = self.open(SELECTIN);
         let n = self.names.signed("<init>", None, &params, &result);
         self.buf.nat(n as u64);
-        self.term_at(None);
+        match written {
+            Some(t) => self.place_here(t, Some(t.start)),
+            None => {
+                self.term_at(None);
+            }
+        }
         if std::mem::take(&mut self.self_init) {
             self.qual_this(c);
             self.class_typeref(c);
@@ -4150,6 +4409,9 @@ impl<'w, 'a> P<'w, 'a> {
             return self.ctor_args(targs, args, &clauses, &formals, ta, opens, block);
         }
         self.buf.byte(NEW);
+        if let Some(t) = written {
+            self.place_here(t, Some(t.start));
+        }
         if object {
             // A synthesized companion's parent is written `AnyRef()`, as `Desugar` makes it.
             if std::mem::take(&mut self.parent_as_anyref) {
@@ -4321,7 +4583,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// A secondary constructor's body: `{ this(args); stats; () }`, the typer's block of the
     /// call of the other constructor and the statements after it.
-    pub(super) fn secondary_body(&mut self, c: ClassId, f: crate::tir::FunId) {
+    pub(super) fn secondary_body(&mut self, c: ClassId, f: crate::tir::FunId, layout: Option<SecondaryLayout>) {
         let Some(body) = self.w.prog.funs[f.idx()].body else { return self.fail("a secondary constructor without a body".to_string()) };
         let TExpr::Block(stmts, res) = self.w.prog.expr(body) else { return self.fail("a secondary constructor's shape".to_string()) };
         let stmts: Vec<TStmt> = self.w.prog.stmt_list(stmts).to_vec();
@@ -4336,12 +4598,24 @@ impl<'w, 'a> P<'w, 'a> {
         let this_ty = self.w.types.class(c, &own);
         let (src, ctx) = (self.src_ctx, self.span_ctx);
         self.src_ctx = self.file;
+        // The block as `constrBlock` places it (the first position given an address is its own; `within` gives one).
+        if let Some((sp, _)) = layout.and_then(|l| l.block) {
+            self.place_here(sp, Some(sp.start));
+        }
         self.within(Some(body), |p| {
             let b = p.open(BLOCK);
+            if let Some((_, u)) = layout.and_then(|l| l.block) {
+                p.place_here(Span { start: u, end: u }, Some(u));
+            }
             p.unit_literal();
             p.within(Some(first), |p| {
                 p.self_init = true;
+                if let Some(a) = layout.and_then(|l| l.init_at) {
+                    let at = Span { start: a, end: a };
+                    p.parent_layout = Some((at, at));
+                }
                 p.ctor_call(c, via, &own, &args, this_ty, None);
+                p.parent_layout = None;
                 p.self_init = false;
             });
             p.statements(rest);
@@ -4383,10 +4657,21 @@ impl<'w, 'a> P<'w, 'a> {
             },
         };
         let own: Vec<TypeId> = targs.clone();
-        self.term_at(None);
+        self.place_parent_call();
         let outside = std::mem::replace(&mut self.in_parent_args, true);
         self.ctor_call(k, via, &own, &args, parent, prelude);
         self.in_parent_args = outside;
+        self.parent_layout = None;
+    }
+
+    /// A parent's constructor call as the source writes it (`parent_layouts`): from its type through its last `)`.
+    fn place_parent_call(&mut self) {
+        match self.parent_layout {
+            Some((full, _)) => self.place_here(full, Some(full.start)),
+            None => {
+                self.term_at(None);
+            }
+        }
     }
 
     /// A trait parent's constructor call with what the class passes it.
@@ -4399,10 +4684,11 @@ impl<'w, 'a> P<'w, 'a> {
             _ => return self.fail("a trait parent that is no class".to_string()),
         };
         let own: Vec<TypeId> = targs.clone();
-        self.term_at(None);
+        self.place_parent_call();
         let outside = std::mem::replace(&mut self.in_parent_args, true);
         self.ctor_call(k, via, &own, args, parent, prelude);
         self.in_parent_args = outside;
+        self.parent_layout = None;
     }
 
     /// `new C { .. }`: the anonymous class defined in a block whose value is its instance, typed
@@ -4451,12 +4737,26 @@ impl<'w, 'a> P<'w, 'a> {
         if expected.is_none() && !mirror && self.refining_anon_class(c, ty) {
             return self.fail("an anonymous class whose members refine its type".to_string());
         }
+        // As `Desugar`'s block of the class and its instance: the instance (its `Typed` and the constructor's
+        // `Apply`) the whole `new { .. }`, its `New` at the `new`, the ascribed type tree after the `}`.
+        let whole = self.braced_anon_span(c);
         let b = self.open(BLOCK);
+        if let Some(w) = whole {
+            self.place_here(w, Some(w.start));
+        }
         self.term_at(None);
         let t = self.open(TYPED);
         let this_ty = self.w.types.class(c, &[]);
+        if let Some(w) = whole {
+            self.place_here(w, Some(w.start));
+            let at = Span { start: w.start, end: w.start };
+            self.parent_layout = Some((at, at));
+        }
         self.ctor_call(c, None, &[], &[], this_ty, None);
+        self.parent_layout = None;
+        self.next_tree_pos = whole.map(|w| (Span { start: w.end, end: w.end }, Some(w.end)));
         self.tpt(ty);
+        self.next_tree_pos = None;
         self.buf.end_length(t);
         self.anon_parent_args = Some(parent_args);
         self.local_class(c);
@@ -4492,29 +4792,57 @@ impl<'w, 'a> P<'w, 'a> {
         let sam = self.w.syms.class(c).parents.first().copied().unwrap_or(ANY);
         let ret = self.w.sig_of(tf.sym).ret;
         let Some(body) = tf.body else { return self.fail("a SAM conversion's method without a body".to_string()) };
+        // The lambda as written, which the class stands for (`closure`'s layout).
+        let layout = {
+            let (file, span) = (self.w.syms.class(c).file, self.w.syms.class(c).span);
+            self.lambda_layout_at(file, span)
+        };
         let b = self.open(BLOCK);
-        self.term_at(None);
+        match layout {
+            Some(ref l) => self.place_here(l.span, Some(l.arrow)),
+            None => {
+                self.term_at(None);
+            }
+        }
         let l = self.open(LAMBDA);
+        if let Some(ref lay) = layout {
+            self.place_here(Span { start: lay.span.start, end: lay.span.start }, None);
+        }
         self.buf.byte(TERMREFDIRECT);
         let fwd = self.buf.forward_reference();
+        self.next_tree_pos = layout.as_ref().map(|l| (Span { start: l.span.start, end: l.span.start }, None));
         self.tpt(sam);
+        self.next_tree_pos = None;
         self.buf.end_length(l);
         let d = self.buf.addr();
         self.buf.fill(fwd, d);
         // The class the SAM conversion makes, which the pickle holds as the lambda, is recorded
         // at its `$anonfun` (kind 2): what names it in a downstream.
         self.class_origins.push((d, c));
-        self.term_at(None);
+        match layout {
+            Some(ref l) => self.place_here(l.span, Some(l.arrow)),
+            None => {
+                self.term_at(None);
+            }
+        }
         let dl = self.open(DEFDEF);
         let n = self.names.simple("$anonfun");
         self.buf.nat(n as u64);
         if tf.params.is_empty() {
             self.buf.byte(EMPTYCLAUSE);
         }
-        for &s in &tf.params {
+        for (i, &s) in tf.params.iter().enumerate() {
+            self.param_layout_next = layout.as_ref().and_then(|l| l.params.get(i).copied());
+            self.param_point_next = layout.as_ref().and_then(|l| l.points.get(i).copied().flatten());
             self.local_param(s);
+            self.param_layout_next = None;
         }
+        self.next_tree_pos = layout.as_ref().map(|l| {
+            let at = l.params.iter().map(|(full, _)| full.end).last().unwrap_or(l.span.start);
+            (Span { start: at, end: at }, None)
+        });
         self.tpt(ret);
+        self.next_tree_pos = None;
         self.term(body);
         self.write_flags(&[SYNTHETIC, ARTIFACT]);
         self.buf.end_length(dl);
@@ -4634,9 +4962,20 @@ impl<'w, 'a> P<'w, 'a> {
         };
         // A context function's closure takes its parameters as a using clause.
         let context = self.w.as_context_function(fun_ty).is_some();
+        // The lambda as written (`Desugar.makeClosure` of the parser's `Function`): its span, its point the arrow,
+        // its parameters', each a `ValDef` of its name through its type.
+        let layout = self.lambda_layout(e);
         let b = self.open(BLOCK);
-        self.term_at(None);
+        match layout {
+            Some(ref l) => self.place_here(l.span, Some(l.arrow)),
+            None => {
+                self.term_at(None);
+            }
+        }
         let l = self.open(LAMBDA);
+        if let Some(ref lay) = layout {
+            self.place_here(Span { start: lay.span.start, end: lay.span.start }, None);
+        }
         self.buf.byte(TERMREFDIRECT);
         let fwd = self.buf.forward_reference();
         if let Some(t) = js_target {
@@ -4645,7 +4984,12 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.end_length(l);
         let d = self.buf.addr();
         self.buf.fill(fwd, d);
-        self.term_at(None);
+        match layout {
+            Some(ref l) => self.place_here(l.span, Some(l.arrow)),
+            None => {
+                self.term_at(None);
+            }
+        }
         let dl = self.open(DEFDEF);
         let n = self.names.simple("$anonfun");
         self.buf.nat(n as u64);
@@ -4669,13 +5013,22 @@ impl<'w, 'a> P<'w, 'a> {
         let pmark = self.params.len();
         for (i, &s) in params.iter().enumerate() {
             let addr = self.buf.addr();
+            self.param_layout_next = layout.as_ref().and_then(|l| l.params.get(i).copied());
+            self.param_point_next = layout.as_ref().and_then(|l| l.points.get(i).copied().flatten());
             self.local_param_named(s, context, first.map(|n| format!("contextual${}", n + i as u32)));
+            self.param_layout_next = None;
             self.params.push((s, addr));
             if context {
                 self.using_params.insert(s, ());
             }
         }
+        // The result's type tree has no span of its own: after the last parameter, or at the lambda's start.
+        self.next_tree_pos = layout.as_ref().map(|l| {
+            let at = l.params.iter().map(|(full, _)| full.end).last().unwrap_or(l.span.start);
+            (Span { start: at, end: at }, None)
+        });
         self.tpt(ret);
+        self.next_tree_pos = None;
         self.term_to(body, ret);
         self.params.truncate(pmark);
         self.tparams.truncate(tmark);
@@ -4698,7 +5051,14 @@ impl<'w, 'a> P<'w, 'a> {
     fn local_param_named(&mut self, s: SymId, given: bool, name: Option<String>) {
         let addr = self.buf.addr();
         self.define(Key::Sym(s), addr);
-        self.term_at(None);
+        let layout = self.param_layout_next.take();
+        let point = self.param_point_next.take().unwrap_or(self.w.syms.sym(s).span.start);
+        match layout {
+            Some((full, _)) => self.place_here(full, Some(point)),
+            None => {
+                self.term_at(None);
+            }
+        }
         let l = self.open(PARAM);
         let n = match name {
             Some(name) => self.names.simple(&name),
@@ -4714,11 +5074,360 @@ impl<'w, 'a> P<'w, 'a> {
             self.term_at(None);
             self.buf.byte(BYNAMETPT);
         }
+        self.next_tree_pos = layout.map(|(_, ty)| (ty, Some(ty.start)));
         self.tpt(t);
+        self.next_tree_pos = None;
         if given {
             self.buf.byte(GIVEN);
         }
         self.buf.end_length(l);
+    }
+
+    /// Where a selection `span` ending in the name `name` has its name: the name's start, where the source writes the
+    /// name at the span's end (a backquoted one with its quotes).
+    fn name_point(&self, file: FileId, span: Span, name: crate::intern::Name) -> Option<u32> {
+        let text = &self.w.files.as_slice().get(file.0 as usize)?.text;
+        let n = self.w.interner.get(name);
+        let end = span.end as usize;
+        let quoted = format!("`{}`", n);
+        for written in [n, quoted.as_str()] {
+            if end >= written.len() && text.get(end - written.len()..end) == Some(written) && (end - written.len()) as u32 >= span.start {
+                return Some((end - written.len()) as u32);
+            }
+        }
+        None
+    }
+
+    /// The source's expressions of a file by their span: the applications, selections, operators and lambdas, the
+    /// outermost of one span kept (made once per file).
+    fn expr_at(&mut self, file: FileId, span: Span) -> Option<crate::ast::ExprId> {
+        if !self.expr_index.contains_key(&file) {
+            let ast = self.w.ast(file);
+            let mut m: FxMap<(u32, u32), crate::ast::ExprId> = FxMap::default();
+            for (i, x) in ast.exprs.iter().enumerate() {
+                if matches!(x, crate::ast::Expr::Apply(..) | crate::ast::Expr::UsingApply(..) | crate::ast::Expr::Infix(..) | crate::ast::Expr::Select(..) | crate::ast::Expr::Lambda(..) | crate::ast::Expr::TypeApply(..) | crate::ast::Expr::New(..) | crate::ast::Expr::Match(..)) {
+                    let sp = ast.expr_spans[i];
+                    m.insert((sp.start, sp.end), crate::ast::ExprId(i as u32));
+                }
+            }
+            self.expr_index.insert(file, m);
+        }
+        self.expr_index[&file].get(&(span.start, span.end)).copied()
+    }
+
+    /// Where the source writes a call's selection and arguments, by the call's span: for `q.m(args)` the selection
+    /// `q.m` (the qualifier's start to the name's end, its point the name) and the application's point, the `(`;
+    /// for `m(args)` the identifier; for `l op r` `Desugar.binop`'s `Select(l, op)`, through the operator.
+    /// `call_layout` of a call of `s`, where the source writes it as a call of `s`: the function written names `s`, or
+    /// `s` is the `apply` the typer inserted on what is written. A node of an inline expansion has its call's span,
+    /// whose written call is the inline method's, not the node's.
+    /// The tree of the pickle a node converted from it stands for (`NodeRecords::tree`), where the node's source is
+    /// none the build reads: the trees the writer makes around the node are read back from that pickle, which the
+    /// build that read the source wrote with them (an upstream module's body expanded here). The same tree has the
+    /// same position however its unit was reached.
+    fn pickled_of(&mut self, e: TExprId) -> Option<(std::sync::Arc<crate::typer::loader::places::FilePositions>, crate::typer::loader::places::PickledTree)> {
+        if self.w.prog.span_of(e).is_some_and(|(f, _)| self.is_own_source(f)) {
+            return None;
+        }
+        let (file, addr) = self.records(e).tree?;
+        let ps = self.w.pickled_positions(file);
+        let t = ps.pickled_tree(addr)?;
+        Some((ps, t))
+    }
+
+    /// `call_layout` of a call converted from a pickle: its applications from the outermost inwards, the written one
+    /// the outermost whose point is not its start (its `(`), and its function's place.
+    fn pickled_call_layout(&mut self, e: TExprId) -> Option<CallLayout> {
+        let (ps, t) = self.pickled_of(e)?;
+        let mut applies = Vec::new();
+        let mut cur = t;
+        loop {
+            match cur.tag {
+                APPLY => {
+                    applies.push(cur);
+                    cur = *ps.pickled_children(cur.addr).first()?;
+                }
+                TYPEAPPLY => cur = *ps.pickled_children(cur.addr).first()?,
+                _ => break,
+            }
+        }
+        let path = matches!(cur.tag, SELECT | SELECTIN | IDENT | TERMREF | TERMREFDIRECT | TERMREFSYMBOL | TERMREFPKG | SELECTOUTER);
+        // A selection the layout placed has its point (`place_here(span, Some(point))`); one the writer placed with no
+        // layout has none (the build that read the source wrote none there: a name the source does not write).
+        let select = cur.pos.filter(|p| path && p.point.is_some()).map(|p| (Span { start: p.start, end: p.end }, p.point.unwrap_or(p.start)));
+        let qual = match cur.tag {
+            SELECT | SELECTIN if select.is_some() => ps.pickled_children(cur.addr).first().and_then(|q| q.pos).map(|q| (Span { start: q.start, end: q.end }, q.point)),
+            _ => None,
+        };
+        let written = applies.iter().position(|a| a.pos.is_some_and(|p| p.point.is_some_and(|q| q != p.start)));
+        let (written, apply_point) = match written {
+            Some(i) => ((applies.len() - i) as u16, applies[i].pos.and_then(|p| p.point)),
+            None => (0, None),
+        };
+        Some(CallLayout { select, apply_point, fun_name: None, written, qual })
+    }
+
+    /// `lambda_layout` of a lambda converted from a pickle: `BLOCK(LAMBDA, DEFDEF)` as the writer writes one, the
+    /// `LAMBDA`'s place the lambda's span and arrow, each `PARAM`'s and its type tree's the parameter's.
+    fn pickled_lambda_layout(&mut self, e: TExprId) -> Option<LambdaLayout> {
+        let (ps, t) = self.pickled_of(e)?;
+        if t.tag != BLOCK {
+            return None;
+        }
+        let children = ps.pickled_children(t.addr);
+        let lambda = children.iter().find(|c| c.tag == LAMBDA)?.pos?;
+        // A lambda the source does not write (an eta-expansion) is placed at its start, empty: no layout.
+        if lambda.end == lambda.start {
+            return None;
+        }
+        let def = children.iter().find(|c| c.tag == DEFDEF)?;
+        let mut params = Vec::new();
+        let mut points = Vec::new();
+        for p in ps.pickled_children(def.addr).into_iter().filter(|c| c.tag == PARAM) {
+            let full = p.pos?;
+            let ty = ps.pickled_children(p.addr).first().and_then(|c| c.pos)?;
+            params.push((Span { start: full.start, end: full.end }, Span { start: ty.start, end: ty.end }));
+            points.push(Some(full.point.unwrap_or(full.start)));
+        }
+        Some(LambdaLayout { span: Span { start: lambda.start, end: lambda.end }, arrow: lambda.point.unwrap_or(lambda.start), params, points })
+    }
+
+    /// `new_layout` of a construction converted from a pickle: `APPLY(SELECTin(NEW(T), <init>), ..)` as the writer
+    /// writes a written `new T(..)`, the selection with its point and the `NEW` at the type's span.
+    fn pickled_new_layout(&mut self, e: TExprId) -> Option<(Span, Span)> {
+        let (ps, t) = self.pickled_of(e)?;
+        let mut cur = t;
+        while matches!(cur.tag, APPLY | TYPEAPPLY) {
+            cur = *ps.pickled_children(cur.addr).first()?;
+        }
+        if !matches!(cur.tag, SELECT | SELECTIN) || !cur.pos.is_some_and(|p| p.point.is_some()) {
+            return None;
+        }
+        let new = ps.pickled_children(cur.addr).into_iter().next().filter(|c| c.tag == NEW)?.pos?;
+        let call = t.pos?;
+        Some((Span { start: call.start, end: call.end }, Span { start: new.start, end: new.end }))
+    }
+
+    /// The `VALDEF` of a pickle whose right-hand side a local's initializer was converted from: its place and its
+    /// type tree's.
+    fn pickled_local_val(&mut self, init: TExprId) -> Option<((Span, Option<u32>), Option<(Span, Option<u32>)>)> {
+        let (ps, t) = self.pickled_of(init)?;
+        let v = ps.pickled_parent(t.addr).filter(|v| v.tag == VALDEF)?;
+        let at = |p: crate::tasty::positions::Pos| (Span { start: p.start, end: p.end }, p.point);
+        let tpt = ps.pickled_children(v.addr).first().filter(|c| c.addr != t.addr).and_then(|c| c.pos).map(at);
+        Some((at(v.pos?), tpt))
+    }
+
+    pub(super) fn call_layout_of(&mut self, e: TExprId, s: SymId) -> Option<CallLayout> {
+        let name = self.w.syms.sym(s).name;
+        let apply = self.w.interner.get(name) == "apply";
+        self.call_layout(e).filter(|l| apply || l.fun_name.map_or(true, |n| n == name))
+    }
+
+    pub(super) fn call_layout(&mut self, e: TExprId) -> Option<CallLayout> {
+        match self.w.prog.span_of(e) {
+            Some((file, span)) if self.is_own_source(file) => self.call_layout_at(file, span),
+            _ => self.pickled_call_layout(e),
+        }
+    }
+
+    /// `call_layout` of the call the source writes at `span`.
+    pub(super) fn call_layout_at(&mut self, file: FileId, span: Span) -> Option<CallLayout> {
+        if !self.is_own_source(file) {
+            return None;
+        }
+        let id = self.expr_at(file, span)?;
+        let ast = self.w.ast(file);
+        let text = &self.w.files.as_slice()[file.0 as usize].text;
+        let interner = self.w.interner;
+        let selection = |f: crate::ast::ExprId| -> Option<(Span, u32)> {
+            let mut f = f;
+            while let crate::ast::Expr::TypeApply(g, _) = ast.expr(f) {
+                f = g;
+            }
+            let fs = ast.expr_spans[f.idx()];
+            match ast.expr(f) {
+                crate::ast::Expr::Select(_, n) => {
+                    let w = interner.get(n);
+                    let end = fs.end as usize;
+                    let start = if end >= w.len() && text.get(end - w.len()..end) == Some(w) { (end - w.len()) as u32 } else { fs.start };
+                    Some((fs, start))
+                }
+                crate::ast::Expr::Ident(_) => Some((fs, fs.start)),
+                _ => None,
+            }
+        };
+        let fun_name = |f: crate::ast::ExprId| -> Option<crate::intern::Name> {
+            let mut f = f;
+            while let crate::ast::Expr::TypeApply(g, _) = ast.expr(f) {
+                f = g;
+            }
+            match ast.expr(f) {
+                crate::ast::Expr::Select(_, n) | crate::ast::Expr::Ident(n) => Some(n),
+                _ => None,
+            }
+        };
+        match ast.expr(id) {
+            crate::ast::Expr::Apply(f, _) | crate::ast::Expr::UsingApply(f, _) => {
+                let fs = ast.expr_spans[f.idx()];
+                let rest = text.get(fs.end as usize..span.end as usize).unwrap_or("");
+                let open = rest.find(|c: char| !c.is_whitespace()).filter(|&i| rest[i..].starts_with('(')).map(|i| fs.end + i as u32);
+                // The argument lists the source writes: the applications down the function.
+                let mut written = 1u16;
+                let mut g = f;
+                while let crate::ast::Expr::Apply(h, _) | crate::ast::Expr::UsingApply(h, _) = ast.expr(g) {
+                    written += 1;
+                    g = h;
+                }
+                Some(CallLayout { select: selection(f), apply_point: open, fun_name: fun_name(f), written, qual: None })
+            }
+            crate::ast::Expr::Infix(l, op, _, op_end) => {
+                let ls = ast.expr_spans[l.idx()];
+                let w = interner.get(op);
+                let point = op_end.checked_sub(w.len() as u32).filter(|&p| p >= ls.start).unwrap_or(ls.start);
+                Some(CallLayout { select: Some((Span { start: ls.start, end: op_end }, point)), apply_point: Some(span.start), fun_name: Some(op), written: 1, qual: None })
+            }
+            crate::ast::Expr::Select(_, n) => Some(CallLayout { select: selection(id), apply_point: None, fun_name: Some(n), written: 0, qual: None }),
+            _ => None,
+        }
+    }
+
+    /// A local definition's place: its span as written with its name's point (as a member's, `position`), or the
+    /// enclosing tree's where the source writes it not (a definition the typer made).
+    fn place_local(&mut self, file: FileId, def: Option<crate::ast::DefId>, name_at: u32) {
+        match self.own_def_span(file, def) {
+            Some(sp) => {
+                let point = if (sp.start..=sp.end).contains(&name_at) { name_at } else { sp.start };
+                self.place_here(sp, Some(point));
+            }
+            None => {
+                self.term_at(None);
+            }
+        }
+    }
+
+    /// The ascription `(e: T)` the source writes around the node `e`: its span and its type's (`Parsers`' `Typed`).
+    fn typed_layout(&mut self, e: TExprId) -> Option<(Span, Span)> {
+        let (file, span) = self.w.prog.span_of(e)?;
+        if !self.is_own_source(file) {
+            return None;
+        }
+        if !self.typed_index.contains_key(&file) {
+            let ast = self.w.ast(file);
+            let mut m: FxMap<(u32, u32), (Span, Span)> = FxMap::default();
+            let mut points: Vec<((u32, u32), crate::ast::TyExprId)> = Vec::new();
+            for (i, x) in ast.exprs.iter().enumerate() {
+                match x {
+                    crate::ast::Expr::Typed(inner, ty) => {
+                        let is = ast.expr_spans[inner.idx()];
+                        m.insert((is.start, is.end), (ast.expr_spans[i], ast.ty_spans[ty.idx()]));
+                        points.push(((is.start, is.end), *ty));
+                    }
+                    // `e: @unchecked`: its type tree, the annotated `TypeTree` dotty's typer makes, has no span of
+                    // its own: after the expression.
+                    crate::ast::Expr::Unchecked(inner) => {
+                        let is = ast.expr_spans[inner.idx()];
+                        m.insert((is.start, is.end), (ast.expr_spans[i], Span { start: is.end, end: is.end }));
+                    }
+                    _ => {}
+                }
+            }
+            let points: FxMap<(u32, u32), Option<u32>> = points.into_iter().map(|(k, t)| (k, self.written_ty_pos(file, t).1)).collect();
+            self.typed_points.insert(file, points);
+            self.typed_index.insert(file, m);
+        }
+        self.typed_index[&file].get(&(span.start, span.end)).copied()
+    }
+
+    /// The point of the type tree of the ascription around the node `e` (`written_ty_pos`).
+    fn typed_point(&mut self, e: TExprId) -> Option<u32> {
+        let (file, span) = self.w.prog.span_of(e)?;
+        self.typed_layout(e)?;
+        self.typed_points.get(&file).and_then(|m| m.get(&(span.start, span.end)).copied()).flatten()
+    }
+
+    /// The position the enclosing `within` gave the `TYPED` about to be written, made the ascription's.
+    fn place_typed(&mut self, layout: Option<(Span, Span)>) {
+        let Some((outer, _)) = layout else { return };
+        let here = self.buf.addr();
+        if let Some(p) = self.positions.iter_mut().rev().find(|p| p.addr == here) {
+            p.span = outer;
+            p.point = Some(outer.start);
+        } else {
+            self.place_here(outer, Some(outer.start));
+        }
+    }
+
+    /// Gives the tree written next the span and point the source gives it.
+    /// `place_here` in the place of the position already given the address, if one is.
+    fn place_over(&mut self, span: Span, point: Option<u32>) {
+        let addr = self.buf.addr();
+        let file = self.src_ctx;
+        match self.positions.iter_mut().rev().find(|q| q.addr == addr) {
+            Some(q) if q.file == file && !q.switch => {
+                q.span = span;
+                q.point = point;
+            }
+            Some(_) => {}
+            None => self.place_here(span, point),
+        }
+    }
+
+    fn place_here(&mut self, span: Span, point: Option<u32>) {
+        let addr = self.buf.addr();
+        self.positions.push(Pos { addr, file: self.src_ctx, span, point, def: false, switch: false, origin: None });
+    }
+
+    /// The lambda the node `e` stands for, as the source writes it: its span, its arrow, and per parameter the
+    /// parameter's span (its name through its written type) and its type tree's (the written type's, or the empty
+    /// span after the name: `Parsers.typedOpt`'s).
+    fn lambda_layout(&mut self, e: TExprId) -> Option<LambdaLayout> {
+        match self.w.prog.span_of(e) {
+            Some((file, span)) if self.is_own_source(file) => self.lambda_layout_at(file, span),
+            _ => self.pickled_lambda_layout(e),
+        }
+    }
+
+    /// `lambda_layout` of the lambda the source writes at `span`.
+    fn lambda_layout_at(&mut self, file: FileId, span: Span) -> Option<LambdaLayout> {
+        if !self.is_own_source(file) {
+            return None;
+        }
+        let id = self.expr_at(file, span)?;
+        let ast = self.w.ast(file);
+        let crate::ast::Expr::Lambda(ps, body) = ast.expr(id) else { return None };
+        let text = &self.w.files.as_slice()[file.0 as usize].text;
+        let mut params = Vec::new();
+        let mut last = span.start;
+        for k in ps.start..ps.start + ps.len {
+            let p = &ast.lambda_params[k as usize];
+            let (full, ty) = match p.ty {
+                Some(t) => {
+                    let ts = ast.ty_spans[t.idx()];
+                    (Span { start: p.span.start, end: ts.end }, ts)
+                }
+                None => (p.span, Span { start: p.span.end, end: p.span.end }),
+            };
+            last = last.max(full.end);
+            params.push((full, ty));
+        }
+        let body_start = ast.expr_spans[body.idx()].start;
+        let between = text.get(last as usize..body_start as usize).unwrap_or("");
+        let written_arrow = between.find("=>").or_else(|| between.find('⇒'));
+        // A placeholder's parameter (`_ + _`, no arrow written): the empty span at its `_` (`Parsers.simpleExpr`'s
+        // USCORE, `ValDef(pname, ..).withSpan(Span(start))`).
+        if written_arrow.is_none() {
+            for (k, (full, _)) in (ps.start..ps.start + ps.len).zip(params.iter_mut()) {
+                let p = &ast.lambda_params[k as usize];
+                if text.get(p.span.start as usize..p.span.end as usize) == Some("_") {
+                    *full = Span { start: p.span.start, end: p.span.start };
+                }
+            }
+        }
+        let arrow = written_arrow.map_or(span.start, |i| last + i as u32);
+        // `?=>`'s point is its `?`.
+        let arrow = if arrow > 0 && text.as_bytes().get(arrow as usize - 1) == Some(&b'?') { arrow - 1 } else { arrow };
+        Some(LambdaLayout { span, arrow, params, points: Vec::new() })
     }
 
     /// Whether a local is a by-name parameter, which a read evaluates.
@@ -5076,7 +5785,13 @@ impl<'w, 'a> P<'w, 'a> {
         let info = self.sym_info(s);
         let addr = self.buf.addr();
         self.define(Key::Sym(s), addr);
-        self.term_at(None);
+        let def = self.local_def_of(s);
+        // A local of a body converted from a pickle: the place that pickle gives its definition and its type tree.
+        let pickled = if self.own_def_span(info.file, def).is_none() { self.pickled_local_val(init) } else { None };
+        match pickled {
+            Some(((span, point), _)) => self.place_here(span, point),
+            None => self.place_local(info.file, def, info.span.start),
+        }
         let l = self.open(VALDEF);
         // A temporary of an application's plan has the fresh name `Lifter.lift` gives it.
         let lifted = (info.mods & mods::LIFTED != 0).then(|| self.w.interner.get(info.name).rsplit_once('$')).flatten().and_then(|(p, k)| Some((p.to_string(), k.parse::<u32>().ok()?)));
@@ -5092,6 +5807,10 @@ impl<'w, 'a> P<'w, 'a> {
             return self.fail("a local of a wildcard type".to_string());
         }
         // A type the source wrote is its tree, one the typer inferred the type alone.
+        self.next_tree_pos = match pickled {
+            Some((_, tpt)) => tpt,
+            None => self.result_tpt_pos(info.file, def, info.span.start),
+        };
         match recorded.and_then(|r| r.tpt) {
             Some(ty) => {
                 let annots = self.type_annotation_trees(info.file, ty);
@@ -5109,6 +5828,7 @@ impl<'w, 'a> P<'w, 'a> {
             }
             None => self.tpt(t),
         }
+        self.next_tree_pos = None;
         self.term_to(init, t);
         let mut flags = Vec::new();
         if info.kind == SymKind::Var {
@@ -5208,14 +5928,21 @@ impl<'w, 'a> P<'w, 'a> {
         let sig = self.w.sig_of(s).clone();
         let addr = self.buf.addr();
         self.define(Key::Sym(s), addr);
-        self.term_at(None);
+        // A local method of a body an expansion brings from another unit stands as the build that reads that unit's
+        // pickle places it (`is_unit_source`).
+        let def = self.local_def_of(s).filter(|_| self.is_unit_source(info.file));
+        self.place_local(info.file, def, info.span.start);
         let l = self.open(DEFDEF);
         let n = self.simple_name(info.name);
         self.buf.nat(n as u64);
         let tmark = self.tparams.len();
         let pmark = self.params.len();
+        self.tparam_spans = self.def_tparam_spans(info.file, def, sig.tparams.len()).into();
         self.def_params(&sig.tparams, &sig.clauses, None);
+        self.tparam_spans.clear();
+        self.next_tree_pos = self.result_tpt_pos(info.file, def, info.span.start);
         self.tpt(sig.ret);
+        self.next_tree_pos = None;
         match tf.body {
             Some(b) => self.term_to(b, sig.ret),
             None => self.fail("a local method without a body".to_string()),
@@ -5325,11 +6052,46 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.end_length(l);
     }
 
+    /// The case clause whose body the node `body` is, as the source writes it: the `CaseDef`'s span, from its `case`
+    /// through its body (`Parsers.caseClause`'s `atSpan(in.offset)` at `case`), and its pattern.
+    fn case_layout(&mut self, body: TExprId) -> Option<(Span, FileId, crate::ast::PatId)> {
+        let (file, span) = self.w.prog.span_of(body)?;
+        if !self.is_own_source(file) {
+            return None;
+        }
+        if !self.case_index.contains_key(&file) {
+            let ast = self.w.ast(file);
+            let text = self.w.files.as_slice()[file.0 as usize].text.as_bytes();
+            let mut m: FxMap<(u32, u32), (Span, crate::ast::PatId)> = FxMap::default();
+            for c in &ast.cases {
+                let ps = ast.pat_spans[c.pat.idx()];
+                let bs = ast.expr_spans[c.body.idx()];
+                let mut i = (ps.start as usize).min(text.len());
+                while i > 0 && text[i - 1].is_ascii_whitespace() {
+                    i -= 1;
+                }
+                if i >= 4 && &text[i - 4..i] == b"case" {
+                    m.insert((bs.start, bs.end), (Span { start: (i - 4) as u32, end: bs.end.max(ps.end) }, c.pat));
+                }
+            }
+            self.case_index.insert(file, m);
+        }
+        self.case_index[&file].get(&(span.start, span.end)).map(|&(sp, p)| (sp, file, p))
+    }
+
     fn case(&mut self, c: crate::tir::TCase, scrut: TypeId, unit: bool) {
-        self.term_at(Some(c.body));
+        let layout = self.case_layout(c.body);
+        match layout {
+            Some((sp, _, _)) => self.place_here(sp, Some(sp.start)),
+            None => {
+                self.term_at(Some(c.body));
+            }
+        }
         let l = self.open(CASEDEF);
         let (tmark, bmark, gmark) = (self.tparams.len(), self.pattern_binds.len(), self.type_givens.len());
+        self.pat_next = layout.map(|(_, f, p)| (f, p));
         self.pattern(c.pat, scrut);
+        self.pat_next = None;
         self.term_in(c.body, unit);
         if let Some(g) = c.guard {
             self.term(g);
@@ -5341,14 +6103,44 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     pub(super) fn pattern(&mut self, p: TPatId, scrut: TypeId) {
+        // The pattern as written, where its tree is the written one's: a wildcard, a binder, a typed pattern
+        // (`Parsers.pattern1`'s `Typed`, its type the written type's tree), each at its span.
+        let taken = self.pat_next.take();
+        // A constructor pattern's own trees are `class_pattern`'s to place.
+        let class_next = taken.filter(|&(file, ap)| matches!((self.w.prog.pats[p.idx()], self.w.ast(file).pat(ap)), (TPat::Class(..), crate::ast::Pat::Ctor(..))));
+        let written = taken.and_then(|(file, ap)| {
+            let ast = self.w.ast(file);
+            let sp = ast.pat_spans[ap.idx()];
+            match (self.w.prog.pats[p.idx()], ast.pat(ap)) {
+                (TPat::Wildcard, crate::ast::Pat::Wildcard) => Some((sp, None, None)),
+                // A constructor pattern tested first (`typedUnApply`'s `Typed`): the pattern's span, its type tree
+                // at its end.
+                (TPat::Test(..), crate::ast::Pat::Ctor(..)) => Some((sp, Some((file, ap)), Some((Span { start: sp.end, end: sp.end }, Some(sp.end))))),
+                (TPat::Bind(..), crate::ast::Pat::Bind(_, inner)) => Some((sp, inner.map(|i| (file, i)), None)),
+                (TPat::Test(..), crate::ast::Pat::Typed(inner, ty)) => Some((sp, Some((file, inner)), Some(self.written_ty_pos(file, ty)))),
+                _ => None,
+            }
+        });
+        if let Some((sp, _, _)) = written {
+            self.place_here(sp, Some(sp.start));
+        }
         self.term_at(None);
+        let (inner_written, ty_written) = written.map_or((None, None), |(_, i, t)| (i, t));
         match self.w.prog.pats[p.idx()] {
             TPat::Wildcard => self.wildcard(scrut),
             TPat::Bind(s, inner) => {
                 let (l, t) = self.bind_head(s);
                 match inner {
-                    Some(i) => self.pattern(i, t),
+                    Some(i) => {
+                        self.pat_next = inner_written;
+                        self.pattern(i, t);
+                        self.pat_next = None;
+                    }
                     None => {
+                        // The binder's wildcard, which the parser places not: at the binder's start.
+                        if let Some((sp, _, _)) = written {
+                            self.place_here(Span { start: sp.start, end: sp.start }, Some(sp.start));
+                        }
                         self.term_at(None);
                         self.wildcard(t)
                     }
@@ -5381,8 +6173,12 @@ impl<'w, 'a> P<'w, 'a> {
                     self.pattern_binds.push((p, self.bindings, false));
                 }
                 let l = self.open(TYPED);
+                self.pat_next = inner_written;
                 self.pattern(inner, t);
+                self.pat_next = None;
+                self.next_tree_pos = ty_written;
                 self.pattern_tpt(t);
+                self.next_tree_pos = None;
                 self.buf.end_length(l);
             }
             // `_: p.type`, which the typer compares by identity: a path of a val.
@@ -5410,7 +6206,9 @@ impl<'w, 'a> P<'w, 'a> {
                 if repeated {
                     return self.repeated_class_pattern(c, t, fields, subs, scrut);
                 }
-                self.class_pattern(c, t, fields, subs, scrut)
+                self.pat_next = class_next;
+                self.class_pattern(c, t, fields, subs, scrut);
+                self.pat_next = None;
             }
             TPat::Seq(..) => self.fail("a sequence pattern".to_string()),
             TPat::Unapply(_, call, inner) if matches!(self.w.prog.expr(call), TExpr::Js(t, _) if self.w.prog.strings[t.idx()] == "$quoteMatch") => self.quote_pattern(call, inner),
@@ -5746,6 +6544,8 @@ impl<'w, 'a> P<'w, 'a> {
     // ---- operators ------------------------------------------------------------------------
 
     fn prim(&mut self, e: TExprId, op: PrimOp, a: TExprId, b: TExprId, form: Option<Form>) {
+        // Where the source writes the operator (`Desugar.binop`'s `Select(l, op)`).
+        self.call_layout_next = self.call_layout(e);
         let (a, b, name) = match form {
             Some(Form::SuperOp(n)) => {
                 let name = self.name(n);
@@ -5756,6 +6556,11 @@ impl<'w, 'a> P<'w, 'a> {
             None => (a, b, prim_name(op).to_string()),
             Some(f) => return self.unsupported_form(f),
         };
+        // The written operator must be this one (a node of an inline expansion has its call's span).
+        let interner = self.w.interner;
+        if self.call_layout_next.as_ref().is_some_and(|l| l.fun_name.is_some_and(|n| interner.get(n) != name)) {
+            self.call_layout_next = None;
+        }
         let (lt, rt) = (self.operand_type(a), self.operand_type(b));
         let a = self.unpromoted(a);
         let b = self.unpromoted(b);
@@ -5775,7 +6580,10 @@ impl<'w, 'a> P<'w, 'a> {
         };
         match (numeric, name.as_str()) {
             (Some(c), _) => self.builtin_op(c, &name, a, rt, b, result),
-            (None, "==" | "!=" | "equals" | "eq" | "ne") => self.universal(&name, |p| p.term(a), &[], &[b]),
+            (None, "==" | "!=" | "equals" | "eq" | "ne") => {
+                self.op_select = self.call_layout_next.as_mut().and_then(|l| l.select.take());
+                self.universal(&name, |p| p.term(a), &[], &[b])
+            }
             (None, _) => self.fail(format!("the operator {} of a receiver", name)),
         }
     }
@@ -5826,6 +6634,9 @@ impl<'w, 'a> P<'w, 'a> {
             return self.fail(format!("the result of {}", name));
         };
         let l = self.open(APPLY);
+        if let Some((span, point)) = self.call_layout_next.as_mut().and_then(|l| l.select.take()) {
+            self.place_here(span, Some(point));
+        }
         let sl = self.open(SELECTIN);
         let n = self.names.signed(name, None, &[SigParam::Type(param)], &res);
         self.buf.nat(n as u64);
@@ -5944,6 +6755,11 @@ impl<'w, 'a> P<'w, 'a> {
         if clause && tps == 0 && args.is_empty() {
             self.mark_auto_applied(call_at);
         }
+        // An operator's selection where the source writes it (`Desugar.binop`'s `Select(l, op)`), as `builtin_op`'s:
+        // `prim`'s alone, which hands it over (the other callers set no layout).
+        if let Some((span, point)) = self.op_select.take() {
+            self.place_here(span, Some(point));
+        }
         if !clause && tps == 0 {
             self.buf.byte(SELECT);
             let n = self.names.simple(name);
@@ -6039,6 +6855,8 @@ impl<'w, 'a> P<'w, 'a> {
         let outer = outer.clone();
         if !outer.transparent {
             return self.within_site(outer.site, e, |p| {
+                // Where the source writes the call's name and arguments (`call_layout`).
+                p.call_layout_next = outer.site.and_then(|(f, s)| p.call_layout_at(f, s));
                 let targs = (!p.w.types.items(outer.targs).is_empty()).then_some(outer.targs);
                 let unqualified = outer.site.map_or(false, |(f, s)| p.text_names(f, s, outer.callee));
                 match outer.recv {
@@ -6062,6 +6880,15 @@ impl<'w, 'a> P<'w, 'a> {
         self.within_site(outer.site, e, |p| {
             p.inlined_open.push(p.inlined_callees.len());
             p.inlined_callees.push((p.buf.addr(), outer.callee));
+            // The `Inlined`'s point is its call's (`Positioned.envelope` of an `Inlined` is `call.span`): the `(`.
+            if let Some(point) = outer.site.and_then(|(f, s)| p.call_layout_at(f, s)).and_then(|l| l.apply_point) {
+                let here = p.buf.addr();
+                if let Some(q) = p.positions.iter_mut().rev().find(|q| q.addr == here) {
+                    if (q.span.start..=q.span.end).contains(&point) {
+                        q.point = Some(point);
+                    }
+                }
+            }
             let l = p.open(INLINED);
             // The expansion, its bindings the block the typer made of them.
             let bindings: Vec<TStmt> = match (outer.binds, inner.is_empty(), p.w.prog.expr(e)) {
@@ -6540,6 +7367,23 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.end_length(l);
     }
 
+    /// The union of the spans the source writes the nodes `items` at, where it writes them all in this source.
+    fn written_union(&mut self, items: &[TExprId]) -> Option<Span> {
+        let mut u: Option<Span> = None;
+        for &i in items {
+            // An argument converted from a pickle: the place that pickle gives it.
+            let (file, sp) = match self.w.prog.span_of(i) {
+                Some((f, sp)) if self.is_own_source(f) => (f, sp),
+                _ => self.pickled_place_of(i).map(|(f, sp, _)| (f, sp))?,
+            };
+            if file != self.src_ctx {
+                return None;
+            }
+            u = Some(u.map_or(sp, |v| Span { start: v.start.min(sp.start), end: v.end.max(sp.end) }));
+        }
+        u
+    }
+
     /// `(elems*: T*)`: a sequence literal passed to a repeated parameter.
     fn repeated_of(&mut self, elem: TypeId, elems: impl FnOnce(&mut Self)) {
         self.term_at(None);
@@ -6782,9 +7626,33 @@ impl<'w, 'a> P<'w, 'a> {
             self.w.rollback(&mark);
             !sub
         };
+        // The pattern as written (`Parsers.pattern3`'s infix or `simplePattern`'s application): the `UnApply` its
+        // span with its point at the constructor's name, the function's trees that name's span (`typedUnApply`),
+        // each argument pattern its own.
+        let layout = self.pat_next.take().and_then(|(file, ap)| {
+            let ast = self.w.ast(file);
+            let crate::ast::Pat::Ctor(fun, args) = ast.pat(ap) else { return None };
+            let fs = ast.expr_span(fun);
+            let named = matches!(ast.expr(fun), crate::ast::Expr::Ident(_));
+            Some((ast.pat_spans[ap.idx()], named.then_some(fs), file, ast.pat_list(args).to_vec()))
+        });
+        // The first of the two stands where `pattern` placed the pattern's tree: in its place.
+        if let (Some((sp, _, _, _)), true) = (&layout, tested) {
+            self.place_over(*sp, Some(sp.start));
+        }
         let typed = tested.then(|| self.open(TYPED));
+        if let Some((sp, fs, _, _)) = &layout {
+            self.place_over(*sp, Some(fs.map_or(sp.start, |f| f.start)));
+        }
         let l = self.open(UNAPPLY);
+        let fun = layout.as_ref().and_then(|l| l.1);
+        if let (Some(f), false) = (fun, targs.is_empty()) {
+            self.place_here(f, Some(f.start));
+        }
         let ta = (!targs.is_empty()).then(|| self.open(TYPEAPPLY));
+        if let Some(f) = fun {
+            self.place_here(f, Some(f.start));
+        }
         let sl = self.open(SELECTIN);
         let mut sig = Vec::new();
         if !targs.is_empty() {
@@ -6802,29 +7670,41 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.nat(name as u64);
                 self.ty(p);
             }
-            _ => self.companion_path(c),
+            _ => {
+                if let Some(f) = fun {
+                    self.place_here(f, Some(f.start));
+                }
+                self.companion_path(c)
+            }
         }
         self.companion_class_ref(c);
         self.buf.end_length(sl);
         if let Some(x) = ta {
             for &a in &targs {
+                self.next_tree_pos = fun.map(|f| (f, Some(f.start)));
                 self.tpt(a);
+                self.next_tree_pos = None;
             }
             self.buf.end_length(x);
         }
         self.ty(t);
+        let arg_pats: Option<(FileId, Vec<crate::ast::PatId>)> = layout.as_ref().filter(|l| l.3.len() == subs.len()).map(|l| (l.2, l.3.clone()));
         let subst: Subst = {
             let own = self.w.syms.class(c).tparams.to_vec();
             own.into_iter().zip(targs.iter().copied()).collect()
         };
-        for (f, p) in fields.iter().zip(subs) {
+        for (i, (f, p)) in fields.iter().zip(subs).enumerate() {
             let ft = self.w.sig_of(*f).ret;
             let ft = self.w.types.subst(ft, &subst);
+            self.pat_next = arg_pats.as_ref().and_then(|(file, ps)| ps.get(i).map(|&ap| (*file, ap)));
             self.pattern(p, ft);
+            self.pat_next = None;
         }
         self.buf.end_length(l);
         if let Some(x) = typed {
+            self.next_tree_pos = layout.as_ref().map(|(sp, _, _, _)| (Span { start: sp.end, end: sp.end }, Some(sp.end)));
             self.tpt(t);
+            self.next_tree_pos = None;
             self.buf.end_length(x);
         }
     }
@@ -6891,4 +7771,35 @@ pub(crate) fn std_target_by(stem: &str, name: &str, receiver: Option<&str>) -> O
         ("collections", "Option", _) => StdTarget::Receiver { pkg: "scala", class: "Option", java: false },
         _ => return None,
     })
+}
+
+/// A lambda as the source writes it (`P::lambda_layout`).
+pub(super) struct LambdaLayout {
+    pub span: Span,
+    pub arrow: u32,
+    pub params: Vec<(Span, Span)>,
+    /// Each parameter's point where a pickle gives it (`pickled_lambda_layout`); none from the source, where it is
+    /// the parameter's name.
+    pub points: Vec<Option<u32>>,
+}
+
+/// A source secondary constructor's trees (`P::secondary_layout`): its right side's span, its block's span and
+/// where its unit result stands, where `<init>` of its self call stands.
+#[derive(Clone, Copy)]
+pub(super) struct SecondaryLayout {
+    pub rhs: Span,
+    pub block: Option<(Span, u32)>,
+    pub init_at: Option<u32>,
+}
+
+/// A call as the source writes it (`P::call_layout`): its selection's span and point, its application's point.
+pub(super) struct CallLayout {
+    pub select: Option<(Span, u32)>,
+    pub apply_point: Option<u32>,
+    /// The name the source writes for the function, where it writes one.
+    pub fun_name: Option<crate::intern::Name>,
+    /// How many argument lists the source writes: the clauses after them are the typer's (an inferred `using`).
+    pub written: u16,
+    /// The selection's qualifier's place, where a pickle gives it (`pickled_call_layout`).
+    pub qual: Option<(Span, Option<u32>)>,
 }

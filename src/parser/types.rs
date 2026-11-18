@@ -1145,9 +1145,10 @@ impl<'a> Parser<'a> {
 
     pub(super) fn parse_type_params(&mut self) -> Vec<TypeParam> {
         let mut out = Vec::new();
-        if !self.eat(Tok::LBracket) {
+        if !self.at(Tok::LBracket) {
             return out;
         }
+        let open = self.bump().span;
         let mut cut = false;
         loop {
             let annots = self.parse_annots();
@@ -1232,6 +1233,7 @@ impl<'a> Parser<'a> {
             }
         }
         self.expect(Tok::RBracket);
+        self.ast.tparam_clauses.push(open.to(self.prev_span()));
         out
     }
 }

@@ -18,6 +18,7 @@ mod fix;
 mod frontend;
 mod held;
 mod index;
+mod init;
 mod intern;
 mod jarcache;
 mod interp;

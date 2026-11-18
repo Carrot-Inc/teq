@@ -101,6 +101,7 @@ suite budget        ./bench/budget.sh
 suite runtime       ./tests/runtime.sh
 suite asymptotics   ./tests/asymptotics.sh
 suite tasty         ./tests/tasty.sh
+suite init-view     ./tests/init-view.sh
 suite modules       ./tests/modules.sh
 suite tasty-exec    ./teq interp tests/tasty-exec.scala
 suite analysis-bytes ./tests/analysis-bytes.sh

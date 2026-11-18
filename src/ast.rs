@@ -417,6 +417,9 @@ pub struct TypeParam {
 pub struct Param {
     pub name: Name,
     pub span: Span,
+    /// The whole parameter as written, from its first annotation or modifier through its type and its default
+    /// (`Parsers.param`'s span, which a product's TASTy gives its `PARAM`); empty where it is not written.
+    pub full: Span,
     pub ty: TyExprId,
     pub default: Option<ExprId>,
     pub mods: Mods,
@@ -427,6 +430,9 @@ pub struct Param {
 #[derive(Clone, Debug, Default)]
 pub struct ParamClause {
     pub params: Vec<Param>,
+    /// From the clause's `(` through its `)`, empty where it is not written (a product's TASTy places a class's
+    /// constructor by its clauses: `Parsers.classConstr`).
+    pub span: Span,
     pub is_using: bool,
     /// A Scala 2 `(implicit ...)` clause: a using clause whose arguments may also be passed
     /// without `using`.
@@ -835,6 +841,9 @@ pub struct Ast {
     /// the colon's line (dotty's `followingIsLambdaAfterColon`, case 1b).
     pub relaxed_lambdas: bool,
     pub top_level: Vec<DefId>,
+    /// Each written clause of type parameters, from its `[` through its `]`, in the order the parser reads them: what
+    /// a product's TASTy places a class's constructor by where the class writes no term parameters.
+    pub tparam_clauses: Vec<Span>,
     /// `private[pkg]` and `protected[pkg]`: where the name of the definition or parameter
     /// starts, and `pkg`.
     pub access_scopes: Vec<(u32, Name)>,
@@ -1153,6 +1162,7 @@ impl Ast {
             source_version: Default::default(),
             relaxed_lambdas: false,
             top_level: Vec::new(),
+            tparam_clauses: Vec::new(),
             access_scopes: Vec::new(),
             has_quotes: false,
             new_outers: crate::intern::FxMap::default(),

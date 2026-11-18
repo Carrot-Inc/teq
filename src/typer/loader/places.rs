@@ -14,9 +14,20 @@ use std::sync::Arc;
 
 /// The positions of one TASTy file, read when a place in it is first asked for: the section
 /// at once, the spans of every tree on the first place of a node (a definition's is its entry).
+/// A tree of a pickle as its positions read it: its address, its end, its tag and its place.
+#[derive(Clone, Copy, Debug)]
+pub struct PickledTree {
+    pub addr: Addr,
+    pub end: Addr,
+    pub tag: u8,
+    pub pos: Option<crate::tasty::positions::Pos>,
+}
+
 pub struct FilePositions {
     pub section: Option<Section>,
     spans: std::sync::OnceLock<Spans>,
+    /// `spans` in address order.
+    sorted: std::sync::OnceLock<Vec<(Addr, crate::tasty::positions::Placed)>>,
     tasty: Arc<crate::tasty::TastyFile>,
     /// `SOURCEFILEattr`'s path, the source where the file has no `Positions` section.
     pub source_file: Option<String>,
@@ -25,6 +36,47 @@ pub struct FilePositions {
 impl FilePositions {
     pub fn spans(&self) -> &Spans {
         self.spans.get_or_init(|| self.section.as_ref().map_or_else(Spans::default, |s| Spans::of(&self.tasty, s)))
+    }
+
+    fn sorted(&self) -> &[(Addr, crate::tasty::positions::Placed)] {
+        self.sorted.get_or_init(|| self.spans().sorted())
+    }
+
+    fn tree(&self, addr: Addr, placed: crate::tasty::positions::Placed) -> PickledTree {
+        PickledTree { addr, end: crate::tasty::positions::file_tree_end(&self.tasty, addr), tag: placed.tag, pos: placed.pos }
+    }
+
+    /// The tree at `addr`, with its end and its place.
+    pub fn pickled_tree(&self, addr: Addr) -> Option<PickledTree> {
+        self.spans().get(addr).map(|p| self.tree(addr, p))
+    }
+
+    /// The trees directly under the tree at `addr`, in order: its children, a type tree among them.
+    pub fn pickled_children(&self, addr: Addr) -> Vec<PickledTree> {
+        let Some(t) = self.pickled_tree(addr) else { return Vec::new() };
+        let sorted = self.sorted();
+        let from = sorted.partition_point(|&(a, _)| a <= addr);
+        let mut out: Vec<PickledTree> = Vec::new();
+        let mut next = t.addr;
+        for &(a, p) in &sorted[from..] {
+            if a >= t.end {
+                break;
+            }
+            if a < next {
+                continue;
+            }
+            let c = self.tree(a, p);
+            next = c.end;
+            out.push(c);
+        }
+        out
+    }
+
+    /// The tree directly enclosing the tree at `addr`.
+    pub fn pickled_parent(&self, addr: Addr) -> Option<PickledTree> {
+        let sorted = self.sorted();
+        let at = sorted.partition_point(|&(a, _)| a < addr);
+        sorted[..at].iter().rev().map(|&(a, p)| self.tree(a, p)).find(|t| t.end > addr)
     }
 
     /// The path of the source of the tree at `addr`: its switch's, else the primary source's or
@@ -366,7 +418,7 @@ impl<'a> Worker<'a> {
             let tasty = w.tasty(file);
             let section = Section::read(&tasty);
             let source_file = source_file_attr(&tasty);
-            let p = Arc::new(FilePositions { section, spans: std::sync::OnceLock::new(), tasty, source_file });
+            let p = Arc::new(FilePositions { section, spans: std::sync::OnceLock::new(), sorted: std::sync::OnceLock::new(), tasty, source_file });
             w.loaded_mut().positions.insert(file, p.clone());
             p
         })
@@ -401,6 +453,26 @@ impl<'a> Worker<'a> {
     /// Whether the application at `addr` of the pickle `file` gives its function a position of
     /// its own: an auto-applied selection's, whose span is the call's where the source wrote no
     /// parentheses.
+    /// The positions of the loaded TASTy file `file`, from which the writer reads the trees around a node converted
+    /// from it (`PickledTree`).
+    pub(crate) fn pickled_positions(&mut self, file: u32) -> Arc<FilePositions> {
+        self.file_positions(file)
+    }
+
+    /// The places the pickle `file` gives the type trees of the term parameters of its method at `addr`, in order.
+    pub(crate) fn pickled_param_type_places(&mut self, file: u32, addr: Addr) -> Vec<Option<crate::tasty::positions::Pos>> {
+        let positions = self.file_positions(file);
+        let sig = crate::tasty::tree::Decoder::new(&positions.tasty).def_sig(addr);
+        sig.clauses
+            .iter()
+            .flat_map(|c| match c {
+                crate::tasty::tree::Clause::Terms(ps) => ps.iter().map(|p| p.addr).collect(),
+                crate::tasty::tree::Clause::Types(_) => Vec::new(),
+            })
+            .map(|p| positions.pickled_children(p).first().and_then(|t| t.pos))
+            .collect()
+    }
+
     pub(crate) fn pickled_function_placed(&mut self, file: u32, addr: Addr) -> bool {
         let positions = self.file_positions(file);
         let mut decoder = crate::tasty::tree::Decoder::new(&positions.tasty);

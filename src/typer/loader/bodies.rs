@@ -641,9 +641,9 @@ impl<'a> Worker<'a> {
                 let ty = if p.repeated { cv.ty(TyExpr::Repeated(elem)) } else { elem };
                 let default = defaults.get(&index).copied();
                 let m = self.syms.sym(sym).mods;
-                params.push(Param { name: p.name, span: cv.span, ty, default, mods: m, annots: ListRef::EMPTY });
+                params.push(Param { name: p.name, span: cv.span, full: crate::source::Span::default(), ty, default, mods: m, annots: ListRef::EMPTY });
             }
-            clauses.push(ParamClause { params, is_using: cl.is_using, is_implicit: cl.is_implicit });
+            clauses.push(ParamClause { params, is_using: cl.is_using, is_implicit: cl.is_implicit, span: crate::source::Span::default() });
         }
         // The addresses of the parameters and their accessors name the parameter symbols.
         let mut i = 0;
@@ -1029,9 +1029,9 @@ impl<'a> Worker<'a> {
                         let own = defaults.get(&(name, index)).or_else(|| synthetic_apply.then(|| defaults.get(&(names::INIT, index))).flatten());
                         let default = own.filter(|_| p.has_default).map(|(_, d)| self.conv_expr(cv, d));
                         let is_inline = self.param_is_inline(cv, sig, index - 1);
-                        params.push(Param { name: p.name, span, ty, default, mods: if is_inline { mods::INLINE } else { 0 }, annots: ListRef::EMPTY });
+                        params.push(Param { name: p.name, span, full: crate::source::Span::default(), ty, default, mods: if is_inline { mods::INLINE } else { 0 }, annots: ListRef::EMPTY });
                     }
-                    clauses.push(ParamClause { params, is_using: cl.is_using, is_implicit: cl.is_implicit });
+                    clauses.push(ParamClause { params, is_using: cl.is_using, is_implicit: cl.is_implicit, span: crate::source::Span::default() });
                 }
                 let ret = cv.ty(TyExpr::Resolved(msig.ret));
                 if sig.ret_inferred {
@@ -4848,12 +4848,12 @@ impl<'a> Worker<'a> {
                                 }
                                 None => None,
                             };
-                            params.push(Param { name: pname, span: cv.span, ty, default, mods: field, annots: ListRef::EMPTY });
+                            params.push(Param { name: pname, span: cv.span, full: crate::source::Span::default(), ty, default, mods: field, annots: ListRef::EMPTY });
                         }
-                        clauses.push(ParamClause { params, is_using: false, is_implicit: false });
+                        clauses.push(ParamClause { params, is_using: false, is_implicit: false, span: crate::source::Span::default() });
                     }
                     if clauses.is_empty() {
-                        clauses.push(ParamClause { params: Vec::new(), is_using: false, is_implicit: false });
+                        clauses.push(ParamClause { params: Vec::new(), is_using: false, is_implicit: false, span: crate::source::Span::default() });
                     }
                     let parents = self.conv_template_parents(cv, &k.template.parents, false);
                     let parents = self.enum_case_parents(cv, parents);
@@ -5040,9 +5040,9 @@ impl<'a> Worker<'a> {
             let ty = self.conv_param_type(cv, &p.ty);
             let field = if p.flags.has(tags::LOCAL) { 0 } else { mods::FIELD | flag_mods(p.flags) & mods::MUTABLE };
             let default = getters.get(&(i + 1)).map(|rhs| self.conv_expr(cv, rhs));
-            params.push(Param { name: pname, span: cv.span, ty, default, mods: field, annots: ListRef::EMPTY });
+            params.push(Param { name: pname, span: cv.span, full: crate::source::Span::default(), ty, default, mods: field, annots: ListRef::EMPTY });
         }
-        let clauses = if cd.template.params.is_empty() { Vec::new() } else { vec![ParamClause { params, is_using: false, is_implicit: false }] };
+        let clauses = if cd.template.params.is_empty() { Vec::new() } else { vec![ParamClause { params, is_using: false, is_implicit: false, span: crate::source::Span::default() }] };
         for s in &cd.template.stats {
             match s {
                 Stat::Val(sig, _) | Stat::Def(sig, _) => {
@@ -5532,10 +5532,10 @@ impl<'a> Worker<'a> {
                         }
                         let ty = self.conv_param_type(cv, &p.ty);
                         let pm = if p.flags.has(tags::INLINE) { mods::INLINE } else { 0 };
-                        params.push(Param { name: n, span: cv.span, ty, default: None, mods: pm, annots: ListRef::EMPTY });
+                        params.push(Param { name: n, span: cv.span, full: crate::source::Span::default(), ty, default: None, mods: pm, annots: ListRef::EMPTY });
                     }
                     let is_implicit = ps.iter().any(|p| p.flags.has(tags::IMPLICIT) && !p.flags.has(tags::GIVEN));
-                    clauses.push(ParamClause { params, is_using, is_implicit });
+                    clauses.push(ParamClause { params, is_using, is_implicit, span: crate::source::Span::default() });
                 }
             }
         }

@@ -34,17 +34,12 @@
 > origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
-56,65c56,66
+56,60c56,61
 < origin	fix.rjava.RdSub	decl.jar	key reader_java.scala	token 108331611 recorded	definitions v1 (1 definitions)
 < select	fix.rdecl.RdBox	def put	reader_decl.scala:11:27	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 < select	fix.rdecl.RdBox	def put	reader_decl.scala:12:51	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 < select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:35	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
-< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:29:56	scala.List (the pickle's scala.collection.immutable.List).sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
-< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:62	scala.Int.*(scala.Int): scala.Int	by name (a builtin's member)	: Int
-< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:62	scala.List (the pickle's scala.collection.immutable.List).map([1], scala.Function1): scala.collection.immutable.List	one member scala.List.map(A => B): List[B]	: List[Int]
-< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:62	scala.List (the pickle's scala.collection.immutable.List).sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
-< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:69	java.lang.String.length(): scala.Int	by name (a builtin's member)	: Int
-< select	fix.rdecl.RdShape	def area	reader_decl.scala:39:34	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:29:59	scala.List (the pickle's scala.collection.immutable.List).sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
 ---
 > origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
 > select	fix.rdecl.RdBox	def put	reader_decl.scala:11:37	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
@@ -52,8 +47,13 @@
 > select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:44	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 > select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:52	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 > select	fix.rdecl.RdNamed	def sum	reader_decl.scala:29:59	scala.collection.IterableOnceOps.sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
-> select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:65	scala.List (the pickle's scala.collection.immutable.List).map([1], scala.Function1): scala.collection.immutable.List	one member scala.List.map(A => B): List[B]	: List[Int]
+62,63c63,64
+< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:69	java.lang.String.length(): scala.Int	by name (a builtin's member)	: Int
+< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:79	scala.List (the pickle's scala.collection.immutable.List).sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
+---
 > select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:71	java.lang.String.length(): scala.Int	by name (a builtin's member)	: Int
 > select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:79	scala.collection.IterableOnceOps.sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
-> select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:83	scala.Int.*(scala.Int): scala.Int	by name (a builtin's member)	: Int
+65c66
+< select	fix.rdecl.RdShape	def area	reader_decl.scala:39:34	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+---
 > select	fix.rdecl.RdShape	def area	reader_decl.scala:39:43	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String

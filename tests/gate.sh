@@ -211,6 +211,7 @@ machine=(
   "task ./tests/task.sh"
   "runner-classes ./tests/runner-classes.sh"
   "tasty ./tests/tasty.sh"
+  "init-view ./tests/init-view.sh"
   "modules ./tests/modules.sh"
   "tasty-exec ./teq interp tests/tasty-exec.scala"
   "analysis-bytes ./tests/analysis-bytes.sh"

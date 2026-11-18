@@ -378,7 +378,7 @@ rightassocparam	fail	-	known classes: the downstream's class differs where the w
 rightassocunhoist	pass	-	
 rollbackprefix	pass	-	
 runtimecheckedalias	pass	-	
-runtimecheckedinline	fail	-	known classes: the call of `runtimeChecked` inside the upstream's transparent expansion is positioned at the downstream's call site (Main.scala, a zero span), the whole build's at the body's place in
+runtimecheckedinline	pass	-	
 runtimecheckedresult	pass	-	
 runtimecheckedstacked	pass	-	
 runtimewhole	pass	-	

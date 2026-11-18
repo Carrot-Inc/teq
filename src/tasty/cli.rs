@@ -303,6 +303,15 @@ pub fn run(args: &[String]) -> ! {
         }
     }
     let Some(&path) = rest.first() else { usage() };
+    // A test's switch, not a verb (tests/init-view.sh): `TEQ_INIT_VIEW=<source root> teq tasty <products dir>` prints
+    // the initialization checker's view of the TASTy files under the directory.
+    if let Some(root) = std::env::var_os("TEQ_INIT_VIEW") {
+        match crate::init::dump::run(path, &root.to_string_lossy()) {
+            Ok(out) => print!("{}", out),
+            Err(e) => fail(e),
+        }
+        std::process::exit(0);
+    }
     match mode {
         "list" => {
             let zip = Zip::open(path).unwrap_or_else(|e| fail(e));
