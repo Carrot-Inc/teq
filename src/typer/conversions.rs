@@ -753,6 +753,15 @@ impl<'a> Worker<'a> {
         converted
     }
 
+    /// Whether nothing but `Nothing` bounds the variable `v` below (dotty's `hasLowerBound` false).
+    fn only_nothing_below(&mut self, v: TVarId) -> bool {
+        let lowers = self.tvars[v].lower.clone();
+        lowers.into_iter().all(|l| {
+            let l = self.deref(l);
+            self.canon(l) == NOTHING
+        })
+    }
+
     fn try_conversion_in(
         &mut self,
         (g, via): ConvRef,
@@ -877,11 +886,31 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        // For a selection, a variable the result holds covariantly is instantiated from below (`instantiateTypeVars`,
+        // Inferencing.scala 815: `fromBelow = v == 1 || ...`): with nothing but `Nothing` below it, it is `Nothing`, so a
+        // conversion to its own bounded parameter (`conv[T <: Rich](b: Boolean): T`) gives no member of the bound, as
+        // scalac has it. `solve_var_directed` takes the upper bounds there, which is the reference's choice for a
+        // variable the result does not hold (`v == 0` without a lower bound). Where the caller wants a type the bound
+        // is kept, as before: the JVM's unboxing of a `Nothing` call as a value class does not hold yet (an explicit
+        // `C.conv[Nothing](true)` for an expected value class `Meters` throws a ClassCastException on the JVM).
+        // The result's variances are read only for a variable of that case, once.
+        let mut covariant: Option<Vec<TVarId>> = None;
         for v in first_var..self.tvars.len() {
             let id = self.tvars.id(v);
-            if !self.conversion_open_vars[open_from..].contains(&id) {
-                self.solve_var_directed(id, Some(to));
+            if self.conversion_open_vars[open_from..].contains(&id) {
+                continue;
             }
+            if !to_type && self.tvars[id].inst.is_none() && self.only_nothing_below(id) {
+                if covariant.is_none() {
+                    let to = self.zonk(to);
+                    covariant = Some(self.var_variances(to).into_iter().filter(|&(_, s)| s == 1).map(|(w, _)| w).collect());
+                }
+                if covariant.as_ref().is_some_and(|c| c.contains(&id)) {
+                    self.instantiate(id, NOTHING);
+                    continue;
+                }
+            }
+            self.solve_var_directed(id, Some(to));
         }
         let mut given_result = None;
         let te = if is_def {
@@ -1010,7 +1039,9 @@ impl<'a> Worker<'a> {
         };
         // What the variables were solved to is checked once more where the caller wants a type:
         // the receiver still conforms to the parameter and the result to that type. A member
-        // the result was found to have is the class's, which solving does not change.
+        // the result was found to have is the class's, which solving does not change, but for a
+        // variable instantiated from below above: its member was found on its bound, and the
+        // selection then finds none on `Nothing`, as scalac's does.
         let ty = given_result.unwrap_or_else(|| self.zonk(to));
         if to_type && {
             let from = self.zonk(from);

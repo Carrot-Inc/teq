@@ -44,6 +44,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   DOM definitions now generate under `teq interp` (the build's generator writes its files through a `PrintStream`
   over a `FileOutputStream`), so `teq compile` of Laminar runs the compile the generator's failure stopped, and
   shows teq's own errors there (702 when the generator first passed).
+- An implicit conversion whose result is its own type parameter, bounded only above, no longer gives a member of the
+  bound to a selection: with `implicit def conv[T <: Rich](b: Boolean): T` in scope, `true.shout` is refused ("value
+  shout is not a member of Nothing"), as scalac refuses it, through an object's import, a value's wildcard or a local
+  def alike. teq took `T` to be `Rich` and called the conversion. A lower bound or a using argument that fixes the
+  parameter still gives the member, and the conversion is still taken for an expected type (`val r: Rich = true`).
 - A class's own constructor parameter named by an import inside its parent's argument, or inside a default of a
   later parameter clause, is read as the constructor's argument, as the parameter's name itself is read there (a
   context bound's evidence, `[T: {Show as sh}]`, among them): `class Named(d: Dsl) extends Base({ import d.*;

@@ -569,6 +569,7 @@ conversion_open_var_case_join	pass	-
 conversion_open_var_lock	fail	-	compile
 conversion_open_var_prefix	fail	-	compile
 conversion_open_var_using	pass	-	
+conversion_own_parameter_bounds	pass	-	
 conversion_prefix_and_expected_member	pass	-	
 conversion_private_member	pass	-	
 conversion_receivers	pass	-	

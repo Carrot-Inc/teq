@@ -554,6 +554,7 @@ conversion_open_var_case_join	pass	-
 conversion_open_var_lock	fail	-	error: ambiguous given instances for Enc[List[Double]]: Enc.seq, Enc.list
 conversion_open_var_prefix	fail	-	error: ambiguous given instances for Enc[List[Double]]: Enc.seq, Enc.list
 conversion_open_var_using	pass	-	
+conversion_own_parameter_bounds	pass	-	
 conversion_prefix_and_expected_member	pass	-	
 conversion_private_member	pass	-	
 conversion_receivers	pass	-	
