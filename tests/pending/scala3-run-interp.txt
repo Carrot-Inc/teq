@@ -257,7 +257,6 @@ i26099	compile-error: type mismatch: found *:[H, Tuple], required TupleGiven[*:[
 i26800-trait-init-binary-compat	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 i2738	run-error: Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: Index 2 out of bounds for length 0
 i2760	compile-error: test contains Java sources
-i2772	compile-error: value setErr is not a member of System
 i2780	compile-error: test contains Java sources
 i2883	compile-error: value getDeclaredFields is not a member of Class[_]
 i2964	wrong-output
@@ -316,7 +315,6 @@ i8033	compile-error: type ObjectOutputStream not found
 i8073	compile-error: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
 i8073b	compile-error: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
 i8101	compile-error: test contains Java sources
-i8425	compile-error: anonymous class T$$anon$1xoc7vx_90 cannot extend final class PrintStream
 i8530-b	compile-error: no given instance of type ValueOf[Pattern] was found for parameter vt
 i8531	compile-error: test contains Java sources
 i8577a	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
@@ -333,7 +331,6 @@ i8599	compile-error: test contains Java sources
 i8602	compile-error: test contains Java sources
 i8661	compile-error: test contains Java sources
 i876	compile-error: type mismatch: found String, required Int
-i8977	compile-error: value printf is not a member of PrintStream
 i9068	compile-error: type Product3 not found
 i9155	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 i9175	compile-error: value empty is not a member of SortedMap[String, Int]

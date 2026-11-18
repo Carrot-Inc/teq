@@ -2264,6 +2264,16 @@ impl<'a> Gen<'a> {
                 }
                 let after = bases.iter().position(|&b| b == t).map_or(0, |i| i + 1);
                 let target = self.concrete_after(&bases[after..], member, &m.descriptor);
+                // The std declares the JDK's varargs `PrintStream.printf` and `format` with a Scala repeated parameter,
+                // so the accessor's descriptor (a `Seq`) finds them where the JDK's class has an array-taking method
+                // alone: the class would not link. scalac refuses it (`ResolveSuper.rebindSuper`); the typer's own
+                // refusal reads a trait's super calls from its body, which this mode never reads.
+                if let Some((b, _)) = &target {
+                    if matches!(member, "printf" | "format") && !cx.class_files.contains_key(b) && &*self.class_name(*b) == "java/io/PrintStream" {
+                        let (file, span) = (syms.class(c).file, syms.class(c).span);
+                        self.refused.push((file, span, format!("not supported on the JVM yet: a trait's super call of PrintStream.{}", member)));
+                    }
+                }
                 wanted.push((m.name.clone(), m.descriptor.clone(), target));
             }
         }

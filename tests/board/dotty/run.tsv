@@ -7,7 +7,7 @@
 25-1	fail	-	java source: teq reads none
 25-2	fail	-	java source: teq reads none
 26071.scala	pass	interp:pass	
-2772.scala	fail	interp:fail	2772.scala:7:23: type mismatch: found PrintStream, required OutputStream
+2772.scala	pass	interp:pass	
 3179.scala	pass	interp:pass	
 9416.scala	fail	interp:fail	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
 CollectionTests.scala	fail	interp:fail	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
@@ -777,7 +777,7 @@ i8101	fail	-	java source: teq reads none
 i8314.scala	pass	interp:pass	
 i8396.scala	pass	interp:pass	
 i8398.scala	pass	interp:pass	
-i8425.scala	fail	interp:fail	i8425.scala:5:16: anonymous class T$$anon$1xoc7vx_90 cannot extend final class PrintStream
+i8425.scala	pass	interp:pass	
 i8530-b.scala	pass	interp:fail	
 i8530.scala	pass	interp:pass	
 i8531	fail	-	java source: teq reads none

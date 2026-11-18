@@ -1,0 +1,7 @@
+high then a letter: 63,120
+high then close: 63
+a low alone: 63
+high then a line's end: 97,63,10
+UTF-16 with an empty print first: 254,255,0,65,0,66
+UTF-16LE: 65,0,66,0
+US-ASCII of an e acute: 99,97,102,63

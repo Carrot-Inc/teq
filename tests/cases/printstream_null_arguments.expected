@@ -1,0 +1,9 @@
+string=ok
+object=ok
+chars=NullPointerException
+bytes=nullnull
+unknown=UnsupportedEncodingException
+illegal=UnsupportedEncodingException
+null-name=NullPointerException
+null-charset=NullPointerException
+null-output=NullPointerException

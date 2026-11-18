@@ -1403,12 +1403,15 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/System")
   object System:
-    @js("\"out\"")
+    // Print streams over the process's output and error (`java.io.ProcessStream`), which `setOut` and `setErr` replace.
     @jvm("getstatic java/lang/System.out:Ljava/io/PrintStream;")
-    def out: java.io.PrintStream
-    @js("\"err\"")
+    def out: java.io.PrintStream = java.io.ProcessStream.out
     @jvm("getstatic java/lang/System.err:Ljava/io/PrintStream;")
-    def err: java.io.PrintStream
+    def err: java.io.PrintStream = java.io.ProcessStream.err
+    @jvm("invokestatic java/lang/System.setOut(Ljava/io/PrintStream;)V")
+    def setOut(out: java.io.PrintStream): Unit = java.io.ProcessStream.setOut(out)
+    @jvm("invokestatic java/lang/System.setErr(Ljava/io/PrintStream;)V")
+    def setErr(err: java.io.PrintStream): Unit = java.io.ProcessStream.setErr(err)
     // The interpreter's stdin (`java.io.Stdin`); JavaScript has none.
     @js("$fail(\"UnsupportedOperationException\", \"System.in is not available on JavaScript\")")
     @jvm("getstatic java/lang/System.in:Ljava/io/InputStream;")

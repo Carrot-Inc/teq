@@ -1,0 +1,66 @@
+[%] -> IllegalArgumentException: Conversion = '%' | [] error=false
+[% ] -> IllegalArgumentException: Conversion = ' ' | [] error=false
+[%-] -> IllegalArgumentException: Conversion = '-' | [] error=false
+[%5] -> IllegalArgumentException: Conversion = '5' | [] error=false
+[%.3] -> IllegalArgumentException: Conversion = '.' | [] error=false
+[%5.] -> IllegalArgumentException: Conversion = '5' | [] error=false
+[%1$] -> IllegalArgumentException: Conversion = '1' | [] error=false
+[%<] -> IllegalArgumentException: Conversion = '<' | [] error=false
+[%t] -> IllegalArgumentException: Conversion = 't' | [] error=false
+[x%] -> IllegalArgumentException: Conversion = '%' | [] error=false
+[%,] -> IllegalArgumentException: Conversion = ',' | [] error=false
+[%#] -> IllegalArgumentException: Conversion = '#' | [] error=false
+[%-5] -> IllegalArgumentException: Conversion = '-' | [] error=false
+[%05] -> IllegalArgumentException: Conversion = '0' | [] error=false
+[a%5.2] -> IllegalArgumentException: Conversion = '5' | [] error=false
+[%5n] -> IllegalArgumentException: 5 | [] error=false
+[%-5n] -> IllegalArgumentException: 5 | [] error=false
+[%.2n] -> IllegalArgumentException: 2 | [] error=false
+[%5%] -> ok | [    %] error=false
+[%-5%] -> ok | [%    ] error=false
+[%.2%] -> IllegalArgumentException: 2 | [] error=false
+[%1$5] -> IllegalArgumentException: Conversion = '1' | [] error=false
+[%$s] -> IllegalArgumentException: Conversion = '$' | [] error=false
+[%0$s] -> IllegalArgumentException: Illegal format argument index = 0 | [] error=false
+[%2$s] -> ok | [b] error=false
+[%tq] -> IllegalArgumentException: Conversion = 'tq' | [] error=false
+[%Tq] -> IllegalArgumentException: Conversion = 'tq' | [] error=false
+[%q] -> IllegalArgumentException: Conversion = 'q' | [] error=false
+[%5q] -> IllegalArgumentException: Conversion = 'q' | [] error=false
+[%-q] -> IllegalArgumentException: Conversion = 'q' | [] error=false
+[%.q] -> IllegalArgumentException: Conversion = '.' | [] error=false
+[%1$q] -> IllegalArgumentException: Conversion = 'q' | [] error=false
+[ab%sc%] -> IllegalArgumentException: Conversion = '%' | [] error=false
+[%s%q] -> IllegalArgumentException: Conversion = 'q' | [] error=false
+[%s% ] -> IllegalArgumentException: Conversion = ' ' | [] error=false
+[%!] -> IllegalArgumentException: Conversion = '!' | [] error=false
+[%5!] -> IllegalArgumentException: Conversion = '5' | [] error=false
+[%-!] -> IllegalArgumentException: Conversion = '-' | [] error=false
+[%--5s] -> IllegalArgumentException: Flags = '-' | [] error=false
+[%++d] -> IllegalArgumentException: Flags = '+' | [] error=false
+[%.5d] -> IllegalArgumentException: 5 | [] error=false
+[%-d] -> IllegalArgumentException: %-d | [] error=false
+[%0d] -> IllegalArgumentException: %0d | [] error=false
+[%b] -> ok | [true] error=false
+[%x] -> ok | [7] error=false
+[%#x] -> ok | [0x7] error=false
+[%o] -> ok | [7] error=false
+[%X] -> ok | [7] error=false
+[%B] -> ok | [TRUE] error=false
+[%3$s] -> IllegalArgumentException: Format specifier '%3$s' | [] error=false
+[%<s] -> IllegalArgumentException: Format specifier '%<s' | [] error=false
+[%s|%s|%s] -> IllegalArgumentException: Format specifier '%s' | [7|b|] error=false
+[%s %<s %s] -> ok | [7 7 b] error=false
+[%2$s %s %<s %s] -> ok | [b 7 7 b] error=false
+null format -> NullPointerException | [] error=false
+null printf -> NullPointerException | [] error=false
+no arguments -> IllegalArgumentException: Format specifier '%s' | [a] error=false
+bad after written pieces -> IllegalArgumentException: Conversion = 'q' | [] error=false
+too few after written pieces -> IllegalArgumentException: Format specifier '%s' | [ax|] error=false
+duplicate flag after written pieces -> IllegalArgumentException: Flags = '-' | [] error=false
+width on a line end -> IllegalArgumentException: 5 | [] error=false
+closed, null format -> ok | [] error=true
+closed, null printf -> ok | [] error=true
+closed, bad format -> ok | [] error=true
+closed, too few -> ok | [] error=true
+closed, a format -> ok | [] error=true

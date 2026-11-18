@@ -1365,6 +1365,14 @@ pub struct Interp<'a, 't> {
     pub out: String,
     /// Whether output goes to the process's stdout as it is made, or only to `out`.
     pub stream: bool,
+    /// The route of the prelude's prints, which Console's are too: the stream's `print(text)`, `println(x)` and `println()`
+    /// while `Console.withOut` runs its body, or where System.out was moved before Console bound its streams.
+    pub out_redirect: Option<(Value, Value, Value)>,
+    /// The process's own output stream as the std made it (`java.io.ProcessStream`); whether Console bound its streams (the
+    /// prelude's first print or Console's making); the streams kept by the first move of System.out or err after that.
+    pub process_out0: Option<Value>,
+    pub console_bound: bool,
+    pub bound_kept: Option<(Value, Value)>,
     /// Whether an effect (output, a mutation of shared state, a random number) is a failure:
     /// what a compile-time evaluation asks for.
     pub pure: bool,
@@ -1501,6 +1509,10 @@ impl<'a, 't> Interp<'a, 't> {
             regex_cache: FxMap::default(),
             reflective: None,
             out: String::new(),
+            out_redirect: None,
+            process_out0: None,
+            console_bound: false,
+            bound_kept: None,
             stream: false,
             pure: false,
             content_hashes: true,

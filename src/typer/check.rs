@@ -1188,6 +1188,21 @@ impl<'a> Worker<'a> {
                                 self.diags.error_by(crate::source::Group::PruneErasedDefs, file, span, msg);
                             }
                         }
+                        // `ResolveSuper.rebindSuper` (ResolveSuper.scala 124): a trait's super accessor is a Scala
+                        // member, which the JDK's varargs member behind the trait does not match.
+                        Some(t) if self.is_std_stream_format(t) => {
+                            let msg = format!(
+                                "Member method {} of mixin {} is missing a concrete super implementation in {}.",
+                                self.name_str(name),
+                                self.class_description(tr),
+                                self.class_description(c)
+                            );
+                            let (file, span) = (self.syms.class(c).file, self.syms.class(c).span);
+                            if !told(self) {
+                                self.told_once("a super call's problem");
+                                self.diags.error_by(crate::source::Group::PruneErasedDefs, file, span, msg);
+                            }
+                        }
                         Some(_) => accessors.push(SuperAccessor { of_trait: tr, member, target, getter: None }),
                         None if of_any => accessors.push(SuperAccessor { of_trait: tr, member, target, getter: None }),
                         None if !implemented => {}
@@ -7327,7 +7342,21 @@ impl<'a> Worker<'a> {
                 // A subclass's val that overrides it assigns the field its getter stands for, which a
                 // setter beside the getter takes (scalacheck's `Test.Parameters.useLegacyShrinking`
                 // overridden in `cpy`'s anonymous class).
-                let constructs = (def.mods | self.syms.sym(sym).mods) & mods::LAZY == 0 && !matches!(self.syms.class(tclass.id).kind, ClassKind::Object | ClassKind::Trait);
+                // The first instance of an object's vals initialising in its constructor, as the reference's class file does
+                // it (3.8.4 library/src/scala/Console.scala 128-129: `outVar` and `errVar`, a `DynamicVariable` of `System.out`
+                // and `System.err` as they stand when Console is made), limited to scala-library's `scala.Console.outVar` and
+                // `errVar` because `System.setOut` and `setErr` make the moment of their first value visible (a move after
+                // Console's first use must not reach Console). It goes when a jar object's vals initialise in its constructor
+                // (std/console.scala, the note on Console's streams). `inVar` stays on demand: its reader's classes are not
+                // on JavaScript's platform layer, and the std has no `System.setIn`.
+                let console_stream = {
+                    let c = self.syms.class(tclass.id);
+                    c.kind == ClassKind::Object
+                        && matches!(c.owner, Owner::Package(p) if self.pkg_path(p) == "scala")
+                        && &*self.name_str(c.name) == "Console"
+                        && matches!(&*self.name_str(self.syms.sym(sym).name), "outVar" | "errVar")
+                };
+                let constructs = (def.mods | self.syms.sym(sym).mods) & mods::LAZY == 0 && (console_stream || !matches!(self.syms.class(tclass.id).kind, ClassKind::Object | ClassKind::Trait));
                 if rhs.is_some() && !constructs && self.is_library_class(tclass.id) && !self.is_product_class(tclass.id) && self.syms.sym(sym).kind == SymKind::Val && !self.jvm && !self.implements_def(tclass.id, sym) {
                     self.with_loader(|w| {
                         let mut info = w.syms.sym_mut(sym);
@@ -8271,6 +8300,26 @@ impl<'a> Worker<'a> {
         self.syms.class(c).ctor_syms.iter().any(|clause| clause.contains(&m))
     }
 
+    /// Whether `k` is the std's `java.io.PrintStream`.
+    fn is_std_print_stream(&mut self, k: ClassId) -> bool {
+        let (owner, file) = (self.syms.class(k).owner, self.syms.class(k).file);
+        matches!(owner, Owner::Package(p) if self.pkg_is(p, "java.io")) && self.std_source(file) && self.name_str(self.syms.class(k).name) == "PrintStream"
+    }
+
+    /// Whether `s` is the std's `java.io.PrintStream.printf` or `format`: the JDK's Java varargs members, which the
+    /// std declares with a Scala repeated parameter as it does every JDK varargs member. After `ElimRepeated` the
+    /// JDK's take an array where a Scala member's repeated parameter is a `Seq`, so one neither implements a Scala
+    /// member (`RefChecks`: "needs to be abstract") nor is the target of a trait's super call
+    /// (`ResolveSuper.rebindSuper`). Of the std's JDK varargs members these two alone are open to a program's class.
+    fn is_std_stream_format(&mut self, s: SymId) -> bool {
+        let Owner::Class(k) = self.syms.sym(s).owner else { return false };
+        if !self.std_source(self.syms.class(k).file) {
+            return false;
+        }
+        let name = self.name_str(self.syms.sym(s).name);
+        (name == "printf" || name == "format") && self.is_std_print_stream(k)
+    }
+
     /// `RefChecks.isInheritedAccessor` (RefChecks.scala 363-368): `m` is a parameter accessor and the chain of
     /// `ParamForwarding.inheritedAccessor` from it meets `p`, every step seen from `c`, the class whose overrides are
     /// checked (`currentClass`). Each step goes one superclass up, so the chain ends.
@@ -8659,6 +8708,18 @@ impl<'a> Worker<'a> {
             || (matches!(m_kind, SymKind::Val | SymKind::Var) && p_kind == SymKind::Def);
         if agreement == Agreement::Params && (p_abstract || overloads) {
             return false;
+        }
+        // The pair is an override. On the JVM the std's `java.io.PrintStream` stands for the JDK's class, whose `printf` and `format` take
+        // an array where the std's take a sequence: an override of one would be a method the JDK's class never
+        // calls (the reference writes the array-taking bridge for an override of a repeated parameter, which this
+        // back end does not yet).
+        if own && self.jvm && self.is_std_print_stream(pb) {
+            let name = self.name_str(self.syms.sym(p).name);
+            if name == "printf" || name == "format" {
+                let span = self.syms.sym(m).span;
+                self.error_by(crate::source::Group::Own, span, format!("not supported yet: an override of PrintStream.{} on the JVM", name));
+                return true;
+            }
         }
         // A member with `override` over a var or its setter, which scalac names by the var
         // (`RefChecks.checkOverride`, `other.isMutableVarOrAccessor`).
@@ -9529,6 +9590,9 @@ impl<'a> Worker<'a> {
                     copied = Some(self.met_base_types(c));
                 }
                 let bases: &Vec<(ClassId, TypeId)> = copied.as_ref().unwrap();
+                // A member written in Scala, whose repeated parameter the JDK's varargs members do not implement
+                // (`is_std_stream_format`); one read from a class file or the std's own is as the JDK's.
+                let scala_member = !self.syms.sym(m).java_defined && !self.std_source(self.syms.sym(m).file);
                 let implemented = bases.iter().enumerate().filter(|&(i, _)| b != c || i == 0).any(|(i, &(other, ot))| {
                     let mut k = 0;
                     while let Some(s) = self.inherited_member(other, name, is_ext, k) {
@@ -9541,6 +9605,7 @@ impl<'a> Worker<'a> {
                             && (!self.is_abstract_member(s) || (self.is_deferred_given(s) && !self.overrides_declaration_of(m, s)))
                             && !self.is_private(s)
                             && !self.is_abstract_override(s)
+                            && !(scala_member && self.is_std_stream_format(s))
                             && ((self.in_std(s) && self.in_std(m) && !self.abstract_by_jdk(m)) || {
                                 let ssig = self.sig_arc(s);
                                 let apart = self.declared_params_apart(&ssig, m);

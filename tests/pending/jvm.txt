@@ -179,6 +179,8 @@ poly_function_class_tag	compile
 poly_function_parent_erasure	backend
 poly_function_type_tests	compile
 println_bare	output
+printstream_format_calls	compile
+printstream_override_of_override	compile
 quote_pattern_ascribed_holes	output
 quoted_values_class_tests	compile
 quoted_values_reflection_kinds	output

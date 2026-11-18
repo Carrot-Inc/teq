@@ -1,0 +1,11 @@
+#trigger: log=[B.print(String S'mov');]
+Console.out=B System.out=B
+#Predef.print: log=[B.print(String S'p');]
+#Predef.println: log=[B.println(Object S'l');]
+#Predef.println(): log=[B.println();]
+#Console.print: log=[B.print(String S'cp');]
+#Console.println: log=[B.println(Object S'cl');]
+#Console.println(): log=[B.println();]
+#Console.out.print: log=[B.print(String S'co');]
+#System.out.print: log=[B.print(String S'so');]
+end

@@ -43,32 +43,6 @@ package java.io:
   @js("$fail(\"UnsupportedOperationException\", \"streams are not available on JavaScript\")")
   def streamOpenWrite(path: String, flags: Int, plain: Boolean): Int
 
-  // How many bytes at the end of `bytes(from until to)` the JDK's UTF-8 decoder leaves for more
-  // input (`decodeArrayLoop`'s underflow): the start of a sequence more bytes can still complete; 0
-  // where they end at a sequence's end or inside one already malformed, which it answers at once (a
-  // lead c0, c1 or f5 to ff, a continuation where a lead belongs, a three- or four-byte prefix whose
-  // later byte is wrong). Under `teq interp` the native that the streams' own text reads share.
-  private[java] def utf8Underflow(bytes: Array[Byte], from: Int, to: Int): Int =
-    def cont(b: Int): Boolean = (b & 0xc0) == 0x80
-    def at(back: Int, i: Int): Int = bytes(to - back + i) & 0xff
-    var back = 1
-    var result = -1
-    while result < 0 && back <= 3 && to - back >= from do
-      val b1 = at(back, 0)
-      if !cont(b1) then
-        result =
-          if b1 >= 0xc2 && b1 <= 0xdf then (if back < 2 then back else 0)
-          else if b1 >= 0xe0 && b1 <= 0xef then
-            if back >= 3 then 0
-            else if back > 1 && ((b1 == 0xe0 && (at(back, 1) & 0xe0) == 0x80) || !cont(at(back, 1))) then 0
-            else back
-          else if b1 >= 0xf0 && b1 <= 0xf4 then
-            if back > 1 && ((b1 == 0xf0 && (at(back, 1) < 0x90 || at(back, 1) > 0xbf)) || (b1 == 0xf4 && (at(back, 1) & 0xf0) != 0x80) || !cont(at(back, 1))) then 0
-            else if back > 2 && !cont(at(back, 2)) then 0
-            else back
-          else 0
-      back += 1
-    if result < 0 then 0 else result
 
   // A stream of the interpreter's, by its index among process.rs's streams.
   @javaDefined
@@ -182,6 +156,15 @@ package java.io:
     def this(file: File) = this(file, false)
     def this(name: String) = this(new File(name), false)
     def this(name: String, append: Boolean) = this(new File(name), append)
+    // The stream's descriptor.
+    def getFD(): FileDescriptor = new FileDescriptor(streamId)
+
+  // A file stream's descriptor, whose `sync` is the stream's flush here.
+  @javaDefined
+  @jvmClass("java/io/FileDescriptor")
+  final class FileDescriptor private[io] (id: Int):
+    def sync(): Unit = streamFlush(id)
+    def valid(): Boolean = id >= 0
 
   // A path's text, as the JDK's `File` keeps it: separators run together, none at the end; its
   // questions to the file system go through `java.nio.file`.

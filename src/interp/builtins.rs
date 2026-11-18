@@ -565,21 +565,45 @@ fn install_core(it: &mut Table) {
     reg!(it, "scala.runtime.Statics.releaseFence", |_it, _a| Ok(Value::Unit));
     // The box of `()`, which the interpreter's `()` is (zio's `Exit.unit` reads it).
     reg!(it, "scala.runtime.BoxedUnit.UNIT", |_it, _a| Ok(Value::Unit));
+    // The prelude's `println()`: on the route's stream its `println()`, else a line's end. The prelude's first print binds
+    // Console's streams (runtime/rt.js `$watchPrelude`).
+    reg!(it, "scala.printlnNone", |it, _a| {
+        if it.pure {
+            return it.impure("println");
+        }
+        it.console_bound = true;
+        match it.out_redirect.clone() {
+            Some((_, _, e)) => it.apply_value(e, vec![]).map(|_| ())?,
+            None => it.print("\n"),
+        }
+        Ok(Value::Unit)
+    });
     reg!(it, "scala.printlnImpl", |it, a| {
         if it.pure {
             return it.impure("println");
         }
-        let s = it.printed(&arg(a, 0))?;
-        it.print(&s);
-        it.print("\n");
+        it.console_bound = true;
+        // On the route's stream its `println(Object)` with the value itself, as the reference's Console.
+        if let Some((_, l, _)) = it.out_redirect.clone() {
+            it.apply_value(l, vec![arg(a, 0)])?;
+            return Ok(Value::Unit);
+        }
+        let s = it.printed(&arg(a, 0))?.to_string();
+        it.print_out(&s, true)?;
         Ok(Value::Unit)
     });
     reg!(it, "scala.print", |it, a| {
         if it.pure {
             return it.impure("print");
         }
-        let s = it.printed(&arg(a, 0))?;
-        it.print(&s);
+        it.console_bound = true;
+        // On the route's stream its `print` with the value, whose text the stream's call makes once Console is bound.
+        if let Some((p, _, _)) = it.out_redirect.clone() {
+            it.apply_value(p, vec![arg(a, 0)])?;
+            return Ok(Value::Unit);
+        }
+        let s = it.printed(&arg(a, 0))?.to_string();
+        it.print_out(&s, false)?;
         Ok(Value::Unit)
     });
     reg!(it, "scala.Any.##", |it, a| Ok(Value::Int(it.hash(&arg(a, 0))?)));
@@ -2042,8 +2066,6 @@ fn install_java(it: &mut Table) {
     reg!(it, "java.lang.Character.isHighSurrogate", |it, a| Ok(Value::Bool((unit(it, a, 1)? & 0xfc00) == 0xd800)));
     reg!(it, "java.lang.Character.isLowSurrogate", |it, a| Ok(Value::Bool((unit(it, a, 1)? & 0xfc00) == 0xdc00)));
     reg!(it, "java.lang.Character.valueOf", |_it, a| Ok(arg(a, 1)));
-    reg!(it, "java.lang.System.out", |_it, _a| Ok(Value::str("out")));
-    reg!(it, "java.lang.System.err", |_it, _a| Ok(Value::str("err")));
     reg!(it, "java.lang.System.arraycopy", |it, a| {
         let (src, dest) = (array(it, a, 1)?, array(it, a, 3)?);
         let (src_pos, dest_pos, length) = (int(it, a, 2)?, int(it, a, 4)?, int(it, a, 5)?);
@@ -2165,20 +2187,56 @@ fn install_java(it: &mut Table) {
         vars.sort();
         Ok(Value::array(vars.into_iter().flat_map(|(k, v)| [Value::Str(k.into()), Value::Str(v.into())]).collect()))
     });
-    reg!(it, "java.io.PrintStream.println", |it, a| {
-        let stream = text(it, a, 0)?;
-        let mut s = if a.len() > 1 { it.to_str(&arg(a, 1))? } else { String::new() };
-        s.push('\n');
-        it.print_to(&stream, &s)?;
+    // The process's output past a redirect, the process's error, and the redirect itself.
+    reg!(it, "java.io.processOut", |it, a| {
+        let s = text(it, a, 0)?;
+        it.print_to("out", &s)?;
         Ok(Value::Unit)
     });
-    reg!(it, "java.io.PrintStream.print", |it, a| {
-        let stream = text(it, a, 0)?;
-        let s = it.to_str(&arg(a, 1))?;
-        it.print_to(&stream, &s)?;
+    reg!(it, "java.io.processErr", |it, a| {
+        let s = text(it, a, 0)?;
+        it.print_to("err", &s)?;
         Ok(Value::Unit)
     });
-    reg!(it, "java.io.PrintStream.flush", |_it, _a| Ok(Value::Unit));
+    reg!(it, "scala.redirectOut", |it, a| {
+        let (p, l, e) = (arg(a, 0), arg(a, 1), arg(a, 2));
+        it.out_redirect = if matches!(p, Value::Null) { None } else { Some((p, l, e)) };
+        Ok(Value::Unit)
+    });
+    // The process stream's moves (runtime/rt.js, the same names): System.out moved before Console bound its streams moves the
+    // route; the first move after it keeps the streams of that moment for Console, if it is made later.
+    reg!(it, "java.io.processMade", |it, a| {
+        let p = arg(a, 0);
+        it.process_out0 = Some(p.clone());
+        Ok(p)
+    });
+    reg!(it, "java.io.isProcess", |it, a| Ok(Value::Bool(it.process_out0.as_ref().is_some_and(|o| o.same(&arg(a, 0))))));
+    reg!(it, "java.io.outMoved", |it, a| {
+        if !it.console_bound {
+            let (p, l, e) = (arg(a, 0), arg(a, 1), arg(a, 2));
+            it.out_redirect = if matches!(p, Value::Null) { None } else { Some((p, l, e)) };
+        }
+        Ok(Value::Unit)
+    });
+    reg!(it, "java.io.consoleBound", |it, _a| Ok(Value::Bool(it.console_bound)));
+    // A print(x)'s text as the prelude prints it, made in the route's call.
+    reg!(it, "java.io.printedText", |it, a| Ok(Value::str(&it.printed(&arg(a, 0))?.to_string())));
+    reg!(it, "scala.printedText", |it, a| Ok(Value::str(&it.printed(&arg(a, 0))?.to_string())));
+    reg!(it, "java.io.keepBound", |it, a| {
+        if it.bound_kept.is_none() {
+            it.bound_kept = Some((arg(a, 0), arg(a, 1)));
+        }
+        Ok(Value::Unit)
+    });
+    reg!(it, "scala.consoleStream", |it, a| {
+        it.console_bound = true;
+        Ok(match (&it.bound_kept, arg(a, 1)) {
+            (Some((_, e)), Value::Int(1)) => e.clone(),
+            (Some((o, _)), _) => o.clone(),
+            (None, _) => arg(a, 0),
+        })
+    });
+    reg!(it, "scala.isProcessOut", |it, a| Ok(Value::Bool(it.process_out0.as_ref().is_some_and(|o| o.same(&arg(a, 0))))));
     // Java's equality: the same object, else `a.equals(b)` as the boxes of their widths answer,
     // never Scala's cooperative `==`.
     reg!(it, "java.util.Objects.equals", |it, a| {
@@ -2708,6 +2766,19 @@ fn install_typer_templates(it: &mut Table) {
 }
 
 impl<'a, 't> Interp<'a, 't> {
+    /// The prelude's output where no stream is on its route (`scala.print`, `scala.printlnImpl`): the process's.
+    fn print_out(&mut self, s: &str, line: bool) -> R<()> {
+        if line {
+            let mut t = String::with_capacity(s.len() + 1);
+            t.push_str(s);
+            t.push('\n');
+            self.print(&t);
+        } else {
+            self.print(s);
+        }
+        Ok(())
+    }
+
     fn print_to(&mut self, stream: &str, s: &str) -> R<()> {
         if self.pure {
             return self.impure("output");

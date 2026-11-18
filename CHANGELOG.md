@@ -7,6 +7,43 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `java.io.PrintStream` is the JDK's class on JavaScript and in the interpreter: an open class over an
+  `OutputStream` (`new PrintStream(out)`, with autoFlush, with a `Charset` or a charset's name), with the JDK's
+  members: `print` and `println` of each type, `printf` and `format`, `append`, the `write`s, `flush`, `close`,
+  `checkError`, `charset`. A program can extend it, and a subclass sees the calls the JDK makes: `println(x)` is
+  its `print(x)` and then the line's end, the bytes go through its `write(bytes, off, len)`, a line's end under
+  autoFlush flushes the stream under it; after `close` nothing is written and `checkError` is true. `printf` and
+  `format` read the whole format before they write anything and write as the JDK does (a width's spaces one by
+  one); a format the JDK refuses throws an `IllegalArgumentException` with the JDK's message. `System.out`
+  and `System.err` are streams of that class (`new PrintStream(System.out)` writes to the process's output), and
+  `System.setOut` and `setErr` replace them. `Console.withOut(stream)` now reaches the prelude's `println` and
+  `print` too, which call the stream's own members, whichever stream it names, nested and restored after a
+  throw. As scalac's, `Console` binds `out` and `err` at its first use (the prelude's first print is one): a
+  `System.setOut` before it moves the prelude's prints and Console's with it, one after it moves neither, and the
+  prelude's `println(x)` hands a stream the value itself (`println(Object)`); under `--std scala-library`
+  Console's `out` and `err` are bound when Console is made, no longer at their first read.
+  `FileOutputStream.getFD` gives a `java.io.FileDescriptor`. The class was final with `println`, `print` and
+  `flush` alone, and `Console.withOut` left the prelude's `println` on the process's output. Not yet: the six
+  constructors over a file's name or a `File` (write `new PrintStream(new FileOutputStream(file))`), `printf` and
+  `format` with a `Locale`, a PrintStream as a `java.lang.Appendable`; on the JVM a class that overrides
+  `PrintStream.printf` or `format` is refused (`not supported yet`). As scalac, a trait's deferred
+  `printf(f: String, a: Any*)` is not implemented by the stream's (`needs to be abstract`), and a trait's
+  `super.printf` finds no implementation in the class that mixes it in. A program that names neither the streams
+  nor `Console` keeps its output's size, with some names spelled otherwise: the std's anonymous classes defined
+  below the changed text of its files (they are named by their place there), and in a release build of a program
+  that reaches `java.lang.System` some short member names (the release table counts System's two new members);
+  the prelude's `println()` and `print(x)` are natives of their own (a program that calls `print` is 40 bytes larger,
+  one that calls `println()` beside `println(x)` 34, `println()` alone smaller).
+  One that prints through `System.out` grows by about 2.3 KB, as does every program under `--std scala-library`
+  that prints (its `println` is scala-library's `Console.out.println`; with Console's `out` and `err` bound as it is
+  made, 67 to 74 bytes fewer in a release build, 83 in a development one); one that also writes bytes to an
+  `OutputStream` keeps the process stream's byte path too (7.5 KB in all for one of the benchmarks). One that calls
+  `System.setOut` or `setErr` also carries what tells whether the prelude printed before Console bound its streams,
+  and the stream's calls the prelude's prints then take: about 1.3 KB in a release build for `setErr` alone, 2.2 KB
+  for `setOut` beside `println` (1.6 KB under `--std scala-library`, whose Predef never takes that route). Laminar's
+  DOM definitions now generate under `teq interp` (the build's generator writes its files through a `PrintStream`
+  over a `FileOutputStream`), so `teq compile` of Laminar runs the compile the generator's failure stopped, and
+  shows teq's own errors there (702 when the generator first passed).
 - A class's own constructor parameter named by an import inside its parent's argument, or inside a default of a
   later parameter clause, is read as the constructor's argument, as the parameter's name itself is read there (a
   context bound's evidence, `[T: {Show as sh}]`, among them): `class Named(d: Dsl) extends Base({ import d.*;

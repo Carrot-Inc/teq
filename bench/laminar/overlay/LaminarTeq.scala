@@ -36,10 +36,13 @@ object LaminarTeq extends AutoPlugin {
 
   val teqLaminarDomTypes = taskKey[File]("Scala DOM Types' Scala 3 jar, which teq's run of the DOM definitions' generator reads")
 
-  // The files DomDefsGenerator writes, by the header it gives them.
+  // The files DomDefsGenerator writes, by the header it gives them. EventProps.scala carries the header but the pinned generator does
+  // not write it (scalac 3.8.4 running the same generator on the JDK writes the other 60): a checked-in source of the project, which
+  // the generator's outputs must not name (a run that deletes the outputs first would lose it).
+  private val notWritten = Set("src/main/scala/com/raquo/laminar/defs/eventProps/EventProps.scala")
   private def generated(root: File): Seq[String] =
     ((root / generatedRoot) ** "*.scala").get().filter(f => IO.readLines(f).take(12).exists(_.contains(header)))
-      .map(f => IO.relativize(root, f).get).sorted
+      .map(f => IO.relativize(root, f).get).filterNot(notWritten).sorted
 
   private def domDefs(root: File): TeqCommand =
     TeqCommand(

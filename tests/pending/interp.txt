@@ -33,6 +33,7 @@ code_of_type_trees	output
 companion_initializer_order	output
 compiletime_string_ops	compile
 concat_order_effectful_condition	output
+console_in_bound_at_making	compile
 const_handed_on_operations	compile
 const_ident_before_init	output
 const_ident_nonfinal	output

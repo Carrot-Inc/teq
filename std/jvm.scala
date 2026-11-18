@@ -680,6 +680,16 @@ def classArray[T](xs: Any): Array[Class[T]] =
     i += 1
   }
   out
+// The array of objects a Java varargs parameter takes, from the sequence the call gives (`PrintStream.printf`).
+def objectArray(xs: Any): Array[Any] =
+  val items = xs.asInstanceOf[scala.collection.Seq[Any]]
+  val out = new Array[Any](items.length)
+  var i = 0
+  items.foreach { x =>
+    out(i) = x
+    i += 1
+  }
+  out
 def arraysAsList(xs: Any): Any =
   val out = new java.util.ArrayList[Any]()
   xs.asInstanceOf[Seq[Any]].foreach(x => out.add(x))

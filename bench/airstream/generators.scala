@@ -31,9 +31,9 @@ import java.nio.file.Files
       System.err.println("usage: generators.scala project/Generate*.scala -- <compile|test> [dir]")
       System.exit(2)
 
-// project/SourceGenerator.scala, the generators' base, with its text kept in a builder and written at the end:
-// the build's prints into a `PrintStream` over a `FileOutputStream`, a constructor teq's java.io does not have
-// (its `PrintStream` is the console's). The lines and their ends are println's, the line separator's.
+// project/SourceGenerator.scala, the generators' base, with its text kept in a builder and written at the end
+// (the build's prints into a `PrintStream` over a `FileOutputStream`). The lines and their ends are println's,
+// the line separator's.
 abstract class SourceGenerator(outputFile: File):
   private val text = new StringBuilder
   private val indentStep = "  "

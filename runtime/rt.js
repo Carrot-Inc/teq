@@ -33,7 +33,52 @@ function $print(s) {
   // console.log cannot print a partial line, so without a process a line is completed first.
   if ($outSize > 65536 || ($sync && ($hasProcess || s.endsWith("\n")))) $flush();
 }
-function $println(s) { $print(s + "\n"); }
+function $printAny(x) { $print($printed(x)); }
+function $println(x) { $print($printed(x) + "\n"); }
+function $printlnNone() { $print("\n"); }
+// The route of the prelude's three prints (print(x), println(x), println()), which Console's are too: for the length of
+// `Console.withOut`'s body, or where System.out was moved before Console bound its streams, calls of that stream (null for the
+// three: the process's again), handed the value itself as the reference's Console does, its text made once Console is bound. The
+// process's own stream (`System.out`) writes with the function above them, which no route replaces.
+let $printAnyReal = null, $printlnReal = null, $printlnNoneReal = null;
+function $redirect(p, l, e) {
+  if ($printAnyReal === null) { $printAnyReal = $printAny; $printlnReal = $println; $printlnNoneReal = $printlnNone; }
+  $printAny = p === null ? $printAnyReal : p;
+  $println = l === null ? $printlnReal : l;
+  $printlnNone = e === null ? $printlnNoneReal : e;
+}
+// The process's own output stream as the std made it (`java.io.ProcessStream`), told apart from a stream put in its place.
+let $processOut0 = null;
+function $processMade(p) { $processOut0 = p; return p; }
+function $isProcessOut(p) { return p === $processOut0; }
+// scala.Console binds `out` and `err` at its first use, and Predef's prints are Console's: the prelude's first print or Console's
+// making binds them. Before that a `System.setOut` moves the route with it; the first move after it keeps the streams of that
+// moment for Console, if it is made later.
+let $consoleBound = false;
+let $bound = null;
+function $keepBound(o, e) { if ($bound === null) $bound = [o, e]; }
+// Console's making: its `out` (0) or `err` (1), `s` as it stands or as the first move after the binding kept it.
+function $consoleStream(s, i) { $consoleBound = true; return $bound === null ? s : $bound[i]; }
+// Emitted only where System.out or err is moved: the prelude's three entry points watched for their first call. A call reads the
+// entry point before its argument is evaluated, which can move System.out and so put a newer watch in place: a wrapper still in
+// place binds Console and puts the route back; one a move replaced hands the value to whatever stands now.
+function $watchPrelude() {
+  if ($printAnyReal === null) { $printAnyReal = $printAny; $printlnReal = $println; $printlnNoneReal = $printlnNone; }
+  const p = $printAny, l = $println, e = $printlnNone;
+  const seen = () => { if ($printAny === wp) { $consoleBound = true; $printAny = p; $println = l; $printlnNone = e; } };
+  const wp = x => { seen(); $printAny(x); };
+  $printAny = wp;
+  $println = x => { seen(); $println(x); };
+  $printlnNone = () => { seen(); $printlnNone(); };
+  return true;
+}
+let $preludeWatched = $watchPrelude();
+function $isBound() { return $preludeWatched && $consoleBound; }
+function $outMoved(p, l, e) {
+  if ($isBound()) return;
+  $redirect(p, l, e);
+  $watchPrelude();
+}
 function $printTo(stream, text) {
   if (stream === "err") {
     if (typeof process !== "undefined" && process.stderr) process.stderr.write(text);

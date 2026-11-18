@@ -1,0 +1,12 @@
+println("") | println(Object:);print(String:); | \n
+println() | println(); | \n
+println("a") | println(Object:a);print(String:a); | a\n
+println(1) | println(Object:1);print(String:1); | 1\n
+println(Empty) | println(Object:);print(String:); | \n
+println(null) | println(Object:null);print(String:null); | null\n
+print("") | print(String:); | 
+print("a") | print(String:a); | a
+print(Empty) | print(String:); | 
+scala.Console.println("") | println(Object:);print(String:); | \n
+scala.Console.println() | println(); | \n
+scala.Console.print("") | print(String:); | 

@@ -1,18 +1,24 @@
 package scala
 
-@js("$println($printed($0))")
+@js("$println($0)")
 @jvm("getstatic java/lang/System.out:Ljava/io/PrintStream; $0:L invokevirtual java/io/PrintStream.println(Ljava/lang/Object;)V")
 def printlnImpl(x: Any): Unit
 
+// The prelude's `println()`: its own native, so that under `Console.withOut` it is the stream's `println()` while `println("")` is its
+// `println(text)` (the empty text no longer stands for no argument).
+@js("$printlnNone()")
+@jvm("getstatic java/lang/System.out:Ljava/io/PrintStream; invokevirtual java/io/PrintStream.println()V")
+def printlnNone(): Unit
+
 @predef
-@js("$print($printed($0))")
+@js("$printAny($0)")
 @jvm("getstatic java/lang/System.out:Ljava/io/PrintStream; $0:L invokevirtual java/io/PrintStream.print(Ljava/lang/Object;)V")
 def print(x: Any): Unit
 
 // scala-library's two overloads: `println(())` passes the unit, which prints as Scala.js prints it,
 // `undefined` (`$printed`), and no default takes it for a missing argument.
 @predef
-def println(): Unit = printlnImpl("")
+def println(): Unit = printlnNone()
 @predef
 def println(x: Any): Unit = printlnImpl(x)
 

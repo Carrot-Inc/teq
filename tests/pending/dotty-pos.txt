@@ -709,7 +709,6 @@ strict-pattern-bindings-3.0-migration.scala	option: -Wsafe-init with -Werror (te
 strict-pattern-bindings-3.1.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 superacc.scala	superacc.scala:15:14: expected an identifier, found 'super'
 switches.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-t0032.scala	t0032.scala:3:7: class PromptStream cannot extend final class PrintStream
 t0231.scala	t0231.scala:10:25: expected an identifier, found 'super'
 t0599.scala	t0599.scala:11:23: expected an identifier, found 'super'
 t0851.scala	t0851.scala:10:13: missing argument for parameter

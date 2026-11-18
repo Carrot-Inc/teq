@@ -1,0 +1,30 @@
+a throwing write, autoFlush true, print = true
+a throwing write, autoFlush true, println = true
+a throwing write, autoFlush true, println() = true
+a throwing write, autoFlush true, printf = true
+a throwing write, autoFlush true, append = true
+a throwing write, autoFlush true, append text = true
+a throwing write, autoFlush true, print chars = true
+a throwing write, autoFlush true, write bytes ! IOException: subwrite
+a throwing write, autoFlush true, write bytes, off, len ! IOException: subwrite
+a throwing write, autoFlush false, print = true
+a throwing write, autoFlush false, println = true
+a throwing write, autoFlush false, println() = true
+a throwing write, autoFlush false, printf = true
+a throwing write, autoFlush false, append = true
+a throwing write, autoFlush false, append text = true
+a throwing write, autoFlush false, print chars = true
+a throwing write, autoFlush false, write bytes ! IOException: subwrite
+a throwing write, autoFlush false, write bytes, off, len ! IOException: subwrite
+over a print stream, println = w[120,10];f;f;
+over a print stream, close = w[120,10];f;f;f;f;c;
+the one under it after the close = w[120,10];f;f;f;f;c;truefalse
+the one under it closed first = f;c;true
+closed, then members = f;c;
+closed, print of a null char array = none
+closed, println of a null char array = none
+closed, a null format = none
+closed, a bad format = none
+closed, its error = true
+open, print of a null char array ! NullPointerException
+open, its error = false

@@ -848,6 +848,16 @@ predef_unimport	pass	-
 predef_unimport_conversion	pass	-	
 predef_unimport_conversion.check	fail	-	< tests/errors/predef_unimport_conversion.scala:11:30: error: Found: Byte
 primitive_selection_erroneous_receiver	pass	-	
+printstream_jar_trait_super_call	fail	-	exit code 0
+printstream_jar_trait_super_call_build	pass	-	
+printstream_jar_trait_super_call_jvm	pass	-	
+printstream_printf_override_jvm	pass	-	
+printstream_varargs_override_conflict_class_trait	fail	-	exit code 0
+printstream_varargs_override_conflict_two_traits	fail	-	exit code 0
+printstream_varargs_super_call	pass	-	
+printstream_varargs_super_call_jvm	pass	-	
+printstream_varargs_unimplemented	pass	-	
+printstream_varargs_unimplemented_jvm	pass	-	
 private_ctor	pass	-	
 private_leaks_signature	fail	-	exit code 0
 private_trait_ctor	pass	-	

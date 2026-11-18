@@ -31,7 +31,8 @@
 # javadefault-lib, tests/support/hidden_owner/javadefault's Java sources compiled by that javac; nesting-lib,
 # tests/support/hidden_owner/nesting's compiled the same way; stubparent-lib, tests/support/hidden_owner/stubparent's
 # compiled the same way and Gone.class deleted; javactors-lib, tests/support/java_ctors's compiled the same way;
-# ctorbodies-lib, tests/support/ctor_bodies compiled by scalac; and
+# ctorbodies-lib, tests/support/ctor_bodies compiled by scalac; pstraits-lib, tests/support/printstream_traits
+# compiled by scalac; and
 # genericclone-lib, polyclone-lib, mixedclone-lib and privateclone-lib, tests/support/hidden_owner's
 # genericclone, polyclone, mixedclone and privateclone traits compiled by scalac, and parammeta-lib, its trait
 # and Java annotation compiled by scalac, each but mixedclone's with
@@ -309,6 +310,21 @@ ctor_bodies_jar() {
     rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
     cp "$src/Paper.scala" "$work/src/"
     timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" -d "$work/classes" "$work/src/Paper.scala" > /dev/null 2>&1 \
+      && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/printstream_traits's library compiled by scalac into a jar, its class files and TASTy: traits over
+# java.io.PrintStream that reach its printf and format through super.
+printstream_traits_jar() {
+  local src=tests/support/printstream_traits
+  local jar=$scratch/pstraits-lib.jar
+  local work=$scratch/pstraits-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.scala')" ]; then
+    rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
+    cp "$src/Traits.scala" "$work/src/"
+    timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" -d "$work/classes" "$work/src/Traits.scala" > /dev/null 2>&1 \
       && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
     rm -rf "$work"
   fi
@@ -1222,6 +1238,7 @@ jar_of() {
     nesting-lib) java_nesting_jar ;;
     javactors-lib) java_ctors_jar ;;
     ctorbodies-lib) ctor_bodies_jar ;;
+    pstraits-lib) printstream_traits_jar ;;
     stubparent-lib) java_stub_parent_jar ;;
     genericclone-lib) scalac_trait_jar genericclone ;;
     genericclone-scalac) scalac_use_jar genericclone genericclone-lib ;;

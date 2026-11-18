@@ -52,7 +52,6 @@ extension_view_too_unspecific	< scalac 3.8.4: rejected, 3 error(s)
 extension_view_too_unspecific_applied	< scalac 3.8.4: rejected, 2 error(s)
 fbound_path_in_type_arg	< show
 for_braces_then_indented_body	< 6
-for_yield_unit_discard_through_var	< 1
 function_xxl_deep_array_signature	< 325
 given_alias_converts_inside_its_own_right_side	< in given 2
 given_alias_of_bounded_param_part	< 13

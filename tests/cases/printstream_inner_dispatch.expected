@@ -1,0 +1,76 @@
+print(String) | autoFlush false | inner answers false | in.write([B,I,I);raw[ab];
+print(String) | autoFlush false | inner answers true | in.write([B,I,I);raw[ab];
+print(String) | autoFlush true | inner answers false | in.write([B,I,I);raw[ab];in.flush;raw.flush;
+print(String) | autoFlush true | inner answers true | in.write([B,I,I);raw[ab];in.flush;raw.flush;
+print(Int) | autoFlush false | inner answers false | in.write([B,I,I);raw[7];
+print(Int) | autoFlush false | inner answers true | in.write([B,I,I);raw[7];
+print(Int) | autoFlush true | inner answers false | in.write([B,I,I);raw[7];in.flush;raw.flush;
+print(Int) | autoFlush true | inner answers true | in.write([B,I,I);raw[7];in.flush;raw.flush;
+print(Char) | autoFlush false | inner answers false | in.write([B,I,I);raw[c];
+print(Char) | autoFlush false | inner answers true | in.write([B,I,I);raw[c];
+print(Char) | autoFlush true | inner answers false | in.write([B,I,I);raw[c];in.flush;raw.flush;
+print(Char) | autoFlush true | inner answers true | in.write([B,I,I);raw[c];in.flush;raw.flush;
+print(Object) | autoFlush false | inner answers false | in.write([B,I,I);raw[List(1)];
+print(Object) | autoFlush false | inner answers true | in.write([B,I,I);raw[List(1)];
+print(Object) | autoFlush true | inner answers false | in.write([B,I,I);raw[List(1)];in.flush;raw.flush;
+print(Object) | autoFlush true | inner answers true | in.write([B,I,I);raw[List(1)];in.flush;raw.flush;
+println() | autoFlush false | inner answers false | in.write([B,I,I);raw[\n];
+println() | autoFlush false | inner answers true | in.write([B,I,I);raw[\n];
+println() | autoFlush true | inner answers false | in.write([B,I,I);raw[\n];in.flush;raw.flush;in.flush;raw.flush;
+println() | autoFlush true | inner answers true | in.write([B,I,I);raw[\n];in.flush;raw.flush;in.flush;raw.flush;
+println(String) | autoFlush false | inner answers false | in.write([B,I,I);raw[ab\n];
+println(String) | autoFlush false | inner answers true | in.write([B,I,I);raw[ab\n];
+println(String) | autoFlush true | inner answers false | in.write([B,I,I);raw[ab\n];in.flush;raw.flush;in.flush;raw.flush;
+println(String) | autoFlush true | inner answers true | in.write([B,I,I);raw[ab\n];in.flush;raw.flush;in.flush;raw.flush;
+println(Int) | autoFlush false | inner answers false | in.write([B,I,I);raw[7\n];
+println(Int) | autoFlush false | inner answers true | in.write([B,I,I);raw[7\n];
+println(Int) | autoFlush true | inner answers false | in.write([B,I,I);raw[7\n];in.flush;raw.flush;in.flush;raw.flush;
+println(Int) | autoFlush true | inner answers true | in.write([B,I,I);raw[7\n];in.flush;raw.flush;in.flush;raw.flush;
+println(Object) | autoFlush false | inner answers false | in.write([B,I,I);raw[List(1)\n];
+println(Object) | autoFlush false | inner answers true | in.write([B,I,I);raw[List(1)\n];
+println(Object) | autoFlush true | inner answers false | in.write([B,I,I);raw[List(1)\n];in.flush;raw.flush;in.flush;raw.flush;
+println(Object) | autoFlush true | inner answers true | in.write([B,I,I);raw[List(1)\n];in.flush;raw.flush;in.flush;raw.flush;
+write(Int) | autoFlush false | inner answers false | in.write(I);raw(65);
+write(Int) | autoFlush false | inner answers true | in.write(I);raw(65);
+write(Int) | autoFlush true | inner answers false | in.write(I);raw(65);
+write(Int) | autoFlush true | inner answers true | in.write(I);raw(65);
+write(bytes,off,len) | autoFlush false | inner answers false | in.write([B,I,I);raw[BC];
+write(bytes,off,len) | autoFlush false | inner answers true | in.write([B,I,I);raw[BC];
+write(bytes,off,len) | autoFlush true | inner answers false | in.write([B,I,I);raw[BC];in.flush;raw.flush;
+write(bytes,off,len) | autoFlush true | inner answers true | in.write([B,I,I);raw[BC];in.flush;raw.flush;
+write(bytes) | autoFlush false | inner answers false | in.write([B,I,I);raw[D];
+write(bytes) | autoFlush false | inner answers true | in.write([B,I,I);raw[D];
+write(bytes) | autoFlush true | inner answers false | in.write([B,I,I);raw[D];in.flush;raw.flush;
+write(bytes) | autoFlush true | inner answers true | in.write([B,I,I);raw[D];in.flush;raw.flush;
+append(Char) | autoFlush false | inner answers false | in.write([B,I,I);raw[e];
+append(Char) | autoFlush false | inner answers true | in.write([B,I,I);raw[e];
+append(Char) | autoFlush true | inner answers false | in.write([B,I,I);raw[e];in.flush;raw.flush;
+append(Char) | autoFlush true | inner answers true | in.write([B,I,I);raw[e];in.flush;raw.flush;
+append(CharSequence) | autoFlush false | inner answers false | in.write([B,I,I);raw[fg];
+append(CharSequence) | autoFlush false | inner answers true | in.write([B,I,I);raw[fg];
+append(CharSequence) | autoFlush true | inner answers false | in.write([B,I,I);raw[fg];in.flush;raw.flush;
+append(CharSequence) | autoFlush true | inner answers true | in.write([B,I,I);raw[fg];in.flush;raw.flush;
+flush() | autoFlush false | inner answers false | in.flush;raw.flush;
+flush() | autoFlush false | inner answers true | in.flush;raw.flush;
+flush() | autoFlush true | inner answers false | in.flush;raw.flush;
+flush() | autoFlush true | inner answers true | in.flush;raw.flush;
+close() | autoFlush false | inner answers false | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close;
+close() | autoFlush false | inner answers true | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close;
+close() | autoFlush true | inner answers false | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close;
+close() | autoFlush true | inner answers true | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close;
+checkError() | autoFlush false | inner answers false | in.flush;raw.flush;in.checkError; =false
+checkError() | autoFlush false | inner answers true | in.flush;raw.flush;in.checkError; =true
+checkError() | autoFlush true | inner answers false | in.flush;raw.flush;in.checkError; =false
+checkError() | autoFlush true | inner answers true | in.flush;raw.flush;in.checkError; =true
+printf | autoFlush false | inner answers false | in.write([B,I,I);raw[1];in.write([B,I,I);raw[|];in.write([B,I,I);raw[x];
+printf | autoFlush false | inner answers true | in.write([B,I,I);raw[1];in.write([B,I,I);raw[|];in.write([B,I,I);raw[x];
+printf | autoFlush true | inner answers false | in.write([B,I,I);raw[1];in.flush;raw.flush;in.write([B,I,I);raw[|];in.flush;raw.flush;in.write([B,I,I);raw[x];in.flush;raw.flush;
+printf | autoFlush true | inner answers true | in.write([B,I,I);raw[1];in.flush;raw.flush;in.write([B,I,I);raw[|];in.flush;raw.flush;in.write([B,I,I);raw[x];in.flush;raw.flush;
+close(); checkError() | autoFlush false | inner answers false | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close; =false
+close(); checkError() | autoFlush false | inner answers true | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close; =false
+close(); checkError() | autoFlush true | inner answers false | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close; =false
+close(); checkError() | autoFlush true | inner answers true | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close; =false
+close(); print(String) | autoFlush false | inner answers false | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close;
+close(); print(String) | autoFlush false | inner answers true | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close;
+close(); print(String) | autoFlush true | inner answers false | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close;
+close(); print(String) | autoFlush true | inner answers true | in.flush;raw.flush;in.close;in.flush;raw.flush;in.close;raw.close;

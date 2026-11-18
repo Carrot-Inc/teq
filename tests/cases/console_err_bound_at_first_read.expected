@@ -1,0 +1,2 @@
+Console.err is the first stream: true, the moved one: false
+after the restore: true

@@ -1,6 +1,5 @@
 16405.scala	16405.scala:14:15: type a not found
 1938-2.scala	1938-2.scala:23:12: this is not a case class or enum case
-2772.scala	2772.scala:7:23: type mismatch: found PrintStream, required OutputStream
 9416.scala	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
 CollectionTests.scala	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
 IArrayOps.scala	iarray.scala:63:16: type Set not found
@@ -196,7 +195,6 @@ i7868.scala	i7868.scala:6:22: no given instance of type ValueOf[S[0]] was found 
 i7963.scala	util.scala:1:1: not supported on JavaScript: method min of java.util.Collections (a Java definition without an implementation in the std's platform layer)
 i8073.scala	i8073.scala:17:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
 i8073b.scala	i8073b.scala:18:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
-i8425.scala	i8425.scala:5:16: anonymous class T$$anon$1xoc7vx_90 cannot extend final class PrintStream
 i8577a.scala	i8577a.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577b.scala	i8577b.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577c.scala	i8577c.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern

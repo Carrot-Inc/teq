@@ -1,0 +1,24 @@
+print(high); close() | plain | autoFlush | out.write[63];out.flush;out.flush;out.close;
+print(high); close() | subclass | autoFlush | print(C);close;write([B,I,I);out.write[63];out.flush;flush;out.flush;close;out.close;
+print(high); close() | plain | noFlush | out.write[63];out.flush;out.close;
+print(high); close() | subclass | noFlush | print(C);close;write([B,I,I);out.write[63];flush;out.flush;close;out.close;
+print(high); flush(); close() | plain | autoFlush | out.flush;out.write[63];out.flush;out.flush;out.close;
+print(high); flush(); close() | subclass | autoFlush | print(C);flush;out.flush;close;write([B,I,I);out.write[63];out.flush;flush;out.flush;close;out.close;
+print(high); flush(); close() | plain | noFlush | out.flush;out.write[63];out.flush;out.close;
+print(high); flush(); close() | subclass | noFlush | print(C);flush;out.flush;close;write([B,I,I);out.write[63];flush;out.flush;close;out.close;
+print(high); checkError() | plain | autoFlush | out.flush;=false
+print(high); checkError() | subclass | autoFlush | print(C);checkError;flush;out.flush;=false
+print(high); checkError() | plain | noFlush | out.flush;=false
+print(high); checkError() | subclass | noFlush | print(C);checkError;flush;out.flush;=false
+print(high); print(low); close() | plain | autoFlush | out.write[240,159,152,128];out.flush;out.flush;out.close;
+print(high); print(low); close() | subclass | autoFlush | print(C);print(C);write([B,I,I);out.write[240,159,152,128];out.flush;close;flush;out.flush;close;out.close;
+print(high); print(low); close() | plain | noFlush | out.write[240,159,152,128];out.flush;out.close;
+print(high); print(low); close() | subclass | noFlush | print(C);print(C);write([B,I,I);out.write[240,159,152,128];close;flush;out.flush;close;out.close;
+print(high); write(65); close() | plain | autoFlush | out.write(65);out.write[63];out.flush;out.flush;out.close;
+print(high); write(65); close() | subclass | autoFlush | print(C);write(I);out.write(65);close;write([B,I,I);out.write[63];out.flush;flush;out.flush;close;out.close;
+print(high); write(65); close() | plain | noFlush | out.write(65);out.write[63];out.flush;out.close;
+print(high); write(65); close() | subclass | noFlush | print(C);write(I);out.write(65);close;write([B,I,I);out.write[63];flush;out.flush;close;out.close;
+print(high); println(); close() | plain | autoFlush | out.write[63,10];out.flush;out.flush;out.flush;out.close;
+print(high); println(); close() | subclass | autoFlush | print(C);println();write([B,I,I);out.write[63,10];out.flush;out.flush;close;flush;out.flush;close;out.close;
+print(high); println(); close() | plain | noFlush | out.write[63,10];out.flush;out.close;
+print(high); println(); close() | subclass | noFlush | print(C);println();write([B,I,I);out.write[63,10];close;flush;out.flush;close;out.close;

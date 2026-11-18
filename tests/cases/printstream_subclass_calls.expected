@@ -1,0 +1,4 @@
+object=print.String;write;bytes:1;out.flush;write;bytes:1;out.flush;out.flush;
+string=println.String;print.String;write;bytes:1;out.flush;write;bytes:1;out.flush;out.flush;
+close=ps.close;ps.flush;out.flush;ps.close;out.close;
+plain=bytes:2;out.flush;out.flush;

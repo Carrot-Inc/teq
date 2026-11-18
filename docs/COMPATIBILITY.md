@@ -136,6 +136,22 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 - A collection class of a jar (scalajs-dom's `DOMListSeq`) answers `foreach` and what is built on it through
   its iterator, but not `map` and the operations that build a collection of its own kind, which the std builds
   through a member such a class lacks.
+- `java.io.PrintStream` has the JDK's members and its calls as a subclass sees them, with these gaps: no
+  constructor over a file's name or a `File` (`new PrintStream(new FileOutputStream(file))` instead), no
+  `printf` or `format` with a `Locale`, and it is no `java.lang.Appendable`; a subclass that writes its override
+  of `printf` or `format` with `Object*` overrides nothing (the std's parameter is `Any*`). Where the prelude's
+  prints reach a stream (`Console.withOut`, or `System.setOut` before Console's first use), `println(x)` of a
+  statically known `Double` or `Float` hands it the value's text, which the lean std formats before the print (a
+  subclass's `println(Object)` sees a `String`, where scalac's sees the number).
+  A format `printf` or `format` refuses throws an `IllegalArgumentException` with the JDK's message, not the
+  JDK's subclass of it (`UnknownFormatConversionException`, `MissingFormatArgumentException`), and the JDK's
+  checks of a flag against its conversion (`%#s`, `%-05d`) are left to the std's formatter, which accepts some.
+  The std declares the JDK's varargs `printf` and `format` with a Scala repeated parameter, so of the programs
+  scalac refuses because the two differ it refuses a trait's deferred member and a trait's super call (of a
+  trait compiled by scalac: the JavaScript build as scalac, the JVM build with `not supported on the JVM yet`,
+  while a check and the interpreter accept the class), and accepts two inherited overrides in unrelated classes
+  or traits (scalac: conflicting members); a concrete `printf(f: String, a: Any*)` of an unrelated trait
+  conflicts with the stream's, where scalac accepts both.
 - Nothing blocks or runs in parallel: `Await.result` of an incomplete future throws `TimeoutException` at
   once, `synchronized` takes no monitor on any target, recursion has node's stack of about 10,000 frames
   (50,000 under Scala.js), there is no reflection, and `getStackTrace` is empty.
@@ -152,6 +168,10 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 
 ### The JVM target, sbt and warnings
 
+- JVM: a class that extends `java.io.PrintStream` and overrides `printf` or `format` is refused (`not supported
+  yet: an override of PrintStream.printf on the JVM`): the JDK's method takes an array, and teq does not write
+  the array-taking bridge scalac writes for an override of a repeated parameter; the other members are
+  overridden freely.
 - JVM: a build mixing the two compilers' modules meets these shapes, where teq's class files or pickles differ from
   scalac's: a trait's bridge over a generic parent's method sits in the trait, where scalac's is in each class
   mixing the trait in, so a class teq compiled against teq's trait throws `AbstractMethodError` over scalac's build

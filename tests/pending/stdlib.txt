@@ -55,6 +55,7 @@ compiletime_string_ops	error: type mismatch: found "urge", required Substring["h
 concat_order_calls	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 concurrent_hash_map_views	error: Ambiguous overload. The overloaded alternatives of method append in class StringBuilder with types
 cons_pattern_binders	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+console_in_bound_at_making	error: not supported on JavaScript: method setIn of java.lang.System (a Java definition without an implementation in the std's platform laye
 const_handed_on_operations	error: value unary_+ is not a member of Int
 const_ident_before_init	output differs
 const_ident_nonfinal	output differs
@@ -405,6 +406,7 @@ std_strings	error: not supported on JavaScript: method isISOControl of java.lang
 std_surface	error: not supported on JavaScript: method format of scala.String (a Java definition without an implementation in the std's platform layer)
 stdin_lines	error: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's pl
 stream_descriptors	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
+stream_in_unrun_callback	error: not supported on JavaScript: class FileOutputStream java.io.FileOutputStream (a Java definition without an implementation in the std'
 stream_ops	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 stream_spread_and_collector_protocol	output differs
 streams_jdk_semantics	error: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's pl

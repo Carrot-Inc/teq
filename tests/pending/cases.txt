@@ -29,6 +29,7 @@ code_of_type_prefixes	< new p.C()
 code_of_type_trees	< List.empty[Functor[[X >: Nothing <: Any] =>> List[X]]]
 companion_initializer_order	< receiver
 compiletime_string_ops	< urge
+console_in_bound_at_making	< made
 const_handed_on_operations	< r
 const_ident_before_init	> undefined
 const_ident_nonfinal	> init x2

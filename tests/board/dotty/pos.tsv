@@ -2737,7 +2737,7 @@ t0020.scala	pass	check:pass
 t0029.scala	pass	check:pass	
 t0030.scala	pass	check:pass	
 t0031.scala	pass	check:pass	
-t0032.scala	fail	check:fail	t0032.scala:3:7: class PromptStream cannot extend final class PrintStream
+t0032.scala	pass	check:pass	
 t0036.scala	pass	check:pass	
 t0039.scala	pass	check:pass	
 t0049.scala	pass	check:pass	

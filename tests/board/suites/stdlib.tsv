@@ -409,7 +409,96 @@ concurrent_hash_map_views	fail	-	error: Ambiguous overload. The overloaded alter
 conditional_precedence	pass	-	
 conformance_extras	pass	-	
 cons_pattern_binders	fail	-	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+console_bind_arg_moves_console_print_moved_a	pass	-	
+console_bind_arg_moves_console_print_no_move	pass	-	
+console_bind_arg_moves_console_println_moved_a	pass	-	
+console_bind_arg_moves_console_println_no_move	pass	-	
+console_bind_arg_moves_predef_print_moved_a	pass	-	
+console_bind_arg_moves_predef_print_no_move	pass	-	
+console_bind_arg_moves_predef_println_moved_a	pass	-	
+console_bind_arg_moves_predef_println_no_move	pass	-	
+console_bind_to_string_moves_console_print_moved_a	pass	-	
+console_bind_to_string_moves_console_print_no_move	pass	-	
+console_bind_to_string_moves_console_println_moved_a	pass	-	
+console_bind_to_string_moves_console_println_no_move	pass	-	
+console_bind_to_string_moves_predef_print_moved_a	pass	-	
+console_bind_to_string_moves_predef_print_no_move	pass	-	
+console_bind_to_string_moves_predef_println_moved_a	pass	-	
+console_bind_to_string_moves_predef_println_no_move	pass	-	
+console_bind_to_string_moves_prints_console_print_moved_a	pass	-	
+console_bind_to_string_moves_prints_console_print_no_move	pass	-	
+console_bind_to_string_moves_prints_console_println_moved_a	pass	-	
+console_bind_to_string_moves_prints_console_println_no_move	pass	-	
+console_bind_to_string_moves_prints_predef_print_moved_a	pass	-	
+console_bind_to_string_moves_prints_predef_print_no_move	pass	-	
+console_bind_to_string_moves_prints_predef_println_moved_a	pass	-	
+console_bind_to_string_moves_prints_predef_println_no_move	pass	-	
+console_bind_to_string_throws_console_print_moved_a	pass	-	
+console_bind_to_string_throws_console_print_no_move	pass	-	
+console_bind_to_string_throws_console_println_moved_a	pass	-	
+console_bind_to_string_throws_console_println_no_move	pass	-	
+console_bind_to_string_throws_predef_print_moved_a	pass	-	
+console_bind_to_string_throws_predef_print_no_move	pass	-	
+console_bind_to_string_throws_predef_println_moved_a	pass	-	
+console_bind_to_string_throws_predef_println_no_move	pass	-	
+console_err_bound_at_first_read	pass	-	
+console_err_bound_at_making	pass	-	
+console_first_streams	pass	-	
+console_in_bound_at_making	fail	-	error: not supported on JavaScript: method setIn of java.lang.System (a Java definition without an implementation in the std's platform laye
+console_route_none_after_console	pass	-	
+console_route_none_after_console_err	pass	-	
+console_route_none_after_prelude	pass	-	
+console_route_none_before	pass	-	
+console_route_set_both_after_console	pass	-	
+console_route_set_both_after_console_err	pass	-	
+console_route_set_both_after_prelude	pass	-	
+console_route_set_both_before	pass	-	
+console_route_set_err_after_console	pass	-	
+console_route_set_err_after_console_err	pass	-	
+console_route_set_err_after_prelude	pass	-	
+console_route_set_err_before	pass	-	
+console_route_set_err_in_with_err_after_console	pass	-	
+console_route_set_err_in_with_err_after_console_err	pass	-	
+console_route_set_err_in_with_err_after_prelude	pass	-	
+console_route_set_err_in_with_err_before	pass	-	
+console_route_set_out_after_console	pass	-	
+console_route_set_out_after_console_err	pass	-	
+console_route_set_out_after_prelude	pass	-	
+console_route_set_out_before	pass	-	
+console_route_set_out_in_with_out_after_console	pass	-	
+console_route_set_out_in_with_out_after_console_err	pass	-	
+console_route_set_out_in_with_out_after_prelude	pass	-	
+console_route_set_out_in_with_out_before	pass	-	
+console_route_two_moves_after_console	pass	-	
+console_route_two_moves_after_console_err	pass	-	
+console_route_two_moves_after_prelude	pass	-	
+console_route_two_moves_before	pass	-	
+console_route_with_err_after_console	pass	-	
+console_route_with_err_after_console_err	pass	-	
+console_route_with_err_after_prelude	pass	-	
+console_route_with_err_before	pass	-	
+console_route_with_err_in_set_err_after_console	pass	-	
+console_route_with_err_in_set_err_after_console_err	pass	-	
+console_route_with_err_in_set_err_after_prelude	pass	-	
+console_route_with_err_in_set_err_before	pass	-	
+console_route_with_out_after_console	pass	-	
+console_route_with_out_after_console_err	pass	-	
+console_route_with_out_after_prelude	pass	-	
+console_route_with_out_before	pass	-	
+console_route_with_out_in_set_out_after_console	pass	-	
+console_route_with_out_in_set_out_after_console_err	pass	-	
+console_route_with_out_in_set_out_after_prelude	pass	-	
+console_route_with_out_in_set_out_before	pass	-	
+console_route_with_out_orig_under_move_after_console	pass	-	
+console_route_with_out_orig_under_move_after_console_err	pass	-	
+console_route_with_out_orig_under_move_after_prelude	pass	-	
+console_route_with_out_orig_under_move_before	pass	-	
+console_set_out_before_first_use	pass	-	
 console_streams	pass	-	
+console_without_calls	pass	-	
+console_without_empty_text	pass	-	
+console_without_nested	pass	-	
+console_without_stream	pass	-	
 const_fold_ascribed	pass	-	
 const_fold_conversions	pass	-	
 const_fold_typed_operands	pass	-	
@@ -2260,6 +2349,21 @@ primitive_compare	pass	-
 primitive_stream_stages	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 print_writer	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 println_bare	pass	-	
+printstream_calls	pass	-	
+printstream_checkerror_inner	pass	-	
+printstream_closed	pass	-	
+printstream_encoding_state	pass	-	
+printstream_error_state	pass	-	
+printstream_format_calls	pass	-	
+printstream_format_malformed	pass	-	
+printstream_held_half_calls	pass	-	
+printstream_inner_dispatch	pass	-	
+printstream_members	pass	-	
+printstream_null_arguments	pass	-	
+printstream_override_of_override	pass	-	
+printstream_subclass	pass	-	
+printstream_subclass_calls	pass	-	
+printstream_surrogate_halves	pass	-	
 private_ctor	pass	-	
 private_given_method_dispatch	pass	-	
 private_param_reads	pass	-	
@@ -2722,6 +2826,7 @@ stdin_lines	fail	-	error: not supported on JavaScript: class BufferedReader java
 storage_descendant_members	pass	-	
 stream_abstract_seq_parent	pass	-	
 stream_descriptors	fail	-	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
+stream_in_unrun_callback	fail	-	error: not supported on JavaScript: class FileOutputStream java.io.FileOutputStream (a Java definition without an implementation in the std'
 stream_iterator_lazy_tail	pass	-	
 stream_ops	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 stream_spread_and_collector_protocol	fail	-	output differs
@@ -2788,6 +2893,7 @@ synthesized_target_name	pass	-
 sys_exit_status	pass	-	
 sys_package	pass	-	
 system_getenv_js	pass	-	
+system_out_stream	pass	-	
 system_properties	fail	-	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
 tabulate_order	pass	-	
 tail_calls	pass	-	

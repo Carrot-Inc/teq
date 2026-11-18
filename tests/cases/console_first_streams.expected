@@ -1,0 +1,6 @@
+Console.out after setOut
+captured by the new out: System.out after setOut|withOut(System.out) after setOut|
+captured by the new err: System.err after setErr|
+Console.out is the first stream: true, the new one: false
+Console.err is the first stream: true, the new one: false
+first: Console's first use|

@@ -3,7 +3,6 @@
 1938-2.scala	1938-2.scala:23:12: this is not a case class or enum case
 25-1	java source: teq reads none
 25-2	java source: teq reads none
-2772.scala	2772.scala:7:23: type mismatch: found PrintStream, required OutputStream
 9416.scala	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
 CollectionTests.scala	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
 IArrayOps.scala	IArrayOps.scala:245:7: type mismatch: found Int => IArray[(Int, Int)], required Int => IterableOnce[Any]
@@ -263,7 +262,6 @@ i8033.scala	run: exit 1: Exception in thread "main" java.io.NotSerializableExcep
 i8073.scala	i8073.scala:17:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
 i8073b.scala	i8073b.scala:18:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
 i8101	java source: teq reads none
-i8425.scala	i8425.scala:5:16: anonymous class T$$anon$1xoc7vx_90 cannot extend final class PrintStream
 i8531	java source: teq reads none
 i8577a.scala	i8577a.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577b.scala	i8577b.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern

@@ -472,21 +472,378 @@ package java.io:
     @jvm("invokevirtual java/io/ByteArrayOutputStream.toString(Ljava/lang/String;)Ljava/lang/String;")
     def toString(charsetName: String): String = new String(buf.toArray, charsetName)
 
+  // How many bytes at the end of `bytes(from until to)` the JDK's UTF-8 decoder leaves for more
+  // input (`decodeArrayLoop`'s underflow): the start of a sequence more bytes can still complete; 0
+  // where they end at a sequence's end or inside one already malformed, which it answers at once (a
+  // lead c0, c1 or f5 to ff, a continuation where a lead belongs, a three- or four-byte prefix whose
+  // later byte is wrong). Under `teq interp` the native that the streams' own text reads share.
+  private[java] def utf8Underflow(bytes: Array[Byte], from: Int, to: Int): Int =
+    def cont(b: Int): Boolean = (b & 0xc0) == 0x80
+    def at(back: Int, i: Int): Int = bytes(to - back + i) & 0xff
+    var back = 1
+    var result = -1
+    while result < 0 && back <= 3 && to - back >= from do
+      val b1 = at(back, 0)
+      if !cont(b1) then
+        result =
+          if b1 >= 0xc2 && b1 <= 0xdf then (if back < 2 then back else 0)
+          else if b1 >= 0xe0 && b1 <= 0xef then
+            if back >= 3 then 0
+            else if back > 1 && ((b1 == 0xe0 && (at(back, 1) & 0xe0) == 0x80) || !cont(at(back, 1))) then 0
+            else back
+          else if b1 >= 0xf0 && b1 <= 0xf4 then
+            if back > 1 && ((b1 == 0xf0 && (at(back, 1) < 0x90 || at(back, 1) > 0xbf)) || (b1 == 0xf4 && (at(back, 1) & 0xf0) != 0x80) || !cont(at(back, 1))) then 0
+            else if back > 2 && !cont(at(back, 2)) then 0
+            else back
+          else 0
+      back += 1
+    if result < 0 then 0 else result
+
+  // The process's output and error as streams of bytes, for what a program WRITES to `System.out` (its prints go
+  // to the process as text: `ProcessText`): a byte written is decoded as UTF-8, an incomplete sequence held for
+  // the bytes that complete it.
+  @javaDefined
+  private[java] final class ProcessStream(err: Boolean) extends OutputStream:
+    private var held: Array[Byte] = null
+    private[java] def print(s: String): Unit = if err then processErr(s) else processOut(s)
+    def write(b: Int): Unit =
+      val one = new Array[Byte](1)
+      one(0) = b.toByte
+      write(one, 0, 1)
+    override def write(b: Array[Byte], off: Int, len: Int): Unit =
+      val had = if held == null then 0 else held.length
+      val all = new Array[Byte](had + len)
+      if had > 0 then System.arraycopy(held, 0, all, 0, had)
+      System.arraycopy(b, off, all, had, len)
+      val keep = utf8Underflow(all, 0, all.length)
+      val n = all.length - keep
+      held = if keep == 0 then null else java.util.Arrays.copyOfRange(all, n, all.length)
+      if n > 0 then print(new String(all, 0, n, java.nio.charset.StandardCharsets.UTF_8))
+
+  // What a print stream's text goes to: `put(text, line, flush)`: `line`: the line's end follows the text in the
+  // same write (a println of a stream of the class itself); `flush`: the stream under the print stream is flushed
+  // after it (a line's end under autoFlush). The process's two streams print the text as it is; a stream the
+  // program makes encodes it and writes the bytes through the stream's own `write(bytes, off, len)`, where a
+  // subclass's `write` sees them. The encoding sink is made by the public constructors alone, so that a program
+  // which only prints through `System.out` links no charset, no byte path and no exception's class.
+  private[java] abstract class TextSink:
+    def put(s: String, line: Boolean, flush: Boolean): Unit
+    // What a close writes first: a pending half of a surrogate pair, as the charset's replacement.
+    def end(): Unit = ()
+    // The stream's own flush: the process's text is held nowhere, an encoded stream flushes the stream under it
+    // (whose IOException is the stream's error: a catch only a made stream brings into a program).
+    def flush(): Unit = ()
+  private[java] final class ProcessText(err: Boolean) extends TextSink:
+    def put(s: String, line: Boolean, flush: Boolean): Unit =
+      val t = if line then s + "\n" else s
+      if err then processErr(t) else processOut(t)
+  // The encoder's state is the stream's, kept across its prints: a byte-order mark is written once, and the
+  // first half of a surrogate pair waits for its second.
+  private[java] final class EncodedText(to: PrintStream, cs: java.nio.charset.Charset) extends TextSink:
+    private val marked = cs.name() == "UTF-16"
+    private var started = false
+    private var held = ""
+    // Whether the stream is of the class itself, asked here and not in the stream's own constructor: a program
+    // that makes no print stream links no class's reflection.
+    val plain: Boolean = to.getClass eq classOf[PrintStream]
+    def put(s: String, line: Boolean, flush: Boolean): Unit =
+      var t = if line then held + s + "\n" else held + s
+      held = ""
+      if t.length > 0 && Character.isHighSurrogate(t.charAt(t.length - 1)) then
+        held = t.substring(t.length - 1)
+        t = t.substring(0, t.length - 1)
+      // An IOException of the stream's own write (a subclass's) is the stream's error, not the print's.
+      try
+        if t.length > 0 then bytes(t)
+        if flush then to.flushUnder()
+      catch case _: IOException => to.failed()
+    private def bytes(t: String): Unit =
+      var b = t.getBytes(cs)
+      if marked && started then b = java.util.Arrays.copyOfRange(b, 2, b.length)
+      started = true
+      to.write(b, 0, b.length)
+    override def flush(): Unit = to.flushUnder()
+    override def end(): Unit =
+      if held.length > 0 then
+        val t = held
+        held = ""
+        try bytes(t)
+        catch case _: IOException => to.failed()
+  // A closed stream's sink: a print writes nothing and puts the stream in error. `close` puts it in the place of
+  // the stream's own, so that an open stream's print asks nothing about closing.
+  private[java] final class ClosedText(to: PrintStream) extends TextSink:
+    def put(s: String, line: Boolean, flush: Boolean): Unit = to.failed()
+
+  private[java] object ProcessStream:
+    var out: PrintStream = processMade(new PrintStream(new ProcessStream(false), true, null, new ProcessText(false), true))
+    var err: PrintStream = new PrintStream(new ProcessStream(true), true, null, new ProcessText(true), true)
+    // scala.Console binds out and err at its first use, which is the prelude's first print or Console's making (the reference's
+    // Predef prints by Console). Before it a move of System.out moves the prelude's prints with it; after it the streams of that
+    // moment are kept for Console, which a later move does not touch.
+    def setOut(p: PrintStream): Unit =
+      if consoleBound() then keepBound(out, err)
+      else if isProcess(p) then outMoved(null, null, null)
+      else outMoved((x: Any) => p.print(printedText(x)), (x: Any) => p.println(x), () => p.println())
+      out = p
+    def setErr(p: PrintStream): Unit =
+      if consoleBound() then keepBound(out, err)
+      err = p
+
+  // The runtime's side of the process stream's moves (runtime/rt.js; the interpreter's builtins of the same names).
+  @js("$processMade($0)")
+  private[java] def processMade(p: PrintStream): PrintStream
+  @js("$isProcessOut($0)")
+  private[java] def isProcess(p: PrintStream): Boolean
+  @js("$outMoved($0, $1, $2)")
+  private[java] def outMoved(p: (Any => Unit) | Null, l: (Any => Unit) | Null, e: (() => Unit) | Null): Unit
+  @js("$isBound()")
+  private[java] def consoleBound(): Boolean
+  @js("$keepBound($0, $1)")
+  private[java] def keepBound(o: PrintStream, e: PrintStream): Unit
+  // A print(x)'s text as the prelude prints it, made in the stream's call (once Console is bound).
+  @js("$printed($0)")
+  private[java] def printedText(x: Any): String
+
+  // The process's output, which no route replaces, and the process's error.
+  @js("$print($0)")
+  private[java] def processOut(s: String): Unit
+  @js("$printTo(\"err\", $0)")
+  private[java] def processErr(s: String): Unit
+
+  // What the JDK's constructors refuse.
+  private[java] def nonNullStream(o: OutputStream): OutputStream =
+    if o == null then throw new NullPointerException("Null output stream") else o
+  private[java] def nonNullCharset(c: java.nio.charset.Charset): java.nio.charset.Charset =
+    if c == null then throw new NullPointerException("charset") else c
+  private[java] def charsetNamed(name: String): java.nio.charset.Charset =
+    if name == null then throw new NullPointerException("charsetName")
+    try java.nio.charset.Charset.forName(name)
+    catch case _: IllegalArgumentException => throw new UnsupportedEncodingException(name)
+
+  // One specifier of a format, read at its `%`: `%[index$ | <][flags][width][.precision]conversion`. `bare` is the
+  // specifier the std's formatter is asked: without the index, and without the width and `-` where the padding is
+  // spaces (the print stream appends those itself); `width` is then the width to pad to, else -1. A malformed
+  // specifier throws as the JDK's formatter names it.
+  private[java] final class FormatPiece:
+    var index = -1
+    var left = false
+    var width = -1
+    var conv = ' '
+    var bare = ""
+    // What the JDK names of a specifier it cannot read: the character after the `%` (the `%` itself at the end).
+    private def unknown(f: String, at: Int): Nothing =
+      throw new IllegalArgumentException("Conversion = '" + (if at + 1 < f.length then f.charAt(at + 1) else '%') + "'")
+    def read(f: String, at: Int): Int =
+      val n = f.length
+      var j = at + 1
+      index = -1
+      var k = j
+      while k < n && f.charAt(k) >= '0' && f.charAt(k) <= '9' do k += 1
+      if k < n && k > j && f.charAt(k) == '$' then
+        index = f.substring(j, k).toInt - 1
+        if index < 0 then throw new IllegalArgumentException("Illegal format argument index = 0")
+        j = k + 1
+      else if j < n && f.charAt(j) == '<' then
+        index = -2
+        j += 1
+      val flagsAt = j
+      while j < n && "-#+ 0,(".indexOf(f.charAt(j)) >= 0 do
+        if f.substring(flagsAt, j).indexOf(f.charAt(j)) >= 0 then throw new IllegalArgumentException("Flags = '" + f.charAt(j) + "'")
+        j += 1
+      val flags = f.substring(flagsAt, j)
+      left = flags.indexOf('-') >= 0
+      val zero = flags.indexOf('0') >= 0
+      val widthAt = j
+      while j < n && f.charAt(j) >= '0' && f.charAt(j) <= '9' do j += 1
+      val widthText = f.substring(widthAt, j)
+      val precisionAt = j
+      if j < n && f.charAt(j) == '.' then
+        j += 1
+        val digits = j
+        while j < n && f.charAt(j) >= '0' && f.charAt(j) <= '9' do j += 1
+        if j == digits then unknown(f, at)
+      val precision = f.substring(precisionAt, j)
+      val convAt = j
+      if j >= n then unknown(f, at)
+      conv = f.charAt(j)
+      j += 1
+      if conv == 't' || conv == 'T' then
+        // A date or time: the letter after it is the conversion's.
+        if j >= n then unknown(f, at)
+        if "HIklMSLNpzZsQBbhAaCYyjmdeRTrDFc".indexOf(f.charAt(j)) < 0 then throw new IllegalArgumentException("Conversion = 't" + f.charAt(j) + "'")
+        conv = 't'
+        j += 1
+      else if conv != '%' && !((conv >= 'a' && conv <= 'z') || (conv >= 'A' && conv <= 'Z')) then unknown(f, at)
+      else if "bBhHsScCdoxXeEfgGaAn%".indexOf(conv) < 0 then throw new IllegalArgumentException("Conversion = '" + conv + "'")
+      if widthText.length == 0 && (left || zero) then throw new IllegalArgumentException(f.substring(at, j))
+      if conv == 'n' && widthText.length > 0 then throw new IllegalArgumentException(widthText)
+      if precision.length > 0 && "doxXcCn%t".indexOf(conv) >= 0 then throw new IllegalArgumentException(precision.substring(1))
+      if zero || widthText.length == 0 then
+        width = -1
+        bare = "%" + flags + widthText + precision + f.substring(convAt, j)
+      else
+        width = widthText.toInt
+        bare = "%" + flags.replace("-", "") + precision + f.substring(convAt, j)
+      j
+
+  // The JDK's class, open, held member by member to what a subclass and the stream under it see of the JDK's:
+  // which overridable members a call reaches and in what order, what is written to the stream under it and
+  // when that stream is flushed (tests/cases/printstream_calls: a subclass overriding every member over a stream
+  // that logs; scalac's lines on the JDK). `plain`: the stream is of this very class: its println writes the
+  // text and the line's end as one, where a subclass's println calls its print and then writes the line's end.
   @javaDefined
   @jvmClass("java/io/PrintStream")
-  final class PrintStream private ():
-    @js("$printTo($0, $str($1) + \"\\n\")")
-    @jvm("invokevirtual java/io/PrintStream.println(Ljava/lang/Object;)V")
-    def println(x: Any): Unit
-    @js("$printTo($0, \"\\n\")")
-    @jvm("invokevirtual java/io/PrintStream.println()V")
-    def println(): Unit
-    @js("$printTo($0, $str($1))")
-    @jvm("invokevirtual java/io/PrintStream.print(Ljava/lang/Object;)V")
-    def print(x: Any): Unit
-    @js("undefined")
-    @jvm("invokevirtual java/io/PrintStream.flush()V")
-    def flush(): Unit
+  class PrintStream private[java] (out: OutputStream, autoFlush: Boolean, cs: java.nio.charset.Charset, private[java] var sink: TextSink, private[java] var plain: Boolean) extends FilterOutputStream(out):
+    def this(out: OutputStream, autoFlush: Boolean, cs: java.nio.charset.Charset) =
+      this(nonNullStream(out), autoFlush, nonNullCharset(cs), null, false)
+      val encoded = new EncodedText(this, cs)
+      sink = encoded
+      plain = encoded.plain
+    def this(out: OutputStream) = this(out, false, java.nio.charset.StandardCharsets.UTF_8)
+    def this(out: OutputStream, autoFlush: Boolean) = this(out, autoFlush, java.nio.charset.StandardCharsets.UTF_8)
+    def this(out: OutputStream, autoFlush: Boolean, encoding: String) = this(nonNullStream(out), autoFlush, charsetNamed(encoding))
+    // The JDK's six constructors over a file's name or a `File` are not here: this layer is loaded where the file
+    // classes are not (`--std scala-library` on JavaScript), and a constructor cannot be another layer's.
+    private var trouble = false
+    private var closing = false
+    private var closed = false
+    // The flush of the stream under this one, the sink's and `flush`'s.
+    private[java] def flushUnder(): Unit =
+      try out.flush()
+      catch case _: IOException => trouble = true
+    private[java] final def failed(): Unit = trouble = true
+    // The text of a print and a line's end, to the sink (a closed stream's writes nothing: `ClosedText`).
+    private def text(s: String): Unit = sink.put(s, false, autoFlush && s.indexOf('\n') >= 0)
+    private def newLine(): Unit = sink.put("\n", false, autoFlush)
+    override def flush(): Unit = if closed then trouble = true else sink.flush()
+    override def close(): Unit =
+      if !closing then
+        closing = true
+        sink.end()
+        this.flush()
+        this.close()
+        try out.close()
+        catch case _: IOException => trouble = true
+        closed = true
+        sink = new ClosedText(this)
+    // A closed stream answers its own state; an open one flushes, and over a print stream answers that stream's checkError (its own
+    // error is not added: the JDK's answer, a subclass's override below it included), else its own state.
+    def checkError(): Boolean =
+      if closed then trouble
+      else
+        this.flush()
+        out match
+          case p: PrintStream => p.checkError()
+          case _ => trouble
+    protected def setError(): Unit = trouble = true
+    protected def clearError(): Unit = trouble = false
+    override def write(b: Int): Unit =
+      if closed then trouble = true
+      else
+        try
+          out.write(b)
+          if b == '\n' && autoFlush then out.flush()
+        catch case _: IOException => trouble = true
+    override def write(buf: Array[Byte], off: Int, len: Int): Unit =
+      if closed then trouble = true
+      else
+        try
+          out.write(buf, off, len)
+          if autoFlush then out.flush()
+        catch case _: IOException => trouble = true
+    override def write(buf: Array[Byte]): Unit = this.write(buf, 0, buf.length)
+    def writeBytes(buf: Array[Byte]): Unit = this.write(buf, 0, buf.length)
+    def print(b: Boolean): Unit = text("" + b)
+    def print(c: Char): Unit = text("" + c)
+    def print(i: Int): Unit = text("" + i)
+    def print(l: Long): Unit = text("" + l)
+    def print(f: Float): Unit = text("" + f)
+    def print(d: Double): Unit = text("" + d)
+    def print(s: Array[Char]): Unit =
+      if closed then trouble = true
+      else
+        if s == null then throw new NullPointerException()
+        text(new String(s))
+    def print(s: String): Unit = text(if s == null then "null" else s)
+    def print(obj: Any): Unit = text("" + obj)
+    def println(): Unit = newLine()
+    def println(x: Boolean): Unit = if plain then sink.put("" + x, true, autoFlush) else { print(x); newLine() }
+    def println(x: Char): Unit = if plain then sink.put("" + x, true, autoFlush) else { print(x); newLine() }
+    def println(x: Int): Unit = if plain then sink.put("" + x, true, autoFlush) else { print(x); newLine() }
+    def println(x: Long): Unit = if plain then sink.put("" + x, true, autoFlush) else { print(x); newLine() }
+    def println(x: Float): Unit = if plain then sink.put("" + x, true, autoFlush) else { print(x); newLine() }
+    def println(x: Double): Unit = if plain then sink.put("" + x, true, autoFlush) else { print(x); newLine() }
+    def println(x: Array[Char]): Unit =
+      if plain then
+        if closed then trouble = true
+        else
+          if x == null then throw new NullPointerException()
+          sink.put(new String(x), true, autoFlush)
+      else { print(x); newLine() }
+    def println(x: String): Unit = if plain then sink.put(if x == null then "null" else x, true, autoFlush) else { print(x); newLine() }
+    // A subclass's println of an object reaches its print of a String (the JDK's).
+    def println(x: Any): Unit =
+      val s = "" + x
+      if plain then sink.put(s, true, autoFlush) else { print(s); newLine() }
+    @jvm("$0 $1 rt $2:L rtcall objectArray(Ljava/lang/Object;)[Ljava/lang/Object; invokevirtual java/io/PrintStream.printf(Ljava/lang/String;[Ljava/lang/Object;)Ljava/io/PrintStream;")
+    def printf(format: String, args: Any*): PrintStream = this.format(format, args*)
+    // What a subclass and the stream under it see of the JDK's formatter: the WHOLE format is read before anything
+    // is written (a malformed specifier throws first); then each piece goes out in its turn: a fixed run of the
+    // format by `append(format, start, end)`, a specifier's text by `append(text)`, and its padding of spaces by
+    // `append(' ')`, one a space, before the text or after it under `-` (zero padding and the other flags are in
+    // the text). Each specifier is formatted by the std's own formatter; a failure is an
+    // IllegalArgumentException with the JDK's message (the std has none of the JDK's subclasses of it).
+    @jvm("$0 $1 rt $2:L rtcall objectArray(Ljava/lang/Object;)[Ljava/lang/Object; invokevirtual java/io/PrintStream.format(Ljava/lang/String;[Ljava/lang/Object;)Ljava/io/PrintStream;")
+    def format(format: String, args: Any*): PrintStream =
+      if closed then trouble = true
+      else
+        if format == null then throw new NullPointerException()
+        val n = format.length
+        val spec = new FormatPiece
+        var i = 0
+        while i < n do
+          if format.charAt(i) != '%' then i += 1 else i = spec.read(format, i)
+        i = 0
+        var run = 0
+        var next = 0
+        var last = -1
+        while i < n do
+          if format.charAt(i) != '%' then i += 1
+          else
+            if i > run then this.append(format, run, i)
+            val end = spec.read(format, i)
+            var text = ""
+            if spec.conv == '%' then text = "%"
+            else if spec.conv == 'n' then text = "\n"
+            else
+              var index = spec.index
+              if index == -2 then index = last
+              else if index == -1 then
+                index = next
+                next += 1
+              if index < 0 || index >= args.length then throw new IllegalArgumentException("Format specifier '" + format.substring(i, end) + "'")
+              last = index
+              text = spec.bare.format(args(index))
+            var pad = spec.width - text.length
+            if spec.left then this.append(text)
+            while pad > 0 do
+              this.append(' ')
+              pad -= 1
+            if !spec.left then this.append(text)
+            i = end
+            run = end
+        if n > run then this.append(format, run, n)
+      this
+    def append(csq: CharSequence): PrintStream =
+      print("" + csq)
+      this
+    def append(c: Char): PrintStream =
+      print(c)
+      this
+    def append(csq: CharSequence, start: Int, end: Int): PrintStream =
+      val s: CharSequence = if csq == null then "null" else csq
+      this.append(s.subSequence(start, end))
+    def charset(): java.nio.charset.Charset = if cs == null then java.nio.charset.StandardCharsets.UTF_8 else cs
 
 package java.util:
 

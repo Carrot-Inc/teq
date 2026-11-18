@@ -1,0 +1,32 @@
+printf("%d-%s", 7, "f") | plain | autoFlush | out.write[7];out.flush;out.write[-];out.flush;out.write[f];out.flush;
+printf("%d-%s", 7, "f") | subclass | autoFlush | printf;format;append(CharSequence);print(String);out.write[7];out.flush;append(CharSequence,I,I);append(CharSequence);print(String);out.write[-];out.flush;append(CharSequence);print(String);out.write[f];out.flush;
+printf("%d-%s", 7, "f") | plain | noFlush | out.write[7];out.write[-];out.write[f];
+printf("%d-%s", 7, "f") | subclass | noFlush | printf;format;append(CharSequence);print(String);out.write[7];append(CharSequence,I,I);append(CharSequence);print(String);out.write[-];append(CharSequence);print(String);out.write[f];
+format("%s+%s%n", "a", "b") | plain | autoFlush | out.write[a];out.flush;out.write[+];out.flush;out.write[b];out.flush;out.write[\n];out.flush;out.flush;
+format("%s+%s%n", "a", "b") | subclass | autoFlush | format;append(CharSequence);print(String);out.write[a];out.flush;append(CharSequence,I,I);append(CharSequence);print(String);out.write[+];out.flush;append(CharSequence);print(String);out.write[b];out.flush;append(CharSequence);print(String);out.write[\n];out.flush;out.flush;
+format("%s+%s%n", "a", "b") | plain | noFlush | out.write[a];out.write[+];out.write[b];out.write[\n];
+format("%s+%s%n", "a", "b") | subclass | noFlush | format;append(CharSequence);print(String);out.write[a];append(CharSequence,I,I);append(CharSequence);print(String);out.write[+];append(CharSequence);print(String);out.write[b];append(CharSequence);print(String);out.write[\n];
+format("") | plain | autoFlush | 
+format("") | subclass | autoFlush | format;
+format("") | plain | noFlush | 
+format("") | subclass | noFlush | format;
+format("plain") | plain | autoFlush | out.write[plain];out.flush;
+format("plain") | subclass | autoFlush | format;append(CharSequence,I,I);append(CharSequence);print(String);out.write[plain];out.flush;
+format("plain") | plain | noFlush | out.write[plain];
+format("plain") | subclass | noFlush | format;append(CharSequence,I,I);append(CharSequence);print(String);out.write[plain];
+format("%s", null) | plain | autoFlush | out.write[null];out.flush;
+format("%s", null) | subclass | autoFlush | format;append(CharSequence);print(String);out.write[null];out.flush;
+format("%s", null) | plain | noFlush | out.write[null];
+format("%s", null) | subclass | noFlush | format;append(CharSequence);print(String);out.write[null];
+format("%2$s %1$s %<s", "a", "b") | plain | autoFlush | out.write[b];out.flush;out.write[ ];out.flush;out.write[a];out.flush;out.write[ ];out.flush;out.write[a];out.flush;
+format("%2$s %1$s %<s", "a", "b") | subclass | autoFlush | format;append(CharSequence);print(String);out.write[b];out.flush;append(CharSequence,I,I);append(CharSequence);print(String);out.write[ ];out.flush;append(CharSequence);print(String);out.write[a];out.flush;append(CharSequence,I,I);append(CharSequence);print(String);out.write[ ];out.flush;append(CharSequence);print(String);out.write[a];out.flush;
+format("%2$s %1$s %<s", "a", "b") | plain | noFlush | out.write[b];out.write[ ];out.write[a];out.write[ ];out.write[a];
+format("%2$s %1$s %<s", "a", "b") | subclass | noFlush | format;append(CharSequence);print(String);out.write[b];append(CharSequence,I,I);append(CharSequence);print(String);out.write[ ];append(CharSequence);print(String);out.write[a];append(CharSequence,I,I);append(CharSequence);print(String);out.write[ ];append(CharSequence);print(String);out.write[a];
+format("%5d|%-5s|%05.1f%%", 42, "ab", 2.25) | plain | autoFlush | out.write[ ];out.flush;out.write[ ];out.flush;out.write[ ];out.flush;out.write[42];out.flush;out.write[|];out.flush;out.write[ab];out.flush;out.write[ ];out.flush;out.write[ ];out.flush;out.write[ ];out.flush;out.write[|];out.flush;out.write[002.3];out.flush;out.write[%];out.flush;
+format("%5d|%-5s|%05.1f%%", 42, "ab", 2.25) | subclass | autoFlush | format;out.write[ ];out.flush;out.write[ ];out.flush;out.write[ ];out.flush;append(CharSequence);print(String);out.write[42];out.flush;append(CharSequence,I,I);append(CharSequence);print(String);out.write[|];out.flush;append(CharSequence);print(String);out.write[ab];out.flush;out.write[ ];out.flush;out.write[ ];out.flush;out.write[ ];out.flush;append(CharSequence,I,I);append(CharSequence);print(String);out.write[|];out.flush;append(CharSequence);print(String);out.write[002.3];out.flush;append(CharSequence);print(String);out.write[%];out.flush;
+format("%5d|%-5s|%05.1f%%", 42, "ab", 2.25) | plain | noFlush | out.write[ ];out.write[ ];out.write[ ];out.write[42];out.write[|];out.write[ab];out.write[ ];out.write[ ];out.write[ ];out.write[|];out.write[002.3];out.write[%];
+format("%5d|%-5s|%05.1f%%", 42, "ab", 2.25) | subclass | noFlush | format;out.write[ ];out.write[ ];out.write[ ];append(CharSequence);print(String);out.write[42];append(CharSequence,I,I);append(CharSequence);print(String);out.write[|];append(CharSequence);print(String);out.write[ab];out.write[ ];out.write[ ];out.write[ ];append(CharSequence,I,I);append(CharSequence);print(String);out.write[|];append(CharSequence);print(String);out.write[002.3];append(CharSequence);print(String);out.write[%];
+close(); printf("%d", 1) | plain | autoFlush | out.flush;=true
+close(); printf("%d", 1) | subclass | autoFlush | out.flush;printf;format;=true
+close(); printf("%d", 1) | plain | noFlush | out.flush;=true
+close(); printf("%d", 1) | subclass | noFlush | out.flush;printf;format;=true

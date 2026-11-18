@@ -1,0 +1,211 @@
+#P1 Predef.print Sempty: log=[]
+#P1 Predef.println Sempty:
+ log=[]
+#P1 Predef.print St:t log=[]
+#P1 Predef.println St:t
+ log=[]
+#P1 Predef.print null:null log=[]
+#P1 Predef.println null:null
+ log=[]
+#P1 Predef.println():
+ log=[]
+#P1 Console.print Sempty: log=[]
+#P1 Console.println Sempty:
+ log=[]
+#P1 Console.print St:t log=[]
+#P1 Console.println St:t
+ log=[]
+#P1 Console.print null:null log=[]
+#P1 Console.println null:null
+ log=[]
+#P1 Console.println():
+ log=[]
+#P1 Console.out.print Sempty: log=[]
+#P1 Console.out.println Sempty:
+ log=[]
+#P1 Console.out.print St:t log=[]
+#P1 Console.out.println St:t
+ log=[]
+#P1 Console.out.print nullS:null log=[]
+#P1 Console.out.println nullS:null
+ log=[]
+#P1 Console.out.print nullAny:null log=[]
+#P1 Console.out.println nullAny:null
+ log=[]
+#P1 Console.out.print C:ab log=[]
+#P1 Console.out.println C:ab
+ log=[]
+#P1 Console.out.println():
+ log=[]
+#P1 System.out.print Sempty: log=[]
+#P1 System.out.println Sempty:
+ log=[]
+#P1 System.out.print St:t log=[]
+#P1 System.out.println St:t
+ log=[]
+#P1 System.out.print nullS:null log=[]
+#P1 System.out.println nullS:null
+ log=[]
+#P1 System.out.print nullAny:null log=[]
+#P1 System.out.println nullAny:null
+ log=[]
+#P1 System.out.print C:ab log=[]
+#P1 System.out.println C:ab
+ log=[]
+#P1 System.out.println():
+ log=[]
+#P1 Console.err=F System.err=E
+#P1 Console.err.print Sempty: log=[F.print(String S'');]
+#P1 Console.err.println Sempty: log=[F.println(String S'');]
+#P1 Console.err.print St: log=[F.print(String S't');]
+#P1 Console.err.println St: log=[F.println(String S't');]
+#P1 Console.err.print nullS: log=[F.print(String null);]
+#P1 Console.err.println nullS: log=[F.println(String null);]
+#P1 Console.err.print nullAny: log=[F.print(Object null);]
+#P1 Console.err.println nullAny: log=[F.println(Object null);]
+#P1 Console.err.print C: log=[F.print(char[] C'ab');]
+#P1 Console.err.println C: log=[F.println(char[] C'ab');]
+#P1 Console.err.print CAny: log=[F.print(Object C'ab');]
+#P1 Console.err.println CAny: log=[F.println(Object C'ab');]
+#P1 Console.err.println(): log=[F.println();]
+#P1 System.err.print Sempty: log=[E.print(String S'');]
+#P1 System.err.println Sempty: log=[E.println(String S'');]
+#P1 System.err.print St: log=[E.print(String S't');]
+#P1 System.err.println St: log=[E.println(String S't');]
+#P1 System.err.print nullS: log=[E.print(String null);]
+#P1 System.err.println nullS: log=[E.println(String null);]
+#P1 System.err.print nullAny: log=[E.print(Object null);]
+#P1 System.err.println nullAny: log=[E.println(Object null);]
+#P1 System.err.print C: log=[E.print(char[] C'ab');]
+#P1 System.err.println C: log=[E.println(char[] C'ab');]
+#P1 System.err.print CAny: log=[E.print(Object C'ab');]
+#P1 System.err.println CAny: log=[E.println(Object C'ab');]
+#P1 System.err.println(): log=[E.println();]
+#P2 Predef.print Sempty: log=[]
+#P2 Predef.println Sempty:
+ log=[]
+#P2 Predef.print St:t log=[]
+#P2 Predef.println St:t
+ log=[]
+#P2 Predef.print null:null log=[]
+#P2 Predef.println null:null
+ log=[]
+#P2 Predef.println():
+ log=[]
+#P2 Console.print Sempty: log=[]
+#P2 Console.println Sempty:
+ log=[]
+#P2 Console.print St:t log=[]
+#P2 Console.println St:t
+ log=[]
+#P2 Console.print null:null log=[]
+#P2 Console.println null:null
+ log=[]
+#P2 Console.println():
+ log=[]
+#P2 Console.out.print Sempty: log=[]
+#P2 Console.out.println Sempty:
+ log=[]
+#P2 Console.out.print St:t log=[]
+#P2 Console.out.println St:t
+ log=[]
+#P2 Console.out.print nullS:null log=[]
+#P2 Console.out.println nullS:null
+ log=[]
+#P2 Console.out.print nullAny:null log=[]
+#P2 Console.out.println nullAny:null
+ log=[]
+#P2 Console.out.print C:ab log=[]
+#P2 Console.out.println C:ab
+ log=[]
+#P2 Console.out.println():
+ log=[]
+#P2 System.out.print Sempty: log=[]
+#P2 System.out.println Sempty:
+ log=[]
+#P2 System.out.print St:t log=[]
+#P2 System.out.println St:t
+ log=[]
+#P2 System.out.print nullS:null log=[]
+#P2 System.out.println nullS:null
+ log=[]
+#P2 System.out.print nullAny:null log=[]
+#P2 System.out.println nullAny:null
+ log=[]
+#P2 System.out.print C:ab log=[]
+#P2 System.out.println C:ab
+ log=[]
+#P2 System.out.println():
+ log=[]
+#P2 Console.err=origErr System.err=E
+#P2 System.err.print Sempty: log=[E.print(String S'');]
+#P2 System.err.println Sempty: log=[E.println(String S'');]
+#P2 System.err.print St: log=[E.print(String S't');]
+#P2 System.err.println St: log=[E.println(String S't');]
+#P2 System.err.print nullS: log=[E.print(String null);]
+#P2 System.err.println nullS: log=[E.println(String null);]
+#P2 System.err.print nullAny: log=[E.print(Object null);]
+#P2 System.err.println nullAny: log=[E.println(Object null);]
+#P2 System.err.print C: log=[E.print(char[] C'ab');]
+#P2 System.err.println C: log=[E.println(char[] C'ab');]
+#P2 System.err.print CAny: log=[E.print(Object C'ab');]
+#P2 System.err.println CAny: log=[E.println(Object C'ab');]
+#P2 System.err.println(): log=[E.println();]
+#P3 Predef.print Sempty: log=[]
+#P3 Predef.println Sempty:
+ log=[]
+#P3 Predef.print St:t log=[]
+#P3 Predef.println St:t
+ log=[]
+#P3 Predef.print null:null log=[]
+#P3 Predef.println null:null
+ log=[]
+#P3 Predef.println():
+ log=[]
+#P3 Console.print Sempty: log=[]
+#P3 Console.println Sempty:
+ log=[]
+#P3 Console.print St:t log=[]
+#P3 Console.println St:t
+ log=[]
+#P3 Console.print null:null log=[]
+#P3 Console.println null:null
+ log=[]
+#P3 Console.println():
+ log=[]
+#P3 Console.out.print Sempty: log=[]
+#P3 Console.out.println Sempty:
+ log=[]
+#P3 Console.out.print St:t log=[]
+#P3 Console.out.println St:t
+ log=[]
+#P3 Console.out.print nullS:null log=[]
+#P3 Console.out.println nullS:null
+ log=[]
+#P3 Console.out.print nullAny:null log=[]
+#P3 Console.out.println nullAny:null
+ log=[]
+#P3 Console.out.print C:ab log=[]
+#P3 Console.out.println C:ab
+ log=[]
+#P3 Console.out.println():
+ log=[]
+#P3 System.out.print Sempty: log=[]
+#P3 System.out.println Sempty:
+ log=[]
+#P3 System.out.print St:t log=[]
+#P3 System.out.println St:t
+ log=[]
+#P3 System.out.print nullS:null log=[]
+#P3 System.out.println nullS:null
+ log=[]
+#P3 System.out.print nullAny:null log=[]
+#P3 System.out.println nullAny:null
+ log=[]
+#P3 System.out.print C:ab log=[]
+#P3 System.out.println C:ab
+ log=[]
+#P3 System.out.println():
+ log=[]
+#P3 Console.err=origErr System.err=origErr
+end

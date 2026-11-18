@@ -516,8 +516,8 @@ and `laminar-test` take the checkouts (`--airstream`, `--laminar`) and the binar
 named, run as lila's, and are held to their records. teq does not compile either project yet: their tests use
 `scala.compiletime.testing.typeCheckErrors` (scalatest's `assertTypeError`), Airstream's macros a `Type` of a type
 constructor (`AnyKind`), and Laminar overloads methods on `scala.Array` and `js.Array`, which teq's std makes one
-type, and Laminar's DOM definitions do not generate under `teq interp` (its interpreter's std has no
-`PrintStream(OutputStream)`); the export lines pass and the others hold to their records.
+type (its DOM definitions generate under `teq interp`, the 60 files Laminar's own, so laminar-compile reaches the
+compile itself: 702 errors when the generator first passed); the export lines pass and the others hold to their records.
 
 ### Tyrian and Indigo
 

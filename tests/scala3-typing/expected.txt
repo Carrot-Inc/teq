@@ -4979,7 +4979,7 @@ pos/t0020.scala	accepts
 pos/t0029.scala	accepts	
 pos/t0030.scala	accepts	
 pos/t0031.scala	accepts	
-pos/t0032.scala	rejects	class PromptStream cannot extend final class PrintStream
+pos/t0032.scala	accepts	
 pos/t0036.scala	accepts	
 pos/t0039.scala	accepts	
 pos/t0049.scala	accepts	

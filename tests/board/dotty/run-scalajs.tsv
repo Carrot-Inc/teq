@@ -4,7 +4,7 @@
 1938-2.scala	fail	lean:fail	1938-2.scala:23:12: this is not a case class or enum case
 1938.scala	pass	lean:pass	
 26071.scala	pass	lean:pass	
-2772.scala	fail	lean:fail	2772.scala:7:23: type mismatch: found PrintStream, required OutputStream
+2772.scala	pass	lean:pass	
 3179.scala	pass	lean:pass	
 9416.scala	fail	lean:fail	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
 CollectionTests.scala	fail	lean:fail	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
@@ -660,7 +660,7 @@ i8096.scala	pass	lean:pass
 i8314.scala	pass	lean:pass	
 i8396.scala	pass	lean:pass	
 i8398.scala	pass	lean:pass	
-i8425.scala	fail	lean:fail	i8425.scala:5:16: anonymous class T$$anon$1xoc7vx_90 cannot extend final class PrintStream
+i8425.scala	pass	lean:pass	
 i8530-b.scala	pass	lean:fail	
 i8530.scala	pass	lean:pass	
 i8577a.scala	fail	lean:fail	i8577a.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern

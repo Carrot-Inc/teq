@@ -1,0 +1,15 @@
+#trigger:mover-text log=[]
+Console.out=orig System.out=B
+#Predef.print:p log=[]
+#Predef.println:l
+ log=[]
+#Predef.println():
+ log=[]
+#Console.print:cp log=[]
+#Console.println:cl
+ log=[]
+#Console.println():
+ log=[]
+#Console.out.print:co log=[]
+#System.out.print: log=[B.print(String S'so');]
+end

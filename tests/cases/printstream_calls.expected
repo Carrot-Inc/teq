@@ -1,0 +1,212 @@
+print(true) | plain | autoFlush | out.write[true];out.flush;
+print(true) | subclass | autoFlush | print(Z);write([B,I,I);out.write[true];out.flush;
+print(true) | plain | noFlush | out.write[true];
+print(true) | subclass | noFlush | print(Z);write([B,I,I);out.write[true];
+print('c') | plain | autoFlush | out.write[c];out.flush;
+print('c') | subclass | autoFlush | print(C);write([B,I,I);out.write[c];out.flush;
+print('c') | plain | noFlush | out.write[c];
+print('c') | subclass | noFlush | print(C);write([B,I,I);out.write[c];
+print(1) | plain | autoFlush | out.write[1];out.flush;
+print(1) | subclass | autoFlush | print(I);write([B,I,I);out.write[1];out.flush;
+print(1) | plain | noFlush | out.write[1];
+print(1) | subclass | noFlush | print(I);write([B,I,I);out.write[1];
+print(2L) | plain | autoFlush | out.write[2];out.flush;
+print(2L) | subclass | autoFlush | print(J);write([B,I,I);out.write[2];out.flush;
+print(2L) | plain | noFlush | out.write[2];
+print(2L) | subclass | noFlush | print(J);write([B,I,I);out.write[2];
+print(1.5f) | plain | autoFlush | out.write[1.5];out.flush;
+print(1.5f) | subclass | autoFlush | print(F);write([B,I,I);out.write[1.5];out.flush;
+print(1.5f) | plain | noFlush | out.write[1.5];
+print(1.5f) | subclass | noFlush | print(F);write([B,I,I);out.write[1.5];
+print(2.5) | plain | autoFlush | out.write[2.5];out.flush;
+print(2.5) | subclass | autoFlush | print(D);write([B,I,I);out.write[2.5];out.flush;
+print(2.5) | plain | noFlush | out.write[2.5];
+print(2.5) | subclass | noFlush | print(D);write([B,I,I);out.write[2.5];
+print(Array('x','y')) | plain | autoFlush | out.write[xy];out.flush;
+print(Array('x','y')) | subclass | autoFlush | print([C);write([B,I,I);out.write[xy];out.flush;
+print(Array('x','y')) | plain | noFlush | out.write[xy];
+print(Array('x','y')) | subclass | noFlush | print([C);write([B,I,I);out.write[xy];
+print("s") | plain | autoFlush | out.write[s];out.flush;
+print("s") | subclass | autoFlush | print(String);write([B,I,I);out.write[s];out.flush;
+print("s") | plain | noFlush | out.write[s];
+print("s") | subclass | noFlush | print(String);write([B,I,I);out.write[s];
+print(null: String) | plain | autoFlush | out.write[null];out.flush;
+print(null: String) | subclass | autoFlush | print(String);write([B,I,I);out.write[null];out.flush;
+print(null: String) | plain | noFlush | out.write[null];
+print(null: String) | subclass | noFlush | print(String);write([B,I,I);out.write[null];
+print(Some(1): Any) | plain | autoFlush | out.write[Some(1)];out.flush;
+print(Some(1): Any) | subclass | autoFlush | print(Object);write([B,I,I);out.write[Some(1)];out.flush;
+print(Some(1): Any) | plain | noFlush | out.write[Some(1)];
+print(Some(1): Any) | subclass | noFlush | print(Object);write([B,I,I);out.write[Some(1)];
+print(null: Any) | plain | autoFlush | out.write[null];out.flush;
+print(null: Any) | subclass | autoFlush | print(Object);write([B,I,I);out.write[null];out.flush;
+print(null: Any) | plain | noFlush | out.write[null];
+print(null: Any) | subclass | noFlush | print(Object);write([B,I,I);out.write[null];
+print("a\nb") | plain | autoFlush | out.write[a\nb];out.flush;out.flush;
+print("a\nb") | subclass | autoFlush | print(String);write([B,I,I);out.write[a\nb];out.flush;out.flush;
+print("a\nb") | plain | noFlush | out.write[a\nb];
+print("a\nb") | subclass | noFlush | print(String);write([B,I,I);out.write[a\nb];
+print('\n') | plain | autoFlush | out.write[\n];out.flush;out.flush;
+print('\n') | subclass | autoFlush | print(C);write([B,I,I);out.write[\n];out.flush;out.flush;
+print('\n') | plain | noFlush | out.write[\n];
+print('\n') | subclass | noFlush | print(C);write([B,I,I);out.write[\n];
+println() | plain | autoFlush | out.write[\n];out.flush;out.flush;
+println() | subclass | autoFlush | println();write([B,I,I);out.write[\n];out.flush;out.flush;
+println() | plain | noFlush | out.write[\n];
+println() | subclass | noFlush | println();write([B,I,I);out.write[\n];
+println(false) | plain | autoFlush | out.write[false\n];out.flush;out.flush;
+println(false) | subclass | autoFlush | println(Z);print(Z);write([B,I,I);out.write[false];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(false) | plain | noFlush | out.write[false\n];
+println(false) | subclass | noFlush | println(Z);print(Z);write([B,I,I);out.write[false];write([B,I,I);out.write[\n];
+println('d') | plain | autoFlush | out.write[d\n];out.flush;out.flush;
+println('d') | subclass | autoFlush | println(C);print(C);write([B,I,I);out.write[d];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println('d') | plain | noFlush | out.write[d\n];
+println('d') | subclass | noFlush | println(C);print(C);write([B,I,I);out.write[d];write([B,I,I);out.write[\n];
+println(3) | plain | autoFlush | out.write[3\n];out.flush;out.flush;
+println(3) | subclass | autoFlush | println(I);print(I);write([B,I,I);out.write[3];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(3) | plain | noFlush | out.write[3\n];
+println(3) | subclass | noFlush | println(I);print(I);write([B,I,I);out.write[3];write([B,I,I);out.write[\n];
+println(4L) | plain | autoFlush | out.write[4\n];out.flush;out.flush;
+println(4L) | subclass | autoFlush | println(J);print(J);write([B,I,I);out.write[4];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(4L) | plain | noFlush | out.write[4\n];
+println(4L) | subclass | noFlush | println(J);print(J);write([B,I,I);out.write[4];write([B,I,I);out.write[\n];
+println(3.5f) | plain | autoFlush | out.write[3.5\n];out.flush;out.flush;
+println(3.5f) | subclass | autoFlush | println(F);print(F);write([B,I,I);out.write[3.5];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(3.5f) | plain | noFlush | out.write[3.5\n];
+println(3.5f) | subclass | noFlush | println(F);print(F);write([B,I,I);out.write[3.5];write([B,I,I);out.write[\n];
+println(4.5) | plain | autoFlush | out.write[4.5\n];out.flush;out.flush;
+println(4.5) | subclass | autoFlush | println(D);print(D);write([B,I,I);out.write[4.5];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(4.5) | plain | noFlush | out.write[4.5\n];
+println(4.5) | subclass | noFlush | println(D);print(D);write([B,I,I);out.write[4.5];write([B,I,I);out.write[\n];
+println(Array('z')) | plain | autoFlush | out.write[z\n];out.flush;out.flush;
+println(Array('z')) | subclass | autoFlush | println([C);print([C);write([B,I,I);out.write[z];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(Array('z')) | plain | noFlush | out.write[z\n];
+println(Array('z')) | subclass | noFlush | println([C);print([C);write([B,I,I);out.write[z];write([B,I,I);out.write[\n];
+println("t") | plain | autoFlush | out.write[t\n];out.flush;out.flush;
+println("t") | subclass | autoFlush | println(String);print(String);write([B,I,I);out.write[t];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println("t") | plain | noFlush | out.write[t\n];
+println("t") | subclass | noFlush | println(String);print(String);write([B,I,I);out.write[t];write([B,I,I);out.write[\n];
+println(List(1,2): Any) | plain | autoFlush | out.write[List(1, 2)\n];out.flush;out.flush;
+println(List(1,2): Any) | subclass | autoFlush | println(Object);print(String);write([B,I,I);out.write[List(1, 2)];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(List(1,2): Any) | plain | noFlush | out.write[List(1, 2)\n];
+println(List(1,2): Any) | subclass | noFlush | println(Object);print(String);write([B,I,I);out.write[List(1, 2)];write([B,I,I);out.write[\n];
+println(null: String) | plain | autoFlush | out.write[null\n];out.flush;out.flush;
+println(null: String) | subclass | autoFlush | println(String);print(String);write([B,I,I);out.write[null];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(null: String) | plain | noFlush | out.write[null\n];
+println(null: String) | subclass | noFlush | println(String);print(String);write([B,I,I);out.write[null];write([B,I,I);out.write[\n];
+println(null: Any) | plain | autoFlush | out.write[null\n];out.flush;out.flush;
+println(null: Any) | subclass | autoFlush | println(Object);print(String);write([B,I,I);out.write[null];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(null: Any) | plain | noFlush | out.write[null\n];
+println(null: Any) | subclass | noFlush | println(Object);print(String);write([B,I,I);out.write[null];write([B,I,I);out.write[\n];
+printf("%d-%s", 7, "f") | plain | autoFlush | out.write[7];out.flush;out.write[-];out.flush;out.write[f];out.flush;
+printf("%d-%s", 7, "f") | subclass | autoFlush | append(CharSequence);print(String);write([B,I,I);out.write[7];out.flush;append(CharSequence,I,I);append(CharSequence);print(String);write([B,I,I);out.write[-];out.flush;append(CharSequence);print(String);write([B,I,I);out.write[f];out.flush;
+printf("%d-%s", 7, "f") | plain | noFlush | out.write[7];out.write[-];out.write[f];
+printf("%d-%s", 7, "f") | subclass | noFlush | append(CharSequence);print(String);write([B,I,I);out.write[7];append(CharSequence,I,I);append(CharSequence);print(String);write([B,I,I);out.write[-];append(CharSequence);print(String);write([B,I,I);out.write[f];
+format("%s+%s%n", "a", "b") | plain | autoFlush | out.write[a];out.flush;out.write[+];out.flush;out.write[b];out.flush;out.write[\n];out.flush;out.flush;
+format("%s+%s%n", "a", "b") | subclass | autoFlush | append(CharSequence);print(String);write([B,I,I);out.write[a];out.flush;append(CharSequence,I,I);append(CharSequence);print(String);write([B,I,I);out.write[+];out.flush;append(CharSequence);print(String);write([B,I,I);out.write[b];out.flush;append(CharSequence);print(String);write([B,I,I);out.write[\n];out.flush;out.flush;
+format("%s+%s%n", "a", "b") | plain | noFlush | out.write[a];out.write[+];out.write[b];out.write[\n];
+format("%s+%s%n", "a", "b") | subclass | noFlush | append(CharSequence);print(String);write([B,I,I);out.write[a];append(CharSequence,I,I);append(CharSequence);print(String);write([B,I,I);out.write[+];append(CharSequence);print(String);write([B,I,I);out.write[b];append(CharSequence);print(String);write([B,I,I);out.write[\n];
+append("app") | plain | autoFlush | out.write[app];out.flush;
+append("app") | subclass | autoFlush | append(CharSequence);print(String);write([B,I,I);out.write[app];out.flush;
+append("app") | plain | noFlush | out.write[app];
+append("app") | subclass | noFlush | append(CharSequence);print(String);write([B,I,I);out.write[app];
+append('!') | plain | autoFlush | out.write[!];out.flush;
+append('!') | subclass | autoFlush | append(C);print(C);write([B,I,I);out.write[!];out.flush;
+append('!') | plain | noFlush | out.write[!];
+append('!') | subclass | noFlush | append(C);print(C);write([B,I,I);out.write[!];
+append("0123456", 2, 4) | plain | autoFlush | out.write[23];out.flush;
+append("0123456", 2, 4) | subclass | autoFlush | append(CharSequence,I,I);append(CharSequence);print(String);write([B,I,I);out.write[23];out.flush;
+append("0123456", 2, 4) | plain | noFlush | out.write[23];
+append("0123456", 2, 4) | subclass | noFlush | append(CharSequence,I,I);append(CharSequence);print(String);write([B,I,I);out.write[23];
+append(null: CharSequence) | plain | autoFlush | out.write[null];out.flush;
+append(null: CharSequence) | subclass | autoFlush | append(CharSequence);print(String);write([B,I,I);out.write[null];out.flush;
+append(null: CharSequence) | plain | noFlush | out.write[null];
+append(null: CharSequence) | subclass | noFlush | append(CharSequence);print(String);write([B,I,I);out.write[null];
+write(65) | plain | autoFlush | out.write(65);
+write(65) | subclass | autoFlush | write(I);out.write(65);
+write(65) | plain | noFlush | out.write(65);
+write(65) | subclass | noFlush | write(I);out.write(65);
+write(10) | plain | autoFlush | out.write(10);out.flush;
+write(10) | subclass | autoFlush | write(I);out.write(10);out.flush;
+write(10) | plain | noFlush | out.write(10);
+write(10) | subclass | noFlush | write(I);out.write(10);
+write(Array(66,67)) | plain | autoFlush | out.write[BC];out.flush;
+write(Array(66,67)) | subclass | autoFlush | write([B);write([B,I,I);out.write[BC];out.flush;
+write(Array(66,67)) | plain | noFlush | out.write[BC];
+write(Array(66,67)) | subclass | noFlush | write([B);write([B,I,I);out.write[BC];
+write(Array(68,69,70), 1, 2) | plain | autoFlush | out.write[EF];out.flush;
+write(Array(68,69,70), 1, 2) | subclass | autoFlush | write([B,I,I);out.write[EF];out.flush;
+write(Array(68,69,70), 1, 2) | plain | noFlush | out.write[EF];
+write(Array(68,69,70), 1, 2) | subclass | noFlush | write([B,I,I);out.write[EF];
+writeBytes(Array(71)) | plain | autoFlush | out.write[G];out.flush;
+writeBytes(Array(71)) | subclass | autoFlush | writeBytes;write([B,I,I);out.write[G];out.flush;
+writeBytes(Array(71)) | plain | noFlush | out.write[G];
+writeBytes(Array(71)) | subclass | noFlush | writeBytes;write([B,I,I);out.write[G];
+flush() | plain | autoFlush | out.flush;
+flush() | subclass | autoFlush | flush;out.flush;
+flush() | plain | noFlush | out.flush;
+flush() | subclass | noFlush | flush;out.flush;
+checkError() | plain | autoFlush | out.flush;=false
+checkError() | subclass | autoFlush | checkError;flush;out.flush;=false
+checkError() | plain | noFlush | out.flush;=false
+checkError() | subclass | noFlush | checkError;flush;out.flush;=false
+close() | plain | autoFlush | out.flush;out.close;
+close() | subclass | autoFlush | close;flush;out.flush;close;out.close;
+close() | plain | noFlush | out.flush;out.close;
+close() | subclass | noFlush | close;flush;out.flush;close;out.close;
+close(); print("s"); checkError() | plain | autoFlush | out.flush;out.close;=true
+close(); print("s"); checkError() | subclass | autoFlush | close;flush;out.flush;close;out.close;print(String);checkError;=true
+close(); print("s"); checkError() | plain | noFlush | out.flush;out.close;=true
+close(); print("s"); checkError() | subclass | noFlush | close;flush;out.flush;close;out.close;print(String);checkError;=true
+close(); write(65); flush(); checkError() | plain | autoFlush | out.flush;out.close;=true
+close(); write(65); flush(); checkError() | subclass | autoFlush | close;flush;out.flush;close;out.close;write(I);flush;checkError;=true
+close(); write(65); flush(); checkError() | plain | noFlush | out.flush;out.close;=true
+close(); write(65); flush(); checkError() | subclass | noFlush | close;flush;out.flush;close;out.close;write(I);flush;checkError;=true
+close(); close() | plain | autoFlush | out.flush;out.close;
+close(); close() | subclass | autoFlush | close;flush;out.flush;close;out.close;close;
+close(); close() | plain | noFlush | out.flush;out.close;
+close(); close() | subclass | noFlush | close;flush;out.flush;close;out.close;close;
+print("") | plain | autoFlush | 
+print("") | subclass | autoFlush | print(String);
+print("") | plain | noFlush | 
+print("") | subclass | noFlush | print(String);
+println("") | plain | autoFlush | out.write[\n];out.flush;out.flush;
+println("") | subclass | autoFlush | println(String);print(String);write([B,I,I);out.write[\n];out.flush;out.flush;
+println("") | plain | noFlush | out.write[\n];
+println("") | subclass | noFlush | println(String);print(String);write([B,I,I);out.write[\n];
+write(Array()) | plain | autoFlush | out.write[];out.flush;
+write(Array()) | subclass | autoFlush | write([B);write([B,I,I);out.write[];out.flush;
+write(Array()) | plain | noFlush | out.write[];
+write(Array()) | subclass | noFlush | write([B);write([B,I,I);out.write[];
+append("") | plain | autoFlush | 
+append("") | subclass | autoFlush | append(CharSequence);print(String);
+append("") | plain | noFlush | 
+append("") | subclass | noFlush | append(CharSequence);print(String);
+format("") | plain | autoFlush | 
+format("") | subclass | autoFlush | 
+format("") | plain | noFlush | 
+format("") | subclass | noFlush | 
+format("plain") | plain | autoFlush | out.write[plain];out.flush;
+format("plain") | subclass | autoFlush | append(CharSequence,I,I);append(CharSequence);print(String);write([B,I,I);out.write[plain];out.flush;
+format("plain") | plain | noFlush | out.write[plain];
+format("plain") | subclass | noFlush | append(CharSequence,I,I);append(CharSequence);print(String);write([B,I,I);out.write[plain];
+format("%s", null) | plain | autoFlush | out.write[null];out.flush;
+format("%s", null) | subclass | autoFlush | append(CharSequence);print(String);write([B,I,I);out.write[null];out.flush;
+format("%s", null) | plain | noFlush | out.write[null];
+format("%s", null) | subclass | noFlush | append(CharSequence);print(String);write([B,I,I);out.write[null];
+print(1); print(2) | plain | autoFlush | out.write[1];out.flush;out.write[2];out.flush;
+print(1); print(2) | subclass | autoFlush | print(I);write([B,I,I);out.write[1];out.flush;print(I);write([B,I,I);out.write[2];out.flush;
+print(1); print(2) | plain | noFlush | out.write[1];out.write[2];
+print(1); print(2) | subclass | noFlush | print(I);write([B,I,I);out.write[1];print(I);write([B,I,I);out.write[2];
+println(1); println(2) | plain | autoFlush | out.write[1\n];out.flush;out.flush;out.write[2\n];out.flush;out.flush;
+println(1); println(2) | subclass | autoFlush | println(I);print(I);write([B,I,I);out.write[1];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;println(I);print(I);write([B,I,I);out.write[2];out.flush;write([B,I,I);out.write[\n];out.flush;out.flush;
+println(1); println(2) | plain | noFlush | out.write[1\n];out.write[2\n];
+println(1); println(2) | subclass | noFlush | println(I);print(I);write([B,I,I);out.write[1];write([B,I,I);out.write[\n];println(I);print(I);write([B,I,I);out.write[2];write([B,I,I);out.write[\n];
+close(); println("x"); checkError() | plain | autoFlush | out.flush;out.close;=true
+close(); println("x"); checkError() | subclass | autoFlush | close;flush;out.flush;close;out.close;println(String);print(String);checkError;=true
+close(); println("x"); checkError() | plain | noFlush | out.flush;out.close;=true
+close(); println("x"); checkError() | subclass | noFlush | close;flush;out.flush;close;out.close;println(String);print(String);checkError;=true
+close(); append('c'); printf("%d", 1) | plain | autoFlush | out.flush;out.close;=true
+close(); append('c'); printf("%d", 1) | subclass | autoFlush | close;flush;out.flush;close;out.close;append(C);print(C);checkError;=true
+close(); append('c'); printf("%d", 1) | plain | noFlush | out.flush;out.close;=true
+close(); append('c'); printf("%d", 1) | subclass | noFlush | close;flush;out.flush;close;out.close;append(C);print(C);checkError;=true

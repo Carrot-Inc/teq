@@ -640,7 +640,7 @@ i26349	pass	-
 i26800-trait-init-binary-compat	fail	-	run-error: Error: UnsupportedOperationException: reflection is not available on JavaScript
 i2738	fail	-	run-error: TypeError: Cannot read properties of undefined (reading 'getMethodName')
 i2760	fail	-	compile-error: test contains Java sources
-i2772	fail	-	compile-error: value setErr is not a member of System
+i2772	pass	-	
 i2780	fail	-	compile-error: test contains Java sources
 i2795	pass	-	
 i2808	pass	-	
@@ -806,7 +806,7 @@ i8101	fail	-	compile-error: test contains Java sources
 i8314	pass	-	
 i8396	pass	-	
 i8398	pass	-	
-i8425	fail	-	compile-error: anonymous class T$$anon$1xoc7vx_90 cannot extend final class PrintStream
+i8425	pass	-	
 i8530	pass	-	
 i8530-b	fail	-	compile-error: no given instance of type ValueOf[Pattern] was found for parameter vt
 i8531	fail	-	compile-error: test contains Java sources
@@ -828,7 +828,7 @@ i8726	pass	-
 i876	fail	-	compile-error: type mismatch: found String, required Int
 i8903	pass	-	
 i8931	pass	-	
-i8977	fail	-	compile-error: value printf is not a member of PrintStream
+i8977	pass	-	
 i9011	pass	-	
 i9056	pass	-	
 i9068	fail	-	compile-error: type Product3 not found
