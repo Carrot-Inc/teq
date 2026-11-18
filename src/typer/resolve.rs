@@ -4239,9 +4239,14 @@ impl<'a> Worker<'a> {
                 };
                 let arg_ids: Vec<TyExprId> = ast.ty_list(args).to_vec();
                 let mut resolved = Vec::with_capacity(arg_ids.len());
+                // A wildcard argument's two ends as written, resolved where it is written, for its bounds' check: the
+                // application's own argument for a variant parameter is one of them (`TypeOps.boundsViolations`
+                // reads the written argument's bounds, `argForParam` the application's).
+                let mut ends: Vec<Option<(TypeId, TypeId)>> = Vec::with_capacity(arg_ids.len());
                 for (i, &a) in arg_ids.iter().enumerate() {
                     if let Some(ops) = operands {
                         resolved.push(ops[i]);
+                        ends.push(None);
                         continue;
                     }
                     if matches!(ast.ty(a), TyExpr::Wildcard) || self.unbound_type_var(a) {
@@ -4250,16 +4255,17 @@ impl<'a> Worker<'a> {
                             -1 => NOTHING,
                             _ => WILD,
                         });
+                        ends.push((!self.unbound_type_var(a)).then_some((NOTHING, ANY)));
                     } else if let TyExpr::BoundedWildcard(lo, hi) = ast.ty(a) {
+                        let (lo, hi) = (self.resolve_type(lo), self.resolve_type(hi));
                         resolved.push(match params.get(i).map_or(0, |&p| self.syms.tparam(p).variance) {
-                            1 => self.resolve_type(hi),
-                            -1 => self.resolve_type(lo),
-                            _ => {
-                                let (lo, hi) = (self.resolve_type(lo), self.resolve_type(hi));
-                                self.types.bounded_wild(lo, hi)
-                            }
+                            1 => hi,
+                            -1 => lo,
+                            _ => self.types.bounded_wild(lo, hi),
                         });
+                        ends.push(Some((lo, hi)));
                     } else {
+                        ends.push(None);
                         let t = self.resolve_type_ctor(a);
                         // `adaptType`'s `etaExpand` of a bare binder as an argument (`typedArg`'s `typedType`).
                         if !self.binder_completing.is_empty() && self.eta_read_at(t, a) {
@@ -4293,6 +4299,7 @@ impl<'a> Worker<'a> {
                     return ERROR;
                 }
                 let t = self.types.apply_ctor(ctor, &resolved);
+                self.applied_class_last = matches!(self.types.get(ctor), Type::Ctor(_));
                 if t == ERROR {
                     // An argument of another kind than its parameter's is what fails a type
                     // lambda's application (`Int` for its `F[X]`).
@@ -4321,7 +4328,32 @@ impl<'a> Worker<'a> {
                         Type::Ctor(c) => Some(c),
                         _ => None,
                     };
-                    self.check_type_args_through(&params, &resolved, &arg_ids, through, class);
+                    // A nested class's bounds name its outer class's parameters: seen from the prefix, they are its arguments
+                    // (`paramInfoAsSeenFrom`).
+                    let through = through.map(|(p, c)| (p, c, false));
+                    let outer = match through {
+                        Some((p, c, _)) => match self.syms.class(c).owner {
+                            crate::symbols::Owner::Class(oc) => {
+                                let under = self.path_underlying(p);
+                                self.base_type(under, oc).map(|base| self.owner_subst(base)).unwrap_or_default()
+                            }
+                            _ => Vec::new(),
+                        },
+                        None => Vec::new(),
+                    };
+                    let top = self.unchecked_top == Some(id);
+                    self.pattern_type_depth += top as u32;
+                    self.check_type_args_through(&params, &resolved, &arg_ids, &ends, t, through, class, outer, false);
+                    self.pattern_type_depth -= top as u32;
+                } else if params.is_empty() && !self.is_body_file(self.env.file) && self.pattern_type_depth == 0 && self.unchecked_top != Some(id) {
+                    // An abstract type member's or a higher-kinded type parameter's application: its own parameters'
+                    // bounds (`checkAppliedType`'s `tycon.tpe.typeParams`, a `LambdaParam` of the bound's lambda); none
+                    // in a pattern or a match type's case, nor of a match type's selector or bound itself.
+                    if let Some((own, outer, seen_from)) = self.applied_abstract_params(ctor) {
+                        if own.len() == resolved.len() {
+                            self.check_type_args_through(&own, &resolved, &arg_ids, &ends, t, seen_from, None, outer, true);
+                        }
+                    }
                 }
                 if self.declaring > 0 && t != ERROR && !self.declared_views.is_empty() {
                     self.note_declared_application(id, f, ctor, &arg_ids, &resolved);
@@ -4512,7 +4544,9 @@ impl<'a> Worker<'a> {
                 // `typedMatchTypeTree`'s `sel1Tpe.isLambdaSub` reads the scrutinee's information, a cycle at the
                 // tree's point, its `match`.
                 if !self.binder_completing.is_empty() {
+                    let outer = self.unchecked_top.replace(scrut);
                     let s = self.resolve_type(scrut);
+                    self.unchecked_top = outer;
                     if let Err(cycle) = self.hk_result_reads(s) {
                         let at = ast.notes.match_keywords.binary_search_by_key(&id, |&(t, _)| t).ok().map_or(span, |k| ast.notes.match_keywords[k].1);
                         self.report_cyclic(cycle, at);
@@ -5550,15 +5584,119 @@ impl<'a> Worker<'a> {
     /// class being completed (`class Bar extends Foo[Bar]` for `Foo[F <: Foo[F]]`). The bounds
     /// of a class nested in a class applied through the prefix `through` gives
     /// (`Ext.this.Visitor[T]`) are seen from that prefix, as dotty sees a `TypeRef`'s class.
-    fn check_type_args_through(&mut self, params: &[TParamId], args: &[TypeId], arg_asts: &[TyExprId], through: Option<(TypeId, ClassId)>, class: Option<ClassId>) {
+    #[allow(clippy::too_many_arguments)]
+    fn check_type_args_through(&mut self, params: &[TParamId], args: &[TypeId], arg_asts: &[TyExprId], ends: &[Option<(TypeId, TypeId)>], app: TypeId, through: Option<(TypeId, ClassId, bool)>, class: Option<ClassId>, outer: Subst, new_site: bool) {
         let ast = self.cur_ast();
-        let subst: Subst = params.iter().copied().zip(args.iter().copied()).collect();
+        // The bounds are instantiated with the application's arguments, a class's wildcard argument as the selection
+        // of its parameter from the application, `<app>#A` (`TypeOps.boundsViolations`' `skolemizeWildcardArgs`): a
+        // variant parameter's argument is the end the application keeps (`argForParam`).
+        // The application's type is a class's (an alias that is the class's eta-reduction followed too): its wildcard
+        // arguments are selected by the class's own parameters (`skolemizeWildcardArgs` zips the class's).
+        // A variant parameter's wildcard too, from the application with its written wildcards (`app_w`), which the
+        // application itself keeps as the end it collapses to (`C[? <: Int, String]#A`).
+        let skolem: Option<(Vec<TParamId>, TypeId)> = match self.types.get(app) {
+            // Nothing to select where no argument is a wildcard (most applications).
+            _ if !ends.iter().any(Option::is_some) && !args.iter().any(|&a| self.types.is_wild(a)) => None,
+            Type::Class(c, items) if self.types.items(items).len() == params.len() => {
+                let mut written: Vec<TypeId> = self.types.items(items).to_vec();
+                for (i, w) in written.iter_mut().enumerate() {
+                    if let Some(Some((lo, hi))) = ends.get(i) {
+                        *w = self.types.bounded_wild(*lo, *hi);
+                    }
+                }
+                Some((self.syms.class(c).tparams.clone(), self.types.class(c, &written)))
+            }
+            _ => None,
+        };
+        let subst: Subst = params
+            .iter()
+            .zip(args)
+            .enumerate()
+            .map(|(i, (&p, &a))| match &skolem {
+                Some((cps, app_w)) if (self.types.is_wild(a) || matches!(ends.get(i), Some(Some(_)))) && i < cps.len() => {
+                    (p, self.types.mk(Type::Member(*app_w, self.syms.tparam(cps[i]).name)))
+                }
+                _ => (p, a),
+            })
+            .chain(outer)
+            .collect();
+        // The bounds seen from the prefix: a nested class's name its outer class's `this`, a member's its own class's.
         let seen = |t: &mut Self, b: TypeId| match through {
-            Some((p, c)) if t.types.has_paths(b) => t.outer_seen_from(b, p, c),
+            Some((p, c, false)) if t.types.has_paths(b) => t.outer_seen_from(b, p, c),
+            Some((p, c, true)) if t.types.has_paths(b) => t.as_seen_from(b, p, c),
             _ => b,
         };
+        // A class's application with a wildcard argument: its arguments, for the F-bound narrowing at the check.
+        let narrow: Vec<TypeId> = if class.is_some() && args.iter().any(|&a| self.types.is_wild(a)) { args.to_vec() } else { Vec::new() };
+        // Where `caps.Pure` is reached, master's check (`check_type_arg_as_master`): its plain substitution and prefix.
+        // A bound as instantiated reaches it only through an argument, a wildcard's end, the prefix or the outer
+        // arguments that hold it: those are asked first, the instantiated bounds only then.
+        let master_through = through.filter(|&(_, _, member)| !member).map(|(p, c, _)| (p, c));
+        let bounded = |w: &mut Self, p: TParamId| w.canon(w.syms.tparam(p).upper) != ANY || w.canon(w.syms.tparam(p).lower) != NOTHING;
+        let pure = if params.iter().any(|&p| bounded(self, p)) { self.pure_class() } else { None };
+        let pure_in_args = pure.is_some_and(|pc| {
+            args.iter().any(|&a| self.holds_class(a, pc))
+                || ends.iter().flatten().any(|&(lo, hi)| self.holds_class(lo, pc) || self.holds_class(hi, pc))
+                || subst.iter().any(|&(_, t)| self.holds_class(t, pc))
+                || through.is_some_and(|(q, _, _)| {
+                    let under = self.path_underlying(q);
+                    self.holds_class(under, pc)
+                })
+        });
         for (i, (&p, &a)) in params.iter().zip(args).enumerate() {
-            if matches!(ast.ty(arg_asts[i]), TyExpr::Wildcard | TyExpr::BoundedWildcard(..)) || self.unbound_type_var(arg_asts[i]) || self.types.contains_error(a) {
+            if bounded(self, p) {
+                if let Some(pc) = pure {
+                    let (upper, lower) = (self.syms.tparam(p).upper, self.syms.tparam(p).lower);
+                    let mut reached = self.holds_class(upper, pc) || self.holds_class(lower, pc);
+                    if !reached && pure_in_args {
+                        let plain: Subst = params.iter().copied().zip(args.iter().copied()).collect();
+                        for b in [upper, lower] {
+                            let (mine, theirs) = (self.types.subst(b, &subst), self.types.subst(b, &plain));
+                            let mine = seen(self, mine);
+                            let theirs = match master_through {
+                                Some((q, c)) if self.types.has_paths(theirs) => self.outer_seen_from(theirs, q, c),
+                                _ => theirs,
+                            };
+                            reached |= self.holds_class(mine, pc) || self.holds_class(theirs, pc);
+                        }
+                        reached |= self.holds_class(a, pc) || ends.get(i).copied().flatten().is_some_and(|(lo, hi)| self.holds_class(lo, pc) || self.holds_class(hi, pc));
+                    }
+                    if reached {
+                        if !new_site {
+                            let plain: Subst = params.iter().copied().zip(args.iter().copied()).collect();
+                            self.check_type_arg_as_master(p, a, arg_asts[i], &plain, master_through, class);
+                        }
+                        continue;
+                    }
+                }
+            }
+            if self.unbound_type_var(arg_asts[i]) || self.types.contains_error(a) {
+                continue;
+            }
+            // A wildcard argument: its written ends against the bounds (`checkOverlapsBounds`), none in a pattern
+            // (`Mode.Pattern`) and none of a higher-kinded parameter's.
+            if matches!(ast.ty(arg_asts[i]), TyExpr::Wildcard | TyExpr::BoundedWildcard(..)) {
+                let Some((lo, hi)) = ends.get(i).copied().flatten() else { continue };
+                if self.pattern_type_depth > 0 || self.param_arity(p) > 0 || self.is_body_file(self.env.file) || self.types.contains_error(lo) || self.types.contains_error(hi) {
+                    continue;
+                }
+                let (upper, lower) = (self.syms.tparam(p).upper, self.syms.tparam(p).lower);
+                let upper = (self.canon(upper) != ANY).then(|| {
+                    let u = self.types.subst(upper, &subst);
+                    seen(self, u)
+                });
+                let lower = (self.canon(lower) != NOTHING).then(|| {
+                    let l = self.types.subst(lower, &subst);
+                    seen(self, l)
+                });
+                if upper.is_none() && lower.is_none() {
+                    continue;
+                }
+                let span = ast.ty_spans[arg_asts[i].idx()];
+                let (file, transparent, of_body) = (self.env.file, self.transparent.clone(), self.diags.of_bodies);
+                self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
+                let gadt = self.gadt_in_force();
+                self.deferred_bounds.push(DeferredBound { arg: a, ends: Some((lo, hi)), narrow: narrow.clone(), gadt, upper, lower, of: None, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
                 continue;
             }
             let span = ast.ty_spans[arg_asts[i].idx()];
@@ -5586,6 +5724,12 @@ impl<'a> Worker<'a> {
                     let of_body = self.diags.of_bodies;
                     let kind_alone = matches!(self.types.get(upper), Type::Lambda(_, r) if self.canon(r) == ANY);
                     let free = class.is_some_and(|c| self.free_class(c));
+                    // A bound that is a kind alone (`[_] =>> Any`) is met by any argument of that kind, which
+                    // `pre_check_kind` asked (`checkBounds`' kind test): no bound to compare (a refinement's own
+                    // higher-kinded member, `{ type E[_[_]] }#E`, is of its kind).
+                    if kind_alone && !free {
+                        continue;
+                    }
                     let (upper, of) = if kind_alone && free {
                         let applied: Vec<(TypeId, TypeId)> = subst.iter().map(|&(q, t)| (self.types.param(q), t)).collect();
                         (None, Some((self.types.param(p), applied)))
@@ -5593,7 +5737,8 @@ impl<'a> Worker<'a> {
                         (Some(self.types.subst(upper, &subst)), None)
                     };
                     self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
-                    self.deferred_bounds.push(DeferredBound { arg: a, upper, lower: None, of, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
+                    let gadt = self.gadt_in_force();
+                    self.deferred_bounds.push(DeferredBound { arg: a, ends: None, narrow: Vec::new(), gadt, upper, lower: None, of, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
                 }
                 continue;
             }
@@ -5613,11 +5758,14 @@ impl<'a> Worker<'a> {
             // An argument naming a refinement's own member is checked while the refinement's
             // members are in scope, which they are no longer at the deferred checks.
             if !self.is_body_file(file) && !self.refine_scopes.is_empty() && self.types.has_rec_this(a) {
-                if let Some(u) = upper.filter(|&u| !self.is_sub(a, u)) {
+                self.bounds_projections += 1;
+                let (upper, lower) = (upper.filter(|&u| !self.is_sub(a, u)), lower.filter(|&l| !self.is_sub(l, a)));
+                self.bounds_projections -= 1;
+                if let Some(u) = upper {
                     let msg = format!("type argument {} does not conform to upper bound {}", self.show(a), self.show(u));
                     self.error_by(crate::source::Group::PostTyper, span, msg);
                 }
-                if let Some(l) = lower.filter(|&l| !self.is_sub(l, a)) {
+                if let Some(l) = lower {
                     let msg = format!("type argument {} does not conform to lower bound {}", self.show(a), self.show(l));
                     self.error_by(crate::source::Group::PostTyper, span, msg);
                 }
@@ -5628,7 +5776,8 @@ impl<'a> Worker<'a> {
             if !self.is_body_file(file) {
                 let of_body = self.diags.of_bodies;
                 self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
-                self.deferred_bounds.push(DeferredBound { arg: a, upper, lower, of: None, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
+                let gadt = self.gadt_in_force();
+                self.deferred_bounds.push(DeferredBound { arg: a, ends: None, narrow: narrow.clone(), gadt, upper, lower, of: None, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
             }
         }
     }
@@ -5708,30 +5857,348 @@ impl<'a> Worker<'a> {
             self.transparent = check.transparent;
             self.diags.of_bodies = check.of_body;
             self.diags.owner = check.owner;
+            self.bounds_projections += 1;
+            let gadt_mark = self.gadt.len();
+            for &(p, t, v) in &check.gadt {
+                if let Type::Param(p) = self.types.get(p) {
+                    self.gadt.push((p, t, v));
+                }
+            }
             // A higher-kinded argument's bound: its parameter's as it is now, through the
             // application's arguments; a kind alone is no bound.
             let later = check.of.as_ref().and_then(|(p, applied)| {
                 let Type::Param(p) = self.types.get(*p) else { return None };
                 let upper = self.syms.tparam(p).upper;
                 let subst: Subst = applied.iter().filter_map(|&(q, t)| if let Type::Param(q) = self.types.get(q) { Some((q, t)) } else { None }).collect();
-                (self.canon(upper) != ANY).then(|| self.types.subst(upper, &subst))
+                // A kind alone (`[_[_]] =>> Any`) is no bound: any argument of the kind meets it.
+                let kind_alone = matches!(self.types.get(upper), Type::Lambda(_, r) if self.canon(r) == ANY);
+                (self.canon(upper) != ANY && !kind_alone).then(|| self.types.subst(upper, &subst))
             });
+            // A wildcard's ends: its lower end against the upper bound, its upper end against the lower bound, "does not
+            // overlap" (`checkOverlapsBounds`, `DoesNotConformToBound` of a `TypeBounds`); one of equal ends is a point.
+            let (lo, hi, shown, relation) = match check.ends {
+                Some((lo, hi)) if lo != hi => (lo, hi, self.show_wildcard(lo, hi), "does not overlap with"),
+                _ => (check.arg, check.arg, self.show(check.arg), "does not conform to"),
+            };
             if let Some(u) = check.upper.or(later) {
-                if !self.is_sub(check.arg, u) {
-                    let msg = format!("type argument {} does not conform to upper bound {}", self.show(check.arg), self.show(u));
-                    self.diags.error_by(crate::source::Group::PostTyper, check.file, check.span, msg);
+                if !self.is_sub(lo, u) && !(check.narrow.contains(&lo) && self.fbound_narrowed(lo).is_some_and(|m| self.same_normalized(m, u))) {
+                    let msg = format!("type argument {shown} {relation} upper bound {}", self.show(u));
+                    // PostTyper's, which does not run after the typer reported an error: a late record.
+                    self.diags.late_error_by(crate::source::Group::PostTyper, check.file, check.span, msg);
                 }
             }
             if let Some(l) = check.lower {
-                if !self.is_sub(l, check.arg) {
-                    let msg = format!("type argument {} does not conform to lower bound {}", self.show(check.arg), self.show(l));
-                    self.diags.error_by(crate::source::Group::PostTyper, check.file, check.span, msg);
+                if !self.is_sub(l, hi) {
+                    let msg = format!("type argument {shown} {relation} lower bound {}", self.show(l));
+                    self.diags.late_error_by(crate::source::Group::PostTyper, check.file, check.span, msg);
                 }
             }
+            self.gadt.truncate(gadt_mark);
+            self.bounds_projections -= 1;
         }
         self.diags.of_bodies = outer;
         self.diags.owner = outer_owner;
         self.transparent.clear();
+    }
+
+    /// The GADT constraints in force here, each parameter as its type, for a deferred check (`DeferredBound::gadt`).
+    fn gadt_in_force(&mut self) -> Vec<(TypeId, TypeId, i8)> {
+        if self.gadt.is_empty() {
+            return Vec::new();
+        }
+        let gadt = self.gadt.clone();
+        gadt.into_iter().map(|(p, t, v)| (self.types.param(p), t, v)).collect()
+    }
+
+    /// Master's check of one type argument of a written application (7043939d11's `check_type_args_through`'s body):
+    /// no wildcard argument checked, the bounds substituted plainly and seen from a nested class's prefix, no narrowing
+    /// and no GADT constraints. Taken where `caps.Pure` is reached.
+    fn check_type_arg_as_master(&mut self, p: TParamId, a: TypeId, arg_ast: TyExprId, subst: &Subst, through: Option<(TypeId, ClassId)>, class: Option<ClassId>) {
+        let ast = self.cur_ast();
+        if matches!(ast.ty(arg_ast), TyExpr::Wildcard | TyExpr::BoundedWildcard(..)) || self.unbound_type_var(arg_ast) || self.types.contains_error(a) {
+            return;
+        }
+        let seen = |t: &mut Self, b: TypeId| match through {
+            Some((q, c)) if t.types.has_paths(b) => t.outer_seen_from(b, q, c),
+            _ => b,
+        };
+        let span = ast.ty_spans[arg_ast.idx()];
+        let arity = self.param_arity(p);
+        if !self.is_body_file(self.env.file) && !self.pre_check_kind(a, p) {
+            let msg = self.kind_mismatch(a, p);
+            self.error(span, msg);
+            return;
+        }
+        let (upper, lower) = (self.syms.tparam(p).upper, self.syms.tparam(p).lower);
+        if arity > 0 {
+            if self.canon(upper) != ANY && !self.is_body_file(self.env.file) {
+                let (file, transparent) = (self.env.file, self.transparent.clone());
+                let of_body = self.diags.of_bodies;
+                let kind_alone = matches!(self.types.get(upper), Type::Lambda(_, r) if self.canon(r) == ANY);
+                let free = class.is_some_and(|c| self.free_class(c));
+                let (upper, of) = if kind_alone && free {
+                    let applied: Vec<(TypeId, TypeId)> = subst.iter().map(|&(q, t)| (self.types.param(q), t)).collect();
+                    (None, Some((self.types.param(p), applied)))
+                } else {
+                    (Some(self.types.subst(upper, subst)), None)
+                };
+                self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
+                self.deferred_bounds.push(DeferredBound { arg: a, ends: None, narrow: Vec::new(), gadt: Vec::new(), upper, lower: None, of, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
+            }
+            return;
+        }
+        if self.canon(upper) == ANY && self.canon(lower) == NOTHING {
+            return;
+        }
+        let upper = (self.canon(upper) != ANY).then(|| {
+            let u = self.types.subst(upper, subst);
+            seen(self, u)
+        });
+        let lower = (self.canon(lower) != NOTHING).then(|| {
+            let l = self.types.subst(lower, subst);
+            seen(self, l)
+        });
+        let file = self.env.file;
+        let transparent = self.transparent.clone();
+        if !self.is_body_file(file) && !self.refine_scopes.is_empty() && self.types.has_rec_this(a) {
+            if let Some(u) = upper.filter(|&u| !self.is_sub(a, u)) {
+                let msg = format!("type argument {} does not conform to upper bound {}", self.show(a), self.show(u));
+                self.error_by(crate::source::Group::PostTyper, span, msg);
+            }
+            if let Some(l) = lower.filter(|&l| !self.is_sub(l, a)) {
+                let msg = format!("type argument {} does not conform to lower bound {}", self.show(a), self.show(l));
+                self.error_by(crate::source::Group::PostTyper, span, msg);
+            }
+            return;
+        }
+        if !self.is_body_file(file) {
+            let of_body = self.diags.of_bodies;
+            self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
+            self.deferred_bounds.push(DeferredBound { arg: a, ends: None, narrow: Vec::new(), gadt: Vec::new(), upper, lower, of: None, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
+        }
+    }
+
+    /// The class `caps.Pure` where entered: a bound or an argument reaching it is checked as master checks it
+    /// (`check_type_arg_as_master`), capture checking's `dropPure` reading an alias's identity teq does not keep.
+    pub(super) fn pure_class(&mut self) -> Option<ClassId> {
+        self.entered_class_at(&["scala", "caps", "Pure"])
+    }
+
+    /// Whether the class `c` is a part of `t` as resolved (an alias's expansion; no alias is asked for).
+    pub(super) fn holds_class(&self, t: TypeId, c: ClassId) -> bool {
+        let mut seen: crate::intern::FxMap<TypeId, ()> = Default::default();
+        let mut stack = vec![t];
+        while let Some(u) = stack.pop() {
+            if seen.insert(u, ()).is_some() {
+                continue;
+            }
+            if matches!(self.types.get(u), Type::Class(k, _) | Type::Ctor(k) if k == c) {
+                return true;
+            }
+            self.types.map_parts(u, &mut |part| {
+                stack.push(part);
+                part
+            });
+        }
+        false
+    }
+
+    /// The type parameters of an application whose constructor is no class and no lambda, with the substitution that
+    /// sees their bounds from where it is selected: a higher-kinded type parameter's own (its bound's lambda's), an
+    /// abstract type member's declared ones with its owner class's parameters read from the prefix (`owner_subst`).
+    #[allow(clippy::type_complexity)]
+    fn applied_abstract_params(&mut self, ctor: TypeId) -> Option<(Vec<TParamId>, Subst, Option<(TypeId, ClassId, bool)>)> {
+        let ids = |t: &Self, l| t.types.items(l).iter().filter_map(|&q| match t.types.get(q) {
+            Type::Param(q) => Some(q),
+            _ => None,
+        }).collect::<Vec<TParamId>>();
+        match self.types.get(ctor) {
+            Type::Param(p) => match self.types.get(self.syms.tparam(p).upper) {
+                Type::Lambda(l, _) => Some((ids(self, l), Vec::new(), None)),
+                _ => None,
+            },
+            // A member being completed (its bound naming its own application, `type DD[X] <: { type DD[Y] =
+            // self.DD[Y] }`) has no bounds yet: it is not completed from here.
+            Type::Decl(d) => {
+                let info = &self.syms.aliases[d.idx()];
+                (info.bounds.is_some() && !info.tparams.is_empty()).then(|| (info.tparams.clone(), Vec::new(), None))
+            }
+            Type::Member(prefix, name) => {
+                let d = self.type_member_alias(prefix, name)?;
+                let info = &self.syms.aliases[d.idx()];
+                if info.bounds.is_none() || info.tparams.is_empty() {
+                    return None;
+                }
+                let (own, owner) = (info.tparams.clone(), info.owner);
+                // The bounds are seen from the prefix: the owner's parameters are its arguments, its `this` the prefix.
+                let (outer, seen_from) = match owner {
+                    crate::symbols::Owner::Class(c) => {
+                        let under = self.path_underlying(prefix);
+                        let outer = match self.base_type(under, c) {
+                            Some(base) => self.owner_subst(base),
+                            None => Vec::new(),
+                        };
+                        (outer, Some((prefix, c, true)))
+                    }
+                    _ => (Vec::new(), None),
+                };
+                Some((own, outer, seen_from))
+            }
+            _ => None,
+        }
+    }
+
+    /// `TypeOps.boundsViolations`' F-bound narrowing (TypeOps.scala 647-678 at 3.8.4) of the argument `a` of an
+    /// application with a wildcard argument: an abstract type whose upper bound names itself (an F-bound) gets that
+    /// bound with its classes' wildcard arguments selected from the applications (`massage`: `C[?, S]` to
+    /// `C[C[?, S]#T0, S]`), where that changes it; an alias's application is left as it is. The bound it installs
+    /// holds a check only where the checked bound is that one (scalac refuses `S <: BS[?, S] & K` at `BS[?, S]`).
+    fn fbound_narrowed(&mut self, a: TypeId) -> Option<TypeId> {
+        let hi = match self.types.get(a) {
+            Type::Param(p) if !self.syms.tparam(p).upper_through_alias => self.syms.tparam(p).upper,
+            // A member's bound as its trait declares it, in the trait's own `this` terms (the GADT bound is the
+            // symbol's info's): a path to it (`h.S`) or a subtrait's `Sub.this.S` does not meet it.
+            Type::Decl(_) | Type::Member(..) => {
+                let d = match self.types.get(a) {
+                    Type::Decl(d) => d,
+                    Type::Member(prefix, name) => self.type_member_alias(prefix, name)?,
+                    _ => return None,
+                };
+                if self.syms.aliases[d.idx()].upper_through_alias {
+                    return None;
+                }
+                self.complete_alias(d);
+                self.syms.aliases[d.idx()].bounds?.1
+            }
+            _ => return None,
+        };
+        if hi == a || !self.type_occurs(hi, a, &mut Default::default()) {
+            return None;
+        }
+        let m = self.massage_wildcards(hi);
+        (m != hi).then_some(m)
+    }
+
+    /// `massage`: a class's application with its wildcard arguments selected from it (`skolemizeWildcardArgs`),
+    /// through an intersection or a union.
+    fn massage_wildcards(&mut self, t: TypeId) -> TypeId {
+        // An alias's application (a retained form over its expansion) is no class's.
+        if matches!(self.types.form_of(t), Some((_, r)) if matches!(self.types.retention(r), crate::types::Retention::Alias(..))) {
+            return t;
+        }
+        match self.types.get(t) {
+            Type::Class(c, args) => {
+                let items: Vec<TypeId> = self.types.items(args).to_vec();
+                if !items.iter().any(|&a| self.types.is_wild(a)) {
+                    return t;
+                }
+                let tparams = self.syms.class(c).tparams.clone();
+                let skolem: Vec<TypeId> = items
+                    .iter()
+                    .zip(&tparams)
+                    .map(|(&a, &p)| if self.types.is_wild(a) { self.types.mk(Type::Member(t, self.syms.tparam(p).name)) } else { a })
+                    .collect();
+                self.types.class(c, &skolem)
+            }
+            Type::Inter(a, b) => {
+                let (ma, mb) = (self.massage_wildcards(a), self.massage_wildcards(b));
+                if (ma, mb) == (a, b) { t } else { self.types.inter(ma, mb) }
+            }
+            Type::Union(a, b, _) => {
+                let (ma, mb) = (self.massage_wildcards(a), self.massage_wildcards(b));
+                if (ma, mb) == (a, b) { t } else { self.types.union(ma, mb) }
+            }
+            _ => t,
+        }
+    }
+
+    /// Whether `x` is a part of `t` (`existsPart`), each part visited once.
+    fn type_occurs(&self, t: TypeId, x: TypeId, seen: &mut crate::intern::FxMap<TypeId, ()>) -> bool {
+        if t == x {
+            return true;
+        }
+        if seen.insert(t, ()).is_some() {
+            return false;
+        }
+        let mut found = false;
+        self.types.map_parts(t, &mut |part| {
+            if !found && self.type_occurs(part, x, seen) {
+                found = true;
+            }
+            part
+        });
+        found
+    }
+
+    /// Whether two bounds are the same type once each class's wildcard argument is read with its parameter's own
+    /// bounds (`TypeComparer`'s capture conversion meets a wildcard argument `& paramBounds(tparam)`, TypeComparer.scala
+    /// 1893-1899 at 3.8.4): `B[P, ?]` and `B[P, ? <: String]` for `class B[P, Q <: String]` are one.
+    fn same_normalized(&mut self, a: TypeId, b: TypeId) -> bool {
+        if self.same_type(a, b) {
+            return true;
+        }
+        let (na, nb) = (self.normalize_wildcards(a), self.normalize_wildcards(b));
+        self.same_type(na, nb)
+    }
+
+    /// `t` with each class application's wildcard argument intersected with its parameter's declared bounds where those
+    /// name none of the class's parameters and the intersection is nonempty (`normalizedArgBounds`' guards), through
+    /// the applications' arguments, a selection's prefix, an intersection and a union.
+    fn normalize_wildcards(&mut self, t: TypeId) -> TypeId {
+        match self.types.get(t) {
+            Type::Class(c, items) => {
+                let items: Vec<TypeId> = self.types.items(items).to_vec();
+                if items.is_empty() {
+                    return t;
+                }
+                let tparams = self.syms.class(c).tparams.clone();
+                let mut out = Vec::with_capacity(items.len());
+                for (i, &a) in items.iter().enumerate() {
+                    let a = self.normalize_wildcards(a);
+                    let normalized = match (self.types.wild_bounds(a), tparams.get(i)) {
+                        (Some((lo, hi)), Some(&p)) => {
+                            let (dlo, dhi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+                            if self.types.names_tparam_mapped(dlo, &tparams) || self.types.names_tparam_mapped(dhi, &tparams) {
+                                a
+                            } else {
+                                let lo2 = if self.canon(dlo) == NOTHING { lo } else if self.canon(lo) == NOTHING { dlo } else { self.types.union(dlo, lo) };
+                                let hi2 = if self.canon(dhi) == ANY { hi } else if self.canon(hi) == ANY { dhi } else { self.types.inter(dhi, hi) };
+                                if self.frozen_sub(lo2, hi2) { self.types.bounded_wild(lo2, hi2) } else { a }
+                            }
+                        }
+                        _ => a,
+                    };
+                    out.push(normalized);
+                }
+                if out == items { t } else { self.types.class(c, &out) }
+            }
+            Type::Member(prefix, name) => {
+                let p = self.normalize_wildcards(prefix);
+                if p == prefix { t } else { self.types.mk(Type::Member(p, name)) }
+            }
+            Type::Inter(x, y) => {
+                let (nx, ny) = (self.normalize_wildcards(x), self.normalize_wildcards(y));
+                if (nx, ny) == (x, y) { t } else { self.types.inter(nx, ny) }
+            }
+            Type::Union(x, y, _) => {
+                let (nx, ny) = (self.normalize_wildcards(x), self.normalize_wildcards(y));
+                if (nx, ny) == (x, y) { t } else { self.types.union(nx, ny) }
+            }
+            _ => t,
+        }
+    }
+
+    /// A wildcard argument as written from its ends (`? >: L <: H`, an end of `Nothing` or `Any` left out), as the
+    /// reference's `TypeBounds` shows in a bound's message.
+    fn show_wildcard(&mut self, lo: TypeId, hi: TypeId) -> String {
+        let mut out = String::from("?");
+        if self.canon(lo) != NOTHING {
+            out.push_str(&format!(" >: {}", self.show(lo)));
+        }
+        if self.canon(hi) != ANY {
+            out.push_str(&format!(" <: {}", self.show(hi)));
+        }
+        out
     }
 
     /// How many type arguments a type takes: a type constructor, a type lambda or a
@@ -6173,10 +6640,12 @@ impl<'a> Worker<'a> {
                     self.error(tp.span, msg);
                     continue;
                 }
+                let through_alias = upper && matches!(self.cur_ast().ty(b), TyExpr::Apply(..)) && !self.applied_class_last;
                 let info = &mut self.syms.tparams[id.idx()];
                 if upper {
                     info.upper = t;
                     info.declared_upper = view;
+                    info.upper_through_alias = through_alias;
                 } else {
                     info.lower = t;
                 }
@@ -6691,7 +7160,7 @@ impl<'a> Worker<'a> {
             return;
         }
         let a = AliasId(self.syms.aliases.len() as u32);
-        self.syms.aliases.push(AliasInfo {
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false,
             name: def.name,
             owner: Owner::Local,
             file,
@@ -6751,7 +7220,7 @@ impl<'a> Worker<'a> {
             return;
         }
         let a = AliasId(self.syms.aliases.len() as u32);
-        self.syms.aliases.push(AliasInfo {
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false,
             name: def.name,
             owner: Owner::Local,
             file,
@@ -6812,7 +7281,12 @@ impl<'a> Worker<'a> {
                     let js = t.written_js_alias(rhs);
                     t.syms.aliases[a.idx()].js = js;
                     let declared = match (upper, t.cur_ast().ty(rhs)) {
-                        (Some(u), TyExpr::Match(..)) => Some(t.resolve_type(u)),
+                        (Some(u), TyExpr::Match(..)) => {
+                            let outer = t.unchecked_top.replace(u);
+                            let b = t.resolve_type(u);
+                            t.unchecked_top = outer;
+                            Some(b)
+                        }
                         _ => None,
                     };
                     t.match_pt = declared;
@@ -6820,7 +7294,12 @@ impl<'a> Worker<'a> {
                     t.match_pt = None;
                     t.syms.aliases[a.idx()].declared_rhs = view;
                     if let (Some(u), Type::Match(scrut, m)) = (upper, t.types.get(ty)) {
-                        let bound = declared.unwrap_or_else(|| t.resolve_type(u));
+                        let bound = declared.unwrap_or_else(|| {
+                            let outer = t.unchecked_top.replace(u);
+                            let b = t.resolve_type(u);
+                            t.unchecked_top = outer;
+                            b
+                        });
                         let cases = t.types.match_info(m).cases.to_vec();
                         ty = t.types.match_type(scrut, &cases, bound);
                     }
@@ -6834,6 +7313,7 @@ impl<'a> Worker<'a> {
                         Some(b) => t.declared_view(b, |w| w.resolve_type(b)),
                         None => (ANY, crate::tir::NO_TYPE),
                     };
+                    t.syms.aliases[a.idx()].upper_through_alias = upper.is_some_and(|b| matches!(t.cur_ast().ty(b), TyExpr::Apply(..))) && !t.applied_class_last;
                     if ids.is_empty() {
                         t.syms.aliases[a.idx()].declared_rhs = view;
                     }
@@ -9234,6 +9714,15 @@ enum Bound {
 /// A type argument to check against its parameter's bounds once every class is complete.
 pub struct DeferredBound {
     arg: TypeId,
+    /// A wildcard argument's two ends as written: its bounds are checked by them (`checkOverlapsBounds`), the lower
+    /// end against the upper bound and the upper end against the lower bound.
+    ends: Option<(TypeId, TypeId)>,
+    /// The application's arguments where it is a class's with a wildcard argument: an F-bounded one among them meets
+    /// the bound through its narrowed bound (`boundsViolations`' `narrowBound`), read when the check runs.
+    narrow: Vec<TypeId>,
+    /// The GADT constraints in force where the application was written (a case's body), each parameter as its type:
+    /// the check runs under them (`PostTyper` restores a `CaseDef`'s `InferredGadtConstraints`).
+    gadt: Vec<(TypeId, TypeId, i8)>,
     upper: Option<TypeId>,
     lower: Option<TypeId>,
     /// A higher-kinded argument's parameter, whose upper bound the check reads when it runs,
@@ -9265,7 +9754,7 @@ impl DeferredBound {
     /// The types it holds, for the measurement of what outlives the body phase.
     pub(super) fn types(&self) -> impl Iterator<Item = TypeId> + '_ {
         let of = self.of.iter().flat_map(|(p, applied)| std::iter::once(*p).chain(applied.iter().flat_map(|&(q, t)| [q, t])));
-        std::iter::once(self.arg).chain(self.upper).chain(self.lower).chain(of)
+        std::iter::once(self.arg).chain(self.ends.iter().flat_map(|&(l, h)| [l, h])).chain(self.narrow.iter().copied()).chain(self.gadt.iter().flat_map(|&(p, t, _)| [p, t])).chain(self.upper).chain(self.lower).chain(of)
     }
 
     pub(super) fn remap(&mut self, class: impl Fn(ClassId) -> ClassId, ty: impl Fn(TypeId) -> TypeId) {
@@ -9273,6 +9762,13 @@ impl DeferredBound {
             *c = class(*c);
         }
         self.arg = ty(self.arg);
+        self.ends = self.ends.map(|(l, h)| (ty(l), ty(h)));
+        for x in &mut self.narrow {
+            *x = ty(*x);
+        }
+        for (p, t, _) in &mut self.gadt {
+            (*p, *t) = (ty(*p), ty(*t));
+        }
         self.upper = self.upper.map(&ty);
         self.lower = self.lower.map(&ty);
         if let Some((p, applied)) = &mut self.of {

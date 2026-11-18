@@ -8,7 +8,7 @@
 12261.scala	fail	-	marks: no error where 5 are marked
 12549.scala	fail	-	check: diagnostic 1 of 1: scalac's is error 12549.scala:15:39 Cannot prove that Not[B] =:= ("unreachable" : String).; teq's is error 12549.scala:15:39 Cannot prove that Not[B] =:= "unreachable".
 14034.scala	fail	-	marks: no error where 6 are marked
-16463.scala	fail	-	marks: 8 errors where 1 are marked: 16463.scala:29:22: type argument IndexOfRec[T, Fold[Tail[T], Head[T], [A, B] =>> (A, B) match { case (Int, Int) => Max[A, B] }], 0] does not conform to upper bound Int
+16463.scala	fail	-	marks: 3 errors where 1 are marked: 16463.scala:34:8: Recursion limit exceeded.
 17077.scala	fail	-	check: diagnostic 1 of 1: scalac's is error 17077.scala:10:12 IsIntResult is not a valid result type of an unapply method of an extractor.; teq's is error 17077.scala:10:12 wrong number of patterns for an extractor of IsIntResult: found 0
 17211.scala	fail	-	check: diagnostic 1 of 1: scalac's is error 17211.scala:14:14 IsInt[Foo.Foo] is not a constant type; cannot take constValue; teq's is error 17211.scala:14:3 IsInt[Foo] is not a constant type; cannot take constValue
 17579.scala	fail	-	marks: 5 errors where 6 are marked
@@ -80,7 +80,7 @@ annot-printing.scala	fail	-	check: diagnostic 1 of 1: scalac's is error annot-pr
 anon-mirror-gen-local.scala	fail	-	check: diagnostic 1 of 2: scalac's is error anon-mirror-gen-local.scala:15:34 No given instance of type scala.deriving.Mirror.Of[Outer1.this.Item] was found for parameter x of method summon in object Predef. Failed to synthesize an instance
 anonymous-instance-cannot-be-empty.scala	fail	-	marks: no error where 1 are marked
 anykind.scala	fail	-	marks: 7 errors where 9 are marked
-anykind1.scala	fail	-	marks: 9 errors where 5 are marked: anykind1.scala:4:19: type AnyKind not found
+anykind1.scala	fail	-	marks: 6 errors where 5 are marked: anykind1.scala:4:19: type AnyKind not found
 anykind2.scala	fail	-	marks: 5 errors where 4 are marked: anykind2.scala:3:14: type AnyKind not found
 anykind3.scala	fail	-	marks: 24 errors where 8 are marked: anykind3.scala:5:3: type argument [A] =>> List[A] does not have the same kind as its bound
 anykind4.scala	fail	-	marks: 4 errors where 1 are marked: anykind4.scala:4:18: type AnyKind not found
@@ -419,7 +419,7 @@ i11897.scala	fail	-	marks: 5 errors where 10 are marked
 i11938.scala	fail	-	marks: no error where 1 are marked
 i11985.scala	fail	-	marks: error on an unmarked line i11985.scala:20: this type cannot be tested at runtime: ?
 i11994.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i11994.scala:2:23 type meow is not a member of object Tuple; teq's is error i11994.scala:2:23 type meow not found
-i12049.scala	fail	-	marks: 8 errors where 7 are marked: i12049.scala:6:17: type mismatch: found M[B], required String
+i12049.scala	fail	-	check: diagnostic 1 of 9: scalac's is error i12049.scala:6:17 Found:    M[B]; teq's is error i12049.scala:6:17 type mismatch: found M[B], required String
 i12049d.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12049d.scala:14:53 Found:    (2 : Int); teq's is error i12049d.scala:14:53 type mismatch: found 2, required M[NotRelevant[Nothing], Relevant[Nothing]]
 i12116.scala	fail	-	check: diagnostic 1 of 2: error i12116.scala:12:11, line 3 of the message: scalac's is You can use -Xmax-inlines to change the limit.; teq's is inlined from tests/neg/i12116.scala:6
 i12116a.scala	fail	-	check: diagnostic 1 of 2: error i12116a.scala:12:11, line 3 of the message: scalac's is You can use -Xmax-inlines to change the limit.; teq's is inlined from tests/neg/i12116a.scala:6
@@ -486,7 +486,7 @@ i13190	fail	-	marks: 2 errors where 1 are marked: B_2.scala:10:17: type mismatch
 i13190b.scala	fail	-	marks: 2 errors where 1 are marked: i13190b.scala:14:17: type mismatch: found FieldType["A", Int], required Int
 i13218.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i13218.scala:5:7 Not found: meow; teq's is error i13218.scala:5:7 not found: meow
 i13320.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i13320.scala:8:21 type Boo is not a member of object Foo - did you mean Foo.Boo.type?; teq's is error i13320.scala:4:8 type Booo not found
-i13332shapeless.scala	fail	-	marks: 6 errors where 4 are marked: i13332shapeless.scala:26:35: No given instance of type Mirror.Of[Atoms01.Atom] was found.
+i13332shapeless.scala	fail	-	check: diagnostic 1 of 4: scalac's is error i13332shapeless.scala:26:35 No given instance of type scala.deriving.Mirror.Of[PathVariantDefns.Atoms01.Atom] was found for parameter m of method apply in object Generic. Failed to synthesize an i
 i13340.scala	fail	-	marks: 2 errors where 1 are marked: i13340.scala:3:9: too many arguments: expected 1
 i13377	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:2:21 Found:    core.Foo[(2 : Int)]; teq's is error Test_2.scala:2:21 type mismatch: found Foo[2], required Foo[1]
 i13435.scala	fail	-	marks: no error where 1 are marked
@@ -572,7 +572,7 @@ i15177.ub.scala	fail	-	marks: 1 errors where 2 are marked
 i15190.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i15190.scala:16:38 No given instance of type scala.deriving.Mirror.SumOf[Fruit & Mixin] was found for parameter x of method summon in object Predef. Failed to synthesize an instance of type scala.
 i15264.scala	marks	-	the marks hold; scalac's diagnostics are not compared: scalac's answer differs from run to run
 i15266.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i15266.scala:5:1 Modifier opaque is not allowed for this definition; teq's is error i15266.scala:1:13 an opaque type needs a right-hand side
-i15272.scala	fail	-	marks: 6 errors where 1 are marked: i15272.scala:9:25: type argument from does not conform to upper bound nt
+i15272.scala	fail	-	marks: 2 errors where 1 are marked: i15272.scala:9:38: type mismatch: found *:[from, Tuple], required *:[from, InNodesTupleOf[nt, toE]]
 i15287.scala	fail	-	check: diagnostic 1 of 1: error i15287.scala:4:20, line 4 of the message: scalac's is match arguments (('c' : Char))((2 : Int)); teq's is match arguments ('c')
 i15301.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i15301.scala:61:38 Found:    Tuple.Elem[EmptyTuple.type, (0 : Int)]; teq's is error i15301.scala:61:40 index out of bounds: 2
 i1531.scala	pass	-	
@@ -589,8 +589,8 @@ i15474b.scala	fail	-	marks: no error where 1 are marked
 i15507.scala	fail	-	marks: 6 errors where 10 are marked
 i15525.scala	fail	-	check: diagnostic 1 of 22: scalac's is error i15525.scala:43:18 Not found: element0 - did you mean element22?; teq's is error i15525.scala:43:18 not found: element0
 i15567.scala	pass	-	
-i15568.scala	fail	-	marks: no error where 1 are marked
-i15569.scala	fail	-	marks: 20 errors where 7 are marked: i15569.scala:6:11: several entry points: Test, Test2, Test3, Test3ok, Test4, Test5, Test6, Test7; choose one with --main
+i15568.scala	fail	-	marks: 2 errors where 1 are marked: i15568.scala:3:16: type argument ? >: Int <: String does not overlap with upper bound String
+i15569.scala	fail	-	marks: 18 errors where 7 are marked: i15569.scala:6:11: several entry points: Test, Test2, Test3, Test3ok, Test4, Test5, Test6, Test7; choose one with --main
 i15575.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i15575.scala:5:28 Type argument T & Any does not conform to lower bound Any; teq's is error i15575.scala:5:22 type argument T does not conform to lower bound Any
 i15614.scala	fail	-	marks: 30 errors where 17 are marked: i15614.scala:3:21: expected ':', found identifier
 i15618.scala	fail	-	marks: 1 errors where 2 are marked
@@ -696,7 +696,7 @@ i17738-infix-object	fail	-	check: diagnostic 1 of 2: scalac's is error ToplevelI
 i17738-toplevel-infix.scala	fail	-	marks: 4 errors where 5 are marked
 i1779.scala	fail	-	marks: 1 errors where 2 are marked
 i1786.scala	fail	-	check: diagnostic 1 of 4: scalac's is error i1786.scala:8:26 package scala.meta is not a value; teq's is error i1786.scala:8:26 meta is a package, not a value
-i1793.scala	fail	-	marks: 2 errors where 1 are marked: i1793.scala:3:46: type argument T does not conform to upper bound AnyRef
+i1793.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1793.scala:5:9 Values of types wr.underlying.T and Null cannot be compared with == or !=; teq's is error i1793.scala:5:9 values of types _ and Null cannot be compared with == or !=
 i17944.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17944.scala:40:88 No singleton value available for Tuple.Elem[test.FindField[(("s" : String) ->> String, ("i" : String) ->> Int), ("i" : String)], (1 : Int)]; eligible singleton types for `ValueO
 i17981.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17981.scala:1:7 Repeated modifier final; teq's is error i17981.scala:1:7 repeated modifier final
 i1802.scala	fail	-	marks: 1 errors where 2 are marked
@@ -709,7 +709,7 @@ i18082.scala	pass	-
 i18090.scala	fail	-	marks: no error where 7 are marked
 i18109.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i18109.scala:7:19 package foo is not a value; teq's is error i18109.scala:7:19 a singleton type needs a val, a parameter or an object
 i18122.scala	fail	-	check: diagnostic 1 of 13: scalac's is error i18122.scala:10:17 positional after named argument; teq's is error i18122.scala:10:5 positional after named argument
-i18171.scala	fail	-	marks: 2 errors where 1 are marked: i18171.scala:5:35: type argument T does not conform to upper bound Tuple
+i18171.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18171.scala:10:3 value bar is not a member of BAZ[Any]; teq's is error i18171.scala:10:3 value bar is not a member of DFVal[BAZREC[Any]]
 i18188.scala	fail	-	marks: no error where 1 are marked
 i18244.scala	pass	-	
 i18265.scala	fail	-	marks: 2 errors where 1 are marked: i18265.scala:5:9: Declaration of method twice not allowed here: only classes can have declared but undefined members
@@ -774,7 +774,7 @@ i19402.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19402.scala:10:
 i19413.scala	pass	-	
 i19414-desugared.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19414-desugared.scala:22:35 No best given instance of type BodySerializer[JsObject] was found for parameter x of method summon in object Predef.; teq's is error i19414-desugared.scala:22:35 ambig
 i19414.scala	fail	-	marks: 2 errors where 1 are marked: i19414.scala:12:42: type mismatch: found Printer, required Writer[?0]
-i19445.scala	fail	-	marks: 3 errors where 2 are marked: i19445.scala:12:41: type argument UnwrapTypes[xs] does not conform to upper bound Tuple
+i19445.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19445.scala:17:16 Found:    Test.UnwrapTypes[FooBar.Bar[Int]]; teq's is error i19445.scala:17:16 type mismatch: found UnwrapTypes[FooBar.Bar[Int]], required Int
 i19506.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19506.scala:7:19 No given instance of type Reader[Object] was found for a context parameter of method read; teq's is error i19506.scala:7:19 no given instance of type Reader[AnyRef] was found for
 i19594.scala	fail	-	check: diagnostic 5 of 6: scalac's is error i19594.scala:26:3 No given instance of type String was found; teq's is error i19594.scala:26:13 no given instance of type String was found for parameter s
 i19619	fail	-	java source: teq reads none
@@ -969,8 +969,8 @@ i2732.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2732.scala:12:14
 i2770.scala	fail	-	marks: 3 errors where 4 are marked
 i2771.scala	fail	-	marks: 7 errors where 3 are marked: i2771.scala:18:9: expected ']', found '='
 i2771a.scala	fail	-	marks: 1 errors where 2 are marked
-i2771b.scala	fail	-	marks: 1 errors where 2 are marked
-i2771c.scala	fail	-	marks: 1 errors where 2 are marked
+i2771b.scala	fail	-	marks: error on an unmarked line i2771b.scala:9: type argument F does not have the same kind as its bound [_]
+i2771c.scala	fail	-	marks: error on an unmarked line i2771c.scala:9: type argument F does not have the same kind as its bound [_]
 i2778.scala	fail	-	marks: 2 errors where 1 are marked: i2778.scala:7:5: parameter first is given twice
 i280.scala	fail	-	check: diagnostic 1 of 2: error i280.scala:5:12, line 3 of the message: scalac's is Run with -explain-cyclic for more details.; teq's is nothing
 i2808.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2808.scala:6:10 value m1_: is not a member of C; teq's is error i2808.scala:6:3 value m1_: is not a member of C
@@ -1024,7 +1024,7 @@ i3901.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3901.scala:2:28 
 i3930.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3930.scala:6:3 None of the overloaded alternatives of method a in object A with types; teq's is error i3930.scala:6:3 Ambiguous overload. The overloaded alternatives of method a in object A with 
 i3935.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3935.scala:2:32 The type of a class parent cannot refer to constructor parameters, but Foo3[(Bar.this.y : T)] refers to y; teq's is error i3935.scala:2:32 The type of a class parent cannot refer 
 i3964.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i3964.scala:9:33 Found:    Test1.Bar {...}; teq's is error i3964.scala:9:33 type mismatch: found Bar, required Bar{val x: Cat}
-i3976.scala	fail	-	marks: 5 errors where 6 are marked
+i3976.scala	fail	-	marks: 3 errors where 6 are marked
 i3989.scala	fail	-	marks: no error where 1 are marked
 i3989a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3989a.scala:6:21 Found:    (a.x : _); teq's is error i3989a.scala:6:21 type mismatch: found Any, required Int
 i3989b.scala	fail	-	marks: no error where 1 are marked
@@ -1372,7 +1372,7 @@ iarrays.scala	fail	-	check: diagnostic 1 of 4: scalac's is error iarrays.scala:4
 iarrays1.scala	fail	-	marks: no error where 1 are marked
 if-error.scala	fail	-	check: diagnostic 1 of 1: scalac's is error if-error.scala:2:3 Found:    Unit; teq's is error if-error.scala:2:3 type mismatch: found Unit, required Int
 illegal-depmeth.scala	fail	-	check: diagnostic 1 of 3: scalac's is error illegal-depmeth.scala:7:12 illegal forward reference to method parameter; teq's is error illegal-depmeth.scala:7:12 type T not found
-illegal-match-types.scala	fail	-	marks: 4 errors where 6 are marked
+illegal-match-types.scala	fail	-	marks: 2 errors where 6 are marked
 illegal-refinements.scala	fail	-	check: diagnostic 1 of 3: scalac's is error illegal-refinements.scala:3:21 refinement cannot have a right-hand side; teq's is error illegal-refinements.scala:3:25 refinement cannot have a body
 impl-conv	fail	-	check: diagnostic 1 of 2: warning A.scala:5:16, line 3 of the message: scalac's is or by setting the compiler option -language:implicitConversions.; teq's is or by setting the compiler option --language implicitConversions.
 implicit-funs.scala	fail	-	marks: no error where 4 are marked
@@ -1504,7 +1504,7 @@ mt-scrutinee-widen.scala	fail	-	check: diagnostic 1 of 2: error mt-scrutinee-wid
 mt-scrutinee-widen2.scala	fail	-	marks: no error where 1 are marked
 mt-subtyping-transitivity.scala	fail	-	check: diagnostic 1 of 1: scalac's is error mt-subtyping-transitivity.scala:8:23 Found:    String; teq's is error mt-subtyping-transitivity.scala:8:23 type mismatch: found String, required MT[A | B]
 multi-file-error	fail	-	check: diagnostic 1 of 2: scalac's is error A.scala:2:3 Not found: foo; teq's is error A.scala:2:3 not found: foo
-multi-param-derives.scala	fail	-	marks: 33 errors where 6 are marked: multi-param-derives.scala:15:16: Show[Mono] cannot be derived: the companion of the type class has no derived method
+multi-param-derives.scala	fail	-	marks: 32 errors where 6 are marked: multi-param-derives.scala:15:16: Show[Mono] cannot be derived: the companion of the type class has no derived method
 multi-patterns.scala	fail	-	marks: 3 errors where 2 are marked: multi-patterns.scala:2:16: expected '=', found ','
 multiLineOps.scala	fail	-	marks: error on an unmarked line multiLineOps.scala:12: value ! is not a member of Unit
 multiple-args-consume.scala	fail	-	marks: 8 errors where 2 are marked: multiple-args-consume.scala:3:9: 'erased' is not part of the supported Scala subset
@@ -1605,7 +1605,7 @@ preview-non-viral	fail	-	option: -preview (teq has no flag for it)
 previewOverloads.scala	fail	-	marks: no error where 2 are marked
 previewOverride.scala	fail	-	marks: error on an unmarked line previewOverride.scala:33: not found: ???
 print-infix-type.scala	fail	-	check: diagnostic 1 of 1: scalac's is error print-infix-type.scala:8:30 Found:    Int over String; teq's is error print-infix-type.scala:8:30 type mismatch: found over[Int, String], required over[String, Int]
-print-tuple-union.scala	fail	-	marks: 2 errors where 1 are marked: print-tuple-union.scala:2:27: type argument A does not conform to upper bound Tuple
+print-tuple-union.scala	fail	-	check: diagnostic 1 of 1: scalac's is error print-tuple-union.scala:3:21 Found:    Tuple.Union[B]; teq's is error print-tuple-union.scala:3:21 type mismatch: found Fold[B, Nothing, [x, y] =>> x | y], required Int
 private-case-class-constr.scala	fail	-	check: diagnostic 1 of 2: scalac's is error private-case-class-constr.scala:7:13 missing argument for parameter disable of method apply in object Nat: (value: Int, disable: Boolean): Option[Nat]; teq's is error private-case-class-constr.sca
 private-this-future.scala	pass	-	
 privates.scala	fail	-	check: diagnostic 1 of 3: scalac's is error privates.scala:8:3 Not found: foo; teq's is warning privates.scala:3:10 Ignoring [this] qualifier.
@@ -1643,7 +1643,7 @@ selfInheritance.scala	fail	-	check: diagnostic 1 of 7: scalac's is warning selfI
 serialversionuid-not-const.scala	fail	-	marks: no error where 1 are marked
 shapeless-hcons.scala	fail	-	check: diagnostic 1 of 2: warning shapeless-hcons.scala:33:3, line 3 of the message: scalac's is It would fail on pattern case: List(_, _*), Nil; teq's is It would fail on pattern case: ::(_, _), Nil
 simple-opaque.scala	fail	-	check: diagnostic 1 of 4: scalac's is error simple-opaque.scala:16:16 Found:    (o.x : o.T); teq's is error simple-opaque.scala:16:16 type mismatch: found T, required Int
-singleton-ctx-bound.scala	fail	-	marks: 8 errors where 6 are marked: singleton-ctx-bound.scala:25:12: expected end of statement, found ':'
+singleton-ctx-bound.scala	fail	-	marks: 7 errors where 6 are marked: singleton-ctx-bound.scala:25:12: expected end of statement, found ':'
 singleton-ops-any.scala	fail	-	marks: 14 errors where 6 are marked: singleton-ops-any.scala:6:24: type mismatch: found true, required false
 singleton-ops-boolean.scala	fail	-	check: diagnostic 1 of 8: scalac's is error singleton-ops-boolean.scala:21:11 '=' expected, but 'false' found; teq's is error singleton-ops-boolean.scala:21:11 expected '=', found 'false'
 singleton-ops-double.scala	fail	-	marks: 57 errors where 27 are marked: singleton-ops-double.scala:4:34: Cannot prove that +[2.0, 3.0] =:= -[6.0, 1.0].
@@ -1707,7 +1707,7 @@ t2994.scala	fail	-	marks: 3 errors where 5 are marked
 t3137.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t3137.scala:16:14 error overriding method C in trait AA of type => Int => BB.this.C;; teq's is error t3137.scala:16:14 error overriding method C in trait AA of type Int => AA.this.C: object C has 
 t3272.scala	pass	-	
 t3275.scala	pass	-	
-t3683-modified.scala	fail	-	marks: 3 errors where 1 are marked: t3683-modified.scala:7:14: cyclic reference involving type T
+t3683-modified.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t3683-modified.scala:7:14 illegal cyclic type reference: lower bound T of type T refers back to the type itself; teq's is error t3683-modified.scala:7:14 cyclic reference involving type T
 t4727.scala	fail	-	check: diagnostic 1 of 3: scalac's is error t4727.scala:10:9 Found:    Null; teq's is error t4727.scala:10:5 type mismatch: found Null, required Int
 t4731.scala	fail	-	marks: no error where 1 are marked
 t4815.scala	fail	-	marks: 4 errors where 5 are marked
@@ -1832,7 +1832,7 @@ valueclasses-doubledefs2.scala	fail	-	marks: no error where 1 are marked
 valueclasses-impl-restrictions.scala	fail	-	check: diagnostic 1 of 3: scalac's is error valueclasses-impl-restrictions.scala:2:3 Value classes may not define an inner class; teq's is error valueclasses-impl-restrictions.scala:2:9 Value classes may not define an inner class
 varargs-annot-2.scala	fail	-	marks: no error where 1 are marked
 varargs-annot.scala	fail	-	marks: no error where 9 are marked
-variances-constr.scala	fail	-	marks: 3 errors where 2 are marked: variances-constr.scala:6:15: covariant type A occurs in contravariant position in type A of parameter x
+variances-constr.scala	pass	-	
 variances.scala	fail	-	marks: error on an unmarked line variances.scala:12: several entry points: Test.main, Test2.main; choose one with --main
 variances1.scala	fail	-	marks: no error where 1 are marked
 while-loops.scala	fail	-	marks: error on an unmarked line while-loops.scala:6: Cannot rewrite recursive call: it is not in tail position

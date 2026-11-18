@@ -23,7 +23,6 @@ array_any_erasure_overloads	missing '12:7: error: Conflicting definitions:'
 assign_op_element_case_class_inline	missing '1 error found'
 assign_op_operand_case_class_inline	missing '1 error found'
 bound_check_after_typer_error	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
-bound_member_params_seen_from_prefix	exit code 0
 brace_line_left_of_first_line	exit code 0
 brace_template_body_at_brace_width	missing '6:7: error:'
 braced_branch_applied_after_condition	exit code 0
@@ -58,8 +57,6 @@ extension_conversion_same_level	exit code 0
 extension_inherited_conversions_ambiguous	missing 'error: Found: (a : A)'
 extension_inner_conversion_method	missing 'error: Found: String'
 extension_inner_conversion_outer	exit code 0
-fbound_through_sibling_member_alias	exit code 0
-fbound_through_sibling_member_alias_member	exit code 0
 file_module_override_packages	exit code 0
 file_module_overrides	exit code 0
 gadt_bound_after_base_type	missing 'gadt_bound_after_base_type.scala:5:17: error: Found: (x : T)'
@@ -175,27 +172,8 @@ unreducible_application_placements	exit code 0
 unreducible_wildcard_application_e043	missing '13:12: error: unreducible application of higher-kinded type [X] =>> h.KC[X] to wildcard arguments'
 unresolved_member_qualifier_interpolated	missing '6:29: error: value foo is not a member of C'
 unresolved_member_qualifier_interpolated.check	< tests/errors/unresolved_member_qualifier_interpolated.scala:6:29: error: value foo is not a member of C
-wildcard_bound_abstract_member_application	exit code 0
-wildcard_bound_both_ends	exit code 0
-wildcard_bound_capture_through_paths	missing 'wildcard_bound_capture_through_paths.scala:11:20: error: type argument Impl[?] does not conform to upper bound BS[BS[?, Impl[?]]#T, Impl[?]]'
-wildcard_bound_dependent_contravariant	exit code 0
-wildcard_bound_dependent_covariant	exit code 0
-wildcard_bound_dependent_edge	exit code 0
-wildcard_bound_dependent_invariant	exit code 0
-wildcard_bound_dependent_on_wildcard	missing '13:23: error: type argument String does not conform to upper bound C[? >: Int, String]#A'
-wildcard_bound_dependent_unbounded	exit code 0
-wildcard_bound_fbound_lower	exit code 0
 wildcard_bound_fbound_lower_instance	exit code 0
-wildcard_bound_fbound_narrow	missing '23:49: error: type argument S does not conform to upper bound BS[BS[? <: String, S]#T, S]'
-wildcard_bound_fbound_param_type	exit code 0
-wildcard_bound_fbound_shapes	missing '29:22: error: type argument X does not conform to upper bound BS[BS[?, X]#T, X]'
-wildcard_bound_hk_param_application	exit code 0
-wildcard_bound_match_scrutinee_nested	exit code 0
-wildcard_bound_nested_positions	exit code 0
-wildcard_bound_other_param	exit code 0
 wildcard_bound_overlap	missing '17:30: error: type argument ? >: T does not overlap with upper bound U'
-wildcard_bound_param_ends	exit code 0
-wildcard_bound_variant_param	exit code 0
 wildcard_bounds	missing '17:22: error: type mismatch: found Box[String], required Box[? >: Dog]'
 wrong_number_of_type_args_beside_a_syntax_error	missing 'wrong_number_of_type_args_beside_a_syntax_error.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]'
 wrong_number_of_type_args_hides_its_arguments	missing 'wrong_number_of_type_args_hides_its_arguments.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]'

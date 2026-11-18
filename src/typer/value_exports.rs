@@ -1299,7 +1299,7 @@ impl<'a> Worker<'a> {
         let js = self.forwarded_alias_js(vp, name);
         let a = AliasId(self.syms.aliases.len() as u32);
         let owner = self.home_owner(home);
-        self.syms.aliases.push(AliasInfo { name: alias, owner, file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js, exported: true, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false, name: alias, owner, file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js, exported: true, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
         self.syms.alias_cells.set(a.0, Completion::Done);
         match home {
             Home::Class(c) => {

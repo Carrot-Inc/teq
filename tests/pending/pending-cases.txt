@@ -111,6 +111,7 @@ poly_override_lower_bound	< scalac 3.8.4: rejected, 2 error(s)
 primitive_eq_selected	< false
 products_extension_export_inline_getter	< 235
 products_super_getter_after_using_clause	< 45,111u9
+pure_bound_sibling_parameter	< 1
 qualified_super_default_in_inner_class	< 3
 qualified_super_mix	< 3
 quoted_type_block	< 1
@@ -188,4 +189,3 @@ view_open_var_extension_specificity	< box of list of double
 view_search_bottom_builtin_members	< scalac 3.8.4: rejected, 7 error(s)
 wildcard_bound_new_wildcard	< scalac 3.8.4: rejected, 1 error(s)
 wildcard_bound_parent_wildcard	< scalac 3.8.4: rejected, 2 error(s)
-wildcard_bound_path_prefix	< 5

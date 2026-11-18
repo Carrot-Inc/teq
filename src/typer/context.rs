@@ -316,7 +316,7 @@ worker_fields! {
     }
     thread {
         trail, mark_floor, dropped_deps, attempts, inlining, attempt_caches, bodies_in_progress, mismatches,
-        mismatch_renders, logging, app_depth, error_nodes, pending_widenings, open_vars, conversion_open_vars,
+        mismatch_renders, logging, app_depth, pattern_type_depth, applied_class_last, unchecked_top, bounds_projections, error_nodes, pending_widenings, open_vars, conversion_open_vars,
         inline_unboxes, completing, pending_library_names, naming_library, export_stack, export_retry,
         export_retrying, diag_range_open, diag_rank, diag_range_from, tclasses_settling, tclass_settling_scopes,
         tclasses_in_checks, pending_shared, merging, infos, std_entered_pending, loader_done_pending, kind_walk,

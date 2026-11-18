@@ -5215,6 +5215,21 @@ impl<'a> Worker<'a> {
         super::elaborate::CallPlan::new(of, sig.clone(), self.annotation_args)
     }
 
+    /// Whether `caps.Pure` is reached by an explicit type argument `var` or its parameter's bounds `upper` and `lower`, as
+    /// resolved or as instantiated through `subst` (and a nested class's `outer_args`): where it is, the bound checked is
+    /// master's (capture checking's `dropPure` reads an alias's identity teq's types do not keep).
+    #[cold]
+    #[inline(never)]
+    fn pure_reached_by(&mut self, var: TypeId, upper: TypeId, lower: TypeId, subst: &Subst, outer_args: &Subst) -> bool {
+        let Some(pc) = self.pure_class() else { return false };
+        [var, upper, lower].into_iter().any(|t| self.holds_class(t, pc))
+            || (subst.iter().chain(outer_args).any(|&(_, t)| self.holds_class(t, pc)) && {
+                let (u, l) = (self.types.subst(upper, subst), self.types.subst(lower, subst));
+                let (uo, lo) = (self.types.subst(u, outer_args), self.types.subst(l, outer_args));
+                [u, l, uo, lo].into_iter().any(|t| self.holds_class(t, pc))
+            })
+    }
+
     fn apply_method_in_now(
         &mut self,
         call: MethodCall,
@@ -5372,6 +5387,18 @@ impl<'a> Worker<'a> {
             Some((recv, recv_ty)) if !sig.tparams.is_empty() => self.receiver_bound_path(&sig, ext_clauses, recv, recv_ty),
             _ => None,
         };
+        // A nested class's constructor: its type parameters' bounds name the outer class's parameters, whose arguments
+        // the prefix gives (`paramInfoAsSeenFrom`).
+        let outer_args: Subst = match &ctor {
+            Some((c, _, Some(p))) => match self.syms.class(*c).owner {
+                crate::symbols::Owner::Class(oc) => {
+                    let under = self.path_underlying(*p);
+                    self.base_type(under, oc).map(|b| self.owner_subst(b)).unwrap_or_default()
+                }
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        };
         for (i, &tp) in sig.tparams.iter().enumerate() {
             let (upper, lower) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower);
             let (upper, lower) = match recv_path {
@@ -5413,8 +5440,15 @@ impl<'a> Worker<'a> {
                     self.tvars[v].set_declared(l, u);
                 }
             }
+            // Where `caps.Pure` is reached (the argument, the bound as resolved or as instantiated), the bound is master's,
+            // as before this part: capture checking's `dropPure` reads the bound's type symbol, an alias's identity teq does
+            // not keep, and the prefix's view of a nested class's bound goes with it.
+            let pure_reached = is_explicit && (upper != ANY || lower != NOTHING) && self.pure_reached_by(var, upper, lower, &subst, &outer_args);
+            let no_outer = Subst::new();
+            let outer_args: &Subst = if pure_reached { &no_outer } else { &outer_args };
             if upper != ANY {
                 let u = self.types.subst(upper, &subst);
+                let u = if outer_args.is_empty() { u } else { self.types.subst(u, outer_args) };
                 if !self.is_sub(var, u) && is_explicit {
                     let msg = format!("type argument {} does not conform to upper bound {}", self.show(var), self.show(u));
                     self.error_by(crate::source::Group::PostTyper, span, msg);
@@ -5422,6 +5456,7 @@ impl<'a> Worker<'a> {
             }
             if lower != NOTHING {
                 let l = self.types.subst(lower, &subst);
+                let l = if outer_args.is_empty() { l } else { self.types.subst(l, outer_args) };
                 if !self.is_sub(l, var) && is_explicit {
                     let msg = format!("type argument {} does not conform to lower bound {}", self.show(var), self.show(l));
                     self.error_by(crate::source::Group::PostTyper, span, msg);

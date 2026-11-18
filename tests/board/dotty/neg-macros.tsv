@@ -57,7 +57,7 @@ i15413.scala	fail	-	marks: no error where 1 are marked
 i15917.scala	fail	-	marks: no error where 1 are marked
 i16355a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i16355a.scala:28:44 access to parameter v from wrong staging level:; teq's is error i16355a.scala:28:34 type mismatch: found (String, String), required ((v : String), "aa")
 i16355b.scala	fail	-	marks: no error where 2 are marked
-i16522.scala	fail	-	marks: error on an unmarked line i16522.scala:11: type argument tl does not conform to upper bound HList
+i16522.scala	fail	-	marks: 2 errors where 3 are marked
 i16532.scala	fail	-	marks: no error where 1 are marked
 i16582	fail	-	marks: error on an unmarked line check.products!Macro_1$package:5: recursive value o2 needs type (in the body of Macro_1$package)
 i16835	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:7:5:None:None: the body of Macro_1$package.fooExpr is withheld from the products of $OUT/neg-macros/i16835/check.products (elided: unstated the reflection API's ImplicitSearchSuccessTypeTest
@@ -209,8 +209,8 @@ quote-sym-newtype	fail	-	option: -Yno-experimental (teq has no flag for it)
 quote-this-a.scala	fail	-	marks: no error where 1 are marked
 quote-this-b.scala	fail	-	marks: no error where 2 are marked
 quote-this-c.scala	fail	-	marks: 1 errors where 2 are marked
-quote-type-variable-no-inference-2.scala	fail	-	marks: no error where 1 are marked
-quote-type-variable-no-inference-3.scala	fail	-	marks: no error where 1 are marked
+quote-type-variable-no-inference-2.scala	fail	-	marks: 2 errors where 1 are marked: quote-type-variable-no-inference-2.scala:5:20: type argument t does not conform to upper bound Int
+quote-type-variable-no-inference-3.scala	fail	-	check: diagnostic 1 of 3: scalac's is warning quote-type-variable-no-inference-3.scala:5:23 Ignored bound <: Comparable[Any]; teq's is error quote-type-variable-no-inference-3.scala:5:23 type argument t does not conform to upper bound Compa
 quote-type-variable-no-inference.scala	fail	-	marks: 4 errors where 1 are marked: quote-type-variable-no-inference.scala:6:13: expected an identifier, found 'type'
 quote-whitebox	fail	-	check: diagnostic 1 of 2: scalac's is error Test_2.scala:5:21 Found:    (1 : Int); teq's is error Test_2.scala:5:21 type mismatch: found 1, required String
 quoted-pattern-with-bounded-type-params-regression.scala	fail	-	check: diagnostic 1 of 1: scalac's is error quoted-pattern-with-bounded-type-params-regression.scala:11:49 Type must be fully defined.; teq's is error quoted-pattern-with-bounded-type-params-regression.scala:11:48 value apply is not a membe

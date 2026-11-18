@@ -84,7 +84,9 @@ impl<'a> Worker<'a> {
     pub(super) fn match_type_expr(&mut self, scrut: TyExprId, cases: ListRef) -> TypeId {
         let pt = self.match_pt.take();
         let case_ids: Vec<TyExprId> = self.cur_ast().ty_list(cases).to_vec();
+        let outer = self.unchecked_top.replace(scrut);
         let scrutinee = self.resolve_type(scrut);
+        self.unchecked_top = outer;
         let mut out = Vec::with_capacity(case_ids.len());
         let mut bound = NOTHING;
         for c in case_ids {
@@ -101,14 +103,19 @@ impl<'a> Worker<'a> {
                 self.case_binders.push((n, t));
                 frame_tparams.push((n, p));
             }
+            // A case is resolved as a pattern is (`Mode.Pattern`): no wildcard's bounds checked in it.
+            self.pattern_type_depth += 1;
             let pattern = self.resolve_type(pat);
+            self.pattern_type_depth -= 1;
             self.bind_binder_bounds(pattern, &binders);
             self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: frame_tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
             // `typedTypeCase` types the body against the match's own expected bound.
             if matches!(self.cur_ast().ty(body), TyExpr::Match(..)) {
                 self.match_pt = pt;
             }
+            self.pattern_type_depth += 1;
             let body = self.resolve_type(body);
+            self.pattern_type_depth -= 1;
             self.match_pt = None;
             self.env.frames.pop();
             self.case_binders.truncate(mark);

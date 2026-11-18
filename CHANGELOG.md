@@ -902,6 +902,18 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   ("found Option[String], required Option[Stage]"); an extension whose given its type variable chooses finds
   `Label[Stage]` for a receiver of `Stage` where it found `Label[String]`; and one whose context bound the
   alias does not meet is refused, as scalac refuses it.
+- A wildcard argument of a written type application is held to its parameter's bounds by its two ends, as scalac holds
+  it: `type A = Up[? >: String]` for `class Up[T <: Int]` is refused ("type argument ? >: String does not overlap with
+  upper bound Int"), and `Up[? <: Int]` built; teq skipped every wildcard argument. A bound that names another
+  parameter whose argument is a wildcard meets it as the reference's `<app>#A` (`class C[A, B <: Set[A]]`, `C[? <:
+  Int, Set[Int]]` is refused against `Set[C[? <: Int, Set[Int]]#A]`), an F-bounded argument is narrowed where scalac
+  narrows it (`def f[S <: BS[?, S]](x: BS[?, S])` builds; through an alias it is refused), and an abstract type
+  member's or a higher-kinded type parameter's application is checked too (`t.M[String]` for `type M[X <: U]` of `t:
+  T[Int]`). A nested class's bounds are seen from its prefix (`new o.In[Int](5)` for `class Outer[X]: class In[T <:
+  X]` and `o: Outer[Int]` builds, which teq refused), a bound that is a kind alone holds no argument back (pos/X
+  builds), a bound or an argument reaching `caps.Pure` is held as before, a check in a `case` body sees the case's
+  GADT constraints, and nothing is checked inside a match type's cases. As scalac, a bounds error is not reported
+  after the typer's errors, and no error of a later phase is reported after it.
 
 ## 0.1.10 (2026-11-13)
 

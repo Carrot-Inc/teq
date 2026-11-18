@@ -623,7 +623,7 @@ impl<'a> Worker<'a> {
                 let k = self.self_type_member_class(c, name)?;
                 self.member_in_class(k, EMPTY_LIST, name, prefix)
             }),
-            Type::Class(c, args) => self.member_in_class(c, args, name, prefix),
+            Type::Class(c, args) => self.member_in_class(c, args, name, prefix).or_else(|| if self.bounds_projections > 0 { self.class_param_projection(c, args, name) } else { None }),
             // The refinement class's `this` while the refinement's members are resolved.
             Type::RecThis(k) => self.refine_scope_member(k, name, prefix),
             _ => {
@@ -642,6 +642,45 @@ impl<'a> Worker<'a> {
             return Some(MemberInfo::Alias(ERROR));
         }
         found
+    }
+
+    /// `C[.., ?, ..]#A` for `A` a type parameter of the class `C` whose argument is a wildcard: the argument's bounds,
+    /// as `SingleDenotation.asSeenFrom` gives a class type parameter seen from an application (`argForParam` with
+    /// `widenAbstract`), the parameter's own bounds intersected with them where those name none of the class's
+    /// parameters and the intersection is provably nonempty (`normalizedArgBounds`, Denotations.scala 1146-1162 at
+    /// 3.8.4). Asked only by a bounds check (`bounds_projections`), whose `<app>#A` it is.
+    fn class_param_projection(&mut self, c: ClassId, args: crate::types::TList, name: Name) -> Option<MemberInfo> {
+        let tparams = self.syms.class(c).tparams.clone();
+        let i = tparams.iter().position(|&p| self.syms.tparam(p).name == name)?;
+        let arg = *self.types.items(args).get(i)?;
+        // A point argument (a wildcard of equal ends is one) is itself.
+        let Some((alo, ahi)) = self.types.wild_bounds(arg) else { return Some(MemberInfo::Alias(arg)) };
+        // A variant parameter's wildcard is its end at the parameter's variance: `C[? >: Int, String]` for
+        // `class C[+A, B <: A]` builds, `Co[? <: Int, String]` is refused against `Int`.
+        match self.syms.tparam(tparams[i]).variance {
+            1 => return Some(MemberInfo::Alias(ahi)),
+            -1 => return Some(MemberInfo::Alias(alo)),
+            _ => {}
+        }
+        let (dlo, dhi) = (self.syms.tparam(tparams[i]).lower, self.syms.tparam(tparams[i]).upper);
+        if self.types.names_tparam_mapped(dlo, &tparams) || self.types.names_tparam_mapped(dhi, &tparams) {
+            return Some(MemberInfo::Bounds(alo, ahi));
+        }
+        let lo = if self.canon(dlo) == NOTHING {
+            alo
+        } else if self.canon(alo) == NOTHING {
+            dlo
+        } else {
+            self.types.union(dlo, alo)
+        };
+        let hi = if self.canon(dhi) == ANY {
+            ahi
+        } else if self.canon(ahi) == ANY {
+            dhi
+        } else {
+            self.types.inter(dhi, ahi)
+        };
+        Some(if self.frozen_sub(lo, hi) { MemberInfo::Bounds(lo, hi) } else { MemberInfo::Bounds(alo, ahi) })
     }
 
     /// A lookup that never ends: members defined through each other across the traits a class
@@ -1113,7 +1152,7 @@ impl<'a> Worker<'a> {
         let rhs = self.alias_body(a);
         let d = AliasId(self.syms.aliases.len() as u32);
         let js = self.syms.aliases[a.idx()].js;
-        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false, name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
         self.syms.alias_cells.set(d.0, Completion::Done);
         self.derived_aliases.insert(key, d);
         let seen = |t: &mut Self, ty: TypeId| -> TypeId {

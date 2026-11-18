@@ -1696,7 +1696,6 @@ valueclasses-doubledefs2.scala	marks: no error where 1 are marked
 valueclasses-impl-restrictions.scala	check: diagnostic 1 of 3: scalac's is error valueclasses-impl-restrictions.scala:2:3 Value classes may not define an inner class; teq's is error valueclasses-impl-restrictions.scala:2:9 Value classes may not define an inner class
 varargs-annot-2.scala	marks: no error where 1 are marked
 varargs-annot.scala	marks: no error where 9 are marked
-variances-constr.scala	marks: 1 errors where 2 are marked
 variances.scala	marks: 9 errors where 10 are marked
 variances1.scala	marks: no error where 1 are marked
 while-loops.scala	marks: error on an unmarked line while-loops.scala:6: Cannot rewrite recursive call: it is not in tail position

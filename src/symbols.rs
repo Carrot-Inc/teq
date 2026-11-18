@@ -565,11 +565,16 @@ pub struct TParamInfo {
     /// The upper bound as declared, where the erasure reads more of it than `upper` holds
     /// (`MethodSig::declared`); `NO_TYPE` elsewhere.
     pub declared_upper: TypeId,
+    /// Whether the upper bound is written as an alias's application (`L[S]`), which teq keeps as its expansion: an
+    /// F-bound there is no class's application to narrow (`TypeOps.boundsViolations`' `massage`).
+    pub upper_through_alias: bool,
 }
 
 #[derive(Clone)]
 pub struct AliasInfo {
     pub name: Name,
+    /// An abstract member's upper bound written as an alias's application (`TParamInfo::upper_through_alias`).
+    pub upper_through_alias: bool,
     pub owner: Owner,
     pub file: FileId,
     /// Absent for an alias read from a library, which completes through `Typer::loaded`.
@@ -1678,7 +1683,7 @@ impl Symbols {
     }
 
     pub fn new_tparam(&mut self, name: Name, variance: i8) -> TParamId {
-        TParamId(self.tparams.push(TParamInfo { name, variance, arity: 0, upper: ANY, lower: NOTHING, hk_variances: Box::new([]), declared_upper: NO_TYPE }))
+        TParamId(self.tparams.push(TParamInfo { upper_through_alias: false, name, variance, arity: 0, upper: ANY, lower: NOTHING, hk_variances: Box::new([]), declared_upper: NO_TYPE }))
     }
 
     /// Whether `s` is a member of a JS type, whose members are plain JS properties and methods.
@@ -2101,7 +2106,7 @@ mod tests {
             let c = syms.new_class(Name(1), ClassKind::Class, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
             let p = syms.new_tparam(Name(2), 0);
             let s = syms.new_sym(Name(5), SymKind::Def, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
-            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false }));
+            let a = AliasId(syms.aliases.push(AliasInfo { upper_through_alias: false, name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false }));
             syms.syms.fork();
             syms.classes.fork();
             syms.tparams.fork();

@@ -108,7 +108,7 @@ Tuple.Drop.scala	pass	check:pass
 Tuple.Elem.scala	pass	check:pass	
 TupleReverse.scala	pass	check:fail	
 TupleReverseOnto.scala	pass	check:fail	
-X.scala	fail	check:fail	X.scala:8:119: type argument m.MirroredElemTypes does not conform to upper bound [_[_]] =>> Any
+X.scala	pass	check:pass	
 Z.scala	pass	check:pass	
 abstract-inline-val.scala	fail	check:fail	abstract-inline-val.scala:6:18: inline value must have a literal constant type
 abstract-tracked-2.scala	fail	check:fail	abstract-tracked-2.scala:5:11: expected end of statement, found 'val'
@@ -450,7 +450,7 @@ i10129.scala	pass	check:pass
 i10161.scala	pass	check:pass	
 i10174.scala	pass	check:pass	
 i10217.scala	pass	check:pass	
-i10242.scala	fail	check:fail	i10242.scala:7:20: type argument x does not conform to upper bound String
+i10242.scala	fail	check:fail	i10242.scala:34:60: Cannot prove that NumElements[HCons[1, HCons[2, HNil]]] =:= NumElements[HCons[2, HCons[1, HNil]]].
 i10247.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i10253.scala	pass	check:pass	
 i10256.scala	pass	check:pass	
@@ -915,7 +915,7 @@ i1570.scala	pass	check:pass
 i15715.scala	pass	check:pass	
 i15717.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i15738.scala	pass	check:pass	
-i15743.gadt.scala	fail	check:fail	i15743.gadt.scala:11:22: type argument T does not conform to upper bound Tuple
+i15743.gadt.scala	pass	check:fail	
 i15743.moregadt.scala	fail	check:fail	i15743.moregadt.scala:8:18: type argument T does not conform to upper bound Tuple
 i15743.pass.scala	pass	check:fail	
 i15743.scala	pass	check:fail	
@@ -1224,7 +1224,7 @@ i19415.scala	pass	check:pass
 i19417	pass	check:pass	
 i19433.scala	pass	check:pass	
 i19434.scala	fail	check:fail	i19434.scala:8:42: type argument DropNames[xs] does not conform to upper bound Tuple
-i19445.scala	fail	check:fail	i19445.scala:10:41: type argument UnwrapTypes[xs] does not conform to upper bound Tuple
+i19445.scala	fail	check:fail	i19445.scala:15:16: type mismatch: found UnwrapTypes[FooBar.Bar[Int]], required Int
 i19460.scala	pass	check:pass	
 i19479.scala	fail	check:fail	i19479.scala:4:29: no given instance of type PdxEncoder[Person] was found for parameter x
 i19493.scala	fail	check:fail	i19493.scala:34:14: expected an identifier, found 'this'
@@ -1776,8 +1776,8 @@ i4837.scala	pass	check:pass
 i4854.scala	pass	check:pass	
 i4863.scala	pass	check:pass	
 i4867.scala	pass	check:pass	
-i4884.scala	fail	check:fail	i4884.scala:37:27: type argument a does not conform to upper bound D
-i4906.scala	fail	check:fail	i4906.scala:34:26: type argument a does not conform to upper bound D
+i4884.scala	pass	check:pass	
+i4906.scala	pass	check:pass	
 i4984.scala	fail	check:fail	i4984.scala:16:10: this is not a case class or enum case
 i4987.scala	pass	check:pass	
 i4988.scala	pass	check:pass	
@@ -2420,7 +2420,7 @@ named-tuple-unstable.scala	fail	check:fail	named-tuple-unstable.scala:13:18: val
 named-tuple-widen.scala	pass	check:pass	
 named-tuples-i22245.scala	pass	check:pass	
 named-tuples-ops-mirror.scala	fail	check:fail	named-tuples-ops-mirror.scala:14:11: value greet is not a member of Endpoints[GreetService]{type Fields = (greet : Endpoint[(String), String, HttpError], setGreeting : Endpoint[(String, String), Unit, HttpError])}
-named-tuples-strawman.scala	fail	check:fail	named-tuples-strawman.scala:11:36: type argument DropNames[xs] does not conform to upper bound Tuple
+named-tuples-strawman.scala	fail	check:fail	named-tuples-strawman.scala:15:5: value asInstanceOf is not a member of T
 named-tuples1.scala	pass	check:pass	
 named-typeargs.scala	fail	check:fail	named-typeargs.scala:8:28: expected ']', found '='
 namedTypeParams.scala	fail	check:fail	namedTypeParams.scala:8:7: expected ']', found '='

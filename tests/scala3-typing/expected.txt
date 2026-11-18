@@ -433,7 +433,7 @@ neg/i11897.scala	subset	5/10 lines
 neg/i11938.scala	accepts	
 neg/i11985.scala	same	
 neg/i11994.scala	std	meow
-neg/i12049.scala	superset	+1 lines: type mismatch
+neg/i12049.scala	same	
 neg/i12049d.scala	same	
 neg/i12116.scala	same	
 neg/i12116a.scala	same	
@@ -500,7 +500,7 @@ neg/i13190	superset	+1 lines: type mismatch
 neg/i13190b.scala	superset	+1 lines: type mismatch
 neg/i13218.scala	std	meow
 neg/i13320.scala	std	Booo
-neg/i13332shapeless.scala	superset	+2 lines: No given instance of type Mirror.Of[Atoms01.Atom] was found.
+neg/i13332shapeless.scala	same	
 neg/i13340.scala	same	
 neg/i13377	same	
 neg/i13435.scala	accepts	
@@ -586,7 +586,7 @@ neg/i15177.ub.scala	subset	1/2 lines
 neg/i15190.scala	same	
 neg/i15264.scala	same	
 neg/i15266.scala	same	
-neg/i15272.scala	superset	+1 lines: type argument from does not conform to upper bound nt
+neg/i15272.scala	same	
 neg/i15287.scala	same	
 neg/i15301.scala	same	
 neg/i1531.scala	same	
@@ -603,7 +603,7 @@ neg/i15474b.scala	accepts
 neg/i15507.scala	subset	6/10 lines
 neg/i15525.scala	std	element0
 neg/i15567.scala	same	
-neg/i15568.scala	accepts	
+neg/i15568.scala	same	
 neg/i15569.scala	different	type mismatch
 neg/i15575.scala	same	
 neg/i15614.scala	syntax	expected {}, found {}
@@ -725,7 +725,7 @@ neg/i18082.scala	same
 neg/i18090.scala	accepts	
 neg/i18109.scala	same	
 neg/i18122.scala	same	
-neg/i18171.scala	superset	+1 lines: type argument T does not conform to upper bound Tuple
+neg/i18171.scala	same	
 neg/i18188.scala	accepts	
 neg/i18234.scala	subset	1/63 lines	--source 3.9
 neg/i18244.scala	same	
@@ -791,7 +791,7 @@ neg/i19402.scala	syntax	expected 'using': the parameters of a given are using cl
 neg/i19413.scala	same	
 neg/i19414-desugared.scala	same	
 neg/i19414.scala	superset	+1 lines: type mismatch
-neg/i19445.scala	superset	+1 lines: type argument UnwrapTypes[xs] does not conform to upper bound Tuple
+neg/i19445.scala	same	
 neg/i19506.scala	same		--source 3.4-migration
 neg/i19594.scala	same	
 neg/i19619	oos	java
@@ -1719,7 +1719,7 @@ neg/preview-non-viral	different	{} is not a member of the package
 neg/previewOverloads.scala	different	{} is not a member of the package
 neg/previewOverride.scala	different	{} is not a member of the package
 neg/print-infix-type.scala	same	
-neg/print-tuple-union.scala	superset	+1 lines: type argument A does not conform to upper bound Tuple
+neg/print-tuple-union.scala	same	
 neg/private-case-class-constr.scala	same	
 neg/private-this-future.scala	same	
 neg/privates.scala	same	
@@ -1851,7 +1851,7 @@ neg/t2994.scala	same
 neg/t3137.scala	same	
 neg/t3272.scala	same	
 neg/t3275.scala	same	
-neg/t3683-modified.scala	superset	+2 lines: cyclic reference involving type T
+neg/t3683-modified.scala	same	
 neg/t4727.scala	same	
 neg/t4731.scala	accepts	
 neg/t4815.scala	subset	4/5 lines
@@ -1994,7 +1994,7 @@ neg/valueclasses-doubledefs2.scala	accepts
 neg/valueclasses-impl-restrictions.scala	same	
 neg/varargs-annot-2.scala	accepts	
 neg/varargs-annot.scala	accepts	
-neg/variances-constr.scala	superset	+1 lines: covariant type A occurs in contravariant position in type A of parameter x
+neg/variances-constr.scala	same	
 neg/variances.scala	different	several entry points: Test.main, Test2.main; choose one with --main
 neg/variances1.scala	accepts	
 neg/while-loops.scala	different	Cannot rewrite recursive call: it is not in tail position
@@ -2131,7 +2131,7 @@ pos/Tuple.Drop.scala	accepts
 pos/Tuple.Elem.scala	accepts	
 pos/TupleReverse.scala	std	Reverse
 pos/TupleReverseOnto.scala	std	ReverseOnto
-pos/X.scala	rejects	type argument m.MirroredElemTypes does not conform to upper bound [_[_]] =>> Any
+pos/X.scala	accepts	
 pos/Z.scala	accepts	
 pos/abstract-inline-val.scala	rejects	inline value must have a literal constant type
 pos/abstract-tracked-2.scala	syntax	expected end of statement, found {}
@@ -3867,8 +3867,8 @@ pos/i4837.scala	accepts
 pos/i4854.scala	accepts	
 pos/i4863.scala	accepts	
 pos/i4867.scala	accepts	
-pos/i4884.scala	rejects	type argument a does not conform to upper bound D
-pos/i4906.scala	rejects	type argument a does not conform to upper bound D
+pos/i4884.scala	accepts	
+pos/i4906.scala	accepts	
 pos/i4984.scala	oos	extractors
 pos/i4987.scala	accepts	
 pos/i4988.scala	accepts	

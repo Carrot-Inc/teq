@@ -256,7 +256,9 @@ impl<'a> Worker<'a> {
 
     fn resolve_type_quiet(&mut self, ty: crate::ast::TyExprId) -> Option<TypeId> {
         let n = self.diags.items.len();
+        self.pattern_type_depth += 1;
         let t = self.resolve_type(ty);
+        self.pattern_type_depth -= 1;
         self.drop_reported_since(n);
         (t != ERROR).then_some(t)
     }
@@ -578,7 +580,9 @@ impl<'a> Worker<'a> {
                 let unchecked = type_unchecked(ast, ty) || (!self.unchecked_typed_pats.is_empty() && self.unchecked_typed_pats.contains(&p));
                 let binders = self.bind_pattern_type_vars(ty);
                 let reads = self.inline.tparam_reads.get();
+                self.pattern_type_depth += 1;
                 let t = self.resolve_type(ty);
+                self.pattern_type_depth -= 1;
                 self.bound_type_vars_by_params(&binders, t);
                 let explicit = ast.reader.as_deref().and_then(|r| r.binder_bounds.get(&p)).cloned();
                 if let Some(bounds) = explicit {

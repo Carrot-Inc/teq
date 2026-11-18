@@ -101,7 +101,7 @@ binder_simple_member_kind	pass	-
 block_type_application_of_method	pass	-	
 block_unbound_placeholder	pass	-	
 bound_check_after_typer_error	fail	-	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
-bound_member_params_seen_from_prefix	fail	-	exit code 0
+bound_member_params_seen_from_prefix	pass	-	
 brace_line_left_of_first_line	fail	-	exit code 0
 brace_template_body_at_brace_width	fail	-	missing '6:7: error:'
 braced_block_overload	pass	-	
@@ -345,8 +345,8 @@ extractor_contravariant_input	pass	-
 extractor_path_repeat	pass	-	
 extractor_pattern_val_refutable	pass	-	
 extractor_tested_coverage	pass	-	
-fbound_through_sibling_member_alias	fail	-	exit code 0
-fbound_through_sibling_member_alias_member	fail	-	exit code 0
+fbound_through_sibling_member_alias	pass	-	
+fbound_through_sibling_member_alias_member	pass	-	
 fbounded_crash	pass	-	
 file_module_override_packages	fail	-	exit code 0
 file_module_overrides	fail	-	exit code 0
@@ -432,7 +432,7 @@ hidden_owner_private_nested_jvm	pass	-
 hidden_owner_unwritable_jvm	pass	-	
 higher_kinded_display	pass	-	
 hk_alias_lower_bound_join	pass	-	
-hk_argument_to_proper_parameter_of_param	fail	-	exit code 0
+hk_argument_to_proper_parameter_of_param	fail	-	missing '13:18: error: type argument List does not have the same kind as its bound'
 hk_bound_argument	pass	-	
 hk_lambda_escape	pass	-	
 hk_param_bounds_both_directions	fail	-	missing '18:14: error: type argument Option does not conform to lower bound [X] =>> List[X]'
@@ -846,7 +846,7 @@ polyfunction_refinement_members	pass	-
 positional_after_named	pass	-	
 postfix_import_scope	pass	-	
 postfix_trailing_operator	pass	-	
-pre_check_kinds_every_constructor	fail	-	missing '18:21: error: type argument Int does not have the same kind as its bound [_]'
+pre_check_kinds_every_constructor	fail	-	missing '19:19: error: type argument List does not have the same kind as its bound'
 predef_any2stringadd	pass	-	
 predef_unimport	pass	-	
 predef_unimport_conversion	pass	-	
@@ -871,6 +871,8 @@ projection_type_constructor_qualifier.check	fail	-	< tests/errors/projection_typ
 protected_given	pass	-	
 proxy_apply_access	pass	-	
 proxy_private_apply	pass	-	
+pure_bound_type_symbol	pass	-	
+pure_bound_type_symbol_jvm	pass	-	
 pure_intersection_double_definition	fail	-	missing 'Conflicting definitions:'
 qualified_this_not_enclosing	pass	-	
 quote_template_body_at_brace_width	fail	-	missing '13:7: error:'
@@ -1122,27 +1124,27 @@ wait_argument_types	pass	-
 wait_type_arguments	pass	-	
 wait_using_clause	pass	-	
 wild_join_instance	pass	-	
-wildcard_bound_abstract_member_application	fail	-	exit code 0
-wildcard_bound_both_ends	fail	-	exit code 0
-wildcard_bound_capture_through_paths	fail	-	missing 'wildcard_bound_capture_through_paths.scala:11:20: error: type argument Impl[?] does not conform to upper bound BS[BS[?, Impl[?]]#T, Impl[?]]'
-wildcard_bound_dependent_contravariant	fail	-	exit code 0
-wildcard_bound_dependent_covariant	fail	-	exit code 0
-wildcard_bound_dependent_edge	fail	-	exit code 0
-wildcard_bound_dependent_invariant	fail	-	exit code 0
-wildcard_bound_dependent_on_wildcard	fail	-	missing '13:23: error: type argument String does not conform to upper bound C[? >: Int, String]#A'
-wildcard_bound_dependent_unbounded	fail	-	exit code 0
-wildcard_bound_fbound_lower	fail	-	exit code 0
-wildcard_bound_fbound_lower_instance	fail	-	exit code 0
-wildcard_bound_fbound_narrow	fail	-	missing '23:49: error: type argument S does not conform to upper bound BS[BS[? <: String, S]#T, S]'
-wildcard_bound_fbound_param_type	fail	-	exit code 0
-wildcard_bound_fbound_shapes	fail	-	missing '29:22: error: type argument X does not conform to upper bound BS[BS[?, X]#T, X]'
-wildcard_bound_hk_param_application	fail	-	exit code 0
-wildcard_bound_match_scrutinee_nested	fail	-	exit code 0
-wildcard_bound_nested_positions	fail	-	exit code 0
-wildcard_bound_other_param	fail	-	exit code 0
+wildcard_bound_abstract_member_application	pass	-	
+wildcard_bound_both_ends	pass	-	
+wildcard_bound_capture_through_paths	pass	-	
+wildcard_bound_dependent_contravariant	pass	-	
+wildcard_bound_dependent_covariant	pass	-	
+wildcard_bound_dependent_edge	pass	-	
+wildcard_bound_dependent_invariant	pass	-	
+wildcard_bound_dependent_on_wildcard	pass	-	
+wildcard_bound_dependent_unbounded	pass	-	
+wildcard_bound_fbound_lower	pass	-	
+wildcard_bound_fbound_lower_instance	fail	-	missing '18:25: error: type argument ? >: java.util.concurrent.TimeUnit does not overlap with upper bound Enum[Enum[? >: java.util.concurrent.TimeUnit]#E]'
+wildcard_bound_fbound_narrow	pass	-	
+wildcard_bound_fbound_param_type	pass	-	
+wildcard_bound_fbound_shapes	pass	-	
+wildcard_bound_hk_param_application	pass	-	
+wildcard_bound_match_scrutinee_nested	pass	-	
+wildcard_bound_nested_positions	pass	-	
+wildcard_bound_other_param	pass	-	
 wildcard_bound_overlap	fail	-	missing '17:30: error: type argument ? >: T does not overlap with upper bound U'
-wildcard_bound_param_ends	fail	-	exit code 0
-wildcard_bound_variant_param	fail	-	exit code 0
+wildcard_bound_param_ends	pass	-	
+wildcard_bound_variant_param	pass	-	
 wildcard_bounds	fail	-	missing '17:22: error: type mismatch: found Box[String], required Box[? >: Dog]'
 wildcard_bounds_order	pass	-	
 wildcard_member_upper_bound	pass	-	

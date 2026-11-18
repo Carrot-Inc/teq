@@ -12,9 +12,9 @@ i3882.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i3882.scala:4:38 
 i4372.scala	fail	-	marks: no error where 1 are marked
 i5495.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5495.scala:13:26 value isInstanceof is not a member of List[T] - did you mean x.isInstanceOf?; teq's is error i5495.scala:13:26 value isInstanceof is not a member of List[T]
 i5826b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5826b.scala:5:25 Found:    _; teq's is error i5826b.scala:5:25 type mismatch: found Any, required Int
-i5877.scala	fail	-	marks: 3 errors where 2 are marked: i5877.scala:28:16: type mismatch: found HasThisType[_], required HasThisType[PThis]
-i6300.scala	fail	-	marks: 2 errors where 1 are marked: i6300.scala:5:47: type argument Foo[T] does not conform to upper bound Foo[Foo[T]]
-i8464a.scala	fail	-	marks: 4 errors where 1 are marked: i8464a.scala:16:18: type argument Type does not conform to upper bound Term[Type, Kind]
+i5877.scala	fail	-	check: diagnostic 1 of 11: scalac's is error i5877.scala:28:16 Recursion limit exceeded.; teq's is warning i5877.scala:11:44 `_` is deprecated for wildcard arguments of types: use `?` instead
+i6300.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6300.scala:7:23 No given instance of type Test.Foo[Test.Bar] was found for parameter e of method implicitly in object Predef.; teq's is error i6300.scala:7:23 no given instance of type Foo[Bar] w
+i8464a.scala	fail	-	marks: 3 errors where 1 are marked: i8464a.scala:17:5: type mismatch: found Term[T, K], required Term[Type, Kind]
 i9325.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i9325.scala:2:40 Found:    (Foo.Blue : Foo[String]); teq's is warning i9325.scala:2:30 Alphanumeric method compareTo is not declared infix; it should not be used as infix operator.
 interop-polytypes.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 matchtype-loop2.scala	fail	-	marks: 2 errors where 1 are marked: matchtype-loop2.scala:5:8: Recursion limit exceeded.

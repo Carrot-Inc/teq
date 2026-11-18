@@ -180,6 +180,7 @@ products_transparent_expansion_inlined_layers	pass	-
 products_transparent_forwarder_positions	pass	-	
 products_transparent_macro_call_positions	pass	-	
 products_upstream_case_apply_whole	pass	-	
+pure_bound_sibling_parameter	fail	-	< 1
 qualified_super_default_in_inner_class	fail	-	< 3
 qualified_super_mix	fail	-	< 3
 quoted_type_block	fail	-	< 1
@@ -260,4 +261,3 @@ view_open_var_extension_specificity	fail	-	< box of list of double
 view_search_bottom_builtin_members	fail	-	< scalac 3.8.4: rejected, 7 error(s)
 wildcard_bound_new_wildcard	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 wildcard_bound_parent_wildcard	fail	-	< scalac 3.8.4: rejected, 2 error(s)
-wildcard_bound_path_prefix	fail	-	< 5

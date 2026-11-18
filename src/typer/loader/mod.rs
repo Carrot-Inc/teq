@@ -1532,7 +1532,7 @@ impl<'a> Worker<'a> {
         if e.deprecated {
             crate::typer::deprecation::note_deprecated();
         }
-        self.syms.aliases.push(AliasInfo {
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false,
             name,
             owner,
             file: file_id,

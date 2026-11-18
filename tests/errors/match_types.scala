@@ -7,7 +7,7 @@
 // expect: 28:37: error: type mismatch: found 1, required Area[Shape]
 // expect: 31:25: error: type mismatch: found true, required Elem[Holder.this.X]
 // expect: does not uniquely determine parameter t
-// expect: 32:24: error: type argument Int does not conform to upper bound Tuple
+// `Tuple.Head[Int]`'s bound is not reported at 32:24: PostTyper does not run after the typer's errors above.
 // expect: 24:6: error: Recursion limit exceeded.
 // expect: Maybe there is an illegal cyclic reference?
 type Code[X] = X match

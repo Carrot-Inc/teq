@@ -1373,6 +1373,19 @@ pub struct Worker<'a> {
     /// a try of it enters, one deeper, is the retry's own, which stopping at its first plain clause
     /// leaves the lists after it to the next try; one nested in its arguments is not.
     pub app_depth: u32,
+    /// How many pattern types or match types (with a match type alias's bound) are being resolved: a wildcard argument of
+    /// a type application in one has no bounds checked (`Checking.checkAppliedType` under `Mode.Pattern`; scalac checks
+    /// nothing inside a match type).
+    pub pattern_type_depth: u32,
+    /// Whether the type application resolved last was a class's (its constructor a `Type::Ctor`), not an alias's:
+    /// a bound written as an application is read so (`TParamInfo::upper_through_alias`).
+    pub applied_class_last: bool,
+    /// A match type's selector or bound being resolved: its own application's wildcards are unchecked, the ones it
+    /// nests are checked (`PostTyper`'s `super.transform` of a `MatchTypeTree`'s bounds and selector).
+    pub unchecked_top: Option<crate::ast::TyExprId>,
+    /// How many bounds checks are comparing: only they select a class's own type parameter from an application
+    /// (`<app>#A`, `Worker::class_param_projection`), which a written `C[? <: String]#A` is not.
+    pub bounds_projections: u32,
     /// The span of the `e` of an `e _` being typed against no function type (`Migrations.typedAsFunction`'s
     /// `AnyFunctionProto`): the application there expands to a function value, a method of `()` and a
     /// vararg one too.
@@ -3276,6 +3289,10 @@ impl<'a> Worker<'a> {
             mismatch_renders: Vec::new(),
             logging: 0,
             app_depth: 0,
+            pattern_type_depth: 0,
+            applied_class_last: false,
+            unchecked_top: None,
+            bounds_projections: 0,
             any_function: None,
             last_unapply: None,
             infix_watch: u32::MAX,
@@ -3762,6 +3779,10 @@ impl<'a> Worker<'a> {
             mismatch_renders: Vec::new(),
             logging: 0,
             app_depth: 0,
+            pattern_type_depth: 0,
+            applied_class_last: false,
+            unchecked_top: None,
+            bounds_projections: 0,
             any_function: None,
             last_unapply: None,
             infix_watch: u32::MAX,

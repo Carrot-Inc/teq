@@ -3361,6 +3361,7 @@ wildcard_bound_match_type_case_body	pass	-
 wildcard_bound_match_type_pattern	pass	-	
 wildcard_bound_match_type_scrutinee	pass	-	
 wildcard_bound_overlap_accepts	pass	-	
+wildcard_bound_path_prefix	pass	-	
 wildcard_bounds	pass	-	
 wildcard_capture_param_bounds	fail	-	compile
 wildcard_lower_bound	pass	-	

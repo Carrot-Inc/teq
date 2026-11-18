@@ -1024,13 +1024,25 @@ impl Diagnostics {
     /// syntax diagnostics where the report is not `whole`.
     fn presented_from(&self, from: usize, whole: bool) -> impl Iterator<Item = &Diagnostic> {
         let syntax = self.syntax_errors;
-        let earlier = self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
-        let failed = self.typer_failed();
+        // A late record of PostTyper's (the deferred bounds checks) gives way to the parser's and the typer's errors only
+        // (PostTyper does not run after the typer reported one), and stops the phases after it as a typer error does
+        // (no later phase runs after PostTyper reported one).
+        let post = self.items.iter().any(|d| !d.is_warning && !d.dependent && d.late && d.position.group == Group::PostTyper);
+        let before_post = self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax) && !d.position.group.after_typer());
+        let earlier = post || self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
+        let failed = post || self.typer_failed();
         let hidden = self.hidden_inlined(earlier, failed);
         self.syntax
             .iter()
             .filter(move |_| whole)
-            .chain(self.items.iter().enumerate().skip(from).filter(move |(i, d)| !d.dependent && !(d.unknown && syntax) && !(d.late && earlier) && !(d.by_phase && failed) && !hidden.contains(i)).map(|(_, d)| d))
+            .chain(
+                self.items
+                    .iter()
+                    .enumerate()
+                    .skip(from)
+                    .filter(move |(i, d)| !d.dependent && !(d.unknown && syntax) && !(d.late && if d.position.group == Group::PostTyper { before_post } else { earlier }) && !(d.by_phase && failed) && !hidden.contains(i))
+                    .map(|(_, d)| d),
+            )
     }
 
     /// Whether the typer failed, after which scalac runs no phase: the program has a syntax error
@@ -1051,8 +1063,9 @@ impl Diagnostics {
     #[cold]
     fn trace_unpresented(&self) {
         let syntax = self.syntax_errors;
-        let earlier = self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
-        let failed = self.typer_failed();
+        let post = self.items.iter().any(|d| !d.is_warning && !d.dependent && d.late && d.position.group == Group::PostTyper);
+        let earlier = post || self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
+        let failed = post || self.typer_failed();
         let hidden = self.hidden_inlined(earlier, failed);
         for (i, d) in self.items.iter().enumerate() {
             let why = if d.dependent {
