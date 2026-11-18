@@ -55,7 +55,8 @@
 # compiled the same way; quotenest-lib, tests/support/quote_nest_lib.scala compiled the same way; aliasval-lib,
 # tests/support/alias_val_lib.scala compiled the same way; aliastop-lib, tests/support/alias_top_lib.scala compiled
 # the same way; aliasimp-lib, tests/support/alias_imported_lib.scala compiled the same way; aliasgiven-lib,
-# tests/support/alias_given_lib.scala compiled the same way; missingdep-lib,
+# tests/support/alias_given_lib.scala compiled the same way; toplevel-lib, tests/support/toplevel_members_lib.scala
+# compiled the same way; missingdep-lib,
 # tests/support/missing_dep/A.scala compiled against dep/B.scala into a jar without it; missingclass-mixed,
 # tests/support/missing_class_mixed's Scala and Java classes compiled against its Gone2 into a jar without it; lazyorder-lib,
 # tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib, tests/support/ctorinit_lib.scala
@@ -700,6 +701,20 @@ alias_given_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/toplevel_members_lib.scala compiled by scalac into a jar: an extension and two givens a package
+# declares at its top level, members of the file's package object.
+toplevel_members_lib_jar() {
+  local src=tests/support/toplevel_members_lib.scala
+  local jar=$scratch/toplevel-lib.jar
+  local dir=$scratch/toplevel-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/toplevel_members_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/erased_overloads_lib.scala compiled by scalac into a jar: overloads scala-library's erasure tells apart.
 erased_overloads_lib_jar() {
   local src=tests/support/erased_overloads_lib.scala
@@ -1170,6 +1185,7 @@ jar_of() {
     aliastop-lib) alias_top_lib_jar ;;
     aliasimp-lib) alias_imported_lib_jar ;;
     aliasgiven-lib) alias_given_lib_jar ;;
+    toplevel-lib) toplevel_members_lib_jar ;;
     missingdep-lib) missingdep_lib_jar ;;
     missingclass-mixed) missingclass_mixed_jar ;;
     predef-lib) predef_lib_jar ;;

@@ -2456,7 +2456,7 @@ impl<'a> Worker<'a> {
 
     /// The package a member of `owner` is a member of: the package itself, or the one around a
     /// package object (dotty's `skipWeakOwner`).
-    fn effective_package(&self, owner: Owner) -> Option<PkgId> {
+    pub(super) fn effective_package(&self, owner: Owner) -> Option<PkgId> {
         match owner {
             Owner::Package(p) => Some(p),
             Owner::Class(c) if self.is_package_object(c) => match self.syms.class(c).owner {
@@ -13630,7 +13630,7 @@ impl<'a> Worker<'a> {
         if self.drops_java_parens(call.sym, &l) {
             l.remove(0);
         }
-        self.attribute_extension(call.sym);
+        self.attribute(call.sym);
         let sym = call.sym;
         let applied = self.apply_method(call, None, targs, l, span, expected, false);
         // After the application, so that the outermost one an argument's typing nests is read.

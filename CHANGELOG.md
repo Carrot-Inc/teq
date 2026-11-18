@@ -13,6 +13,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - `teq test` no longer runs on a test JVM that kept the environment of an earlier invocation: the runner the
   daemon starts ahead for the next run is used only by a client of the same environment, so `FOO=2 teq test`
   after `FOO=1 teq test` sees `FOO=2`.
+- `--wunused imports` no longer calls `import p.*` unused where what it brings is an extension a library declares
+  at the top level of package `p`: ip4s's `ip"127.0.0.1"` and `port"8080"` with `import com.comcast.ip4s.*`.
+  Such a definition is a member of its file's package object in the library, which the import's prefix now
+  looks through, as scalac's does; so does a given such a package declares, imported by `p.given` or by its
+  name and found by a search. A build under `--werror` stopped on the warning. A selector that renames what a search
+  finds (`import p.{number as n}` with `summon[Long]`) is no longer counted as used, as scalac does not count it.
 - A member whose declared type is `Unit` drops the value of its body, as every other place that expects `Unit`
   does: `def paid: Unit = bump()`, a `val`, `var`, `lazy val` or `given` of type `Unit`, an override and a
   local `def`, with the value the whole body or a branch of an `if`, a case, a handler or a block's end, and

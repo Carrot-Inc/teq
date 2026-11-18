@@ -145,7 +145,6 @@ struct Facts {
     name: Name,
     given: bool,
     scala3_given: bool,
-    renamed: bool,
     via: GivenScope,
 }
 
@@ -196,7 +195,7 @@ pub struct Unused {
 /// What an attribution looks for, the key of its memo.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Target {
-    Sym(SymId, bool, u64),
+    Sym(SymId, u64),
     Class(ClassId),
     Package(PkgId),
 }
@@ -211,7 +210,7 @@ impl Unused {
         self.quiet.retain(|_, imports| !imports.iter().any(&stale));
         self.memo.retain(|&(_, target), found| {
             let own = match target {
-                Target::Sym(s, _, _) => s.0 >= crate::arena::LOCAL_BASE,
+                Target::Sym(s, _) => s.0 >= crate::arena::LOCAL_BASE,
                 Target::Class(c) => c.0 >= crate::arena::LOCAL_BASE,
                 Target::Package(p) => p.0 >= crate::arena::LOCAL_BASE,
             };
@@ -227,7 +226,7 @@ impl Unused {
         v.field("Unused::memo", |v| {
             for (&(_, target), found) in self.memo.iter() {
                 match target {
-                    Target::Sym(s, _, _) => v.sym(s),
+                    Target::Sym(s, _) => v.sym(s),
                     Target::Class(c) => v.class(c),
                     Target::Package(p) => v.pkg(p),
                 }
@@ -774,7 +773,7 @@ impl<'a> Worker<'a> {
         let winners = std::mem::take(&mut self.unused.given_winners);
         if commit {
             for &(g, via) in &winners {
-                self.attribute_as(g, true, via);
+                self.attribute_as(g, via);
                 self.attribute_prefixes(g, via);
                 // An implicit argument's reference reads the given (`refUsage`), and the objects
                 // of its path, which its tree names (`Foo.int`).
@@ -1061,27 +1060,22 @@ impl<'a> Worker<'a> {
     /// that brings `sym` where the search stands, walking out from the innermost scope; a named
     /// import beats a wildcard, and of one precedence the innermost wins. A scope that defines
     /// `sym` ends the walk, and so does an enclosing class of this file that has it as a member,
-    /// which takes it from any import met before (CheckUnused's `Definition`).
+    /// which takes it from any import met before (CheckUnused's `Definition`). A selector that
+    /// renames the symbol is not credited: CheckUnused matches it by the name the tree uses, the
+    /// symbol's own (`import A.f as f2` stays unused by `2.f`, `import p.{n as m}` by a summon).
     pub(super) fn attribute(&mut self, sym: SymId) {
-        self.attribute_as(sym, true, GivenScope::Lexical);
+        self.attribute_as(sym, GivenScope::Lexical);
     }
 
     /// `attribute` for what a search read on the object or value `via`, the receiver a
     /// conversion was applied through.
     pub(super) fn attribute_via(&mut self, sym: SymId, via: GivenScope) {
-        self.attribute_as(sym, true, via);
-    }
-
-    /// An extension method applied by the extension syntax: as `attribute`, but a selector that
-    /// renames it is not credited, since CheckUnused matches a renamed selector by the name the
-    /// typer leaves in the tree, the method's own (`import A.f as f2` stays unused by `2.f2`).
-    pub(super) fn attribute_extension(&mut self, sym: SymId) {
-        self.attribute_as(sym, false, GivenScope::Lexical);
+        self.attribute_as(sym, via);
     }
 
     /// `via` is what a search read the symbol on: an object (`Module`) or a stable value
     /// (`Value`) takes only an import of that one, CheckUnused's prefix test.
-    fn attribute_as(&mut self, sym: SymId, renamed: bool, via: GivenScope) {
+    fn attribute_as(&mut self, sym: SymId, via: GivenScope) {
         if !self.marking() {
             return;
         }
@@ -1105,10 +1099,10 @@ impl<'a> Worker<'a> {
         // Past the frames that may define it, with no import of a block or a class visible, the
         // answer is the file's imports': memoised.
         let via_code = via.memo_code();
-        let key = Target::Sym(sym, renamed, via_code);
+        let key = Target::Sym(sym, via_code);
         let given = self.syms.is_given(sym);
         let scala3_given = self.syms.sym(sym).mods & crate::ast::mods::GIVEN != 0 || self.syms.sym(sym).kind == SymKind::Given;
-        let facts = Facts { sym, owner, name, given, scala3_given, renamed, via };
+        let facts = Facts { sym, owner, name, given, scala3_given, via };
         let n_local = self.env.imports.len();
         let mut best: Option<(ResolvedImport, u8)> = None;
         let mut next = 0;
@@ -1164,9 +1158,9 @@ impl<'a> Worker<'a> {
     }
 
     fn consider_import(&mut self, imp: ResolvedImport, facts: &Facts, best: &mut Option<(ResolvedImport, u8)>) {
-        let Facts { sym, owner, name, given, scala3_given, renamed, via } = *facts;
+        let Facts { sym, owner, name, given, scala3_given, via } = *facts;
         let Some((_, bound)) = self.sel_of(imp) else { return };
-        if !renamed && imp.name.is_some_and(|n| n != name) {
+        if imp.name.is_some_and(|n| n != name) {
             return;
         }
         // CheckUnused's precedence: a named import 2, a wildcard 3; a later find replaces an
@@ -1186,10 +1180,12 @@ impl<'a> Worker<'a> {
             (Owner::Class(o), GivenScope::Lexical) => o == c || t.derives_from(c, o),
             _ => false,
         };
+        // A top-level definition read from a class path is a member of its file's package object,
+        // which the import's prefix skips (CheckUnused's `skipPackageObject`).
         let in_pkg = |t: &Self, p: PkgId| match via {
-            GivenScope::Module(m) => t.syms.pkg(p).package_object == Some(m),
+            GivenScope::Module(m) => t.syms.pkg(p).package_object == Some(m) || t.effective_package(Owner::Class(m)) == Some(p),
             GivenScope::Value(_) | GivenScope::Path(_) => false,
-            GivenScope::Lexical => owner == Owner::Package(p),
+            GivenScope::Lexical => t.effective_package(owner) == Some(p),
         };
         let of_value = |t: &mut Self, v: crate::typer::ValueImport| match via {
             GivenScope::Value(w) => v == w,

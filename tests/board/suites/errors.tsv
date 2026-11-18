@@ -1045,6 +1045,8 @@ unused_imports_blocks	pass	-
 unused_imports_can_equal_bound	pass	-	
 unused_imports_can_equal_wildcard	pass	-	
 unused_imports_class_header_annotations	pass	-	
+unused_imports_classpath_toplevel	pass	-	
+unused_imports_classpath_toplevel_members	pass	-	
 unused_imports_conversion_receiver	pass	-	
 unused_imports_crlf	pass	-	
 unused_imports_duplicates	pass	-	
@@ -1060,6 +1062,7 @@ unused_imports_packages	pass	-
 unused_imports_patterns	pass	-	
 unused_imports_qualified	pass	-	
 unused_imports_receiver	pass	-	
+unused_imports_renamed_search	pass	-	
 unused_imports_renames	pass	-	
 unused_imports_selectors	pass	-	
 unused_imports_settled	pass	-	
