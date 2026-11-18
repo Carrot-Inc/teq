@@ -638,6 +638,25 @@ else
 fi
 extra_jar one
 task test app '*Resources' > /dev/null
+# A runner kept for the next invocation serves a client of the environment it was started with alone: a client of
+# another environment has it stopped and runs on a runner of its own environment, the one kept after it of that one.
+changed=$(log_count '^stopping the test runner of app/test: what it was started with changed')
+TEQ_TASK_PROBE=one task test app '*Via*' > /dev/null
+probe_of() { tr '\0' '\n' < "/proc/$1/environ" 2> /dev/null | grep '^TEQ_TASK_PROBE='; }
+out=$(TEQ_TASK_PROBE=two task test app '*Via*')
+kept=$(next_runner)
+# The kept runner's own environment, read while it waits (the next run retires it); a system without /proc
+# (macOS) is held to the log's count alone.
+if [ -d /proc ]; then seen=$(probe_of "$kept"); else seen='TEQ_TASK_PROBE=two'; fi
+TEQ_TASK_PROBE=two task test app '*Via*' > /dev/null
+if [[ "$out" == *"app: 1 suite, 1 passed"* ]] && [ "$(log_count '^stopping the test runner of app/test: what it was started with changed')" = $((changed + 2)) ] \
+  && [ "$seen" = 'TEQ_TASK_PROBE=two' ]; then
+  pass "a runner kept for the next invocation is stopped for a client of another environment, kept for one of the same"
+else
+  fail "the client's environment: $out // stopped for a change $(( $(log_count '^stopping the test runner of app/test: what it was started with changed') - changed )) times, the kept runner's $seen"
+fi
+# The runner kept for what follows is one of the suite's own environment again.
+task test app '*Via*' > /dev/null
 pid=$(next_runner)
 kill "$pid"
 for _ in $(seq 100); do alive "$pid" || break; sleep 0.1; done

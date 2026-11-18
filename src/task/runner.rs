@@ -228,6 +228,9 @@ pub struct Spec {
     pub options: Vec<String>,
     pub directory: PathBuf,
     pub env: BTreeMap<String, String>,
+    /// The environment of the client the runner was started for, beneath `env`: a runner kept
+    /// for the next invocation serves it only where that client's environment is the same.
+    pub environment: BTreeMap<String, String>,
     /// test-interface alone (`interface_dir`), a directory named by its digest.
     pub interface: PathBuf,
 }
@@ -433,7 +436,7 @@ impl Runner {
     /// Starts the runner's JVM in the spec's directory, with the client's environment and the
     /// spec's variables, its class path, its own classes and the interface, in an argument file
     /// (a long one passes Windows' limit on a command line); `handshake` then reads its version.
-    pub fn launch(spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path) -> Result<Runner, String> {
+    pub fn launch(spec: Spec, argfile: &Path) -> Result<Runner, String> {
         let classpath = vec![classes_dir()?, spec.interface.clone()];
         if let Some(dir) = argfile.parent() {
             std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {}", dir.display(), e))?;
@@ -447,7 +450,7 @@ impl Runner {
             .arg(&token)
             .current_dir(&spec.directory)
             .env_clear()
-            .envs(environment)
+            .envs(&spec.environment)
             .envs(&spec.env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

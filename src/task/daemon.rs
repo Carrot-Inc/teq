@@ -1044,7 +1044,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
                 return 2;
             }
         }
-        match start_runner(state, key, spec, &request.environment, &argfile, Some((reply, &finished))) {
+        match start_runner(state, key, spec, &argfile, Some((reply, &finished))) {
             Ok(r) => *runner = Some(r),
             Err(e) => {
                 failed(request, key, e, reply);
@@ -1056,7 +1056,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     // invocation alone, as sbt's worker serves one request, and every way out from here spends it.
     let spend = |runner: &mut Option<Runner>, failed: bool| {
         if let Some(spent) = runner.take() {
-            *runner = renew(state, spent, key, &request.environment, &argfile, failed);
+            *runner = renew(state, spent, key, &argfile, failed);
         }
     };
     let r = runner.as_mut().expect("started");
@@ -1866,8 +1866,8 @@ impl Drop for Finished {
 /// it.
 /// A runner launched, registered for an ending daemon's kill pass, and its frameworks loaded; `watched`, the client
 /// waiting for it, has it killed when it leaves.
-fn start_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path, watched: Option<(&Reply, &Finished)>) -> Result<Runner, Failure> {
-    launch_runner(state, key, spec, environment, argfile).and_then(|mut r| {
+fn start_runner(state: &State, key: &Key, spec: Spec, argfile: &Path, watched: Option<(&Reply, &Finished)>) -> Result<Runner, Failure> {
+    launch_runner(state, key, spec, argfile).and_then(|mut r| {
         if let Some((reply, finished)) = watched {
             kill_when_gone(reply, finished, r.process(), key);
         }
@@ -1882,13 +1882,13 @@ fn start_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<Str
 }
 
 /// A runner launched and registered for an ending daemon's kill pass.
-fn launch_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path) -> Result<Runner, Failure> {
+fn launch_runner(state: &State, key: &Key, spec: Spec, argfile: &Path) -> Result<Runner, Failure> {
     // Launched under the registry's lock, so that an ending daemon's kill pass either sees the
     // process or the launch sees the daemon ending.
     let mut processes = state.runner_processes.lock().unwrap_or_else(|e| e.into_inner());
     match state.ending.lock().unwrap_or_else(|e| e.into_inner()).clone() {
         Some(why) => Err(Failure::crash(format!("the daemon is ending ({})", why))),
-        None => Runner::launch(spec, environment, argfile).map_err(Failure::from).inspect(|r| {
+        None => Runner::launch(spec, argfile).map_err(Failure::from).inspect(|r| {
             processes.insert(key.clone(), r.process());
         }),
     }
@@ -1904,7 +1904,7 @@ fn launch_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<St
 /// client is answered: its JVM starts while the client reads the run, nothing of the test class path loaded until the
 /// next `test` sends it `load` after its build, and the next `test` reads its version. None when it cannot be
 /// launched, the next `test` starting its own.
-fn renew(state: &State, spent: Runner, key: &Key, environment: &BTreeMap<String, String>, argfile: &Path, failed: bool) -> Option<Runner> {
+fn renew(state: &State, spent: Runner, key: &Key, argfile: &Path, failed: bool) -> Option<Runner> {
     let spec = spent.spec.clone();
     if failed {
         log(&format!("stopping the test runner of {}: its run failed, its tasks in flight and done() given {} s", key, STOP_BOUND.as_secs()));
@@ -1927,7 +1927,7 @@ fn renew(state: &State, spent: Runner, key: &Key, environment: &BTreeMap<String,
         stopped.store(true, Ordering::SeqCst);
     });
     log(&format!("starting the test runner of {} for the next run: {}", key, spec.java.display()));
-    launch_runner(state, key, spec, environment, argfile).inspect_err(|e| log(&format!("the test runner of {} for the next run did not start: {}", key, e.message()))).ok()
+    launch_runner(state, key, spec, argfile).inspect_err(|e| log(&format!("the test runner of {} for the next run did not start: {}", key, e.message()))).ok()
 }
 
 fn kill_when_gone(reply: &Reply, finished: &Finished, process: Arc<Mutex<std::process::Child>>, key: &Key) {
@@ -1954,6 +1954,7 @@ fn runner_spec(export: &Export, key: &Key, context: &TestContext, environment: &
         options: context.java_options.clone(),
         directory: if context.sandbox { export.sandbox_directory(key) } else { export.path(&context.base_directory) },
         env: context.env(export),
+        environment: environment.clone(),
         interface,
     })
 }
