@@ -15,6 +15,7 @@
 # Env: TEQ (default ./target/release/teq); COURSIER (the coursier launcher initdump.py resolves scalac with, `cs`).
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
+TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
 . tests/support/pending.sh
 work=out/init-view
 mkdir -p "$work/oracle" "$work/teq"
@@ -49,7 +50,7 @@ for dir in tests/init-view/programs/*/; do
   rm -rf "${out:?}"
   mkdir -p "$out"
   abs=$(cd "$dir" && pwd)
-  if ! (cd "$dir" && timeout 120 "$OLDPWD/$TEQ" compiler check *.scala --std scala-library --products "$OLDPWD/$out/p") > "$out/check.txt" 2>&1; then
+  if ! (cd "$dir" && timeout 120 "$TEQ" compiler check *.scala --std scala-library --products "$OLDPWD/$out/p") > "$out/check.txt" 2>&1; then
     pending_fail "$name" "teq's products: $(head -1 "$out/check.txt")"
     fail=$((fail + 1))
     continue
