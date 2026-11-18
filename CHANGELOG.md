@@ -15,6 +15,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   the construction. teq read the parameter on a module of the class, which has none: the JavaScript build panicked
   or its run failed (`Nam$ is not defined`), the interpreter threw a NullPointerException and the JVM's class a
   NoSuchFieldError.
+- The TASTy of a product (`--products`, and so the sbt plugin's and Mill's builds) holds the body of a member
+  whose result type is inferred and whose first use comes inside an implicit conversion that is tried and
+  given up: `x.foo(y)` where the nearer conversion needs a given the program lacks (an `Ord[Int]`) and a
+  farther one serves, with `foo` of the first conversion's class written `def foo(b: A) = List(a, b).head`.
+  Such a body was left out of the product. At one worker in a build of several files it was written with
+  `Any` where the member's type parameter stood, which scalac refuses to read back. At several workers the
+  product could differ from one build to the next. The program's output was right in each case.
 - A build at several workers (`--threads`, or the count teq picks for a large program) could stop with the
   compiler's own "index out of bounds" in the place of its result, about one build in two of such a program:
   where an inline method's body calls a member that the platform gives an `Array` or a `String` (`a.length`,

@@ -1165,60 +1165,78 @@ impl<'a> Worker<'a> {
             }),
             None => c.changed.clear(),
         }
-        let zonk = |w: &mut Worker<'a>, t: TypeId| if t == crate::tir::NO_TYPE || !w.types.has_vars(t) { t } else { w.zonk(t) };
         for f in files {
             let keys = c.made.get(&f).cloned().unwrap_or_default();
-            for k in keys {
-                match k {
-                    Key::Targs(e) => {
-                        if let Some(l) = c.targs.get(&e).copied() {
-                            let items: Vec<TypeId> = self.types.items(l).to_vec();
-                            if items.iter().any(|&t| self.types.has_vars(t)) {
-                                let z: Vec<TypeId> = items.into_iter().map(|t| zonk(self, t)).collect();
-                                c.targs.insert(e, self.types.list(&z));
-                            }
-                        }
-                    }
-                    Key::Form(e) => {
-                        if let Some(f) = c.forms.get_mut(&e) {
-                            let types = self.types.clone();
-                            *f = map_form(*f, &types, &mut |t| zonk(self, t), &|s| s);
-                        }
-                    }
-                    Key::Wrap(e) => {
-                        for w in c.wraps.get_mut(&e).into_iter().flatten() {
-                            *w = map_wrap(*w, &mut |t| zonk(self, t));
-                        }
-                    }
-                    Key::Inline(e) => {
-                        for call in c.inline_calls.get_mut(&e).into_iter().flatten() {
-                            let items: Vec<TypeId> = self.types.items(call.targs).to_vec();
-                            if items.iter().any(|&t| self.types.has_vars(t)) {
-                                let z: Vec<TypeId> = items.into_iter().map(|t| zonk(self, t)).collect();
-                                call.targs = self.types.list(&z);
-                            }
-                        }
-                    }
-                    Key::Builtin(_) | Key::Receiver(_) | Key::Evidence(_) | Key::Tree(_) => {}
-                    Key::Pat(p) => {
-                        if let Some(PatForm::Seq(t)) = c.pats.get_mut(&p) {
-                            *t = zonk(self, *t);
-                        }
-                    }
-                    Key::Local(s) => {
-                        if let Some(l) = c.locals.get_mut(&s) {
-                            l.ty = l.ty.map(|t| zonk(self, t));
-                        }
-                    }
-                    Key::Class(_) | Key::BlockClasses(_) => {}
-                }
-            }
+            self.zonk_records(&mut c, &keys);
             if let Some(keys) = c.made.get(&f) {
                 c.sync_published(keys);
             }
         }
         self.prog.capture = Some(c);
         finish_measure("zonked");
+    }
+}
+
+impl<'a> Worker<'a> {
+    /// The records `unit` made at the positions `from..to` of its list, their types zonked: work
+    /// done on demand settled at its end (`hold_capture`).
+    pub(super) fn zonk_capture_range(&mut self, unit: FileId, from: usize, to: usize) {
+        let Some(mut c) = self.prog.capture.take() else { return };
+        let keys: Vec<Key> = c.made.get(&unit).map(|k| k[from.min(k.len())..to.min(k.len())].to_vec()).unwrap_or_default();
+        self.zonk_records(&mut c, &keys);
+        c.sync_published(&keys);
+        self.prog.capture = Some(c);
+    }
+
+    /// The types the records of `keys` hold, zonked: the typing that made them is over
+    /// (`finish_capture_of`, `zonk_capture_range`).
+    fn zonk_records(&mut self, c: &mut Capture, keys: &[Key]) {
+        let zonk = |w: &mut Worker<'a>, t: TypeId| if t == crate::tir::NO_TYPE || !w.types.has_vars(t) { t } else { w.zonk(t) };
+        for &k in keys {
+            match k {
+                Key::Targs(e) => {
+                    if let Some(l) = c.targs.get(&e).copied() {
+                        let items: Vec<TypeId> = self.types.items(l).to_vec();
+                        if items.iter().any(|&t| self.types.has_vars(t)) {
+                            let z: Vec<TypeId> = items.into_iter().map(|t| zonk(self, t)).collect();
+                            c.targs.insert(e, self.types.list(&z));
+                        }
+                    }
+                }
+                Key::Form(e) => {
+                    if let Some(f) = c.forms.get_mut(&e) {
+                        let types = self.types.clone();
+                        *f = map_form(*f, &types, &mut |t| zonk(self, t), &|s| s);
+                    }
+                }
+                Key::Wrap(e) => {
+                    for w in c.wraps.get_mut(&e).into_iter().flatten() {
+                        *w = map_wrap(*w, &mut |t| zonk(self, t));
+                    }
+                }
+                Key::Inline(e) => {
+                    for call in c.inline_calls.get_mut(&e).into_iter().flatten() {
+                        let items: Vec<TypeId> = self.types.items(call.targs).to_vec();
+                        if items.iter().any(|&t| self.types.has_vars(t)) {
+                            let z: Vec<TypeId> = items.into_iter().map(|t| zonk(self, t)).collect();
+                            call.targs = self.types.list(&z);
+                        }
+                    }
+                }
+                Key::Builtin(_) | Key::Receiver(_) | Key::Evidence(_) | Key::Tree(_) => {}
+                Key::Pat(p) => {
+                    if let Some(PatForm::Seq(t)) = c.pats.get_mut(&p) {
+                        *t = zonk(self, *t);
+                    }
+                }
+                Key::Local(s) => {
+                    if let Some(l) = c.locals.get_mut(&s) {
+                        l.ty = l.ty.map(|t| zonk(self, t));
+                    }
+                }
+                Key::Class(_) | Key::BlockClasses(_) => {}
+            }
+        }
     }
 }
 
@@ -1607,6 +1625,9 @@ impl<'a> Worker<'a> {
 pub(super) struct CaptureMark {
     unit: FileId,
     at: (usize, usize),
+    /// The attempt the mark was taken for, which a drop gives up: work done on demand it keeps
+    /// keeps its records (`Capture::held`).
+    attempt: Option<crate::tir::capture::Dropper>,
 }
 
 impl<'a> Worker<'a> {
@@ -1614,16 +1635,25 @@ impl<'a> Worker<'a> {
     pub(super) fn capture_mark(&self) -> Option<CaptureMark> {
         let c = self.prog.capture.as_deref()?;
         let unit = self.typing_unit();
-        Some(CaptureMark { unit, at: c.mark(unit) })
+        Some(CaptureMark { unit, at: c.mark(unit), attempt: None })
+    }
+
+    /// `capture_mark` for the attempt `m`, just begun, whose failure drops what it added.
+    #[inline]
+    pub(super) fn capture_mark_for(&self, m: &super::state::Mark) -> Option<CaptureMark> {
+        let mut mark = self.capture_mark()?;
+        mark.attempt = Some(m.dropper());
+        Some(mark)
     }
 
     /// Puts the capture back where `mark` found it: an alternative tried and given up, whose
-    /// nodes no body holds and whose changes to the records of others no body keeps.
+    /// nodes no body holds and whose changes to the records of others no body keeps. What work
+    /// done on demand recorded meanwhile stays where the attempt keeps that work.
     #[cold]
     #[inline(never)]
     pub(super) fn capture_drop_since(&mut self, mark: Option<CaptureMark>) {
         let (Some(mark), Some(c)) = (mark, self.prog.capture.as_deref_mut()) else { return };
-        c.drop_since(mark.unit, mark.at);
+        c.drop_since_for(mark.unit, mark.at, mark.attempt);
     }
 }
 
@@ -1851,5 +1881,96 @@ mod tests {
         c.copy(unit, TExprId(1), TExprId(2));
         assert_eq!(c.wraps[&TExprId(2)], c.wraps[&TExprId(1)]);
         assert_eq!(c.forms.get(&TExprId(2)), Some(&Form::ByName));
+    }
+
+    #[test]
+    fn a_drop_keeps_what_work_it_keeps_recorded_past_the_mark() {
+        use crate::tir::capture::{Dropper, Held, HoldKeep};
+        let types = TypeStore::new();
+        let mut c = Capture::new(vec![true], vec![true]);
+        let unit = FileId(0);
+        c.form(unit, TExprId(1), Form::ByName);
+        let mark = c.mark(unit);
+        c.targs(unit, TExprId(2), types.list(&[ANY]));
+        // A body typed on demand inside the try: two records, held for a definition made before it.
+        let from = c.mark(unit);
+        c.form(unit, TExprId(3), Form::Repeated(ANY));
+        c.targs(unit, TExprId(4), types.list(&[ANY]));
+        let to = c.mark(unit);
+        c.held.push(Held { unit, made: (from.0 as u32, to.0 as u32), changed: (from.1 as u32, to.1 as u32), keep: HoldKeep::Made(5) });
+        c.form(unit, TExprId(6), Form::ByName);
+        assert_eq!(c.drop_since_for(unit, mark, Some(Dropper { syms: 9, seq: 3 })), 2);
+        assert!(c.forms.contains_key(&TExprId(1)) && c.forms.contains_key(&TExprId(3)) && c.targs.contains_key(&TExprId(4)));
+        assert!(!c.targs.contains_key(&TExprId(2)) && !c.forms.contains_key(&TExprId(6)));
+        assert_eq!(c.made[&unit], vec![Key::Form(TExprId(1)), Key::Form(TExprId(3)), Key::Targs(TExprId(4))]);
+        // The hold moved with its records.
+        assert_eq!((c.held[0].made.0, c.held[0].made.1), (1, 3));
+    }
+
+    #[test]
+    fn a_drop_undoes_work_the_attempt_does_not_keep() {
+        use crate::tir::capture::{Dropper, Held, HoldKeep};
+        let mut c = Capture::new(vec![true], vec![true]);
+        let unit = FileId(0);
+        let mark = c.mark(unit);
+        let from = c.mark(unit);
+        c.form(unit, TExprId(3), Form::ByName);
+        let to = c.mark(unit);
+        // Work for a definition the attempt made itself (its symbol past the attempt's count), and an
+        // argument's typing under a cache opened after the attempt began.
+        c.held.push(Held { unit, made: (from.0 as u32, to.0 as u32), changed: (from.1 as u32, to.1 as u32), keep: HoldKeep::Made(12) });
+        let from = c.mark(unit);
+        c.form(unit, TExprId(4), Form::ByName);
+        let to = c.mark(unit);
+        c.held.push(Held { unit, made: (from.0 as u32, to.0 as u32), changed: (from.1 as u32, to.1 as u32), keep: HoldKeep::Since(7) });
+        assert_eq!(c.drop_since_for(unit, mark, Some(Dropper { syms: 9, seq: 7 })), 2);
+        assert!(c.forms.is_empty() && c.held.is_empty());
+    }
+
+    #[test]
+    fn a_kept_change_stays_and_its_place_follows_the_kept_records() {
+        use crate::tir::capture::{Dropper, Held, HoldKeep};
+        let mut c = Capture::new(vec![true], vec![true]);
+        let unit = FileId(0);
+        c.form(unit, TExprId(1), Form::ByName);
+        let mark = c.mark(unit);
+        c.form(unit, TExprId(2), Form::ByName);
+        // An expansion kept as a waiting call's typing: it makes a record and changes an earlier one.
+        let from = c.mark(unit);
+        c.form(unit, TExprId(3), Form::ByName);
+        c.form(unit, TExprId(1), Form::Widening);
+        let to = c.mark(unit);
+        c.held.push(Held { unit, made: (from.0 as u32, to.0 as u32), changed: (from.1 as u32, to.1 as u32), keep: HoldKeep::Since(2) });
+        assert_eq!(c.drop_since_for(unit, mark, Some(Dropper { syms: 0, seq: 3 })), 1);
+        assert_eq!(c.forms.get(&TExprId(1)), Some(&Form::Widening));
+        assert!(c.forms.contains_key(&TExprId(3)) && !c.forms.contains_key(&TExprId(2)));
+        // The change counts the records made before it: the one before the mark and the kept one.
+        assert_eq!(c.changed[&unit].iter().map(|(s, _)| *s).collect::<Vec<_>>(), vec![2]);
+        // An outer attempt that does not keep the work takes it all back.
+        assert_eq!(c.drop_since_for(unit, (1, 0), Some(Dropper { syms: 0, seq: 1 })), 1);
+        assert_eq!(c.forms.get(&TExprId(1)), Some(&Form::ByName));
+        assert!(!c.forms.contains_key(&TExprId(3)));
+    }
+
+    #[test]
+    fn a_kept_change_over_the_attempts_own_change_keeps_the_works_value() {
+        use crate::tir::capture::{Dropper, Held, HoldKeep};
+        let mut c = Capture::new(vec![true], vec![true]);
+        let unit = FileId(0);
+        let e = TExprId(1);
+        c.form(unit, e, Form::ByName);
+        let mark = c.mark(unit);
+        // The attempt changes the record, then work it keeps changes it again.
+        c.form(unit, e, Form::Widening);
+        let from = c.mark(unit);
+        c.form(unit, e, Form::Promotion);
+        let to = c.mark(unit);
+        c.held.push(Held { unit, made: (from.0 as u32, to.0 as u32), changed: (from.1 as u32, to.1 as u32), keep: HoldKeep::Made(1) });
+        assert_eq!(c.drop_since_for(unit, mark, Some(Dropper { syms: 4, seq: 2 })), 0);
+        assert_eq!(c.forms.get(&e), Some(&Form::Promotion));
+        // What stands as the kept change's prior is the value before the attempt.
+        assert_eq!(c.changed[&unit].len(), 1);
+        assert_eq!(c.drop_since_for(unit, (1, 0), Some(Dropper { syms: 0, seq: 1 })), 0);
+        assert_eq!(c.forms.get(&e), Some(&Form::ByName));
     }
 }

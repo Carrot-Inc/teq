@@ -1,0 +1,18 @@
+import scala.language.implicitConversions
+trait Ord[A]
+object Far:
+  implicit def fallback(a: Int): Fallback = new Fallback(a)
+class Fallback(a: Int):
+  def m: Int = a * 10
+object Near:
+  implicit def toOps[A](a: A)(using Ord[A]): Ops[A] = new Ops(a)
+
+object Main:
+  import Far.*
+  import Near.*
+
+  def main(args: Array[String]): Unit =
+    println(3.m)
+    println(new Ops("s").m)
+class Ops[A](a: A):
+  val (m, k) = (List(a).head, Seq(a))

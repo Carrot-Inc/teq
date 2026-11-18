@@ -104,6 +104,50 @@ pub struct Capture {
     /// it took the unit holding them (`adopt`): the calls its expansions rewrite, whose records
     /// its own then are whole, which the merge puts in the place of the main worker's (`absorb`).
     pub adopted: FxMap<TExprId, ()>,
+    /// What work done on demand inside an open attempt recorded (`Worker::promote_end`), settled
+    /// first: a definition's signature or body typed on demand, an inline definition checked on
+    /// demand, a waiting inline call expanded. The work outlives the attempts that keep it
+    /// (`HoldKeep`), and so do its records, which `drop_since_for` leaves standing. Cleared when
+    /// the outermost attempt ends.
+    pub held: Vec<Held>,
+}
+
+/// The records a unit's work done on demand made and changed: their positions in the unit's
+/// `made` and `changed`, and what keeps the work.
+#[derive(Clone, Copy, Debug)]
+pub struct Held {
+    pub unit: FileId,
+    pub made: (u32, u32),
+    pub changed: (u32, u32),
+    pub keep: HoldKeep,
+}
+
+/// What keeps work done on demand when an attempt is given up, as the typer's journal keeps
+/// it (`Keep` in typer/state.rs): a definition's work, by one past its symbol's index, is kept
+/// by an attempt that began with at least that many symbols; an argument a cache retains, or a
+/// waiting call's expansion, by the sequence number it was typed under, is kept by an attempt
+/// that began after it.
+#[derive(Clone, Copy, Debug)]
+pub enum HoldKeep {
+    Made(u32),
+    Since(u32),
+}
+
+/// The attempt a drop gives up: how many symbols there were when it began, and its number.
+#[derive(Clone, Copy, Debug)]
+pub struct Dropper {
+    pub syms: u32,
+    pub seq: u32,
+}
+
+impl HoldKeep {
+    #[inline]
+    pub fn kept_by(self, d: Dropper) -> bool {
+        match self {
+            HoldKeep::Made(made) => made <= d.syms,
+            HoldKeep::Since(seq) => d.seq > seq,
+        }
+    }
 }
 
 /// The records of the quotes' bodies, published by the worker that typed each body once it is
@@ -836,6 +880,7 @@ impl Capture {
     /// are typed again.
     pub fn forget(&mut self, file: FileId) {
         self.changed.remove(&file);
+        self.held.retain(|h| h.unit != file);
         self.block_stmts.retain(|&(f, _), _| f != file);
         self.annotations.retain(|&(f, _), _| f != file);
         let Some(keys) = self.made.remove(&file) else { return };
@@ -884,6 +929,114 @@ impl Capture {
         self.sync_published(&touched);
         self.discarded += keys.len() as u64;
         keys.len()
+    }
+
+    /// `drop_since` for the attempt `dropper` gives up: what work done on demand recorded past
+    /// the mark stays where that work outlives the attempt (`held`), in its order, after what
+    /// came before the mark; the rest is undone as `drop_since` undoes it. How many it dropped.
+    pub fn drop_since_for(&mut self, unit: FileId, mark: (usize, usize), dropper: Option<Dropper>) -> usize {
+        let (made, changed) = mark;
+        let kept: Vec<Held> = match dropper {
+            Some(d) if !self.held.is_empty() => {
+                self.held.iter().filter(|h| h.unit == unit && h.keep.kept_by(d) && (h.made.1 as usize > made || h.changed.1 as usize > changed)).copied().collect()
+            }
+            _ => Vec::new(),
+        };
+        if kept.is_empty() {
+            let n = self.drop_since(unit, mark);
+            self.remap_held(unit, made, changed, &[], &[]);
+            return n;
+        }
+        let priors: Vec<(u32, Prior)> = match self.changed.get_mut(&unit) {
+            Some(p) if p.len() > changed => p.drain(changed..).collect(),
+            _ => Vec::new(),
+        };
+        let keys: Vec<Key> = match self.made.get_mut(&unit) {
+            Some(k) if k.len() > made => k.drain(made..).collect(),
+            _ => Vec::new(),
+        };
+        let key_kept: Vec<bool> = (0..keys.len()).map(|i| kept.iter().any(|h| (h.made.0 as usize) <= made + i && made + i < h.made.1 as usize)).collect();
+        let prior_kept: Vec<bool> = (0..priors.len()).map(|j| kept.iter().any(|h| (h.changed.0 as usize) <= changed + j && changed + j < h.changed.1 as usize)).collect();
+        let mut touched: Vec<Key> = Vec::new();
+        let mut undone = keys.len();
+        let mut kept_priors: Vec<(u32, Prior)> = Vec::new();
+        for (j, (stamp, prior)) in priors.into_iter().enumerate().rev() {
+            let after = (stamp as usize).saturating_sub(made);
+            while undone > after {
+                undone -= 1;
+                if !key_kept[undone] {
+                    touched.push(keys[undone]);
+                    self.drop_key(keys[undone]);
+                }
+            }
+            if prior_kept[j] {
+                kept_priors.push((stamp, prior));
+            } else if let Some(later) = kept_priors.iter_mut().find(|(_, p)| p.key() == prior.key()) {
+                // The kept work changed the record after the attempt did: its change stands, and
+                // what the record was before the attempt is what a drop that does not keep the work
+                // puts back.
+                later.1 = prior;
+            } else {
+                touched.push(prior.key());
+                self.put_back(prior);
+            }
+        }
+        while undone > 0 {
+            undone -= 1;
+            if !key_kept[undone] {
+                touched.push(keys[undone]);
+                self.drop_key(keys[undone]);
+            }
+        }
+        // The kept records' places: past the mark, each after the kept ones before it.
+        let before = |flags: &[bool]| -> Vec<u32> {
+            let mut v = Vec::with_capacity(flags.len() + 1);
+            let mut n = 0u32;
+            v.push(0);
+            for &f in flags {
+                n += f as u32;
+                v.push(n);
+            }
+            v
+        };
+        let (keys_before, priors_before) = (before(&key_kept), before(&prior_kept));
+        let stays: Vec<Key> = keys.iter().zip(&key_kept).filter(|(_, &k)| k).map(|(&k, _)| k).collect();
+        let dropped = keys.len() - stays.len();
+        if !stays.is_empty() {
+            self.made.entry(unit).or_default().extend(stays);
+        }
+        if !kept_priors.is_empty() {
+            kept_priors.reverse();
+            let at = |s: u32| if s as usize <= made { s } else { made as u32 + keys_before[(s as usize - made).min(keys_before.len() - 1)] };
+            let moved: Vec<(u32, Prior)> = kept_priors.into_iter().map(|(s, p)| (at(s), p)).collect();
+            self.changed.entry(unit).or_default().extend(moved);
+        }
+        self.remap_held(unit, made, changed, &keys_before, &priors_before);
+        self.sync_published(&touched);
+        self.discarded += dropped as u64;
+        dropped
+    }
+
+    /// The held ranges of `unit` once a drop past `(made, changed)` kept, of the records past the
+    /// mark, the ones counted by `keys_before` and `priors_before` (none where they are empty).
+    fn remap_held(&mut self, unit: FileId, made: usize, changed: usize, keys_before: &[u32], priors_before: &[u32]) {
+        if self.held.is_empty() {
+            return;
+        }
+        let at = |p: u32, from: usize, before: &[u32]| -> u32 {
+            if p as usize <= from {
+                p
+            } else if before.is_empty() {
+                from as u32
+            } else {
+                from as u32 + before[(p as usize - from).min(before.len() - 1)]
+            }
+        };
+        for h in self.held.iter_mut().filter(|h| h.unit == unit) {
+            h.made = (at(h.made.0, made, keys_before), at(h.made.1, made, keys_before));
+            h.changed = (at(h.changed.0, changed, priors_before), at(h.changed.1, changed, priors_before));
+        }
+        self.held.retain(|h| h.made.0 < h.made.1 || h.changed.0 < h.changed.1);
     }
 
     fn put_back(&mut self, prior: Prior) {

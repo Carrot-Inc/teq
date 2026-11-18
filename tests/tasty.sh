@@ -94,6 +94,36 @@ for src in tests/tasty/capture/*.scala tests/tasty/capture/*/ tests/tasty/src/bo
     fi
   done
 done
+# The bodies typed on demand inside a try that fails (tests/tasty/hold/<name>/: a member of inferred
+# result first typed while an implicit conversion or a given is tried and given up, in every shape:
+# the try nested or repeated, inside an inline expansion, the program split over files): each program
+# built in the product mode at one worker, at two and at eight, the three products' TASTy the same
+# bytes, and the one worker's read by scalac with the capture's programs below, its tree checker
+# after readTasty: a body keeps the types the program was typed with, whatever try first asked for it.
+for src in tests/tasty/hold/*/; do
+  src=${src%/}
+  name=$(basename "$src")
+  held=1
+  for t in 1 2 8; do
+    rm -rf "$capture_tmp/h$t"
+    if ! timeout 60 "$teq" compiler check --products "$capture_tmp/h$t" "$src"/*.scala --threads $t > "$capture_tmp/log" 2>&1; then
+      held=0
+      said_fail "hold $name at $t worker(s): the product check fails: $(head -2 "$capture_tmp/log")"
+      break
+    fi
+    if [ $t != 1 ] && [ "$(cd "$capture_tmp/h1" && find . -name '*.tasty' | LC_ALL=C sort | xargs cat | cksum)" != "$(cd "$capture_tmp/h$t" && find . -name '*.tasty' | LC_ALL=C sort | xargs cat | cksum)" ]; then
+      held=0
+      said_fail "hold $name: the TASTy at $t workers differs from one worker's"
+    fi
+  done
+  if [ $held = 1 ]; then
+    pass=$((pass + 1))
+    cp -R "$capture_tmp/h1" "$extra/hold-$name"
+    extra_units+=("hold-$name")
+  else
+    fail=$((fail + 1))
+  fi
+done
 # The parts the capture keeps of each interpolation of tests/tasty/src/interparts.scala have to
 # be the ones scalac 3.8.4 pickles in its `StringContext.apply` (the fixture InterpParts.tasty):
 # as written, `$$` and unicode escapes aside.

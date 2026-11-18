@@ -28,9 +28,9 @@ hashCode                                                   26
 inline method body                                          7
 js.native                                                   1
 macro body                                                 11
-module val                                                 94
+module val                                                 97
 ordinal                                                     4
-parent constructor call                                   154
+parent constructor call                                   159
 parent constructor call with arguments                      5
 productArity                                               25
 productElement                                             25
@@ -38,10 +38,10 @@ productElementName                                         25
 productPrefix                                              25
 secondary constructor                                       1
 setter stub                                                 4
-source body                                               253
+source body                                               262
 template statement                                          4
 toString                                                   42
 trait parent call with arguments                            1
 valueOf                                                     4
 values                                                      4
-writeReplace                                               94
+writeReplace                                               97

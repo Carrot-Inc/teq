@@ -326,6 +326,15 @@ pub(super) struct Mark {
     index: Recorded,
 }
 
+impl Mark {
+    /// The attempt as the capture's drop asks it whether it keeps work done on demand
+    /// (`Keep::by`, `crate::tir::capture::HoldKeep`).
+    #[inline]
+    pub(super) fn dropper(&self) -> crate::tir::capture::Dropper {
+        crate::tir::capture::Dropper { syms: self.syms, seq: self.seq }
+    }
+}
+
 /// What a set-aside attempt wrote, for `restore`.
 pub(super) struct SetAside {
     redo: Vec<Redo>,
@@ -352,6 +361,14 @@ pub(super) struct PromoteMark {
     records: u32,
     marks: usize,
     rare: [u32; RARE],
+    /// Where the capture stood in the units the work records in (the typing unit, and the
+    /// definition's file for a definition's work): what it records there is held
+    /// (`Capture::held`), as the journal keeps its entries.
+    capture: [Option<(crate::source::FileId, (u32, u32))>; 2],
+    /// Where the type variables and the typed nodes stood when the work began: what the work made
+    /// is settled at its end before its records are held (`hold_capture`).
+    vars: u32,
+    nodes: u32,
 }
 
 /// The typed arguments of an application that several attempts apply, dotty's `FunProtoState`
@@ -1883,10 +1900,20 @@ impl<'a> Worker<'a> {
         // of the attempt's, and outlives it: its work is kept by every attempt (a macro's run
         // that types `ArrayBuffer.empty` and fails keeps its expanded `emptyBuffer`).
         let made = if library || self.source(self.syms.sym(def).file).is_std { 0 } else { def.0 + 1 };
-        Some(self.promote_mark(Keep::Made(made), diags_kept))
+        let mut p = self.promote_mark(Keep::Made(made), diags_kept);
+        self.hold_file_too(&mut p, self.syms.sym(def).file);
+        Some(p)
     }
 
     fn promote_mark(&self, keep: Keep, diags_kept: bool) -> PromoteMark {
+        let capture = match self.prog.capture.as_deref() {
+            Some(c) => {
+                let unit = self.typing_unit();
+                let (m, ch) = c.mark(unit);
+                [Some((unit, (m as u32, ch as u32))), None]
+            }
+            None => [None, None],
+        };
         PromoteMark {
             keep,
             diags_kept,
@@ -1894,6 +1921,64 @@ impl<'a> Worker<'a> {
             records: self.index_mark().records() as u32,
             marks: self.unused.journal_len(),
             rare: self.rare_lens(),
+            capture,
+            vars: self.tvars.len() as u32,
+            nodes: self.prog.exprs.len() as u32,
+        }
+    }
+
+    /// The definition's work records in its own file too, where it is typed in its own place
+    /// (`where_made`, `type_body`).
+    fn hold_file_too(&self, p: &mut PromoteMark, file: crate::source::FileId) {
+        let Some(c) = self.prog.capture.as_deref() else { return };
+        if p.capture[0].is_some_and(|(u, _)| u == file) {
+            return;
+        }
+        let (m, ch) = c.mark(file);
+        p.capture[1] = Some((file, (m as u32, ch as u32)));
+    }
+
+    /// What the work recorded in the capture is held while an attempt that keeps it is open
+    /// (`Capture::held`).
+    fn hold_capture(&mut self, p: &PromoteMark) {
+        // An argument's typing a cache retains (`Keep::Since` of a cache: its diagnostics go with the
+        // attempt) is the try's own typing here: its variables are the try's, which its retraction
+        // undoes, so its records are not held, and a body that keeps such an argument is withheld
+        // (the reference types it in the prototype's own state and instantiates what that state
+        // made: `FunProto.typedArgs`).
+        if matches!(p.keep, Keep::Since(_)) && !p.diags_kept {
+            return;
+        }
+        let Some(c) = self.prog.capture.as_deref() else { return };
+        let grew: Vec<(crate::source::FileId, u32, u32, u32, u32)> = p
+            .capture
+            .iter()
+            .flatten()
+            .copied()
+            .filter_map(|(unit, (m, ch))| {
+                let (now_m, now_ch) = c.mark(unit);
+                (now_m as u32 > m || now_ch as u32 > ch).then_some((unit, m, now_m as u32, ch, now_ch as u32))
+            })
+            .collect();
+        if grew.is_empty() {
+            return;
+        }
+        // The work's trees are made final first, as the reference's completer types a body in the
+        // definition's own state (`Namer.Completer.creationContext`): what it left open is
+        // instantiated, and its nodes' types and its records are zonked, so that a try's
+        // retraction, which undoes the variables' solutions, leaves its trees as typed.
+        self.force_open_vars(p.vars as usize);
+        self.settle_node_types(p.nodes as usize);
+        for &(unit, m, now_m, _, _) in &grew {
+            self.zonk_capture_range(unit, m as usize, now_m as usize);
+        }
+        let keep = match p.keep {
+            Keep::Made(m) => crate::tir::capture::HoldKeep::Made(m),
+            Keep::Since(s) => crate::tir::capture::HoldKeep::Since(s),
+        };
+        let Some(c) = self.prog.capture.as_deref_mut() else { return };
+        for (unit, m, now_m, ch, now_ch) in grew {
+            c.held.push(crate::tir::capture::Held { unit, made: (m, now_m), changed: (ch, now_ch), keep });
         }
     }
 
@@ -1906,6 +1991,9 @@ impl<'a> Worker<'a> {
         // demand settles its own, `check.rs`).
         if self.unused.on() {
             self.unused.settle_since(p.marks);
+        }
+        if p.capture[0].is_some() {
+            self.hold_capture(&p);
         }
         let lens = self.rare_lens();
         let diags_end = if p.diags_kept { self.diags.items.len() as u32 } else { p.diags };
@@ -1960,6 +2048,11 @@ impl<'a> Worker<'a> {
         if m.outer == 0 {
             if !self.attempts.promoted.is_empty() {
                 self.attempts.promoted.clear();
+            }
+            if let Some(c) = self.prog.capture.as_deref_mut() {
+                if !c.held.is_empty() {
+                    c.held.clear();
+                }
             }
             if !self.attempts.late.is_empty() {
                 self.attempts.late.clear();

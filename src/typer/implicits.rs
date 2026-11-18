@@ -3542,7 +3542,7 @@ impl<'a> Worker<'a> {
             // Each candidate is an attempt of its own: what it
             // wrote goes with it where it fails, and stays aside where another wins.
             let mark = self.attempt();
-            let captured = self.capture_mark();
+            let captured = self.capture_mark_for(&mark);
             let winners_mark = self.unused.given_winners.len();
             self.profile.try_start(given.0);
             let attempt = self.try_given(given, Some(target), span, true);
@@ -3565,8 +3565,8 @@ impl<'a> Worker<'a> {
                     if coherent {
                         let earlier: Vec<SymId> = ambiguous.clone();
                         if !earlier.iter().all(|&a| self.compare_givens(given.0, a) > 0) {
-                            self.retract(mark);
                             self.capture_drop_since(captured);
+                            self.retract(mark);
                             self.step_end(step, how);
                             continue;
                         }

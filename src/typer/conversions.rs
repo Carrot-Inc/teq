@@ -734,13 +734,15 @@ impl<'a> Worker<'a> {
         // A conversion tried is an attempt of its own: what it wrote
         // goes with it where it does not apply.
         let mark = self.attempt();
-        let captured = self.capture_mark();
+        let captured = self.capture_mark_for(&mark);
         let converted = self.try_conversion_in(conv, recv, recv_ty, span, accept, to_type);
         if converted.is_none() {
-            self.retract(mark);
+            // The try's records go before its attempt ends: the end of the outermost attempt ends
+            // the holds of the work done on demand inside it, which the drop keeps.
             if captured.is_some() {
                 self.capture_drop_since(captured);
             }
+            self.retract(mark);
         } else {
             self.close(mark);
             // The language server's index steps through a conversion no source wrote.
