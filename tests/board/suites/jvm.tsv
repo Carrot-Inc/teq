@@ -3119,6 +3119,7 @@ unreachable_deep_split	pass	-
 unread_argument_of_a_library_member	pass	-	
 unreducible_application_in_pattern	pass	-	
 untupled_partial_lambda	pass	-	
+untupled_value_class_params	pass	-	
 unused_ctor_param_reads	pass	-	
 unused_imports_permanent_alias	pass	-	
 unused_params_constant_bodies	pass	-	

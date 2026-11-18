@@ -4398,7 +4398,7 @@ impl<'a> Worker<'a> {
                 let mut stmts = Vec::with_capacity(syms.len());
                 for (i, &s) in syms.iter().enumerate() {
                     let t = self.prog.add(TExpr::Local(tuple_sym));
-                    let f = if elems.len() > 22 { self.tuple_element(t, &fields, &elems, i, span) } else { self.prog.add(TExpr::Field(t, fields[i])) };
+                    let f = self.tuple_element(t, &fields, &elems, i, span);
                     stmts.push(TStmt::Val(s, f));
                 }
                 let l = self.prog.stmts.push_slice(&stmts);

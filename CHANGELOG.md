@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM a lambda whose parameters are untupled from a tuple that holds a value class reads the element as
+  the value class: `pairs.map((code, text) => code.value)` with `Code(value: Int) extends AnyVal` threw a
+  ClassCastException (`Code` cannot be cast to `Integer`), whichever parameter the body used.
 - A member whose declared type is `Unit` drops the value of its body, as every other place that expects `Unit`
   does: `def paid: Unit = bump()`, a `val`, `var`, `lazy val` or `given` of type `Unit`, an override and a
   local `def`, with the value the whole body or a branch of an `if`, a case, a handler or a block's end, and

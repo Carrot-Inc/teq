@@ -742,12 +742,18 @@ impl<'a> Worker<'a> {
         (self.tuple_value(&items), ty)
     }
 
-    /// Element `i` of a tuple of the element types `elems`: its field `_i+1` up to 22 elements;
-    /// above, `productElement(i)` cast to the element's type, as scalac reads one, since such a
-    /// tuple is a TupleXXL at run time where it comes from `Tuple.fromArray` or a mirror.
+    /// Element `i` of a tuple of the element types `elems`: its field `_i+1` up to 22 elements,
+    /// typed as the element (a back end that erases the field to its type parameter's bound reads
+    /// a value class's box there, as dotty's erasure reads `x._1` of a `(V, B)`); above,
+    /// `productElement(i)` cast to the element's type, as scalac reads one, since such a tuple is
+    /// a TupleXXL at run time where it comes from `Tuple.fromArray` or a mirror.
     pub(super) fn tuple_element(&mut self, recv: TExprId, fields: &[SymId], elems: &[TypeId], i: usize, span: Span) -> TExprId {
         if elems.len() <= 22 {
-            return self.prog.add(TExpr::Field(recv, fields[i]));
+            let element = self.prog.add(TExpr::Field(recv, fields[i]));
+            if let Some(&ty) = elems.get(i) {
+                self.prog.set_type(element, ty);
+            }
+            return element;
         }
         let index = self.prog.add(TExpr::Int(i as i32));
         let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(index, self.b.t_int)], using: false, span, fun: super::apply::ArgList::NO_FUN };
