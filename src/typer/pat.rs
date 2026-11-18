@@ -669,6 +669,9 @@ impl<'a> Worker<'a> {
                 if self.unused.on() {
                     self.mark_can_equal(lit, sty);
                 }
+                if self.pattern_asks_equality(lit, sty) {
+                    self.check_pattern_equality(te, lit, sty, span);
+                }
                 self.prog.add_pat(TPat::Equals(te, strict))
             }
             Pat::StableId(path) => {
@@ -687,9 +690,16 @@ impl<'a> Worker<'a> {
                     };
                     self.error(span, format!("Stable identifier required, but `{}` found", name));
                 }
+                // A value's pattern has the value's singleton type in the reference, which no other
+                // scrutinee type conforms to; an object's is its module's type.
+                let module = matches!(self.prog.expr(te), TExpr::Module(_));
+                let asks = !unstable && (!module || self.pattern_asks_equality(pty, sty));
                 self.refine_gadt(pty, sty);
                 if self.unused.on() {
                     self.mark_can_equal(pty, sty);
+                }
+                if asks {
+                    self.check_pattern_equality(te, pty, sty, span);
                 }
                 let strict = match self.prog.expr(te) {
                     TExpr::Module(c) => !self.overrides_equals(c),

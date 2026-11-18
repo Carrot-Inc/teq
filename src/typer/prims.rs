@@ -1963,7 +1963,7 @@ impl<'a> Worker<'a> {
             _ if lty == self.b.t_null || rty == self.b.t_null => {
                 let other = if lty == self.b.t_null { rty } else { lty };
                 let strict = self.strict_equality();
-                let abstract_ok = if strict { self.can_equal_given(lty, rty, span) } else { self.compares_with_null(other) };
+                let abstract_ok = if strict { self.can_equal_given(lty, rty, true, span) } else { self.compares_with_null(other) };
                 if !self.null_conforms(other) && other != self.b.t_null && !abstract_ok {
                     let msg = format!("values of types {} and {} cannot be compared with == or !=", self.show(lty), self.show(rty));
                     self.error(span, msg);
@@ -2080,15 +2080,225 @@ impl<'a> Worker<'a> {
     /// standard `CanEqual` instance, or both lack a reflexive one; with `--strict-equality` a
     /// `CanEqual[L, R]` has to exist: predefined for primitives and the standard types, given
     /// for everything else.
+    /// Whether a pattern compared by `==` (a literal, a stable identifier) asks for the comparison's
+    /// evidence: dotty's `checkEqualityEvidence` (Typer.scala 5233 at 3.8.4) asks it unless the
+    /// scrutinee's type conforms to the pattern's, read before the pattern refines the scrutinee.
+    pub(super) fn pattern_asks_equality(&mut self, pattern: TypeId, scrutinee: TypeId) -> bool {
+        let snap = self.snapshot();
+        let conforms = self.is_sub(scrutinee, pattern);
+        self.rollback(&snap);
+        !conforms
+    }
+
+    /// The evidence of `pattern == <a value of the scrutinee's type>`, which `checkEqualityEvidence`
+    /// types: the test a comparison in an expression runs, the pattern on the left. Numbers compare,
+    /// `null` with a reference, a `==` the pattern's class declares for the scrutinee is called, and
+    /// the rest asks `CanEqual`.
+    pub(super) fn check_pattern_equality(&mut self, te: TExprId, pattern: TypeId, scrutinee: TypeId, span: Span) {
+        // Under strict equality alone: without it the comparison's defaults (`validEqAnyArgs`) are not the
+        // reference's whole rule here, and a pattern would be refused where `==` is refused wrongly.
+        if !self.strict_equality() || self.assumed_pattern_equality(te, pattern, scrutinee, span) {
+            return;
+        }
+        let normal = |t: &mut Self, ty: TypeId| {
+            let ty = t.solve_in(ty);
+            let ty = t.dealias(ty);
+            let ty = t.union_as_class(ty);
+            t.canon(ty)
+        };
+        let (lty, rty) = (normal(self, pattern), normal(self, scrutinee));
+        if self.is_numeric(lty).is_some() && self.is_numeric(rty).is_some() {
+            return;
+        }
+        let refused = if lty == self.b.t_null || rty == self.b.t_null {
+            let other = if lty == self.b.t_null { rty } else { lty };
+            let abstract_ok = if self.strict_equality() { self.can_equal_given(lty, rty, true, span) } else { self.compares_with_null(other) };
+            !self.null_conforms(other) && other != self.b.t_null && !abstract_ok
+        } else if self.is_numeric(lty).is_none() && self.declares_equality_for(te, lty, names::EQEQ, rty) {
+            false
+        } else {
+            !self.can_equal(lty, rty, span)
+        };
+        if refused {
+            let msg = format!("values of types {} and {} cannot be compared with == or !=", self.show(lty), self.show(rty));
+            self.error(span, msg);
+        }
+    }
+
+    /// dotty's `assumedCanEqual` for a pattern under strict equality (Implicits.scala 1051 at 3.8.4): an
+    /// erroneous side, or, with `experimental.strictEqualityPatternMatching`, an enum value's or a case
+    /// object's pattern that conforms to the scrutinee lifted. The scrutinee as written is taken too: an
+    /// alias of an abstract type is its target here, which the reference's lift keeps unlifted.
+    fn assumed_pattern_equality(&mut self, te: TExprId, pattern: TypeId, scrutinee: TypeId, span: Span) -> bool {
+        let (l, r) = (self.deref_canonical(pattern), self.deref_canonical(scrutinee));
+        if l == ERROR || r == ERROR {
+            return true;
+        }
+        let l = self.lift_for_equality(l);
+        let mark = self.snapshot();
+        let assumed = if self.strict_equality() {
+            let adt = match self.prog.expr(te) {
+                TExpr::Module(c) => self.syms.class(c).mods & crate::ast::mods::CASE != 0,
+                TExpr::Static(s) | TExpr::Field(_, s) => matches!(self.syms.sym(s).kind, SymKind::EnumValue(_)),
+                _ => false,
+            };
+            let feature = self.interner.intern("experimental.strictEqualityPatternMatching");
+            adt && self.feature_enabled(self.env.file, span.start, feature) && {
+                let lifted = self.lift_for_equality(r);
+                self.is_sub(l, lifted) || self.is_sub(l, r)
+            }
+        } else {
+            false
+        };
+        self.rollback(&mark);
+        assumed
+    }
+
+    /// dotty's `lift` in `assumedCanEqual` (Implicits.scala 1054): a singleton widened, a non-opaque
+    /// abstract type its upper bound and a refinement its parent at any variance; the parts of any
+    /// other type lifted where the position is covariant.
+    fn lift_for_equality(&mut self, t: TypeId) -> TypeId {
+        self.lift_at(t, true, &mut Vec::new())
+    }
+
+    /// `seen`: the types being replaced by a bound or a widening; one met again inside its own
+    /// bound (`T <: Seq[T]`) is kept, as the reference keeps a recursive bound's `LazyRef`.
+    fn lift_at(&mut self, t: TypeId, covariant: bool, seen: &mut Vec<TypeId>) -> TypeId {
+        let t = self.deref(t);
+        let widened = if self.types.is_path(t) { let w = self.widen_path(t); self.widen_lit(w) } else { self.widen_lit(t) };
+        if widened != t {
+            return self.lift_through(t, widened, covariant, seen);
+        }
+        match self.types.get(t) {
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                self.lift_through(t, upper, covariant, seen)
+            }
+            // An alias and an opaque type are kept, as the reference keeps them.
+            Type::Member(..) | Type::AppMember(..) | Type::Decl(_) if self.abstract_type_member(t) => {
+                let (lower, upper) = self.member_bounds(t);
+                if lower == upper || upper == t { t } else { self.lift_through(t, upper, covariant, seen) }
+            }
+            Type::Refined(parent, _) => self.lift_at(parent, covariant, seen),
+            Type::Union(a, b, _) if covariant => {
+                let (la, lb) = (self.lift_at(a, true, seen), self.lift_at(b, true, seen));
+                if (la, lb) == (a, b) { t } else { self.types.union(la, lb) }
+            }
+            Type::Inter(a, b) if covariant => {
+                let (la, lb) = (self.lift_at(a, true, seen), self.lift_at(b, true, seen));
+                if (la, lb) == (a, b) { t } else { self.types.inter(la, lb) }
+            }
+            Type::Class(c, args) if covariant => {
+                let args: Vec<TypeId> = self.types.items(args).to_vec();
+                let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+                if args.is_empty() || args.len() != variances.len() {
+                    return t;
+                }
+                let lifted: Vec<TypeId> = args.iter().zip(&variances).map(|(&a, &v)| self.lift_at(a, v > 0, seen)).collect();
+                if lifted == args { t } else { self.types.class(c, &lifted) }
+            }
+            _ => t,
+        }
+    }
+
+    fn lift_through(&mut self, t: TypeId, to: TypeId, covariant: bool, seen: &mut Vec<TypeId>) -> TypeId {
+        if seen.contains(&t) {
+            return t;
+        }
+        seen.push(t);
+        let lifted = self.lift_at(to, covariant, seen);
+        seen.pop();
+        lifted
+    }
+
+    /// Whether `t` names a type member declared with bounds (`type T <: U`), not an alias.
+    fn abstract_type_member(&mut self, t: TypeId) -> bool {
+        match self.types.get(t) {
+            Type::Member(prefix, name) => matches!(self.type_member(prefix, name), Some(super::members::MemberInfo::Bounds(..))),
+            Type::AppMember(m, _) => self.abstract_type_member(m),
+            Type::Decl(a) => {
+                self.complete_alias(a);
+                self.syms.aliases[a.idx()].bounds.is_some()
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether `CanEqual[l, r]` holds.
     fn can_equal(&mut self, l: TypeId, r: TypeId, span: Span) -> bool {
-        match self.can_equal_predefined(l, r, span) {
+        if self.equality_in_progress.contains(&(l, r, false)) {
+            return false;
+        }
+        self.equality_in_progress.push((l, r, false));
+        let holds = self.can_equal_exact(l, r, true, span) || self.can_equal_by_bounds(l, r, span);
+        self.equality_in_progress.pop();
+        holds
+    }
+
+    /// The evidence is contravariant (`CanEqual[-L, -R]`), so an instance for a side's upper bound
+    /// answers for it: a type parameter, an abstract member or an opaque type stands for its bound
+    /// (`T <: String` compares as `String`), an intersection for either part. Only evidence: the
+    /// defaults of multiversal equality are decided on the operands as written, as dotty's
+    /// `validEqAnyArgs` tests them, never on a bound that has lost an operand's own instance.
+    fn can_equal_by_bounds(&mut self, l: TypeId, r: TypeId, span: Span) -> bool {
+        if self.equality_in_progress.contains(&(l, r, true)) {
+            return false;
+        }
+        self.equality_in_progress.push((l, r, true));
+        let holds = self.evidence_by_bounds(l, r, span);
+        self.equality_in_progress.pop();
+        holds
+    }
+
+    fn evidence_by_bounds(&mut self, l: TypeId, r: TypeId, span: Span) -> bool {
+        let (ul, ur) = (self.equality_upcast(l), self.equality_upcast(r));
+        if (ul, ur) != (l, r) && (self.can_equal_exact(ul, ur, false, span) || self.can_equal_by_bounds(ul, ur, span)) {
+            return true;
+        }
+        for (side, other, left) in [(l, r, true), (r, l, false)] {
+            let side = self.deref(side);
+            if let Type::Inter(a, b) = self.types.get(side) {
+                for part in [a, b] {
+                    let (x, y) = if left { (part, other) } else { (other, part) };
+                    if self.can_equal_exact(x, y, false, span) || self.can_equal_by_bounds(x, y, span) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// One step of `can_equal`'s upcast: a type parameter's, an abstract member's or an opaque
+    /// type's upper bound, the type itself where it has none narrower than `Any`.
+    fn equality_upcast(&mut self, t: TypeId) -> TypeId {
+        let mut seen: Vec<TypeId> = Vec::new();
+        let mut t = self.deref(t);
+        loop {
+            let upper = match self.types.get(t) {
+                Type::Param(p) => self.syms.tparam(p).upper,
+                Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => self.member_upper(t),
+                Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Opaque => self.opaque_bound(t).unwrap_or(ANY),
+                _ => return t,
+            };
+            let upper = self.deref(upper);
+            if upper == ANY || upper == t || seen.contains(&upper) {
+                return t;
+            }
+            seen.push(t);
+            t = upper;
+        }
+    }
+
+    fn can_equal_exact(&mut self, l: TypeId, r: TypeId, defaults: bool, span: Span) -> bool {
+        match self.can_equal_predefined(l, r, defaults, span) {
             Some(true) => true,
             // A given decides, and one of the pair itself answers where the standard instances
             // refuse it (`given CanEqual[Option[Camera], Option[Camera]]` in a companion), as
             // `Implicits.checkCanEqual` searches the pair's implicit scope; two tuples have the
             // standard `canEqualTuple` alone, which the element-wise rule is.
             Some(false) if self.both_tuples(l, r) => false,
-            Some(false) | None => self.can_equal_given(l, r, span),
+            Some(false) | None => self.can_equal_given(l, r, defaults, span),
         }
     }
 
@@ -2102,7 +2312,8 @@ impl<'a> Worker<'a> {
 
     /// The part of the rule that needs no given: `Some(true)` when the instance is predefined,
     /// `Some(false)` when a standard type rules the comparison out, `None` when a given decides.
-    fn can_equal_predefined(&mut self, l: TypeId, r: TypeId, span: Span) -> Option<bool> {
+    /// `defaults`: whether multiversal equality's defaults apply (the operands as written).
+    fn can_equal_predefined(&mut self, l: TypeId, r: TypeId, defaults: bool, span: Span) -> Option<bool> {
         let l = self.deref_canonical(l);
         let r = self.deref_canonical(r);
         if l == ERROR || r == ERROR || l == NOTHING || r == NOTHING {
@@ -2121,10 +2332,11 @@ impl<'a> Worker<'a> {
             return Some(true);
         }
         let strict = self.strict_equality();
-        if l == r && (!strict || self.is_primitive(l)) {
+        let loose = defaults && !strict;
+        if l == r && (loose || self.is_primitive(l)) {
             return Some(true);
         }
-        if !strict {
+        if loose {
             let mark = self.snapshot();
             let related = self.is_sub(l, r) || self.is_sub(r, l);
             self.rollback(&mark);
@@ -2138,7 +2350,10 @@ impl<'a> Worker<'a> {
         if let Some(standard) = self.std_can_equal(l, r, span) {
             return Some(standard);
         }
-        if !strict && !self.has_reflexive_can_equal(l) && !self.has_reflexive_can_equal(r) {
+        if self.derived_can_equal(l, r, span) {
+            return Some(true);
+        }
+        if loose && !self.has_reflexive_can_equal(l) && !self.has_reflexive_can_equal(r) {
             return Some(true);
         }
         None
@@ -2172,7 +2387,7 @@ impl<'a> Worker<'a> {
         }
         let Type::Class(_, args) = self.types.get(target) else { return None };
         let &[l, r] = self.types.items(args) else { return None };
-        if self.can_equal_predefined(l, r, span) != Some(true) {
+        if self.defined_equality_only == Some(target) || self.can_equal_predefined(l, r, true, span) != Some(true) {
             return None;
         }
         let module = self.syms.class(c).companion?;
@@ -2180,6 +2395,31 @@ impl<'a> Worker<'a> {
         let derived = self.module_term(module, derived)?.sym()?;
         let recv = self.prog.add(TExpr::Module(module));
         Some(self.prog.add(TExpr::CallMethod(recv, derived, ListRef::EMPTY)))
+    }
+
+    /// The instance `derives CanEqual` stands for (Deriving.scala's `deriveCanEqual` at 3.8.4):
+    /// `CanEqual[C[Ls], C[Rs]]` given a `CanEqual[L, R]` for each parameter of kind `*`. The given the
+    /// desugaring writes relates `C[A]` to itself alone, so the rule is applied here.
+    fn derived_can_equal(&mut self, l: TypeId, r: TypeId, span: Span) -> bool {
+        let derived = self.interner.intern("derived$CanEqual");
+        for class in [self.class_of(l), self.class_of(r)].into_iter().flatten() {
+            let Some(module) = self.syms.class(class).companion else { continue };
+            let givens = self.syms.class(module).givens.clone();
+            if !givens.into_iter().any(|g| self.syms.sym(g).name == derived) {
+                continue;
+            }
+            let (Some(lb), Some(rb)) = (self.base_type(l, class), self.base_type(r, class)) else { continue };
+            let (Type::Class(_, la), Type::Class(_, ra)) = (self.types.get(lb), self.types.get(rb)) else { continue };
+            let kinds: Vec<u8> = self.syms.class(class).tparams.iter().map(|&p| self.syms.tparam(p).arity).collect();
+            let (la, ra) = (self.types.items(la).to_vec(), self.types.items(ra).to_vec());
+            if la.is_empty() || la.len() != kinds.len() || ra.len() != kinds.len() {
+                continue;
+            }
+            if (0..kinds.len()).all(|i| kinds[i] != 0 || self.can_equal(la[i], ra[i], span)) {
+                return true;
+            }
+        }
+        false
     }
 
     /// The standard instances: `Option`, `Seq` and `Set` compare regardless of their elements
@@ -2236,10 +2476,14 @@ impl<'a> Worker<'a> {
         })
     }
 
-    fn can_equal_given(&mut self, l: TypeId, r: TypeId, span: Span) -> bool {
+    /// Whether a given `CanEqual[l, r]` is found; without `defaults` only a definition counts.
+    fn can_equal_given(&mut self, l: TypeId, r: TypeId, defaults: bool, span: Span) -> bool {
         let Some(can_equal) = self.can_equal_class() else { return true };
         let target = self.types.class(can_equal, &[l, r]);
+        let target = self.zonk(target);
+        let outer = std::mem::replace(&mut self.defined_equality_only, (!defaults).then_some(target));
         let found = self.resolve_given(target, span).is_some();
+        self.defined_equality_only = outer;
         self.given_ambiguity = None;
         found
     }

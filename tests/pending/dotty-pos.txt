@@ -72,7 +72,6 @@ dependent-implicits.scala	dependent-implicits.scala:5:19: type mismatch: found T
 depmet_implicit_norm_ret.scala	depmet_implicit_norm_ret.scala:29:42: type mismatch: found ZipWith[S => Nothing => Nothing]{type T = Stream[S] => Stream[Nothing] => Stream[Nothing]}, required ZipWith[A => B]
 depmet_implicit_tpbetareduce.scala	depmet_implicit_tpbetareduce.scala:9:10: covariant type x occurs in invariant position in type = List[x] of type m
 deprecated-no-kind-polymorphism-anykind.scala	deprecated-no-kind-polymorphism-anykind.scala:5:16: type AnyKind not found
-derive-eq.scala	derive-eq.scala:16:53: Values of types Lst[Lst[One]] and Lst[Lst[Two]] cannot be compared with == or !=
 doWhile.scala	doWhile.scala:3:3: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
 eff-compose.scala	eff-compose.scala:17:12: type mismatch: found A => (E) ?=> B, required A => B
 enum-refinement.scala	enum-refinement.scala:9:19: expected ':', found 'val'

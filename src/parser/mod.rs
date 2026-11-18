@@ -1376,9 +1376,13 @@ impl<'a> Parser<'a> {
                 [names::ROOT, names::SCALA, rest @ ..] | [names::SCALA, rest @ ..] => rest,
                 rest => rest,
             };
-            if path != [names::LANGUAGE] {
-                continue;
-            }
+            // An experimental feature (`language.experimental.n`) is named as `-language` names it,
+            // `experimental.n`.
+            let experimental = match path {
+                [names::LANGUAGE] => false,
+                [names::LANGUAGE, names::EXPERIMENTAL] => true,
+                _ => continue,
+            };
             // A feature an explicit selector names is enabled, one it excludes (`n as _`) is not,
             // and what the clause's wildcard brings is neither (`ImportInfo.mentionsFeature`): a
             // feature not named is looked up in the clauses around.
@@ -1387,6 +1391,7 @@ impl<'a> Parser<'a> {
                 ImportSel::Name(n, _) => (n, true),
                 ImportSel::Wildcard | ImportSel::Given => continue,
             };
+            let name = if experimental { self.interner.intern(&format!("experimental.{}", self.interner.get(name))) } else { name };
             if local {
                 self.language_open.push(self.ast.language_scopes.len());
             }

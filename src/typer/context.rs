@@ -267,6 +267,8 @@ worker_fields! {
         blocked_conversion is none,
         unsimplified is no,
         given_ambiguity is none,
+        defined_equality_only is none,
+        equality_in_progress is empty,
         unentered_impls is empty,
         necessary_either is no
     }

@@ -19,6 +19,18 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   looks through, as scalac's does; so does a given such a package declares, imported by `p.given` or by its
   name and found by a search. A build under `--werror` stopped on the warning. A selector that renames what a search
   finds (`import p.{number as n}` with `summon[Long]`) is no longer counted as used, as scalac does not count it.
+- Under `strictEquality` a literal or stable identifier pattern asks the evidence its comparison with the
+  scrutinee needs, as scalac does: `case Color.Red` on an enum without `derives CanEqual` is refused ("values of
+  types Color and Color cannot be compared"). teq accepted it; a build that compiled under teq failed under
+  scalac. `import scala.language.experimental.strictEqualityPatternMatching` relaxes the check for an enum case
+  or a case object as scalac's does.
+- Under `strictEquality` a comparison of a value whose type is bounded by another (`x == "a"` with `x: T` and
+  `T <: String`, an opaque type over `Int`, an intersection with `Int`, a `List` of a bounded member) takes the
+  bound's `CanEqual`, as scalac does: its evidence is contravariant. teq refused them on JavaScript and in the
+  interpreter.
+- Two values of a class that `derives CanEqual` compare where their type arguments compare pairwise, as the
+  instance scalac derives has it: `x == y` for `x: Box[A]` with `type A <: String` and `y: Box[String]`
+  compiles. teq refused it.
 - A member whose declared type is `Unit` drops the value of its body, as every other place that expects `Unit`
   does: `def paid: Unit = bump()`, a `val`, `var`, `lazy val` or `given` of type `Unit`, an override and a
   local `def`, with the value the whole body or a branch of an `if`, a case, a handler or a block's end, and

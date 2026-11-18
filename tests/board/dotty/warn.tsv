@@ -65,7 +65,7 @@ i15503e.scala	pass	-
 i15503f.scala	fail	-	marks: an error where warnings are marked: i15503f.scala:38:21: expected ':', found '['
 i15503g.scala	fail	-	marks: 6 warnings where 7 are marked
 i15503h.scala	pass	-	
-i15503i.scala	fail	-	marks: 38 warnings where 37 are marked
+i15503i.scala	fail	-	check: diagnostic 11 of 37: scalac's is warning i15503i.scala:53:10 unused explicit parameter; teq's is warning i15503i.scala:279:22 unused import
 i15503j.scala	pass	-	
 i15503k.scala	pass	-	
 i15503kb	pass	-	
@@ -347,7 +347,7 @@ type-test-paths.scala	fail	-	marks: 3 warnings where 1 are marked
 type-test-syntesize-b.scala	fail	-	marks: 4 warnings where 3 are marked
 uninitialized-3.4.scala	pass	-	
 uninitialized-future-migration.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning uninitialized-future-migration.scala:5:16 `= _` has been deprecated; use `= uninitialized` instead.; teq's is warning uninitialized-future-migration.scala:5:16 `= _` has been deprecate
-unused-can-equal.scala	fail	-	marks: an error where warnings are marked: unused-can-equal.scala:16:3: values of types Box[Int] and Box[Long] cannot be compared with == or !=
+unused-can-equal.scala	pass	-	
 unused-locals.scala	pass	-	
 unused-params.scala	fail	-	marks: an error where warnings are marked: unused-params.scala:124:16: method call overrides nothing
 unused-privates.scala	pass	-	

@@ -286,7 +286,7 @@ depmet_implicit_chaining_zw.scala	pass	check:pass
 depmet_implicit_norm_ret.scala	fail	check:fail	depmet_implicit_norm_ret.scala:29:42: type mismatch: found ZipWith[S => Nothing => Nothing]{type T = Stream[S] => Stream[Nothing] => Stream[Nothing]}, required ZipWith[A => B]
 depmet_implicit_tpbetareduce.scala	fail	check:fail	depmet_implicit_tpbetareduce.scala:9:10: covariant type x occurs in invariant position in type  = List[x] of type m
 deprecated-no-kind-polymorphism-anykind.scala	fail	check:fail	deprecated-no-kind-polymorphism-anykind.scala:5:16: type AnyKind not found
-derive-eq.scala	fail	check:fail	derive-eq.scala:16:53: Values of types Lst[Lst[One]] and Lst[Lst[Two]] cannot be compared with == or !=
+derive-eq.scala	pass	check:pass	
 derives-obj.scala	pass	check:pass	
 devalify.scala	pass	check:pass	
 doWhile.scala	fail	check:fail	doWhile.scala:3:3: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
@@ -509,7 +509,7 @@ i11015.scala	pass	check:pass
 i11020.scala	pass	check:pass	
 i11022.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i1103.scala	pass	check:pass	
-i11057.scala	pass	check:fail	
+i11057.scala	pass	check:pass	
 i11064.scala	pass	check:pass	
 i11075	pass	check:pass	
 i11078.scala	pass	check:pass	

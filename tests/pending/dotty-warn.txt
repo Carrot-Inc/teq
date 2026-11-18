@@ -222,7 +222,6 @@ type-test-paths-2.scala	marks: 6 warnings where 4 are marked
 type-test-paths.scala	marks: 3 warnings where 1 are marked
 type-test-syntesize-b.scala	marks: 4 warnings where 3 are marked
 uninitialized-future-migration.scala	check: diagnostic 1 of 1: scalac's is migration warning uninitialized-future-migration.scala:5:16 `= _` has been deprecated; use `= uninitialized` instead.; teq's is warning uninitialized-future-migration.scala:5:16 `= _` has been deprecate
-unused-can-equal.scala	marks: an error where warnings are marked: unused-can-equal.scala:16:3: values of types Box[Int] and Box[Long] cannot be compared with == or !=
 unused-params.scala	marks: an error where warnings are marked: unused-params.scala:124:16: method call overrides nothing
 warn-value-discard.scala	marks: 0 warnings where 5 are marked
 with-type-operator-future-migration.scala	check: diagnostic 1 of 1: scalac's is migration warning with-type-operator-future-migration.scala:5:14 with as a type operator has been deprecated; use & instead; teq's is warning with-type-operator-future-migration.scala:5:14 with as a typ

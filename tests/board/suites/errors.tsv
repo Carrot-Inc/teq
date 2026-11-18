@@ -107,6 +107,7 @@ byname_types	pass	-
 cacheable_state_names	pass	-	
 cacheable_state_names_build	pass	-	
 callsyntax	pass	-	
+can_equal_default_on_operands	pass	-	
 can_equal_fixed_operands	pass	-	
 canequal_nested_ambiguity	pass	-	
 canequal_nested_ambiguity_warm	pass	-	
@@ -812,6 +813,7 @@ pattern_binding_runtime_checked_join	pass	-
 pattern_binding_runtime_checked_named	pass	-	
 pattern_binding_runtime_checked_typed	pass	-	
 pattern_binding_tuple_components	pass	-	
+pattern_can_equal_strict	pass	-	
 pattern_case_class_parent_value_reference	fail	-	missing '15:3: error: Found: C[Int]'
 pattern_class_parent_value_reference	fail	-	exit code 0
 pattern_runtime_checked_match	pass	-	

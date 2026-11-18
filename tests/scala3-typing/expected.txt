@@ -162,7 +162,7 @@ neg/depfuns.scala	syntax	expected {}, found {}
 neg/deprecatedName-nonconstant.scala	accepts	
 neg/deptypes-badsyntax.scala	syntax	expected end of statement, found {}
 neg/deptypes.scala	syntax	expected end of statement, found {}	--language experimental.dependent
-neg/derive-eq.scala	superset	+4 lines: no given instance
+neg/derive-eq.scala	same	
 neg/deriving-duplicate.scala	same	
 neg/deriving-from-product-typed.scala	same	
 neg/deriving.scala	same	
@@ -214,7 +214,7 @@ neg/enum-values.scala	same
 neg/enum-variance.scala	same	
 neg/enumWithType.scala	same	
 neg/enums.scala	superset	+2 lines: explicit extends clause needed because both enum case and enum class have type parameters
-neg/enumsAccess.scala	subset	4/10 lines
+neg/enumsAccess.scala	subset	3/10 lines
 neg/enumsLabel-singleimpl.scala	accepts	
 neg/enumvalues.scala	superset	+1 lines: {} is not a member of the package
 neg/eql.scala	subset	6/8 lines
@@ -424,7 +424,7 @@ neg/i1169.scala	accepts
 neg/i11694.scala	different	missing parameter type
 neg/i11719.scala	accepts	
 neg/i11719a.scala	different	type mismatch
-neg/i11761.scala	same	3/3 lines
+neg/i11761.scala	same	
 neg/i11781.scala	oos	inheritance
 neg/i11797.scala	same	
 neg/i1181c.scala	same	
@@ -1138,7 +1138,7 @@ neg/i4986d.scala	subset	2/3 lines
 neg/i50-volatile.scala	different	type mismatch
 neg/i5001.scala	same	
 neg/i5004.scala	syntax	expected {}, found {}
-neg/i5005.scala	subset	1/4 lines
+neg/i5005.scala	subset	2/4 lines
 neg/i5008.scala	oos	inheritance
 neg/i5010.scala	same	
 neg/i5019.scala	same	
@@ -1613,7 +1613,7 @@ neg/mt-scrutinee-widen.scala	same
 neg/mt-scrutinee-widen2.scala	accepts	
 neg/mt-subtyping-transitivity.scala	same	
 neg/multi-file-error	std	foo
-neg/multi-param-derives.scala	superset	+17 lines: {} cannot be derived
+neg/multi-param-derives.scala	superset	+15 lines: {} cannot be derived
 neg/multi-patterns.scala	syntax	expected {}, found {}
 neg/multiLineOps.scala	syntax	expected a definition, found {}
 neg/multiple-args-consume.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
@@ -2131,7 +2131,7 @@ pos/Tuple.Drop.scala	accepts
 pos/Tuple.Elem.scala	accepts	
 pos/TupleReverse.scala	std	Reverse
 pos/TupleReverseOnto.scala	std	ReverseOnto
-pos/X.scala	rejects	type argument m.MirroredElemTypes does not have the same kind as its bound [_[_]]
+pos/X.scala	rejects	type argument m.MirroredElemTypes does not conform to upper bound [_[_]] =>> Any
 pos/Z.scala	accepts	
 pos/abstract-inline-val.scala	rejects	inline value must have a literal constant type
 pos/abstract-tracked-2.scala	syntax	expected end of statement, found {}
@@ -2310,7 +2310,7 @@ pos/depmet_implicit_norm_ret.scala	rejects	type mismatch
 pos/depmet_implicit_tpbetareduce.scala	rejects	covariant type x occurs in invariant position in type  = List[x] of type m
 pos/deprecated-no-kind-polymorphism-anykind.scala	std	AnyKind
 pos/deprecatedName-symbol.scala	accepts	
-pos/derive-eq.scala	rejects	no given instance
+pos/derive-eq.scala	accepts	
 pos/derives-obj.scala	accepts	
 pos/devalify.scala	accepts	
 pos/doWhile.scala	rejects	`do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
@@ -3649,7 +3649,7 @@ pos/i25866d.scala	accepts
 pos/i25894	rejects	type {} is already defined
 pos/i25943.scala	accepts	
 pos/i25947.scala	rejects	type mismatch
-pos/i25979.scala	accepts	
+pos/i25979.scala	rejects	values of types {} and {} cannot be compared
 pos/i26026.scala	accepts	
 pos/i26031.scala	accepts	
 pos/i26153.scala	accepts	
@@ -5901,8 +5901,8 @@ warn/conditionalWarnings.scala	different	there was 1 feature warning; re-run wit
 warn/context-bounds-migration-3.4.scala	same		--source 3.4
 warn/conversion-lang-import.scala	rejects	cannot resolve import
 warn/convertible.scala	rejects	cannot resolve import
-warn/deprecated-origin-verbose.scala	different	there were 2 deprecation warnings; re-run with -deprecation for details
-warn/deprecated-origin.scala	different	there were 2 deprecation warnings; re-run with -deprecation for details
+warn/deprecated-origin-verbose.scala	different	there were 4 deprecation warnings; re-run with -deprecation for details
+warn/deprecated-origin.scala	different	there were 4 deprecation warnings; re-run with -deprecation for details
 warn/deprecated-override.scala	silent	
 warn/deprecatedName-symbol.scala	rejects	there is no parameter named {}
 warn/dollar-java	oos	java
@@ -6237,8 +6237,8 @@ warn/refinements-this.scala	silent
 warn/relaxed-extension-imports-deprecated-flag.scala	options	invalid choice(s) for -language: experimental.relaxedExtensionImports	--language experimental.relaxedExtensionImports
 warn/relaxed-extension-imports-deprecated-import.scala	same	
 warn/rewrite-messages.scala	same		--source future-migration
-warn/sip67-deprecated-flag.scala	accepts	scalac rejects	--language experimental.strictEqualityPatternMatching
-warn/sip67-deprecated-import.scala	accepts	scalac rejects
+warn/sip67-deprecated-flag.scala	rejects	values of types {} and {} cannot be compared	--language experimental.strictEqualityPatternMatching
+warn/sip67-deprecated-import.scala	rejects	values of types {} and {} cannot be compared
 warn/strict-pattern-bindings-3.2.scala	wording	pattern's type 1 is more specialized than the right hand side expression's type Int
 warn/stringcontext-any-methods.scala	same	
 warn/sub-cases-exhaustivity.scala	syntax	expected {}, found {}
@@ -6263,7 +6263,7 @@ warn/type-test-syntesize-b.scala	superset	+1 diagnostics: the type test for Arra
 warn/unary-minus.scala	silent	
 warn/uninitialized-3.4.scala	same	
 warn/uninitialized-future-migration.scala	same	
-warn/unused-can-equal.scala	rejects	values of types {} and {} cannot be compared
+warn/unused-can-equal.scala	silent	
 warn/unused-erased.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 warn/unused-locals.scala	silent	
 warn/unused-params.scala	rejects	method call overrides nothing

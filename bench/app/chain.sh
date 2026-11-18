@@ -42,6 +42,7 @@ if side == "frontend":
     flags = ["--max-inlines", str(d["maxInlines"])] if d.get("maxInlines") else []
     flags += ["--strict-equality"] if d.get("strictEquality") else []
     flags += ["--kind-projector"] if d.get("kindProjector") else []
+    flags += ["--language", ",".join(d["language"])] if d.get("language") else []
     flags += ["--werror"] if d.get("werror") else []
     command = "check"
 else:

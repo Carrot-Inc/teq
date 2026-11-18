@@ -1249,6 +1249,12 @@ pub struct Worker<'a> {
     /// The first ambiguity met by the given search that is under way. A search that fails
     /// because of it reports this instead of a missing instance.
     pub given_ambiguity: Option<String>,
+    /// The `CanEqual` target that a search under way finds only by a definition: the instance
+    /// multiversal equality's defaults would grant is not synthesized for it.
+    pub defined_equality_only: Option<TypeId>,
+    /// The pairs whose `CanEqual` is being decided, the walk over their bounds apart: one met again
+    /// inside its own evidence diverges (`T <: Seq[T]`), and the reference's search finds nothing then.
+    pub equality_in_progress: Vec<(TypeId, TypeId, bool)>,
     /// The candidates of the search under way whose inline expansion failed, with the first
     /// error each: discarded quietly like scalac's, named when nothing else is found.
     pub failed_givens: Vec<(SymId, String)>,
@@ -3212,6 +3218,8 @@ impl<'a> Worker<'a> {
             search_only_depth: None,
             implicit_budget: 0,
             given_ambiguity: None,
+            defined_equality_only: None,
+            equality_in_progress: Vec::new(),
             failed_givens: Vec::new(),
             given_stack: Vec::new(),
             search_byname: false,
@@ -3690,6 +3698,8 @@ impl<'a> Worker<'a> {
             search_only_depth: Default::default(),
             implicit_budget: Default::default(),
             given_ambiguity: Default::default(),
+            defined_equality_only: Default::default(),
+            equality_in_progress: Default::default(),
             failed_givens: Default::default(),
             given_stack: Default::default(),
             search_byname: Default::default(),
