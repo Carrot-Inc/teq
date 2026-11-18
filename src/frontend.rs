@@ -207,7 +207,7 @@ fn mark_type_prefix(ast: &Ast, t: TyExprId, used: &mut UsedNames) {
 /// source version import gave (`Parsed::keywords`, which the parser takes as it meets the import).
 pub fn parse_one(text: &str, interner: &Interner, syntax: parser::Syntax) -> (Vec<Ast>, Syntactic) {
     let mut closed: Vec<u32> = Vec::new();
-    let mut keywords = lexer::Keywords::of_setting(syntax.source);
+    let mut keywords = lexer::Keywords { script: syntax.script.is_some(), ..lexer::Keywords::of_setting(syntax.source) };
     loop {
         let mut lexed = lexer::lex_with(text, interner, &closed, keywords);
         let parsed = parser::parse(text, &mut lexed, &closed, interner, syntax);

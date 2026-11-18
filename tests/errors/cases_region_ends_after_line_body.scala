@@ -1,4 +1,4 @@
-// expect: 15:5: error: expected 'case', found '.'
+// expect: 15:5: error: expected end of statement, found '.'
 // expect: 22:3: error: expected end of statement, found '.'
 // expect: 30:3: error: expected end of statement, found 'match'
 // A line at the cases' width that does not begin with `case` ends the cases where the last case's body stands on

@@ -179,7 +179,6 @@ i12478.scala	i12478.scala:9:7: type mismatch: found Bar[F$1], required Foo[T1]
 i12663.scala	i12663.scala:22:3: Ambiguous overload. The overloaded alternatives of method asd in class HookComponentBuilder with types
 i12708.scala	i12708.scala:33:11: type mismatch: found Map[Int, A], required (Int, A)
 i12723.scala	i12723.scala:8:12: expected a pattern, found identifier
-i12757.scala	i12757.scala:5:10: expected 'then', found new line
 i12945	A_1.scala:10:32: Cannot prove that Int =:= 7.
 i12950	test_2.scala:4:19: no given instance of type Mul[Two, 2] was found for parameter m
 i13001	Main_1.scala:28:48: value asInstanceOf is not a member of Product{type Kind = K0; type MirroredType = T; type MirroredElemTypes <: Tuple}
@@ -585,7 +584,6 @@ imports-pos.scala	imports-pos.scala:8:10: PrintStream is not a valid import pref
 indent-colons.scala	indent-colons.scala:146:11: value + is not a member of Int
 indent-in-parens.scala	indent-in-parens.scala:47:11: expected '}', found identifier
 indent4.scala	indent4.scala:16:5: expected an expression, found 'val'
-indented-parens.scala	indented-parens.scala:7:5: operator + cannot be applied to Int and Int => Int
 infer-function-type-in-union.scala	infer-function-type-in-union.scala:20:5: missing parameter type
 infer-tracked-1.scala	infer-tracked-1.scala:29:32: type mismatch: found 6, required Test.IntSet.ord.T
 infer-tracked-explicit-witness.scala	infer-tracked-explicit-witness.scala:12:12: a parent has to be a class or a trait

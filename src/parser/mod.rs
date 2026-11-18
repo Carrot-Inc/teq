@@ -93,13 +93,6 @@ pub struct Parser<'a> {
     /// The pattern definitions (`val pat = rhs`) parsed so far: a body or block whose statements
     /// began at the same count holds none, and is not scanned for them (`desugar_pattern_vals_in`).
     pattern_vals: u32,
-    /// The first `case` of each open region of cases that ends at a line of its width, the innermost last: the
-    /// cases of a `match` or a `catch` on lines of their own (`Parser::parse_cases`).
-    case_regions: Vec<u32>,
-    /// While what continues a block is read, an indented block continued on the line that closes it
-    /// (`Parser::parse_block_tail`) or a case's block continued by anything (`Parser::parse_case_body`): the
-    /// token that continues it, by its index.
-    continued_at: Option<usize>,
     ext_groups: u32,
     expr_scratch: Vec<ExprId>,
     pat_scratch: Vec<PatId>,
@@ -237,8 +230,6 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         placeholder_names: Vec::new(),
         fresh_counter: 0,
         pattern_vals: 0,
-        case_regions: Vec::new(),
-        continued_at: None,
         ext_groups: 0,
         expr_scratch: Vec::new(),
         pat_scratch: Vec::new(),
@@ -1657,17 +1648,12 @@ impl<'a> Parser<'a> {
     /// Where the import's version reads `given` and `enum` otherwise than the setting's, past the tokens dotty's
     /// scanner holds (`fetched_end`), the text is lexed again with the switch and the parse goes on over the new
     /// tokens, the ones it has read the same: what it parsed stays (dotty's scanner reads the version at each
-    /// token it fetches, `Scanners.toToken`). Nothing is lexed again for an import the unit ends with, or one no
-    /// `given` or `enum` follows.
+    /// token it fetches, `Scanners.toToken`, and reads it again at each line it begins: `handleNewLine`'s
+    /// `isContinuing`, which the migration source turns off).
     fn switch_keywords(&mut self, v: SourceVersion) {
         let at = self.source_switch;
-        let wanted = crate::lexer::Keywords { switch: Some((at, v.migrate_to_3())), ..crate::lexer::Keywords::of_setting(self.syntax.source) };
+        let wanted = crate::lexer::Keywords { switch: Some((at, v.migrate_to_3())), script: self.lex_keywords.script, ..crate::lexer::Keywords::of_setting(self.syntax.source) };
         if v.migrate_to_3() == wanted.migrating || at == u32::MAX || self.lex_keywords == wanted {
-            return;
-        }
-        let interner = self.interner;
-        let named = |t: &Token| matches!(t.kind, Tok::KwGiven | Tok::KwEnum) || (t.kind == Tok::Ident && matches!(interner.get(t.name), "given" | "enum"));
-        if !self.toks[self.pos..].iter().any(|t| t.span.start >= at && named(t)) {
             return;
         }
         let fresh = crate::lexer::lex_with(self.text, self.interner, self.closed, wanted);

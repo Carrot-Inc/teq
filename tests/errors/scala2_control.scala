@@ -1,6 +1,6 @@
 // expect: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
 // expect: expected 'then', found identifier
-// expect: `yield` or `do` expected
+// expect: expected '<-', found end of indented block
 
 object E:
   def f(xs: List[Int]): Unit =

@@ -12,6 +12,6 @@ Tuple-toArray.scala	pass	interp:fail
 colltest4	pass	interp:fail	
 i16191.scala	fail	interp:fail	output: line 1: the .check has 'List(private final Context C.ctx)', the program printed 'List(private Context C.ctx, private java.lang.Object C.given_Context$lzy, private java.lang.Object C.given_C$lzy)'
 i5256.scala	pass	interp:pass	
-tuple-cons.scala	fail	interp:fail	tuple-cons.scala:42:7: expected 'case', found identifier
+tuple-cons.scala	pass	interp:pass	
 tuple-drop.scala	pass	interp:pass	
 tuple-take.scala	pass	interp:pass	

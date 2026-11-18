@@ -152,7 +152,7 @@ neg/ctx-bounds-priority.scala	same		--source 3.7
 neg/curried-dependent-ift.scala	same	
 neg/cycles.scala	syntax	expected {}, found {}
 neg/cyclic.scala	superset	+1 lines: recursive use of {} needs an explicit result type
-neg/dedented-string-literals.scala	syntax	expected end of statement, found {}
+neg/dedented-string-literals.scala	different	Incompatible combinations of tabs and spaces in indentation prefixes.
 neg/default-arg-in-refinement.scala	same	
 neg/deferred-givens-2.scala	syntax	expected end of statement, found {}	--source future --language experimental.modularity
 neg/deferred-givens.scala	superset	+3 lines: No given instance of type Ctx was found for inferring the implementation of the deferred given instance ctx in trait A
@@ -465,7 +465,7 @@ neg/i12486.scala	oos	inheritance
 neg/i12487.scala	same	
 neg/i12537.scala	accepts	
 neg/i1255.scala	same	
-neg/i12554a.scala	subset	1/3 lines
+neg/i12554a.scala	different	too many arguments
 neg/i12554b.scala	subset	1/4 lines
 neg/i12555.scala	same	
 neg/i12555b.scala	different	Deferred inline method noop in trait Noop cannot be invoked
@@ -905,7 +905,7 @@ neg/i22941.scala	same
 neg/i22979.scala	different	{} is not a member of the package
 neg/i23036.scala	same	
 neg/i23111.scala	same	
-neg/i23119.scala	superset	+4 lines: `yield` or `do` expected
+neg/i23119.scala	oos	local-givens
 neg/i23155a.scala	same	
 neg/i23156.scala	superset	+1 lines: wrong number of patterns for an extractor of <error>: found 2
 neg/i23179-reverse.scala	subset	1/2 lines
@@ -950,7 +950,7 @@ neg/i24681.scala	syntax	expected {}, found {}
 neg/i2470.scala	same	
 neg/i24711-java-nested-types.scala	same	
 neg/i2473.scala	subset	1/2 lines
-neg/i24745.scala	syntax	expected {}, found {}
+neg/i24745.scala	same	
 neg/i24789.scala	same	
 neg/i24825.scala	same	
 neg/i24825b.scala	same	
@@ -1778,7 +1778,7 @@ neg/ski.scala	subset	7/11 lines
 neg/skolemize.scala	subset	1/2 lines
 neg/source-import-3-1-migration.scala	same	
 neg/source-import.scala	same	
-neg/spaces-vs-tabs.scala	subset	1/5 lines
+neg/spaces-vs-tabs.scala	superset	+1 lines: Incompatible combinations of tabs and spaces in indentation prefixes.
 neg/specialized-trait-anonymous-class-breaks-rules.scala	oos	inline-trait	--language experimental.specializedTraits
 neg/specialized-trait-bad-type-param.scala	oos	inline-trait	--language experimental.specializedTraits
 neg/specialized-trait-banned-covariance.scala	oos	inline-trait	--language experimental.specializedTraits
@@ -2703,7 +2703,7 @@ pos/i12730.scala	accepts
 pos/i12739-fallout.scala	accepts	
 pos/i12739.scala	accepts	
 pos/i12754.scala	accepts	
-pos/i12757.scala	syntax	expected {}, found {}
+pos/i12757.scala	accepts	
 pos/i12803.scala	accepts	
 pos/i12834.scala	accepts	
 pos/i1285.scala	accepts	
@@ -4336,7 +4336,7 @@ pos/indent.scala	std	ArrowAssoc
 pos/indent2.scala	accepts	
 pos/indent3.scala	accepts	
 pos/indent4.scala	syntax	expected an expression, found {}
-pos/indented-parens.scala	rejects	operator {} cannot be applied
+pos/indented-parens.scala	accepts	
 pos/inf.scala	accepts	
 pos/infer-function-type-in-union.scala	rejects	missing parameter type
 pos/infer-tracked-1.scala	rejects	type mismatch

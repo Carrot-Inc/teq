@@ -263,7 +263,7 @@ reflect-sourceCode	fail	-	wrong-output
 reflect-typeChecks	fail	-	compile-error: value testing is not a member of compiletime
 requiredSymbols	fail	-	compile-error: exception in macro: java.util.NoSuchElementException: class java.lang.Object not found (called by foo in object Macro)
 self	fail	-	wrong-output
-simple-interpreter	fail	-	compile-error: `yield` or `do` expected
+simple-interpreter	pass	-	
 simple-switch	fail	-	compile-error: not supported yet in a macro: a case whose pattern is no pattern tree (called by switch)
 splice-position	fail	-	compile-error: missing parameter type
 string-context-implicits	fail	-	compile-error: expected '}', found ';'

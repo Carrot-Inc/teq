@@ -1,5 +1,6 @@
 # test	verdict	the other ways	the first line of the difference
 backticked-main	pass	-	
+brace-lambda-body	pass	-	
 dirs-package	pass	-	
 echo-args	pass	-	
 echo-args-none	pass	-	
@@ -32,6 +33,9 @@ hyphen-package-main	pass	-
 hyphen-package-merge	pass	-	
 hyphen-package-raw-reference	pass	-	
 hyphen-package-reference	pass	-	
+indented-first-line	pass	-	
+indented-first-line-header-block	pass	-	
+indented-first-line-shebang	pass	-	
 main-object	pass	-	
 nested-app	pass	-	
 nested-main	pass	-	

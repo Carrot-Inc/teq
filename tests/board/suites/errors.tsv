@@ -98,10 +98,14 @@ binder_named_function_cycle	pass	-
 binder_named_function_parts	pass	-	
 binder_over_binder_keeps_expected_type	pass	-	
 binder_simple_member_kind	pass	-	
+block_type_application_of_method	pass	-	
 block_unbound_placeholder	pass	-	
 bound_check_after_typer_error	fail	-	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
 bound_member_params_seen_from_prefix	fail	-	exit code 0
+brace_line_left_of_first_line	fail	-	exit code 0
+brace_template_body_at_brace_width	fail	-	missing '6:7: error:'
 braced_block_overload	pass	-	
+braced_branch_applied_after_condition	fail	-	exit code 0
 byname_positions	pass	-	
 byname_types	pass	-	
 cacheable_state_names	pass	-	
@@ -120,10 +124,9 @@ case_clause_guard_colon_lambda_inline	pass	-
 case_clause_in_parens	pass	-	
 case_companion_apply_defaults	pass	-	
 case_copy_clauses	pass	-	
-cases_deeper_line_after_continued_block	pass	-	
-cases_end_match_after_catch_branch	fail	-	exit code 0
-cases_end_selection_after_continued_branch	fail	-	exit code 0
-cases_end_selection_after_operator_line	fail	-	exit code 0
+cases_end_match_after_catch_branch	fail	-	missing '10:3: error: missing parameter type'
+cases_end_selection_after_continued_branch	pass	-	
+cases_end_selection_after_operator_line	pass	-	
 cases_region_ends_after_line_body	pass	-	
 cases_region_ends_at_width	pass	-	
 cases_region_ends_at_width_tabs	pass	-	
@@ -151,6 +154,7 @@ companion_apply_private_alias	pass	-
 companion_default_later_clause	pass	-	
 companion_proxy_access	pass	-	
 companion_proxy_prefix	pass	-	
+condition_bracket_line_then_statement	pass	-	
 conflicting_bases	pass	-	
 conformance_extras	pass	-	
 constructor_access	pass	-	
@@ -462,8 +466,15 @@ impure_function_alias_missing_class	fail	-	missing '7:27: error: Cyclic referenc
 inaccessible_member_retry_fails	pass	-	
 incomplete_def_at_eof	pass	-	
 incomplete_local_val	pass	-	
+indentation_runs_dropped_right_side	pass	-	
+indentation_tabs_after_script_header	pass	-	
+indentation_tabs_incomparable	pass	-	
+indentation_tabs_operator_line	pass	-	
 indented_block_between_widths	pass	-	
 indented_block_bracket_statement	pass	-	
+indented_first_line_plain	pass	-	
+indented_first_line_plain_header_block	pass	-	
+indented_first_line_plain_shebang	pass	-	
 indirect_member_kind	pass	-	
 inference_details	pass	-	
 inference_direction	pass	-	
@@ -687,6 +698,7 @@ match_case_not_a_case_intersection_prefix	fail	-	exit code 0
 match_case_not_a_case_intersection_prefix_mismatch	fail	-	missing '11:28: error: this match type case is not a match case once its pattern is approximated: Nothing'
 match_case_not_a_case_param_bound	fail	-	missing '9:33: error: this match type case is not a match case once its pattern is approximated: Nothing'
 match_case_not_a_case_param_bound_mismatch	fail	-	missing '8:33: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_cases_without_region	pass	-	
 match_prefix_spaces	pass	-	
 match_type_declared_no_cases	fail	-	missing '1:5: warning: Match type reduction failed since selector EmptyTuple.type'
 match_type_dependent	pass	-	
@@ -723,6 +735,7 @@ mirror_refusals	pass	-
 mirror_term_refinement	pass	-	
 mirror_types_after_typer	pass	-	
 mirror_types_of_a_plain_mirror	pass	-	
+misaligned_line_begins_with_operator	pass	-	
 modifiers	pass	-	
 modifiers_table	pass	-	
 named_tuple_mismatch	pass	-	
@@ -845,6 +858,7 @@ proxy_apply_access	pass	-
 proxy_private_apply	pass	-	
 pure_intersection_double_definition	fail	-	missing 'Conflicting definitions:'
 qualified_this_not_enclosing	pass	-	
+quote_template_body_at_brace_width	fail	-	missing '13:7: error:'
 recovered_discard_warnings	pass	-	
 recovered_discard_warnings.check	pass	-	
 refinement_converted_receiver_not_narrowed	pass	-	
@@ -864,6 +878,7 @@ refinement_target_name	pass	-
 refinement_variance	pass	-	
 refutable_extractor_binding	pass	-	
 refutable_patterns	pass	-	
+return_block_then_arguments	pass	-	
 return_stmt	pass	-	
 right_assoc_ext	pass	-	
 right_assoc_extension_calls	pass	-	

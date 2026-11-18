@@ -1,5 +1,5 @@
-// expect: 14:3: error: expected 'case', found '.'
-// expect: 19:3: error: expected 'case', found '.'
+// expect: 14:3: error: expected end of statement, found '.'
+// expect: 19:3: error: expected end of statement, found '.'
 // expect: 25:1: error: expected end of statement, found '.'
 // expect: 32:3: error: expected end of statement, found '.'
 // A line at the width of a match's indented cases that does not begin with `case` ends the cases: a selection

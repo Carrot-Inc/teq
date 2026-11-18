@@ -23,4 +23,8 @@ run_dir hyphen-package-reference hyphen-pkg-ref main_sc
 run_dir hyphen-package-raw-reference hyphen-pkg-raw main_sc
 run_dir hyphen-package-merge hyphen-merge 'x$minusy.run_sc'
 run script-paths script-paths.sc
+run brace-lambda-body brace-lambda-body.sc
+run indented-first-line indented-first-line.sc
+run indented-first-line-shebang indented-first-line-shebang.sc
+run indented-first-line-header-block indented-first-line-header-block.sc
 refusal_cp queue-version queue-version.scala dev/zio/zio_3/2.1.25/zio_3-2.1.25.jar dev/zio/zio-internal-macros_3/2.1.25/zio-internal-macros_3-2.1.25.jar dev/zio/zio-stacktracer_3/2.1.25/zio-stacktracer_3-2.1.25.jar dev/zio/izumi-reflect_3/3.0.9/izumi-reflect_3-3.0.9.jar dev/zio/izumi-reflect-thirdparty-boopickle-shaded_3/3.0.9/izumi-reflect-thirdparty-boopickle-shaded_3-3.0.9.jar org/scala-lang/modules/scala-collection-compat_3/2.14.0/scala-collection-compat_3-2.14.0.jar

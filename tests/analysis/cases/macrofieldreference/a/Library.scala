@@ -9,6 +9,7 @@ object Read:
     val owner = TypeRepr.of[A].typeSymbol
     val field = owner.caseFields.head
     def select(value: Expr[A]): Expr[Long] = Select(value.asTerm, field).asExprOf[Long]
-    '{ new Read[A]:
-      extension (a: A) def value: Long = ${ select('a) }
+    '{
+      new Read[A]:
+        extension (a: A) def value: Long = ${ select('a) }
     }

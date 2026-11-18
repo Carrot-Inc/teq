@@ -14,18 +14,6 @@ enum ColonLambda {
     Case,
 }
 
-/// How the token after a block continues it (`Parser::block_continues`).
-#[derive(Clone, Copy, PartialEq)]
-enum Continued {
-    /// Nothing continues the block.
-    No,
-    /// The block is read on as an operand: a block in braces by whatever follows it, an indented one by an
-    /// operator that leads its line.
-    Operand,
-    /// An indented block by a selection, a type application or a `match` on the line that closes it.
-    Closing,
-}
-
 pub(super) fn op_precedence(op: &str) -> (u8, bool) {
     let right = op.ends_with(':');
     let first = op.as_bytes()[0];
@@ -108,9 +96,8 @@ impl<'a> Parser<'a> {
         let mark = self.placeholders.len();
         let start = self.span();
         let block = self.parse_block();
-        let continued = self.block_continues(start);
-        if continued != Continued::No {
-            return self.parse_block_tail(block, start, min_prec, mark, continued == Continued::Closing);
+        if self.block_continues(start) {
+            return self.parse_block_tail(block, start, min_prec, mark);
         }
         // `{ case ... }: PartialFunction[A, B]`
         if self.at(Tok::Colon) {
@@ -119,68 +106,25 @@ impl<'a> Parser<'a> {
         block
     }
 
-    /// How the token after the block read from the `Indent` at `start` continues it (`parse_block_operand`):
-    /// whatever follows a brace block is read on, a selection, a type application, a `match` and an operator
-    /// after an indented one.
+    /// Whether the token after the block read from the `Indent` at `start` continues it (`parse_block_operand`):
+    /// whatever follows a brace block is read on; after an indented one a selection, a type application, a
+    /// `match` and an operator that leads its line. A line that ends a region of cases continues none of the
+    /// blocks inside it: the scanner's `Outdent` of that region stands before it.
     #[inline]
-    fn block_continues(&self, start: Span) -> Continued {
-        if start.end > start.start || self.at_operator() {
-            Continued::Operand
-        } else if matches!(self.kind(), Tok::Dot | Tok::LBracket | Tok::KwMatch) && !self.ends_case_region() {
-            Continued::Closing
-        } else {
-            Continued::No
-        }
+    fn block_continues(&self, start: Span) -> bool {
+        start.end > start.start || self.at_operator() || matches!(self.kind(), Tok::Dot | Tok::LBracket | Tok::KwMatch)
     }
 
-    /// Whether the token begins a line that ends the innermost open region of cases: a line of the cases' width
-    /// (it does not begin with `case`: the cases' loop took those). Dotty's scanner closes the region there
-    /// (`handleNewLine`: `indentPrefix == MATCH || indentPrefix == CATCH`), and every indented block open inside
-    /// the last case with it, so that nothing on the line continues any of them; the lexer leaves no token of
-    /// that end, and the line is read as it is without the continuation.
+    /// What continues the block `block`, read from the `Indent` at `start` (`parse_block_operand`).
     #[inline(never)]
-    fn ends_case_region(&self) -> bool {
-        self.case_regions.last().is_some_and(|&case_at| self.begins_line_at_width_of(case_at))
-    }
-
-    /// What continues the block `block`, read from the `Indent` at `start` (`parse_block_operand`); `remember`:
-    /// the continuing token is kept while what continues is read (`continued_at`).
-    #[inline(never)]
-    fn parse_block_tail(&mut self, block: ExprId, start: Span, min_prec: u8, mark: usize, remember: bool) -> ExprId {
-        let outer = self.continued_at;
-        if remember {
-            self.continued_at = Some(self.pos);
-        }
+    fn parse_block_tail(&mut self, block: ExprId, start: Span, min_prec: u8, mark: usize) -> ExprId {
         let e = if matches!(self.kind(), Tok::Dot | Tok::LBracket) { self.parse_postfix(block, start) } else { block };
         let e = self.parse_infix_rest(e, start, min_prec);
-        let e = if min_prec > 0 {
+        if min_prec > 0 {
             e
         } else {
             let e = self.parse_expr1_rest(e, start);
             self.placeholder_lambda(mark, start, e)
-        };
-        self.continued_at = outer;
-        e
-    }
-
-    /// After cases at their `match`'s own width: a line further in than the cases, which scalac reads as a
-    /// statement of the last case's body (`caseClause`'s `block()`) and which is read here as a statement after
-    /// the match. Where the match stands in what continues a block (an indented block continued on the line
-    /// that closes it: `Continued::Closing`; a case's block continued by anything: `parse_case_body`), the
-    /// program is refused at the token that continues the block, with the words of a statement that does not
-    /// end there: a continued block brings no program read otherwise than scalac reads it. The refusal goes when a case's body takes the
-    /// lines further in than its `case` as its statements (tests/pending-cases/layout_cases_deeper_line_*).
-    #[cold]
-    #[inline(never)]
-    fn line_after_cases(&mut self, case_at: u32) {
-        let Some(at) = self.continued_at else { return };
-        let Some(next) = self.toks.get(self.pos + 1).copied() else { return };
-        if self.at(Tok::Newline) && !matches!(next.kind, Tok::Outdent | Tok::Eof) && self.line_indent(next.span.start) > self.line_indent(case_at) {
-            self.continued_at = None;
-            let here = std::mem::replace(&mut self.pos, at);
-            let (span, found) = self.found();
-            self.pos = here;
-            self.error_at(span, format!("expected end of statement, found {}", found));
         }
     }
 
@@ -208,7 +152,7 @@ impl<'a> Parser<'a> {
     /// The cases that fill an open region up to its end, as a function of them.
     pub(super) fn parse_case_lambda_in_region(&mut self) -> ExprId {
         let start = self.span();
-        let cases = self.parse_cases_from(true, false);
+        let cases = self.parse_cases_from(true);
         self.case_lambda(cases, start)
     }
 
@@ -461,6 +405,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Whether `e` is an expression written alone in braces, inside any parentheses.
+    fn block_value(&self, e: ExprId) -> bool {
+        match self.ast.expr(e) {
+            Expr::Parens(inner) => self.block_value(inner),
+            _ => self.ast.is_braced(e),
+        }
+    }
+
     /// Whether `e` was written in braces that kept no node of their own (`Ast::written_args`).
     fn written_in_braces(&self, e: ExprId) -> bool {
         let from = self.ast.written_args.partition_point(|&(x, ..)| x < e);
@@ -576,7 +528,9 @@ impl<'a> Parser<'a> {
             }
             Tok::KwReturn => {
                 self.bump();
-                let value = if self.at_expr_start() { Some(self.parse_expr()) } else { None };
+                // The operand is an expression as any other: a block at its start is read on by what continues a
+                // block, and no argument list applies it (`simpleExpr`'s `canApply = false`).
+                let value = if self.at_expr_start() { Some(self.parse_block_or_expr()) } else { None };
                 return self.ast.add_expr(Expr::Return(value), start.to(self.prev_span()));
             }
             Tok::KwThrow => return self.parse_throw(),
@@ -811,31 +765,53 @@ impl<'a> Parser<'a> {
         self.ast.add_expr(Expr::Try(index), start.to(self.prev_span()))
     }
 
+    /// The cases of a `match` or a `catch`. They fill a region: braces, or the indentation region the scanner
+    /// opens for them, further in than the keyword's region or at its own width (dotty's `matchClause`:
+    /// `inBracesOrIndented(caseClauses(..))`), which ends at a line of the cases' width that does not begin with
+    /// `case`. A `case` on a `catch`'s own line is a case without a region: its body is one expression.
     pub(super) fn parse_cases(&mut self) -> ListRef {
-        // The cases of a `match` or a `catch` in an indentation region: dotty's scanner ends the region at a
-        // line of the cases' width that does not begin with `case` (`handleNewLine`: `indentPrefix == MATCH ||
-        // indentPrefix == CATCH`).
-        let keyword = self.pos > 0 && matches!(self.toks[self.pos - 1].kind, Tok::KwMatch | Tok::KwCatch);
-        // The region is an indented one, or one of the keyword's own width, which the lexer opens no region for:
-        // the cases on the lines after the keyword, at its line's width.
-        let region = (self.at(Tok::Indent) && self.span().start == self.span().end) || (self.at(Tok::KwCase) && self.line_starts_here());
-        let ends_at_width = keyword && region;
+        let after_match = self.pos > 0 && self.toks[self.pos - 1].kind == Tok::KwMatch;
         let indented = self.eat(Tok::Indent);
-        self.parse_cases_from(indented, ends_at_width)
+        // A `match` takes its cases in a region alone (`matchClause`); a `catch` takes one case on its own line
+        // too (`singleCaseMatch`). A `case` without a region is refused; the cases are read all the same, for
+        // what is recovered of them. Right inside the braces of an interpolated expression the lexer makes no
+        // layout token: cases on the lines after the keyword stand in the region the scanner opens for them
+        // there, which no token shows.
+        if !indented && after_match && self.at(Tok::KwCase) && !(self.line_starts_here() && self.in_interpolation_braces()) {
+            let (at, found) = self.found();
+            self.error_at(at, format!("expected '{{', found {}", found));
+        }
+        self.parse_cases_from(indented)
     }
 
-    /// The cases, `indented` when they fill a region whose `Indent` is behind, up to and with
-    /// its end; `ends_at_width` where a line at their width that does not begin with `case` ends the region
-    /// (`parse_cases`).
-    fn parse_cases_from(&mut self, indented: bool, ends_at_width: bool) -> ListRef {
+    /// Whether the innermost bracket open at the token is the brace of an interpolated expression (`${`), which
+    /// the lexer leaves an `LBrace`; a block's brace and an indentation region are an `Indent`.
+    #[cold]
+    #[inline(never)]
+    fn in_interpolation_braces(&self) -> bool {
+        let mut closed = 0usize;
+        for t in self.toks[..self.pos].iter().rev() {
+            match t.kind {
+                Tok::RParen | Tok::RBracket | Tok::RBrace | Tok::Outdent => closed += 1,
+                Tok::LParen | Tok::LBracket | Tok::LBrace | Tok::Indent => {
+                    if closed == 0 {
+                        return t.kind == Tok::LBrace;
+                    }
+                    closed -= 1;
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// The cases, `indented` when they fill a region whose `Indent` is behind, up to and with its end.
+    fn parse_cases_from(&mut self, indented: bool) -> ListRef {
         let mut cases: Vec<CaseClause> = Vec::new();
         let mut broken: Vec<u32> = Vec::new();
-        let regions = self.case_regions.len();
         loop {
             if indented {
                 self.skip_separators();
-            } else if self.at(Tok::Newline) && self.kind_at(1) == Tok::KwCase && !cases.is_empty() {
-                self.bump();
             }
             if !self.at(Tok::KwCase) {
                 // A token between the cases of an indented match: skipped, its nested regions
@@ -849,9 +825,6 @@ impl<'a> Parser<'a> {
                 break;
             }
             let case_at = self.bump().span.start;
-            if ends_at_width && self.case_regions.len() == regions {
-                self.case_regions.push(case_at);
-            }
             let mark = self.error_events;
             let pat = self.within_match_pattern(Self::parse_pattern);
             let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
@@ -868,14 +841,10 @@ impl<'a> Parser<'a> {
             let body = if !arrow && self.at(Tok::Newline) && !matches!(self.kind_at(1), Tok::KwCase | Tok::Outdent | Tok::Eof) {
                 self.parse_case_lines()
             } else {
-                self.parse_case_body(ends_at_width.then_some(case_at))
+                self.parse_case_body(indented)
             };
             cases.push(CaseClause { pat, guard, body });
         }
-        if !indented && self.continued_at.is_some() && self.case_regions.len() > regions {
-            self.line_after_cases(self.case_regions[regions]);
-        }
-        self.case_regions.truncate(regions);
         if indented {
             self.end_region();
         }
@@ -885,12 +854,6 @@ impl<'a> Parser<'a> {
         let l = push_list(&mut self.ast.cases, &cases);
         self.ast.broken_cases.extend(broken.into_iter().map(|i| l.start + i));
         l
-    }
-
-    /// Whether the token begins its line, at the width of the line the offset `at` stands on, counted as the lexer
-    /// counts a line's width.
-    fn begins_line_at_width_of(&self, at: u32) -> bool {
-        self.line_starts_here() && self.line_indent(self.span().start) == self.line_indent(at)
     }
 
     /// The statements up to the next `case` or the end of the cases' region, as a block.
@@ -916,31 +879,64 @@ impl<'a> Parser<'a> {
         self.ast.add_expr(Expr::Block(l), start.to(self.prev_span()))
     }
 
-    /// A case's body. `ends_at`: the case's `case`, where its region ends at a line of the cases' width that
-    /// does not begin with `case` (`parse_cases`).
-    fn parse_case_body(&mut self, ends_at: Option<u32>) -> ExprId {
-        // A body that begins with a block is that block and what continues it: dotty's `caseClause` reads the
-        // body as a block's statements, the first of which is the expression the `INDENT` or the brace begins.
-        // Nothing on a line that ends the cases' region continues it; an operator that leads such a line ends no
-        // region (`handleNewLine`'s `canDedent`) and continues the body.
+    /// Whether a statement of the case's body follows the separators here: anything but the next `case` and the
+    /// end of the cases' region.
+    fn case_statement_follows(&self) -> bool {
+        let mut n = 0;
+        while matches!(self.kind_at(n), Tok::Newline | Tok::Semi) {
+            n += 1;
+        }
+        n > 0 && !matches!(self.kind_at(n), Tok::KwCase | Tok::Outdent | Tok::RBrace | Tok::Eof)
+    }
+
+    /// A case's body. `clause`: the case stands in a region of cases, and its body is a block's statements, as
+    /// dotty's `caseClause` reads its `block()`: the lines up to the next `case` or the region's end (the
+    /// scanner ends an indented region of cases at a line of its width; in braces every line up to the `}` is
+    /// the body's). A case on its keyword's line has one expression.
+    fn parse_case_body(&mut self, clause: bool) -> ExprId {
+        let patdefs_mark = self.pattern_vals;
+        let start = self.span();
+        let mut stmts: Vec<Stmt> = Vec::new();
+        // A body that begins with a block is that block and what continues it, the first of the body's
+        // statements: the expression the `INDENT` or the brace begins.
+        let mut first_block = None;
         if self.at(Tok::Indent) {
             let mark = self.placeholders.len();
-            let start = self.span();
             let block = self.parse_block_kept(true);
-            if !self.at_operator() && ends_at.is_some_and(|case_at| self.begins_line_at_width_of(case_at)) {
-                return block;
-            }
-            let continued = self.block_continues(start);
-            let body = if continued != Continued::No || self.at(Tok::Colon) {
-                // A case's block is continued here alone, in braces or indented: whatever continues it is
-                // remembered while it is read (`continued_at`).
-                let outer = std::mem::replace(&mut self.continued_at, Some(self.pos));
-                let body = if continued != Continued::No { self.parse_block_tail(block, start, 0, mark, false) } else { self.parse_expr1_rest(block, start) };
-                self.continued_at = outer;
-                body
+            let body = if self.block_continues(start) {
+                self.parse_block_tail(block, start, 0, mark)
+            } else if self.at(Tok::Colon) {
+                self.parse_expr1_rest(block, start)
             } else {
                 block
             };
+            first_block = Some((block, body));
+            stmts.push(Stmt::Expr(body));
+        } else if matches!(self.kind(), Tok::Newline | Tok::Outdent | Tok::KwCase | Tok::RBrace | Tok::Eof) {
+            // An empty body: the next case, which a line after `=>` starts with no newline between
+            // them (`=>` ends no statement), or the end of the cases (dotc's `block` of no statements).
+            return self.ast.add_expr(Expr::UnitLit, self.span());
+        } else {
+            self.parse_block_stmt(&mut stmts);
+        }
+        loop {
+            if self.eat(Tok::Semi) {
+                if matches!(self.kind(), Tok::Newline | Tok::Outdent | Tok::Eof | Tok::KwCase) {
+                    break;
+                }
+            } else if clause && self.case_statement_follows() {
+                self.skip_separators();
+            } else {
+                break;
+            }
+            let before = self.pos;
+            self.parse_block_stmt(&mut stmts);
+            if self.pos == before {
+                break;
+            }
+        }
+        self.desugar_local_pattern_vals(&mut stmts, patdefs_mark);
+        if let (Some((block, body)), 1) = (first_block, stmts.len()) {
             // The body's `Block` is around all of it: an indented block that is continued is the expression it
             // holds, and the continued expression the block's. A block in braces that is all of the body keeps
             // its own.
@@ -952,21 +948,13 @@ impl<'a> Parser<'a> {
             }
             return body;
         }
-        // An empty body: the next case, which a line after `=>` starts with no newline between
-        // them (`=>` ends no statement), or the end of the cases (dotc's `block` of no statements).
-        if matches!(self.kind(), Tok::Newline | Tok::Outdent | Tok::KwCase | Tok::RBrace | Tok::Eof) {
-            return self.ast.add_expr(Expr::UnitLit, self.span());
-        }
-        let patdefs_mark = self.pattern_vals;
-        let start = self.span();
-        let mut stmts: Vec<Stmt> = Vec::new();
-        loop {
-            self.parse_block_stmt(&mut stmts);
-            if !self.eat(Tok::Semi) || matches!(self.kind(), Tok::Newline | Tok::Outdent | Tok::Eof | Tok::KwCase) {
-                break;
+        if let Some((block, _)) = first_block {
+            // The block is the first of several statements: an indented one of one expression is that
+            // expression (`blockExpr`), the body's `Block` the one around the statements.
+            if start.end == start.start && !self.written_in_braces(block) {
+                self.ast.unmark_braced(block);
             }
         }
-        self.desugar_local_pattern_vals(&mut stmts, patdefs_mark);
         if let [Stmt::Expr(e)] = stmts[..] {
             return e;
         }
@@ -1004,7 +992,12 @@ impl<'a> Parser<'a> {
                     if filtering {
                         self.error_at(self.span(), "expected '<-' after a case pattern");
                     }
-                    self.expect(Tok::Eq);
+                    // A pattern that no `=` follows is a generator's (dotty's `enumerator`: `generatorRest`
+                    // accepts the `<-`).
+                    if !self.eat(Tok::Eq) {
+                        let (at, found) = self.found();
+                        self.error_at(at, format!("expected '<-', found {}", found));
+                    }
                     let e = self.parse_expr();
                     enums.push(Enumerator::Val(pat, e));
                 }
@@ -1020,7 +1013,13 @@ impl<'a> Parser<'a> {
                     self.error_at(at, format!("expected end of enumerator, found {}", found));
                     self.quiet = true;
                 }
-            } else if !self.eat(Tok::Semi) {
+            } else if self.eat(Tok::Semi) {
+            } else if !parens && self.at(Tok::Newline) && !matches!(self.kind_at(1), Tok::KwYield | Tok::KwDo | Tok::RBrace | Tok::Outdent | Tok::Eof) {
+                // Enumerators without brackets around them, begun on the `for`'s own line, go on over line
+                // ends: dotty reads them in a region where every line end separates (`forExpr`'s
+                // `inSepRegion(InFor)`), up to the `yield` or `do`.
+                self.bump();
+            } else {
                 break;
             }
             if self.at(Tok::Eof) {
@@ -1578,8 +1577,15 @@ impl<'a> Parser<'a> {
             }
             Tok::LParen => self.parse_parens(),
             Tok::LBracket if self.bracket_followed_by(Tok::Arrow) => {
+                // A polymorphic function literal that a block's statement starts hands the rest of the block to
+                // its function literal (dotty reads what follows the type parameters' arrow in the literal's own
+                // location: `expr(location)`, `Location.InBlock`).
+                let in_block = self.block_lambda_at == self.pos;
                 let (params, bounds, ctx, annotated) = self.parse_type_params_of_lambda();
                 self.expect(Tok::Arrow);
+                if in_block {
+                    self.block_lambda_at = self.pos;
+                }
                 let lambda = self.parse_expr();
                 if !matches!(self.ast.expr(lambda), Expr::Lambda(..)) {
                     self.error_at(start, "a polymorphic function literal takes a function literal after `=>`");
@@ -2005,6 +2011,13 @@ impl<'a> Parser<'a> {
                     self.note_name(e, name_span);
                 }
                 Tok::LBracket => {
+                    // A type argument list after an expression written in braces applies to the value of the
+                    // block, its `apply`: dotty types a block's expression without the application's prototype
+                    // (`Typer.typedBlock`: `pt.dropIfProto`), so the type arguments never reach a method the block
+                    // names.
+                    if self.block_value(e) {
+                        e = self.ast.add_expr(Expr::Select(e, names::APPLY), self.ast.expr_span(e));
+                    }
                     let targs = self.parse_type_args();
                     e = self.ast.add_expr(Expr::TypeApply(e, targs), start.to(self.prev_span()));
                 }

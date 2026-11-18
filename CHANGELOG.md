@@ -791,6 +791,47 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   method by the member selected, and `for x <- xs yield` with `x` alone on the indented line after it yields `xs`
   itself, as `for x <- xs yield x` does (teq read the indented `x` as a block's expression and mapped the
   collection).
+- A line that begins with `(`, `[` or `{` and stands further in than the block it is in goes on with the line
+  before it, as scalac reads it: it is the argument list, the type argument list or the block argument of what
+  that line ends in, with a comment line between them or not. After a blank line (one inside a block comment
+  too), at the block's own indentation, and under ``import scala.language.`3.0-migration` ``, such a line begins
+  a statement.
+  teq decided this from what the line before ended in, and read some of these programs otherwise than scalac or
+  refused them; braces whose first line break falls inside parentheses now take the indentation of the block
+  around them, so a line of theirs that begins with a parenthesis continues the line before it too.
+- A `for` whose enumerators begin on its own line, without parentheses or braces, goes on over the lines after
+  it, at its own indentation or further in, up to its `yield` or `do` (`for x <- xs` / `y <- ys` / `yield ..`).
+  teq refused the second line (`` `yield` or `do` expected ``).
+- The cases of a `match` or a `catch` and their bodies are divided as scalac divides them. A case's body is every
+  line up to the next `case`: lines further in than the cases after a body that began on the case's line, or after
+  a body in braces, belong to it, and under `{ case x =>` a later line left of the body's first line does too
+  (teq refused these: `expected 'case'`, `expected end of statement`). Cases indented below their
+  keyword, or written at its own indentation, end at the first line of their indentation that does not begin with
+  `case`; that line is the next statement, or continues the whole `match` when it begins with `.` or an operator.
+  A `case` on the same line as its `match`, without braces (`x match case 1 => ..`), is refused as scalac
+  refuses it (`expected '{', found 'case'`); teq accepted it.
+- Indentation that mixes tabs and spaces is measured and compared as scalac does: a line's indentation is its first
+  run of one character and the run after it, which is all scalac keeps of it (a line led by a space, a tab and two
+  more spaces is as wide as one led by a space and a tab), and a line belongs to a block whose indentation it
+  extends. Where neither indentation extends the other the line is refused with scalac's error (`Incompatible
+  combinations of tabs and spaces in indentation prefixes`, with the two indentations); teq compared the counts of
+  characters and could put such a line in the wrong block without a word. A line that matches no enclosing
+  indentation is reported with its widths in scalac's words (`1 tab, 2 spaces`). A source file's outermost block
+  is as wide as the line its first token stands on (after a script header, the line after the header), and a
+  line left of it narrows the block, as in scalac; teq's was 0 wide. A Scala CLI script's statements are read in
+  its wrapper class, from the start of a line, whatever its first line's indentation, as before.
+- A type argument list after an expression written in braces applies to the value of the block, as in scalac:
+  `{ poly }[Int]` calls the value's `apply`. teq handed the type arguments to a method the block named, and where
+  that method's result had an `apply` with type parameters it gave the method's result itself, a wrong value. A
+  method named in braces that has no such `apply` is refused (`{ id }[Int](1)`).
+- After `return`, a block in braces followed by an argument list is refused as scalac refuses it (`expected end
+  of statement, found '('`); what continues a block (a selection, an operator, a `match`) continues the operand.
+- A type projection goes on over a line break after its `#` or before it (`A#` / `B`); teq ended the statement
+  at the line break and refused the next line.
+- After `if (c)`, `while (c)` or `for (..)`, a line further in that begins with a bracket is the branch or the
+  body itself and opens no block, as in scalac: a second statement on the line after it is not part of the branch,
+  and an `else` below it is refused (`expected end of statement, found 'else'`). teq read both lines as the
+  branch's block.
 
 ## 0.1.10 (2026-11-13)
 

@@ -135,6 +135,7 @@ block_lambda_stmts	pass	-
 block_reduced_to_result	pass	-	
 block_statement_lambda	pass	-	
 block_then_select	pass	-	
+block_value_type_application	pass	-	
 body_reads_outer_member	pass	-	
 boolean_assign_ops	pass	-	
 boolean_strict_operators	pass	-	
@@ -151,7 +152,9 @@ boxed_numeric_conversions	pass	-
 boxed_operators	pass	-	
 boxed_widening	pass	-	
 brace_assign_update	pass	-	
+brace_block_first_line_width	pass	-	
 brace_first_line_statements	pass	-	
+brace_lambda_body_lines	pass	-	
 brace_next_line	pass	-	
 brace_self_type_parent	pass	-	
 braces	pass	-	
@@ -209,6 +212,7 @@ case_apply_bare_in_companion	pass	-
 case_apply_beside_curried	pass	-	
 case_apply_primary_alone	pass	-	
 case_body_continued	pass	-	
+case_body_lines	pass	-	
 case_class_below_superclass	pass	-	
 case_class_beside_method_of_its_name	pass	-	
 case_class_copy_through_trait	pass	-	
@@ -416,6 +420,7 @@ concat_order_long	pass	-
 concat_order_macro	pass	-	
 concat_order_transparent	pass	-	
 concurrent_hash_map_views	pass	-	
+condition_then_bracket_line	pass	-	
 conditional_precedence	pass	-	
 conformance_extras	pass	-	
 cons_pattern_binders	pass	-	
@@ -844,6 +849,7 @@ for_deep_equals_3_3	pass	-
 for_deep_equals_3_8	pass	-	
 for_drop_map_3_8	pass	-	
 for_drop_map_lifted_receiver	pass	-	
+for_enumerators_over_lines	pass	-	
 for_generator_callee_guard	fail	-	compile
 for_generator_callee_parameter	fail	-	compile
 for_generator_converted_receiver	pass	-	
@@ -866,6 +872,7 @@ for_yield_view	pass	-
 for_yield_view_chain	pass	-	
 for_yield_view_depth	pass	-	
 for_yield_view_forms	pass	-	
+forms_after_bracket_on_its_line	pass	-	
 forward_reference_accepted	pass	-	
 forward_reference_quoted_class	pass	-	
 fractional_equals_method	pass	-	
@@ -1127,6 +1134,10 @@ import_wildcard_private_member	pass	-
 imports_scoped	pass	-	
 impossible_type_test_bounds	pass	-	
 impure_function_alias	fail	-	compile
+indentation_case_after_multiline_string	pass	-	
+indentation_runs_after_the_second	pass	-	
+indentation_tab_on_first_line	pass	-	
+indentation_tabs_comparable	pass	-	
 indented_block_continued	pass	-	
 indented_block_expression	pass	-	
 indexed_seq_defaults	fail	-	exception
@@ -1627,6 +1638,15 @@ lambda_spread_poly_function_bound	fail	-	compile
 lambda_union_expected	pass	-	
 lambdas	pass	-	
 language_import_from_root	pass	-	
+layout_cases_deeper_line_after_block	pass	-	
+layout_cases_deeper_line_after_case_block	pass	-	
+layout_cases_deeper_line_after_case_block_match	pass	-	
+layout_cases_deeper_line_after_inline_else	pass	-	
+layout_cases_deeper_line_after_inline_else_one_case	pass	-	
+layout_cases_deeper_line_after_operator	pass	-	
+layout_cases_deeper_line_after_operator_block	pass	-	
+layout_cases_end_after_continued_block	pass	-	
+layout_cases_end_after_selection	pass	-	
 layout_mixed	pass	-	
 lazy_given_nested_object	pass	-	
 lazy_initializer_release	fail	-	output
@@ -1696,6 +1716,7 @@ library_type_pattern_from_above	pass	-
 library_val_overridden	pass	-	
 lifted_block_arguments	pass	-	
 lifted_receiver_default	pass	-	
+line_continued_by_bracket	pass	-	
 linking_info	cannot run	-	its expectation is Scala.js's
 linking_info_module	cannot run	-	its expectation is Scala.js's
 linking_info_release	cannot run	-	its expectation is Scala.js's
@@ -1980,6 +2001,7 @@ maps	pass	-
 marker_traits	pass	-	
 match_abstract_member_type	pass	-	
 match_alias_declared_bound	pass	-	
+match_cases_in_interpolation_braces	pass	-	
 match_nested_bound	pass	-	
 match_reduction_stack	pass	-	
 match_type_case_and_line	pass	-	
@@ -2163,6 +2185,8 @@ ordered_comparable	pass	-
 ordering_ordered_evidence	pass	-	
 ordering_tuples_large	pass	-	
 outer_setter_assign	pass	-	
+outermost_region_after_script_header	pass	-	
+outermost_region_narrows_after_separator	pass	-	
 outline_widened_operand	pass	-	
 overload_alias_by_name_lambda	pass	-	
 overload_apply	pass	-	
@@ -2326,6 +2350,7 @@ poly_function_union_erasure	pass	-
 poly_functions	pass	-	
 poly_named_params	pass	-	
 polyfunction_gadt_scope	pass	-	
+polymorphic_literal_at_brace_start	pass	-	
 polymorphic_result_applied	pass	-	
 postfix_import_scoped	pass	-	
 postfix_operators	pass	-	
@@ -2356,6 +2381,7 @@ product_element_names	pass	-
 product_iterator	pass	-	
 program_annotations_named_js_and_jvm_evidence	pass	-	
 projection_prefix	pass	-	
+projection_sign_at_line_end	pass	-	
 prop_abs_negative_zero	pass	-	
 prop_boolean_and_or_short_circuit	pass	-	
 prop_double_text_subnormal	pass	-	

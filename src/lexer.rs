@@ -17,21 +17,21 @@ struct ExtHeader {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Region {
-    Indent(u32),
+    Indent(IndentWidth),
     /// Parens, brackets and import selectors disable newlines. The width an indented region inside
     /// has to exceed is fixed at the first line break: that line's own when the bracket ends the
     /// line before it, else the enclosing region's (dotc's `proposeKnownWidth`).
-    Enclosed(u8, Option<u32>),
+    Enclosed(u8, Option<IndentWidth>),
     /// A brace block holds statements like an indented region. Its width is that of the first
     /// statement line, unknown until then.
-    Braces(Option<u32>),
+    Braces(Option<IndentWidth>),
     InterpBrace { triple: bool },
     /// The pattern and guard of a case clause, from its `case` to its `=>`: dotty's `InCase`
     /// (`Parsers.caseClause` and `typeCaseClause` parse them inside it), where a line break
     /// separates nothing, as inside parentheses (`Scanners.handleNewLine`: a region neither
-    /// indented nor braces). Its width is that of the line of its `case`, at `at`
-    /// (`proposeKnownWidth`); `guard` once its guard's `if` is lexed.
-    Case { width: u32, at: u32, guard: bool },
+    /// indented nor braces). Its width is that of the line its `case` stands on, at `at`
+    /// (`proposeKnownWidth(in.indentWidth(in.offset), CASE)`); `guard` once its guard's `if` is lexed.
+    Case { width: IndentWidth, at: u32, guard: bool },
 }
 
 /// What the source version makes of the text as dotty's scanner reads it. `given` and `enum` are
@@ -40,24 +40,26 @@ enum Region {
 /// the version the unit's source import names, which the parser finds (`Parsed::keywords`).
 /// Indentation is significant unless the setting is `3.0-migration` (`indentSyntax`, which the scanner
 /// fixes at its construction, before any import is read): without it no line opens an indented
-/// region and `end` marks no end.
+/// region and `end` marks no end. `script`: the text is a Scala CLI script's with its wrapper appended
+/// (`parser::Syntax::script`), whose statements the wrapper's class holds (`script.rs`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Keywords {
     pub migrating: bool,
     pub switch: Option<(u32, bool)>,
     pub indent: bool,
+    pub script: bool,
 }
 
 impl Default for Keywords {
     fn default() -> Self {
-        Keywords { migrating: false, switch: None, indent: true }
+        Keywords { migrating: false, switch: None, indent: true, script: false }
     }
 }
 
 impl Keywords {
     /// The setting's reading, before the unit's import is known.
     pub fn of_setting(source: crate::source_version::SourceVersion) -> Keywords {
-        Keywords { migrating: source.migrate_to_3(), switch: None, indent: !source.migrate_to_3() }
+        Keywords { migrating: source.migrate_to_3(), switch: None, indent: !source.migrate_to_3(), script: false }
     }
 
     pub fn migrating_at(self, offset: u32) -> bool {
@@ -150,8 +152,11 @@ struct Lexer<'a> {
     /// an enum's cases or a for's enumerators, whose `case` starts no case clause (dotty's
     /// `enumCase` and `generator` parse theirs outside `InCase`).
     no_case_clauses: Vec<bool>,
-    /// The indentation of the line being lexed.
-    line_width: u32,
+    /// Bit `d`: the indentation region at depth `d`, below 64, was opened after `match` or `catch` (dotty's
+    /// `Indented.prefix`); a deeper region is asked of its tokens (`cases_region`). Such a region holds the
+    /// keyword's cases: it opens at a `case` on a line of the enclosing region's own width too, and ends at a
+    /// line of its own width that does not begin with `case` (`Scanners.handleNewLine`).
+    cases_mask: u64,
     case_lines: Vec<(u32, u32)>,
     /// `LexResult::backquoted`.
     backquoted: Vec<u32>,
@@ -165,7 +170,7 @@ struct Lexer<'a> {
 /// A brace block, while the lexer looks for a missing `}`.
 struct BraceBlock {
     /// The indentation of the line its `{` stands on.
-    open_width: u32,
+    open_width: IndentWidth,
     /// Its first line indented less than its statements (scalac's "Line is indented too far to
     /// the left, or a `}` is missing"), a closer or a token that continues a statement aside.
     left_line: Option<u32>,
@@ -198,7 +203,7 @@ pub fn lex_with(text: &str, interner: &Interner, close_parens: &[u32], keywords:
             // A script header (`#!/usr/bin/env -S teq interp`) is skipped as scalac skips it.
             pos: crate::directives::script_header(text),
             tokens: Vec::with_capacity(text.len() / 4 + 16),
-            regions: vec![Region::Indent(0)],
+            regions: vec![Region::Indent(IndentWidth::ZERO)],
             interner,
             errors: Vec::new(),
             end_markers: Vec::new(),
@@ -219,7 +224,7 @@ pub fn lex_with(text: &str, interner: &Interner, close_parens: &[u32], keywords:
             open_blocks: Vec::new(),
             indent_starts: vec![0],
             no_case_clauses: vec![false],
-            line_width: 0,
+            cases_mask: 0,
             case_lines: Vec::new(),
             backquoted: Vec::new(),
             last_enum: 0,
@@ -283,6 +288,162 @@ pub(crate) fn line_comment_end(src: &[u8], start: usize) -> usize {
 /// by this one rule.
 pub(crate) fn block_comment_end(src: &[u8], start: usize) -> Option<usize> {
     block_comment(src, start).0
+}
+
+/// Whether the text holds a blank line: a line end, then white space alone up to the next line end (dotty's
+/// `pastBlankLine`, whose line ends are LF and FF).
+#[cold]
+#[inline(never)]
+fn blank_line_in(text: &[u8]) -> bool {
+    let mut blank = false;
+    for &c in text {
+        if c == b'\n' || c == 0x0c {
+            if blank {
+                return true;
+            }
+            blank = true;
+        } else {
+            blank &= c <= b' ';
+        }
+    }
+    false
+}
+
+/// The width of a line's indentation as the reference has it (`Scanners.IndentWidth`, Scanners.scala 1710-1768),
+/// built as `Scanners.indentWidth` (488-505) builds it from the line's leading white space: its first run of one
+/// character (`Run`), and, where another character follows, that second run (`Conc(Run, Run)`). The construction
+/// keeps no more than two runs: a third and later are no part of the width (`" \t  "` is as wide as `" \t"`, and
+/// prints as `1 space, 1 tab`). Packed in a `u64`: bits 0-31 the first run's count, bit 32 whether it is of tabs,
+/// bits 33-62 the second run's count (none where 0), bit 63 whether it is of tabs. A width of spaces alone is its
+/// count, and two such compare as their counts; any other pair takes `IndentWidth.<=`, a partial order.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct IndentWidth(u64);
+
+impl IndentWidth {
+    /// `IndentWidth.Zero`: no white space.
+    pub(crate) const ZERO: IndentWidth = IndentWidth(0);
+    const FIRST_TAB: u64 = 1 << 32;
+    const SECOND_SHIFT: u32 = 33;
+    const SECOND_MAX: u64 = (1 << 30) - 1;
+    const SECOND_TAB: u64 = 1 << 63;
+
+    /// The width of `n` spaces.
+    #[inline(always)]
+    pub(crate) fn spaces(n: u32) -> IndentWidth {
+        IndentWidth(n as u64)
+    }
+
+    /// The width of a line whose leading white space is `prefix` (spaces and tabs alone).
+    pub(crate) fn of(prefix: &[u8]) -> IndentWidth {
+        let Some(&c0) = prefix.first() else { return Self::ZERO };
+        let n1 = prefix.iter().take_while(|&&c| c == c0).count();
+        let mut w = n1 as u32 as u64 | if c0 == b'\t' { Self::FIRST_TAB } else { 0 };
+        if let Some(&c1) = prefix.get(n1) {
+            let n2 = prefix[n1..].iter().take_while(|&&c| c == c1).count() as u64;
+            w |= n2.min(Self::SECOND_MAX) << Self::SECOND_SHIFT | if c1 == b'\t' { Self::SECOND_TAB } else { 0 };
+        }
+        IndentWidth(w)
+    }
+
+    /// The first run: whether it is of tabs, and its count.
+    fn first(self) -> (bool, u32) {
+        (self.0 & Self::FIRST_TAB != 0, self.0 as u32)
+    }
+
+    /// The second run, where there is one (`Conc`'s right side).
+    fn second(self) -> Option<(bool, u32)> {
+        let n = (self.0 >> Self::SECOND_SHIFT) & Self::SECOND_MAX;
+        (n != 0).then_some((self.0 & Self::SECOND_TAB != 0, n as u32))
+    }
+
+    /// Whether the width is of spaces alone, compared as its count.
+    #[inline(always)]
+    fn plain(self, that: IndentWidth) -> bool {
+        (self.0 | that.0) >> 32 == 0
+    }
+
+    /// `IndentWidth.<=`: a run against a run by its count where the characters are the same (a run of none is below
+    /// every width); a run against `Conc(l, r)` as against `l`; `Conc(l1, r1)` against `Conc(l2, r2)` where `l1 ==
+    /// l2` as `r1` against `r2`; a `Conc` is below no run.
+    fn le_tabbed(self, that: IndentWidth) -> bool {
+        let run_le = |(t1, n1): (bool, u32), (t2, n2): (bool, u32)| n1 <= n2 && (t1 == t2 || n1 == 0);
+        match (self.second(), that.second()) {
+            (None, _) => run_le(self.first(), that.first()),
+            (Some(r1), Some(r2)) => self.first() == that.first() && run_le(r1, r2),
+            (Some(_), None) => false,
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn cmp_tabbed(self, that: IndentWidth) -> Option<std::cmp::Ordering> {
+        use std::cmp::Ordering::*;
+        if self == that {
+            Some(Equal)
+        } else if self.le_tabbed(that) {
+            Some(Less)
+        } else if that.le_tabbed(self) {
+            Some(Greater)
+        } else {
+            None
+        }
+    }
+
+    /// Whether neither width is below the other: indentations of tabs and spaces that are no prefix of each other
+    /// (`handleNewLine`'s last branch: `lastWidth != nextWidth` where neither is `<` the other).
+    #[inline(always)]
+    pub(crate) fn incomparable(self, that: IndentWidth) -> bool {
+        !self.plain(that) && self.cmp_tabbed(that).is_none()
+    }
+
+    /// `IndentWidth.isClose`: two runs of spaces one count apart at most, or two `Conc`s of the same first run
+    /// whose second runs are.
+    pub(crate) fn is_close(self, that: IndentWidth) -> bool {
+        let run_close = |(t1, n1): (bool, u32), (t2, n2): (bool, u32)| t1 == t2 && !t1 && n1.abs_diff(n2) <= 1;
+        match (self.second(), that.second()) {
+            (None, None) => run_close(self.first(), that.first()),
+            (Some(r1), Some(r2)) => self.first() == that.first() && run_close(r1, r2),
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd for IndentWidth {
+    #[inline(always)]
+    fn partial_cmp(&self, that: &IndentWidth) -> Option<std::cmp::Ordering> {
+        if self.plain(*that) { Some(self.0.cmp(&that.0)) } else { self.cmp_tabbed(*that) }
+    }
+    #[inline(always)]
+    fn lt(&self, that: &IndentWidth) -> bool {
+        if self.plain(*that) { self.0 < that.0 } else { self.cmp_tabbed(*that) == Some(std::cmp::Ordering::Less) }
+    }
+    #[inline(always)]
+    fn le(&self, that: &IndentWidth) -> bool {
+        if self.plain(*that) { self.0 <= that.0 } else { matches!(self.cmp_tabbed(*that), Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)) }
+    }
+    #[inline(always)]
+    fn gt(&self, that: &IndentWidth) -> bool {
+        that.lt(self)
+    }
+    #[inline(always)]
+    fn ge(&self, that: &IndentWidth) -> bool {
+        that.le(self)
+    }
+}
+
+/// `IndentWidth.toString`: `2 spaces`, `1 tab, 2 spaces`.
+impl std::fmt::Display for IndentWidth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let run = |f: &mut std::fmt::Formatter<'_>, (tab, n): (bool, u32)| {
+            write!(f, "{} {}{}", n, if tab { "tab" } else { "space" }, if n == 1 { "" } else { "s" })
+        };
+        run(f, self.first())?;
+        if let Some(r) = self.second() {
+            f.write_str(", ")?;
+            run(f, r)?;
+        }
+        Ok(())
+    }
 }
 
 /// `block_comment_end`, and where the comment's last line starts (past its last newline) when it
@@ -376,35 +537,45 @@ impl<'a> Lexer<'a> {
 
     /// Skips whitespace and comments. Returns the indentation width of the new line if a line
     /// break was crossed. A line break inside a block comment is one, as dotc's scanner has it
-    /// (`val a = 1 /*⏎*/ val b = 2` is two statements); the line it ends in is then indented by
-    /// its leading whitespace, before the comment's end.
+    /// (`val a = 1 /*⏎*/ val b = 2` is two statements). The line's width is its leading white space
+    /// (`Scanners.indentWidth`: the spaces and tabs back to the line's start), whatever stands between it and
+    /// the line's first token: a comment that begins the line, or one the line ends inside. A blank line is one
+    /// of white space alone between two line ends (`pastBlankLine`), inside a block comment as outside it.
     #[inline(always)]
-    fn skip_trivia(&mut self) -> Option<u32> {
+    fn skip_trivia(&mut self) -> Option<IndentWidth> {
         let mut new_line: Option<usize> = None;
-        let mut in_comment = false;
         let mut comment_on_line = false;
+        // Whether spaces alone were passed since the last line end: they are the line's width then. After a tab,
+        // a carriage return or a comment the width is counted from the line's start (`leading_width`).
+        let mut plain = true;
         self.blank_line = false;
         loop {
             match self.peek(0) {
-                b' ' | b'\t' | b'\r' => self.pos += 1,
+                b' ' => self.pos += 1,
+                b'\t' | b'\r' => {
+                    plain = false;
+                    self.pos += 1;
+                }
                 b'\n' => {
                     self.pos += 1;
                     self.blank_line |= new_line.is_some() && !comment_on_line;
                     new_line = Some(self.pos);
-                    in_comment = false;
                     comment_on_line = false;
+                    plain = true;
                 }
                 b'/' if self.peek(1) == b'/' => {
                     comment_on_line = true;
+                    plain = false;
                     self.pos = line_comment_end(self.src, self.pos);
                 }
                 b'/' if self.peek(1) == b'*' => {
                     comment_on_line = true;
+                    plain = false;
                     let start = self.pos;
                     let (end, line) = block_comment(self.src, start);
                     if line.is_some() {
                         new_line = line;
-                        in_comment = true;
+                        self.blank_line |= blank_line_in(&self.src[start..end.unwrap_or(self.src.len())]);
                     }
                     match end {
                         Some(end) => self.pos = end,
@@ -417,10 +588,24 @@ impl<'a> Lexer<'a> {
                 _ => break,
             }
         }
-        new_line.map(|ls| match in_comment {
-            true => self.src[ls..].iter().take_while(|&&c| c == b' ' || c == b'\t').count() as u32,
-            false => (self.pos - ls) as u32,
-        })
+        new_line.map(|ls| if plain { IndentWidth::spaces((self.pos - ls) as u32) } else { self.leading_width(ls) })
+    }
+
+    /// The width of the line that begins at `ls` (`Scanners.indentWidth`): its leading white space, read where it
+    /// holds a tab or where a comment or a carriage return stands between it and the line's first token
+    /// (`skip_trivia`).
+    #[inline(never)]
+    fn leading_width(&self, ls: usize) -> IndentWidth {
+        let n = self.src[ls..].iter().take_while(|&&c| c == b' ' || c == b'\t').count();
+        IndentWidth::of(&self.src[ls..ls + n])
+    }
+
+    /// The width of the line the offset `p` stands on (`Scanners.indentWidth(p)`).
+    #[cold]
+    #[inline(never)]
+    fn width_at(&self, p: usize) -> IndentWidth {
+        let ls = self.src[..p.min(self.src.len())].iter().rposition(|&b| b == b'\n').map_or(0, |i| i + 1);
+        self.leading_width(ls)
     }
 
     fn at_line_end(&self, mut p: usize) -> bool {
@@ -498,7 +683,19 @@ impl<'a> Lexer<'a> {
         loop {
             let mut line_break = self.skip_trivia();
             if first {
-                line_break = line_break.or(Some(self.pos as u32));
+                // The outermost region is as wide as the line of the first token (`topLevelRegion(indentWidth(offset))`
+                // after the first token is read), which the first line break compares with as with any other. That
+                // line is the one the token stands on: after a script header that ends with a `!#` line the lexer
+                // begins past that line's end, on the token's own line (scalac blanks the header and keeps its lines).
+                // A Scala CLI script's statements are no file's first tokens: Scala CLI writes them into the body of
+                // the wrapper's `final class <name>$_ {`, after the class's own lines at the start of a line, so
+                // scalac measures them in a region of braces whose width that first line fixed at 0
+                // (`proposeKnownWidth`); the region keeps that width whatever the script's first line is.
+                let width = line_break.unwrap_or_else(|| self.width_at(self.pos));
+                if !self.keywords.script {
+                    self.regions[0] = Region::Indent(width);
+                }
+                line_break = Some(width);
                 first = false;
             }
             if self.pos >= self.src.len() {
@@ -509,15 +706,20 @@ impl<'a> Lexer<'a> {
                 continue;
             }
             if let Some(width) = line_break {
-                self.line_width = width;
                 let start = self.pos;
                 if self.relexing {
                     self.close_at_line(width, start);
                 }
                 let (next, next_end) = self.peek_kind();
+                let next = if next == Tok::OpIdent && self.is_hash(start, next_end) { HASH_AT_BREAK } else { next };
                 let leading_op = !std::mem::take(&mut after_end_marker) && self.leading_operator(next, start, next_end, width);
                 let insert_at = self.tokens.len();
-                let cond_body = self.cond_closed && next.can_start_statement() && !(leading_op && self.infix_fits_region(width));
+                // The region after a condition in parentheses is the line's separator turned into one (dotty's
+                // `observeIndented`, which reads a `NEWLINE`): a line that goes on with the line before it has none.
+                let cond_body = self.cond_closed
+                    && next.can_start_statement()
+                    && !(leading_op && self.infix_fits_region(width))
+                    && !self.continues_line(width, next, start);
                 // An extension's header ends at the line break after its last clause; a parameter clause that begins
                 // the next line, no blank line between, continues it (`termParamClauses`'
                 // `newLineOptWhenFollowedBy(LPAREN)`).
@@ -546,8 +748,8 @@ impl<'a> Lexer<'a> {
         let last_end = self.tokens.last().map_or(0, |t| t.span.end as usize);
         while let Some(r) = self.regions.pop() {
             match r {
-                Region::Indent(w) => {
-                    if w > 0 || !self.regions.is_empty() {
+                Region::Indent(_) => {
+                    if !self.regions.is_empty() {
                         self.push(Tok::Outdent, end, end);
                     }
                 }
@@ -570,7 +772,7 @@ impl<'a> Lexer<'a> {
     /// the parser's or the lexer's diagnosis closes before it.
     #[cold]
     #[inline(never)]
-    fn close_at_line(&mut self, width: u32, start: usize) {
+    fn close_at_line(&mut self, width: IndentWidth, start: usize) {
         if self.close_braces.binary_search(&(start as u32)).is_ok() {
             self.close_brace_block(start);
         }
@@ -582,7 +784,7 @@ impl<'a> Lexer<'a> {
 
     /// The width of the innermost indentation or brace region below `regions[..below]` whose
     /// width is known.
-    fn owning_width(&self, below: usize) -> Option<u32> {
+    fn owning_width(&self, below: usize) -> Option<IndentWidth> {
         self.regions[..below].iter().rev().find_map(|r| match *r {
             Region::Indent(w) | Region::Braces(Some(w)) => Some(w),
             _ => None,
@@ -593,7 +795,7 @@ impl<'a> Lexer<'a> {
     /// that owns the statement around them, is a boundary the parser may close them at.
     #[cold]
     #[inline(never)]
-    fn note_boundary(&mut self, width: u32, start: usize) {
+    fn note_boundary(&mut self, width: IndentWidth, start: usize) {
         let first = self.regions.iter().rposition(|r| !matches!(r, Region::Enclosed(..))).map_or(0, |i| i + 1);
         if self.owning_width(first).is_some_and(|w| width <= w) {
             self.boundaries.push(start as u32);
@@ -605,7 +807,7 @@ impl<'a> Lexer<'a> {
     /// them. Their closing tokens are left for the parser to report missing.
     #[cold]
     #[inline(never)]
-    fn close_enclosed(&mut self, width: u32, start: usize) {
+    fn close_enclosed(&mut self, width: IndentWidth, start: usize) {
         loop {
             let Some(e) = self.regions.iter().rposition(|r| matches!(r, Region::Enclosed(..))) else { return };
             if self.regions[e + 1..].iter().any(|r| !matches!(r, Region::Indent(_))) {
@@ -648,7 +850,7 @@ impl<'a> Lexer<'a> {
     /// scalac's `isLeadingInfixOperator` short of its test of the regions: the token at `start`
     /// is an operator (symbolic, backquoted, or a name ending in an operator character), white
     /// space or the line's end follows it, no blank line precedes it, and an operand follows.
-    fn leading_operator(&mut self, next: Tok, start: usize, end: usize, width: u32) -> bool {
+    fn leading_operator(&mut self, next: Tok, start: usize, end: usize, width: IndentWidth) -> bool {
         let operator = match next {
             Tok::OpIdent => true,
             Tok::Ident => self.src[start] == b'`' || is_op_char(self.src[end - 1]),
@@ -664,7 +866,7 @@ impl<'a> Lexer<'a> {
     /// starts an expression and is no operator but a unary one; on a later line, past no blank
     /// one, it stands at least as far in as the operator at `width`.
     #[cold]
-    fn operand_follows(&mut self, end: usize, width: u32) -> bool {
+    fn operand_follows(&mut self, end: usize, width: IndentWidth) -> bool {
         let (pos, errors, blank) = (self.pos, self.errors.len(), self.blank_line);
         self.pos = end;
         let line = self.skip_trivia();
@@ -695,10 +897,10 @@ impl<'a> Lexer<'a> {
 
     /// The test of the regions of `isLeadingInfixOperator` for an operator at `width`: an
     /// indented region no wider than it, or one whose enclosing region is narrower.
-    fn infix_fits_region(&self, width: u32) -> bool {
+    fn infix_fits_region(&self, width: IndentWidth) -> bool {
         let n = self.regions.len();
         match self.regions[n - 1] {
-            Region::Indent(w) if w > width && n > 1 => match self.regions[n - 2] {
+            Region::Indent(w) if !(w <= width) && n > 1 => match self.regions[n - 2] {
                 Region::Indent(outer) => outer < width,
                 _ => self.outer_width() < width,
             },
@@ -798,18 +1000,33 @@ impl<'a> Lexer<'a> {
     }
 
     #[inline(always)]
-    fn line_break(&mut self, width: u32, next: Tok, leading_op: bool, cond_body: bool, header_end: bool, at: usize, pos: usize) {
+    #[allow(clippy::too_many_arguments)]
+    fn line_break(&mut self, width: IndentWidth, next: Tok, leading_op: bool, cond_body: bool, header_end: bool, at: usize, pos: usize) {
         debug_assert_eq!(at, self.tokens.len());
-        let last = if at == 0 { Tok::Eof } else { self.tokens[at - 1].kind };
-        let top = *self.regions.last().unwrap_or(&Region::Indent(0));
+        let last = match self.tokens[..at].last() {
+            None => Tok::Eof,
+            Some(t) if t.kind == Tok::OpIdent && self.is_hash(t.span.start as usize, t.span.end as usize) => HASH_AT_BREAK,
+            Some(t) => t.kind,
+        };
+        let top = *self.regions.last().unwrap_or(&Region::Indent(IndentWidth::ZERO));
         // `header_end`: the line follows an extension's header, whose methods an indented region holds (dotty's
         // `observeIndented`: the next token's width against the enclosing region's).
         let opens_indent = self.keywords.indent && (last.can_start_indent() || cond_body || header_end);
         // Whether the header alone asks for the region: braces whose width nothing made known yet take it from this
         // very line first (`handleNewLine`'s `proposeKnownWidth`), and a line no wider than itself opens nothing.
         let header_alone = header_end && !(last.can_start_indent() || cond_body);
+        // The cases of a `match` or a `catch` open their region on a line of the enclosing region's own width
+        // (`handleNewLine`: `lastWidth == nextWidth && (lastToken == MATCH || lastToken == CATCH) && token == CASE`).
+        let cases_follow = || matches!(last, Tok::KwMatch | Tok::KwCatch) && next == Tok::KwCase;
         match top {
             Region::Enclosed(close, known) => {
+                // The first line break inside a bracket, not right after the opening one: the bracket takes the
+                // width of the region around it, and every region around it without a width takes that width first
+                // (`Region.proposeKnownWidth`, `useOuterWidth`): braces opened on the bracket's own line are as
+                // wide as what encloses them, not as their first line.
+                if known.is_none() && !matches!(last, Tok::LParen | Tok::LBracket) && self.ext_headers.is_empty() {
+                    self.use_outer_width();
+                }
                 let w = known.unwrap_or_else(|| {
                     if !self.ext_headers.is_empty() {
                         if let Some(w) = self.header_bracket_width(last, close) {
@@ -820,7 +1037,10 @@ impl<'a> Lexer<'a> {
                     *self.regions.last_mut().unwrap() = Region::Enclosed(close, Some(w));
                     w
                 });
-                if width > w && opens_indent {
+                if self.keywords.indent && width.incomparable(w) {
+                    return self.incomparable_error(w, width, pos);
+                }
+                if opens_indent && (width > w || (width == w && cases_follow())) {
                     self.push_indent(width);
                     self.push(Tok::Indent, pos, pos);
                 }
@@ -828,7 +1048,12 @@ impl<'a> Lexer<'a> {
             Region::InterpBrace { .. } => {}
             // dotty's `handleNewLine` in `InCase`: no separator and no dedent; an indented region
             // opens where the line goes further in than the case's and the token before opens one.
-            Region::Case { width: w, at: case_at, .. } => self.case_line_break(width, w, case_at, opens_indent, pos),
+            Region::Case { width: w, at: case_at, .. } => {
+                if self.keywords.indent && width.incomparable(w) {
+                    return self.incomparable_error(w, width, pos);
+                }
+                self.case_line_break(width, w, case_at, opens_indent, cases_follow(), pos)
+            }
             Region::Braces(None) if !opens_indent || header_alone => {
                 *self.regions.last_mut().unwrap() = Region::Braces(Some(width));
                 if self.diagnose {
@@ -844,13 +1069,35 @@ impl<'a> Lexer<'a> {
             Region::Indent(_) | Region::Braces(_) => {
                 let cur = match top {
                     Region::Indent(w) | Region::Braces(Some(w)) => w,
-                    _ => 0,
+                    _ => IndentWidth::ZERO,
                 };
-                if (width > cur || top == Region::Braces(None)) && opens_indent {
-                    if top == Region::Braces(None) && matches!(last, Tok::Arrow | Tok::CtxArrow) {
+                if self.keywords.indent && width.incomparable(cur) {
+                    // Widths the reference cannot compare: a line of braces or of the outermost region still
+                    // separates statements (`newlineIsSeparating`), and the indentation, asked again after
+                    // that `NEWLINE` or at once elsewhere, cannot decide (`handleNewLine`'s last branch).
+                    let separates = matches!(top, Region::Braces(_)) || self.regions.len() == 1;
+                    if separates && at > 0 && last.can_end_statement() && next.can_start_statement() && !leading_op {
+                        self.push(Tok::Newline, pos, pos);
+                    }
+                    return self.incomparable_error(cur, width, pos);
+                }
+                if opens_indent && (width > cur || top == Region::Braces(None) || (width == cur && cases_follow())) {
+                    if top == Region::Braces(None) {
+                        // The braces take their first line's width (`handleNewLine`: `proposeKnownWidth`, after
+                        // which the line is no wider than its region) and no indented region opens there, but
+                        // the cases' after `match` or `catch`, which open one at the region's own width. So the
+                        // body of a lambda or of a case that begins on the line after `{ x =>` is the braces'
+                        // own statements (dotty reads it as the block's rest: `closureRest`'s and `caseClause`'s
+                        // `block()`).
                         *self.regions.last_mut().unwrap() = Region::Braces(Some(width));
                         if self.diagnose {
                             self.note_first_brace_line(width, pos);
+                        }
+                        if !cases_follow() {
+                            if at > 0 && last.can_end_statement() && next.can_start_statement() && !leading_op {
+                                self.push(Tok::Newline, pos, pos);
+                            }
+                            return;
                         }
                     }
                     self.push_indent(width);
@@ -860,13 +1107,20 @@ impl<'a> Lexer<'a> {
                     // dotc's `canDedent`: a line after `yield`, `then` or `else` continues it.
                     let continued = statement_continues(last);
                     while let Some(&Region::Indent(w)) = self.regions.last().filter(|_| !continued) {
-                        if width < w
+                        // Each region the line reaches is compared in its turn (the scanner decides again after
+                        // every `OUTDENT`).
+                        if outdented && self.keywords.indent && width.incomparable(w) {
+                            return self.incomparable_error(w, width, pos);
+                        }
+                        // A region of cases ends at a line of its own width too, where the line begins with no
+                        // `case` (`handleNewLine`: `indentPrefix == MATCH || indentPrefix == CATCH`).
+                        let cases_end = self.cases_region(self.regions.len() - 1) && width == w && next != Tok::KwCase;
+                        if (width < w || cases_end)
                             && self.regions.len() > 1
-                            && !(self.is_brace_lambda_body(w) && statement_continues(next))
                             && !(leading_op && self.infix_fits_region(width))
                         {
                             let n = self.regions.len();
-                            if matches!(self.regions[n - 2], Region::Indent(outer) if outer < width) && self.misaligned(width, next, w, pos) {
+                            if width < w && matches!(self.regions[n - 2], Region::Indent(outer) if outer < width) && self.misaligned(width, next, w, pos) {
                                 break;
                             }
                             self.regions.pop();
@@ -882,16 +1136,93 @@ impl<'a> Lexer<'a> {
                     let in_statements =
                         matches!(self.regions.last(), Some(Region::Indent(_) | Region::Braces(_)));
                     let prev = if outdented { Tok::Outdent } else { last };
-                    if in_statements
+                    let separates = in_statements
                         && at > 0
                         && prev.can_end_statement()
                         && next.can_start_statement()
                         && !(leading_op && self.infix_fits_region(width))
-                    {
+                        && !self.continues_line(width, next, pos);
+                    if separates {
                         self.push(Tok::Newline, pos, pos);
+                    }
+                    // A line left of the outermost region makes the region as wide as itself (`handleNewLine`: `if
+                    // nextWidth < lastWidth then currentRegion = topLevelRegion(nextWidth)`, asked again after the
+                    // `NEWLINE` it may have made first), a region whose lines are counted from here on.
+                    if let [Region::Indent(w)] = self.regions[..] {
+                        if self.keywords.indent && width < w {
+                            self.regions[0] = Region::Indent(width);
+                            self.indent_starts[0] = self.tokens.len() as u32;
+                        }
+                    }
+                    // The braces the line came out to, where their width and the line's cannot be compared.
+                    if outdented && self.keywords.indent {
+                        if let Some(w) = self.regions.last().and_then(|&r| region_width(r)) {
+                            if width.incomparable(w) {
+                                self.incomparable_error(w, width, pos);
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+
+    /// scalac's error for a line whose indentation it cannot compare with its region's (`handleNewLine`:
+    /// `spaceTabMismatchMsg`), at the line's first token; no layout token is made there.
+    #[cold]
+    #[inline(never)]
+    fn incomparable_error(&mut self, region: IndentWidth, width: IndentWidth, pos: usize) {
+        let msg = format!(
+            "Incompatible combinations of tabs and spaces in indentation prefixes.\nPrevious indent : {}\nLatest indent   : {}",
+            region, width
+        );
+        self.error(pos, pos, &msg);
+    }
+
+    /// Whether the token from `start` to `end` is `#` alone.
+    #[inline]
+    fn is_hash(&self, start: usize, end: usize) -> bool {
+        end == start + 1 && self.src[start] == b'#'
+    }
+
+    /// dotty's `isContinuing` (`handleNewLine`): a line that begins with an opening bracket, further in than its
+    /// region, no blank line before it, goes on with the line before it: an argument list, a type argument list
+    /// or a block argument of what that line ends in. Not under the `3.0-migration` source, nor without
+    /// significant indentation, where Scala 2's reading holds (the line is a statement).
+    #[inline(always)]
+    fn continues_line(&self, width: IndentWidth, next: Tok, pos: usize) -> bool {
+        matches!(next, Tok::LParen | Tok::LBracket | Tok::LBrace) && self.bracket_continues(width, pos)
+    }
+
+    #[inline(never)]
+    fn bracket_continues(&self, width: IndentWidth, pos: usize) -> bool {
+        !self.blank_line
+            && matches!(self.regions.last(), Some(&Region::Indent(w)) | Some(&Region::Braces(Some(w))) if width > w)
+            && self.keywords.indent
+            && !self.keywords.migrating_at(pos as u32)
+    }
+
+    /// The regions around the top one that have no width yet take the width of the region around them all
+    /// (`Region.useOuterWidth`).
+    #[cold]
+    #[inline(never)]
+    fn use_outer_width(&mut self) {
+        let n = self.regions.len();
+        let mut k = n - 1;
+        while k > 0 && matches!(self.regions[k - 1], Region::Braces(None) | Region::Enclosed(_, None)) {
+            k -= 1;
+        }
+        if k == n - 1 {
+            return;
+        }
+        let from = self.regions[..k].iter().rposition(|r| matches!(r, Region::Indent(_) | Region::Braces(Some(_)) | Region::Enclosed(_, Some(_)) | Region::Case { .. }));
+        let w = from.and_then(|i| region_width(self.regions[i])).unwrap_or(IndentWidth::ZERO);
+        for d in k..n - 1 {
+            self.regions[d] = match self.regions[d] {
+                Region::Braces(None) => Region::Braces(Some(w)),
+                Region::Enclosed(c, None) => Region::Enclosed(c, Some(w)),
+                other => other,
+            };
         }
     }
 
@@ -901,7 +1232,7 @@ impl<'a> Lexer<'a> {
     /// known (`useOuterWidth`). The width taken so, none where the bracket takes its width as any other does.
     #[cold]
     #[inline(never)]
-    fn header_bracket_width(&mut self, last: Tok, close: u8) -> Option<u32> {
+    fn header_bracket_width(&mut self, last: Tok, close: u8) -> Option<IndentWidth> {
         let header = self.ext_header().is_some_and(|h| h.clause && self.regions.len() > h.depth);
         if !header || last == Tok::LParen {
             return None;
@@ -934,19 +1265,16 @@ impl<'a> Lexer<'a> {
     }
 
     /// Whether a line of `width` stands in the top region: no further left than its lines.
-    fn in_top_region(&self, width: u32) -> bool {
-        self.regions.last().is_none_or(|r| match *r {
-            Region::Indent(w) | Region::Braces(Some(w)) | Region::Enclosed(_, Some(w)) | Region::Case { width: w, .. } => width >= w,
-            _ => true,
-        })
+    fn in_top_region(&self, width: IndentWidth) -> bool {
+        self.regions.last().is_none_or(|&r| region_width(r).is_none_or(|w| width >= w))
     }
 
     /// A line break in a case region (`line_break`'s arm), recorded among its lines.
     #[cold]
     #[inline(never)]
-    fn case_line_break(&mut self, width: u32, case_width: u32, case_at: u32, opens_indent: bool, pos: usize) {
+    fn case_line_break(&mut self, width: IndentWidth, case_width: IndentWidth, case_at: u32, opens_indent: bool, cases_follow: bool, pos: usize) {
         self.case_lines.push((case_at, pos as u32));
-        if width > case_width && opens_indent {
+        if (width > case_width || (width == case_width && cases_follow)) && opens_indent {
             self.push_indent(width);
             self.push(Tok::Indent, pos, pos);
         }
@@ -955,7 +1283,7 @@ impl<'a> Lexer<'a> {
     /// While diagnosing, a line of the top brace block indented less than its statements.
     #[cold]
     #[inline(never)]
-    fn note_left_line(&mut self, width: u32, next: Tok, pos: usize) {
+    fn note_left_line(&mut self, width: IndentWidth, next: Tok, pos: usize) {
         if !matches!(self.regions.last(), Some(Region::Braces(Some(_)))) {
             return;
         }
@@ -968,11 +1296,15 @@ impl<'a> Lexer<'a> {
     }
 
     #[inline(always)]
-    fn push_indent(&mut self, width: u32) {
+    fn push_indent(&mut self, width: IndentWidth) {
         let depth = self.regions.len();
         let last = self.tokens.last().map_or(Tok::Eof, |t| t.kind);
         let enumerations = last == Tok::KwFor || (last == Tok::ColonEol && self.enum_header_before(self.tokens.len() - 1));
         self.set_no_case_clauses(depth, enumerations);
+        if depth < u64::BITS as usize {
+            let bit = 1u64 << depth;
+            self.cases_mask = if matches!(last, Tok::KwMatch | Tok::KwCatch) { self.cases_mask | bit } else { self.cases_mask & !bit };
+        }
         self.regions.push(Region::Indent(width));
         let at = self.tokens.len() as u32;
         if self.indent_starts.len() <= depth {
@@ -982,14 +1314,28 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Whether the indentation region at `depth` was opened after `match` or `catch` (`cases_mask`).
+    #[inline(always)]
+    fn cases_region(&self, depth: usize) -> bool {
+        if depth < u64::BITS as usize { self.cases_mask >> depth & 1 == 1 } else { self.deep_cases_region(depth) }
+    }
+
+    /// `cases_region` past the mask: the token before the region's `Indent`.
+    #[cold]
+    #[inline(never)]
+    fn deep_cases_region(&self, depth: usize) -> bool {
+        let at = self.indent_starts.get(depth).copied().unwrap_or(0) as usize;
+        at > 0 && matches!(self.tokens[at - 1].kind, Tok::KwMatch | Tok::KwCatch)
+    }
+
     /// Whether a line of the indentation region at `depth` stood at `width` without opening a
     /// region since the region opened: scalac's `otherIndentWidths`, read again from the tokens
     /// when it is needed. A line inside a nested region or a delimiter does not count.
-    fn width_seen_in(&self, depth: usize, width: u32) -> bool {
+    fn width_seen_in(&self, depth: usize, width: IndentWidth) -> bool {
         let Some(&from) = self.indent_starts.get(depth) else { return false };
         // Past the region's own `Indent`, which its first line put in front of its tokens; the
-        // outermost region has none.
-        let from = if depth == 0 { 0 } else { (from as usize + 1).min(self.tokens.len()) };
+        // outermost region has none, and counts its lines from where it last took its width.
+        let from = if depth == 0 { from as usize } else { (from as usize + 1).min(self.tokens.len()) };
         let mut nested = 0u32;
         for t in &self.tokens[from..] {
             match t.kind {
@@ -998,7 +1344,7 @@ impl<'a> Lexer<'a> {
                 _ => {}
             }
             let start = t.span.start as usize;
-            if nested == 0 && t.span.start < t.span.end && self.starts_line(start) && self.line_indent(start) == width {
+            if nested == 0 && t.span.start < t.span.end && self.starts_line(start) && self.width_at(start) == width {
                 return true;
             }
         }
@@ -1010,51 +1356,31 @@ impl<'a> Lexer<'a> {
     /// before, stays in the top region: scalac's "does not match any of the previous indentation
     /// widths" (a line that starts with a `.` passes unless it stands one column off either
     /// width). A line that cannot start a statement (`else`) leaves the region as scalac's does
-    /// and continues the statement; another stays. The body of a lambda that starts on the line
-    /// of its `{` is the brace block's region for scalac, which checks no width there.
+    /// and continues the statement; another stays.
     #[cold]
     #[inline(never)]
-    fn misaligned(&mut self, width: u32, next: Tok, inner: u32, pos: usize) -> bool {
+    fn misaligned(&mut self, width: IndentWidth, next: Tok, inner: IndentWidth, pos: usize) -> bool {
         let n = self.regions.len();
         let Region::Indent(outer) = self.regions[n - 2] else { return false };
-        if n >= 3 && self.regions[n - 3] == Region::Braces(Some(outer)) {
-            return false;
-        }
-        let close = |w: u32| width.abs_diff(w) <= 1;
-        let passes = next == Tok::Dot && !close(inner) && !close(outer);
+        let passes = next == Tok::Dot && !width.is_close(inner) && !width.is_close(outer);
         if passes || self.width_seen_in(n - 2, width) {
             return false;
         }
         let msg = format!(
-            "The start of this line does not match any of the previous indentation widths.\nIndentation width of current line : {} spaces\nThis falls between previous widths: {} spaces and {} spaces",
+            "The start of this line does not match any of the previous indentation widths.\nIndentation width of current line : {}\nThis falls between previous widths: {} and {}",
             width, outer, inner
         );
         self.error(pos, pos, &msg);
         next.can_start_statement()
     }
 
-    /// Whether the top region is the body of a lambda or case clause that starts on the line of
-    /// its `{`. dotc gives the brace block that body's width and opens no region for it, so a
-    /// `yield` or `else` further left closes the regions inside the body and not the body.
-    fn is_brace_lambda_body(&self, width: u32) -> bool {
-        let n = self.regions.len();
-        n >= 2 && self.regions[n - 2] == Region::Braces(Some(width))
-    }
-
     /// The width of the innermost region below the top one that knows its width.
-    fn outer_width(&self) -> u32 {
+    fn outer_width(&self) -> IndentWidth {
         let below = &self.regions[..self.regions.len().saturating_sub(1)];
-        below
-            .iter()
-            .rev()
-            .find_map(|r| match *r {
-                Region::Indent(w) | Region::Braces(Some(w)) | Region::Enclosed(_, Some(w)) | Region::Case { width: w, .. } => Some(w),
-                _ => None,
-            })
-            .unwrap_or(0)
+        below.iter().rev().find_map(|&r| region_width(r)).unwrap_or(IndentWidth::ZERO)
     }
 
-    #[inline]
+    #[inline(always)]
     fn open(&mut self, kind: Tok, close: u8) {
         let last = self.tokens.last().map_or(Tok::Eof, |t| t.kind);
         if kind == Tok::LParen && matches!(last, Tok::KwIf | Tok::KwWhile | Tok::KwFor) {
@@ -1195,7 +1521,7 @@ impl<'a> Lexer<'a> {
         self.set_no_case_clauses(self.regions.len(), enumerations);
         self.regions.push(Region::Braces(None));
         if self.diagnose {
-            let open_width = self.line_indent(p);
+            let open_width = self.width_at(p);
             self.open_blocks.push(self.brace_blocks.len());
             self.brace_blocks.push(BraceBlock { open_width, left_line: None, suspect: false });
         }
@@ -1205,7 +1531,7 @@ impl<'a> Lexer<'a> {
     /// line of its `{`: where the block lacks its `}`, the `}` belongs before that line.
     #[cold]
     #[inline(never)]
-    fn note_first_brace_line(&mut self, width: u32, pos: usize) {
+    fn note_first_brace_line(&mut self, width: IndentWidth, pos: usize) {
         if let Some(&b) = self.open_blocks.last() {
             if width <= self.brace_blocks[b].open_width {
                 self.brace_blocks[b].left_line.get_or_insert(pos as u32);
@@ -1239,7 +1565,8 @@ impl<'a> Lexer<'a> {
             _ => false,
         };
         if clause && !self.case_definition_follows(at + 4) {
-            self.regions.push(Region::Case { width: self.line_width, at: at as u32, guard: false });
+            let width = self.width_at(at);
+            self.regions.push(Region::Case { width, at: at as u32, guard: false });
         }
     }
 
@@ -1407,13 +1734,6 @@ impl<'a> Lexer<'a> {
         self.src[..p].iter().rev().take_while(|&&b| b != b'\n').all(|&b| b == b' ' || b == b'\t')
     }
 
-    /// The indentation of the line holding the offset `p`.
-    #[cold]
-    fn line_indent(&self, p: usize) -> u32 {
-        let start = self.src[..p].iter().rposition(|&b| b == b'\n').map_or(0, |i| i + 1);
-        self.src[start..p].iter().take_while(|&&b| b == b' ' || b == b'\t').count() as u32
-    }
-
     /// The `}` at `p` closed the innermost open brace block. When it starts a line indented less
     /// than the line of the block's `{`, the block is a suspect of lacking its own `}`; further,
     /// the `}` is a suspect of having lost its `{`.
@@ -1425,7 +1745,7 @@ impl<'a> Lexer<'a> {
         if !self.src[start..p].iter().all(|&c| c == b' ' || c == b'\t') {
             return;
         }
-        let width = (p - start) as u32;
+        let width = IndentWidth::of(&self.src[start..p]);
         if width < self.brace_blocks[b].open_width {
             self.brace_blocks[b].suspect = true;
         } else if width > self.brace_blocks[b].open_width {
@@ -1993,7 +2313,63 @@ fn closes_region(tok: Tok) -> bool {
     matches!(tok, Tok::RBrace | Tok::RParen | Tok::RBracket | Tok::KwCase) || statement_continues(tok)
 }
 
+/// How a line break reads `#` beside it: an operator's name to the parser, a reserved word to the reference
+/// (`HASH`), with which no statement ends and none begins (`canEndStatTokens`, `canStartStatTokens`), as none
+/// does with `<:`.
+const HASH_AT_BREAK: Tok = Tok::Subtype;
+
+/// The width a region knows, none where it knows none yet (`Region.knownWidth`).
+#[inline(always)]
+fn region_width(r: Region) -> Option<IndentWidth> {
+    match r {
+        Region::Indent(w) | Region::Braces(Some(w)) | Region::Enclosed(_, Some(w)) | Region::Case { width: w, .. } => Some(w),
+        _ => None,
+    }
+}
+
 /// dotc's `statCtdTokens`: a line starting with one continues the statement before it.
 fn statement_continues(tok: Tok) -> bool {
     matches!(tok, Tok::KwThen | Tok::KwElse | Tok::KwDo | Tok::KwCatch | Tok::KwFinally | Tok::KwYield | Tok::KwMatch)
+}
+
+#[cfg(test)]
+mod indent_width_tests {
+    use super::IndentWidth;
+
+    fn w(s: &str) -> IndentWidth {
+        IndentWidth::of(s.as_bytes())
+    }
+
+    /// The widths as `Scanners.indentWidth` builds them and `IndentWidth.toString` prints them, scalac 3.8.4's own
+    /// words in its tabs error (`" \t  "`, `"\t \t "`: the runs after the second are no part of the width).
+    #[test]
+    fn construction() {
+        assert_eq!(w("").to_string(), "0 spaces");
+        assert_eq!(w(" ").to_string(), "1 space");
+        assert_eq!(w("\t\t").to_string(), "2 tabs");
+        assert_eq!(w("\t  ").to_string(), "1 tab, 2 spaces");
+        assert_eq!(w(" \t  ").to_string(), "1 space, 1 tab");
+        assert_eq!(w("\t \t ").to_string(), "1 tab, 1 space");
+        assert_eq!(w(" \t  "), w(" \t"));
+        assert_eq!(w("    "), IndentWidth::spaces(4));
+    }
+
+    /// `IndentWidth.<=` and the order it gives, `isClose`.
+    #[test]
+    fn order() {
+        assert!(w("  ") < w("    "));
+        assert!(w("") < w("\t"));
+        assert!(w("\t") < w("\t\t"));
+        assert!(w("\t") < w("\t  "));
+        assert!(w("\t  ") < w("\t   "));
+        assert!(w("\t  ").incomparable(w("\t\t")));
+        assert!(w("\t").incomparable(w("  ")));
+        assert!(w(" \t").incomparable(w("\t ")));
+        assert!(!w(" \t").incomparable(w(" \t  ")));
+        assert!(w("  ").partial_cmp(&w("\t")).is_none());
+        assert!(!(w("\t") < w("  ")) && !(w("  ") < w("\t")) && w("\t") != w("  "));
+        assert!(w("   ").is_close(w("    ")) && !w("   ").is_close(w("     ")));
+        assert!(!w("\t").is_close(w("\t\t")));
+        assert!(w("\t  ").is_close(w("\t   ")) && !w("\t  ").is_close(w("  ")));
+    }
 }

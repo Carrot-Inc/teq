@@ -169,7 +169,7 @@ backquoted_type_operator.scala	pass	check:pass
 bad-footprint.scala	pass	check:pass	
 basicFromTasty.scala	pass	check:pass	
 bcode_throw_null	pass	check:pass	
-better-fors-given.scala	fail	check:fail	better-fors-given.scala:38:7: expected '=', found '@'
+better-fors-given.scala	fail	check:fail	better-fors-given.scala:38:7: expected '<-', found '@'
 better-fors-i21804.scala	pass	check:pass	
 bigint.scala	pass	check:pass	
 blockescapes.scala	pass	check:pass	
@@ -225,7 +225,7 @@ class-refinement.scala	pass	check:pass
 classWithCompObj.scala	pass	check:pass	
 classtag-typetest	pass	check:pass	
 clear-retains-for-inferred-types	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
-closure-args.scala	fail	check:fail	closure-args.scala:10:3: expected a definition, found '('
+closure-args.scala	fail	check:fail	closure-args.scala:13:51: end of single-line lambda expected, but end of single-line lambda found
 cls.scala	pass	check:pass	
 cls1.scala	pass	check:pass	
 clsrefine.scala	pass	check:pass	
@@ -675,7 +675,7 @@ i12730.scala	pass	check:pass
 i12739-fallout.scala	pass	check:pass	
 i12739.scala	pass	check:pass	
 i12754.scala	pass	check:pass	
-i12757.scala	fail	check:fail	i12757.scala:5:10: expected 'then', found new line
+i12757.scala	pass	check:pass	
 i12803.scala	pass	check:pass	
 i12834.scala	pass	check:pass	
 i1285.scala	pass	check:pass	
@@ -2247,7 +2247,7 @@ indent.scala	pass	check:fail
 indent2.scala	pass	check:pass	
 indent3.scala	pass	check:pass	
 indent4.scala	fail	check:fail	indent4.scala:16:5: expected an expression, found 'val'
-indented-parens.scala	fail	check:fail	indented-parens.scala:7:5: operator + cannot be applied to Int and Int => Int
+indented-parens.scala	pass	check:pass	
 inf.scala	pass	check:pass	
 infer-function-type-in-union.scala	fail	check:fail	infer-function-type-in-union.scala:20:5: missing parameter type
 infer-tracked-1.scala	fail	check:fail	infer-tracked-1.scala:29:32: type mismatch: found 6, required Test.IntSet.ord.T
@@ -2302,7 +2302,7 @@ interleaving-ba.scala	fail	check:fail	interleaving-ba.scala:6:20: expected '=', 
 interleaving-chainedParams.scala	fail	check:fail	interleaving-chainedParams.scala:8:29: expected '=', found '['
 interleaving-classless.scala	fail	check:fail	interleaving-classless.scala:2:12: expected '=', found '['
 interleaving-functor.scala	fail	check:fail	interleaving-functor.scala:7:24: expected '=', found '['
-interleaving-newline.scala	fail	check:fail	interleaving-newline.scala:4:9: expected an expression, found '['
+interleaving-newline.scala	fail	check:fail	interleaving-newline.scala:6:9: expected '=', found '['
 interleaving-overload.cleanup.scala	pass	check:pass	
 interleaving-overload.scala	fail	check:fail	interleaving-overload.scala:4:22: expected '=', found '['
 interleaving-params.scala	fail	check:fail	interleaving-params.scala:4:21: expected '=', found '['

@@ -24,9 +24,10 @@ assign_op_element_case_class_inline	missing '1 error found'
 assign_op_operand_case_class_inline	missing '1 error found'
 bound_check_after_typer_error	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
 bound_member_params_seen_from_prefix	exit code 0
+brace_line_left_of_first_line	exit code 0
+brace_template_body_at_brace_width	missing '6:7: error:'
+braced_branch_applied_after_condition	exit code 0
 cases_end_match_after_catch_branch	exit code 0
-cases_end_selection_after_continued_branch	exit code 0
-cases_end_selection_after_operator_line	exit code 0
 collection_seq_not_immutable.check	< tests/errors/collection_seq_not_immutable.scala:5:85: error: Found: (xs : scala.collection.Seq[Int])
 constructor_proxy_prefix	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'
 copy_default_later_clause	missing '7:25: error: value copy$default$2 is not a member of C'
@@ -135,6 +136,7 @@ predef_unimport_conversion.check	< tests/errors/predef_unimport_conversion.scala
 private_leaks_signature	exit code 0
 projection_type_constructor_qualifier.check	< tests/errors/projection_type_constructor_qualifier.scala:4:18: error: Found: Outer.C
 pure_intersection_double_definition	missing 'Conflicting definitions:'
+quote_template_body_at_brace_width	missing '13:7: error:'
 scala3_i2887c	missing '21:71: error: Found: (1 : Int)'
 scala3_i2887c.check	< tests/errors/scala3_i2887c.scala:21:71: error: Found: (1 : Int)
 scalajs_anonymous_js_objects	missing '19:5: error: object creation impossible, since val name: String in trait JsTrait in package app is not defined'

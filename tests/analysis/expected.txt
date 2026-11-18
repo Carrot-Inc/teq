@@ -135,6 +135,7 @@ hkbounds_a ha.Functor$.given_Functor_List given_Functor_List alias-expanded
 inline_a ila.Macros pick inline-fingerprint
 inline_a ila.Macros twice inline-fingerprint
 inline_a ila.Tuner adjust inline-fingerprint
+macrofieldreference_a macrofieldreference.Read derived inline-fingerprint
 matchtype_a mta.Elems first alias-expanded
 pkgobj_a pa.nested.package <products> package-object
 sealed_a sa.Expr Expr mirror-companion

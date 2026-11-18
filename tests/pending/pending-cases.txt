@@ -10,7 +10,10 @@ array_concat_null_right_operand	< thrown: null right operand
 array_concat_null_right_operand_beside_a_tag	< thrown: null right operand
 binary_int_literal	< 5
 case_companion_initialising_apply	< k2 |
+class_header_then_blank_line_brace	< log:block
+class_header_then_comment_blank_line_brace	< log:block
 classfile_reader_lone_surrogate	< d83d
+condition_over_line_of_own_width	< 1
 conflicting_base_types_through_trait	< scalac 3.8.4: rejected, 1 error(s)
 conversion_ambiguity_member_order	< scalac 3.8.4: rejected, 1 error(s)
 conversion_ambiguity_sorted	< scalac 3.8.4: rejected, 1 error(s)
@@ -21,7 +24,9 @@ default_getter_selected_by_name	< scalac 3.8.4: rejected, 1 error(s)
 directive_java_source	< k 7
 directive_target_scope_experimental	< scala-cli 1.17.1: rejected, 1 error(s)
 directive_test_scope_own	< main
+else_at_branch_width	< yesno
 empty_package_import_beside_packaging	< 1
+end_marker_backquoted_name	< 1
 enum_case_alias_parent	< 3
 enum_case_annotation_tparam	< 1
 eta_param_from_expected_function	< List(List(P(2), P(1)), List(P(4), P(3)))
@@ -46,6 +51,7 @@ extension_unindexed_object_more_specific	< a
 extension_view_too_unspecific	< scalac 3.8.4: rejected, 3 error(s)
 extension_view_too_unspecific_applied	< scalac 3.8.4: rejected, 2 error(s)
 fbound_path_in_type_arg	< show
+for_braces_then_indented_body	< 6
 for_yield_unit_discard_through_var	< 1
 function_xxl_deep_array_signature	< 325
 given_alias_converts_inside_its_own_right_side	< in given 2
@@ -69,6 +75,8 @@ inline_param_type_prefix	< scalac 3.8.4: rejected, 1 error(s)
 inline_prefix_lift_bindings	> argT 6
 inline_val_float	< 0.0
 interleaved_type_clause	< 1
+interpolation_braces_indented_region	< vp
+interpolation_braces_statements	< a2b
 iterable_once_iterator_only	< TreeSet(1, 2)
 jar_alias_names_program_val	< in:int
 jar_imported_alias_names_program_val	< in:int
@@ -80,19 +88,13 @@ java_lang_string_type	< a
 java_wildcard_object_bound	< 1
 kind_error_argument_in_match_scrutinee	< scalac 3.8.4: rejected, 1 error(s)
 lambda_param_refined_type	< 2
-layout_cases_deeper_line_after_block	< a/a/m
-layout_cases_deeper_line_after_case_block	< mx/
-layout_cases_deeper_line_after_case_block_match	< one|zz|mx/m
-layout_cases_deeper_line_after_inline_else	< t|zz|m
-layout_cases_deeper_line_after_inline_else_one_case	< zz|zz/mm
-layout_cases_deeper_line_after_operator	< zz|mx|zz/m<zz>m<zz>
-layout_cases_deeper_line_after_operator_block	< zz|mx|zz/m<zz>m<zz>
-layout_cases_end_after_continued_block	< (1,3,3)
-layout_cases_end_after_selection	< (1,3,3)
+line_at_extension_body_width	< in O's body
+line_break_after_modifiers	< 1
 local_class_match_scrutinee_avoided	< 1
 local_extension_defined_later_applied_before	< update 0
 local_object_forward	< 2
 macro_annotation_object_member_classes	< 15
+match_in_guard_over_lines	< ab
 math_round_overloads	< 2 1234567890123456789
 member_ctor_lambda_bound	< 1
 method_type_arg_kind	< 1
@@ -132,6 +134,7 @@ repr_retains_annotation_clash	< -- [E120] Naming Error: tests/pending-cases/repr
 repr_term_member_type_prefix	< s
 repr_union_alias	< O.U | TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<empty>")), "O"), "U") | O$.U
 repr_wildcard_equal_bounds	< scala.collection.immutable.List[_ >: scala.Int <: scala.Int] | AppliedType(TypeRef(TermRef(TermRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "collection"), "immutable"), "List"), Li
+result_type_on_wider_line_after_colon	< 1
 root_empty_package_member	< scalac 3.8.4: rejected, 1 error(s)
 scala3_i17132	< scalac 3.8.4: rejected, 1 error(s)
 scalajs_js_custom_function_types	< scalac 3.8.4: rejected, 7 error(s)
@@ -148,6 +151,7 @@ scalajs_js_trait_members	< scalac 3.8.4: rejected, 8 error(s)
 scalajs_js_trait_members_wrong_kind	< scalac 3.8.4: rejected, 4 error(s)
 scalajs_js_type_override_equals_hashcode	< scalac 3.8.4: rejected, 8 error(s)
 select_field_mismatch_point	< scalac 3.8.4: rejected, 2 error(s)
+self_type_refinement_then_line	< p
 settings_conflicting_alias	< scalac 3.8.4: rejected, 1 error(s)
 settings_deprecated_alias	< scalac 3.8.4: rejected, 1 error(s)
 settings_unchecked_false	< scalac 3.8.4: accepted, 1 warning
