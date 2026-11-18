@@ -4429,9 +4429,9 @@ impl<'a> Worker<'a> {
         let ast = self.cur_ast();
         let is_param = |n: Name| f.clauses.iter().any(|c| c.params.iter().any(|p| p.name == n));
         let dependent = |tp: &ast::TypeParam| [tp.upper, tp.lower].into_iter().flatten().any(|b| super::resolve::ty_selects_from(ast, b, &is_param));
-        self.resolve_tparam_bounds_of(&f.tparams, ids, |tp| !dependent(tp));
-        let clauses = self.resolve_clauses(&f.clauses, None, &f.tparams, ids, None);
-        self.resolve_tparam_bounds_of(&f.tparams, ids, dependent);
+        self.resolve_tparam_bounds_of(&f.tparams, ids, None, |tp| !dependent(tp));
+        let clauses = self.resolve_clauses(&f.clauses, None, &f.tparams, ids, None, None);
+        self.resolve_tparam_bounds_of(&f.tparams, ids, None, dependent);
         clauses
     }
 
@@ -4462,7 +4462,9 @@ impl<'a> Worker<'a> {
             DefKind::Fun(f) if def.name == names::INIT => {
                 // A secondary constructor: the class's type parameters, and the class as result.
                 let Owner::Class(c) = t.syms.sym(sym).owner else { return MethodSig::value(ERROR) };
-                let clauses = t.resolve_clauses(&f.clauses, None, &[], &[], None);
+                // A private one's parameters are left out of the variances held (`resolve_clauses`).
+                let ctor_of = (t.syms.sym(sym).mods & mods::PRIVATE == 0).then_some(c);
+                let clauses = t.resolve_clauses(&f.clauses, None, &[], &[], None, ctor_of);
                 let info = t.syms.class(c);
                 MethodSig { tparams: info.tparams.clone(), clauses, ret: info.base_types[0].1, declared: crate::tir::NO_TYPE }
             }
@@ -4480,7 +4482,7 @@ impl<'a> Worker<'a> {
                     t.compute_dependent_bounds_sig(f, &ids)
                 } else {
                     t.resolve_tparam_bounds(&f.tparams, &ids);
-                    t.resolve_clauses(&f.clauses, None, &f.tparams, &ids, None)
+                    t.resolve_clauses(&f.clauses, None, &f.tparams, &ids, None, None)
                 };
                 if let Some(tags) = t.erased_tags.take() {
                     t.shared_write(sym, |w| w.syms.sym_mut(sym).erased_tags = tags);
@@ -4556,7 +4558,7 @@ impl<'a> Worker<'a> {
                     let ids = t.make_tparams(&g.tparams);
                     t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                     t.resolve_tparam_bounds(&g.tparams, &ids);
-                    let clauses = t.resolve_clauses(&g.clauses, None, &g.tparams, &ids, None);
+                    let clauses = t.resolve_clauses(&g.clauses, None, &g.tparams, &ids, None, None);
                     let (ret, declared) = t.declared_view(g.ty, |w| w.resolve_declared_type(g.ty));
                     let ret = t.declared_chain(ret, declared);
                     t.env.frames.pop();
@@ -10109,6 +10111,96 @@ impl<'a> Worker<'a> {
         let shown = self.show(t);
         self.report_variance_at(p, required, &shown, file, span, what);
         true
+    }
+
+    /// The variant type parameters a constructor of the class `c` nested in a class sees (`VarianceChecker.relativeVariance`
+    /// from `paramOuter`: a constructor's parameter is seen from its class's owner, flipped; a class's type parameters
+    /// are its primary constructor's): those of the classes the walk reaches outward from the class's owner, up to the
+    /// first whose owner is a term (an anonymous class's too: teq records the enclosing class) or a package or that is
+    /// private to its instance (`PrivateLocal`, beyond which a position is bivariant), the last one's included; never
+    /// the class's own. `None` where nothing is to be held: a local class (`Owner::Local` records no owner to walk to),
+    /// a class of the standard library or of a library body, a class seeing no variant parameter.
+    pub(super) fn nested_ctor_visible(&mut self, c: ClassId) -> Option<Vec<TParamId>> {
+        let (owner, file) = {
+            let i = self.syms.class(c);
+            (i.owner, i.file)
+        };
+        let Owner::Class(first) = owner else { return None };
+        if self.source(file).is_std || self.is_body_file(file) {
+            return None;
+        }
+        let (mut k, mut visible) = (first, Vec::new());
+        loop {
+            let (k_owner, anonymous) = {
+                let i = self.syms.class(k);
+                (i.owner, i.mods & mods::ANONYMOUS != 0)
+            };
+            visible.extend(self.syms.class(k).tparams.iter().copied().filter(|&p| self.syms.tparam(p).variance != 0));
+            match k_owner {
+                Owner::Class(o) if !anonymous && !self.private_to_instance(k) => k = o,
+                _ => break,
+            }
+        }
+        (!visible.is_empty()).then_some(visible)
+    }
+
+    /// A nested class's constructor parameter or type parameter bound `t` of the class `c`, at the sign `sign`, held
+    /// to the variances its constructor sees (`nested_ctor_visible`): the class's own parameters read as no variant
+    /// parameter. Asked only of a written type the resolver proved to name classes and type parameters alone, with no
+    /// `@uncheckedVariance` in it (`Worker::proving_written_type`).
+    pub(super) fn nested_ctor_violation(&mut self, c: ClassId, visible: &[TParamId], t: TypeId, sign: i8) -> Option<(TParamId, i8)> {
+        let own_out: Subst = self.syms.class(c).tparams.iter().map(|&p| (p, ANY)).collect();
+        let seen = self.types.subst(t, &own_out);
+        let skip = std::mem::take(&mut self.variance_skip);
+        let found = self.visible_variance_violation(seen, sign, visible);
+        self.variance_skip = skip;
+        found
+    }
+
+    /// `variance_violation` of the type parameters `visible` alone: another's occurrence reads as `Any`.
+    fn visible_variance_violation(&mut self, t: TypeId, sign: i8, visible: &[TParamId]) -> Option<(TParamId, i8)> {
+        let mut t = t;
+        loop {
+            match self.variance_violation(t, sign) {
+                Some((p, _)) if !visible.contains(&p) => t = self.types.subst(t, &vec![(p, ANY)]),
+                found => return found,
+            }
+        }
+    }
+
+    /// Whether the class `k` is private to its instance (`PrivateLocal`): private and unqualified, or the module of a
+    /// private object. A selection of it through another instance, which makes it a member of every instance in the
+    /// reference, is not recorded for a class.
+    fn private_to_instance(&self, k: ClassId) -> bool {
+        let i = self.syms.class(k);
+        let private = i.mods & mods::PRIVATE != 0 || i.module_sym.is_some_and(|m| self.syms.sym(m).mods & mods::PRIVATE != 0);
+        private && !i.def.is_some_and(|d| self.has_access_scope(i.file, self.ast(i.file).def(d).span.start))
+    }
+
+    /// `report_variance_at` for a constructor's parameter: under `-source:3.0-migration` a migration warning
+    /// (`VarianceChecker`'s `migrateTo3 && sym.owner.isConstructor`), an error elsewhere.
+    pub(super) fn report_constructor_variance(&mut self, p: TParamId, required: i8, in_type: &str, file: FileId, span: crate::source::Span, what: &str) {
+        if !self.ast(file).source_version.migrate_to_3() {
+            self.report_variance_at(p, required, in_type, file, span, what);
+            return;
+        }
+        let label = |v: i8| match v {
+            1 => "covariant",
+            -1 => "contravariant",
+            _ => "invariant",
+        };
+        let msg = format!(
+            "According to new variance rules, this is no longer accepted; need to annotate with @uncheckedVariance\n{} type {} occurs in {} position in type {} of {}",
+            label(self.syms.tparam(p).variance),
+            self.name_str(self.syms.tparam(p).name),
+            label(required),
+            in_type,
+            what
+        );
+        let saved = std::mem::replace(&mut self.env.file, file);
+        let w = crate::source::Warning { category: crate::warnings::Category::Migration, group: crate::source::Group::PostTyper, ..crate::source::Warning::plain() };
+        self.warn_as(span, msg, w);
+        self.env.file = saved;
     }
 
     fn report_variance_at(&mut self, p: TParamId, required: i8, in_type: &str, file: FileId, span: crate::source::Span, what: &str) {

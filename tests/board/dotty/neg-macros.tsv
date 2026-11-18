@@ -17,9 +17,9 @@ annot-on-type	fail	-	marks: 1 errors where 3 are marked
 annot-result-owner	fail	-	marks: no error where 2 are marked
 annot-suspend-cycle	fail	-	marks: no error where 1 are marked
 beta-reduce-inline-result	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:11:17 Found:    Int; teq's is error Test_2.scala:11:17 type mismatch: found Int, required 4
-delegate-match-1	fail	-	marks: 7 errors where 1 are marked: Macro_1.scala:12:7: expected 'case', found identifier
-delegate-match-2	fail	-	marks: 6 errors where 1 are marked: Macro_1.scala:12:7: expected 'case', found identifier
-delegate-match-3	fail	-	marks: 3 errors where 1 are marked: Macro_1.scala:12:7: expected 'case', found identifier
+delegate-match-1	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:13:None:None: the body of Macro_1$package.fImpl is withheld from the products of $OUT/neg-macros/delegate-match-1/check.products (elided: unstated the reflection API's ImplicitSearchSucces
+delegate-match-2	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:13:None:None: the body of Macro_1$package.fImpl is withheld from the products of $OUT/neg-macros/delegate-match-2/check.products (elided: unstated the reflection API's ImplicitSearchSucces
+delegate-match-3	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:13:None:None: the body of Macro_1$package.fImpl is withheld from the products of $OUT/neg-macros/delegate-match-3/check.products (elided: unstated the reflection API's ImplicitSearchSucces
 higher-order-quoted-expressions.scala	fail	-	marks: 1 errors where 3 are marked
 i10127-a.scala	fail	-	marks: no error where 1 are marked
 i10127-b.scala	fail	-	marks: no error where 1 are marked

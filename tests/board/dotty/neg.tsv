@@ -451,7 +451,7 @@ i12486.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i12486.scala:9:3
 i12487.scala	pass	-	
 i12537.scala	fail	-	marks: no error where 1 are marked
 i1255.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i1255.scala:2:29 match may not be exhaustive.; teq's is error i1255.scala:3:15 unreachable case: type Int is not a subclass of class Double
-i12554a.scala	fail	-	marks: 1 errors where 3 are marked
+i12554a.scala	fail	-	marks: error on an unmarked line i12554a.scala:5: value apply is not a member of String
 i12554b.scala	fail	-	marks: 1 errors where 4 are marked
 i12555.scala	fail	-	check: diagnostic 1 of 1: error i12555.scala:6:18, line 2 of the message: scalac's is ---------------------------------------------------------------------------------------------------------------------; teq's is inlined from tests/neg/i12
 i12555b.scala	fail	-	marks: error on an unmarked line i12555b.scala:18: Deferred inline method noop in trait Noop cannot be invoked
@@ -531,7 +531,7 @@ i1430.scala	fail	-	check: diagnostic 1 of 9: scalac's is error i1430.scala:4:30 
 i14303	cannot run	-	an older compiler: a group is compiled by scalac 3.0.0
 i14363.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14363.scala:2:14 Found:    (1 : Int); teq's is error i14363.scala:2:14 type mismatch: found 1, required T
 i14367.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14367.scala:2:17 Found:    (i : Seq[Int]); teq's is error i14367.scala:2:17 type mismatch: found Seq[Int], required Int
-i14386.scala	fail	-	marks: 4 errors where 3 are marked: i14386.scala:34:2: The start of this line does not match any of the previous indentation widths.
+i14386.scala	fail	-	marks: 6 errors where 3 are marked: i14386.scala:30:2: Incompatible combinations of tabs and spaces in indentation prefixes.
 i14401.scala	fail	-	marks: 1 errors where 5 are marked
 i14401b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i14401b.scala:5:18 forward reference to x extends over the definition of x (on line 6); teq's is error i14401b.scala:5:18 not found: x
 i14401c.scala	fail	-	check: diagnostic 1 of 1: error i14401c.scala:5:18, line 2 of the message: scalac's is ---------------------------------------------------------------------------------------------------------------------; teq's is nothing
@@ -883,7 +883,7 @@ i2292.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2292.scala:1:12 
 i22941.scala	pass	-	
 i23036.scala	fail	-	check: diagnostic 1 of 10: scalac's is error i23036.scala:2:3 imports are not allowed inside extensions; teq's is error i23036.scala:2:3 only defs are allowed in an extension
 i23111.scala	fail	-	marks: 4 errors where 2 are marked: i23111.scala:2:46: missing parameter type
-i23119.scala	fail	-	marks: 9 errors where 2 are marked: i23119.scala:4:17: `yield` or `do` expected
+i23119.scala	fail	-	marks: 4 errors where 2 are marked: i23119.scala:17:3: local givens cannot take parameters
 i23155a.scala	fail	-	marks: 2 errors where 1 are marked: i23155a.scala:4:10: wrong number of patterns for an extractor of (x : Int, y : Int): found 2
 i23156.scala	fail	-	marks: 3 errors where 1 are marked: i23156.scala:3:10: wrong number of patterns for an extractor of <error>: found 2
 i23179-reverse.scala	fail	-	marks: 1 errors where 2 are marked
@@ -926,7 +926,7 @@ i24681.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i24681.scala:3:1
 i2470.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2470.scala:1:8 object Foo cannot extend AnyVal; teq's is error i2470.scala:1:20 only a class can extend AnyVal
 i24711-java-nested-types.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i24711-java-nested-types.scala:2:21 Found:    java.util.Map.Entry[String, Int]; teq's is error i24711-java-nested-types.scala:2:21 type mismatch: found Entry[String, Int], required Int
 i2473.scala	fail	-	marks: 1 errors where 2 are marked
-i24745.scala	fail	-	marks: 4 errors where 1 are marked: i24745.scala:18:14: expected ',' or ')', found identifier
+i24745.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i24745.scala:5:3 right-associative extension method must start with a single parameter, consider a tupled parameter instead; teq's is error i24745.scala:5:7 right-associative extension method must
 i24789.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i24789.scala:10:8 Unreachable case; teq's is error i24789.scala:10:8 unreachable case: type A | B and class C are unrelated
 i24825.scala	fail	-	check: diagnostic 4 of 4: scalac's is warning without a place: there were 3 deprecation warnings; re-run with -deprecation for details; teq's is nothing
 i24825b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i24825b.scala:5:3 modifier(s) `abstract override` incompatible with type definition; teq's is error i24825b.scala:5:27 class Blah overrides nothing
@@ -1662,7 +1662,7 @@ ski.scala	fail	-	marks: 9 errors where 11 are marked
 skolemize.scala	fail	-	marks: 1 errors where 2 are marked
 source-import-3-1-migration.scala	pass	-	
 source-import.scala	pass	-	
-spaces-vs-tabs.scala	fail	-	marks: 2 errors where 5 are marked
+spaces-vs-tabs.scala	fail	-	marks: 8 errors where 5 are marked: spaces-vs-tabs.scala:5:5: Incompatible combinations of tabs and spaces in indentation prefixes.
 specializing-inline.scala	fail	-	check: diagnostic 1 of 2: scalac's is error specializing-inline.scala:5:17 Found:    (Test.z : Int | String); teq's is error specializing-inline.scala:5:17 type mismatch: found Int | String, required Int
 spread-patterns.scala	fail	-	marks: 2 errors where 1 are marked: spread-patterns.scala:12:21: a sequence wildcard can only end a sequence pattern
 stackoverflowmacro	fail	-	check: diagnostic 1 of 1: scalac's is error 2_Use.scala:2:14 String constant is too long for the JVM; teq's is error 2_Use.scala:2:14 not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
@@ -1832,8 +1832,8 @@ valueclasses-doubledefs2.scala	fail	-	marks: no error where 1 are marked
 valueclasses-impl-restrictions.scala	fail	-	check: diagnostic 1 of 3: scalac's is error valueclasses-impl-restrictions.scala:2:3 Value classes may not define an inner class; teq's is error valueclasses-impl-restrictions.scala:2:9 Value classes may not define an inner class
 varargs-annot-2.scala	fail	-	marks: no error where 1 are marked
 varargs-annot.scala	fail	-	marks: no error where 9 are marked
-variances-constr.scala	fail	-	marks: 1 errors where 2 are marked
-variances.scala	fail	-	marks: 9 errors where 10 are marked
+variances-constr.scala	fail	-	marks: 3 errors where 2 are marked: variances-constr.scala:6:15: covariant type A occurs in contravariant position in type A of parameter x
+variances.scala	fail	-	marks: error on an unmarked line variances.scala:12: several entry points: Test.main, Test2.main; choose one with --main
 variances1.scala	fail	-	marks: no error where 1 are marked
 while-loops.scala	fail	-	marks: error on an unmarked line while-loops.scala:6: Cannot rewrite recursive call: it is not in tail position
 widenInst-cycle.scala	fail	-	check: diagnostic 1 of 1: error widenInst-cycle.scala:11:6, line 3 of the message: scalac's is where:    N is a type variable; teq's is nothing

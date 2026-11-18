@@ -749,6 +749,8 @@ nested_class_override	pass	-
 nested_class_prefix_identity	pass	-	
 nested_class_prefix_review	pass	-	
 nested_class_prefix_spaces	pass	-	
+nested_constructor_variance	pass	-	
+nested_constructor_variance_migration	pass	-	
 nested_object_not_implicit	pass	-	
 nested_object_singleton	pass	-	
 nested_object_singleton_other_instance	pass	-	

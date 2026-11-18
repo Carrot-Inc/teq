@@ -55,6 +55,34 @@ pub struct RefineScope {
     referenced: bool,
 }
 
+/// The proof, while a written type is resolved (`Worker::proving_written_type`), that it names classes and type
+/// parameters alone, through structural forms only: the nodes of that tree a resolver's arm read so. A node no arm
+/// approved (an alias, a selection through a path, `@uncheckedVariance`, any other form) leaves the tree unproved.
+struct WrittenProof {
+    file: FileId,
+    span: Span,
+    approved: Vec<TyExprId>,
+}
+
+thread_local! {
+    static WRITTEN_PROOF: std::cell::RefCell<Option<WrittenProof>> = const { std::cell::RefCell::new(None) };
+    static PROVING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The nodes of the written type `root` a proof has to approve, or `None` where its form is none the proof reads.
+fn written_tree_nodes(ast: &crate::ast::Ast, root: TyExprId, out: &mut Vec<TyExprId>) -> bool {
+    out.push(root);
+    match ast.ty(root) {
+        TyExpr::Name(_) | TyExpr::Select(..) => true,
+        TyExpr::Apply(f, args) => written_tree_nodes(ast, f, out) && ast.ty_list(args).iter().all(|&a| written_tree_nodes(ast, a, out)),
+        TyExpr::Fun(params, ret) if ast.fun_param_names(root).is_none() => ast.ty_list(params).iter().all(|&a| written_tree_nodes(ast, a, out)) && written_tree_nodes(ast, ret, out),
+        TyExpr::Tuple(elems) => ast.ty_list(elems).iter().all(|&a| written_tree_nodes(ast, a, out)),
+        TyExpr::Union(a, b) | TyExpr::Inter(a, b) => written_tree_nodes(ast, a, out) && written_tree_nodes(ast, b, out),
+        TyExpr::ByName(t) | TyExpr::Repeated(t) => written_tree_nodes(ast, t, out),
+        _ => false,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeRef {
     Class(ClassId),
@@ -4068,6 +4096,9 @@ impl<'a> Worker<'a> {
             if self.declaring > 0 && matches!(r, TypeRef::Alias(_)) {
                 self.note_declared_alias(id, r);
             }
+            if PROVING.get() && matches!(r, TypeRef::Class(_) | TypeRef::Param(_)) {
+                self.prove_node(id, span);
+            }
             return t;
         }
         match n {
@@ -4088,6 +4119,9 @@ impl<'a> Worker<'a> {
     pub fn resolve_type_ctor(&mut self, id: TyExprId) -> TypeId {
         let ast = self.cur_ast();
         let span = ast.ty_spans[id.idx()];
+        if PROVING.get() && matches!(ast.ty(id), TyExpr::Apply(..) | TyExpr::Fun(..) | TyExpr::Tuple(_) | TyExpr::Union(..) | TyExpr::Inter(..) | TyExpr::ByName(_) | TyExpr::Repeated(_)) {
+            self.prove_node(id, span);
+        }
         match ast.ty(id) {
             TyExpr::Name(n) => self.resolve_type_name(id, n, span),
             TyExpr::Select(q, n) => {
@@ -4138,6 +4172,9 @@ impl<'a> Worker<'a> {
                         let t = self.type_ref_to_type(r, span, false);
                         if self.declaring > 0 && matches!(r, TypeRef::Alias(_)) {
                             self.note_declared_alias(id, r);
+                        }
+                        if PROVING.get() && matches!(r, TypeRef::Class(_)) {
+                            self.prove_node(id, span);
                         }
                         t
                     }
@@ -6107,17 +6144,28 @@ impl<'a> Worker<'a> {
     }
 
     pub fn resolve_tparam_bounds(&mut self, tps: &[ast::TypeParam], ids: &[(Name, TParamId)]) {
-        self.resolve_tparam_bounds_of(tps, ids, |_| true);
+        self.resolve_tparam_bounds_of(tps, ids, None, |_| true);
     }
 
-    pub(super) fn resolve_tparam_bounds_of(&mut self, tps: &[ast::TypeParam], ids: &[(Name, TParamId)], which: impl Fn(&ast::TypeParam) -> bool) {
+    /// `class`: the class whose own type parameters these are, whose bounds are its primary constructor's (held to the
+    /// variances a constructor of a class nested in a class sees where the resolver proves them, `resolve_clauses`).
+    pub(super) fn resolve_tparam_bounds_of(&mut self, tps: &[ast::TypeParam], ids: &[(Name, TParamId)], class: Option<ClassId>, which: impl Fn(&ast::TypeParam) -> bool) {
+        let held = class.filter(|&c| self.syms.class(c).mods & mods::PRIVATE_CTOR == 0).and_then(|c| Some((c, self.nested_ctor_visible(c)?)));
         for (tp, &(_, id)) in tps.iter().zip(ids).filter(|(tp, _)| which(tp)) {
             let itself = self.types.param(id);
+            // Each end with whether its written type is proved, the lower end held first (`TypeBounds` are folded so).
+            let mut ends: [Option<(TypeId, bool)>; 2] = [None, None];
             for (bound, upper) in [(tp.upper, true), (tp.lower, false)] {
                 let Some(b) = bound else { continue };
                 // An upper bound is declared as a signature's type is: a `*:` chain stays the chain
                 // it is spelled as, which scalac erases a parameter it bounds to (`Product`).
-                let (t, view) = if upper { self.declared_view(b, |w| w.resolve_declared_type(b)) } else { (self.resolve_type(b), crate::tir::NO_TYPE) };
+                let ((t, view), proved) = match &held {
+                    Some(_) if upper => self.proving_written_type(b, |w| w.declared_view(b, |w| w.resolve_declared_type(b))),
+                    Some(_) => self.proving_written_type(b, |w| (w.resolve_type(b), crate::tir::NO_TYPE)),
+                    None if upper => (self.declared_view(b, |w| w.resolve_declared_type(b)), false),
+                    None => ((self.resolve_type(b), crate::tir::NO_TYPE), false),
+                };
+                ends[usize::from(upper)] = Some((t, proved));
                 let t = self.declared_chain(t, view);
                 let u = self.canon(t);
                 if u == itself || self.eta_reduce(u) == itself {
@@ -6131,6 +6179,22 @@ impl<'a> Worker<'a> {
                     info.declared_upper = view;
                 } else {
                     info.lower = t;
+                }
+            }
+            if let Some((c, visible)) = &held {
+                let (c, visible) = (*c, visible.clone());
+                let (lo, hi) = (self.syms.tparam(id).lower, self.syms.tparam(id).upper);
+                for (end, t, sign) in [(ends[0], lo, 1), (ends[1], hi, -1)] {
+                    if !end.is_some_and(|(_, proved)| proved) {
+                        continue;
+                    }
+                    if let Some((p, required)) = self.nested_ctor_violation(c, &visible, t, sign) {
+                        let text = self.bounds_text(lo, hi);
+                        let what = format!("type {}", self.name_str(tp.name));
+                        let file = self.env.file;
+                        self.report_constructor_variance(p, required, &format!(" {}", text.trim_start()), file, tp.span, &what);
+                        break;
+                    }
                 }
             }
             // An annotated clause with no bound: the lambda made of it for the record, resolved for its binders'
@@ -6165,6 +6229,43 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// `f`, the resolution of the written type `root`, with whether the resolver proved it names classes and type
+    /// parameters alone through structural forms (`WrittenProof`): every node of the tree approved by the arm that read
+    /// it. A proof under way (a class completed while another's parameter is resolved) is set aside and restored.
+    fn proving_written_type<R>(&mut self, root: TyExprId, f: impl FnOnce(&mut Self) -> R) -> (R, bool) {
+        let span = self.cur_ast().ty_spans[root.idx()];
+        let outer = WRITTEN_PROOF.with(|p| p.borrow_mut().replace(WrittenProof { file: self.env.file, span, approved: Vec::new() }));
+        let was = PROVING.replace(true);
+        let r = f(self);
+        let proof = WRITTEN_PROOF.with(|p| std::mem::replace(&mut *p.borrow_mut(), outer));
+        PROVING.set(was);
+        let mut nodes = Vec::new();
+        let proved = proof.is_some_and(|proof| written_tree_nodes(self.cur_ast(), root, &mut nodes) && nodes.iter().all(|n| proof.approved.contains(n)));
+        (r, proved)
+    }
+
+    fn prove_node(&self, id: TyExprId, span: Span) {
+        let file = self.env.file;
+        WRITTEN_PROOF.with(|p| {
+            if let Some(proof) = p.borrow_mut().as_mut() {
+                if proof.file == file && proof.span.start <= span.start && span.end <= proof.span.end {
+                    proof.approved.push(id);
+                }
+            }
+        });
+    }
+
+    /// A parameter of a constructor of the class `c` nested in a class whose resolved type `t` is proved: held to the
+    /// variances the constructor sees (`VarianceChecker`; the reference checks it after the typer, PostTyper's group).
+    fn hold_ctor_param_variance(&mut self, c: ClassId, visible: &[TParamId], t: TypeId, name: Name, span: Span) {
+        if let Some((p, required)) = self.nested_ctor_violation(c, visible, t, -1) {
+            let shown = self.show(t);
+            let what = format!("parameter {}", self.name_str(name));
+            let file = self.env.file;
+            self.report_constructor_variance(p, required, &shown, file, span, &what);
+        }
+    }
+
     pub fn resolve_clauses(
         &mut self,
         clauses: &[ast::ParamClause],
@@ -6172,9 +6273,13 @@ impl<'a> Worker<'a> {
         tps: &[ast::TypeParam],
         ids: &[(Name, TParamId)],
         class_owner: Option<ClassId>,
+        ctor_of: Option<ClassId>,
     ) -> Vec<ClauseSig> {
         let file = self.env.file;
         let ast = self.cur_ast();
+        // A constructor of a class nested in a class: each parameter's written type the resolver proves is held to the
+        // variances the constructor sees; one not proved is not held (no refusal where the proof fails).
+        let held = ctor_of.and_then(|c| Some((c, self.nested_ctor_visible(c)?)));
         let mut out = Vec::with_capacity(clauses.len() + 1);
         for (ci, clause) in clauses.iter().enumerate() {
             let mut sig = ClauseSig { params: Vec::with_capacity(clause.params.len()), is_using: clause.is_using, is_implicit: clause.is_implicit };
@@ -6184,7 +6289,14 @@ impl<'a> Worker<'a> {
                     TyExpr::Repeated(inner) => matches!(ast.ty(inner), TyExpr::ByName(_)),
                     other => matches!(other, TyExpr::ByName(_)),
                 };
-                let (resolved, declared) = self.declared_view(p.ty, |w| w.resolve_type(p.ty));
+                let ((resolved, declared), proved) = match &held {
+                    Some(_) => self.proving_written_type(p.ty, |w| w.declared_view(p.ty, |w| w.resolve_type(p.ty))),
+                    None => (self.declared_view(p.ty, |w| w.resolve_type(p.ty)), false),
+                };
+                if let (Some((c, visible)), true) = (&held, proved) {
+                    let (c, visible) = (*c, visible.clone());
+                    self.hold_ctor_param_variance(c, &visible, resolved, p.name, p.span);
+                }
                 let resolved = self.declared_chain(resolved, declared);
                 let spelled = self.spelled_cons(p.ty, resolved);
                 // A tuple parameter spelled as a `*:` chain is the chain to its body and its
@@ -6904,7 +7016,7 @@ impl<'a> Worker<'a> {
         let outer = if self.deps.is_some() { Some(self.deps_enter_class(c)) } else { None };
         self.with_env(env, |t| {
             t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
-            t.resolve_tparam_bounds_of(&cls.tparams, &ids, |tp| tp.arity == 0);
+            t.resolve_tparam_bounds_of(&cls.tparams, &ids, Some(c), |tp| tp.arity == 0);
         });
         if let Some(outer) = outer {
             self.deps_leave(outer);
@@ -7175,7 +7287,7 @@ impl<'a> Worker<'a> {
                 t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                 t.resolve_tparam_bounds(&g.tparams, &ids);
                 let existing = t.syms.class(c).ctor_syms.clone();
-                let ctor = t.resolve_clauses(&g.clauses, Some(existing), &g.tparams, &ids, Some(c));
+                let ctor = t.resolve_clauses(&g.clauses, Some(existing), &g.tparams, &ids, Some(c), Some(c));
                 t.syms.class_mut(c).ctor = ctor;
                 // A structural instance over constructor calls has those parents (`given t: P()
                 // with Q`), else its type is its one parent.
@@ -7258,12 +7370,15 @@ impl<'a> Worker<'a> {
         // (`FromIterator[+C[X] <: Iterable[X]]`, `Iterable extends FromIterator[Iterable]`),
         // so it is resolved once the class is complete enough to be extended.
         if !made {
-            self.resolve_tparam_bounds_of(tparam_asts, &ids, |tp| tp.arity == 0);
+            self.resolve_tparam_bounds_of(tparam_asts, &ids, Some(c), |tp| tp.arity == 0);
         }
         let existing = self.syms.class(c).ctor_syms.clone();
         // Scala copies the type parameters of the enum to a case without their context bounds.
         let bounds_for_ctor: &[ast::TypeParam] = if inherited { &[] } else { tparam_asts };
-        let ctor = self.resolve_clauses(&cls.clauses, Some(existing), bounds_for_ctor, &ids, Some(c));
+        // A private constructor's parameters are left out: `private[this]` makes it local (`PrivateLocal`, no position
+        // is held), which the parser does not keep apart from `private`.
+        let ctor_of = (self.syms.class(c).mods & mods::PRIVATE_CTOR == 0).then_some(c);
+        let ctor = self.resolve_clauses(&cls.clauses, Some(existing), bounds_for_ctor, &ids, Some(c), ctor_of);
         if kind == ClassKind::Trait {
             if let Some(p) = cls.clauses.iter().flat_map(|cl| cl.params.iter()).find(|p| {
                 matches!(self.cur_ast().ty(p.ty), TyExpr::ByName(_))
@@ -7451,7 +7566,7 @@ impl<'a> Worker<'a> {
         }
         if tparam_asts.iter().any(|tp| tp.arity > 0) {
             self.syms.class_mut(c).state().set(Completion::Done);
-            self.resolve_tparam_bounds_of(tparam_asts, &ids, |tp| tp.arity > 0);
+            self.resolve_tparam_bounds_of(tparam_asts, &ids, Some(c), |tp| tp.arity > 0);
         }
     }
 

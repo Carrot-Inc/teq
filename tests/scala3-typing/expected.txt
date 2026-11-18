@@ -1994,7 +1994,7 @@ neg/valueclasses-doubledefs2.scala	accepts
 neg/valueclasses-impl-restrictions.scala	same	
 neg/varargs-annot-2.scala	accepts	
 neg/varargs-annot.scala	accepts	
-neg/variances-constr.scala	different	type mismatch
+neg/variances-constr.scala	superset	+1 lines: covariant type A occurs in contravariant position in type A of parameter x
 neg/variances.scala	different	several entry points: Test.main, Test2.main; choose one with --main
 neg/variances1.scala	accepts	
 neg/while-loops.scala	different	Cannot rewrite recursive call: it is not in tail position

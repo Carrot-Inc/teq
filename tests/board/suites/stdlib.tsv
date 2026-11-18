@@ -2150,6 +2150,8 @@ nested_class_prefix_review	pass	-
 nested_class_prefix_types	pass	-	
 nested_classes	pass	-	
 nested_companion_lib	fail	-	error: cannot resolve import: nclib not found
+nested_constructor_variance_bivariant	pass	-	
+nested_constructor_variance_unchecked	pass	-	
 nested_enum_lifetime	pass	-	
 nested_member_kind_variance	pass	-	
 nested_object_given_receivers	pass	-	

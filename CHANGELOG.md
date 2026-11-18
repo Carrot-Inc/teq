@@ -57,6 +57,15 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   auto-tupling is on: `true.==("a", "b")` is refused as scalac refuses it ("values of types Boolean and (String,
   String) cannot be compared"), also where a conversion in scope gives a class with an `==` of two parameters,
   which teq took and called.
+- A class nested in a class holds its constructors' parameters and its type parameters' bounds to the variances of the
+  enclosing classes' type parameters, as scalac does (`VarianceChecker.relativeVariance`): `class C[+A] { class
+  Inner(x: A) }` is refused ("covariant type A occurs in contravariant position in type A of parameter x"), and so are
+  a secondary constructor's `def this(a: A)` and `class Inner[B <: A]`, which teq built. The enclosing classes are
+  held up to the first whose owner is a term (a local or an anonymous class) or that is private to its instance, whose
+  own parameters are still held; a private constructor and a local class itself hold nothing. A parameter or a bound
+  is held only where its written type names classes and type parameters alone: one that names an alias, a path's
+  member or `@uncheckedVariance` anywhere is not held. Under `-source:3.0-migration` it is a migration warning, as
+  scalac's.
 - A class's own constructor parameter named by an import inside its parent's argument, or inside a default of a
   later parameter clause, is read as the constructor's argument, as the parameter's name itself is read there (a
   context bound's evidence, `[T: {Show as sh}]`, among them): `class Named(d: Dsl) extends Base({ import d.*;
