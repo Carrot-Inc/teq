@@ -79,6 +79,7 @@ mod unused_defs;
 pub(crate) mod unused_edits;
 pub mod value_exports;
 
+use crate::shake::SpawnRefusable as _;
 use crate::ast::{Ast, Asts, ListRef};
 use crate::intern::{FxMap, Interner, Name};
 use crate::source::{Diagnostics, FileId, Sources, Span};
@@ -2885,7 +2886,7 @@ impl<'a> Typer<'a> {
                         let handle = std::thread::Builder::new()
                             .name(format!("teq-worker-{}", k + 1))
                             .stack_size(1 << 30)
-                            .spawn_scoped(s, move || {
+                            .spawn_scoped_refusable(s, crate::shake::Start::Body, move || {
                                 crate::alloc::enter();
                                 let launched = since();
                                 worker.work(queue, first);

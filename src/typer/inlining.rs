@@ -17,6 +17,7 @@
 //! (`FromSymbol`), and an expansion is the tree the phase makes of the call, the call's arguments
 //! as typed.
 
+use crate::shake::SpawnRefusable as _;
 use super::state::{PendingCall, PendingInline};
 use super::Worker;
 use crate::intern::FxMap;
@@ -788,7 +789,7 @@ impl<'a> Worker<'a> {
                 let handle = std::thread::Builder::new()
                     .name(format!("teq-inlining-{}", k + 1))
                     .stack_size(1 << 30)
-                    .spawn_scoped(s, move || {
+                    .spawn_scoped_refusable(s, crate::shake::Start::Inlining, move || {
                         crate::alloc::enter();
                         w.phase_work(q);
                         // A session outlives the build: the cycles this worker's macro runs left

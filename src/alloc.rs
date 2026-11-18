@@ -3905,6 +3905,7 @@ mod tests {
         ("src/lsp/sources.rs", 1, "alloc::spawn for the workers that fetch the libraries' sources"),
         ("src/main.rs", 1, "a builder for the stack's size; alloc::enter is the first statement of compile"),
         ("src/products.rs", 1, "alloc::spawn_in for the publication's steps"),
+        ("src/shake.rs", 3, "spawn_scoped_refusable, a builder's spawn_scoped that the forced refusal of a start may refuse, declared and implemented: the closures its callers hand it (src/typer/mod.rs, src/typer/inlining.rs, src/crew.rs) enter first"),
         ("src/task/client.rs", 1, "starts the daemon process"),
         ("src/task/daemon.rs", 5, "alloc::spawn for the watch, per connection, per test run's client watcher and per spent runner's quitting, alloc::spawn_in per resident's build"),
         ("src/task/export.rs", 1, "starts git check-ignore for the staleness check"),

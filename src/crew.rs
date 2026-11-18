@@ -4,6 +4,7 @@
 //! thread has finished it, so a part may borrow what its caller holds. With one thread a part is
 //! a call.
 
+use crate::shake::SpawnRefusable as _;
 use std::sync::{Condvar, Mutex};
 
 /// A part handed to the crew: the function, with its borrow's lifetime erased (`run` waits for
@@ -62,7 +63,7 @@ impl Crew {
             let mut handles = Vec::with_capacity(crew.threads - 1);
             for k in 1..crew.threads {
                 let shared = &crew;
-                let started = std::thread::Builder::new().name(format!("teq-merge-{}", k)).spawn_scoped(s, move || {
+                let started = std::thread::Builder::new().name(format!("teq-merge-{}", k)).spawn_scoped_refusable(s, crate::shake::Start::Merge, move || {
                     crate::alloc::enter();
                     shared.serve(k)
                 });

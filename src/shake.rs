@@ -15,6 +15,16 @@
 //! the lock's holder on the same path at a read a scenario names, so that the path after each
 //! read is walked without the schedule. Off, one load and a branch where a signature is
 //! completed or its reads are hooked.
+//!
+//! And the forced refusal of a start: with `TEQ_REFUSE_START=<phase>:<k>` the k-th start of the
+//! named phase's threads (`body`, a worker of the body phase; `inlining`, a worker of the inlining
+//! phase; `merge`, a merge thread) is refused as the system refuses one, where it has no address
+//! space for the thread's stack: the thread is not started, what it was to run is dropped, and the
+//! site takes the path its refusal takes (the build is given to one worker). A refusal of the
+//! system's needs a memory limit that falls in the window where that start is the first thing to
+//! fail; the forced one puts the build on the same path at the start a test names, whatever the
+//! machine. A value that names no one start (`body:1`, not `body` nor `body:1,merge:1`) stops the run
+//! with a line that says so. Off, one load and a branch where a thread is started.
 
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 
@@ -165,5 +175,120 @@ pub fn refuse(sym: u32) -> Refused {
         Refused::Again
     } else {
         Refused::No
+    }
+}
+
+/// The starts the forced refusal may refuse (`TEQ_REFUSE_START`): a thread of a phase of the typing.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Start {
+    /// A worker of the body phase (`Typer::run`).
+    Body = 0,
+    /// A worker of the inlining phase (`Worker::expand_in_parallel`).
+    Inlining = 1,
+    /// A merge thread (`crew::Crew::with`).
+    Merge = 2,
+}
+
+/// 0 not read yet, 1 off, 2 on.
+static START_REFUSAL: AtomicU8 = AtomicU8::new(0);
+static REFUSED_PHASE: AtomicU8 = AtomicU8::new(0);
+static REFUSED_START: AtomicU64 = AtomicU64::new(0);
+static STARTS: [AtomicU64; 3] = [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
+
+#[cold]
+#[inline(never)]
+fn start_refusal() -> bool {
+    // Unset or empty, the switch is off. Any other value is one start or the run stops here: a test that set it
+    // wrongly would otherwise pass by refusing nothing.
+    let named = std::env::var_os("TEQ_REFUSE_START").filter(|v| !v.is_empty()).map(|v| {
+        let text = v.to_string_lossy().into_owned();
+        named_start(&text).unwrap_or_else(|| {
+            eprintln!("teq: TEQ_REFUSE_START={text:?} is not one <phase>:<k> (the phase body, inlining or merge, k a number from 1: merge:1)");
+            std::process::exit(2);
+        })
+    });
+    if let Some((phase, k)) = named {
+        REFUSED_PHASE.store(phase as u8, Ordering::Relaxed);
+        REFUSED_START.store(k, Ordering::Relaxed);
+    }
+    START_REFUSAL.store(if named.is_some() { 2 } else { 1 }, Ordering::Release);
+    named.is_some()
+}
+
+/// The start a value of `TEQ_REFUSE_START` names: exactly one `<phase>:<k>`, the phase `body`, `inlining` or `merge`
+/// and k digits alone, from 1.
+fn named_start(v: &str) -> Option<(Start, u64)> {
+    let (phase, k) = v.split_once(':')?;
+    let phase = match phase {
+        "body" => Start::Body,
+        "inlining" => Start::Inlining,
+        "merge" => Start::Merge,
+        _ => return None,
+    };
+    if k.is_empty() || !k.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    k.parse::<u64>().ok().filter(|&k| k > 0).map(|k| (phase, k))
+}
+
+/// Counts a start of `start`'s phase, and whether the forced refusal refuses it: the one the setting names.
+pub fn refuse_start(start: Start) -> bool {
+    let on = match START_REFUSAL.load(Ordering::Acquire) {
+        1 => false,
+        2 => true,
+        _ => start_refusal(),
+    };
+    if !on {
+        return false;
+    }
+    let n = STARTS[start as usize].fetch_add(1, Ordering::SeqCst) + 1;
+    REFUSED_PHASE.load(Ordering::Relaxed) == start as u8 && n == REFUSED_START.load(Ordering::Relaxed)
+}
+
+/// `Builder::spawn_scoped` that the forced refusal may refuse (`refuse_start`): the thread is not started, `f` is
+/// dropped, and the error is the site's to take, as the system's own refusal is.
+pub trait SpawnRefusable {
+    fn spawn_scoped_refusable<'scope, 'env, F, T>(
+        self,
+        s: &'scope std::thread::Scope<'scope, 'env>,
+        start: Start,
+        f: F,
+    ) -> std::io::Result<std::thread::ScopedJoinHandle<'scope, T>>
+    where
+        F: FnOnce() -> T + Send + 'scope,
+        T: Send + 'scope;
+}
+
+impl SpawnRefusable for std::thread::Builder {
+    fn spawn_scoped_refusable<'scope, 'env, F, T>(
+        self,
+        s: &'scope std::thread::Scope<'scope, 'env>,
+        start: Start,
+        f: F,
+    ) -> std::io::Result<std::thread::ScopedJoinHandle<'scope, T>>
+    where
+        F: FnOnce() -> T + Send + 'scope,
+        T: Send + 'scope,
+    {
+        if refuse_start(start) {
+            drop(f);
+            return Err(std::io::Error::other(format!("refused by TEQ_REFUSE_START at start {} of the phase", REFUSED_START.load(Ordering::Relaxed))));
+        }
+        self.spawn_scoped(s, f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{named_start, Start};
+
+    #[test]
+    fn a_refusal_of_a_start_names_one_start_exactly() {
+        assert_eq!(named_start("body:1"), Some((Start::Body, 1)));
+        assert_eq!(named_start("inlining:2"), Some((Start::Inlining, 2)));
+        assert_eq!(named_start("merge:99"), Some((Start::Merge, 99)));
+        for bad in ["unknown:1", "body:0", "body:no", "body", "body:", ":1", "body:1,merge:1", "body:+1", "body: 1", "Body:1", "body:99999999999999999999999"] {
+            assert_eq!(named_start(bad), None, "{bad}");
+        }
     }
 }

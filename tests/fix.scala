@@ -1595,23 +1595,20 @@ object Typing:
           expect(s"limit/w$w", wrong.result().isEmpty && joined, (if joined then "" else s"the fork never joined up to ${gib - 1} GiB\n  ") + wrong.result().mkString("\n  "))
           if spent > 0 then println(s"typing/limit/w$w: $spent run(s) ended in an allocation the system refused (no start's), counted apart")
           expect(s"limit/w$w/worker-refused", refusedWorker, s"no limit from 6 to ${gib - 1} GiB gave a worker no thread after the fork")
-        // The starts of the typing's threads, each refused (as cells): the body
-        // phase's workers, the inlining phase's and the merge's crew, over a program of inline calls at four workers.
-        // The limits where each is met lie in the GiB below the first that joins the fork, a few MiB apart and moving
-        // with the schedule: a GiB at a time to that first one, 32 MiB at a time across the GiB below it, then 8 MiB at a
-        // time over the 384 MiB from just below the highest limit that refused the body phase's start, again (four
-        // times at most) until every start was met. Where those passes met no refusal of the merge's start, its window
-        // is narrower than their step: it lies just under the limits that join, about the highest limit that refused
-        // any start, and how wide it is depends on the allocator, the address space that grows between the inlining
-        // phase's starts and the merge's (glibc's arenas take theirs ahead, ten limits of a MiB in seventeen there met
-        // the merge; an allocator that asks the system for a growth's address space when the growth comes leaves it one
-        // or two in that span). So that span, 8 MiB on either side of that limit, is swept a MiB at a time, again (five
-        // times at most, some 90 s) until the merge's start is met; the passes before it find the window at once for
-        // most runs. Each run gives the one-worker run's exit, lints and files,
-        // its record the path taken (the mappings refused; a start refused, named in the reason, the attempt given
-        // way and one worker's `outcome=one` after; the fork joined); a run that ends in an allocation the system
-        // refused (Rust's "memory allocation of … failed", the address space spent by an allocation and no thread's
-        // start) is counted apart, any other end fails.
+        // The starts of the typing's threads, each refused: the body phase's workers, the inlining phase's and the merge's
+        // crew, over a program of inline calls at four workers. Each start is refused once by the switch that refuses the
+        // k-th start of a named phase as the system refuses one (`TEQ_REFUSE_START`, src/shake.rs), with no memory limit:
+        // the run gives the one-worker run's exit, lints and files, and its record the path taken (the start refused,
+        // named in the reason, the attempt given way and one worker's `outcome=one` after). A switch naming a start the run
+        // never makes joins the fork and so fails that check: the check sees the refusal. Then the real limits, for what
+        // each run gives where the system itself refuses: a GiB at a time to the first that joins the fork, 32 MiB at a
+        // time across the GiB below it, 8 MiB at a time over the 384 MiB from just below the highest limit that refused the
+        // body phase's start, and a MiB at a time over the 16 MiB about the highest limit that refused any start, each pass
+        // run whole; which starts they met is told, not asked, since a start's window moves with the schedule, the
+        // allocator and the build's memory. Each run gives the one-worker run's exit, lints and files and its record the
+        // path taken (the mappings refused; a start refused; the fork joined); a run that ends in an allocation the system
+        // refused (Rust's "memory allocation of … failed", the address space spent by an allocation and no thread's start)
+        // is counted apart, any other end fails. Each run has an empty temporary directory of its own.
         val inlineFiles = program("inline", "inl")
         val cells = work.resolve("typing-starts")
         Sh.remove(cells)
@@ -1620,71 +1617,104 @@ object Typing:
           Files.writeString(cells.resolve(f), text)
         Files.writeString(cells.resolve("fix.conf"), "rules = [NoUnusedImports]\n")
         val inlineInputs = inlineFiles.map(_._1).sorted.mkString(" ")
-        val inlineBase = Sh("bash", "-c", s"exec '$teq' compiler fix $inlineInputs --config fix.conf --check --threads 1").in(cells).timeout(300).check(false).run()
+        val temps = work.resolve("typing-starts-tmp")
+        Sh.remove(temps)
+        var runs = 0
+        /** An empty temporary directory of the next run's own. */
+        def freshTemp(): String =
+          runs += 1
+          val d = temps.resolve(s"t$runs")
+          Files.createDirectories(d)
+          d.toString
+        val inlineBase = Sh("bash", "-c", s"exec '$teq' compiler fix $inlineInputs --config fix.conf --check --threads 1").in(cells)
+          .withEnv("TMPDIR" -> freshTemp()).timeout(300).check(false).run()
         val starts = Map("a typing worker" -> "body", "a worker of the inlining phase" -> "inlining", "a merge thread" -> "merge")
         val wrong = Vector.newBuilder[String]
         val met = scala.collection.mutable.Set.empty[String]
+        val swept = scala.collection.mutable.Set.empty[String]
         var allocations = 0
-        // The highest limit of the 32 MiB pass where the body phase's start was refused: the inlining phase's and the
-        // merge's lie above it, by a few MiB and the schedule.
-        var bodyAt = 0L
-        // The highest limit where any start was refused: the merge's window lies about it.
-        var refusedAt = 0L
-        /** One run under `mib` MiB: whether it joined the fork. */
-        def cell(mib: Long): Boolean =
+        /** A run at four workers (under `mib` MiB where it is not 0, with `env`): its record's attempts where it gives the
+         *  one-worker run's exit, lints and files; None, told in `wrong`, where it does not; None where an allocation the
+         *  system refused ended it (counted apart). */
+        def run(label: String, mib: Long, env: (String, String)*): Option[Vector[Attempt]] =
           val record = cells.resolve("record.txt")
           Files.deleteIfExists(record)
-          val r = Sh("bash", "-c", s"ulimit -v ${mib * 1024} && exec '$teq' compiler fix $inlineInputs --config fix.conf --check --threads 4").in(cells)
-            .withEnv("TEQ_FIX_RECORD" -> record.toString, "TEQ_FIX_RULE_THREADS" -> "1").timeout(300).check(false).run()
+          val limit = if mib > 0 then s"ulimit -v ${mib * 1024} && " else ""
+          val r = Sh("bash", "-c", s"${limit}exec '$teq' compiler fix $inlineInputs --config fix.conf --check --threads 4").in(cells)
+            .withEnv((Seq("TEQ_FIX_RECORD" -> record.toString, "TEQ_FIX_RULE_THREADS" -> "1", "TMPDIR" -> freshTemp()) ++ env)*).timeout(300).check(false).run()
           val err = r.errAll().linesIterator.filterNot(_.startsWith("teq: no memory mapping for the type store's overlays")).mkString("\n")
           val as = if Files.exists(record) then attemptsOf(read(record).linesIterator.toVector) else Vector()
           if allocationRefused(r) then
             allocations += 1
-            false
+            None
           else if r.status != inlineBase.status || err != inlineBase.errAll().linesIterator.mkString("\n") || !inlineFiles.forall((f, t) => read(cells.resolve(f)) == t) then
-            wrong += s"$mib MiB: exit ${r.status} (one worker's ${inlineBase.status}): ${r.errAll().linesIterator.take(3).mkString(" | ")}"
-            false
+            wrong += s"$label: exit ${r.status} (one worker's ${inlineBase.status}): ${r.errAll().linesIterator.take(3).mkString(" | ")}"
+            None
           else if as.isEmpty then
-            wrong += s"$mib MiB: no typing line"
-            false
+            wrong += s"$label: no typing line"
+            None
+          else Some(as)
+        /** The start a refused run's record names, where its path is a refusal's: the attempt given way, one worker after. */
+        def refused(label: String, as: Vector[Attempt]): Option[String] =
+          val (first, last) = (as.head, as.last)
+          if !first.workerRefused then None
           else
-            val (first, last) = (as.head, as.last)
-            if first.workerRefused then
-              starts.find((why, _) => first.why.startsWith("the system gave " + why + " no thread")) match
-                case Some((_, site)) =>
-                  met += site
+            val site = starts.collectFirst { case (why, site) if first.why.startsWith("the system gave " + why + " no thread") => site }
+            if site.isEmpty then wrong += s"$label: a refusal of no start named: ${first.why}"
+            if as.size != 2 || first.outcome != "retried" || last.forked || last.outcome != "one" then wrong += s"$label: ${as.mkString("; ")}"
+            site
+        // The switch: each phase's first start refused, and a start the run never makes.
+        for phase <- Vector("body", "inlining", "merge") do
+          run(s"$phase refused", 0, "TEQ_REFUSE_START" -> s"$phase:1").foreach { as =>
+            refused(s"$phase refused", as) match
+              case Some(site) if site == phase => met += site
+              case Some(site) => wrong += s"$phase refused: the record names the start of $site"
+              case None => wrong += s"$phase refused: the run took no refusal's path: ${as.mkString("; ")}"
+          }
+        run("a start never made refused", 0, "TEQ_REFUSE_START" -> "merge:99").foreach { as =>
+          if as.size != 1 || as.head.workerRefused || !as.last.forked || as.last.outcome != "joined" then wrong += s"a start never made refused: ${as.mkString("; ")}"
+        }
+        // A value that names no one start stops the run, with the line that says so: it refuses nothing silently.
+        for bad <- Vector("unknown:1", "body:1,merge:1") do
+          val r = Sh("bash", "-c", s"exec '$teq' compiler fix $inlineInputs --config fix.conf --check --threads 4").in(cells)
+            .withEnv("TMPDIR" -> freshTemp(), "TEQ_REFUSE_START" -> bad).timeout(300).check(false).run()
+          if r.status != 2 || !r.errAll().contains(s"TEQ_REFUSE_START=$"$bad$" is not one <phase>:<k>") then
+            wrong += s"TEQ_REFUSE_START=$bad: exit ${r.status}: ${r.errAll().linesIterator.take(2).mkString(" | ")}"
+        // The real limits.
+        var bodyAt = 0L
+        var refusedAt = 0L
+        /** One run under `mib` MiB: whether it joined the fork. */
+        def cell(mib: Long): Boolean =
+          run(s"$mib MiB", mib) match
+            case None => false
+            case Some(as) =>
+              val (first, last) = (as.head, as.last)
+              if first.workerRefused then
+                refused(s"$mib MiB", as).foreach { site =>
+                  swept += site
                   refusedAt = refusedAt max mib
                   if site == "body" then bodyAt = bodyAt max mib
-                case None => wrong += s"$mib MiB: a refusal of no start named: ${first.why}"
-              if as.size != 2 || first.outcome != "retried" || last.forked || last.outcome != "one" then wrong += s"$mib MiB: ${as.mkString("; ")}"
-              false
-            else if first.mappingRefused then
-              if as.size != 1 || last.forked || last.outcome != "one" then wrong += s"$mib MiB: ${as.mkString("; ")}"
-              false
-            else
-              if as.size != 1 || !last.forked || last.outcome != "joined" then wrong += s"$mib MiB: ${as.mkString("; ")}"
-              true
+                }
+                false
+              else if first.mappingRefused then
+                if as.size != 1 || last.forked || last.outcome != "one" then wrong += s"$mib MiB: ${as.mkString("; ")}"
+                false
+              else
+                if as.size != 1 || !last.forked || last.outcome != "joined" then wrong += s"$mib MiB: ${as.mkString("; ")}"
+                true
         var joinedAt = 0L
         var g = 6L
         while joinedAt == 0 && g <= 64 do
           if cell(g * 1024) then joinedAt = g
           g += 1
-        var sweeps = 0
         if joinedAt > 0 then
           for mib <- ((joinedAt - 1) * 1024) until (joinedAt * 1024) by 32 do cell(mib)
-          sweeps = 1
           val from = if bodyAt > 0 then bodyAt - 64 else (joinedAt - 1) * 1024
-          while sweeps < 5 && !Set("body", "inlining", "merge").subsetOf(met) do
-            for mib <- from until (from + 384) by 8 do cell(mib)
-            sweeps += 1
-        var fine = 0
-        if joinedAt > 0 && refusedAt > 0 then
-          while fine < 5 && !met.contains("merge") do
-            for mib <- (refusedAt - 8) to (refusedAt + 8) do cell(mib)
-            fine += 1
+          for mib <- from until (from + 384) by 8 do cell(mib)
+          if refusedAt > 0 then for mib <- (refusedAt - 8) to (refusedAt + 8) do cell(mib)
         expect("starts", joinedAt > 0 && wrong.result().isEmpty, (if joinedAt == 0 then "the fork never joined up to 64 GiB\n  " else "") + wrong.result().mkString("\n  "))
-        expect("starts/met", Set("body", "inlining", "merge").subsetOf(met), s"the starts met: ${met.toVector.sorted.mkString(", ")}, over the GiB below $joinedAt GiB ($sweeps sweeps, $fine at a MiB about $refusedAt MiB, $allocations allocations refused)")
-        if fine > 0 && met.contains("merge") then println(s"typing/starts: the merge's start met by $fine pass(es) a MiB at a time about $refusedAt MiB")
+        expect("starts/met", Set("body", "inlining", "merge").subsetOf(met), s"the starts the switch refused: ${met.toVector.sorted.mkString(", ")}")
+        println(s"typing/starts: the real limits met ${if swept.isEmpty then "no start" else swept.toVector.sorted.mkString(", ")}, over the GiB below $joinedAt GiB ($runs runs)")
         if allocations > 0 then println(s"typing/starts: $allocations run(s) ended in an allocation the system refused (no start's), counted apart")
 
     // The counter macro library (`counter/lib`, its products built here): a run of `next` changes `Counter.n`, which
