@@ -9,7 +9,7 @@ import { resolve } from "node:path"
 const [file, teq, out, ...extra] = process.argv.slice(2)
 const d = JSON.parse(readFileSync(file, "utf-8"))
 const root = resolve(file, "..", d.root ?? "../../..")
-const flags = [...(d.maxInlines ? ["--max-inlines", String(d.maxInlines)] : []), ...(d.strictEquality ? ["--strict-equality"] : []), ...(d.kindProjector ? ["--kind-projector"] : []), ...(d.werror ? ["--werror"] : []), ...(d.cacheableState ?? []).flatMap((n) => ["--cacheable-state", n])]
+const flags = [...(d.maxInlines ? ["--max-inlines", String(d.maxInlines)] : []), ...(d.strictEquality ? ["--strict-equality"] : []), ...(d.kindProjector ? ["--kind-projector"] : []), ...(d.language?.length ? ["--language", d.language.join(",")] : []), ...(d.werror ? ["--werror"] : []), ...(d.cacheableState ?? []).flatMap((n) => ["--cacheable-state", n])]
 // The words before the compiler's verb for this binary, which may be master's or the reference's from before the
 // project verbs took the top level (bench/app/export-identity.sh builds both): `compiler` when `<teq> compiler --help`
 // exits 0, none under the old spelling (the usage, exit 2), probed once here before the build, as
