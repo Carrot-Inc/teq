@@ -1,9 +1,9 @@
-// expect: error: no given instance of type Second was found
+// expect: 17:57: error: value pick is not a member of R.
 // expect: 1 error found
-// Where no imported extension's prefix holds and the implicit scope has none, the error is the
-// first alternative's, as dotty commits `failures.head` and keeps its error: the innermost
-// import's `B.pick`, whose `Second` has no instance, rather than a later alternative's
-// failure.
+// Where no imported extension's prefix holds and the implicit scope has none, the error is the first alternative's,
+// as dotty commits `failures.head` and keeps its error: the innermost import's `B.pick`, whose `Second` has no
+// instance, rather than a later alternative's failure. scalac 3.8.4 reports `value pick is not a member of R.` at the
+// selection, `B.pick` and the missing `Second` in the lines after it.
 trait First
 trait Second
 class R

@@ -1,6 +1,6 @@
 // Adapted from scala3 tests/neg/union.scala (Apache-2.0, see tests/scala3/README.md); replaced: class inheritance by traits.
-// expect: type mismatch: found A, required B | C
-// expect: type mismatch: found Top, required A | B
+// expect: 12:18: error: type mismatch: found A, required B | C
+// expect: 27:19: error: type mismatch: found Top, required A | B
 object Test:
   trait A
   class B extends A

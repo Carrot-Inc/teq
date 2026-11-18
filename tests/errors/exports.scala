@@ -3,10 +3,10 @@
 // expect: cannot resolve export: Inner not found
 // expect: expected '.', found new line
 // absent: cyclic export
-// expect: no given instance of type Tag[Int]
-// expect: not found: secret
-// expect: not found: hiddenOne
-// expect: not found: notReexported
+// expect: 47:21: error: no given instance of type Tag[Int]
+// expect: 44:11: error: not found: secret
+// expect: 45:11: error: not found: hiddenOne
+// expect: 46:11: error: not found: notReexported
 // expect: value nope is not a member of Api
 
 import Api.*

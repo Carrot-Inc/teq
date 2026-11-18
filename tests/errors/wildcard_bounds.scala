@@ -1,6 +1,6 @@
-// expect: type mismatch: found Box[String], required Box[? >: Dog]
-// expect: type mismatch: found "str", required
-// expect: type mismatch: found Dog, required
+// expect: 17:22: error: type mismatch: found Box[String], required Box[? >: Dog]
+// expect: 13:23: error: type mismatch: found "str", required
+// expect: 16:18: error: type mismatch: found Dog, required
 trait Animal:
   def name: String
 final case class Dog(name: String) extends Animal

@@ -27,8 +27,10 @@ bound_member_params_seen_from_prefix	exit code 0
 brace_line_left_of_first_line	exit code 0
 brace_template_body_at_brace_width	missing '6:7: error:'
 braced_branch_applied_after_condition	exit code 0
+callsyntax	missing '28:12: error: type mismatch: found (Int, Int, Int), required (Int, Int)'
 cases_end_match_after_catch_branch	exit code 0
 collection_seq_not_immutable.check	< tests/errors/collection_seq_not_immutable.scala:5:85: error: Found: (xs : scala.collection.Seq[Int])
+companion_apply_plain_class	missing '5:11: error: dummy term capture parameter method apply cannot be used as a value'
 constructor_proxy_prefix	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'
 copy_default_later_clause	missing '7:25: error: value copy$default$2 is not a member of C'
 directive_hidden_file	present '.policy.scala'
@@ -42,6 +44,7 @@ directive_werror_files	exit code 0
 early_param_kind_inner_bound	exit code 0
 early_param_kind_inner_bound_one_file	exit code 0
 end_marker_duplicate	exit code 0
+enum_checks	missing '40:41: error: no given instance of type Show[Boolean] was found for parameter evidence$'
 enum_parent_recovery	missing 'extends enum Choice, but extending enums is prohibited.'
 erased_use_definition_tie	missing 'inlined from tests/errors/erased_use_definition_tie.scala:5'
 erased_use_definition_tie.check	< tests/errors/erased_use_definition_tie.scala:7:14: error: method erasedValue is declared as `erased`, but is in fact used
@@ -74,6 +77,8 @@ inferred_type_apply_mismatch_point	missing '9:21: error: Found: Option[Nothing]'
 inferred_type_apply_mismatch_point.check	< tests/errors/inferred_type_apply_mismatch_point.scala:9:21: error: Found: Option[Nothing]
 infix_after_hidden_overload	missing '7:19: error: Alphanumeric method f is not declared infix; it should not be used as infix operator.'
 inherited_abstract_type_member_cycle	exit code 0
+inline_definition_failed	missing '22:20: error: type mismatch: found Int, required String'
+inline_definition_splice	missing '8:26: error: type mismatch: found Expr[String], required Expr[Int]'
 inline_library_summon_from	present '(in the body of'
 inline_parameter_block_path_final	missing '9:25: error: (x$proxy1 : Int) is not a constant type; cannot take constValue'
 inline_val_purity.check	< tests/errors/inline_val_purity.scala:18:18: error: inline value must be pure
@@ -91,6 +96,8 @@ java_signature_missing_class_throws	exit code 0
 java_signature_missing_jdk_root_class	exit code 0
 java_signature_missing_parent	exit code 0
 java_signature_missing_scala_class	exit code 0
+lexical_extension_failure_beside_scope	missing '17:57: error: value pick is not a member of R.'
+lexical_extension_failure_detail	missing '17:57: error: value pick is not a member of R.'
 lexical_extension_given_heal.check	< tests/errors/lexical_extension_given_heal.scala:19:50: error: Found: R
 lower_bound_cycle_illegal	missing 'lower_bound_cycle_illegal.scala:12:9: error: illegal cyclic type reference: lower bound BS[?, S] of type S refers back to the type itself'
 match_case_not_a_case_dep_method_eta	exit code 0
@@ -137,6 +144,7 @@ private_leaks_signature	exit code 0
 projection_type_constructor_qualifier.check	< tests/errors/projection_type_constructor_qualifier.scala:4:18: error: Found: Outer.C
 pure_intersection_double_definition	missing 'Conflicting definitions:'
 quote_template_body_at_brace_width	missing '13:7: error:'
+right_assoc_ext	missing '14:15: error: value *: is not a member of Int.'
 scala3_i2887c	missing '21:71: error: Found: (1 : Int)'
 scala3_i2887c.check	< tests/errors/scala3_i2887c.scala:21:71: error: Found: (1 : Int)
 scalajs_anonymous_js_objects	missing '19:5: error: object creation impossible, since val name: String in trait JsTrait in package app is not defined'
@@ -185,6 +193,7 @@ wildcard_bound_other_param	exit code 0
 wildcard_bound_overlap	missing '17:30: error: type argument ? >: T does not overlap with upper bound U'
 wildcard_bound_param_ends	exit code 0
 wildcard_bound_variant_param	exit code 0
+wildcard_bounds	missing '17:22: error: type mismatch: found Box[String], required Box[? >: Dog]'
 wrong_number_of_type_args_beside_a_syntax_error	missing 'wrong_number_of_type_args_beside_a_syntax_error.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]'
 wrong_number_of_type_args_hides_its_arguments	missing 'wrong_number_of_type_args_hides_its_arguments.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]'
 wrong_number_of_type_args_message_forms	exit code 0

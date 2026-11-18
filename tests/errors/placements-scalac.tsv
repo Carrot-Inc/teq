@@ -1,0 +1,82 @@
+# The 74 expectations of the three message families given a place by their diagnostic (E007 type mismatch, E006 not
+# found, E172 no given instance), against scalac 3.8.4: each program compiled alone with its flags, every diagnostic
+# with its place and message ID; columns 1-based. `same`: scalac reports the family's ID at that line, column and
+# severity. `moved`: scalac reports the same diagnostic at another column, its point (a selection's name, an
+# argument) where teq gives the expression's start: the expectation is at scalac's place and the program on
+# tests/pending/errors.txt. `not reported`: scalac reports another diagnostic there: the expectation holds scalac's,
+# and the program is on the list.
+# program	teq's place	scalac's place	scalac's ID	verdict	scalac's diagnostic where it differs
+callsyntax	24:17	24:17	E007	same	
+callsyntax	28:3	28:12	E007	moved: pending	the same diagnostic at scalac's point
+callsyntax	30:24	30:24	E007	same	
+callsyntax	29:3	29:15	E007	not reported: pending	scalac reports each argument: 29:15 Found: (1 : Int) and 29:18 Found: (2 : Int)
+companion_apply_plain_class	5:11	5:11	E195	not reported: pending	scalac: dummy term capture parameter method apply cannot be used as a value
+conversions	28:16	28:16	E007	same	
+enum_checks	40:33	40:41	E172	moved: pending	the same diagnostic at scalac's point
+exc_types	8:26	8:26	E007	same	
+exc_types	10:22	10:22	E007	same	
+exc_types	14:25	14:25	E007	same	
+exports	47:21	47:21	E172	same	
+exports	44:11	44:11	E006	same	
+exports	45:11	45:11	E006	same	
+exports	46:11	46:11	E006	same	
+exports_order_excluded	15:11	15:11	E006	same	
+fbounded_crash	5:14	5:14	E007	same	
+gadt_alternatives	10:24	10:24	E007	same	
+givens_ambiguous	58:29	58:29	E172	same	
+givens_ambiguous	60:49	60:49	E172	same	
+givens_ambiguous	61:33	61:33	E172	same	
+givens_ambiguous_warm	65:29	65:29	E172	same	
+givens_ambiguous_warm	67:49	67:49	E172	same	
+givens_ambiguous_warm	68:33	68:33	E172	same	
+givens_imports	37:26	37:26	E172	same	
+givens_imports	38:11	38:11	E006	same	
+givens_imports	39:11	39:11	E006	same	
+givens_imports	41:29	41:29	E172	same	
+import_scope_statement	8:11	8:11	E006	same	
+inline_definition_errors	25:72	25:72	E007	same	
+inline_definition_errors	26:59	26:59	E172	same	
+inline_definition_failed	22:17	22:20	E007	moved: pending	the same diagnostic at scalac's point
+inline_definition_splice	8:23	8:26	E007	moved: pending	the same diagnostic at scalac's point
+inline_definition_splice	10:25	10:28	E007	moved: pending	the same diagnostic at scalac's point
+lexical_extension_failure_beside_scope	17:61	17:57	E008	not reported: pending	scalac: value pick is not a member of R., the extension tried and the missing Need after it
+lexical_extension_failure_detail	17:61	17:57	E008	not reported: pending	scalac: value pick is not a member of R., B.pick and the missing Second after it
+literal_types	9:18	9:18	E007	same	
+literal_types	10:18	10:18	E007	same	
+literal_types	11:17	11:17	E007	same	
+named_tuple_mismatch	7:25	7:25	E007	same	
+named_tuple_mismatch	8:38	8:38	E007	same	
+null_types	12:17	12:17	E007	same	
+null_types	14:15	14:15	E007	same	
+null_types	16:14	16:14	E007	same	
+numeric_narrowing	8:17	8:17	E007	same	
+numeric_narrowing	9:18	9:18	E007	same	
+numeric_narrowing	10:18	10:18	E007	same	
+numeric_narrowing	11:18	11:18	E007	same	
+return_stmt	8:33	8:33	E007	same	
+right_assoc_ext	14:11	14:15	E008	not reported: pending	scalac: value *: is not a member of Int., the extension tried and its mismatch after it
+scala3_null-conforms	8:26	8:26	E007	same	
+scala3_null-conforms	10:19	10:19	E007	same	
+scala3_null-conforms	15:17	15:17	E007	same	
+scala3_null-conforms	16:17	16:17	E007	same	
+scala3_union	12:18	12:18	E007	same	
+scala3_union	27:19	27:19	E007	same	
+secondary_constructor_rules	36:9	36:9	E007	same	
+sourcecode	17:17	17:17	E172	same	
+types	45:16	45:16	E007	same	
+types	46:11	46:11	E006	same	
+types	48:22	48:22	E172	same	
+union_joins	18:21	18:21	E007	same	
+union_joins	20:21	20:21	E007	same	
+union_joins	22:21	22:21	E007	same	
+union_joins	24:21	24:21	E007	same	
+union_joins	26:21	26:21	E007	same	
+union_joins	28:21	28:21	E007	same	
+union_joins	30:21	30:21	E007	same	
+union_joins	34:21	34:21	E007	same	
+value_class_rules	19:19	19:19	E007	same	
+wildcard_bounds	17:11	17:22	E007	moved: pending	the same diagnostic at scalac's point
+wildcard_bounds	13:23	13:23	E007	same	
+wildcard_bounds	16:15	16:18	E007	moved: pending	the same diagnostic at scalac's point
+zio_tag	8:38	8:38	E172	same	
+zio_tag	9:43	9:43	E172	same	

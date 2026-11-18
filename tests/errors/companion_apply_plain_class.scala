@@ -3,4 +3,4 @@
 class C()
 object C:
   val c = apply()
-// expect: not found: apply
+// expect: 5:11: error: dummy term capture parameter method apply cannot be used as a value

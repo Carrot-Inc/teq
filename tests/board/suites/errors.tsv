@@ -110,7 +110,7 @@ byname_positions	pass	-
 byname_types	pass	-	
 cacheable_state_names	pass	-	
 cacheable_state_names_build	pass	-	
-callsyntax	pass	-	
+callsyntax	fail	-	missing '28:12: error: type mismatch: found (Int, Int, Int), required (Int, Int)'
 can_equal_default_on_operands	pass	-	
 can_equal_fixed_operands	pass	-	
 canequal_nested_ambiguity	pass	-	
@@ -149,7 +149,7 @@ colon_lambda_end	pass	-
 colon_lambda_single_line	pass	-	
 companion_apply_inserted	pass	-	
 companion_apply_path	pass	-	
-companion_apply_plain_class	pass	-	
+companion_apply_plain_class	fail	-	missing '5:11: error: dummy term capture parameter method apply cannot be used as a value'
 companion_apply_private_alias	pass	-	
 companion_default_later_clause	pass	-	
 companion_proxy_access	pass	-	
@@ -253,7 +253,7 @@ enum_case_infix_search	pass	-
 enum_case_override_nothing	pass	-	
 enum_case_parents	pass	-	
 enum_case_refs	pass	-	
-enum_checks	pass	-	
+enum_checks	fail	-	missing '40:41: error: no given instance of type Show[Boolean] was found for parameter evidence$'
 enum_parent_recovery	fail	-	missing 'extends enum Choice, but extending enums is prohibited.'
 enum_value_case_prefix	pass	-	
 equality	pass	-	
@@ -287,6 +287,7 @@ expanded_function_block_implicit	pass	-
 expanded_function_block_implicit.check	fail	-	< tests/errors/expanded_function_block_implicit.scala:1:20: error: Missing parameter type
 expanded_function_layout	pass	-	
 expanded_function_layout.check	fail	-	< tests/errors/expanded_function_layout.scala:1:10: error: Missing parameter type
+expect_continuation_lines	pass	-	
 expected_last_list_union	pass	-	
 export_case_apply_omitted_default	fail	-	missing '14:18: error: missing argument for parameter x of method apply in object Z: (x: Int, y: Int): Pt'
 export_conflicts	pass	-	
@@ -513,9 +514,9 @@ inline_constant_readers_held	pass	-
 inline_constants	pass	-	
 inline_definition_bounds	pass	-	
 inline_definition_errors	pass	-	
-inline_definition_failed	pass	-	
+inline_definition_failed	fail	-	missing '22:20: error: type mismatch: found Int, required String'
 inline_definition_restrictions	pass	-	
-inline_definition_splice	pass	-	
+inline_definition_splice	fail	-	missing '8:26: error: type mismatch: found Expr[String], required Expr[Int]'
 inline_error_positions	pass	-	
 inline_errors	pass	-	
 inline_errors_expansion	pass	-	
@@ -642,8 +643,8 @@ lambda_param_callee_spread_two_params	pass	-
 lambda_result_not_recovered	pass	-	
 language_import_intersection	pass	-	
 leading_infix_operand_placement	pass	-	
-lexical_extension_failure_beside_scope	pass	-	
-lexical_extension_failure_detail	pass	-	
+lexical_extension_failure_beside_scope	fail	-	missing '17:57: error: value pick is not a member of R.'
+lexical_extension_failure_detail	fail	-	missing '17:57: error: value pick is not a member of R.'
 lexical_extension_given_ambiguity	pass	-	
 lexical_extension_given_heal	pass	-	
 lexical_extension_given_heal.check	fail	-	< tests/errors/lexical_extension_given_heal.scala:19:50: error: Found: R
@@ -880,7 +881,7 @@ refutable_extractor_binding	pass	-
 refutable_patterns	pass	-	
 return_block_then_arguments	pass	-	
 return_stmt	pass	-	
-right_assoc_ext	pass	-	
+right_assoc_ext	fail	-	missing '14:15: error: value *: is not a member of Int.'
 right_assoc_extension_calls	pass	-	
 right_assoc_extension_prefix	pass	-	
 right_assoc_extension_selected	pass	-	
@@ -1127,7 +1128,7 @@ wildcard_bound_other_param	fail	-	exit code 0
 wildcard_bound_overlap	fail	-	missing '17:30: error: type argument ? >: T does not overlap with upper bound U'
 wildcard_bound_param_ends	fail	-	exit code 0
 wildcard_bound_variant_param	fail	-	exit code 0
-wildcard_bounds	pass	-	
+wildcard_bounds	fail	-	missing '17:22: error: type mismatch: found Box[String], required Box[? >: Dog]'
 wildcard_bounds_order	pass	-	
 wildcard_member_upper_bound	pass	-	
 wildcard_param_bound_variance	pass	-	

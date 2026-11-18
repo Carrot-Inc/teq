@@ -1,11 +1,11 @@
-// expect: type mismatch: found Tag | Int, required Nothing
-// expect: type mismatch: found List[Tag | String], required Nothing
-// expect: type mismatch: found List[Field[? >: Int & String <: (Int | String)]], required Nothing
-// expect: type mismatch: found Option[Int], required Nothing
-// expect: type mismatch: found Set[Int | String], required Nothing
-// expect: type mismatch: found Boolean => Tag | Int, required Nothing
-// expect: type mismatch: found Double, required Nothing
-// expect: type mismatch: found Map[Int, String], required Nothing
+// expect: 18:21: error: type mismatch: found Tag | Int, required Nothing
+// expect: 20:21: error: type mismatch: found List[Tag | String], required Nothing
+// expect: 22:21: error: type mismatch: found List[Field[? >: Int & String <: (Int | String)]], required Nothing
+// expect: 24:21: error: type mismatch: found Option[Int], required Nothing
+// expect: 26:21: error: type mismatch: found Set[Int | String], required Nothing
+// expect: 28:21: error: type mismatch: found Boolean => Tag | Int, required Nothing
+// expect: 30:21: error: type mismatch: found Double, required Nothing
+// expect: 34:21: error: type mismatch: found Map[Int, String], required Nothing
 
 final case class Tag(name: String)
 enum Field[T]:

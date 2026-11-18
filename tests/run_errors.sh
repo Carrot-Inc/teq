@@ -15,18 +15,56 @@
 # now out of the list, --add writes the unlisted failures in (for the change that brings the programs), and
 # either writes the suite's row of the board, tests/board/suites/errors.tsv. A listed program's failure is not
 # printed. A program's `.check` is listed apart from the program, as `<name>.check`.
+# A diagnostic of several lines states its further lines by `// expect+ <line>` lines right after its `// expect:`
+# (`// expect+` alone for a blank one), or joined to that line by `⏎` where it stands above the program's code: the
+# output must hold the expectation on a line followed by those lines, whole (tests/support/expects.py, whose own test
+# runs first). `--write <base binary>` is the writing verb: the programs run
+# on the base binary into out/errors-base and on TEQ; where TEQ's diagnostics stand at the base's places and
+# severities, as many at each, in every program, each expectation the one base diagnostic at its place held and TEQ's
+# diagnostic of the same place, severity and ordinal no longer holds is rewritten to that diagnostic, its further
+# lines as `// expect+` lines (a `.check` the base's output was, to TEQ's output); else nothing is written. The
+# programs on the list are left; the expectations without a place, held by several or none, or two on one diagnostic
+# are refused and listed; nothing else runs after it.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
 fail=0
 update=
 add=
-for arg in "$@"; do
-  case $arg in
+write_base=
+while [ $# -gt 0 ]; do
+  case $1 in
     --update) update=--update ;;
     --add) add=--add ;;
+    --write) write_base=$2; shift ;;
   esac
+  shift
 done
+python3 tests/support/expects.py test || fail=1
+# run_program <teq> <records>: the program at $src under <teq>, its exit and output to <records>/<name>.out ($out,
+# $code); a program whose jars are missing is skipped ($JARS_MISSING set).
+run_program() {
+  local teq=$1 dir=$2
+  flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
+  jars_of "$src"
+  [ -n "$JARS_MISSING" ] && return
+  [ -n "$JARS_CP" ] && flags="$flags --classpath $JARS_CP"
+  command=$(grep -h -o '^// command: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// command: ||')
+  [ "$command" = build ] && mkdir -p out && flags="$flags -o out/errors.js"
+  nojdk=()
+  grep -q '^// jdk: none' "$src" "$src"/*.scala 2>/dev/null && nojdk=(env -u JAVA_HOME PATH=/nonexistent)
+  out=$(timeout 20 "${nojdk[@]}" "$teq" compiler ${command:-check} "$src" $flags 2>&1)
+  code=$?
+  printf 'exit %s\n%s\n' "$code" "$out" > "$dir/$(basename "$src" .scala).out"
+}
+if [ -n "$write_base" ]; then
+  rm -rf out/errors-base
+  mkdir -p out/errors-base
+  for src in tests/errors/*.scala tests/errors/*/; do
+    src=${src%/}
+    run_program "$write_base" out/errors-base
+  done
+fi
 records=out/errors-tests
 rm -rf "$records"
 mkdir -p "$records"
@@ -39,32 +77,34 @@ for src in tests/errors/*.scala tests/errors/*/; do
   src=${src%/}
   name=$(basename "$src" .scala)
   why=
-  flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
-  jars_of "$src"
+  run_program "$TEQ" "$records"
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $src: not in the coursier cache:$JARS_MISSING"
     printf 'skip %s\tnot in the coursier cache:%s\n' "$name" "$JARS_MISSING" >> "$records/results.txt"
     continue
   fi
-  [ -n "$JARS_CP" ] && flags="$flags --classpath $JARS_CP"
-  command=$(grep -h -o '^// command: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// command: ||')
-  [ "$command" = build ] && mkdir -p out && flags="$flags -o out/errors.js"
-  nojdk=()
-  grep -q '^// jdk: none' "$src" "$src"/*.scala 2>/dev/null && nojdk=(env -u JAVA_HOME PATH=/nonexistent)
-  out=$(timeout 20 "${nojdk[@]}" "$TEQ" compiler ${command:-check} "$src" $flags 2>&1)
-  code=$?
-  printf 'exit %s\n%s\n' "$code" "$out" > "$records/$(basename "$src" .scala).out"
   if [ $code -ne 1 ]; then
     said "FAIL $src: exit code $code"
     why=${why:-"exit code $code"}
   fi
   while IFS= read -r line; do
     expected=${line#// expect: }
+    # the first line's text alone: further lines joined by ⏎ are held whole below
+    expected=${expected%%⏎*}
     if ! grep -qF -- "$expected" <<< "$out"; then
       said "FAIL $src: missing '$expected'"
       why=${why:-"missing '$expected'"}
     fi
   done < <(grep -h '^// expect: ' "$src" "$src"/*.scala 2>/dev/null)
+  # The continuation lines, whole (tests/support/expects.py), where the program states any.
+  if grep -q -e '^// expect+' -e '^// expect: .*⏎' "$src" "$src"/*.scala "$src"/*.sc 2>/dev/null; then
+    sources=("$src")
+    [ -d "$src" ] && mapfile -t sources < <(ls "$src"/*.scala "$src"/*.sc 2>/dev/null)
+    if ! held=$(python3 tests/support/expects.py continuations "$records/$name.out" "${sources[@]}"); then
+      said "FAIL $src: $held"
+      why=${why:-$held}
+    fi
+  fi
   while IFS= read -r line; do
     absent=${line#// absent: }
     if grep -qF -- "$absent" <<< "$out"; then
@@ -94,6 +134,11 @@ for src in tests/errors/*.scala tests/errors/*/; do
     printf 'pass %s\n' "$name" >> "$records/results.txt"
   fi
 done
+# The writing verb rewrites the expectations and ends the run: the next run judges them.
+if [ -n "$write_base" ]; then
+  python3 tests/support/expects.py write tests/errors out/errors-base "$records" tests/pending/errors.txt --apply
+  exit $?
+fi
 # The programs held to the list of those expected to fail.
 python3 tests/support/pending.py errors "$records/results.txt" $update $add || fail=1
 # The unused-import warning against scalac's on dotty's corpus and the probes (its own script).

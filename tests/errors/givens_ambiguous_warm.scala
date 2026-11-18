@@ -1,8 +1,8 @@
 // expect: ambiguous given instances for TC[Int]: first, second
 // expect: ambiguous given instances for TC[Both]: viaString, viaLong
-// expect: no given instance of type TC[String]
-// expect: no given instance of type Eq[Circle]
-// expect: no given instance of type Eq[Some[Int]]
+// expect: 65:29: error: no given instance of type TC[String]
+// expect: 67:49: error: no given instance of type Eq[Circle]
+// expect: 68:33: error: no given instance of type Eq[Some[Int]]
 // expect: given_Show_T is already defined
 package demo
 

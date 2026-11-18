@@ -1,7 +1,7 @@
-// expect: type mismatch: found "hello", required Int
-// expect: not found: missing
+// expect: 45:16: error: type mismatch: found "hello", required Int
+// expect: 46:11: error: not found: missing
 // expect: value nope is not a member of Int
-// expect: no given instance of type Show[Boolean]
+// expect: 48:22: error: no given instance of type Show[Boolean]
 // expect: reassignment to val x
 // expect: missing argument for parameter b
 // expect: too many arguments

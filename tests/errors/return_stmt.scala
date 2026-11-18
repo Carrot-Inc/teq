@@ -1,6 +1,6 @@
 // expect: return outside method definition
 // expect: method f has a return statement; it needs a result type
-// expect: type mismatch: found "s", required Int
+// expect: 8:33: error: type mismatch: found "s", required Int
 
 object E:
   val x = { return 1 }

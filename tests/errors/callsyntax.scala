@@ -1,10 +1,10 @@
 // expect: value zz is not a member of StringContext
-// expect: type mismatch: found "text", required Int
+// expect: 24:17: error: type mismatch: found "text", required Int
 // expect: too many arguments: expected 2
 // expect: too many arguments: expected 1
-// expect: type mismatch: found (Int, Int, Int), required (Int, Int)
-// expect: type mismatch: found true, required String | (String, Boolean)
-// expect: type mismatch: found (Int, Int), required String | (String, Boolean)
+// expect: 28:12: error: type mismatch: found (Int, Int, Int), required (Int, Int)
+// expect: 30:24: error: type mismatch: found true, required String | (String, Boolean)
+// expect: 29:15: error: Found:    (1 : Int)
 
 extension (sc: StringContext)
   def sum(args: Int*): Int = args.length

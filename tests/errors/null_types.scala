@@ -1,7 +1,7 @@
 // expect: values of types Int and Null cannot be compared with == or !=
-// expect: type mismatch: found 1, required AnyRef
-// expect: type mismatch: found Null, required T
-// expect: type mismatch: found Null, required Int
+// expect: 12:17: error: type mismatch: found 1, required AnyRef
+// expect: 14:15: error: type mismatch: found Null, required T
+// expect: 16:14: error: type mismatch: found Null, required Int
 // expect: values of types Null and Boolean cannot be compared with == or !=
 // teq: --strict-equality
 
