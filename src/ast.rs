@@ -1487,6 +1487,22 @@ impl Ast {
         wrapped && matches!(self.ty(t), TyExpr::Wildcard)
     }
 
+    /// Whether `e` is written as a path: an identifier (one the desugaring wrote too), `this` or `super`, or a
+    /// selection of a path, any of them in parentheses but none alone in braces (a block, `is_braced`).
+    pub fn plain_path(&self, e: ExprId) -> bool {
+        let mut e = e;
+        loop {
+            if self.is_braced(e) {
+                return false;
+            }
+            match self.expr(e) {
+                Expr::Ident(_) | Expr::SymRef(_) | Expr::This | Expr::ThisOf(_) | Expr::QualThis(_) | Expr::Super(_) => return true,
+                Expr::Select(q, _) | Expr::Parens(q) => e = q,
+                _ => return false,
+            }
+        }
+    }
+
     /// Whether `e` is an ascription to a written type (`e: T`, dotty's `Typed`, of the type written),
     /// not an annotation-only one (`e: @A`, `e`'s own type annotated).
     pub fn is_ascription(&self, e: ExprId) -> bool {

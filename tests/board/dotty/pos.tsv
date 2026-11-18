@@ -529,7 +529,7 @@ i11184a.scala	pass	check:pass
 i11184b.scala	pass	check:pass	
 i11184c.scala	pass	check:pass	
 i11184d.scala	pass	check:pass	
-i11185.scala	fail	check:fail	i11185.scala:4:3: type mismatch: found (Int, Int) => Int, required ((Int, Int)) => Any
+i11185.scala	fail	check:fail	i11185.scala:4:3: type mismatch: found (Int, Int) => Int, required ((Int | 1 | Int, Int)) => Any
 i11220.scala	pass	check:pass	
 i11223.scala	pass	check:pass	
 i11225.scala	pass	check:pass	
@@ -1966,7 +1966,7 @@ i739.scala	pass	check:pass
 i7392.scala	pass	check:pass	
 i7401.scala	pass	check:pass	
 i7403.scala	pass	check:pass	
-i7413.scala	fail	check:fail	i7413.scala:20:12: value greeter is not a member of Int
+i7413.scala	pass	check:pass	
 i7414.scala	pass	check:pass	
 i7421.scala	fail	check:fail	i7421.scala:7:9: expected end of statement, found 'else'
 i7424.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)

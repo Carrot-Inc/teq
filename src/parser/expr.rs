@@ -551,6 +551,20 @@ impl<'a> Parser<'a> {
     fn annotation_ascription(&mut self, e: ExprId, annots: &[Annot], start: Span) -> ExprId {
         let kept: Vec<&Annot> = annots.iter().filter(|a| !matches!(a.name, names::UNCHECKED | names::UNCHECKED_VARIANCE | names::NOWARN)).collect();
         if kept.is_empty() {
+            // `e: @uncheckedVariance` or `e: @nowarn` is still the reference's `Annotated` tree of `e`, kept as the
+            // annotation-only ascription it is, of its annotations' classes (none a `RuntimeChecked`, so that it
+            // types as `e`), and no plain path. `e: @unchecked` is `Expr::Unchecked`'s.
+            if !annots.iter().any(|a| a.name == names::UNCHECKED) {
+                let classes: Option<Vec<TyExprId>> = annots.iter().map(|a| self.ast.annot_new(a).map(|(path, _)| path)).collect();
+                if let Some(classes) = classes {
+                    let span = start.to(self.prev_span());
+                    let mut own = self.ast.add_ty(TyExpr::Wildcard, span);
+                    for class in classes {
+                        own = self.ast.add_ty(TyExpr::Annotated(own, Some(class)), span);
+                    }
+                    return self.ast.add_expr(Expr::Typed(e, own), span);
+                }
+            }
             return e;
         }
         let span = start.to(self.prev_span());

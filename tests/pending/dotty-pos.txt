@@ -517,7 +517,6 @@ i7056.scala	i7056.scala:19:9: value idnt1 is not a member of Any
 i7219b.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i7219c.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i7296.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-i7413.scala	i7413.scala:20:12: value greeter is not a member of Int
 i7421.scala	i7421.scala:7:9: expected end of statement, found 'else'
 i7424.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i7424b.scala	option: -Wsafe-init with -Werror (teq has no flag for it)

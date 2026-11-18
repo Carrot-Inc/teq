@@ -1326,6 +1326,10 @@ impl<'a> Worker<'a> {
         // The function tree `Desugar.binop` makes, `Select(l, op)`, ends with the operator.
         let mut all = vec![ArgList { args: self.infix_args(r), using: false, span, fun: FunEnd::operand_at(op_end) }];
         all.extend(lists);
+        // A literal operand keeps its own type for a view or an extension where the lookup's is its class.
+        if recv_ty != solved && self.is_literal_type(solved) {
+            return Some(self.with_own_receiver(tl, solved, |this| this.apply_member(tl, recv_ty, op, None, all, span, expected)));
+        }
         Some(self.apply_member(tl, recv_ty, op, None, all, span, expected))
     }
 
@@ -1377,6 +1381,12 @@ impl<'a> Worker<'a> {
         Some((self.wrap_hoisted(mark, call), self.b.t_unit))
     }
 
+    /// Whether `t` is a literal's type, which `dealias` widens to its class for a lookup.
+    fn is_literal_type(&mut self, t: TypeId) -> bool {
+        let t = self.deref(t);
+        matches!(self.types.get(t), Type::Lit(_))
+    }
+
     /// `l op r` on the typed `l`: a builtin operator of its type, or the member's application.
     #[allow(clippy::too_many_arguments)]
     fn binop_on_typed(&mut self, tl: TExprId, lty: TypeId, op: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
@@ -1394,8 +1404,22 @@ impl<'a> Worker<'a> {
         // and a type parameter bounded by a primitive or `String` its bound's.
         let prim_lty = self.operator_type(widened);
         let prim_lty = self.canon(prim_lty);
-        let (te, ty) = self.binop_or_member(op, tl, prim_lty, lty, r, FunEnd::operand_at(op_end), span, expected);
+        // A literal operand keeps its own type for a view or an extension where the lookup's is its class (an
+        // opaque type's own scope reads it as its underlying type, as the lookup does).
+        let (te, ty) = if lty != solved && self.is_literal_type(solved) {
+            self.binop_owning(op, tl, solved, prim_lty, lty, r, op_end, span, expected)
+        } else {
+            self.binop_or_member(op, tl, prim_lty, lty, r, FunEnd::operand_at(op_end), span, expected)
+        };
         (te, self.const_folded(te, ty, op, tl, own_ty))
+    }
+
+    /// `binop_or_member` of a literal operand `tl` of type `own`, kept as its own type (`with_own_receiver`): out of
+    /// `binop_on_typed`'s line.
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn binop_owning(&mut self, op: Name, tl: TExprId, own: TypeId, prim_lty: TypeId, lty: TypeId, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
+        self.with_own_receiver(tl, own, |this| this.binop_or_member(op, tl, prim_lty, lty, r, FunEnd::operand_at(op_end), span, expected))
     }
 
     /// `l base= r` on the left side typed by itself as `tl`, a `var`: `l = l base r`, a field's prefix

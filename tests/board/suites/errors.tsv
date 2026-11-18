@@ -860,6 +860,7 @@ proxy_private_apply	pass	-
 pure_intersection_double_definition	fail	-	missing 'Conflicting definitions:'
 qualified_this_not_enclosing	pass	-	
 quote_template_body_at_brace_width	fail	-	missing '13:7: error:'
+receiver_own_type_refused	pass	-	
 recovered_discard_warnings	pass	-	
 recovered_discard_warnings.check	pass	-	
 refinement_converted_receiver_not_narrowed	pass	-	

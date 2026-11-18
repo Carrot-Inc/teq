@@ -492,6 +492,14 @@ pub struct MethodCall {
     pub refined: Option<Arc<MethodSig>>,
 }
 
+/// How a qualifier is written where it is a plain receiver (`Worker::plain_written`): a literal token, or a path (`true`
+/// for one whose typed node is a term reference).
+#[derive(Clone, Copy)]
+enum Plain {
+    Literal,
+    Path(bool),
+}
+
 impl<'a> Worker<'a> {
     #[inline]
     pub fn type_application(&mut self, e: ExprId, expected: Option<TypeId>) -> (TExprId, TypeId) {
@@ -646,7 +654,57 @@ impl<'a> Worker<'a> {
         self.selections.push(selection);
         let typed = self.type_expr(q, None);
         self.selections.pop();
+        // A view's or an extension's variable meets the qualifier's own type only where it is written as a plain path
+        // or a literal token (`plain_receivers`), decided on the tree as written and typed. The decision is this
+        // selection's: a node teq hands back for an outer tree too (a cast erased, an ascription) was decided for the
+        // inner one. Only a type a literal, an alias, a union or a path heads can have an own type the lookup widens
+        // (read through a variable or an annotation out of the line).
+        if matches!(self.types.get(typed.1), Type::Lit(_) | Type::Alias(..) | Type::Union(..) | Type::Term(_) | Type::Select(..) | Type::Var(_) | Type::Annotated(_)) {
+            self.decide_plain_receiver(q, typed.0, typed.1);
+        } else if typed.0 <= self.plain_max {
+            self.forget_plain_receiver(typed.0);
+        }
         typed
+    }
+
+    /// `te` is no plain receiver: its record or the literal kept dropped (a node handed back for an outer tree).
+    #[inline(never)]
+    fn forget_plain_receiver(&mut self, te: TExprId) {
+        if !self.plain_receivers.is_empty() {
+            self.plain_receivers.remove(&te);
+        }
+        if self.literal_receiver == Some(te) {
+            self.literal_receiver = None;
+        }
+    }
+
+    /// `type_selected`'s decision for a qualifier `q` typed as `te` of type `ty`: a literal token kept, a path recorded.
+    #[inline(never)]
+    fn decide_plain_receiver(&mut self, q: ExprId, te: TExprId, ty: TypeId) {
+        let head = self.deref(ty);
+        let plain = if matches!(self.types.get(head), Type::Lit(_) | Type::Alias(..) | Type::Union(..) | Type::Term(_) | Type::Select(..)) {
+            self.plain_written(q, te)
+        } else {
+            None
+        };
+        match plain {
+            Some(Plain::Literal) => {
+                if te <= self.plain_max && !self.plain_receivers.is_empty() {
+                    self.plain_receivers.remove(&te);
+                }
+                self.literal_receiver = Some(te);
+                self.plain_max = self.plain_max.max(te);
+            }
+            Some(Plain::Path(reference)) => {
+                self.plain_receivers.insert(te, reference);
+                if self.literal_receiver == Some(te) {
+                    self.literal_receiver = None;
+                }
+                self.plain_max = self.plain_max.max(te);
+            }
+            None if te <= self.plain_max => self.forget_plain_receiver(te),
+            None => {}
+        }
     }
 
     /// The span an overloaded reference resolved by a selection on the qualifier `q` has: the
@@ -5383,9 +5441,10 @@ impl<'a> Worker<'a> {
             let leading: Vec<SymId> = sig.clauses[..idx].iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
             let pty = self.approx_paths(pty, &leading, &mut Vec::new());
             let mark = self.snapshot();
-            // The receiver is the extension's first argument, a path's type compared as the
-            // path's (`extMethodApply`'s `receiver`).
-            self.alias_bound_as_path = self.is_stable_path(recv);
+            // The receiver is the extension's first argument (`extMethodApply`'s `receiver`): a plain path's or a
+            // literal's own type where the member lookup widened it, a path's compared as the path's.
+            let (recv_ty, as_path) = self.receiver_meets(recv, recv_ty);
+            self.alias_bound_as_path = as_path;
             if !self.is_sub(recv_ty, pty) {
                 self.rollback(&mark);
                 if trial {
@@ -8498,6 +8557,201 @@ impl<'a> Worker<'a> {
         out
     }
 
+    /// Runs `f`, the typing of a selection on `recv` whose member is looked up in a type widened from `own`, with
+    /// `own` as the receiver's own type: the type the reference gives the qualifier tree, which a view or an
+    /// extension method takes as its argument (`receiver_own_type`). An enclosing selection of the same receiver
+    /// that set one keeps it: the type before the first widening.
+    /// Only a receiver written as a plain path or a literal token has one (`plain_receivers`).
+    pub(super) fn with_own_receiver<R>(&mut self, recv: TExprId, own: TypeId, f: impl FnOnce(&mut Self) -> R) -> R {
+        if self.own_receiver.is_some_and(|(r, _)| r == recv) || (self.literal_receiver != Some(recv) && !self.plain_receivers.contains_key(&recv)) {
+            return f(self);
+        }
+        let saved = self.own_receiver.replace((recv, own));
+        let r = f(self);
+        self.own_receiver = saved;
+        r
+    }
+
+    /// The type a view or an extension method applied to the receiver `recv` takes it as: its own type where the
+    /// member lookup widened it (`with_own_receiver`), `lookup` otherwise.
+    ///
+    /// The own type is given where it tells the variable more than the lookup's: a literal's or a path's type, a
+    /// union, an alias of one of them. An alias of anything else (`UIO[Unit]`, an opaque type where it is
+    /// transparent) is the same type as its expansion, which the lookup's is: the variable meets the expansion, whose
+    /// partial unification fixes a constructor variable at the receiver (`F := ZIO[Any, Nothing, *]`), as the
+    /// reference's minimizing at the member's using clause takes the receiver's bound (`instantiateSelected`)
+    /// whatever the member's expected result bounds it by.
+    pub(super) fn receiver_own_type(&mut self, recv: TExprId, lookup: TypeId) -> TypeId {
+        let own = match self.own_receiver {
+            Some((r, own)) if r == recv => own,
+            _ => return lookup,
+        };
+        if self.own_type_tells(own) {
+            own
+        } else {
+            lookup
+        }
+    }
+
+    /// Whether `own`, a receiver's own type, is a literal's type, a union, or an alias of one of them, a path's read as
+    /// the type it widens to (`widenSingletons`): a path whose declared type is an alias of a class's application
+    /// tells no more than the expansion.
+    fn own_type_tells(&mut self, own: TypeId) -> bool {
+        let mut t = self.deref(own);
+        loop {
+            match self.types.get(t) {
+                Type::Lit(_) | Type::Union(..) => return true,
+                Type::Term(_) | Type::Select(..) => {
+                    let u = self.path_underlying(t);
+                    if u == t {
+                        return false;
+                    }
+                    t = self.deref(u);
+                }
+                Type::Alias(..) => {
+                    let u = self.deref_alias(t);
+                    if u == t {
+                        return false;
+                    }
+                    t = self.deref(u);
+                }
+                _ => return false,
+            }
+        }
+    }
+
+    /// `apply_member` (`again`) or `apply_member_of_class` of `recv` at the lookup's type `lookup`, its own type `own`
+    /// kept for a view or an extension (`with_own_receiver`): out of the callers' line, which most selections pass.
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn apply_member_owning(&mut self, recv: TExprId, own: TypeId, lookup: TypeId, name: Name, targs: Option<ListRef>, lists: Vec<ArgList>, span: Span, expected: Option<TypeId>, again: bool) -> (TExprId, TypeId) {
+        self.with_own_receiver(recv, own, |this| {
+            if again {
+                this.apply_member(recv, lookup, name, targs, lists, span, expected)
+            } else {
+                this.apply_member_of_class(recv, lookup, name, targs, lists, span, expected)
+            }
+        })
+    }
+
+    /// The type a view's or an extension's variable meets the receiver `recv`, looked up as `lookup`, as, with
+    /// `alias_bound_as_path` for it (`is_sub`'s variable on the right keeps an alias at the head or reads through it).
+    /// A receiver written as a plain path or a literal token (`plain_receivers`) gives its own type where it tells the
+    /// variable more than the lookup's (`receiver_own_type`): a term reference whose type is its path meets it as the
+    /// declared type the `TermRef` widens to, its alias kept (`widenSingletons`), and one whose type an alias of a
+    /// union or a literal heads as that alias. Any other receiver, and these where their own type tells nothing more,
+    /// is met as the lookup's type, a stable path's compared as the path's.
+    ///
+    /// Inline: a receiver with no own type whose lookup's type no alias or path heads, or met where no qualifier was
+    /// recorded, is met as master meets it, without asking the record (each view a search tries asks).
+    #[inline]
+    pub(super) fn receiver_meets(&mut self, recv: TExprId, lookup: TypeId) -> (TypeId, bool) {
+        // An own type is only ever set for a recorded receiver or the literal kept.
+        if (self.plain_receivers.is_empty() && self.literal_receiver != Some(recv))
+            || (!matches!(self.own_receiver, Some((r, _)) if r == recv)
+                && !matches!(self.types.get(lookup), Type::Alias(..) | Type::Union(_, _, UnionKind::Named) | Type::Term(_) | Type::Select(..) | Type::Var(_) | Type::Annotated(_)))
+        {
+            return (lookup, self.is_stable_path(recv));
+        }
+        self.receiver_meets_recorded(recv, lookup)
+    }
+
+    /// `receiver_meets` where the record or the own type is asked.
+    #[inline(never)]
+    fn receiver_meets_recorded(&mut self, recv: TExprId, lookup: TypeId) -> (TypeId, bool) {
+        let reference = match self.plain_receivers.get(&recv) {
+            Some(&reference) => reference,
+            None if self.literal_receiver == Some(recv) => false,
+            None => return (lookup, self.is_stable_path(recv)),
+        };
+        let ty = self.receiver_own_type(recv, lookup);
+        let head = self.deref(ty);
+        if matches!(self.types.get(head), Type::Term(_) | Type::Select(..)) {
+            if reference {
+                let declared = self.path_underlying(head);
+                if self.own_type_tells(declared) {
+                    return (declared, true);
+                }
+            }
+        } else if ty != lookup || (reference && self.alias_headed(ty) && self.own_type_tells(ty)) {
+            let as_path = reference || !self.alias_headed(ty);
+            return (ty, as_path);
+        }
+        (lookup, self.is_stable_path(recv))
+    }
+
+    /// Whether an alias stands at the head of `ty`, which a variable meeting it keeps or reads through: a term's path
+    /// read through its declared type.
+    fn alias_headed(&mut self, ty: TypeId) -> bool {
+        let mut head = self.deref(ty);
+        if matches!(self.types.get(head), Type::Term(_) | Type::Select(..)) {
+            let declared = self.path_underlying(head);
+            head = self.deref(declared);
+        }
+        matches!(self.types.get(head), Type::Alias(..) | Type::Union(_, _, UnionKind::Named))
+    }
+
+    /// Whether the written qualifier `q`, typed as `te`, is a plain path or a literal token, bare or in parentheses:
+    /// `Plain::Path(true)` for a path whose typed node is a term reference (`written_ref_symbol`). A path is an identifier,
+    /// `this` or `super`, or a selection of a path; a literal token is one the reference's `literal()` reads (a
+    /// negative number's sign is part of it). Nothing else: no ascription, block (one expression alone in braces too,
+    /// which teq's parser keeps no node of: `is_braced`), `if`, `match`, application, type application or
+    /// interpolated string.
+    fn plain_written(&mut self, q: ExprId, te: TExprId) -> Option<Plain> {
+        let ast = self.cur_ast();
+        if ast.is_braced(q) {
+            return None;
+        }
+        match ast.expr(q) {
+            Expr::Parens(inner) => self.plain_written(inner, te),
+            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::NullLit => Some(Plain::Literal),
+            _ if ast.plain_path(q) => Some(Plain::Path(self.written_ref_symbol(q, te).is_some())),
+            _ => None,
+        }
+    }
+
+    /// The term whose `TermRef` the reference gives the written path `e`, typed as `te`, as its type, read on the tree
+    /// as written and typed, before any of teq's rewriting: an identifier or a selection naming a val, a var, a lazy
+    /// val, a parameter (by name too), an object or a parameterless def that takes no type arguments, where the typed
+    /// node is that member (a named tuple's field is an application); inside parentheses.
+    fn written_ref_symbol(&mut self, e: ExprId, te: TExprId) -> Option<SymId> {
+        let ast = self.cur_ast();
+        match ast.expr(e) {
+            Expr::Parens(inner) => self.written_ref_symbol(inner, te),
+            Expr::Ident(name) | Expr::Select(_, name) => {
+                let s = self.typed_reference(te)?;
+                (self.syms.sym(s).name == name).then_some(s)
+            }
+            // A reference the desugaring wrote is the symbol it names.
+            Expr::SymRef(written) => self.typed_reference(te).filter(|&s| s == written),
+            _ => None,
+        }
+    }
+
+    /// The term a typed reference node reads: a val, a var, a lazy val, a parameter (a by-name one's read too), an object
+    /// or a parameterless def that takes no type arguments.
+    fn typed_reference(&mut self, te: TExprId) -> Option<SymId> {
+        let s = match self.prog.expr(te) {
+            TExpr::Module(c) => return self.syms.class(c).module_sym,
+            TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => s,
+            TExpr::CallStatic(s, args) | TExpr::CallMethod(_, s, args) if args.len == 0 => s,
+            TExpr::CallClosure(f, args) if args.len == 0 => match self.prog.expr(f) {
+                TExpr::Local(s) if self.syms.sym(s).by_name => s,
+                _ => return None,
+            },
+            _ => return None,
+        };
+        let ok = match self.syms.sym(s).kind {
+            SymKind::Val | SymKind::Var | SymKind::Param | SymKind::Object(_) => true,
+            SymKind::Def => {
+                let sig = self.sig_arc(s);
+                sig.clauses.is_empty() && sig.tparams.is_empty()
+            }
+            _ => false,
+        };
+        ok.then_some(s)
+    }
+
     pub fn apply_member(
         &mut self,
         recv: TExprId,
@@ -8510,11 +8764,22 @@ impl<'a> Worker<'a> {
     ) -> (TExprId, TypeId) {
         // A member of a union is its join's (dotty's `findMember` of an `OrType`, `goOr`): a
         // union of one primitive class's constants (`1 | 2`, a join of branches) has the class's.
-        let recv_ty = match self.types.get(recv_ty) {
-            Type::Union(..) => self.primitive_side(recv_ty).unwrap_or(recv_ty),
-            _ => recv_ty,
-        };
+        if let Type::Union(..) = self.types.get(recv_ty) {
+            return self.apply_member_of_union(recv, recv_ty, name, targs, lists, span, expected);
+        }
         self.apply_member_of_class(recv, recv_ty, name, targs, lists, span, expected)
+    }
+
+    /// `apply_member` of a receiver of a union type: the member looked up in the join, the union kept as the
+    /// receiver's own type where they differ.
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn apply_member_of_union(&mut self, recv: TExprId, own: TypeId, name: Name, targs: Option<ListRef>, lists: Vec<ArgList>, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
+        let joined = self.primitive_side(own).unwrap_or(own);
+        if joined != own {
+            return self.apply_member_owning(recv, own, joined, name, targs, lists, span, expected, false);
+        }
+        self.apply_member_of_class(recv, own, name, targs, lists, span, expected)
     }
 
     /// The member `sym` of the receiver's class (seen as `owner_ty`) as a refinement of the
@@ -8782,7 +9047,7 @@ impl<'a> Worker<'a> {
                 Type::Class(c, _) if Some(c) == self.b.cons_tuple => self.lower_cast(recv, recv_ty, underlying, span).0,
                 _ => recv,
             };
-            return self.apply_member(recv, underlying, name, targs, lists, span, expected);
+            return self.apply_member_owning(recv, recv_ty, underlying, name, targs, lists, span, expected, true);
         }
         if let Some(r) = self.named_tuple_member(recv, recv_ty, name, targs, &lists, span, expected) {
             return r;
@@ -9207,7 +9472,7 @@ impl<'a> Worker<'a> {
                 lists = Some(l);
             }
             self.no_receiver_conversion = converted;
-            return self.apply_member(recv, underlying, name, targs, lists.unwrap_or_default(), span, expected);
+            return self.apply_member_owning(recv, recv_ty, underlying, name, targs, lists.unwrap_or_default(), span, expected, true);
         }
         if dynamic {
             return self.apply_dynamic_member(recv, name, targs, lists.unwrap_or_default(), span, expected);

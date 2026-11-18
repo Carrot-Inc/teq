@@ -697,7 +697,7 @@ i17738-toplevel-infix.scala	fail	-	marks: 4 errors where 5 are marked
 i1779.scala	fail	-	marks: 1 errors where 2 are marked
 i1786.scala	fail	-	check: diagnostic 1 of 4: scalac's is error i1786.scala:8:26 package scala.meta is not a value; teq's is error i1786.scala:8:26 meta is a package, not a value
 i1793.scala	fail	-	marks: 2 errors where 1 are marked: i1793.scala:3:46: type argument T does not conform to upper bound AnyRef
-i17944.scala	fail	-	marks: 4 errors where 1 are marked: i17944.scala:39:14: extension method ->> is not applicable to String
+i17944.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17944.scala:40:88 No singleton value available for Tuple.Elem[test.FindField[(("s" : String) ->> String, ("i" : String) ->> Int), ("i" : String)], (1 : Int)]; eligible singleton types for `ValueO
 i17981.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17981.scala:1:7 Repeated modifier final; teq's is error i17981.scala:1:7 repeated modifier final
 i1802.scala	fail	-	marks: 1 errors where 2 are marked
 i18020.scala	fail	-	marks: 9 errors where 14 are marked

@@ -781,9 +781,10 @@ impl<'a> Worker<'a> {
         let singleton_from = matches!(self.types.get(from_head), Type::Term(_) | Type::Select(..));
         let widened = self.snapshot();
         let mut recv = recv;
-        // The receiver is the view's argument, a path's type compared as the path's
-        // (`inferView`'s `argument.tpe`).
-        self.alias_bound_as_path = self.is_stable_path(recv);
+        // The receiver is the view's argument (`inferView`'s `argument.tpe`): a plain path's or a literal's own type
+        // where the member lookup widened it, a path's compared as the path's.
+        let (recv_ty, as_path) = self.receiver_meets(recv, recv_ty);
+        self.alias_bound_as_path = as_path;
         if !self.is_sub(recv_ty, from) {
             self.rollback(&widened);
             // The receiver is the conversion's argument, and a receiver of a numeric constant type

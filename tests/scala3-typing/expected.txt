@@ -712,7 +712,7 @@ neg/i17738-toplevel-infix.scala	subset	4/5 lines
 neg/i1779.scala	std	_
 neg/i1786.scala	same	
 neg/i1793.scala	superset	+1 lines: cannot resolve import
-neg/i17944.scala	superset	+2 lines: extension method ->> is not applicable to String
+neg/i17944.scala	same	
 neg/i17981.scala	same	
 neg/i1802.scala	subset	1/2 lines
 neg/i18020.scala	syntax	expected {}, found {}
@@ -4056,7 +4056,7 @@ pos/i739.scala	accepts
 pos/i7392.scala	accepts	
 pos/i7401.scala	accepts	
 pos/i7403.scala	accepts	
-pos/i7413.scala	rejects	value {} is not a member of {}
+pos/i7413.scala	accepts	
 pos/i7414.scala	accepts	
 pos/i7421.scala	syntax	expected end of statement, found {}
 pos/i7424.scala	rejects	type mismatch

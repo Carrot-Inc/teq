@@ -1660,6 +1660,21 @@ pub struct Worker<'a> {
     /// `TypeAlias` case). Consumed at `is_sub`'s entry, so that the arguments under the head are
     /// compared as types.
     pub alias_bound_as_path: bool,
+    /// The receiver whose own type the member lookup widened (a union joined, a literal or a singleton read as its
+    /// class), with that own type, while its selection is typed: a view or an extension method is applied to the
+    /// receiver as the reference types the qualifier tree (`tryInsertImplicitOnQualifier`, `extMethodApply`), its
+    /// variable instantiated from the own type (`widenInferred`).
+    pub own_receiver: Option<(TExprId, TypeId)>,
+    /// The typed qualifiers written as a plain path or a literal token (`Worker::type_selected`), the only receivers
+    /// whose own type a view's or an extension's variable meets (`receiver_meets`); `true` for a path whose typed node
+    /// is a term reference. Read while the selection is typed, by the worker that typed it.
+    pub plain_receivers: FxMap<TExprId, bool>,
+    /// The typed node of the last qualifier written as a literal token (`Worker::type_selected`): a literal's node is
+    /// no other qualifier's, so the one being selected on is kept, not recorded.
+    pub literal_receiver: Option<TExprId>,
+    /// An upper bound of `plain_receivers`' keys and `literal_receiver`: a node above it is neither, and a selection
+    /// on it asks no removal.
+    pub plain_max: TExprId,
     /// How many signature, alias or class completions are under way: a definition completes
     /// in its own scope, whatever inline expansion asked for it.
     pub completing: u32,
@@ -3350,6 +3365,10 @@ impl<'a> Worker<'a> {
             join_wild: false,
             necessary_either: false,
             alias_bound_as_path: false,
+            own_receiver: None,
+            plain_receivers: FxMap::default(),
+            literal_receiver: None,
+            plain_max: TExprId(0),
             soft_lub: false,
             completing: 0,
             pending_library_names: Vec::new(),
@@ -3833,6 +3852,10 @@ impl<'a> Worker<'a> {
             soft_lub: Default::default(),
             necessary_either: Default::default(),
             alias_bound_as_path: false,
+            own_receiver: None,
+            plain_receivers: FxMap::default(),
+            literal_receiver: None,
+            plain_max: TExprId(0),
             completing: Default::default(),
             pending_library_names: Default::default(),
             class_base_memo: FxMap::default(),

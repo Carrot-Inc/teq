@@ -832,6 +832,17 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   body itself and opens no block, as in scalac: a second statement on the line after it is not part of the branch,
   and an `else` below it is refused (`expected end of statement, found 'else'`). teq read both lines as the
   branch's block.
+- A view or an extension method applied to a receiver written as a path or a literal (bare or in parentheses) takes
+  the receiver's own type, as scalac does, where the member lookup widened it: a literal, a singleton or a union of
+  constants keeps its own type for the method's type variable, which is widened only where nothing bounds it; and a
+  `val`, a `var`, a `lazy val`, a parameterless `def` or a by-name parameter whose type is an alias of a union keeps
+  the alias. A receiver written any other way (an ascription, an annotation, a block, an `if`, an application) is
+  taken as before. So
+  `val o: Option[Stage] = "final".some` (an `implicit def` view's `.some`, `type Stage = "draft" | "final"`),
+  `val p: (Stage, Int) = "final" -> 1` and `stageVar.some` for an `Option[Stage]` compile, which teq refused
+  ("found Option[String], required Option[Stage]"); an extension whose given its type variable chooses finds
+  `Label[Stage]` for a receiver of `Stage` where it found `Label[String]`; and one whose context bound the
+  alias does not meet is refused, as scalac refuses it.
 
 ## 0.1.10 (2026-11-13)
 
