@@ -1,6 +1,6 @@
-// expect: 10:23: error: type mismatch: found Show, required Int
-// expect: 13:3: error: type mismatch: found Show, required Int
-// expect: 16:3: error: type mismatch: found L, required String
+// expect: 10:23: error: Found:    Show⏎Required: Int
+// expect: 13:3: error: Found:    Show⏎Required: Int
+// expect: 16:3: error: Found:    L⏎Required: String
 // expect: 3 errors found
 // The classes the definition check keeps with the record take none of the output's names: a
 // message of the check that shows such a class shows its parents or its own name, as scalac's

@@ -1,5 +1,5 @@
-// expect: 45:16: error: type mismatch: found "hello", required Int
-// expect: 46:11: error: not found: missing
+// expect: 45:16: error: Found:    "hello"⏎Required: Int
+// expect: 46:11: error: Not found: missing
 // expect: value nope is not a member of Int
 // expect: 48:22: error: no given instance of type Show[Boolean]
 // expect: reassignment to val x

@@ -7,7 +7,10 @@ val x: S[-1] = 0
 val y: S[-2147483648] = -2147483647
 val z: S[2147483647] = -2147483648
 val ok: S[1] = 2
-// expect: successor_natural.scala:6:16: error: type mismatch: found 0, required S[-1]
-// expect: successor_natural.scala:7:25: error: type mismatch: found -2147483647, required S[-2147483648]
-// expect: successor_natural.scala:8:24: error: type mismatch: found -2147483648, required S[2147483647]
+// expect: successor_natural.scala:6:16: error: Found:    0
+// expect+ Required: S[-1]
+// expect: successor_natural.scala:7:25: error: Found:    -2147483647
+// expect+ Required: S[-2147483648]
+// expect: successor_natural.scala:8:24: error: Found:    -2147483648
+// expect+ Required: S[2147483647]
 // expect: 3 errors found

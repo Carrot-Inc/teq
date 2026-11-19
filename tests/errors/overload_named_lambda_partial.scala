@@ -1,6 +1,6 @@
-// expect: overload_named_lambda_partial.scala:14:21: error: type mismatch: found ((Int, Int)) => Int, required PartialFunction[(Int, Int),
-// expect: overload_named_lambda_partial.scala:15:21: error: type mismatch: found ((Int, Int)) => (Int, Int), required PartialFunction[(Int, Int),
-// expect: overload_named_lambda_partial.scala:16:22: error: type mismatch: found Int => Int, required PartialFunction[Int, Int]
+// expect: overload_named_lambda_partial.scala:14:21: error: Found:    ((Int, Int)) => Int⏎Required: PartialFunction[(Int, Int), B]
+// expect: overload_named_lambda_partial.scala:15:21: error: Found:    ((Int, Int)) => (Int, Int)⏎Required: PartialFunction[(Int, Int), (K2, V2)]
+// expect: overload_named_lambda_partial.scala:16:22: error: Found:    Int => Int⏎Required: PartialFunction[Int, Int]
 // A function literal named to an overloaded method is typed ahead as a function where its
 // alternatives agree on its parameter types (dotty's `Applications.pretypeArgs`), and the
 // `NamedArg` kept around it is not converted to a partial function as a bare closure is

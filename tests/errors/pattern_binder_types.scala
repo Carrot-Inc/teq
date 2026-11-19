@@ -1,13 +1,13 @@
-// expect: 30:63: error: type mismatch: found B & A, required String
-// expect: 31:68: error: type mismatch: found B & C & A, required String
-// expect: 32:67: error: type mismatch: found B & A | B & C, required String
-// expect: 33:73: error: type mismatch: found B2 | B & C, required String
-// expect: 34:77: error: type mismatch: found B & A | B2, required String
-// expect: 36:76: error: type mismatch: found Box[T$1], required Box[Any]
-// expect: 37:75: error: type mismatch: found T$1, required String
-// expect: 38:78: error: type mismatch: found Box[T$1], required Box[AnyVal]
+// expect: 30:63: error: Found:    B & A⏎Required: String
+// expect: 31:68: error: Found:    B & C & A⏎Required: String
+// expect: 32:67: error: Found:    B & A | B & C⏎Required: String
+// expect: 33:73: error: Found:    B2 | B & C⏎Required: String
+// expect: 34:77: error: Found:    B & A | B2⏎Required: String
+// expect: 36:76: error: Found:    Box[T$1]⏎Required: Box[Any]
+// expect: 37:75: error: Found:    T$1⏎Required: String
+// expect: 38:78: error: Found:    Box[T$1]⏎Required: Box[AnyVal]
 // expect: 45:80: error: value foo is not a member of
-// expect: 46:67: error: type mismatch: found B, required Int
+// expect: 46:67: error: Found:    B⏎Required: Int
 // absent: 35:53: error
 // absent: 39:73: error
 // absent: 40:55: error
@@ -46,5 +46,6 @@ def serial(x: Integer | S): String = x match { case b: java.io.Serializable => b
 def absorbed(x: A | B): Int = x match { case b: B => val s: Int = b; 0; case _ => 1 }
 def listBinder(x: Any): Any = x match { case l: List[t] => val a: t = 1; a; case _ => 0 }
 def listHead(x: Any): Any = x match { case l: List[t] => val a: t = l.head; a; case _ => 0 }
-// expect: 47:71: error: type mismatch: found 1, required t
+// expect: 47:71: error: Found:    1
+// expect+ Required: t
 // absent: 48:

@@ -1024,7 +1024,7 @@ impl<'a> Worker<'a> {
             self.complete_class(expr);
         }
         if code_ty != ERROR && !self.is_sub(code_ty, required) {
-            let msg = format!("type mismatch: found {}, required {}", self.show(code_ty), self.show(required));
+            let msg = super::expr::mismatch_message(&self.show(code_ty), &self.show(required), &Default::default());
             self.error(span, msg);
         }
         let ty = match ret {
@@ -1805,7 +1805,7 @@ impl<'a> Worker<'a> {
         if !fits {
             let any_expr = self.expr_type(ANY);
             if !self.is_sub(te_ty, any_expr) {
-                let msg = format!("type mismatch: found {}, required {}", self.show(te_ty), self.show(expr_ty));
+                let msg = super::expr::mismatch_message(&self.show(te_ty), &self.show(expr_ty), &Default::default());
                 self.error(span, msg);
             }
         }

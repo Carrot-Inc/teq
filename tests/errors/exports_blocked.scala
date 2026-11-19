@@ -1,4 +1,4 @@
-// expect: type MissingTrait not found
+// expect: Not found: type MissingTrait
 // expect: cannot resolve export: MissingObj not found
 // expect: cannot resolve export: Other not found
 // expect: no eligible member nope at Inner

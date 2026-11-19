@@ -1,5 +1,5 @@
-// expect: 19:16: error: type mismatch: found In[Nothing], required Int
-// expect: 21:16: error: type mismatch: found Box[Nothing], required Int
+// expect: 19:16: error: Found:    In[Nothing]⏎Required: Int
+// expect: 21:16: error: Found:    Box[Nothing]⏎Required: Int
 // expect: 2 errors found
 // A closure's result whose escaping parameter's member sits in an invariant argument under a
 // contravariant one: the avoidance's range is `Nothing & Box[?]` at the negative variance

@@ -7,4 +7,5 @@ type RI[R, A] = Z[R, Throwable, A]
 def g[M[_], A0, A1](a: M[A0], b: M[A1]): M[A0] = a
 def t2[R](u: U2[Int], r: RI[R, Int]) = g(u, r)
 val z: Z[Any, Throwable, Int] = t2[Any](new Z(1), new Z(2))
-// expect: 9:33: error: type mismatch: found Z[Any, String | Throwable, Int], required Z[Any, Throwable, Int]
+// expect: 9:33: error: Found:    Z[Any, String | Throwable, Int]
+// expect+ Required: Z[Any, Throwable, Int]

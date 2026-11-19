@@ -9,7 +9,7 @@
 // expect: (b: Boolean): G
 // expect: (x: Int): G
 // expect: match arguments (1.5)
-// expect: 36:9: error: type mismatch: found 1, required String
+// expect: 36:9: error: Found:    1⏎Required: String
 // expect: Value classes may not define a secondary constructor
 class B(x: Int):
   def this(s: String) = this(this.toString.length)

@@ -8,7 +8,10 @@ object O:
   def ap[T](xs: T*): Array[T] = ???
   def ap(x: Int, xs: Int*): Array[Int] = ???
 val v: Array[Int] = O.ap(1, "s")
-// expect: overload_arg_position.scala:5:17: error: type mismatch: found "s", required Int
-// expect: overload_arg_position.scala:6:27: error: type mismatch: found "s", required Int
-// expect: overload_arg_position.scala:10:29: error: type mismatch: found "s", required Int
+// expect: overload_arg_position.scala:5:17: error: Found:    "s"
+// expect+ Required: Int
+// expect: overload_arg_position.scala:6:27: error: Found:    "s"
+// expect+ Required: Int
+// expect: overload_arg_position.scala:10:29: error: Found:    "s"
+// expect+ Required: Int
 // expect: 3 errors found

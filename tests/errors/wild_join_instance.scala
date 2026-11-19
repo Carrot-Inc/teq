@@ -11,4 +11,5 @@ given AttrValue[Builder, String] = new AttrValue[Builder, String] {}
 given AttrValue[Builder, List[(String, Boolean)]] = new AttrValue[Builder, List[(String, Boolean)]] {}
 def mods(b: Boolean) = List(Attr("class") := List("a" -> b), Attr("x") := "s")
 val x: Int = mods(true)
-// expect: 13:14: error: type mismatch: found List[AttrPair[Builder, ? >: List[(String, Boolean)] & String <: (List[(String, Boolean)] | String)]], required Int
+// expect: 13:14: error: Found:    List[AttrPair[Builder, ? >: List[(String, Boolean)] & String <: (List[(String, Boolean)] | String)]]
+// expect+ Required: Int

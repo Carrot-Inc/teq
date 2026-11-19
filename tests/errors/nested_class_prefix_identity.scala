@@ -1,9 +1,9 @@
-// expect: 15:29: error: type mismatch: found (b.R : R), required (O.this.R : R)
+// expect: 15:29: error: Found:    (b.R : R)⏎Required: (O.this.R : R)
 // expect: 24:7: error: class C has conflicting base types H.a.I and H.b.I
-// expect: 29:23: error: type mismatch: found o.Item, required o2.Item
-// expect: 31:25: error: type mismatch: found o.Item, required w.Item
-// expect: 33:26: error: type mismatch: found (joined : ((o : O) | (o2 : O))#Item), required o.Item
-// expect: 35:22: error: type mismatch: found (p : O#Item), required o.Item
+// expect: 29:23: error: Found:    o.Item⏎Required: o2.Item
+// expect: 31:25: error: Found:    o.Item⏎Required: w.Item
+// expect: 33:26: error: Found:    (joined : ((o : O) | (o2 : O))#Item)⏎Required: o.Item
+// expect: 35:22: error: Found:    (p : O#Item)⏎Required: o.Item
 // expect: 6 errors found
 
 // An instance's class is not another instance's (`TypeComparer.isSubPrefix`): through a val

@@ -1,5 +1,5 @@
-// expect: 16:49: error: type mismatch: found "bad", required Int
-// expect: 16:56: error: not found: undefinedName
+// expect: 16:49: error: Found:    "bad"⏎Required: Int
+// expect: 16:56: error: Not found: undefinedName
 // expect: 2 errors found
 // A member whose first list fails gives way to a conversion of its receiver; the converted call's
 // later list holds an application of its own (`g`) whose first list fails: that application types

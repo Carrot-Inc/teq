@@ -5,7 +5,7 @@
 // (tests/cases/case_apply_primary_alone.scala).
 // expect: 32:11: error: too many arguments: expected 1
 // expect: 33:11: error: too many arguments: expected 1
-// expect: 34:13: error: type mismatch: found "abc", required Int
+// expect: 34:13: error: Found:    "abc"⏎Required: Int
 // expect: 35:11: error: there is no parameter named a
 // expect: 35:11: error: there is no parameter named b
 // expect: 35:11: error: missing argument for parameter x

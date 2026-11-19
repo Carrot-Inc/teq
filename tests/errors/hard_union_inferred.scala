@@ -14,6 +14,9 @@ def run() =
   val c: 1 | "one" = g
   val d: Int = m
   val e: 1 | 2 = m
-// expect: 12:16: error: type mismatch: found Int | String, required Int
-// expect: 14:22: error: type mismatch: found Int | String, required 1 | "one"
-// expect: 16:18: error: type mismatch: found Int, required 1 | 2
+// expect: 12:16: error: Found:    Int | String
+// expect+ Required: Int
+// expect: 14:22: error: Found:    Int | String
+// expect+ Required: 1 | "one"
+// expect: 16:18: error: Found:    Int
+// expect+ Required: 1 | 2

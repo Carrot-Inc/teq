@@ -19,7 +19,7 @@ rbtree.scala	fail	check:fail	rbtree.scala:28:1: expected a definition, found new
 singleton-ops-test-issue-8287.scala	pass	check:pass	
 t0055.scala	pass	check:pass	
 t10032.scala	pass	check:pass	
-t2111.scala	fail	check:fail	t2111.scala:5:28: not found: Value
+t2111.scala	fail	check:fail	t2111.scala:5:28: Not found: Value
 t6888.scala	pass	check:pass	
 t7120	pass	check:pass	
 t8002.scala	pass	check:pass	

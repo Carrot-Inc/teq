@@ -13,7 +13,8 @@ tests/modules/ctoraccessrefused/b/B.scala:12:13: error: constructor P4 cannot be
 tests/modules/ctoraccessrefused/b/B.scala:13:13: error: missing argument for parameter x
       println(new ctr.S().x)
               ^^^^^^^^^^^
-tests/modules/ctoraccessrefused/b/B.scala:14:23: error: type mismatch: found "s", required Int
+tests/modules/ctoraccessrefused/b/B.scala:14:23: error: Found:    "s"
+Required: Int
       println(new ctr.S("s").x)
                         ^^^
 tests/modules/ctoraccessrefused/b/B.scala:15:13: error: constructor K cannot be accessed as a member of K from object Use

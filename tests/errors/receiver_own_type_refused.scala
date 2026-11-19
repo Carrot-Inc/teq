@@ -21,5 +21,7 @@ object Steps:
   val viewed: Cell[Step] = same("first").lifted
   val extended: Cell[Step] = same("first").boxed
 // expect: 19:29: error: no given instance of type Label["first" | "second"] was found for parameter evidence$1
-// expect: 21:28: error: type mismatch: found Cell[String], required Cell["first" | "second"]
-// expect: 22:30: error: type mismatch: found Cell[String], required Cell["first" | "second"]
+// expect: 21:28: error: Found:    Cell[String]
+// expect+ Required: Cell["first" | "second"]
+// expect: 22:30: error: Found:    Cell[String]
+// expect+ Required: Cell["first" | "second"]

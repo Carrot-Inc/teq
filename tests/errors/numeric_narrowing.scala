@@ -1,7 +1,7 @@
-// expect: 8:17: error: type mismatch: found 300, required Byte
-// expect: 9:18: error: type mismatch: found 1.5, required Float
-// expect: 10:18: error: type mismatch: found Byte, required Char
-// expect: 11:18: error: type mismatch: found Null, required Short
+// expect: 8:17: error: Found:    300⏎Required: Byte
+// expect: 9:18: error: Found:    1.5⏎Required: Float
+// expect: 10:18: error: Found:    Byte⏎Required: Char
+// expect: 11:18: error: Found:    Null⏎Required: Short
 // expect: operator & cannot be applied to Float
 // expect: operator << cannot be applied to Float
 @main def run(): Unit =

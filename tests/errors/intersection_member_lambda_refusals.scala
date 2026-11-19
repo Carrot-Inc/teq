@@ -1,6 +1,6 @@
-// expect: 12:81: error: type mismatch: found List[Int | String], required Nothing & Any
-// expect: 14:63: error: type mismatch: found [T <: Int | String] => (x$1: T) => T, required [T <: Int & String] => (x$1: T) => T
-// expect: 16:42: error: type mismatch: found List[Int] & Option[Int], required Boolean
+// expect: 12:81: error: Found:    List[Int | String]⏎Required: Nothing & Any
+// expect: 14:63: error: Found:    [T <: Int | String] => (x$1: T) => T⏎Required: [T <: Int & String] => (x$1: T) => T
+// expect: 16:42: error: Found:    List[Int] & Option[Int]⏎Required: Boolean
 // expect: 3 errors found
 // The last fold's refusals, as scalac 3.8.4 refuses them: a constructor range's lambda (a union
 // of two classes' constructors, invariant) leaves a range argument nothing to fit where it is

@@ -12,5 +12,7 @@ object ToRaw:
 val f: Long => Raw = n => Raw("a", n.toString)
 def value: Long => ToRaw = f
 def mapped: Task[ToRaw] = Task.succeed(1L).map(f)
-// expect: 13:28: error: type mismatch: found Long => Raw, required Long => ToRaw
-// expect: 14:48: error: type mismatch: found Long => Raw, required Long => ToRaw
+// expect: 13:28: error: Found:    Long => Raw
+// expect+ Required: Long => ToRaw
+// expect: 14:48: error: Found:    Long => Raw
+// expect+ Required: Long => ToRaw

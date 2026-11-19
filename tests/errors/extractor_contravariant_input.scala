@@ -1,5 +1,5 @@
-// expect: 14:30: error: type mismatch: found "no", required Nothing
-// expect: 17:20: error: type mismatch: found AnyRef, required String
+// expect: 14:30: error: Found:    "no"⏎Required: Nothing
+// expect: 17:20: error: Found:    AnyRef⏎Required: String
 // A generic `unapply` over a scrutinee that does not conform to its parameter maximises its
 // type parameters as scalac's `maximizeType` does: down to the lower bound where the parameter
 // is contravariant in it (the binder is a `Sink[Nothing]`, which takes no `String`), up to the

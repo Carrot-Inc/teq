@@ -53,7 +53,7 @@ i13542.scala	fail	-	marks: 0 warnings where 4 are marked
 i14579.scala	fail	-	check: diagnostic 1 of 1: warning i14579.scala:7:17, line 3 of the message: scalac's is It would fail on pattern case: _: X2; teq's is It would fail on pattern case: _: X2, _: X3
 i14705.scala	fail	-	marks: 0 warnings where 1 are marked
 i14721.scala	fail	-	marks: 0 warnings where 1 are marked
-i15226.scala	fail	-	marks: an error where warnings are marked: i15226.scala:9:67: type mismatch: found (Proj, String), required ((pj.a : Proj), (pj.b : String))
+i15226.scala	fail	-	marks: an error where warnings are marked: i15226.scala:9:67: Found:    (Proj, String)
 i15264.scala	fail	-	marks: 0 warnings where 2 are marked
 i15474.scala	fail	-	marks: 0 warnings where 2 are marked
 i15479.scala	fail	-	marks: 0 warnings where 1 are marked
@@ -81,11 +81,11 @@ i16649-refutable.scala	fail	-	marks: 4 warnings where 1 are marked
 i16723.scala	fail	-	marks: 0 warnings where 1 are marked
 i16723a.scala	fail	-	marks: 0 warnings where 1 are marked
 i16728.scala	fail	-	marks: 0 warnings where 1 are marked
-i16743.scala	fail	-	marks: an error where warnings are marked: i16743.scala:111:25: type mismatch: found "x", required G
+i16743.scala	fail	-	marks: an error where warnings are marked: i16743.scala:111:25: Found:    "x"
 i16930.scala	pass	-	
 i17230.min1.scala	pass	-	
 i17230.orig.scala	pass	-	
-i17266.scala	fail	-	marks: an error where warnings are marked: i17266.scala:4:3: not found: synchronized
+i17266.scala	fail	-	marks: an error where warnings are marked: i17266.scala:4:3: Not found: synchronized
 i17314.scala	pass	-	
 i17314a.scala	pass	-	
 i17314b.scala	pass	-	
@@ -126,7 +126,7 @@ i19302.scala	pass	-
 i19359.scala	pass	-	
 i19416.scala	fail	-	marks: 0 warnings where 1 are marked
 i19505.scala	fail	-	marks: 0 warnings where 1 are marked
-i19506.scala	fail	-	marks: an error where warnings are marked: i19506.scala:4:74: type mismatch: found 42, required Reader[?0]
+i19506.scala	fail	-	marks: an error where warnings are marked: i19506.scala:4:74: Found:    42
 i19657-mega.scala	fail	-	marks: 1 warnings where 3 are marked
 i19657.scala	fail	-	marks: an error where warnings are marked: i19657.scala:22:16: no given instance of type Schema[Foo] was found for parameter x$1
 i19687.scala	pass	-	
@@ -161,7 +161,7 @@ i21036a.scala	fail	-	marks: 0 warnings where 1 are marked
 i21036b.scala	fail	-	marks: 0 warnings where 1 are marked
 i21036c.scala	pass	-	
 i21187.scala	fail	-	marks: an error where warnings are marked: i21187.scala:9:55: missing parameter type
-i21190.scala	fail	-	marks: an error where warnings are marked: i21190.scala:20:29: type mismatch: found FromEnd, required Int
+i21190.scala	fail	-	marks: an error where warnings are marked: i21190.scala:20:29: Found:    FromEnd
 i21207	fail	-	java source: teq reads none
 i21218.scala	pass	-	
 i21239.Frac.scala	fail	-	marks: 0 warnings where 1 are marked
@@ -177,7 +177,7 @@ i21845.scala	pass	-
 i21860.scala	fail	-	marks: an error where warnings are marked: i21860.scala:5:8: illegal inheritance: self type Triangle of case Triangle does not conform to self type Product of parent trait Product
 i21860.unenum.scala	fail	-	marks: an error where warnings are marked: i21860.unenum.scala:6:15: illegal inheritance: self type Triangle of object Triangle does not conform to self type Product of parent trait Product
 i21917.scala	pass	-	
-i22051.scala	fail	-	marks: an error where warnings are marked: i22051.scala:16:12: type mismatch: found local.(T => local.Break), required T => RuntimeException
+i22051.scala	fail	-	marks: an error where warnings are marked: i22051.scala:16:12: Found:    local.(T => local.Break)
 i22212	fail	-	marks: 0 warnings where 1 are marked
 i22232.scala	fail	-	marks: 0 warnings where 4 are marked
 i22233.scala	fail	-	marks: 0 warnings where 1 are marked
@@ -210,7 +210,7 @@ i22969.scala	pass	-
 i22971.scala	pass	-	
 i22981.scala	fail	-	marks: an error where warnings are marked: i22981.scala:8:31: expected an identifier, found 'type'
 i22983.scala	pass	-	
-i23018.scala	fail	-	marks: an error where warnings are marked: i23018.scala:18:31: type mismatch: found 42, required C
+i23018.scala	fail	-	marks: an error where warnings are marked: i23018.scala:18:31: Found:    42
 i23033.scala	pass	-	
 i23047.scala	pass	-	
 i23049.scala	pass	-	
@@ -258,7 +258,7 @@ i25094.scala	fail	-	marks: 0 warnings where 1 are marked
 i25100.scala	pass	-	
 i25158.scala	fail	-	marks: 0 warnings where 5 are marked
 i25227.scala	pass	-	
-i25347.scala	fail	-	marks: an error where warnings are marked: i25347.scala:30:5: type mismatch: found Test.j.D, required Int
+i25347.scala	fail	-	marks: an error where warnings are marked: i25347.scala:30:5: Found:    Test.j.D
 i25548.scala	fail	-	marks: an error where warnings are marked: i25548.scala:3:16: expected 'extends' or a template body, found '@'
 i25548b.scala	fail	-	marks: an error where warnings are marked: i25548b.scala:3:16: expected 'extends' or a template body, found '@'
 i25553.scala	fail	-	option: -Wvalue-discard with -Werror (teq has no flag for it)
@@ -291,7 +291,7 @@ i8932.scala	fail	-	marks: 1 warnings where 2 are marked
 i9166.scala	fail	-	marks: 0 warnings where 1 are marked
 i9241.scala	fail	-	marks: 0 warnings where 8 are marked
 i9266.scala	fail	-	marks: an error where warnings are marked: i9266.scala:7:24: expected a definition, found identifier
-i9408a.scala	fail	-	marks: an error where warnings are marked: i9408a.scala:18:21: type mismatch: found "qwerty", required Int
+i9408a.scala	fail	-	marks: an error where warnings are marked: i9408a.scala:18:21: Found:    "qwerty"
 i9740.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i9740.scala:10:10 Implausible pattern:; teq's is warning i9740.scala:10:10 unreachable case
 i9740b.scala	fail	-	marks: 0 warnings where 2 are marked
 i9740c.scala	fail	-	marks: 0 warnings where 1 are marked
@@ -305,7 +305,7 @@ infer-or-type.scala	fail	-	marks: 0 warnings where 2 are marked
 infix-named-args-migration.scala	fail	-	marks: an error where warnings are marked: infix-named-args-migration.scala:4:11: value + is not a member of Int
 inline-givens.scala	fail	-	marks: 0 warnings where 3 are marked
 into-as-mod.scala	fail	-	option: -preview (teq has no flag for it)
-looping-givens.scala	fail	-	marks: an error where warnings are marked: looping-givens.scala:9:17: type mismatch: found Any, required A
+looping-givens.scala	fail	-	marks: an error where warnings are marked: looping-givens.scala:9:17: Found:    Any
 manifest-summoning-b.scala	fail	-	marks: an error where warnings are marked: manifest-summoning-b.scala:3:35: No Manifest available for List[Int].
 matchable.scala	fail	-	marks: 0 warnings where 6 are marked
 multiple-entry-points	fail	-	marks: an error where warnings are marked: 1_First.scala:4:7: several entry points: First.main, Second.main; choose one with --main
@@ -334,7 +334,7 @@ suppressed-type-test-warnings.scala	fail	-	marks: 2 warnings where 3 are marked
 switches.scala	fail	-	marks: 2 warnings where 6 are marked
 symbolic-packages.scala	fail	-	marks: 0 warnings where 4 are marked
 t10373.scala	pass	-	
-t11620.scala	fail	-	marks: an error where warnings are marked: t11620.scala:8:23: type mismatch: found Any, required X
+t11620.scala	fail	-	marks: an error where warnings are marked: t11620.scala:8:23: Found:    Any
 t13095.scala	pass	-	
 t2755.scala	fail	-	marks: 17 warnings where 2 are marked
 t3235-minimal.scala	fail	-	check: diagnostic 2 of 4: scalac's is warning t3235-minimal.scala:6:12 method round in package scala.math is deprecated since 2.11.0: This is an integer type; there is no reason to round it. Perhaps you meant to call this with a floating-po

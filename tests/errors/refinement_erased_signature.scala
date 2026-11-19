@@ -1,5 +1,5 @@
-// expect: 13:31: error: type mismatch: found C[String], required AnyRef{def f(x: String): String}
-// expect: 14:37: error: type mismatch: found C[String], required AnyRef{def f(x: String): String}
+// expect: 13:31: error: Found:    C[String]⏎Required: AnyRef{def f(x: String): String}
+// expect: 14:37: error: Found:    C[String]⏎Required: AnyRef{def f(x: String): String}
 // absent: 15:
 // A member the refined type's class does not declare is called by reflection, which needs its
 // erased parameters to be the refinement's: `C[A].f(x: A)` erases its parameter to `Object`

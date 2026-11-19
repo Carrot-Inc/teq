@@ -1,5 +1,5 @@
-// expect: 16:25: error: type mismatch: found (b.U : U), required (a.U : U)
-// expect: 17:25: error: type mismatch: found (C.U : U), required (B.U : U)
+// expect: 16:25: error: Found:    (b.U : U)⏎Required: (a.U : U)
+// expect: 17:25: error: Found:    (C.U : U)⏎Required: (B.U : U)
 // expect: 2 errors found
 // The singleton type of an object nested in a trait is its enclosing instance's: `a.U.type` is no
 // `b.U.type` of another instance, nor `B.U.type` the `C.U.type` of another object extending the

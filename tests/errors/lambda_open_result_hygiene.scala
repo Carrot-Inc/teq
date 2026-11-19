@@ -15,6 +15,7 @@ def cons(s: S) =
 def joined(s: S) = pair(x => Item((x.a: x.A | String)), "later").value
 // expect: 11:24: error: return type Item[Any] of lambda cannot be made hygienic
 // expect: it is not a supertype of the hygienic type Item[?]
-// expect: 13:29: error: type mismatch: found List[Item[?]], required List[Item[Any]]
+// expect: 13:29: error: Found:    List[Item[?]]
+// expect+ Required: List[Item[Any]]
 // expect: 15:25: error: return type Item[Any] of lambda cannot be made hygienic
 // expect: it is not a supertype of the hygienic type Item[? >: String]

@@ -1179,14 +1179,21 @@ impl<'a> Worker<'a> {
                             format!("{} {}", what, self.method_description(c.sym))
                         })
                         .collect();
-                    let msg = format!(
-                        "type mismatch: found {}, required {}. Note that implicit extension methods cannot be applied because they are ambiguous; both {} and {} provide {}",
-                        self.show(recv_ty),
-                        wanted(self),
-                        described[0],
-                        described[1],
-                        provided(self),
-                    );
+                    // The reference's `AmbiguousImplicits.notes` (typer/Implicits.scala): the conversions or the
+                    // extension methods by the expected type (a selection's prototype or a type), with `qualify`'s
+                    // words; no note where the argument is of type Nothing.
+                    let mut notes = super::expr::MismatchNotes::default();
+                    if self.canon(recv_ty) != NOTHING {
+                        let what = if to_type { "conversions" } else { "extension methods" };
+                        notes.notes.push(format!(
+                            "Note that implicit {} cannot be applied because they are ambiguous;\nboth {} and {} {}",
+                            what,
+                            described[0],
+                            described[1],
+                            provided(self),
+                        ));
+                    }
+                    let msg = super::expr::mismatch_message(&self.show(recv_ty), &wanted(self), &notes);
                     self.error(span, msg);
                 }
                 return Some(Err(()));
@@ -1415,7 +1422,7 @@ impl<'a> Worker<'a> {
         let prof = self.prof(Kind::Conversion, span, About::Member(recv_ty, name));
         let mut accept = |t: &mut Self, to: TypeId| t.result_has_member(to, name, lists, expected);
         let wanted = |t: &mut Self| format!("?{{ {}: ? }}", t.name_str(name));
-        let provided = |t: &mut Self| format!("an extension method `{}` on {}", t.name_str(name), t.show(recv_ty));
+        let provided = |t: &mut Self| format!("provide an extension method `{}` on {}", t.name_str(name), t.show(recv_ty));
         self.blocked_conversion = None;
         let mut picked = self.pick_conversion(levels.clone(), recv, recv_ty, span, false, &wanted, &provided, &mut accept, false);
         // dotc's `inferImplicit` searches once more on an ambiguity with the expected type of the
@@ -1462,7 +1469,7 @@ impl<'a> Worker<'a> {
         }
         let probe = self.prog.add(TExpr::Unit);
         let wanted = |t: &mut Self| format!("?{{ {}: ? }}", t.name_str(name));
-        let provided = |t: &mut Self| format!("an extension method `{}` on {}", t.name_str(name), t.show(recv_ty));
+        let provided = |t: &mut Self| format!("provide an extension method `{}` on {}", t.name_str(name), t.show(recv_ty));
         let mut deep = |t: &mut Self, to: TypeId| t.result_has_member(to, name, &[], None) && accept(t, to);
         self.blocked_conversion = None;
         let picked = self.pick_conversion(levels, probe, recv_ty, span, false, &wanted, &provided, &mut deep, false);
@@ -1665,7 +1672,7 @@ impl<'a> Worker<'a> {
         let prof = self.prof(Kind::Conversion, span, About::Type(expected));
         let mut accept = |t: &mut Self, to: TypeId| t.is_sub(to, expected);
         let wanted = |t: &mut Self| t.show(expected);
-        let provided = |t: &mut Self| format!("a conversion from {} to {}", t.show(actual), t.show(expected));
+        let provided = |t: &mut Self| format!("convert from {} to {}", t.show(actual), t.show(expected));
         let picked = self.pick_conversion(levels, te, actual, span, report, &wanted, &provided, &mut accept, true);
         if let (Some(Ok((g, _, _))), true) = (&picked, report) {
             self.restrict_conversion_use(*g, span);

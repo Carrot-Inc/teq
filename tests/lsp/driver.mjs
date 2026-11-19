@@ -406,7 +406,7 @@ async function mainWorkspace() {
     const one = otherError.indexOf('"one"')
     check(
       "didOpen: the open text's error",
-      d?.length === 1 && d[0].severity === 1 && d[0].message.includes("type mismatch") && same(d[0].range, { start: positionAt(otherError, one), end: positionAt(otherError, one + 5) }),
+      d?.length === 1 && d[0].severity === 1 && d[0].message.includes("Found: ") && same(d[0].range, { start: positionAt(otherError, one), end: positionAt(otherError, one + 5) }),
       d,
     )
     m = c.mark()
@@ -675,7 +675,7 @@ async function mainWorkspace() {
     const callsText = readFileSync(calls, "utf-8")
     writeFileSync(calls, callsText.replace("def leaf(): Int = 1", 'def leaf(): Int = "1"'))
     d = await c.waitDiagnostics(m, uriOf(calls), (ds) => ds.length > 0, 40000)
-    check("a file changed on disk without a notification", d?.length === 1 && d[0].message.includes("type mismatch"), d)
+    check("a file changed on disk without a notification", d?.length === 1 && d[0].message.includes("Found: "), d)
     m = c.mark()
     writeFileSync(calls, callsText)
     const notified = Date.now()
@@ -4870,14 +4870,14 @@ async function serverGenerators() {
     const m = c.mark()
     writeFileSync(join(root, "g/value.txt"), '"s"\n')
     const d = await c.waitDiagnostics(m, uriOf(use), (ds) => ds.length === 1, 15000)
-    check("a generator's input changed during the session: generated again, its use checked against it", d?.[0]?.message.includes("type mismatch"), d)
+    check("a generator's input changed during the session: generated again, its use checked against it", d?.[0]?.message.includes("Found: "), d)
     const more = join(root, "g/more/M.scala")
     mkdirSync(dirname(more), { recursive: true })
     writeFileSync(more, 'object M:\n  val wrong: Int = "m"\n')
     const m2 = c.mark()
     c.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: uriOf(more), type: 1 }] })
     const dm = await c.waitDiagnostics(m2, uriOf(more), (ds) => ds.length === 1, 15000)
-    check("a declared root created during the session: the session started anew over it", dm?.[0]?.message.includes("type mismatch"), dm)
+    check("a declared root created during the session: the session started anew over it", dm?.[0]?.message.includes("Found: "), dm)
     await c.result("shutdown", null)
     c.notify("exit", null)
     await Promise.race([c.exited, sleep(5000)])
@@ -4951,7 +4951,7 @@ async function serverGenerators() {
     const h2 = await c2.result("textDocument/hover", at_(user, "Made.v", 0, 5))
     check(
       "a generator sbt alone runs: a later full build skips it too, its own diagnostic published and withdrawn",
-      wrong?.[0]?.message.includes("type mismatch") && right?.length === 0 && h2?.contents?.value?.includes("val Made.v: Int") && failed().length === 0,
+      wrong?.[0]?.message.includes("Found: ") && right?.length === 0 && h2?.contents?.value?.includes("val Made.v: Int") && failed().length === 0,
       { wrong, right, h2, failed: failed() },
     )
     c2.notify("textDocument/didOpen", { textDocument: { uri: uriOf(consumer), languageId: "scala", version: 1, text: readFileSync(consumer, "utf-8") } })
@@ -5038,7 +5038,7 @@ async function sbtBuildAt(place) {
     check(where + `the export written at ${place}, no session before a file of it is opened`, ended && existsSync(exportFile) && (!under || !existsSync(join(root, "teq.lock"))) && checkingTokens(c).length === 0, { ended, begun: progressOf(c, "begin") })
     c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(demo), languageId: "scala", version: 1, text: readFileSync(demo, "utf-8") } })
     const diags = await c.waitDiagnostics(m, uriOf(demo), (ds) => ds.length > 0, 10000)
-    check(where + "a file of the export's project opened: its session's diagnostics", diags?.length === 1 && diags[0].message.includes("type mismatch"), diags)
+    check(where + "a file of the export's project opened: its session's diagnostics", diags?.length === 1 && diags[0].message.includes("Found: "), diags)
     const refs = await c.result("textDocument/references", { ...at_(demo, "def greet", 0, 4), context: { includeDeclaration: true } })
     check(where + "navigation from the export", sameLocs(refs, [at(demo, "def greet", 0, 4, 5), at(demo, 'greet("you")', 0, 0, 5)]), refs)
     // The build changed: nothing runs again, a warning on the build file names the change and
@@ -5497,7 +5497,7 @@ async function idleMinute() {
     writeFileSync(quiet, 'object Quiet:\n  val n: Int = "one"\n')
     const written = Date.now()
     const d = await c.waitDiagnostics(m, uriOf(quiet), (ds) => ds.length === 1, 15000)
-    check("an edit on disk without a notification: published by the next poll", d?.[0]?.message.includes("type mismatch") && Date.now() - written < IDLE + 3000, { d, ms: Date.now() - written })
+    check("an edit on disk without a notification: published by the next poll", d?.[0]?.message.includes("Found: ") && Date.now() - written < IDLE + 3000, { d, ms: Date.now() - written })
     // The command generator failing: its input changed without a notification and the generator
     // made to exit 1. A failed run sends no build, so its attempts are the generator's own runs,
     // each timed by the time runs.txt took: one per poll, 3 s apart, not one at every wake.
@@ -5534,7 +5534,7 @@ async function idleMinute() {
     const cleared = failure && !c.latestDiagnostics(failure.uri).some((x) => x.message.includes("`sh gen.sh` failed"))
     check(
       "the generator succeeding again: run once by the next poll, its output typed, its failure withdrawn",
-      runs() === recoveredFrom + 1 && wrong?.[0]?.message.includes("type mismatch") && cleared,
+      runs() === recoveredFrom + 1 && wrong?.[0]?.message.includes("Found: ") && cleared,
       { runs: runs() - recoveredFrom, wrong, cleared, latest: failure && c.latestDiagnostics(failure.uri) },
     )
     await c.result("shutdown", null)
@@ -5808,7 +5808,7 @@ async function jarFetch() {
       c.proc.kill()
     }
   }
-  const mismatch = ["type mismatch: found Name, required Int"]
+  const mismatch = ["Found:    Name\nRequired: Int"]
   try {
     const cold = await run("sources-published")
     const lines = told(c)
@@ -6771,7 +6771,7 @@ async function sourcesHeld() {
       writeFileSync(files.next, `${sourcesMain.replace("object M", "object NEXT")}  val wrong: String = 2\n`)
       open(files.next)
       const fetched = await c.waitDiagnostics(m2, uriOf(files.next), (ds) => ds.length > 0, 60000)
-      check("held-download: with both of the sources' transfers held, the session's build and an unrelated query complete, and a new project's binary is fetched and its file checked", held && built?.some((d) => d.message.includes("type mismatch")) && hover?.contents?.value?.includes("def liba.A.hello: Int") && fetched?.some((d) => d.message.includes("type mismatch")) && other.jar.requests === 1 && a.src.held.length === 1, { held, built, hover, fetched, binary: other.jar.requests })
+      check("held-download: with both of the sources' transfers held, the session's build and an unrelated query complete, and a new project's binary is fetched and its file checked", held && built?.some((d) => d.message.includes("Found: ")) && hover?.contents?.value?.includes("def liba.A.hello: Int") && fetched?.some((d) => d.message.includes("Found: ")) && other.jar.requests === 1 && a.src.held.length === 1, { held, built, hover, fetched, binary: other.jar.requests })
       for (const r of [a.src, b.src, other.src]) repo.release(r)
       await traceSaid(trace, "sources-published", repo.url + a.sourcesPath)
       const { ok, found } = await landsInSources(c, files.app, cache)
@@ -7211,7 +7211,7 @@ async function importActions() {
     // The files of a use each have a report; the build of the first texts publishes them.
     const first = {}
     for (const n of Object.keys(texts).filter((n) => /^(Use[A-Z]|J\d|R[\dA-HN]|S2?|P\d(Use|Twin)|W\d|[CET]\d|N1|G\db?(Use|Twin)|V(Use|Twin)|StarUse|M\d+|E[345]|[IQDXZO]1|Gv\d)\.scala$/.test(n))) first[n] = (await published(m, n, 1)) ?? []
-    check("imports: the reports the fixes are for are published", first["UseA.scala"].filter((d) => d.message === "type Widget not found").length === 2 && first["R1.scala"].some((d) => d.message === "value asGlyph is not a member of Int"), { a: first["UseA.scala"], r: first["R1.scala"] })
+    check("imports: the reports the fixes are for are published", first["UseA.scala"].filter((d) => d.message === "Not found: type Widget").length === 2 && first["R1.scala"].some((d) => d.message === "value asGlyph is not a member of Int"), { a: first["UseA.scala"], r: first["R1.scala"] })
 
     // A name not found: completion's candidates for the whole name.
     let a = await imports("UseA.scala", wholeOf(texts["UseA.scala"]))
@@ -7237,7 +7237,7 @@ async function importActions() {
     a = await imports("UseE.scala", at("UseE.scala", "Lantern"))
     check("imports (e): a pattern's stable identifier, a term", same(titles(a), ["import own.Lantern"]), a)
     r = a[0] ? await applied("UseE.scala", a[0]) : { errors: ["no action"] }
-    check("imports (e): the pattern's import applied, that report gone", !r.errors.includes("not found: Lantern") && r.errors.length === 2, r)
+    check("imports (e): the pattern's import applied, that report gone", !r.errors.includes("Not found: Lantern") && r.errors.length === 2, r)
     a = await imports("UseF.scala", at("UseF.scala", "Gadget", 1))
     check("imports (f): a name the file's wildcard leaves out, none", same(titles(a), []), a)
     a = await imports("UseG.scala", at("UseG.scala", "Nested", 1))
@@ -7353,15 +7353,15 @@ async function importActions() {
     r = a[0] ? await applied("M3.scala", a[0]) : { errors: ["no action"] }
     check("imports: a val, a lazy val and a var as an assignment's target: one import for the three reports, applied, no error", same(titles(a), ["import mlib.Members.*"]) && a[0]?.diagnostics?.length === 3 && same(preferred(a), ["import mlib.Members.*"]) && r.errors.length === 0, { a, r })
     await fixed("M4.scala", "MInner", ["import mlib.Members.*"], "a nested object as a path's root")
-    await fixed("M5.scala", "inherited", ["import mlib.MHeld.*"], "a member the object inherits", ["not found: exported"])
+    await fixed("M5.scala", "inherited", ["import mlib.MHeld.*"], "a member the object inherits", ["Not found: exported"])
     await fixed("M5.scala", "exported", ["import mlib.MExp.*"], "a member the object exports under another name")
     a = await imports("M6.scala", wholeOf(texts["M6.scala"]))
     check("imports: an enum's cases as a value, in a pattern and applied: their companions' imports", same(titles(a), ["import mlib.Tint.*", "import mlib.Form.*"]) && a[0]?.diagnostics?.length === 2, a)
     r = a[0] ? await applied("M6.scala", a[0]) : { errors: ["no action"] }
-    check("imports: the enum's import applied: its two reports gone", same(r.errors, ["not found: Circle"]), r)
+    check("imports: the enum's import applied: its two reports gone", same(r.errors, ["Not found: Circle"]), r)
     await fixed("M6.scala", "Circle", ["import mlib.Form.*"], "a class case applied, its enum's import")
     await fixed("M7.scala", "made", ["import mlib.Comp.*"], "a def of a class's companion")
-    await fixed("M8.scala", "Leaf", ["import mlib.Members.MInner.*"], "a class of an object nested in an object, as a type", ["type MNested not found"])
+    await fixed("M8.scala", "Leaf", ["import mlib.Members.MInner.*"], "a class of an object nested in an object, as a type", ["Not found: type MNested"])
     await fixed("M8.scala", "MNested", ["import mlib.Comp.*"], "a class of a class's companion, as a type")
     a = await imports("M9.scala", at("M9.scala", "shared9"))
     check("imports: the name in three objects: the document's package's first, then the nearer package's, none preferred", same(titles(a), ["import ord.a.b.Here.*", "import ord.a.Up.*", "import zeta.Far.*"]) && same(preferred(a), []), a)
@@ -7377,7 +7377,7 @@ async function importActions() {
     a = await imports("M14.scala", wholeOf(texts["M14.scala"]))
     check("imports: a private member, a member of an object inside a class, the members the compiler made of a case class, an enum and a derives clause: none", same(titles(a), []) && first["M14.scala"].filter((d) => d.severity === 1).length === 7, { a, ds: first["M14.scala"] })
     await fixed("M20.scala", "viaExt", ["import mlib.MExt.viaExt"], "an object that exports an extension the document has one of its own name of: by name")
-    await fixed("M21.scala", "fromCtor", ["import mlib.MSub.*"], "a member the object inherits from a class's parameter", ["not found: lt"])
+    await fixed("M21.scala", "fromCtor", ["import mlib.MSub.*"], "a member the object inherits from a class's parameter", ["Not found: lt"])
     await fixed("M21.scala", "lt", ["import mlib.MTicks.lt"], "a member the object inherits from a library's trait: by name, the trait holding an implicit")
     a = await imports("E5.scala", at("E5.scala", "emptyHidden"))
     check("imports: a private member of an object of the empty package: none", same(titles(a), []), a)
@@ -7390,7 +7390,7 @@ async function importActions() {
     a = await imports("M17.scala", wholeOf(texts["M17.scala"]))
     check("imports: an object the document spells another name of: by name, one action for a member's four uses and one for the other's", same(titles(a), ["import mlib.Members.mplain", "import mlib.Members.twice"]) && same(a.map((x) => x.diagnostics.length), [4, 1]) && same(preferred(a), titles(a)), a)
     r = a[0] ? await applied("M17.scala", a[0]) : { errors: ["no action"] }
-    check("imports: the first applied: its four reports gone", same(r.errors, ["not found: twice"]), r)
+    check("imports: the first applied: its four reports gone", same(r.errors, ["Not found: twice"]), r)
     await fixed("M17.scala", "twice", ["import mlib.Members.twice"], "the other applied, no error")
     await fixed("M18.scala", "42.asApplied", ["import alib.AGlyphs.asApplied"], "an object that holds an `apply`, which a document uses without writing it: by name")
     a = await imports("M19.scala", at("M19.scala", "MAlias"))
@@ -7400,9 +7400,9 @@ async function importActions() {
     a = await imports("D1.scala", at("D1.scala", "memberD"))
     check("imports: a member of an object that a package of its name stands beside, whose path an import reads as the package: none", same(titles(a), []), a)
     a = await imports("X1.scala", at("X1.scala", "toString"))
-    check("imports: a member the compiler made of a case class's companion, where its name is not found: none", same(titles(a), []) && first["X1.scala"].some((d) => d.message === "not found: toString"), { a, ds: first["X1.scala"] })
+    check("imports: a member the compiler made of a case class's companion, where its name is not found: none", same(titles(a), []) && first["X1.scala"].some((d) => d.message === "Not found: toString"), { a, ds: first["X1.scala"] })
     a = await imports("Z1.scala", at("Z1.scala", "counter_="))
-    check("imports: a var's setter by its name: none", same(titles(a), []) && first["Z1.scala"].some((d) => d.message === "not found: counter_="), { a, ds: first["Z1.scala"] })
+    check("imports: a var's setter by its name: none", same(titles(a), []) && first["Z1.scala"].some((d) => d.message === "Not found: counter_="), { a, ds: first["Z1.scala"] })
     await fixed("O1.scala", "Q", ["import olib.Consts.*"], "a member whose name is one character, which completion does not offer: the object's import")
     // A given or an implicit by name would join the document's implicit searches (another `summon` of the
     // document turns ambiguous): none, for an object's member and for a package's that completion offers.
@@ -7925,7 +7925,7 @@ async function importAll() {
       const next = (await actionsAt(n, wholeOf(fixed ?? ""), ["quickfix"])).filter((a) => a.title.startsWith("import "))
       const whole = apply(fixed ?? "", editsOf(next[0]) ?? [])
       const after = await built(n, whole ?? "")
-      check("import all: an object's wildcard that brings the first name of another import's path: the wildcard alone, the other report left to its own fix, which then starts at the root", asked.length === 1 && asked[0].diagnostics?.length === 1 && fixed?.includes("package iau\n\nimport iaw.Wide.*\n\nobject W1:") && same(errors, ["type Other not found"]) && same(next.map((a) => a.title), ["import _root_.iao.Other"]) && after.length === 0, { asked, fixed, errors, next, whole, after })
+      check("import all: an object's wildcard that brings the first name of another import's path: the wildcard alone, the other report left to its own fix, which then starts at the root", asked.length === 1 && asked[0].diagnostics?.length === 1 && fixed?.includes("package iau\n\nimport iaw.Wide.*\n\nobject W1:") && same(errors, ["Not found: type Other"]) && same(next.map((a) => a.title), ["import _root_.iao.Other"]) && after.length === 0, { asked, fixed, errors, next, whole, after })
     }
 
     // Nothing to add together.
@@ -8078,7 +8078,7 @@ async function phaseRecords() {
     "a macro's warning": [notes, `def first: Int = Notes.noted(9)\n${last}`, ["warning Main.scala:1 noted here"]],
     "a macro's warning and a macro's error": [notes, `def first: Int = Notes.noted(9)\ndef second: Int = Notes.refused(9)\n${last}`, ["error Main.scala:2 refused here", "warning Main.scala:1 noted here"]],
     "a transparent macro's error": [notes, `def first: Int = Notes.denied(9)\n${last}`, ["error Main.scala:1 denied here"]],
-    "a type error after a transparent macro's call": [notes, `def first: Int = Notes.early(9)\nval wrong: String = 3\n${last}`, ["error Main.scala:2 type mismatch"]],
+    "a type error after a transparent macro's call": [notes, `def first: Int = Notes.early(9)\nval wrong: String = 3\n${last}`, ["error Main.scala:2 Found: "]],
   }
   const other = { clean: 'val unrelated: Int = 1\nval lastOfOther: String = "kept"\n', broken: 'val unrelated: Int = 1\nval lastOfOther: String = "\n' }
   const names = ["Defs.scala", "Main.scala", "Other.scala"]

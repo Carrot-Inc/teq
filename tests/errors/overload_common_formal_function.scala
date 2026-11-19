@@ -4,7 +4,7 @@
 // expect: overload_common_formal_function.scala:15:17: error: None of the overloaded alternatives
 // expect: overload_common_formal_function.scala:16:18: error: None of the overloaded alternatives
 // expect: overload_common_formal_function.scala:22:18: error: None of the overloaded alternatives
-// absent: type mismatch
+// absent: Found:
 // absent: <error>
 object OverloadCommonFormalFunction:
   def g(a: Int, b: Int): Int = a

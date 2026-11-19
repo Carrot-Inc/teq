@@ -5,6 +5,8 @@ object Main:
   def main(args: Array[String]): Unit =
     val lock = new Object
     lock.synchronized { lock.wait("bad"); lock.wait(1L, "bad") }
-// expect: 7:35: error: type mismatch: found "bad", required Long
-// expect: 7:57: error: type mismatch: found "bad", required Int
+// expect: 7:35: error: Found:    "bad"
+// expect+ Required: Long
+// expect: 7:57: error: Found:    "bad"
+// expect+ Required: Int
 // expect: 2 errors found

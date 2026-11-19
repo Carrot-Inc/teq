@@ -8,8 +8,8 @@
 // expect: 17:21: error: Cyclic reference involving type B
 // expect: 18:20: error: illegal cyclic type reference: upper bound B of type C refers back to the type itself
 // expect: 19:9: error: main annotation cannot be applied to type B
-// expect: 20:13: error: not found: type C
-// expect: 20:24: error: not found: type B
+// expect: 20:13: error: Not found: type C
+// expect: 20:24: error: Not found: type B
 class ann[T] extends scala.annotation.StaticAnnotation
 class K[B <: C, C <: B]
 def m[B >: C, C >: B] = 1

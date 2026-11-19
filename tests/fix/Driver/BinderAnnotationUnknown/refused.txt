@@ -1,1 +1,1 @@
-type DoesNotExist not found
+Not found: type DoesNotExist

@@ -1,4 +1,4 @@
-// expect: 10:24: error: type mismatch: found 42, required T
+// expect: 10:24: error: Found:    42⏎Required: T
 enum Expr[+T]:
   case I1() extends Expr[Int]
   case I2() extends Expr[Int]

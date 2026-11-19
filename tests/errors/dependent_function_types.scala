@@ -2,10 +2,10 @@
 // expect: 26:13: error: (c: Ctx, x: c.T): c.T is an illegal function type because it has inter-parameter dependencies
 // expect: 27:38: error: Implementation restriction: Expected result type (c: Ctx) ?=> (D) ?=> c.T
 // expect: 28:37: error: Implementation restriction: Expected result type (c: Ctx) => (D) ?=> c.T
-// expect: 32:20: error: type mismatch: found left.T, required right.T
-// expect: 34:42: error: type mismatch: found (c: Ctx) => List[c.T] => Int, required Ctx => List[Any] => Int
-// expect: 36:32: error: type mismatch: found (c: Ctx) => Box[c.T], required Ctx => Box[Any]
-// expect: 37:61: error: type mismatch: found (c: Ctx) => F[c.T], required Ctx => F[?]
+// expect: 32:20: error: Found:    left.T⏎Required: right.T
+// expect: 34:42: error: Found:    (c: Ctx) => List[c.T] => Int⏎Required: Ctx => List[Any] => Int
+// expect: 36:32: error: Found:    (c: Ctx) => Box[c.T]⏎Required: Ctx => Box[Any]
+// expect: 37:61: error: Found:    (c: Ctx) => F[c.T]⏎Required: Ctx => F[?]
 // A function type naming its parameters (scalac 3.8.4: the same messages, "Found: left.T,
 // Required: right.T" as E007): a parameter type naming an earlier parameter, a curried context
 // function type expected of a lambda or of a wrapped expression, a call's result at another

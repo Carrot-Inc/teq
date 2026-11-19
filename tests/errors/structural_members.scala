@@ -1,6 +1,6 @@
-// expect: 12:11: error: type mismatch: found AnyRef{def m(x: Int): String}, required Selectable | Dynamic
-// expect: 13:11: error: type mismatch: found AnyRef{def apply(x: Int): Int}, required Selectable | Dynamic
-// expect: 15:18: error: type mismatch: found String, required Int
+// expect: 12:11: error: Found:    AnyRef{def m(x: Int): String}⏎Required: Selectable | Dynamic
+// expect: 13:11: error: Found:    AnyRef{def apply(x: Int): Int}⏎Required: Selectable | Dynamic
+// expect: 15:18: error: Found:    String⏎Required: Int
 // expect: 3 errors found
 class Sel extends Selectable:
   def selectDynamic(name: String): Any = 1

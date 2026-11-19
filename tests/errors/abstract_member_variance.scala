@@ -12,5 +12,6 @@ def run(): Unit =
   val y = valid(1)
   val z: V[Impl.Type[String], Int] = y
   val t: Int = y
-// expect: 14:16: error: type mismatch: found V[Type[Nothing], Int], required Int
+// expect: 14:16: error: Found:    V[Type[Nothing], Int]
+// expect+ Required: Int
 // absent: 13:38:

@@ -5,26 +5,26 @@
 // result; nor where the bound's member takes a parameter of another erased type than the one asked (the call
 // goes by reflection); nor a `val` asked of the bound's `var`, or a `var` of its `val`. scalac 3.8.4 refuses the
 // same twenty lines.
-// expect: 33:85: error: type mismatch: found T, required AnyRef{def self: Int}
-// expect: 34:85: error: type mismatch: found T, required AnyRef{def self: String}
-// expect: 35:81: error: type mismatch: found T, required AnyRef{def self: Int}
-// expect: 36:80: error: type mismatch: found T, required AnyRef{val self: Int}
-// expect: 37:103: error: type mismatch: found T, required AnyRef{def add(n: Int): Int}
-// expect: 38:94: error: type mismatch: found T, required AnyRef{def self(n: Int): Int}
-// expect: 39:93: error: type mismatch: found F[String], required AnyRef{def self: Int}
-// expect: 40:61: error: type mismatch: found T, required AnyRef{def self: Int}
-// expect: 41:60: error: type mismatch: found T, required AnyRef{def self: Int}
-// expect: 42:50: error: type mismatch: found T, required AnyRef{def self: Int}
-// expect: 43:89: error: type mismatch: found U, required AnyRef{def self: Int}
-// expect: 44:97: error: type mismatch: found U, required AnyRef{def self: Int}
-// expect: 45:108: error: type mismatch: found U, required AnyRef{def self: Int}
-// expect: 46:116: error: type mismatch: found F[String], required AnyRef{def self: Int}
-// expect: 47:98: error: type mismatch: found U, required AnyRef{def self: Int}
-// expect: 48:96: error: type mismatch: found T, required AnyRef{def self(x: String): Int}
-// expect: 49:79: error: type mismatch: found T, required AnyRef{val self: Int}
-// expect: 50:79: error: type mismatch: found T, required AnyRef{val self: Int}
-// expect: 51:92: error: type mismatch: found F[Int], required AnyRef{val self: Int}
-// expect: 52:101: error: type mismatch: found U, required AnyRef{val self: Int}
+// expect: 33:85: error: Found:    T⏎Required: AnyRef{def self: Int}
+// expect: 34:85: error: Found:    T⏎Required: AnyRef{def self: String}
+// expect: 35:81: error: Found:    T⏎Required: AnyRef{def self: Int}
+// expect: 36:80: error: Found:    T⏎Required: AnyRef{val self: Int}
+// expect: 37:103: error: Found:    T⏎Required: AnyRef{def add(n: Int): Int}
+// expect: 38:94: error: Found:    T⏎Required: AnyRef{def self(n: Int): Int}
+// expect: 39:93: error: Found:    F[String]⏎Required: AnyRef{def self: Int}
+// expect: 40:61: error: Found:    T⏎Required: AnyRef{def self: Int}
+// expect: 41:60: error: Found:    T⏎Required: AnyRef{def self: Int}
+// expect: 42:50: error: Found:    T⏎Required: AnyRef{def self: Int}
+// expect: 43:89: error: Found:    U⏎Required: AnyRef{def self: Int}
+// expect: 44:97: error: Found:    U⏎Required: AnyRef{def self: Int}
+// expect: 45:108: error: Found:    U⏎Required: AnyRef{def self: Int}
+// expect: 46:116: error: Found:    F[String]⏎Required: AnyRef{def self: Int}
+// expect: 47:98: error: Found:    U⏎Required: AnyRef{def self: Int}
+// expect: 48:96: error: Found:    T⏎Required: AnyRef{def self(x: String): Int}
+// expect: 49:79: error: Found:    T⏎Required: AnyRef{val self: Int}
+// expect: 50:79: error: Found:    T⏎Required: AnyRef{val self: Int}
+// expect: 51:92: error: Found:    F[Int]⏎Required: AnyRef{val self: Int}
+// expect: 52:101: error: Found:    U⏎Required: AnyRef{val self: Int}
 // expect: 20 errors found
 class Knot { def self: Int = 1 }
 class Other

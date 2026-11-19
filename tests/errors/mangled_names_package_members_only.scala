@@ -13,8 +13,8 @@ object Main:
     println(f$minusg)
     println(O.i$minusj.v)
     println(O.p$minusq)
-// expect: 12:13: error: not found: x$plusy
-// expect: 13:13: error: not found: f$minusg
+// expect: 12:13: error: Not found: x$plusy
+// expect: 13:13: error: Not found: f$minusg
 // expect: 14:13: error: value i$minusj is not a member of O
 // expect: 15:13: error: value p$minusq is not a member of O
 // expect: 4 errors found

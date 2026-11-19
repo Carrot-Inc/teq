@@ -1741,7 +1741,7 @@ object Typing:
     // error printed once, every file as it was.
     val badFiles = program("counter/use", "p") ++ program("counter/bad", "p") :+ print
     val bads = counts.map(t => typed(s"bad-$t", badFiles, counterConf, t, t, extra = cp))
-    expect("bad", bads.head.status == 2 && bads.head.files == badFiles.toMap && bads.head.err.linesIterator.count(_.contains("error: type mismatch")) == 1 && bads.head.err.linesIterator.count(_ == "configured") == 1,
+    expect("bad", bads.head.status == 2 && bads.head.files == badFiles.toMap && bads.head.err.linesIterator.count(_.contains("error: Found: ")) == 1 && bads.head.err.linesIterator.count(_ == "configured") == 1,
       s"exit ${bads.head.status}, files kept ${bads.head.files == badFiles.toMap}\n${bads.head.err}")
     for (o, t) <- bads.zip(counts).drop(1) do
       expect(s"bad/w$t/bytes", sameBytes(bads.head, o).isEmpty, sameBytes(bads.head, o).getOrElse(""))

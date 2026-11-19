@@ -1,5 +1,5 @@
-// expect: 15:36: error: type mismatch: found C[_, _], required C[?, ? <: (Any => Int)]
-// expect: 16:35: error: type mismatch: found D[_, _], required D[?, ? <: Contra[Any]]
+// expect: 15:36: error: Found:    C[_, _]⏎Required: C[?, ? <: (Any => Int)]
+// expect: 16:35: error: Found:    D[_, _]⏎Required: D[?, ? <: Contra[Any]]
 // expect: 2 errors found
 // A wildcard argument stands in its parameter's bound for the end its variance takes there
 // (`TypeComparer.isSubArgs`' `paramBounds` through `substApprox`): in `F <: (A => Int)` the unknown

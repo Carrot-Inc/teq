@@ -19,7 +19,18 @@ def folded: 2 = h(1 + 1)
 def pair = { val p = k(1, 2); val q: (IsX[1], IsX[2]) = p }
 def widened = { val p = k(1, 2); val q: (IsX[Int], IsX[Int]) = p }
 // expect: 13:23: error:
-// expect: 20:64: error: type mismatch: found (IsX[1], IsX[2]), required (IsX[Int], IsX[Int])
+// expect: 20:64: error: Found:    (IsX[1], IsX[2])
+// expect+ Required: (IsX[Int], IsX[Int])
+// expect+
+// expect+ Note: a match type could not be fully reduced:
+// expect+
+// expect+   trying to reduce  IsX[Int]
+// expect+   failed since selector Int
+// expect+   does not match  case (x : Int) => true
+// expect+   and cannot be shown to be disjoint from it either.
+// expect+   Therefore, reduction cannot advance to the remaining case
+// expect+
+// expect+     case _ => false
 // absent: 14:
 // absent: 15:
 // absent: 16:

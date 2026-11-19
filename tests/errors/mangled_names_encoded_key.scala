@@ -4,5 +4,5 @@ object A:
   val value = 42
 object Main:
   def main(args: Array[String]): Unit = println($u0041.value)
-// expect: 6:49: error: not found: $u0041
+// expect: 6:49: error: Not found: $u0041
 // expect: 1 error found

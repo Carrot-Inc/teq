@@ -1,5 +1,5 @@
-// expect: 20:17: error: type mismatch: found Any, required String
-// expect: 21:14: error: type mismatch: found Any, required Int
+// expect: 20:17: error: Found:    Any⏎Required: String
+// expect: 21:14: error: Found:    Any⏎Required: Int
 // expect: 22:18: error: Ambiguous overload. The overloaded alternatives of method (k: "k"): String with types
 // expect:  (k: "k"): String
 // expect:  (k: "v"): Int

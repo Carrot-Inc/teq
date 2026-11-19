@@ -13,8 +13,12 @@ def run() =
   val c: 1 = stored.zero
   val d: 1 = box((1: Int)).zero
   val e: 1 = box(1).zero
-// expect: 10:14: error: type mismatch: found Int, required 1
-// expect: 11:14: error: type mismatch: found Int, required 1
-// expect: 13:14: error: type mismatch: found Int, required 1
-// expect: 14:14: error: type mismatch: found Int, required 1
+// expect: 10:14: error: Found:    Int
+// expect+ Required: 1
+// expect: 11:14: error: Found:    Int
+// expect+ Required: 1
+// expect: 13:14: error: Found:    Int
+// expect+ Required: 1
+// expect: 14:14: error: Found:    Int
+// expect+ Required: 1
 // absent: 15:

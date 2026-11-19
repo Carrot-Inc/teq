@@ -1,12 +1,12 @@
 // Path equality and subtyping between type members, each answer from scalac 3.8.4: the lines
 // without an error are what scalac accepts.
-// expect: 39:23: error: type mismatch: found b.Elem, required a.Elem
-// expect: 42:25: error: type mismatch: found Container#Elem, required a.Elem
-// expect: 45:21: error: type mismatch: found a.Elem, required Int
-// expect: 47:31: error: type mismatch: found (fa : a.F[Int]), required a.F[String]
-// expect: 48:31: error: type mismatch: found (fb : b.F[Int]), required a.F[Int]
-// expect: 50:51: error: type mismatch: found Names, required Container{type Elem = Int}
-// expect: 53:49: error: type mismatch: found Container{type Elem <: String}, required Container{type Elem = String}
+// expect: 39:23: error: Found:    b.Elem⏎Required: a.Elem
+// expect: 42:25: error: Found:    Container#Elem⏎Required: a.Elem
+// expect: 45:21: error: Found:    a.Elem⏎Required: Int
+// expect: 47:31: error: Found:    (fa : a.F[Int])⏎Required: a.F[String]
+// expect: 48:31: error: Found:    (fb : b.F[Int])⏎Required: a.F[Int]
+// expect: 50:51: error: Found:    Names⏎Required: Container{type Elem = Int}
+// expect: 53:49: error: Found:    Container{type Elem <: String}⏎Required: Container{type Elem = String}
 // expect: 7 errors found
 trait Container:
   type Elem

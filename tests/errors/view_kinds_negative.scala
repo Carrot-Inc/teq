@@ -1,9 +1,9 @@
 // A view keeps scala-library's type: a `View` is no `SeqView`, a `SeqView` no `IndexedSeqView`,
 // and `filter` gives a `View` where `map` keeps the kind.
-// expect: 11:25: error: type mismatch: found View[Int], required SeqView[Int]
-// expect: 12:32: error: type mismatch: found SeqView[Int], required IndexedSeqView[Int]
-// expect: 13:25: error: type mismatch: found View[Int], required SeqView[Int]
-// expect: 14:32: error: type mismatch: found View[Int], required IndexedSeqView[Int]
+// expect: 11:25: error: Found:    View[Int]⏎Required: SeqView[Int]
+// expect: 12:32: error: Found:    SeqView[Int]⏎Required: IndexedSeqView[Int]
+// expect: 13:25: error: Found:    View[Int]⏎Required: SeqView[Int]
+// expect: 14:32: error: Found:    View[Int]⏎Required: IndexedSeqView[Int]
 // expect: 4 errors found
 import scala.collection.{View, SeqView, IndexedSeqView}
 object Main:

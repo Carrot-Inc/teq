@@ -1,16 +1,16 @@
-// expect: 30:30: error: type mismatch: found Int => 5, required Int => Unit
-// expect: 34:30: error: type mismatch: found Int => 5, required Int => Unit
-// expect: 40:30: error: type mismatch: found Int => 5, required Int => Unit
-// expect: 44:38: error: type mismatch: found Int => 5, required Int => Unit
-// expect: 48:30: error: type mismatch: found Int => 5, required Int => Unit
-// expect: 51:70: error: type mismatch: found Int => Meter, required Int => Unit | Null
-// expect: 58:67: error: type mismatch: found Int => Meter, required Int => U
-// expect: 63:73: error: type mismatch: found Int => Meter, required Int => r.R
-// expect: 68:31: error: type mismatch: found Int => Meter | Unit, required Int => Unit
-// expect: 73:16: error: type mismatch: found Int => Meter | Unit, required Int => Unit
-// expect: 74:16: error: type mismatch: found Int => Meter | Unit, required Int => Unit
-// expect: 75:16: error: type mismatch: found Int => Meter, required Int => Unit
-// expect: 76:16: error: type mismatch: found Int => Meter | Unit, required Int => Unit
+// expect: 30:30: error: Found:    Int => 5⏎Required: Int => Unit
+// expect: 34:30: error: Found:    Int => 5⏎Required: Int => Unit
+// expect: 40:30: error: Found:    Int => 5⏎Required: Int => Unit
+// expect: 44:38: error: Found:    Int => 5⏎Required: Int => Unit
+// expect: 48:30: error: Found:    Int => 5⏎Required: Int => Unit
+// expect: 51:70: error: Found:    Int => Meter⏎Required: Int => Unit | Null
+// expect: 58:67: error: Found:    Int => Meter⏎Required: Int => U
+// expect: 63:73: error: Found:    Int => Meter⏎Required: Int => r.R
+// expect: 68:31: error: Found:    Int => Meter | Unit⏎Required: Int => Unit
+// expect: 73:16: error: Found:    Int => Meter | Unit⏎Required: Int => Unit
+// expect: 74:16: error: Found:    Int => Meter | Unit⏎Required: Int => Unit
+// expect: 75:16: error: Found:    Int => Meter⏎Required: Int => Unit
+// expect: 76:16: error: Found:    Int => Meter | Unit⏎Required: Int => Unit
 // A lambda's result that does not conform to its open variable is adapted again only where the variable can be
 // defined further to a type the value is dropped to. A variable DECLARED below `Unit` is not such a one: its
 // instance is the value's type, which the bound refuses, also for a branch inside a case. Nor is one that
@@ -85,5 +85,7 @@ object HandlerNotUnit:
   def go(): Unit =
     settleUnit(x => try println("body") catch count)
     settleUnit(x => try println("body") catch counter(7))
-// expect: 86:47: error: type mismatch: found Throwable => Int, required Throwable => Unit
-// expect: 87:55: error: type mismatch: found 7, required Unit
+// expect: 86:47: error: Found:    Throwable => Int
+// expect+ Required: Throwable => Unit
+// expect: 87:55: error: Found:    7
+// expect+ Required: Unit

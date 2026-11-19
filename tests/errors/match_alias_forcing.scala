@@ -25,8 +25,13 @@ def pred[N <: Int](n: S[N]): N = (n - 1).asInstanceOf[N]
   val d = prev(2)
   val e: Box[1] = d
   println(pred(0))
-// expect: 22:14: error: type mismatch: found Int, required 1
-// expect: 23:14: error: type mismatch: found Int, required 1
-// expect: 24:14: error: type mismatch: found Int, required 1
-// expect: 26:19: error: type mismatch: found Box[Int], required Box[1]
-// expect: 27:16: error: type mismatch: found 0, required S[N]
+// expect: 22:14: error: Found:    Int
+// expect+ Required: 1
+// expect: 23:14: error: Found:    Int
+// expect+ Required: 1
+// expect: 24:14: error: Found:    Int
+// expect+ Required: 1
+// expect: 26:19: error: Found:    Box[Int]
+// expect+ Required: Box[1]
+// expect: 27:16: error: Found:    0
+// expect+ Required: S[N]

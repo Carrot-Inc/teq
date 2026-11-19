@@ -8,8 +8,8 @@
 // expect: 22:23: error: Cyclic reference involving type A
 // expect: 23:20: error: Cyclic reference involving type A
 // expect: 24:28: error: illegal cyclic type reference: upper bound A of type B refers back to the type itself
-// expect: 29:23: error: type mismatch: found Null, required A
-// expect: 30:23: error: type A not found
+// expect: 29:23: error: Found:    Null⏎Required: A
+// expect: 30:23: error: Not found: type A
 // absent: binder_completion_cycle.scala:25:
 // absent: binder_completion_cycle.scala:26:
 // absent: binder_completion_cycle.scala:27:

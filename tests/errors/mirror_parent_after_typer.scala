@@ -1,8 +1,8 @@
-// expect: 18:27: error: type mismatch
+// expect: 18:27: error: Found:    P⏎Required: Product
 // expect: 19:11: error: value fromProduct is not a member of
-// expect: 21:13: error: type mismatch
-// expect: 22:23: error: type mismatch
-// expect: 23:29: error: type mismatch
+// expect: 21:13: error: Found:    P⏎Required: Product
+// expect: 22:23: error: Found:    S⏎Required: Sum
+// expect: 23:29: error: Found:    O⏎Required: Singleton
 // expect: 24:11: error: value ordinal is not a member of
 // expect: 6 errors found
 // A companion, a case object, is its class's mirror from `SyntheticMembers.addMirrorSupport`,

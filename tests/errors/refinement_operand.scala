@@ -3,4 +3,5 @@
 trait A:
   type T
 def f(a: A & { type T = Int })(x: a.T): String = x
-// expect: 5:50: error: type mismatch: found Int, required String
+// expect: 5:50: error: Found:    Int
+// expect+ Required: String

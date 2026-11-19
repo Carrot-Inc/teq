@@ -7,6 +7,7 @@ def uses(): Unit =
   println(x)
 // The restriction on an overloaded `applyDynamic` is `RefChecks`' (`checkOverloadedRestrictions`): where the typer
 // has reported an error it is not told, as under scalac.
-// expect: 6:16: error: type mismatch: found "s", required Int
+// expect: 6:16: error: Found:    "s"
+// expect+ Required: Int
 // expect: 1 error found
 // absent: implementation restriction

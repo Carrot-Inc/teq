@@ -1,5 +1,5 @@
-// expect: 12:24: error: type mismatch: found Html.Tag[Node], required Svg.Tag[Node]
-// expect: 13:17: error: type mismatch: found Html.Tag[Node], required String
+// expect: 12:24: error: Found:    Html.Tag[Node]⏎Required: Svg.Tag[Node]
+// expect: 13:17: error: Found:    Html.Tag[Node]⏎Required: String
 // The copies of a trait's opaque type that two objects deriving from it have are two types, opaque
 // outside the trait (scalac: E007 at both lines).
 trait TagKit[Top]:

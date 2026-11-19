@@ -2,7 +2,7 @@
 // early expansion needs is the phase's, not run after a typer error (`_clean` warns), and the
 // argument is reused by the retry on the qualifier's conversion: the one error is the last line's.
 // absent: prefix warning
-// expect: Use.scala:19:21: error: type mismatch
+// expect: Use.scala:19:21: error: Found:    Int⏎Required: String
 // expect: 1 error found
 import scala.language.implicitConversions
 

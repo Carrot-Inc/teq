@@ -1366,7 +1366,7 @@ pub struct Worker<'a> {
     /// the depth of the application they were reported under: rendered again from the types as
     /// that application's typing leaves them, before it solves its variables
     /// (`apply::render_mismatches`).
-    pub mismatch_renders: Vec<(usize, String, TypeId, TypeId, usize, u32)>,
+    pub mismatch_renders: Vec<(usize, String, TypeId, TypeId, expr::MismatchNotes, u32)>,
     pub logging: u32,
     /// How many method applications are under way (`apply::apply_method_in`), and the depth at
     /// which a member's retry on the qualifier runs (`apply::retry_on_qualifier`): the application

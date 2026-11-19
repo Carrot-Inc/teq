@@ -1,6 +1,6 @@
 // expect: 9:8: error: cannot resolve import: Nope not found
 // expect: 27:5: error: value += is not a member of Int
-// expect: 27:10: error: not found: missing
+// expect: 27:10: error: Not found: missing
 // expect: 3 errors found
 // An operand of an assignment operator that is an error without a report of its own (a name of an import that did
 // not resolve: told at the import) fails neither typing of the operation: the assignment form stands and nothing

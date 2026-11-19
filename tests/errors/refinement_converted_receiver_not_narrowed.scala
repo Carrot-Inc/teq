@@ -1,4 +1,4 @@
-// expect: 8:75: error: type mismatch: found Any, required String
+// expect: 8:75: error: Found:    Any⏎Required: String
 // A refinement of a receiver says nothing of a call on what a conversion makes of it. The member's
 // application does not type (`""` is no `Int`), so the receiver is converted, as scalac's
 // `tryInsertImplicitOnQualifier` has it, and `v` is rejected (`Found: (v : Any), Required: String`).

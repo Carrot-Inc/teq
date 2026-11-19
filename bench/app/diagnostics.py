@@ -135,6 +135,10 @@ def record(side, scope, root, cwd, out, d, code=""):
     # A place in this run's products (`<out dir>/<scope>.products!<source>`, where teq names an inlined body) is
     # written under <out>; nothing else of a message is rewritten.
     message = re.sub(re.escape(out.rstrip("/")) + r"/([\w-]+\.products)!", r"<out>/\1!", d.get("message", ""))
+    if side == "teq":
+        sys.path.insert(0, os.path.join(HERE, "..", "..", "tests", "support"))
+        import rewording  # teq's words rendered back to master's, which this reader reads
+        message = rewording.render_message(message, strict=False)[1]
     category, payload = categorize(side, code, message)
     # Where it is: scalac's point, its span's start and end; teq's start and end; each a line and a column.
     at = [(d["line"], d["col"])] if "line" in d else []

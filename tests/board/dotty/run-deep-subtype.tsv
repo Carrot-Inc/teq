@@ -10,7 +10,7 @@ Tuple-size.scala	pass	interp:pass
 Tuple-tail.scala	pass	interp:pass	
 Tuple-toArray.scala	pass	interp:fail	
 colltest4	pass	interp:fail	
-i16191.scala	fail	interp:fail	output: line 1: the .check has 'List(private final Context C.ctx)', the program printed 'List(private Context C.ctx, private java.lang.Object C.given_Context$lzy, private java.lang.Object C.given_C$lzy)'
+i16191.scala	fail	interp:fail	output: line 1: the .check has 'List(private final Context C.ctx)', the program printed 'List(private static final java.lang.invoke.VarHandle C.given_C$lzy1$lzyHandle, private static final java.lang.invoke.VarHandle C.given_Context$lzy1$lzy
 i5256.scala	pass	interp:pass	
 tuple-cons.scala	pass	interp:pass	
 tuple-drop.scala	pass	interp:pass	

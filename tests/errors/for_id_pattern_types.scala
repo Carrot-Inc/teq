@@ -6,5 +6,7 @@
   for x: String <- List(1) do println(x)
   val xs = List(1, 2); val ys = List(3, 4)
   for (a: String, b) <- xs.lazyZip(ys) do println(b)
-// expect: 6:7: error: type mismatch: found String => Unit, required Int => Any
-// expect: 8:7: error: type mismatch: found (String, Int) => Unit, required (Int, Int) => Any
+// expect: 6:7: error: Found:    String => Unit
+// expect+ Required: Int => Any
+// expect: 8:7: error: Found:    (String, Int) => Unit
+// expect+ Required: (Int, Int) => Any

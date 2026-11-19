@@ -93,6 +93,10 @@
 #            tests/run_stdlib.sh --update without its jar writing every case cannot run; tests/support/identity.sh
 #            counting no program identical whose runs were killed on both sides; tests/workers.sh's checks whose
 #            command was killed failing with that reason.
+#   words    the first words' readers: master's code on the head's output rendered back whole, deciding as on master's
+#            (run.py, the typing harness, tests/parser/run.py, bench/app/diagnostics.py; a term named `type X` the
+#            pinned row); tests/run_errors.sh
+#            holding a placed expectation by a diagnostic's header, never by its text inside a quoted value.
 #   board    the conformance board's decision on a neg or warn test (tests/board/dotty.py, neg_or_warn) over made-up
 #            sources, records of teq's and oracles of scalac's, no compiler run but teq's where said: diagnostics
 #            equal to scalac's passing; one word of a message, a later line of it, a line past its end, a column,
@@ -1877,6 +1881,62 @@ mkdir -p "$t/d8/scala-cli"
 tools_run "$t/tools.sh" 0 "$t/d8"
 check "tools: a directory where a tool goes refused, said, nothing asked, installed nor added" "$t/err" \
   eval '[ $code = 1 ] && grep -q "d8/scala-cli is a directory, where the scala-cli binary goes" "$t/err" && [ ! -s "$t/urls" ] && [ "$(ls "$t/d8")" = scala-cli ] && [ -z "$(ls "$t/d8/scala-cli")" ] && [ ! -s "$t/path" ]'
+
+# The first words' readers are master's code, fed the head's output rendered back whole (rewording.render_stream): the
+# rendered stream is master's byte for byte, and each reader decides on it as on master's (run.py's bucket and its
+# source line, the typing harness's category, the parser's normalised lines, the app oracle's record); a backticked
+# term named `type Widget` reads as the missing type (a row, pinned). tests/run_errors.sh holds a placed expectation
+# by a diagnostic's header alone.
+wd=$work/words
+mkdir -p "$wd"
+cat > "$wd/readers.py" <<'PY'
+import importlib.util, json, sys
+sys.argv = ['run.py']
+for d in ('tests/scala3-typing', 'tests/scala3', 'tests/support'):
+    sys.path.insert(0, d)
+import run as R, harness as H, rewording as W
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
+P, A = load('parser_run', 'tests/parser/run.py'), load('app_diagnostics', 'bench/app/diagnostics.py')
+def out(msg, src, col):
+    return f'p.scala:1:{col}: error: {msg}\n  {src}\n  {" " * (col - 1)}^\n1 error found\n'
+def decisions(o):
+    first = next(m for m in (H.DIAG.match(l) for l in o.splitlines()) if m)
+    return (R.bucket_of(*R.first_error(o)), R.first_error(o)[1], H.normalise(first.group(5)),
+            sorted(P.normalise(m['path'], 1, 1, m['severity'], m['message']) for m in map(P.DIAG.match, o.splitlines()) if m))
+def app(msg):
+    r = A.record('teq', 'files', '.', '.', '/nowhere', {'file': 'p.scala', 'line': 1, 'col': 1, 'severity': 'error', 'message': msg})
+    return r['category'], r['payload'], r['message']
+cases = (('a missing type of two words', 'type Two Words not found', 'Not found: type Two Words', 'val b: `Two Words` = ???', 8),
+         ('a backticked term', 'not found: two words', 'Not found: two words', 'val a = `two words`', 9),
+         ('a mismatch whose literal holds the delimiter', 'type mismatch: found "a, required B", required Int', 'Found:    "a, required B"\nRequired: Int', 'val x: Int = "a, required B"', 14),
+         ('a mismatch over a null source line', 'type mismatch: found "oops", required Int', 'Found:    "oops"\nRequired: Int', 'val x: Int = { val a = null; "oops" }', 30),
+         ('a message of several lines, the same words', 'None of the overloaded alternatives of method area with types\n (r: Int): Int\n (w: Int, h: Int): Int\nmatch arguments ()', 'None of the overloaded alternatives of method area with types\n (r: Int): Int\n (w: Int, h: Int): Int\nmatch arguments ()', 'area()', 3))
+for name, old, new, src, col in cases:
+    o, n = out(old, src, col), out(new, src, col)
+    rendered = W.render_stream(n)
+    ok = rendered == o and decisions(rendered) == decisions(o) and app(new) == app(old)
+    print(('ok ' if ok else 'FAIL ') + name)
+o, n = out('not found: type Widget', 'val x = `type Widget`', 9), out('Not found: type Widget', 'val x = `type Widget`', 9)
+d_old, d_new = decisions(o), decisions(W.render_stream(n))
+print(('ok ' if (d_old[0], d_new[0], d_old[2], d_new[2]) == (('gap', 'standard library'), ('gap', 'typing'), 'not found: {}', 'type {} not found') else 'FAIL ')
+      + 'a term named `type Widget`, read as the missing type (a row, pinned)')
+PY
+timeout 60 python3 -B "$wd/readers.py" > "$wd/readers.log" 2>&1
+check "words: master's readers on the head's output rendered back decide as on master's, a term named \`type Widget\` the pinned row" "$wd/readers.log" eval '
+  [ "$(grep -c "^ok " "$wd/readers.log")" = 6 ] && ! grep -q -v "^ok " "$wd/readers.log"'
+held_of() {
+  local expected=$1 out=$2 held
+  eval "$(sed -n '/^    if \[\[ \$expected =~ /,/^    fi$/p' tests/run_errors.sh)"
+  echo "${held:-none}"
+}
+out='tests/errors/p.scala:1:14: error: Found:    "1:14: error: type mismatch"
+Required: Int
+  val x: Int = "1:14: error: type mismatch"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^'
+check "words: a placed expectation is held by a diagnostic's header, never by its text inside a quoted value" /dev/null eval '
+  [ "$(held_of "1:14: error: type mismatch" "$out")" = none ] && [ "$(held_of "1:14: error: Found:    \"1:14" "$out")" = held ] &&
+  [ "$(held_of "p.scala:1:14: error: Found:" "$out")" = held ] && [ "$(held_of "Required: Int" "$out")" = held ]'
 
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]

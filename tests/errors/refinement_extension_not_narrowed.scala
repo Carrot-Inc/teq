@@ -1,4 +1,4 @@
-// expect: 7:68: error: type mismatch: found Any, required String
+// expect: 7:68: error: Found:    Any⏎Required: String
 // expect: 1 error found
 // A refinement narrows a call of the member it describes only: `c.f()` falls back to the
 // extension, whose result stays `Any` (scalac: `Found: (r : Any), Required: String`).

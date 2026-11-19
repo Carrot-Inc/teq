@@ -1,6 +1,6 @@
-// expect: type mismatch: found String, required Bar
-// expect: type mismatch: found String, required Bar
-// expect: type mismatch: found String, required Bar
+// expect: Found:    String⏎Required: Bar
+// expect: Found:    String⏎Required: Bar
+// expect: Found:    String⏎Required: Bar
 // scala3's neg/i15939: the companion of a class nested in a class enters the implicit scope of
 // the class's type only through a stable prefix. `mkFoo.andThen(mkBarString)` wants a
 // `mkFoo.Bar` whose prefix `mkFoo` is a method call, so its companion's conversion

@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.join(REPO, "tests", "scala3-typing"))
 sys.path.insert(0, os.path.join(REPO, "tests", "support"))
 from harness import scalac_options, teq_flags  # noqa: E402
 import pending  # noqa: E402
+import rewording  # noqa: E402  (teq's words rendered back to master's, which these readers read)
 sys.path.insert(0, os.path.join(REPO, "tests", "board"))
 import dotty  # noqa: E402
 
@@ -229,7 +230,7 @@ def run_one(test, teq, out_dir, compile_timeout, run_timeout, target="js"):
         return result
     result["compile_seconds"] = round(time.monotonic() - t0, 3)
     if build.returncode != 0:
-        err, source = first_error(build.stderr)
+        err, source = first_error(rewording.render_stream(build.stderr))
         if build.returncode != 1 or "panicked" in build.stderr or "internal error" in build.stderr:
             result.update(status="compile-crash", error=(build.stderr or "")[-600:], code=build.returncode)
             return result
@@ -277,7 +278,7 @@ def run_one_interp(test, teq, result, timeout, flags):
         return result
     result["compile_seconds"] = round(time.monotonic() - t0, 3)
     if run.returncode != 0:
-        err, source = first_error(run.stderr)
+        err, source = first_error(rewording.render_stream(run.stderr))
         if "panicked" in run.stderr or "internal error" in run.stderr:
             result.update(status="compile-crash", error=(run.stderr or "")[-600:], code=run.returncode)
         elif run.returncode == 3:

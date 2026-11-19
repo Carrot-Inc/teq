@@ -1,4 +1,4 @@
-// expect: 13:44: error: type mismatch: found Any, required String
+// expect: 13:44: error: Found:    Any⏎Required: String
 // absent: intersection_member_refined.scala:11:
 // expect: 1 error found
 // Two parts refining the member differently: neither refinement's parameter matches the member

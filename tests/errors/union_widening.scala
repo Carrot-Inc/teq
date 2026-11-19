@@ -1,11 +1,11 @@
 // Soft unions in inferred val and def types: kept when the join is transparent, widened to the join otherwise.
-// expect: 26:29: error: type mismatch: found Shape, required Circle | Square
-// expect: 30:21: error: type mismatch: found Named, required N1 | N2
-// expect: 32:23: error: type mismatch: found Named & HasSize, required NS1 | NS2
-// expect: 35:35: error: type mismatch: found Option[Int], required Some[Int] | None
-// expect: 43:29: error: type mismatch: found Shape, required Circle | Square
-// expect: 51:30: error: type mismatch: found Shape, required Circle | Square
-// expect: 58:38: error: type mismatch: found Seq[Int], required List[Int] | Vector[Int]
+// expect: 26:29: error: Found:    Shape⏎Required: Circle | Square
+// expect: 30:21: error: Found:    Named⏎Required: N1 | N2
+// expect: 32:23: error: Found:    Named & HasSize⏎Required: NS1 | NS2
+// expect: 35:35: error: Found:    Option[Int]⏎Required: Some[Int] | None
+// expect: 43:29: error: Found:    Shape⏎Required: Circle | Square
+// expect: 51:30: error: Found:    Shape⏎Required: Circle | Square
+// expect: 58:38: error: Found:    Seq[Int]⏎Required: List[Int] | Vector[Int]
 trait Shape
 case class Circle(r: Int) extends Shape
 case class Square(s: Int) extends Shape

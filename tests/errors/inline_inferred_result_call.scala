@@ -1,4 +1,4 @@
-// expect: 6:14: error: type mismatch: found Int | String, required Int
+// expect: 6:14: error: Found:    Int | String⏎Required: Int
 // expect: 1 error found
 // A plain inline method's call whose result is inferred has the definition's inferred type, not its
 // expansion's (`Namer.inferredResultType`): `pick(true)` expands to `1` and is an `Int | String`.

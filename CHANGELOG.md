@@ -66,6 +66,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   is held only where its written type names classes and type parameters alone: one that names an alias, a path's
   member or `@uncheckedVariance` anywhere is not held. Under `-source:3.0-migration` it is a migration warning, as
   scalac's.
+- A type mismatch reads as scalac's: `Found:    <type>` and `Required: <type>` on lines of their own, each note on lines of
+  its own after them (implicit conversions not tried to `AnyVal` or `AnyRef`; the ambiguity of two conversions,
+  `convert from A to B`, or of two extension methods, `provide an extension method`), then a match type's reduction
+  note. A missing name reads `Not found: x`, a missing type `Not found: type X`. teq said `type mismatch: found T,
+  required U` and `not found: x` / `type X not found`. A no-given message names a candidate's failure whole. A tool
+  that reads a diagnostic's first line alone now finds `Found:    <type>` there: the JSON's `message` field and the
+  language server hold the whole message.
 - A class's own constructor parameter named by an import inside its parent's argument, or inside a default of a
   later parameter clause, is read as the constructor's argument, as the parameter's name itself is read there (a
   context bound's evidence, `[T: {Show as sh}]`, among them): `class Named(d: Dsl) extends Base({ import d.*;

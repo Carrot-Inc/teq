@@ -1,7 +1,7 @@
-// expect: 10:44: error: type mismatch: found Int, required String
+// expect: 10:44: error: Found:    Int⏎Required: String
 // expect: 13:53: error: value length is not a member of Any
-// expect: 16:40: error: type nope not found
-// expect: 20:53: error: type mismatch: found "a", required Int
+// expect: 16:40: error: Not found: type nope
+// expect: 20:53: error: Found:    "a"⏎Required: Int
 // expect: 4 errors found
 // A `for`'s alias that is a typed variable is a value definition: its right side is checked against the written
 // type, its variable has that type, and a lowercase name of the type is the type of that name.

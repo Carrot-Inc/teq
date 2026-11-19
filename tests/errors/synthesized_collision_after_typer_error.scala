@@ -1,4 +1,4 @@
-// expect: 9:14: error: type mismatch: found "bad", required Int
+// expect: 9:14: error: Found:    "bad"⏎Required: Int
 // expect: 1 error found
 // absent: Conflicting definitions
 // The synthesized member's collision is erasure's error (`checkNoDoubleDeclaration`), which a

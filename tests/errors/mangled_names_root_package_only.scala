@@ -16,7 +16,7 @@ object Main:
     println(q$minusr.c$minusd.v)
     println(new q$minusr.k$minusl)
     println(outer.x$minusy.Z)
-// expect: 9:31: error: not found: c$minusd
+// expect: 9:31: error: Not found: c$minusd
 // expect: 14:19: error: c$minusd is not a member of the package
 // expect: 16:13: error: value c$minusd is not a member of q$minusr
 // expect: 17:17: error: type k$minusl not found

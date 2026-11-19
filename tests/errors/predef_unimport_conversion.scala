@@ -1,5 +1,5 @@
-// expect: 11:30: error: type mismatch: found scala.Byte, required java.lang.Byte
-// expect: 12:32: error: type mismatch: found 1, required Integer
+// expect: 11:30: error: Found:    scala.Byte⏎Required: java.lang.Byte
+// expect: 12:32: error: Found:    1⏎Required: Integer
 // expect: 2 errors found
 // An explicit import of `Predef` takes its implicit conversions away with its other members, and
 // a wildcard import leaves out the conversions it hides.

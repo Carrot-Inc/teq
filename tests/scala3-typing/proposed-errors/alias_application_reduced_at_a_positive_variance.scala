@@ -5,7 +5,7 @@
 // to, E007. teq's avoidance returns the canonical map's own result, `Out[Box[? <: Box[?]]]`, and accepts it; without
 // the alias both compilers give that type and accept. source-version-3's `derivedAppliedType` port;
 // this case goes live at the rebase onto its landing. scalac's line.
-// expect: 16:34: error: type mismatch: found Out[Twice[x.T]], required Out[Box[Box[_]]]
+// expect: 16:34: error: Found:    Out[Twice[x.T]]⏎Required: Out[Box[Box[_]]]
 package twice
 class C { type T }
 class Box[A]

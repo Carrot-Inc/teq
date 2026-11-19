@@ -31,7 +31,7 @@ def uses(g: Guarded): Unit =
 // expect: 21:11: error: inner is private to Guarded
 // expect: 22:11: error: depth is private to Guarded
 // expect: 23:11: error: method tag in class Guarded cannot be accessed as a member of Guarded from here
-// expect: 23:17: error: not found: absent
+// expect: 23:17: error: Not found: absent
 // expect: 7 errors found
 // absent: no given instance
 // absent: ambiguous extension methods

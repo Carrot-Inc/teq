@@ -4108,7 +4108,8 @@ impl<'a> Worker<'a> {
             names::MATCHABLE => ANY,
             names::NOTHING => NOTHING,
             _ => {
-                let msg = format!("type {} not found", self.name_str(n));
+                // the reference's MissingIdent, its plain branch (a member of a prefix below is scalac's E008)
+                let msg = format!("Not found: type {}", self.name_str(n));
                 self.not_found_error(n, span, msg, Some(crate::source::MissingKind::Type));
                 ERROR
             }
@@ -4594,7 +4595,7 @@ impl<'a> Worker<'a> {
                     }
                 }
                 if let Type::Ctor(c) = self.types.get(prefix) {
-                    let msg = format!("type mismatch: found {}, required ?{{ {}: ? }}", self.name_str(self.syms.class(c).name), self.name_str(n));
+                    let msg = super::expr::mismatch_message(&self.name_str(self.syms.class(c).name), &format!("?{{ {}: ? }}", self.name_str(n)), &Default::default());
                     self.error(self.cur_ast().ty_spans[q.idx()], msg);
                     return ERROR;
                 }

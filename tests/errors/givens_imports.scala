@@ -1,6 +1,6 @@
 // expect: 37:26: error: no given instance of type TC[Int]
-// expect: 38:11: error: not found: intTC
-// expect: 39:11: error: not found: plain
+// expect: 38:11: error: Not found: intTC
+// expect: 39:11: error: Not found: plain
 // expect: value label is not a member of Secret
 // expect: 41:29: error: no given instance of type Label[Secret]
 package demo

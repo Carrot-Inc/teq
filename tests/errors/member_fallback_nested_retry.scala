@@ -1,5 +1,5 @@
-// expect: 13:29: error: type mismatch: found "bad", required Int
-// expect: 13:36: error: not found: undefinedName
+// expect: 13:29: error: Found:    "bad"⏎Required: Int
+// expect: 13:36: error: Not found: undefinedName
 // A member call an extension takes over through the retry on the qualifier, whose later clause
 // holds a call that fails in its first clause: that call is no part of the retry, so the list
 // past its failing clause is typed alone, once, for its own error (`undefinedName`), as dotty's

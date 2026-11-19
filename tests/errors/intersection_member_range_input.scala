@@ -1,4 +1,4 @@
-// expect: 9:46: error: type mismatch: found Null, required Nothing & Box[
+// expect: 9:46: error: Found:    Null⏎Required: Nothing & Box[? >: (Int | String) <: Int & String]
 // expect: 1 error found
 // A parameter of an invariant class of the parameter that two instances make a range
 // (`R[Int] & R[String]`'s `put(x: Box[K])`): no `Box` fits the range where the parameter is

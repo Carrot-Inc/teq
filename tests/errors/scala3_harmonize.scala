@@ -1,11 +1,11 @@
 // Adapted from scala3 tests/neg/harmonize.scala (Apache-2.0, see tests/scala3/README.md).
 // try/catch and inline vals left out, AnyVal written as Any, the Array cases left out (Array.apply is overloaded in Scala).
-// expect: 18:18: error: type mismatch: found Char | Int, required Int
-// expect: 30:23: error: type mismatch: found Char | Long | Double, required Double
-// expect: 33:28: error: type mismatch: found List[Double | Int | Char], required List[Double]
-// expect: 37:32: error: type mismatch: found ArrayBuffer[Char], required ArrayBuffer[Int]
-// expect: 39:32: error: type mismatch: found ArrayBuffer[Int | Char], required ArrayBuffer[Int]
-// expect: 41:35: error: type mismatch: found ArrayBuffer[Double | Long], required ArrayBuffer[Double]
+// expect: 18:18: error: Found:    Char | Int⏎Required: Int
+// expect: 30:23: error: Found:    Char | Long | Double⏎Required: Double
+// expect: 33:28: error: Found:    List[Double | Int | Char]⏎Required: List[Double]
+// expect: 37:32: error: Found:    ArrayBuffer[Char]⏎Required: ArrayBuffer[Int]
+// expect: 39:32: error: Found:    ArrayBuffer[Int | Char]⏎Required: ArrayBuffer[Int]
+// expect: 41:35: error: Found:    ArrayBuffer[Double | Long]⏎Required: ArrayBuffer[Double]
 import collection.mutable.ArrayBuffer
 object Test:
   final val nn = 2

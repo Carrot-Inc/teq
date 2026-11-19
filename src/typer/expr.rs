@@ -1320,18 +1320,14 @@ impl<'a> Worker<'a> {
         };
         let (shown_found, shown_expected, fbounded) = self.reported_mismatch(found, expected);
         let (found_text, expected_text) = self.show_pair(shown_found, shown_expected);
-        let mut msg = format!("type mismatch: found {}, required {}", found_text, expected_text);
-        let mut note_len = 0;
-        if let Some(note) = self.match_type_note(actual, expected) {
-            note_len = note.len();
-            msg.push_str(&note);
-        }
-        // No conversion was tried to `AnyVal` or `AnyRef` itself (`convert_to_typed`).
+        let mut notes = MismatchNotes::default();
+        // No conversion was tried to `AnyVal` or `AnyRef` itself (`convert_to_typed`): the reference's
+        // `TooUnspecific` note (typer/Implicits.scala).
         if exp == self.b.t_any_val || exp == self.b.t_any_ref {
-            let note = format!(". Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than {}", self.show(expected));
-            note_len += note.len();
-            msg.push_str(&note);
+            notes.notes.push(format!("Note that implicit conversions were not tried because the result of an implicit conversion\nmust be more specific than {}", self.show(expected)));
         }
+        notes.trace = self.match_type_note(actual, expected);
+        let msg = mismatch_message(&found_text, &expected_text, &notes);
         let at = self.diags.items.len();
         self.error_unless_unknown(span, msg.clone(), &[found, expected]);
         if self.logging > 0 {
@@ -1342,7 +1338,7 @@ impl<'a> Worker<'a> {
         // constraint of the attempt it was reported in, whose instances count and whose open
         // variables show their bounds; one F-bounded shows the variable, as it does.
         if self.app_depth > 0 && !fbounded && self.diags.items.len() > at && (self.types.has_vars(found) || self.types.has_vars(expected)) {
-            self.mismatch_renders.push((at, msg, found, expected, note_len, self.app_depth));
+            self.mismatch_renders.push((at, msg, found, expected, notes, self.app_depth));
         }
         (te, expected)
     }
@@ -6512,7 +6508,7 @@ impl<'a> Worker<'a> {
             }
             if !self.frozen_sub(elems[i], declared) {
                 let (found, required) = self.show_pair(elems[i], declared);
-                self.error(close, format!("type mismatch: found {}, required {}", found, required));
+                self.error(close, mismatch_message(&found, &required, &Default::default()));
             }
         }
     }
@@ -7664,4 +7660,29 @@ fn needs_no_filter(ast: &ast::Ast, pat: ast::PatId, rhs: ExprId) -> bool {
         }
     }
     var_binding(ast, pat) || irrefutable(ast, pat, rhs)
+}
+
+/// What a type mismatch's message adds after its two types: the notes, each on lines of its own (dotty's
+/// `TypeMismatch.msgPostscript`, the notes it renders), then the match type's reduction note that
+/// `ShowMatchTrace` adds after them (its text with its own leading blank lines).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct MismatchNotes {
+    pub notes: Vec<String>,
+    pub trace: Option<String>,
+}
+
+/// A type mismatch's message, dotty's `TypeMismatch` (reporting/messages.scala at 3.8.4, `msg` and `msgPostscript`):
+/// `Found:    <found>` and `Required: <required>` on lines of their own, `Found:` padded to `Required:`'s width, then
+/// each note on lines of its own, then the match type's reduction note. The one renderer of the message: every site
+/// that reports a type mismatch gives its types and notes to it.
+pub(crate) fn mismatch_message(found: &str, required: &str, notes: &MismatchNotes) -> String {
+    let mut msg = format!("Found:    {found}\nRequired: {required}");
+    for note in &notes.notes {
+        msg.push('\n');
+        msg.push_str(note);
+    }
+    if let Some(trace) = &notes.trace {
+        msg.push_str(trace);
+    }
+    msg
 }

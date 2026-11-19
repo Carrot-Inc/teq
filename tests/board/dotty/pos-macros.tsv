@@ -14,7 +14,7 @@ captured-quoted-def-2	pass	check:pass
 captured-quoted-def-3	pass	check:pass	
 captured-quoted-def-4	pass	check:pass	
 captured-quoted-def-5	pass	check:pass	
-captured-quoted-multy-stage	fail	check:fail	Macro_1.scala:7:45: not found: $x
+captured-quoted-multy-stage	fail	check:fail	Macro_1.scala:7:45: Not found: $x
 captured-quoted-type-1	pass	check:pass	
 captured-quoted-type-2	fail	check:fail	Macro_1.scala:3:41: no given instance of type Type[T] was found for parameter evidence$1
 captured-type	pass	check:pass	
@@ -72,7 +72,7 @@ i12948	pass	check:pass
 i13021	pass	check:pass	
 i13095	pass	check:pass	
 i13319	pass	check:pass	
-i13376a.scala	fail	check:fail	i13376a.scala:5:44: type mismatch: found Expr[C], required Expr[C{def foo: x.T}]
+i13376a.scala	fail	check:fail	i13376a.scala:5:44: Found:    Expr[C]
 i13376b.scala	pass	check:pass	
 i13405	pass	check:pass	
 i13422	pass	check:pass	
@@ -102,8 +102,8 @@ i14708.scala	pass	check:pass
 i14740	fail	check:fail	Macro_1.scala:9:25: type argument Foo does not have the same kind as its bound
 i15028a	pass	check:pass	
 i15028b	pass	check:pass	
-i15165a	fail	check:fail	Macro_1.scala:8:32: type α not found
-i15165b	fail	check:fail	Macro_1.scala:8:32: type α not found
+i15165a	fail	check:fail	Macro_1.scala:8:32: Not found: type α
+i15165b	fail	check:fail	Macro_1.scala:8:32: Not found: type α
 i15165c	fail	check:fail	Macro_1.scala:8:48: value apply is not a member of Any
 i15213.scala	pass	check:pass	
 i15227a	pass	check:pass	
@@ -122,8 +122,8 @@ i16008	pass	check:pass
 i16265.scala	fail	check:fail	i16265.scala:7:29: type argument tail does not conform to upper bound Tuple
 i16318	fail	check:fail	Test_2.scala:2:11: exception in macro: java.util.NoSuchElementException: head of empty list (called by ann in object Macro_1$package) (in the body of Macro_1$package.ann)
 i16331	pass	check:pass	
-i16420	fail	check:fail	Test.scala:6:5: type mismatch: found Meow, required Nothing
-i16522.scala	fail	check:fail	i16522.scala:11:34: type argument tl does not conform to upper bound HList
+i16420	fail	check:fail	Test.scala:6:5: Found:    Meow
+i16522.scala	fail	check:fail	i16522.scala:11:44: Found:    HCons[Any, HList]
 i16615.scala	pass	check:pass	
 i16630.scala	fail	check:fail	i16630.scala:6:30: expected end of statement, found identifier
 i16636	fail	check:fail	Macro_1.scala:16:7:None:None: the body of ReproTransformer.getTransformerMacro is withheld from the products of $OUT/pos-macros/i16636/jvm.products (elided: unstated a reference to the type parameter src outside its scope): the TASTy writer
@@ -160,7 +160,7 @@ i18059	pass	check:pass
 i18125.scala	pass	check:pass	
 i18125b.scala	pass	check:pass	
 i18155	pass	check:pass	
-i18197a.scala	fail	check:fail	i18197a.scala:5:26: type mismatch: found Expr[Int], required Expr[(Int) ?=> Int]
+i18197a.scala	fail	check:fail	i18197a.scala:5:26: Found:    Expr[Int]
 i18197b	pass	check:pass	
 i18228.scala	fail	check:fail	i18228.scala:11:11: value value is not a member of Expr[Map[String, String]]
 i18228b.scala	fail	check:fail	i18228b.scala:11:11: value value is not a member of Expr[Map[String, String]]
@@ -200,12 +200,12 @@ i21271	pass	check:pass
 i21672	pass	check:pass	
 i21721-a	fail	check:fail	Test.scala:3:3: not supported yet: scala.quoted Reflect.InlinedMethods.Inlined.body (called by impl in object Macro)
 i21721-b	fail	check:fail	Macro_1.scala:8:10: unreachable case: type TypeBlock and class Block are unrelated
-i21802	fail	check:fail	Test.scala:7:7: not found: counters
+i21802	fail	check:fail	Test.scala:7:7: Not found: counters
 i21844	pass	check:pass	
 i21983	pass	check:pass	
 i22424	fail	check:fail	Test_2.scala:4:3: exception in macro: scala.MatchError: PolymorphicTrait.Embedded.ATrait[scala.Predef.String, scala.Int] (of class scala.quoted.Type) (called by transparentInlineMock in object MockMaker) (in the body of MockMaker.transparen
-i22584	fail	check:fail	Macro.scala:18:9: type mismatch: found Symbol => ValOrDefDef, required Symbol => ValDef | DefDef
-i22585	fail	check:fail	Macro.scala:16:49: type mismatch: found Any, required Hammer[?, Int]
+i22584	fail	check:fail	Macro.scala:18:9: Found:    Symbol => ValOrDefDef
+i22585	fail	check:fail	Macro.scala:16:49: Found:    Any
 i23423	pass	check:pass	
 i23589	fail	check:fail	Macro_1.scala:8:38: value apply is not a member of Any
 i23969	fail	check:fail	Macro.scala:15:3: value ensureApplied is not a member of Select
@@ -257,7 +257,7 @@ i6214b.scala	pass	check:pass
 i6253.scala	pass	check:pass	
 i6435.scala	pass	check:pass	
 i6535	fail	check:fail	Test_2.scala:7:5: exception in macro: scala.MatchError: Test.neverRuns(package.error("Sad times 1")) (of class scala.quoted.Expr) (called by assert in object scalatest) (in the body of scalatest.assert)
-i6588.scala	fail	check:fail	i6588.scala:3:19: type AnyKind not found
+i6588.scala	fail	check:fail	i6588.scala:3:19: Not found: type AnyKind
 i6693.scala	pass	check:pass	
 i6783.scala	pass	check:pass	
 i6803b	pass	check:pass	
@@ -265,7 +265,7 @@ i6997c.scala	pass	check:pass
 i6998.scala	pass	check:pass	
 i7011	fail	check:fail	Macros_1.scala:11:21:None:None: extension method asExpr is not applicable to contextual$2.reflect.Term (in the body of Macros_1$package.mcrImpl)
 i7030	pass	check:pass	
-i7046.scala	fail	check:fail	i7046.scala:5:22: type mismatch: found Expr[Int], required Expr[1]
+i7046.scala	fail	check:fail	i7046.scala:5:22: Found:    Expr[Int]
 i7048.scala	pass	check:pass	
 i7048b.scala	pass	check:pass	
 i7048c.scala	pass	check:pass	
@@ -309,7 +309,7 @@ i8208	pass	check:pass
 i8302.scala	pass	check:pass	
 i8325	pass	check:pass	
 i8325b	pass	check:pass	
-i8521	fail	check:fail	Macro_1.scala:4:23: type AnyKind not found
+i8521	fail	check:fail	Macro_1.scala:4:23: Not found: type AnyKind
 i8577a	fail	check:fail	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577b	fail	check:fail	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577c	fail	check:fail	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
@@ -388,15 +388,15 @@ quote-pattern-type-variable-no-escape.scala	pass	check:pass
 quote-sym-newboundedtype	fail	check:fail	option: -Yno-experimental (teq has no flag for it)
 quote-sym-newtype	fail	check:fail	option: -Yno-experimental (teq has no flag for it)
 quote-sym-newtype-in-trait	fail	check:fail	option: -Yno-experimental (teq has no flag for it)
-quote-this.scala	fail	check:fail	quote-this.scala:18:43: not found: this
+quote-this.scala	fail	check:fail	quote-this.scala:18:43: Not found: this
 quote-type-with-param.scala	pass	check:pass	
 quote-whitebox-2	pass	check:pass	
 quoted-inline-quote.scala	pass	check:pass	
 quoted-patten-with-type-params.scala	fail	check:fail	quoted-patten-with-type-params.scala:10:38: value apply is not a member of Any
-quoted-pattern-type.scala	fail	check:fail	quoted-pattern-type.scala:9:9: type mismatch: found Expr[Boolean], required Expr[T & Boolean]
+quoted-pattern-type.scala	fail	check:fail	quoted-pattern-type.scala:9:9: Found:    Expr[Boolean]
 quoted-splice-pattern-applied.scala	fail	check:fail	quoted-splice-pattern-applied.scala:4:11: value apply is not a member of Any
 quoted-var.scala	pass	check:pass	
-quoted-with-precise-types.scala	fail	check:fail	quoted-with-precise-types.scala:3:19: type AnyKind not found
+quoted-with-precise-types.scala	fail	check:fail	quoted-with-precise-types.scala:3:19: Not found: type AnyKind
 quotedPatterns.scala	fail	check:fail	quotedPatterns.scala:29:18: only classes can have declared but undefined members
 scala2-macro-compat-1.scala	fail	check:fail	scala2-macro-compat-1.scala:5:31: expected end of statement, found identifier
 semanticdb-inline-unapply	pass	check:pass	
@@ -406,7 +406,7 @@ splice-pat	pass	check:pass
 splice-pat.scala	pass	check:pass	
 splice-with-explicit-context.scala	fail	check:fail	splice-with-explicit-context.scala:5:19: a splice takes an Expr, but this has type (<error>) ?=> Expr[Int]
 tasty-constant-type	fail	check:fail	Test_2.scala:4:14: Int is not a constant type; cannot take constValue
-toexproftuple.scala	fail	check:fail	toexproftuple.scala:5:43: type mismatch: found Expr[Int], required Expr[1]
+toexproftuple.scala	fail	check:fail	toexproftuple.scala:5:43: Found:    Expr[Int]
 treemap-unapply	fail	check:fail	Test.scala:1:18: not supported yet in a macro: tpt of a tree that is no val (called by mcr)
 typedProjectionApply	fail	check:fail	Macro_1.scala:13:20: value apply is not a member of TypeProjection
 typetags.scala	pass	check:pass	

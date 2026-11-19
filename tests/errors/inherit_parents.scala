@@ -6,11 +6,11 @@
 // expect: 38:22: error: missing argument for parameter label
 // expect: 39:20: error: missing argument for parameter width
 // expect: 39:20: error: missing argument for parameter label
-// expect: 40:29: error: type mismatch: found "a", required Int
-// expect: 40:34: error: type mismatch: found 1, required String
+// expect: 40:29: error: Found:    "a"⏎Required: Int
+// expect: 40:34: error: Found:    1⏎Required: String
 // expect: 41:20: error: too many arguments: expected 2
 // expect: 42:27: error: this can be used only in a class, object, or template
-// expect: 43:28: error: not found: size
+// expect: 43:28: error: Not found: size
 // expect: 45:7: error: class Hammer needs to be abstract, since it has 3 unimplemented members: name, use, weight
 // expect: 46:7: error: class Phone needs to be abstract, since def charge(level: Int): String in class Gadget is not defined
 // expect: 47:8: error: object creation impossible, since def charge(level: Int): String in class Gadget is not defined

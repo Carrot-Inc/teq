@@ -1,5 +1,5 @@
-// expect: 8:31: error: type mismatch: found (Int), required F[A, B]
-// expect: 9:31: error: type mismatch: found (Int), required F[A, B]
+// expect: 8:31: error: Found:    (Int)⏎Required: F[A, B]
+// expect: 9:31: error: Found:    (Int)⏎Required: F[A, B]
 // expect: 2 errors found
 // An open higher-kinded variable a message shows is named by its type parameter, as dotty shows
 // `F[A, B]` (its where-clause aside): each body's message is the same, whatever the build

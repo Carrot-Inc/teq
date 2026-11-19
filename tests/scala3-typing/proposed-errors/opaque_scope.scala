@@ -1,5 +1,5 @@
-// expect: type mismatch: found String, required A
-// expect: type mismatch: found A, required String
+// expect: Found:    String⏎Required: A
+// expect: Found:    A⏎Required: String
 opaque type A = String
 val ok: A = "abc"
 

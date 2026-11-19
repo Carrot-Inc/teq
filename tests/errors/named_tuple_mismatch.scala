@@ -7,6 +7,8 @@ object Main:
     val swapped: Ping = (sentAt = "t", seq = 1)
     val other: (a: Int, b: String) = p
     println(p._1)
-// expect: 7:25: error: type mismatch: found (sentAt : String, seq : Int), required (seq : Int, sentAt : String)
-// expect: 8:38: error: type mismatch: found (seq : Int, sentAt : String), required (a : Int, b : String)
+// expect: 7:25: error: Found:    (sentAt : String, seq : Int)
+// expect+ Required: (seq : Int, sentAt : String)
+// expect: 8:38: error: Found:    (seq : Int, sentAt : String)
+// expect+ Required: (a : Int, b : String)
 // expect: value _1 is not a member of (seq : Int, sentAt : String)

@@ -32,9 +32,13 @@ def widened() =
   val v: 1 = f(0)
 def overloaded() = choose(s => Item(s, Some(s)), 1)
 def searched() = inspect(List("x").map(s => Item(s, Some(s))))
-// expect: 24:43: error: type mismatch: found List[Item[Some[String]]], required List[Item[Option[String]]]
-// expect: 26:52: error: type mismatch: found Item[Option[String]], required Item[Some[String]]
-// expect: 29:12: error: type mismatch: found Item[Option[String]], required Item[Some[String]]
-// expect: 32:14: error: type mismatch: found Int, required 1
+// expect: 24:43: error: Found:    List[Item[Some[String]]]
+// expect+ Required: List[Item[Option[String]]]
+// expect: 26:52: error: Found:    Item[Option[String]]
+// expect+ Required: Item[Some[String]]
+// expect: 29:12: error: Found:    Item[Option[String]]
+// expect+ Required: Item[Some[String]]
+// expect: 32:14: error: Found:    Int
+// expect+ Required: 1
 // expect: 33:20: error: None of the overloaded alternatives of method choose
 // expect: 34:63: error: no given instance of type Tag[Some[String]] was found for parameter tag

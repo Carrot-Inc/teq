@@ -1,11 +1,11 @@
 // Union and intersection laws, function and tuple subtyping, aliases, wildcards.
-// expect: 28:60: error: type mismatch: found Cov[A | B], required Cov[A] | Cov[B]
-// expect: 31:56: error: type mismatch: found Inv[A] | Inv[B], required Inv[A | B]
+// expect: 28:60: error: Found:    Cov[A | B]⏎Required: Cov[A] | Cov[B]
+// expect: 31:56: error: Found:    Inv[A] | Inv[B]⏎Required: Inv[A | B]
 // expect: 34:42: error: value b is not a member of X1 | X2
-// expect: 44:24: error: type mismatch: found Int => Int, required Any => Int
-// expect: 49:25: error: type mismatch: found (Int, Any), required (Int, Int)
-// expect: 69:42: error: type mismatch: found Inv[Nothing], required Inv[Int]
-// expect: 74:26: error: type mismatch: found Int | String | Boolean, required Int | String
+// expect: 44:24: error: Found:    Int => Int⏎Required: Any => Int
+// expect: 49:25: error: Found:    (Int, Any)⏎Required: (Int, Int)
+// expect: 69:42: error: Found:    Inv[Nothing]⏎Required: Inv[Int]
+// expect: 74:26: error: Found:    Int | String | Boolean⏎Required: Int | String
 trait HasA { def a: Int }
 trait HasB { def b: String }
 trait Greets { def hello: String }

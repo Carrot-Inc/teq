@@ -1,13 +1,13 @@
 // Literal types: an inferred literal type widens to its class, an ascribed one is kept.
-// expect: 17:14: error: type mismatch: found Int, required 1
-// expect: 19:16: error: type mismatch: found String, required "x"
-// expect: 20:16: error: type mismatch: found 2, required 1
-// expect: 24:14: error: type mismatch: found Int, required 1
-// expect: 26:20: error: type mismatch: found List[Int], required List[1]
-// expect: 31:14: error: type mismatch: found Int, required 1
-// expect: 33:29: error: type mismatch: found "medium", required "fast" | "slow"
-// expect: 35:20: error: type mismatch: found 'b', required 'a'
-// expect: 37:21: error: type mismatch: found false, required true
+// expect: 17:14: error: Found:    Int⏎Required: 1
+// expect: 19:16: error: Found:    String⏎Required: "x"
+// expect: 20:16: error: Found:    2⏎Required: 1
+// expect: 24:14: error: Found:    Int⏎Required: 1
+// expect: 26:20: error: Found:    List[Int]⏎Required: List[1]
+// expect: 31:14: error: Found:    Int⏎Required: 1
+// expect: 33:29: error: Found:    "medium"⏎Required: "fast" | "slow"
+// expect: 35:20: error: Found:    'b'⏎Required: 'a'
+// expect: 37:21: error: Found:    false⏎Required: true
 object Lits:
   final val a = 1
   val b = 1

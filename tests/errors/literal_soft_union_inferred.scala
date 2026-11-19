@@ -17,11 +17,18 @@ def run() =
   val g: List[Int] = f
   val h = Option(if "a".isEmpty then 1 else "s")
   val k: Option[Int] = h
-// expect: 11:16: error: type mismatch: found Int | String, required Int
-// expect: 12:16: error: type mismatch: found Int | String, required Int
-// expect: 13:16: error: type mismatch: found Boolean | Char, required Int
-// expect: 14:16: error: type mismatch: found Long, required Int
-// expect: 15:16: error: type mismatch: found Int | String, required Int
-// expect: 17:22: error: type mismatch: found List[Int | String], required List[Int]
-// expect: 19:24: error: type mismatch: found Option[Int | String], required Option[Int]
+// expect: 11:16: error: Found:    Int | String
+// expect+ Required: Int
+// expect: 12:16: error: Found:    Int | String
+// expect+ Required: Int
+// expect: 13:16: error: Found:    Boolean | Char
+// expect+ Required: Int
+// expect: 14:16: error: Found:    Long
+// expect+ Required: Int
+// expect: 15:16: error: Found:    Int | String
+// expect+ Required: Int
+// expect: 17:22: error: Found:    List[Int | String]
+// expect+ Required: List[Int]
+// expect: 19:24: error: Found:    Option[Int | String]
+// expect+ Required: Option[Int]
 // expect: 7 errors found

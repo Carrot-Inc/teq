@@ -1,5 +1,5 @@
-// expect: 15:31: error: type mismatch: found C, required AnyRef{def f(): Unit}
-// expect: 16:29: error: type mismatch: found D, required B{def g(): String}
+// expect: 15:31: error: Found:    C⏎Required: AnyRef{def f(): Unit}
+// expect: 16:29: error: Found:    D⏎Required: B{def g(): String}
 // A member whose `@targetName` renames it is not the member a refinement of its name asks for
 // (`TypeComparer.hasMatchingMember`'s `qualifies`: `m.symbol.hasTargetName(m.symbol.name)`),
 // whether a parent declares it or not.

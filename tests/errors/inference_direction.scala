@@ -1,5 +1,5 @@
 // Instantiation direction of type variables: minimised, maximised, improved lower bounds.
-// expect: 24:31: error: type mismatch: found Map[Nothing, Nothing], required Map[String, Int]
+// expect: 24:31: error: Found:    Map[Nothing, Nothing]⏎Required: Map[String, Int]
 class Inv[T](val t: T)
 class Cov[+T](val t: T)
 class Con[-T]:

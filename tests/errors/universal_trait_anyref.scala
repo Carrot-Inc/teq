@@ -4,15 +4,15 @@
 // whose first parent resolves to `Any`, written so or through an alias, their intersection and a type parameter
 // bounded by one; master took them all for `AnyRef`. A trait extending one without `Any`, a class, `null` and a Java
 // interface stay as they were.
-// expect: 22:29: error: type mismatch: found Product, required AnyRef
-// expect: 23:42: error: type mismatch: found Serializable, required AnyRef
-// expect: 24:40: error: type mismatch: found Enum, required AnyRef
-// expect: 25:28: error: type mismatch: found Equals, required AnyRef
-// expect: 26:41: error: type mismatch: found Cloneable, required AnyRef
-// expect: 27:23: error: type mismatch: found U, required AnyRef
-// expect: 28:23: error: type mismatch: found R, required AnyRef
-// expect: 29:44: error: type mismatch: found Product & Serializable, required AnyRef
-// expect: 30:37: error: type mismatch: found T, required AnyRef
+// expect: 22:29: error: Found:    Product⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
+// expect: 23:42: error: Found:    Serializable⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
+// expect: 24:40: error: Found:    Enum⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
+// expect: 25:28: error: Found:    Equals⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
+// expect: 26:41: error: Found:    Cloneable⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
+// expect: 27:23: error: Found:    U⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
+// expect: 28:23: error: Found:    R⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
+// expect: 29:44: error: Found:    Product & Serializable⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
+// expect: 30:37: error: Found:    T⏎Required: AnyRef⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyRef
 // absent: universal_trait_anyref.scala:31:
 // absent: universal_trait_anyref.scala:32:
 // absent: universal_trait_anyref.scala:33:

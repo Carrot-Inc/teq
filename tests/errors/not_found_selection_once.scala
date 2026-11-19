@@ -1,4 +1,4 @@
-// expect: 6:9: error: not found: missing
+// expect: 6:9: error: Not found: missing
 // absent: is not a member of
 // expect: 1 error found
 // A name not found is one error: the selections on it (`.foo.bar`) report nothing more, the error

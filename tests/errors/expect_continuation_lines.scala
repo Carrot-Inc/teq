@@ -6,7 +6,8 @@ type IsX[T] = T match
   case _ => false
 def k(a: Int): IsX[a.type] = ???
 def widened = { val q: IsX[Int] = k(1) }
-// expect: 8:35: error: type mismatch: found IsX[1], required IsX[Int]
+// expect: 8:35: error: Found:    IsX[1]
+// expect+ Required: IsX[Int]
 // expect+
 // expect+ Note: a match type could not be fully reduced:
 // expect+

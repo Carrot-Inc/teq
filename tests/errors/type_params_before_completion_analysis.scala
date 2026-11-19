@@ -1,8 +1,8 @@
 // teq: --analysis-version 3
-// expect: type_params_before_completion_analysis.scala:20:18: error: type mismatch: found "s", required Int
+// expect: type_params_before_completion_analysis.scala:20:18: error: Found:    "s"⏎Required: Int
 // expect: 1 error found
 // absent: Cyclic inheritance
-// absent: not found
+// absent: Not found
 // A type application of a class makes its type parameters without completing it (Namer's
 // TypeParamsCompleter): `X[B[D]]` in `A`'s parents needs `B`'s parameters, not its constructor, whose
 // `A.Id` would complete `A` again. A build that records dependencies (the analysis teq's tasks ask

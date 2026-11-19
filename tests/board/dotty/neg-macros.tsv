@@ -1,7 +1,7 @@
 # dotty 3.8.4 (7d4833b6) neg-macros, neg; compiler/test/dotty/tools/dotc/BootstrappedOnlyCompilationTests.scala:98; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
 BigFloat	fail	-	marks: 3 errors where 1 are marked: BigFloatFromDigitsImpl_1.scala:12:31: no given instance of type ToExpr[BigInt] was found for parameter to
-GenericNumLits	fail	-	marks: 4 errors where 2 are marked: Test_2.scala:4:18: type mismatch: found 1234, required Even
+GenericNumLits	fail	-	marks: 4 errors where 2 are marked: Test_2.scala:4:18: Found:    1234
 annot-MacroAnnotation-direct.scala	fail	-	marks: no error where 1 are marked
 annot-accessIndirect	fail	-	marks: 1 errors where 2 are marked
 annot-crash	fail	-	marks: no error where 1 are marked
@@ -16,7 +16,7 @@ annot-nested.scala	fail	-	marks: 6 errors where 10 are marked
 annot-on-type	fail	-	marks: 1 errors where 3 are marked
 annot-result-owner	fail	-	marks: no error where 2 are marked
 annot-suspend-cycle	fail	-	marks: no error where 1 are marked
-beta-reduce-inline-result	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:11:17 Found:    Int; teq's is error Test_2.scala:11:17 type mismatch: found Int, required 4
+beta-reduce-inline-result	fail	-	check: diagnostic 1 of 1: error Test_2.scala:11:17, line 2 of the message: scalac's is Required: (4 : Int); teq's is Required: 4
 delegate-match-1	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:13:None:None: the body of Macro_1$package.fImpl is withheld from the products of $OUT/neg-macros/delegate-match-1/check.products (elided: unstated the reflection API's ImplicitSearchSucces
 delegate-match-2	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:13:None:None: the body of Macro_1$package.fImpl is withheld from the products of $OUT/neg-macros/delegate-match-2/check.products (elided: unstated the reflection API's ImplicitSearchSucces
 delegate-match-3	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:13:None:None: the body of Macro_1$package.fImpl is withheld from the products of $OUT/neg-macros/delegate-match-3/check.products (elided: unstated the reflection API's ImplicitSearchSucces
@@ -41,7 +41,7 @@ i13376b.scala	pass	-
 i13406	fail	-	check: diagnostic 2 of 2: error Test_2.scala:8:12, line 2 of the message: scalac's is I found:; teq's is inlined from tests/neg-macros/i13406/Test_2.scala:5
 i13407.scala	fail	-	marks: 1 errors where 2 are marked
 i13516	fail	-	marks: no error where 1 are marked
-i13809	fail	-	marks: 6 errors where 1 are marked: Test_2.scala:6:64: type CB not found
+i13809	fail	-	marks: 6 errors where 1 are marked: Test_2.scala:6:64: Not found: type CB
 i13991	fail	-	check: diagnostic 1 of 1: error Test_2.scala:6:6, line 2 of the message: scalac's is ---------------------------------------------------------------------------------------------------------------------; teq's is inlined from tests/neg-macr
 i14001	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:9:11 Exception occurred while executing macro expansion.; teq's is error Test_2.scala:9:11 exception in macro: java.util.NoSuchElementException: method test.A.C.apply not found (calle
 i14039	fail	-	check: diagnostic 1 of 1: error Test_2.scala:4:14, line 2 of the message: scalac's is ---------------------------------------------------------------------------------------------------------------------; teq's is inlined from tests/neg-mac
@@ -55,7 +55,7 @@ i15009a.scala	fail	-	marks: 5 errors where 6 are marked
 i15159	fail	-	marks: no error where 1 are marked
 i15413.scala	fail	-	marks: no error where 1 are marked
 i15917.scala	fail	-	marks: no error where 1 are marked
-i16355a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i16355a.scala:28:44 access to parameter v from wrong staging level:; teq's is error i16355a.scala:28:34 type mismatch: found (String, String), required ((v : String), "aa")
+i16355a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i16355a.scala:28:44 access to parameter v from wrong staging level:; teq's is error i16355a.scala:28:34 Found:    (String, String)
 i16355b.scala	fail	-	marks: no error where 2 are marked
 i16522.scala	fail	-	marks: 2 errors where 3 are marked
 i16532.scala	fail	-	marks: no error where 1 are marked
@@ -80,7 +80,7 @@ i18695.scala	fail	-	marks: 2 errors where 1 are marked: i18695.scala:67:57: no g
 i18825	fail	-	marks: no error where 1 are marked
 i19342.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19342.scala:5:27 Type must be fully defined.; teq's is error i19342.scala:5:26 value apply is not a member of Any
 i19526	fail	-	marks: no error where 1 are marked
-i19601	fail	-	marks: 8 errors where 1 are marked: Macro.scala:27:51: type mismatch: found Int, required A
+i19601	fail	-	marks: 8 errors where 1 are marked: Macro.scala:27:51: Found:    Int
 i19676	fail	-	marks: no error where 1 are marked
 i19842-a	fail	-	marks: 3 errors where 1 are marked: Macro.scala:17:7: missing parameter type
 i19842-b	fail	-	marks: 3 errors where 1 are marked: Macro.scala:19:7: missing parameter type
@@ -96,9 +96,9 @@ i4044a.scala	fail	-	marks: no error where 3 are marked
 i4044b.scala	fail	-	marks: no error where 3 are marked
 i4350.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i4350.scala:4:3 No given instance of type scala.quoted.Quotes was found; teq's is error i4350.scala:4:3 No given instance of type scala.quoted.Quotes was found for a quote
 i4396b.scala	fail	-	marks: no error where 1 are marked
-i4433.scala	fail	-	marks: 2 errors where 1 are marked: i4433.scala:4:16: not found: true
-i4493-b.scala	fail	-	marks: error on an unmarked line i4493-b.scala:6: type mismatch: found Expr[Index[K]], required Expr[Any]
-i4493.scala	fail	-	marks: error on an unmarked line i4493.scala:6: type mismatch: found Expr[Index[K]], required Expr[Any]
+i4433.scala	fail	-	marks: 2 errors where 1 are marked: i4433.scala:4:16: Not found: true
+i4493-b.scala	fail	-	marks: error on an unmarked line i4493-b.scala:6: Found:    Expr[Index[K]]
+i4493.scala	fail	-	marks: error on an unmarked line i4493.scala:6: Found:    Expr[Index[K]]
 i4803e.scala	fail	-	marks: no error where 1 are marked
 i4803f.scala	fail	-	marks: no error where 1 are marked
 i4846.scala	fail	-	marks: no error where 3 are marked
@@ -115,11 +115,11 @@ i6371	fail	-	check: diagnostic 1 of 1: scalac's is error B_2.scala:2:3 Exception
 i6432	fail	-	check: diagnostic 1 of 3: scalac's is error Test_2.scala:4:7 abc; teq's is error Test_2.scala:4:3 abc
 i6432b	fail	-	check: diagnostic 1 of 3: scalac's is error Test_2.scala:4:9 abc; teq's is error Test_2.scala:4:3 abc
 i6436.scala	fail	-	marks: 1 errors where 2 are marked
-i6530.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6530.scala:2:27 Not found: Type - did you mean Byte? or perhaps Tuple?; teq's is error i6530.scala:2:27 not found: Type
+i6530.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6530.scala:2:27 Not found: Type - did you mean Byte? or perhaps Tuple?; teq's is error i6530.scala:2:27 Not found: Type
 i6530b.scala	fail	-	check: diagnostic 1 of 4: scalac's is error i6530b.scala:9:12 Type splicing with `$` in quotes not supported anymore; teq's is error i6530b.scala:9:12 expected an identifier, found splice
 i6622f.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6622f.scala:6:5 failed: println("foo") ...; teq's is error i6622f.scala:6:5 failed: Predef.println("foo") ...
 i6739.scala	fail	-	marks: no error where 1 are marked
-i6762.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6762.scala:5:72 Found:    (word : String); teq's is error i6762.scala:5:72 type mismatch: found String, required G[String]
+i6762.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6762.scala:5:72 Found:    (word : String); teq's is error i6762.scala:5:72 Found:    String
 i6783.scala	fail	-	marks: no error where 1 are marked
 i6976	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:5:41 Exception occurred while executing macro expansion.; teq's is error Test_2.scala:5:41 exception in macro: scala.MatchError: 2 (of class scala.quoted.Expr) (called by mcr in objec
 i6991.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i6991.scala:11:15 expression does not take parameters; teq's is error i6991.scala:11:14 value apply is not a member of Foo
@@ -136,7 +136,7 @@ i7121.scala	fail	-	marks: no error where 2 are marked
 i7142	fail	-	marks: no error where 1 are marked
 i7142b	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:30: a splice takes an Expr, but this has type Nothing
 i7142c	fail	-	marks: no error where 1 are marked
-i7142d	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:43: type mismatch: found Expr[Nothing], required Expr[Int]
+i7142d	fail	-	marks: 2 errors where 1 are marked: Macro_1.scala:6:43: Found:    Expr[Nothing]
 i7142e	fail	-	marks: no error where 1 are marked
 i7142f	fail	-	marks: no error where 1 are marked
 i7142g	fail	-	marks: no error where 1 are marked
@@ -158,7 +158,7 @@ i8216	fail	-	marks: no error where 1 are marked
 i8749.scala	fail	-	marks: no error where 1 are marked
 i8865.scala	fail	-	marks: 3 errors where 1 are marked: i8865.scala:7:12: expected an identifier, found splice
 i8871.scala	fail	-	marks: 3 errors where 1 are marked: i8871.scala:6:12: expected an identifier, found splice
-i8871b.scala	fail	-	marks: 2 errors where 1 are marked: i8871b.scala:6:10: type $tpe not found
+i8871b.scala	fail	-	marks: 2 errors where 1 are marked: i8871b.scala:6:10: Not found: type $tpe
 i8887.scala	fail	-	marks: no error where 1 are marked
 i9014	pass	-	
 i9014b	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:1:24 No given instance of type Bar was found for parameter x of method summon in object Predef.; teq's is error Test_2.scala:1:24 no given instance of type Bar was found for parameter
@@ -166,8 +166,8 @@ i9570.scala	fail	-	marks: error on an unmarked line i9570.scala:15: missing para
 i9685	pass	-	
 i9801	pass	-	
 i9801b	marks	-	the marks hold; the reader cannot decide: teq's diagnostics equal all it reads of scalac's, and scalac's diagnostic 1 is a box it does not read
-i9972	fail	-	marks: 4 errors where 1 are marked: Macro_1.scala:6:19: type T not found
-i9972b	fail	-	check: diagnostic 1 of 1: scalac's is error Macro_1.scala:3:30 Not found: type T; teq's is error Macro_1.scala:3:30 type T not found
+i9972	fail	-	marks: 4 errors where 1 are marked: Macro_1.scala:6:19: Not found: type T
+i9972b	pass	-	
 ill-abort	fail	-	check: diagnostic 1 of 1: scalac's is error quoted_2.scala:1:12 Macro expansion was aborted by the macro without any errors reported. Macros should issue errors to end-users when aborting a macro expansion with StopMacroExpansion.; teq's is
 inline-macro-staged-interpreter	fail	-	marks: error on an unmarked line Main_2.scala:6: Expected a known value. 
 inline-option	fail	-	marks: 3 errors where 2 are marked: quotes.scala:193:35: no given instance of type FromExpr[T | Null] was found for parameter from
@@ -203,8 +203,8 @@ quote-open-patterns-typer.scala	fail	-	check: diagnostic 1 of 2: scalac's is err
 quote-pattern-implemnetation-restrictions.scala	fail	-	marks: no error where 7 are marked
 quote-pattern-type-var-bounds.scala	fail	-	marks: 9 errors where 6 are marked: quote-pattern-type-var-bounds.scala:3:11: expected an identifier, found 'type'
 quote-pcp-in-arg.scala	fail	-	marks: no error where 1 are marked
-quote-splice-interpret-1.scala	fail	-	marks: 2 errors where 1 are marked: quote-splice-interpret-1.scala:6:18: not found: true
-quote-spliceNonStaged.scala	fail	-	check: diagnostic 1 of 1: scalac's is error quote-spliceNonStaged.scala:6:3 Not found: $printHello - did you mean printHello?; teq's is error quote-spliceNonStaged.scala:6:3 not found: $printHello
+quote-splice-interpret-1.scala	fail	-	marks: 2 errors where 1 are marked: quote-splice-interpret-1.scala:6:18: Not found: true
+quote-spliceNonStaged.scala	fail	-	check: diagnostic 1 of 1: scalac's is error quote-spliceNonStaged.scala:6:3 Not found: $printHello - did you mean printHello?; teq's is error quote-spliceNonStaged.scala:6:3 Not found: $printHello
 quote-sym-newtype	fail	-	option: -Yno-experimental (teq has no flag for it)
 quote-this-a.scala	fail	-	marks: no error where 1 are marked
 quote-this-b.scala	fail	-	marks: no error where 2 are marked
@@ -212,12 +212,12 @@ quote-this-c.scala	fail	-	marks: 1 errors where 2 are marked
 quote-type-variable-no-inference-2.scala	fail	-	marks: 2 errors where 1 are marked: quote-type-variable-no-inference-2.scala:5:20: type argument t does not conform to upper bound Int
 quote-type-variable-no-inference-3.scala	fail	-	check: diagnostic 1 of 3: scalac's is warning quote-type-variable-no-inference-3.scala:5:23 Ignored bound <: Comparable[Any]; teq's is error quote-type-variable-no-inference-3.scala:5:23 type argument t does not conform to upper bound Compa
 quote-type-variable-no-inference.scala	fail	-	marks: 4 errors where 1 are marked: quote-type-variable-no-inference.scala:6:13: expected an identifier, found 'type'
-quote-whitebox	fail	-	check: diagnostic 1 of 2: scalac's is error Test_2.scala:5:21 Found:    (1 : Int); teq's is error Test_2.scala:5:21 type mismatch: found 1, required String
+quote-whitebox	fail	-	check: diagnostic 1 of 2: scalac's is error Test_2.scala:5:21 Found:    (1 : Int); teq's is error Test_2.scala:5:21 Found:    1
 quoted-pattern-with-bounded-type-params-regression.scala	fail	-	check: diagnostic 1 of 1: scalac's is error quoted-pattern-with-bounded-type-params-regression.scala:11:49 Type must be fully defined.; teq's is error quoted-pattern-with-bounded-type-params-regression.scala:11:48 value apply is not a membe
 quoted-pattern-with-bounded-type-params.scala	fail	-	check: diagnostic 1 of 1: scalac's is error quoted-pattern-with-bounded-type-params.scala:11:51 Implementation restriction: Type arguments to Open pattern are expected to have no bounds; teq's is error quoted-pattern-with-bounded-type-param
 quoted-pattern-with-type-params-regression.scala	fail	-	check: diagnostic 1 of 3: scalac's is error quoted-pattern-with-type-params-regression.scala:8:32 Type must be fully defined.; teq's is error quoted-pattern-with-type-params-regression.scala:8:31 value apply is not a member of Any
 quoted-pattern-with-type-params.scala	fail	-	check: diagnostic 1 of 3: scalac's is error quoted-pattern-with-type-params.scala:6:31 Implementation restriction: A higher-order pattern must carry value arguments; teq's is error quoted-pattern-with-type-params.scala:6:31 value apply is n
-quotedPatterns-1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error quotedPatterns-1.scala:3:21 access to parameter x$2 from wrong staging level:; teq's is error quotedPatterns-1.scala:3:33 not found: y
+quotedPatterns-1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error quotedPatterns-1.scala:3:21 access to parameter x$2 from wrong staging level:; teq's is error quotedPatterns-1.scala:3:33 Not found: y
 quotedPatterns-2.scala	fail	-	marks: no error where 2 are marked
 quotedPatterns-3.scala	fail	-	marks: 3 errors where 6 are marked
 quotedPatterns-4.scala	fail	-	check: diagnostic 1 of 1: scalac's is error quotedPatterns-4.scala:6:31 Splice pattern must match an Expr[...]; teq's is error quotedPatterns-4.scala:6:31 unreachable case: type Expr[Seq[String]] and class Repeated are unrelated
@@ -226,7 +226,7 @@ quotedPatterns-6.scala	fail	-	marks: 3 errors where 2 are marked: quotedPatterns
 reflect-inline	fail	-	check: diagnostic 1 of 1: error test_2.scala:5:3, line 4 of the message: scalac's is could not be extracted using scala.quoted.FromExpr$PrimitiveFromExpr@<hash>; teq's is could not be extracted using scala.quoted.FromExpr$StringFromExpr@<ha
 scope-extrusion	fail	-	marks: no error where 3 are marked
 splice-in-top-level-splice-1.scala	fail	-	marks: no error where 1 are marked
-splice-in-top-level-splice-2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error splice-in-top-level-splice-2.scala:4:29 Not found: $x; teq's is error splice-in-top-level-splice-2.scala:4:29 not found: $x
+splice-in-top-level-splice-2.scala	pass	-	
 splice-non-expr.scala	fail	-	check: diagnostic 1 of 5: scalac's is error splice-non-expr.scala:4:7 Found:    (3 : Int); teq's is error splice-non-expr.scala:4:5 a splice takes an Expr, but this has type Int
 splice-pat.scala	fail	-	marks: 3 errors where 2 are marked: splice-pat.scala:13:5: expected a pattern, found 'import'
 tasty-macro-assert-1	fail	-	marks: no error where 1 are marked
@@ -235,5 +235,5 @@ tasty-macro-error	pass	-
 tasty-macro-positions	pass	-	
 tasty-string-interpolator-position-a	fail	-	check: diagnostic 2 of 1: scalac's is nothing; teq's is warning without a place: there was 1 deprecation warning; re-run with --deprecation for details
 tasty-string-interpolator-position-b	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:6:25 there are no args; teq's is error Test_2.scala:6:3 there are no args
-toexproftuple.scala	fail	-	marks: 7 errors where 2 are marked: toexproftuple.scala:5:43: type mismatch: found Expr[Int], required Expr[1]
+toexproftuple.scala	fail	-	marks: 7 errors where 2 are marked: toexproftuple.scala:5:43: Found:    Expr[Int]
 wrong-owner	fail	-	marks: no error where 1 are marked

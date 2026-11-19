@@ -1,7 +1,7 @@
 // expect: 40:29: error: value secret is not a member of Parcel
-// expect: 45:20: error: not found: to
-// expect: 46:22: error: not found: secret
-// expect: 46:31: error: not found: hidden
+// expect: 45:20: error: Not found: to
+// expect: 46:22: error: Not found: secret
+// expect: 46:31: error: Not found: hidden
 // expect: 47:29: error: method draft in class Letter cannot be accessed as a member of Letter from class Parcel; protected method draft can only be accessed from class Parcel or one of its subclasses
 // expect: 50:23: error: method address in class Letter is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
 // expect: 51:23: error: method seal in trait Sealable is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'

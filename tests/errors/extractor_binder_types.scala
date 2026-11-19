@@ -1,12 +1,12 @@
-// expect: 23:38: error: type mismatch: found Apply, required Int
-// expect: 25:42: error: type mismatch: found Apply, required Int
-// expect: 27:36: error: type mismatch: found Tree, required Int
-// expect: 29:36: error: type mismatch: found Tree, required Int
-// expect: 31:39: error: type mismatch: found Apply, required Int
-// expect: 33:37: error: type mismatch: found Any, required Int
-// expect: 35:38: error: type mismatch: found Apply & T, required Int
-// expect: 39:40: error: type mismatch: found Apply & Holder.this.U, required Int
-// expect: 43:38: error: type mismatch: found B & A, required Int
+// expect: 23:38: error: Found:    Apply⏎Required: Int
+// expect: 25:42: error: Found:    Apply⏎Required: Int
+// expect: 27:36: error: Found:    Tree⏎Required: Int
+// expect: 29:36: error: Found:    Tree⏎Required: Int
+// expect: 31:39: error: Found:    Apply⏎Required: Int
+// expect: 33:37: error: Found:    Any⏎Required: Int
+// expect: 35:38: error: Found:    Apply & T⏎Required: Int
+// expect: 39:40: error: Found:    Apply & Holder.this.U⏎Required: Int
+// expect: 43:38: error: Found:    B & A⏎Required: Int
 // The types scalac 3.8.4 gives the binders, by its own messages: the scrutinee's type where
 // it conforms to what `unapply` takes (the generic `Same`, `Wide`), the narrower of the two,
 // and their intersection with a type parameter, an abstract type or an unrelated trait.

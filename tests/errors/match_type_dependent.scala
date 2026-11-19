@@ -17,9 +17,65 @@ def fewer[X](x: X): Elem[X] = x match
 def wrongBody[X](x: X): Elem[X] = x match
   case s: String => s.length
   case a: Array[t] => a(0)
-// expect: 10:35: error: type mismatch: found Char, required Elem[X]
-// expect: 11:23: error: type mismatch: found t, required Elem[X]
-// expect: 13:27: error: type mismatch: found Char, required Elem[X]
-// expect: 14:23: error: type mismatch: found t, required Elem[X]
-// expect: 16:21: error: type mismatch: found Char, required Elem[X]
-// expect: 18:21: error: type mismatch: found Int, required Char
+// expect: 10:35: error: Found:    Char
+// expect+ Required: Elem[X]
+// expect+
+// expect+ Note: a match type could not be fully reduced:
+// expect+
+// expect+   trying to reduce  Elem[X]
+// expect+   failed since selector X
+// expect+   does not match  case String => Char
+// expect+   and cannot be shown to be disjoint from it either.
+// expect+   Therefore, reduction cannot advance to the remaining case
+// expect+
+// expect+     case Array[t] => t
+// expect: 11:23: error: Found:    t
+// expect+ Required: Elem[X]
+// expect+
+// expect+ Note: a match type could not be fully reduced:
+// expect+
+// expect+   trying to reduce  Elem[X]
+// expect+   failed since selector X
+// expect+   does not match  case String => Char
+// expect+   and cannot be shown to be disjoint from it either.
+// expect+   Therefore, reduction cannot advance to the remaining case
+// expect+
+// expect+     case Array[t] => t
+// expect: 13:27: error: Found:    Char
+// expect+ Required: Elem[X]
+// expect+
+// expect+ Note: a match type could not be fully reduced:
+// expect+
+// expect+   trying to reduce  Elem[X]
+// expect+   failed since selector X
+// expect+   does not match  case String => Char
+// expect+   and cannot be shown to be disjoint from it either.
+// expect+   Therefore, reduction cannot advance to the remaining case
+// expect+
+// expect+     case Array[t] => t
+// expect: 14:23: error: Found:    t
+// expect+ Required: Elem[X]
+// expect+
+// expect+ Note: a match type could not be fully reduced:
+// expect+
+// expect+   trying to reduce  Elem[X]
+// expect+   failed since selector X
+// expect+   does not match  case String => Char
+// expect+   and cannot be shown to be disjoint from it either.
+// expect+   Therefore, reduction cannot advance to the remaining case
+// expect+
+// expect+     case Array[t] => t
+// expect: 16:21: error: Found:    Char
+// expect+ Required: Elem[X]
+// expect+
+// expect+ Note: a match type could not be fully reduced:
+// expect+
+// expect+   trying to reduce  Elem[X]
+// expect+   failed since selector X
+// expect+   does not match  case String => Char
+// expect+   and cannot be shown to be disjoint from it either.
+// expect+   Therefore, reduction cannot advance to the remaining case
+// expect+
+// expect+     case Array[t] => t
+// expect: 18:21: error: Found:    Int
+// expect+ Required: Char

@@ -14,8 +14,8 @@ object Q:
   locally { import H.{given NoSuchType, given String}; println(summon[Int]) }
   println(P.p + Q.q)
 
-// expect: given_import_bound_error_order.scala:8:30: error: type Missing not found
+// expect: given_import_bound_error_order.scala:8:30: error: Not found: type Missing
 // expect: given_import_bound_error_order.scala:9:25: error: no given instance of type String was found for parameter x
-// expect: given_import_bound_error_order.scala:11:19: error: type Missing2 not found
-// expect: given_import_bound_error_order.scala:14:29: error: type NoSuchType not found
+// expect: given_import_bound_error_order.scala:11:19: error: Not found: type Missing2
+// expect: given_import_bound_error_order.scala:14:29: error: Not found: type NoSuchType
 // expect: 4 errors found

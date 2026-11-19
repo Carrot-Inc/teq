@@ -10,6 +10,8 @@ def f(): Unit =
   val t: Int = s
   val u: Int = Option(8).same
   ()
-// expect: 10:16: error: type mismatch: found Option[Int], required Int
-// expect: 11:16: error: type mismatch: found Option[Int], required Int
+// expect: 10:16: error: Found:    Option[Int]
+// expect+ Required: Int
+// expect: 11:16: error: Found:    Option[Int]
+// expect+ Required: Int
 // absent: (o : Option[Int])

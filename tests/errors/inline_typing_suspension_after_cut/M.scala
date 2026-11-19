@@ -2,8 +2,8 @@
 // the unit's typer at once, and `B.z` stays a lazy completer, which `C`'s read completes, its error reported and
 // standing. `C` does not suspend; `Z`'s error and `B.z`'s end the runs: scalac reports both. (Before, the walk went
 // on over `B` unwinding, published `B.z` suspended, and `C` suspended on it, the error lost at one worker.)
-// expect: B.scala:3:29: error: type mismatch: found 1, required String
-// expect: Z.scala:2:24: error: type mismatch: found 456, required Boolean
+// expect: B.scala:3:29: error: Found:    1⏎Required: String
+// expect: Z.scala:2:24: error: Found:    456⏎Required: Boolean
 // expect: 2 errors found
 import scala.quoted.*
 object M:

@@ -1,10 +1,10 @@
-// expect: 25:19: error: type mismatch: found "s", required Int
-// expect: 26:19: error: type mismatch: found "s", required Int
-// expect: 26:24: error: not found: undefinedName
-// expect: 27:22: error: type mismatch: found 2, required String
-// expect: 29:24: error: type mismatch: found 1, required String
-// expect: 32:30: error: type mismatch: found "s", required Int
-// expect: 33:19: error: type mismatch: found "s", required Int
+// expect: 25:19: error: Found:    "s"⏎Required: Int
+// expect: 26:19: error: Found:    "s"⏎Required: Int
+// expect: 26:24: error: Not found: undefinedName
+// expect: 27:22: error: Found:    2⏎Required: String
+// expect: 29:24: error: Found:    1⏎Required: String
+// expect: 32:30: error: Found:    "s"⏎Required: Int
+// expect: 33:19: error: Found:    "s"⏎Required: Int
 // A curried member call is applied clause by clause, the innermost first, as dotty's
 // `realApply` types it (Applications.scala 1315): where the first plain clause fails, the
 // later clauses are typed alone, once, for their own errors (1438: `1` reports nothing against

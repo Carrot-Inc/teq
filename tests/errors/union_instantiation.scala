@@ -1,11 +1,11 @@
 // Soft unions when type variables are instantiated.
-// expect: 23:35: error: type mismatch: found List[Shape], required List[Circle | Square]
-// expect: 29:42: error: type mismatch: found List[Option[Int]], required List[Some[Int] | None]
-// expect: 33:29: error: type mismatch: found Shape, required Circle | Square
-// expect: 39:35: error: type mismatch: found Cov[Shape], required Cov[Circle | Square]
-// expect: 42:35: error: type mismatch: found List[Shape], required List[Circle | Square]
-// expect: 44:35: error: type mismatch: found List[Shape], required List[Circle | Square]
-// expect: 50:39: error: type mismatch: found Option[Shape], required Option[Circle | Square]
+// expect: 23:35: error: Found:    List[Shape]⏎Required: List[Circle | Square]
+// expect: 29:42: error: Found:    List[Option[Int]]⏎Required: List[Some[Int] | None]
+// expect: 33:29: error: Found:    Shape⏎Required: Circle | Square
+// expect: 39:35: error: Found:    Cov[Shape]⏎Required: Cov[Circle | Square]
+// expect: 42:35: error: Found:    List[Shape]⏎Required: List[Circle | Square]
+// expect: 44:35: error: Found:    List[Shape]⏎Required: List[Circle | Square]
+// expect: 50:39: error: Found:    Option[Shape]⏎Required: Option[Circle | Square]
 trait Shape
 case class Circle(r: Int) extends Shape
 case class Square(s: Int) extends Shape

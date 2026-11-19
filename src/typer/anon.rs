@@ -2273,7 +2273,7 @@ impl<'a> Worker<'a> {
         if declared_narrower {
             let param_tys: Vec<TypeId> = param_sigs.iter().map(|p| p.ty).collect();
             let found = self.fun_type(&param_tys, ret);
-            let msg = format!("type mismatch: found {}, required {}", self.show(found), self.show(trait_ty));
+            let msg = super::expr::mismatch_message(&self.show(found), &self.show(trait_ty), &Default::default());
             self.error(span, msg);
         }
         if self.as_context_function(ret).is_some() {

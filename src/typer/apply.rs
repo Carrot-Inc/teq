@@ -3885,7 +3885,8 @@ impl<'a> Worker<'a> {
                 let msg = format!("{} is not accessible from constructor arguments", self.name_str(name));
                 self.error(span, msg);
             } else {
-                let msg = format!("not found: {}", self.name_str(name));
+                // the reference's MissingIdent (reporting/messages.scala), its plain branch
+                let msg = format!("Not found: {}", self.name_str(name));
                 self.not_found_error(name, span, msg, Some(crate::source::MissingKind::Term));
             }
             return None;
@@ -5150,9 +5151,9 @@ impl<'a> Worker<'a> {
     /// the outermost is typed.
     fn render_mismatches(&mut self, depth: u32) {
         let renders = std::mem::take(&mut self.mismatch_renders);
-        for (at, old, found, expected, note_len, at_depth) in renders {
+        for (at, old, found, expected, notes, at_depth) in renders {
             if at_depth < depth {
-                self.mismatch_renders.push((at, old, found, expected, note_len, at_depth));
+                self.mismatch_renders.push((at, old, found, expected, notes, at_depth));
                 continue;
             }
             if self.diags.items.get(at).map_or(true, |d| d.msg != old) {
@@ -5164,10 +5165,9 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let (found, expected, _) = self.reported_mismatch(found, expected);
-            // What the message adds after the types (a match type's note) stays.
-            let note = &old[old.len() - note_len..];
-            let msg = format!("type mismatch: found {}, required {}{}", self.show(found), self.show(expected), note);
-            self.diags.items[at].msg = msg;
+            // What the message adds after the types (its notes, a match type's note) stays.
+            let (found, expected) = (self.show(found), self.show(expected));
+            self.diags.items[at].msg = super::expr::mismatch_message(&found, &expected, &notes);
         }
     }
 
@@ -6266,7 +6266,7 @@ impl<'a> Worker<'a> {
         let plain_eta = expanded && eta_sam_mismatch.is_none() && eta_sam.is_none();
         if let Some((found, required)) = eta_sam_mismatch {
             let (found_text, required_text) = self.show_pair(found, required);
-            let msg = format!("type mismatch: found {}, required {}", found_text, required_text);
+            let msg = super::expr::mismatch_message(&found_text, &required_text, &Default::default());
             self.error_unless_unknown(span, msg, &[found, required]);
             ty = ERROR;
         } else if let Some((trait_ty, method, sam_sig, sam_subst)) = eta_sam {
@@ -7442,7 +7442,7 @@ impl<'a> Worker<'a> {
                                 let seen = self.replay_sig_view(Arc::new(MethodSig::value(ret)), &view).ret;
                                 let given = self.param_type(seen, subst);
                                 if !self.is_sub(given, pty) {
-                                    let msg = format!("type mismatch: found {}, required {}", self.show(given), self.show(pty));
+                                    let msg = super::expr::mismatch_message(&self.show(given), &self.show(pty), &Default::default());
                                     self.error(list.span, msg);
                                 }
                                 if let Some(pl) = plan.as_deref_mut() {
@@ -10005,7 +10005,7 @@ impl<'a> Worker<'a> {
                 Some((te, ty)) if ty != ERROR => (recv, recv_ty) = (te, ty),
                 _ => {
                     let found = self.path_of(recv).unwrap_or(recv_ty);
-                    let msg = format!("type mismatch: found {}, required Selectable | Dynamic", self.show(found));
+                    let msg = super::expr::mismatch_message(&self.show(found), "Selectable | Dynamic", &Default::default());
                     self.error(span, msg);
                     return failed(self, &lists);
                 }

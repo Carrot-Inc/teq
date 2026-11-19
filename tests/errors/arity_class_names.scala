@@ -8,11 +8,11 @@
 // taken; Tuple23, Tuple01 and Function01 not found (E008). The taken rows run in
 // tests/cases/arity_class_names_found.scala. `LeadingZeros`'s lambda has no parameter type: its
 // AnonymousFunctionMissingParamType prints the erroneous expected type, so HideNonSensicalMessages hides it.
-// expect: 22:10: error: type Tuple01 not found
-// expect: 23:10: error: type Function01 not found
-// expect: 31:12: error: type Tuple23 not found
-// expect: 32:12: error: type Tuple01 not found
-// expect: 33:12: error: type Function01 not found
+// expect: 22:10: error: Not found: type Tuple01
+// expect: 23:10: error: Not found: type Function01
+// expect: 31:12: error: Not found: type Tuple23
+// expect: 32:12: error: Not found: type Tuple01
+// expect: 33:12: error: Not found: type Function01
 // absent: 26:12: error
 // absent: 27:12: error
 // absent: 28:11: error
@@ -55,7 +55,7 @@ object Terms {
   val function2 = scala.Function2
   val tuple23 = scala.Tuple23
 }
-// expect: 43:14: error: type Tuple23 not found
+// expect: 43:14: error: Not found: type Tuple23
 // expect: 46:293: error: Found:    (x : (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int,
 // expect: 49:85: error: Found:    (x : (Int) ?=> Int)
 // expect: 12 errors found

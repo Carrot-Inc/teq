@@ -5,8 +5,8 @@
 // type is type-representation's; this case goes live at the rebase onto its
 // landing. scalac's lines.
 // teq: --std=scala-library
-// expect: 15:22: error: type mismatch: found 1, required Int @Ref
-// expect: 16:25: error: type mismatch: found Int @Other, required Int @Ref
+// expect: 15:22: error: Found:    1⏎Required: Int @Ref
+// expect: 16:25: error: Found:    Int @Other⏎Required: Int @Ref
 package review
 class Ref extends scala.annotation.RefiningAnnotation
 class Other extends scala.annotation.RefiningAnnotation

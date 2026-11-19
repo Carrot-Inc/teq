@@ -1,6 +1,6 @@
 // `type Bad = Missing` stands after `B.dependent`, where `B` suspends: dotty's traversal never reaches it, and
 // its completion owns what it reports, which goes with it.
-// expect: Z.scala:2:24: error: type mismatch: found 456, required Boolean
+// expect: Z.scala:2:24: error: Found:    456⏎Required: Boolean
 // expect: 1 error found
 // absent: Missing
 import scala.quoted.*

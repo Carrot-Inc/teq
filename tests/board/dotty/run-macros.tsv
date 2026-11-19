@@ -43,16 +43,16 @@ enum-nat-macro	pass	interp:pass
 exports	fail	interp:fail	output: line 3: the .check has "extracted with TreeAccumulator: '{export Messages.{logMessage => log}}, '{export Messages.{count}}", the program printed 'extracted with TreeAccumulator: '
 expr-map-1	fail	interp:fail	Test_2.scala:4:13: exception in macro: java.lang.StackOverflowError (called by rewrite in object Macro_1$package) (in the body of Macro_1$package.rewrite)
 expr-map-2	fail	interp:fail	output: line 3: the .check has '4', the program printed '2'
-expr-map-3	fail	interp:fail	Macro_1.scala:14:28: type mismatch: found String, required String & T
+expr-map-3	fail	interp:fail	Macro_1.scala:14:28: Found:    String
 expr-mirror-info	fail	interp:fail	Macro_1.scala:21:114: no given instance of type ToExpr[(String, List[String], String, String, List[String])] was found for parameter to
-f-interpolation-1	fail	interp:fail	FQuote_1.scala:8:52: not found: this
+f-interpolation-1	fail	interp:fail	FQuote_1.scala:8:52: Not found: this
 f-interpolator-tests.scala	fail	interp:fail	f-interpolator-tests.scala:374:7: expected end of statement, found identifier
 f-interpolator.scala	pass	interp:pass	
 flops-rewrite	fail	interp:fail	output: line 1: the .check has 'scala.Nil.map[scala.Nothing](((x: scala.Nothing) => x))', the program printed 'Nil.map[scala.Nothing](((x: scala.Nothing) => x))'
 flops-rewrite-2	fail	interp:fail	output: line 11: the .check has '0.+(a).+(b)', the program printed 'Macro_1$package.plus(a, 0).+(Macro_1$package.plus(0, b))'
 flops-rewrite-3	fail	interp:fail	output: line 11: the .check has '0.+(a).+(b)', the program printed 'Macro_1$package.plus(a, 0).+(Macro_1$package.plus(0, b))'
 from-type	pass	interp:pass	
-gestalt-optional-staging	fail	interp:fail	Macro_1.scala:10:75: not found: this
+gestalt-optional-staging	fail	interp:fail	Macro_1.scala:10:75: Not found: this
 gestalt-type-toolbox-reflect	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed:
 i10011	pass	interp:pass	
 i10043	pass	interp:pass	
@@ -71,16 +71,16 @@ i12351	fail	interp:fail	option: -Xread-docs (teq has no flag for it)
 i12352	fail	interp:fail	option: -Xread-docs (teq has no flag for it)
 i12392	fail	interp:fail	output: line 1: the .check has 'scala.Option[java.lang.String] to scala.Option[scala.Int]', the program printed 'scala.Option[scala.Predef.String] to scala.Option[scala.Predef.String]'
 i12417	pass	interp:pass	
-i12417b	fail	interp:pass	Tuples.scala:247:12:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+i12417b	fail	interp:pass	Tuples.scala:247:12:None:None: Found:    IArray[AnyRef]
 i13033	pass	interp:pass	
 i13183	pass	interp:pass	
 i13230	pass	interp:pass	
 i13947	pass	interp:pass	
 i14902	pass	interp:pass	
 i15968	fail	interp:fail	output: line 2: the .check has '  type Z = java.lang.String', the program printed '  val arg: Z = "foo"'
-i16734a	fail	interp:fail	Macro_1.scala:3:27: type AnyKind not found
-i16734b	fail	interp:fail	Macro_1.scala:5:31: type AnyKind not found
-i16734c	fail	interp:fail	Macro_1.scala:3:32: type AnyKind not found
+i16734a	fail	interp:fail	Macro_1.scala:3:27: Not found: type AnyKind
+i16734b	fail	interp:fail	Macro_1.scala:5:31: Not found: type AnyKind
+i16734c	fail	interp:fail	Macro_1.scala:3:32: Not found: type AnyKind
 i17105	fail	interp:fail	Macro_2.scala:7:51: value apply is not a member of Any
 i17105b	fail	interp:fail	Macro_1.scala:11:26: 'erased' is not part of the supported Scala subset
 i17257	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError: 'void scala.runtime.TupleXXL.<init>(java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object, java.lang
@@ -97,10 +97,10 @@ i19951-java-annotations-tasty-compat	fail	-	java source: teq reads none
 i19951-java-annotations-tasty-compat-2	fail	-	java source: teq reads none
 i20052	fail	-	java source: teq reads none
 i20449	fail	interp:fail	output: line 2: the .check has 'Original: Main_2$package.UserName.T', the program printed 'Original: UserName.T'
-i21225	fail	interp:fail	Macro_1.scala:12:35: not found: GivenSelector
-i22260	fail	interp:fail	Macros_1.scala:16:26: not found: MethodTypeKind
+i21225	fail	interp:fail	Macro_1.scala:12:35: Not found: GivenSelector
+i22260	fail	interp:fail	Macros_1.scala:16:26: Not found: MethodTypeKind
 i22395	fail	interp:fail	output: line 1: the .check has 'TypeRef(AppliedType(TypeRef(ThisType(TypeRef(ThisType(TypeRef(NoPrefix,module class <root>)),module class <empty>)),Foo),List(TypeRef(TermRef(ThisType(TypeRef(NoPrefix,module class <root>)),object scala),Int)
-i22616c	fail	interp:pass	out/dotty-3.8.4/tests/run-macros/i22616c/MyTypeRepr_3.scala: cannot write TASTy for the reflection API's type TypeRepr outside a method of a Quotes in MyTypeRepr
+i22616c	fail	interp:pass	out/sort/scala3-tag/tests/run-macros/i22616c/MyTypeRepr_3.scala: cannot write TASTy for the reflection API's type TypeRepr outside a method of a Quotes in MyTypeRepr
 i24006	fail	interp:fail	Test.scala:3:20: not supported yet in a macro: reading stdin is an effect, which a compile-time evaluation cannot have (called by eval in object Eval)
 i4431-b	pass	interp:pass	
 i4455	pass	interp:pass	
@@ -160,13 +160,13 @@ i8530	pass	interp:pass
 i8671	pass	interp:pass	
 i8745	pass	interp:pass	
 i8745b	pass	interp:pass	
-i8746	fail	interp:fail	Macro_1.scala:7:32: type mismatch: found tpe2, required "anything"
+i8746	fail	interp:fail	Macro_1.scala:7:32: Found:    tpe2
 i8746b	pass	interp:pass	
 i8877	pass	interp:pass	
-i9206	fail	interp:fail	Macros_1.scala:5:27: type AnyKind not found
+i9206	fail	interp:fail	Macros_1.scala:5:27: Not found: type AnyKind
 i9475	pass	interp:pass	
 i9570	fail	interp:pass	Test_2.scala:6:16: exception in macro: scala.MatchError: Macros.HList.HNil (of class scala.quoted.Expr) (called by size in object HList) (in the body of Macros.size)
-i9812b	fail	interp:fail	Macro_1.scala:50:31: type mismatch: found (Quotes) ?=> Expr[Lst[Int]], required Expr[Lst[Int]]
+i9812b	fail	interp:fail	Macro_1.scala:50:31: Found:    (Quotes) ?=> Expr[Lst[Int]]
 inferred-repeated-result	pass	interp:pass	
 inline-beta-reduce-polyfunction.scala	fail	interp:fail	output: line 1: the .check has '{', the program printed 'foo([X] => (x: X) => { println(x); x })'
 inline-case-objects	fail	interp:fail	Macro_1.scala:5:7:None:None: the body of Macros.impl is withheld from the products of $OUT/run-macros/inline-case-objects/jvm.products (elided: unstated the std's Class.getCanonicalName, which scala-library has under another shape): the TAS
@@ -198,7 +198,7 @@ pattern-scope-extrusion	fail	interp:fail	quoted_1.scala:9:29: value apply is not
 places-proto	fail	interp:fail	Macros_1.scala:4:7:None:None: the body of Places.withPlace is withheld from the products of $OUT/run-macros/places-proto/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): the TAST
 power-macro	pass	interp:pass	
 quote-and-splice	pass	interp:pass	
-quote-change-owner	pass	interp:fail	
+quote-change-owner	pass	interp:pass	
 quote-elide-prefix	pass	interp:pass	
 quote-force	pass	interp:fail	
 quote-implicitMatch	pass	interp:fail	
@@ -211,7 +211,7 @@ quote-match-poly-function-1-regression	fail	interp:fail	output: line 2: the .che
 quote-match-poly-function-2	fail	interp:fail	Macro_1.scala:7:42: value apply is not a member of Any
 quote-matcher-inference	pass	interp:pass	
 quote-matcher-power	pass	interp:pass	
-quote-matcher-runtime	fail	interp:fail	quoted_1.scala:15:36: type mismatch: found Type[?] & AnyRef, required Type[T]
+quote-matcher-runtime	fail	interp:fail	quoted_1.scala:15:36: Found:    Type[?] & AnyRef
 quote-matcher-string-interpolator	pass	interp:pass	
 quote-matcher-string-interpolator-2	fail	interp:pass	quoted_2.scala:6:13: exception in macro: java.lang.StackOverflowError (called by xyz in object Macros) (in the body of Macros.xyz)
 quote-matcher-string-interpolator-3	pass	interp:pass	
@@ -230,23 +230,23 @@ quote-sep-comp-2	pass	interp:pass
 quote-simple-macro	pass	interp:pass	
 quote-toExprOfSeq	pass	interp:pass	
 quote-toExprOfTuple	pass	interp:pass	
-quote-type-matcher	fail	interp:fail	quoted_1.scala:13:38: type mismatch: found Type[?] & AnyRef, required Type[T]
+quote-type-matcher	fail	interp:fail	quoted_1.scala:13:38: Found:    Type[?] & AnyRef
 quote-type-matcher-2	pass	interp:pass	
 quote-unrolled-foreach	pass	interp:pass	
 quote-whitebox	pass	interp:pass	
-quoted-ToExpr-derivation-macro	fail	interp:fail	Derivation_1.scala:15:48: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
+quoted-ToExpr-derivation-macro	fail	interp:fail	Derivation_1.scala:15:48: Found:    Sum{type MirroredElemTypes = mirroredElemTypes}
 quoted-expr-block	pass	interp:pass	
-quoted-liftable-derivation-macro	fail	interp:fail	Derivation_1.scala:18:50: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
-quoted-liftable-derivation-macro-2	fail	interp:fail	Derivation_1.scala:20:50: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
+quoted-liftable-derivation-macro	fail	interp:fail	Derivation_1.scala:18:50: Found:    Sum{type MirroredElemTypes = mirroredElemTypes}
+quoted-liftable-derivation-macro-2	fail	interp:fail	Derivation_1.scala:20:50: Found:    Sum{type MirroredElemTypes = mirroredElemTypes}
 quoted-matching-docs	fail	interp:fail	output: line 5: the .check has 'args$proxy5.sum[scala.Int](scala.math.Numeric.IntIsIntegral)', the program printed 'Test.seq.sum[scala.Int](scala.math.Numeric.IntIsIntegral)'
 quoted-matching-docs-2	fail	interp:fail	output: line 5: the .check has '4.+(Macro_1$package.sum(Test.seq: _*))', the program printed '4.+(Macro_1$package.sum(Test.seq))'
 quoted-pattern-open-expr	fail	interp:fail	Macro_1.scala:8:29: value apply is not a member of Any
 quoted-pattern-open-expr-0	fail	interp:fail	Macro_1.scala:7:29: value apply is not a member of Any
 quoted-pattern-open-expr-simple-eval	fail	interp:fail	Macro_1.scala:7:30: value apply is not a member of Any
-quoted-pattern-type	fail	interp:fail	Macro_1.scala:9:36: type mismatch: found Expr[Boolean], required Expr[T]
+quoted-pattern-type	fail	interp:fail	Macro_1.scala:9:36: Found:    Expr[Boolean]
 quoted-toExprOfClass	fail	interp:fail	Test_2.scala:3:36: not supported yet in a macro: no literal holds long (called by wildcard in object Macros_1$package) (in the body of Macros_1$package.wildcard)
 refined-apply	fail	interp:fail	Macro_1.scala:12:22: value newTypeAlias is not a member of Symbol
-refined-selectable-macro	fail	interp:fail	Macro_1.scala:9:61: not found: this
+refined-selectable-macro	fail	interp:fail	Macro_1.scala:9:61: Not found: this
 reflect-dsl	pass	interp:fail	
 reflect-inline	fail	interp:fail	test_2.scala:7:12: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 reflect-isFunctionType	fail	interp:fail	test_2.scala:61:41: expected ',' or ')', found identifier
@@ -262,9 +262,9 @@ reflect-sourceCode	fail	interp:fail	output: line 6: the .check has '{ f }', the 
 reflect-typeChecks	fail	interp:fail	test_2.scala:12:5: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 requiredSymbols	fail	interp:fail	Test_2.scala:4:13: exception in macro: java.util.NoSuchElementException: class java.lang.Object not found (called by foo in object Macro) (in the body of Macro.foo)
 self	fail	interp:fail	output: line 1: the .check has 'ExprType(TypeRef(TermRef(ThisType(TypeRef(NoPrefix,module class <root>)),object scala),Int))', the program printed 'B.this.X'
-simple-interpreter	fail	interp:fail	Macro_1.scala:33:51: `yield` or `do` expected
+simple-interpreter	fail	interp:pass	output: line 3: the .check has 'Some(OPTION[INT])', the program printed 'None'
 simple-switch	fail	interp:fail	Main_2.scala:7:3: not supported yet in a macro: a case whose pattern is no pattern tree (called by switch in object Macro_1$package) (in the body of Macro_1$package.switch)
-splice-position	fail	interp:fail	Test.scala:5:34: missing parameter type
+splice-position	fail	interp:fail	Test.scala:5:47: value apply is not a member of Array[StackTraceElement]
 string-context-implicits	fail	interp:fail	Test_2.scala:6:41: expected '}', found ';'
 summonIgnoring	fail	interp:fail	output: line 2: the .check has 'TC[C2] generated in macro without TC[C1]', the program printed 'TC[C2] generated in macro using:'
 summonIgnoring-nonrecursive	pass	interp:pass	
@@ -282,9 +282,9 @@ tasty-extractors-3	fail	interp:fail	output: line 3: the .check has 'TermRef(NoPr
 tasty-extractors-constants-1	pass	interp:pass	
 tasty-extractors-owners	fail	interp:fail	output: line 2: the .check has 'ValDef("macro", Inferred(), None)', the program printed 'DefDef("main", List(TermParamClause(List(ValDef("args", Inferred(AppliedType(TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Array"), List(TypeRef(Thi
 tasty-getfile	pass	interp:pass	
-tasty-getfile-implicit-by-name-fun-context	fail	interp:fail	Macro_1.scala:8:5: type mismatch: found Macro[String], required Expr[String]
-tasty-getfile-implicit-fun-context	fail	interp:fail	Macro_1.scala:9:5: type mismatch: found Macro[String], required Expr[String]
-tasty-implicit-fun-context-2	fail	interp:fail	Macro_1.scala:9:5: type mismatch: found (Quotes) ?=> Tastier[(Quotes) ?=> Macro[String]], required Expr[String]
+tasty-getfile-implicit-by-name-fun-context	fail	interp:fail	Macro_1.scala:8:5: Found:    Macro[String]
+tasty-getfile-implicit-fun-context	fail	interp:fail	Macro_1.scala:9:5: Found:    Macro[String]
+tasty-implicit-fun-context-2	fail	interp:fail	Macro_1.scala:9:5: Found:    (Quotes) ?=> Tastier[(Quotes) ?=> Macro[String]]
 tasty-indexed-map	pass	interp:pass	
 tasty-interpolation-1	fail	interp:fail	Macro.scala:57:17:None:None: the body of MacroStringInterpolator.getStaticStringContext is withheld from the products of $OUT/run-macros/tasty-interpolation-1/jvm.products (elided: unstated an extractor pattern): the TASTy writer's queue of
 tasty-linenumber	pass	interp:fail	
@@ -306,11 +306,11 @@ tasty-tree-map	fail	interp:fail	quoted_2.scala:21:13: not supported yet in a mac
 tasty-typeof	fail	interp:fail	output: line 3: the .check has 'Macros', the program printed 'Macros.type'
 tasty-unsafe-let	pass	interp:pass	
 term-show	fail	interp:fail	Test_2.scala:6:19: 'erased' is not part of the supported Scala subset
-type-members	fail	interp:fail	Macro_1.scala:6:31: type AnyKind not found
-type-show	fail	interp:fail	Macro_1.scala:4:24: type AnyKind not found
+type-members	fail	interp:fail	Macro_1.scala:6:31: Not found: type AnyKind
+type-show	fail	interp:fail	Macro_1.scala:4:24: Not found: type AnyKind
 whitebox-inline-macro	pass	interp:pass	
-xml-interpolation-1	fail	interp:fail	XmlQuote_1.scala:11:59: not found: this
-xml-interpolation-2	fail	interp:fail	XmlQuote_1.scala:12:57: not found: this
+xml-interpolation-1	fail	interp:fail	XmlQuote_1.scala:11:59: Not found: this
+xml-interpolation-2	fail	interp:fail	XmlQuote_1.scala:12:57: Not found: this
 xml-interpolation-3	pass	interp:pass	
 xml-interpolation-4	fail	interp:pass	Macros_1.scala:12:15:None:None: the body of XmlQuote.impl is withheld from the products of $OUT/run-macros/xml-interpolation-4/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): th
 xml-interpolation-5	pass	interp:pass	

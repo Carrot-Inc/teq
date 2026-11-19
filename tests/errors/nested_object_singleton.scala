@@ -1,4 +1,4 @@
-// expect: 9:23: error: type mismatch: found (b.R : R), required (a.R : R)
+// expect: 9:23: error: Found:    (b.R : R)⏎Required: (a.R : R)
 class O:
   object R
 

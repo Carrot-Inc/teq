@@ -4,7 +4,7 @@
 // List.empty` is a `List[Any => Unit]`, `List[T] = List.empty` a `List[Nothing]`, `(T, T) = (1, 2)` an `(Int, Int)`,
 // `Map[String, T => Unit] = Map.empty` a `Map[String, Any => Unit]`, and `Map[T, T] = Map(1 -> "a")` a
 // `Map[Int, String]`, which the call then cannot fit to `Map[T, T]` (scalac 3.8.4: tests/pos/infer1.scala).
-// expect: M.scala:19:12: error: type mismatch: found Map[Int, String], required Map[T, T]
+// expect: M.scala:19:12: error: Found:    Map[Int, String]⏎Required: Map[T, T]
 // expect: 1 error found
 object G:
   def f[T](xs: List[T => Unit] = List.empty): List[T => Unit] = xs

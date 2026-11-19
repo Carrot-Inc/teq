@@ -1,5 +1,5 @@
 // teq: --threads 1
-// expect: 23:21: error: type mismatch
+// expect: 23:21: error: Found:    Int⏎Required: String
 // expect: 1 error found
 // At one worker `H.ext`'s body is typed on demand inside the first extension alternative and its
 // warning is its definition's (a promoted range); the extractor's quiet typing of the path drops

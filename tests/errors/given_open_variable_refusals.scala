@@ -44,13 +44,18 @@ object Main:
   val none = F.f(Window(()), true)
   val ambiguous = F.g(Window(()))
   val holder = new Holder(Window(()), "x")
-// expect: 40:38: error: type mismatch: found Window[Unit, Nothing], required Window[Unit, Unit]
-// expect: 41:35: error: type mismatch: found Window[Unit, String], required Window[Unit, Unit]
-// expect: 42:37: error: type mismatch: found Window[Unit, CharSequence], required Window[Unit, Unit]
-// expect: 43:36: error: type mismatch: found Window[Unit, R], required Window[Int, Unit]
+// expect: 40:38: error: Found:    Window[Unit, Nothing]
+// expect+ Required: Window[Unit, Unit]
+// expect: 41:35: error: Found:    Window[Unit, String]
+// expect+ Required: Window[Unit, Unit]
+// expect: 42:37: error: Found:    Window[Unit, CharSequence]
+// expect+ Required: Window[Unit, Unit]
+// expect: 43:36: error: Found:    Window[Unit, R]
+// expect+ Required: Window[Int, Unit]
 // expect: 44:14: error: None of the overloaded alternatives of method f in object F with types
 // expect: match arguments (Window[Unit, Nothing], true)
 // expect: 45:19: error: Ambiguous overload. The overloaded alternatives of method g in object F with types
 // expect: both match arguments (Window[Unit, Nothing])
 // absent: None of the overloaded alternatives of method g
-// expect: 46:39: error: type mismatch: found "x", required Int
+// expect: 46:39: error: Found:    "x"
+// expect+ Required: Int

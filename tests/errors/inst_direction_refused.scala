@@ -5,4 +5,5 @@ def mk[A >: Null](f: A => Unit): Box[A] = new Box[A]
 def run() =
   val y = mk((s: String) => ())
   val z: Box[Null] = y
-// expect: 7:22: error: type mismatch: found Box[String], required Box[Null]
+// expect: 7:22: error: Found:    Box[String]
+// expect+ Required: Box[Null]

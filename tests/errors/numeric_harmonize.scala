@@ -1,16 +1,16 @@
 // Numeric widening and the harmonisation of Int literals in branches and varargs.
-// expect: 28:21: error: type mismatch: found Long, required Int
-// expect: 29:22: error: type mismatch: found Double, required Long
-// expect: 35:19: error: type mismatch: found Int | Long, required Long
-// expect: 37:19: error: type mismatch: found Int | Long, required Long
-// expect: 43:21: error: type mismatch: found Int | Double, required Double
-// expect: 45:21: error: type mismatch: found Long | Double, required Double
-// expect: 54:25: error: type mismatch: found List[Int | Long], required List[Long]
-// expect: 56:25: error: type mismatch: found List[Int | Long], required List[Long]
-// expect: 60:24: error: type mismatch: found List[Char], required List[Int]
+// expect: 28:21: error: Found:    Long⏎Required: Int
+// expect: 29:22: error: Found:    Double⏎Required: Long
+// expect: 35:19: error: Found:    Int | Long⏎Required: Long
+// expect: 37:19: error: Found:    Int | Long⏎Required: Long
+// expect: 43:21: error: Found:    Int | Double⏎Required: Double
+// expect: 45:21: error: Found:    Long | Double⏎Required: Double
+// expect: 54:25: error: Found:    List[Int | Long]⏎Required: List[Long]
+// expect: 56:25: error: Found:    List[Int | Long]⏎Required: List[Long]
+// expect: 60:24: error: Found:    List[Char]⏎Required: List[Int]
 // expect: 73:16: error: number too large for Int; use an L suffix for Long
-// expect: 76:19: error: type mismatch: found Int | Long, required Long
-// expect: 78:19: error: type mismatch: found Int | Long, required Long
+// expect: 76:19: error: Found:    Int | Long⏎Required: Long
+// expect: 78:19: error: Found:    Int | Long⏎Required: Long
 object N:
   val c = true
   val i: Int = 3

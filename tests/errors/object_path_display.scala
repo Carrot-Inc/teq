@@ -4,4 +4,5 @@ object API:
   class B { class Item }
   val b = new B
 val x: String = new API.b.Item
-// expect: 6:17: error: type mismatch: found API.b.Item, required String
+// expect: 6:17: error: Found:    API.b.Item
+// expect+ Required: String

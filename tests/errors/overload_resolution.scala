@@ -10,7 +10,7 @@
 // expect: all match expected type Any
 // expect: 25:11: error: None of the overloaded alternatives of method area in object Geometry with types
 // expect: match arguments (true, false, true)
-// expect: 26:28: error: type mismatch: found "x", required Double
+// expect: 26:28: error: Found:    "x"⏎Required: Double
 // expect: 5 errors found
 object Geometry:
   def area(side: Int): Int = side * side

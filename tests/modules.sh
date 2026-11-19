@@ -1248,7 +1248,7 @@ if [ -n "$every_case" ]; then
         ok=0
         detail="the build naming its own removed object succeeded"$'\n'
       fi
-      grep -q "not found: Old" "$od/log" || { ok=0; detail="$detail$(tail -3 "$od/log")"$'\n'; }
+      grep -q "Not found: Old" "$od/log" || { ok=0; detail="$detail$(tail -3 "$od/log")"$'\n'; }
       diff -rq "$od/before" "$od/out" > /dev/null || { ok=0; detail="${detail}the directory changed"; }
     else
       ok=0

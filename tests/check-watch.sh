@@ -152,7 +152,7 @@ if has '"modules":0' && ! [ -e "$work/out" ]; then ok; else bad "first build: wr
 sed -i.bak 's/def tag: String = "tagged"/def tag: String = 42/' "$src/b.scala"
 build "$src/b.scala"
 expect "type error" "$(field ok),$(field incremental)" 'false,true'
-if has '"file":"'"$src"'/b.scala","line":6,"col":21,"endLine":6,"endCol":23,"severity":"error","message":"type mismatch: found 42, required String"'; then ok; else bad "type error diagnostic: $RESULT"; fi
+if has '"file":"'"$src"'/b.scala","line":6,"col":21,"endLine":6,"endCol":23,"severity":"error","message":"Found:    42\nRequired: String"'; then ok; else bad "type error diagnostic: $RESULT"; fi
 if has '"source":"  def tag: String = 42"' && has '"caret":"                    ^^"'; then ok; else bad "type error source and caret: $RESULT"; fi
 expect "type error is also an error of the build answer" "$(echo "$RESULT" | grep -o '"errors":\[{' | wc -l | tr -d ' ')" 1
 
@@ -319,7 +319,7 @@ expect "a nested class through a prefix: the first build" "$(field ok),$(count e
 sed -i.bak 's/a\.Item = new a\.Item/b.Item = new b.Item/' "$pdir/A.scala"
 build "$pdir/A.scala"
 expect "a nested class's prefix changed" "$(field ok),$(count error)" 'false,1'
-if has 'found API.b.Item, required API.a.Item'; then ok; else bad "a nested class's prefix changed: $RESULT"; fi
+if has 'Found:    API.b.Item\nRequired: API.a.Item'; then ok; else bad "a nested class's prefix changed: $RESULT"; fi
 as_fresh "a nested class's prefix changed" "$pdir/A.scala" "$pdir/B.scala"
 mv "$pdir/A.scala.bak" "$pdir/A.scala"
 build "$pdir/A.scala"
@@ -797,7 +797,7 @@ printf 'object A { val x = ("s"; val bad: Int = "s" }\n' > "$work/A-malformed.sc
 text "$src/A.scala" "$work/A-malformed.scala"
 build "$src/A.scala"
 expect "pending text: A malformed" "$(field ok),$(field fallback),$(count error)" 'false,"the inferred type of x changed",3'
-if has "')', found" && has '"file":"'"$src"'/B.scala","line":1,"col":25' && has '"message":"type mismatch: found String, required Int"'; then ok; else bad "pending text: A's parse error, its own error and B's: $RESULT"; fi
+if has "')', found" && has '"file":"'"$src"'/B.scala","line":1,"col":25' && has '"message":"Found:    String\nRequired: Int"'; then ok; else bad "pending text: A's parse error, its own error and B's: $RESULT"; fi
 printf 'object B { val y: Int = A.x + 0 }\n' > "$work/B-plus.scala"
 text "$src/B.scala" "$work/B-plus.scala"
 build "$src/B.scala"
@@ -815,7 +815,7 @@ if has "')', found" && has '"retyped":["'"$src"'/B.scala"]'; then ok; else bad "
 withdraw "$src/A.scala"
 build "$src/B.scala"
 expect "pending text: A's disk text read with B's build" "$(field ok),$(field fallback),$(count error)" 'false,"the inferred type of x changed",1'
-if ! has "')', found" && has '"file":"'"$src"'/A.scala","line":1,"col":38' && has '"message":"type mismatch: found \"s\", required Int"'; then ok; else bad "pending text: A read from disk, its parse error gone: $RESULT"; fi
+if ! has "')', found" && has '"file":"'"$src"'/A.scala","line":1,"col":38' && has '"message":"Found:    \"s\"\nRequired: Int"'; then ok; else bad "pending text: A read from disk, its parse error gone: $RESULT"; fi
 stop
 # Parse errors survive the full path with their files' trees, and the parse errors of the files
 # that remain are kept when one of them is removed; a fix that comes with a file added back is
@@ -1243,7 +1243,7 @@ as_fresh "forward reference: undone" "$fref"
 printf 'object Use:\n  def run(n: Int): Int =\n    val held: Int = "text"\n    def first: Int = held + second\n    val more: Int = first\n    def second: Int = n\n    more\n' > "$fref/Use.scala"
 build "$fref/Use.scala"
 expect "forward reference: an initialiser that does not type" "$(field ok),$(count error)" 'false,1'
-if has 'type mismatch'; then ok; else bad "forward reference: the type error alone: $RESULT"; fi
+if has 'Found: '; then ok; else bad "forward reference: the type error alone: $RESULT"; fi
 as_fresh "forward reference: an initialiser that does not type" "$fref"
 printf 'object Use:\n  def run(n: Int): Int =\n    val held: Int = n\n    def first: Int = held + second\n    val more: Int = first\n    def second: Int = n\n    more\n' > "$fref/Use.scala"
 build "$fref/Use.scala"

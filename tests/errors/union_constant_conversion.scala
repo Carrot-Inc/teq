@@ -2,10 +2,10 @@
 // with a member other than `Null` is no class bound (`classBound`'s `stripNull` drops `Null` alone), so the constant is
 // not converted, and with no view to it (`Byte`, `Short`, `Char`) the mismatch is E007, as scalac 3.8.4 gives it; a
 // literal under such a union is an `Int` (`typedNumber`'s `isRef`), and `Float | String` takes `int2float`.
-// expect: 10:24: error: type mismatch: found 65, required Byte | String
-// expect: 11:26: error: type mismatch: found 65, required Short | Boolean
-// expect: 12:22: error: type mismatch: found 65, required Char | Unit
-// expect: 13:26: error: type mismatch: found 65, required Byte | String
+// expect: 10:24: error: Found:    65⏎Required: Byte | String
+// expect: 11:26: error: Found:    65⏎Required: Short | Boolean
+// expect: 12:22: error: Found:    65⏎Required: Char | Unit
+// expect: 13:26: error: Found:    65⏎Required: Byte | String
 def id[T](x: T): T = x
 val b: Byte | String = id[65](65)
 val s: Short | Boolean = id[65](65)

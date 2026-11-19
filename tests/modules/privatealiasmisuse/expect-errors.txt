@@ -1,4 +1,5 @@
-tests/modules/privatealiasmisuse/b/Outside.scala:8:25: error: type mismatch: found "x", required Elsewhere.Event
+tests/modules/privatealiasmisuse/b/Outside.scala:8:25: error: Found:    "x"
+Required: Elsewhere.Event
     val cmd = Cmd(1)(List("x"))
                           ^^^
 1 error found

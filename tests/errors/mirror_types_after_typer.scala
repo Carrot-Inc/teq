@@ -1,8 +1,8 @@
-// expect: 16:16: error: type MirroredElemTypes not found
-// expect: 16:36: error: type MirroredElemTypes not found
-// expect: 17:15: error: type MirroredMonoType not found
-// expect: 17:34: error: type MirroredMonoType not found
-// expect: 21:12: error: type MirroredLabel not found
+// expect: 16:16: error: Not found: type MirroredElemTypes
+// expect: 16:36: error: Not found: type MirroredElemTypes
+// expect: 17:15: error: Not found: type MirroredMonoType
+// expect: 17:34: error: Not found: type MirroredMonoType
+// expect: 21:12: error: Not found: type MirroredLabel
 // expect: 24:12: error: type MirroredElemTypes not found
 // expect: 25:12: error: type MirroredType not found
 // expect: 26:12: error: type MirroredMonoType not found

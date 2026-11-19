@@ -1445,7 +1445,7 @@ commands = b"text " + path.encode() + b" " + str(len(text)).encode() + b"\n" + t
 for n in ("1", "16"):
     p = subprocess.run([sys.argv[1], "compiler", "watch", "--check", "tests/workers/macro_counter/use", "--classpath", sys.argv[2], "--threads", n], input=commands, capture_output=True, timeout=60)
     out = p.stdout.decode()
-    print(n, '"ok":false' in out and "type mismatch" in out)
+    print(n, '"ok":false' in out and "Found: " in out)
 PY
 )
 if [ "$session" = "$(printf '1 True\n16 True')" ]; then

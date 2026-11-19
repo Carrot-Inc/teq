@@ -1,4 +1,4 @@
-// expect: 9:21: error: type mismatch
+// expect: 9:21: error: Found:    "text"⏎Required: Int
 // expect: 1 error found
 // absent: forward reference
 // A block's value whose initialiser does not type, read by a later method of the block that also names a method

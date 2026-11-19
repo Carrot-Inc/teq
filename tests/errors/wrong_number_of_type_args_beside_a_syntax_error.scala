@@ -12,4 +12,4 @@ object U:
 object W:
   val x: Int = (1 +
 // expect: wrong_number_of_type_args_beside_a_syntax_error.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]
-// absent: Undef not found
+// absent: Not found: type Undef

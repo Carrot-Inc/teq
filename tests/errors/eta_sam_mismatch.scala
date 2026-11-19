@@ -1,5 +1,5 @@
-// expect: 13:44: error: type mismatch: found Builder, required TagMod => TagMod
-// expect: 15:24: error: type mismatch: found Builder, required Int
+// expect: 13:44: error: Found:    Builder⏎Required: TagMod => TagMod
+// expect: 15:24: error: Found:    Builder⏎Required: Int
 // A method eta-expanded into a trait takes the trait method's parameters: an extension whose
 // parameter is a function does not implement `applyTo(b: Builder)`, as under scalac.
 class Builder

@@ -3,7 +3,7 @@
 // (`Typer.inferredFromTarget`, `translateFromRepeated`; its comment names neg/i14367 for the
 // misprediction), and the argument does not fit the element. scalac 3.8.4: `Found: (x : Seq[String])
 // Required: String`.
-// expect: 9:19: error: type mismatch: found Seq[String], required String
+// expect: 9:19: error: Found:    Seq[String]⏎Required: String
 def join(xs: String*): String = xs.mkString("/")
 
 val f = x => join(x)

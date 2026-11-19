@@ -2,7 +2,7 @@
 // 3.8.4 types the function as `Int* => Many` and refuses the call below it, `f(Seq(1, 2))`, with `Found:
 // Seq[Int] Required: Int`. Here a repeated parameter gives an open formal no type, and the lambda is
 // refused where it is written.
-// expect: 10:25: error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+// expect: 10:25: error: Found:    Any⏎Required: Seq[Int] | Array[? <: Int]
 case class Many(items: Int*)
 def on[A, B](f: A => B): A => B = f
 

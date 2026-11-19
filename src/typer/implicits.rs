@@ -5881,9 +5881,22 @@ impl<'a> Worker<'a> {
     pub fn given_failure_notes(&mut self) -> String {
         let failed = std::mem::take(&mut self.failed_givens);
         let mut out = String::new();
+        // A candidate's failure is embedded whole, never its first line alone: the reference embeds a nested
+        // diagnostic's every line or none of it (typer/Implicits.scala: NestedFailure, MacroErrorsFailure,
+        // MismatchedImplicit). One line stays on the candidate's; more go under it, indented.
         for (g, msg) in failed.iter().take(3) {
-            let first = msg.lines().next().unwrap_or("");
-            out.push_str(&format!("\n  candidate {} failed: {}", self.method_description(*g), first));
+            let described = self.method_description(*g);
+            let mut lines = msg.lines();
+            match (lines.next(), lines.clone().next()) {
+                (first, None) => out.push_str(&format!("\n  candidate {} failed: {}", described, first.unwrap_or(""))),
+                (Some(first), Some(_)) => {
+                    out.push_str(&format!("\n  candidate {} failed:\n    {}", described, first));
+                    for l in lines {
+                        out.push_str(&format!("\n    {}", l));
+                    }
+                }
+                (None, Some(_)) => unreachable!(),
+            }
         }
         out
     }

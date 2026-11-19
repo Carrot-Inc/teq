@@ -2,14 +2,14 @@
 // expect: 25:5: error: value += is not a member of Int
 // expect: 27:5: error: value += is not a member of Char
 // expect: 29:5: error: value += is not a member of Int
-// expect: 29:15: error: not found: nope
+// expect: 29:15: error: Not found: nope
 // expect: 30:5: error: value += is not a member of Int
 // expect: 32:5: error: value ++= is not a member of List[Int]
 // expect: 32:35: error: value nope is not a member of Int
 // expect: 34:5: error: value += is not a member of Int
 // expect: 36:5: error: value -= is not a member of String
 // expect: 37:5: error: value += is not a member of List[Int]
-// expect: 37:11: error: not found: nope
+// expect: 37:11: error: Not found: nope
 // expect: 12 errors found
 // Where both tries of an assignment operator's application fail, the first failure stands (`typedApply`'s
 // `failedState.commit()`): the operator is no member of the left side's type, with what typing the right side

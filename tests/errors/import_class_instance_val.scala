@@ -14,7 +14,7 @@
 // expect: import_class_instance_val.scala:28:10: error: (Use.this.v : API) is not a legal path since it refers to nonfinal variable v
 // expect: import_class_instance_val.scala:28:10: error: import prefix is not a pure expression
 // expect: import_class_instance_val.scala:30:10: error: (Use.this.l : API) is not a legal path since it refers to nonfinal lazy value l
-// expect: import_class_instance_val.scala:33:19: error: not found: hidden
+// expect: import_class_instance_val.scala:33:19: error: Not found: hidden
 // expect: import_class_instance_val.scala:35:12: error: value noSuch is not a member of API
 // expect: import_class_instance_val.scala:36:13: error: value absent is not a member of API
 // expect: import_class_instance_val.scala:40:12: error: value gone is not a member of API

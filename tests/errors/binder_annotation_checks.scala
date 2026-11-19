@@ -12,13 +12,13 @@
 // expect: 34:20: error: class Object is not a valid Java annotation: it was not declared with `@interface`
 // expect: 35:32: error: Named arguments are required for Java defined annotations
 // expect: 36:29: error: constructor Deprecated in trait Deprecated: (since: String, forRemoval: Boolean): Deprecated does not have a parameter foo
-// expect: 38:31: error: type B not found
-// expect: 39:24: error: type B not found
-// expect: 40:26: error: type B not found
-// expect: 42:26: error: type A not found
+// expect: 38:31: error: Not found: type B
+// expect: 39:24: error: Not found: type B
+// expect: 40:26: error: Not found: type B
+// expect: 42:26: error: Not found: type A
 // expect: 43:13: error: class Plain is not a valid Scala annotation: it does not extend `scala.annotation.Annotation`
 // expect: 44:14: error: class Plain is not a valid Scala annotation: it does not extend `scala.annotation.Annotation`
-// expect: 45:32: error: type B not found
+// expect: 45:32: error: Not found: type B
 // absent: binder_annotation_checks.scala:33:
 // absent: binder_annotation_checks.scala:37:
 import scala.annotation.{implicitNotFound, targetName, StaticAnnotation}

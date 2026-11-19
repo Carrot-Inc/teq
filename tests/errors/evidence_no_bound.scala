@@ -2,5 +2,6 @@
 // `List[A]` is no `List[String]` for an `A <:< String`, as scalac refuses it too.
 def f[A](xs: List[A])(using ev: A <:< String): List[String] = xs
 def g[A](a: A)(using ev: A <:< String): Int = a.length
-// expect: 3:63: error: type mismatch: found List[A], required List[String]
+// expect: 3:63: error: Found:    List[A]
+// expect+ Required: List[String]
 // absent: 4:

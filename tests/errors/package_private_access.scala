@@ -28,4 +28,4 @@ object test {
 // expect: 17:11: error: method pd in package jam cannot be accessed as a member of jam.type from object test.
 // expect: private[jam] method pd can only be accessed from package jam.
 // expect: 18:11: error: method qd in package jam cannot be accessed as a member of jam.type from object test.
-// expect: 20:11: error: not found: pd
+// expect: 20:11: error: Not found: pd

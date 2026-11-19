@@ -6,6 +6,9 @@ def immutable(xs: scala.collection.Seq[Int]): scala.collection.immutable.Seq[Int
 def count(xs: Int*): Int = xs.size
 def spread(xs: scala.collection.Seq[Int]): Int = count(xs*)
 def indexed(xs: scala.collection.IndexedSeq[Int]): IndexedSeq[Int] = xs
-// expect: 5:85: error: type mismatch: found scala.collection.Seq[Int], required scala.Seq[Int]
-// expect: 7:56: error: type mismatch: found scala.collection.Seq[Int], required scala.Seq[Int] | Array[? <: Int]
-// expect: 8:70: error: type mismatch: found scala.collection.IndexedSeq[Int], required scala.IndexedSeq[Int]
+// expect: 5:85: error: Found:    scala.collection.Seq[Int]
+// expect+ Required: scala.Seq[Int]
+// expect: 7:56: error: Found:    scala.collection.Seq[Int]
+// expect+ Required: scala.Seq[Int] | Array[? <: Int]
+// expect: 8:70: error: Found:    scala.collection.IndexedSeq[Int]
+// expect+ Required: scala.IndexedSeq[Int]

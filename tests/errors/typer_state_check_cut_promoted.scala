@@ -1,5 +1,5 @@
 // teq: --threads 1
-// expect: 20:21: error: type mismatch
+// expect: 20:21: error: Found:    Int⏎Required: String
 // expect: 1 error found
 // At one worker `H.g`'s body is typed on demand during the check of the inline `I.f`, which drains
 // what it reported and puts back what stays; no promoted range keeps a position past the drain

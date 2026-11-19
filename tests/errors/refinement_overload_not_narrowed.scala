@@ -1,5 +1,5 @@
 // expect: 9:21: error: Refinements cannot introduce overloaded definitions
-// expect: 12:19: error: type mismatch: found Any, required String
+// expect: 12:19: error: Found:    Any⏎Required: String
 // A `def` refinement is the denotation of the member it describes only: a call of another
 // overload of the name keeps its own result. scalac rejects the call too, and before it the
 // refinement itself (`Typer.typedRefinedTypeTree`).

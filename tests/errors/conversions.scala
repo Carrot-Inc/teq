@@ -1,6 +1,6 @@
 // expect: both method a2b in object Both and method a2b2 in object Both provide an extension method `b` on A
 // expect: value c is not a member of A
-// expect: 28:16: error: type mismatch: found A, required C
+// expect: 28:16: error: Found:    A⏎Required: C
 // expect: value d is not a member of A
 
 import scala.language.implicitConversions

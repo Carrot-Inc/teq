@@ -1,4 +1,4 @@
-// expect: 9:58: error: type mismatch: found RawImage, required String | Int | Long | Double | Boolean
+// expect: 9:58: error: Found:    RawImage⏎Required: String | Int | Long | Double | Boolean
 // expect: 1 error found
 object Media:
   opaque type RawImage = String

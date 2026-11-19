@@ -9,4 +9,5 @@ def pure[A](a: A): IO[A] = new Fr(a)
 def run(c: Boolean): Unit =
   val joined = if c then pure(Left("no")) else pure(Right(1))
   val t: Int = joined
-// expect: 11:16: error: type mismatch: found IO[Either[String, Int]], required Int
+// expect: 11:16: error: Found:    IO[Either[String, Int]]
+// expect+ Required: Int

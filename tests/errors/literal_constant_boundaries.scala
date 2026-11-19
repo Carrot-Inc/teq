@@ -18,12 +18,18 @@ def run() =
   val a: 1 = box((1: Int)).value
   val l: List[1] = List(x)
   val k: 2.5f = 1.5f + 1f
-// expect: 11:17: error: type mismatch: found 2.5f, required 1.5f
-// expect: 15:14: error: type mismatch: found Int, required 1
-// expect: 16:15: error: type mismatch: found Int, required 7
-// expect: 17:15: error: type mismatch: found Int, required 7
-// expect: 18:14: error: type mismatch: found Int, required 1
-// expect: 19:25: error: type mismatch: found Int, required 1
+// expect: 11:17: error: Found:    2.5f
+// expect+ Required: 1.5f
+// expect: 15:14: error: Found:    Int
+// expect+ Required: 1
+// expect: 16:15: error: Found:    Int
+// expect+ Required: 7
+// expect: 17:15: error: Found:    Int
+// expect+ Required: 7
+// expect: 18:14: error: Found:    Int
+// expect+ Required: 1
+// expect: 19:25: error: Found:    Int
+// expect+ Required: 1
 // absent: 12:
 // absent: 13:
 // absent: 20:

@@ -2,8 +2,8 @@
 // (`Applications.tryDefault`'s `defaultArg.tpe.widen`), typing the default and reporting its error, before
 // `B.dependent` reads `A.inferred`, which a transparent macro of the run suspended: the getter's report stands, as
 // dotty's completer typed it when read and nothing retracts it. `Later` comes after `B`'s cut.
-// expect: B.scala:5:40: error: type mismatch: found 123, required String
-// expect: Z.scala:2:24: error: type mismatch: found 456, required Boolean
+// expect: B.scala:5:40: error: Found:    123⏎Required: String
+// expect: Z.scala:2:24: error: Found:    456⏎Required: Boolean
 // expect: 2 errors found
 import scala.quoted.*
 object M:

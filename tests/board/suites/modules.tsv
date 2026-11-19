@@ -357,6 +357,7 @@ quote_pattern_outer_variable	fail	-	quote_pattern_outer_variable subset
 quotecopymembers	fail	-	known classes: the same as macroquote: the classes b's expansions make (the quote's copies, its local class, object and given) carry the pseudo file's SourceFile and line numbers (`a!ema.Macros`, `a!e
 reabstractoverload	fail	-	known readtasty-b: teq's pickle writes `o.toString` of a name overloaded beside `toString(n: Int)` as the selection of the `()` method without its application, which scalac's reader refuses as an inva
 receiverowner	pass	-	
+receiverowntype	pass	-	
 recmacro	pass	-	
 recrefine	pass	-	
 recterm	pass	-	

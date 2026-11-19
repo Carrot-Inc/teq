@@ -1,7 +1,7 @@
-// expect: 43:31: error: type mismatch: found "s", required Int
-// expect: 45:35: error: type mismatch: found "s", required Int
-// expect: 47:31: error: type mismatch: found "s", required Int
-// expect: 49:28: error: type mismatch: found "s", required Int
+// expect: 43:31: error: Found:    "s"⏎Required: Int
+// expect: 45:35: error: Found:    "s"⏎Required: Int
+// expect: 47:31: error: Found:    "s"⏎Required: Int
+// expect: 49:28: error: Found:    "s"⏎Required: Int
 // expect: 51:23: error: constructor P2 cannot be accessed as a member of P2 from class H
 // expect: 53:20: error: constructor K cannot be accessed as a member of K from class KD
 // expect: 54:21: error: constructor K cannot be accessed as a member of K from class KD
@@ -12,7 +12,7 @@
 // expect: 60:11: error: constructor P2 cannot be accessed as a member of P2 from here
 // expect: 61:11: error: the constructor of P3 is private to P3
 // expect: 62:11: error: constructor P4 cannot be accessed as a member of P4 from here
-// expect: 63:20: error: type mismatch: found "s", required Int
+// expect: 63:20: error: Found:    "s"⏎Required: Int
 // expect: 64:12: error: the constructor of P3 is private to P3
 // expect: 71:18: error: the constructor of S2 is private to S2
 // expect: 73:11: error: the constructor of S2 is private to S2
@@ -26,7 +26,7 @@
 // expect: 93:19: error: constructor G cannot be accessed as a member of G from object GO
 // expect: 95:12: error: constructor G cannot be accessed as a member of G from here
 // expect: 96:16: error: constructor G cannot be accessed as a member of G from here
-// expect: 41:26: error: type mismatch: found "s", required Int
+// expect: 41:26: error: Found:    "s"⏎Required: Int
 // expect: 29 errors found
 package up:
   class P1 private (val x: Int)

@@ -117,8 +117,8 @@ import sys
 d = sys.argv[1]
 for name, renamed in (("files.answer", "renamed.answer"), ("files.teq.log", "renamed.log")):
     text = open(f"{d}/{name}").read()
-    assert "not found: a  b" in text
-    open(f"{d}/{renamed}", "w").write(text.replace("not found: a  b", "not found: a b"))
+    assert "Not found: a  b" in text
+    open(f"{d}/{renamed}", "w").write(text.replace("Not found: a  b", "Not found: a b"))
 PY
 STAND_IN_OUT=$out/symbol/renamed.answer STAND_IN_ERR=$out/symbol/renamed.log STAND_IN_EXIT=1 oracle renamed "$stand_in" tests/scalac-oracle/symbol.scala
 expect renamed 1 "^files payload tests/scalac-oracle/symbol.scala:3 error $hex $hex 1 " '"name": "a  b"' '"name": "a b"'
@@ -130,8 +130,8 @@ import sys
 d = sys.argv[1]
 for name, renamed in (("files.answer", "renamed.answer"), ("files.teq.log", "renamed.log")):
     text = open(f"{d}/{name}").read()
-    assert "required  a" in text
-    open(f"{d}/{renamed}", "w").write(text.replace("required  a", "required a"))
+    assert "Required:  a" in text
+    open(f"{d}/{renamed}", "w").write(text.replace("Required:  a", "Required: a"))
 PY
 STAND_IN_OUT=$out/leading/renamed.answer STAND_IN_ERR=$out/leading/renamed.log STAND_IN_EXIT=1 oracle leading-renamed "$stand_in" tests/scalac-oracle/leading.scala
 expect leading-renamed 1 "^files payload tests/scalac-oracle/leading.scala:5 error $hex $hex 1 " '"required": " a"' '"required": "a"'

@@ -22,12 +22,19 @@ def locals(): Unit =
   val (x, y: Long) = (1, 2)
   val (_, e: Accept) = (parseLine(): @scala.annotation.internal.RuntimeChecked)
   ()
-// expect: 13:25: error: type mismatch: found HttpHeader, required Accept
-// expect: 14:28: error: type mismatch: found 2, required String
-// expect: 16:20: error: type mismatch: found Int, required String
-// expect: 18:20: error: type mismatch: found HttpHeader, required Accept
-// expect: 19:20: error: type mismatch: found HttpHeader, required Accept
-// expect: 20:25: error: type mismatch: found HttpHeader, required Accept
-// expect: 23:20: error: type mismatch: found HttpHeader, required Accept
+// expect: 13:25: error: Found:    HttpHeader
+// expect+ Required: Accept
+// expect: 14:28: error: Found:    2
+// expect+ Required: String
+// expect: 16:20: error: Found:    Int
+// expect+ Required: String
+// expect: 18:20: error: Found:    HttpHeader
+// expect+ Required: Accept
+// expect: 19:20: error: Found:    HttpHeader
+// expect+ Required: Accept
+// expect: 20:25: error: Found:    HttpHeader
+// expect+ Required: Accept
+// expect: 23:20: error: Found:    HttpHeader
+// expect+ Required: Accept
 // absent: pattern_binding_tuple_components.scala:21:
 // absent: pattern_binding_tuple_components.scala:22:

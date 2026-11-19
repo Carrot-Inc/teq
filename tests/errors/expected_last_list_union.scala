@@ -1,5 +1,5 @@
-// expect: 13:14: error: type mismatch: found String | W, required W
-// expect: 14:14: error: type mismatch: found String | W, required W
+// expect: 13:14: error: Found:    String | W⏎Required: W
+// expect: 14:14: error: Found:    String | W⏎Required: W
 // expect: 2 errors found
 // An earlier argument list settles the type argument from its own arguments, without the
 // expected type, which the whole result then fails to meet, as scalac reports it.

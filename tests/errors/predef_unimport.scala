@@ -1,5 +1,5 @@
-// expect: 13:5: error: not found: assert
-// expect: 14:5: error: not found: println
+// expect: 13:5: error: Not found: assert
+// expect: 14:5: error: Not found: println
 // expect: 2 errors found
 // An explicit import of `Predef` takes its root import away below it, as under scalac: only
 // what its selectors name is imported, so an exclusion alone leaves none of Predef's members.

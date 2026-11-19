@@ -3,7 +3,7 @@
 // with `Found: Seq[Int] Required: Int`. Here the first parameter is typed from the callee's parameter in its
 // place, as scalac types it, and the repeated parameter gives the second no type: the lambda is refused where
 // it is written, at the sequence argument.
-// expect: 11:33: error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+// expect: 11:33: error: Found:    Any⏎Required: Seq[Int] | Array[? <: Int]
 def sum(n: Int, xs: Int*): Int = n + xs.sum
 def on2[A, B, C](f: (A, B) => C): (A, B) => C = f
 

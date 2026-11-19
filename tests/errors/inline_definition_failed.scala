@@ -7,7 +7,7 @@
 // not, on a program without errors). scalac reports the ten errors; the count pins that no call
 // adds its own and that each mismatch is there.
 // expect: value noSuch is not a member of Int
-// expect: 22:20: error: type mismatch: found Int, required String
+// expect: 22:20: error: Found:    Int⏎Required: String
 // expect: match may not be exhaustive.
 // expect: value noSuch is not a member of T
 // expect: 10 errors found

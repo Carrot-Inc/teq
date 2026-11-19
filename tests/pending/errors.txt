@@ -70,8 +70,6 @@ hk_param_bounds_both_directions	missing '18:14: error: type argument Option does
 hk_wildcard_param_bound	missing '13:43: error: Found: (c : C[List, ?])'
 implicit_migration_negation	missing '22:30: migration warning: Ambiguous implicits value n1 in object O and value n2 in object O'
 impure_function_alias_missing_class	missing '7:27: error: Cyclic reference involving type ImpureFunction01'
-inferred_type_apply_mismatch_point	missing '9:21: error: Found: Option[Nothing]'
-inferred_type_apply_mismatch_point.check	< tests/errors/inferred_type_apply_mismatch_point.scala:9:21: error: Found: Option[Nothing]
 infix_after_hidden_overload	missing '7:19: error: Alphanumeric method f is not declared infix; it should not be used as infix operator.'
 inherited_abstract_type_member_cycle	exit code 0
 inline_definition_failed	missing '22:20: error: type mismatch: found Int, required String'
@@ -132,7 +130,6 @@ overload_unknown_function_diagnostics.check	< both match arguments (<?> => <?>)
 own_equality_clash_with_any	the declaration is not refused; queued: the part "a member that clashes with an inherited member after erasure is refused at its declaration (E120)"
 own_equality_set_clash_with_any	the declaration is not refused; queued: the part "a member that clashes with an inherited member after erasure is refused at its declaration (E120)"
 path_through_nonfinal_lazy_val	the path is not refused; queued: the realizability of a path (a lazy val that is not final in a path)
-pattern_case_class_parent_value_reference	missing '15:3: error: Found: C[Int]'
 pattern_class_parent_value_reference	exit code 0
 pattern_type_argument_value_reference	exit code 0
 pre_check_kinds_every_constructor	missing '18:21: error: type argument Int does not have the same kind as its bound [_]'

@@ -48,7 +48,7 @@ apply_argument_order	pass	-
 approx_store_application_reject	fail	-	missing '13:28: error: Found: h.KC[?1.A]'
 argument_parenthesized_mismatch	pass	-	
 argument_parenthesized_mismatch.check	fail	-	< tests/errors/argument_parenthesized_mismatch.scala:3:19: error: Found: (1 : Int)
-arity_class_names	fail	-	missing '31:12: error: type Tuple23 not found'
+arity_class_names	fail	-	missing '22:10: error: Not found: type Tuple01'
 array_any_erasure_overloads	fail	-	missing '12:7: error: Conflicting definitions:'
 array_case_unreachable	pass	-	
 array_literal_spread_mismatch	pass	-	
@@ -110,7 +110,7 @@ byname_positions	pass	-
 byname_types	pass	-	
 cacheable_state_names	pass	-	
 cacheable_state_names_build	pass	-	
-callsyntax	fail	-	missing '28:12: error: type mismatch: found (Int, Int, Int), required (Int, Int)'
+callsyntax	fail	-	missing '28:12: error: Found: (Int, Int, Int)'
 can_equal_default_on_operands	pass	-	
 can_equal_fixed_operands	pass	-	
 canequal_nested_ambiguity	pass	-	
@@ -328,7 +328,7 @@ extension_import_ambiguity	pass	-
 extension_in_brace_line	pass	-	
 extension_inherited_conversions_ambiguous	fail	-	missing 'error: Found: (a : A)'
 extension_inherited_other_instance	pass	-	
-extension_inner_conversion_method	fail	-	missing 'error: Found: String'
+extension_inner_conversion_method	fail	-	missing '2 errors found'
 extension_inner_conversion_outer	fail	-	exit code 0
 extension_instance_overload	pass	-	
 extension_method_modifiers	pass	-	
@@ -484,8 +484,8 @@ inference_direction	pass	-
 inference_leftovers_rejected	pass	-	
 inference_misc	pass	-	
 inferred_range_simplified	pass	-	
-inferred_type_apply_mismatch_point	fail	-	missing '9:21: error: Found: Option[Nothing]'
-inferred_type_apply_mismatch_point.check	fail	-	< tests/errors/inferred_type_apply_mismatch_point.scala:9:21: error: Found: Option[Nothing]
+inferred_type_apply_mismatch_point	pass	-	
+inferred_type_apply_mismatch_point.check	pass	-	
 infix_after_hidden_overload	fail	-	missing '7:19: error: Alphanumeric method f is not declared infix; it should not be used as infix operator.'
 infix_failed_application	pass	-	
 infix_line_end	pass	-	
@@ -516,9 +516,9 @@ inline_constant_readers_held	pass	-
 inline_constants	pass	-	
 inline_definition_bounds	pass	-	
 inline_definition_errors	pass	-	
-inline_definition_failed	fail	-	missing '22:20: error: type mismatch: found Int, required String'
+inline_definition_failed	fail	-	missing '22:20: error: Found: Int'
 inline_definition_restrictions	pass	-	
-inline_definition_splice	fail	-	missing '8:26: error: type mismatch: found Expr[String], required Expr[Int]'
+inline_definition_splice	fail	-	missing '8:26: error: Found: Expr[String]'
 inline_error_positions	pass	-	
 inline_errors	pass	-	
 inline_errors_expansion	pass	-	
@@ -834,7 +834,7 @@ pattern_binding_runtime_checked_named	pass	-
 pattern_binding_runtime_checked_typed	pass	-	
 pattern_binding_tuple_components	pass	-	
 pattern_can_equal_strict	pass	-	
-pattern_case_class_parent_value_reference	fail	-	missing '15:3: error: Found: C[Int]'
+pattern_case_class_parent_value_reference	pass	-	
 pattern_class_parent_value_reference	fail	-	exit code 0
 pattern_runtime_checked_match	pass	-	
 pattern_type_argument_value_reference	fail	-	exit code 0
@@ -1145,7 +1145,7 @@ wildcard_bound_other_param	pass	-
 wildcard_bound_overlap	fail	-	missing '17:30: error: type argument ? >: T does not overlap with upper bound U'
 wildcard_bound_param_ends	pass	-	
 wildcard_bound_variant_param	pass	-	
-wildcard_bounds	fail	-	missing '17:22: error: type mismatch: found Box[String], required Box[? >: Dog]'
+wildcard_bounds	fail	-	missing '17:22: error: Found: Box[String]'
 wildcard_bounds_order	pass	-	
 wildcard_member_upper_bound	pass	-	
 wildcard_param_bound_variance	pass	-	

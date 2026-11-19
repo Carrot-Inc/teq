@@ -2173,7 +2173,7 @@ fi
 out=$(slow 'one two' compile app)
 code=$?
 err=$(timeless < "$work/slow.err")
-if [ $code = 1 ] && [ "$out" = "app: 1 error" ] && [ "$(head -1 <<< "$err")" = "compiling app, core (1 of 1)" ] && [[ "$err" == *"error: type mismatch: found \"no\", required Int"* ]] && [[ "$err" != *"teq compile: "* ]]; then
+if [ $code = 1 ] && [ "$out" = "app: 1 error" ] && [ "$(head -1 <<< "$err")" = "compiling app, core (1 of 1)" ] && [[ "$err" == *"error: Found:    \"no\""$'\n'"Required: Int"* ]] && [[ "$err" != *"teq compile: "* ]]; then
   pass "compile: a failing build over a second: the diagnostic on stderr, the count on stdout, no total for one build"
 else
   fail "a slow failing compile ($code): $out // $err"

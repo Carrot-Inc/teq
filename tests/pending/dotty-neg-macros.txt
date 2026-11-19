@@ -157,7 +157,6 @@ i8887.scala	marks: no error where 1 are marked
 i9014b	check: diagnostic 1 of 1: scalac's is error Test_2.scala:1:24 No given instance of type Bar was found for parameter x of method summon in object Predef.; teq's is error Test_2.scala:1:24 no given instance of type Bar was found for parameter
 i9570.scala	marks: error on an unmarked line i9570.scala:15: missing parameter type
 i9972	marks: 4 errors where 1 are marked: Macro_1.scala:6:19: type T not found
-i9972b	check: diagnostic 1 of 1: scalac's is error Macro_1.scala:3:30 Not found: type T; teq's is error Macro_1.scala:3:30 type T not found
 ill-abort	check: diagnostic 1 of 1: scalac's is error quoted_2.scala:1:12 Macro expansion was aborted by the macro without any errors reported. Macros should issue errors to end-users when aborting a macro expansion with StopMacroExpansion.; teq's is
 inline-macro-staged-interpreter	marks: error on an unmarked line Main_2.scala:6: Expected a known value.
 inline-option	marks: 3 errors where 2 are marked: quotes.scala:193:35: no given instance of type FromExpr[T | Null] was found for parameter from
@@ -210,7 +209,6 @@ quotedPatterns-6.scala	marks: 3 errors where 2 are marked: quotedPatterns-6.scal
 reflect-inline	check: diagnostic 1 of 1: error test_2.scala:5:3, line 4 of the message: scalac's is could not be extracted using scala.quoted.FromExpr$PrimitiveFromExpr@<hash>; teq's is could not be extracted using scala.quoted.FromExpr$StringFromExpr@<ha
 scope-extrusion	marks: no error where 3 are marked
 splice-in-top-level-splice-1.scala	marks: no error where 1 are marked
-splice-in-top-level-splice-2.scala	check: diagnostic 1 of 1: scalac's is error splice-in-top-level-splice-2.scala:4:29 Not found: $x; teq's is error splice-in-top-level-splice-2.scala:4:29 not found: $x
 splice-non-expr.scala	check: diagnostic 1 of 5: scalac's is error splice-non-expr.scala:4:7 Found: (3 : Int); teq's is error splice-non-expr.scala:4:5 a splice takes an Expr, but this has type Int
 splice-pat.scala	marks: 3 errors where 2 are marked: splice-pat.scala:13:5: expected a pattern, found 'import'
 tasty-macro-assert-1	marks: no error where 1 are marked

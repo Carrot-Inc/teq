@@ -1,9 +1,9 @@
-// expect: 18:14: error: type mismatch: found Any => Int, required Int
-// expect: 21:15: error: type mismatch: found Any => Int, required Int
-// expect: 24:15: error: type mismatch: found Any => Any, required Int
-// expect: 27:14: error: type mismatch: found [K[_]] => (x$1: K[Int]) => Int, required Int
-// expect: 30:15: error: type mismatch: found Wrap[[K[_]] =>> K[Int]], required Int
-// expect: 32:11: error: type mismatch: found 1, required K[A]
+// expect: 18:14: error: Found:    Any => Int⏎Required: Int
+// expect: 21:15: error: Found:    Any => Int⏎Required: Int
+// expect: 24:15: error: Found:    Any => Any⏎Required: Int
+// expect: 27:14: error: Found:    [K[_]] => (x$1: K[Int]) => Int⏎Required: Int
+// expect: 30:15: error: Found:    Wrap[[K[_]] =>> K[Int]]⏎Required: Int
+// expect: 32:11: error: Found:    1⏎Required: K[A]
 // expect: 33:19: error: covariant type A occurs in invariant position in type [G[_]]: G[A] of method m
 // expect: 7 errors found
 // A higher-kinded variable nothing bounds is maximized to its kind's top, the `[_] =>> Any` its

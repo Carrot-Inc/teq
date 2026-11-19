@@ -38,7 +38,7 @@ i12544.scala	fail	-	marks: 0 warnings where 1 are marked
 i15363.scala	fail	-	marks: 0 warnings where 1 are marked
 i15459.scala	fail	-	marks: 0 warnings where 1 are marked
 i4031.scala	fail	-	marks: 0 warnings where 1 are marked
-i4042.scala	fail	-	marks: an error where warnings are marked: i4042.scala:11:5: type mismatch: found a.R, required V
+i4042.scala	fail	-	marks: an error where warnings are marked: i4042.scala:11:5: Found:    a.R
 i50.scala	fail	-	marks: 0 warnings where 1 are marked
 i5854.scala	fail	-	marks: 0 warnings where 1 are marked
 inherit-non-hot.scala	fail	-	marks: 0 warnings where 1 are marked
@@ -124,8 +124,8 @@ promotion-segment2.scala	fail	-	marks: 0 warnings where 1 are marked
 promotion-segment3.scala	fail	-	marks: 0 warnings where 1 are marked
 secondary-ctor.scala	fail	-	marks: 0 warnings where 1 are marked
 secondary-ctor2.scala	fail	-	marks: 0 warnings where 1 are marked
-secondary-ctor3.scala	fail	-	marks: an error where warnings are marked: secondary-ctor3.scala:24:18: type D not found
-secondary-ctor4.scala	fail	-	marks: an error where warnings are marked: secondary-ctor4.scala:42:17: type mismatch: found D, required D
+secondary-ctor3.scala	fail	-	marks: an error where warnings are marked: secondary-ctor3.scala:24:18: Not found: type D
+secondary-ctor4.scala	fail	-	marks: an error where warnings are marked: secondary-ctor4.scala:42:17: Found:    D
 simple1.scala	fail	-	marks: 0 warnings where 1 are marked
 simple2.scala	fail	-	marks: 0 warnings where 1 are marked
 simple3.scala	fail	-	marks: 0 warnings where 1 are marked

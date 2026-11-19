@@ -14,6 +14,6 @@ object V:
 // expect: wrong_number_of_type_args_hides_its_arguments.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]
 // expect: wrong_number_of_type_args_hides_its_arguments.scala:12:15: error: Too many type arguments for V.Aux[T, P, R0]
 // expect: wrong_number_of_type_args_hides_its_arguments.scala:13:18: error: Not enough type arguments for V.Aux[T, P, R0]
-// absent: Undef not found
+// absent: Not found: type Undef
 // absent: does not take type
 // expect: 3 errors found

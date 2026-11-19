@@ -1,4 +1,4 @@
-// expect: 7:21: error: type X not found
+// expect: 7:21: error: Not found: type X
 // expect: 9:10: error: type argument Int does not have the same kind as its bound [X]
 // expect: 2 errors found
 

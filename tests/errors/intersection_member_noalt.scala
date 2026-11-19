@@ -1,5 +1,5 @@
-// expect: 8:42: error: type mismatch: found "z", required "k" | "v"
-// expect: 9:47: error: type mismatch: found "z", required "v" | "k"
+// expect: 8:42: error: Found:    "z"⏎Required: "k" | "v"
+// expect: 9:47: error: Found:    "z"⏎Required: "v" | "k"
 // expect: 2 errors found
 // A call no instance's parameter takes: the member seen from the whole receiver takes the union
 // of the instances' arguments (`NamedType.argForParam` of the intersection's base type), so the

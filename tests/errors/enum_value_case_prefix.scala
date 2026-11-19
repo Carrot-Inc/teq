@@ -7,4 +7,5 @@ class O:
 val a = new O
 val b = new O
 val x: a.E = b.E.A
-// expect: 9:14: error: type mismatch: found (b.E.A : E), required a.E
+// expect: 9:14: error: Found:    (b.E.A : E)
+// expect+ Required: a.E

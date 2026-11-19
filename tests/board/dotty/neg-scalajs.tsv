@@ -5,7 +5,7 @@ enumeration-warnings.scala	fail	-	marks: no error where 1 are marked
 internal-annotations.scala	fail	-	marks: 1 errors where 11 are marked
 isinstanceof-js-type.scala	fail	-	marks: 1 errors where 2 are marked
 js-case-class-object.scala	fail	-	marks: no error where 4 are marked
-js-custom-function-types-backend.scala	fail	-	marks: 3 errors where 2 are marked: js-custom-function-types-backend.scala:11:44: type mismatch: found () => 42, required BadThisFunction1
+js-custom-function-types-backend.scala	fail	-	marks: 3 errors where 2 are marked: js-custom-function-types-backend.scala:11:44: Found:    () => 42
 js-custom-function-types-prepjsinterop.scala	fail	-	marks: 2 errors where 7 are marked
 js-dynamic-literal.scala	fail	-	marks: 2 errors where 4 are marked
 js-enums.scala	fail	-	marks: error on an unmarked line js-enums.scala:17: Any does not have a constructor
@@ -82,4 +82,4 @@ non-native-js-types-inside-js-native.scala	fail	-	marks: 9 errors where 8 are ma
 package-object-extends-js-any.scala	fail	-	marks: no error where 1 are marked
 reflective-calls.scala	fail	-	marks: no error where 5 are marked
 scala-types-inside-js-native.scala	fail	-	marks: 12 errors where 10 are marked: scala-types-inside-js-native.scala:7:9: A1 is nested in a native JS type, which cannot define classes or objects
-type-mismatch.scala	fail	-	check: diagnostic 1 of 1: scalac's is error type-mismatch.scala:6:18 Found:    (msg : String); teq's is error type-mismatch.scala:6:18 type mismatch: found String, required Int
+type-mismatch.scala	fail	-	check: diagnostic 1 of 1: scalac's is error type-mismatch.scala:6:18 Found:    (msg : String); teq's is error type-mismatch.scala:6:18 Found:    String

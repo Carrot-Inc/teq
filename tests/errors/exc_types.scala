@@ -1,6 +1,6 @@
-// expect: 8:26: error: type mismatch: found 5, required Throwable
-// expect: 10:22: error: type mismatch: found "text", required Throwable
-// expect: 14:25: error: type mismatch: found Any, required Int
+// expect: 8:26: error: Found:    5⏎Required: Throwable
+// expect: 10:22: error: Found:    "text"⏎Required: Throwable
+// expect: 14:25: error: Found:    Any⏎Required: Int
 // expect: A try without catch or finally is equivalent to putting its body in a block; no exceptions are handled.
 // expect: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
 // teq: --werror

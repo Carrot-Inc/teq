@@ -5,7 +5,7 @@
 // expect: Value class needs one val parameter
 // expect: Value classes may not be abstract
 // expect: only a class can extend AnyVal
-// expect: 19:19: error: type mismatch: found "s", required AnyVal
+// expect: 19:19: error: Found:    "s"⏎Required: AnyVal⏎Note that implicit conversions were not tried because the result of an implicit conversion⏎must be more specific than AnyVal
 class A(val x: Int, val y: Int) extends AnyVal
 class B(var x: Int) extends AnyVal
 class C(val x: Int) extends AnyVal:

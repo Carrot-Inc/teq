@@ -1,4 +1,4 @@
-// expect: 11:44: error: type mismatch: found Any, required String
+// expect: 11:44: error: Found:    Any⏎Required: String
 // absent: refinement_intersection_overload.scala:7:
 // Two parts of an intersection refining one method differently make an overload
 // (`Types.findMember`'s `goAnd`, `Denotation.meet`), which no refinement narrows: the call has the

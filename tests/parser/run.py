@@ -49,6 +49,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import mutate  # noqa: E402
+sys.path.insert(0, os.path.join(HERE, "..", "support"))
+import rewording  # noqa: E402  (teq's words rendered back to master's, which this reader reads)
 
 OUT = os.path.join(ROOT, "out", "parser")
 MUTANTS = os.path.join(OUT, "mutants")
@@ -182,6 +184,7 @@ def teq_mutant(teq, flags, m, orig_dump):
     record["structure"] = compare(orig_dump, defs, Edit(src, m))
     cmd = [teq, "compiler", "check"] + flags + (m["teq_flags"].split() if m["teq_flags"] else []) + [path]
     code, _, err = run(cmd)
+    err = rewording.render_stream(err)
     record["exit"] = code
     record["diagnostics"] = diagnostics(err)
     return record
@@ -457,6 +460,7 @@ def normalise(file, line, col, severity, message):
 def teq_fixture(teq, files):
     """The exit of `teq compiler check` over the files and its diagnostics, normalised."""
     code, _, err = run([teq, "compiler", "check"] + files)
+    err = rewording.render_stream(err)
     out = []
     for line in err.splitlines():
         m = DIAG.match(line)

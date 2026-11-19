@@ -8,6 +8,8 @@ def f[A]: Unit =
 def g = Tuple.unapply((1, 2))
 val x: 1 = 3.4028235e38f
 // expect: inference_leftovers_rejected.scala:6:9: error: Declaration of given instance tag not allowed here: only classes can have declared but undefined members
-// expect: inference_leftovers_rejected.scala:8:23: error: type mismatch: found (Int, Int), required EmptyTuple
-// expect: inference_leftovers_rejected.scala:9:12: error: type mismatch: found 3.4028235E38f, required 1
+// expect: inference_leftovers_rejected.scala:8:23: error: Found:    (Int, Int)
+// expect+ Required: EmptyTuple
+// expect: inference_leftovers_rejected.scala:9:12: error: Found:    3.4028235E38f
+// expect+ Required: 1
 // expect: 3 errors found

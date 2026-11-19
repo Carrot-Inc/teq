@@ -1,9 +1,9 @@
 // expect: value zz is not a member of StringContext
-// expect: 24:17: error: type mismatch: found "text", required Int
+// expect: 24:17: error: Found:    "text"⏎Required: Int
 // expect: too many arguments: expected 2
 // expect: too many arguments: expected 1
-// expect: 28:12: error: type mismatch: found (Int, Int, Int), required (Int, Int)
-// expect: 30:24: error: type mismatch: found true, required String | (String, Boolean)
+// expect: 28:12: error: Found:    (Int, Int, Int)⏎Required: (Int, Int)
+// expect: 30:24: error: Found:    true⏎Required: String | (String, Boolean)
 // expect: 29:15: error: Found:    (1 : Int)
 
 extension (sc: StringContext)

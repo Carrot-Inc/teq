@@ -4,7 +4,7 @@
 // is typed in a third run, whose typer reports the type error. What the second run's phase
 // reported stays reported beside it.
 // expect: Raised.scala:6:19: warning: noted by the macro
-// expect: Main.scala:10:21: error: type mismatch
+// expect: Main.scala:10:21: error: Found:    3⏎Required: String
 // expect: 1 error found
 def lifted: Int = Raised.raised(9)
 val wrong: String = 3

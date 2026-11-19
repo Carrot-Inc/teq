@@ -17,29 +17,29 @@
 // expect: 88:19: error: no given instance of type Evidence was found for parameter x$2
 // absent: 89:11: error: member refused
 // expect: 90:22: error: value toLowerCase is not a member of Int
-// expect: 91:20: error: type mismatch: found "s", required Int
-// expect: 92:55: error: type mismatch: found String, required Int
-// expect: 93:22: error: type mismatch: found "text", required Int
+// expect: 91:20: error: Found:    "s"⏎Required: Int
+// expect: 92:55: error: Found:    String⏎Required: Int
+// expect: 93:22: error: Found:    "text"⏎Required: Int
 // expect: 94:30: error: no given instance of type Evidence was found
-// expect: 95:31: error: type mismatch: found "x", required Int
+// expect: 95:31: error: Found:    "x"⏎Required: Int
 // absent: 96:11: error: member refused
-// expect: 97:22: error: type mismatch: found "x", required Int
-// expect: 98:18: error: type mismatch: found "x", required Int
-// expect: 99:21: error: type mismatch: found "x"
-// expect: 100:23: error: type mismatch: found "s", required Int
-// expect: 101:38: error: type mismatch: found "s"
-// expect: 102:39: error: type mismatch: found "s"
-// expect: 103:55: error: type mismatch: found "s", required Int
-// expect: 104:35: error: type mismatch: found "s"
-// expect: 105:33: error: type mismatch: found "s", required Int
-// expect: 106:17: error: type mismatch: found "s", required Int
-// expect: 107:18: error: type mismatch: found "s", required Int
-// expect: 108:21: error: type mismatch: found "s", required Int
-// expect: 109:27: error: type mismatch: found "s", required Int
-// expect: 110:32: error: type mismatch: found "s", required Int
-// expect: 111:25: error: type mismatch: found "s", required Int
-// expect: 112:18: error: type mismatch: found "s", required Int
-// expect: 113:17: error: type mismatch: found "s", required Int
+// expect: 97:22: error: Found:    "x"⏎Required: Int
+// expect: 98:18: error: Found:    "x"⏎Required: Int
+// expect: 99:21: error: Found:    "x"⏎Required: Int
+// expect: 100:23: error: Found:    "s"⏎Required: Int
+// expect: 101:38: error: Found:    "s"⏎Required: Int
+// expect: 102:39: error: Found:    "s"⏎Required: Int
+// expect: 103:55: error: Found:    "s"⏎Required: Int
+// expect: 104:35: error: Found:    "s"⏎Required: Int
+// expect: 105:33: error: Found:    "s"⏎Required: Int
+// expect: 106:17: error: Found:    "s"⏎Required: Int
+// expect: 107:18: error: Found:    "s"⏎Required: Int
+// expect: 108:21: error: Found:    "s"⏎Required: Int
+// expect: 109:27: error: Found:    "s"⏎Required: Int
+// expect: 110:32: error: Found:    "s"⏎Required: Int
+// expect: 111:25: error: Found:    "s"⏎Required: Int
+// expect: 112:18: error: Found:    "s"⏎Required: Int
+// expect: 113:17: error: Found:    "s"⏎Required: Int
 import scala.compiletime.error
 import scala.language.implicitConversions
 trait Evidence

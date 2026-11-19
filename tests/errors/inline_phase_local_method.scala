@@ -1,4 +1,4 @@
-// expect: 11:21: error: type mismatch
+// expect: 11:21: error: Found:    1⏎Required: String
 // expect: 1 error found
 // absent: a local expansion
 // A local inline method's call is kept for the inlining phase as a member's is: its expansion's

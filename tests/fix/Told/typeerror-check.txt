@@ -1,5 +1,6 @@
 a: typing main (1 of 3)
-core/src/Core.scala:1:35: error: type mismatch: found "no", required List[Int]
+core/src/Core.scala:1:35: error: Found:    "no"
+Required: List[Int]
   object Core { val xs: List[Int] = "no" }
                                     ^^^^
 teq fix --check: a does not type (1 error); nothing rewritten, in <t>

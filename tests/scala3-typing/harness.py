@@ -416,6 +416,9 @@ def classify(test):
     if test.conflict:
         return "options", test.conflict, ""
     code, out, why = run_teq(test)
+    sys.path.insert(0, os.path.join(HERE, "..", "support"))
+    import rewording  # teq's words rendered back to master's, which this reader reads
+    out = rewording.render_stream(out)
     if why == "hang":
         return "hang", "", out
     # A version the tracked scalac does not know (`-source 3.11`), which teq refuses as scalac does.

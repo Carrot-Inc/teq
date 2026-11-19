@@ -8,5 +8,6 @@ def call[R](f: S => R, s: S): R = f(s)
 def run(s: S) =
   val r = call(x => Item("t", x.a), s)
   val z: Int = r
-// expect: 10:16: error: type mismatch: found Item[_], required Int
+// expect: 10:16: error: Found:    Item[_]
+// expect+ Required: Int
 // absent: x.A

@@ -1,4 +1,4 @@
-// expect: 12:42: error: type mismatch: found (x : I), required Sub.this.I
+// expect: 12:42: error: Found:    (x : I)⏎Required: Sub.this.I
 // expect: 23:11: error: value same is not a member of b.Term: the extension method takes c.Term
 // expect: 2 errors found
 // An inner class through a subclass's `this` is not the one through the enclosing instance's

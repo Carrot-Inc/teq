@@ -41,6 +41,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 python3 tests/support/expects.py test || fail=1
+python3 tests/support/rewording.py test || fail=1
 # run_program <teq> <records>: the program at $src under <teq>, its exit and output to <records>/<name>.out ($out,
 # $code); a program whose jars are missing is skipped ($JARS_MISSING set).
 run_program() {
@@ -91,7 +92,19 @@ for src in tests/errors/*.scala tests/errors/*/; do
     expected=${line#// expect: }
     # the first line's text alone: further lines joined by ⏎ are held whole below
     expected=${expected%%⏎*}
-    if ! grep -qF -- "$expected" <<< "$out"; then
+    # a placed expectation is held by a diagnostic's own header from its place on (the file's name kept where it
+    # names one), never by a copy of its text inside a quoted value of a message or the source excerpt
+    if [[ $expected =~ ^([^[:space:]:]+\.(scala|sc):)?[0-9]+:[0-9]+:\ (error|warning|migration\ warning|info):\  ]]; then
+      held=$(EXPECTED=$expected awk 'BEGIN { e = ENVIRON["EXPECTED"] }
+        match($0, /^[^ ]*\.(scala|sc):[0-9]+:[0-9]+: /) {
+          p = index($0, ".scala:") ? index($0, ".scala:") + 6 : index($0, ".sc:") + 3
+          path = substr($0, 1, p - 1); rest = substr($0, p + 1); n = split(path, parts, "/")
+          if (index(rest, e) == 1 || index(parts[n] ":" rest, e) == 1) { print "held"; exit }
+        }' <<< "$out")
+    else
+      held=$(grep -qF -- "$expected" <<< "$out" && echo held)
+    fi
+    if [ -z "$held" ]; then
       said "FAIL $src: missing '$expected'"
       why=${why:-"missing '$expected'"}
     fi

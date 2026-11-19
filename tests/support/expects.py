@@ -2,7 +2,8 @@
 """The expectations of tests/errors (tests/run_errors.sh): their continuation lines and the writing verb.
 
 A program states a diagnostic it must give by `// expect: <text>`, a fixed string looked for in its output (the
-runner's grep). A diagnostic of several lines states its further lines by `// expect+ <line>` lines right after its
+runner's grep); one that names a place (`L:C: <severity>: ..`) is held by a diagnostic's own header from its place
+on, never by a copy of its text inside a quoted value of a message or the source excerpt. A diagnostic of several lines states its further lines by `// expect+ <line>` lines right after its
 `// expect:` (`// expect+` alone for a blank line), or, where the expectation stands above the program's code (a line
 added there would move the code), joined to its own line by `⏎`: the expectation then holds only where a line of the
 output holds its first text and its further lines are those lines exactly, whole, in order, none more.
@@ -12,8 +13,10 @@ output holds its first text and its further lines are those lines exactly, whole
       first that does not hold and exits 1, else exits 0.
   expects.py write <errors dir> <base records> <head records> <pending list> [--apply]
       the writing verb (`tests/run_errors.sh --write <base binary>`). In every program, those on the pending list
-      too, the HEAD's diagnostics must stand at the BASE's places and severities, as many at each, or the verb stops
-      and writes nothing; the files of the programs on the list are never written. On the base, each expectation that
+      too, the HEAD's diagnostics must stand at the BASE's places and severities, as many at each, with the base's exit,
+      and every diagnostic the head changes must be one of the rewordings tests/support/rewording.py tells apart, taken
+      whole (the found and required texts, the notes, the place, the source excerpt), or the verb stops and writes
+      nothing; the files of the programs on the list are never written. On the base, each expectation that
       names a place (`L:C: <severity>: ..`, or `<file>:L:C: ..`) is mapped to the one diagnostic at that place and
       severity (and file) that holds it, then bound to that diagnostic's file, its ordinal counted among that file's
       diagnostics at that place and severity; one no diagnostic there holds, or several, and two on one diagnostic,
@@ -48,6 +51,9 @@ import re
 import shutil
 import sys
 import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rewording  # noqa: E402
 
 PLACED = re.compile(r"^(?:(?P<file>[^\s:]+\.(?:scala|sc)):)?(?P<line>\d+):(?P<col>\d+): (?P<sev>error|warning|migration warning|info): ")
 FIRST = re.compile(r"^(?P<file>\S+?\.(?:scala|sc)):(?P<line>\d+):(?P<col>\d+): (?P<sev>error|warning|migration warning|info): ")
@@ -162,7 +168,8 @@ def write_files(changed):
 
 
 def output(record):
-    raw = open(record, encoding="utf-8", errors="replace").read()
+    # every byte kept: no newline translation, and a byte not UTF-8 stays itself (rewording.py compares exact text)
+    raw = rewording.read_text(record)
     first, _, out = raw.partition("\n")
     return first, out
 
@@ -207,7 +214,14 @@ def held_whole(out, text, conts):
     no line more, no line less (the source excerpt and its caret are no part of a message)."""
     m = PLACED.match(text)
     body = text[m.start("line"):] if m and m.group("file") else text
-    return any(body in d[4] and d[5] == conts for d in diagnostics(out))
+    return any(head_holds(body, d[4]) and d[5] == conts for d in diagnostics(out))
+
+
+def head_holds(body, first):
+    """Whether a diagnostic's first line (from its place on) holds an expectation's text: a placed one from its place on,
+    bound to the diagnostic's own header (never a copy of that text inside a quoted value of the message), one without a
+    place anywhere in the line."""
+    return first.startswith(body) if PLACED.match(body) else body in first
 
 
 def continuations(record, sources):
@@ -221,7 +235,7 @@ def continuations(record, sources):
 
 
 def holds(body, conts, d):
-    return body in d[4] and (not conts or d[5] == conts)
+    return head_holds(body, d[4]) and (not conts or d[5] == conts)
 
 
 def programs(errors_dir):
@@ -256,14 +270,17 @@ def rebuilt(lines, replaced):
     return b"".join(c + e for c, e in out)
 
 
-def write(errors_dir, base_dir, head_dir, pending_path, apply):
+def write(errors_dir, base_dir, head_dir, pending_path, apply, classified=True):
     pending = {l.split("\t")[0].strip() for l in open(pending_path) if l.strip()} if os.path.exists(pending_path) else set()
     rewrites, refused, changed = [], collections.defaultdict(list), {}
     places = lambda ds: collections.Counter((d[0], d[1], d[2], d[3]) for d in ds)
     runs, stopped = [], []
     for name, srcs in programs(errors_dir):
         bp, hp = os.path.join(base_dir, name + ".out"), os.path.join(head_dir, name + ".out")
-        if not (os.path.exists(bp) and os.path.exists(hp)):
+        if os.path.exists(bp) != os.path.exists(hp):
+            stopped.append(name + (" (on the pending list)" if name in pending else "") + ": a record on one side alone")
+            continue
+        if not os.path.exists(bp):
             continue
         (_, bout), (_, hout) = output(bp), output(hp)
         base, head = diagnostics(bout), diagnostics(hout)
@@ -279,13 +296,32 @@ def write(errors_dir, base_dir, head_dir, pending_path, apply):
         for name in stopped:
             print(f"    {name}")
         return 2
+    # And every diagnostic the head changes is one of the rewordings tests/support/rewording.py tells apart, taken whole
+    # (the found and required texts, the notes, the place, the excerpt), with the base's exit, in every program: a
+    # changed type, a note more or less, another family is no rewording, and nothing is written.
+    changed_beyond = []
+    for name, srcs in programs(errors_dir) if classified else []:
+        bp, hp = os.path.join(base_dir, name + ".out"), os.path.join(head_dir, name + ".out")
+        if not (os.path.exists(bp) and os.path.exists(hp)):
+            continue
+        (bexit, bout), (hexit, hout) = output(bp), output(hp)
+        if bexit != hexit:
+            changed_beyond.append(f"{name}: exit {bexit!r} against {hexit!r}")
+            continue
+        _, refusals = rewording.compare(bout, hout)
+        changed_beyond += [f"{name}: {why}" for why in refusals]
+    if changed_beyond:
+        print(f"the writing verb stops: {len(changed_beyond)} diagnostics change beyond the rewordings (tests/support/rewording.py); nothing is written")
+        for c in changed_beyond:
+            print(f"    {c}")
+        return 2
     for name, srcs, bout, hout, base, head in runs:
         program_changed, program_rewrites = {}, []
         check = os.path.join(errors_dir, name + ".check")
         if os.path.exists(check) and name + ".check" not in pending:
             text = open(check, encoding="utf-8").read()
             if text.rstrip("\n") == bout.rstrip("\n") and text.rstrip("\n") != hout.rstrip("\n"):
-                program_changed[check] = (hout.rstrip("\n") + "\n").encode("utf-8")
+                program_changed[check] = (hout.rstrip("\n") + "\n").encode("utf-8", "surrogateescape")
                 program_rewrites.append((name + ".check", "the whole output", ["the head's output"]))
         sources = []
         for src in srcs:
@@ -423,7 +459,7 @@ def place(errors_dir, records, pending_path, words, apply):
 
 def test():
     """The verb and the rule on fixtures; exits 1 at the first that does not hold."""
-    def run(src_text, base_out, head_out, pending="", other=None):
+    def run(src_text, base_out, head_out, pending="", other=None, classified=False):
         d = tempfile.mkdtemp(prefix="expects-test.")
         for sub in ("errors", "base", "head"):
             os.makedirs(os.path.join(d, sub))
@@ -435,7 +471,7 @@ def test():
         devnull = open(os.devnull, "w")
         saved, sys.stdout = sys.stdout, devnull
         try:
-            code = write(os.path.join(d, "errors"), os.path.join(d, "base"), os.path.join(d, "head"), os.path.join(d, "pending.txt"), True)
+            code = write(os.path.join(d, "errors"), os.path.join(d, "base"), os.path.join(d, "head"), os.path.join(d, "pending.txt"), True, classified)
         finally:
             sys.stdout = saved
         result = open(os.path.join(d, "errors", "p.scala")).read()
@@ -447,7 +483,7 @@ def test():
         os.rmdir(d)
         return code, result
 
-    def run_files(progs, pending="", capture=False):
+    def run_files(progs, pending="", capture=False, classified=False):
         """progs, {name: ({path in tests/errors: bytes}, base output, head output)}: the verb's exit and every file's
         bytes after it, the temporary files of a failed write among them if any were left."""
         d = tempfile.mkdtemp(prefix="expects-test.")
@@ -464,7 +500,7 @@ def test():
         out = io.StringIO()
         saved, sys.stdout = sys.stdout, out
         try:
-            code = write(os.path.join(d, "errors"), os.path.join(d, "base"), os.path.join(d, "head"), os.path.join(d, "pending.txt"), True)
+            code = write(os.path.join(d, "errors"), os.path.join(d, "base"), os.path.join(d, "head"), os.path.join(d, "pending.txt"), True, classified)
         finally:
             sys.stdout = saved
         result = {}
@@ -485,6 +521,18 @@ def test():
     old = diag(1, 17, "type mismatch: found 1, required String") + "1 error found\n"
     new = diag(1, 17, "Found:    (1 : Int)", "Required: String\n") + "1 error found\n"
     cases.append(("the identity", run(src, old, old), (0, src)))
+    # with the classifier (tests/support/rewording.py), as the landing's verb runs: scalac's words for master's pass,
+    # another required type stops it
+    scalac = diag(1, 17, "Found:    1", "Required: String\n") + "1 error found\n"
+    other = diag(1, 17, "Found:    1", "Required: Boolean\n") + "1 error found\n"
+    cases.append(("classified: a rewording of the landing written", run(src, old, scalac, classified=True),
+                  (0, "val x: String = 1\n// expect: 1:17: error: Found:    1\n// expect+ Required: String\n")))
+    cases.append(("classified: another required type stops the verb", run(src, old, other, classified=True), (2, src)))
+    quoted = '// expect: 1:14: error: type mismatch\nval x: Int = "1:14: error: type mismatch"\n'
+    q_old = diag(1, 14, 'type mismatch: found "1:14: error: type mismatch", required Int') + "1 error found\n"
+    q_new = diag(1, 14, 'Found:    "1:14: error: type mismatch"', "Required: Int\n") + "1 error found\n"
+    cases.append(("classified: an old text inside a quoted value holds no more, and is rewritten", run(quoted, q_old, q_new, classified=True),
+                  (0, '// expect: 1:14: error: Found:    "1:14: error: type mismatch"⏎Required: Int\nval x: Int = "1:14: error: type mismatch"\n')))
     cases.append(("a rewrite with its further line", run(src, old, new),
                   (0, "val x: String = 1\n// expect: 1:17: error: Found:    (1 : Int)\n// expect+ Required: String\n")))
     two = "val (a: Int, b: Boolean) = p\n// expect: 1:26: error: type mismatch: found String, required Int\n// expect: 1:26: error: type mismatch: found String, required Boolean\n"
@@ -550,7 +598,7 @@ def test():
     cases.append(("the second of three renames fails: the write said partial", (code, files, told),
                   (3, {"a.scala": rewritten, "b.scala": src.encode(), "c.scala": src.encode()}, True)))
     # A source that is a symbolic link: its target is rewritten, the link stays a link.
-    def symlinked():
+    def symlinked(classified=False):
         d = tempfile.mkdtemp(prefix="expects-test.")
         for sub in ("errors", "targets", "base", "head"):
             os.makedirs(os.path.join(d, sub))
@@ -562,7 +610,7 @@ def test():
         open(os.path.join(d, "pending.txt"), "w").write("")
         saved, sys.stdout = sys.stdout, io.StringIO()
         try:
-            code = write(os.path.join(d, "errors"), os.path.join(d, "base"), os.path.join(d, "head"), os.path.join(d, "pending.txt"), True)
+            code = write(os.path.join(d, "errors"), os.path.join(d, "base"), os.path.join(d, "head"), os.path.join(d, "pending.txt"), True, classified)
         finally:
             sys.stdout = saved
         got = (code, os.path.islink(link), os.readlink(link) if os.path.islink(link) else None, open(target, "rb").read(), sorted(os.listdir(os.path.join(d, "targets"))))

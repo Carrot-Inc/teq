@@ -7,16 +7,16 @@
 // formal is below. A repeated parameter's type is the sequence, which the plain argument then does not fit.
 // scalac 3.8.4 refuses each: `Found: (x : Any)` with the callee's parameter type required, `value wrap is not
 // a member of Any`, and `Found: (x : Seq[String])  Required: String` for the last.
-// expect: 31:28: error: type mismatch: found Any, required String
-// expect: 32:29: error: type mismatch: found Any, required String
-// expect: 33:28: error: type mismatch: found Any, required String
-// expect: 34:25: error: type mismatch: found Any, required String
-// expect: 34:28: error: type mismatch: found Any, required String
-// expect: 35:33: error: type mismatch: found Any, required String
+// expect: 31:28: error: Found:    Any⏎Required: String
+// expect: 32:29: error: Found:    Any⏎Required: String
+// expect: 33:28: error: Found:    Any⏎Required: String
+// expect: 34:25: error: Found:    Any⏎Required: String
+// expect: 34:28: error: Found:    Any⏎Required: String
+// expect: 35:33: error: Found:    Any⏎Required: String
 // expect: 36:21: error: value wrap is not a member of Any
-// expect: 37:27: error: type mismatch: found Any, required String
-// expect: 38:24: error: type mismatch: found Any, required String
-// expect: 39:29: error: type mismatch: found Seq[String], required String
+// expect: 37:27: error: Found:    Any⏎Required: String
+// expect: 38:24: error: Found:    Any⏎Required: String
+// expect: 39:29: error: Found:    Seq[String]⏎Required: String
 final case class Tag(name: String):
   def wrap(t: Tag): Tag = Tag(name + t.name)
 def one(name: String): Tag = Tag(name)

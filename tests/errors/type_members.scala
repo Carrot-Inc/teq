@@ -1,19 +1,19 @@
-// expect: 23:18: error: type mismatch: found Container.this.Elem, required Int
-// expect: 24:20: error: type mismatch: found 1, required Container.this.Elem
+// expect: 23:18: error: Found:    Container.this.Elem⏎Required: Int
+// expect: 24:20: error: Found:    1⏎Required: Container.this.Elem
 // expect: 26:8: error: illegal cyclic type reference: upper bound Cyclic.this.T of type T refers back to the type itself
 // expect: 28:8: error: illegal cyclic type reference: upper bound Mutual.this.Y of type X refers back to the type itself
-// expect: 39:19: error: type mismatch: found c.Elem, required Int
-// expect: 41:22: error: type mismatch: found c.Elem, required d.Elem
+// expect: 39:19: error: Found:    c.Elem⏎Required: Int
+// expect: 41:22: error: Found:    c.Elem⏎Required: d.Elem
 // expect: 43:13: error: (v : Container) is not a valid type prefix, since it is not an immutable path
 // expect: 44:13: error: (make : => Container) is not a valid type prefix, since it is not an immutable path
-// expect: 45:19: error: type mismatch: found Container#Elem, required Int
-// expect: 47:19: error: type mismatch: found c.Elem, required Int
-// expect: 48:22: error: type mismatch: found String, required c.Elem
-// expect: 49:46: error: type mismatch: found Names, required Container{type Elem = Int}
-// expect: 50:46: error: type mismatch: found Container{type Elem = String}, required Container{type Elem = Int}
-// expect: 51:56: error: type mismatch: found A, required (a : A)
-// expect: 53:23: error: type mismatch: found (a2 : A), required (a : A)
-// expect: 54:45: error: type mismatch: found Container#Elem, required b.Elem
+// expect: 45:19: error: Found:    Container#Elem⏎Required: Int
+// expect: 47:19: error: Found:    c.Elem⏎Required: Int
+// expect: 48:22: error: Found:    String⏎Required: c.Elem
+// expect: 49:46: error: Found:    Names⏎Required: Container{type Elem = Int}
+// expect: 50:46: error: Found:    Container{type Elem = String}⏎Required: Container{type Elem = Int}
+// expect: 51:56: error: Found:    A⏎Required: (a : A)
+// expect: 53:23: error: Found:    (a2 : A)⏎Required: (a : A)
+// expect: 54:45: error: Found:    Container#Elem⏎Required: b.Elem
 // expect: 16 errors found
 
 trait Container:
