@@ -27,7 +27,6 @@
 3559.scala	check: diagnostic 1 of 1: scalac's is error 3559.scala:3:10 forward reference not allowed from self constructor invocation; teq's is error 3559.scala:3:10 not found: b
 3559d.scala	check: diagnostic 1 of 1: scalac's is error 3559d.scala:7:10 Not found: f; teq's is error 3559d.scala:7:10 f is not accessible from constructor arguments
 4376.scala	check: diagnostic 1 of 3: scalac's is error 4376.scala:5:6 Found: Array[? >: App.Id[Nothing]]; teq's is warning 4376.scala:4:16 `_` is deprecated for wildcard arguments of types: use `?` instead
-5541.scala	marks: no error where 1 are marked
 6314-1.scala	check: diagnostic 1 of 1: scalac's is error 6314-1.scala:22:25 Found: ("hello" : String); teq's is error 6314-1.scala:22:25 type mismatch: found "hello", required Int
 6314-2.scala	marks: 2 errors where 4 are marked
 6314-3.scala	check: diagnostic 1 of 2: scalac's is error 6314-3.scala:9:38 Found: (fa : Wizzle.this.Bar[L]); teq's is warning 6314-3.scala:2:27 with as a type operator has been deprecated; use & instead

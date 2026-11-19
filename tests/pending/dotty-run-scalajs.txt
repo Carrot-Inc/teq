@@ -59,7 +59,6 @@ errorhandling	Result.scala:45:35: type mismatch: found Err[Any], required Result
 exceptions-2.scala	exceptions-2.scala:233:79: expected an expression, found ';'
 exceptions-nest.scala	output: line 7: the .check has 'OK', the program printed '1000'
 export-in-extension.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
-extra-implicits.scala	extra-implicits.scala:14:3: missing argument for parameter b
 final-fields.scala	output: line 5: the .check has '3 2 3 -4', the program printed '-1 -2 -3 -4'
 fors.scala	<jdk>:1:1: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition without an implementation in the std's platform layer)
 fragables-extension.scala	fragables-extension.scala:11:3: missing parameter type

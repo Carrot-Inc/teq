@@ -7090,9 +7090,24 @@ impl<'a> Worker<'a> {
                         .collect()
                 })
                 .unwrap_or_default();
+            // A trait of using clauses alone takes no written `()` (`evidence_only` leaves it out of `lists`); the
+            // reference's constructor has its empty clause after the using clauses, or before an implicit first one
+            // (Desugar.scala's `creatorExpr`), so a `()` elsewhere has taken a clause whole or follows the clauses.
+            let written: Vec<(bool, bool)> = clause.map(|p| p.args.iter().map(|&(l, using)| (using, ast.expr_list(l).is_empty())).collect()).unwrap_or_default();
+            let first_using = written.iter().position(|&(using, _)| using);
+            let last_using = written.iter().rposition(|&(using, _)| using);
+            let implicit_first = sig.clauses.first().is_some_and(|cl| cl.is_implicit);
+            let empty_aside = written.iter().enumerate().any(|(k, &(using, empty))| {
+                let aside = if implicit_first { first_using.is_some_and(|f| k > f) } else { last_using.is_some_and(|l| k < l) };
+                !using && empty && aside
+            });
             if !evidence_only && !lists.iter().any(|l| !l.using) {
                 lists.insert(0, ArgList { args: Vec::new(), using: false, span, fun: ArgList::NO_FUN });
             }
+            // A trait's implicit clause applied with a `using` list keeps master's refusal: a body kept in lean products
+            // loses that list's written arguments, a given in scope taking their place (another value at run time).
+            let implicit_clause = sig.clauses.iter().any(|cl| cl.is_implicit);
+            super::apply::limit_using_search(&mut lists, (evidence_only && empty_aside) || implicit_clause);
             let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             let applied = self.with_env(outside.clone(), |t| {
                 let outer = t.parent_args_of.replace(c);
@@ -7283,8 +7298,12 @@ impl<'a> Worker<'a> {
             lists.push(ArgList { args: Vec::new(), using: false, span, fun: ArgList::NO_FUN });
         }
         // `extends E()` for a parent declared without a parameter list.
-        if !has_normal_clause && lists.first().map_or(false, |l| !l.using && l.args.is_empty()) {
+        let empty_dropped = !has_normal_clause && lists.first().map_or(false, |l| !l.using && l.args.is_empty());
+        if empty_dropped {
             lists.remove(0);
+        }
+        if !has_normal_clause && !sig.clauses.first().is_some_and(|cl| cl.is_implicit) {
+            super::apply::limit_using_search(&mut lists, empty_dropped || !self.syms.class(parent).ctors.is_empty());
         }
         let (te, ty) = if in_place {
             let site = ParentSite { written: clause.is_some(), call: call_of(ahead_given.unwrap_or(false)) };

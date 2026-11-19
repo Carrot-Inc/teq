@@ -185,7 +185,7 @@ i22267.scala	fail	-	marks: 0 warnings where 1 are marked
 i22279.scala	fail	-	marks: 0 warnings where 1 are marked
 i22371.scala	pass	-	
 i22412.scala	fail	-	check: diagnostic 1 of 1: scalac's is warning i22412.scala:3:35 A try without catch or finally is equivalent to putting; teq's is warning i22412.scala:3:35 A try without catch or finally is equivalent to putting its body in a block; no exce
-i22439.scala	fail	-	marks: 1 warnings where 3 are marked
+i22439.scala	pass	-	
 i22440.scala	pass	-	
 i22507.scala	pass	-	
 i22527.scala	fail	-	marks: an error where warnings are marked: i22527.scala:6:7: expected ',' or ')', found literal
@@ -225,7 +225,7 @@ i23347.scala	pass	-
 i23349.scala	pass	-	
 i23369.scala	fail	-	marks: 2 warnings where 1 are marked
 i23494.scala	pass	-	
-i23541.scala	fail	-	marks: 0 warnings where 3 are marked
+i23541.scala	fail	-	marks: 1 warnings where 3 are marked
 i23620b.scala	fail	-	marks: 0 warnings where 3 are marked
 i23621	fail	-	check: diagnostic 1 of 1: warning i23621.scala:2:10, line 3 of the message: scalac's is It would fail on pattern case: Tuple2(42, true); teq's is It would fail on pattern case: (_, _)
 i23651.scala	fail	-	check: diagnostic 1 of 3: scalac's is warning i23651.scala:14:1 @nowarn annotation does not suppress any warnings but matches a diagnostic; teq's is warning i23651.scala:11:1 @nowarn annotation does not suppress any warnings
@@ -235,7 +235,7 @@ i23704.scala	fail	-	marks: 3 warnings where 5 are marked
 i23758.scala	pass	-	
 i23822.scala	fail	-	marks: 0 warnings where 1 are marked
 i23905	pass	-	
-i24034	fail	-	marks: an error where warnings are marked: circe.scala:30:7: missing argument for parameter mirror
+i24034	pass	-	
 i24082.scala	pass	-	
 i24246.scala	fail	-	marks: 0 warnings where 1 are marked
 i24248	pass	-	

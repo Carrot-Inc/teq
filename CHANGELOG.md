@@ -89,6 +89,21 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   forwards its getter (on the JVM the read through the overridden member threw `AbstractMethodError`, a written
   `final val x: 1 = 1` alike). A final val whose constant a block gives (`final val f = { println(3); 3 }`) is
   read as that constant in its own class: on the JVM `val g = f + 1` beside it failed with `NoSuchFieldError`.
+- A written `using` list shorter than its clause has its omitted parameters searched as givens at the application, as
+  scalac does: `getJson(1)(using Config(html = false))` for `getJson(page: Int)(using c: Config, t: Translate)` takes
+  the `Translate` in scope (in a using clause, an implicit one applied with `using`, a constructor's, a parent call's,
+  an enum case's and an extension's), where teq refused it ("missing argument for parameter t"); on the constructor of a
+  class of using clauses alone, only its trailing parameters, as scalac (which refuses the rest with E100). The
+  alternatives of an overloaded method are narrowed by the written `using` list first, by its size (a default fills a
+  parameter, a given does not), so `f(1)(using A())` takes `f(x: Int)(using a: A = A())` beside `f(x: Int)(using a: A,
+  b: B)`, where teq chose the longer one or called the call ambiguous. A default taken where a given exists is told by
+  E220 ("Argument for implicit parameter b was supplied using a default argument."), the search's inference kept; a
+  failed search is E172 at the application ("No given instance of type B was found"). The written arguments are
+  evaluated before the searched ones. Nothing in a macro's splice code is completed or narrowed by a written `using`
+  list: a call's arguments stay as written. A trait's implicit clause applied with a short `using` list keeps the
+  refusal for now: a body kept in lean products would lose the list's written arguments.
+- A case class whose first parameter clause is a `using` or `implicit` one is refused at its name, as scalac refuses it
+  (E144, "A case class must have at least one leading non-implicit parameter list"); teq accepted it.
 - `java.io.PrintStream` is the JDK's class on JavaScript and in the interpreter: an open class over an
   `OutputStream` (`new PrintStream(out)`, with autoFlush, with a `Charset` or a charset's name), with the JDK's
   members: `print` and `println` of each type, `printf` and `format`, `append`, the `write`s, `flush`, `close`,

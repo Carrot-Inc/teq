@@ -207,7 +207,8 @@ worker_fields! {
         skip_proxies: bool,
         parent_args_of: Option<ClassId>,
         in_place_parent_of: Option<(Option<ClassId>, ClassId)>,
-        deferred_impl_of: Option<ClassId>
+        deferred_impl_of: Option<ClassId>,
+        typing_splice_code: bool
     }
     place_waiting {
         typing_annotation: bool,

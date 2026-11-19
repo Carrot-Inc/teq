@@ -240,6 +240,28 @@ impl ArgList {
     pub const NO_FUN: FunEnd = FunEnd::NONE;
 }
 
+/// Limits the search of the omitted parameters of the using lists `lists` (`type_clause_args_planned`) to the trailing
+/// ones, or to none where `kept`, and takes the lists out of the narrowing of alternatives: master's refusal stays for
+/// the rest. Two places take it. The constructor of a class of using clauses alone, the first a `using` one (an
+/// implicit first clause has the reference's empty clause before it, Desugar.scala's `creatorExpr`, where teq takes a
+/// written `()` as well): the reference's constructor has an empty clause after the using ones (`class K(using a: A)`
+/// is `K(using a: A)()`), which teq's has not, so a parameter omitted before a written argument is E100 there without
+/// that `()` ("must be called with () argument"), a `()` written before the list has taken the using clause whole, and
+/// beside a secondary constructor a short list fits no alternative by its size (E134): kept where a `()` was dropped or
+/// the constructor is overloaded. A trait parent's lists (check.rs): a parameter omitted before a written argument
+/// would be placed after it, which teq's lifting of a trait parent's arguments out of their order does not do (a
+/// written `T(using b = y, a = x)` fails the same way on master); kept for a trait of using clauses alone where a `()`
+/// is written where the reference's empty clause is not: before its last using list, or after the first where its first
+/// clause is implicit; and kept for a trait with an implicit clause, a class's parent or an anonymous class's alike: a
+/// body kept in lean products loses such a list's written arguments, a given of their type in scope taking their place
+/// (`trait Tr(implicit a: Int, b: Int)`, `new Tr(using 10) {}` beside `given Int = 20`: another value at run time, as
+/// master's whole list does), so the part adds no program to that.
+pub(super) fn limit_using_search(lists: &mut [ArgList], kept: bool) {
+    for l in lists.iter_mut().filter(|l| l.using) {
+        l.fun = l.fun.search_limited(kept);
+    }
+}
+
 impl Clone for ArgList {
     fn clone(&self) -> ArgList {
         ArgList { args: self.args.clone(), using: self.using, span: self.span, fun: self.fun }
@@ -260,8 +282,9 @@ impl Clone for ArgList {
 /// span ends there (an application's function, the application of the lists before, the right operand a
 /// right-associative operator's `Select(r, op)` ends with), its place read only where the rule is
 /// applied (`FunEnd::end`); and whether the list is an operator's, whose operand `Desugar.binop` passes
-/// with one level of parentheses unwrapped (`Ast::written_arg`). A place or a node below 2^30, the top
-/// bit telling them apart and the next marking an operator's list.
+/// with one level of parentheses unwrapped (`Ast::written_arg`). A place or a node below 2^28, the top
+/// bit telling them apart, the next marking an operator's list, and the two below them a `using` list's
+/// search limit (`limit_using_search`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct FunEnd(u32);
 
@@ -269,13 +292,17 @@ impl FunEnd {
     pub const NONE: FunEnd = FunEnd(u32::MAX);
     const TREE: u32 = 1 << 31;
     const OPERAND: u32 = 1 << 30;
+    const SEARCH_LIMITED: u32 = 1 << 29;
+    const SEARCH_KEPT: u32 = 1 << 28;
 
     /// The place `place`, none for `NO_END`.
     pub fn at(place: u32) -> FunEnd {
+        debug_assert!(place == u32::MAX || place < Self::SEARCH_KEPT);
         FunEnd(place)
     }
 
     pub fn tree(e: ExprId) -> FunEnd {
+        debug_assert!(e.0 < Self::SEARCH_KEPT);
         FunEnd(Self::TREE | e.0)
     }
 
@@ -286,6 +313,7 @@ impl FunEnd {
 
     /// A right-associative operator's list, its `Select(r, op)` ending with `r`.
     pub fn operand_tree(r: ExprId) -> FunEnd {
+        debug_assert!(r.0 < Self::SEARCH_KEPT);
         FunEnd(Self::TREE | Self::OPERAND | r.0)
     }
 
@@ -298,8 +326,22 @@ impl FunEnd {
         self != Self::NONE && (self.0 & (Self::TREE | Self::OPERAND)) == (Self::TREE | Self::OPERAND)
     }
 
+    /// A using list whose omitted parameters are searched where they trail its written arguments only, or not at all
+    /// where `kept` (`limit_using_search`).
+    pub fn search_limited(self, kept: bool) -> FunEnd {
+        if self == Self::NONE { self } else { FunEnd(self.0 | Self::SEARCH_LIMITED | if kept { Self::SEARCH_KEPT } else { 0 }) }
+    }
+
+    pub fn is_search_limited(self) -> bool {
+        self != Self::NONE && self.0 & Self::SEARCH_LIMITED != 0
+    }
+
+    pub fn is_search_kept(self) -> bool {
+        self != Self::NONE && self.0 & Self::SEARCH_KEPT != 0
+    }
+
     pub fn end(self, ast: &crate::ast::Ast) -> Option<u32> {
-        let v = self.0 & !(Self::TREE | Self::OPERAND);
+        let v = self.0 & !(Self::TREE | Self::OPERAND | Self::SEARCH_LIMITED | Self::SEARCH_KEPT);
         match self {
             Self::NONE => None,
             FunEnd(f) if f & Self::TREE != 0 => Some(ast.expr_span(ExprId(v)).end),
@@ -1553,6 +1595,27 @@ impl<'a> Worker<'a> {
         let info = self.syms.class(c);
         (info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some())
             && info.companion.map_or(false, |e| self.syms.class(e).kind == ClassKind::Enum)
+    }
+
+    /// The given for the parameter `p` of a using or implicit clause of `callee`, its type `target`, at `site`: the
+    /// search a clause left out takes and a short `using` list's omitted parameter alike (the reference's
+    /// `implicitArgTree`, from `adaptNoArgsImplicitMethod` and from `matchArgs`): the hit the probe of an extension's
+    /// using clauses kept (`inferred_hit`), else the search.
+    pub(super) fn find_param_given(&mut self, callee: Option<SymId>, p: &ParamSig, target: TypeId, site: Span) -> Option<(TExprId, TypeId)> {
+        if let Some(hit) = callee.and_then(|m| self.inferred_hit(m, target, p.sym)) {
+            return Some(hit);
+        }
+        self.resolve_given_typed(target, site)
+    }
+
+    /// Why no given was found for the parameter `p` (`find_param_given`), as the search tells it: an ambiguity, a
+    /// missing tag's words (`missing_tag`), the parameter's `@implicitNotFound`, the type's; `None` where the caller's
+    /// own words stand (a clause left out names the parameter, a short list does not). The candidates' notes are the
+    /// caller's to append.
+    pub(super) fn param_given_failure(&mut self, callee: Option<SymId>, ctor: Option<ClassId>, p: &ParamSig, target: TypeId, subst: &Subst, missing_tag: Option<String>) -> Option<String> {
+        let msg = self.given_ambiguity.take().or(missing_tag);
+        let msg = msg.or_else(|| callee.and_then(|m| self.param_not_found_message(m, ctor, p.sym, p.name, subst)));
+        msg.or_else(|| self.implicit_not_found_message(target))
     }
 
     /// An error about how many arguments a list holds: dependent where the parser's recovery cut
@@ -5229,8 +5292,12 @@ impl<'a> Worker<'a> {
             lists.push(ArgList { args: Vec::new(), using: false, span, fun: ArgList::NO_FUN });
         }
         // `Foo()` for a class declared without a parameter list.
-        if !has_normal_clause && lists.first().map_or(false, |l| !l.using && l.args.is_empty()) {
+        let empty_dropped = !has_normal_clause && lists.first().map_or(false, |l| !l.using && l.args.is_empty());
+        if empty_dropped {
             lists.remove(0);
+        }
+        if !has_normal_clause && !sig.clauses.first().is_some_and(|cl| cl.is_implicit) {
+            limit_using_search(&mut lists, empty_dropped || !self.syms.class(c).ctors.is_empty());
         }
         if !secondaries.is_empty() && !as_function {
             let primary = self.syms.class(c).primary_ctor.filter(|_| primary_accessible).map(|s| (s, sig));
@@ -5943,10 +6010,7 @@ impl<'a> Worker<'a> {
                         let open_tag = self.open_tag(target);
                         // A given the probe of the extension's using clauses resolved is taken,
                         // not resolved again (`prefix_holds`).
-                        let found = match self.inferred_hit(call.sym, target, p.sym) {
-                            Some(hit) => Some(hit),
-                            None => self.resolve_given_typed(target, given_site),
-                        };
+                        let found = self.find_param_given(Some(call.sym), p, target, given_site);
                         match found {
                             Some((te, given_ty)) => {
                                 if ctor.is_none() && self.is_std_summon(call.sym) {
@@ -5998,9 +6062,8 @@ impl<'a> Worker<'a> {
                                 // the array's construction, at the call where it stands.
                                 let tag_at_call = missing_tag.is_some() && ctor.is_none() && self.syms.sym(call.sym).jvm_evidence;
                                 let target = self.solve_bounded_in(target);
-                                let msg = self.given_ambiguity.take().or(missing_tag);
-                                let msg = msg.or_else(|| self.param_not_found_message(call.sym, ctor.as_ref().map(|&(c, _, _)| c), p.sym, p.name, &subst));
-                                let msg = match msg.or_else(|| self.implicit_not_found_message(target)) {
+                                let msg = self.param_given_failure(Some(call.sym), ctor.as_ref().map(|&(c, _, _)| c), p, target, &subst, missing_tag);
+                                let msg = match msg {
                                     Some(m) => m,
                                     None => {
                                         // the method the typer selected (`methPart(fun)`): a function's `apply` is the
@@ -7597,6 +7660,10 @@ impl<'a> Worker<'a> {
         // The parameters' arguments typed in the parameters' order, as `matchArgs` types the
         // reordered arguments (Applications.scala 661, 816).
         let mut results: Vec<Option<TExprId>> = vec![None; n];
+        // Where the diagnostics stand before the arguments: a search that fails after an argument of the list
+        // failed (an error made since, inside the application) tells nothing more, as the reference's application
+        // has failed by then.
+        let diags_mark = self.diags.items.len();
         for i in 0..n {
             let p = &clause.params[i];
             let pty = self.param_type(p.ty, subst);
@@ -7661,6 +7728,81 @@ impl<'a> Worker<'a> {
                         }
                         _ => false,
                     };
+                // `matchArgs`'s branch of a missing argument (Applications.scala 840-896): in a contextual
+                // application, a written `using` list on a using or implicit clause, a parameter left without an
+                // argument and without a default is searched as a given at the application
+                // (`implicitArgTree(formal, appPos.span)`), by the search a clause left out takes, after the
+                // arguments before it; with a default, the search is made first and the default taken, a given
+                // found keeping its constraints and told by E220 (`DefaultShadowsGiven`), in a plain list of an
+                // implicit clause too.
+                let limited = list.fun.is_search_limited() && (list.fun.is_search_kept() || slots[i + 1..].iter().any(|s| !s.is_empty()));
+                // A list inside a macro's splice code (`type_splice_code`): its arguments are taken as written.
+                if !misplaced && clause.is_using && !self.is_body_file(self.env.file) && !limited && !self.typing_splice_code {
+                    if list.using && !has_default {
+                        let target = self.param_type(p.ty, subst);
+                        let open_tag = self.open_tag(target);
+                        let te = match self.find_param_given(callee.map(|(m, _)| m), p, target, list.span) {
+                            Some((te, given_ty)) => {
+                                if self.inline.record_args {
+                                    self.inline.arg_types.push((te, given_ty));
+                                }
+                                if dependent {
+                                    // The given's own path, or its type, as the whole clause's search notes it.
+                                    let path = self.path_of(te).unwrap_or(given_ty);
+                                    self.param_paths.push((p.sym, path));
+                                }
+                                if p.by_name {
+                                    self.by_name_thunk(te)
+                                } else {
+                                    te
+                                }
+                            }
+                            None => {
+                                let missing_tag = self.missing_tag(p.ty, target, open_tag);
+                                let target = self.solve_bounded_in(target);
+                                // The type's `@implicitNotFound` alone: `implicitArgTree` asks `missingArgMsg` without the
+                                // parameter (Implicits.scala 962-966), so a parameter's own text is not read here.
+                                let msg = match self.param_given_failure(None, None, p, target, subst, missing_tag) {
+                                    Some(m) => m,
+                                    None => format!("No given instance of type {} was found", self.show(target)),
+                                };
+                                let msg = msg + &self.given_failure_notes();
+                                let arg_failed = self.diags.items.get(diags_mark..).is_some_and(|made| {
+                                    made.iter().any(|d| !d.is_warning && d.file == self.env.file && d.span.start >= list.span.start && d.span.end <= list.span.end)
+                                });
+                                if !arg_failed {
+                                    // matchArgs's `implicitArgTree` at the application: the typer's record (E172).
+                                    let outer = std::mem::replace(&mut self.diags.producer, crate::source::Group::Typer);
+                                    self.given_failure_error(list.span, msg, target);
+                                    self.diags.producer = outer;
+                                }
+                                self.prog.add(TExpr::Unit)
+                            }
+                        };
+                        results[i] = Some(te);
+                        continue;
+                    }
+                    if has_default && (list.using || clause.is_implicit) {
+                        let target = self.param_type(p.ty, subst);
+                        let mark = self.attempt();
+                        let hit = self.resolve_given_typed(target, list.span);
+                        let found = hit.is_some() && !self.attempt_failed(&mark);
+                        match hit {
+                            Some((te, _)) if found => {
+                                self.drop_pending_in(&[te]);
+                                self.close(mark);
+                                let msg = format!("Argument for implicit parameter {} was supplied using a default argument.", self.name_str(p.name));
+                                let w = crate::source::Warning { id: crate::warnings::id::DEFAULT_SHADOWS_GIVEN, ..crate::source::Warning::plain() };
+                                self.warn_as(list.span, msg, w.by(crate::source::Group::Typer));
+                            }
+                            _ => {
+                                // A probe's ambiguity is not the application's to tell.
+                                self.retract(mark);
+                                self.given_ambiguity = None;
+                            }
+                        }
+                    }
+                }
                 if !has_default && !misplaced {
                     let msg = format!("missing argument for parameter {}", self.name_str(p.name));
                     self.arity_error(&list, msg);
@@ -7717,6 +7859,11 @@ impl<'a> Worker<'a> {
                 a => a,
             };
             let te = self.type_arg_for(list.fun, p, at(i), arg, pty, list.span, false);
+            // In a short `using` list, its path before a searched slot's type is read (a written argument a later
+            // parameter's type names: `f(using o: Ord, e: o.Eq)`).
+            if dependent && list.using && clause.is_using && list.args.len() < n {
+                self.note_param_path(p, te, pty);
+            }
             results[i] = Some(if p.by_name {
                 self.by_name_thunk(te)
             } else {

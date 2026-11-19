@@ -110,7 +110,6 @@ exceptions-2	compile-error: expected an expression, found ';'
 exceptions-nest	wrong-output
 export-in-extension	run-error: Error: AssertionError: assertion failed
 exports	wrong-output
-extra-implicits	compile-error: missing argument for parameter b
 final-fields	wrong-output
 forwarder	compile-error: value getModifiers is not a member of Method
 forwarder-java-package-private	compile-error: test contains Java sources

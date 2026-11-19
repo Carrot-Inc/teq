@@ -41,7 +41,7 @@ neg/3559c.scala	same
 neg/3559d.scala	same	
 neg/4376.scala	same	
 neg/4382.scala	same	
-neg/5541.scala	accepts	
+neg/5541.scala	same	
 neg/5902.scala	std	infer
 neg/6314-1.scala	same	
 neg/6314-2.scala	subset	2/4 lines
@@ -874,7 +874,7 @@ neg/i22357.scala	syntax	expected identifier, found {}
 neg/i22357a.scala	same	
 neg/i22367.scala	accepts	
 neg/i22423.scala	same	
-neg/i22439.scala	superset	+2 lines: missing argument for parameter {}
+neg/i22439.scala	same	
 neg/i22440.scala	same		--source future
 neg/i22498.scala	accepts	
 neg/i22552.scala	same	
@@ -6074,7 +6074,7 @@ warn/i22298_joint	oos	java
 warn/i22298_separ	oos	java
 warn/i22371.scala	same	
 warn/i22412.scala	wording	A try without catch or finally is equivalent to putting its body in a block; no exceptions are handled.
-warn/i22439.scala	subset	1/3 diagnostics
+warn/i22439.scala	same	
 warn/i22440.scala	same		--source 3.7
 warn/i22507.scala	same	
 warn/i22527.scala	syntax	expected {}, found {}
@@ -6114,7 +6114,7 @@ warn/i23347.scala	silent
 warn/i23349.scala	silent	
 warn/i23369.scala	superset	+1 diagnostics: match may not be exhaustive.
 warn/i23494.scala	same	
-warn/i23541.scala	silent	
+warn/i23541.scala	subset	1/3 diagnostics
 warn/i23620b.scala	silent	
 warn/i23621	wording	match may not be exhaustive.
 warn/i23651.scala	silent	
@@ -6124,7 +6124,7 @@ warn/i23704.scala	silent
 warn/i23758.scala	silent	
 warn/i23822.scala	silent	
 warn/i23905	different	there were 4 deprecation warnings; re-run with -deprecation for details
-warn/i24034	rejects	missing argument for parameter {}
+warn/i24034	same	
 warn/i24082.scala	same	
 warn/i24246.scala	silent	
 warn/i24248	same	

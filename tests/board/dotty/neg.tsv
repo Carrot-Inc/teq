@@ -33,7 +33,7 @@
 3559d.scala	fail	-	check: diagnostic 1 of 1: scalac's is error 3559d.scala:7:10 Not found: f; teq's is error 3559d.scala:7:10 f is not accessible from constructor arguments
 4376.scala	fail	-	check: diagnostic 1 of 3: scalac's is error 4376.scala:5:6 Found:    Array[? >: App.Id[Nothing]]; teq's is warning 4376.scala:4:16 `_` is deprecated for wildcard arguments of types: use `?` instead
 4382.scala	pass	-	
-5541.scala	fail	-	marks: no error where 1 are marked
+5541.scala	pass	-	
 5902.scala	pass	-	
 6314-1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error 6314-1.scala:22:25 Found:    ("hello" : String); teq's is error 6314-1.scala:22:25 Found:    "hello"
 6314-2.scala	fail	-	marks: 2 errors where 4 are marked
@@ -856,7 +856,7 @@ i22357.scala	fail	-	marks: 2 errors where 1 are marked: i22357.scala:1:2: expect
 i22357a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22357a.scala:2:7 [A] =>> Int does not have a constructor; teq's is error i22357a.scala:2:3 Int cannot be instantiated
 i22367.scala	fail	-	marks: no error where 2 are marked
 i22423.scala	fail	-	check: diagnostic 1 of 1: error i22423.scala:35:3, line 2 of the message: scalac's is patterns :  case given reader @ _:ConfigReader[List[String]]; teq's is patterns :  case reader: ConfigReader[A]
-i22439.scala	fail	-	marks: 9 errors where 6 are marked: i22439.scala:7:3: missing argument for parameter i
+i22439.scala	fail	-	marks: 7 errors where 6 are marked: i22439.scala:7:3: missing argument for parameter i
 i22440.scala	pass	-	
 i22498.scala	fail	-	marks: no error where 1 are marked
 i22552.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i22552.scala:3:13 Context bounds are not allowed in this position; teq's is error i22552.scala:3:10 Context bounds are not allowed in this position

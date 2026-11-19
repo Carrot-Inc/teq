@@ -117,7 +117,6 @@ i22233.scala	marks: 0 warnings where 1 are marked
 i22267.scala	marks: 0 warnings where 1 are marked
 i22279.scala	marks: 0 warnings where 1 are marked
 i22412.scala	check: diagnostic 1 of 1: scalac's is warning i22412.scala:3:35 A try without catch or finally is equivalent to putting; teq's is warning i22412.scala:3:35 A try without catch or finally is equivalent to putting its body in a block; no exce
-i22439.scala	marks: 1 warnings where 3 are marked
 i22527.scala	marks: an error where warnings are marked: i22527.scala:6:7: expected ',' or ')', found literal
 i22672	marks: 2 warnings where 1 are marked
 i22705.scala	marks: an error where warnings are marked: i22705.scala:15:22: Node cannot be instantiated
@@ -137,7 +136,6 @@ i23621	check: diagnostic 1 of 1: warning i23621.scala:2:10, line 3 of the messag
 i23651.scala	check: diagnostic 1 of 3: scalac's is warning i23651.scala:14:1 @nowarn annotation does not suppress any warnings but matches a diagnostic; teq's is warning i23651.scala:11:1 @nowarn annotation does not suppress any warnings
 i23704.scala	marks: 3 warnings where 5 are marked
 i23822.scala	marks: 0 warnings where 1 are marked
-i24034	marks: an error where warnings are marked: circe.scala:30:7: missing argument for parameter mirror
 i24246.scala	marks: 0 warnings where 1 are marked
 i24265.scala	option: -Wall with -Werror (teq has no flag for it)
 i24322.scala	marks: 0 warnings where 1 are marked

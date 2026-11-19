@@ -85,6 +85,19 @@ impl Alt {
     fn has_defaults(&self) -> bool {
         self.sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default))
     }
+
+    /// The clause the `j`-th of the `using` lists written after the `k`-th explicit list takes (`None`:
+    /// the lists written before every explicit one): the `j`-th clause past that explicit clause, where it
+    /// and the clauses between are using or implicit ones, as dotty's `resolve` keeps for a `using` list
+    /// the alternatives whose next clause is implicit (`ApplyKind.Using`).
+    fn using_clause_after(&self, k: Option<usize>, j: usize) -> Option<&ClauseSig> {
+        let start = match k {
+            None => 0,
+            Some(k) => self.sig.clauses.iter().enumerate().filter(|(_, c)| !c.is_using).nth(k)?.0 + 1,
+        };
+        let taken = self.sig.clauses.get(start..=start + j)?;
+        taken.iter().all(|c| c.is_using).then(|| &taken[j])
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -2980,6 +2993,39 @@ impl<'a> Worker<'a> {
         infos.clear();
         infos.resize_with(lists.len(), || None);
         let explicit_lists: Vec<usize> = (0..lists.len()).filter(|&i| !lists[i].using).collect();
+        // The `using` lists written before every explicit one narrow the alternatives first, as dotty's
+        // `resolve` takes the first list whatever its kind (Applications.scala 2459).
+        let leading: Vec<usize> = (0..lists.len()).take_while(|&i| lists[i].using).collect();
+        let mut narrowed_by_leading = false;
+        if cands.len() > 1 && !leading.is_empty() && !self.is_body_file(self.env.file) {
+            for (j, &ui) in leading.iter().enumerate() {
+                let Some(narrowed) = self.narrow_by_using_list(alts, &cands, None, j, &lists[ui], &explicit) else { break };
+                narrowed_by_leading = true;
+                cands = narrowed;
+                if cands.len() <= 1 || !self.using_lists_alike(alts, &cands, None, j) {
+                    break;
+                }
+            }
+        }
+        if narrowed_by_leading {
+            match cands.as_slice() {
+                [] => return Err(Failure::NoneApplicable),
+                [one] if explicit_lists.is_empty() => return Ok(*one),
+                // Several left by the only lists, `using` ones: the most specific, then those that declare no
+                // default arguments (`resolveOverloaded1`'s `noDefaults`, Applications.scala 2752).
+                _ if explicit_lists.is_empty() => {
+                    let best = self.narrow_most_specific(alts, cands.clone(), &explicit, None);
+                    if let [one] = best.as_slice() {
+                        return Ok(*one);
+                    }
+                    let no_defaults: Vec<usize> = best.iter().copied().filter(|&i| !alts[i].has_defaults()).collect();
+                    if let [one] = no_defaults.as_slice() {
+                        return Ok(*one);
+                    }
+                }
+                _ => {}
+            }
+        }
         if explicit_lists.is_empty() {
             if let Some(name) = selection {
                 return self.resolve_selected(alts, &cands, &explicit, name);
@@ -3082,7 +3128,7 @@ impl<'a> Worker<'a> {
             if applicable.is_empty() {
                 return Err(Failure::NoneApplicable);
             }
-            let best = self.narrow_most_specific(alts, applicable.clone(), &explicit, Some(k));
+            let mut best = self.narrow_most_specific(alts, applicable.clone(), &explicit, Some(k));
             if best.len() == 1 {
                 let mut pool = applicable.clone();
                 if !partial && !widened {
@@ -3091,11 +3137,134 @@ impl<'a> Worker<'a> {
                 }
                 return Ok(self.adapt_by_result(alts, best[0], &pool, &explicit, explicit_lists.len(), expected));
             }
+            // Several left: the `using` lists written next narrow the applicable ones, as dotty resolves the
+            // candidates again against the next list (`resolveMapped` with the deepened prototype,
+            // Applications.scala 2731), a `using` list among them; an explicit list that left one
+            // alternative has chosen it, whose short `using` list its givens complete.
+            let following: Vec<usize> = (li + 1..lists.len()).take_while(|&x| lists[x].using).collect();
+            if !following.is_empty() && !self.is_body_file(self.env.file) {
+                let mut narrowed = applicable.clone();
+                for (j, &ui) in following.iter().enumerate() {
+                    let Some(next) = self.narrow_by_using_list(alts, &narrowed, Some(k), j, &lists[ui], &explicit) else { break };
+                    narrowed = next;
+                    if narrowed.len() <= 1 || !self.using_lists_alike(alts, &narrowed, Some(k), j) {
+                        break;
+                    }
+                }
+                match narrowed.as_slice() {
+                    [] => return Err(Failure::NoneApplicable),
+                    [one] => return Ok(*one),
+                    _ => {
+                        let kept: Vec<usize> = best.iter().copied().filter(|i| narrowed.contains(i)).collect();
+                        best = if kept.is_empty() { narrowed.clone() } else { kept };
+                        applicable = narrowed;
+                    }
+                }
+            }
             if k + 1 == explicit_lists.len() {
                 return self.break_tie(alts, best, &applicable, &explicit, &upto, expected);
             }
         }
         unreachable!()
+    }
+
+    /// Whether the clauses the `j`th `using` list after explicit list `k` takes in each of `cands` declare the same
+    /// parameter types. Dotty narrows by one list, takes the most specific of the applicable alternatives, and goes on
+    /// to the next list only where several remain (`resolveOverloaded1`, Applications.scala 2729-2745); here the next
+    /// list narrows only where this one cannot tell them apart, and otherwise the choice is left to the most specific
+    /// of the explicit lists and the tie-breaks, which refuse where they cannot choose.
+    fn using_lists_alike(&self, alts: &[Alt], cands: &[usize], k: Option<usize>, j: usize) -> bool {
+        let tys = |i: usize| alts[i].using_clause_after(k, j).map(|c| c.params.iter().map(|p| p.ty).collect::<Vec<_>>());
+        let first = tys(cands[0]);
+        first.is_some() && cands[1..].iter().all(|&i| tys(i) == first)
+    }
+
+    /// The alternatives of `cands` a written `using` list applies to (dotty's `resolveOverloaded1` against a
+    /// `using` prototype): those whose clause it takes is a using or implicit one (`Alt::using_clause_after`),
+    /// that its arguments fit by number and names, a default filling a parameter and a given not
+    /// (`narrowBySize`'s `sizeFits`), and whose parameters the arguments' types conform to (`narrowByTrees`),
+    /// each argument typed once on its own; an argument that cannot be typed so tells nothing. None for a list that
+    /// narrows nothing, one `limit_using_search` marked or one in a macro's splice code (`typing_splice_code`, whose
+    /// call takes its arguments as written): every scan of alternatives (the leading lists', a following list's, a
+    /// creation's, a parent call's, a self call's) leaves its alternatives to master's resolution then.
+    fn narrow_by_using_list(&mut self, alts: &[Alt], cands: &[usize], k: Option<usize>, j: usize, list: &ArgList, explicit: &[TypeId]) -> Option<Vec<usize>> {
+        if list.fun.is_search_limited() || self.typing_splice_code {
+            return None;
+        }
+        let shapes = self.arg_shapes(list);
+        let sized: Vec<usize> = cands
+            .iter()
+            .copied()
+            .filter(|&i| alts[i].using_clause_after(k, j).is_some_and(|cl| Self::map_args(&self.syms, cl, &shapes).is_some()))
+            .collect();
+        if sized.len() <= 1 {
+            return Some(sized);
+        }
+        let ast = self.cur_ast();
+        // Typed ahead only where the typing makes nothing it keeps (no class of a body, no function literal),
+        // as `pretypeArgs` leaves what needs its formal; the application types the arguments again.
+        fn simple(ast: &crate::ast::Ast, e: crate::ast::ExprId) -> bool {
+            let list_simple = |l: ListRef| ast.expr_list(l).iter().all(|&a| simple(ast, a));
+            match ast.expr(e) {
+                Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit => true,
+                Expr::Ident(_) | Expr::This => true,
+                Expr::Select(r, _) => simple(ast, r),
+                Expr::Apply(f, args) | Expr::UsingApply(f, args) => simple(ast, f) && list_simple(args),
+                Expr::TypeApply(f, _) => simple(ast, f),
+                Expr::New(_, args) => list_simple(args),
+                Expr::Parens(inner) | Expr::Typed(inner, _) | Expr::NamedArg(_, inner) => simple(ast, inner),
+                _ => false,
+            }
+        }
+        let values: Vec<Option<crate::ast::ExprId>> = list
+            .args
+            .iter()
+            .map(|a| match a {
+                ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => Some(match ast.expr(*e) {
+                    Expr::NamedArg(_, v) => v,
+                    _ => *e,
+                }),
+                _ => None,
+            })
+            .collect();
+        let mut types: Vec<Option<TypeId>> = Vec::with_capacity(values.len());
+        for (a, v) in list.args.iter().zip(&values) {
+            let plain = matches!(shapes[types.len()].shape, Shape::Plain) && v.is_some_and(|e| simple(&ast, e));
+            let ty = match (a, v) {
+                (ArgSrc::Typed(_, ty) | ArgSrc::Named(_, _, ty), _) => Some(*ty),
+                (_, Some(e)) if plain => {
+                    let mark = self.attempt();
+                    let (_, ty) = self.type_expr(*e, None);
+                    let failed = self.attempt_failed(&mark);
+                    self.retract(mark);
+                    (!failed && ty != ERROR).then_some(ty)
+                }
+                _ => None,
+            };
+            types.push(ty);
+        }
+        let typed: Vec<usize> = sized
+            .iter()
+            .copied()
+            .filter(|&i| {
+                let alt = &alts[i];
+                let Some(cl) = alt.using_clause_after(k, j) else { return false };
+                let Some(mapping) = Self::map_args(&self.syms, cl, &shapes) else { return false };
+                let params: Vec<TypeId> = (0..shapes.len()).map(|a| cl.params[mapping.param(a)].ty).collect();
+                let mark = self.snapshot();
+                let subst = self.alt_subst(alt, explicit);
+                let ok = params.iter().zip(&types).all(|(&declared, ty)| match ty {
+                    Some(ty) => {
+                        let pty = self.types.subst(declared, &subst);
+                        self.is_compatible(*ty, pty)
+                    }
+                    None => true,
+                });
+                self.rollback(&mark);
+                ok
+            })
+            .collect();
+        Some(if typed.is_empty() { sized } else { typed })
     }
 
     fn pick(&mut self, alts: &[Alt], compatible: Vec<usize>, explicit: &[TypeId]) -> Result<usize, Failure> {

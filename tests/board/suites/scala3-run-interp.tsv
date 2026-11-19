@@ -244,7 +244,7 @@ extension-specificity	pass	-
 extension-specificity2	pass	-	
 extmethod-overload	pass	-	
 extmethods2	pass	-	
-extra-implicits	fail	-	compile-error: missing argument for parameter b
+extra-implicits	pass	-	
 final-fields	fail	-	wrong-output
 final-var	pass	-	
 finally	pass	-	

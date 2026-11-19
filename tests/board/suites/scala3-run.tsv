@@ -244,7 +244,7 @@ extension-specificity	pass	-
 extension-specificity2	pass	-	
 extmethod-overload	pass	-	
 extmethods2	pass	-	
-extra-implicits	fail	-	compile-error: missing argument for parameter b
+extra-implicits	pass	-	
 final-fields	fail	-	wrong-output
 final-var	pass	-	
 finally	pass	-	
@@ -1492,7 +1492,7 @@ t5729	pass	-
 t5733	pass	-	
 t5830	pass	-	
 t5856	pass	-	
-t5857	fail	-	run-error: Error: AssertionError: assertion failed: 8972
+t5857	fail	-	run-error: Error: AssertionError: assertion failed: 10786
 t5866	fail	-	wrong-output
 t5867	fail	-	compile-error: UnrolledBuffer is not a member of the package
 t5879	fail	-	compile-error: value merged is not a member of HashMap[Int, String]

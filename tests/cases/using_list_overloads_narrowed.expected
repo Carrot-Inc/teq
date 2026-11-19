@@ -1,0 +1,26 @@
+int x givenB
+str y
+one x
+two x y
+plain
+using x givenB
+int x givenB
+any y z
+givenB
+at-int y givenB
+at-str z
+apply-int p givenB
+apply-str q givenC
+ext-int r givenB
+ext-str u givenB
+int x givenB
+str y
+one x
+two x y
+short
+default x dflt
+short-default
+generic x int:1
+string y givenB
+generic z int:1
+list w List(int:1)

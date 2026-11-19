@@ -1,18 +1,18 @@
 # dotty 3.8.4 (7d4833b6) run, run-js; sjs-compiler-tests/test/scala/dotty/tools/dotc/ScalaJSCompilationTests.scala:32; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
-16405.scala	fail	lean:fail	16405.scala:14:15: type a not found
+16405.scala	fail	lean:fail	16405.scala:14:15: Not found: type a
 1938-2.scala	fail	lean:fail	1938-2.scala:23:12: this is not a case class or enum case
 1938.scala	pass	lean:pass	
 26071.scala	pass	lean:pass	
 2772.scala	pass	lean:pass	
 3179.scala	pass	lean:pass	
-9416.scala	fail	lean:fail	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
+9416.scala	fail	lean:fail	9416.scala:18:16: Found:    "foo"
 CollectionTests.scala	fail	lean:fail	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
 ConfManagement.scala	pass	lean:fail	
 HLists-nonvariant.scala	pass	lean:pass	
 HLists.scala	pass	lean:pass	
 HelloWorld.scala	pass	lean:pass	
-IArrayOps.scala	fail	lean:fail	iarray.scala:63:16: type Set not found
+IArrayOps.scala	fail	lean:fail	iarray.scala:63:16: Not found: type Set
 Lazies1.scala	pass	lean:pass	
 Lazies2.scala	pass	lean:pass	
 LazyLists.scala	pass	lean:pass	
@@ -26,8 +26,8 @@ Parser.scala	fail	lean:fail	option: -preview (teq has no flag for it)
 Pouring.scala	pass	lean:pass	
 Pouring2.scala	pass	lean:pass	
 Predef.readLine.scala	fail	lean:fail	<jdk>:1:1: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's platform layer)
-PrivateAnd.scala	fail	lean:fail	PrivateAnd.scala:4:38: type mismatch: found Int => Int, required Int
-Providers.scala	fail	lean:fail	Providers.scala:55:41: no given instance of type Select[(Int, String, List[Int]), Int] was found for parameter x
+PrivateAnd.scala	fail	lean:fail	PrivateAnd.scala:4:38: Found:    Int => Int
+Providers.scala	fail	lean:fail	Providers.scala:55:41: No given instance of type Select[(Int, String, List[Int]), Int] was found for parameter x of method summon in object Predef
 QueueTest.scala	pass	lean:pass	
 ReplacementMatching.scala	pass	lean:fail	
 ReverseSeqView.scala	pass	lean:pass	
@@ -93,7 +93,7 @@ classmanifests_new_alias.scala	fail	lean:fail	Manifest.scala:65:96:None:None: no
 classof-object.scala	pass	lean:pass	
 classtags_contextbound.scala	fail	lean:fail	output: line 1: the .check has 'class [I', the program printed 'class [Ljava.lang.Object;'
 cochis-example.scala	pass	lean:pass	
-cochis.scala	fail	lean:fail	cochis.scala:9:27: type ⇒ not found
+cochis.scala	fail	lean:fail	cochis.scala:9:27: Not found: type ⇒
 collection-stacks.scala	pass	lean:pass	
 collections-toSelf.scala	pass	lean:pass	
 collections.scala	fail	lean:fail	collections.scala:23:44: expected ',' or ')', found identifier
@@ -102,7 +102,7 @@ colltest.scala	pass	lean:pass
 comparable-comparator.scala	pass	lean:fail	
 complicatedmatch.scala	pass	lean:pass	
 concat-two-strings.scala	pass	lean:pass	
-config.scala	fail	lean:fail	config.scala:130:42: no given instance of type CanThrow was found for parameter of Possibly[Configured[String]]
+config.scala	fail	lean:fail	config.scala:130:42: No given instance of type CanThrow was found for parameter of Possibly[Configured[String]]
 constValueTuple.scala	pass	lean:pass	
 constant-optimization.scala	pass	lean:pass	
 constructors.scala	pass	lean:pass	
@@ -114,7 +114,7 @@ convertible.scala	fail	lean:fail	option: -preview (teq has no flag for it)
 coop-equality.scala	pass	lean:pass	
 correct-bind.scala	pass	lean:pass	
 creator-applys.scala	fail	lean:fail	creator-applys.scala:126:11: value Object is not a member of lang
-curried-mirror.scala	fail	lean:fail	curried-mirror.scala:7:74: no given instance of type Product{type MirroredType[T] = Prod0} was found for parameter x
+curried-mirror.scala	fail	lean:fail	curried-mirror.scala:7:74: No given instance of type Product{type MirroredType[T] = Prod0} was found for parameter x of method summon in object Predef
 curried-using-threading.scala	pass	lean:pass	
 dead-code-elimination.scala	pass	lean:pass	
 defaultGetters.scala	pass	lean:pass	
@@ -137,13 +137,13 @@ duplicate-meth.scala	pass	lean:pass
 duration-coarsest.scala	pass	lean:pass	
 dynamic-anyval.scala	pass	lean:pass	
 dynamicDynamicTests.scala	pass	lean:pass	
-eff-dependent.scala	fail	lean:fail	eff-dependent.scala:22:12: type mismatch: found A => (f.Eff) ?=> B, required A => B
+eff-dependent.scala	fail	lean:fail	eff-dependent.scala:36:10: Values of types (CanThrow) ?=> (CanIO) ?=> Int and Int cannot be compared with == or !=
 elidable-noflags.scala	pass	lean:fail	
 empty-array.scala	pass	lean:fail	
 emptypf.scala	pass	lean:pass	
 enrich-gentraversable.scala	crash	lean:fail	teq: signal 6
 enum-Color.scala	pass	lean:pass	
-enum-HList.scala	fail	lean:fail	enum-HList.scala:9:37: type mismatch: found Any, required HLst
+enum-HList.scala	fail	lean:fail	enum-HList.scala:9:37: Found:    Any
 enum-List1.scala	pass	lean:pass	
 enum-List2.scala	pass	lean:pass	
 enum-List2a.scala	pass	lean:pass	
@@ -154,7 +154,7 @@ enum-approx.scala	pass	lean:pass
 enum-constrs.scala	pass	lean:pass	
 enum-custom-toString.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: Tag.IntTag.productPrefix = IntTagImpl
 enum-in-trait.scala	pass	lean:pass	
-enum-nat.scala	fail	lean:fail	enum-nat.scala:22:32: type mismatch: found Any, required (Nat.Zero : Nat) | Succ[?]
+enum-nat.scala	fail	lean:fail	enum-nat.scala:22:32: Found:    Any
 enum-ordinal-java	pass	lean:pass	
 enum-values-order.scala	fail	lean:fail	run: exit 1: SyntaxError: Identifier 'LatinAlphabet$M' has already been declared
 enums-java-compat.scala	fail	lean:fail	enums-java-compat.scala:10:6: object creation impossible, since it has 2 unimplemented members: valueOf, values
@@ -170,11 +170,11 @@ erased-25.scala	fail	lean:fail	erased-25.scala:11:17: 'erased' is not part of th
 erased-26.scala	fail	lean:fail	erased-26.scala:7:25: 'erased' is not part of the supported Scala subset
 erased-7.scala	fail	lean:fail	erased-7.scala:6:11: 'erased' is not part of the supported Scala subset
 erased-inline-product-1.scala	fail	lean:fail	erased-inline-product-1.scala:21:10: No given instance of type ProductOf[(p : (Int, Long))] was found.
-erased-inline-product-2.scala	fail	lean:fail	erased-inline-product-2.scala:17:16: type p not found
+erased-inline-product-2.scala	fail	lean:fail	erased-inline-product-2.scala:17:16: Not found: type p
 erased-inline-product-3.scala	pass	lean:pass	
 erased-machine-state.scala	fail	lean:fail	erased-machine-state.scala:20:20: 'erased' is not part of the supported Scala subset
 erased-poly-ref.scala	fail	lean:fail	erased-poly-ref.scala:9:11: 'erased' is not part of the supported Scala subset
-errorhandling	fail	lean:fail	Result.scala:45:35: type mismatch: found Err[Any], required Result[*:[T, U], List[E]]
+errorhandling	fail	lean:fail	Result.scala:45:35: Found:    Err[Any]
 eta-extension.scala	pass	lean:pass	
 evaluation-order.scala	pass	lean:pass	
 exc.scala	pass	lean:pass	
@@ -194,7 +194,7 @@ extension-specificity.scala	pass	lean:pass
 extension-specificity2.scala	pass	lean:pass	
 extmethod-overload.scala	pass	lean:pass	
 extmethods2.scala	pass	lean:pass	
-extra-implicits.scala	fail	lean:fail	extra-implicits.scala:14:3: missing argument for parameter b
+extra-implicits.scala	pass	lean:pass	
 final-fields.scala	fail	lean:fail	output: line 5: the .check has '3 2 3 -4', the program printed '-1 -2 -3 -4'
 final-var.scala	pass	lean:pass	
 finally.scala	pass	lean:pass	
@@ -211,7 +211,7 @@ fully-abstract-nat-4.scala	fail	lean:fail	fully-abstract-nat-4.scala:20:12: this
 fully-abstract-nat-5.scala	fail	lean:fail	fully-abstract-nat-5.scala:20:12: this is not a case class or enum case
 fully-abstract-nat-6.scala	fail	lean:fail	fully-abstract-nat-6.scala:20:12: this is not a case class or enum case
 fully-abstract-nat-7.scala	fail	lean:fail	fully-abstract-nat-7.scala:20:12: this is not a case class or enum case
-fully-abstract-nat.scala	fail	lean:fail	fully-abstract-nat.scala:27:28: type mismatch: found Any, required ?{ pred: ? }. Note that implicit extension methods cannot be applied because they are ambiguous; both method SuccDeco in class Numbers and method SuccDeco in object Unbounde
+fully-abstract-nat.scala	fail	lean:fail	fully-abstract-nat.scala:27:28: Found:    Any
 function-arity.scala	pass	lean:pass	
 functionXXL.scala	pass	lean:pass	
 gadts.scala	pass	lean:pass	
@@ -238,11 +238,11 @@ i10062.scala	pass	lean:pass
 i10068a.scala	pass	lean:pass	
 i10068b.scala	pass	lean:pass	
 i10068c.scala	pass	lean:pass	
-i10068d.scala	fail	lean:fail	i10068d.scala:26:20: type mismatch: found () => it, required SAM_B2
+i10068d.scala	fail	lean:fail	i10068d.scala:26:20: Found:    () => it
 i10082.scala	pass	lean:pass	
 i10178.scala	pass	lean:pass	
 i10285.scala	pass	lean:pass	
-i10511.scala	fail	lean:fail	i10511.scala:27:29: type mismatch: found (t : (Bool.True : Bool)), required Not[(Bool.False : Bool)]
+i10511.scala	fail	lean:fail	i10511.scala:27:29: Found:    (t : (Bool.True : Bool))
 i10527.scala	pass	lean:pass	
 i10724.scala	pass	lean:pass	
 i10857.scala	pass	lean:pass	
@@ -251,7 +251,7 @@ i10889.scala	pass	lean:fail
 i10905.scala	pass	lean:pass	
 i10930.scala	pass	lean:fail	
 i1099.scala	pass	lean:pass	
-i10997.scala	fail	lean:fail	i10997.scala:13:60: no given instance of type Of[(ClassWrapper.this.Qux : Qux)] was found for parameter x
+i10997.scala	fail	lean:fail	i10997.scala:13:60: No given instance of type Of[(ClassWrapper.this.Qux : Qux)] was found for parameter x of method summon in object Predef
 i11008.scala	pass	lean:pass	
 i11008b.scala	fail	lean:fail	i11008b.scala:7:17: a sequence wildcard can only end a sequence pattern
 i11045.scala	pass	lean:pass	
@@ -267,7 +267,7 @@ i11542.scala	pass	lean:pass
 i11542a.scala	pass	lean:pass	
 i11563.scala	pass	lean:pass	
 i11571.scala	pass	lean:fail	
-i11583.scala	fail	lean:fail	Tuples.scala:247:12:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+i11583.scala	fail	lean:fail	Tuples.scala:247:12:None:None: Found:    IArray[AnyRef]
 i11630.scala	fail	lean:fail	i11630.scala:5:11: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 i11676.scala	pass	lean:pass	
 i11706.scala	pass	lean:pass	
@@ -316,9 +316,9 @@ i13228.scala	pass	lean:pass
 i13252a.scala	pass	lean:pass	
 i13252b	pass	lean:pass	
 i13304.scala	pass	lean:pass	
-i13332.scala	fail	lean:fail	i13332.scala:22:81: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
-i13332a.scala	fail	lean:fail	i13332a.scala:17:15: no given instance of type Mirror{type MirroredType[X] = Scope.this.IList[X]; type MirroredMonoType = Scope.this.IList[?]; type MirroredElemTypes <: [_] =>> Tuple} was found for parameter x
-i13332anonprod.scala	fail	lean:fail	i13332anonprod.scala:23:81: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
+i13332.scala	fail	lean:fail	i13332.scala:22:81: No given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x of method summon in object Predef
+i13332a.scala	fail	lean:fail	i13332a.scala:17:15: No given instance of type Mirror{type MirroredType[X] = Scope.this.IList[X]; type MirroredMonoType = Scope.this.IList[?]; type MirroredElemTypes <: [_] =>> Tuple} was found for parameter x of method summon in object Pre
+i13332anonprod.scala	fail	lean:fail	i13332anonprod.scala:23:81: No given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x of method summon in object Predef
 i13332intersection.scala	fail	lean:fail	i13332intersection.scala:230:54: cannot reduce summonFrom with
 i13332shapeless-b.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 i13332shapeless.scala	fail	lean:fail	i13332shapeless.scala:338:29: type argument CListRefl[tl] does not conform to upper bound CList
@@ -346,7 +346,7 @@ i13986.scala	pass	lean:pass
 i13987.scala	pass	lean:pass	
 i14020.scala	fail	lean:fail	run: exit 1: TypeError: Cannot read properties of undefined (reading 'a')
 i14127.scala	pass	lean:pass	
-i14150.scala	fail	lean:fail	i14150.scala:67:83: no given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev
+i14150.scala	fail	lean:fail	i14150.scala:67:83: No given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev of given instance mirDeriver in object MirrorNamesDeriver
 i14164.scala	pass	lean:pass	
 i14215.scala	pass	lean:pass	
 i1423.scala	pass	lean:pass	
@@ -378,8 +378,8 @@ i1503.scala	pass	lean:pass
 i15101.scala	pass	lean:pass	
 i15190.scala	pass	lean:pass	
 i15234.scala	fail	lean:fail	i15234.scala:18:10: value fromProduct is not a member of Mirror{type MirroredType = (Nil : Nil); type MirroredMonoType = (Nil : Nil); type MirroredElemTypes <: Tuple}
-i15287.scala	fail	lean:fail	i15287.scala:6:3: not found: f
-i15302a.scala	fail	lean:fail	i15302a.scala:6:28: type mismatch: found *:[Int, *:[bh, bt] & (Int, Int)], required (Int, Int, Int)
+i15287.scala	fail	lean:fail	i15287.scala:6:3: Not found: f
+i15302a.scala	fail	lean:fail	i15302a.scala:6:28: Found:    *:[Int, *:[bh, bt] & (Int, Int)]
 i15302b.scala	pass	lean:pass	
 i15315.scala	pass	lean:pass	
 i15317.scala	pass	lean:pass	
@@ -394,7 +394,7 @@ i15723.scala	pass	lean:pass
 i15725.scala	fail	lean:fail	output: line 1: the .check has '2 meters', the program printed 'ToString@2'
 i1573.scala	pass	lean:pass	
 i15840.scala	fail	lean:fail	i15840.scala:9:32: expected ':', found 'val'
-i15855.scala	fail	lean:fail	i15855.scala:10:57: type mismatch: found () => R, required MyFunction0[R]
+i15855.scala	fail	lean:fail	i15855.scala:10:57: Found:    () => R
 i15913.scala	pass	lean:pass	
 i15943.scala	pass	lean:pass	
 i15988a.scala	pass	lean:pass	
@@ -455,7 +455,7 @@ i19629	pass	lean:pass
 i19641.scala	pass	lean:pass	
 i19711.scala	pass	lean:pass	
 i19724.scala	pass	lean:pass	
-i1990b.scala	fail	lean:fail	run: exit 1: ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor
+i1990b.scala	fail	lean:fail	run: exit 1: ReferenceError: $thisr0jxdn_6 is not defined
 i1991.scala	pass	lean:pass	
 i2004.scala	pass	lean:pass	
 i2004b.scala	pass	lean:pass	
@@ -493,14 +493,14 @@ i2337.scala	pass	lean:pass
 i2337b.scala	pass	lean:pass	
 i23409.scala	pass	lean:pass	
 i23409b.scala	pass	lean:pass	
-i23440.scala	fail	lean:fail	i23440.scala:9:28: type mismatch: found (<error>, <error>) => Unit, required (a : Int, b : String) => Any
+i23440.scala	fail	lean:fail	i23440.scala:9:28: Found:    (<error>, <error>) => Unit
 i23444.scala	pass	lean:pass	
 i23477.scala	pass	lean:pass	
 i2360.scala	pass	lean:pass	
 i23693.scala	pass	lean:pass	
 i23776.scala	pass	lean:pass	
 i23875.scala	pass	lean:pass	
-i23897.scala	fail	lean:fail	i23897.scala:19:15: no given instance of type Semigroup[(Int)] was found for parameter s
+i23897.scala	fail	lean:fail	i23897.scala:19:15: No given instance of type Semigroup[(Int)] was found for parameter s of method derived in object Semigroup
 i23901.scala	pass	lean:pass	
 i2396.scala	pass	lean:pass	
 i2396b.scala	pass	lean:pass	
@@ -644,7 +644,7 @@ i768.scala	fail	lean:fail	output: line 1: the .check has 'WrappedVarArgs(a, bc)'
 i7783.scala	pass	lean:pass	
 i7788.scala	fail	lean:fail	i7788.scala:9:64: Found:    (<error>, <error>) => String
 i7798.scala	pass	lean:pass	
-i7868.scala	fail	lean:fail	i7868.scala:6:22: no given instance of type ValueOf[S[0]] was found for parameter x
+i7868.scala	fail	lean:fail	i7868.scala:6:22: No given instance of type ValueOf[S[0]] was found for parameter x of method plusOne in object Test
 i789.scala	pass	lean:pass	
 i7926.scala	pass	lean:pass	
 i7963.scala	fail	lean:fail	util.scala:1:1: not supported on JavaScript: method min of java.util.Collections (a Java definition without an implementation in the std's platform layer)
@@ -654,8 +654,8 @@ i8035.scala	pass	lean:pass
 i8058.scala	pass	lean:pass	
 i806.scala	pass	lean:pass	
 i8064.scala	pass	lean:pass	
-i8073.scala	fail	lean:fail	i8073.scala:17:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
-i8073b.scala	fail	lean:fail	i8073b.scala:18:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
+i8073.scala	fail	lean:fail	i8073.scala:17:46: No given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x of method summon in object Predef
+i8073b.scala	fail	lean:fail	i8073b.scala:18:46: No given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x of method summon in object Predef
 i8096.scala	pass	lean:pass	
 i8314.scala	pass	lean:pass	
 i8396.scala	pass	lean:pass	
@@ -675,10 +675,10 @@ i8577i.scala	fail	lean:fail	i8577i.scala:12:10: mac is not an extractor: it has 
 i8582.scala	fail	lean:fail	i8582.scala:10:7: run in trait BeforeAndAfterAll cannot override the concrete run in trait Suite without a member that both override
 i8662.scala	pass	lean:pass	
 i8726.scala	pass	lean:pass	
-i876.scala	fail	lean:fail	i876.scala:7:16: type mismatch: found String, required Int
+i876.scala	fail	lean:fail	i876.scala:7:16: Found:    String
 i8903.scala	pass	lean:pass	
 i8931.scala	pass	lean:pass	
-i8977.scala	fail	lean:fail	run: exit 1: TypeError: "out".printf is not a function
+i8977.scala	fail	lean:pass	run: exit 1: TypeError: Cannot read properties of undefined (reading 'toString')
 i9011.scala	pass	lean:pass	
 i9056.scala	pass	lean:pass	
 i9068.scala	pass	lean:fail	
@@ -690,7 +690,7 @@ i9341.scala	fail	lean:fail	i9341.scala:3:15: expected an identifier, found 'supe
 i9404.scala	fail	lean:pass	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
 i9439.scala	pass	lean:pass	
 i9473.scala	pass	lean:pass	
-i9482.scala	fail	lean:fail	i9482.scala:47:32: no given instance of type OptManifest[A] was found for parameter evidence$1
+i9482.scala	fail	lean:fail	i9482.scala:47:32: No given instance of type OptManifest[A] was found for a context parameter of method makeWithArr in object Ref
 i9507.scala	pass	lean:pass	
 i9530.scala	fail	lean:fail	i9530.scala:16:7: object creation impossible, since it has 2 unimplemented members: combine, value
 i9928.scala	pass	lean:pass	
@@ -704,11 +704,11 @@ implicit-functors2.scala	pass	lean:pass
 implicit-specifity-2.scala	pass	lean:pass	
 implicit-specifity.scala	fail	lean:fail	implicit-specifity.scala:20:48: value asInstanceOf is not a member of Show[T]
 implicitFunctionXXL.scala	pass	lean:pass	
-implicitFuns2.scala	fail	lean:fail	implicitFuns2.scala:32:12: values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
+implicitFuns2.scala	fail	lean:fail	implicitFuns2.scala:32:12: Values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
 implicitMatch.scala	pass	lean:fail	
-implicitShortcut	fail	lean:fail	Test_3.scala:8:10: values of types (C) ?=> Int and Int cannot be compared with == or !=
+implicitShortcut	fail	lean:fail	Test_3.scala:8:10: Values of types (C) ?=> Int and Int cannot be compared with == or !=
 implicitclasses.scala	pass	lean:pass	
-implicits-numeric.scala	fail	lean:fail	implicits-numeric.scala:6:29: no given instance of type AnyVal was found for parameter e
+implicits-numeric.scala	fail	lean:fail	implicits-numeric.scala:6:29: No given instance of type AnyVal was found for parameter e of method implicitly in object Predef
 implicits_poly.scala	pass	lean:pass	
 implied-divergence.scala	pass	lean:pass	
 implied-for.scala	pass	lean:pass	
@@ -740,7 +740,7 @@ irrefutable.scala	pass	lean:pass
 isInstanceOf-eval.scala	pass	lean:pass	
 iterables.scala	fail	lean:fail	output: line 1: the .check has 'false', the program printed '5,6,7,8,9'
 iterator-concat.scala	pass	lean:pass	
-iterator-from.scala	fail	lean:fail	iterator-from.scala:53:45: not found: Value
+iterator-from.scala	fail	lean:fail	iterator-from.scala:53:45: Not found: Value
 iterator-iterate-lazy.scala	pass	lean:pass	
 iterator3444.scala	pass	lean:pass	
 iterators.scala	pass	lean:pass	
@@ -764,9 +764,9 @@ lists-run.scala	pass	lean:pass
 literals.scala	pass	lean:pass	
 llift.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 longmap.scala	fail	lean:pass	lang.scala:1:1: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platform layer)
-loops-alt.scala	fail	lean:fail	loops-alt.scala:19:12: no given instance of type Label[Unit] was found for parameter label
+loops-alt.scala	fail	lean:fail	loops-alt.scala:19:12: No given instance of type Label[Unit] was found for parameter label of method break in object boundary
 loops.scala	timeout	lean:fail	the program: over 45 s
-lst	fail	lean:fail	Lst.scala:35:9: expected 'case', found 'var'
+lst	fail	lean:fail	Lst.scala:111:24: new Array takes one type argument
 main-functions.scala	pass	lean:pass	
 mapConserve.scala	pass	lean:pass	
 mapValues.scala	pass	lean:pass	
@@ -795,7 +795,7 @@ multi-apply.scala	pass	lean:pass
 mutable-treeset.scala	pass	lean:fail	
 named-patmatch.scala	pass	lean:pass	
 named-patterns.scala	fail	lean:fail	named-patterns.scala:17:12: Person is not a case class, so it cannot be used as a pattern
-named-tuple-ops.scala	fail	lean:fail	named-tuple-ops.scala:40:16: type mismatch: found EmptyTuple, required Drop[(name : String, zip : Int, pop : Int), 3] (in the body of scala.NamedTupleDecomposition.drop)
+named-tuple-ops.scala	fail	lean:fail	named-tuple-ops.scala:40:16: Found:    EmptyTuple
 named-tuple-ordering.scala	pass	lean:fail	
 named-tuples-mirror.scala	fail	lean:fail	named-tuples-mirror.scala:22:58: No given instance of type Mirror.Of[(foo : Int, bla : String)] was found.
 named-tuples-strawman-2.scala	fail	lean:fail	named-tuples-strawman-2.scala:147:41: value asInstanceOf is not a member of NT
@@ -838,7 +838,7 @@ patmat-finally.scala	pass	lean:pass
 patmat-option-named.scala	pass	lean:pass	
 patmat-spec.scala	fail	lean:fail	patmat-spec.scala:29:12: FirstChars is not a case class, so it cannot be used as a pattern
 patmat.scala	pass	lean:pass	
-patmatch-classtag.scala	fail	lean:fail	patmatch-classtag.scala:21:57: no given instance of type ClassTag[CaseDef] was found for parameter e
+patmatch-classtag.scala	fail	lean:fail	patmatch-classtag.scala:21:57: No given instance of type ClassTag[CaseDef] was found for parameter e of method implicitly in object Predef
 pf-sub-cases.scala	fail	lean:fail	pf-sub-cases.scala:4:23: expected '=>', found 'match'
 phantomValueClass.scala	pass	lean:pass	
 pkgobjvals.scala	fail	lean:fail	pkgobjvals.scala:19:11: a singleton type needs a val, a parameter or an object
@@ -849,7 +849,7 @@ prod-mirror-inacessible-ctor	pass	lean:pass
 productElementName.scala	fail	lean:fail	productElementName.scala:43:16: method productElementName overrides nothing
 promotion.scala	pass	lean:pass	
 protectedSuper.scala	pass	lean:pass	
-protectedacc.scala	fail	lean:fail	protectedacc.scala:117:43: not found: meth1
+protectedacc.scala	fail	lean:fail	protectedacc.scala:117:43: Not found: meth1
 proxy.scala	pass	lean:fail	
 publicInBinary	fail	lean:fail	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
 pure-args-byname-noinline.scala	pass	lean:pass	
@@ -899,8 +899,8 @@ sort.scala	pass	lean:pass
 sorted-sets-ok.scala	pass	lean:pass	
 spec-self.scala	pass	lean:pass	
 spread-patterns.scala	fail	lean:fail	spread-patterns.scala:12:18: a sequence wildcard can only end a sequence pattern
-spreads-subtyping.scala	fail	lean:fail	spreads-subtyping.scala:7:16: type mismatch: found CharSequence, required Seq[CharSequence] | Array[? <: CharSequence]
-spreads.scala	fail	lean:fail	spreads.scala:18:26: type mismatch: found 1, required Seq[Int] | Array[? <: Int]
+spreads-subtyping.scala	fail	lean:fail	spreads-subtyping.scala:7:16: Found:    CharSequence
+spreads.scala	fail	lean:fail	spreads.scala:18:26: Found:    1
 stable-enum-hashcodes.scala	pass	lean:pass	
 static	pass	lean:pass	
 static-module-method.scala	pass	lean:pass	
@@ -961,7 +961,7 @@ t1434.scala	pass	lean:pass
 t1466.scala	pass	lean:pass	
 t1500b.scala	pass	lean:pass	
 t1500c.scala	pass	lean:pass	
-t1505.scala	fail	lean:fail	t1505.scala:2:11: not found: Value
+t1505.scala	fail	lean:fail	t1505.scala:2:11: Not found: Value
 t1524.scala	pass	lean:pass	
 t153.scala	pass	lean:pass	
 t1535.scala	pass	lean:pass	
@@ -982,7 +982,7 @@ t2027.scala	pass	lean:pass
 t2029.scala	pass	lean:pass	
 t2075.scala	pass	lean:fail	
 t2087-and-2400.scala	pass	lean:pass	
-t2111.scala	fail	lean:fail	t2111.scala:4:28: not found: Value
+t2111.scala	fail	lean:fail	t2111.scala:4:28: Not found: Value
 t2127.scala	pass	lean:pass	
 t2147.scala	pass	lean:pass	
 t216.scala	pass	lean:pass	
@@ -1019,7 +1019,7 @@ t3088.scala	pass	lean:fail
 t3097.scala	pass	lean:pass	
 t3112.scala	pass	lean:pass	
 t3126.scala	fail	lean:fail	t3126.scala:6:9: value unapply is not a member of C
-t3186.scala	fail	lean:fail	t3186.scala:1:59: not found: Value
+t3186.scala	fail	lean:fail	t3186.scala:1:59: Not found: Value
 t3199b.scala	fail	lean:pass	output: line 1: the .check has '[1, 2, 3]', the program printed '[(), (), ()]'
 t3220-3.scala	fail	lean:fail	t3220-3.scala:42:18: value in backtick quoted identifier is not a member of Literals
 t3232.scala	pass	lean:pass	
@@ -1052,13 +1052,13 @@ t3529.scala	pass	lean:pass
 t3540.scala	pass	lean:fail	
 t3563.scala	pass	lean:pass	
 t3603.scala	fail	lean:pass	lang.scala:1:1: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platform layer)
-t3616.scala	fail	lean:fail	t3616.scala:2:13: not found: Value
+t3616.scala	fail	lean:fail	t3616.scala:2:13: Not found: Value
 t3619.scala	pass	lean:pass	
 t363.scala	pass	lean:pass	
 t3645.scala	pass	lean:pass	
 t3651.scala	pass	lean:pass	
 t3670.scala	pass	lean:pass	
-t3687.scala	fail	lean:fail	t3687.scala:1:43: not found: Value
+t3687.scala	fail	lean:fail	t3687.scala:1:43: Not found: Value
 t3699.scala	pass	lean:pass	
 t3702.scala	pass	lean:pass	
 t3714.scala	pass	lean:pass	
@@ -1075,7 +1075,7 @@ t3887.scala	fail	lean:fail	t3887.scala:9:18: expected a pattern, found 'this'
 t3895.scala	pass	lean:pass	
 t3923.scala	pass	lean:pass	
 t3935.scala	pass	lean:pass	
-t3950.scala	fail	lean:fail	t3950.scala:3:18: not found: Value
+t3950.scala	fail	lean:fail	t3950.scala:3:18: Not found: Value
 t3980.scala	pass	lean:pass	
 t3984.scala	pass	lean:fail	
 t3994.scala	pass	lean:pass	
@@ -1105,7 +1105,7 @@ t4535.scala	pass	lean:fail
 t4537	pass	lean:pass	
 t4558.scala	pass	lean:pass	
 t4565_1.scala	pass	lean:pass	
-t4570.scala	fail	lean:fail	t4570.scala:2:13: not found: Value
+t4570.scala	fail	lean:fail	t4570.scala:2:13: Not found: Value
 t4577.scala	pass	lean:pass	
 t4582.scala	pass	lean:pass	
 t4592.scala	pass	lean:pass	
@@ -1153,11 +1153,11 @@ t5407.scala	pass	lean:pass
 t5530.scala	pass	lean:pass	
 t5532.scala	pass	lean:pass	
 t5552.scala	pass	lean:pass	
-t5588.scala	fail	lean:fail	t5588.scala:3:15: not found: Value
+t5588.scala	fail	lean:fail	t5588.scala:3:15: Not found: Value
 t5604.scala	pass	lean:pass	
 t5608.scala	pass	lean:pass	
 t5610a.scala	pass	lean:pass	
-t5612.scala	fail	lean:fail	t5612.scala:2:25: not found: Value
+t5612.scala	fail	lean:fail	t5612.scala:2:25: Not found: Value
 t5614.scala	pass	lean:pass	
 t5629.scala	pass	lean:pass	
 t5629b.scala	pass	lean:pass	
@@ -1282,7 +1282,7 @@ t8233-bcode.scala	pass	lean:pass
 t8233.scala	pass	lean:pass	
 t8245.scala	pass	lean:pass	
 t8280.scala	pass	lean:pass	
-t8346.scala	fail	lean:fail	t8346.scala:5:33: not found: Value
+t8346.scala	fail	lean:fail	t8346.scala:5:33: Not found: Value
 t8395.scala	pass	lean:pass	
 t8428.scala	pass	lean:pass	
 t8570.scala	pass	lean:pass	
@@ -1306,7 +1306,7 @@ t8933b	fail	lean:pass	<jdk>:1:1: not supported on JavaScript: class ReentrantRea
 t8933c.scala	fail	lean:pass	<jdk>:1:1: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition without an implementation in the std's platform layer)
 t920.scala	pass	lean:pass	
 t920_1.scala	pass	lean:pass	
-t949.scala	fail	lean:fail	t949.scala:6:20: not found: Value
+t949.scala	fail	lean:fail	t949.scala:6:20: Not found: Value
 t9516.scala	pass	lean:pass	
 t978.scala	pass	lean:pass	
 tagless.scala	fail	lean:fail	output: line 7: the .check has 'tf1Tree = Node(Add,WrappedVarArgs(Node(Lit,WrappedVarArgs(Leaf(8))), Node(Neg,WrappedVarArgs(Node(Add,WrappedVarArgs(Node(Lit,WrappedVarArgs(Leaf(1))), Node(Lit,WrappedVarArgs(Leaf(2)))))))))', the program pr
@@ -1350,9 +1350,9 @@ try-catch-unify.scala	fail	lean:fail	scala-library-3.8.4.jar!scala.util.control.
 try.scala	pass	lean:pass	
 tryPatternMatch.scala	pass	lean:pass	
 tuple-accessors.scala	pass	lean:pass	
-tuple-concat.scala	fail	lean:pass	scala-library-3.8.4.jar!scala.runtime.Tuples:12:1: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the bo
+tuple-concat.scala	fail	lean:pass	scala-library-3.8.4.jar!scala.runtime.Tuples:12:1: Found:    IArray[AnyRef]
 tuple-cons-2.scala	pass	lean:pass	
-tuple-cons.scala	fail	lean:pass	Tuples.scala:247:12:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+tuple-cons.scala	fail	lean:pass	Tuples.scala:247:12:None:None: Found:    IArray[AnyRef]
 tuple-deconstruct-wildcard-sideeffect.scala	pass	lean:pass	
 tuple-erased.scala	fail	lean:pass	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 tuple-for-comprehension.scala	pass	lean:pass	
@@ -1365,7 +1365,7 @@ tuple-patmat.scala	fail	lean:pass	run: exit 1: AssertionError [java.lang.Asserti
 tuple-patterns.scala	fail	lean:pass	output: line 3: the .check has '3', the program printed '()'
 tuple-product.scala	pass	lean:pass	
 tuple-split.scala	pass	lean:pass	
-tuple-tail.scala	fail	lean:pass	Tuples.scala:350:14:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+tuple-tail.scala	fail	lean:pass	Tuples.scala:350:14:None:None: Found:    IArray[AnyRef]
 tuple-typetests.scala	pass	lean:pass	
 tuple-underscore-syntax.scala	pass	lean:pass	
 tuple-zip.scala	pass	lean:pass	
@@ -1375,9 +1375,9 @@ tupled-function-compose.scala	fail	lean:fail	tupled-function-compose.scala:9:28:
 tupled-function-extension-method.scala	fail	lean:fail	tupled-function-extension-method.scala:18:21: (Int, Int) => (Int, Int) cannot be tupled as ((Int, Int)) => R
 tupled-function-tupled.scala	fail	lean:fail	tupled-function-tupled.scala:10:13: (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) => Int cannot be tupled as Tuple => R
 tupled-function-untupled.scala	fail	lean:fail	tupled-function-untupled.scala:8:36: () => Int cannot be tupled as Tuple & EmptyTuple => Int
-tuples-empty.scala	fail	lean:pass	Tuples.scala:350:14:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+tuples-empty.scala	fail	lean:pass	Tuples.scala:350:14:None:None: Found:    IArray[AnyRef]
 tuples.scala	pass	lean:fail	
-tuples1.scala	fail	lean:fail	tuples1.scala:83:72: type mismatch: found Concat[X, (y : Y)], required Concat[X, Y]
+tuples1.scala	fail	lean:fail	tuples1.scala:83:72: Found:    Concat[X, (y : Y)]
 tuples1a.scala	pass	lean:pass	
 tuples1b.scala	pass	lean:pass	
 typable.scala	pass	lean:pass	
@@ -1388,8 +1388,8 @@ typeCheckErrors.scala	fail	lean:fail	typeCheckErrors.scala:6:18: not supported y
 typealias_overriding.scala	fail	lean:fail	typealias_overriding.scala:17:24: expected an identifier, found 'super'
 typeclass-derivation-doc-example.scala	pass	lean:pass	
 typeclass-derivation1.scala	fail	lean:fail	typeclass-derivation1.scala:23:55: value asInstanceOf is not a member of Cons[T]
-typeclass-derivation2a.scala	fail	lean:fail	typeclass-derivation2a.scala:142:19: type mismatch: found Lst[T], required Lst[T]
-typeclass-derivation2b.scala	fail	lean:fail	typeclass-derivation2b.scala:117:31: type mismatch: found ? <: T, required _
+typeclass-derivation2a.scala	fail	lean:fail	typeclass-derivation2a.scala:142:19: Found:    Lst[T]
+typeclass-derivation2b.scala	fail	lean:fail	typeclass-derivation2b.scala:117:31: Found:    ? <: T
 typeclass-derivation2d.scala	fail	lean:fail	typeclass-derivation2d.scala:87:7: value asInstanceOf is not a member of Lst
 typeclass-derivation3.scala	pass	lean:fail	
 typelevel-numeric.scala	fail	lean:fail	typelevel-numeric.scala:27:14: MathLib is abstract; it cannot be instantiated
@@ -1403,7 +1403,7 @@ unapply.scala	fail	lean:fail	unapply.scala:40:12: wrong number of patterns for a
 unapplyArray.scala	pass	lean:pass	
 unboxingBug.scala	pass	lean:pass	
 unchecked-patterns.scala	pass	lean:pass	
-unicodeEscapes.scala	fail	lean:fail	unicodeEscapes.scala:14:36: not found: ida
+unicodeEscapes.scala	fail	lean:fail	unicodeEscapes.scala:14:36: Not found: ida
 uninitialized-field-values.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 unittest_collection.scala	pass	lean:fail	
 unittest_iterator.scala	pass	lean:pass	
@@ -1447,7 +1447,7 @@ virtpatmat_typed.scala	pass	lean:pass
 virtpatmat_unapply.scala	pass	lean:pass	
 virtpatmat_unapplyseq.scala	pass	lean:pass	
 virtpatmat_valdef.scala	pass	lean:pass	
-weak-conformance.scala	fail	lean:fail	weak-conformance.scala:14:38: type mismatch: found List[Byte | Int], required List[Byte]
+weak-conformance.scala	fail	lean:fail	weak-conformance.scala:14:38: Found:    List[Byte | Int]
 weakconform.scala	pass	lean:pass	
 whitebox-inline.scala	pass	lean:pass	
 wildcard-vals.scala	pass	lean:pass	

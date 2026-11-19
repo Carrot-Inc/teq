@@ -76,7 +76,6 @@ erased-poly-ref.scala	erased-poly-ref.scala:9:11: 'erased' is not part of the su
 errorhandling	Result.scala:45:35: type mismatch: found Err[Any], required Result[*:[T, U], List[E]]
 exceptions-2.scala	exceptions-2.scala:233:79: expected an expression, found ';'
 export-in-extension.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
-extra-implicits.scala	extra-implicits.scala:14:3: missing argument for parameter b
 forwarder-java-package-private	java source: teq reads none
 forwarder.scala	forwarder.scala:19:23: value getModifiers is not a member of Method
 fragables-extension.scala	fragables-extension.scala:11:3: missing parameter type

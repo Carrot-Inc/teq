@@ -1,0 +1,25 @@
+1 false
+1 true fr
+1 false implicit
+(false,given)
+2 true given
+3 given
+a b c-given
+1 a2 b-given
+x int:1
+y str:s
+z str:built2
+v int:2
+w str:c3
+givenB
+givenB
+aa gb gc
+x argA givenB givenC
+cc gb ga
+x argC givenB givenA
+ga bb gc
+argB givenA givenC
+cc gb aa
+argA argC givenB
+dd gb cc
+argC defaultD givenB

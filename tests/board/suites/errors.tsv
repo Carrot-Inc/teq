@@ -117,6 +117,7 @@ canequal_nested_ambiguity	pass	-
 canequal_nested_ambiguity_warm	pass	-	
 case_apply_primary_alone	pass	-	
 case_class_deferred_synthesized	pass	-	
+case_class_leading_using_clause	pass	-	
 case_class_own_deferred	pass	-	
 case_clause_bar_before_case	pass	-	
 case_clause_bar_missing_operand	pass	-	
@@ -1142,6 +1143,15 @@ unused_imports_renames	pass	-
 unused_imports_selectors	pass	-	
 unused_imports_settled	pass	-	
 unused_imports_testing_name	pass	-	
+using_list_overloaded_ctor_limited	pass	-	
+using_list_overloads_two_lists	pass	-	
+using_list_short_refused	pass	-	
+using_list_short_using_class_ctor	pass	-	
+using_list_splice_call	pass	-	
+using_list_splice_forms	pass	-	
+using_list_splice_overloads	pass	-	
+using_list_splice_quote_arg	pass	-	
+using_list_trait_implicit_clause	pass	-	
 value_class_rules	pass	-	
 value_import_given_conversion	pass	-	
 value_import_wildcard_givens	pass	-	

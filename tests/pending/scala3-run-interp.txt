@@ -104,7 +104,6 @@ escaped-space	compile-error: invalid escape sequence
 exceptions-2	compile-error: expected an expression, found ';'
 export-in-extension	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 exports	wrong-output
-extra-implicits	compile-error: missing argument for parameter b
 final-fields	wrong-output
 forwarder	compile-error: value getModifiers is not a member of Method
 forwarder-java-package-private	compile-error: test contains Java sources

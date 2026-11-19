@@ -1250,6 +1250,9 @@ pub struct Worker<'a> {
     /// The first ambiguity met by the given search that is under way. A search that fails
     /// because of it reports this instead of a missing instance.
     pub given_ambiguity: Option<String>,
+    /// Whether a macro's splice code is being typed (`type_splice_code`): no `using` list is completed by a search
+    /// there, at any depth, nor narrows an overload's alternatives.
+    pub typing_splice_code: bool,
     /// The `CanEqual` target that a search under way finds only by a definition: the instance
     /// multiversal equality's defaults would grant is not synthesized for it.
     pub defined_equality_only: Option<TypeId>,
@@ -3270,6 +3273,7 @@ impl<'a> Worker<'a> {
             search_only_depth: None,
             implicit_budget: 0,
             given_ambiguity: None,
+            typing_splice_code: false,
             defined_equality_only: None,
             equality_in_progress: Vec::new(),
             failed_givens: Vec::new(),
@@ -3762,6 +3766,7 @@ impl<'a> Worker<'a> {
             search_only_depth: Default::default(),
             implicit_budget: Default::default(),
             given_ambiguity: Default::default(),
+            typing_splice_code: false,
             defined_equality_only: Default::default(),
             equality_in_progress: Default::default(),
             failed_givens: Default::default(),

@@ -1,7 +1,7 @@
 # dotty 3.8.4 (7d4833b6) run, run; compiler/test/dotty/tools/dotc/CompilationTests.scala:179; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
 10838	fail	-	java source: teq reads none
-16405.scala	fail	interp:fail	16405.scala:14:15: type a not found
+16405.scala	fail	interp:fail	16405.scala:14:15: Not found: type a
 1938-2.scala	fail	interp:fail	1938-2.scala:23:12: this is not a case class or enum case
 1938.scala	pass	interp:pass	
 25-1	fail	-	java source: teq reads none
@@ -9,7 +9,7 @@
 26071.scala	pass	interp:pass	
 2772.scala	pass	interp:pass	
 3179.scala	pass	interp:pass	
-9416.scala	fail	interp:fail	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
+9416.scala	fail	interp:fail	9416.scala:18:16: Found:    "foo"
 CollectionTests.scala	fail	interp:fail	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
 ConfManagement.scala	pass	interp:fail	
 Course-2002-01.scala	pass	interp:pass	
@@ -26,7 +26,7 @@ Course-2002-13.scala	pass	interp:fail
 HLists-nonvariant.scala	pass	interp:pass	
 HLists.scala	pass	interp:pass	
 HelloWorld.scala	pass	interp:pass	
-IArrayOps.scala	fail	interp:fail	IArrayOps.scala:245:7: type mismatch: found Int => IArray[(Int, Int)], required Int => IterableOnce[Any]
+IArrayOps.scala	fail	interp:fail	IArrayOps.scala:245:7: Found:    Int => IArray[(Int, Int)]
 Lazies1.scala	pass	interp:pass	
 Lazies2.scala	pass	interp:pass	
 LazyLists.scala	pass	interp:pass	
@@ -40,8 +40,8 @@ Parser.scala	fail	interp:fail	option: -preview (teq has no flag for it)
 Pouring.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError: 'void Pouring$package$.Test$main(java.lang.String[])'
 Pouring2.scala	pass	interp:pass	
 Predef.readLine.scala	pass	interp:fail	
-PrivateAnd.scala	fail	interp:fail	PrivateAnd.scala:4:38: type mismatch: found Int => Int, required Int
-Providers.scala	fail	interp:fail	Providers.scala:55:41: no given instance of type Select[(Int, String, List[Int]), Int] was found for parameter x
+PrivateAnd.scala	fail	interp:fail	PrivateAnd.scala:4:38: Found:    Int => Int
+Providers.scala	fail	interp:fail	Providers.scala:55:41: No given instance of type Select[(Int, String, List[Int]), Int] was found for parameter x of method summon in object Predef
 QueueTest.scala	pass	interp:pass	
 ReplacementMatching.scala	pass	interp:fail	
 ReverseSeqView.scala	pass	interp:pass	
@@ -117,7 +117,7 @@ classof-object.scala	pass	interp:pass
 classof.scala	pass	interp:fail	
 classtags_contextbound.scala	pass	interp:fail	
 cochis-example.scala	pass	interp:pass	
-cochis.scala	fail	interp:fail	cochis.scala:9:27: type ⇒ not found
+cochis.scala	fail	interp:fail	cochis.scala:9:27: Not found: type ⇒
 collection-stacks.scala	pass	interp:pass	
 collections-toSelf.scala	pass	interp:pass	
 collections.scala	fail	interp:fail	collections.scala:23:44: expected ',' or ')', found identifier
@@ -129,7 +129,7 @@ colltest6	fail	interp:fail	CollectionStrawMan6_1.scala:139:9: method isEmpty nee
 comparable-comparator.scala	pass	interp:fail	
 complicatedmatch.scala	pass	interp:pass	
 concat-two-strings.scala	pass	interp:pass	
-config.scala	fail	interp:fail	config.scala:130:42: no given instance of type CanThrow was found for parameter of Possibly[Configured[String]]
+config.scala	fail	interp:fail	config.scala:130:42: No given instance of type CanThrow was found for parameter of Possibly[Configured[String]]
 constValueTuple.scala	pass	interp:pass	
 constant-optimization.scala	pass	interp:pass	
 constructors.scala	pass	interp:pass	
@@ -141,7 +141,7 @@ convertible.scala	fail	interp:fail	option: -preview (teq has no flag for it)
 coop-equality.scala	pass	interp:pass	
 correct-bind.scala	pass	interp:fail	
 creator-applys.scala	fail	interp:fail	creator-applys.scala:126:11: value Object is not a member of lang
-curried-mirror.scala	fail	interp:fail	curried-mirror.scala:7:74: no given instance of type Product{type MirroredType[T] = Prod0} was found for parameter x
+curried-mirror.scala	fail	interp:fail	curried-mirror.scala:7:74: No given instance of type Product{type MirroredType[T] = Prod0} was found for parameter x of method summon in object Predef
 curried-using-threading.scala	pass	interp:pass	
 dead-code-elimination.scala	pass	interp:pass	
 deadlock.scala	timeout	interp:fail	the program: over 45 s
@@ -168,13 +168,13 @@ duplicate-meth.scala	pass	interp:pass
 duration-coarsest.scala	pass	interp:pass	
 dynamic-anyval.scala	pass	interp:pass	
 dynamicDynamicTests.scala	pass	interp:pass	
-eff-dependent.scala	fail	interp:fail	eff-dependent.scala:22:12: type mismatch: found A => (f.Eff) ?=> B, required A => B
+eff-dependent.scala	fail	interp:fail	eff-dependent.scala:36:10: Values of types (CanThrow) ?=> (CanIO) ?=> Int and Int cannot be compared with == or !=
 elidable-noflags.scala	pass	interp:fail	
 empty-array.scala	pass	interp:fail	
 emptypf.scala	pass	interp:pass	
 enrich-gentraversable.scala	crash	interp:fail	teq: signal 6
 enum-Color.scala	pass	interp:pass	
-enum-HList.scala	fail	interp:fail	enum-HList.scala:9:37: type mismatch: found Any, required HLst
+enum-HList.scala	fail	interp:fail	enum-HList.scala:9:37: Found:    Any
 enum-List1.scala	pass	interp:pass	
 enum-List2.scala	pass	interp:pass	
 enum-List2a.scala	pass	interp:pass	
@@ -188,15 +188,15 @@ enum-efficient-collections.scala	pass	interp:fail
 enum-in-trait.scala	pass	interp:pass	
 enum-java	fail	-	java source: teq reads none
 enum-java-scala	fail	-	java source: teq reads none
-enum-nat.scala	fail	interp:fail	enum-nat.scala:22:32: type mismatch: found Any, required (Nat.Zero : Nat) | Succ[?]
+enum-nat.scala	fail	interp:fail	enum-nat.scala:22:32: Found:    Any
 enum-ordinal-java	pass	interp:pass	
 enum-values-order.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
-enum-values.scala	fail	interp:fail	enum-values.scala:66:32: type mismatch: found Color, required AnyRef{def fromOrdinal(ordinal: Int): T}
+enum-values.scala	fail	interp:fail	enum-values.scala:66:32: Found:    Color
 enums-java-compat.scala	fail	interp:fail	enums-java-compat.scala:10:6: object creation impossible, since it has 2 unimplemented members: valueOf, values
 enums-precise.scala	pass	interp:pass	
 enums-serialization-compat.scala	fail	interp:fail	enums-serialization-compat.scala:36:15: expected ')', found '@'
 enums-thunk.scala	pass	interp:pass	
-enums.scala	fail	interp:fail	enums.scala:10:45: not found: Value
+enums.scala	fail	interp:fail	enums.scala:10:45: Not found: Value
 eq-xmethod.scala	pass	interp:pass	
 equality.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: 5.0 ==  
 erased-18.scala	fail	interp:fail	erased-18.scala:7:15: expected ',' or ')', found identifier
@@ -207,13 +207,13 @@ erased-25.scala	fail	interp:fail	erased-25.scala:11:17: 'erased' is not part of 
 erased-26.scala	fail	interp:fail	erased-26.scala:7:25: 'erased' is not part of the supported Scala subset
 erased-7.scala	fail	interp:fail	erased-7.scala:6:11: 'erased' is not part of the supported Scala subset
 erased-inline-product-1.scala	fail	interp:fail	erased-inline-product-1.scala:21:10: No given instance of type ProductOf[(p : (Int, Long))] was found.
-erased-inline-product-2.scala	fail	interp:fail	erased-inline-product-2.scala:17:16: type p not found
+erased-inline-product-2.scala	fail	interp:fail	erased-inline-product-2.scala:17:16: Not found: type p
 erased-inline-product-3.scala	pass	interp:pass	
 erased-inline-vals.scala	fail	interp:fail	erased-inline-vals.scala:9:18: inline value must have a literal constant type
 erased-lambdas.scala	fail	interp:fail	erased-lambdas.scala:6:18: expected ',' or ')', found identifier
 erased-machine-state.scala	fail	interp:fail	erased-machine-state.scala:20:20: 'erased' is not part of the supported Scala subset
 erased-poly-ref.scala	fail	interp:fail	erased-poly-ref.scala:9:11: 'erased' is not part of the supported Scala subset
-errorhandling	fail	interp:fail	Result.scala:45:35: type mismatch: found Err[Any], required Result[*:[T, U], List[E]]
+errorhandling	fail	interp:fail	Result.scala:45:35: Found:    Err[Any]
 eta-extension.scala	pass	interp:pass	
 evaluation-order.scala	pass	interp:pass	
 exc.scala	pass	interp:pass	
@@ -233,7 +233,7 @@ extension-specificity.scala	pass	interp:pass
 extension-specificity2.scala	pass	interp:pass	
 extmethod-overload.scala	pass	interp:pass	
 extmethods2.scala	pass	interp:pass	
-extra-implicits.scala	fail	interp:fail	extra-implicits.scala:14:3: missing argument for parameter b
+extra-implicits.scala	pass	interp:pass	
 final-fields.scala	pass	interp:fail	
 final-var.scala	pass	interp:pass	
 finally.scala	pass	interp:pass	
@@ -252,7 +252,7 @@ fully-abstract-nat-4.scala	fail	interp:fail	fully-abstract-nat-4.scala:20:12: th
 fully-abstract-nat-5.scala	fail	interp:fail	fully-abstract-nat-5.scala:20:12: this is not a case class or enum case
 fully-abstract-nat-6.scala	fail	interp:fail	fully-abstract-nat-6.scala:20:12: this is not a case class or enum case
 fully-abstract-nat-7.scala	fail	interp:fail	fully-abstract-nat-7.scala:20:12: this is not a case class or enum case
-fully-abstract-nat.scala	fail	interp:fail	fully-abstract-nat.scala:27:28: type mismatch: found Any, required ?{ pred: ? }. Note that implicit extension methods cannot be applied because they are ambiguous; both method SuccDeco in class Numbers and method SuccDeco in object Unbounde
+fully-abstract-nat.scala	fail	interp:fail	fully-abstract-nat.scala:27:28: Found:    Any
 function-arity.scala	pass	interp:pass	
 functionXXL.scala	pass	interp:pass	
 future-flatmap-exec-count.scala	pass	interp:fail	
@@ -283,11 +283,11 @@ i10062.scala	pass	interp:pass
 i10068a.scala	pass	interp:pass	
 i10068b.scala	pass	interp:pass	
 i10068c.scala	pass	interp:pass	
-i10068d.scala	fail	interp:fail	i10068d.scala:26:20: type mismatch: found () => it, required SAM_B2
+i10068d.scala	fail	interp:fail	i10068d.scala:26:20: Found:    () => it
 i10082.scala	pass	interp:pass	
 i10178.scala	pass	interp:pass	
 i10285.scala	pass	interp:pass	
-i10511.scala	fail	interp:fail	i10511.scala:27:29: type mismatch: found (t : (Bool.True : Bool)), required Not[(Bool.False : Bool)]
+i10511.scala	fail	interp:fail	i10511.scala:27:29: Found:    (t : (Bool.True : Bool))
 i10527.scala	pass	interp:pass	
 i10724.scala	pass	interp:pass	
 i10846	fail	interp:fail	i10846.scala:19:12: value getReturnType is not a member of Method
@@ -298,7 +298,7 @@ i10889.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.
 i10905.scala	pass	interp:pass	
 i10930.scala	pass	interp:fail	
 i1099.scala	pass	interp:pass	
-i10997.scala	fail	interp:fail	i10997.scala:13:60: no given instance of type Of[(ClassWrapper.this.Qux : Qux)] was found for parameter x
+i10997.scala	fail	interp:fail	i10997.scala:13:60: No given instance of type Of[(ClassWrapper.this.Qux : Qux)] was found for parameter x of method summon in object Predef
 i11008.scala	pass	interp:pass	
 i11008b.scala	fail	interp:fail	i11008b.scala:7:17: a sequence wildcard can only end a sequence pattern
 i11045.scala	pass	interp:pass	
@@ -308,7 +308,7 @@ i11052b.scala	pass	interp:fail
 i11114.scala	fail	interp:fail	i11114.scala:8:17: value apply is not a member of Tuple2
 i11174.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class EnumerateNames$$anon$giujju_505$giujju_1213 cannot be cast to class MainClass (EnumerateNames$$anon$giujju_505$giujju_1213 and MainClass are in unnamed module of lo
 i11174local.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class EnumerateNames$$anon$snqzfh_505$snqzfh_1225$2 cannot be cast to class MainClass (EnumerateNames$$anon$snqzfh_505$snqzfh_1225$2 and MainClass are in unnamed module o
-i11332.scala	fail	interp:fail	i11332.scala:25:20: type mismatch: found AnyRef, required Int
+i11332.scala	fail	interp:fail	i11332.scala:25:20: Found:    AnyRef
 i11367.scala	fail	interp:fail	output: line 1: the .check has 'class C$G has outer fields', the program printed nothing
 i1140	pass	interp:pass	
 i11419.scala	fail	interp:fail	output: line 1: the .check has 'List(x, foo)', the program printed 'List(x)'
@@ -372,9 +372,9 @@ i13228.scala	pass	interp:pass
 i13252a.scala	pass	interp:pass	
 i13252b	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError: 'Star Test$Bar$.star()'
 i13304.scala	pass	interp:pass	
-i13332.scala	fail	interp:fail	i13332.scala:22:81: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
-i13332a.scala	fail	interp:fail	i13332a.scala:17:15: no given instance of type Mirror{type MirroredType[X] = Scope.this.IList[X]; type MirroredMonoType = Scope.this.IList[?]; type MirroredElemTypes <: [_] =>> Tuple} was found for parameter x
-i13332anonprod.scala	fail	interp:fail	i13332anonprod.scala:23:81: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
+i13332.scala	fail	interp:fail	i13332.scala:22:81: No given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x of method summon in object Predef
+i13332a.scala	fail	interp:fail	i13332a.scala:17:15: No given instance of type Mirror{type MirroredType[X] = Scope.this.IList[X]; type MirroredMonoType = Scope.this.IList[?]; type MirroredElemTypes <: [_] =>> Tuple} was found for parameter x of method summon in object Pre
+i13332anonprod.scala	fail	interp:fail	i13332anonprod.scala:23:81: No given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x of method summon in object Predef
 i13332intersection.scala	fail	interp:fail	i13332intersection.scala:230:54: cannot reduce summonFrom with
 i13332shapeless-b.scala	pass	interp:pass	
 i13332shapeless.scala	fail	interp:fail	i13332shapeless.scala:338:29: type argument CListRefl[tl] does not conform to upper bound CList
@@ -405,7 +405,7 @@ i13987.scala	pass	interp:pass
 i14020.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class i14020$package$ cannot be cast to class C (i14020$package$ and C are in unnamed module of loader 'app')
 i14083.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i14127.scala	pass	interp:pass	
-i14150.scala	fail	interp:fail	i14150.scala:67:83: no given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev
+i14150.scala	fail	interp:fail	i14150.scala:67:83: No given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev of given instance mirDeriver in object MirrorNamesDeriver
 i14164.scala	pass	interp:pass	
 i14198.scala	fail	interp:fail	atomic.scala:262:37: String cannot be instantiated
 i14215.scala	pass	interp:pass	
@@ -439,8 +439,8 @@ i15101.scala	pass	interp:pass
 i15190.scala	pass	interp:pass	
 i15199	fail	-	java source: teq reads none
 i15234.scala	fail	interp:fail	i15234.scala:18:10: value fromProduct is not a member of Mirror{type MirroredType = (Nil : Nil); type MirroredMonoType = (Nil : Nil); type MirroredElemTypes <: Tuple}
-i15287.scala	fail	interp:fail	i15287.scala:6:3: not found: f
-i15302a.scala	fail	interp:fail	i15302a.scala:6:28: type mismatch: found *:[Int, *:[bh, bt] & (Int, Int)], required (Int, Int, Int)
+i15287.scala	fail	interp:fail	i15287.scala:6:3: Not found: f
+i15302a.scala	fail	interp:fail	i15302a.scala:6:28: Found:    *:[Int, *:[bh, bt] & (Int, Int)]
 i15302b.scala	pass	interp:pass	
 i15315.scala	pass	interp:pass	
 i15317.scala	pass	interp:pass	
@@ -456,7 +456,7 @@ i15723.scala	pass	interp:pass
 i15725.scala	fail	interp:fail	output: line 1: the .check has '2 meters', the program printed 'ToString@2'
 i1573.scala	pass	interp:pass	
 i15840.scala	fail	interp:fail	i15840.scala:9:32: expected ':', found 'val'
-i15855.scala	fail	interp:fail	i15855.scala:10:57: type mismatch: found () => R, required MyFunction0[R]
+i15855.scala	fail	interp:fail	i15855.scala:10:57: Found:    () => R
 i15913.scala	pass	interp:pass	
 i15943.scala	pass	interp:pass	
 i15988a.scala	pass	interp:pass	
@@ -573,7 +573,7 @@ i2337.scala	pass	interp:pass
 i2337b.scala	pass	interp:pass	
 i23409.scala	pass	interp:pass	
 i23409b.scala	pass	interp:pass	
-i23440.scala	fail	interp:fail	i23440.scala:9:28: type mismatch: found (<error>, <error>) => Unit, required (a : Int, b : String) => Any
+i23440.scala	fail	interp:fail	i23440.scala:9:28: Found:    (<error>, <error>) => Unit
 i23444.scala	pass	interp:fail	
 i23477.scala	pass	interp:pass	
 i23479	fail	-	java source: teq reads none
@@ -583,7 +583,7 @@ i23693.scala	pass	interp:pass
 i23776.scala	pass	interp:pass	
 i23875.scala	pass	interp:pass	
 i23882.scala	fail	interp:fail	i23882.scala:17:13: value getParameterTypes is not a member of Method
-i23897.scala	fail	interp:fail	i23897.scala:19:15: no given instance of type Semigroup[(Int)] was found for parameter s
+i23897.scala	fail	interp:fail	i23897.scala:19:15: No given instance of type Semigroup[(Int)] was found for parameter s of method derived in object Semigroup
 i23901.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class [Ljava.lang.Object; cannot be cast to class [[Ljava.lang.String; ([Ljava.lang.Object; and [[Ljava.lang.String; are in module java.base of loader 'bootstrap')
 i2396.scala	pass	interp:pass	
 i2396b.scala	pass	interp:pass	
@@ -770,8 +770,8 @@ i8035.scala	pass	interp:pass
 i8058.scala	pass	interp:pass	
 i806.scala	pass	interp:pass	
 i8064.scala	pass	interp:pass	
-i8073.scala	fail	interp:fail	i8073.scala:17:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
-i8073b.scala	fail	interp:fail	i8073b.scala:18:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
+i8073.scala	fail	interp:fail	i8073.scala:17:46: No given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x of method summon in object Predef
+i8073b.scala	fail	interp:fail	i8073b.scala:18:46: No given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x of method summon in object Predef
 i8096.scala	pass	interp:pass	
 i8101	fail	-	java source: teq reads none
 i8314.scala	pass	interp:pass	
@@ -796,10 +796,10 @@ i8602	fail	-	java source: teq reads none
 i8661	fail	-	java source: teq reads none
 i8662.scala	pass	interp:pass	
 i8726.scala	pass	interp:pass	
-i876.scala	fail	interp:fail	i876.scala:7:16: type mismatch: found String, required Int
+i876.scala	fail	interp:fail	i876.scala:7:16: Found:    String
 i8903.scala	pass	interp:pass	
 i8931.scala	pass	interp:pass	
-i8977.scala	pass	interp:fail	
+i8977.scala	pass	interp:pass	
 i9011.scala	pass	interp:pass	
 i9056.scala	pass	interp:pass	
 i9068.scala	pass	interp:fail	
@@ -812,7 +812,7 @@ i9341.scala	fail	interp:fail	i9341.scala:3:15: expected an identifier, found 'su
 i9404.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodException: Foo$n430cx_120.makeInt()
 i9439.scala	pass	interp:pass	
 i9473.scala	pass	interp:pass	
-i9482.scala	fail	interp:fail	i9482.scala:47:32: no given instance of type OptManifest[A] was found for parameter evidence$1
+i9482.scala	fail	interp:fail	i9482.scala:47:32: No given instance of type OptManifest[A] was found for a context parameter of method makeWithArr in object Ref
 i9507.scala	pass	interp:pass	
 i9530.scala	fail	interp:fail	i9530.scala:16:7: object creation impossible, since it has 2 unimplemented members: combine, value
 i9881.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.io.NotSerializableException: Config
@@ -829,11 +829,11 @@ implicit-specifity-2.scala	pass	interp:pass
 implicit-specifity.scala	fail	interp:fail	implicit-specifity.scala:20:48: value asInstanceOf is not a member of Show[T]
 implicitFunctionXXL.scala	pass	interp:pass	
 implicitFuns.scala	fail	interp:fail	implicitFuns.scala:22:14: value unary_! is not a member of Boolean
-implicitFuns2.scala	fail	interp:fail	implicitFuns2.scala:32:12: values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
+implicitFuns2.scala	fail	interp:fail	implicitFuns2.scala:32:12: Values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
 implicitMatch.scala	pass	interp:fail	
-implicitShortcut	fail	interp:fail	Test_3.scala:8:10: values of types (C) ?=> Int and Int cannot be compared with == or !=
+implicitShortcut	fail	interp:fail	Test_3.scala:8:10: Values of types (C) ?=> Int and Int cannot be compared with == or !=
 implicitclasses.scala	pass	interp:pass	
-implicits-numeric.scala	fail	interp:fail	implicits-numeric.scala:6:29: no given instance of type AnyVal was found for parameter e
+implicits-numeric.scala	fail	interp:fail	implicits-numeric.scala:6:29: No given instance of type AnyVal was found for parameter e of method implicitly in object Predef
 implicits_poly.scala	pass	interp:pass	
 implied-divergence.scala	pass	interp:pass	
 implied-for.scala	pass	interp:pass	
@@ -868,7 +868,7 @@ is-valid-num.scala	pass	interp:fail
 isInstanceOf-eval.scala	pass	interp:pass	
 iterables.scala	fail	interp:fail	output: line 1: the .check has 'false', the program printed '5,6,7,8,9'
 iterator-concat.scala	pass	interp:pass	
-iterator-from.scala	fail	interp:fail	iterator-from.scala:53:45: not found: Value
+iterator-from.scala	fail	interp:fail	iterator-from.scala:53:45: Not found: Value
 iterator-iterate-lazy.scala	pass	interp:pass	
 iterator3444.scala	pass	interp:pass	
 iterators.scala	pass	interp:pass	
@@ -909,11 +909,11 @@ lists-run.scala	pass	interp:pass
 literals.scala	pass	interp:pass	
 llift.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError: T1$134qwe6_1093: method 'void <init>()' not found
 longmap.scala	pass	interp:pass	
-loops-alt.scala	fail	interp:fail	loops-alt.scala:19:12: no given instance of type Label[Unit] was found for parameter label
+loops-alt.scala	fail	interp:fail	loops-alt.scala:19:12: No given instance of type Label[Unit] was found for parameter label of method break in object boundary
 loops.scala	timeout	interp:fail	the program: over 45 s
-lst	fail	interp:fail	Lst.scala:35:9: expected 'case', found 'var'
+lst	fail	interp:fail	Lst.scala:111:24: new Array takes one type argument
 main-functions.scala	pass	interp:pass	
-manifest-summoning.scala	fail	interp:fail	manifest-summoning.scala:10:32: no given instance of type OptManifest[Array[? <: Int]] was found for parameter evidence$1
+manifest-summoning.scala	fail	interp:fail	manifest-summoning.scala:10:32: No given instance of type OptManifest[Array[? <: Int]] was found for a context parameter of method noManifest
 mapConserve.scala	pass	interp:pass	
 mapValues.scala	pass	interp:pass	
 map_test.scala	pass	interp:fail	
@@ -943,7 +943,7 @@ multi-apply.scala	pass	interp:pass
 mutable-treeset.scala	pass	interp:fail	
 named-patmatch.scala	pass	interp:pass	
 named-patterns.scala	fail	interp:fail	named-patterns.scala:17:12: Person is not a case class, so it cannot be used as a pattern
-named-tuple-ops.scala	fail	interp:fail	named-tuple-ops.scala:40:16: type mismatch: found EmptyTuple, required Drop[(name : String, zip : Int, pop : Int), 3] (in the body of scala.NamedTupleDecomposition.drop)
+named-tuple-ops.scala	fail	interp:fail	named-tuple-ops.scala:40:16: Found:    EmptyTuple
 named-tuple-ordering.scala	pass	interp:fail	
 named-tuples-mirror.scala	fail	interp:fail	named-tuples-mirror.scala:22:58: No given instance of type Mirror.Of[(foo : Int, bla : String)] was found.
 named-tuples-strawman-2.scala	fail	interp:fail	named-tuples-strawman-2.scala:147:41: value asInstanceOf is not a member of NT
@@ -998,7 +998,7 @@ patmat-finally.scala	pass	interp:pass
 patmat-option-named.scala	pass	interp:pass	
 patmat-spec.scala	fail	interp:fail	patmat-spec.scala:29:12: FirstChars is not a case class, so it cannot be used as a pattern
 patmat.scala	pass	interp:pass	
-patmatch-classtag.scala	fail	interp:fail	patmatch-classtag.scala:21:57: no given instance of type ClassTag[CaseDef] was found for parameter e
+patmatch-classtag.scala	fail	interp:fail	patmatch-classtag.scala:21:57: No given instance of type ClassTag[CaseDef] was found for parameter e of method implicitly in object Predef
 pf-sub-cases.scala	fail	interp:fail	pf-sub-cases.scala:4:23: expected '=>', found 'match'
 phantomValueClass.scala	pass	interp:fail	
 pkgobjvals.scala	fail	interp:fail	pkgobjvals.scala:19:11: a singleton type needs a val, a parameter or an object
@@ -1012,7 +1012,7 @@ productElementName.scala	fail	interp:fail	productElementName.scala:43:16: method
 promotion.scala	pass	interp:pass	
 properties-version-string.scala	pass	interp:fail	
 protectedSuper.scala	pass	interp:pass	
-protectedacc.scala	fail	interp:fail	protectedacc.scala:117:43: not found: meth1
+protectedacc.scala	fail	interp:fail	protectedacc.scala:117:43: Not found: meth1
 proxy.scala	pass	interp:fail	
 publicInBinary	fail	interp:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 pure-args-byname-noinline.scala	pass	interp:fail	
@@ -1056,8 +1056,8 @@ scan.scala	pass	interp:pass
 search.scala	pass	interp:fail	
 selectable-new.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodException: selectable$minusnew$package$$anon$1w8ntly_121.name()
 seqlike-kmp.scala	pass	interp:fail	
-serialization-new-legacy.scala	fail	interp:fail	serialization-new-legacy.scala:47:73: not found: Value
-serialization-new.scala	fail	interp:fail	serialization-new.scala:47:73: not found: Value
+serialization-new-legacy.scala	fail	interp:fail	serialization-new-legacy.scala:47:73: Not found: Value
+serialization-new.scala	fail	interp:fail	serialization-new.scala:47:73: Not found: Value
 serialize-stream.scala	pass	interp:fail	
 serialize.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.io.NotSerializableException: scala.runtime.PartialFunctionImpl
 simpleClass.scala	pass	interp:pass	
@@ -1070,8 +1070,8 @@ sort.scala	pass	interp:pass
 sorted-sets-ok.scala	pass	interp:pass	
 spec-self.scala	pass	interp:pass	
 spread-patterns.scala	fail	interp:fail	spread-patterns.scala:12:18: a sequence wildcard can only end a sequence pattern
-spreads-subtyping.scala	fail	interp:fail	spreads-subtyping.scala:7:16: type mismatch: found CharSequence, required Seq[CharSequence] | Array[? <: CharSequence]
-spreads.scala	fail	interp:fail	spreads.scala:18:26: type mismatch: found 1, required Seq[Int] | Array[? <: Int]
+spreads-subtyping.scala	fail	interp:fail	spreads-subtyping.scala:7:16: Found:    CharSequence
+spreads.scala	fail	interp:fail	spreads.scala:18:26: Found:    1
 stable-enum-hashcodes.scala	pass	interp:pass	
 static	pass	interp:pass	
 static-module-method.scala	pass	interp:pass	
@@ -1122,7 +1122,7 @@ t1192.scala	pass	interp:pass
 t1220.scala	pass	interp:pass	
 t12290	fail	-	java source: teq reads none
 t12300	fail	-	java source: teq reads none
-t12348.scala	fail	interp:fail	t12348.scala:11:18: type mismatch: found AnyRef, required Int
+t12348.scala	fail	interp:fail	t12348.scala:11:18: Found:    AnyRef
 t1300.scala	pass	interp:pass	
 t13033.scala	pass	interp:pass	
 t1309.scala	pass	interp:pass	
@@ -1139,7 +1139,7 @@ t1434.scala	pass	interp:pass
 t1466.scala	pass	interp:pass	
 t1500b.scala	pass	interp:pass	
 t1500c.scala	pass	interp:pass	
-t1505.scala	fail	interp:fail	t1505.scala:2:11: not found: Value
+t1505.scala	fail	interp:fail	t1505.scala:2:11: Not found: Value
 t1524.scala	pass	interp:pass	
 t153.scala	pass	interp:pass	
 t1535.scala	pass	interp:pass	
@@ -1160,7 +1160,7 @@ t2027.scala	pass	interp:pass
 t2029.scala	pass	interp:fail	
 t2075.scala	pass	interp:fail	
 t2087-and-2400.scala	pass	interp:pass	
-t2111.scala	fail	interp:fail	t2111.scala:4:28: not found: Value
+t2111.scala	fail	interp:fail	t2111.scala:4:28: Not found: Value
 t2127.scala	pass	interp:pass	
 t2147.scala	pass	interp:pass	
 t216.scala	pass	interp:pass	
@@ -1201,7 +1201,7 @@ t3088.scala	pass	interp:pass
 t3097.scala	pass	interp:fail	
 t3112.scala	pass	interp:pass	
 t3126.scala	fail	interp:fail	t3126.scala:6:9: value unapply is not a member of C
-t3186.scala	fail	interp:fail	t3186.scala:1:59: not found: Value
+t3186.scala	fail	interp:fail	t3186.scala:1:59: Not found: Value
 t3199b.scala	pass	interp:fail	
 t3220-3.scala	fail	interp:fail	t3220-3.scala:42:18: value in backtick quoted identifier is not a member of Literals
 t3232.scala	pass	interp:pass	
@@ -1242,13 +1242,13 @@ t3540.scala	pass	interp:fail
 t3563.scala	pass	interp:pass	
 t3603.scala	pass	interp:pass	
 t3613.scala	pass	interp:fail	
-t3616.scala	fail	interp:fail	t3616.scala:2:13: not found: Value
+t3616.scala	fail	interp:fail	t3616.scala:2:13: Not found: Value
 t3619.scala	pass	interp:pass	
 t363.scala	pass	interp:pass	
 t3645.scala	pass	interp:pass	
 t3651.scala	pass	interp:pass	
 t3670.scala	pass	interp:pass	
-t3687.scala	fail	interp:fail	t3687.scala:1:43: not found: Value
+t3687.scala	fail	interp:fail	t3687.scala:1:43: Not found: Value
 t3699.scala	pass	interp:pass	
 t3702.scala	pass	interp:pass	
 t3714.scala	pass	interp:pass	
@@ -1266,7 +1266,7 @@ t3887.scala	fail	interp:fail	t3887.scala:9:18: expected a pattern, found 'this'
 t3895.scala	pass	interp:pass	
 t3923.scala	pass	interp:pass	
 t3935.scala	pass	interp:pass	
-t3950.scala	fail	interp:fail	t3950.scala:3:18: not found: Value
+t3950.scala	fail	interp:fail	t3950.scala:3:18: Not found: Value
 t3980.scala	pass	interp:pass	
 t3984.scala	pass	interp:fail	
 t3994.scala	pass	interp:pass	
@@ -1302,7 +1302,7 @@ t4536.scala	fail	interp:fail	run: exit 1: or a JavaFX application class must ext
 t4537	pass	interp:pass	
 t4558.scala	pass	interp:pass	
 t4565_1.scala	pass	interp:pass	
-t4570.scala	fail	interp:fail	t4570.scala:2:13: not found: Value
+t4570.scala	fail	interp:fail	t4570.scala:2:13: Not found: Value
 t4577.scala	pass	interp:pass	
 t4582.scala	pass	interp:pass	
 t4592.scala	pass	interp:pass	
@@ -1353,12 +1353,12 @@ t5530.scala	pass	interp:pass
 t5532.scala	pass	interp:pass	
 t5552.scala	pass	interp:pass	
 t5568.scala	fail	interp:fail	output: line 5: the .check has 'class scala.runtime.BoxedUnit', the program printed 'void'
-t5588.scala	fail	interp:fail	t5588.scala:3:15: not found: Value
+t5588.scala	fail	interp:fail	t5588.scala:3:15: Not found: Value
 t5590.scala	pass	interp:fail	
 t5604.scala	pass	interp:pass	
 t5608.scala	pass	interp:pass	
 t5610a.scala	pass	interp:pass	
-t5612.scala	fail	interp:fail	t5612.scala:2:25: not found: Value
+t5612.scala	fail	interp:fail	t5612.scala:2:25: Not found: Value
 t5614.scala	pass	interp:pass	
 t5629.scala	pass	interp:pass	
 t5629b.scala	pass	interp:pass	
@@ -1504,7 +1504,7 @@ t8233-bcode.scala	pass	interp:pass
 t8233.scala	pass	interp:pass	
 t8245.scala	pass	interp:pass	
 t8280.scala	pass	interp:pass	
-t8346.scala	fail	interp:fail	t8346.scala:5:33: not found: Value
+t8346.scala	fail	interp:fail	t8346.scala:5:33: Not found: Value
 t8395.scala	pass	interp:pass	
 t8428.scala	pass	interp:pass	
 t8549b.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
@@ -1535,7 +1535,7 @@ t8933c.scala	pass	interp:pass
 t920.scala	pass	interp:pass	
 t920_1.scala	pass	interp:pass	
 t9400.scala	pass	interp:fail	
-t949.scala	fail	interp:fail	t949.scala:6:20: not found: Value
+t949.scala	fail	interp:fail	t949.scala:6:20: Not found: Value
 t9516.scala	pass	interp:pass	
 t978.scala	pass	interp:pass	
 t9915	fail	-	java source: teq reads none
@@ -1614,7 +1614,7 @@ tupled-function-tupled.scala	fail	interp:fail	tupled-function-tupled.scala:10:13
 tupled-function-untupled.scala	fail	interp:fail	tupled-function-untupled.scala:8:36: () => Int cannot be tupled as Tuple & EmptyTuple => Int
 tuples-empty.scala	pass	interp:pass	
 tuples.scala	pass	interp:fail	
-tuples1.scala	fail	interp:fail	tuples1.scala:83:72: type mismatch: found Concat[X, (y : Y)], required Concat[X, Y]
+tuples1.scala	fail	interp:fail	tuples1.scala:83:72: Found:    Concat[X, (y : Y)]
 tuples1a.scala	pass	interp:pass	
 tuples1b.scala	pass	interp:pass	
 typable.scala	pass	interp:pass	
@@ -1625,8 +1625,8 @@ typeCheckErrors.scala	fail	interp:fail	typeCheckErrors.scala:6:18: not supported
 typealias_overriding.scala	fail	interp:fail	typealias_overriding.scala:17:24: expected an identifier, found 'super'
 typeclass-derivation-doc-example.scala	pass	interp:pass	
 typeclass-derivation1.scala	fail	interp:fail	typeclass-derivation1.scala:23:55: value asInstanceOf is not a member of Cons[T]
-typeclass-derivation2a.scala	fail	interp:fail	typeclass-derivation2a.scala:142:19: type mismatch: found Lst[T], required Lst[T]
-typeclass-derivation2b.scala	fail	interp:fail	typeclass-derivation2b.scala:117:31: type mismatch: found ? <: T, required _
+typeclass-derivation2a.scala	fail	interp:fail	typeclass-derivation2a.scala:142:19: Found:    Lst[T]
+typeclass-derivation2b.scala	fail	interp:fail	typeclass-derivation2b.scala:117:31: Found:    ? <: T
 typeclass-derivation2d.scala	fail	interp:fail	typeclass-derivation2d.scala:87:7: value asInstanceOf is not a member of Lst
 typeclass-derivation3.scala	pass	interp:fail	
 typelevel-numeric.scala	fail	interp:fail	typelevel-numeric.scala:27:14: MathLib is abstract; it cannot be instantiated
@@ -1640,7 +1640,7 @@ unapply.scala	fail	interp:fail	unapply.scala:40:12: wrong number of patterns for
 unapplyArray.scala	pass	interp:pass	
 unboxingBug.scala	pass	interp:pass	
 unchecked-patterns.scala	pass	interp:pass	
-unicodeEscapes.scala	fail	interp:fail	unicodeEscapes.scala:14:36: not found: ida
+unicodeEscapes.scala	fail	interp:fail	unicodeEscapes.scala:14:36: Not found: ida
 uninitialized-field-values.scala	pass	interp:fail	
 unit-lazy-val.scala	pass	interp:fail	
 unit-val.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: field foo not erased
@@ -1695,7 +1695,7 @@ virtpatmat_typed.scala	pass	interp:fail
 virtpatmat_unapply.scala	pass	interp:pass	
 virtpatmat_unapplyseq.scala	pass	interp:fail	
 virtpatmat_valdef.scala	pass	interp:pass	
-weak-conformance.scala	fail	interp:fail	weak-conformance.scala:14:38: type mismatch: found List[Byte | Int], required List[Byte]
+weak-conformance.scala	fail	interp:fail	weak-conformance.scala:14:38: Found:    List[Byte | Int]
 weakconform.scala	pass	interp:pass	
 whitebox-inline.scala	pass	interp:pass	
 wildcard-vals.scala	pass	interp:pass	

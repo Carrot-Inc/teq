@@ -1015,7 +1015,7 @@ impl<'a> Worker<'a> {
         self.push_scope();
         let q = self.fresh_local("quotes", quotes_ty, span);
         self.bind_given(q);
-        let (code, code_ty) = self.type_expr(e, ret.map(|_| required));
+        let (code, code_ty) = self.type_splice_code(e, ret.map(|_| required));
         let code_ty = self.solve_inferred(code_ty);
         self.pop_scope();
         // `Expr`'s variance is its declaration's, which a definition checked before anything
@@ -1040,6 +1040,17 @@ impl<'a> Worker<'a> {
         self.prog.set_type(te, ty);
         self.note_splice(te);
         (te, ty)
+    }
+
+    /// A macro's splice code `e` typed with `typing_splice_code` set: no `using` list is completed by a search in it
+    /// (`type_clause_args_planned`) nor narrows an overload's alternatives (`narrow_by_using_list`), at any depth. The reference takes the one call a splice may make with its arguments
+    /// as written (`Splicer.checkValidMacroBody`: a quoted parameter, a literal, an `inline val`, a quote without
+    /// splices; anything else is a malformed macro), so a short list there is master's refusal, whatever wraps the call.
+    fn type_splice_code(&mut self, e: ExprId, expected: Option<TypeId>) -> (TExprId, TypeId) {
+        let outer = std::mem::replace(&mut self.typing_splice_code, true);
+        let typed = self.type_expr(e, expected);
+        self.typing_splice_code = outer;
+        typed
     }
 
     /// The `Expr` a macro's splice is typed against where the macro returns `ret`: `Expr[Any]`
@@ -1797,7 +1808,7 @@ impl<'a> Worker<'a> {
         // return (`Expr[Any]` of a transparent one) need not conform to it, the expansion does,
         // and an open expected type is left for the expansion to settle.
         let hint = if self.types.has_vars(ret) { None } else { Some(self.splice_code_type(ret)) };
-        let (te, te_ty) = self.type_expr(e, hint);
+        let (te, te_ty) = self.type_splice_code(e, hint);
         let te_ty = self.solve_inferred(te_ty);
         let snap = self.snapshot();
         let fits = te_ty == ERROR || self.is_sub(te_ty, expr_ty);

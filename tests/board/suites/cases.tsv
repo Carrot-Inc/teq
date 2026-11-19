@@ -3307,6 +3307,8 @@ url_encoder	pass	-
 using_conversion_param	pass	-	
 using_default	pass	-	
 using_lambda_argument	pass	-	
+using_list_overloads_narrowed	pass	-	
+using_list_short_searched	pass	-	
 using_search	pass	-	
 util_sorting	pass	-	
 uuid	pass	-	

@@ -7866,6 +7866,15 @@ impl<'a> Worker<'a> {
         // is held), which the parser does not keep apart from `private`.
         let ctor_of = (self.syms.class(c).mods & mods::PRIVATE_CTOR == 0).then_some(c);
         let ctor = self.resolve_clauses(&cls.clauses, Some(existing), bounds_for_ctor, &ids, Some(c), ctor_of);
+        // A case class's first written clause is a plain one (Desugar.scala 758-760, `CaseClassMissingNonImplicitParamList`,
+        // E144; an enum's class case among them, `isCaseClass` at 721), told at its name; a context bound's evidence
+        // clause is not written (its span empty).
+        if (self.syms.class(c).mods & mods::CASE != 0 && kind == ClassKind::Class) || kind == ClassKind::EnumCase {
+            if cls.clauses.iter().find(|cl| cl.span.end > cl.span.start).is_some_and(|cl| cl.is_using) {
+                let at = self.syms.class(c).def.map_or(self.syms.class(c).span, |d| self.cur_ast().def(d).span);
+                self.error_by(crate::source::Group::Typer, at, "A case class must have at least one leading non-implicit parameter list");
+            }
+        }
         if kind == ClassKind::Trait {
             if let Some(p) = cls.clauses.iter().flat_map(|cl| cl.params.iter()).find(|p| {
                 matches!(self.cur_ast().ty(p.ty), TyExpr::ByName(_))

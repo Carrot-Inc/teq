@@ -79,6 +79,7 @@ pub mod id {
     pub const DEPRECATED_ASSIGNMENT_SYNTAX: u16 = 203;
     pub const DEPRECATED_INFIX_NAMED_ARGUMENT_SYNTAX: u16 = 204;
     pub const FORMAT_INTERPOLATION_ERROR: u16 = 209;
+    pub const DEFAULT_SHADOWS_GIVEN: u16 = 220;
     /// 3.10.0's (`IllegalIdentifierID`), past 3.8.4's numbers.
     pub const ILLEGAL_IDENTIFIER: u16 = 230;
     pub const MATCH_IS_NOT_PARTIAL_FUNCTION: u16 = 211;
