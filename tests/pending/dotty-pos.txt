@@ -779,7 +779,6 @@ t7233b.scala	t7233b.scala:3:49: not found: toS
 t7364	java source: teq reads none
 t7532	java source: teq reads none
 t762.scala	t762.scala:2:66: type mismatch: found Bar1.this, required Foo{type T <: Bar1.this.T}
-t7668.scala	t7668.scala:11:28: type mismatch: found (ss.x : Space.this.T), required s.T
 t802.scala	t802.scala:11:30: expected an identifier, found 'super'
 t8046.scala	t8046.scala:19:23: a parent has to be a class or a trait
 t8046b.scala	t8046b.scala:10:23: a parent has to be a class or a trait

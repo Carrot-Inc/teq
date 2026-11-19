@@ -962,7 +962,7 @@ i25716.scala	fail	-	marks: 4 errors where 5 are marked
 i25717.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i25717.scala:4:31 an identifier expected, but string interpolator found; teq's is error i25717.scala:4:31 expected an identifier, found literal
 i2642.scala	fail	-	marks: 4 errors where 6 are marked
 i2672.scala	pass	-	
-i2677.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2677.scala:4:44 Found:    Int; teq's is error i2677.scala:4:40 error overriding method x in trait A of type String: method x of type Int has incompatible type
+i2677.scala	pass	-	
 i2712.scala	fail	-	check: diagnostic 1 of 6: scalac's is error i2712.scala:8:6 <trait> types cannot be lazy; teq's is error i2712.scala:2:3 modifier lazy is not allowed for this definition
 i2730.scala	pass	-	
 i2732.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2732.scala:12:14 Found:    Int => Int; teq's is error i2732.scala:12:14 illegal inheritance: self type Object with A {...} of anonymous class Object with A {...} does not conform to self type B o

@@ -639,7 +639,10 @@ impl<'a> Gen<'a> {
                 if info.kind == SymKind::Def && (concrete && !has_body || !cx.input.reach.funs.get(f as usize).copied().unwrap_or(false) && concrete) {
                     continue;
                 }
-                if concrete && info.kind != SymKind::Def && !given_def {
+                // A trait's constant is the trait's own default getter, no field of the class that mixes
+                // it in (`class_fields`): a concrete method of the trait, as a def with a body is.
+                let trait_constant = info.kind == SymKind::Val && syms.class(b).kind == ClassKind::Trait && self.is_trait_constant(b, m);
+                if concrete && info.kind != SymKind::Def && !given_def && !trait_constant {
                     continue;
                 }
                 let r = self.mref(m);
@@ -647,6 +650,15 @@ impl<'a> Gen<'a> {
             }
         }
         out
+    }
+
+    /// Whether the val `m` of the program's trait `b` is a constant (`constant`): its getter is the trait's
+    /// default method. An inline val is left to its own lowering.
+    fn is_trait_constant(&self, b: ClassId, m: SymId) -> bool {
+        let idx = self.cx.tclass_of[b.idx()];
+        self.cx.input.syms.sym(m).mods & crate::ast::mods::INLINE == 0
+            && idx != u32::MAX
+            && self.cx.input.prog.classes[idx as usize].init.iter().any(|i| matches!(*i, crate::tir::TInit::Field(s, e) if s == m && self.constant(s, e).is_some()))
     }
 
     /// Class `run` of a `@main def run`, with the `main(String[])` the `java` launcher calls.

@@ -25,7 +25,6 @@ cast_array_kinds	output differs
 cats_dispatch_rebuild	error: cannot resolve import: cats not found
 charset_utf8_replacement	output differs
 class_constant_arrays	output differs
-class_constant_kinds	TypeError: Cannot read properties of undefined (reading 'slice')
 class_literal_qualifier	TypeError: Cannot read properties of null (reading '$qname')
 class_pattern_on_library_trait_list_iterator	error: unreachable case: type List[Int] and class ListIterator are unrelated
 class_pattern_on_library_trait_path	error: not supported on JavaScript: method get of java.nio.file.Paths (a Java definition without an implementation in the std's platform lay
@@ -148,7 +147,7 @@ impure_function_alias	error: type ImpureFunction1 not found
 inference_leftovers_retired	TypeError: CanEqual$(...).derived is not a function
 inferred_result_java_enum	error: type mismatch: found (e.d : ElementType), required (ElementType.FIELD : ElementType)
 inferred_result_tracked	error: expected ':', found 'val'
-inferred_result_types	error: error overriding method x in trait B of type Int: method x of type Any has incompatible type
+inferred_result_types	error: Found: Int
 infix_alphanumeric_exempt	error: cannot resolve import: cats not found
 init_field_zero	TypeError: Cannot read properties of undefined (reading 'charCodeAt')
 inline_bodies_scalac_product	error: cannot resolve import: inlinebodies not found

@@ -3967,9 +3967,16 @@ impl<'a> Worker<'a> {
         }
         let untyped_source = !self.in_jar(info.file) && info.def.is_some_and(|d| matches!(self.ast(info.file).def(d).kind, crate::ast::DefKind::Val { ty: None, .. }));
         if untyped_source {
-            return None;
+            // One of no written type is a constant by its signature once its type is known (typing the read asked
+            // for it): its right-hand side's constant type, an overriding one's kept over the inherited type, is read
+            // as a written one is whatever its initialiser's tree (`final val f = {println(3); 3}`), as its field's
+            // elision reads it (`tir::constant_val`). Its type is not asked here: its initialiser is its worker's.
+            if !info.sig.as_ref().is_some_and(|sig| matches!(self.types.get(sig.ret), crate::types::Type::Lit(_))) {
+                return None;
+            }
+        } else {
+            self.sig_of(s);
         }
-        self.sig_of(s);
         let crate::types::Type::Lit(l) = self.types.get(self.syms.sig(s).ret) else { return None };
         Some(match self.types.lit_val(l) {
             crate::types::LitVal::Int(v) => TExpr::Int(v),

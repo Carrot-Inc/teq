@@ -314,7 +314,7 @@ charset_decode_writable	pass	-
 charset_encode_consumes	pass	-	
 charset_utf8_replacement	fail	-	output differs
 class_constant_arrays	fail	-	output differs
-class_constant_kinds	fail	-	TypeError: Cannot read properties of undefined (reading 'slice')
+class_constant_kinds	pass	-	
 class_for_name_arrays	pass	-	
 class_for_name_init	pass	-	
 class_literal_arrays	pass	-	
@@ -918,6 +918,8 @@ files_stream_ops	fail	-	error: not supported on JavaScript: method createDirecto
 files_tree_visitor	fail	-	error: not supported on JavaScript: class SimpleFileVisitor java.nio.file.SimpleFileVisitor (a Java definition without an implementation in
 files_walk_copy	fail	-	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
 final_constant_typearg	pass	-	
+final_val_block_constant_read	pass	-	
+final_val_folded_object_not_initialised	pass	-	
 float_constant_equality	pass	-	
 float_constant_tostring	pass	-	
 float_constants_jdk	pass	-	
@@ -1253,7 +1255,7 @@ inference_nested_lambda	pass	-
 inferred_ctor	pass	-	
 inferred_result_java_enum	fail	-	error: type mismatch: found (e.d : ElementType), required (ElementType.FIELD : ElementType)
 inferred_result_tracked	fail	-	error: expected ':', found 'val'
-inferred_result_types	fail	-	error: error overriding method x in trait B of type Int: method x of type Any has incompatible type
+inferred_result_types	fail	-	error: Found: Int
 infix_alphanumeric_exempt	fail	-	error: cannot resolve import: cats not found
 infix_and_or_method_clauses	pass	-	
 infix_args	pass	-	
@@ -1301,10 +1303,18 @@ inherit_super	pass	-
 inherit_super_any	pass	-	
 inherit_trait_over_class	pass	-	
 inherited_companion_extension	pass	-	
+inherited_constant_read_as_written	pass	-	
+inherited_constant_written_twin	pass	-	
 inherited_extension_two_objects	pass	-	
+inherited_inline_method_result	pass	-	
 inherited_main	pass	-	
 inherited_method_under_two_names_super	pass	-	
+inherited_result_conjunction	pass	-	
+inherited_result_own_parameters	pass	-	
 inherited_storage	pass	-	
+inherited_val_adapted	pass	-	
+inherited_val_trait_bridge	pass	-	
+inherited_val_union_widened	pass	-	
 init_companions	pass	-	
 init_field_zero	fail	-	TypeError: Cannot read properties of undefined (reading 'charCodeAt')
 init_files	pass	-	

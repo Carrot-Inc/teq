@@ -609,17 +609,24 @@ impl<'a> Worker<'a> {
 
     /// `check_expr`, with the type the expression had before it was adapted.
     pub fn check_expr_own(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId) {
+        let (te, own, _) = self.check_expr_own_adapted(e, expected);
+        (te, own)
+    }
+
+    /// `check_expr_own`, with the adapted tree's type too (`adapt_typed`'s): what `typedAheadExpr(rhs, pt).tpe` gives,
+    /// after every adaptation the expected type caused (a numeric widening, a conversion, the discarding into `Unit`).
+    pub fn check_expr_own_adapted(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId, TypeId) {
         let (te, ty) = self.type_expr(e, Some(expected));
         let discards = self.canon(expected) == self.b.t_unit;
         if discards {
             self.warn_discarded(e, te, ty);
         }
         let span = self.cur_ast().expr_span(e);
-        let adapted = self.adapt(te, ty, expected, span);
+        let (adapted, adapted_ty) = self.adapt_typed(te, ty, expected, span);
         if discards {
             self.mark_removed_discard(e, te, adapted);
         }
-        (adapted, ty)
+        (adapted, ty, adapted_ty)
     }
 
     /// A lambda whose body, typed under the result type the expected type gave (`body_ty`, the
@@ -1274,7 +1281,10 @@ impl<'a> Worker<'a> {
         }
         if let Some(widened) = self.widen_numeric(te, act, target) {
             self.note_conversion_layer(te, widened);
-            return (widened, expected);
+            // Under a union the widening is the view to its numeric member (`int2double` under `Double | String`),
+            // whose result is the adapted tree's type.
+            let ty = if matches!(self.types.get(exp_shape), Type::Union(..)) { target } else { expected };
+            return (widened, ty);
         }
         // A literal's narrowing is `convertTo`'s too: by the expected type's class bound (an `Int` or a `Char` alone
         // narrows).

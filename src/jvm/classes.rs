@@ -506,7 +506,7 @@ impl<'a> Gen<'a> {
     /// no field holds it, in its class or a class that mixes its trait in. A top-level val's owner is
     /// its file's module class, a Scala object (`Desugar.packageDef`), where dotty asks the same
     /// (`file_constant`).
-    fn constant(&self, s: SymId, init: TExprId) -> Option<ConstVal> {
+    pub(super) fn constant(&self, s: SymId, init: TExprId) -> Option<ConstVal> {
         let input = &self.cx.input;
         if matches!(input.syms.sym(s).owner, Owner::Package(_)) {
             return self.file_constant(s, init);
@@ -1116,6 +1116,7 @@ impl<'a> Gen<'a> {
             self.super_accessors(tc);
             self.implemented_nested_objects(tc);
             self.emit_inherited_bridges(tc);
+            self.trait_constant_bridges(tc);
             // A case value class's product members are its companion's (`value_class_members`).
             if !(info.value_class && cx.vc_on_companion(c)) {
                 self.product_members(c, is_case || is_case_object, is_value_case, is_object || info.local_module.is_some() || info.inner_object.is_some());
@@ -2619,6 +2620,41 @@ impl<'a> Gen<'a> {
             let m = self.mref(s);
             if !self.cw.has_method(&m.name, &m.desc) {
                 self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &m.name, &m.desc, None);
+            }
+        }
+    }
+
+    /// The bridges of the constants of the traits the class is the first to mix in. A trait's
+    /// constant is the trait's own default getter, of no field of the class (`class_fields`), and
+    /// the members it overrides under another erased signature are bridged in the class, as the
+    /// class's own val's are: dotty's `Bridges` makes no exception for a constant.
+    fn trait_constant_bridges(&mut self, tc: &TClass) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let inherited = self.traits_implemented_above(tc.id);
+        let bases: Vec<ClassId> = syms.class(tc.id).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        for b in bases {
+            let idx = cx.tclass_of[b.idx()];
+            if syms.class(b).kind != ClassKind::Trait || inherited.contains(&b) || idx == u32::MAX {
+                continue;
+            }
+            for init in &cx.input.prog.classes[idx as usize].init {
+                let TInit::Field(s, e) = *init else { continue };
+                // a constant val's getter: an inline val's is left to its own lowering
+                if syms.sym(s).mods & mods::INLINE != 0 || self.constant(s, e).is_none() || syms.sym(s).sig.is_none() {
+                    continue;
+                }
+                let ret = self.sym_type(s);
+                let getter = MRef {
+                    owner: self.this_name.clone(),
+                    owner_is_interface: false,
+                    name: self.field_name(s),
+                    params: Vec::new(),
+                    desc: method_desc(&[], &ret),
+                    ret,
+                    kind: Invoke::Virtual,
+                };
+                self.emit_bridges(s, &getter);
             }
         }
     }

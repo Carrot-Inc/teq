@@ -234,7 +234,7 @@ extension-specificity2.scala	pass	interp:pass
 extmethod-overload.scala	pass	interp:pass	
 extmethods2.scala	fail	interp:fail	extmethods2.scala:5:9: object creation impossible, since def apply(v1: TC): AnyRef in trait Function1 is not defined
 extra-implicits.scala	fail	interp:fail	extra-implicits.scala:14:3: missing argument for parameter b
-final-fields.scala	fail	interp:fail	output: line 5: the .check has '3 2 3 -4', the program printed '-1 2 -3 -4'
+final-fields.scala	pass	interp:fail	
 final-var.scala	pass	interp:pass	
 finally.scala	pass	interp:pass	
 flat-flat-flat.scala	pass	interp:pass	
@@ -491,7 +491,7 @@ i1732.scala	pass	interp:pass
 i1732_1.scala	pass	interp:pass	
 i17332.scala	pass	interp:pass	
 i1748.scala	pass	interp:fail	
-i17549.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Method C.x()Ljava/lang/Object; is abstract
+i17549.scala	pass	interp:pass	
 i17555.scala	pass	interp:pass	
 i17584.scala	pass	interp:pass	
 i17584a.scala	pass	interp:pass	
@@ -1062,7 +1062,7 @@ serialize-stream.scala	pass	interp:fail
 serialize.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.io.NotSerializableException: scala.runtime.PartialFunctionImpl
 simpleClass.scala	pass	interp:pass	
 single-case-expr.scala	fail	interp:fail	single-case-expr.scala:5:29: expected an expression, found 'case'
-singletons.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.NoSuchFieldError: Class Test$ does not have member field 'int y'
+singletons.scala	pass	interp:pass	
 sip23-valueof.scala	pass	interp:pass	
 slice-strings.scala	pass	interp:pass	
 slices.scala	pass	interp:pass	

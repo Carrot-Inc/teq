@@ -1604,7 +1604,7 @@ neg/more-specific.scala	different	{} is not a member of the package
 neg/mt-deskolemize-2.scala	superset	+1 lines: Recursion limit exceeded.
 neg/mt-deskolemize-2b.scala	superset	+1 lines: Recursion limit exceeded.
 neg/mt-deskolemize-2c.scala	superset	+1 lines: Recursion limit exceeded.
-neg/mt-deskolemize-2d.scala	superset	+1 lines: Recursion limit exceeded.
+neg/mt-deskolemize-2d.scala	different	Recursion limit exceeded.
 neg/mt-deskolemize-2f.scala	superset	+1 lines: Recursion limit exceeded.
 neg/mt-deskolemize.scala	superset	+1 lines: Recursion limit exceeded.
 neg/mt-recur.cov.scala	different	Recursion limit exceeded.
@@ -5597,7 +5597,7 @@ pos/t757a.scala	accepts
 pos/t758.scala	accepts	
 pos/t759.scala	accepts	
 pos/t762.scala	rejects	type mismatch
-pos/t7668.scala	rejects	type mismatch
+pos/t7668.scala	accepts	
 pos/t767.scala	accepts	
 pos/t7689.scala	accepts	
 pos/t7690.scala	accepts	

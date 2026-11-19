@@ -28,6 +28,19 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   scalac: `case '{ Field.const[a, tpe]($s) }` against `def const[A, F](selector: Selector ?=> A => F)` binds
   `s: Expr[Selector ?=> a => tpe]`, at any arity, by name and through an alias; it bound `Expr[a => tpe]`, and a
   program that states the hole's type was refused with a type mismatch.
+- A member of no written result type that overrides takes the overridden members' result as scalac gives it, where
+  programs scalac accepts were refused with a type mismatch: a result naming the overridden method's value parameters
+  (`def k(x: Any): x.type` overridden by `def k(y: Any) = y`, a `c.T` of a parameter `c`) reads them as the member's
+  own; the results of every base that declares the member are met (`AnyVal` from one trait and `Any` from another give
+  `AnyVal`); an inline method's body is typed against the inherited result, which its calls take; a final val
+  takes its right-hand side's type as adapted to the inherited one (a numeric widening, a conversion, the discarding
+  into `Unit`: `override final val x = small` of a `Byte` against `def x: Long` is a `Long`), and keeps a constant
+  over the inherited type (`override final val f3 = { println(3); 3 }` against `val f3: Int` is of type `3`).
+  A trait's constant that overrides a member of a wider type (`override final val x = 1` against `def x:
+  Matchable`) is bridged in the class that mixes the trait in, as scalac bridges it, and an object's mirror class
+  forwards its getter (on the JVM the read through the overridden member threw `AbstractMethodError`, a written
+  `final val x: 1 = 1` alike). A final val whose constant a block gives (`final val f = { println(3); 3 }`) is
+  read as that constant in its own class: on the JVM `val g = f + 1` beside it failed with `NoSuchFieldError`.
 - `java.io.PrintStream` is the JDK's class on JavaScript and in the interpreter: an open class over an
   `OutputStream` (`new PrintStream(out)`, with autoFlush, with a `Charset` or a charset's name), with the JDK's
   members: `print` and `println` of each type, `printf` and `format`, `append`, the `write`s, `flush`, `close`,

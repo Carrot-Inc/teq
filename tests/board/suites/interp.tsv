@@ -920,6 +920,8 @@ files_stream_ops	pass	-
 files_tree_visitor	pass	-	
 files_walk_copy	pass	-	
 final_constant_typearg	pass	-	
+final_val_block_constant_read	pass	-	
+final_val_folded_object_not_initialised	pass	-	
 float_constant_equality	pass	-	
 float_constant_tostring	pass	-	
 float_constants_jdk	pass	-	
@@ -1304,10 +1306,18 @@ inherit_super	pass	-
 inherit_super_any	pass	-	
 inherit_trait_over_class	pass	-	
 inherited_companion_extension	pass	-	
+inherited_constant_read_as_written	pass	-	
+inherited_constant_written_twin	pass	-	
 inherited_extension_two_objects	pass	-	
+inherited_inline_method_result	pass	-	
 inherited_main	pass	-	
 inherited_method_under_two_names_super	pass	-	
+inherited_result_conjunction	pass	-	
+inherited_result_own_parameters	pass	-	
 inherited_storage	pass	-	
+inherited_val_adapted	pass	-	
+inherited_val_trait_bridge	pass	-	
+inherited_val_union_widened	pass	-	
 init_companions	pass	-	
 init_field_zero	pass	-	
 init_files	pass	-	

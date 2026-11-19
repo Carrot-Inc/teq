@@ -4500,9 +4500,18 @@ impl<'a> Worker<'a> {
                 let ret = ret.map(|r| if clauses.is_empty() { t.types.unannotated(r) } else { r });
                 t.env.frames.pop();
                 let mut sig = MethodSig { tparams, clauses, ret: ret.unwrap_or(ERROR), declared };
+                // An inline method of no written result that overrides takes the overridden members' result, transparent
+                // or not (Namer.inferredResultType 2259-2260: `inherited` where it exists); its body is typed against it
+                // where the body is typed (`inline_definition`).
+                if ret.is_none() && def.mods & mods::INLINE != 0 && def.mods & mods::INCOMPLETE == 0 && f.body.is_some() {
+                    let partial = Arc::new(sig.clone());
+                    if let Some(inherited) = t.inherited_result_type(sym, &partial) {
+                        sig.ret = inherited;
+                    }
+                }
                 // A macro without a declared result type has the type its splice's `Expr` holds,
                 // against which a call infers its type arguments before the macro runs.
-                if ret.is_none() && def.mods & mods::INLINE != 0 && def.mods & (mods::TRANSPARENT | mods::INCOMPLETE) == 0 {
+                if ret.is_none() && sig.ret == ERROR && def.mods & mods::INLINE != 0 && def.mods & (mods::TRANSPARENT | mods::INCOMPLETE) == 0 {
                     if let Some(body) = f.body.filter(|&b| matches!(t.ast(t.syms.sym(sym).file).expr(b), ast::Expr::Splice(_))) {
                         let _ = body;
                         sig.ret = t.inferred_macro_result(sym, &sig);
@@ -4672,15 +4681,19 @@ impl<'a> Worker<'a> {
         self.shared_write(sym, |w| w.syms.sym_mut(sym).mods &= !mods::IMPLICIT);
     }
 
-    /// The result type of the ancestor member that a member without a declared type overrides,
-    /// seen from the member's class: it is the type scalac gives the member. The member's own
-    /// signature holds its parameters already, with `ERROR` for the result.
+    /// The result type the members a member without a declared type overrides give it, as scalac's `inherited`
+    /// (Namer.inferredResultType 2118-2153): every base class past the member's own, its own non-private member that
+    /// matches the member's signature, whose result is instantiated by the member's own type and value parameters,
+    /// clause by clause (`instantiate(tparams.map(_.typeRef))`, `instantiate(vparams.map(_.termRef))`), and seen from
+    /// the member's class; the results of all those bases met (`tp & iResType`). The member's own signature holds its
+    /// parameters already, with `ERROR` for the result.
     pub(super) fn inherited_result_type(&mut self, sym: SymId, msig: &Arc<MethodSig>) -> Option<TypeId> {
         let (name, is_ext, owner) = {
             let s = self.syms.sym(sym);
             (s.name, s.is_extension, s.owner)
         };
         let Owner::Class(c) = owner else { return None };
+        let mut met: Option<TypeId> = None;
         for i in 1..self.syms.class(c).base_types.len() {
             let b = self.syms.class(c).base_types[i].0;
             let bt = self.base_instance_at(c, i);
@@ -4698,13 +4711,75 @@ impl<'a> Worker<'a> {
                 }
                 let mut ret = self.types.subst(psig.ret, &subst);
                 if self.types.has_paths(ret) {
+                    // The overridden's value parameters are the member's own, by position (a path to `x` in its
+                    // result, `x.type` or `x.T`, is one to the member's parameter of that place).
+                    let pairs: Vec<(SymId, SymId)> = psig
+                        .clauses
+                        .iter()
+                        .zip(&msig.clauses)
+                        .flat_map(|(pc, mc)| pc.params.iter().zip(&mc.params).map(|(p, m)| (p.sym, m.sym)))
+                        .filter(|&(p, m)| p != m)
+                        .collect();
+                    if !pairs.is_empty() {
+                        let own: Vec<(SymId, TypeId)> = pairs.into_iter().map(|(p, m)| (p, self.types.mk(Type::Term(m)))).collect();
+                        ret = self.subst_paths(ret, &own);
+                    }
                     let this = self.this_prefix(c);
                     ret = self.as_seen_from(ret, this, c);
                 }
-                return (ret != ERROR).then_some(ret);
+                // One matching member of each base (`matchingDenotation`); the bases' results met, an erroneous one
+                // leaving the others' as they are.
+                met = match met {
+                    None => Some(ret),
+                    Some(f) if f == ERROR || ret == ERROR || self.is_same(f, ret) => Some(f),
+                    Some(f) => Some(self.glb(f, ret)),
+                };
+                break;
             }
         }
-        None
+        met.filter(|&t| t != ERROR)
+    }
+
+    /// The type of a final val of no written type that overrides, from its right-hand side `e` typed against the
+    /// inherited type `t` and adapted to it (of type `adapted`, after a numeric widening, a conversion, the discarding
+    /// into `Unit`: `typedAheadRhs(pt).tpe`), as scalac's `rhsType` gives it: a constant kept where the adapted tree is one,
+    /// a path's to the constant it stands for too (`widenTermRefExpr`, `case ctp: ConstantType if sym.isInlineVal`),
+    /// converted to the inherited type as a literal typed against it is (`Constant.convertTo`: an `Int` into a `Byte`,
+    /// a `Short` or a `Char` where it fits, into a `Long`, a `Float` or a `Double`); another type widened as an
+    /// inferred one (`widenInferred`), a path's to what it stands for.
+    #[inline(never)]
+    fn inherited_val_type(&mut self, e: TExprId, adapted: TypeId, t: TypeId) -> TypeId {
+        let path = |w: &Self, t: TypeId| matches!(w.types.get(t), Type::Term(_) | Type::Select(..));
+        // The type as typed, before any widening of an inferred type: the constant is looked for there.
+        let typed = self.solve_in(adapted);
+        let typed = if path(self, typed) { self.widen_path(typed) } else { typed };
+        let constant = match self.types.get(typed) {
+            Type::Lit(l) => Some(self.fold_constant_as_typed(e).unwrap_or_else(|| self.types.lit_val(l))),
+            // A literal typed against `Byte`, `Short` or `Char` has its class's type (the narrowed constant, `LitVal`):
+            // its constant is the tree's.
+            _ if !self.widened_constant(e) && [self.b.t_byte, self.b.t_short, self.b.t_char].contains(&self.canon(typed)) => self.fold_constant_as_typed(e),
+            _ => None,
+        };
+        let Some(v) = constant else {
+            let w = self.solve_inferred(adapted);
+            return if path(self, w) { self.widen_path(w) } else { w };
+        };
+        // A constant that does not fit is the mismatch the right-hand side's typing reported: the inherited type.
+        self.constant_into(v, t).map_or(t, |v| self.types.lit(v))
+    }
+
+    /// The constant `v` converted to the type `t`, a literal type's class or a class, as a literal typed against it is
+    /// (`Constant.convertTo`): an `Int` into a `Byte`, a `Short` or a `Char` where it fits (none where it does not),
+    /// into a `Long`, a `Float` or a `Double` (`folded_as`); any other kept.
+    fn constant_into(&mut self, v: LitVal, t: TypeId) -> Option<LitVal> {
+        let target = self.deref(t);
+        let class = self.widen_lit(target);
+        match v {
+            LitVal::Int(i) if class == self.b.t_byte => i8::try_from(i).ok().map(LitVal::Byte),
+            LitVal::Int(i) if class == self.b.t_short => i16::try_from(i).ok().map(LitVal::Short),
+            LitVal::Int(i) if class == self.b.t_char => u16::try_from(i).ok().map(LitVal::Char),
+            _ => Some(self.folded_as(v, t)),
+        }
     }
 
     /// `private` without a qualifier: a `private[scope]` member takes part in overriding.
@@ -5496,6 +5571,16 @@ impl<'a> Worker<'a> {
                 // type is: its value is evaluated and dropped (`Typer.adaptToSubType`, "drop type if prototype is
                 // Unit").
                 Some(t) if self.canon(t) != self.b.t_unit && self.declared_type_inferred(&def.kind) => self.type_inferred_val(b, t).0,
+                // A final val of no written type that overrides (`isInlineVal`: final, not mutable) takes its
+                // right-hand side's type, typed against the inherited one and adapted to it, not the inherited type
+                // itself (Namer.inferredResultType 2226 `typedAheadRhs(pt).tpe`, 2245-2250, 2260-2261). An inline one
+                // is typed as before.
+                Some(t) if matches!(&def.kind, DefKind::Val { ty: None, .. }) && def.mods & mods::FINAL != 0 && def.mods & (mods::MUTABLE | mods::INLINE) == 0 => {
+                    let (e, own, adapted) = self.check_expr_own_adapted(b, t);
+                    body_ty = Some(own);
+                    result_ty = self.inherited_val_type(e, adapted, t);
+                    e
+                }
                 Some(t) => {
                     let (e, own) = self.check_expr_own(b, t);
                     body_ty = Some(own);

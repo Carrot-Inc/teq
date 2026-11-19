@@ -2535,8 +2535,13 @@ impl<'a> Worker<'a> {
         let outer_returns = std::mem::take(&mut self.returns);
         let transparent = def.mods & mods::TRANSPARENT != 0;
         let defaults = self.enter_params(sig, &default_exprs, frame, Some(crate::tir::DefaultOf::Method(sym)), true);
+        // A method of no written result that overrides takes the overridden members' result, and its body is typed
+        // against it (Namer.inferredResultType 2224, 2259-2260).
+        let inherited = if declared { None } else { self.inherited_result_type(sym, &std::sync::Arc::new(sig.clone())).filter(|&t| t != ERROR) };
         let (te, ty) = if declared {
             (self.check_expr(body, sig.ret), sig.ret)
+        } else if let Some(t) = inherited {
+            (self.check_expr(body, t), t)
         } else {
             let (te, ty) = self.type_expr(body, None);
             // A plain one's result is inferred as a definition's (`inferredResultType`'s

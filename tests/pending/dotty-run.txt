@@ -79,7 +79,6 @@ exceptions-2.scala	exceptions-2.scala:233:79: expected an expression, found ';'
 export-in-extension.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 extmethods2.scala	extmethods2.scala:5:9: object creation impossible, since def apply(v1: TC): AnyRef in trait Function1 is not defined
 extra-implicits.scala	extra-implicits.scala:14:3: missing argument for parameter b
-final-fields.scala	output: line 5: the .check has '3 2 3 -4', the program printed '-1 2 -3 -4'
 forwarder-java-package-private	java source: teq reads none
 forwarder.scala	forwarder.scala:19:23: value getModifiers is not a member of Method
 fragables-extension.scala	fragables-extension.scala:11:3: missing parameter type
@@ -177,7 +176,6 @@ i16943.scala	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError
 i17021.ext-java	java source: teq reads none
 i17115.scala	i17115.scala:3:7: object creation impossible, since def apply(v1: A[Tail[Tup]]): A[Tup] in trait Function1 is not defined
 i17255	java source: teq reads none
-i17549.scala	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Method C.x()Ljava/lang/Object; is abstract
 i18150.scala	i18150.scala:4:7: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 i18183.findRef.scala	i18183.findRef.scala:5:10: expected an identifier, found 'this'
 i18183.given.scala	i18183.given.scala:30:30: ambiguous given instances for Foo: foo, foo
@@ -372,7 +370,6 @@ serialization-new-legacy.scala	serialization-new-legacy.scala:47:73: not found: 
 serialization-new.scala	serialization-new.scala:47:73: not found: Value
 serialize.scala	run: exit 1: Exception in thread "main" java.io.NotSerializableException: scala.runtime.PartialFunctionImpl
 single-case-expr.scala	single-case-expr.scala:5:29: expected an expression, found 'case'
-singletons.scala	run: exit 1: Exception in thread "main" java.lang.NoSuchFieldError: Class Test$ does not have member field 'int y'
 spread-patterns.scala	spread-patterns.scala:12:18: a sequence wildcard can only end a sequence pattern
 spreads-subtyping.scala	spreads-subtyping.scala:7:16: type mismatch: found CharSequence, required Seq[CharSequence] | Array[? <: CharSequence]
 spreads.scala	spreads.scala:18:26: type mismatch: found 1, required Seq[Int] | Array[? <: Int]

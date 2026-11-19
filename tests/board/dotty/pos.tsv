@@ -3356,7 +3356,7 @@ t757a.scala	pass	check:pass
 t758.scala	pass	check:pass	
 t759.scala	pass	check:pass	
 t762.scala	fail	check:fail	t762.scala:2:66: type mismatch: found Bar1.this, required Foo{type T <: Bar1.this.T}
-t7668.scala	fail	check:fail	t7668.scala:11:28: type mismatch: found (ss.x : Space.this.T), required s.T
+t7668.scala	pass	check:pass	
 t767.scala	pass	check:pass	
 t7689.scala	pass	check:pass	
 t7690.scala	pass	check:pass	
