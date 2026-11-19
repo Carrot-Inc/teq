@@ -160,7 +160,7 @@ i18059	pass	check:pass
 i18125.scala	pass	check:pass	
 i18125b.scala	pass	check:pass	
 i18155	pass	check:pass	
-i18197a.scala	fail	check:fail	i18197a.scala:5:26: Found:    Expr[Int]
+i18197a.scala	pass	check:pass	
 i18197b	pass	check:pass	
 i18228.scala	fail	check:fail	i18228.scala:11:11: value value is not a member of Expr[Map[String, String]]
 i18228b.scala	fail	check:fail	i18228b.scala:11:11: value value is not a member of Expr[Map[String, String]]

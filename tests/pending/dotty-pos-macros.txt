@@ -48,7 +48,6 @@ i17103c	Macro_1.scala:5:5:None:None: the body of Macro_1$package.testExpr is wit
 i17506	Test_2.scala:5:3: the body of Macro_1$package.regularCurriedCtxFun2BetaReduceTest is withheld from the products of $OUT/pos-macros/i17506/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another
 i17606	Macros_1.scala:8:7:None:None: the body of example.A.impl is withheld from the products of $OUT/pos-macros/i17606/jvm.products (elided: unstated the std's String.newString, which scala-library has under another shape): the TASTy writer's que
 i17610	Macros.scala:7:30: no given instance of type Type[I] was found for parameter evidence$1
-i18197a.scala	i18197a.scala:5:26: type mismatch: found Expr[Int], required Expr[(Int) ?=> Int]
 i18228.scala	i18228.scala:11:11: value value is not a member of Expr[Map[String, String]]
 i18228b.scala	i18228b.scala:11:11: value value is not a member of Expr[Map[String, String]]
 i18353	Macro_1.scala:55:15: value fromTuple is not a member of ProductOf[T]{type MirroredElemTypes = elementTypes}

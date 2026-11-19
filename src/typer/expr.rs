@@ -2109,7 +2109,10 @@ impl<'a> Worker<'a> {
         }
         if let Some(exp) = expected {
             if let Some((ptys, ret)) = self.as_context_function(exp) {
-                if !self.is_contextual_lambda(e) {
+                // A quote pattern's hole is typed against the context function type itself, as the reference exempts a
+                // `SplicePattern` from the contextual closure (Typer 3909-3927): `$s` under a `Selector ?=> A => F`
+                // binds an `Expr[Selector ?=> a => tpe]`.
+                if !self.is_contextual_lambda(e) && !matches!(self.cur_ast().expr(e), ast::Expr::SplicePat(..)) {
                     return self.wrap_context_function(e, exp, &ptys, ret);
                 }
             }

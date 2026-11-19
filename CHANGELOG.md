@@ -7,6 +7,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A quote pattern's hole under a context function parameter binds an `Expr` of that context function type, as under
+  scalac: `case '{ Field.const[a, tpe]($s) }` against `def const[A, F](selector: Selector ?=> A => F)` binds
+  `s: Expr[Selector ?=> a => tpe]`, at any arity, by name and through an alias; it bound `Expr[a => tpe]`, and a
+  program that states the hole's type was refused with a type mismatch.
 - `java.io.PrintStream` is the JDK's class on JavaScript and in the interpreter: an open class over an
   `OutputStream` (`new PrintStream(out)`, with autoFlush, with a `Charset` or a charset's name), with the JDK's
   members: `print` and `println` of each type, `printf` and `format`, `append`, the `write`s, `flush`, `close`,

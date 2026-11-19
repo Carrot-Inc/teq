@@ -2470,6 +2470,7 @@ qualified_final	pass	-
 qualified_private_trait_member	pass	-	
 qualified_this_outer_alias	pass	-	
 quote_class_owner	pass	-	
+quote_hole_context_function_types	pass	-	
 quote_if_kept_across_runs	pass	-	
 quote_keeps_constant_condition	pass	-	
 quote_local_type_before_splice	pass	-	
