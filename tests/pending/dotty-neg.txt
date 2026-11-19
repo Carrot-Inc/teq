@@ -674,7 +674,6 @@ i19320.scala	check: diagnostic 1 of 1: scalac's is error i19320.scala:11:18 Not 
 i19334.scala	marks: 2 errors where 1 are marked: i19334.scala:6:3: too many arguments: expected 0
 i19364.scala	marks: no error where 10 are marked
 i19372.scala	marks: 2 errors where 5 are marked
-i19402.scala	check: diagnostic 1 of 1: scalac's is error i19402.scala:10:13 `using` expected; teq's is error i19402.scala:10:12 expected 'using': the parameters of a given are using clauses
 i19414-desugared.scala	check: diagnostic 1 of 1: scalac's is error i19414-desugared.scala:22:35 No best given instance of type BodySerializer[JsObject] was found for parameter x of method summon in object Predef.; teq's is error i19414-desugared.scala:22:35 ambig
 i19414.scala	marks: 2 errors where 1 are marked: i19414.scala:12:42: type mismatch: found Printer, required Writer[?0]
 i19445.scala	marks: 3 errors where 2 are marked: i19445.scala:12:41: type argument UnwrapTypes[xs] does not conform to upper bound Tuple

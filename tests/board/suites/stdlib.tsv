@@ -1008,9 +1008,11 @@ given_bound_singleton_fallback	pass	-
 given_bounded_wildcard	pass	-	
 given_class_index_export_given	fail	-	output differs
 given_class_index_match_part	fail	-	output differs
+given_comma_parents	pass	-	
 given_conditional_arrow	pass	-	
 given_context_gadt_bounds	pass	-	
 given_context_site_package_member	pass	-	
+given_context_types_clause	pass	-	
 given_conversion_union	pass	-	
 given_default_nested	pass	-	
 given_deferred_declaration	pass	-	
@@ -1120,6 +1122,7 @@ given_memo_strict_equality	pass	-
 given_memo_trait_site_member	pass	-	
 given_memo_var_candidate	pass	-	
 given_memo_walk_levels	pass	-	
+given_named_conditional_type	pass	-	
 given_nested_trait_object	pass	-	
 given_not_given_fallback	pass	-	
 given_not_given_negation	pass	-	

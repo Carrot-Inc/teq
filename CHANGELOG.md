@@ -7,6 +7,32 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A given definition is read as scalac reads Scala 3.6's syntax for it:
+  - A named given's condition written as a type, `given listOrd: [A] => Ord[A] => Ord[List[A]] = ..` or
+    `given f: Int => String = ..`, is a using clause of that one parameter, as an anonymous given's already was.
+    teq read the rest of the line as the given's type, a function type. So it refused programs scalac accepts,
+    and accepted and ran programs scalac refuses (a function on the right side).
+  - A condition in parentheses may be types alone: `given [A, B] => (Semigroup[A], Semigroup[B]) =>
+    Semigroup[(A, B)] = ..`, named or not. teq stopped at a syntax error.
+  - A given's parents may follow a comma, its body after a colon: `given Exp[Tree], Mult[Tree]:`. teq stopped at a
+    syntax error.
+  - An anonymous given object of several parents (that one, and `given P() with Q`) takes every parent's name, as
+    scalac's does (`given_A_B`).
+  - Given types scalac does not read as a given's type are refused as scalac refuses them; teq took them whole:
+    - `given g: C ?=> String = ..`, a context function's type;
+    - `given x: 1 | 2 = ..` (a literal is a type alone there);
+    - a match type without parentheses;
+    - a function type after the syntax before 3.6's parameters (`given f[T]: T => String = ..`);
+    - an infix type in that syntax (`given g[T](using Ord[T]): Int | String`, and `given x: Int | String` under
+      `-source 3.5`).
+    The same types in parentheses are read as before.
+  - A `using` written in a condition, where it is implied (`given x: (using a: A) => C`), is refused as scalac
+    refuses it.
+  - In the syntax before 3.6:
+    - a parameter clause of a given that is no using clause is reported at its first parameter, in scalac's words
+      (`` `using` expected ``);
+    - an anonymous given of one type with nothing after it is refused, as scalac refuses it;
+    - a brace where `with` should open the body is named as one (`'with' expected, but '{' found`).
 - The preference between two givens a search finds, or two that provide the extension method a call selects, follows
   the source version up to 3.5 and from 3.7, as scalac's does:
   - Up to `-source 3.5` (or a `language.3.5` import) the more specific given wins, and two givens whose owners and

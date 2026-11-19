@@ -8,7 +8,7 @@ i2468.scala	pass	check:pass
 i5606.scala	pass	check:pass	
 i6109.scala	pass	check:pass	
 i6858.scala	pass	check:pass	
-i6914.scala	fail	check:fail	i6914.scala:8:9: object creation impossible, since def apply(v1: Liftable[T]): ToExpr[T] in trait Function1 is not defined
+i6914.scala	pass	check:pass	
 i7821.scala	pass	check:pass	
 i8892.scala	fail	check:fail	i8892.scala:14:27: value + is not a member of Any
 i9670.scala	pass	check:pass	

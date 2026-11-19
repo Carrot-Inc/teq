@@ -122,6 +122,9 @@ pub struct Parser<'a> {
     package_blocks: Vec<Ast>,
     /// Set while a parent or the type after `new` is parsed, where braces start a class body.
     template_type: bool,
+    /// Set for the next parameter clause, a given's condition (`termParamClause` with `initialMods = Modifiers(Given)`):
+    /// a using clause without the word, where a written `using` is refused (`parse_given_param_clause`).
+    given_clause: bool,
     /// Set while a self alias's type is parsed (`self: T =>`), whose `=>` ends it: there a type in parentheses is the
     /// type (dotty's `selfType` reads an `infixType`, where `(T)` is `Parens`), never a function's parameters.
     in_self_type: bool,
@@ -243,6 +246,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         pending_defaults: Vec::new(),
         package_blocks: Vec::new(),
         template_type: false,
+        given_clause: false,
         in_self_type: false,
         quote_level: 0,
         quote_pattern: false,

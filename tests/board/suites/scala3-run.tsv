@@ -60,7 +60,7 @@ Tuple-fromProduct	pass	-
 Typeable	fail	-	compile-error: expected '=>', found '['
 UnrolledBuffer	fail	-	compile-error: UnrolledBuffer is not a member of the package
 absoverride	pass	-	
-abstract-givens	fail	-	compile-error: object creation impossible, since given def z[T](using x$1: T): Seq[T] in trait T is not defined
+abstract-givens	fail	-	compile-error: object creation impossible, since def buildCC[B](items: Array[B]): Seq[B] in trait IterableOps is not defined
 adding-growing-set	pass	-	
 annotation-info-not-erased	fail	-	compile-error: test contains Java sources
 anon-mirror-gen-local	fail	-	compile-error: not supported yet: an instance of Seed, a class nested in a class, made outside that class
@@ -243,7 +243,7 @@ extension-override	pass	-
 extension-specificity	pass	-	
 extension-specificity2	pass	-	
 extmethod-overload	pass	-	
-extmethods2	fail	-	compile-error: object creation impossible, since def apply(v1: TC): AnyRef in trait Function1 is not defined
+extmethods2	pass	-	
 extra-implicits	fail	-	compile-error: missing argument for parameter b
 final-fields	fail	-	wrong-output
 final-var	pass	-	
@@ -497,7 +497,7 @@ i16943	fail	-	compile-error: not found: caps
 i17021	pass	-	
 i17021.defs	pass	-	
 i17021.ext-java	fail	-	compile-error: test contains Java sources
-i17115	fail	-	compile-error: object creation impossible, since def apply(v1: A[Tail[Tup]]): A[Tup] in trait Function1 is not defined
+i17115	fail	-	compile-error: no given instance of type A[(String, String, String)] was found for parameter x
 i17255	fail	-	compile-error: test contains Java sources
 i17317	pass	-	
 i17317-b	pass	-	
@@ -783,7 +783,7 @@ i7675	pass	-
 i7677	pass	-	
 i768	pass	-	
 i7783	pass	-	
-i7788	fail	-	compile-error: value fold is not a member of Show[B]
+i7788	fail	-	compile-error: type mismatch: found (<error>, <error>) => String, required Show[(A, B)]
 i7798	pass	-	
 i7843	fail	-	run-error: Node.js v25.9.0
 i7868	fail	-	compile-error: no given instance of type ValueOf[S[0]] was found for parameter x
@@ -854,7 +854,7 @@ implicit-alias	fail	-	compile-error: local givens cannot take parameters
 implicit-disambiguation	pass	-	
 implicit-functors	pass	-	
 implicit-functors2	pass	-	
-implicit-specifity	fail	-	compile-error: expected ':', found ','
+implicit-specifity	fail	-	compile-error: value asInstanceOf is not a member of Show[T]
 implicit-specifity-2	pass	-	
 implicitFunctionXXL	pass	-	
 implicitFuns	fail	-	compile-error: value unary_! is not a member of Boolean
@@ -874,7 +874,7 @@ indexedSeq	pass	-
 indexedSeq-apply	pass	-	
 infiniteloop	pass	-	
 infix	pass	-	
-inline-numeric	fail	-	compile-error: expected end of statement, found ','
+inline-numeric	fail	-	compile-error: value toFloatOption is not a member of String
 inline-override	pass	-	
 inline-override-num	pass	-	
 inline-param-semantics	pass	-	
@@ -978,7 +978,7 @@ llift	fail	-	run-error: Error: AssertionError: assertion failed
 longmap	pass	-	
 loops	fail	-	compile-error: boundary is not a member of the package
 loops-alt	fail	-	compile-error: boundary is not a member of the package
-lst	fail	-	compile-error: expected 'case', found 'var'
+lst	fail	-	compile-error: object creation impossible, since def buildCC[B](items: Array[B]): Iterable[B] in trait IterableOps is not defined
 main-functions	pass	-	
 manifest-summoning	fail	-	compile-error: NoManifest is not a member of the package
 mapConserve	pass	-	
@@ -1492,7 +1492,7 @@ t5729	pass	-
 t5733	pass	-	
 t5830	pass	-	
 t5856	pass	-	
-t5857	fail	-	run-error: Error: AssertionError: assertion failed: 11628
+t5857	fail	-	run-error: Error: AssertionError: assertion failed: 8972
 t5866	fail	-	wrong-output
 t5867	fail	-	compile-error: UnrolledBuffer is not a member of the package
 t5879	fail	-	compile-error: value merged is not a member of HashMap[Int, String]
@@ -1657,7 +1657,7 @@ t949	fail	-	compile-error: type Enumeration not found
 t9516	pass	-	
 t978	pass	-	
 t9915	fail	-	compile-error: test contains Java sources
-tagless	fail	-	compile-error: expected end of statement, found ','
+tagless	pass	-	
 tailrec-return	fail	-	compile-error: Cannot rewrite recursive call: it is not in tail position
 takeAndDrop	pass	-	
 targetName	pass	-	

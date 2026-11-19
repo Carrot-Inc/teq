@@ -135,7 +135,7 @@ pattern_cons_extractor	fail	-	< 1
 pattern_mirror_typer_base	fail	-	< The `--offline` option is experimental
 plain_class_dollar_name	fail	-	< Foo(1)
 poly_override_lower_bound	fail	-	< scalac 3.8.4: rejected, 2 error(s)
-primitive_eq_selected	fail	-	< false
+primitive_eq_selected	pass	-	
 products_alias_operand_operator	pass	-	
 products_array_wildcard_pattern_pickle	pass	-	
 products_bundle_accessor_member_order	pass	-	
@@ -244,7 +244,7 @@ trait_param_override_values	fail	-	< 1 1
 treeset_own_collection	fail	-	< TreeSet(2, 3) TreeSet(2, 3) TreeSet(2, 3)
 try_handler_shape	fail	-	< bind ex$, val $N$
 tuple_cast_runtime_size	fail	-	< 3
-union_alias_conversion_receiver	fail	-	< List((opening,1), (middlegame,1), (endgame,1))
+union_alias_conversion_receiver	pass	-	
 unit_as_any_print	fail	-	< ()
 unreducible_application_in_inferred_type	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 unresolved_nested_value_pattern	fail	-	< scalac 3.8.4: rejected, 1 error(s)
@@ -253,6 +253,7 @@ unresolved_pattern_reachability_second	fail	-	< scalac 3.8.4: rejected, 1 error(
 unresolved_selections_interpolated	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 unresolved_stable_pattern	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 unresolved_stable_pattern_retained_argument	fail	-	< scalac 3.8.4: rejected, 1 error(s)
+using_by_name_summoned	fail	-	< 3
 view_ambiguity_alike_refs_disambiguated	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 view_conversion_ambiguity_at_qualifier	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 view_mismatch_select_qualifier_position	fail	-	< scalac 3.8.4: rejected, 4 error(s)

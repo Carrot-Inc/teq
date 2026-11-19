@@ -40,7 +40,7 @@ Tuple-fromProduct.scala	pass	lean:pass
 Typeable.scala	fail	lean:fail	Typeable.scala:45:29: expected '=>', found '['
 UnrolledBuffer.scala	pass	lean:fail	
 absoverride.scala	pass	lean:pass	
-abstract-givens.scala	fail	lean:fail	abstract-givens.scala:6:8: object creation impossible, since given def z[T](using x$1: T): Seq[T] in trait T is not defined
+abstract-givens.scala	pass	lean:fail	
 adding-growing-set.scala	fail	lean:pass	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 anon-mirror-gen-local.scala	fail	lean:fail	anon-mirror-gen-local.scala:85:47: not supported yet: an instance of Seed, a class nested in a class, made outside that class
 applydynamic_sip.scala	pass	lean:pass	
@@ -193,7 +193,7 @@ extension-override.scala	pass	lean:pass
 extension-specificity.scala	pass	lean:pass	
 extension-specificity2.scala	pass	lean:pass	
 extmethod-overload.scala	pass	lean:pass	
-extmethods2.scala	fail	lean:fail	extmethods2.scala:5:9: object creation impossible, since def apply(v1: TC): AnyRef in trait Function1 is not defined
+extmethods2.scala	pass	lean:pass	
 extra-implicits.scala	fail	lean:fail	extra-implicits.scala:14:3: missing argument for parameter b
 final-fields.scala	fail	lean:fail	output: line 5: the .check has '3 2 3 -4', the program printed '-1 -2 -3 -4'
 final-var.scala	pass	lean:pass	
@@ -416,7 +416,7 @@ i16879.scala	pass	lean:pass
 i16943.scala	fail	lean:fail	run: exit 1: NotImplementedError [scala.NotImplementedError]: an implementation is missing
 i17021.defs.scala	pass	lean:pass	
 i17021.scala	pass	lean:pass	
-i17115.scala	fail	lean:fail	i17115.scala:3:7: object creation impossible, since def apply(v1: A[Tail[Tup]]): A[Tup] in trait Function1 is not defined
+i17115.scala	fail	lean:fail	i17115.scala:7:48: No given instance of type A[(String, String, String)] was found for parameter x of method summon in object Predef
 i17317-b.scala	pass	lean:pass	
 i17317.scala	pass	lean:pass	
 i1732.scala	pass	lean:pass	
@@ -642,7 +642,7 @@ i7675.scala	pass	lean:pass
 i7677.scala	pass	lean:pass	
 i768.scala	fail	lean:fail	output: line 1: the .check has 'WrappedVarArgs(a, bc)', the program printed 'ArraySeq(a, bc)'
 i7783.scala	pass	lean:pass	
-i7788.scala	fail	lean:fail	i7788.scala:8:3: value fold is not a member of Show[B]
+i7788.scala	fail	lean:fail	i7788.scala:9:64: Found:    (<error>, <error>) => String
 i7798.scala	pass	lean:pass	
 i7868.scala	fail	lean:fail	i7868.scala:6:22: no given instance of type ValueOf[S[0]] was found for parameter x
 i789.scala	pass	lean:pass	
@@ -702,7 +702,7 @@ implicit-disambiguation.scala	pass	lean:pass
 implicit-functors.scala	pass	lean:pass	
 implicit-functors2.scala	pass	lean:pass	
 implicit-specifity-2.scala	pass	lean:pass	
-implicit-specifity.scala	fail	lean:fail	implicit-specifity.scala:34:33: expected ':', found ','
+implicit-specifity.scala	fail	lean:fail	implicit-specifity.scala:20:48: value asInstanceOf is not a member of Show[T]
 implicitFunctionXXL.scala	pass	lean:pass	
 implicitFuns2.scala	fail	lean:fail	implicitFuns2.scala:32:12: values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
 implicitMatch.scala	pass	lean:fail	
@@ -720,7 +720,7 @@ indexedSeq-apply.scala	pass	lean:pass
 indexedSeq.scala	pass	lean:pass	
 infiniteloop.scala	pass	lean:pass	
 infix.scala	pass	lean:pass	
-inline-numeric	fail	lean:fail	Fractional.scala:20:55: expected end of statement, found ','
+inline-numeric	fail	lean:fail	Ordering.scala:25:46: Found:    AnyRef
 inline-override-num.scala	pass	lean:pass	
 inline-override.scala	pass	lean:pass	
 inline-param-semantics.scala	pass	lean:pass	
@@ -1309,7 +1309,7 @@ t920_1.scala	pass	lean:pass
 t949.scala	fail	lean:fail	t949.scala:6:20: not found: Value
 t9516.scala	pass	lean:pass	
 t978.scala	pass	lean:pass	
-tagless.scala	fail	lean:fail	tagless.scala:86:18: expected end of statement, found ','
+tagless.scala	fail	lean:fail	output: line 7: the .check has 'tf1Tree = Node(Add,WrappedVarArgs(Node(Lit,WrappedVarArgs(Leaf(8))), Node(Neg,WrappedVarArgs(Node(Add,WrappedVarArgs(Node(Lit,WrappedVarArgs(Leaf(1))), Node(Lit,WrappedVarArgs(Leaf(2)))))))))', the program pr
 tailrec-return.scala	fail	lean:fail	tailrec-return.scala:4:7: Cannot rewrite recursive call: it is not in tail position
 takeAndDrop.scala	pass	lean:pass	
 targetName-separate	pass	lean:pass	

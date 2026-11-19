@@ -62,7 +62,7 @@ i15503b.scala	pass	-
 i15503c.scala	pass	-	
 i15503d.scala	fail	-	marks: 23 warnings where 20 are marked
 i15503e.scala	pass	-	
-i15503f.scala	fail	-	marks: an error where warnings are marked: i15503f.scala:38:21: expected ':', found '['
+i15503f.scala	fail	-	marks: 7 warnings where 9 are marked
 i15503g.scala	fail	-	marks: 6 warnings where 7 are marked
 i15503h.scala	pass	-	
 i15503i.scala	fail	-	check: diagnostic 11 of 37: scalac's is warning i15503i.scala:53:10 unused explicit parameter; teq's is warning i15503i.scala:279:22 unused import

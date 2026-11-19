@@ -55,7 +55,7 @@ Tuple-fromProduct.scala	fail	interp:pass	run: exit 1: Exception in thread "main"
 Typeable.scala	fail	interp:fail	Typeable.scala:45:29: expected '=>', found '['
 UnrolledBuffer.scala	pass	interp:fail	
 absoverride.scala	pass	interp:fail	
-abstract-givens.scala	fail	interp:fail	abstract-givens.scala:6:8: object creation impossible, since given def z[T](using x$1: T): Seq[T] in trait T is not defined
+abstract-givens.scala	pass	interp:fail	
 adding-growing-set.scala	pass	interp:pass	
 annotation-info-not-erased	fail	-	java source: teq reads none
 anon-mirror-gen-local.scala	fail	interp:fail	anon-mirror-gen-local.scala:85:47: not supported yet: an instance of Seed, a class nested in a class, made outside that class
@@ -232,7 +232,7 @@ extension-override.scala	pass	interp:pass
 extension-specificity.scala	pass	interp:pass	
 extension-specificity2.scala	pass	interp:pass	
 extmethod-overload.scala	pass	interp:pass	
-extmethods2.scala	fail	interp:fail	extmethods2.scala:5:9: object creation impossible, since def apply(v1: TC): AnyRef in trait Function1 is not defined
+extmethods2.scala	pass	interp:pass	
 extra-implicits.scala	fail	interp:fail	extra-implicits.scala:14:3: missing argument for parameter b
 final-fields.scala	pass	interp:fail	
 final-var.scala	pass	interp:pass	
@@ -483,7 +483,7 @@ i16943.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.
 i17021.defs.scala	pass	interp:pass	
 i17021.ext-java	fail	-	java source: teq reads none
 i17021.scala	pass	interp:pass	
-i17115.scala	fail	interp:fail	i17115.scala:3:7: object creation impossible, since def apply(v1: A[Tail[Tup]]): A[Tup] in trait Function1 is not defined
+i17115.scala	fail	interp:fail	i17115.scala:7:48: No given instance of type A[(String, String, String)] was found for parameter x of method summon in object Predef
 i17255	fail	-	java source: teq reads none
 i17317-b.scala	pass	interp:pass	
 i17317.scala	pass	interp:pass	
@@ -753,7 +753,7 @@ i7675.scala	pass	interp:pass
 i7677.scala	pass	interp:pass	
 i768.scala	pass	interp:pass	
 i7783.scala	pass	interp:pass	
-i7788.scala	fail	interp:fail	i7788.scala:8:3: value fold is not a member of Show[B]
+i7788.scala	fail	interp:fail	i7788.scala:9:64: Found:    (<error>, <error>) => String
 i7798.scala	pass	interp:pass	
 i7843.scala	pass	interp:fail	
 i7868.scala	fail	interp:fail	i7868.scala:6:22: No singleton value available for S[0]; eligible singleton types for `ValueOf` synthesis include literals and stable paths.
@@ -826,7 +826,7 @@ implicit-disambiguation.scala	pass	interp:pass
 implicit-functors.scala	pass	interp:pass	
 implicit-functors2.scala	pass	interp:pass	
 implicit-specifity-2.scala	pass	interp:pass	
-implicit-specifity.scala	fail	interp:fail	implicit-specifity.scala:34:33: expected ':', found ','
+implicit-specifity.scala	fail	interp:fail	implicit-specifity.scala:20:48: value asInstanceOf is not a member of Show[T]
 implicitFunctionXXL.scala	pass	interp:pass	
 implicitFuns.scala	fail	interp:fail	implicitFuns.scala:22:14: value unary_! is not a member of Boolean
 implicitFuns2.scala	fail	interp:fail	implicitFuns2.scala:32:12: values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
@@ -845,7 +845,7 @@ indexedSeq-apply.scala	pass	interp:pass
 indexedSeq.scala	pass	interp:pass	
 infiniteloop.scala	pass	interp:pass	
 infix.scala	pass	interp:pass	
-inline-numeric	fail	interp:fail	Fractional.scala:20:55: expected end of statement, found ','
+inline-numeric	fail	interp:fail	Ordering.scala:25:46: Found:    AnyRef
 inline-override-num.scala	pass	interp:pass	
 inline-override.scala	pass	interp:pass	
 inline-param-semantics.scala	pass	interp:pass	
@@ -1539,7 +1539,7 @@ t949.scala	fail	interp:fail	t949.scala:6:20: not found: Value
 t9516.scala	pass	interp:pass	
 t978.scala	pass	interp:pass	
 t9915	fail	-	java source: teq reads none
-tagless.scala	fail	interp:fail	tagless.scala:86:18: expected end of statement, found ','
+tagless.scala	pass	interp:pass	
 tailrec-return.scala	fail	interp:fail	tailrec-return.scala:4:7: Cannot rewrite recursive call: it is not in tail position
 takeAndDrop.scala	pass	interp:pass	
 targetName-interop	fail	-	java source: teq reads none

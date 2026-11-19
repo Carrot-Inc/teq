@@ -1010,9 +1010,11 @@ given_bound_singleton_fallback	pass	-
 given_bounded_wildcard	pass	-	
 given_class_index_export_given	fail	-	< 13
 given_class_index_match_part	fail	-	< 13
+given_comma_parents	pass	-	
 given_conditional_arrow	pass	-	
 given_context_gadt_bounds	pass	-	
 given_context_site_package_member	pass	-	
+given_context_types_clause	pass	-	
 given_conversion_union	pass	-	
 given_default_nested	pass	-	
 given_deferred_declaration	pass	-	
@@ -1039,6 +1041,8 @@ given_enum_value_singleton_head	pass	-
 given_export_by_givenness	pass	-	
 given_extension_context_chain	pass	-	
 given_extension_levels	pass	-	
+given_extension_preference_prefix_35	pass	-	
+given_extension_preference_prefix_implicits	pass	-	
 given_extension_prefix	pass	-	
 given_fits_abstract_member	pass	-	
 given_fits_gadt_branch	pass	-	
@@ -1120,6 +1124,7 @@ given_memo_strict_equality	pass	-
 given_memo_trait_site_member	pass	-	
 given_memo_var_candidate	pass	-	
 given_memo_walk_levels	pass	-	
+given_named_conditional_type	pass	-	
 given_nested_trait_object	pass	-	
 given_not_given_fallback	pass	-	
 given_not_given_negation	pass	-	
@@ -1131,6 +1136,9 @@ given_object_module	pass	-
 given_object_publication	pass	-	
 given_object_publication_super	cannot run	-	the JVM's platform
 given_object_publication_super_js	pass	-	
+given_object_several_parents_generic_owner	pass	-	
+given_object_several_parents_mixed	fail	-	< 3.6: 12; default: 12
+given_object_several_parents_unported	pass	-	
 given_object_singleton_reference	pass	-	
 given_one_symbol_two_receivers_by_type	pass	-	
 given_opaque_scope_prefix	pass	-	
@@ -1146,6 +1154,8 @@ given_patterns	pass	-
 given_poly_member_def	pass	-	
 given_polymorphic_def	pass	-	
 given_pref_gadt_local_object	pass	-	
+given_preference_default_source	pass	-	
+given_preference_old_source	pass	-	
 given_ranked_abstract_member	pass	-	
 given_ranked_seen_from_receiver	pass	-	
 given_ranking_of_one_pair_for_many_targets	pass	-	

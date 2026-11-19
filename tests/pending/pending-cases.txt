@@ -108,7 +108,6 @@ pattern_cons_extractor	< 1
 pattern_mirror_typer_base	< The `--offline` option is experimental
 plain_class_dollar_name	< Foo(1)
 poly_override_lower_bound	< scalac 3.8.4: rejected, 2 error(s)
-primitive_eq_selected	< false
 products_extension_export_inline_getter	< 235
 products_super_getter_after_using_clause	< 45,111u9
 pure_bound_sibling_parameter	< 1
@@ -172,7 +171,6 @@ trait_param_override_values	< 1 1
 treeset_own_collection	< TreeSet(2, 3) TreeSet(2, 3) TreeSet(2, 3)
 try_handler_shape	< bind ex$, val $N$
 tuple_cast_runtime_size	< 3
-union_alias_conversion_receiver	< List((opening,1), (middlegame,1), (endgame,1))
 unit_as_any_print	< ()
 unreducible_application_in_inferred_type	< scalac 3.8.4: rejected, 1 error(s)
 unresolved_nested_value_pattern	< scalac 3.8.4: rejected, 1 error(s)
@@ -181,6 +179,7 @@ unresolved_pattern_reachability_second	< scalac 3.8.4: rejected, 1 error(s)
 unresolved_selections_interpolated	< scalac 3.8.4: rejected, 1 error(s)
 unresolved_stable_pattern	< scalac 3.8.4: rejected, 1 error(s)
 unresolved_stable_pattern_retained_argument	< scalac 3.8.4: rejected, 1 error(s)
+using_by_name_summoned	< 3
 view_ambiguity_alike_refs_disambiguated	< scalac 3.8.4: rejected, 1 error(s)
 view_conversion_ambiguity_at_qualifier	< scalac 3.8.4: rejected, 1 error(s)
 view_mismatch_select_qualifier_position	< scalac 3.8.4: rejected, 4 error(s)

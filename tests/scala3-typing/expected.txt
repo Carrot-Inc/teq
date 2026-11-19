@@ -72,7 +72,7 @@ neg/OpaqueEscape.scala	superset	+1 lines: {} needs to be abstract
 neg/OrType.scala	same	
 neg/SummonFrom.scala	same	
 neg/abstract-givens-new.scala	superset	+3 lines: This defines an abstract given, which is no longer supported. Use a `deferred` given instead.	--source future --language experimental.modularity
-neg/abstract-givens.scala	superset	+1 lines: given instance y cannot override final member given instance y in trait T
+neg/abstract-givens.scala	same	
 neg/abstract-inline-val.scala	subset	1/2 lines
 neg/abstract-override.scala	same	
 neg/abstract-tracked-1.scala	syntax	expected end of statement, found {}
@@ -510,7 +510,7 @@ neg/i13487.scala	same
 neg/i13497.scala	same	
 neg/i13513.scala	same	
 neg/i13570.scala	same	
-neg/i13580.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
+neg/i13580.scala	superset	+1 lines: `using` is already implied here, should not be given explicitly	--source future --language experimental.modularity
 neg/i13701.scala	accepts	
 neg/i13703.scala	same	
 neg/i13757-match-type-anykind.scala	std	AnyKind
@@ -787,7 +787,7 @@ neg/i19328conversion.scala	same
 neg/i19334.scala	same	
 neg/i19364.scala	accepts	
 neg/i19372.scala	subset	2/5 lines
-neg/i19402.scala	syntax	expected 'using': the parameters of a given are using clauses
+neg/i19402.scala	same	
 neg/i19413.scala	same	
 neg/i19414-desugared.scala	same	
 neg/i19414.scala	superset	+1 lines: type mismatch
@@ -2198,7 +2198,7 @@ pos/bigint.scala	accepts
 pos/blockescapes.scala	accepts	
 pos/boundary-variations.scala	rejects	{} is not a member of the package
 pos/bounds.scala	accepts	
-pos/bson	syntax	expected {}, found {}	--source 3.5
+pos/bson	rejects	value {} is not a member of {}	--source 3.5
 pos/bubbleUpNothing.scala	accepts	
 pos/builders.scala	accepts	
 pos/byNameVarargs.scala	accepts	
@@ -2252,7 +2252,7 @@ pos/cls.scala	accepts
 pos/cls1.scala	accepts	
 pos/clsrefine.scala	accepts	
 pos/collectGenericCC.scala	rejects	no given instance
-pos/combine.scala	syntax	expected {}, found {}
+pos/combine.scala	accepts	
 pos/comma-separated.scala	accepts	
 pos/comp-rec-test.scala	accepts	
 pos/companions.scala	accepts	
@@ -2431,7 +2431,7 @@ pos/given-loop-prevention.scala	accepts		--source 3.4
 pos/given-owner-disambiguate.scala	accepts	
 pos/given-pattern.scala	rejects	missing argument for parameter {}
 pos/given-priority.scala	accepts	
-pos/given-syntax.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
+pos/given-syntax.scala	std	is	--source future --language experimental.modularity
 pos/givenFallback.scala	rejects	type mismatch
 pos/givenIn.scala	accepts	
 pos/gosh.scala	accepts	
@@ -2903,7 +2903,7 @@ pos/i15184.scala	accepts
 pos/i15188.scala	oos	extractors
 pos/i15188b.scala	oos	extractors
 pos/i15216.scala	accepts	
-pos/i15264.scala	rejects	type mismatch
+pos/i15264.scala	accepts	
 pos/i15274.orig.scala	accepts	
 pos/i15274.scala	accepts	
 pos/i15289.scala	accepts	
@@ -3161,7 +3161,7 @@ pos/i18163.orig.scala	accepts
 pos/i18163.scala	accepts	
 pos/i18175.scala	syntax	expected {}, found {}
 pos/i18183.migration.scala	accepts		--source 3.0-migration
-pos/i18211.scala	syntax	expected {}, found {}
+pos/i18211.scala	std	Drop
 pos/i18226.scala	accepts	
 pos/i18226a.scala	accepts	
 pos/i18234.scala	syntax	expected {}, found {}
@@ -3392,9 +3392,9 @@ pos/i21303a	oos	java
 pos/i21319	oos	java
 pos/i21320a.scala	accepts	
 pos/i21320b.scala	accepts	
-pos/i21352a	rejects	type mismatch	--source 3.5
+pos/i21352a	accepts		--source 3.5
 pos/i21352b.scala	rejects	ambiguous given instances
-pos/i21352c.scala	syntax	expected {}, found {}
+pos/i21352c.scala	accepts	
 pos/i21360.scala	accepts	
 pos/i21390.zio.scala	accepts	
 pos/i2140.scala	accepts	
@@ -4022,7 +4022,7 @@ pos/i6864.scala	accepts
 pos/i6891.scala	accepts	
 pos/i6900.scala	accepts	
 pos/i6909.scala	accepts	
-pos/i6914.scala	rejects	object creation impossible
+pos/i6914.scala	accepts	
 pos/i6938.scala	accepts	
 pos/i6989	accepts	
 pos/i7034.scala	accepts	
@@ -5944,7 +5944,7 @@ warn/i15503b.scala	silent
 warn/i15503c.scala	silent		--source 3.3
 warn/i15503d.scala	different	unreachable case
 warn/i15503e.scala	silent	
-warn/i15503f.scala	syntax	expected {}, found {}
+warn/i15503f.scala	silent	
 warn/i15503g.scala	silent	
 warn/i15503h.scala	silent	
 warn/i15503i.scala	rejects	{} is not a member of the package

@@ -3,7 +3,7 @@
 // expect: modifier lazy is not allowed for this definition
 // expect: modifier private is not allowed for this definition
 // expect: modifier final is not allowed for this definition
-// expect: expected 'using': the parameters of a given are using clauses
+// expect: 34:13: error: `using` expected
 final object FO
 abstract trait AT
 object G:

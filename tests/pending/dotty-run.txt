@@ -17,7 +17,6 @@ Signals.scala	Signals.scala:12:28: covariant type T occurs in contravariant posi
 Signals2.scala	run: exit 1: Exception in thread "main" java.lang.NullPointerException: Cannot invoke "scala.Function1.apply(Object)" because "this.expr$c0" is null
 Tuple-fromProduct.scala	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Receiver class MyProduct$loywqj_1820 does not define or inherit an implementation of the resolved method 'abstract java.lang.Object productElement(int)' of interface sca
 Typeable.scala	Typeable.scala:45:29: expected '=>', found '['
-abstract-givens.scala	abstract-givens.scala:6:8: object creation impossible, since given def z[T](using x$1: T): Seq[T] in trait T is not defined
 annotation-info-not-erased	java source: teq reads none
 anon-mirror-gen-local.scala	anon-mirror-gen-local.scala:85:47: not supported yet: an instance of Seed, a class nested in a class, made outside that class
 array-erasure.scala	array-erasure.scala:27:16: value apply is not a member of Array[?] & T
@@ -77,7 +76,6 @@ erased-poly-ref.scala	erased-poly-ref.scala:9:11: 'erased' is not part of the su
 errorhandling	Result.scala:45:35: type mismatch: found Err[Any], required Result[*:[T, U], List[E]]
 exceptions-2.scala	exceptions-2.scala:233:79: expected an expression, found ';'
 export-in-extension.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
-extmethods2.scala	extmethods2.scala:5:9: object creation impossible, since def apply(v1: TC): AnyRef in trait Function1 is not defined
 extra-implicits.scala	extra-implicits.scala:14:3: missing argument for parameter b
 forwarder-java-package-private	java source: teq reads none
 forwarder.scala	forwarder.scala:19:23: value getModifiers is not a member of Method
@@ -446,7 +444,6 @@ t8601e	java source: teq reads none
 t8803.scala	t8803.scala:20:68: expected an identifier, found 'super'
 t949.scala	t949.scala:6:20: not found: Value
 t9915	java source: teq reads none
-tagless.scala	tagless.scala:86:18: expected end of statement, found ','
 tailrec-return.scala	tailrec-return.scala:4:7: Cannot rewrite recursive call: it is not in tail position
 targetName-interop	java source: teq reads none
 targetName-modules-1	java source: teq reads none

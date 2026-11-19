@@ -104,7 +104,6 @@ escaped-space	compile-error: invalid escape sequence
 exceptions-2	compile-error: expected an expression, found ';'
 export-in-extension	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 exports	wrong-output
-extmethods2	compile-error: object creation impossible, since def apply(v1: TC): AnyRef in trait Function1 is not defined
 extra-implicits	compile-error: missing argument for parameter b
 final-fields	wrong-output
 forwarder	compile-error: value getModifiers is not a member of Method
@@ -671,7 +670,6 @@ t8823	compile-error: type Product2 not found
 t9400	compile-error: type Retention not found
 t949	compile-error: type Enumeration not found
 t9915	compile-error: test contains Java sources
-tagless	compile-error: expected end of statement, found ','
 tailrec-return	compile-error: Cannot rewrite recursive call: it is not in tail position
 targetName-interop	compile-error: test contains Java sources
 targetName-modules-1	compile-error: test contains Java sources

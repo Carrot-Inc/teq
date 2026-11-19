@@ -58,7 +58,6 @@ chang	java source: teq reads none
 class-gadt	inheritance.scala:12:24: type mismatch: found T, required Int
 clear-retains-for-inferred-types	S1.scala:4:58: expected a declaration, found 'this'
 closure-args.scala	closure-args.scala:10:3: expected a definition, found '('
-combine.scala	combine.scala:5:27: expected ':', found '['
 conversion-function-prototype.scala	conversion-function-prototype.scala:19:66: missing parameter type
 convert.scala	convert.scala:8:25: ambiguous extension methods: both given_Conversion_Int_String and given_Conversion_Int_Date provide convert on Int
 cycle	java source: teq reads none
@@ -111,7 +110,6 @@ gadt-simpleEQ.scala	gadt-simpleEQ.scala:11:25: type mismatch: found A, required 
 gadt-upcast.scala	gadt-upcast.scala:8:28: type mismatch: found 0, required A
 gadt-variant-hkt.scala	gadt-variant-hkt.scala:14:9: type mismatch: found F[Int], required Option[Int]
 given-loop-prevention.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-given-syntax.scala	given-syntax.scala:62:19: expected ':', found identifier
 givenFallback.scala	givenFallback.scala:4:18: inline value must have a literal constant type
 help.scala	option: -help (teq has no flag for it)
 hk.scala	hk.scala:34:10: contravariant type U occurs in invariant position in type = Ident[U] of type ThisType
@@ -231,7 +229,6 @@ i15177.hylolib.scala	i15177.hylolib.scala:5:11: expected end of statement, found
 i15183	test_2.scala:6:9: no given instance of type Map[((Env.Local : Env), (Env.Sit : Env), (Env.Prod : Env)), Decoder] was found for parameter d
 i15188.scala	i15188.scala:7:7: this is not a case class or enum case
 i15188b.scala	i15188b.scala:7:7: this is not a case class or enum case
-i15264.scala	i15264.scala:39:63: type mismatch: found C[Q[V]], required Prio0 => C[V] => C[Q[V]]
 i15289.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i15398.scala	i15398.scala:6:38: Cannot prove that "Tuple23" =:= "Tuple".
 i1540.scala	i1540.scala:11:13: Casey1 is not a case class, so it cannot be used as a pattern
@@ -361,9 +358,7 @@ i21282.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i21303	java source: teq reads none
 i21303a	java source: teq reads none
 i21319	java source: teq reads none
-i21352a	schema.scala:16:5: type mismatch: found Schema[S], required IsUnionOf[String, S] => Schema[S]
 i21352b.scala	i21352b.scala:33:35: ambiguous given instances for Reader[<error>]: UnitReader, StringReader
-i21352c.scala	i21352c.scala:10:40: expected ':', found '['
 i21405.scala	i21405.scala:6:19: reference to IO is ambiguous: it is both imported by import o.* and imported subsequently by import p.*
 i21415.scala	option: -rewrite (teq has no flag for it)
 i21631_joint	java source: teq reads none
@@ -489,7 +484,6 @@ i5773.scala	i5773.scala:14:18: Implicit classes must accept exactly one primary 
 i5773b.scala	i5773b.scala:21:13: value appendS is not a member of Int
 i5938.scala	i5938.scala:17:3: 'erased' is not part of the supported Scala subset
 i5970.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-i5978.scala	i5978.scala:92:9: object creation impossible, since def apply(v1: TC): TC in trait Function1 is not defined
 i6009a.scala	i6009a.scala:4:22: expected ',' or ')', found identifier
 i6009b.scala	i6009b.scala:4:22: expected ',' or ')', found identifier
 i6009c.scala	i6009c.scala:4:22: expected ',' or ')', found identifier
@@ -508,7 +502,6 @@ i6635.scala	i6635.scala:30:74: type mismatch: found (x : Int), required e1.A
 i6635a.scala	i6635a.scala:13:75: type mismatch: found e1.A, required Int
 i6662.scala	i6662.scala:7:46: type mismatch: found Null, required Opt[A]
 i6781.scala	i6781.scala:9:26: type mismatch: found Any, required Nat
-i6914.scala	i6914.scala:8:9: object creation impossible, since def apply(v1: Liftable[T]): ToExpr[T] in trait Function1 is not defined
 i7056.scala	i7056.scala:19:9: value idnt1 is not a member of Any
 i7219b.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i7219c.scala	option: -Wsafe-init with -Werror (teq has no flag for it)

@@ -41,6 +41,18 @@ impl<'a> Parser<'a> {
         ty
     }
 
+    /// A context type of a given's condition (`contextTypes`' `paramTypeOf(toplevelTyp)`): `=> T` is passed
+    /// unevaluated; no `*` follows it, which ends the type.
+    pub(super) fn parse_context_type(&mut self) -> TyExprId {
+        let start = self.span();
+        let by_name = self.eat(Tok::Arrow);
+        let ty = self.parse_type();
+        if by_name {
+            return self.ast.add_ty(TyExpr::ByName(ty), start.to(self.prev_span()));
+        }
+        ty
+    }
+
     pub(super) fn parse_type(&mut self) -> TyExprId {
         if self.at(Tok::Indent) && self.span().start == self.span().end {
             return self.parse_indented_type();
@@ -628,8 +640,14 @@ impl<'a> Parser<'a> {
     /// resolved on an operator stack as scalac does, which reports mixed associativity only
     /// against the operator on top of the stack.
     fn parse_infix_type(&mut self, bar: bool) -> TyExprId {
+        let first = self.parse_with_type();
+        self.infix_type_rest(first, bar)
+    }
+
+    /// dotty's `infixTypeRest`: the operators and operands after the infix type's first operand, `first`.
+    pub(super) fn infix_type_rest(&mut self, first: TyExprId, bar: bool) -> TyExprId {
         let mut stack: Vec<(TyExprId, Token, Span)> = Vec::new();
-        let mut top = self.parse_with_type();
+        let mut top = first;
         // An operator ending its line continues on the next when that line starts a type (dotc's
         // `newLineOptWhenFollowing(canStartInfixTypeTokens)`): `0 | 1 |` then `2 | 3`.
         let continued = |p: &Self| p.kind_at(1) == Tok::Newline && !p.blank_line_before(1) && p.can_start_type(2);
@@ -641,7 +659,16 @@ impl<'a> Parser<'a> {
             let (prec, right) = super::expr::op_precedence(self.interner.get(op.name));
             top = self.reduce_type_ops(&mut stack, top, prec, !right, op.name);
             stack.push((top, op, self.span()));
-            top = self.parse_with_type();
+            // An operand that starts with `{` is a refinement where braces after a type start a body (a given's
+            // type: `given x: A & { def f: Int } = ..`).
+            top = if self.template_type && self.at_lead_refinement() {
+                self.template_type = false;
+                let t = self.parse_with_type();
+                self.template_type = true;
+                t
+            } else {
+                self.parse_with_type()
+            };
         }
         self.reduce_type_ops(&mut stack, top, 0, true, names::EMPTY)
     }
@@ -718,6 +745,11 @@ impl<'a> Parser<'a> {
             },
             _ => false,
         }
+    }
+
+    /// A refinement of no parent at the cursor: a `{`, or the region the lexer opens for one.
+    pub(super) fn at_lead_refinement(&self) -> bool {
+        self.at(Tok::LBrace) || (self.at(Tok::Indent) && self.at_refinement_block(0))
     }
 
     /// A refinement without a parent at token `n`: the region the lexer opens for a brace

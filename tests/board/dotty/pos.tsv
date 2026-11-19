@@ -175,7 +175,7 @@ bigint.scala	pass	check:pass
 blockescapes.scala	pass	check:pass	
 boundary-variations.scala	pass	check:fail	
 bounds.scala	pass	check:pass	
-bson	fail	check:fail	bson.scala:24:66: expected ':', found '['
+bson	fail	check:fail	bson.scala:10:81: value mapWriter is not a member of bson
 bubbleUpNothing.scala	pass	check:pass	
 builders.scala	pass	check:pass	
 byNameVarargs.scala	pass	check:pass	
@@ -230,7 +230,7 @@ cls.scala	pass	check:pass
 cls1.scala	pass	check:pass	
 clsrefine.scala	pass	check:pass	
 collectGenericCC.scala	pass	check:fail	
-combine.scala	fail	check:fail	combine.scala:5:27: expected ':', found '['
+combine.scala	pass	check:pass	
 comma-separated.scala	pass	check:pass	
 comp-rec-test.scala	pass	check:pass	
 companions.scala	pass	check:pass	
@@ -405,7 +405,7 @@ given-loop-prevention.scala	fail	check:fail	option: -Wsafe-init with -Werror (te
 given-owner-disambiguate.scala	pass	check:pass	
 given-pattern.scala	pass	check:fail	
 given-priority.scala	pass	check:pass	
-given-syntax.scala	fail	check:fail	given-syntax.scala:62:19: expected ':', found identifier
+given-syntax.scala	pass	check:fail	
 givenFallback.scala	fail	check:fail	givenFallback.scala:4:18: inline value must have a literal constant type
 givenIn.scala	pass	check:pass	
 gosh.scala	pass	check:pass	
@@ -874,7 +874,7 @@ i15184.scala	pass	check:pass
 i15188.scala	fail	check:fail	i15188.scala:7:7: this is not a case class or enum case
 i15188b.scala	fail	check:fail	i15188b.scala:7:7: this is not a case class or enum case
 i15216.scala	pass	check:pass	
-i15264.scala	fail	check:fail	i15264.scala:39:63: type mismatch: found C[Q[V]], required Prio0 => C[V] => C[Q[V]]
+i15264.scala	pass	check:pass	
 i15274.orig.scala	pass	check:pass	
 i15274.scala	pass	check:pass	
 i15289.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -1128,7 +1128,7 @@ i18163.orig.scala	pass	check:pass
 i18163.scala	pass	check:pass	
 i18175.scala	fail	check:fail	i18175.scala:45:18: expected '=>', found identifier
 i18183.migration.scala	pass	check:pass	
-i18211.scala	fail	check:fail	i18211.scala:24:43: expected ':', found '['
+i18211.scala	fail	check:fail	i18211.scala:36:45: No given instance of type Indexes[String, (String, Int, String, Boolean)] was found for parameter indexes of method apply in class GetAll
 i18226.scala	pass	check:pass	
 i18226a.scala	pass	check:pass	
 i18247.scala	pass	check:pass	
@@ -1357,9 +1357,9 @@ i21303a	fail	-	java source: teq reads none
 i21319	fail	-	java source: teq reads none
 i21320a.scala	pass	check:pass	
 i21320b.scala	pass	check:pass	
-i21352a	fail	check:fail	schema.scala:16:5: type mismatch: found Schema[S], required IsUnionOf[String, S] => Schema[S]
+i21352a	pass	check:pass	
 i21352b.scala	fail	check:fail	i21352b.scala:33:35: ambiguous given instances for Reader[<error>]: UnitReader, StringReader
-i21352c.scala	fail	check:fail	i21352c.scala:10:40: expected ':', found '['
+i21352c.scala	pass	check:pass	
 i21360.scala	pass	check:pass	
 i21390.zio.scala	pass	check:pass	
 i2140.scala	pass	check:pass	
@@ -1386,7 +1386,7 @@ i21742.2.scala	pass	check:pass
 i21749.scala	fail	check:fail	option: -no-indent (teq has no flag for it)
 i21755.scala	pass	check:pass	
 i21757.scala	pass	check:pass	
-i21768.scala	fail	check:fail	i21768.scala:7:3: expected end of statement, found 'def'
+i21768.scala	fail	check:fail	i21768.scala:7:3: expected an identifier, found 'def'
 i21769.scala	fail	check:fail	i21769.scala:4:19: expected ',' or ')', found identifier
 i21779	fail	check:fail	Test_2.scala:3:5: type mismatch: found (String, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int), required ("a", 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
 i21790.scala	pass	check:pass	
@@ -1850,7 +1850,7 @@ i5915.scala	pass	check:pass
 i5938.scala	fail	check:fail	i5938.scala:17:3: 'erased' is not part of the supported Scala subset
 i5966.scala	pass	check:pass	
 i5970.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
-i5978.scala	fail	check:fail	i5978.scala:92:9: object creation impossible, since def apply(v1: TC): TC in trait Function1 is not defined
+i5978.scala	pass	check:fail	
 i5980.scala	pass	check:pass	
 i5997.scala	pass	check:pass	
 i6003.scala	pass	check:pass	
@@ -1932,7 +1932,7 @@ i6864.scala	pass	check:pass
 i6891.scala	pass	check:pass	
 i6900.scala	pass	check:pass	
 i6909.scala	pass	check:pass	
-i6914.scala	fail	check:fail	i6914.scala:8:9: object creation impossible, since def apply(v1: Liftable[T]): ToExpr[T] in trait Function1 is not defined
+i6914.scala	pass	check:pass	
 i6938.scala	pass	check:pass	
 i6989	pass	check:pass	
 i7034.scala	pass	check:pass	

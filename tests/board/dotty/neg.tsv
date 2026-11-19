@@ -65,7 +65,7 @@ OrType.scala	pass	-
 SummonFrom.scala	pass	-	
 WrongBounds.java	fail	-	java source: teq reads none
 abstract-givens-new.scala	fail	-	marks: 4 errors where 1 are marked: abstract-givens-new.scala:7:23: This defines an abstract given, which is no longer supported. Use a `deferred` given instead.
-abstract-givens.scala	fail	-	marks: 4 errors where 3 are marked: abstract-givens.scala:8:9: given instance y cannot override final member given instance y in trait T
+abstract-givens.scala	fail	-	check: diagnostic 1 of 3: scalac's is error abstract-givens.scala:11:9 instance cannot be created, since def iterator: Iterator[A] in trait IterableOnce in package scala.collection is not defined; teq's is error abstract-givens.scala:8:9 gi
 abstract-inline-val.scala	fail	-	marks: 1 errors where 2 are marked
 abstract-override.scala	pass	-	
 abstract-tracked-1.scala	fail	-	marks: 3 errors where 1 are marked: abstract-tracked-1.scala:5:11: expected end of statement, found 'val'
@@ -435,7 +435,7 @@ i12232.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i12232.scala:17:
 i12245.scala	pass	-	
 i12284.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12284.scala:6:27 Found:    (xx : Vector[Any]); teq's is error i12284.scala:6:27 Found:    Vector[F[_]]
 i12299.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i12299.scala:10:11 Not found: apply; teq's is error i12299.scala:10:17 Found:    2
-i12348.scala	fail	-	marks: 5 errors where 1 are marked: i12348.scala:2:16: expected ':', found identifier
+i12348.scala	fail	-	marks: 4 errors where 1 are marked: i12348.scala:2:16: expected end of statement, found identifier
 i123577.scala	pass	-	
 i12361.scala	fail	-	marks: 4 errors where 2 are marked: i12361.scala:3:23: expected end of statement, found '.'
 i12384.scala	fail	-	marks: 2 errors where 1 are marked: i12384.scala:6:21: Not found: type Nat
@@ -770,7 +770,7 @@ i19328conversion.scala	pass	-
 i19334.scala	fail	-	marks: 2 errors where 1 are marked: i19334.scala:6:3: too many arguments: expected 0
 i19364.scala	fail	-	marks: no error where 10 are marked
 i19372.scala	fail	-	marks: 2 errors where 5 are marked
-i19402.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19402.scala:10:13 `using` expected; teq's is error i19402.scala:10:12 expected 'using': the parameters of a given are using clauses
+i19402.scala	pass	-	
 i19413.scala	pass	-	
 i19414-desugared.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19414-desugared.scala:22:35 No best given instance of type BodySerializer[JsObject] was found for parameter x of method summon in object Predef.; teq's is error i19414-desugared.scala:22:35 ambig
 i19414.scala	fail	-	marks: 2 errors where 1 are marked: i19414.scala:12:42: Found:    Printer
@@ -1205,7 +1205,7 @@ i6826.scala	fail	-	marks: no error where 1 are marked
 i6891.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6891.scala:8:24 Found:    ("foo" : String); teq's is error i6891.scala:8:24 Found:    "foo"
 i7028.scala	fail	-	marks: error on an unmarked line i7028.scala:2: value foo is not a member of String
 i7040.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7040.scala:11:13 Type-checking succeeded unexpectedly.; teq's is error i7040.scala:11:13 not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
-i7045.scala	fail	-	marks: 3 errors where 1 are marked: i7045.scala:7:31: 'with' expected, but ':' found
+i7045.scala	fail	-	marks: 3 errors where 1 are marked: i7045.scala:7:31: 'with' expected, but '{' found
 i705-inner-value-class.scala	fail	-	marks: 3 errors where 6 are marked
 i705-inner-value-class2.scala	fail	-	marks: 1 errors where 2 are marked
 i7060.scala	fail	-	marks: 2 errors where 1 are marked: i7060.scala:5:44: expected ')', found '=>'
