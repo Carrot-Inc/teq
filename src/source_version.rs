@@ -180,6 +180,14 @@ impl SourceVersion {
     pub fn enables_new_givens(self) -> bool {
         self.is_at_least(SourceVersion::V3_6)
     }
+
+    /// Whether two givens are compared at this version as teq has not ported: 3.6 (3.6-migration too) and
+    /// 3.7-migration, where dotty compares under both schemes and warns where they differ (E205). A compilation with a
+    /// file at one of them compares and types its givens as teq did before it told the versions apart, every file of it
+    /// (`typer::Worker::compilation_unported`, the one reader of this test).
+    pub fn given_preference_unported(self) -> bool {
+        self.is_at_least(SourceVersion::V3_6) && (self.stable() == SourceVersion::V3_6 || (self.is_migrating() && self.stable() == SourceVersion::V3_7))
+    }
 }
 
 /// A row of dotty's migration table: a construct deprecated from `warn_from`, refused from
@@ -343,6 +351,44 @@ mod tests {
         for v in SourceVersion::all() {
             assert_eq!(v.is_migrating(), v.name().ends_with("-migration"), "{}", v.name());
         }
+    }
+
+    #[test]
+    fn the_unported_versions_of_the_given_preference() {
+        let unported: Vec<&str> = SourceVersion::all().filter(|v| v.given_preference_unported()).map(|v| v.name()).collect();
+        assert_eq!(unported, ["3.6-migration", "3.6", "3.7-migration"]);
+    }
+
+    /// A tripwire: the version's given test is read once, where the compilation's fact is computed, so that no file
+    /// is asked again and a compilation holds one form of each given (`typer::Worker::compilation_unported`).
+    #[test]
+    fn the_given_preference_test_has_one_reader() {
+        fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    sources(&path, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut files = Vec::new();
+        sources(&root.join("src"), &mut files);
+        assert!(files.iter().any(|f| f.ends_with("src/typer/mod.rs")), "the walk found the typer's sources");
+        let call = concat!(".given_preference_", "unported()");
+        let mut readers = Vec::new();
+        for file in files {
+            let name = file.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+            for (n, line) in std::fs::read_to_string(&file).unwrap().lines().enumerate() {
+                if line.contains(call) && !line.trim_start().starts_with("//") {
+                    readers.push(format!("{name}:{}", n + 1));
+                }
+            }
+        }
+        let (typer, here) = (readers.iter().filter(|r| r.starts_with("src/typer/mod.rs:")).count(), readers.iter().filter(|r| r.starts_with("src/source_version.rs:")).count());
+        assert!(readers.len() == 2 && typer == 1 && here == 1, "the source version's given test read at {readers:?}: only `Worker::scan_compilation_unported` (src/typer/mod.rs) and the test of its versions here may read it");
     }
 
     #[test]

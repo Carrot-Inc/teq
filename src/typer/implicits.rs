@@ -5,6 +5,7 @@ use super::{Frame, ImportTarget, ResolvedImport, Worker};
 use crate::ast::ListRef;
 use crate::intern::{FxMap, Name};
 use crate::source::{FileId, Span};
+use crate::source_version::SourceVersion;
 use std::sync::Arc;
 use crate::symbols::*;
 use crate::tir::*;
@@ -382,6 +383,23 @@ pub(super) enum Pick {
     NoMatch,
     Found(TExprId, TypeId),
     Ambiguous,
+}
+
+/// The scheme two candidates are compared by, which the source version decides (dotty's `Applications.compare`, its
+/// `CompareScheme`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) enum PreferenceScheme {
+    /// Up to 3.5 (`CompareScheme.Intermediate`): the more specific type wins, and an owner's win holds only where the
+    /// type comparison does not go the other way.
+    Intermediate,
+    /// 3.6 and 3.7-migration, which dotty compares under both schemes, warning where they differ (E205): not ported,
+    /// teq compares there as it did before it told the versions apart (the new scheme, a Scala 2 implicit's own side
+    /// not compared the intermediate way). Every file of a compilation with a file at one of them is compared so
+    /// (`Worker::compilation_unported`), and reads a given object of several parents as before.
+    Unported,
+    /// From 3.7 (`CompareScheme.New`): the owner decides outright, and between unrelated owners the more general type
+    /// wins.
+    New,
 }
 
 /// The scopes a search walks: the levels among the enclosing frames, the package clauses,
@@ -4235,7 +4253,9 @@ impl<'a> Worker<'a> {
             && self.transparent.is_empty()
             && self.gadt.is_empty()
             && fitting.iter().all(|&i| !self.defined_in_body(candidates[i].0));
-        let key: Option<Box<[SymId]>> = keep.then(|| fitting.iter().map(|&i| candidates[i].0).collect());
+        // The order is the scheme's, which the source version decides (`preference_scheme`).
+        let scheme = self.preference_scheme();
+        let key: Option<(PreferenceScheme, Box<[SymId]>)> = keep.then(|| (scheme, fitting.iter().map(|&i| candidates[i].0).collect()));
         if let Some(order) = key.as_ref().and_then(|k| self.given_orders.get(k)) {
             let ordered: Vec<usize> = order.iter().map(|&k| fitting[k as usize]).collect();
             *fitting = ordered;
@@ -4302,13 +4322,15 @@ impl<'a> Worker<'a> {
         // extending `G[A]`): compared by their reference types, dotty's `alt.widen` (`compare`,
         // 2367-2373), not by their declarations, and not kept, the comparison being the
         // receivers'.
+        let scheme = self.preference_scheme();
         if a.0 != b.0 && (self.given_seen_from_receiver(a) || self.given_seen_from_receiver(b)) {
-            return self.compare_givens_seen(a, b);
+            return self.compare_givens_seen(a, b, scheme);
         }
         if a.0 != b.0 || a.1 == b.1 {
             return self.compare_givens(a.0, b.0);
         }
-        let by_type = self.as_good_seen(a, b) as i32 - self.as_good_seen(b, a) as i32;
+        let intermediate = scheme == PreferenceScheme::Intermediate;
+        let by_type = self.as_good_seen(a, b, intermediate) as i32 - self.as_good_seen(b, a, intermediate) as i32;
         if by_type != 0 {
             return by_type;
         }
@@ -4352,13 +4374,13 @@ impl<'a> Worker<'a> {
 
     /// `compare_givens_uncached` over the candidates' types as their receivers see them
     /// (`as_good_seen`), dotty's `compareWithTypes(alt1.widen, alt2.widen)`.
-    fn compare_givens_seen(&mut self, a: GivenRef, b: GivenRef) -> i32 {
+    fn compare_givens_seen(&mut self, a: GivenRef, b: GivenRef, scheme: PreferenceScheme) -> i32 {
         let owners = self.compare_given_owners(a.0, b.0);
-        let old_style = self.syms.is_scala2_implicit(a.0) && self.syms.is_scala2_implicit(b.0);
-        if owners != 0 && !old_style {
+        let intermediate = scheme == PreferenceScheme::Intermediate || (self.syms.is_scala2_implicit(a.0) && self.syms.is_scala2_implicit(b.0));
+        if owners != 0 && !intermediate {
             return owners;
         }
-        let (wins_a, wins_b) = (self.as_good_seen(a, b), self.as_good_seen(b, a));
+        let (wins_a, wins_b) = (self.as_good_seen(a, b, intermediate), self.as_good_seen(b, a, intermediate));
         let by_type = match owners {
             1 if wins_a || !wins_b => 1,
             -1 if wins_b || !wins_a => -1,
@@ -4378,8 +4400,9 @@ impl<'a> Worker<'a> {
     }
 
     /// `is_as_good_given` of two references to one given, each signature seen from its receiver
-    /// (`open_given_sig`): `x`'s own type parameters as they are, `y`'s open.
-    fn as_good_seen(&mut self, x: GivenRef, y: GivenRef) -> bool {
+    /// (`open_given_sig`): `x`'s own type parameters as they are, `y`'s open; under the intermediate scheme, or where `x`
+    /// is a Scala 2 implicit, the more specific wins (`isAsGoodValueType`).
+    fn as_good_seen(&mut self, x: GivenRef, y: GivenRef, intermediate: bool) -> bool {
         let mark = self.snapshot();
         let ok = (|| {
             let (_, mut subst_x, sig_x) = self.open_given_sig(x)?;
@@ -4388,7 +4411,7 @@ impl<'a> Worker<'a> {
             let (ret_x, ret_y) = (self.ranked_ret(x.0, sig_x.ret), self.ranked_ret(y.0, sig_y.ret));
             let ret_x = self.types.subst(ret_x, &subst_x);
             let ret_y = self.types.subst(ret_y, &subst_y);
-            let ok = if self.syms.is_scala2_implicit(x.0) {
+            let ok = if intermediate || self.syms.is_scala2_implicit(x.0) {
                 let (ret_x, ret_y) = (self.flip_contravariant(ret_x), self.flip_contravariant(ret_y));
                 self.is_sub(ret_x, ret_y)
             } else {
@@ -4453,12 +4476,37 @@ impl<'a> Worker<'a> {
         only.filter(|_| count == 1)
     }
 
-    /// Scala 3.7's preference between two givens that both apply: positive when `a` is
-    /// preferred. The given whose owner derives from the other's owner wins whatever their
-    /// types; between unrelated owners the given whose type is as good as the other's wins.
-    /// After a draw the given without using parameters wins, and two givens with using
-    /// parameters are compared by those.
+    /// The preference between two givens that both apply, under the scheme of the source version
+    /// (`preference_scheme`): positive when `a` is preferred. Under the new scheme the given whose
+    /// owner derives from the other's owner wins whatever their types, and between unrelated
+    /// owners the given whose type is as good as the other's wins; under the intermediate one the
+    /// type decides where it goes against the owner (`compare_givens_uncached`). After a draw the
+    /// given without using parameters wins, and two givens with using parameters are compared by
+    /// those.
     pub(super) fn compare_givens(&mut self, a: SymId, b: SymId) -> i32 {
+        let scheme = self.preference_scheme();
+        self.compare_givens_by(a, b, scheme)
+    }
+
+    /// The scheme of the source version (`PreferenceScheme`): in every file of a compilation with a
+    /// file at 3.6 or 3.7-migration (3.6-migration too) the comparison teq made before it told the
+    /// versions apart (`compilation_unported`); else by the current file's version, the intermediate
+    /// one up to 3.5 and the new one from 3.7.
+    pub(super) fn preference_scheme(&self) -> PreferenceScheme {
+        // A compilation with a file at 3.6 or 3.7-migration is compared as before whole, a file at 3.5 or below among
+        // them: a file of the intermediate scheme would read its givens in another form than its tables describe.
+        if self.compilation_unported {
+            return PreferenceScheme::Unported;
+        }
+        if !self.cur_ast().source_version.is_at_least(SourceVersion::V3_6) {
+            PreferenceScheme::Intermediate
+        } else {
+            PreferenceScheme::New
+        }
+    }
+
+    /// `compare_givens` under one scheme, kept per pair and scheme.
+    fn compare_givens_by(&mut self, a: SymId, b: SymId, scheme: PreferenceScheme) -> i32 {
         if a == b {
             return 0;
         }
@@ -4471,14 +4519,14 @@ impl<'a> Worker<'a> {
             && !self.defined_in_body(a)
             && !self.defined_in_body(b);
         if keep {
-            if let Some(&c) = self.given_preferences.get(&(a, b)) {
+            if let Some(&c) = self.given_preferences.get(&(a, b, scheme)) {
                 return c as i32;
             }
         }
-        let c = self.compare_givens_uncached(a, b);
+        let c = self.compare_givens_uncached(a, b, scheme);
         if keep {
-            self.given_preferences.insert((a, b), c as i8);
-            self.given_preferences.insert((b, a), -c as i8);
+            self.given_preferences.insert((a, b, scheme), c as i8);
+            self.given_preferences.insert((b, a, scheme), -c as i8);
         }
         c
     }
@@ -4496,16 +4544,22 @@ impl<'a> Worker<'a> {
         }
     }
 
-    fn compare_givens_uncached(&mut self, a: SymId, b: SymId) -> i32 {
+    fn compare_givens_uncached(&mut self, a: SymId, b: SymId, scheme: PreferenceScheme) -> i32 {
         let owners = self.compare_given_owners(a, b);
-        // Two Scala 2 implicits are compared as under Scala 3.0 to 3.6 (dotc's intermediate
-        // scheme): the more specific type wins, and an owner's win holds only where the type
-        // comparison does not go the other way. Between givens the owner decides outright.
-        let old_style = self.syms.is_scala2_implicit(a) && self.syms.is_scala2_implicit(b);
-        if owners != 0 && !old_style {
+        // Under the intermediate scheme, which two Scala 2 implicits are compared under whatever the
+        // version (`Applications.compare`), the more specific type wins, and an owner's win holds
+        // only where the type comparison does not go the other way (`compareWithTypes`'
+        // `drawOrOwner`); under the new one the owner decides outright.
+        let intermediate = scheme == PreferenceScheme::Intermediate || (self.syms.is_scala2_implicit(a) && self.syms.is_scala2_implicit(b));
+        if owners != 0 && !intermediate {
             return owners;
         }
-        let (wins_a, wins_b) = (self.is_as_good_given(a, b, old_style), self.is_as_good_given(b, a, old_style));
+        // A Scala 2 implicit's own side is compared the intermediate way whatever the scheme
+        // (`isAsGoodValueType`'s `alt1IsImplicit`): against a given of a more general type each wins
+        // its own side, an ambiguity. Not at 3.6 and 3.7-migration (`PreferenceScheme::Unported`).
+        let own_side = |t: &Self, x: SymId| intermediate || (scheme != PreferenceScheme::Unported && t.syms.is_scala2_implicit(x));
+        let (side_a, side_b) = (own_side(self, a), own_side(self, b));
+        let (wins_a, wins_b) = (self.is_as_good_given(a, b, side_a), self.is_as_good_given(b, a, side_b));
         let by_type = match owners {
             1 if wins_a || !wins_b => 1,
             -1 if wins_b || !wins_a => -1,

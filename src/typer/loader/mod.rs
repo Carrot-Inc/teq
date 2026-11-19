@@ -1263,16 +1263,26 @@ impl<'a> Worker<'a> {
         self.loaded_mut().classes.insert(cid, LClass { file, addr: e.addr, value_case: false });
         self.loaded_mut().tables[file as usize].classes.insert(e.addr, cid);
         let sym = self.syms.new_sym(name, SymKind::Given, mods::FINAL | mods::LAZY | mods::GIVEN, owner, file_id, None, Span::default());
-        // Its type is the type it was declared with, the class's last parent, as the
-        // program's own given has.
+        // Its type is the type it was declared with, the class's one parent past `Object`, as the program's own
+        // given has; of several parents (`given A, B:`, `given t: P() with Q`) their intersection (check.rs's given
+        // signature). In a compilation with a file at 3.6 or 3.7-migration (`compilation_unported`) the class's last
+        // parent, as teq read it before.
         let tasty = self.tasty(file);
         let sig = Decoder::new(&tasty).class_sig(e.addr);
-        let ty = match sig.parents.last() {
-            Some(p) => {
-                let mut cx = MapCx::new(file);
-                self.map_type(&mut cx, p)
+        let mut cx = MapCx::new(file);
+        let ty = if self.compilation_unported {
+            match sig.parents.last() {
+                Some(p) => self.map_type(&mut cx, p),
+                None => self.types.class(cid, &[]),
             }
-            None => self.types.class(cid, &[]),
+        } else {
+            let parents: Vec<TypeId> = sig.parents.iter().map(|p| self.map_type(&mut cx, p)).collect();
+            let declared: Vec<TypeId> = parents.iter().copied().filter(|&t| t != self.b.t_any_ref).collect();
+            match declared[..] {
+                [] => parents.last().copied().unwrap_or_else(|| self.types.class(cid, &[])),
+                [one] => one,
+                _ => declared.iter().copied().reduce(|x, y| self.types.inter(x, y)).unwrap_or(declared[0]),
+            }
         };
         {
             let mut s = self.syms.sym_mut(sym);

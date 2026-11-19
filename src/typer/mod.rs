@@ -1750,9 +1750,9 @@ pub struct Worker<'a> {
     pub class_given_indexes: FxMap<ClassId, Option<std::sync::Arc<implicits::GivenIndex>>>,
     /// `compare_givens` per pair of member givens, which depends on their signatures and owners
     /// alone (`Worker::compare_givens` says when it is not kept).
-    pub given_preferences: FxMap<(SymId, SymId), i8>,
+    pub given_preferences: FxMap<(SymId, SymId, implicits::PreferenceScheme), i8>,
     /// The preference order of a long list of fitting candidates, per list (`preference_order`).
-    pub given_orders: FxMap<Box<[SymId]>, Box<[u32]>>,
+    pub given_orders: FxMap<(implicits::PreferenceScheme, Box<[SymId]>), Box<[u32]>>,
     /// The implicit scope of a type without open variables, computed once: the objects whose
     /// members make it up, and per wanted class the givens selected from them before the
     /// accessibility filter, which depends on the scope of the search (`implicits.rs`).
@@ -1887,6 +1887,14 @@ pub struct Worker<'a> {
     pub merging: Vec<SymId>,
     /// Whether the body phase takes the largest files first: with more than one worker.
     pub walk_by_size: bool,
+    /// Whether a source file of the compilation is at 3.6, 3.6-migration or 3.7-migration
+    /// (`SourceVersion::given_preference_unported`), whose comparison of givens teq does not port: then the whole
+    /// compilation types givens as teq did before it told the versions apart (`implicits::PreferenceScheme::Unported`
+    /// in every file, a given object of several parents its first parent, a product's last). One pass over the
+    /// files' trees decides it where the worker is made, before the class path is opened or anything entered
+    /// (`scan_compilation_unported`), so that a compilation holds one form of each given; a retype keeps it, since a
+    /// file whose version changes, or a file added or removed, is typed again by a full build.
+    pub compilation_unported: bool,
     /// Whether the body phase began: the prefix typed before the fork, or the workers.
     pub bodies_started: bool,
     /// The info messages the macros' runs gave while a build or a retype is typed, held until
@@ -3480,6 +3488,7 @@ impl<'a> Worker<'a> {
             pending_shared: Vec::new(),
             merging: Vec::new(),
             walk_by_size: false,
+            compilation_unported: Worker::scan_compilation_unported(asts, files),
             bodies_started: false,
             infos: None,
             std_seen: 0,
@@ -3940,6 +3949,7 @@ impl<'a> Worker<'a> {
             arity_classes: self.arity_classes.attach(),
             merging: Vec::new(),
             walk_by_size: self.walk_by_size,
+            compilation_unported: self.compilation_unported,
             bodies_started: self.bodies_started,
             infos: self.infos.as_ref().map(|_| Vec::new()),
             std_seen: self.std_seen,
@@ -5401,6 +5411,13 @@ impl<'a> Worker<'a> {
         self.phase_end(p);
         self.complete_program();
         self.build_scope_tables();
+    }
+
+    /// Whether a source file of the program is at a version whose comparison of givens teq does not port
+    /// (`compilation_unported`): its version as the parser read it, the build's `--source`, its `--source-at` root's or
+    /// its own `language` import's, wherever that stands. The std's files are no file of the program.
+    pub fn scan_compilation_unported(asts: &Asts, files: &Sources) -> bool {
+        (0..files.len().min(asts.len())).any(|i| !files[i].is_std && asts[i].source_version.given_preference_unported())
     }
 
     /// Whether the files name a wildcard type argument anywhere.

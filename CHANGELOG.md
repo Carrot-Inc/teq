@@ -7,6 +7,22 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- The preference between two givens a search finds, or two that provide the extension method a call selects, follows
+  the source version up to 3.5 and from 3.7, as scalac's does:
+  - Up to `-source 3.5` (or a `language.3.5` import) the more specific given wins, and two givens whose owners and
+    types disagree (the derived object's given more general than its trait's) are ambiguous, as under scalac. teq
+    preferred the more general one, and let the owner decide, at every version.
+  - From 3.7 a Scala 2 implicit against a given is compared the old way on the implicit's side. So a given of `A` and
+    an implicit of a subtype of `A` are ambiguous, as scalac reports them; teq took the given. Up to 3.5 the implicit
+    wins.
+  - Of two givens tied for an extension method, the method read on the more specific one is taken, as scalac takes
+    it. teq reported the call ambiguous.
+  - Under 3.6 and 3.7-migration, where scalac asks both rules and warns where they differ (E205), teq compares as
+    before, and so does every file of a compilation with a file there (a file at 3.5 or below among them).
+- A given object of several parents (`given A, B:`, `given t: P() with Q`) is found as each of them, from the
+  program's sources and from products, a generic class's read on an instance as of that instance's type arguments.
+  teq found it as its first parent alone, or its last from a product, as it still does in a compilation with a file
+  under 3.6 or 3.7-migration.
 - A protected member reached from a trait whose self type is its class, outside the member's package, is refused
   as scalac refuses it: "illegal access to protected method m in class C from trait Side". It is refused by
   identifier, as a value, through `this`, inside a lambda, as a `protected[p]` member from outside `p`, and as the

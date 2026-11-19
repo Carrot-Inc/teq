@@ -297,7 +297,7 @@ worker_fields! {
         target_name_files, rule_member_names, derived_aliases, derived_opaques, import_values, export_blocks,
         js_import_ids, js_registry, js_imports_at_bodies, js_exported, worker, arity_classes, items, diag_ranges,
         diag_region, history_reads, told, meetings, claims, inherited, tclasses_published, tclasses_registered,
-        walk_by_size, bodies_started, std_seen, arity_seen, lists_at_fork, tvars_at_fork, files,
+        walk_by_size, compilation_unported, bodies_started, std_seen, arity_seen, lists_at_fork, tvars_at_fork, files,
         ascription_constants, kind_clauses, inferred_parent_args, inferred_trait_args, sam_classes,
         std_package_misses, inline_accessor_syms, inline_results, expr_marks, eta_expansions, folded_paths,
         folded_deprecated, wildcards_used, captured_locals, spaces, deferred_matches, late_methods, override_pairs,

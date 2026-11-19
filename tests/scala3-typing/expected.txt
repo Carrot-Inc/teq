@@ -147,7 +147,7 @@ neg/creative-gadt-constraints.scala	same
 neg/creator-ambiguous.scala	same	
 neg/creator-applys.scala	same	
 neg/creator-applys2.scala	same	
-neg/ctx-bounds-priority-migration.scala	superset	+1 lines: value {} is not a member of {}	--source 3.5
+neg/ctx-bounds-priority-migration.scala	same		--source 3.5
 neg/ctx-bounds-priority.scala	same		--source 3.7
 neg/curried-dependent-ift.scala	same	
 neg/cycles.scala	syntax	expected {}, found {}

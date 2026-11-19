@@ -17,7 +17,7 @@ alias_tuple_exhaustivity	pass	-
 alias_wildcard_refined_member	pass	-	
 alternative_mode_completion	pass	-	
 and_base_override_through_instances	fail	-	error: error overriding method unapply in trait Ex of type (x: Any): Option[A]: method unapply of type (x: Any): Option[Int & String] has in
-and_base_three_instances	fail	-	error: type mismatch: found ? >: (Int | String) <: Int & String, required Double
+and_base_three_instances	fail	-	error: Found: ? >: (Int | String) <: Int & String
 annotated_generic_parent	pass	-	
 annotated_type_params	pass	-	
 annotation_through_export	pass	-	
@@ -51,11 +51,11 @@ applied_lambda_anon_inner_parent_in_inner_class	pass	-
 applied_lambda_anon_inner_parent_in_local_class	pass	-	
 applied_lambda_anon_parent_arg_outer	pass	-	
 applied_lambda_outer_this_argument	pass	-	
-applied_member_declared_variance	fail	-	error: type mismatch: found (f : (c: A) => c.FC[c.Ab]), required A => A#FC[String]
+applied_member_declared_variance	fail	-	error: Found: (f : (c: A) => c.FC[c.Ab])
 applied_param_reference	pass	-	
 apply_value	pass	-	
 approx_match_case_pattern_agree	pass	-	
-approx_store_application_agree	fail	-	error: type mismatch: found (f : (c: Am) => Cov[c.FCt[c.T]]), required Am => Cov[Am#FCt[Null]]
+approx_store_application_agree	fail	-	error: Found: (f : (c: Am) => Cov[c.FCt[c.T]])
 argument_block_ascriptions	fail	-	output differs
 arity	pass	-	
 arity_class_names_found	fail	-	error: type ContextFunction01 not found
@@ -358,7 +358,7 @@ class_through_path_array_concat	pass	-
 class_through_path_array_spread	fail	-	TypeError: Cannot read properties of undefined (reading 'v')
 class_through_path_equality	pass	-	
 class_through_path_generic_equality	fail	-	output differs
-class_through_path_generic_method	fail	-	error: type mismatch: found None, required Some[Int]
+class_through_path_generic_method	fail	-	error: Found: None
 class_through_path_inline_parameter	fail	-	ReferenceError: o$2 is not defined
 class_through_path_opaque_controls	pass	-	
 class_through_path_tag	pass	-	
@@ -404,7 +404,7 @@ companion_mirror_order	pass	-
 companion_ref_quoted_class	pass	-	
 companion_unapply_through_prefix	pass	-	
 comparable_boxes	pass	-	
-compiletime_string_ops	fail	-	error: type mismatch: found "urge", required Substring["hamburger", 4, 8]
+compiletime_string_ops	fail	-	error: Found: "urge"
 compound_assignment_lifted	pass	-	
 concat_order	pass	-	
 concat_order_boundary	pass	-	
@@ -423,7 +423,7 @@ concurrent_hash_map_views	fail	-	error: Ambiguous overload. The overloaded alter
 condition_then_bracket_line	pass	-	
 conditional_precedence	pass	-	
 conformance_extras	pass	-	
-cons_pattern_binders	fail	-	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+cons_pattern_binders	fail	-	error: Found: IArray[AnyRef]
 console_bind_arg_moves_console_print_moved_a	pass	-	
 console_bind_arg_moves_console_print_no_move	pass	-	
 console_bind_arg_moves_console_println_moved_a	pass	-	
@@ -589,9 +589,9 @@ ctor_parameter_storage	pass	-
 curried_alias_erased_overload	pass	-	
 curried_alias_implicit_scope	pass	-	
 curried_alias_lambda_argument_erased	pass	-	
-curried_alias_null_comparison	fail	-	error: type mismatch: found Null, required Const[Any, Int]
+curried_alias_null_comparison	fail	-	error: Found: Null
 curried_alias_synthesized_givens	fail	-	TypeError: CanEqual$(...).derived is not a function
-curried_alias_third_application	fail	-	error: type mismatch: found (Int, String, Boolean), required Curried[Int, String, Boolean]
+curried_alias_third_application	fail	-	error: Found: (Int, String, Boolean)
 curried_alias_value_class_box	pass	-	
 curried_capture_clauses	pass	-	
 curried_tuple_prototypes	pass	-	
@@ -712,8 +712,8 @@ enum_case_refinement_binders	pass	-
 enum_case_through_inline_call	pass	-	
 enum_case_type_param_refs	pass	-	
 enum_case_widen_lifting	fail	-	error: None of the overloaded alternatives of method which in object Main with types
-enum_case_widened_through_prefix	fail	-	error: type mismatch: found a.E.E, required a.E
-enum_case_widening	fail	-	error: type mismatch: found (k : a.E), required a.Tr
+enum_case_widened_through_prefix	fail	-	error: Found: a.E.E
+enum_case_widening	fail	-	error: Found: (k : a.E)
 enum_cases	pass	-	
 enum_category	pass	-	
 enum_extends_class	pass	-	
@@ -877,7 +877,7 @@ extension_overload_targs	pass	-
 extension_overloads_by_argument	pass	-	
 extension_package_sibling	pass	-	
 extension_receiver_path	pass	-	
-extension_result_application	fail	-	error: type mismatch: found Int, required String
+extension_result_application	fail	-	error: Found: Int
 extension_result_view	pass	-	
 extension_siblings	pass	-	
 extension_siblings_typeclass	pass	-	
@@ -895,7 +895,7 @@ extractor_binder_narrowed	pass	-
 extractor_irrefutable_tested	pass	-	
 extractor_pattern_bound_types	fail	-	error: value size is not a member of Any
 extractor_reachable_after	pass	-	
-extractor_selected_bounds	fail	-	error: type mismatch: found Any, required String
+extractor_selected_bounds	fail	-	error: Found: Any
 extractor_sequence_wrapper_result	fail	-	error: Slots is not a case class, so it cannot be used as a pattern
 extractor_singleton_subpattern	pass	-	
 extractor_through_value_import	fail	-	RangeError: Maximum call stack size exceeded
@@ -981,7 +981,7 @@ function_type_tests	pass	-
 function_value_callee	pass	-	
 function_value_helper_leaving_local	pass	-	
 function_value_helper_local_names	pass	-	
-function_xxl	fail	-	error: type Function023 not found
+function_xxl	fail	-	error: Not found: type Function023
 function_xxl_arity256	fail	-	output differs
 function_xxl_erased_class	fail	-	error: type Function023 not found
 function_xxl_erased_overload	pass	-	
@@ -989,8 +989,8 @@ function_xxl_inherited_member	pass	-
 function_xxl_jvm	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 function_xxl_overloaded_alias_apply	pass	-	
 function_xxl_overloaded_apply	pass	-	
-future_prepare	fail	-	error: type IllegalThreadStateException not found
-futures	fail	-	error: type IllegalThreadStateException not found
+future_prepare	fail	-	error: Not found: type IllegalThreadStateException
+futures	fail	-	error: Not found: type IllegalThreadStateException
 gadt_alternatives	pass	-	
 gadt_fresh_abstract	pass	-	
 gadt_fresh_abstract_bounds	pass	-	
@@ -1037,6 +1037,8 @@ given_enum_value_singleton_head	pass	-
 given_export_by_givenness	pass	-	
 given_extension_context_chain	pass	-	
 given_extension_levels	pass	-	
+given_extension_preference_prefix_35	pass	-	
+given_extension_preference_prefix_implicits	pass	-	
 given_extension_prefix	pass	-	
 given_fits_abstract_member	pass	-	
 given_fits_gadt_branch	pass	-	
@@ -1054,7 +1056,7 @@ given_fits_site_refined_result	pass	-
 given_fits_trait_receiver	pass	-	
 given_fits_var_candidate	pass	-	
 given_hk_bound	pass	-	
-given_implicit_scope_match_part	fail	-	error: no given instance of type A was found for parameter x
+given_implicit_scope_match_part	fail	-	error: No given instance of type A was found for parameter x of method summon in object Predef
 given_implicit_scope_negation	pass	-	
 given_import_bound_exclusion	pass	-	
 given_import_bound_situated	pass	-	
@@ -1066,13 +1068,13 @@ given_import_index_export_forwarder	pass	-
 given_import_index_match_part	pass	-	
 given_import_index_match_part_alone	pass	-	
 given_import_index_member_part	pass	-	
-given_import_index_part_selectors	fail	-	error: no given instance of type A was found for parameter x
+given_import_index_part_selectors	fail	-	error: No given instance of type A was found for parameter x of method summon in object Predef
 given_import_index_value_part	pass	-	
 given_import_level_owner	pass	-	
 given_import_same_level	pass	-	
 given_in_alias_object_scope	pass	-	
-given_index_dependent_parameter_later_clause	fail	-	error: no given instance of type A was found for parameter x
-given_index_dependent_parameter_same_clause	fail	-	error: no given instance of type A was found for parameter x
+given_index_dependent_parameter_later_clause	fail	-	error: No given instance of type A was found for parameter x of method summon in object Predef
+given_index_dependent_parameter_same_clause	fail	-	error: No given instance of type A was found for parameter x of method summon in object Predef
 given_inferred_override_class_context	pass	-	
 given_inferred_override_class_context_alone	pass	-	
 given_inferred_override_extension	pass	-	
@@ -1123,12 +1125,15 @@ given_not_given_fallback	pass	-
 given_not_given_negation	pass	-	
 given_not_given_shadowed	pass	-	
 given_object_extension_import	pass	-	
-given_object_instance_lazy	fail	-	error: type IllegalThreadStateException not found
+given_object_instance_lazy	fail	-	error: Not found: type IllegalThreadStateException
 given_object_instance_recursion_js	pass	-	
 given_object_module	pass	-	
 given_object_publication	pass	-	
 given_object_publication_super	fail	-	RangeError: Maximum call stack size exceeded
 given_object_publication_super_js	pass	-	
+given_object_several_parents_generic_owner	pass	-	
+given_object_several_parents_mixed	fail	-	output differs
+given_object_several_parents_unported	pass	-	
 given_object_singleton_reference	pass	-	
 given_one_symbol_two_receivers_by_type	pass	-	
 given_opaque_scope_prefix	pass	-	
@@ -1144,6 +1149,8 @@ given_patterns	pass	-
 given_poly_member_def	pass	-	
 given_polymorphic_def	pass	-	
 given_pref_gadt_local_object	pass	-	
+given_preference_default_source	pass	-	
+given_preference_old_source	pass	-	
 given_ranked_abstract_member	pass	-	
 given_ranked_seen_from_receiver	pass	-	
 given_ranking_of_one_pair_for_many_targets	pass	-	
@@ -1253,7 +1260,7 @@ inference_empty_collection	pass	-
 inference_leftovers_retired	fail	-	TypeError: CanEqual$(...).derived is not a function
 inference_nested_lambda	pass	-	
 inferred_ctor	pass	-	
-inferred_result_java_enum	fail	-	error: type mismatch: found (e.d : ElementType), required (ElementType.FIELD : ElementType)
+inferred_result_java_enum	fail	-	error: Found: (e.d : ElementType)
 inferred_result_tracked	fail	-	error: expected ':', found 'val'
 inferred_result_types	fail	-	error: Found: Int
 infix_alphanumeric_exempt	fail	-	error: cannot resolve import: cats not found
@@ -1352,7 +1359,7 @@ inline_by_name_named_args	pass	-
 inline_case_binder_prefix	pass	-	
 inline_case_default_calls	pass	-	
 inline_case_default_match	pass	-	
-inline_case_renewed_import	fail	-	error: not found: render
+inline_case_renewed_import	fail	-	error: Not found: render
 inline_check_class_in_given	pass	-	
 inline_check_conversion_round	pass	-	
 inline_check_getters_and_paths	pass	-	
@@ -1385,7 +1392,7 @@ inline_definition_copies	pass	-
 inline_definition_default_calls	pass	-	
 inline_definition_deferred_path	pass	-	
 inline_definition_gadt_scope	pass	-	
-inline_definition_gaps	fail	-	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+inline_definition_gaps	fail	-	error: Found: IArray[AnyRef]
 inline_definition_inline_val_expr	pass	-	
 inline_definition_local	pass	-	
 inline_definition_local_resolution	pass	-	
@@ -1555,7 +1562,7 @@ int_remainder_negative_zero	pass	-
 int_sign	pass	-	
 interp_escapes	pass	-	
 interp_order	pass	-	
-interpolate_forcing_boundaries	fail	-	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+interpolate_forcing_boundaries	fail	-	error: Found: IArray[AnyRef]
 interpolate_open_variables	pass	-	
 interpolation_dollar_quote	pass	-	
 interpolator_context_companion_apply	pass	-	
@@ -1586,7 +1593,7 @@ jar_case_class_selectors	fail	-	error: cannot resolve import: play not found
 jar_class_unicode_name	fail	-	error: cannot resolve import: reactivemongo not found
 jar_covariant_factory_bridge	pass	-	
 jar_inner_class_bounds	pass	-	
-jar_signed_extension_macro	fail	-	error: not found: inlinebodies
+jar_signed_extension_macro	fail	-	error: Not found: inlinebodies
 java_annotation_interface	pass	-	
 java_atomics	fail	-	error: String cannot be instantiated
 java_byte_short_constants	fail	-	error: Cannot reduce `inline if` because its condition is not a constant value: java.lang.Short.MAX_VALUE > 100
@@ -1609,7 +1616,7 @@ java_net_uri	pass	-
 java_parens	fail	-	error: not supported on JavaScript: method random of java.lang.Math (a Java definition without an implementation in the std's platform layer
 java_parens_overloads	pass	-	
 java_queues_threads	pass	-	
-java_stand_ins	fail	-	error: not found: println
+java_stand_ins	fail	-	error: Not found: println
 java_time_parse_iso	fail	-	error: not supported on JavaScript: class DateTimeException java.time.DateTimeException (a Java definition without an implementation in the
 java_tree_map	pass	-	
 java_tree_map_calls	pass	-	
@@ -1617,16 +1624,16 @@ java_tree_map_edges	pass	-
 java_tree_map_views	pass	-	
 java_tree_set	pass	-	
 java_util_bits	fail	-	output differs
-java_varargs_spread	fail	-	error: not found: fix
-java_varargs_spread_unimported	fail	-	error: type mismatch: found Array[String], required Seq[String]
+java_varargs_spread	fail	-	error: Not found: fix
+java_varargs_spread_unimported	fail	-	error: Found: Array[String]
 java_view_remove_named_apart	pass	-	
 jdk_abstract_members	pass	-	
 jdk_abstract_members_jvm	fail	-	error: class Empty needs to be abstract, since def read(): Int in class Reader is not defined
 jdk_enum_stable_values	fail	-	error: a singleton type needs a val, a parameter or an object
-jdk_member_missing_class	fail	-	error: type mismatch: found Throwable, required IllegalStateException
+jdk_member_missing_class	fail	-	error: Found: Throwable
 jdk_routes_compiler_subset	fail	-	error: not supported on JavaScript: class File java.io.File (a Java definition without an implementation in the std's platform layer)
 jdk_static_values_stable	fail	-	error: a singleton type needs a val, a parameter or an object
-jdk_statics_import	fail	-	error: not found: getType
+jdk_statics_import	fail	-	error: Not found: getType
 junit_comparison_failure	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 jvm_direct_interfaces	fail	-	error: method andThen overrides nothing
 jvm_lazy_local_closure	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
@@ -1635,9 +1642,9 @@ jvm_lazy_val_race	fail	-	error: not supported on JavaScript: class CountDownLatc
 jvm_return_finally	pass	-	
 jvm_synchronized_cleanup	fail	-	output differs
 jvm_synchronized_nested	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
-jvm_synchronized_other_monitor	fail	-	error: type IllegalThreadStateException not found
+jvm_synchronized_other_monitor	fail	-	error: Not found: type IllegalThreadStateException
 jvm_synchronized_race	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
-jvm_synchronized_throw	fail	-	error: type IllegalThreadStateException not found
+jvm_synchronized_throw	fail	-	error: Not found: type IllegalThreadStateException
 jvm_unbox_null	pass	-	
 jvm_varargs_backing_arrays	fail	-	output differs
 kind_projector	pass	-	
@@ -1675,33 +1682,33 @@ lambda_param_ordered_vars	pass	-
 lambda_param_overload_same_count	pass	-	
 lambda_param_spread_argument	pass	-	
 lambda_result_recovered	pass	-	
-lambda_spread_bounded_formal_anyref	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_case_class	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_constructor_variable	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_enum_case	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_function_bound	fail	-	error: type mismatch: found Int => Int, required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_generic_callee	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_iterable_in_a_list	fail	-	error: type mismatch: found Iterable[Int], required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_placeholder	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_seq_of_any_not_applied	fail	-	error: type mismatch: found Seq[Any], required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_two_params	fail	-	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_two_params_union_bound	fail	-	error: type mismatch: found Seq[Int] | Array[Int], required Seq[Int]
-lambda_spread_bounded_formal_union_bound	fail	-	error: type mismatch: found Int | Seq[Int], required Seq[Int] | Array[? <: Int]
-lambda_spread_bounded_formal_wildcard_seq_bound	fail	-	error: type mismatch: found Seq[Any], required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_any_sequence	fail	-	error: type mismatch: found Any, required Seq[Any] | Array[?]
-lambda_spread_open_formal_case_class_element	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_enum_case_element	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_in_a_list	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_kept_not_called	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_method_element	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_nested	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_not_applied	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_placeholder_element	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_plain_any_element	fail	-	error: type mismatch: found 1, required Seq[Any]
+lambda_spread_bounded_formal_anyref	fail	-	error: Found: AnyRef
+lambda_spread_bounded_formal_case_class	fail	-	error: Found: AnyRef
+lambda_spread_bounded_formal_constructor_variable	fail	-	error: Found: AnyRef
+lambda_spread_bounded_formal_enum_case	fail	-	error: Found: AnyRef
+lambda_spread_bounded_formal_function_bound	fail	-	error: Found: Int => Int
+lambda_spread_bounded_formal_generic_callee	fail	-	error: Found: AnyRef
+lambda_spread_bounded_formal_iterable_in_a_list	fail	-	error: Found: Iterable[Int]
+lambda_spread_bounded_formal_placeholder	fail	-	error: Found: AnyRef
+lambda_spread_bounded_formal_seq_of_any_not_applied	fail	-	error: Found: Seq[Any]
+lambda_spread_bounded_formal_two_params	fail	-	error: Found: AnyRef
+lambda_spread_bounded_formal_two_params_union_bound	fail	-	error: Found: Seq[Int] | Array[Int]
+lambda_spread_bounded_formal_union_bound	fail	-	error: Found: Int | Seq[Int]
+lambda_spread_bounded_formal_wildcard_seq_bound	fail	-	error: Found: Seq[Any]
+lambda_spread_open_formal_any_sequence	fail	-	error: Found: Any
+lambda_spread_open_formal_case_class_element	fail	-	error: Found: Any
+lambda_spread_open_formal_enum_case_element	fail	-	error: Found: Any
+lambda_spread_open_formal_in_a_list	fail	-	error: Found: Any
+lambda_spread_open_formal_kept_not_called	fail	-	error: Found: Any
+lambda_spread_open_formal_method_element	fail	-	error: Found: Any
+lambda_spread_open_formal_nested	fail	-	error: Found: Any
+lambda_spread_open_formal_not_applied	fail	-	error: Found: Any
+lambda_spread_open_formal_placeholder_element	fail	-	error: Found: Any
+lambda_spread_open_formal_plain_any_element	fail	-	error: Found: 1
 lambda_spread_open_formal_plain_any_sequence	fail	-	output differs
-lambda_spread_open_formal_result_used	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_open_formal_two_params_element	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
-lambda_spread_poly_function_bound	fail	-	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_result_used	fail	-	error: Found: Any
+lambda_spread_open_formal_two_params_element	fail	-	error: Found: Any
+lambda_spread_poly_function_bound	fail	-	error: Found: Any
 lambda_union_expected	pass	-	
 lambdas	pass	-	
 language_import_from_root	pass	-	
@@ -1742,12 +1749,12 @@ lazy_object	pass	-
 lazy_object_init	pass	-	
 lazy_pattern_erased_element	pass	-	
 lazy_pattern_local	pass	-	
-lazy_race	fail	-	error: type IllegalThreadStateException not found
-lazy_recursion	fail	-	error: type IllegalThreadStateException not found
-lazy_serialize	fail	-	error: type IllegalThreadStateException not found
+lazy_race	fail	-	error: Not found: type IllegalThreadStateException
+lazy_recursion	fail	-	error: Not found: type IllegalThreadStateException
+lazy_serialize	fail	-	error: Not found: type IllegalThreadStateException
 lazy_thread_unsafe	pass	-	
-lazy_thread_unsafe_given	fail	-	error: type IllegalThreadStateException not found
-lazy_thread_unsafe_given_sites	fail	-	error: type IllegalThreadStateException not found
+lazy_thread_unsafe_given	fail	-	error: Not found: type IllegalThreadStateException
+lazy_thread_unsafe_given_sites	fail	-	error: Not found: type IllegalThreadStateException
 lazy_thread_unsafe_reentrant	fail	-	TypeError: Cannot redefine property: x
 lazy_thread_unsafe_reentrant_object	fail	-	TypeError: Cannot redefine property: x
 lazy_thread_unsafe_reentrant_renamed	fail	-	TypeError: Cannot redefine property: renamed
@@ -1755,7 +1762,7 @@ lazy_thread_unsafe_reentrant_toplevel	fail	-	output differs
 lazy_thread_unsafe_reentrant_trait	fail	-	TypeError: Cannot redefine property: x
 lazy_throw_retry	pass	-	
 lazy_types	pass	-	
-lazy_waiting	fail	-	error: type IllegalThreadStateException not found
+lazy_waiting	fail	-	error: Not found: type IllegalThreadStateException
 lazy_zip_on_demand	pass	-	
 lazyvals	pass	-	
 leading_infix	pass	-	
@@ -1771,7 +1778,7 @@ lexical_extension_ranked_givens	pass	-
 lexical_extension_ranked_macro	pass	-	
 lexical_extension_ranked_receiver	pass	-	
 lexical_extension_retry_leading	pass	-	
-library_body_casts	fail	-	error: not found: bodycasts
+library_body_casts	fail	-	error: Not found: bodycasts
 library_body_std_defaults	fail	-	error: cannot resolve import: stddefaultslib not found
 library_named_tuple_size	pass	-	
 library_overloads_erased_alike	fail	-	error: type PairMaker not found
@@ -1945,7 +1952,7 @@ macro_lambda_definition_tree	pass	-
 macro_lambda_method_type	pass	-	
 macro_lambda_quotes	pass	-	
 macro_lambda_transparent_signature	pass	-	
-macro_library_body_attempt	fail	-	error: not found: cats
+macro_library_body_attempt	fail	-	error: Not found: cats
 macro_library_super	pass	-	
 macro_member_trees	pass	-	
 macro_method_type_binder	pass	-	
@@ -1969,7 +1976,7 @@ macro_param_clauses	pass	-
 macro_param_has_default	pass	-	
 macro_pattern_intersection	pass	-	
 macro_pattern_type_bounds	pass	-	
-macro_patterns	fail	-	error: no given instance of type FromExpr[T | Null] was found for parameter from
+macro_patterns	fail	-	error: No given instance of type FromExpr[T | Null] was found for parameter from of method unapply in object Expr
 macro_position_implicit	pass	-	
 macro_position_named_arg	fail	-	output differs
 macro_position_nested	pass	-	
@@ -2017,10 +2024,10 @@ macro_suspended_after_std_demand	pass	-
 macro_suspended_after_std_demand_flagged	pass	-	
 macro_suspended_after_std_demand_retried	pass	-	
 macro_suspended_library_class	fail	-	error: type Tally not found
-macro_suspended_library_default	fail	-	error: not found: rounddemand
+macro_suspended_library_default	fail	-	error: Not found: rounddemand
 macro_suspended_library_path_misses_waiting_call	fail	-	error: value Chosen is not a member of rounddemand
-macro_suspended_library_unboxing	fail	-	error: not found: rounddemand
-macro_suspended_library_unboxing_in_one_call	fail	-	error: not found: rounddemand
+macro_suspended_library_unboxing	fail	-	error: Not found: rounddemand
+macro_suspended_library_unboxing_in_one_call	fail	-	error: Not found: rounddemand
 macro_suspended_member_class_bound	pass	-	
 macro_suspended_round_stands_after_std_demand	pass	-	
 macro_suspended_twice_without_demand	pass	-	
@@ -2093,7 +2100,7 @@ member_retry_splice	fail	-	output differs
 member_retry_transparent	pass	-	
 memberaliases	pass	-	
 method_type_arg_kind	fail	-	error: type argument P#F[Int] does not have the same kind as its bound [_]
-method_type_arg_kinds_accepted	fail	-	error: type AnyKind not found
+method_type_arg_kinds_accepted	fail	-	error: Not found: type AnyKind
 methods_of_namesake_parameters	pass	-	
 mirror_declared_parent_interfaces	fail	-	TypeError: c.getInterfaces is not a function
 mirror_declared_type	pass	-	
@@ -2510,8 +2517,8 @@ receiver_own_type_instance	pass	-
 receiver_reference_forms	pass	-	
 receiver_type_args_from_expected	pass	-	
 recursive_hk_after_join	pass	-	
-reducer_literal_bound	fail	-	error: type mismatch: found ReducerLiteralC[[X] =>> 1, _, _], required ReducerLiteralC[[X] =>> 1, ?, ? <: 1]
-reducer_wildcard_bound	fail	-	error: type mismatch: found ReducerC[[X] =>> X, _, _], required ReducerC[[X] =>> X, ? <: String, ? <: String]
+reducer_literal_bound	fail	-	error: Found: ReducerLiteralC[[X] =>> 1, _, _]
+reducer_wildcard_bound	fail	-	error: Found: ReducerC[[X] =>> X, _, _]
 refined_aux_givens	pass	-	
 refined_poly_applications	pass	-	
 refined_projection_patterns	pass	-	
@@ -2554,7 +2561,7 @@ regex_quote_embedded_end	pass	-
 regex_scoped_flags	fail	-	throw new PatternSyntaxException(error, regex, -1);
 regex_supplementary	pass	-	
 regex_unicode_class_case	fail	-	throw new PatternSyntaxException(error, regex, -1);
-regroup_bincompat_lib	fail	-	error: not found: rgb
+regroup_bincompat_lib	fail	-	error: Not found: rgb
 repeated_args_solved_later	pass	-	
 repeated_args_value_class_cast	pass	-	
 result_takes_arguments	pass	-	
@@ -2607,11 +2614,11 @@ sam_conversion_after_overloaded_apply	fail	-	error: not supported on JavaScript:
 sam_eta_java_function	pass	-	
 sam_function_value	pass	-	
 sam_lambda_this	pass	-	
-sam_literal_receiver_shapes	fail	-	error: type IllegalThreadStateException not found
+sam_literal_receiver_shapes	fail	-	error: Not found: type IllegalThreadStateException
 sam_literal_receiver_synthesized	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
 sam_literal_receiver_unchanged	pass	-	
 sam_literal_receiver_unchanged_local_default	pass	-	
-sam_literal_receiver_wait_notify	fail	-	error: type IllegalThreadStateException not found
+sam_literal_receiver_wait_notify	fail	-	error: Not found: type IllegalThreadStateException
 sam_method_by_name	pass	-	
 sam_outer_name	pass	-	
 sam_overloaded_lambda	pass	-	
@@ -2654,14 +2661,14 @@ scala3_i11966	pass	-
 scala3_i11993	pass	-	
 scala3_i1463	pass	-	
 scala3_i1543	pass	-	
-scala3_i16806	fail	-	error: type IllegalThreadStateException not found
+scala3_i16806	fail	-	error: Not found: type IllegalThreadStateException
 scala3_i1856	pass	-	
 scala3_i1856_local	pass	-	
 scala3_i18638	pass	-	
 scala3_i20095	pass	-	
 scala3_i20395	pass	-	
 scala3_i2077	pass	-	
-scala3_i20856	fail	-	error: type IllegalThreadStateException not found
+scala3_i20856	fail	-	error: Not found: type IllegalThreadStateException
 scala3_i2266	pass	-	
 scala3_i23409b	pass	-	
 scala3_i23693	pass	-	
@@ -2684,7 +2691,7 @@ scala3_isInstanceOf-eval	pass	-
 scala3_iterator-concat	pass	-	
 scala3_lazyVals	pass	-	
 scala3_lazy_exprs	fail	-	function $matchError(v) { const c = $exc.MatchError; throw c ? new c(v) : new Error("MatchError: " + $str(v)); }
-scala3_lazy_impl	fail	-	error: type IllegalThreadStateException not found
+scala3_lazy_impl	fail	-	error: Not found: type IllegalThreadStateException
 scala3_lazy_implicit_lists	pass	-	
 scala3_lazy_implicit_nums	pass	-	
 scala3_lazy_override_run	pass	-	
@@ -2768,14 +2775,14 @@ scala3_z1720	pass	-
 scala_library_deprecated_members	fail	-	its summaries of hidden warnings are not scalac's (tests/stdlib-summaries.txt)
 scala_package_member_before_predef	fail	-	output differs
 scalajs_stack_trace	pass	-	
-script_bounded_output	fail	-	error: not found: Script
+script_bounded_output	fail	-	error: Not found: Script
 script_header	pass	-	
 script_header_block	pass	-	
-script_json_python	fail	-	error: not found: Json
-script_library	fail	-	error: not found: Script
-script_lsp	fail	-	error: not found: Script
-script_owned_children	fail	-	error: not found: Script
-script_owned_signal	fail	-	error: not found: Script
+script_json_python	fail	-	error: Not found: Json
+script_library	fail	-	error: Not found: Script
+script_lsp	fail	-	error: Not found: Script
+script_owned_children	fail	-	error: Not found: Script
+script_owned_signal	fail	-	error: Not found: Script
 sealed_child_owner_prefix	pass	-	
 secondary_constructors	fail	-	RangeError: Maximum call stack size exceeded
 secondary_constructors_anon	pass	-	
@@ -2970,14 +2977,14 @@ symbolic_package_block	pass	-
 symbolic_type_selection	pass	-	
 sync_break_direct	pass	-	
 sync_exits	pass	-	
-sync_exits_jvm	fail	-	error: type IllegalThreadStateException not found
-sync_mutual_exclusion	fail	-	error: type IllegalThreadStateException not found
+sync_exits_jvm	fail	-	error: Not found: type IllegalThreadStateException
+sync_mutual_exclusion	fail	-	error: Not found: type IllegalThreadStateException
 sync_nesting	pass	-	
 sync_nesting_jvm	fail	-	output differs
 sync_receivers	fail	-	output differs
 sync_results	pass	-	
 sync_return_operands	pass	-	
-sync_wait_notify	fail	-	error: type IllegalThreadStateException not found
+sync_wait_notify	fail	-	error: Not found: type IllegalThreadStateException
 syntax_extras	pass	-	
 syntax_gaps	pass	-	
 synthesized_target_name	pass	-	
@@ -3013,42 +3020,42 @@ template_pattern_vals	pass	-
 this_rooted_type_path	pass	-	
 this_type_intersection	pass	-	
 this_type_prefix_params	pass	-	
-thread_concurrent_map_put_interrupted	fail	-	error: type IllegalThreadStateException not found
-thread_concurrent_map_read_during_compute	fail	-	error: type IllegalThreadStateException not found
-thread_condition_interrupt_signal	fail	-	error: type IllegalThreadStateException not found
-thread_condition_signal_transfer	fail	-	error: type IllegalThreadStateException not found
-thread_condition_timed_signal	fail	-	error: type IllegalThreadStateException not found
-thread_condition_zero_wait	fail	-	error: type IllegalThreadStateException not found
+thread_concurrent_map_put_interrupted	fail	-	error: Not found: type IllegalThreadStateException
+thread_concurrent_map_read_during_compute	fail	-	error: Not found: type IllegalThreadStateException
+thread_condition_interrupt_signal	fail	-	error: Not found: type IllegalThreadStateException
+thread_condition_signal_transfer	fail	-	error: Not found: type IllegalThreadStateException
+thread_condition_timed_signal	fail	-	error: Not found: type IllegalThreadStateException
+thread_condition_zero_wait	fail	-	error: Not found: type IllegalThreadStateException
 thread_daemon	fail	-	error: not supported on JavaScript: class IllegalThreadStateException java.lang.IllegalThreadStateException (a Java definition without an im
-thread_ended_lock_and_join	fail	-	error: type IllegalThreadStateException not found
-thread_future_cancel_interrupt	fail	-	error: type IllegalThreadStateException not found
-thread_interrupt_sleep	fail	-	error: type IllegalThreadStateException not found
+thread_ended_lock_and_join	fail	-	error: Not found: type IllegalThreadStateException
+thread_future_cancel_interrupt	fail	-	error: Not found: type IllegalThreadStateException
+thread_interrupt_sleep	fail	-	error: Not found: type IllegalThreadStateException
 thread_join_timeout	fail	-	error: not supported on JavaScript: class IllegalThreadStateException java.lang.IllegalThreadStateException (a Java definition without an im
-thread_latch_fanout	fail	-	error: type IllegalThreadStateException not found
-thread_latch_interrupt_release	fail	-	error: type IllegalThreadStateException not found
-thread_lazy_interrupt	fail	-	error: type IllegalThreadStateException not found
-thread_lazy_race	fail	-	error: type IllegalThreadStateException not found
-thread_lifecycle	fail	-	error: type IllegalThreadStateException not found
-thread_local_inherit_construction	fail	-	error: type IllegalThreadStateException not found
-thread_local_lazy_race	fail	-	error: type IllegalThreadStateException not found
-thread_local_values	fail	-	error: type IllegalThreadStateException not found
-thread_lock_interrupt_release	fail	-	error: type IllegalThreadStateException not found
-thread_main_inherits_nothing	fail	-	error: type IllegalThreadStateException not found
-thread_module_race	fail	-	error: type IllegalThreadStateException not found
-thread_pool_futures	fail	-	error: type IllegalThreadStateException not found
-thread_queue_handoff	fail	-	error: type IllegalThreadStateException not found
+thread_latch_fanout	fail	-	error: Not found: type IllegalThreadStateException
+thread_latch_interrupt_release	fail	-	error: Not found: type IllegalThreadStateException
+thread_lazy_interrupt	fail	-	error: Not found: type IllegalThreadStateException
+thread_lazy_race	fail	-	error: Not found: type IllegalThreadStateException
+thread_lifecycle	fail	-	error: Not found: type IllegalThreadStateException
+thread_local_inherit_construction	fail	-	error: Not found: type IllegalThreadStateException
+thread_local_lazy_race	fail	-	error: Not found: type IllegalThreadStateException
+thread_local_values	fail	-	error: Not found: type IllegalThreadStateException
+thread_lock_interrupt_release	fail	-	error: Not found: type IllegalThreadStateException
+thread_main_inherits_nothing	fail	-	error: Not found: type IllegalThreadStateException
+thread_module_race	fail	-	error: Not found: type IllegalThreadStateException
+thread_pool_futures	fail	-	error: Not found: type IllegalThreadStateException
+thread_queue_handoff	fail	-	error: Not found: type IllegalThreadStateException
 thread_scheduled_cancel	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
 thread_scheduled_policy_after_shutdown	fail	-	error: not supported on JavaScript: class AbstractExecutorService java.util.concurrent.AbstractExecutorService (a Java definition without an
 thread_scheduled_shutdown_now	fail	-	error: not supported on JavaScript: class AbstractExecutorService java.util.concurrent.AbstractExecutorService (a Java definition without an
-thread_spin	fail	-	error: type IllegalThreadStateException not found
+thread_spin	fail	-	error: Not found: type IllegalThreadStateException
 thread_sync_queue_handoff	fail	-	error: String cannot be instantiated
-thread_synchronized_counter	fail	-	error: type IllegalThreadStateException not found
-thread_timer_stale_head	fail	-	error: type IllegalThreadStateException not found
-thread_uncaught	fail	-	error: type IllegalThreadStateException not found
+thread_synchronized_counter	fail	-	error: Not found: type IllegalThreadStateException
+thread_timer_stale_head	fail	-	error: Not found: type IllegalThreadStateException
+thread_uncaught	fail	-	error: Not found: type IllegalThreadStateException
 thread_wait_argument_order	fail	-	output differs
 thread_wait_argument_widening	pass	-	
 thread_wait_named_argument	pass	-	
-thread_wait_notify	fail	-	error: type IllegalThreadStateException not found
+thread_wait_notify	fail	-	error: Not found: type IllegalThreadStateException
 thread_wait_null_receiver	fail	-	output differs
 throwable_init_cause	pass	-	
 time_clock	fail	-	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
@@ -3105,9 +3112,9 @@ tuple_member_extension	pass	-
 tuple_named_arguments	pass	-	
 tuple_ops_type_args	pass	-	
 tuple_product_getters	pass	-	
-tuple_xxl	fail	-	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+tuple_xxl	fail	-	error: Found: IArray[AnyRef]
 tuple_xxl_product	pass	-	
-tuple_xxl_typed	fail	-	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+tuple_xxl_typed	fail	-	error: Found: IArray[AnyRef]
 tupling_priority	pass	-	
 type_checks_nested_package_clauses	fail	-	error: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 type_evidence_refl	pass	-	
@@ -3279,8 +3286,8 @@ vector_trie	pass	-
 view_after_unrelated_extension	pass	-	
 view_bound_variance	pass	-	
 view_contravariant_variable	pass	-	
-view_import_ineligible_shadow	fail	-	error: type mismatch: found 7, required Wrapped
-view_import_renamed_prefixes	fail	-	error: type mismatch: found 1, required Box[Int]
+view_import_ineligible_shadow	fail	-	error: Found: 7
+view_import_renamed_prefixes	fail	-	error: Found: 1
 view_instance_open_variable	pass	-	
 view_kinds	fail	-	output differs
 view_lib_alias	fail	-	error: cannot resolve import: viewlib not found
@@ -3309,7 +3316,7 @@ wildcard_bound_match_type_scrutinee	pass	-
 wildcard_bound_overlap_accepts	pass	-	
 wildcard_bound_path_prefix	pass	-	
 wildcard_bounds	pass	-	
-wildcard_capture_param_bounds	fail	-	error: type mismatch: found C[[A] =>> List[A], _], required C[?, ? <: Seq[Int]]
+wildcard_capture_param_bounds	fail	-	error: Found: C[[A] =>> List[A], _]
 wildcard_lower_bound	pass	-	
 wildcard_lower_bound_argument	pass	-	
 wildcard_param_bound	pass	-	
@@ -3329,7 +3336,7 @@ zio_runtime_lazy_race	fail	-	error: cannot resolve import: zio not found
 zio_runtime_module_race	fail	-	error: cannot resolve import: zio not found
 zio_runtime_pipe	fail	-	error: cannot resolve import: zio not found
 zio_runtime_sleep_fork	fail	-	error: cannot resolve import: zio not found
-zio_signal_handler	fail	-	error: not found: Unsafe
+zio_signal_handler	fail	-	error: Not found: Unsafe
 zio_succeed_anon_inner_parent	fail	-	error: cannot resolve import: zio not found
 zip_default_zone	fail	-	error: value zoneName is not a member of zip
 zip_digest	fail	-	error: not supported on JavaScript: class CRC32 java.util.zip.CRC32 (a Java definition without an implementation in the std's platform layer

@@ -14001,6 +14001,12 @@ impl<'a> Worker<'a> {
             let diff = match by_givens(self, b, i) {
                 0 if self.has_more_specific_receiver(&best, &call) => 1,
                 0 if self.has_more_specific_receiver(&call, &best) => -1,
+                // One extension method read on two givens: the more specific given's (`compareWithTypes`'
+                // `comparePrefixes` where `alt1.symbol == alt2.symbol`); not at 3.6 and 3.7-migration, whose
+                // comparison is not ported (`PreferenceScheme::Unported`).
+                0 if best.sym == call.sym && self.preference_scheme() != super::implicits::PreferenceScheme::Unported => {
+                    self.compare_given_prefixes(cands[b].0 .1, cands[i].0 .1)
+                }
                 d => d,
             };
             match diff {
@@ -14836,6 +14842,17 @@ impl<'a> Worker<'a> {
         // `extension (using c: Ctx)`) is open until that given is found.
         let leading: Vec<SymId> = sig.clauses[..idx].iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
         Some(self.approx_paths(pty, &leading, &mut Vec::new()))
+    }
+
+    /// Two givens' types as the prefixes one extension method is read on (`comparePrefixes`): positive where `a`'s is
+    /// the more specific.
+    fn compare_given_prefixes(&mut self, a: TypeId, b: TypeId) -> i32 {
+        let mark = self.snapshot();
+        let a_in_b = self.is_sub(a, b);
+        self.rollback(&mark);
+        let b_in_a = self.is_sub(b, a);
+        self.rollback(&mark);
+        a_in_b as i32 - b_in_a as i32
     }
 
     /// Whether every receiver of `a` is a receiver of `b` and not the other way round.

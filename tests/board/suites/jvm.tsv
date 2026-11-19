@@ -1039,6 +1039,8 @@ given_enum_value_singleton_head	pass	-
 given_export_by_givenness	pass	-	
 given_extension_context_chain	pass	-	
 given_extension_levels	pass	-	
+given_extension_preference_prefix_35	pass	-	
+given_extension_preference_prefix_implicits	pass	-	
 given_extension_prefix	pass	-	
 given_fits_abstract_member	pass	-	
 given_fits_gadt_branch	pass	-	
@@ -1131,6 +1133,9 @@ given_object_module	pass	-
 given_object_publication	pass	-	
 given_object_publication_super	pass	-	
 given_object_publication_super_js	cannot run	-	its expectation is Scala.js's
+given_object_several_parents_generic_owner	pass	-	
+given_object_several_parents_mixed	fail	-	output
+given_object_several_parents_unported	pass	-	
 given_object_singleton_reference	pass	-	
 given_one_symbol_two_receivers_by_type	pass	-	
 given_opaque_scope_prefix	pass	-	
@@ -1146,6 +1151,8 @@ given_patterns	pass	-
 given_poly_member_def	pass	-	
 given_polymorphic_def	pass	-	
 given_pref_gadt_local_object	pass	-	
+given_preference_default_source	pass	-	
+given_preference_old_source	pass	-	
 given_ranked_abstract_member	pass	-	
 given_ranked_seen_from_receiver	pass	-	
 given_ranking_of_one_pair_for_many_targets	pass	-	

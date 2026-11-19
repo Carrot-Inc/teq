@@ -6,7 +6,9 @@
 # under --werror), a file added, the UTF-16 columns of a line with a non-ASCII character, a first
 # build with an error followed by its fix, a constant val's value changed where its singleton
 # type is read (the full path, as a fresh check), a library's source version import changed under a
-# client's explicit evidence argument and back (the full path, as a fresh check), a nested class's
+# client's explicit evidence argument and back (the full path, as a fresh check), a 3.6 import added to a file and
+# removed and a file at 3.6 added and deleted beside a given object of several parents (the compilation's form of its
+# givens, the full path each time, as a fresh check), a nested class's
 # prefix changed under a client (scalac's error, as a fresh check), a first build with a file that fails to parse (its
 # recovered tree typed with the rest) followed by its fix, and the `text` command: an unsaved
 # text standing in for the file on disk for a named and for a plain `build`, and its withdrawal;
@@ -305,6 +307,35 @@ printf 'import scala.language.`3.3`\ntrait C[T]\nobject Lib { def f[T: C](): Int
 build "$vdir/Lib.scala"
 expect "a source version import changed back: the full path" "$(field ok),$(field incremental),$(field fallback),$(count error)" 'true,false,"'"$vdir"'/Lib.scala: source version changed",0'
 as_fresh "a source version import changed back" "$vdir/Lib.scala" "$vdir/Use.scala"
+stop
+
+# A compilation with a file at 3.6 or 3.7-migration types every file's givens as teq did before it told the versions
+# apart (`Worker::compilation_unported`, read from the files' versions before anything is entered): a given object
+# of several parents is its first parent there, so a summon of its second finds nothing. scalac finds it at every
+# version; the part that ports 3.6's comparison takes the difference away. A 3.6 import added and removed, and a file
+# at 3.6 added and deleted, each take the full path, whose answer is a fresh check's.
+gdir=$work/givenfact
+mkdir -p "$gdir"
+printf 'class P\ntrait Q\nobject O:\n  given g: P() with Q with {}\n' > "$gdir/G.scala"
+printf 'import O.given\nobject Use { val q: Q = summon[Q] }\n' > "$gdir/Use.scala"
+start "$gdir"
+expect "the compilation's given form: the first build" "$(field ok),$(count error)" 'true,0'
+printf 'import scala.language.`3.6`\nclass P\ntrait Q\nobject O:\n  given g: P() with Q with {}\n' > "$gdir/G.scala"
+build "$gdir/G.scala"
+expect "the compilation's given form: a 3.6 import added" "$(field ok),$(field incremental),$(field fallback),$(count error)" 'false,false,"'"$gdir"'/G.scala: source version changed",1'
+as_fresh "the compilation's given form: a 3.6 import added" "$gdir"
+printf 'class P\ntrait Q\nobject O:\n  given g: P() with Q with {}\n' > "$gdir/G.scala"
+build "$gdir/G.scala"
+expect "the compilation's given form: the 3.6 import removed" "$(field ok),$(field incremental),$(field fallback),$(count error)" 'true,false,"'"$gdir"'/G.scala: source version changed",0'
+as_fresh "the compilation's given form: the 3.6 import removed" "$gdir"
+printf 'import scala.language.`3.6`\nobject Old\n' > "$gdir/Old.scala"
+build "$gdir/Old.scala"
+expect "the compilation's given form: a file at 3.6 added" "$(field ok),$(field incremental),$(field fallback),$(count error)" 'false,false,"files added or removed",1'
+as_fresh "the compilation's given form: a file at 3.6 added" "$gdir"
+rm "$gdir/Old.scala"
+build "$gdir/Old.scala"
+expect "the compilation's given form: the file at 3.6 deleted" "$(field ok),$(field incremental),$(field fallback),$(count error)" 'true,false,"files added or removed",0'
+as_fresh "the compilation's given form: the file at 3.6 deleted" "$gdir"
 stop
 
 # A class nested in a class is a type of its own through each prefix: a result moved from

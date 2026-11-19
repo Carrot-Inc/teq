@@ -185,6 +185,11 @@ exportrelayrename_b rrb.C$package run annotation-tree
 extensionoverload_b eob.B$package run annotation-tree
 givenfold_b gfb.Use$package run annotation-tree
 givenladder_b glb.Use$package run annotation-tree
+# given-object-in-class: teq's module class of a given object of a class instance has a writeReplace that scalac's
+# lacks (master's binary writes it for a one-parent one too).
+givenobjectparents_a gop.C.pair writeReplace given-object-in-class
+givenobjectparents_a gop.D.both writeReplace given-object-in-class
+givenobjectparents_b gopu.Use$package run annotation-tree
 identityexpand_c idxmain.Main$package run annotation-tree
 initcall_b icallb.Use$package run annotation-tree
 initdef_b idb.Use$package run annotation-tree
@@ -312,6 +317,12 @@ extension_a usedName ea.Ext$package Int primitive-operator scalac Default
 extension_a binaryDependency ea.Ext$package scala.Int primitive-operator scalac jar:scala-library,Ext.scala,DependencyByMemberRef
 given_a usedName ga.Show$.listShow ImpureFunction1 impure-function scalac Default
 given_a usedName ga.Show$.listShow a synthetic-local scalac Default
+# given-object-reference: a reference to a given object records the names and classes of the signature teq reads it
+# by, its parents' intersection (`P[T] & R`), where scalac's records the object's class alone (master records the one
+# parent's names for a one-parent object); the part "a reference to a given object is recorded by its module".
+givenobjectparents_b binaryDependency gopu.Use$package gop.R given-object-reference teq products:givenobjectparents_a/gop/R.class,Use.scala,DependencyByMemberRef
+givenobjectparents_b usedName gopu.Use$package R given-object-reference teq Default
+givenobjectparents_b usedName gopu.Use$package T given-object-reference teq Default
 hkbounds_a usedName ha.Functor$.given_Functor_List ImpureFunction1 impure-function scalac Default
 hkbounds_b usedName hb.Use _$1 synthetic-local scalac Default
 hkbounds_b usedName hb.Use _$2 synthetic-local scalac Default

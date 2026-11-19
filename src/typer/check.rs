@@ -4551,9 +4551,20 @@ impl<'a> Worker<'a> {
                     let info = t.syms.class(c);
                     let (tparams, clauses) = (info.tparams.clone(), info.ctor.clone());
                     // A given object, of no parameters, is read as its object
-                    // (`given_object_type`); its value's type stays the one declared.
+                    // (`given_object_type`); its value's type stays the one declared. Of several parents
+                    // (`given A, B:`, `given t: P() with Q`) it is their intersection, each of them a base of it as of
+                    // the reference's `ModuleDef` of the given's name, and seen from a receiver as each of them is
+                    // (`c.pair` of a `given pair: P[T]() with R` in a `class C[T]`, read on a `C[Int]`). In a
+                    // compilation with a file at 3.6 or 3.7-migration (`compilation_unported`) it is its first parent,
+                    // as teq read it before.
                     let ret = if tparams.is_empty() && clauses.iter().all(|c| c.params.is_empty()) {
-                        info.parents.first().copied().unwrap_or(ERROR)
+                        if info.parents.len() > 1 && !t.compilation_unported {
+                            let declared: Vec<TypeId> = info.parents.iter().copied().filter(|&p| p != t.b.t_any_ref).collect();
+                            let first = info.parents[0];
+                            declared.into_iter().reduce(|x, y| t.types.inter(x, y)).unwrap_or(first)
+                        } else {
+                            info.parents.first().copied().unwrap_or(ERROR)
+                        }
                     } else {
                         let own: Vec<TypeId> = tparams.iter().map(|&p| t.types.param(p)).collect();
                         t.types.class(c, &own)
