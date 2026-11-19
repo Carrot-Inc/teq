@@ -1,41 +1,44 @@
 # test	verdict	the other ways	the first line of the difference
 byname	pass	-	
-case-lazy-object	fail	-	65 aligned lines' positions differ; shape lines: 155 scalac's, 138 teq's; first: scalac `Ident [s1 364..375@364 5:8-5:19]` teq `Ident [s1 0..0@0 1:0-1:0]`
-case-nested-object-path-patterns	fail	-	9 aligned lines' positions differ; shape lines: 124 scalac's, 105 teq's; first: scalac `Ident [s1 200..200@200 4:0-4:0]` teq `Ident [s1 0..0@0 1:0-1:0]`
-case-numeric-range-factory	fail	-	64 aligned lines' positions differ; shape lines: 47 scalac's, 40 teq's; first: scalac `Ident [s1 195..195@195 3:0-3:0]` teq `Ident [s1 0..0@0 1:0-1:0]`
-case-std-number-scan-sorted	fail	-	95 aligned lines' positions differ; shape lines: 101 scalac's, 82 teq's; first: scalac `Ident [s1 244..244@244 5:0-5:0]` teq `Ident [s1 0..0@0 1:0-1:0]`
+case-lazy-object	fail	-	104 aligned lines' positions differ; first: scalac `Ident [s1 364..375@364 5:8-5:19]` teq `Ident [s1 0..0@0 1:0-1:0]`; 100 lines with no partner (no ORACLE kind); first, teq's: `ValDef [s1 427..427@42
+case-nested-object-path-patterns	fail	-	43 aligned lines' positions differ; first: scalac `Ident [s1 200..200@200 4:0-4:0]` teq `Ident [s1 0..0@0 1:0-1:0]`; 47 lines with no partner (no ORACLE kind); first, scalac's: `Block [s1 291..299@291
+case-numeric-range-factory	fail	-	63 aligned lines' positions differ; first: scalac `Ident [s1 195..195@195 3:0-3:0]` teq `Ident [s1 0..0@0 1:0-1:0]`; 70 lines with no partner (no ORACLE kind); first, scalac's: `Select [s1 278..317@30
+case-std-number-scan-sorted	fail	-	91 aligned lines' positions differ; first: scalac `Ident [s1 244..244@244 5:0-5:0]` teq `Ident [s1 0..0@0 1:0-1:0]`; 150 lines with no partner (no ORACLE kind); first, teq's: `Select [s1 337..344@337
 companion-order	pass	-	
 ctor	pass	-	
 dead-branch	pass	-	
+diamond	pass	-	
+diamond-self	fail	-	300 aligned lines' positions differ; first: scalac `Template [s1 422..450@422 6:11-6:39]` teq `Template [s1 417..417@417 6:6-6:6]`
 global-dead-branch	pass	-	
-hidden	pass	-	
-hidden-gadt	pass	-	
+hidden	fail	-	4 lines with no partner (no ORACLE kind); first, scalac's: `Select [s1 97..106@103 7:4-7:13] sym=scala.sys.package {module,lazy,final} qual=scala.sys`
+hidden-gadt	fail	-	43 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 31..31@31 2:11-2:11] sym=<empty>.IntBox.x {paramAccessor,caseAccessor} pre=this(<empty>.IntBox)`; 4 lines excused as ORACLE hunks
 inline-arg	pass	-	
 inline-binding	pass	-	
 inlined	pass	-	
 inlined2	pass	-	
+library-members	fail	-	16 aligned lines' positions differ; first: scalac `Apply [s1 147..147@147 3:7-3:7]` teq `Apply [s1 140..140@140 3:0-3:0]`
 local-library	pass	-	
 nested-inline	pass	-	
-objects	pass	-	
-objects-withheld	pass	-	
-order	pass	-	
-order-safe	pass	-	
-outer	pass	-	
-pos-i15820	fail	-	27 aligned lines' positions differ; shape lines: 4 scalac's, 7 teq's; first: scalac `ValDef [s1 24..24@24 3:0-3:0]` teq `ValDef [s1 0..0@0 1:0-1:0]`
-refined-path	pass	-	
-review-empty	fail	-	64 aligned lines' positions differ; shape lines: 3 scalac's, 1 teq's; first: scalac `Apply [s1 12..12@12 1:12-1:12]` teq `Apply [s1 0..0@0 1:0-1:0]`
-review-implicit	pass	-	
-review-leading-package	fail	-	3 aligned lines' positions differ; shape lines: 2 scalac's, 1 teq's; first: scalac `Template [s1 13..13@13 3:0-3:0]` teq `Template [s1 19..19@19 3:6-3:6]`
+objects	fail	-	14 lines with no partner (no ORACLE kind); first, scalac's: `Block [s1 145..155@145 13:16-13:26]`
+objects-withheld	fail	-	30 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 31..31@31 2:11-2:11] sym=<empty>.IntBox.x {paramAccessor,caseAccessor} pre=this(<empty>.IntBox)`; 4 lines excused as ORACLE hunks
+order	fail	-	3 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 45..52@45 2:31-2:38] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)`
+order-safe	fail	-	3 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 49..56@49 2:31-2:38] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)`
+outer	fail	-	12 lines with no partner (no ORACLE kind); first, scalac's: `Typed [s1 139..148@139 8:43-8:52]`
+pos-i15820	fail	-	28 aligned lines' positions differ; first: scalac `ValDef [s1 24..24@24 3:0-3:0]` teq `ValDef [s1 0..0@0 1:0-1:0]`; 3 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 154..157@154 6
+refined-path	fail	-	3 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 36..43@36 3:4-3:11] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)`
+review-empty	fail	-	66 aligned lines' positions differ; first: scalac `Apply [s1 12..12@12 1:12-1:12]` teq `Apply [s1 0..0@0 1:0-1:0]`
+review-implicit	fail	-	3 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 87..88@87 3:26-3:27] sym=<empty>.Implicit$.f#(scala.Int,scala.Int)scala.Int {method} pre=this(<empty>.Implicit$)`
+review-leading-package	fail	-	3 aligned lines' positions differ; first: scalac `Template [s1 13..13@13 3:0-3:0]` teq `Template [s1 19..19@19 3:6-3:6]`; 3 lines excused as ORACLE hunks
 review-origins	fail	-	8 aligned lines' positions differ; first: scalac `TypeDef [s1 27..34@27 2:13-2:20]` teq `TypeDef [s1 27..28@27 2:13-2:14]`
-review-placeholder	fail	-	4 aligned lines' positions differ; shape lines: 1 scalac's, 1 teq's; first: scalac `Tpt [s1 30..47@41 2:9-2:26]` teq `Tpt [s1 30..47@30 2:9-2:26]`
-sam	fail	-	9 aligned lines' positions differ; shape lines: 6 scalac's, 5 teq's; first: scalac `DefDef [s1 90..109@90 4:38-4:57]` teq `DefDef [s1 90..90@90 4:38-4:38]`
-sam-probe	fail	-	9 aligned lines' positions differ; shape lines: 6 scalac's, 5 teq's; first: scalac `DefDef [s1 55..74@55 2:38-2:57]` teq `DefDef [s1 55..55@55 2:38-2:38]`
+review-placeholder	fail	-	4 aligned lines' positions differ; first: scalac `Tpt [s1 30..47@41 2:9-2:26]` teq `Tpt [s1 30..47@30 2:9-2:26]`
+sam	fail	-	9 aligned lines' positions differ; first: scalac `DefDef [s1 90..109@90 4:38-4:57]` teq `DefDef [s1 90..90@90 4:38-4:38]`; 11 lines with no partner (no ORACLE kind); first, scalac's: `Block [s1 99..10
+sam-probe	fail	-	9 aligned lines' positions differ; first: scalac `DefDef [s1 55..74@55 2:38-2:57]` teq `DefDef [s1 55..55@55 2:38-2:38]`; 11 lines with no partner (no ORACLE kind); first, scalac's: `Block [s1 64..72@
 sam2	pass	-	
-shape-sweep	pass	-	
-synth	pass	-	
-transparent	fail	-	7 aligned lines' positions differ; shape lines: 6 scalac's, 3 teq's; first: scalac `source s2 name=Predef.scala path=library/src/scala/Predef.scala content=no sha256=-` teq `source s2 name=Predef.scal
+shape-sweep	fail	-	21 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 278..285@278 15:26-15:33] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)`
+synth	fail	-	14 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 11..11@11 1:11-1:11] sym=<empty>.P.a {paramAccessor,caseAccessor} pre=this(<empty>.P)`; 8 lines excused as ORACLE hunks
+transparent	fail	-	7 aligned lines' positions differ; first: scalac `source s2 name=Predef.scala path=library/src/scala/Predef.scala content=no sha256=-` teq `source s2 name=Predef.scala path=tests/init-view/programs/tr
 type-alias	pass	-	
 type-path	pass	-	
 type-select	pass	-	
-type-trace	pass	-	
+type-trace	fail	-	3 lines with no partner (no ORACLE kind); first, scalac's: `Ident [s1 54..61@54 4:4-4:11] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)`
 unchecked	pass	-	

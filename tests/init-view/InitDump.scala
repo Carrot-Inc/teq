@@ -30,7 +30,7 @@ package dotty.tools.dotc.transform.init
 
 import dotty.tools.dotc.*
 import core.*
-import Contexts.*, Symbols.*, Flags.*, Types.*, Phases.*, Constants.*, StdNames.*
+import Contexts.*, Symbols.*, Flags.*, Types.*, Phases.*, Constants.*, StdNames.*, Decorators.*
 import ast.tpd.*
 import util.{SourceFile, SourcePosition}
 
@@ -43,8 +43,9 @@ object InitDumpText:
     Abstract -> "abstract", Trait -> "trait", Final -> "final", Sealed -> "sealed", Open -> "open", Case -> "case",
     Enum -> "enum", Private -> "private", Protected -> "protected", Local -> "local", Override -> "override",
     Inline -> "inline", Transparent -> "transparent", Macro -> "macro", Given -> "given", Implicit -> "implicit",
-    Erased -> "erased", Synthetic -> "synthetic", Artifact -> "artifact", JavaDefined -> "java", Exported -> "exported",
-    StableRealizable -> "stable")
+    Erased -> "erased", Synthetic -> "synthetic", Artifact -> "artifact", JavaDefined -> "java", Exported -> "exported")
+  // `StableRealizable` is left out: the checker reads it nowhere (transform/init), and the typer sets it lazily, where a
+  // path's realizability is checked (`SymDenotation.isRealizable`), which a tree does not record.
 
 class InitDumpPhase(tag: String, after: String) extends Phase:
   def phaseName: String = "initDump" + tag.capitalize
@@ -52,13 +53,58 @@ class InitDumpPhase(tag: String, after: String) extends Phase:
 
   private val sources = mutable.LinkedHashMap[SourceFile, Int]()
 
+  protected def run(using Context): Unit =
+    val unit = ctx.compilationUnit
+    val text = printTree(unit.tpdTree, 0)
+
+    val classes = mutable.ArrayBuffer[ClassSymbol]()
+    new TreeTraverser:
+      def traverse(t: Tree)(using Context): Unit =
+        traverseChildren(t)
+        t match
+          case td: TypeDef if td.isClassDef => classes += td.symbol.asClass
+          case _ =>
+    .traverse(unit.tpdTree)
+
+    import Util.*
+    println(s"unit ${unit.source.file.path}")
+    for c <- classes do
+      println(s"class ${symId(c)} concrete=${isConcreteClass(c)} staticObject=${c.isStaticObject}")
+    print(text)
+  end run
+
+  // The library members the evaluation follows (tests/init-view/library-members.txt, named by INITDUMP_MEMBERS): after
+  // the pickler phase's units, each class's `defTree` (its root tree read: a class of the class path keeps its tree
+  // under -Wsafe-init, `Symbols.retainsDefTree`), under `deftree <name>`, printed as a unit's tree is.
   override def runOn(units: List[CompilationUnit])(using Context): List[CompilationUnit] =
     println(s"phase $tag")
     val done = super.runOn(units)
+    val members = sys.env.get("INITDUMP_MEMBERS").filter(f => f.nonEmpty && tag == "pickler")
+    for file <- members; name <- scala.io.Source.fromFile(file).getLines().map(_.trim).filter(n => n.nonEmpty && !n.startsWith("#")) do
+      val cls = getClassIfDefined(name)
+      if !cls.exists || !cls.isClass then println(s"deftree $name missing")
+      else
+        cls.asClass.rootTree
+        val tree = cls.defTree
+        if tree.isEmpty then println(s"deftree $name empty")
+        else
+          println(s"deftree $name")
+          print(printTree(tree, 1))
     done
 
-  protected def run(using Context): Unit =
-    val unit = ctx.compilationUnit
+  def symId(s: Symbol)(using Context): String =
+    if !s.exists then "-"
+    else if s.isRoot || s.isEmptyPackage || s.is(Package) then s.fullName.toString
+    else
+      val own = symId(s.owner)
+      val sig =
+        if s.is(Method) then
+          val sg = s.signature
+          "#(" + sg.paramsSig.map(_.toString).mkString(",") + ")" + sg.resSig.toString
+        else ""
+      own + "." + s.name.toString + sig
+
+  def printTree(root: Tree, depth0: Int)(using Context): String =
     val out = new StringBuilder
     def line(s: String): Unit = out.append(s).append('\n')
 
@@ -85,18 +131,6 @@ class InitDumpPhase(tag: String, after: String) extends Phase:
         else
           val id = sourceId(p.source)
           s"[s$id ${t.span.start}..${t.span.end}@${t.span.point} ${p.startLine + 1}:${p.startColumn}-${p.endLine + 1}:${p.endColumn}]"
-
-    def symId(s: Symbol): String =
-      if !s.exists then "-"
-      else if s.isRoot || s.isEmptyPackage || s.is(Package) then s.fullName.toString
-      else
-        val own = symId(s.owner)
-        val sig =
-          if s.is(Method) then
-            val sg = s.signature
-            "#(" + sg.paramsSig.map(_.toString).mkString(",") + ")" + sg.resSig.toString
-          else ""
-        own + "." + s.name.toString + sig
 
     def flags(s: Symbol): String =
       if !s.exists then "" else
@@ -156,7 +190,7 @@ class InitDumpPhase(tag: String, after: String) extends Phase:
       case _ => ""
 
     new TreeTraverser:
-      var depth = 0
+      var depth = depth0
       def traverse(t: Tree)(using Context): Unit =
         t match
           case EmptyTree => ()
@@ -170,23 +204,9 @@ class InitDumpPhase(tag: String, after: String) extends Phase:
             depth += 1
             traverseChildren(t)
             depth -= 1
-    .traverse(unit.tpdTree)
-
-    val classes = mutable.ArrayBuffer[ClassSymbol]()
-    new TreeTraverser:
-      def traverse(t: Tree)(using Context): Unit =
-        traverseChildren(t)
-        t match
-          case td: TypeDef if td.isClassDef => classes += td.symbol.asClass
-          case _ =>
-    .traverse(unit.tpdTree)
-
-    import Util.*
-    println(s"unit ${unit.source.file.path}")
-    for c <- classes do
-      println(s"class ${symId(c)} concrete=${isConcreteClass(c)} staticObject=${c.isStaticObject}")
-    print(out.toString)
-  end run
+    .traverse(root)
+    out.toString
+  end printTree
 
 object InitDump:
   def main(args: Array[String]): Unit =

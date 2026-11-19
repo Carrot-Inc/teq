@@ -1,0 +1,10 @@
+# The library classes whose trees the initialization checker follows over tests/init-view's programs and dotty's
+# init warn tests (counted 18 Nov): the parents Desugar adds a case class, an enum and a companion (their templates
+# evaluate as mixins, `Semantic.init`), the class a module's `writeReplace` constructs. Java's (Serializable) and the
+# classes Definitions enters (Any, Object, Array) have no tree. Predef's bodies reach the checker as Inlined
+# expansions inside the programs' own trees.
+scala.Product
+scala.Equals
+scala.reflect.Enum
+scala.deriving.Mirror
+scala.runtime.ModuleSerializationProxy

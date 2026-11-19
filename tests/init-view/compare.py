@@ -1,19 +1,33 @@
 #!/usr/bin/env python3
 """compare.py [--positions] <oracle dump> <teq's dump>: whether teq's initialization view of a program is scalac's
-(tests/init-view.sh).
+(tests/init-view.sh). It fails closed: an empty dump on either side fails both judgments.
 
 The two dumps are InitDump.scala's after `pickler` and `TEQ_INIT_VIEW=<root> teq tasty`. Without --positions they
-agree when equal line for line. With --positions only the positions are judged: the `unit` and `source` lines and, of
-each tree's line, its depth, kind and position (`[...]`). The two are aligned (difflib), and the lines that stand
-against a line of the same depth and kind must have its position; the lines of a tree whose shape differs (a line of
-one side with none of the same depth and kind against it) are counted apart as SHAPE lines, which are not
-positions. Prints `equal` (with the shape lines' count where there are any) and exits 0, or the aligned lines whose
-positions differ, their count and the first, and exits 1."""
+agree when equal line for line. With --positions only the positions are judged: every line's depth, kind and position
+(`[...]`), the `unit` and `source` lines whole, in order. The two are aligned (difflib, by depth, kind and a definition's
+own name); an aligned line must have its partner's position, and a line of either dump with no partner fails the
+judgment unless its hunk is a fact no pickle carries, by the one list of them, tests/init-view/oracle.py (a parameter
+accessor's place, moved and not lost; a package clause's qualified id). Prints `equal` and exits 0, or the differing and
+unpartnered lines, their counts and the first of each, and exits 1.
+
+A line it prints holds no path of the machine, as the suites record its lines (tests/pending, tests/board/suites): a
+path under the suite's root (this script's tree) is printed relative to it, one in coursier's cache by the fixed name
+`<coursier cache>`, in both dumps' lines alike, so the same program prints the same line on every machine."""
 import difflib
+import os
 import re
 import sys
 
+import oracle
+
 POS = re.compile(r"^(\s*)(\S+) (\[[^\]]*\])")
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CACHE = re.compile(r"/\S*?/[Cc]oursier/v1/")
+
+
+def placeless(line):
+    """A dump's line as the suites print and record it: no path of the machine."""
+    return CACHE.sub("<coursier cache>/", line.replace(ROOT + "/", ""))
 
 
 def positions(lines):
@@ -63,6 +77,10 @@ def main():
         args = args[1:]
     a = open(args[0], encoding="utf-8").read().splitlines()
     b = open(args[1], encoding="utf-8").read().splitlines()
+    # An empty dump is no view and no oracle: a failure, never compared (fails closed).
+    if not a or not b:
+        print(f"empty dump: scalac's {len(a)} lines, teq's {len(b)}")
+        return 1
     if not only_positions:
         if a == b:
             print("equal")
@@ -70,27 +88,40 @@ def main():
         first = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
         sa = a[first] if first < len(a) else "<end>"
         sb = b[first] if first < len(b) else "<end>"
-        print(f"first difference at line {first + 1}: scalac `{sa.strip()}` teq `{sb.strip()}`")
+        print(f"first difference at line {first + 1}: scalac `{placeless(sa.strip())}` teq `{placeless(sb.strip())}`")
         return 1
-    # Aligned by depth, kind and a definition's name, so that a position never decides what stands against what.
-    ha, hb = [head(x) for x in a if not x.startswith("class ")], [head(y) for y in b if not y.startswith("class ")]
-    a, b = positions(a), positions(b)
+    # Every line's depth, kind and position, in order. Aligned by depth, kind and a definition's name, so that a position
+    # never decides what stands against what; a line of either dump with no partner fails the judgment unless its hunk is
+    # a fact no pickle carries (tests/init-view/oracle.py, the one list by_kind.py files by too).
+    ra, rb = [x for x in a if not x.startswith("class ")], [y for y in b if not y.startswith("class ")]
+    ha, hb = [head(x) for x in ra], [head(y) for y in rb]
+    pa, pb = positions(ra), positions(rb)
     sm = difflib.SequenceMatcher(None, ha, hb, autojunk=False)
-    differ, shape_a, shape_b = [], 0, 0
+    differ, hunks, excused = [], [], 0
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == "equal":
-            for x, y in zip(a[i1:i2], b[j1:j2]):
+            for x, y in zip(pa[i1:i2], pb[j1:j2]):
                 if x != y:
                     differ.append((x, y))
         else:
-            shape_a += i2 - i1
-            shape_b += j2 - j1
-    shape = f"; shape lines: {shape_a} scalac's, {shape_b} teq's" if shape_a or shape_b else ""
-    if not differ:
-        print("equal" + shape)
+            hunks.append((ra[i1:i2], rb[j1:j2]))
+    pos_of = dict(zip(ra, pa)) | dict(zip(rb, pb))
+    failing = oracle.hunks_excused(hunks, key=lambda l: pos_of.get(l, l))
+    excused = sum(len(h[0]) + len(h[1]) for h in hunks) - sum(len(f[0]) + len(f[1]) for f in failing)
+    note = f"; {excused} lines excused as ORACLE hunks" if excused else ""
+    if not differ and not failing:
+        print("equal" + note)
         return 0
-    x, y = differ[0]
-    print(f"{len(differ)} aligned lines' positions differ{shape}; first: scalac `{x.strip()}` teq `{y.strip()}`")
+    parts = []
+    if differ:
+        x, y = differ[0]
+        parts.append(f"{len(differ)} aligned lines' positions differ; first: scalac `{placeless(x.strip())}` teq `{placeless(y.strip())}`")
+    if failing:
+        fa, fb, why = failing[0]
+        first = placeless((fa or fb)[0].strip()) if (fa or fb) else ""
+        side = "scalac's" if fa else "teq's"
+        parts.append(f"{sum(len(f[0]) + len(f[1]) for f in failing)} lines with no partner ({why}); first, {side}: `{first}`")
+    print("; ".join(parts) + note)
     return 1
 
 

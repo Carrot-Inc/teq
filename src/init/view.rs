@@ -10,7 +10,7 @@
 //! A definition's flags are `readModifiers`' with `normalizeFlags`' (`Method` for a `DEFDEF`, `Deferred` for a member
 //! without a body, `ParamAccessor` for a class's `PARAM`, `Param` for a method's, the module flags of an object).
 
-use crate::tasty::positions::{Pos, Section, Spans};
+use crate::tasty::positions::{Section, Spans};
 use crate::tasty::tags::*;
 use crate::tasty::tree::{Addr, Decoder, TType};
 use crate::tasty::{NameRef, Reader, TastyFile};
@@ -161,6 +161,7 @@ impl DefFlags {
     pub const SUPER_PARAM_ALIAS: u64 = 1 << 36;
     pub const OPAQUE: u64 = 1 << 37;
     pub const EXTENSION: u64 = 1 << 38;
+    pub const INVISIBLE: u64 = 1 << 39;
 
     /// The flags the reference's dump prints, in its order (tests/init-view/InitDump.scala, `flagNames`).
     pub const PRINTED: &'static [(u64, &'static str)] = &[
@@ -195,7 +196,8 @@ impl DefFlags {
         (Self::ARTIFACT, "artifact"),
         (Self::JAVA, "java"),
         (Self::EXPORTED, "exported"),
-        (Self::STABLE, "stable"),
+        // `stable` (`StableRealizable`) is not printed: the checker never reads it, and the typer sets it lazily
+        // where it checks a path's realizability, which no tree records (InitDump.scala's list leaves it out too).
     ];
 
     pub fn has(self, f: u64) -> bool {
@@ -222,12 +224,26 @@ pub struct Node {
     pub target: Option<Addr>,
     /// `Inlined`'s call, which `tpd.TreeTraverser` does not visit.
     pub call: Option<Box<Node>>,
+    /// A method's term parameter clauses: how many parameters each holds (0 for `()`), in order.
+    pub clauses: Vec<u16>,
+    /// A `Select` the reader made of a path type (`tpd.ref` of a `TermRef` whose prefix it cannot elide without
+    /// symbols): `ty` is the whole path, and the printer makes it the `Ident` `ref` makes where the prefix is elidable.
+    pub path: bool,
+    /// A template's self definition (`SELFDEF`), which the reference's tree holds with no symbol of its own.
+    pub selfdef: bool,
+    /// A template's parents: the range of its children `readParents` read (after the constructor).
+    pub parents: std::ops::Range<usize>,
     pub children: Vec<Node>,
 }
 
 impl Node {
     fn new(addr: Addr, at: Addr, _tag: u8, kind: Kind) -> Node {
-        Node { addr, at, kind, name: None, ty: None, flags: DefFlags::default(), target: None, call: None, children: Vec::new() }
+        Node { addr, at, kind, name: None, ty: None, flags: DefFlags::default(), target: None, call: None, clauses: Vec::new(), path: false, selfdef: false, parents: 0..0, children: Vec::new() }
+    }
+
+    /// A template's parent trees.
+    pub fn template_parents(&self) -> &[Node] {
+        self.children.get(self.parents.clone()).unwrap_or(&[])
     }
 
     pub fn is_class_def(&self) -> bool {
@@ -267,16 +283,6 @@ impl<'f> ViewReader<'f> {
             None => Spans::default(),
         };
         ViewReader { file, trees: &file.bytes[file.asts.clone()], section, spans, dec: Decoder::new(file) }
-    }
-
-    /// The span `TreeUnpickler` gives the tree at `addr`.
-    pub fn pos(&self, addr: Addr) -> Option<Pos> {
-        self.spans.get(addr).and_then(|p| p.pos)
-    }
-
-    /// The path of the source of the tree at `addr`.
-    pub fn source(&self, addr: Addr) -> Option<NameRef> {
-        self.spans.get(addr).and_then(|p| p.source).or_else(|| self.section.as_ref().and_then(|s| s.primary()))
     }
 
     fn type_at(&mut self, addr: usize) -> TType {
@@ -384,7 +390,8 @@ impl<'f> ViewReader<'f> {
                 EXPORTED => DefFlags::EXPORTED,
                 OPEN => DefFlags::OPEN,
                 TRANSPARENT => DefFlags::TRANSPARENT,
-                COVARIANT | CONTRAVARIANT | INVISIBLE | INFIX | TRACKED | INTO => 0,
+                INVISIBLE => DefFlags::INVISIBLE,
+                COVARIANT | CONTRAVARIANT | INFIX | TRACKED | INTO => 0,
                 PRIVATEQUALIFIED | PROTECTEDQUALIFIED => {
                     r.byte();
                     if tag == PROTECTEDQUALIFIED {
@@ -428,7 +435,6 @@ impl<'f> ViewReader<'f> {
         };
         let mut n = Node::new(addr, addr, tag, kind);
         n.name = Some(name);
-        let mut is_class = false;
         let mut abstract_type = false;
         match tag {
             DEFDEF => {
@@ -436,11 +442,20 @@ impl<'f> ViewReader<'f> {
                     match r.peek() {
                         PARAM | TYPEPARAM => {
                             let ptag = r.peek();
+                            let mut k = 0u16;
                             while r.peek() == ptag && r.pos < end {
                                 n.children.push(self.def(r, Owner::Other));
+                                k += 1;
+                            }
+                            if ptag == PARAM {
+                                n.clauses.push(k);
                             }
                         }
-                        EMPTYCLAUSE | SPLITCLAUSE => {
+                        EMPTYCLAUSE => {
+                            r.byte();
+                            n.clauses.push(0);
+                        }
+                        SPLITCLAUSE => {
                             r.byte();
                         }
                         _ => break,
@@ -453,7 +468,6 @@ impl<'f> ViewReader<'f> {
             }
             _ => {
                 if r.peek() == TEMPLATE {
-                    is_class = true;
                     n.children.push(self.template(r));
                 } else {
                     abstract_type = self.is_abstract_type(r.pos);
@@ -472,8 +486,10 @@ impl<'f> ViewReader<'f> {
         // `normalizeFlags`.
         let term_name = !matches!(tag, TYPEDEF | TYPEPARAM);
         let ctor = term_name && self.file.simple(name) == Some("<init>");
+        // A type parameter is no deferred member: the typer's symbol has no `Deferred`, which the checker reads on terms
+        // alone (the unpickler's `isAbsType` would add it to one read from a library).
         let lacks = (rhs_empty && term_name && !ctor && flags & (DefFlags::PARAM | DefFlags::PARAM_ACCESSOR) == 0 && tag != PARAM)
-            || abstract_type;
+            || abstract_type && tag != TYPEPARAM;
         if lacks && tag != PARAM {
             flags |= DefFlags::DEFERRED;
         }
@@ -498,9 +514,6 @@ impl<'f> ViewReader<'f> {
             }
         } else if matches!(tag, PARAM | TYPEPARAM) {
             flags |= DefFlags::PARAM;
-        }
-        if is_class && flags & DefFlags::TRAIT != 0 {
-            flags |= DefFlags::ABSTRACT;
         }
         n.flags = DefFlags(flags);
         n
@@ -573,6 +586,7 @@ impl<'f> ViewReader<'f> {
             let name = r.nat();
             let mut s = Node::new(saddr, saddr, SELFDEF, Kind::ValDef);
             s.name = Some(name);
+            s.selfdef = true;
             s.children.push(self.tpt(r));
             self_def = Some(s);
         }
@@ -596,7 +610,9 @@ impl<'f> ViewReader<'f> {
         if let Some(c) = ctor {
             n.children.push(c);
         }
+        let first = n.children.len();
         n.children.extend(parents);
+        n.parents = first..n.children.len();
         if let Some(s) = self_def {
             n.children.push(s);
         }
@@ -819,7 +835,8 @@ impl<'f> ViewReader<'f> {
                 n.ty = Some(self.type_at(r.pos));
                 self.skip(r);
                 n.children.push(self.term(r));
-                n.flags = DefFlags(self.modifiers(r, end));
+                // `createBindSymbol`: a pattern binder is `Case`, its modifiers added.
+                n.flags = DefFlags(self.modifiers(r, end) | DefFlags::CASE);
             }
             ALTERNATIVE => {
                 n.kind = Kind::Alternative;
@@ -985,7 +1002,8 @@ impl<'f> ViewReader<'f> {
         let kind = match &ty {
             TType::Const(_) => Kind::Literal,
             TType::This(_) => Kind::This,
-            TType::TermRef(..) | TType::LocalTerm(..) => Kind::Ident,
+            // A package's `TermRef` (`TERMREFpkg`): `tpd.ref` makes it an `Ident`.
+            TType::TermRef(..) | TType::LocalTerm(..) | TType::Package(_) => Kind::Ident,
             _ => Kind::Tpt,
         };
         let mut n = Node::new(addr, addr, tag, kind);
@@ -998,12 +1016,14 @@ impl<'f> ViewReader<'f> {
                 };
                 if let TType::This(_) = prefix.as_ref() {
                     n.kind = Kind::Select;
+                    n.path = true;
                     n.name = name;
                     let mut q = Node::new(addr, addr, tag, Kind::This);
                     q.ty = Some((**prefix).clone());
                     n.children.push(q);
                 } else if let TType::TermRef(..) = prefix.as_ref() {
                     n.kind = Kind::Select;
+                    n.path = true;
                     n.name = name;
                     let mut q = Node::new(addr, addr, tag, Kind::Ident);
                     q.ty = Some((**prefix).clone());
@@ -1018,15 +1038,3 @@ impl<'f> ViewReader<'f> {
     }
 }
 
-/// Every class definition of a list of trees, children first, as `Checker.InitTreeTraverser` collects them.
-pub fn classes_post_order<'a>(nodes: &'a [Node], out: &mut Vec<&'a Node>) {
-    for n in nodes {
-        if let Some(call) = &n.call {
-            let _ = call;
-        }
-        classes_post_order(&n.children, out);
-        if n.is_class_def() {
-            out.push(n);
-        }
-    }
-}

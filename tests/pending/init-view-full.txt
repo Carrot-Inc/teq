@@ -1,0 +1,30 @@
+case-lazy-object	first difference at line 2: scalac `class lazy_object.Top$ concrete=true staticObject=true` teq `class lazy_object.lazy_object$package$.main#()scala.Unit.$anon concrete=true staticObject=false`
+case-nested-object-path-patterns	first difference at line 2: scalac `class <empty>.O.R$ concrete=true staticObject=false` teq `class <empty>.nested_object_path_patterns$package$ concrete=true staticObject=true`
+case-numeric-range-factory	first difference at line 3: scalac `class <empty>.main concrete=true staticObject=false` teq `source s1 name=numeric_range_factory.scala path=tests/init-view/programs/case-numeric-range-factory/numeri
+case-std-number-scan-sorted	first difference at line 3: scalac `class <empty>.main concrete=true staticObject=false` teq `source s1 name=std_number_scan_sorted.scala path=tests/init-view/programs/case-std-number-scan-sorted/std_
+diamond-self	first difference at line 76: scalac `Template [s1 422..450@422 6:11-6:39]` teq `Template [s1 417..417@417 6:6-6:6]`
+global-dead-branch	first difference at line 66: scalac `Ident [s1 78..85@78 5:21-5:28] sym=<empty>.Mutable {module,lazy,final} pre=this(<empty>)` teq `Ident [s1 78..85@78 5:21-5:28] sym=<empty>.Mutable {module,lazy,fina
+hidden	first difference at line 20: scalac `DefDef [s1 61..61@61 4:6-4:6] sym=<empty>.Host.unused#()scala.Unit.Lost.<init>#()Host._$Lost {method}` teq `DefDef [s1 61..61@61 4:6-4:6] sym=<empty>.Host.unused#(
+hidden-gadt	first difference at line 5: scalac `class <empty>.HostGadt.unused#(1,Box)java.lang.Object.Lost concrete=true staticObject=false` teq `class <empty>.HostGadt concrete=true staticObject=false`
+library-members	first difference at line 16: scalac `Apply [s1 147..147@147 3:7-3:7] fn=java.lang.Object.<init>#()java.lang.Object margs=[]` teq `Apply [s1 140..140@140 3:0-3:0] fn=java.lang.Object.<init>#()java.lang
+objects	first difference at line 35: scalac `Ident [s1 22..24@22 2:10-2:12] sym=<empty>.O2 {module,lazy,final} pre=this(<empty>)` teq `Ident [s1 22..24@22 2:10-2:12] sym=<empty>.O2 {module,lazy,final} pre=ter
+objects-withheld	first difference at line 31: scalac `DefDef [s1 31..31@31 2:11-2:11] sym=<empty>.IntBox.hashCode#()scala.Int {method,override,synthetic}` teq `ValDef [s1 38..44@38 2:18-2:24] sym=<empty>.IntBox.x {par
+order	first difference at line 19: scalac `Ident [s1 45..52@45 2:31-2:38] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)` teq `Select [s1 45..52@45 2:31-2:38] sym=sca
+order-safe	first difference at line 19: scalac `Ident [s1 49..56@49 2:31-2:38] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)` teq `Select [s1 49..56@49 2:31-2:38] sym=sca
+outer	first difference at line 54: scalac `DefDef [s1 126..126@126 8:30-8:30] sym=<empty>.Outer2.mk#()scala.Int.L.<init>#()Outer2._$L {method}` teq `DefDef [s1 126..126@126 8:30-8:30] sym=<empty>.Outer2.mk#
+pos-i15820	first difference at line 16: scalac `ValDef [s1 24..24@24 3:0-3:0] sym=<empty>.i15820$package {module,lazy,final,synthetic}` teq `ValDef [s1 0..0@0 1:0-1:0] sym=<empty>.i15820$package {module,lazy,fin
+refined-path	first difference at line 16: scalac `Tpt [s1 27..27@27 2:7-2:7] paths=[<empty>.RefinedPath.cell]` teq `Tpt [s1 27..27@27 2:7-2:7] paths=[]`
+review-empty	first difference at line 16: scalac `Apply [s1 12..12@12 1:12-1:12] fn=java.lang.Object.<init>#()java.lang.Object margs=[]` teq `Apply [s1 0..0@0 1:0-1:0] fn=java.lang.Object.<init>#()java.lang.Object
+review-implicit	first difference at line 40: scalac `ValDef [s1 75..78@75 3:14-3:17] sym=<empty>.Implicit$.g#(scala.Int)scala.Int.x$1 {param,given,synthetic}` teq `ValDef [s1 75..78@75 3:14-3:17] sym=<empty>.Implicit
+review-leading-package	first difference at line 5: scalac `Select [s1 9..12@11 2:8-2:11] sym=a.b {package,module,lazy,final,java} qual=a` teq `Ident [s1 13..13@13 3:0-3:0] sym=a.b {package,module,lazy,final,java} pre=this(a
+review-origins	first difference at line 19: scalac `TypeDef [s1 27..34@27 2:13-2:20] sym=<empty>.Holder.<init>#(1,Show,Show)Holder.A {param}` teq `TypeDef [s1 27..28@27 2:13-2:14] sym=<empty>.Holder.<init>#(1,Show,S
+review-placeholder	first difference at line 30: scalac `Tpt [s1 30..47@41 2:9-2:26] paths=[]` teq `Tpt [s1 30..47@30 2:9-2:26] paths=[]`
+sam	first difference at line 30: scalac `DefDef [s1 90..109@90 4:38-4:57] sym=<empty>.S.pf.$anonfun#(scala.Int)scala.Int {method,synthetic,artifact}` teq `DefDef [s1 90..90@90 4:38-4:38] sym=<empty>.S.pf.
+sam-probe	first difference at line 17: scalac `DefDef [s1 55..74@55 2:38-2:57] sym=<empty>.SamProbe.pf.$anonfun#(scala.Int)scala.Int {method,synthetic,artifact}` teq `DefDef [s1 55..55@55 2:38-2:38] sym=<empty>
+shape-sweep	first difference at line 89: scalac `Ident [s1 278..285@278 15:26-15:33] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)` teq `Select [s1 278..285@278 15:26-15:3
+synth	first difference at line 21: scalac `DefDef [s1 11..11@11 1:11-1:11] sym=<empty>.P.hashCode#()scala.Int {method,override,synthetic}` teq `ValDef [s1 13..19@13 1:13-1:19] sym=<empty>.P.a {paramAccessor
+transparent	first difference at line 25: scalac `Inlined [s1 78..85@82 3:10-3:17] call=<empty>.T callpos=[s1 78..85@82 3:10-3:17]` teq `Inlined [s1 78..85@82 3:10-3:17] call=? callpos=[s1 78..78@78 3:10-3:10]`
+type-path	first difference at line 18: scalac `Tpt [s1 38..38@38 3:9-3:9] paths=[]` teq `Tpt [s1 38..38@38 3:9-3:9] paths=[<empty>.TypePath.b]`
+type-select	first difference at line 29: scalac `Tpt [s1 76..79@78 4:13-4:16] paths=[<empty>.TypeSelect.b]` teq `Tpt [s1 76..79@78 4:13-4:16] paths=[]`
+type-trace	first difference at line 20: scalac `Ident [s1 54..61@54 4:4-4:11] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)` teq `Select [s1 54..61@54 4:4-4:11] sym=scala
+unchecked	first difference at line 19: scalac `Tpt [s1 30..30@30 2:12-2:12] paths=[<empty>.Unchecked.b]` teq `Tpt [s1 30..30@30 2:12-2:12] paths=[]`

@@ -2834,6 +2834,29 @@ fn pickle_products(opts: &Options, typer: &mut typer::Typer) -> tasty::write::Wr
             let _ = f.write_all(text.as_bytes());
         }
     }
+    // The typed program's classes (`TEQ_INIT_VIEW_INVENTORY=<file>`, the initialization view's inventory, src/init):
+    // one row per class the program's own sources write (a source definition, not dropped: no SAM closure's class,
+    // no synthesized companion), its source path as given, its name and its name's offset. It reads the typed
+    // program alone; without the variable, nothing.
+    if let Some(path) = std::env::var_os("TEQ_INIT_VIEW_INVENTORY") {
+        let text: String = typer.on_thread(|w| {
+            let mut rows: Vec<String> = Vec::new();
+            for c in &w.prog.classes {
+                let info = w.syms.class(c.id);
+                if info.def.is_none() || info.dropped {
+                    continue;
+                }
+                let Some(src) = w.files.as_slice().get(info.file.0 as usize).filter(|f| !f.is_std) else { continue };
+                rows.push(format!("class\t{}\t{}\t{}\n", src.path, w.interner.get(info.name), info.span.start));
+            }
+            rows.sort();
+            rows.concat()
+        });
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = f.write_all(text.as_bytes());
+        }
+    }
     if std::env::var_os("TEQ_PRODUCTS_DETAIL").is_some() {
         let mut shapes: Vec<(&String, &u32)> = written.approximated.iter().collect();
         shapes.sort();
