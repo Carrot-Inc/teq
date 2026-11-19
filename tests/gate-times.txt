@@ -82,6 +82,7 @@ indigo-run 1
 fix 186
 interp-script 8
 std-kinds 3
+java-lang-names 35
 board-pos 44
 board-run 80
 board-rest 39

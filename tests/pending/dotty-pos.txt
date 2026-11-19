@@ -661,7 +661,6 @@ parsercombinators-new-syntax.scala	parsercombinators-new-syntax.scala:18:17: a p
 parsercombinators-this.scala	parsercombinators-this.scala:32:6: a context bound needs a type constructor with one parameter
 pat_iuli.scala	pat_iuli.scala:16:12: opcodes is not accessible from here: it belongs to an instance of its enclosing class
 patmat.scala	patmat.scala:11:11: expected '=>', found ':'
-patterns2.scala	patterns2.scala:3:20: type String not found
 phantom-Eq.scala	phantom-Eq.scala:21:3: 'erased' is not part of the supported Scala subset
 phantom-Eq2	Phantom-Eq_1.scala:7:33: expected 'extends' or a template body, found '@'
 phantom-Evidence.scala	phantom-Evidence.scala:15:30: expected 'extends' or a template body, found '@'

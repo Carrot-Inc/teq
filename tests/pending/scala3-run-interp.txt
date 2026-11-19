@@ -152,7 +152,6 @@ i1240	run-error: Exception in thread "main" java.lang.AssertionError: assertion 
 i12492	compile-error: test contains Java sources
 i12656	compile-error: value testing is not a member of compiletime
 i12753	compile-error: test contains Java sources
-i12914	compile-error: type String not found
 i12976	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 i13087	compile-error: expected an expression, found end of indented block
 i13131	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed

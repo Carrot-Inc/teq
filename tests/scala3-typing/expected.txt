@@ -4708,7 +4708,7 @@ pos/patmatch-in-catch.scala	accepts
 pos/patterns.scala	accepts		--source 3.2
 pos/patterns1.scala	accepts		--source 3.2
 pos/patterns1213.scala	accepts	
-pos/patterns2.scala	std	String
+pos/patterns2.scala	accepts	
 pos/patterns3.scala	accepts	
 pos/pets.scala	accepts	
 pos/phantom-Eq.scala	syntax	'erased' is not part of the supported Scala subset

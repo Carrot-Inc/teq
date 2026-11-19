@@ -160,7 +160,6 @@ i1240	run-error: Error: AssertionError: assertion failed
 i12492	compile-error: test contains Java sources
 i12656	compile-error: value testing is not a member of compiletime
 i12753	compile-error: test contains Java sources
-i12914	compile-error: type String not found
 i12976	run-error: AssertionError [java.lang.AssertionError]: assertion failed
 i13087	compile-error: expected an expression, found end of indented block
 i13146poly	compile-error: type argument m.MirroredElemTypes does not have the same kind as its bound [_]

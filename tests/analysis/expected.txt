@@ -326,6 +326,8 @@ givenobjectparents_b usedName gopu.Use$package T given-object-reference teq Defa
 hkbounds_a usedName ha.Functor$.given_Functor_List ImpureFunction1 impure-function scalac Default
 hkbounds_b usedName hb.Use _$1 synthetic-local scalac Default
 hkbounds_b usedName hb.Use _$2 synthetic-local scalac Default
+javamemberstring usedName demo.H Throwable member-owner teq Default
+javamemberstring binaryDependency demo.H java.lang.Throwable member-owner teq jrt:/modules/java.base/java/lang/Throwable.class,Members.scala,DependencyByMemberRef
 matchtype_a usedName mta.Elems MatchCase match-type scalac Default
 matchtype_a usedName mta.Elems _$1 synthetic-local scalac Default
 matchtype_a usedName mta.Elems t match-type teq Default

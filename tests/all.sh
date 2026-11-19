@@ -114,6 +114,7 @@ suite reference-test-verb ./tests/reference-test-verb.sh
 suite mill-test-verb ./tests/mill-test-verb.sh
 suite std-entered   ./tests/std-entered.sh
 suite std-kinds     ./tests/std-kinds.sh
+suite java-lang-names ./tests/java-lang-names.sh
 suite jvm           ./tests/run_jvm.sh
 suite jvm-21        ./tests/run_jvm.sh --java-output-version=21
 suite interp        ./tests/run_interp.sh

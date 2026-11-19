@@ -297,7 +297,7 @@ i12828a.scala	pass	lean:pass
 i12828b.scala	pass	lean:pass	
 i12829.scala	pass	lean:pass	
 i1284.scala	pass	lean:pass	
-i12914.scala	fail	lean:fail	i12914.scala:3:21: type String not found
+i12914.scala	pass	lean:pass	
 i12919.scala	pass	lean:pass	
 i12919a.scala	pass	lean:pass	
 i12919b.scala	pass	lean:pass	

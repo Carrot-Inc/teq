@@ -122,7 +122,6 @@ i12492	java source: teq reads none
 i12656.scala	i12656.scala:13:11: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 i12753	java source: teq reads none
 i1284.scala	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class [Ljava.io.Serializable; cannot be cast to class [Lscala.deriving.Mirror$Singleton; ([Ljava.io.Serializable; is in module java.base of loader 'bootstrap'; [Lscala.de
-i12914.scala	i12914.scala:3:21: type String not found
 i12976.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i13087.scala	i13087.scala:11:5: expected an expression, found end of indented block
 i13146poly.scala	i13146poly.scala:13:12: type argument Mono does not have the same kind as its bound [_]

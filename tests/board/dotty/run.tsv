@@ -352,7 +352,7 @@ i12828a.scala	pass	interp:pass
 i12828b.scala	pass	interp:pass	
 i12829.scala	pass	interp:pass	
 i1284.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class [Ljava.io.Serializable; cannot be cast to class [Lscala.deriving.Mirror$Singleton; ([Ljava.io.Serializable; is in module java.base of loader 'bootstrap'; [Lscala.de
-i12914.scala	fail	interp:fail	i12914.scala:3:21: type String not found
+i12914.scala	pass	interp:pass	
 i12919.scala	pass	interp:pass	
 i12919a.scala	pass	interp:pass	
 i12919b.scala	pass	interp:pass	

@@ -33,6 +33,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
       (`` `using` expected ``);
     - an anonymous given of one type with nothing after it is refused, as scalac refuses it;
     - a brace where `with` should open the body is named as one (`'with' expected, but '{' found`).
+- `java.lang.String` written in full is the builtin `String` on every target, as `java.lang.Object` is `AnyRef`: a
+  val's, a parameter's or a result's type, a type argument, `_root_.java.lang.String`, `import java.lang.{String =>
+  S}`, `new java.lang.String(...)`, `classOf[java.lang.String]`, a type test and a typed pattern were refused with
+  "type String not found". On the JVM over scala-library a file that reaches `String` only through a Java member (a
+  super call to `Throwable`'s constructor, `getMessage`) no longer records a dependency on `scala.Predef$` in its
+  analysis; scalac records none.
 - The preference between two givens a search finds, or two that provide the extension method a call selects, follows
   the source version up to 3.5 and from 3.7, as scalac's does:
   - Up to `-source 3.5` (or a `language.3.5` import) the more specific given wins, and two givens whose owners and

@@ -111,6 +111,11 @@ jobs:
             suites: tasty init-view classfile classpath stdlib std-kinds
             minutes: 35
             jars: true
+          # A java.lang class written in full, 863 programs on four legs: some eight minutes on four cores.
+          - group: java-lang-names
+            suites: java-lang-names
+            minutes: 20
+            jars: true
           # The modules suite as its two pieces (tests/all.sh's `modules.1/2`): whole it is thirty minutes of the runner.
           - group: modules-1
             suites: modules.1/2 workers tasty-exec

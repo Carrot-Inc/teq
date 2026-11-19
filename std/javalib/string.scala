@@ -206,3 +206,7 @@ package java.lang:
     def newString(bytes: Array[scala.Byte], offset: Int, length: Int, charset: java.nio.charset.Charset): String = java.nio.charset.decode(bytes, offset, length, charset)
     @js("$format($1, [...$2])")
     def format(format: String, args: Any*): String
+
+  // The class `java.lang.String` is the builtin `String`, as `Object` is `AnyRef` (lang.scala): a type written in full
+  // (`val s: java.lang.String`) is the builtin's. After the statics, moving no line of the file.
+  type String = scala.String

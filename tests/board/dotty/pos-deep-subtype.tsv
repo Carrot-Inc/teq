@@ -22,7 +22,7 @@ i7580.scala	pass	check:pass
 i9346.scala	pass	check:pass	
 i9631.scala	pass	check:pass	
 i9736.scala	pass	check:pass	
-i9759.scala	fail	check:fail	i9759.scala:7:28: type String not found
+i9759.scala	pass	check:pass	
 i9782.scala	fail	check:fail	No warnings can be incurred under -Werror
 t8146a.scala	pass	check:pass	
 tuples2.scala	pass	check:pass	

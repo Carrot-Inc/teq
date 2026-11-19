@@ -93,7 +93,6 @@ i12328.scala	i12328.scala:34:23: No given instance of type Schema[A] was found.
 i12328a.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 i1240.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 i12656.scala	i12656.scala:13:11: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
-i12914.scala	i12914.scala:3:21: type String not found
 i13087.scala	i13087.scala:11:5: expected an expression, found end of indented block
 i13146poly.scala	i13146poly.scala:13:12: type argument Mono does not have the same kind as its bound [_]
 i13181.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed

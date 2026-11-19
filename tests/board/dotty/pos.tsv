@@ -2515,7 +2515,7 @@ patmatch-in-catch.scala	pass	check:pass
 patterns.scala	pass	check:pass	
 patterns1.scala	pass	check:pass	
 patterns1213.scala	pass	check:pass	
-patterns2.scala	fail	check:fail	patterns2.scala:3:20: type String not found
+patterns2.scala	pass	check:pass	
 patterns3.scala	pass	check:pass	
 pets.scala	pass	check:pass	
 phantom-Eq.scala	fail	check:fail	phantom-Eq.scala:21:3: 'erased' is not part of the supported Scala subset

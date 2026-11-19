@@ -362,7 +362,7 @@ i12828a	pass	-
 i12828b	pass	-	
 i12829	pass	-	
 i1284	pass	-	
-i12914	fail	-	compile-error: type String not found
+i12914	pass	-	
 i12919	pass	-	
 i12919a	pass	-	
 i12919b	pass	-	
