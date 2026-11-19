@@ -1152,7 +1152,7 @@ impl<'a> Worker<'a> {
         let rhs = self.alias_body(a);
         let d = AliasId(self.syms.aliases.len() as u32);
         let js = self.syms.aliases[a.idx()].js;
-        self.syms.aliases.push(AliasInfo { upper_through_alias: false, name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false, unchecked_override: false, name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
         self.syms.alias_cells.set(d.0, Completion::Done);
         self.derived_aliases.insert(key, d);
         let seen = |t: &mut Self, ty: TypeId| -> TypeId {

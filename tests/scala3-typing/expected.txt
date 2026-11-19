@@ -5085,7 +5085,7 @@ pos/t1272.scala	accepts
 pos/t12787.scala	rejects	{} is not a member of the package
 pos/t1279a.scala	accepts	
 pos/t1280.scala	accepts	
-pos/t13127.scala	rejects	{} is not a member of the package
+pos/t13127.scala	accepts	
 pos/t1318.scala	accepts	
 pos/t1385.scala	accepts	
 pos/t1391.scala	accepts	

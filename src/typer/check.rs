@@ -4128,6 +4128,12 @@ impl<'a> Worker<'a> {
                 }
             }
         });
+        // The override mark, read where the definition stands (`SymInfo::unchecked_override`).
+        if matches!(owner, Owner::Class(_)) && !self.ast(file).def(def_id).annots.is_empty() {
+            let env = self.env_at(file, owner, span.start);
+            let marked = self.with_env(env, |t| t.marked_by_annotation(file, def_id));
+            self.shared_write(sym, |w| w.syms.sym_mut(sym).unchecked_override = marked);
+        }
         let mut noted = false;
         if let Some(outer) = outer_owner {
             noted = self.inlining.demands.len() > marks.0 || self.diags.items.len() > marks.1;
@@ -8193,7 +8199,7 @@ impl<'a> Worker<'a> {
                     self.sig_string(m)
                 );
                 self.error_at_by(crate::source::Group::RefChecks, m, msg);
-            } else if overrides_any && m_mods & mods::OVERRIDE == 0 && !self.is_abstract_member(m) {
+            } else if overrides_any && m_mods & mods::OVERRIDE == 0 && !self.is_abstract_member(m) && !self.is_marked_override(m) {
                 let msg = format!("method {} needs `override` modifier to override the {} of Any", self.name_str(name), self.name_str(name));
                 self.error_at_by(crate::source::Group::RefChecks, m, msg);
             } else if !overrides_any && m_mods & mods::OVERRIDE != 0 {
@@ -8258,6 +8264,56 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the member `m` is marked as an override (`RefChecks.isMarkedOverride`, RefChecks.scala 390 at 3.8.4): it is
+    /// written `override`, or it carries `scala.annotation.unchecked.uncheckedOverride`, a fact of the symbol
+    /// (`SymInfo::unchecked_override`): a library member's read from its TASTy, a source member's read where its
+    /// definition stands as its signature completes (`marked_by_annotation`), which a definition with an annotation
+    /// has done before its mark is read.
+    pub(super) fn is_marked_override(&mut self, m: SymId) -> bool {
+        let info = self.syms.sym(m);
+        if info.mods & mods::OVERRIDE != 0 || info.unchecked_override {
+            return true;
+        }
+        let (Some(d), file) = (info.def, info.file) else { return false };
+        if self.ast(file).def(d).annots.is_empty() {
+            return false;
+        }
+        let _ = self.sig_arc(m);
+        self.syms.sym(m).unchecked_override
+    }
+
+    /// Whether the definition `d` of `file` is marked by an annotation of the class
+    /// `scala.annotation.unchecked.uncheckedOverride` (`RefChecks.isMarkedOverride`, RefChecks.scala 390 at 3.8.4, reads
+    /// the symbol's annotation of that class), each annotation's class resolved in the environment at hand (the
+    /// definition's own) whatever the annotation is written as: its own name, a renamed import, an alias of it, the full
+    /// path (dotty's Namer types an annotation's class ahead, `typedAheadAnnotationClass`); a program's own class of that
+    /// name is another class. An instance of the class marks only where it types without an error of its own (its
+    /// arguments and type arguments typed with it: the class takes none; `annotation_is_instance_of`).
+    pub(super) fn marked_by_annotation(&mut self, file: FileId, d: crate::ast::DefId) -> bool {
+        const MARK: &str = "scala.annotation.unchecked.uncheckedOverride";
+        let annots: Vec<(Option<crate::ast::TyExprId>, crate::ast::ExprId)> = {
+            let ast = self.ast(file);
+            ast.def(d).annots.iter().map(|a| (ast.annot_new(a).map(|(path, _)| path), a.instance)).collect()
+        };
+        // Reading the classes records no use for the computation at hand (the class whose typing completed the
+        // member): the analysis' used names are what the definitions write, as master records them.
+        let aside = self.deps_set_aside();
+        let marked = annots.into_iter().any(|(path, instance)| {
+            path.and_then(|p| self.annotation_class(p)).is_some_and(|k| self.class_path(k) == MARK)
+                && self.annotation_is_instance_of(file, instance, MARK)
+        });
+        self.deps_leave(aside);
+        marked
+    }
+
+    /// Whether the type member `a` is marked as an override: written `override`, or annotated
+    /// `scala.annotation.unchecked.uncheckedOverride`, the fact its completion set (`AliasInfo::unchecked_override`).
+    fn alias_marked_override(&mut self, a: AliasId) -> bool {
+        self.complete_alias(a);
+        let info = &self.syms.aliases[a.idx()];
+        info.unchecked_override || info.def.is_some_and(|d| self.ast(info.file).def(d).mods & mods::OVERRIDE != 0)
+    }
+
     /// Every type member of `c` against the one of its name an ancestor declares: an alias
     /// has to lie within the bounds it implements, bounds within the bounds, and an alias that
     /// overrides an alias with `override` has to equal it. Both are seen from `c`, whose other
@@ -8272,9 +8328,9 @@ impl<'a> Worker<'a> {
             let Some((b, bt, p)) = bases.iter().find_map(|&(b, bt)| self.syms.class(b).type_aliases.get(&name).map(|&p| (b, bt, p))) else { continue };
             self.complete_alias(m);
             self.complete_alias(p);
-            let (m_def, m_mods, m_file) = {
+            let (m_def, m_file) = {
                 let i = &self.syms.aliases[m.idx()];
-                (i.def, i.def.map_or(0, |d| self.ast(i.file).def(d).mods), i.file)
+                (i.def, i.file)
             };
             let Some(m_def) = m_def else { continue };
             let seen = |t: &mut Self, ty: TypeId, subst: &Subst| {
@@ -8314,9 +8370,9 @@ impl<'a> Worker<'a> {
             }
             let mark = self.snapshot();
             let ok = !kinds_differ && match (p_bounds, m_bounds) {
-                // scalac lets an alias take the place of an alias without a word unless
-                // `override` asks for the check.
-                (None, None) => m_mods & mods::OVERRIDE == 0 || self.is_same(m_rhs, p_rhs),
+                // scalac lets an alias take the place of an alias without a word unless its mark
+                // (`override`, `@uncheckedOverride`: `isMarkedOverride`) asks for the check.
+                (None, None) => !self.alias_marked_override(m) || self.is_same(m_rhs, p_rhs),
                 (None, Some((lo, hi))) => self.is_sub(lo, p_rhs) && self.is_sub(p_rhs, hi) && self.is_same(lo, hi),
                 (Some((lo, hi)), None) => self.is_sub(lo, m_rhs) && self.is_sub(m_rhs, hi),
                 (Some((plo, phi)), Some((mlo, mhi))) => self.is_sub(plo, mlo) && self.is_sub(mhi, phi),
@@ -8825,9 +8881,9 @@ impl<'a> Worker<'a> {
                 return true;
             }
         }
-        // A member with `override` over a var or its setter, which scalac names by the var
-        // (`RefChecks.checkOverride`, `other.isMutableVarOrAccessor`).
-        let overrides_var = own && m_mods & mods::OVERRIDE != 0 && (p_kind == SymKind::Var || (p_kind == SymKind::Def && p_mods & mods::SETTER != 0));
+        // A member marked as an override over a var or its setter, which scalac names by the var
+        // (`RefChecks.checkOverride`, `isMarkedOverride(member) && other.isMutableVarOrAccessor`).
+        let overrides_var = own && (p_kind == SymKind::Var || (p_kind == SymKind::Def && p_mods & mods::SETTER != 0)) && self.is_marked_override(m);
         let overridden_var = match p_kind {
             SymKind::Var if overrides_var => Some(p),
             SymKind::Def if overrides_var => super::setters::var_of_setter(&self.syms, self.interner, p),
@@ -8866,8 +8922,14 @@ impl<'a> Worker<'a> {
             } else {
                 "{m} has weaker access privileges than {p}; it should be public"
             }
-        } else if own && m_mods & (mods::OVERRIDE | mods::SELECTOR) == 0 && (!p_abstract || p_deferred) && !self.is_product_member(p) {
-            // A case class's selector overrides as if marked (dotty's `RefChecks.autoOverride`).
+        } else if own
+            && m_mods & (mods::OVERRIDE | mods::SELECTOR) == 0
+            && (!p_abstract || p_deferred)
+            && !self.is_product_member(p)
+            && !self.is_marked_override(m)
+        {
+            // A case class's selector overrides as if marked (dotty's `RefChecks.autoOverride`); a member marked by
+            // `@uncheckedOverride` needs no modifier (`isMarkedOverride`).
             "{m} needs `override` modifier to override {p}"
         } else {
             if !own {

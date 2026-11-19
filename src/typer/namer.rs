@@ -623,7 +623,7 @@ impl<'a> Worker<'a> {
                 } else {
                     let aid = AliasId(self.syms.aliases.len() as u32);
                     let abstract_member = matches!(def.kind, DefKind::TypeAlias { rhs: None, .. });
-                    self.syms.aliases.push(AliasInfo { upper_through_alias: false,
+                    self.syms.aliases.push(AliasInfo { upper_through_alias: false, unchecked_override: false,
                         name: def.name,
                         owner,
                         file,

@@ -830,6 +830,9 @@ override_checks	pass	-
 override_class	pass	-	
 override_clause_shape	pass	-	
 override_given_final	pass	-	
+override_marked_unchecked_files	pass	-	
+override_marked_unchecked_refused	pass	-	
+override_marked_unchecked_typed	pass	-	
 override_nullary_loose	pass	-	
 override_refused_once	pass	-	
 override_rules	pass	-	

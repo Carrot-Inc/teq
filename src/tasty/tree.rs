@@ -47,6 +47,8 @@ pub struct Entry {
     pub js_annotated: bool,
     /// The definition is annotated `@deprecated` (`typer::deprecation`).
     pub deprecated: bool,
+    /// The definition is annotated `@scala.annotation.unchecked.uncheckedOverride` (`RefChecks.isMarkedOverride`).
+    pub unchecked_override: bool,
 }
 
 /// The simple names of the Scala.js annotations the loader reads (`scala.scalajs.js.native` and
@@ -395,6 +397,7 @@ impl<'a> Decoder<'a> {
         let mut access_within = None;
         let mut js_annotated = false;
         let mut deprecated = false;
+        let mut unchecked_override = false;
         while self.r.pos < end {
             let m = self.r.byte();
             match m {
@@ -403,6 +406,7 @@ impl<'a> Decoder<'a> {
                     match self.annotation_name() {
                         Some(n) if JS_ANNOTATION_NAMES.contains(&n) => js_annotated = true,
                         Some("deprecated") => deprecated = true,
+                        Some("uncheckedOverride") => unchecked_override |= self.annotation_in_package(&["scala", "annotation", "unchecked"]),
                         _ => {}
                     }
                     self.r.pos = annot_end;
@@ -419,7 +423,7 @@ impl<'a> Decoder<'a> {
             }
         }
         self.r.pos = end;
-        Entry { addr, tag, name, flags, is_class, has_body, qualified_private, access_within, js_annotated, deprecated }
+        Entry { addr, tag, name, flags, is_class, has_body, qualified_private, access_within, js_annotated, deprecated, unchecked_override }
     }
 
     /// The class or package a qualifier type at the cursor refers to.
@@ -484,6 +488,50 @@ impl<'a> Decoder<'a> {
                     break self.file.simple(n);
                 }
                 _ => break None,
+            }
+        };
+        self.r.pos = saved;
+        found
+    }
+
+    /// Whether the annotation class at the cursor, a type reference, is a member of the package `pkg` (its qualifier a
+    /// package reference of that full name); the cursor is left where it was.
+    fn annotation_in_package(&mut self, pkg: &[&str]) -> bool {
+        let saved = self.r.pos;
+        // A shared type refers to an earlier one (the format's back reference), so a walk that only moves back ends.
+        let found = loop {
+            let at = self.r.pos;
+            match self.r.byte() {
+                SHAREDTYPE => {
+                    let addr = self.r.nat() as usize;
+                    if addr >= at {
+                        break false;
+                    }
+                    self.r.pos = addr;
+                }
+                TYPEREF => {
+                    self.r.nat();
+                    break loop {
+                        let at = self.r.pos;
+                        match self.r.byte() {
+                            SHAREDTYPE => {
+                                let addr = self.r.nat() as usize;
+                                if addr >= at {
+                                    break false;
+                                }
+                                self.r.pos = addr;
+                            }
+                            TERMREFPKG | TYPEREFPKG => {
+                                let q = self.r.nat();
+                                let mut segments = Vec::new();
+                                self.file.segments(q, &mut segments);
+                                break segments.len() == pkg.len() && segments.iter().zip(pkg).all(|(&s, &p)| self.file.simple(s) == Some(p));
+                            }
+                            _ => break false,
+                        }
+                    };
+                }
+                _ => break false,
             }
         };
         self.r.pos = saved;

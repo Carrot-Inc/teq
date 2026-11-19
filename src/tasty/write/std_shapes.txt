@@ -16274,6 +16274,7 @@ scala.annotation.targetName	<init>	java.lang.String:scala.annotation.targetName
 scala.annotation.targetName	name	-:java.lang.String
 scala.annotation.threadUnsafe	<init>	:scala.annotation.threadUnsafe
 scala.annotation.unchecked.uncheckedCaptures	<init>	:scala.annotation.unchecked.uncheckedCaptures
+scala.annotation.unchecked.uncheckedOverride	<init>	:scala.annotation.unchecked.uncheckedOverride
 scala.annotation.unchecked.uncheckedStable	<init>	:scala.annotation.unchecked.uncheckedStable
 scala.annotation.unchecked.uncheckedVariance	<init>	:scala.annotation.unchecked.uncheckedVariance
 scala.annotation.unroll	<init>	:scala.annotation.unroll

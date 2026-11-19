@@ -1542,7 +1542,7 @@ impl<'a> Worker<'a> {
         if e.deprecated {
             crate::typer::deprecation::note_deprecated();
         }
-        self.syms.aliases.push(AliasInfo { upper_through_alias: false,
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false, unchecked_override: e.unchecked_override,
             name,
             owner,
             file: file_id,
@@ -2616,6 +2616,8 @@ impl<'a> Worker<'a> {
             info.member_order.retain(|&m| Some(m) != object);
         }
         let sym = self.syms.new_sym(name, kind, m, Owner::Class(c), file_id, None, Span::default());
+        // `@uncheckedOverride` marks it as an override for a class that inherits it (`RefChecks.isMarkedOverride`).
+        self.syms.sym_mut(sym).unchecked_override = e.unchecked_override;
         // An abstract var is read through its getter (`typer::setters`).
         if kind == SymKind::Var && m & mods::ABSTRACT != 0 {
             self.syms.sym_mut(sym).needs_accessor = true;

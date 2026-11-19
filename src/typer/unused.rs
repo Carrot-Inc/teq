@@ -553,6 +553,30 @@ impl<'a> Worker<'a> {
         out
     }
 
+    /// Whether the annotation `instance` of `file`, typed as the import marks type it (`type_annotation`, quietly: what
+    /// it reports is taken back), types without an error of its own and is an instance of the class named `path`: an
+    /// annotation's arguments and type arguments are typed with it (`@uncheckedOverride(1)` is none: the class takes
+    /// none), its class resolved in the environment at hand.
+    pub(super) fn annotation_is_instance_of(&mut self, file: FileId, instance: ast::ExprId, path: &str) -> bool {
+        let mark = self.diags.items.len();
+        let span = self.ast(file).expr_span(instance);
+        self.type_annotation(file, instance, false, |w, tree| {
+            let own_error = w.diags.items[mark.min(w.diags.items.len())..]
+                .iter()
+                .any(|d| !d.is_warning && d.file == file && d.span.start >= span.start && d.span.end <= span.end);
+            // The instance's class: the `New` the typing made (its type is kept only in builds that keep types).
+            let class = tree.and_then(|t| match w.prog.expr(t) {
+                crate::tir::TExpr::New(c, _) => Some(c),
+                crate::tir::TExpr::NewVia(ctor, _) => match w.syms.sym(ctor).owner {
+                    crate::symbols::Owner::Class(c) => Some(c),
+                    _ => None,
+                },
+                _ => None,
+            });
+            !own_error && class.is_some_and(|k| w.class_path(k) == path)
+        })
+    }
+
     pub(super) fn mark_names_of_type(&mut self, ast: &'a ast::Ast, t: ast::TyExprId) {
         match ast.ty(t) {
             ast::TyExpr::Name(n) => {

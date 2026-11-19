@@ -41,6 +41,7 @@ package unchecked:
   @field @getter
   final class uncheckedStable extends StaticAnnotation
   final class uncheckedCaptures extends StaticAnnotation
+  final class uncheckedOverride extends StaticAnnotation
 
 package meta:
   final class field extends StaticAnnotation

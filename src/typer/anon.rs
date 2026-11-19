@@ -2419,7 +2419,7 @@ impl<'a> Worker<'a> {
         self.syms.check_cells.set(c.0, Completion::Done);
         for &(alias, rhs) in types {
             let a = AliasId(self.syms.aliases.len() as u32);
-            self.syms.aliases.push(AliasInfo { upper_through_alias: false, name: alias, owner: Owner::Class(c), file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js: false, declared_rhs: crate::tir::NO_TYPE, exported: false, completion_noted: false });
+            self.syms.aliases.push(AliasInfo { upper_through_alias: false, unchecked_override: false, name: alias, owner: Owner::Class(c), file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js: false, declared_rhs: crate::tir::NO_TYPE, exported: false, completion_noted: false });
             self.syms.alias_cells.set(a.0, Completion::Done);
             let mut info = self.syms.class_mut(c);
             let old = info.type_aliases.insert(alias, a);

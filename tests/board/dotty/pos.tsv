@@ -2843,7 +2843,7 @@ t1272.scala	pass	check:pass
 t12787.scala	pass	check:fail	
 t1279a.scala	pass	check:pass	
 t1280.scala	pass	check:pass	
-t13127.scala	fail	check:fail	t13127.scala:16:26: method max needs `override` modifier to override method max in trait Base
+t13127.scala	pass	check:pass	
 t1318.scala	pass	check:pass	
 t1385.scala	pass	check:pass	
 t1391.scala	pass	check:pass	

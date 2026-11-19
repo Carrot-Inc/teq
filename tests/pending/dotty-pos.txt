@@ -709,7 +709,6 @@ t11788b	java source: teq reads none
 t11788c	java source: teq reads none
 t122.scala	t122.scala:2:12: recursive value v needs type
 t12396	dotty: unknown test option: -jvm 21+ -jvm 21+
-t13127.scala	t13127.scala:16:26: method max needs `override` modifier to override method max in trait Base
 t151.scala	t151.scala:5:10: (foo : <error>) is not a valid type prefix, since it is not an immutable path
 t1513a.scala	t1513a.scala:36:10: expected ']', found '='
 t1513b.scala	t1513b.scala:10:8: expected ']', found '='

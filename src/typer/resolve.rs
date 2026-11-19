@@ -7054,6 +7054,12 @@ impl<'a> Worker<'a> {
         self.dump_door("alias", super::context::Entered::Alias(a));
         // In the alias's own place, whatever named it first (`where_made`).
         let (ids, ty, bounds) = self.where_made("alias", super::context::Entered::Alias(a), |t| t.with_env(env, |t| t.resolve_alias_def(a, tparams, *rhs, *lower, *upper)));
+        // The override mark, read in the alias's own environment (`AliasInfo::unchecked_override`).
+        if matches!(owner, Owner::Class(_)) && !def.annots.is_empty() {
+            let env = self.env_at(file, owner, def.span.start);
+            let marked = self.with_env(env, |t| t.marked_by_annotation(file, def_id));
+            self.syms.alias_mut(a).unchecked_override = marked;
+        }
         let mut noted = false;
         if let Some(outer) = outer_owner {
             noted = self.inlining.demands.len() > marks.0 || self.diags.items.len() > marks.1;
@@ -7161,7 +7167,7 @@ impl<'a> Worker<'a> {
             return;
         }
         let a = AliasId(self.syms.aliases.len() as u32);
-        self.syms.aliases.push(AliasInfo { upper_through_alias: false,
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false, unchecked_override: false,
             name: def.name,
             owner: Owner::Local,
             file,
@@ -7221,7 +7227,7 @@ impl<'a> Worker<'a> {
             return;
         }
         let a = AliasId(self.syms.aliases.len() as u32);
-        self.syms.aliases.push(AliasInfo { upper_through_alias: false,
+        self.syms.aliases.push(AliasInfo { upper_through_alias: false, unchecked_override: false,
             name: def.name,
             owner: Owner::Local,
             file,
@@ -9563,7 +9569,7 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 let winner = self.syms.class(earlier).members[&name];
-                let marked = self.syms.sym(winner).mods & mods::OVERRIDE != 0;
+                let marked = self.is_marked_override(winner);
                 let of_any = matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS);
                 let shared = of_any
                     || self.syms.class(earlier).base_types.iter().skip(1).any(|&(x, _)| {

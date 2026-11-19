@@ -38,7 +38,9 @@
 #             files teq's `p.<File>$package`, and one with parents names no class twice; what an
 #             inline method's body reads is its own class's dependencies, not those of a caller
 #             the file puts first, at one thread and at four (scalac's collector meets the body
-#             in its class's tree).
+#             in its class's tree); and the annotations of a member another class's typing
+#             completes, read for the override mark, are no used names of that class
+#             (tests/analysis/fixtures/annotation-read-elsewhere, at one thread and at four).
 # Needs scala-library's jar in the coursier cache (tests/support/jars.sh), without which it
 # is not run: its skip line, which the gate fails, and no pass.
 cd "$(dirname "$0")/.."
@@ -304,6 +306,15 @@ first, last, first4 = deps("first"), deps("last"), deps("first4")
 sys.exit(0 if first == last == first4 and "compiletime" in first["io.Lib"]["names"] and "compiletime" not in first["io.Use"]["names"] else 1)
 EOF
 check "an inline method's body's names are its class's dependencies whatever calls it first" $?
+for t in 1 4; do
+  "$TEQ" compiler check --analysis-version 3 --threads $t tests/analysis/fixtures/annotation-read-elsewhere > "$work/annotation-elsewhere-$t.json" 2> /dev/null
+done
+python3 - "$work/annotation-elsewhere-1.json" "$work/annotation-elsewhere-4.json" << 'EOF' > /dev/null 2>&1
+import json, sys
+names = [{c: d["names"] for f in json.load(open(a))["api"]["files"] for c, d in f["deps"].items()} for a in sys.argv[1:]]
+sys.exit(0 if names[0] == names[1] and "Main" in names[0] and "annotation" not in names[0]["Main"] else 1)
+EOF
+check "a member's annotations read where another class completes it are no names of that class" $?
 answer=$(printf 'quit\n' | timeout 60 "$TEQ" compiler watch --check --analysis-version 2 tests/modules/basic/a 2> /dev/null | head -1)
 python3 -c 'import json, sys; a = json.loads(sys.argv[1]); sys.exit(0 if a.get("ok") and a.get("analysisVersion") == 2 and sorted(f["file"] for f in a["api"]["files"]) == sorted(f["file"] for f in a["analysis"]) and a["analysis"] else 1)' "$answer" 2> /dev/null
 check "a check session without --own answers the graph of every file" $?

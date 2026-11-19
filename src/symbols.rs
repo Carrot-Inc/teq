@@ -462,6 +462,10 @@ pub struct SymInfo {
     /// block's symbols are that worker's alone until its body is published, the statement done.
     pub initialising: bool,
     pub alternative: bool,
+    /// Annotated `@scala.annotation.unchecked.uncheckedOverride`, the annotation resolved where the definition stands
+    /// (`Worker::mark_unchecked_override`) or read from a library member's TASTy: marked as an override
+    /// (`RefChecks.isMarkedOverride`).
+    pub unchecked_override: bool,
     /// dotty's `Synthetic`: a pattern definition's holder (`Ast::patdef_holders`,
     /// `Desugar.makePatDef`'s `patMods`), or a definition a pickle marks `SYNTHETIC`; a copy
     /// keeps it, reflection reports it and the pickle writes it.
@@ -575,6 +579,9 @@ pub struct AliasInfo {
     pub name: Name,
     /// An abstract member's upper bound written as an alias's application (`TParamInfo::upper_through_alias`).
     pub upper_through_alias: bool,
+    /// Annotated `@scala.annotation.unchecked.uncheckedOverride`, the annotation typed where the member stands as it
+    /// completes (`Worker::annotated_unchecked_override`): marked as an override (`RefChecks.isMarkedOverride`).
+    pub unchecked_override: bool,
     pub owner: Owner,
     pub file: FileId,
     /// Absent for an alias read from a library, which completes through `Typer::loaded`.
@@ -1533,6 +1540,7 @@ impl Symbols {
             merge_pending: false,
             superseded: false,
             alternative: false,
+            unchecked_override: false,
             initialising: false,
             synthetic: false,
             dispatch: Dispatch::UNKNOWN,
@@ -2106,7 +2114,7 @@ mod tests {
             let c = syms.new_class(Name(1), ClassKind::Class, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
             let p = syms.new_tparam(Name(2), 0);
             let s = syms.new_sym(Name(5), SymKind::Def, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
-            let a = AliasId(syms.aliases.push(AliasInfo { upper_through_alias: false, name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false }));
+            let a = AliasId(syms.aliases.push(AliasInfo { upper_through_alias: false, unchecked_override: false, name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false }));
             syms.syms.fork();
             syms.classes.fork();
             syms.tparams.fork();
