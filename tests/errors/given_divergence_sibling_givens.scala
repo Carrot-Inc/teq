@@ -1,4 +1,4 @@
-// expect: 23:15: error: no given instance of type TC[X] was found for parameter tc
+// expect: 23:15: error: No given instance of type TC[X] was found for parameter tc of method need
 // expect: 1 error found
 // Two givens of one signature but for a third clause, each asking `Wrap[A, B]` and then `TC[B]`: the request for
 // `TC[B]` under either is of the classes the open goal had when it was opened and larger, and is cut at once, as

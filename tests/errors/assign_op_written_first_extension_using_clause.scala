@@ -1,6 +1,6 @@
-// expect: 22:11: error: no given instance of type Tok was found for parameter t
-// expect: 24:14: error: no given instance of type Tok was found for parameter t
-// expect: 25:16: error: no given instance of type Tok was found for parameter t
+// expect: 22:11: error: No given instance of type Tok was found for parameter t of method +=
+// expect: 24:14: error: No given instance of type Tok was found for parameter t of method +=
+// expect: 25:16: error: No given instance of type Tok was found for parameter t of method +=
 // expect: 3 errors found
 // The first try of an assignment operator's application has not failed where a member that does not take the
 // argument gave way to an extension that does: the extension's using clause, which finds no instance, is told

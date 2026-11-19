@@ -1,5 +1,5 @@
-// expect: 13:20: error: no given instance of type Show[Int] was found for parameter x
-// expect: 16:24: error: no given instance of type Codec[String] was found for parameter x
+// expect: 13:20: error: No given instance of type Show[Int] was found for parameter x of method summon in package scala
+// expect: 16:24: error: No given instance of type Codec[String] was found for parameter x of method summon in package scala
 // expect: 2 errors found
 // A candidate asked again for a type that is no smaller than the one it is already open for
 // diverges, and so does a mutually recursive pair without a base instance.

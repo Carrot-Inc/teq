@@ -1,6 +1,6 @@
 # dotty 3.8.4 (7d4833b6) neg-macros, neg; compiler/test/dotty/tools/dotc/BootstrappedOnlyCompilationTests.scala:98; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
-BigFloat	fail	-	marks: 3 errors where 1 are marked: BigFloatFromDigitsImpl_1.scala:12:31: no given instance of type ToExpr[BigInt] was found for parameter to
+BigFloat	fail	-	marks: 3 errors where 1 are marked: BigFloatFromDigitsImpl_1.scala:12:31: No given instance of type ToExpr[BigInt] was found for parameter to of method apply in object Expr
 GenericNumLits	fail	-	marks: 4 errors where 2 are marked: Test_2.scala:4:18: Found:    1234
 annot-MacroAnnotation-direct.scala	fail	-	marks: no error where 1 are marked
 annot-accessIndirect	fail	-	marks: 1 errors where 2 are marked
@@ -73,10 +73,10 @@ i17545c	fail	-	marks: no error where 1 are marked
 i17545d	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:3:35 Malformed tree was found while expanding macro with -Xcheck-macros.; teq's is error Test_2.scala:3:35 not supported yet in a macro: a selection of <none>, which is no term (calle
 i18113	marks	-	the marks hold; the reader cannot decide: teq's diagnostics equal all it reads of scalac's, and scalac's diagnostic 1 is a box it does not read
 i18113b	marks	-	the marks hold; the reader cannot decide: teq's diagnostics equal all it reads of scalac's, and scalac's diagnostic 1 is a box it does not read
-i18228.scala	fail	-	marks: error on an unmarked line i18228.scala:11: no given instance of type FromExpr[Map[String, String]] was found for parameter from
+i18228.scala	fail	-	marks: error on an unmarked line i18228.scala:11: No given instance of type FromExpr[Map[String, String]] was found for parameter from of method value in trait Quotes
 i18677-a	fail	-	marks: no error where 1 are marked
 i18677-b	fail	-	marks: no error where 1 are marked
-i18695.scala	fail	-	marks: 2 errors where 1 are marked: i18695.scala:67:57: no given instance of type SumOf[A]{type MirroredElemTypes = m.MirroredElemTypes; type MirroredLabel = m.MirroredLabel} was found for parameter m
+i18695.scala	fail	-	marks: 2 errors where 1 are marked: i18695.scala:67:57: No given instance of type SumOf[A]{type MirroredElemTypes = m.MirroredElemTypes; type MirroredLabel = m.MirroredLabel} was found for parameter m of method derivedImpl in object HKDSumG
 i18825	fail	-	marks: no error where 1 are marked
 i19342.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19342.scala:5:27 Type must be fully defined.; teq's is error i19342.scala:5:26 value apply is not a member of Any
 i19526	fail	-	marks: no error where 1 are marked
@@ -94,7 +94,7 @@ i22616b.scala	fail	-	marks: 1 errors where 2 are marked
 i23008	fail	-	marks: no error where 1 are marked
 i4044a.scala	fail	-	marks: no error where 3 are marked
 i4044b.scala	fail	-	marks: no error where 3 are marked
-i4350.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i4350.scala:4:3 No given instance of type scala.quoted.Quotes was found; teq's is error i4350.scala:4:3 No given instance of type scala.quoted.Quotes was found for a quote
+i4350.scala	pass	-	
 i4396b.scala	fail	-	marks: no error where 1 are marked
 i4433.scala	fail	-	marks: 2 errors where 1 are marked: i4433.scala:4:16: Not found: true
 i4493-b.scala	fail	-	marks: error on an unmarked line i4493-b.scala:6: Found:    Expr[Index[K]]
@@ -106,7 +106,7 @@ i4890.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i4890.scala:6:7 s
 i5015.scala	fail	-	marks: 3 errors where 4 are marked
 i5547.scala	fail	-	marks: no error where 1 are marked
 i5840.scala	fail	-	marks: no error where 1 are marked
-i5954.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5954.scala:9:5 No given instance of type scala.quoted.Quotes was found; teq's is error i5954.scala:9:5 No given instance of type scala.quoted.Quotes was found for a quote
+i5954.scala	pass	-	
 i5954b.scala	fail	-	marks: no error where 1 are marked
 i5954c.scala	fail	-	marks: no error where 1 are marked
 i6324.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i6324.scala:2:38 type Reflection is not a member of quoted; teq's is error i6324.scala:2:38 type Reflection not found
@@ -143,7 +143,7 @@ i7142g	fail	-	marks: no error where 1 are marked
 i7142h	fail	-	marks: no error where 1 are marked
 i7264d.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7264d.scala:4:25 Type argument Any does not conform to upper bound Tuple; teq's is error i7264d.scala:4:25 type argument Any does not conform to upper bound Tuple
 i7323.scala	fail	-	marks: no error where 1 are marked
-i7407.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7407.scala:2:18 No given instance of type scala.quoted.Quotes was found for parameter ctx of method qc; teq's is error i7407.scala:2:18 no given instance of type Quotes was found for parameter ct
+i7407.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7407.scala:2:18 No given instance of type scala.quoted.Quotes was found for parameter ctx of method qc; teq's is error i7407.scala:2:18 No given instance of type Quotes was found for parameter ct
 i7603.scala	fail	-	marks: 4 errors where 2 are marked: i7603.scala:4:17: expected an identifier, found splice
 i7618.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7618.scala:34:47 Expected a term, but found a type: Quotes; teq's is error i7618.scala:34:47 Quotes is a trait; it cannot be instantiated
 i7618b.scala	fail	-	check: diagnostic 1 of 1: error i7618b.scala:34:5, line 2 of the message: scalac's is scrutinee:  letExp : (letExp : macros.Exp); teq's is scrutinee:  e : Exp
@@ -161,7 +161,7 @@ i8871.scala	fail	-	marks: 3 errors where 1 are marked: i8871.scala:6:12: expecte
 i8871b.scala	fail	-	marks: 2 errors where 1 are marked: i8871b.scala:6:10: Not found: type $tpe
 i8887.scala	fail	-	marks: no error where 1 are marked
 i9014	pass	-	
-i9014b	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:1:24 No given instance of type Bar was found for parameter x of method summon in object Predef.; teq's is error Test_2.scala:1:24 no given instance of type Bar was found for parameter
+i9014b	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:1:24 No given instance of type Bar was found for parameter x of method summon in object Predef.; teq's is error Test_2.scala:1:24 No given instance of type Bar was found for parameter
 i9570.scala	fail	-	marks: error on an unmarked line i9570.scala:15: missing parameter type
 i9685	pass	-	
 i9801	pass	-	
@@ -170,7 +170,7 @@ i9972	fail	-	marks: 4 errors where 1 are marked: Macro_1.scala:6:19: Not found: 
 i9972b	pass	-	
 ill-abort	fail	-	check: diagnostic 1 of 1: scalac's is error quoted_2.scala:1:12 Macro expansion was aborted by the macro without any errors reported. Macros should issue errors to end-users when aborting a macro expansion with StopMacroExpansion.; teq's is
 inline-macro-staged-interpreter	fail	-	marks: error on an unmarked line Main_2.scala:6: Expected a known value. 
-inline-option	fail	-	marks: 3 errors where 2 are marked: quotes.scala:193:35: no given instance of type FromExpr[T | Null] was found for parameter from
+inline-option	fail	-	marks: 3 errors where 2 are marked: quotes.scala:193:35: No given instance of type FromExpr[T | Null] was found for parameter from of method unapply in object Expr
 inline-quote.scala	fail	-	marks: no error where 1 are marked
 inline-tuples-1	fail	-	marks: 41 errors where 44 are marked
 macro-class-not-found-1	fail	-	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 exception in macro: java.lang.NoClassDefFoundError (called by myMacro in object Foo)

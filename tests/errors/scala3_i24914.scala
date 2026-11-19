@@ -1,5 +1,5 @@
 // Adapted from scala3 tests/neg/i24914.scala (Apache-2.0, see tests/scala3/README.md): a forest of sibling givens of one signature.
-// expect: 27:19: error: no given instance of type Functor[F] was found for parameter evidence$
+// expect: 27:19: error: No given instance of type Functor[F] was found for a context parameter of method m
 // expect: 1 error found
 trait Functor[F[_]]
 trait Monad[F[_]] extends Functor[F]

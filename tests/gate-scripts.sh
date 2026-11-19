@@ -1921,10 +1921,19 @@ o, n = out('not found: type Widget', 'val x = `type Widget`', 9), out('Not found
 d_old, d_new = decisions(o), decisions(W.render_stream(n))
 print(('ok ' if (d_old[0], d_new[0], d_old[2], d_new[2]) == (('gap', 'standard library'), ('gap', 'typing'), 'not found: {}', 'type {} not found') else 'FAIL ')
       + 'a term named `type Widget`, read as the missing type (a row, pinned)')
+# A row, pinned: two context bounds of one type and place (`def m[A: Need, B: Need]`, `m[Int, Int]`): master named the
+# second `evidence$2`, which the new line does not hold; a reader renders both `evidence$1`. run.py and the harness
+# read the first error alike, the parser's lines differ.
+two = lambda a, b: f'p.scala:3:20: error: {a}\n  val x = m[Int, Int]\n                   ^\np.scala:3:20: error: {b}\n  val x = m[Int, Int]\n                   ^\n2 errors found\n'
+o = two('no given instance of type Need[Int] was found for parameter evidence$1', 'no given instance of type Need[Int] was found for parameter evidence$2')
+nw = two('No given instance of type Need[Int] was found for a context parameter of method m', 'No given instance of type Need[Int] was found for a context parameter of method m')
+d_old, d_new = decisions(o), decisions(W.render_stream(nw))
+print(('ok ' if (d_old[0], d_old[2]) == (d_new[0], d_new[2]) and d_old[3] != d_new[3] else 'FAIL ')
+      + 'two context bounds of one type and place: the first error read alike, the second\'s evidence$2 a row (pinned)')
 PY
 timeout 60 python3 -B "$wd/readers.py" > "$wd/readers.log" 2>&1
 check "words: master's readers on the head's output rendered back decide as on master's, a term named \`type Widget\` the pinned row" "$wd/readers.log" eval '
-  [ "$(grep -c "^ok " "$wd/readers.log")" = 6 ] && ! grep -q -v "^ok " "$wd/readers.log"'
+  [ "$(grep -c "^ok " "$wd/readers.log")" = 7 ] && ! grep -q -v "^ok " "$wd/readers.log"'
 held_of() {
   local expected=$1 out=$2 held
   eval "$(sed -n '/^    if \[\[ \$expected =~ /,/^    fi$/p' tests/run_errors.sh)"

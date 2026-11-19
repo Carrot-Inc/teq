@@ -114,6 +114,13 @@ message_disambiguation.check	< tests/errors/message_disambiguation.scala:6:43: e
 message_gadt_deferred.check	< tests/errors/message_gadt_deferred.scala:7:26: error: Found: (t : T)
 method_type_arg_check_bounds	missing '14:13: error: type argument Int does not conform to upper bound [_] =>> Any'
 method_value_as_pattern	exit code 0
+missing_given_contexts_row_interpolation_definition	missing '21 errors found' (teq's parser refuses a definition in `${ }`)
+missing_given_contexts_row_local_given_class	missing the E172 lines (teq takes a local structural given's reference without its context argument)
+missing_given_contexts_row_local_given_parameters	missing the E172 lines (teq refuses a local given with parameters)
+missing_given_contexts_row_pattern_definitions	missing the E172 lines (teq refuses a pattern definition outside a block)
+missing_given_function_alias	missing '3:22: error: No given instance of type Need[Int] was found for parameter of F'
+missing_given_review_extension_selections	missing 'c12.scala:4:18: error: value call is not a member of Int.'
+missing_given_row_local_owner	missing the E172 lines' owners (a local definition is said without its location; queued: a local definition's effective owner in a diagnostic's location)
 nested_projection_cycle	exit code 0
 new_eta_expanded_opaque	missing 'error: [A] =>> O.F[A] does not have a constructor'
 nonsensical_hidden	missing 'error: Only function types can be followed by _ but the current expression has type <error'

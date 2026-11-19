@@ -2,4 +2,4 @@
 object Main:
   def f[A <: Int](a: A): Boolean = a == null
   def main(args: Array[String]): Unit = println(f(1))
-// expect: values of types A and Null cannot be compared with == or !=
+// expect: Values of types A and Null cannot be compared with == or !=

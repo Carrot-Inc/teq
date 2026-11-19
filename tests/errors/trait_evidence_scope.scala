@@ -1,4 +1,4 @@
-// expect: 10:23: error: no given instance of type A[Int]
+// expect: 10:23: error: No given instance of type A[Int] was found for a context parameter of constructor B in trait B
 // expect: 1 error found
 trait A[T]:
   def f: Int

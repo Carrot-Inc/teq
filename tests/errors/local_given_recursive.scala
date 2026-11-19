@@ -1,4 +1,4 @@
-// expect: 16:94: error: no given instance of type Eq[List[Tree]] was found for parameter x
+// expect: 16:94: error: No given instance of type Eq[List[Tree]] was found for parameter x of method summon in package scala
 // expect: 1 error found
 // As in scalac, a local alias given is not in scope in its own right-hand side: the recursive
 // Eq[Tree] that Eq[List[Tree]] needs is not found there.

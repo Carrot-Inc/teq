@@ -10,4 +10,4 @@ object Main {
   def main(args: Array[String]): Unit = println(summon[Box[String]].value)
 }
 
-// expect: given_import_bound_constrained.scala:10:68: error: no given instance of type Box[String] was found
+// expect: given_import_bound_constrained.scala:10:68: error: No given instance of type Box[String] was found for parameter x of method summon in package scala

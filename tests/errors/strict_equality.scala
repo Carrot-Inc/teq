@@ -1,11 +1,11 @@
 // teq: --strict-equality
-// expect: values of types Any and Int cannot be compared with == or !=
-// expect: values of types P and P cannot be compared with == or !=
-// expect: values of types Color and Color cannot be compared with == or !=
-// expect: values of types Some[P] and Some[P] cannot be compared with == or !=
-// expect: values of types T and T cannot be compared with == or !=
-// expect: values of types Email and Email cannot be compared with == or !=
-// expect: values of types Der and Color cannot be compared with == or !=
+// expect: Values of types Any and Int cannot be compared with == or !=
+// expect: Values of types P and P cannot be compared with == or !=
+// expect: Values of types Color and Color cannot be compared with == or !=
+// expect: Values of types Some[P] and Some[P] cannot be compared with == or !=
+// expect: Values of types T and T cannot be compared with == or !=
+// expect: Values of types Email and Email cannot be compared with == or !=
+// expect: Values of types Der and Color cannot be compared with == or !=
 enum Color:
   case Red, Green
 enum Der derives CanEqual:

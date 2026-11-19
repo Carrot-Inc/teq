@@ -1,4 +1,4 @@
-// expect: 17:17: error: no given instance of type Name was found for parameter n
+// expect: 17:17: error: No given instance of type Name was found for parameter n of method nameOf in package demo
 // expect: ambiguous given instances for Line: first, second
 // jars: sourcecode
 package demo

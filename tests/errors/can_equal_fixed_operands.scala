@@ -1,13 +1,13 @@
-// expect: 16:11: error: values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
-// expect: 18:11: error: values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
-// expect: 22:11: error: values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
-// expect: 23:11: error: values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
-// expect: 24:11: error: values of types Left[String, Nothing] and Left[Int, Nothing] cannot be compared with == or !=
-// expect: 25:11: error: values of types (String, Int) and (Int, Int) cannot be compared with == or !=
-// expect: 26:11: error: values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
-// expect: 27:11: error: values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
-// expect: 29:11: error: values of types Either[String, Int] and Left[Int, Nothing] cannot be compared with == or !=
-// expect: 30:11: error: values of types Left[Int, Nothing] and Either[String, Int] cannot be compared with == or !=
+// expect: 16:11: error: Values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
+// expect: 18:11: error: Values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
+// expect: 22:11: error: Values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
+// expect: 23:11: error: Values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
+// expect: 24:11: error: Values of types Left[String, Nothing] and Left[Int, Nothing] cannot be compared with == or !=
+// expect: 25:11: error: Values of types (String, Int) and (Int, Int) cannot be compared with == or !=
+// expect: 26:11: error: Values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
+// expect: 27:11: error: Values of types Map[String, Int] and Map[Int, Int] cannot be compared with == or !=
+// expect: 29:11: error: Values of types Either[String, Int] and Left[Int, Nothing] cannot be compared with == or !=
+// expect: 30:11: error: Values of types Left[Int, Nothing] and Either[String, Int] cannot be compared with == or !=
 // expect: 10 errors found
 // With an operand's type arguments fixed (a val, an ascription, explicit type arguments, a
 // covariant class's application or a tuple), `==` checks CanEqual on them as scalac does.

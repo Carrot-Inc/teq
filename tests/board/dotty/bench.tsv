@@ -13,7 +13,7 @@ i1687.scala	pass	check:pass
 implicit-scope-loop.scala	pass	check:pass	
 implicitNums.scala	pass	check:pass	
 implicit_cache.scala	pass	check:pass	
-inductive-implicits.scala	fail	check:fail	inductive-implicits.scala:64:33: no given instance of type Selector[::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[I
+inductive-implicits.scala	fail	check:fail	inductive-implicits.scala:64:33: No given instance of type Selector[::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[I
 patmatexhaust.scala	pass	check:pass	
 power-macro	pass	check:pass	
 string-interpolation-macro	fail	check:pass	Test.scala:4:22: exception in macro: scala.NotImplementedError: an implementation is missing (called by x in object Macro)

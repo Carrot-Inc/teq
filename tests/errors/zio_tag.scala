@@ -1,5 +1,5 @@
-// expect: 8:38: error: no given instance of type Tag[T] was found for parameter t
-// expect: 9:43: error: no given instance of type Tag[Int | String] was found for parameter t
+// expect: 8:38: error: No given instance of type Tag[T] was found for parameter t of method tagOf in package zio
+// expect: 9:43: error: No given instance of type Tag[Int | String] was found for parameter t of method tagOf in package zio
 package zio
 
 final class Tag[A](val key: String)

@@ -1,0 +1,20 @@
+# The lines no pattern of tests/support/rewording.py takes: a context bound's evidence, "for parameter evidence$N",
+# which becomes "for a context parameter of <owner>": the new line does not hold the old name. An entry is checked
+# (rewording.py test): the phrase, from "for a context parameter" to the end of the owner, is scalac 3.8.4's own for
+# that program at that place, character for character; the rest of the line and its place are the old line's,
+# unchanged. Its status is "whole" where the whole line is then scalac's, else the row that owns the rest. The one
+# named exception: an error scalac does not report (it compiles the program), checked against the callee's
+# declaration and the bound whose evidence is missing.
+# The rows an entry's status names (`row: <name>`), each declared once:
+row	the place	teq's place differs from scalac's, the program's own row on tests/pending/errors.txt
+row	the alias as written	the printer's a: scalac prints a type's alias where teq prints its expansion
+row	E172's nested failure	scalac's `I found:` … `But …` block of a nested search failure, and the stop that ends the headline before it
+place	old	new	scalac	status
+tests/errors/trait_evidence_scope.scala:10:23	no given instance of type A[Int] was found for parameter evidence$1	No given instance of type A[Int] was found for a context parameter of constructor B in trait B	No given instance of type A[Int] was found for a context parameter of constructor B in trait B	whole
+tests/errors/trait_params.scala:15:51	no given instance of type Show[T] was found for parameter evidence$1	No given instance of type Show[T] was found for a context parameter of constructor Shown in trait Shown	No given instance of type Show[T] was found for a context parameter of constructor Shown in trait Shown	whole
+tests/errors/trait_params.scala:16:60	no given instance of type Show[Boolean] was found for parameter evidence$1	No given instance of type Show[Boolean] was found for a context parameter of constructor Shown in trait Shown	No given instance of type Show[Boolean] was found for a context parameter of constructor Shown in trait Shown	whole
+tests/errors/trait_params.scala:19:32	no given instance of type Show[String] was found for parameter evidence$1	No given instance of type Show[String] was found for a context parameter of constructor Shown in trait Shown	No given instance of type Show[String] was found for a context parameter of constructor Shown in trait Shown	whole
+tests/errors/enum_checks.scala:40:33	no given instance of type Show[Boolean] was found for parameter evidence$1	No given instance of type Show[Boolean] was found for a context parameter of constructor Key in class Key	No given instance of type Show[Boolean] was found for a context parameter of constructor Key in class Key	row: the place
+tests/errors/receiver_own_type_refused.scala:19:29	no given instance of type Label["first" | "second"] was found for parameter evidence$1	No given instance of type Label["first" | "second"] was found for a context parameter of method labelled in object Steps	No given instance of type Label[Steps.Step] was found for a context parameter of method labelled in object Steps	row: the alias as written
+tests/errors/scala3_i24914.scala:27:19	no given instance of type Functor[F] was found for parameter evidence$1	No given instance of type Functor[F] was found for a context parameter of method m	No given instance of type Functor[F] was found for a context parameter of method m.	row: E172's nested failure
+modules/user/src/main/UserRepo.scala:405:68	no given instance of type BSONWriter[HashedPassword] was found for parameter evidence$1	No given instance of type BSONWriter[HashedPassword] was found for a context parameter of method updateField in object dsl	no scalac line: scalac compiles the program	the named exception: the callee is updateField, declared at modules/db/src/main/dsl.scala:459 (`def updateField[V: BSONWriter](...)`, an extension of object dsl), and BSONWriter[HashedPassword] is its bound's evidence for V = HashedPassword

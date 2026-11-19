@@ -1,4 +1,4 @@
-// expect: 8:50: error: no given instance of type O was found for parameter x
+// expect: 8:50: error: No given instance of type O was found for parameter x of method summon in package scala
 // expect: 1 error found
 // A using parameter of an inline body is a given of its declared type: `summon[O.type]` over
 // `x: B` finds nothing, as scalac finds nothing at the definition, whatever the argument, and

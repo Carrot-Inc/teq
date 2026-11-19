@@ -1,8 +1,8 @@
 // expect: ambiguous given instances for TC[Int]: first, second
 // expect: ambiguous given instances for TC[Both]: viaString, viaLong
-// expect: 58:29: error: no given instance of type TC[String]
-// expect: 60:49: error: no given instance of type Eq[Circle]
-// expect: 61:33: error: no given instance of type Eq[Some[Int]]
+// expect: 58:29: error: No given instance of type TC[String] was found for parameter x of method summon in package scala
+// expect: 60:49: error: No given instance of type Eq[Circle] was found for parameter x$3 of method same in package demo
+// expect: 61:33: error: No given instance of type Eq[Some[Int]] was found for parameter x$3 of method same in package demo
 // expect: given_Show_T is already defined
 package demo
 

@@ -1,7 +1,7 @@
 // teq: --dialect strict
 // expect: a second alternative of `go` is not allowed under the dialect flag `no-overloading`
 // expect: `count` needs a declared type under the dialect flag `explicit-result-types`
-// expect: values of types Int and String cannot be compared with == or !=
+// expect: Values of types Int and String cannot be compared with == or !=
 // expect: the call of the inline method `twice` is not allowed under the dialect flag `no-inline`
 object O:
   def go(x: Int): Int = x

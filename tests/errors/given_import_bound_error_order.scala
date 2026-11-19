@@ -15,7 +15,7 @@ object Q:
   println(P.p + Q.q)
 
 // expect: given_import_bound_error_order.scala:8:30: error: Not found: type Missing
-// expect: given_import_bound_error_order.scala:9:25: error: no given instance of type String was found for parameter x
+// expect: given_import_bound_error_order.scala:9:25: error: No given instance of type String was found for parameter x of method summon in package scala
 // expect: given_import_bound_error_order.scala:11:19: error: Not found: type Missing2
 // expect: given_import_bound_error_order.scala:14:29: error: Not found: type NoSuchType
 // expect: 4 errors found

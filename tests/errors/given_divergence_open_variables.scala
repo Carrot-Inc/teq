@@ -1,6 +1,6 @@
-// expect: 30:38: error: no given instance of type Show[W[P[Int, Long]]] was found for parameter x
-// expect: 31:26: error: no given instance of type Show[Int] was found for parameter x
-// expect: 32:13: error: no given instance of type Show[P[
+// expect: 30:38: error: No given instance of type Show[W[P[Int, Long]]] was found for parameter x of method summon in package scala
+// expect: 31:26: error: No given instance of type Show[Int] was found for parameter x of method summon in package scala
+// expect: 32:13: error: No given instance of type Show[P[Nothing, Nothing]] was found for parameter s of method best
 // expect: 3 errors found
 // Recursive givens without a base instance whose requests hold open type variables (a using clause's `Out`):
 // the swap alternates between two requests of one size, the growth asks for larger ones of the same classes, and

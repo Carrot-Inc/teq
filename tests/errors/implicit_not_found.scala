@@ -41,12 +41,12 @@ def run() =
 // expect: 29:24: error: Need evidence for Int
 // expect: 30:35: error: No codec between String and List[Int] (?Missing)
 // expect: 31:20: error: Need evidence for Long
-// expect: 32:21: error: no given instance of type Plain[Int] was found for parameter x
+// expect: 32:21: error: No given instance of type Plain[Int] was found for parameter x of method summon in package scala
 // expect: 33:7: error: Need evidence for List[Int]
 // expect: 34:9: error: Need evidence for Int
 // expect: 35:10: error: Need evidence for Option[String]
 // expect: 36:12: error: Supply Char once
-// expect: 37:8: error: no given instance of type Vault was found for parameter v
+// expect: 37:8: error: No given instance of type Vault was found for parameter v of method vault
 // expect: 38:10: error: Need evidence for Long
 // expect: 39:9: error: Box needs evidence of Int
 // expect: 40:23: error: Owner token Int

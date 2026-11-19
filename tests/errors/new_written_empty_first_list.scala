@@ -1,4 +1,4 @@
-// expect: 9:34: error: no given instance of type Ctx was found for parameter ctx
+// expect: 9:34: error: No given instance of type Ctx was found for parameter ctx of constructor Node in class Node
 // A written `()` before the lists of a constructor whose first clause is a using clause is an
 // argument list, so the using clause is resolved in its place, as scalac does (`No given instance
 // of type Ctx was found for parameter ctx of constructor Node`); `new Node(using c)(..)` and

@@ -1989,7 +1989,7 @@ impl<'a> Worker<'a> {
                 let strict = self.strict_equality();
                 let abstract_ok = if strict { self.can_equal_given(lty, rty, true, span) } else { self.compares_with_null(other) };
                 if !self.null_conforms(other) && other != self.b.t_null && !abstract_ok {
-                    let msg = format!("values of types {} and {} cannot be compared with == or !=", self.show(lty), self.show(rty));
+                    let msg = format!("Values of types {} and {} cannot be compared with == or !=", self.show(lty), self.show(rty));
                     self.error(span, msg);
                 }
                 true
@@ -1997,7 +1997,7 @@ impl<'a> Worker<'a> {
             _ => {
                 if !self.can_equal(lty, rty, span) {
                     let msg = format!(
-                        "values of types {} and {} cannot be compared with == or !=",
+                        "Values of types {} and {} cannot be compared with == or !=",
                         self.show(lty),
                         self.show(rty)
                     );
@@ -2144,7 +2144,7 @@ impl<'a> Worker<'a> {
             !self.can_equal(lty, rty, span)
         };
         if refused {
-            let msg = format!("values of types {} and {} cannot be compared with == or !=", self.show(lty), self.show(rty));
+            let msg = format!("Values of types {} and {} cannot be compared with == or !=", self.show(lty), self.show(rty));
             self.error(span, msg);
         }
     }

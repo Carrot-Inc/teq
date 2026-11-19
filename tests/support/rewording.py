@@ -381,9 +381,89 @@ def render_strict(msg, strict):
             return "E006", f"type {name[len('type '):]} not found"
         return "E006", f"not found: {name}"
     lines = msg.split("\n")
+    if lines[0].startswith((E172_HEAD, "Values of types ")):
+        kind, first = render_e172_first(lines[0], strict)
+        if kind is None:
+            return None, first
+        if any(CANDIDATE.match(l) for l in lines[1:]):
+            k2, text = render_candidates([first] + lines[1:], strict)
+            if k2 is None and not strict:
+                # a reader's: the headline rendered, the candidates' lines as they stand (as master's reader leaves them)
+                return kind, "\n".join([first] + lines[1:])
+            if k2 is None:
+                return k2, text
+            return (kind if k2 == "same" else f"{kind} + {k2}"), text
+        return kind, "\n".join([first] + lines[1:])
     if any(CANDIDATE.match(l) for l in lines):
         return render_candidates(lines, strict)
     return "same", msg
+
+
+E172_HEAD = "No given instance of type "
+# dotty's `locatedText` as teq ports it (typer/resolve.rs `located_text`): `method m`, `given instance g`, `constructor
+# C`, then ` in class C`, ` in object O`, ` in trait T` or ` in package a.b`
+# a name as the printer emits it: a backticked one with spaces or dots too (`method odd method in class Odd Class`),
+# never ending in a stop; ` in ` before the owner's kind ends it
+NAME = r"(?:(?! in )[^\n])*?[^\s.]"
+LOCATED = re.compile(r"(?:method|given instance|constructor) " + NAME + r"(?: in (?:class|object|trait) " + NAME + r"| in package [\w$]+(?:\.[\w$]+)*)?")
+
+
+def e172_readings(first):
+    """The readings of a new E172 headline `No given instance of type T was found<L>`: [(T, L kind, L's part)], one a
+    place where ` was found` can end T, the type and the location qualifying."""
+    out, at = [], first.find(" was found", len(E172_HEAD))
+    while at >= 0:
+        t, rest = first[len(E172_HEAD):at], first[at + len(" was found"):]
+        if qualifies(t):
+            if rest == "":
+                out.append((t, "none", ""))
+            elif rest.startswith(" for parameter of ") and qualifies(rest[len(" for parameter of "):]):
+                out.append((t, "function", rest[len(" for parameter of "):]))
+            elif rest.startswith(" for a context parameter of ") and LOCATED.fullmatch(rest[len(" for a context parameter of "):]):
+                out.append((t, "context", rest))
+            else:
+                m = re.fullmatch(r" for parameter (\S+) of (.+)", rest)
+                if m and LOCATED.fullmatch(m.group(2)):
+                    out.append((t, "owner", m.group(1)))
+        at = first.find(" was found", at + 1)
+    return out
+
+
+def render_e172_first(first, strict, alternative=False):
+    """E172's headline (MissingImplicitArgument's defaultImplicitNotFoundMessage) and CanEqual's custom message,
+    rendered back to master's: (kind, old first line) or (None, why). The alternative reading of a function's
+    location is master's line without it (the context function applied at apply.rs:4544)."""
+    if first.startswith("Values of types "):
+        m = re.fullmatch(r"Values of types (.+) cannot be compared with == or !=", first)
+        if not m:
+            return None, f"a CanEqual message the landing does not word: {first[:80]!r}"
+        return "E172 (Values of types)", "v" + first[1:]
+    got = e172_readings(first)
+    if not strict and len(got) != 1:
+        return "same", first
+    if len(got) != 1:
+        return None, f"an E172 headline not of one reading ({len(got)} readings): {first[:100]!r}"
+    t, kind, part = got[0]
+    low = "no given instance of type " + t + " was found"
+    if kind == "none":
+        if t == "scala.quoted.Quotes":
+            return "E172 (a quote's Quotes)", E172_HEAD + t + " was found for a quote"
+        return "E172 (the capital)", low
+    if kind == "function":
+        return ("E172 (a context function's location)", low) if alternative else ("E172 (the capital)", low + " for parameter of " + part)
+    if kind == "owner":
+        # master printed one owner phrase already, the main annotation's proxy (typer/check.rs, a by-name parameter's
+        # `FromString`): a reader takes that line as master's. The interpreter's explanation of a failed search
+        # (interp/quoted.rs, `No given instance of type T was found`, a macro's) is master's in scalac's words too: a
+        # row, pinned by a fixture the day a program reaches it
+        if not strict and first.endswith(" for parameter fs of method parseArgument in object CommandLineParser") and t.startswith("scala.util.CommandLineParser.FromString[=> "):
+            return "same", first
+        return "E172 (the owner phrase)", low + " for parameter " + part
+    if not strict:
+        # a reader's rendering, never the classifier's: master named a context bound's evidence `evidence$1` where it
+        # was the call's first (a second bound's is `evidence$2`, which this line does not tell: a row of the fence)
+        return "E172 (a context parameter, a reader's rendering)", low + " for parameter evidence$1"
+    return None, f"a context parameter's line, which goes by the hand list alone: {first[:100]!r}"
 
 
 def render_candidates(lines, strict):
@@ -451,15 +531,106 @@ def with_roots(blocks, root):
     return blocks
 
 
+HAND_LIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rewording-hand-list.tsv")
+HAND = None
+
+
+def hand_list():
+    """The checked hand list (rewording-hand-list.tsv): [(place, old line, new line, scalac's line, status)]; its
+    declared rows are `hand_rows()`."""
+    global HAND
+    if HAND is None:
+        HAND, ROWS[:] = [], []
+        if os.path.exists(HAND_LIST):
+            for l in read_text(HAND_LIST).split("\n"):
+                if l.startswith("row\t"):
+                    ROWS.append(l.split("\t")[1])
+                elif l and not l.startswith("#") and not l.startswith("place\t"):
+                    HAND.append(tuple(l.split("\t")))
+    return HAND
+
+
+ROWS = []
+
+
+def hand_rows():
+    """The rows the hand list declares (`row<tab><name><tab><what>`), which an entry's status names."""
+    hand_list()
+    return list(ROWS)
+
+
+def at_place(header_place, place):
+    """Whether a header's place is the entry's: the same, or the entry's after a path's `/` or a record's prefix."""
+    return bool(header_place) and (header_place == place or header_place.endswith(("/" + place, " " + place)))
+
+
+def hand_listed(o, n):
+    """Whether the pair is a context parameter's line the hand list holds: the place (the header's place ending with
+    the entry's), master's first line and the head's, and the rest of the block byte for byte."""
+    for place, old, new, _, _ in hand_list():
+        if at_place(n.place, place) and o.msg[0] == old and n.msg[0] == new and n.text("\n".join([old] + n.msg[1:])) == o.text():
+            return True
+    return False
+
+
+def check_hand_list(entries=None, rows=None):
+    """The hand list's own check: each entry a context bound's evidence line, master's `for parameter evidence$N`
+    become the head's `for a context parameter of <owner>`, the rest of the line (the headline and the type) the old
+    line's; its phrase (from `for a context parameter` to the end of the owner) scalac's own, character for
+    character; its status `whole` where the line is then scalac's whole, else `row: <the row that owns the rest>`;
+    the one named exception (`no scalac line: scalac compiles the program`) naming the callee's declaration and its
+    bound. [why] for each bad entry."""
+    bad, seen, exceptions = [], set(), 0
+    # the phrase runs to the line's end, but for the stop scalac's line ends with before a nested failure's block
+    def phrase(line):
+        m = re.search(r"for a context parameter of ", line)
+        text = line[m.start():] if m else ""
+        text = text[:-1] if text.endswith(".") else text
+        return text if m and LOCATED.fullmatch(text[len("for a context parameter of "):]) else None
+    for e in hand_list() if entries is None else entries:
+        if len(e) != 5:
+            bad.append(f"an entry of {len(e)} fields: {e!r}")
+            continue
+        place, old, new, sc, status = e
+        m = re.fullmatch(r"no given instance of type (.+) was found for parameter evidence\$\d+", old)
+        k = re.fullmatch(re.escape(E172_HEAD) + r"(.+) was found for a context parameter of (.+)", new)
+        if not m or not k or m.group(1) != k.group(1) or not LOCATED.fullmatch(k.group(2)):
+            bad.append(f"{place}: the rest of the line is not the old line's, or no context bound's evidence")
+        elif sc == "no scalac line: scalac compiles the program":
+            exceptions += 1
+            if not re.match(r"the named exception: the callee is \S+, declared at \S+:\d+ .*its bound's evidence", status):
+                bad.append(f"{place}: an exception that names no declaration")
+        elif not phrase(sc) or phrase(sc) != phrase(new):
+            bad.append(f"{place}: the phrase is not scalac's")
+        elif status == "whole":
+            if sc != new:
+                bad.append(f"{place}: said whole, but the line is not scalac's")
+        elif not status.startswith("row: ") or status[len("row: "):].strip() not in (hand_rows() if rows is None else rows) \
+                or status[len("row: "):] != status[len("row: "):].strip():
+            bad.append(f"{place}: neither whole nor a row the list declares")
+        if (place, old) in seen:
+            bad.append(f"{place}: twice")
+        seen.add((place, old))
+    if exceptions > 1:
+        bad.append(f"{exceptions} entries without a scalac line: the list holds one named exception")
+    return bad
+
+
 def block_verdict(o, n):
     """(kind, None) for a block the old one is, rendered back; (None, why) otherwise."""
     if o.text() == n.text():
         return "same", None
     kind, text = render_message(n.message())
+    if kind is None and hand_listed(o, n):
+        return "E172 (a context parameter, by the hand list)", None
     if kind is None:
         return None, f"{n.prefix}unclassified: {text}"
     if n.text(text) == o.text():
         return kind, None
+    if n.msg[0].startswith(E172_HEAD):
+        k2, first = render_e172_first(n.msg[0], True, alternative=True)
+        if k2 is not None and n.text("\n".join([first] + n.msg[1:])) == o.text():
+            return k2, None
     if nothing_arm(o, n):
         return "E007 (no ambiguity note on Nothing)", None
     old, new = o.text().split("\n"), n.text(text).split("\n")
@@ -581,6 +752,10 @@ def records(old_path, new_path):
         texts, why = [], None
         for b in blocks:
             kind, text = render_message(b.message())
+            if kind is None:
+                listed = [old for place, old, new, _, _ in hand_list() if at_place(b.place, place) and b.msg[0] == new]
+                if len(listed) == 1:
+                    kind, text = "E172 (a context parameter, by the hand list)", "\n".join([listed[0]] + b.msg[1:])
             if kind is None:
                 why = text
                 break
@@ -834,6 +1009,43 @@ def second_matrix():
     ]
 
 
+def e172_matrix():
+    """E172's own parts (the first words' next landing): each pattern, and its near misses. (name, old, new, accepted)"""
+    h, l = E172_HEAD, "no given instance of type "
+    one_ = lambda m: one(m, place="5:16", excerpt="  val x = named\n                ^")
+    return [
+        ("e172-capital", one_(l + "Need[Int] was found"), one_(h + "Need[Int] was found"), True),
+        ("e172-capital-function-location", one_(l + "Need[Int] was found for parameter of (Need[Int]) ?=> Int"), one_(h + "Need[Int] was found for parameter of (Need[Int]) ?=> Int"), True),
+        ("e172-function-location-added", one_(l + "Need[Int] was found"), one_(h + "Need[Int] was found for parameter of (Need[Int]) ?=> Int => Int"), True),
+        ("e172-owner", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of method named in object O"), True),
+        ("e172-owner-package", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of method m in package a.pkg"), True),
+        ("e172-owner-constructor", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of constructor C in class C"), True),
+        ("e172-owner-local", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of method local"), True),
+        ("e172-owner-given", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of given instance g in trait T"), True),
+        ("e172-owner-a-backticked-name-with-spaces", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of method odd method in class Odd Class"), True),
+        ("e172-owner-a-backticked-name-with-dots", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of method odd.method in object Odd.Object"), True),
+        ("e172-owner-a-companion-apply", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of method apply in object C"), True),
+        ("e172-owner-written-evidence", one_(l + "Need[Int] was found for parameter evidence$1"), one_(h + "Need[Int] was found for parameter evidence$1 of method m"), True),
+        ("e172-values", one_("values of types Foo and Bar cannot be compared with == or !="), one_("Values of types Foo and Bar cannot be compared with == or !="), True),
+        ("e172-quotes", one_("No given instance of type scala.quoted.Quotes was found for a quote"), one_("No given instance of type scala.quoted.Quotes was found"), True),
+        ("e172-capital-another-type", one_(l + "Need[Int] was found"), one_(h + "Need[Long] was found"), False),
+        ("e172-owner-another-parameter", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev2 of method named in object O"), False),
+        ("e172-owner-over-a-function-location", one_(l + "Need[Int] was found for parameter of (Need[Int]) ?=> Int"), one_(h + "Need[Int] was found for parameter ev of method m"), False),
+        ("e172-owner-anonymous-class-named", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of method foo in anonymous class $anon"), False),
+        ("e172-owner-without-a-kind", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of named"), False),
+        ("e172-owner-dropped", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found"), False),
+        ("e172-context-parameter-over-a-written-one", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for a context parameter of method m"), False),
+        ("e172-context-parameter-not-on-the-hand-list", one_(l + "Need[Int] was found for parameter evidence$1"), one_(h + "Need[Int] was found for a context parameter of method m"), False),
+        ("e172-capital-left-lower", one_(l + "Need[Int] was found for parameter ev"), one_(l + "Need[Int] was found for parameter ev of method m"), False),
+        ("e172-values-another-type", one_("values of types Foo and Bar cannot be compared with == or !="), one_("Values of types Foo and Baz cannot be compared with == or !="), False),
+        ("e172-values-a-stop-added", one_("values of types Foo and Bar cannot be compared with == or !="), one_("Values of types Foo and Bar cannot be compared with == or !=."), False),
+        ("e172-quotes-another-type", one_("No given instance of type Quotes was found for a quote"), one_("No given instance of type Quotes was found"), False),
+        ("e172-quote-location-kept", one_("No given instance of type scala.quoted.Quotes was found for a quote"), one_("No given instance of type scala.quoted.Quotes was found for a quote"), True),
+        ("e172-stop-added", one_(l + "Need[Int] was found for parameter ev"), one_(h + "Need[Int] was found for parameter ev of method m."), False),
+        ("e172-with-a-candidate", one_(l + "S was found for parameter s\n  candidate g failed: not found: x"), one_(h + "S was found for parameter s of method f\n  candidate g failed: Not found: x"), True),
+    ]
+
+
 def test():
     import contextlib
     import io
@@ -853,7 +1065,7 @@ def test():
         with open(path, "w", encoding="utf-8", errors="surrogateescape", newline="") as fh:
             fh.write(s)
 
-    for name, old, new, want in review_matrix() + second_matrix():
+    for name, old, new, want in review_matrix() + second_matrix() + e172_matrix():
         if want in ("roots", "roots-refused"):
             check(name + " (pairs, no roots given)", not compare(old, new)[1], False)
             check(name + " (pairs, the roots given)", not compare(old, new, ("/one/", "/two/"))[1], want == "roots")
@@ -884,9 +1096,35 @@ def test():
     # render_stream (the readers' render-back) gives every accepted pair's old output back byte for byte, but the
     # Nothing arm's, whose dropped note it cannot give, and the analysis answer's, a JSON line of the run's timings that
     # no stream reader reads (the app oracle renders its messages one by one).
-    for name, old, new, want in review_matrix() + second_matrix():
-        if want is True and not name.startswith(("nothing-arm", "analysis-answer")):
+    for name, old, new, want in review_matrix() + second_matrix() + e172_matrix():
+        # and the second reading of a function's location (apply.rs:4544's master line had none), which a reader takes
+        # by the first (the location kept: master's expr.rs:1469 line)
+        if want is True and not name.startswith(("nothing-arm", "analysis-answer", "e172-function-location-added")):
             check(f"{name} (render_stream gives the old output back)", render_stream(new) == old, True)
+    # The hand list's own check, an entry of each kind, and its pairs.
+    for why in check_hand_list():
+        bad += 1
+        print(f"FAIL rewording test the hand list: {why}")
+    n += 1
+    hl = "no given instance of type Need[Int] was found for parameter evidence$1"
+    hn = E172_HEAD + "Need[Int] was found for a context parameter of method m in object O"
+    kinds = [("whole", ("p.scala:1:1", hl, hn, hn, "whole"), True),
+             ("a named row", ("p.scala:1:1", hl, hn, hn + ".", "row: E172's nested failure"), True),
+             ("neither whole nor a row", ("p.scala:1:1", hl, hn, hn + ".", "close enough"), False),
+             ("a row of spaces", ("p.scala:1:1", hl, hn, hn + ".", "row:    "), False),
+             ("a row of a tab", ("p.scala:1:1", hl, hn, hn + ".", "row: \t"), False),
+             ("a row the list does not declare", ("p.scala:1:1", hl, hn, hn + ".", "row: E172 elsewhere"), False),
+             ("the rest of the line moved", ("p.scala:1:1", hl, hn.replace("Need[Int]", "Need[Long]"), hn.replace("Need[Int]", "Need[Long]"), "whole"), False),
+             ("the phrase not scalac's", ("p.scala:1:1", hl, hn, hn.replace("object O", "class O"), "row: the owner"), False),
+             ("said whole, not scalac's", ("p.scala:1:1", hl, hn, hn + ".", "whole"), False)]
+    for name, entry, want in kinds:
+        check(f"the hand list's check: an entry {name}", not check_hand_list([entry], rows=hand_rows() + ["E172's nested failure"]), want)
+    e = hand_list()[0]
+    at = lambda place, line: f"{place}: error: {line}\n  x\n  ^\n1 error found\n"
+    check("a hand-listed context parameter's line (pairs)", not compare(at(e[0], e[1]), at(e[0], e[2]))[1], True)
+    check("a hand-listed line at another place (pairs)", not compare(at(e[0] + "0", e[1]), at(e[0] + "0", e[2]))[1], False)
+    check("a hand-listed line in a file whose name ends like the entry's (pairs)", not compare(at("x" + e[0], e[1]), at("x" + e[0], e[2]))[1], False)
+    check("a hand-listed line with another old name (pairs)", not compare(at(e[0], e[1][:-1] + "2"), at(e[0], e[2]))[1], False)
     # The writing verb with a program's record on one side alone: it stops, nothing written.
     for missing in ("base", "head"):
         with tempfile.TemporaryDirectory() as d:
@@ -935,6 +1173,12 @@ def test():
                       ("Not found: `x`", "not found: `x`"), ('Found:    "a, required B"\nRequired: Int', 'type mismatch: found "a, required B", required Int'),
                       ("Found:    List[Int\nRequired: Int", "type mismatch: found List[Int, required Int"),
                       ("value a is not a member of B", "value a is not a member of B"),
+                      ("No given instance of type scala.util.CommandLineParser.FromString[=> Int] was found for parameter fs of method parseArgument in object CommandLineParser",
+                       "No given instance of type scala.util.CommandLineParser.FromString[=> Int] was found for parameter fs of method parseArgument in object CommandLineParser"),
+                      ("No given instance of type Need[Int] was found for a context parameter of method m", "no given instance of type Need[Int] was found for parameter evidence$1"),
+                      ("No given instance of type Need[Int] was found for parameter ev of method m in object O", "no given instance of type Need[Int] was found for parameter ev"),
+                      ("No given instance of type Foo was found for parameter ev of method m in object T\n  candidate g failed:\n    cannot reduce summonFrom with\n     patterns :  case t: T",
+                       "no given instance of type Foo was found for parameter ev\n  candidate g failed:\n    cannot reduce summonFrom with\n     patterns :  case t: T"),
                       # a row: a term named `type Widget` read as the missing type
                       ("Not found: type Widget", "type Widget not found")):
         check(f"a reader's rendering of {msg!r}", render_message(msg, strict=False)[1] == want, True)

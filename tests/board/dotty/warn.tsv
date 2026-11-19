@@ -128,7 +128,7 @@ i19416.scala	fail	-	marks: 0 warnings where 1 are marked
 i19505.scala	fail	-	marks: 0 warnings where 1 are marked
 i19506.scala	fail	-	marks: an error where warnings are marked: i19506.scala:4:74: Found:    42
 i19657-mega.scala	fail	-	marks: 1 warnings where 3 are marked
-i19657.scala	fail	-	marks: an error where warnings are marked: i19657.scala:22:16: no given instance of type Schema[Foo] was found for parameter x$1
+i19657.scala	fail	-	marks: an error where warnings are marked: i19657.scala:22:16: No given instance of type Schema[Foo] was found for parameter x$1 of method summonSchemas
 i19687.scala	pass	-	
 i19687a.scala	fail	-	check: diagnostic 1 of 1: warning i19687a.scala:11:3, line 3 of the message: scalac's is It would fail on pattern case: C1(_); teq's is It would fail on pattern case: A1(_), C1(_)
 i19687b.scala	pass	-	

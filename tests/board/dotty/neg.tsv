@@ -102,11 +102,11 @@ blockescapesNeg.scala	fail	-	marks: no error where 1 are marked
 bounds.scala	fail	-	check: diagnostic 1 of 2: scalac's is error bounds.scala:4:5 Type argument String does not conform to upper bound Int; teq's is error bounds.scala:4:7 Found:    "foo"
 boundspropagation.scala	fail	-	marks: 4 errors where 3 are marked: boundspropagation.scala:8:24: Found:    Tree[Nothing]
 by-name.scala	fail	-	marks: 4 errors where 3 are marked: by-name.scala:3:18: 'erased' is not part of the supported Scala subset
-byname-implicits-11.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-11.scala:8:23 No given instance of type Foo[Int] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-11.scala:8:23 no given instance 
-byname-implicits-16.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-16.scala:15:19 No given instance of type Test.O[Test.Z] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-16.scala:15:19 no given i
+byname-implicits-11.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-11.scala:8:23 No given instance of type Foo[Int] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-11.scala:8:23 No given instance 
+byname-implicits-16.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-16.scala:15:19 No given instance of type Test.O[Test.Z] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-16.scala:15:19 No given i
 byname-implicits-18.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-18.scala:52:33 No given instance of type Test.Tc[Test.Bootstrap[Int]] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-18.scala:52
-byname-implicits-21.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-21.scala:20:27 No given instance of type Test.Foo[Test.A[Unit]] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-21.scala:20:27 no
-byname-implicits-26.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-26.scala:34:21 No given instance of type Test.Foo[Test.A] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-26.scala:34:21 no given
+byname-implicits-21.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-21.scala:20:27 No given instance of type Test.Foo[Test.A[Unit]] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-21.scala:20:27 No
+byname-implicits-26.scala	fail	-	check: diagnostic 1 of 1: scalac's is error byname-implicits-26.scala:34:21 No given instance of type Test.Foo[Test.A] was found for parameter e of method implicitly in object Predef.; teq's is error byname-implicits-26.scala:34:21 No given
 cannot-call-java-enum-constructor.scala	fail	-	marks: no error where 1 are marked
 cannot-reduce-inline-match.scala	fail	-	check: diagnostic 1 of 1: error cannot-reduce-inline-match.scala:9:3, line 2 of the message: scalac's is scrutinee:  "f" : ("f" : String); teq's is scrutinee:  x : "f"
 cannot-reduce-summonFrom.scala	fail	-	check: diagnostic 1 of 1: error cannot-reduce-summonFrom.scala:13:3, line 2 of the message: scalac's is patterns :  case given _$1 @ _:Int; teq's is patterns :  case _: Int
@@ -152,7 +152,7 @@ deferredSummon.scala	pass	-
 depfuns.scala	fail	-	marks: 2 errors where 1 are marked: depfuns.scala:5:20: expected ',' or ')', found identifier
 deptypes-badsyntax.scala	fail	-	check: diagnostic 1 of 1: scalac's is error deptypes-badsyntax.scala:2:16 illegal parameter list for type lambda; teq's is error deptypes-badsyntax.scala:2:19 expected end of statement, found '=>>'
 deptypes.scala	fail	-	marks: 5 errors where 3 are marked: deptypes.scala:3:24: expected end of statement, found '=>>'
-derive-eq.scala	fail	-	check: diagnostic 1 of 2: scalac's is error derive-eq.scala:27:3 Values of types Triple[List[One], One, Two] and Triple[One, List[Two], One] cannot be compared with == or !=.; teq's is error derive-eq.scala:27:3 values of types Triple[List[
+derive-eq.scala	fail	-	check: diagnostic 1 of 2: scalac's is error derive-eq.scala:27:3 Values of types Triple[List[One], One, Two] and Triple[One, List[Two], One] cannot be compared with == or !=.; teq's is error derive-eq.scala:27:3 Values of types Triple[List[
 deriving-duplicate.scala	fail	-	marks: 3 errors where 1 are marked: deriving-duplicate.scala:20:14: derived$TC1 is already defined as given instance derived$TC1
 deriving-from-product-typed.scala	fail	-	check: diagnostic 1 of 3: error deriving-from-product-typed.scala:6:63, line 3 of the message: scalac's is where:    Elems is a type variable with constraint <: (Int, String & Int); teq's is nothing
 deriving.scala	fail	-	check: diagnostic 1 of 5: scalac's is error deriving.scala:1:16 value Generic is not a member of reflect; teq's is error deriving.scala:1:16 Generic is not a member of the package
@@ -209,7 +209,7 @@ enumvalues.scala	fail	-	check: diagnostic 1 of 4: scalac's is error enumvalues.s
 eql.scala	fail	-	marks: 6 errors where 8 are marked
 equality.scala	fail	-	marks: 13 errors where 28 are marked
 equality1.scala	fail	-	marks: 6 errors where 15 are marked
-equality2.scala	fail	-	check: diagnostic 1 of 6: scalac's is error equality2.scala:5:3 Values of types Int and equality2.A cannot be compared with == or !=; teq's is error equality2.scala:5:3 values of types Int and A cannot be compared with == or !=
+equality2.scala	fail	-	check: diagnostic 1 of 6: scalac's is error equality2.scala:5:3 Values of types Int and equality2.A cannot be compared with == or !=; teq's is error equality2.scala:5:3 Values of types Int and A cannot be compared with == or !=
 erased-15.scala	fail	-	marks: error on an unmarked line erased-15.scala:16: 'erased' is not part of the supported Scala subset
 erased-4.scala	fail	-	marks: 9 errors where 1 are marked: erased-4.scala:6:14: 'erased' is not part of the supported Scala subset
 erased-5.scala	fail	-	marks: error on an unmarked line erased-5.scala:5: expected ',' or ')', found identifier
@@ -326,7 +326,7 @@ given-ambiguous-1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error given
 given-ambiguous-2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error given-ambiguous-2.scala:10:16 Ambiguous given instances: both given instance a1 and given instance a2 match type A of parameter a of method g; teq's is error given-ambiguous-2.scala:10:16 ambiguou
 given-ambiguous-default-1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error given-ambiguous-default-1.scala:18:24 No best given instance of type B was found for parameter x of method summon in object Predef.; teq's is error given-ambiguous-default-1.scala:18:24 ambiguous 
 given-ambiguous-default-2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error given-ambiguous-default-2.scala:18:24 No best given instance of type C was found for parameter x of method summon in object Predef.; teq's is error given-ambiguous-default-2.scala:18:24 ambiguous 
-given-eta.scala	fail	-	check: diagnostic 1 of 1: scalac's is error given-eta.scala:8:10 No given instance of type d.T was found for parameter x of method h; teq's is error given-eta.scala:8:10 no given instance of type eta$0.T was found for parameter x
+given-eta.scala	fail	-	check: diagnostic 1 of 1: scalac's is error given-eta.scala:8:10 No given instance of type d.T was found for parameter x of method h; teq's is error given-eta.scala:8:10 No given instance of type eta$0.T was found for parameter x of method 
 given-loop-prevention.scala	fail	-	marks: no error where 1 are marked
 given-pattern.scala	fail	-	marks: 2 errors where 4 are marked
 given-triangle.scala	fail	-	marks: no error where 1 are marked
@@ -403,7 +403,7 @@ i11561.scala	fail	-	marks: 5 errors where 2 are marked: i11561.scala:2:26: reass
 i11565.gadt.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11565.gadt.scala:10:17 Found:    ("Hi" : String); teq's is error i11565.gadt.scala:10:17 Found:    "Hi"
 i11567.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11567.scala:4:13 view bounds `<%' are no longer supported, use a context bound `:' instead; teq's is error i11567.scala:4:13 expected ',' or ']', found identifier
 i11581.scala	fail	-	marks: no error where 4 are marked
-i11614.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11614.scala:4:10 No given instance of type I was found for parameter of (i: I) ?=> (i : I); teq's is error i11614.scala:4:10 no given instance of type I was found for parameter of (i: I) ?=> (i :
+i11614.scala	pass	-	
 i11616	fail	-	java source: teq reads none
 i11637.scala	fail	-	marks: no error where 2 are marked
 i1169.scala	fail	-	marks: no error where 1 are marked
@@ -412,7 +412,7 @@ i11719.scala	fail	-	marks: no error where 1 are marked
 i11719a.scala	fail	-	marks: error on an unmarked line i11719a.scala:17: Found:    Sub => Boolean
 i11761.scala	pass	-	
 i11781.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11781.scala:4:7 A.this.Foo does not have a constructor; teq's is error i11781.scala:4:3 only classes can be instantiated with new
-i11797.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11797.scala:6:18 Oops; teq's is error i11797.scala:6:18 no given instance of type Bar was found for parameter x
+i11797.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11797.scala:6:18 Oops; teq's is error i11797.scala:6:18 No given instance of type Bar was found for parameter x of method summon in object Predef
 i1181c.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1181c.scala:19:9 Found:    (Baz.this.x : Foo[Int]); teq's is error i1181c.scala:19:9 Found:    Foo[Int]
 i11859.scala	fail	-	marks: no error where 2 are marked
 i11897.scala	fail	-	marks: 5 errors where 10 are marked
@@ -431,7 +431,7 @@ i12207.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12207.scala:8:2
 i12208.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12208.scala:1:16 Found:    (3 : Int); teq's is error i12208.scala:1:16 Found:    3
 i12211.scala	fail	-	marks: 1 errors where 2 are marked
 i12220.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12220.scala:2:27 List takes type parameters; teq's is error i12220.scala:2:9 value foreach is not a member of [A] =>> List[A]
-i12232.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i12232.scala:17:16 No given instance of type Op[Int, Int, V] was found for parameter op of method min in object Foo; teq's is error i12232.scala:17:16 no given instance of type Op[Int, Int, Double
+i12232.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i12232.scala:17:16 No given instance of type Op[Int, Int, V] was found for parameter op of method min in object Foo; teq's is error i12232.scala:17:16 No given instance of type Op[Int, Int, Double
 i12245.scala	pass	-	
 i12284.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12284.scala:6:27 Found:    (xx : Vector[Any]); teq's is error i12284.scala:6:27 Found:    Vector[F[_]]
 i12299.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i12299.scala:10:11 Not found: apply; teq's is error i12299.scala:10:17 Found:    2
@@ -466,7 +466,7 @@ i12729.scala	fail	-	marks: 1 errors where 6 are marked
 i12736a.scala	pass	-	
 i12736b.scala	pass	-	
 i12754.scala	pass	-	
-i12802.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12802.scala:10:11 No given instance of type M was found for parameter m of method m; teq's is error i12802.scala:10:13 no given instance of type M was found for parameter m
+i12802.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12802.scala:10:11 No given instance of type M was found for parameter m of method m; teq's is error i12802.scala:10:13 No given instance of type M was found for parameter m of method m
 i12828.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i12828.scala:7:8 object creation impossible, since def foo(x: A): Unit in trait Foo is not defined; teq's is error i12828.scala:7:8 object creation impossible, since def foo(x: Int): Unit in trait
 i12828c.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i12828c.scala:7:8 object creation impossible, since def foo(x: A): Unit in class Foo is not defined; teq's is error i12828c.scala:7:8 object creation impossible, since def foo(x: Int): Unit in cla
 i12828d.scala	fail	-	marks: no error where 1 are marked
@@ -493,7 +493,7 @@ i13435.scala	fail	-	marks: no error where 1 are marked
 i13461-a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13461-a.scala:8:22 Found:    i13461.Opaque; teq's is error i13461-a.scala:8:22 Found:    Opaque
 i13466.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13466.scala:9:7 object creation impossible, since:; teq's is error i13466.scala:9:7 object creation impossible, since it has 3 unimplemented members: foo, withTV, withTV2
 i13487.scala	fail	-	marks: 2 errors where 1 are marked: i13487.scala:6:12: type argument Foo[A] does not have the same kind as its bound [_,_[_]]
-i13497.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13497.scala:10:30 No given instance of type Foo was found for parameter x of method summon in object Predef.; teq's is error i13497.scala:10:30 no given instance of type Foo was found for paramet
+i13497.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13497.scala:10:30 No given instance of type Foo was found for parameter x of method summon in object Predef.; teq's is error i13497.scala:10:30 No given instance of type Foo was found for paramet
 i13513.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13513.scala:4:5 Type argument TwoTypes does not conform to upper bound [_] =>> Any; teq's is error i13513.scala:4:3 type argument TwoTypes does not have the same kind as its bound [_]
 i13570.scala	fail	-	check: diagnostic 1 of 1: error i13570.scala:8:3, line 2 of the message: scalac's is scrutinee:  seq$proxy1 : (seq$proxy1 : Seq[Int]); teq's is scrutinee:  seq : Seq[Int]
 i13580.scala	fail	-	marks: 3 errors where 1 are marked: i13580.scala:9:22: expected ')', found 'val'
@@ -596,7 +596,7 @@ i15614.scala	fail	-	marks: 30 errors where 17 are marked: i15614.scala:3:21: exp
 i15618.scala	fail	-	marks: 1 errors where 2 are marked
 i1568.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1568.scala:2:28 Overloaded or recursive method foo needs return type; teq's is error i1568.scala:2:14 recursive use of foo needs an explicit result type
 i15687.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i15687.scala:1:54 Cannot prove that X =:= Tuple.Map[Tuple.InverseMap[X, F], F].; teq's is error i15687.scala:1:54 Cannot prove that (4, 2) =:= Map[InverseMap[(4, 2), [X] =>> Int], [X] =>> Int].
-i15692.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i15692.scala:4:18 No given instance of type TC[Int] was found for parameter x of method summon in object Predef.; teq's is error i15692.scala:4:18 no given instance of type TC[Int] was found for p
+i15692.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i15692.scala:4:18 No given instance of type TC[Int] was found for parameter x of method summon in object Predef.; teq's is error i15692.scala:4:18 No given instance of type TC[Int] was found for p
 i15741.scala	fail	-	marks: no error where 2 are marked
 i15750.scala	fail	-	marks: 2 errors where 3 are marked
 i15784.scala	fail	-	marks: 10 errors where 2 are marked: i15784.scala:2:21: expected ')', found '@'
@@ -657,7 +657,7 @@ i16861.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i16861.scala:1:2
 i16872.scala	fail	-	check: diagnostic 5 of 6: scalac's is error i16872.scala:17:7 Not found: ee - did you mean eq? or perhaps ne?; teq's is error i16872.scala:17:7 Not found: ee
 i16876	fail	-	check: diagnostic 1 of 2: scalac's is warning Test.scala:7:39 unused explicit parameter; teq's is warning Test.scala:4:24 unused explicit parameter
 i1688.scala	fail	-	marks: 1 errors where 2 are marked
-i16888.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i16888.scala:3:39 No given instance of type scala.quoted.Quotes was found for parameter x of method summon in object Predef; teq's is error i16888.scala:3:39 no given instance of type Quotes was f
+i16888.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i16888.scala:3:39 No given instance of type scala.quoted.Quotes was found for parameter x of method summon in object Predef; teq's is error i16888.scala:3:39 No given instance of type Quotes was f
 i16920.scala	fail	-	check: diagnostic 1 of 7: scalac's is error i16920.scala:19:5 value wow is not a member of String.; teq's is error i16920.scala:19:5 value wow is not a member of String
 i17002.scala	fail	-	marks: no error where 3 are marked
 i1701.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i1701.scala:2:17 Expected a type, but found a term: test; teq's is error i1701.scala:2:17 Not found: type test
@@ -669,7 +669,7 @@ i1708.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1708.scala:2:15 
 i17089.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17089.scala:4:16 constructor T cannot be accessed as a member of (T.this : o.T) from anonymous class Object with o.T {...}.; teq's is error i17089.scala:4:16 the constructor of T is private to T
 i1708b.scala	fail	-	marks: no error where 1 are marked
 i17121.scala	fail	-	marks: no error where 4 are marked
-i17122.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17122.scala:7:15 No given instance of type A was found for parameter of C; teq's is error i17122.scala:7:15 no given instance of type A was found for parameter of (A) ?=> B
+i17122.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17122.scala:7:15 No given instance of type A was found for parameter of C; teq's is error i17122.scala:7:15 No given instance of type A was found for parameter of (A) ?=> B
 i17123.scala	fail	-	check: diagnostic 2 of 11: scalac's is error i17123.scala:9:3 missing argument list for method m2 in object ConfusingErrorMessage; teq's is error i17123.scala:9:3 method m2 in object ConfusingErrorMessage must be called with () argument
 i17132.min.scala	fail	-	marks: no error where 1 are marked
 i17132.scala	fail	-	marks: error on an unmarked line i17132.scala:8: Recursion limit exceeded.
@@ -696,7 +696,7 @@ i17738-infix-object	fail	-	check: diagnostic 1 of 2: scalac's is error ToplevelI
 i17738-toplevel-infix.scala	fail	-	marks: 4 errors where 5 are marked
 i1779.scala	fail	-	marks: 1 errors where 2 are marked
 i1786.scala	fail	-	check: diagnostic 1 of 4: scalac's is error i1786.scala:8:26 package scala.meta is not a value; teq's is error i1786.scala:8:26 meta is a package, not a value
-i1793.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1793.scala:5:9 Values of types wr.underlying.T and Null cannot be compared with == or !=; teq's is error i1793.scala:5:9 values of types _ and Null cannot be compared with == or !=
+i1793.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1793.scala:5:9 Values of types wr.underlying.T and Null cannot be compared with == or !=; teq's is error i1793.scala:5:9 Values of types _ and Null cannot be compared with == or !=
 i17944.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17944.scala:40:88 No singleton value available for Tuple.Elem[test.FindField[(("s" : String) ->> String, ("i" : String) ->> Int), ("i" : String)], (1 : Int)]; eligible singleton types for `ValueO
 i17981.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i17981.scala:1:7 Repeated modifier final; teq's is error i17981.scala:1:7 repeated modifier final
 i1802.scala	fail	-	marks: 1 errors where 2 are marked
@@ -727,8 +727,8 @@ i18408a.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i18408a.scala:2
 i18408b.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i18408b.scala:2:1 Illegal start of toplevel definition; teq's is error i18408b.scala:2:1 expected a definition, found identifier
 i18408c.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i18408c.scala:2:1 Illegal start of toplevel definition; teq's is error i18408c.scala:2:1 expected a definition, found identifier
 i1845.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1845.scala:2:12 identifier expected; teq's is error i1845.scala:2:12 type this not found
-i18453.min.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18453.min.scala:11:15 No given instance of type Box[B & Foo] was found for parameter boxA of method meth in class Test; teq's is error i18453.min.scala:11:15 no given instance of type Box[B & Foo
-i18453.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18453.scala:12:9 No given instance of type Box[X & Y] was found for parameter ba of method f in class Test; teq's is error i18453.scala:12:9 no given instance of type Box[X & Y] was found for par
+i18453.min.scala	pass	-	
+i18453.scala	pass	-	
 i18458.scala	fail	-	marks: no error where 1 are marked
 i1846.scala	fail	-	marks: 21 errors where 12 are marked: i1846.scala:6:20: expected a pattern, found indented block
 i18533	fail	-	java source: teq reads none
@@ -741,7 +741,7 @@ i18650.min.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18650.min.s
 i18650.min2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18650.min2.scala:8:37 Cannot prove that c.Nat =:= Int.; teq's is error i18650.min2.scala:8:37 Cannot prove that (Int) =:= Int.
 i18650.scala	fail	-	marks: 3 errors where 1 are marked: i18650.scala:25:24: Found:    Any
 i18657.scala	fail	-	marks: 3 errors where 1 are marked: i18657.scala:2:28: Found:    Int => Int
-i18670.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18670.scala:11:39 No given instance of type TC[A] was found for a context parameter of constructor Payload in class Payload.; teq's is error i18670.scala:11:37 no given instance of type TC[Nothin
+i18670.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18670.scala:11:39 No given instance of type TC[A] was found for a context parameter of constructor Payload in class Payload.; teq's is error i18670.scala:11:37 No given instance of type TC[Nothin
 i18678.scala	fail	-	check: diagnostic 1 of 9: scalac's is error i18678.scala:11:15 Found:    Unit; teq's is error i18678.scala:11:15 Found:    scala.Unit
 i18678b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18678b.scala:3:17 Found:    ("" : String); teq's is error i18678b.scala:3:17 Found:    ""
 i18682.scala	fail	-	check: diagnostic 1 of 10: scalac's is error i18682.scala:3:9 Not found: Fop - did you mean Foo?; teq's is error i18682.scala:3:9 Not found: Fop
@@ -765,8 +765,8 @@ i19100.scala	fail	-	marks: 10 errors where 3 are marked: i19100.scala:5:10: expe
 i19198.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i19198.scala:12:3 No given instance of type scala.deriving.Mirror.Of[DoesNotReduce[Option[Int]]] was found. Failed to synthesize an instance of type scala.deriving.Mirror.Of[DoesNotReduce[Option[I
 i19248	fail	-	marks: no error where 1 are marked
 i19320.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19320.scala:11:18 Not found: type Concurren - did you mean Concurrent?; teq's is error i19320.scala:11:18 Not found: type Concurren
-i19328.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19328.scala:14:6 No given instance of type Boolean was found for parameter bool of method bar in object i19328; teq's is error i19328.scala:14:6 no given instance of type Boolean was found for pa
-i19328conversion.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19328conversion.scala:13:6 No given instance of type Boolean was found for parameter bool of method bar in object i19328conversion; teq's is error i19328conversion.scala:13:6 no given instance of
+i19328.scala	pass	-	
+i19328conversion.scala	pass	-	
 i19334.scala	fail	-	marks: 2 errors where 1 are marked: i19334.scala:6:3: too many arguments: expected 0
 i19364.scala	fail	-	marks: no error where 10 are marked
 i19372.scala	fail	-	marks: 2 errors where 5 are marked
@@ -775,8 +775,8 @@ i19413.scala	pass	-
 i19414-desugared.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19414-desugared.scala:22:35 No best given instance of type BodySerializer[JsObject] was found for parameter x of method summon in object Predef.; teq's is error i19414-desugared.scala:22:35 ambig
 i19414.scala	fail	-	marks: 2 errors where 1 are marked: i19414.scala:12:42: Found:    Printer
 i19445.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19445.scala:17:16 Found:    Test.UnwrapTypes[FooBar.Bar[Int]]; teq's is error i19445.scala:17:16 Found:    UnwrapTypes[FooBar.Bar[Int]]
-i19506.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19506.scala:7:19 No given instance of type Reader[Object] was found for a context parameter of method read; teq's is error i19506.scala:7:19 no given instance of type Reader[AnyRef] was found for
-i19594.scala	fail	-	check: diagnostic 5 of 6: scalac's is error i19594.scala:26:3 No given instance of type String was found; teq's is error i19594.scala:26:13 no given instance of type String was found for parameter s
+i19506.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19506.scala:7:19 No given instance of type Reader[Object] was found for a context parameter of method read; teq's is error i19506.scala:7:19 No given instance of type Reader[AnyRef] was found for
+i19594.scala	fail	-	check: diagnostic 5 of 6: scalac's is error i19594.scala:26:3 No given instance of type String was found; teq's is error i19594.scala:26:13 No given instance of type String was found for parameter s of method h in object updated
 i19619	fail	-	java source: teq reads none
 i19731.scala	fail	-	check: diagnostic 2 of 3: scalac's is error i19731.scala:7:7 class F2 needs to be abstract, since:; teq's is error i19731.scala:7:7 class F2 needs to be abstract, since def foo(): Unit in class F2 is not defined
 i19746.scala	fail	-	marks: error on an unmarked line i19746.scala:10: Found:    Any
@@ -791,16 +791,16 @@ i2001.scala	fail	-	marks: error on an unmarked line i2001.scala:2: recursive use
 i2001a.scala	fail	-	marks: error on an unmarked line i2001a.scala:2: recursive use of odd needs an explicit result type
 i2001b.scala	fail	-	marks: error on an unmarked line i2001b.scala:2: recursive use of odd needs an explicit result type
 i2005.scala	pass	-	
-i2006.scala	fail	-	marks: error on an unmarked line i2006.scala:3: no given instance of type Int was found for parameter of (Int) ?=> Int
-i20071a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i20071a.scala:17:13 No given instance of type ScopeToInt[Scope] was found for parameter d of method bar; teq's is error i20071a.scala:17:13 no given instance of type ScopeToInt[Scope] was found fo
-i20071b	fail	-	check: diagnostic 1 of 1: scalac's is error B_2.scala:4:13 No given instance of type ScopeToInt[Scope] was found for parameter d of method bar; teq's is error B_2.scala:4:13 no given instance of type Scope match { case Scope => Int } was fo
+i2006.scala	fail	-	marks: error on an unmarked line i2006.scala:3: No given instance of type Int was found for parameter of (Int) ?=> Int
+i20071a.scala	pass	-	
+i20071b	fail	-	check: diagnostic 1 of 1: scalac's is error B_2.scala:4:13 No given instance of type ScopeToInt[Scope] was found for parameter d of method bar; teq's is error B_2.scala:4:13 No given instance of type Scope match { case Scope => Int } was fo
 i20079	fail	-	check: diagnostic 1 of 2: scalac's is error Test_2.scala:4:39 Found:    (Test.ints : List[Int]); teq's is error Test_2.scala:4:39 Found:    List[Int]
 i20105.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i20105.scala:6:7 The tail recursive def foo contains a recursive call inside the non-inlined inner def bar; teq's is error i20105.scala:3:5 TailRec optimisation not applicable, method foo contai
-i20127.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i20127.scala:14:15 foo!; teq's is error i20127.scala:14:15 no given instance of type X was found for parameter x
+i20127.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i20127.scala:14:15 foo!; teq's is error i20127.scala:14:15 No given instance of type X was found for parameter x of method foo in object FooClone
 i20245	fail	-	marks: no error where 2 are marked
 i20265-1.scala	fail	-	marks: no error where 1 are marked
 i20265.scala	fail	-	marks: 6 errors where 2 are marked: i20265.scala:8:27: X is not a legal path
-i2030.scala	fail	-	marks: 2 errors where 1 are marked: i2030.scala:4:26: No given instance of type scala.quoted.Quotes was found for a quote
+i2030.scala	fail	-	marks: 2 errors where 1 are marked: i2030.scala:4:26: No given instance of type scala.quoted.Quotes was found
 i20317a.scala	fail	-	marks: 1 errors where 2 are marked
 i2032.scala	fail	-	marks: no error where 1 are marked
 i2033.scala	fail	-	marks: 4 errors where 2 are marked: i2033.scala:6:38: Found:    Unit
@@ -875,7 +875,7 @@ i22671.scala	fail	-	check: diagnostic 1 of 11: scalac's is error i22671.scala:41
 i22721	fail	-	check: diagnostic 1 of 1: scalac's is error test2.scala:3:1 foobar is already defined as method foobar in tests/neg/i22721/test1.scala; teq's is error test2.scala:3:13 foobar is already defined as method foobar in tests/neg/i22721/test1.sca
 i22752.scala	fail	-	marks: no error where 1 are marked
 i22792.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22792.scala:8:18 missing argument for parameter ev of method run in class Foo: (implicit ev: Permit): Unit; teq's is error i22792.scala:8:18 missing argument for parameter ev
-i22851.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22851.scala:8:20 MirroredElemTypes mismatch, expected: EmptyTuple.type, found:  <: NonEmptyTuple.; teq's is error i22851.scala:8:20 no given instance of type ProductOf[EmptyTuple]{type MirroredEl
+i22851.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22851.scala:8:20 MirroredElemTypes mismatch, expected: EmptyTuple.type, found:  <: NonEmptyTuple.; teq's is error i22851.scala:8:20 No given instance of type ProductOf[EmptyTuple]{type MirroredEl
 i22890	fail	-	java source: teq reads none
 i22903.scala	fail	-	marks: 3 errors where 1 are marked: i22903.scala:1:7: class CustomProduct needs to be abstract, since it has 2 unimplemented members: productArity, productElement
 i22906.scala	fail	-	option: -rewrite (teq has no flag for it)
@@ -981,7 +981,7 @@ i2887c.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i2887c.scala:11:
 i2901.scala	pass	-	
 i2928.scala	fail	-	marks: no error where 1 are marked
 i2950.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2950.scala:8:7 no pattern match extractor named Foo was found; teq's is error i2950.scala:8:7 Not found: Foo
-i2960.scala	fail	-	marks: 3 errors where 1 are marked: i2960.scala:66:1: No given instance of type scala.quoted.Quotes was found for a quote
+i2960.scala	fail	-	marks: 3 errors where 1 are marked: i2960.scala:66:1: No given instance of type scala.quoted.Quotes was found
 i2971.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2971.scala:17:24 Found:    Foo[[X0] =>> Any]; teq's is error i2971.scala:17:33 Found:    Foo[B]
 i2973.scala	fail	-	check: diagnostic 1 of 34: scalac's is error i2973.scala:10:1 contravariant type T occurs in invariant position in type InvClass[T] {...} of class Contra; teq's is error i2973.scala:10:7 contravariant type T occurs in invariant position in 
 i2974.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2974.scala:15:21 Ambiguous given instances: both value ba and value fa match type Foo[Int] of parameter x of method summon in object Predef; teq's is error i2974.scala:15:21 ambiguous given insta
@@ -1001,14 +1001,14 @@ i3332.scala	fail	-	marks: 6 errors where 4 are marked: i3332.scala:19:24: expect
 i3348.scala	fail	-	check: diagnostic 2 of 1: scalac's is nothing; teq's is warning without a place: there was 1 deprecation warning; re-run with --deprecation for details
 i3364.scala	fail	-	marks: no error where 2 are marked
 i3442.scala	fail	-	check: diagnostic 1 of 14: scalac's is warning i3442.scala:3:34 `_` is deprecated for wildcard arguments of types: use `?` instead; teq's is error i3442.scala:3:16 method getClass overrides nothing
-i3452.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i3452.scala:20:22 No given instance of type Test1.TC[Int] was found for parameter e of method implicitly in object Predef.; teq's is error i3452.scala:20:22 no given instance of type TC[Int] was f
+i3452.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i3452.scala:20:22 No given instance of type Test1.TC[Int] was found for parameter e of method implicitly in object Predef.; teq's is error i3452.scala:20:22 No given instance of type TC[Int] was f
 i3470.scala	fail	-	check: diagnostic 1 of 1: error i3470.scala:4:47, line 3 of the message: scalac's is where:    T is a type in class Factory with bounds <: Int; teq's is nothing
 i3471.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3471.scala:1:1 Modifier sealed is not allowed for this definition; teq's is error i3471.scala:1:1 modifier sealed is not allowed for this definition
 i3487.scala	pass	-	
 i3537.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3537.scala:4:22 Found:    ("Hello" : String); teq's is error i3537.scala:4:22 Found:    "Hello"
 i3540.scala	fail	-	check: diagnostic 1 of 7: scalac's is error i3540.scala:2:3 Implicit classes must accept exactly one primary constructor parameter; teq's is error i3540.scala:2:18 Implicit classes must accept exactly one primary constructor parameter
-i3542.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3542.scala:7:22 No given instance of type Test.TC[Int] was found for parameter e of method implicitly in object Predef.; teq's is error i3542.scala:7:22 no given instance of type TC[Int] was foun
-i3542a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3542a.scala:4:12 missing argument list for method f in object Foo; teq's is error i3542a.scala:4:15 no given instance of type String was found for parameter ctx
+i3542.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3542.scala:7:22 No given instance of type Test.TC[Int] was found for parameter e of method implicitly in object Predef.; teq's is error i3542.scala:7:22 No given instance of type TC[Int] was foun
+i3542a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3542a.scala:4:12 missing argument list for method f in object Foo; teq's is error i3542a.scala:4:15 No given instance of type String was found for parameter ctx of method f in object Foo
 i3557.scala	fail	-	marks: no error where 1 are marked
 i3630.scala	fail	-	marks: no error where 1 are marked
 i3657.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i3657.scala:16:12 error overriding type F in trait ModuleSig with bounds[_$1,_$2];; teq's is error i3657.scala:16:12 error overriding type F in trait ModuleSig;
@@ -1039,7 +1039,7 @@ i4058.scala	fail	-	marks: error on an unmarked line i4058.scala:10: g is already
 i4060.scala	fail	-	marks: 4 errors where 1 are marked: i4060.scala:7:14: 'erased' is not part of the supported Scala subset
 i4098.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i4098.scala:8:13 Z is not a legal path; teq's is error i4098.scala:8:13 AnyRef{type R >: U} & AnyRef{type R = V} is not a legal path
 i4098a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i4098a.scala:8:13 (z.x : Object{type R >: U | V <: V}) is not a valid type prefix, since it is not an immutable path; teq's is error i4098a.scala:8:13 type R not found
-i4196.scala	fail	-	marks: 2 errors where 1 are marked: i4196.scala:4:9: values of types (Unit) ?=> Int and Int cannot be compared with == or !=
+i4196.scala	fail	-	marks: 2 errors where 1 are marked: i4196.scala:4:9: Values of types (Unit) ?=> Int and Int cannot be compared with == or !=
 i4247.scala	fail	-	marks: no error where 1 are marked
 i4247b.scala	fail	-	marks: no error where 1 are marked
 i4272.scala	pass	-	
@@ -1086,7 +1086,7 @@ i4935.scala	fail	-	check: diagnostic 3 of 6: scalac's is error i4935.scala:3:8 N
 i4936.scala	fail	-	check: diagnostic 1 of 5: scalac's is error i4936.scala:1:1 Modifier abstract is not allowed for this definition; teq's is error i4936.scala:1:1 modifier abstract is not allowed for this definition
 i4984.scala	fail	-	marks: 10 errors where 6 are marked: i4984.scala:28:10: this is not a case class or enum case
 i4986a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i4986a.scala:6:58 Cannot construct a collection of type List[String] with elements of type Int based on a collection of type List[Int]..; teq's is error i4986a.scala:6:58 Cannot construct a collec
-i4986c.scala	fail	-	check: diagnostic 1 of 16: scalac's is error i4986c.scala:38:9 Missing X$Y for Test[Char]; teq's is error i4986c.scala:38:9 no given instance of type X$Y was found for parameter xy
+i4986c.scala	fail	-	check: diagnostic 1 of 16: scalac's is error i4986c.scala:38:9 Missing X$Y for Test[Char]; teq's is error i4986c.scala:38:9 No given instance of type X$Y was found for parameter xy of method f in class Test
 i4986d.scala	fail	-	marks: 2 errors where 3 are marked
 i50-volatile.scala	fail	-	marks: 2 errors where 3 are marked
 i5001.scala	pass	-	
@@ -1109,9 +1109,9 @@ i5101.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5101.scala:11:12
 i5139.scala	fail	-	check: diagnostic 1 of 1: error i5139.scala:6:7, line 4 of the message: scalac's is have the same type (ab: A): A after erasure.; teq's is have the same type after erasure.
 i5202.scala	fail	-	marks: 6 errors where 5 are marked: i5202.scala:4:11: Found:    5
 i5202a.scala	pass	-	
-i5234a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5234a.scala:8:28 No given instance of type scala.util.NotGiven[Test.Foo] was found for parameter e of method implicitly in object Predef; teq's is error i5234a.scala:8:28 no given instance of typ
+i5234a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5234a.scala:8:28 No given instance of type scala.util.NotGiven[Test.Foo] was found for parameter e of method implicitly in object Predef; teq's is error i5234a.scala:8:28 No given instance of typ
 i5234b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5234b.scala:28:29 Ambiguous given instances: both method amb1 in object NotGiven2 and method amb2 in object NotGiven2 match type NotGiven2[Test.Foo] of parameter e of method implicitly in object 
-i5234c.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5234c.scala:8:11 No given instance of type scala.util.NotGiven[Test.Foo] was found for parameter ev of method foo in object Test; teq's is error i5234c.scala:8:11 no given instance of type NotGiv
+i5234c.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5234c.scala:8:11 No given instance of type scala.util.NotGiven[Test.Foo] was found for parameter ev of method foo in object Test; teq's is error i5234c.scala:8:11 No given instance of type NotGiv
 i5278.scala	fail	-	marks: 3 errors where 1 are marked: i5278.scala:2:5: expected an identifier, found 'type'
 i5302.scala	fail	-	marks: no error where 1 are marked
 i5311.scala	fail	-	marks: 3 errors where 1 are marked: i5311.scala:11:5: missing argument for parameter f
@@ -1123,7 +1123,7 @@ i5328.scala	fail	-	marks: 4 errors where 1 are marked: i5328.scala:7:7: expected
 i533	fail	-	java source: teq reads none
 i5332.scala	pass	-	
 i5397.scala	fail	-	marks: error on an unmarked line i5397.scala:7: Cannot rewrite recursive call: it is not in tail position
-i5427.scala	fail	-	marks: 6 errors where 2 are marked: i5427.scala:11:8: no given instance of type Foo[A] was found for parameter f1
+i5427.scala	fail	-	marks: 6 errors where 2 are marked: i5427.scala:11:8: No given instance of type Foo[A] was found for parameter f1 of method test2 in object Test
 i5433.scala	fail	-	marks: no error where 1 are marked
 i5445.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5445.scala:4:11 object creation impossible, since def polymorphic[x]: Int in trait A in object Test is not defined; teq's is error i5445.scala:4:11 object creation impossible, since def polymorph
 i5453	fail	-	java source: teq reads none
@@ -1134,14 +1134,14 @@ i5498-postfixOps.scala	fail	-	marks: 4 errors where 5 are marked
 i5521.scala	fail	-	marks: no error where 2 are marked
 i5525.scala	fail	-	option: -preview (teq has no flag for it)
 i5525b.scala	fail	-	marks: 5 errors where 7 are marked
-i5546.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i5546.scala:21:13 Values of types O.Feet and O.Meters cannot be compared with == or !=; teq's is error i5546.scala:21:13 values of types Feet and Meters cannot be compared with == or !=
+i5546.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i5546.scala:21:13 Values of types O.Feet and O.Meters cannot be compared with == or !=; teq's is error i5546.scala:21:13 Values of types Feet and Meters cannot be compared with == or !=
 i5556.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5556.scala:9:37 SAM{type T = String} is not a legal SAM type; teq's is error i5556.scala:9:37 Found:    Int => Int
 i5578.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5578.scala:4:7 class C needs to be abstract, since def a[T]: A in trait P is not defined; teq's is error i5578.scala:4:7 class C needs to be abstract, since def a[T]: Int in trait P is not define
 i5636.scala	fail	-	marks: 2 errors where 1 are marked: i5636.scala:7:29: The type of a class parent cannot refer to constructor parameters, but Bar[(a : A)] refers to a
 i5638.scala	fail	-	marks: 1 errors where 2 are marked
 i5640.scala	fail	-	marks: 2 errors where 1 are marked: i5640.scala:2:14: expected an identifier, found '('
 i5690.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5690.scala:6:9 Inherited is a trait; it cannot be instantiated; teq's is error i5690.scala:6:5 Inherited is a trait; it cannot be instantiated
-i5810.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i5810.scala:3:7 Values of types T and Null cannot be compared with == or !=; teq's is error i5810.scala:3:7 values of types T and Null cannot be compared with == or !=
+i5810.scala	pass	-	
 i5823.scala	fail	-	marks: no error where 2 are marked
 i5854.scala	fail	-	marks: 1 errors where 2 are marked
 i5888.scala	fail	-	marks: 5 errors where 3 are marked: i5888.scala:1:25: Found:    String => Int
@@ -1149,7 +1149,7 @@ i5948.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i5948.scala:17:20
 i5948a.scala	pass	-	
 i5948b.scala	fail	-	check: diagnostic 1 of 5: scalac's is error i5948b.scala:16:20 Found:    (pair : (Foo[?], Foo[?])); teq's is warning i5948b.scala:15:20 `_` is deprecated for wildcard arguments of types: use `?` instead
 i5976.scala	fail	-	marks: 1 errors where 2 are marked
-i5978.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i5978.scala:19:65 No given instance of type TokenParser[Char, Position[CharSequence]] was found for parameter x of method summon in object Predef; teq's is error i5978.scala:19:65 no given instanc
+i5978.scala	fail	-	check: diagnostic 1 of 3: error i5978.scala:19:65, line 3 of the message: scalac's is Note: object TP in object TextParser was not considered because it was not imported with `import given`.; teq's is nothing
 i6035.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i6035.scala:1:17 an identifier expected, but ';' found; teq's is error i6035.scala:1:17 expected an identifier, found ';'
 i6036.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6036.scala:5:15 Found:    Object {...}; teq's is error i6036.scala:5:15 Found:    AnyRef
 i6047.scala	fail	-	marks: no error where 9 are marked
@@ -1198,8 +1198,8 @@ i6762b.scala	pass	-
 i6778.scala	fail	-	marks: 1 errors where 2 are marked
 i6779.scala	fail	-	check: diagnostic 2 of 3: scalac's is error i6779.scala:12:30 value f is not a member of T.; teq's is error i6779.scala:12:30 Found:    F[T]
 i6795-b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6795-b.scala:1:12 values cannot be sealed; teq's is error i6795-b.scala:1:1 modifier sealed is not allowed for this definition
-i6796.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6796.scala:8:16 No given instance of type Test.A was found for parameter e of method implicitly in object Predef.; teq's is error i6796.scala:8:16 no given instance of type A was found for parame
-i6801.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i6801.scala:4:35 No given instance of type Numeric[Float | T] was found for parameter n of method +; teq's is error i6801.scala:4:35 no given instance of type Numeric[Float | T] was found for para
+i6796.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6796.scala:8:16 No given instance of type Test.A was found for parameter e of method implicitly in object Predef.; teq's is error i6796.scala:8:16 No given instance of type A was found for parame
+i6801.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i6801.scala:5:35 No given instance of type Numeric[T | Float] was found for parameter n of method +; teq's is error i6801.scala:5:34 No given instance of type Numeric[T | Float] was found for para
 i6815.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i6815.scala:14:14 Found:    (r : Computes[T$1]); teq's is warning i6815.scala:8:27 `_` is deprecated for wildcard arguments of types: use `?` instead
 i6826.scala	fail	-	marks: no error where 1 are marked
 i6891.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i6891.scala:8:24 Found:    ("foo" : String); teq's is error i6891.scala:8:24 Found:    "foo"
@@ -1213,19 +1213,19 @@ i7068-a.scala	marks	-	the marks hold; the reader cannot decide: teq's diagnostic
 i7068-b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7068-b.scala:2:3 Case class definitions are not allowed in inline methods or quoted code. Use a normal class instead.; teq's is error i7068-b.scala:2:14 Case class definitions are not allowed in 
 i7078.scala	fail	-	marks: no error where 3 are marked
 i7086.scala	fail	-	check: diagnostic 3 of 2: scalac's is nothing; teq's is warning without a place: there was 1 deprecation warning; re-run with --deprecation for details
-i7092.scala	fail	-	marks: 10 errors where 8 are marked: i7092.scala:24:20: no given instance of type F[String] was found for parameter x
+i7092.scala	fail	-	marks: 10 errors where 8 are marked: i7092.scala:24:20: No given instance of type F[String] was found for parameter x of method summon in object Predef
 i7107.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7107.scala:2:22 type X is not a member of object Rec; teq's is error i7107.scala:2:22 type X not found
 i7137.scala	fail	-	check: diagnostic 3 of 2: scalac's is nothing; teq's is warning without a place: there was 1 deprecation warning; re-run with --deprecation for details
 i7195.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7195.scala:10:9 Found:    B.T; teq's is error i7195.scala:10:9 Found:    T
-i7248.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7248.scala:3:14 No given instance of type Int was found for parameter x of method summon in object Predef.; teq's is error i7248.scala:3:14 no given instance of type Int was found for parameter x
-i7249.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7249.scala:8:23 No given instance of type F[Int, Unit] was found for parameter x of method summon in object Predef.; teq's is error i7249.scala:8:23 no given instance of type F[Int, Unit] was fou
+i7248.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7248.scala:3:14 No given instance of type Int was found for parameter x of method summon in object Predef.; teq's is error i7248.scala:3:14 No given instance of type Int was found for parameter x
+i7249.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7249.scala:8:23 No given instance of type F[Int, Unit] was found for parameter x of method summon in object Predef.; teq's is error i7249.scala:8:23 No given instance of type F[Int, Unit] was fou
 i7294.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7294.scala:7:16 Found:    Any; teq's is error i7294.scala:7:16 value g is not a member of Nothing
 i7325.scala	fail	-	marks: no error where 1 are marked
 i7359-f.scala	fail	-	marks: no error where 1 are marked
 i7359-g.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7359-g.scala:5:20 Found:    () => String; teq's is error i7359-g.scala:5:20 Found:    () => "Hello"
 i7359.scala	fail	-	marks: no error where 1 are marked
 i7387.scala	fail	-	marks: 1 errors where 2 are marked
-i739.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i739.scala:5:7 No given instance of type Foo[Int, B] was found for parameter f of method t in class Test; teq's is error i739.scala:5:7 no given instance of type Foo[Int, Int] was found for parame
+i739.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i739.scala:5:7 No given instance of type Foo[Int, B] was found for parameter f of method t in class Test; teq's is error i739.scala:5:7 No given instance of type Foo[Int, Int] was found for parame
 i7425.scala	pass	-	
 i7438.scala	fail	-	marks: 3 errors where 1 are marked: i7438.scala:10:17: Found:    Some[Double]
 i7459.scala	fail	-	check: diagnostic 1 of 5: scalac's is error i7459.scala:17:37 No given instance of type Eq[t] was found for parameter t of method summon.; teq's is warning i7459.scala:15:43 `_` is deprecated for wildcard arguments of types: use `?` instead
@@ -1235,17 +1235,17 @@ i7567.scala	fail	-	check: diagnostic 2 of 2: scalac's is error i7567.scala:6:31 
 i7575.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7575.scala:1:1 extension of type scala.Dynamic needs to be enabled; teq's is error i7575.scala:1:7 extension of type scala.Dynamic needs to be enabled
 i7575b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7575b.scala:2:1 extension of type scala.Dynamic needs to be enabled; teq's is error i7575b.scala:2:7 extension of type scala.Dynamic needs to be enabled
 i7597.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i7597.scala:3:5 object creation impossible, since def apply(v1: T1): R in trait Function1 in package scala is not defined; teq's is error i7597.scala:3:5 object creation impossible, since def appl
-i7613.scala	fail	-	marks: 2 errors where 1 are marked: i7613.scala:10:17: no given instance of type Baz[A] was found for parameter x$1
+i7613.scala	fail	-	marks: 2 errors where 1 are marked: i7613.scala:10:17: No given instance of type Baz[A] was found for parameter x$1 of constructor BazLaws in trait BazLaws
 i7709.scala	fail	-	marks: 2 errors where 8 are marked
 i7742.scala	fail	-	marks: 2 errors where 1 are marked: i7742.scala:2:5: a for expression needs a generator
-i7745.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7745.scala:3:22 No implicit search was attempted for parameter e of method implicitly in object Predef; teq's is error i7745.scala:3:22 no given instance of type T was found for parameter e
+i7745.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7745.scala:3:22 No implicit search was attempted for parameter e of method implicitly in object Predef; teq's is error i7745.scala:3:22 No given instance of type T was found for parameter e of me
 i7746.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i7746.scala:2:27 ')' expected, but '=>' found; teq's is error i7746.scala:2:27 expected ')', found '=>'
 i7748.scala	fail	-	marks: no error where 2 are marked
 i7750.scala	fail	-	check: diagnostic 1 of 4: scalac's is error i7750.scala:2:21 an identifier expected, but ':' found; teq's is error i7750.scala:2:21 expected an identifier, found ':'
 i7750a.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i7750a.scala:3:18 result type of implicit definition needs to be given explicitly; teq's is error i7750a.scala:2:40 value unary_+ is not a member of String
 i7751.scala	fail	-	marks: 7 errors where 3 are marked: i7751.scala:2:19: expected end of statement, found '=>'
 i7753.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i7753.scala:2:1 'then' expected, but '}' found; teq's is error i7753.scala:2:1 expected 'then', found '}'
-i7758.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7758.scala:1:24 No given instance of type T was found for parameter e of method implicitly in object Predef; teq's is error i7758.scala:1:24 no given instance of type Int was found for parameter 
+i7758.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7758.scala:1:24 No given instance of type T was found for parameter e of method implicitly in object Predef; teq's is error i7758.scala:1:24 No given instance of type Int was found for parameter 
 i7808.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i7808.scala:4:9 a is already defined as value a; teq's is error i7808.scala:4:16 a is already defined as value a
 i7810.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i7810.scala:1:31 No singleton value available for ; eligible singleton types for `ValueOf` synthesis include literals and stable paths.; teq's is warning i7810.scala:1:28 `_` is deprecated for wil
 i7811.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i7811.scala:2:17 an identifier expected, but ']' found; teq's is error i7811.scala:2:17 expected an identifier, found ']'
@@ -1302,8 +1302,8 @@ i8731.scala	fail	-	marks: no error where 2 are marked
 i8731a.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i8731a.scala:4:3 'do' expected, but 'end' found; teq's is error i8731a.scala:4:3 expected 'do' before the end marker
 i8736.scala	fail	-	check: diagnostic 3 of 3: scalac's is error i8736.scala:31:23 Ambiguous overload. The overloaded alternatives of method (k: ("k" : String)): String with types; teq's is error i8736.scala:31:23 Ambiguous overload. The overloaded alternatives
 i876.scala	fail	-	marks: 2 errors where 1 are marked: i876.scala:6:19: Found:    Int
-i8827a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i8827a.scala:16:27 No given instance of type pkg.Order[List[pkg.Foo]] was found for parameter x of method summon in object Predef.; teq's is error i8827a.scala:16:27 no given instance of type Orde
-i8827b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i8827b.scala:16:29 No given instance of type pkg.Order[Option[pkg.Foo]] was found for parameter x of method summon in object Predef.; teq's is error i8827b.scala:16:29 no given instance of type Or
+i8827a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i8827a.scala:16:27 No given instance of type pkg.Order[List[pkg.Foo]] was found for parameter x of method summon in object Predef.; teq's is error i8827a.scala:16:27 No given instance of type Orde
+i8827b.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i8827b.scala:16:29 No given instance of type pkg.Order[Option[pkg.Foo]] was found for parameter x of method summon in object Predef.; teq's is error i8827b.scala:16:29 No given instance of type Or
 i8841.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i8841.scala:2:21 inline value must have a literal constant type; teq's is error i8841.scala:2:31 inline value must have a literal constant type
 i8861.scala	fail	-	marks: 4 errors where 1 are marked: i8861.scala:19:17: Found:    Int
 i8894.scala	fail	-	marks: error on an unmarked line i8894.scala:11: poql is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
@@ -1340,7 +1340,7 @@ i9310.scala	fail	-	marks: 3 errors where 1 are marked: i9310.scala:2:11: expecte
 i9327.scala	fail	-	marks: 1 errors where 2 are marked
 i9328.scala	fail	-	marks: 12 errors where 5 are marked: i9328.scala:16:1: unmatched closing bracket
 i9329.scala	fail	-	check: diagnostic 1 of 1: error i9329.scala:8:7, line 2 of the message: scalac's is (The class implements abstract override def name: String in trait Son but that definition still needs an implementation); teq's is nothing
-i9330.scala	fail	-	marks: error on an unmarked line i9330.scala:2: values of types Unit and String cannot be compared with == or !=
+i9330.scala	fail	-	marks: error on an unmarked line i9330.scala:2: Values of types Unit and String cannot be compared with == or !=
 i9331.scala	fail	-	marks: error on an unmarked line i9331.scala:2: expected a definition, found '('
 i9332.scala	fail	-	marks: no error where 1 are marked
 i9344.scala	pass	-	
@@ -1352,7 +1352,7 @@ i9437.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9437.scala:7:11 
 i9460.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9460.scala:3:7 parameterized trait A is indirectly implemented,; teq's is error i9460.scala:3:7 parameterized trait A is indirectly implemented, needs to be implemented directly so that arguments
 i9472a	fail	-	marks: no error where 1 are marked
 i9472b	fail	-	marks: no error where 1 are marked
-i9504.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9504.scala:13:11 No given instance of type Monad[F] was found for a context parameter of method blaMonad in object Test.; teq's is error i9504.scala:13:11 no given instance of type Monad[F] was f
+i9504.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9504.scala:13:11 No given instance of type Monad[F] was found for a context parameter of method blaMonad in object Test.; teq's is error i9504.scala:13:11 No given instance of type Monad[F] was f
 i9517.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9517.scala:3:25 Missing parameter type; teq's is error i9517.scala:3:23 missing parameter type
 i9529.scala	fail	-	marks: error on an unmarked line i9529.scala:1: Found:    Unit
 i9529b.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i9529b.scala:1:28 Found:    Unit; teq's is error i9529b.scala:1:15 Found:    Unit
@@ -1365,7 +1365,7 @@ i9790.scala	fail	-	marks: 2 errors where 1 are marked: i9790.scala:5:3: The star
 i9803.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9803.scala:15:11 Reference to f421 is ambiguous.; teq's is error i9803.scala:15:11 reference to f421 is ambiguous: it is both imported by name by import bugs.shadowing.x.f421 and imported by name
 i9886.scala	pass	-	
 i9928.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9928.scala:21:6 Found:    (3 : Int); teq's is error i9928.scala:21:6 ambiguous extension methods: both given_Magic_String and given_Magic_Foo provide read on 3
-i9958.scala	fail	-	marks: error on an unmarked line i9958.scala:1: no given instance of type [X] =>> (X, X) was found for parameter x
+i9958.scala	fail	-	marks: error on an unmarked line i9958.scala:1: No given instance of type [X] =>> (X, X) was found for parameter x of method summon in object Predef
 i997.scala	fail	-	marks: no error where 15 are marked
 i997a.scala	fail	-	marks: 1 errors where 2 are marked
 iarrays.scala	fail	-	check: diagnostic 1 of 4: scalac's is error iarrays.scala:4:7 IArray[String] does not have a constructor; teq's is error iarrays.scala:4:3 IArray cannot be instantiated
@@ -1380,7 +1380,7 @@ implicit-migration.scala	fail	-	check: diagnostic 2 of 8: scalac's is error impl
 implicit-package-object.scala	fail	-	check: diagnostic 1 of 3: scalac's is error implicit-package-object.scala:41:34 No given instance of type toString.ToString[A.AA] was found for parameter x of method summon in object Predef; teq's is error implicit-package-object.scala:41:3
 implicit-params.scala	fail	-	marks: 10 errors where 6 are marked: implicit-params.scala:12:17: expected '=', found 'given'
 implicitDefs.scala	fail	-	marks: 4 errors where 3 are marked: implicitDefs.scala:7:16: type of implicit definition needs to be given explicitly
-implicitSearch.scala	fail	-	check: diagnostic 1 of 2: scalac's is error implicitSearch.scala:13:13 No given instance of type Test.Ord[List[List[T]]] was found for parameter o of method sort in object Test.; teq's is error implicitSearch.scala:13:13 no given instance o
+implicitSearch.scala	fail	-	check: diagnostic 1 of 2: scalac's is error implicitSearch.scala:13:13 No given instance of type Test.Ord[List[List[T]]] was found for parameter o of method sort in object Test.; teq's is error implicitSearch.scala:13:13 No given instance o
 implied-for.scala	fail	-	check: diagnostic 1 of 2: scalac's is error implied-for.scala:15:11 Expected a term, but found a type: c; teq's is error implied-for.scala:15:11 Not found: c
 import-given.scala	fail	-	marks: 2 errors where 3 are marked
 imports.scala	fail	-	check: diagnostic 1 of 1: scalac's is error imports.scala:1:29 named imports cannot follow wildcard imports; teq's is error imports.scala:1:8 named imports cannot follow wildcard imports
@@ -1441,7 +1441,7 @@ kind-projector-underscores.scala	fail	-	option: -Xkind-projector:underscores (te
 kind-projector.scala	fail	-	marks: 5 errors where 3 are marked: kind-projector.scala:7:24: type argument [_$kp$1, _$kp$2] =>> Either[_$kp$1, _$kp$2] does not have the same kind as its bound [_]
 kinds1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error kinds1.scala:8:12 Type argument Test.C does not have the same kind as its bound; teq's is error kinds1.scala:8:12 type argument C does not have the same kind as its bound
 kinds2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error kinds2.scala:14:5 Missing type parameter for Test.C; teq's is error kinds2.scala:14:3 type argument C does not have the same kind as its bound
-labelNotFound.scala	fail	-	check: diagnostic 1 of 1: scalac's is error labelNotFound.scala:4:31 No given instance of type scala.util.boundary.Label[Int] was found for parameter label of method break in object boundary; teq's is error labelNotFound.scala:4:31 no given
+labelNotFound.scala	fail	-	check: diagnostic 1 of 1: scalac's is error labelNotFound.scala:4:31 No given instance of type scala.util.boundary.Label[Int] was found for parameter label of method break in object boundary; teq's is error labelNotFound.scala:4:31 No given
 lambda-infer.scala	fail	-	marks: 7 errors where 4 are marked: lambda-infer.scala:3:26: expected ',' or ')', found identifier
 lambda-rename.scala	fail	-	marks: 5 errors where 4 are marked: lambda-rename.scala:4:34: Found:    (x: Int) => Foo[(x : Int)]
 language-import.scala	fail	-	check: diagnostic 4 of 5: scalac's is error language-import.scala:6:25 value noAutoTupling is not a member of object b; teq's is error language-import.scala:6:25 value noAutoTupling is not a member of b
@@ -1463,7 +1463,7 @@ magic-offset-header-c_wrapper.scala	fail	-	option: -Ymagic-offset-header:SOURCE_
 magic-offset-header-d_wrapper.scala	fail	-	option: -Ymagic-offset-header:SOURCE_CODE_START_MARKER (teq has no flag for it)
 magic-offset-header-e.scala	fail	-	check: diagnostic 1 of 1: scalac's is error magic-offset-header-e.scala:2:16 Found:    ("not an int" : String); teq's is error magic-offset-header-e.scala:2:16 Found:    "not an int"
 magic-offset-header-e_wrapper.scala	fail	-	option: -Ymagic-offset-header:TEST_MARKER (teq has no flag for it)
-magic-offset-header-f.scala	fail	-	check: diagnostic 1 of 1: scalac's is error magic-offset-header-f.scala:6:13 Values of types Foo and Bar cannot be compared with == or !=; teq's is error magic-offset-header-f.scala:6:13 values of types Foo and Bar cannot be compared with =
+magic-offset-header-f.scala	pass	-	
 magic-offset-header-f_wrapper.scala	fail	-	option: -Ymagic-offset-header:TEST_MARKER (teq has no flag for it)
 main-annotation-by-name-param.scala	fail	-	check: diagnostic 1 of 1: scalac's is error main-annotation-by-name-param.scala:4:3 No given instance of type scala.util.CommandLineParser.FromString[=> Int] was found for parameter fs of method parseArgument in object CommandLineParser; te
 main-functions-doubledef.scala	fail	-	marks: 3 errors where 2 are marked: main-functions-doubledef.scala:4:13: bar is already defined as class bar
@@ -1476,15 +1476,15 @@ match-type-enumeration-value-hack.scala	fail	-	check: diagnostic 1 of 1: error m
 matchtype-seq.scala	fail	-	check: diagnostic 1 of 31: scalac's is error matchtype-seq.scala:9:19 Found:    ("" : String); teq's is error matchtype-seq.scala:9:19 Found:    ""
 migrate-once.scala	pass	-	
 mirror-implicit-scope.scala	fail	-	check: diagnostic 1 of 7: scalac's is error mirror-implicit-scope.scala:9:53 No given instance of type Test.SomeClass & scala.deriving.Mirror.ProductOf[Test.ISB] was found for parameter x of method summon in object Predef; teq's is error mi
-mirror-synthesis-errors-b.scala	fail	-	marks: 11 errors where 8 are marked: mirror-synthesis-errors-b.scala:21:57: no given instance of type ProductOf[Cns[Int] & Sm[Int]] was found for parameter x
+mirror-synthesis-errors-b.scala	fail	-	marks: 11 errors where 8 are marked: mirror-synthesis-errors-b.scala:21:57: No given instance of type ProductOf[Cns[Int] & Sm[Int]] was found for parameter x of method summon in object Predef
 mirror-synthesis-errors.scala	fail	-	marks: 6 errors where 7 are marked
 missing-implicit-2.scala	fail	-	check: diagnostic 1 of 2: error missing-implicit-2.scala:4:25, line 14 of the message: scalac's is The following import might fix the problem:; teq's is nothing
 missing-implicit-3.scala	fail	-	check: diagnostic 1 of 2: scalac's is error missing-implicit-3.scala:6:45 Found:    (Int, java.util.concurrent.TimeUnit); teq's is error missing-implicit-3.scala:6:45 Found:    (Int, TimeUnit)
 missing-implicit.scala	fail	-	check: diagnostic 1 of 2: scalac's is error missing-implicit.scala:5:20 value > is not a member of T, but could be made available as an extension method.; teq's is error missing-implicit.scala:5:20 value > is not a member of T
 missing-implicit1.scala	fail	-	check: diagnostic 1 of 3: scalac's is error missing-implicit1.scala:17:5 No given instance of type testObjectInstance.Zip[Option] was found for parameter xs of method ff in object testObjectInstance; teq's is error missing-implicit1.scala:1
 missing-implicit2.scala	fail	-	marks: error on an unmarked line missing-implicit2.scala:9: local givens cannot take parameters
-missing-implicit3.scala	fail	-	check: diagnostic 1 of 1: scalac's is error missing-implicit3.scala:13:37 No given instance of type ord.Ord[ord.Foo] was found for a context parameter of method sort in package ord.; teq's is error missing-implicit3.scala:13:37 no given ins
-missing-implicit4.scala	fail	-	check: diagnostic 1 of 3: scalac's is error missing-implicit4.scala:14:5 No given instance of type Zip[Option] was found for parameter xs of method ff; teq's is error missing-implicit4.scala:14:5 no given instance of type Zip[Option] was fo
+missing-implicit3.scala	fail	-	check: diagnostic 1 of 1: scalac's is error missing-implicit3.scala:13:37 No given instance of type ord.Ord[ord.Foo] was found for a context parameter of method sort in package ord.; teq's is error missing-implicit3.scala:13:37 No given ins
+missing-implicit4.scala	fail	-	check: diagnostic 1 of 3: error missing-implicit4.scala:14:5, line 3 of the message: scalac's is The following import might fix the problem:; teq's is nothing
 missing-implicit5.scala	fail	-	check: diagnostic 1 of 3: scalac's is error missing-implicit5.scala:15:3 value first is not a member of List[Int], but could be made available as an extension method.; teq's is error missing-implicit5.scala:15:3 value first is not a member 
 missing-implicit6.scala	fail	-	check: diagnostic 2 of 6: scalac's is error missing-implicit6.scala:33:5 value xxx is not a member of Int, but could be made available as an extension method.; teq's is error missing-implicit6.scala:33:5 value xxx is not a member of Int
 missing-import.scala	fail	-	check: diagnostic 1 of 2: scalac's is error missing-import.scala:1:26 Not found: type Annotation - did you mean annotation?; teq's is error missing-import.scala:1:26 Not found: type Annotation
@@ -1549,7 +1549,7 @@ overconstrained-type-variables-gadt.scala	fail	-	marks: 3 errors where 4 are mar
 overload_repeated.scala	fail	-	check: diagnostic 1 of 2: error overload_repeated.scala:10:10, line 4 of the message: scalac's is both match arguments (("" : String)); teq's is both match arguments ("")
 overloaded.scala	fail	-	check: diagnostic 1 of 1: error overloaded.scala:10:3, line 4 of the message: scalac's is both match arguments (<?> => <?>); teq's is both match arguments (<?>)
 overloading-specifity-2.scala	fail	-	marks: no error where 1 are marked
-overloading-specifity.scala	fail	-	marks: error on an unmarked line overloading-specifity.scala:26: no given instance of type Context was found for parameter ctx
+overloading-specifity.scala	fail	-	marks: error on an unmarked line overloading-specifity.scala:26: No given instance of type Context was found for parameter ctx of method foo in object a
 override-erasure-clash.scala	pass	-	
 override-extension_normal-methods.scala	fail	-	check: diagnostic 1 of 2: scalac's is error override-extension_normal-methods.scala:6:16 error overriding method m in trait A of type [T](t: T): String;; teq's is error override-extension_normal-methods.scala:6:16 method m overrides nothing
 override-inner-class.scala	fail	-	marks: no error where 1 are marked
@@ -1684,7 +1684,7 @@ summonFrom-ambiguous.scala	fail	-	check: diagnostic 1 of 1: scalac's is error su
 summonInline.scala	fail	-	check: diagnostic 1 of 2: scalac's is error summonInline.scala:19:16 Missing One; teq's is error summonInline.scala:19:16 No given instance of type Missing1 was found.
 supertraits.scala	fail	-	check: diagnostic 1 of 4: scalac's is error supertraits.scala:7:13 Found:    (x : A); teq's is error supertraits.scala:7:13 Found:    A
 surrogates.scala	fail	-	check: diagnostic 1 of 1: scalac's is error surrogates.scala:3:29 illegal codepoint in Char constant: '\ud801\udc00'; teq's is error surrogates.scala:3:29 character literal does not fit in a Char
-symlits.scala	fail	-	marks: 4 errors where 1 are marked: symlits.scala:3:11: No given instance of type scala.quoted.Quotes was found for a quote
+symlits.scala	fail	-	marks: 4 errors where 1 are marked: symlits.scala:3:11: No given instance of type scala.quoted.Quotes was found
 syntax-error-recovery.scala	fail	-	marks: 22 errors where 19 are marked: syntax-error-recovery.scala:3:17: expected ')', found 'then'
 t10035.scala	pass	-	
 t11437.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t11437.scala:5:17 Unbound placeholder parameter; incorrect use of _; teq's is error t11437.scala:5:17 Not found: _$0

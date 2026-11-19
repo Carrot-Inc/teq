@@ -1,4 +1,4 @@
-// expect: 13:64: error: no given instance of type Need was found
+// expect: 13:64: error: No given instance of type Need was found for parameter x$3 of method pick in object Main
 // expect: 1 error found
 // A using clause after the method's explicit parameters is the selected extension's, resolved
 // after its arguments: its missing given is reported, not a reason to take the companion's

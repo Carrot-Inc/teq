@@ -428,7 +428,7 @@ impl<'a> Worker<'a> {
         let found = self.resolve_given(ty, span);
         if found.is_none() {
             self.drop_reported_since(mark);
-            self.error(span, "No given instance of type scala.quoted.Quotes was found for a quote");
+            self.error(span, "No given instance of type scala.quoted.Quotes was found");
         }
         found
     }

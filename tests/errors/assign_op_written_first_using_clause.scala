@@ -1,4 +1,4 @@
-// expect: 17:14: error: no given instance of type Token was found for parameter x$2
+// expect: 17:14: error: No given instance of type Token was found for parameter x$2 of method += in class E
 // expect: 1 error found
 // An assignment operator's application is typed as written first, and that try has failed only where an error
 // was told before the operator's list was applied: a using clause of the operator that finds no instance is told

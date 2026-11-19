@@ -1,7 +1,7 @@
 // expect: 25:12: error: ambiguous given instances for Show[Int]: fancyInt, localInt
 // expect: 30:12: error: ambiguous given instances for Show[Int]: plainInt, fancyInt
 // expect: 35:31: error: ambiguous given instances for Show[Int]: plainInt, fancyInt
-// expect: 48:13: error: no given instance of type Show[Long] was found for parameter s
+// expect: 48:13: error: No given instance of type Show[Long] was found for parameter s of method render
 // expect: 4 errors found
 
 trait Show[T]:

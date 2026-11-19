@@ -8,7 +8,7 @@
 // expect: value nosuch is not a member of Int
 // expect: value nosuch is not a member of String
 // expect: 25:72: error: Found:    0⏎Required: T
-// expect: 26:59: error: no given instance of type TC[(x : B)] was found
+// expect: 26:59: error: No given instance of type TC[(x : B)] was found for parameter x of method summon in package scala
 // expect: No explicit return allowed from inlineable method returns
 // expect: value nosuchLocal is not a member of Int
 import scala.compiletime.erasedValue

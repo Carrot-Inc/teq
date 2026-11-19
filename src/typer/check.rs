@@ -7374,7 +7374,10 @@ impl<'a> Worker<'a> {
                 }
             }
             let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
-            return self.apply_method(call, Some((parent, sig, prefix)), None, lists, span, None, false).unwrap();
+            let outer = self.given_creation.take();
+            let r = self.apply_method(call, Some((parent, sig, prefix)), None, lists, span, None, false).unwrap();
+            self.given_creation = outer;
+            return r;
         }
         // Every alternative, the primary included, takes the parent's type arguments.
         // `sig` is seen from the prefix already, a secondary constructor's own signature not.

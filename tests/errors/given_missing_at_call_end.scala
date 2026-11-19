@@ -1,6 +1,6 @@
-// expect: 10:18: error: no given instance of type String was found for parameter s
-// expect: 12:7: error: no given instance of type String was found for parameter s
-// expect: 13:20: error: no given instance of type String was found for parameter s
+// expect: 10:18: error: No given instance of type String was found for parameter s of method need
+// expect: 12:7: error: No given instance of type String was found for parameter s of method need
+// expect: 13:20: error: No given instance of type String was found for parameter s of method middle
 // A using clause no given fills is reported at the end of what the call applies so far (dotty's
 // `adaptNoArgsImplicitMethod`, which asks for the argument at `tree.span.endPos`): the call's end,
 // over several lines too, or the end of the lists before a clause a written list follows.

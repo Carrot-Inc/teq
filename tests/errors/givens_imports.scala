@@ -1,8 +1,8 @@
-// expect: 37:26: error: no given instance of type TC[Int]
+// expect: 37:26: error: No given instance of type TC[Int] was found for parameter x of method summon in package scala
 // expect: 38:11: error: Not found: intTC
 // expect: 39:11: error: Not found: plain
 // expect: value label is not a member of Secret
-// expect: 41:29: error: no given instance of type Label[Secret]
+// expect: 41:29: error: No given instance of type Label[Secret] was found for parameter l of method labelOf in package demo
 package demo
 
 trait TC[A]:

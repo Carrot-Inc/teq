@@ -1,4 +1,4 @@
-// expect: 19:22: error: no given instance of type Missing was found for parameter
+// expect: 19:22: error: No given instance of type Missing was found for parameter x$3 of method +: in object A
 // expect: 23:20: error: Found:    true⏎Required: Float
 // expect: 27:20: error: missing parameter type
 // absent: required String

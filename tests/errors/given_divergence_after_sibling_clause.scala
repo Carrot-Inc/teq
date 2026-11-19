@@ -1,4 +1,4 @@
-// expect: 31:15: error: no given instance of type TC[Z, X] was found for parameter tc
+// expect: 31:15: error: No given instance of type TC[Z, X] was found for parameter tc of method need
 // expect: 1 error found
 // A divergence the goals' growth could hide: `g` is asked again for `TC[K2, B]` while it is open for `TC[Z, X]`, and
 // the using clause between them (`Wrap[A, B]`) has by then given the open goal's variable a `Box`. The open goal is

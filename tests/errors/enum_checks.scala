@@ -3,7 +3,7 @@
 // expect: 32:32: error: illegal reference to fallback from an enum case; write Rgb.fallback
 // expect: 33:31: error: only the enum itself takes constructor arguments
 // expect: 34:24: error: too many arguments: expected 1
-// expect: 40:41: error: no given instance of type Show[Boolean] was found for parameter evidence$
+// expect: 40:41: error: No given instance of type Show[Boolean] was found for a context parameter of constructor Key in class Key
 // expect: 42:36: warning: match may not be exhaustive.
 // expect: 46:38: warning: match may not be exhaustive.
 // expect: 50:43: warning: match may not be exhaustive.

@@ -256,7 +256,7 @@ enum_case_infix_search	pass	-
 enum_case_override_nothing	pass	-	
 enum_case_parents	pass	-	
 enum_case_refs	pass	-	
-enum_checks	fail	-	missing '40:41: error: no given instance of type Show[Boolean] was found for parameter evidence$'
+enum_checks	fail	-	missing '40:41: error: No given instance of type Show[Boolean] was found for a context parameter of constructor Key in class Key'
 enum_parent_recovery	fail	-	missing 'extends enum Choice, but extending enums is prohibited.'
 enum_value_case_prefix	pass	-	
 equality	pass	-	
@@ -741,6 +741,29 @@ mirror_term_refinement	pass	-
 mirror_types_after_typer	pass	-	
 mirror_types_of_a_plain_mirror	pass	-	
 misaligned_line_begins_with_operator	pass	-	
+missing_given_contexts_class	pass	-	
+missing_given_contexts_empty_package	pass	-	
+missing_given_contexts_enum_companion	pass	-	
+missing_given_contexts_given_instance	pass	-	
+missing_given_contexts_named_package	pass	-	
+missing_given_contexts_object	pass	-	
+missing_given_contexts_package_object	pass	-	
+missing_given_contexts_row_interpolation_definition	fail	-	missing 'empty_package_k18.scala:1:68: error: No given instance of type Numeric[String] was found for parameter need of method call'
+missing_given_contexts_row_local_given_class	fail	-	missing 'class_k01.scala:2:82: error: No given instance of type Numeric[String] was found for parameter need of given instance call in class C01'
+missing_given_contexts_row_local_given_parameters	fail	-	missing 'class_k01.scala:2:69: error: No given instance of type Numeric[String] was found for parameter need of given instance call in class C01'
+missing_given_contexts_row_pattern_definitions	fail	-	missing 'empty_package_k02.scala:1:73: error: No given instance of type Numeric[String] was found for parameter need of method call'
+missing_given_contexts_trait	pass	-	
+missing_given_function_alias	fail	-	missing '3:22: error: No given instance of type Need[Int] was found for parameter of F'
+missing_given_owners	pass	-	
+missing_given_review_callees	pass	-	
+missing_given_review_creations	pass	-	
+missing_given_review_extension_selections	fail	-	missing 'c12.scala:4:18: error: value call is not a member of Int.'
+missing_given_review_functions	pass	-	
+missing_given_review_givens	pass	-	
+missing_given_review_owners	pass	-	
+missing_given_review_val_owners	pass	-	
+missing_given_row_local_owner	fail	-	missing 'contexts_class_class_k01.scala:2:67: error: No given instance of type Numeric[String] was found for parameter need of method call in class C01'
+missing_given_summon_predef	pass	-	
 modifiers	pass	-	
 modifiers_table	pass	-	
 named_tuple_mismatch	pass	-	
@@ -983,7 +1006,7 @@ std_methods_erased_alike_two_traits	pass	-
 store_reducer_contra_member_alias	fail	-	missing '16:57: error: Found: (x : h.KC[Nothing])'
 strict_equality	pass	-	
 strict_equality_import	pass	-	
-strict_equality_null_classes	fail	-	missing '3:48: error: values of types Const[Any][Int] and Null cannot be compared with == or !='
+strict_equality_null_classes	fail	-	missing '3:48: error: Values of types Const[Any][Int] and Null cannot be compared with == or !='
 structural_abstract	pass	-	
 structural_members	pass	-	
 structural_target_name	pass	-	

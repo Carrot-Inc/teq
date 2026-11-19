@@ -346,7 +346,6 @@ i11561.scala	marks: 5 errors where 2 are marked: i11561.scala:2:26: reassignment
 i11565.gadt.scala	check: diagnostic 1 of 1: scalac's is error i11565.gadt.scala:10:17 Found: ("Hi" : String); teq's is error i11565.gadt.scala:10:17 type mismatch: found "Hi", required t
 i11567.scala	check: diagnostic 1 of 1: scalac's is error i11567.scala:4:13 view bounds `<%' are no longer supported, use a context bound `:' instead; teq's is error i11567.scala:4:13 expected ',' or ']', found identifier
 i11581.scala	marks: no error where 4 are marked
-i11614.scala	check: diagnostic 1 of 1: scalac's is error i11614.scala:4:10 No given instance of type I was found for parameter of (i: I) ?=> (i : I); teq's is error i11614.scala:4:10 no given instance of type I was found for parameter of (i: I) ?=> (i :
 i11616	java source: teq reads none
 i11637.scala	marks: no error where 2 are marked
 i1169.scala	marks: no error where 1 are marked
@@ -640,8 +639,6 @@ i18408a.scala	check: diagnostic 1 of 3: scalac's is error i18408a.scala:2:1 Ille
 i18408b.scala	check: diagnostic 1 of 3: scalac's is error i18408b.scala:2:1 Illegal start of toplevel definition; teq's is error i18408b.scala:2:1 expected a definition, found identifier
 i18408c.scala	check: diagnostic 1 of 3: scalac's is error i18408c.scala:2:1 Illegal start of toplevel definition; teq's is error i18408c.scala:2:1 expected a definition, found identifier
 i1845.scala	check: diagnostic 1 of 1: scalac's is error i1845.scala:2:12 identifier expected; teq's is error i1845.scala:2:12 type this not found
-i18453.min.scala	check: diagnostic 1 of 1: scalac's is error i18453.min.scala:11:15 No given instance of type Box[B & Foo] was found for parameter boxA of method meth in class Test; teq's is error i18453.min.scala:11:15 no given instance of type Box[B & Foo
-i18453.scala	check: diagnostic 1 of 1: scalac's is error i18453.scala:12:9 No given instance of type Box[X & Y] was found for parameter ba of method f in class Test; teq's is error i18453.scala:12:9 no given instance of type Box[X & Y] was found for par
 i18458.scala	marks: no error where 1 are marked
 i1846.scala	marks: 21 errors where 12 are marked: i1846.scala:6:20: expected a pattern, found indented block
 i18533	java source: teq reads none
@@ -675,8 +672,6 @@ i19100.scala	marks: 10 errors where 3 are marked: i19100.scala:5:10: expected a 
 i19198.scala	check: diagnostic 1 of 3: scalac's is error i19198.scala:12:3 No given instance of type scala.deriving.Mirror.Of[DoesNotReduce[Option[Int]]] was found. Failed to synthesize an instance of type scala.deriving.Mirror.Of[DoesNotReduce[Option[I
 i19248	marks: no error where 1 are marked
 i19320.scala	check: diagnostic 1 of 1: scalac's is error i19320.scala:11:18 Not found: type Concurren - did you mean Concurrent?; teq's is error i19320.scala:11:18 type Concurren not found
-i19328.scala	check: diagnostic 1 of 1: scalac's is error i19328.scala:14:6 No given instance of type Boolean was found for parameter bool of method bar in object i19328; teq's is error i19328.scala:14:6 no given instance of type Boolean was found for pa
-i19328conversion.scala	check: diagnostic 1 of 1: scalac's is error i19328conversion.scala:13:6 No given instance of type Boolean was found for parameter bool of method bar in object i19328conversion; teq's is error i19328conversion.scala:13:6 no given instance of
 i19334.scala	marks: 2 errors where 1 are marked: i19334.scala:6:3: too many arguments: expected 0
 i19364.scala	marks: no error where 10 are marked
 i19372.scala	marks: 2 errors where 5 are marked
@@ -699,7 +694,6 @@ i2001.scala	marks: error on an unmarked line i2001.scala:2: recursive use of odd
 i2001a.scala	marks: error on an unmarked line i2001a.scala:2: recursive use of odd needs an explicit result type
 i2001b.scala	marks: error on an unmarked line i2001b.scala:2: recursive use of odd needs an explicit result type
 i2006.scala	marks: error on an unmarked line i2006.scala:3: no given instance of type Int was found for parameter of (Int) ?=> Int
-i20071a.scala	check: diagnostic 1 of 1: scalac's is error i20071a.scala:17:13 No given instance of type ScopeToInt[Scope] was found for parameter d of method bar; teq's is error i20071a.scala:17:13 no given instance of type ScopeToInt[Scope] was found fo
 i20071b	check: diagnostic 1 of 1: scalac's is error B_2.scala:4:13 No given instance of type ScopeToInt[Scope] was found for parameter d of method bar; teq's is error B_2.scala:4:13 no given instance of type Scope match { case Scope => Int } was fo
 i20079	check: diagnostic 1 of 2: scalac's is error Test_2.scala:4:39 Found: (Test.ints : List[Int]); teq's is error Test_2.scala:4:39 type mismatch: found List[Int], required View[Int]
 i20105.scala	check: diagnostic 1 of 2: scalac's is warning i20105.scala:6:7 The tail recursive def foo contains a recursive call inside the non-inlined inner def bar; teq's is error i20105.scala:3:5 TailRec optimisation not applicable, method foo contai
@@ -1015,7 +1009,6 @@ i5636.scala	marks: 2 errors where 1 are marked: i5636.scala:7:29: The type of a 
 i5638.scala	marks: 1 errors where 2 are marked
 i5640.scala	marks: 2 errors where 1 are marked: i5640.scala:2:14: expected an identifier, found '('
 i5690.scala	check: diagnostic 1 of 1: scalac's is error i5690.scala:6:9 Inherited is a trait; it cannot be instantiated; teq's is error i5690.scala:6:5 Inherited is a trait; it cannot be instantiated
-i5810.scala	check: diagnostic 1 of 2: scalac's is error i5810.scala:3:7 Values of types T and Null cannot be compared with == or !=; teq's is error i5810.scala:3:7 values of types T and Null cannot be compared with == or !=
 i5823.scala	marks: no error where 2 are marked
 i5854.scala	marks: 1 errors where 2 are marked
 i5888.scala	marks: 5 errors where 3 are marked: i5888.scala:1:25: type mismatch: found String => Int, required <:<[String, Int]
@@ -1304,7 +1297,6 @@ magic-offset-header-c_wrapper.scala	option: -Ymagic-offset-header:SOURCE_CODE_ST
 magic-offset-header-d_wrapper.scala	option: -Ymagic-offset-header:SOURCE_CODE_START_MARKER (teq has no flag for it)
 magic-offset-header-e.scala	check: diagnostic 1 of 1: scalac's is error magic-offset-header-e.scala:2:16 Found: ("not an int" : String); teq's is error magic-offset-header-e.scala:2:16 type mismatch: found "not an int", required Int
 magic-offset-header-e_wrapper.scala	option: -Ymagic-offset-header:TEST_MARKER (teq has no flag for it)
-magic-offset-header-f.scala	check: diagnostic 1 of 1: scalac's is error magic-offset-header-f.scala:6:13 Values of types Foo and Bar cannot be compared with == or !=; teq's is error magic-offset-header-f.scala:6:13 values of types Foo and Bar cannot be compared with =
 magic-offset-header-f_wrapper.scala	option: -Ymagic-offset-header:TEST_MARKER (teq has no flag for it)
 main-annotation-by-name-param.scala	check: diagnostic 1 of 1: scalac's is error main-annotation-by-name-param.scala:4:3 No given instance of type scala.util.CommandLineParser.FromString[=> Int] was found for parameter fs of method parseArgument in object CommandLineParser; te
 main-functions-doubledef.scala	marks: 3 errors where 2 are marked: main-functions-doubledef.scala:4:13: bar is already defined as class bar

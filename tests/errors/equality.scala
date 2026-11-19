@@ -1,9 +1,9 @@
-// expect: values of types Int and String cannot be compared with == or !=
-// expect: values of types A and String cannot be compared with == or !=
-// expect: values of types Some[Int] and String cannot be compared with == or !=
-// expect: values of types List[Int] and String cannot be compared with == or !=
-// expect: values of types Color and String cannot be compared with == or !=
-// expect: values of types P and String cannot be compared with == or !=
+// expect: Values of types Int and String cannot be compared with == or !=
+// expect: Values of types A and String cannot be compared with == or !=
+// expect: Values of types Some[Int] and String cannot be compared with == or !=
+// expect: Values of types List[Int] and String cannot be compared with == or !=
+// expect: Values of types Color and String cannot be compared with == or !=
+// expect: Values of types P and String cannot be compared with == or !=
 // Default mode of scalac 3.8.4: a comparison is rejected when one side has a reflexive CanEqual
 // (primitives, String, Seq, Set) and the types are unrelated. The last four lines are legal.
 class A

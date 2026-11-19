@@ -3,7 +3,7 @@
 // expect: cannot resolve export: Inner not found
 // expect: expected '.', found new line
 // absent: cyclic export
-// expect: 47:21: error: no given instance of type Tag[Int]
+// expect: 47:21: error: No given instance of type Tag[Int] was found for parameter t of method tagOf
 // expect: 44:11: error: Not found: secret
 // expect: 45:11: error: Not found: hiddenOne
 // expect: 46:11: error: Not found: notReexported

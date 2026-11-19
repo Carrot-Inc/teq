@@ -1,4 +1,4 @@
-// expect: 14:29: error: no given instance of type Codec[Int] was found for parameter x
+// expect: 14:29: error: No given instance of type Codec[Int] was found for parameter x of method summon in package scala
 // A wildcard import from a value leaves its givens out, as one from an object does (scalac: E172
 // No given instance of type Codec[Int] was found).
 trait Codec[A]:

@@ -60,6 +60,19 @@ pub enum ForBinder {
     Unpack(u32),
 }
 
+/// What a site of a missing given knows of the parameter it asks for (`Worker::implicit_param_string`).
+#[derive(Clone, Copy)]
+pub enum GivenParam {
+    /// A function's `apply` (a context function applied): its type.
+    OfFunction(TypeId),
+    /// A method's or a constructor's parameter: its name and the callee.
+    Of { name: Name, callee: SymId, ctor: Option<ClassId> },
+    /// A structural member's parameter: its name and the member's.
+    OfRefinementMember { name: Name, member: Name },
+    /// A parameter of the member a creation implements (`Worker::given_creation`): a companion's `apply`, a `copy`.
+    OfCreation { name: Name, class: ClassId, member: &'static str, of_companion: bool },
+}
+
 /// What `Typer.typedInfixOp`'s lift does with the argument about to be typed (`Worker::lift_arg`).
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum Lift {
@@ -4646,7 +4659,9 @@ impl<'a> Worker<'a> {
                                 let arg = match self.resolve_given(pty, span) {
                                     Some(a) => a,
                                     None => {
-                                        let msg = format!("no given instance of type {} was found", self.show(pty));
+                                        // a polymorphic function's instance: scalac names its `apply`'s
+                                        // parameter (`x$1 of method apply`), which this site does not hold
+                                        let msg = self.no_given_message(pty, None);
                                         self.given_failure_error(span, msg, pty);
                                         self.prog.add(TExpr::Unit)
                                     }
@@ -4727,7 +4742,10 @@ impl<'a> Worker<'a> {
                             let arg = match self.resolve_given(pty, span) {
                                 Some(a) => a,
                                 None => {
-                                    let msg = format!("no given instance of type {} was found", self.show(pty));
+                                    // a polymorphic function's instance (`f[Int](1)`): scalac names its `apply`'s
+                                    // parameter (`x$1 of method apply`), which this site does not hold
+                                    let at = if poly_targs.is_some() { None } else { Some(GivenParam::OfFunction(ty)) };
+                                    let msg = self.no_given_message(pty, at);
                                     self.given_failure_error(span, msg, pty);
                                     self.prog.add(TExpr::Unit)
                                 }
@@ -5075,6 +5093,28 @@ impl<'a> Worker<'a> {
     /// call (`Callee::Ctor`).
     #[allow(clippy::too_many_arguments)]
     fn construct(
+        &mut self,
+        c: ClassId,
+        targs: Option<ListRef>,
+        lists: Vec<ArgList>,
+        span: Span,
+        expected: Option<TypeId>,
+        as_function: bool,
+        applied: bool,
+    ) -> (TExprId, TypeId) {
+        // The method the typer selected (`Typer.issueErrors`' `methPart(fun)`): a case class's or an enum case's
+        // creation written without a `new` is its companion's `apply`; a `new`, or a class with no `apply` (dotty's
+        // creator application), its constructor.
+        let info = self.syms.class(c);
+        let companion_apply = applied && (info.mods & crate::ast::mods::CASE != 0 || info.kind == ClassKind::EnumCase);
+        let outer = std::mem::replace(&mut self.given_creation, companion_apply.then_some((c, "apply", true)));
+        let r = self.construct_in(c, targs, lists, span, expected, as_function, applied);
+        self.given_creation = outer;
+        r
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn construct_in(
         &mut self,
         c: ClassId,
         targs: Option<ListRef>,
@@ -5962,7 +6002,20 @@ impl<'a> Worker<'a> {
                                 let msg = msg.or_else(|| self.param_not_found_message(call.sym, ctor.as_ref().map(|&(c, _, _)| c), p.sym, p.name, &subst));
                                 let msg = match msg.or_else(|| self.implicit_not_found_message(target)) {
                                     Some(m) => m,
-                                    None => format!("no given instance of type {} was found for parameter {}", self.show(target), self.name_str(p.name)),
+                                    None => {
+                                        // the method the typer selected (`methPart(fun)`): a function's `apply` is the
+                                        // function's (`implicitParamString`), a creation the member it implements
+                                        let ctor_class = ctor.as_ref().map(|&(c, _, _)| c);
+                                        let fun_recv = call.recv.and_then(|r| self.prog.type_of(r)).filter(|&t| {
+                                            self.syms.sym(call.sym).name == names::APPLY && (self.as_function(t).is_some() || self.as_context_function(t).is_some())
+                                        });
+                                        let callee = match (fun_recv, self.given_creation, ctor_class) {
+                                            (Some(f), _, _) => GivenParam::OfFunction(f),
+                                            (None, Some((k, member, of_companion)), Some(c)) if k == c => GivenParam::OfCreation { name: p.name, class: c, member, of_companion },
+                                            _ => GivenParam::Of { name: p.name, callee: call.sym, ctor: ctor_class },
+                                        };
+                                        self.no_given_message(target, Some(callee))
+                                    }
                                 };
                                 let msg = msg + &self.given_failure_notes();
                                 // At the end of what is applied so far, as dotty's
@@ -10257,7 +10310,7 @@ impl<'a> Worker<'a> {
                     match self.resolve_given_typed(p.ty, span) {
                         Some((te, _)) => typed.push(ArgSrc::Typed(te, p.ty)),
                         None => {
-                            let msg = format!("no given instance of type {} was found for parameter {}", self.show(p.ty), self.name_str(p.name));
+                            let msg = self.no_given_message(p.ty, Some(GivenParam::OfRefinementMember { name: p.name, member: name }));
                             self.error(Span::new(span.end, span.end), msg);
                             return failed(self, &[]);
                         }
@@ -11273,7 +11326,9 @@ impl<'a> Worker<'a> {
         let outer_prefixed = self.new_prefixed;
         self.new_prefixed |= inner;
         self.copy_application = true;
+        let outer = std::mem::replace(&mut self.given_creation, Some((c, "copy", false)));
         let applied = self.apply_method(call, Some((c, sig, None)), targs, lists, span, expected, false);
+        self.given_creation = outer;
         self.copy_application = false;
         self.new_prefixed = outer_prefixed;
         let (te, ty) = applied.unwrap();
@@ -14839,6 +14894,36 @@ impl<'a> Worker<'a> {
         let mut clauses = vec![(first, false, ast.expr_span(head), FunEnd::at(ast.ty_end(ty)))];
         clauses.extend(raw_lists.iter().map(|&(app, args, using, f)| (args, using, ast.expr_span(app), FunEnd::tree(f))));
         clauses
+    }
+
+    /// dotty's `MissingImplicitArgument.defaultImplicitNotFoundMessage` (messages.scala 3164-3166): `No given
+    /// instance of type T was found`, then ` for <where>` where the site knows the parameter
+    /// (`implicit_param_string`); a site that does not know it says no location.
+    pub(super) fn no_given_message(&mut self, ty: TypeId, at: Option<GivenParam>) -> String {
+        let where_ = at.map(|p| self.implicit_param_string(p));
+        format!("No given instance of type {} was found{}", self.show(ty), where_.map(|w| format!(" for {}", w)).unwrap_or_default())
+    }
+
+    /// dotty's `implicitParamString` (Implicits.scala 1033-1042), the `where` of a missing given: `parameter of F`
+    /// for a function's `apply`, else `a context parameter` (a context bound's evidence) or `parameter p`, then ` of
+    /// <the callee's showLocated>` (`issueErrors`' `err.refStr(methPart(fun).tpe)`, `located_text`).
+    pub(super) fn implicit_param_string(&mut self, p: GivenParam) -> String {
+        match p {
+            GivenParam::OfFunction(f) => format!("parameter of {}", self.show(f)),
+            GivenParam::Of { name, callee, ctor } => {
+                let param = if self.is_evidence_name(name) { "a context parameter".to_string() } else { format!("parameter {}", self.name_str(name)) };
+                format!("{} of {}", param, self.located_text(callee, ctor))
+            }
+            GivenParam::OfCreation { name, class, member, of_companion } => {
+                let param = if self.is_evidence_name(name) { "a context parameter".to_string() } else { format!("parameter {}", self.name_str(name)) };
+                format!("{} of {}", param, self.located_member(member, class, of_companion))
+            }
+            GivenParam::OfRefinementMember { name, member } => {
+                // a structural member's owner is the refinement, which `locationText` leaves out (`isEmptyPrefix`)
+                let param = if self.is_evidence_name(name) { "a context parameter".to_string() } else { format!("parameter {}", self.name_str(name)) };
+                format!("{} of method {}", param, self.name_str(member))
+            }
+        }
     }
 
     /// Whether `n` is the derived name of a context bound's evidence (dotty's `ContextBoundParamName`,

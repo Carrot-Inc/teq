@@ -41,4 +41,4 @@ def searched() = inspect(List("x").map(s => Item(s, Some(s))))
 // expect: 32:14: error: Found:    Int
 // expect+ Required: 1
 // expect: 33:20: error: None of the overloaded alternatives of method choose
-// expect: 34:63: error: no given instance of type Tag[Some[String]] was found for parameter tag
+// expect: 34:63: error: No given instance of type Tag[Some[String]] was found for parameter tag of method inspect in package lambdaopenresultrefusals

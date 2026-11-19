@@ -6,5 +6,5 @@ object Main:
     if x == null then 1
     else if x == "abc" then 2
     else 3
-// expect: values of types T and Null cannot be compared with == or !=
-// expect: values of types T and String cannot be compared with == or !=
+// expect: Values of types T and Null cannot be compared with == or !=
+// expect: Values of types T and String cannot be compared with == or !=

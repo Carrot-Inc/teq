@@ -332,7 +332,7 @@ worker_fields! {
         unadapted_call, unadapted_node, ext_undecided, no_receiver_conversion, dynamic_assign, inserted_apply,
         declared_call, declared_took,
         infix_declared, direct_ext_targs, ctor_prefix, anon_super_call, sig_bound_names, copy_application, case_scrutinee,
-        apply_seen_from, private_alias_prefix, dropped_type_list, assign_op_receiver, written_qualifier, joint_sig,
+        apply_seen_from, given_creation, private_alias_prefix, dropped_type_list, assign_op_receiver, written_qualifier, joint_sig,
         dependent_checks, last_arg_types, eager_inline_conversion, unboxing_after, tested, alias_bound_as_path, own_receiver, plain_receivers, literal_receiver, plain_max,
         for_bases, ext_modules, enum_case_new, ascribed_constant, selections, selection_typed, dead_case,
         partial_match, erroneous_args, erroneous_lambdas, wildcard_results, lambda_levels, body_node,

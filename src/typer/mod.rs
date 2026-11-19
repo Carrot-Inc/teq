@@ -1525,6 +1525,10 @@ pub struct Worker<'a> {
     /// The case class whose creator application is typed and the class of the instance its
     /// companion's `apply` is selected on (`companion_apply_sig`); the receiver class of `r.C(..)`.
     pub apply_seen_from: Option<(ClassId, ClassId)>,
+    /// The member a creation implements, as the typer selected it (`Typer.issueErrors`' `methPart(fun)`): a case
+    /// class's or an enum case's companion `apply` (`true`) or its `copy`, of the class it creates; a missing
+    /// given's location names it, not the constructor.
+    pub given_creation: Option<(ClassId, &'static str, bool)>,
     pub creator_receiver: Option<(ClassId, ClassId)>,
     /// The class `K` and the receiver a private alias of `K` is seen from, while a companion's
     /// `apply` signature is resolved (`companion_apply_sig`).
@@ -3348,6 +3352,7 @@ impl<'a> Worker<'a> {
             copy_application: false,
             case_scrutinee: None,
             apply_seen_from: None,
+            given_creation: None,
             creator_receiver: None,
             private_alias_prefix: None,
             retracted_unapplies: Default::default(),
@@ -3840,6 +3845,7 @@ impl<'a> Worker<'a> {
             copy_application: false,
             case_scrutinee: None,
             apply_seen_from: None,
+            given_creation: None,
             creator_receiver: None,
             private_alias_prefix: None,
             retracted_unapplies: Default::default(),

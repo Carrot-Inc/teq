@@ -1,6 +1,6 @@
 # dotty 3.8.4 (7d4833b6) run-macros, run; compiler/test/dotty/tools/dotc/BootstrappedOnlyCompilationTests.scala:114; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
-BigFloat	fail	interp:fail	BigFloatFromDigitsImpl_1.scala:12:31: no given instance of type ToExpr[BigInt] was found for parameter to
+BigFloat	fail	interp:fail	BigFloatFromDigitsImpl_1.scala:12:31: No given instance of type ToExpr[BigInt] was found for parameter to of method apply in object Expr
 TypeRepr-isTupleN	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 ValDef-let-flags	fail	interp:fail	Macro_1.scala:7:5: None of the overloaded alternatives of method let in object ValDef with types
 Xmacro-settings-compileTimeEnv	fail	interp:fail	option: -Xmacro-settings:a,b=1,c.b.a=x.y.z=1,myLogger.level=INFO (teq has no flag for it)
@@ -44,7 +44,7 @@ exports	fail	interp:fail	output: line 3: the .check has "extracted with TreeAccu
 expr-map-1	fail	interp:fail	Test_2.scala:4:13: exception in macro: java.lang.StackOverflowError (called by rewrite in object Macro_1$package) (in the body of Macro_1$package.rewrite)
 expr-map-2	fail	interp:fail	output: line 3: the .check has '4', the program printed '2'
 expr-map-3	fail	interp:fail	Macro_1.scala:14:28: Found:    String
-expr-mirror-info	fail	interp:fail	Macro_1.scala:21:114: no given instance of type ToExpr[(String, List[String], String, String, List[String])] was found for parameter to
+expr-mirror-info	fail	interp:fail	Macro_1.scala:21:114: No given instance of type ToExpr[(String, List[String], String, String, List[String])] was found for parameter to of method apply in object Expr
 f-interpolation-1	fail	interp:fail	FQuote_1.scala:8:52: Not found: this
 f-interpolator-tests.scala	fail	interp:fail	f-interpolator-tests.scala:374:7: expected end of statement, found identifier
 f-interpolator.scala	pass	interp:pass	
@@ -57,7 +57,7 @@ gestalt-type-toolbox-reflect	fail	interp:fail	run: exit 1: Exception in thread "
 i10011	pass	interp:pass	
 i10043	pass	interp:pass	
 i10464	pass	interp:pass	
-i10863	fail	interp:fail	Macro_1.scala:4:18: no given instance of type Type[T] was found for parameter evidence$1
+i10863	fail	interp:fail	Macro_1.scala:4:18: No given instance of type Type[T] was found for a context parameter of method showListExpr
 i10880	fail	interp:pass	Test_2.scala:7:29: missing argument for parameter name (in the body of Dsl.ent)
 i10914a	pass	interp:pass	
 i10914b	pass	interp:pass	
@@ -172,8 +172,8 @@ inline-beta-reduce-polyfunction.scala	fail	interp:fail	output: line 1: the .chec
 inline-case-objects	fail	interp:fail	Macro_1.scala:5:7:None:None: the body of Macros.impl is withheld from the products of $OUT/run-macros/inline-case-objects/jvm.products (elided: unstated the std's Class.getCanonicalName, which scala-library has under another shape): the TAS
 inline-macro-inner-object	pass	interp:pass	
 inline-macro-staged-interpreter	pass	interp:pass	
-inline-option	fail	interp:pass	quotes.scala:193:35: no given instance of type FromExpr[T | Null] was found for parameter from
-inline-tuples-1	fail	interp:fail	Macro_1.scala:8:100: no given instance of type FromExpr[(Int, Int, Int, Int)] was found for parameter from
+inline-option	fail	interp:pass	quotes.scala:193:35: No given instance of type FromExpr[T | Null] was found for parameter from of method unapply in object Expr
+inline-tuples-1	fail	interp:fail	Macro_1.scala:8:100: No given instance of type FromExpr[(Int, Int, Int, Int)] was found for parameter from of method valueOrAbort in trait Quotes
 inline-tuples-2	pass	interp:pass	
 inline-varargs-1	pass	interp:pass	
 is-in-typer	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed

@@ -100,6 +100,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   is held only where its written type names classes and type parameters alone: one that names an alias, a path's
   member or `@uncheckedVariance` anywhere is not held. Under `-source:3.0-migration` it is a migration warning, as
   scalac's.
+- A missing given reads as scalac's: `No given instance of type T was found for parameter p of method m in object O`,
+  the callee named as scalac locates it (`constructor C in class C`, `method m in package p`; a local method or one of
+  an anonymous class without an owner), `for a context parameter of …` for a context bound's evidence, and `for
+  parameter of <its type>` for a context function applied. teq said `no given instance of type T was found for
+  parameter p` (or `evidence$1`), without the callee. `Values of types A and B cannot be compared with == or !=` takes
+  its capital, and a quote without a `Quotes` in scope no longer adds `for a quote`.
 - A type mismatch reads as scalac's: `Found:    <type>` and `Required: <type>` on lines of their own, each note on lines of
   its own after them (implicit conversions not tried to `AnyVal` or `AnyRef`; the ambiguity of two conversions,
   `convert from A to B`, or of two extension methods, `provide an extension method`), then a match type's reduction

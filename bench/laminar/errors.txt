@@ -1,8 +1,8 @@
 # The accepted errors of a reference project's line (bench/reference/records.scala; docs/DEVELOPING.md, "The project records").
 kind migrate
-reason the first words' landing 1b: E007's layout and E006's words, scalac's (reporting/messages.scala TypeMismatch, MissingIdent at 3.8.4)
-revision 103ceb4e0b
-binary teq 0.1.10 103ceb4e0b
+reason the first words' next landing: E172's words, scalac's (reporting/messages.scala MissingImplicitArgument, Typer.issueErrors, PlainPrinter.locationText at 3.8.4)
+revision cb2b61a028
+binary teq 0.1.10 cb2b61a028
 pin 098433793be4e745fe9ac9a58a01fce545dc0bc2
 inputs 383f66437a2bfce90c61edd3eade3126bc1c80f1416ce3dd15f3cb0d301f1cd9
 key laminar/test
@@ -14,11 +14,11 @@ error laminar/test src/main/scala/com/raquo/laminar/keys/CompositeKey.scala:42:2
 error laminar/test src/main/scala/com/raquo/laminar/keys/CompositeKey.scala:4:31: error: MapValueMapper is not a member of the package\nimport com.raquo.laminar.api.{MapValueMapper, StringSeqValueMapper, StringValueMapper}\n                              ^^^^^^^^^^^^^^
 error laminar/test src/main/scala/com/raquo/laminar/keys/CompositeKey.scala:4:47: error: StringSeqValueMapper is not a member of the package\nimport com.raquo.laminar.api.{MapValueMapper, StringSeqValueMapper, StringValueMapper}\n                                              ^^^^^^^^^^^^^^^^^^^^
 error laminar/test src/main/scala/com/raquo/laminar/keys/CompositeKey.scala:4:69: error: StringValueMapper is not a member of the package\nimport com.raquo.laminar.api.{MapValueMapper, StringSeqValueMapper, StringValueMapper}\n                                                                    ^^^^^^^^^^^^^^^^^
-error laminar/test src/main/scala/com/raquo/laminar/keys/CompositeKey.scala:66:24: error: no given instance of type CompositeValueMapper[Seq[String]] was found for parameter mapper\n    this.:= (items: _*)\n                       ^
+error laminar/test src/main/scala/com/raquo/laminar/keys/CompositeKey.scala:66:24: error: No given instance of type CompositeValueMapper[Seq[String]] was found for parameter mapper of method := in class CompositeKey\n    this.:= (items: _*)\n                       ^
 error laminar/test src/main/scala/com/raquo/laminar/modifiers/CompositeKeySetter.scala:4:30: error: StringSeqValueMapper is not a member of the package\nimport com.raquo.laminar.api.StringSeqValueMapper\n                             ^^^^^^^^^^^^^^^^^^^^
-error laminar/test src/main/scala/com/raquo/laminar/modifiers/CompositeKeySetter.scala:51:26: error: no given instance of type CompositeValueMapper[Seq[String]] was found for parameter mapper\n      key(itemsToAdd: _*)\n                         ^
-error laminar/test src/main/scala/com/raquo/laminar/modifiers/CompositeKeySetter.scala:53:12: error: no given instance of type CompositeValueMapper[Seq[Nothing]] was found for parameter mapper\n      key()\n           ^
-error laminar/test src/main/scala/com/raquo/laminar/modifiers/CompositeKeySetter.scala:67:82: error: no given instance of type CompositeValueMapper[List[String]] was found for parameter valueMapper\n    key <-- include.toObservable.map(include => if (include) itemsToAdd else Nil)\n                                                                                 ^
+error laminar/test src/main/scala/com/raquo/laminar/modifiers/CompositeKeySetter.scala:51:26: error: No given instance of type CompositeValueMapper[Seq[String]] was found for parameter mapper of method apply in class CompositeKey\n      key(itemsToAdd: _*)\n                         ^
+error laminar/test src/main/scala/com/raquo/laminar/modifiers/CompositeKeySetter.scala:53:12: error: No given instance of type CompositeValueMapper[Seq[Nothing]] was found for parameter mapper of method apply in class CompositeKey\n      key()\n           ^
+error laminar/test src/main/scala/com/raquo/laminar/modifiers/CompositeKeySetter.scala:67:82: error: No given instance of type CompositeValueMapper[List[String]] was found for parameter valueMapper of method <-- in class CompositeKey\n    key <-- include.toObservable.map(include => if (include) itemsToAdd else Nil)\n                                                                                 ^
 error laminar/test src/main/scala/com/raquo/laminar/nodes/ReactiveElement.scala:193:32: error: Found:    ReactiveElement[Ref]\nRequired: ReactiveElement.this\n    Transaction.onStart.shared {\n                               ^
 error laminar/test src/test/scala-3/com/raquo/laminar/tests/RenderableTextScala3Spec.scala:13:21: error: Found:    1\nRequired: Modifier[ReactiveHtmlElement[HTMLDivElement]]\n      div(if (true) 1 else "none").ref,\n                    ^
 error laminar/test src/test/scala-3/com/raquo/laminar/tests/RenderableTextScala3Spec.scala:13:28: error: Found:    "none"\nRequired: Modifier[ReactiveHtmlElement[HTMLDivElement]]\n      div(if (true) 1 else "none").ref,\n                           ^^^^^^
@@ -424,7 +424,7 @@ error laminar/test src/test/scala/com/raquo/laminar/tests/RenderableSpec.scala:4
 error laminar/test src/test/scala/com/raquo/laminar/tests/RenderableSpec.scala:494:17: error: Found:    4\nRequired: Modifier[ReactiveHtmlElement[HTMLDivElement]]\n      if (true) 4 else "string-4",\n                ^
 error laminar/test src/test/scala/com/raquo/laminar/tests/RenderableSpec.scala:494:24: error: Found:    "string-4"\nRequired: Modifier[ReactiveHtmlElement[HTMLDivElement]]\n      if (true) 4 else "string-4",\n                       ^^^^^^^^^^
 error laminar/test src/test/scala/com/raquo/laminar/tests/RenderableSpec.scala:61:7: error: Found:    Seq[Modifier[ReactiveHtmlElement[HTMLInputElement]]]\nRequired: Modifier[ReactiveHtmlElement[HTMLInputElement]]\n      mods\n      ^^^^
-error laminar/test src/test/scala/com/raquo/laminar/tests/ShadowDomSpec.scala:102:16: error: values of types <error> and Null cannot be compared with == or !=\n        assert(app.ref.parentNode == null)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+error laminar/test src/test/scala/com/raquo/laminar/tests/ShadowDomSpec.scala:102:16: error: Values of types <error> and Null cannot be compared with == or !=\n        assert(app.ref.parentNode == null)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^
 error laminar/test src/test/scala/com/raquo/laminar/tests/ShadowDomSpec.scala:47:11: error: Found:    "Hello, "\nRequired: Modifier[ReactiveHtmlElement[HTMLDivElement]]\n          "Hello, ",\n          ^^^^^^^^^
 error laminar/test src/test/scala/com/raquo/laminar/tests/SignalChangesPullSpec.scala:109:14: error: value --> is not a member of EventStream[String]\n    el.amend(combined --> _logCombined(log, "combined-init-3"))\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 error laminar/test src/test/scala/com/raquo/laminar/tests/SignalChangesPullSpec.scala:142:7: error: value --> is not a member of EventStream[String]\n      combined --> _logCombined(log, s"combined-ch$ix-1"),\n      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

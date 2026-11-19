@@ -88,7 +88,6 @@ i22616b.scala	marks: 1 errors where 2 are marked
 i23008	marks: no error where 1 are marked
 i4044a.scala	marks: no error where 3 are marked
 i4044b.scala	marks: no error where 3 are marked
-i4350.scala	check: diagnostic 1 of 1: scalac's is error i4350.scala:4:3 No given instance of type scala.quoted.Quotes was found; teq's is error i4350.scala:4:3 No given instance of type scala.quoted.Quotes was found for a quote
 i4396b.scala	marks: no error where 1 are marked
 i4433.scala	marks: 2 errors where 1 are marked: i4433.scala:4:16: not found: true
 i4493-b.scala	marks: error on an unmarked line i4493-b.scala:6: type mismatch: found Expr[Index[K]], required Expr[Any]
@@ -100,7 +99,6 @@ i4890.scala	check: diagnostic 1 of 1: scalac's is error i4890.scala:6:7 symbol l
 i5015.scala	marks: 3 errors where 4 are marked
 i5547.scala	marks: no error where 1 are marked
 i5840.scala	marks: no error where 1 are marked
-i5954.scala	check: diagnostic 1 of 1: scalac's is error i5954.scala:9:5 No given instance of type scala.quoted.Quotes was found; teq's is error i5954.scala:9:5 No given instance of type scala.quoted.Quotes was found for a quote
 i5954b.scala	marks: no error where 1 are marked
 i5954c.scala	marks: no error where 1 are marked
 i6324.scala	check: diagnostic 1 of 3: scalac's is error i6324.scala:2:38 type Reflection is not a member of quoted; teq's is error i6324.scala:2:38 type Reflection not found

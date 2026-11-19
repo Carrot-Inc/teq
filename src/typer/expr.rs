@@ -1476,7 +1476,10 @@ impl<'a> Worker<'a> {
             let arg = match self.resolve_given(p, span) {
                 Some(arg) => arg,
                 None => {
-                    let msg = self.given_ambiguity.take().unwrap_or_else(|| format!("no given instance of type {} was found for parameter of {}", self.show(p), self.show(actual)));
+                    let msg = match self.given_ambiguity.take() {
+                        Some(m) => m,
+                        None => self.no_given_message(p, Some(super::apply::GivenParam::OfFunction(actual))),
+                    };
                     let msg = msg + &self.given_failure_notes();
                     self.given_failure_error(Span::new(span.end, span.end), msg, p);
                     self.prog.add(TExpr::Unit)

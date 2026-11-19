@@ -9704,6 +9704,78 @@ impl<'a> Worker<'a> {
         let name = if c == self.b.any_ref { "Object".to_string() } else { self.name_str(info.name) };
         format!("{} {}", kind, name)
     }
+
+    /// dotty's `showLocated` of a method or a constructor (`PlainPrinter.locatedText`, RefinedPrinter's `kindString`
+    /// and `toText`): its kind and name (`method m`, `given instance g`, `constructor C`), then `locationText`.
+    pub(super) fn located_text(&self, sym: SymId, ctor: Option<ClassId>) -> String {
+        if let Some(c) = ctor {
+            return format!("constructor {}{}", self.name_str(self.syms.class(c).name), self.location_text(Owner::Class(c)));
+        }
+        let info = self.syms.sym(sym);
+        if let Owner::Class(c) = info.owner {
+            if info.name == crate::names::INIT {
+                return format!("constructor {}{}", self.name_str(self.syms.class(c).name), self.location_text(Owner::Class(c)));
+            }
+        }
+        let kind = if info.kind == SymKind::Given || info.mods & mods::GIVEN != 0 { "given instance" } else { "method" };
+        format!("{} {}{}", kind, self.name_str(info.name), self.location_text(info.owner))
+    }
+
+    /// dotty's `showLocated` of a member the typer selected that a creation implements (`Typer.issueErrors`'
+    /// `methPart(fun)`): a case class's or an enum case's companion `apply`, a case class's `copy`.
+    pub(super) fn located_member(&self, member: &str, c: ClassId, of_companion: bool) -> String {
+        let at = if of_companion {
+            // an enum case's companion holds no class of teq's: the object is named as the case
+            let k = self.syms.class(c).companion.unwrap_or(c);
+            format!(" in object {}", self.name_str(self.syms.class(k).name))
+        } else {
+            format!(" in class {}", self.name_str(self.syms.class(c).name))
+        };
+        format!("method {}{}", member, at)
+    }
+
+    /// dotty's `PlainPrinter.locationText`: ` in <owner>` where the effective owner (`skipWeakOwner`: a package
+    /// object's member is its package's) is a class that is no empty prefix (`isEmptyPrefix`: the root, the empty
+    /// package, an anonymous class), else nothing; a package (dotty's package class) is `package a.b`.
+    pub(super) fn location_text(&self, owner: Owner) -> String {
+        let mut owner = owner;
+        while let Owner::Class(c) = owner {
+            if !self.is_package_object(c) {
+                break;
+            }
+            owner = self.syms.class(c).owner;
+        }
+        match owner {
+            Owner::Class(c) if self.syms.class(c).kind != ClassKind::Anon => {
+                let info = self.syms.class(c);
+                let kind = match info.kind {
+                    ClassKind::Trait => "trait",
+                    ClassKind::Object | ClassKind::GivenImpl => "object",
+                    _ => "class",
+                };
+                let name = if c == self.b.any_ref { "Object".to_string() } else { self.name_str(info.name) };
+                format!(" in {} {}", kind, name)
+            }
+            Owner::Package(p) => {
+                let mut parts = Vec::new();
+                let mut at = Some(p);
+                while let Some(q) = at {
+                    let info = self.syms.pkg(q);
+                    if q == crate::symbols::ROOT_PKG || info.name == crate::names::EMPTY {
+                        break;
+                    }
+                    parts.push(self.name_str(info.name));
+                    at = info.parent;
+                }
+                if parts.is_empty() {
+                    return String::new();
+                }
+                parts.reverse();
+                format!(" in package {}", parts.join("."))
+            }
+            _ => String::new(),
+        }
+    }
 }
 
 enum Bound {

@@ -1,4 +1,4 @@
-// expect: 9:14: error: no given instance of type NotGiven[Int] was found for parameter x$1
+// expect: 9:14: error: No given instance of type NotGiven[Int] was found for parameter x$1 of method f in object Main
 //> using scala 3.8.4
 import scala.util.NotGiven
 object Main:

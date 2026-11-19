@@ -1,4 +1,4 @@
-// expect: 9:30: error: no given instance of type Show[Int] was found for parameter x
+// expect: 9:30: error: No given instance of type Show[Int] was found for parameter x of method summon in package scala
 // expect: 1 error found
 trait Show[A]
 object Show:

@@ -1,4 +1,4 @@
-// expect: 11:19: error: no given instance of type Missing was found for parameter x$3
+// expect: 11:19: error: No given instance of type Missing was found for parameter x$3 of method f
 // absent: required String
 // A try of a member's retry is the application of the member's argument list (dotty's
 // `tryWithImplicitOnQualifier` commits `simpleApply`): the extension that takes the list takes over,

@@ -1,4 +1,4 @@
-// expect: 9:22: error: no given instance of type ProductOf[P]{type MirroredMonoType = String} was found for parameter m
+// expect: 9:22: error: No given instance of type ProductOf[P]{type MirroredMonoType = String} was found for parameter m of method bad
 // expect: 1 error found
 // A mirror target whose mono type is not the mirrored class is no given.
 import scala.deriving.Mirror

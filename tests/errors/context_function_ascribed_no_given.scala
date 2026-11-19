@@ -1,5 +1,5 @@
-// expect: 7:46: error: no given instance of type Int was found for parameter of (Int) ?=> Int
-// expect: 8:35: error: no given instance of type Int was found for parameter of (Int) ?=> Int
+// expect: 7:46: error: No given instance of type Int was found for parameter of (Int) ?=> Int
+// expect: 8:35: error: No given instance of type Int was found for parameter of (Int) ?=> Int
 // A value ascribed a context function type is no contextual closure (dotty's `isContextualClosure`):
 // where another type is expected it is applied to the givens in scope, and none is an error (E172)
 // at the end of the value. A context function literal as written stays the function.

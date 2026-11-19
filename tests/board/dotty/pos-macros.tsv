@@ -16,7 +16,7 @@ captured-quoted-def-4	pass	check:pass
 captured-quoted-def-5	pass	check:pass	
 captured-quoted-multy-stage	fail	check:fail	Macro_1.scala:7:45: Not found: $x
 captured-quoted-type-1	pass	check:pass	
-captured-quoted-type-2	fail	check:fail	Macro_1.scala:3:41: no given instance of type Type[T] was found for parameter evidence$1
+captured-quoted-type-2	fail	check:fail	Macro_1.scala:3:41: No given instance of type Type[T] was found for a context parameter of method myMacroExpr
 captured-type	pass	check:pass	
 classesInInlinedParam.scala	pass	check:pass	
 contruct-desturct	pass	check:pass	
@@ -155,7 +155,7 @@ i17434c	pass	check:pass
 i17434d	pass	check:pass	
 i17506	fail	check:fail	Test_2.scala:5:3: the body of Macro_1$package.regularCurriedCtxFun2BetaReduceTest is withheld from the products of $OUT/pos-macros/i17506/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another
 i17606	fail	check:fail	Macros_1.scala:8:7:None:None: the body of example.A.impl is withheld from the products of $OUT/pos-macros/i17606/jvm.products (elided: unstated the std's String.newString, which scala-library has under another shape): the TASTy writer's que
-i17610	fail	check:fail	Macros.scala:7:30: no given instance of type Type[I] was found for parameter evidence$1
+i17610	fail	check:fail	Macros.scala:7:30: No given instance of type Type[I] was found for a context parameter of method processorExpr in object Macros
 i18059	pass	check:pass	
 i18125.scala	pass	check:pass	
 i18125b.scala	pass	check:pass	

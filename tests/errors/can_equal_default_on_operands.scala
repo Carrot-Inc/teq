@@ -18,8 +18,8 @@ object Main:
   def same(x: A & B, y: A): Boolean = x == y
   def bound(x: O.T, y: D): Boolean = x == y
 
-// expect: can_equal_default_on_operands.scala:13:32: error: values of types A & B and C cannot be compared with == or !=
-// expect: can_equal_default_on_operands.scala:15:36: error: values of types A & B and C cannot be compared with == or !=
-// expect: can_equal_default_on_operands.scala:16:36: error: values of types C and A & B cannot be compared with == or !=
-// expect: can_equal_default_on_operands.scala:17:34: error: values of types T and C cannot be compared with == or !=
+// expect: can_equal_default_on_operands.scala:13:32: error: Values of types A & B and C cannot be compared with == or !=
+// expect: can_equal_default_on_operands.scala:15:36: error: Values of types A & B and C cannot be compared with == or !=
+// expect: can_equal_default_on_operands.scala:16:36: error: Values of types C and A & B cannot be compared with == or !=
+// expect: can_equal_default_on_operands.scala:17:34: error: Values of types T and C cannot be compared with == or !=
 // expect: 4 errors found

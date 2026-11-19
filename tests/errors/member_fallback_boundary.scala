@@ -14,13 +14,13 @@
 // operand's tuple stays one argument to a unary member, and an extension selected on the
 // qualifier whose application fails opens no
 // conversion search.
-// expect: 88:19: error: no given instance of type Evidence was found for parameter x$2
+// expect: 88:19: error: No given instance of type Evidence was found for parameter x$2 of method f in class A
 // absent: 89:11: error: member refused
 // expect: 90:22: error: value toLowerCase is not a member of Int
 // expect: 91:20: error: Found:    "s"⏎Required: Int
 // expect: 92:55: error: Found:    String⏎Required: Int
 // expect: 93:22: error: Found:    "text"⏎Required: Int
-// expect: 94:30: error: no given instance of type Evidence was found
+// expect: 94:30: error: No given instance of type Evidence was found for parameter x$2 of method f in class H
 // expect: 95:31: error: Found:    "x"⏎Required: Int
 // absent: 96:11: error: member refused
 // expect: 97:22: error: Found:    "x"⏎Required: Int
