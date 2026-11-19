@@ -1518,6 +1518,9 @@ impl<'a> Worker<'a> {
         if !self.prog.forward.places.is_empty() {
             self.forward_move(from, to);
         }
+        if !self.prog.forward.accessors.is_empty() {
+            self.accessor_move(from, to);
+        }
         // An `erasedValue` the expansion is stands in the call's node now.
         for made in self.erased_values.iter_mut().filter(|m| m.0 == from) {
             made.0 = to;

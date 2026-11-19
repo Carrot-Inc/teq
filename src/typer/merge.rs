@@ -1463,6 +1463,7 @@ impl Remap {
             }
         });
         self.map(&mut p.forward.patterns, |r, t| r.pat(t), |_, _| {});
+        self.map(&mut p.forward.accessors, |r, e| r.expr(e), |_, _| {});
         self.map(&mut p.leaf_tests, |r, t| r.test(t), |_, _| {});
         self.map(&mut p.stored_tests, |r, t| r.test(t), |_, _| {});
         self.map(&mut p.stored_pats, |r, t| r.pat(t), |_, _| {});
@@ -2513,6 +2514,7 @@ impl<'a> Worker<'a> {
         union(&mut self.prog.block_classes, &mut o.prog.block_classes);
         union(&mut self.prog.forward.places, &mut o.prog.forward.places);
         union(&mut self.prog.forward.patterns, &mut o.prog.forward.patterns);
+        union(&mut self.prog.forward.accessors, &mut o.prog.forward.accessors);
         for f in std::mem::take(&mut o.prog.forward.units) {
             if !self.prog.forward.units.contains(&f) {
                 self.prog.forward.units.push(f);

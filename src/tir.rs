@@ -1064,6 +1064,23 @@ pub struct ForwardNotes {
     pub patterns: FxMap<TPatId, ForwardPattern>,
     /// The files in whose trees a noted node stands: the units the check walks.
     pub units: Vec<FileId>,
+    /// By node, a reference to a protected member that needs an accessor no enclosing class can hold
+    /// (`ProtectedAccessors`, a phase of the forward-reference check's group): told by the walk where the node stands
+    /// in the final trees, after the inliner and the folds, as scalac checks the references that reach that phase.
+    pub accessors: FxMap<TExprId, AccessorNote>,
+    /// The units of a walk the typer's error held back (`forward_references`), which a session's next build walks.
+    pub owed: Vec<FileId>,
+}
+
+/// A protected reference's error, as the typing of the reference decided it (`check_protected_accessor`), and the
+/// shape of its node then (`TExpr::reference_shape`): a node an expansion took (an inline call's, whose value its
+/// expansion's root now is) has another, and its note is no error.
+#[derive(Clone)]
+pub struct AccessorNote {
+    pub file: FileId,
+    pub span: Span,
+    pub msg: Box<str>,
+    pub shape: (std::mem::Discriminant<TExpr>, u32),
 }
 
 /// A pattern's note.
@@ -1609,7 +1626,8 @@ impl Program {
             quote_pats: Arena::attach(self.quote_pats.shared_arc(), worker),
             expansions: FxMap::default(),
             block_classes: FxMap::default(),
-            forward: ForwardNotes::default(),
+            // A worker of the inlining phase copies and expands the notes' nodes: it reads the protected references'.
+            forward: ForwardNotes { accessors: self.forward.accessors.clone(), ..ForwardNotes::default() },
             expansion_bits: Bits::attach(self.expansion_bits.shared_arc(), worker),
             chain_end_bits: Bits::attach(self.chain_end_bits.shared_arc(), worker),
             taken_then_bits: Bits::attach(self.taken_then_bits.shared_arc(), worker),
@@ -1653,6 +1671,18 @@ pub enum ChainHead {
 }
 
 impl TExpr {
+    /// The node's kind and what it names where it names a member, a class or a default (`AccessorNote::shape`): the
+    /// same for a copy of the node, whatever its operands are.
+    pub fn reference_shape(self) -> (std::mem::Discriminant<TExpr>, u32) {
+        let named = match self {
+            TExpr::CallMethod(_, s, _) | TExpr::Field(_, s) | TExpr::Static(s) | TExpr::CallStatic(s, _) => s.0,
+            TExpr::New(c, _) => c.0,
+            TExpr::Default(_, at, _) => at,
+            _ => u32::MAX,
+        };
+        (std::mem::discriminant(&self), named)
+    }
+
     /// The operand and the kind of the rendering, where the node is a concatenation's own
     /// rendering of an operand; `None` for what is evaluated as it stands, the program's
     /// `x.toString` included.

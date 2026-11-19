@@ -7186,7 +7186,10 @@ impl<'a> Worker<'a> {
         }
         let (te, ty) = if in_place {
             let site = ParentSite { written: clause.is_some(), call: call_of(ahead_given.unwrap_or(false)) };
-            self.construct_parent(parent, sig, owner_subst, prefix, lists, span, site)
+            let outer = self.in_place_parent_of.replace((Some(c), parent));
+            let r = self.construct_parent(parent, sig, owner_subst, prefix, lists, span, site);
+            self.in_place_parent_of = outer;
+            r
         } else {
             let mut names = Vec::new();
             let mut givens = Vec::new();

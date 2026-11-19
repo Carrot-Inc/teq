@@ -351,6 +351,8 @@ products_inline_match_case_block	pass	-
 productserrorcall	fail	-	productserrorcall diags
 productshapes	fail	-	known readtasty-b: scalac's tree checker refuses teq's pickle of a polymorphic function value's application in the downstream (`poly(List(7))`: a selection of `apply` with no denotation), as it does o
 productwiden	pass	-	
+protectedqualified	pass	-	
+protectedqualifiedrefused	pass	-	
 purealias	fail	-	purealias check-lean
 qualifiedprivateimport	pass	-	
 quote_pattern_outer_variable	fail	-	quote_pattern_outer_variable subset

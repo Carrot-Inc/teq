@@ -144,6 +144,8 @@ impl Program {
             + block_classes.values().map(array).sum::<usize>()
             + table(&forward.places)
             + table(&forward.patterns)
+            + table(&forward.accessors)
+            + array(&forward.owed)
             + array(&forward.units)
             + table(aside_types)
             + expansion_bits.held()

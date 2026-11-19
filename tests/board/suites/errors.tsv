@@ -160,6 +160,8 @@ conformance_extras	pass	-
 constructor_access	pass	-	
 constructor_access_anonymous	pass	-	
 constructor_access_default_getter	pass	-	
+constructor_access_default_getter_beside_inline_val	fail	-	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
+constructor_access_default_getter_beside_syntax_error	pass	-	
 constructor_access_sealed_parent	pass	-	
 constructor_access_self_type_default	pass	-	
 constructor_access_told_once	pass	-	
@@ -868,6 +870,14 @@ private_trait_ctor	pass	-
 private_var_setter	pass	-	
 projection_type_constructor_qualifier	pass	-	
 projection_type_constructor_qualifier.check	fail	-	< tests/errors/projection_type_constructor_qualifier.scala:4:18: error: Found: Outer.C
+protected_accessor_before_inline_val	fail	-	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
+protected_accessor_beside_inline_val	fail	-	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
+protected_accessor_beside_syntax_error	pass	-	
+protected_accessor_beside_syntax_error_same_file	pass	-	
+protected_accessor_kept	pass	-	
+protected_accessor_not_public_in_binary	pass	-	
+protected_accessor_qualified_self_type	pass	-	
+protected_accessor_without_host	pass	-	
 protected_given	pass	-	
 proxy_apply_access	pass	-	
 proxy_private_apply	pass	-	

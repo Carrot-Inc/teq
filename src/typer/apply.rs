@@ -2654,6 +2654,14 @@ impl<'a> Worker<'a> {
         })
     }
 
+    /// Whether `s` is protected: written `protected` in the sources, or a loaded member's `protected[p]`, which the
+    /// loader marks `QUALIFIED` with the protected flag in `access_within` and no `PROTECTED` (`enter_access_within`).
+    pub(super) fn is_protected_member(&self, s: SymId) -> bool {
+        let mods = self.syms.sym(s).mods;
+        mods & crate::ast::mods::PROTECTED != 0
+            || (mods & crate::ast::mods::QUALIFIED != 0 && self.loaded.as_ref().and_then(|l| l.access_within.get(&s).copied()).is_some_and(|(_, protected)| protected))
+    }
+
     /// A jar's `private[p]` or `protected[p]` member is out of a program's reach outside `p`, a
     /// protected one apart from subclasses; the library's own bodies see it as public.
     pub(super) fn qualified_reachable(&self, s: SymId) -> bool {
@@ -2664,6 +2672,34 @@ impl<'a> Worker<'a> {
         let Some(&(scope, protected)) = loaded.access_within.get(&s) else { return true };
         let file = self.env.file;
         self.in_jar(file) || self.is_body_file(file) || self.source(file).is_std || self.within_loaded_qualifier(s, scope) || (protected && self.in_subclass_of_owner(s))
+    }
+
+    /// The qualifier of the protected member `s` as the typer's access decision reads it (`protected_denied`), and
+    /// whether the site stands inside it: `Some(inside)` where `s` has one (`protected[p]`), `None` where it has none.
+    /// It is the qualifier of the declaration whose access applies (`access_declaration_of`: a deferred given's
+    /// implementation keeps its declaration's), read from its source (`in_access_scope`) or, for a loaded member,
+    /// from its pickle (`access_within`, `within_loaded_qualifier`). The accessor check (`check_protected_accessor`)
+    /// and the default getter's (`check_ctor_default_access`) read the boundary by it, as dotty's `insideBoundaryOf`
+    /// reads `accessBoundary`: the qualifier where there is one, else the package around the member's class.
+    pub(super) fn protected_qualifier_admits(&mut self, s: SymId) -> Option<bool> {
+        let d = self.access_declaration_of(s);
+        if let Some((scope, _)) = self.loaded.as_ref().and_then(|l| l.access_within.get(&d).copied()) {
+            return Some(self.within_loaded_qualifier(d, scope));
+        }
+        let info = self.syms.sym(d);
+        let (file, at, owner) = (info.file, info.span.start, info.owner);
+        self.has_access_scope(file, at).then(|| self.in_access_scope(file, at, owner))
+    }
+
+    /// Whether the site stands inside the access boundary of the protected member `s` of class `owner`, as dotty's
+    /// `insideBoundaryOf` reads `accessBoundary(enclosingPackageClass)`: its qualifier, as the typer's access decision
+    /// reads it (`protected_qualifier_admits`), else the package around `owner`. The accessor check and the default
+    /// getter's both ask it.
+    pub(super) fn inside_protected_boundary(&mut self, s: SymId, owner: ClassId) -> bool {
+        match self.protected_qualifier_admits(s) {
+            Some(inside) => inside,
+            None => self.site_in_package_of(owner),
+        }
     }
 
     /// Whether the site is inside the loaded member `s`'s qualifier (`ctx.owner.isContainedIn(privateWithin)`): the
@@ -2767,6 +2803,149 @@ impl<'a> Worker<'a> {
         })
     }
 
+    /// dotty's ProtectedAccessors (ProtectedAccessors.scala 38-49 `needsAccessor`, 70-78 `ifNoHost`; AccessProxies.scala
+    /// 136-153 `useAccessor`, 169-181 `hostForAccessorOf`): a reference to a protected term member, not a trait's (a
+    /// trait's members are public in the binary), from outside its access boundary (`insideBoundaryOf`: its qualifier's
+    /// scope, else the package around it, inner packages inside) and from a class that does not derive from its owner,
+    /// needs an accessor in an enclosing class that derives from the owner or whose companion object is the owner;
+    /// where there is none the reference is an error of that later phase. A self type is no base class: `trait Side {
+    /// self: C => .. }` reaches `C`'s protected members through its `this`, which the typer allows, and this refuses.
+    /// The arguments of a class's parent call stand in its constructor (dotty's `superCallContext`): that class
+    /// encloses them, though they are typed outside it (`parent_args_of`; an anonymous class's where it is made,
+    /// `in_place_parent_of`). A member `@publicInBinary` needs no accessor (`needsAccessorIfNotInSubclass`, line 40),
+    /// which is asked last: only a reference about to be refused resolves the member's annotations.
+    ///
+    /// scalac checks the references that reach that phase, after the inlining phase and FirstTransform's folds: an
+    /// inline argument its expansion does not use, an untaken inline or constant branch, a folded condition's operand
+    /// are none. The error is the note of the reference's node (`note_accessor`), told by the forward-reference
+    /// check's walk where the node stands in the final trees (`forward_node`); this gives the note, or None where the
+    /// reference needs no accessor or the error went where a dependent check's or a library body's go at once.
+    pub(super) fn check_protected_accessor(&mut self, s: SymId, span: Span, pure_receiver: bool) -> Option<crate::tir::AccessorNote> {
+        let owner = self.syms.sym(s).owner;
+        // Protected as written, or as the loaded member's pickle says (`protected[p]`), its own or its declaration's
+        // (`access_declaration_of`: a deferred given's implementation).
+        let protected = self.is_protected_member(s) || {
+            let d = self.access_declaration_of(s);
+            d != s && self.is_protected_member(d)
+        };
+        if !protected || self.site_is_typed_body() || self.source(self.env.file).is_std {
+            return None;
+        }
+        let Owner::Class(owner) = owner else { return None };
+        if self.syms.class(owner).kind == ClassKind::Trait {
+            return None;
+        }
+        if self.inside_protected_boundary(s, owner) {
+            return None;
+        }
+        let derives = |t: &Self, sub: ClassId, sup: ClassId| sub == sup || t.syms.class(sub).base_types.iter().any(|&(b, _)| b == sup);
+        let classes: Vec<ClassId> = self.env.frames.iter().rev().filter_map(|f| match f {
+            super::Frame::Class(k) | super::Frame::Ctor(k) => Some(*k),
+            _ => None,
+        }).chain(self.parent_args_of).chain(self.in_place_parent_of.and_then(|(k, _)| k)).collect();
+        if classes.iter().any(|&k| derives(self, k, owner) || self.syms.class(k).companion == Some(owner))
+            || self.in_place_parent_of.is_some_and(|(_, sup)| derives(self, sup, owner))
+        {
+            return None;
+        }
+        if self.has_public_in_binary(s) {
+            return None;
+        }
+        // `constToLiteral` (TreeInfo.scala 753-776), which FirstTransform applies to an identifier and a selection
+        // (FirstTransform.scala 180-189): a pure expression of a constant type is its literal before the phase. A val
+        // of a constant type read through a pure path is no reference there.
+        if pure_receiver && self.syms.sym(s).kind == SymKind::Val && self.syms.sym(s).mods & crate::ast::mods::LAZY == 0 {
+            let (plain, ret) = {
+                let sig = self.sig_of(s);
+                (sig.clauses.is_empty() && sig.tparams.is_empty(), sig.ret)
+            };
+            if plain && matches!(self.types.get(ret), Type::Lit(_)) {
+                return None;
+            }
+        }
+        let from = match self.owner_class() {
+            Some(k) => self.class_description(k),
+            None => "here".to_string(),
+        };
+        let msg = format!("illegal access to protected {} in {} from {}", self.member_description(s, None), self.class_description(owner), from);
+        self.accessor_note(span, msg)
+    }
+
+    /// The note of a protected reference's error at `span`, or the error itself where a dependent check's or a library
+    /// body's errors go at once (`late_error_of`).
+    pub(super) fn accessor_note(&mut self, span: Span, msg: String) -> Option<crate::tir::AccessorNote> {
+        if self.dependent_checks > 0 || self.is_body_file(self.env.file) {
+            self.late_error_of(span, msg, crate::source::PHASE_FORWARD_DEP_CHECKS);
+            return None;
+        }
+        Some(crate::tir::AccessorNote { file: self.env.file, span, msg: msg.into_boxed_str(), shape: TExpr::Unit.reference_shape() })
+    }
+
+    /// The note a reference to the method `s` left pending (`note_callee_accessor`), given to its call `te`: the
+    /// latest of that method's, as a call's arguments are typed between its reference and its call.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn take_accessor_pending(&mut self, s: SymId, te: TExprId) {
+        if let Some(k) = self.accessor_pending.iter().rposition(|(m, _)| *m == s) {
+            let (_, note) = self.accessor_pending.remove(k);
+            self.note_accessor(te, note);
+        }
+    }
+
+    /// A protected reference's note given to the callee it makes: a value's node now, a method's call where
+    /// `apply_method` makes it (`accessor_pending`).
+    pub(super) fn note_callee_accessor(&mut self, callee: &Callee, s: SymId, note: crate::tir::AccessorNote) {
+        match callee {
+            Callee::Value(te, _) => self.note_accessor(*te, note),
+            _ => self.accessor_pending.push((s, note)),
+        }
+    }
+
+    /// dotty's `hasPublicInBinary` (SymDenotations.scala 1082-1083): the term carries `@scala.annotation.publicInBinary`.
+    /// A loaded member's is read off its pickle; a definition's of the sources, or a class parameter's (its clause's),
+    /// is resolved where it is written, as `target_name_of` resolves `@targetName`: by the class its type names,
+    /// whatever the spelling (a renaming import, an alias), never a program's own class of that name.
+    fn has_public_in_binary(&mut self, s: SymId) -> bool {
+        if self.loaded.as_ref().map_or(false, |l| l.syms.contains_key(&s)) {
+            return self.loaded_public_in_binary(s);
+        }
+        // Every spelling of the annotation, an import's renaming or an alias, reads its name.
+        if self.interner.lookup("publicInBinary").is_none() {
+            return false;
+        }
+        let info = self.syms.sym(s);
+        let (file, owner, at, name, def) = (info.file, info.owner, info.span.start, info.name, info.def);
+        if (file.0 as usize) >= self.files.len() && !self.is_body_file(file) {
+            return false;
+        }
+        let ast = self.ast(file);
+        let annots: Vec<crate::ast::Annot> = match (def, owner) {
+            (Some(d), _) => ast.def(d).annots.clone(),
+            (None, Owner::Class(c)) => {
+                let Some(cd) = self.syms.class(c).def.filter(|_| self.syms.class(c).file == file) else { return false };
+                let crate::ast::DefKind::Class(cls) = &ast.def(cd).kind else { return false };
+                let Some(p) = cls.clauses.iter().flat_map(|cl| cl.params.iter()).find(|p| p.name == name) else { return false };
+                ast.param_annots(p).to_vec()
+            }
+            _ => return false,
+        };
+        let written: Vec<crate::ast::TyExprId> = annots.iter().filter_map(|a| Some(ast.annot_new(a)?.0)).collect();
+        if written.is_empty() {
+            return false;
+        }
+        let env = self.env_at(file, owner, at);
+        self.with_env(env, |t| {
+            let mark = t.diags.items.len();
+            let found = written.iter().any(|&ty| {
+                let resolved = t.resolve_type_ctor(ty);
+                let resolved = t.dealias(resolved);
+                matches!(t.types.get(resolved), Type::Class(k, _) | Type::Ctor(k) if t.is_scala_annotation_class(k, "publicInBinary"))
+            });
+            t.drop_reported_since(mark);
+            found
+        })
+    }
+
     fn check_protected_access(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, span: Span) {
         let s = self.access_declaration_of(s);
         let through_this = matches!(self.prog.expr(recv), TExpr::This | TExpr::Super(_));
@@ -2796,11 +2975,7 @@ impl<'a> Worker<'a> {
         if through_this {
             return None;
         }
-        let (owner, file, filed_at) = {
-            let info = self.syms.sym(s);
-            let Owner::Class(owner) = info.owner else { return None };
-            (owner, info.file, info.span.start)
-        };
+        let Owner::Class(owner) = self.syms.sym(s).owner else { return None };
         let companion = self.syms.class(owner).companion;
         let derives = |t: &Self, sub: ClassId, sup: ClassId| t.syms.class(sub).base_types.iter().any(|&(b, _)| b == sup);
         let mut enclosing_subclass = None;
@@ -2816,7 +2991,7 @@ impl<'a> Worker<'a> {
                 enclosing_subclass = Some(k);
             }
         }
-        if self.in_access_scope(file, filed_at, Owner::Class(owner)) {
+        if self.protected_qualifier_admits(s) == Some(true) {
             return None;
         }
         // The body of an inline method expands where it is called, with the access rights of
@@ -4044,7 +4219,11 @@ impl<'a> Worker<'a> {
                     None => (self.syms.this_type(c), s),
                 };
                 let this = self.this_ref(c);
+                let accessor = self.check_protected_accessor(s, span, true);
                 let callee = self.member_callee(this, self_ty, s);
+                if let Some(note) = accessor {
+                    self.note_callee_accessor(&callee, s, note);
+                }
                 if let Callee::Value(te, _) = callee {
                     self.mark_if_param_ident(c, s, te);
                 }
@@ -6145,6 +6324,10 @@ impl<'a> Worker<'a> {
                 && !self.types.contains_error(ret_ty) =>
             {
                 let te = self.build_call(&call, l);
+                // Its expansion, made later in this node's place, takes the note with the reference.
+                if !self.accessor_pending.is_empty() {
+                    self.take_accessor_pending(call.sym, te);
+                }
                 let arg_types = std::mem::replace(&mut self.inline.arg_types, outer_arg_types);
                 ty = self.normalize(ret_ty);
                 self.defer_plain_inline(te, &call, &sig, &subst, &args_out, arg_types, ret_ty, ty, span, expected);
@@ -6161,6 +6344,10 @@ impl<'a> Worker<'a> {
                 // A plain inline call waits for the later expansion phase, as dotty expands it
                 // in its `Inlining` phase.
                 let te = self.build_call(&call, l);
+                // Its expansion, made later in this node's place, takes the note with the reference.
+                if !self.accessor_pending.is_empty() {
+                    self.take_accessor_pending(call.sym, te);
+                }
                 let arg_types = std::mem::replace(&mut self.inline.arg_types, outer_arg_types);
                 // The call's type is its result type as types are read, reduced
                 // (`ToString[7]` the singleton of "7"), as scalac's typer leaves it.
@@ -6189,6 +6376,7 @@ impl<'a> Worker<'a> {
                 let expanded = self.expand_inline(&call, &sig, &subst, &args_out, ret_ty, span, expected);
                 self.inline.arg_types = outer_arg_types;
                 match expanded {
+                    // The expansion takes the call's place: no reference to the method stands there.
                     Some((e, t)) => {
                         if !kept_pending.is_empty() {
                             self.drop_pending_copied(&kept_pending, e);
@@ -6196,11 +6384,20 @@ impl<'a> Worker<'a> {
                         ty = t;
                         e
                     }
-                    None => self.build_call(&call, l),
+                    None => {
+                        let te = self.build_call(&call, l);
+                        if !self.accessor_pending.is_empty() {
+                            self.take_accessor_pending(call.sym, te);
+                        }
+                        te
+                    }
                 }
             }
             None => {
                 let te = self.build_call(&call, l);
+                if !self.accessor_pending.is_empty() {
+                    self.take_accessor_pending(call.sym, te);
+                }
                 // scala-library's `erasedValue` is a plain method: a call the trees keep is used.
                 if self.syms.sym(call.sym).name == crate::names::ERASED_VALUE && self.intrinsic_of(call.sym) == Some(super::inline::Intrinsic::ErasedValue) {
                     self.note_erased_value(te, span);
@@ -9274,10 +9471,21 @@ impl<'a> Worker<'a> {
             if sym_mods & crate::ast::mods::PRIVATE != 0 {
                 self.note_private_selection(sym, recv, recv_ty, false);
             }
-            if sym_mods & crate::ast::mods::PROTECTED != 0 {
+            let accessor = if sym_mods & crate::ast::mods::PROTECTED != 0 {
                 self.check_protected_access(sym, recv, recv_ty, span);
-            }
+                let pure = self.is_stable(recv);
+                self.check_protected_accessor(sym, span, pure)
+            } else if sym_mods & crate::ast::mods::QUALIFIED != 0 && self.is_protected_member(sym) {
+                // A loaded member's `protected[p]`: the typer's own decision is `qualified_reachable`'s.
+                let pure = self.is_stable(recv);
+                self.check_protected_accessor(sym, span, pure)
+            } else {
+                None
+            };
             let mut callee = self.member_callee_in(recv, recv_ty, Some(owner_ty), sym);
+            if let Some(note) = accessor {
+                self.note_callee_accessor(&callee, sym, note);
+            }
             let refined = match self.refined_denotation(recv, recv_ty, name, sym, owner_ty) {
                 Some(Err(alts)) => {
                     if self.refinement_overload_ambiguity(sym, owner_ty, &alts, &lists, span) {

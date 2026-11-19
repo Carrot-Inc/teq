@@ -1934,6 +1934,12 @@ pub struct Worker<'a> {
     /// The enum case whose parent constructor arguments are being typed. They belong to the
     /// scope of the companion, so the members of the case are not visible by name.
     pub parent_args_of: Option<ClassId>,
+    /// The anonymous class whose superclass call's arguments are being typed where it is made, in the environment
+    /// around it (`type_parent_ctor_at` in place; none where an empty body makes no class, `type_new_anon`), with
+    /// that superclass: the class encloses them all the same, as their constructor's (dotty's `superCallContext`),
+    /// and derives from the superclass before its parents are set (a parent whose type arguments the call infers).
+    /// For `check_protected_accessor` alone.
+    pub in_place_parent_of: Option<(Option<ClassId>, ClassId)>,
     /// The class whose deferred givens' implementations are being searched, under
     /// `parent_args_of`: its own using parameters are the givens of its frame
     /// (`Worker::implement_deferred_givens`).
@@ -1989,6 +1995,11 @@ pub struct Worker<'a> {
     /// mark stands over: the entry's index and that variance. The comparison's own: a definition typed in its own
     /// place has none in use (`Worker::where_made`).
     pub gadt_in_use: Vec<(u32, i8)>,
+    /// A protected reference of a method whose call is still to be made (`check_protected_accessor`): its note,
+    /// given to the call's node where `apply_method` makes it; dropped at the end of the tree typed
+    /// (`type_expr`) where no call was made (a member left for an extension, an attempt given up). The tree's
+    /// own: a definition typed in its own place has none.
+    pub accessor_pending: Vec<(SymId, crate::tir::AccessorNote)>,
     /// Whether a wildcard type argument occurs anywhere, so that capture conversion has
     /// something to do: read off the syntax before anything is typed (`scan_wildcards`), so
     /// that a body's type does not depend on what was typed before it.
@@ -3482,6 +3493,7 @@ impl<'a> Worker<'a> {
             inferred_parent_args: Default::default(),
             inferred_trait_args: Default::default(),
             parent_args_of: None,
+            in_place_parent_of: None,
             deferred_impl_of: None,
             unentered_impls: Vec::new(),
             sam_classes: FxMap::default(),
@@ -3497,6 +3509,7 @@ impl<'a> Worker<'a> {
             selection_typed: Vec::new(),
             gadt: Vec::new(),
             gadt_in_use: Vec::new(),
+            accessor_pending: Vec::new(),
             wildcards_used: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             captured_locals: Default::default(),
             index: None,
@@ -3946,6 +3959,7 @@ impl<'a> Worker<'a> {
             inferred_parent_args: self.inferred_parent_args.attach(),
             inferred_trait_args: self.inferred_trait_args.attach(),
             parent_args_of: Default::default(),
+            in_place_parent_of: Default::default(),
             deferred_impl_of: None,
             unentered_impls: Vec::new(),
             sam_classes: self.sam_classes.clone(),
@@ -3961,6 +3975,7 @@ impl<'a> Worker<'a> {
             selection_typed: Vec::new(),
             gadt: Default::default(),
             gadt_in_use: Default::default(),
+            accessor_pending: Default::default(),
             wildcards_used: self.wildcards_used.clone(),
             captured_locals: self.captured_locals.clone(),
             gadt_open: Default::default(),

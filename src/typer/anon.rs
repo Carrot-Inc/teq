@@ -209,7 +209,9 @@ impl<'a> Worker<'a> {
                 // arguments, which the expected type fixes for a bare name alone.
                 let ahead = self.parent_typed_ahead(first.ty, first.args.is_empty().then_some((k, expected)));
                 self.anon_super_call = Some((span, ahead));
+                let outer = self.in_place_parent_of.replace((None, k));
                 let typed = self.type_new(first.ty, &args, first_written, span, expected);
+                self.in_place_parent_of = outer;
                 self.anon_super_call = None;
                 // No class is made, and the creation is still the subclass it stands for: what a class asks of its
                 // parent is asked of it (`check_anon_parent`, `check_anon_self_type`), where the creation itself

@@ -946,7 +946,12 @@ impl<'a> Worker<'a> {
                         },
                         Some((site, _)) => self.trait_member_receiver(site),
                     };
-                    self.prog.add(TExpr::CallMethod(r, g, l))
+                    let accessor = self.check_protected_accessor(g, span, false);
+                    let call = self.prog.add(TExpr::CallMethod(r, g, l));
+                    if let Some(note) = accessor {
+                        self.note_accessor(call, note);
+                    }
+                    call
                 }
                 Owner::Package(_) | Owner::Local => self.prog.add(TExpr::CallStatic(g, l)),
             };

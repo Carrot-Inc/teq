@@ -206,6 +206,7 @@ worker_fields! {
         view_compat: bool,
         skip_proxies: bool,
         parent_args_of: Option<ClassId>,
+        in_place_parent_of: Option<(Option<ClassId>, ClassId)>,
         deferred_impl_of: Option<ClassId>
     }
     place_waiting {
@@ -240,6 +241,7 @@ worker_fields! {
     }
     own {
         gadt_in_use is empty,
+        accessor_pending is empty,
         join_wild is no,
         soft_lub is no,
         interp_call is none,

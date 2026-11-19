@@ -3668,6 +3668,18 @@ impl<'a> Worker<'a> {
         }
         (None, None)
     }
+
+    /// Whether the loaded member `sym` carries `@scala.annotation.publicInBinary` (dotty's `hasPublicInBinary`), read
+    /// off its pickle: the annotation's class by its package and its name.
+    pub(crate) fn loaded_public_in_binary(&mut self, sym: SymId) -> bool {
+        let Some((file, addr)) = self.loaded.as_ref().and_then(|l| l.syms.get(&sym)).map(|l| (l.file, l.addr)) else { return false };
+        let tasty = self.tasty(file);
+        let annots = Decoder::new(&tasty).annotations_at(addr);
+        annots.iter().any(|a| match &a.class {
+            TType::TypeRef(prefix, n) => tasty.simple(*n) == Some("publicInBinary") && matches!(&**prefix, TType::Package(p) if tasty.name(*p) == "scala.annotation"),
+            _ => false,
+        })
+    }
 }
 
 /// A context bound's evidence name, `evidence$<n>` of dotty's `ContextBoundParamName` (a unique name of the

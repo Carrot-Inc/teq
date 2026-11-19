@@ -1,0 +1,7 @@
+tests/modules/protectedqualifiedrefused/b/Side.scala:5:16: error: illegal access to protected given instance g in class Impl from trait Left
+    def f: Int = g
+                 ^
+tests/modules/protectedqualifiedrefused/b/Side.scala:9:16: error: illegal access to protected method m in class B from trait Right
+    def h: Int = m
+                 ^
+2 errors found

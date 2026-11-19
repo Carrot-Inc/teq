@@ -2118,7 +2118,12 @@ impl<'a> Worker<'a> {
             }
         }
         let vars_mark = self.tvars.len();
+        let accessor_mark = self.accessor_pending.len();
         let (te, ty) = self.type_expr_untracked(e, expected);
+        // A protected method's reference whose call this tree did not make (`accessor_pending`) made none.
+        if self.accessor_pending.len() > accessor_mark {
+            self.accessor_pending.truncate(accessor_mark);
+        }
         // The tree's interpolation (`Typer.simplify`): only where an inner one left a variable
         // of this tree's open, which most trees have none of, and not of a polymorphic method
         // named without a parameter list (`leave_vars_open`).

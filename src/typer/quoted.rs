@@ -2374,7 +2374,7 @@ impl<'a> Worker<'a> {
     /// answering for the rest (`Copier::declared`).
     pub(super) fn instantiate_tree(&mut self, body: TExprId, holes: &FxMap<SymId, TExprId>, params: &FxMap<SymId, TExprId>, subst: &Subst, renames: &FxMap<SymId, SymId>, paths: &[(SymId, TypeId)], declared: &[(TExprId, Vec<ClassId>)]) -> TExprId {
         let copies = self.capturing().then(FxMap::default);
-        let mut copier = Copier { holes, params, subst, renames, paths, extra: FxMap::default(), classes: FxMap::default(), added: FxMap::default(), locals: None, carries_chain: false, map: None, copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: None, deferring: false, class_depth: 0, body_depth: 0, hole_depth: None, site_this: Vec::new(), suspended: Vec::new(), scratch: Scratch::default(), reducing: false, declared, block_declares: None };
+        let mut copier = Copier { holes, params, subst, renames, paths, extra: FxMap::default(), classes: FxMap::default(), added: FxMap::default(), locals: None, carries_chain: false, map: None, copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: None, deferring: false, class_depth: 0, body_depth: 0, hole_depth: None, site_this: Vec::new(), suspended: Vec::new(), scratch: Scratch::default(), reducing: false, accessors: !self.prog.forward.accessors.is_empty(), declared, block_declares: None };
         let copied = copier.expr(self, body);
         if copier.copies.is_some() {
             let roots: Vec<TExprId> = std::iter::once(body).chain(copier.filled.iter().copied()).collect();
@@ -2401,7 +2401,7 @@ impl<'a> Worker<'a> {
         let copies = self.capturing().then(FxMap::default);
         let (extra, copied_classes) = (std::mem::take(members), std::mem::take(classes));
         let scratch = std::mem::take(&mut map.part.scratch);
-        let mut copier = Copier { holes: &holes, params, subst, renames, paths, extra, classes: copied_classes, added: FxMap::default(), locals: None, carries_chain: false, map: Some(map), copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: Some(stored), deferring: stored.leaves_for_demand.is_some(), class_depth: 0, body_depth: 0, hole_depth: None, site_this: Vec::new(), suspended: Vec::new(), scratch, reducing: false, declared: stored.blocks, block_declares: None };
+        let mut copier = Copier { holes: &holes, params, subst, renames, paths, extra, classes: copied_classes, added: FxMap::default(), locals: None, carries_chain: false, map: Some(map), copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: Some(stored), deferring: stored.leaves_for_demand.is_some(), class_depth: 0, body_depth: 0, hole_depth: None, site_this: Vec::new(), suspended: Vec::new(), scratch, reducing: false, accessors: !self.prog.forward.accessors.is_empty(), declared: stored.blocks, block_declares: None };
         for &r in roots {
             let copy = copier.expr(self, r);
             copier.map.as_mut().expect("the copy's map").part.roots.push(copy);
@@ -2677,6 +2677,9 @@ struct Copier<'c> {
     /// Whether the patterns being copied are a reducible match's, which a copy on demand copies
     /// for the walk's reduction alone and never for the output: their tests are the stored ones,
     /// and a pattern the copy leaves as it was is the stored one (`Copier::pat`).
+    /// Whether the program holds protected references' notes (`ForwardNotes::accessors`) as the copy starts: each
+    /// copied node then gives its note to its copy (`accessor_copy`).
+    accessors: bool,
     reducing: bool,
 }
 
@@ -3719,6 +3722,9 @@ impl<'c> Copier<'c> {
         let id = self.expr_node(t, e, node);
         if id != e && !t.prog.forward.places.is_empty() && matches!(t.prog.expr(e), TExpr::Local(_) | TExpr::CallStatic(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Default(..)) {
             t.forward_copy(e, id);
+        }
+        if self.accessors && id != e {
+            t.accessor_copy(e, id);
         }
         // An identifier of an own parameter accessor, and an empty anonymous class's creation (`MARK_ANON_PARENT`), stays
         // one in the copy (`into_constr`).

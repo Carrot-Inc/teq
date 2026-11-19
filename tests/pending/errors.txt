@@ -30,6 +30,7 @@ callsyntax	missing '28:12: error: type mismatch: found (Int, Int, Int), required
 cases_end_match_after_catch_branch	exit code 0
 collection_seq_not_immutable.check	< tests/errors/collection_seq_not_immutable.scala:5:85: error: Found: (xs : scala.collection.Seq[Int])
 companion_apply_plain_class	missing '5:11: error: dummy term capture parameter method apply cannot be used as a value'
+constructor_access_default_getter_beside_inline_val	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
 constructor_proxy_prefix	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'
 copy_default_later_clause	missing '7:25: error: value copy$default$2 is not a member of C'
 directive_hidden_file	present '.policy.scala'
@@ -139,6 +140,8 @@ printstream_varargs_override_conflict_class_trait	exit code 0
 printstream_varargs_override_conflict_two_traits	exit code 0
 private_leaks_signature	exit code 0
 projection_type_constructor_qualifier.check	< tests/errors/projection_type_constructor_qualifier.scala:4:18: error: Found: Outer.C
+protected_accessor_before_inline_val	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
+protected_accessor_beside_inline_val	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
 pure_intersection_double_definition	missing 'Conflicting definitions:'
 quote_template_body_at_brace_width	missing '13:7: error:'
 right_assoc_ext	missing '14:15: error: value *: is not a member of Int.'

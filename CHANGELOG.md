@@ -7,6 +7,23 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A protected member reached from a trait whose self type is its class, outside the member's package, is refused
+  as scalac refuses it: "illegal access to protected method m in class C from trait Side". It is refused by
+  identifier, as a value, through `this`, inside a lambda, as a `protected[p]` member from outside `p`, and as the
+  implicit conversion or given a search takes through the trait's `this`. No enclosing class can hold the accessor
+  such a reference needs (scalac's ProtectedAccessors). teq built these.
+  An enclosing subclass, an inner or anonymous class of one, a lambda inside one, the member's companion and its own
+  package still reach it. So do the arguments of an anonymous subclass's parent call made in the trait
+  (`new C(m(1)) {}`), and a member annotated `@scala.annotation.publicInBinary`, which needs no accessor.
+  A reference scalac drops before that phase is not refused: an inline argument the expansion does not use, an
+  untaken `inline if` or `summonFrom` case, a quote a macro leaves out, a call of a protected inline method, a
+  constant condition's untaken branch (`if false`, a `final val`, `false && x`, `true || x`), and a constant val
+  read through a path. A protected constructor's default argument dropped the same way is no longer refused either
+  (`Ops.ignore(new Dflt() { }.a)` with an inline parameter it does not use): teq refused it.
+  A `protected[p]` member is judged by its qualifier as the typer judges it, whether it is written in the sources,
+  read from teq's products or from a jar, and whether the compiler made it (a deferred given's implementation, a
+  case class's copy, an enum's member, an export's forwarder, an inherited member, a default): read inside `p` it
+  needs no accessor, read through a self type outside `p` it is refused, in every one of those forms.
 - A quote pattern's hole under a context function parameter binds an `Expr` of that context function type, as under
   scalac: `case '{ Field.const[a, tpe]($s) }` against `def const[A, F](selector: Selector ?=> A => F)` binds
   `s: Expr[Selector ?=> a => tpe]`, at any arity, by name and through an alias; it bound `Expr[a => tpe]`, and a

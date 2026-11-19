@@ -2463,6 +2463,9 @@ prop_nan_bits	pass	-
 prop_repeat_negative	pass	-	
 prop_string_index_unchecked	pass	-	
 prop_trim_control	pass	-	
+protected_accessor_dropped	pass	-	
+protected_accessor_hosts	pass	-	
+protected_accessor_made_members	pass	-	
 protected_member_retried	pass	-	
 proxy_private_import	pass	-	
 proxy_protected_import	pass	-	

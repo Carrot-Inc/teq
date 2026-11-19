@@ -650,7 +650,7 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether `k` is the class `name` of the package `scala.annotation`, by its qualified name.
-    fn is_scala_annotation_class(&self, k: ClassId, name: &str) -> bool {
+    pub(super) fn is_scala_annotation_class(&self, k: ClassId, name: &str) -> bool {
         let info = self.syms.class(k);
         let Owner::Package(p) = info.owner else { return false };
         let named = |p: PkgId, n: &str| self.interner.get(self.syms.pkg(p).name) == n;

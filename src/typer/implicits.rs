@@ -5657,7 +5657,8 @@ impl<'a> Worker<'a> {
                         None => self.prog.add(TExpr::This),
                     }
                 };
-                match (impl_class, has_params) {
+                let accessor = self.check_protected_accessor(g, span, false);
+                let given_ref = match (impl_class, has_params) {
                     // The class of a given of a class or trait instance takes that instance first.
                     (Some(ic), true) if self.outer_class(ic).is_some() => {
                         let items: Vec<TExprId> = std::iter::once(recv).chain(args.iter().copied()).collect();
@@ -5678,7 +5679,11 @@ impl<'a> Worker<'a> {
                             field
                         }
                     }
+                };
+                if let Some(note) = accessor {
+                    self.note_accessor(given_ref, note);
                 }
+                given_ref
             }
         };
         self.forward_note_given(te, g, span);

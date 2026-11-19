@@ -2653,6 +2653,9 @@ impl<'a> Worker<'a> {
             if let Some(place) = self.prog.forward.places.get(&reduced).cloned() {
                 self.prog.forward.places.insert(d, place);
             }
+            if let Some(note) = self.prog.forward.accessors.get(&reduced).cloned() {
+                self.prog.forward.accessors.insert(d, note);
+            }
             if d == tree {
                 root = Some(ty);
             }
@@ -3454,6 +3457,9 @@ impl<'a> Worker<'a> {
         let id = self.prog.add(copied);
         if noted && !self.prog.forward.places.is_empty() {
             self.forward_copy(e, id);
+        }
+        if !self.prog.forward.accessors.is_empty() {
+            self.accessor_copy(e, id);
         }
         if self.profile.on {
             self.profile.inline.copied_nodes += 1;

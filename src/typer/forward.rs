@@ -772,6 +772,42 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// A protected reference's note (`ForwardNotes::accessors`) given to a copy of its node: an inline argument at
+    /// a use of its parameter, a quote's tree in a macro's expansion. Every kind of node is copied with it.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn accessor_copy(&mut self, from: TExprId, to: TExprId) {
+        if let Some(note) = self.prog.forward.accessors.get(&from).cloned() {
+            self.prog.forward.accessors.insert(to, note);
+            self.forward_unit();
+        }
+    }
+
+    /// An expansion's root `from` gives its value to its call's node `to`: a protected reference the root is stands
+    /// there now; the call's own note goes, as its callee is no longer named.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn accessor_move(&mut self, from: TExprId, to: TExprId) {
+        match self.prog.forward.accessors.remove(&from) {
+            Some(note) => {
+                self.prog.forward.accessors.insert(to, note);
+            }
+            None => {
+                self.prog.forward.accessors.remove(&to);
+            }
+        }
+    }
+
+    /// The note of a protected reference `node` (`check_protected_accessor`), told where the node stands in the
+    /// final trees (`forward_node`).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn note_accessor(&mut self, node: TExprId, mut note: crate::tir::AccessorNote) {
+        note.shape = self.prog.expr(node).reference_shape();
+        self.prog.forward.accessors.entry(node).or_insert(note);
+        self.forward_unit();
+    }
+
     #[cold]
     #[inline(never)]
     pub(super) fn forward_copy_pattern(&mut self, from: TPatId, to: TPatId) {
@@ -788,14 +824,21 @@ impl<'a> Worker<'a> {
     /// or every one.
     pub(super) fn forward_references(&mut self, only: Option<&[FileId]>) {
         let probe = forward_dump();
-        if self.diags.typer_failed() || (self.prog.forward.units.is_empty() && !probe) {
+        if self.prog.forward.units.is_empty() && !probe {
             return;
         }
+        // A walk the typer's error held back is owed to its units: a session's next build walks them where its typer
+        // reports none, though it types none of them again (`ForwardNotes::owed`).
+        let owed = std::mem::take(&mut self.prog.forward.owed);
         let noted: Vec<FileId> = self.prog.forward.units.clone();
         let files: Vec<FileId> = (0..self.asts.len() as u32)
             .map(FileId)
-            .filter(|&f| self.program_file(f) && (probe || noted.contains(&f)) && only.map_or(true, |o| o.contains(&f)))
+            .filter(|&f| self.program_file(f) && (probe || noted.contains(&f)) && (only.map_or(true, |o| o.contains(&f)) || owed.contains(&f)))
             .collect();
+        if self.diags.typer_failed() {
+            self.prog.forward.owed = files;
+            return;
+        }
         if files.is_empty() {
             return;
         }
@@ -1380,6 +1423,14 @@ impl<'a> Worker<'a> {
     }
 
     fn forward_node(&mut self, w: &mut Walk, e: TExprId) {
+        // A protected reference that reached the phase: its accessor's error, once.
+        if !self.prog.forward.accessors.is_empty() {
+            if let Some(note) = self.prog.forward.accessors.remove(&e) {
+                if self.prog.expr(e).reference_shape() == note.shape {
+                    self.forward_tell_accessor(note);
+                }
+            }
+        }
         match self.prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null => {}
             TExpr::Local(s) => {
@@ -1956,6 +2007,15 @@ impl<'a> Worker<'a> {
             }
             None => self.diags.late_error_of(place_file, place, msg, PHASE_FORWARD_DEP_CHECKS),
         }
+    }
+
+    /// A protected reference's error (`check_protected_accessor`), a record of the forward-reference check's group:
+    /// two at one place keep the first (`Diagnostic::yields`), as the getters of one application.
+    #[cold]
+    #[inline(never)]
+    fn forward_tell_accessor(&mut self, note: crate::tir::AccessorNote) {
+        self.diags.late_error_of(note.file, note.span, String::from(note.msg), PHASE_FORWARD_DEP_CHECKS);
+        self.diags.yielding();
     }
 
     /// The point of the call written at `span`, where scalac's header places a message of its
