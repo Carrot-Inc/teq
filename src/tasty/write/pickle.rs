@@ -386,6 +386,12 @@ struct P<'w, 'a> {
     op_select: Option<(Span, u32)>,
     /// The span and the type tree's span the next local parameter written takes (`closure`'s lambda's).
     param_layout_next: Option<(Span, Span)>,
+    /// The point of the `New`'s type tree a pickle gives the construction `new_layout` read from it, where it gives
+    /// one (`pickled_new_layout`): the whole build's, which reads it from the source.
+    new_tpt_point: Option<u32>,
+    /// The span and point a synthetic definition (`synth_def`, `synth_val_with`) takes where it is placed as written
+    /// (an enum's lookup members at the case that defines them), else none.
+    synth_def_span: Option<(Span, u32)>,
     /// The point of the parameter `param_layout_next` places, where a pickle gives it (`pickled_lambda_layout`).
     param_point_next: Option<u32>,
     /// The place of the qualifier of the selection being written, where a pickle gives it (`CallLayout::qual`): its
@@ -602,6 +608,8 @@ impl<'w, 'a> P<'w, 'a> {
             pat_next: None,
             op_select: None,
             param_layout_next: None,
+            new_tpt_point: None,
+            synth_def_span: None,
             param_point_next: None,
             qual_place_next: None,
             param_type_points: FxMap::default(),
@@ -685,6 +693,7 @@ pub fn pickle_unit(w: &mut Worker, index: &Index, lines: &Lines, unit: &Unit, so
     let root = p.buf.addr();
     p.buf.byte(PACKAGE);
     let len = p.buf.begin_length();
+    let id_at = p.buf.addr();
     p.package_ref(pkg);
     let first = match &unit.kind {
         UnitKind::Class { class, module } => class.or(*module).map_or(u32::MAX, |c| p.w.syms.class(c).span.start),
@@ -701,6 +710,23 @@ pub fn pickle_unit(w: &mut Worker, index: &Index, lines: &Lines, unit: &Unit, so
     p.buf.end_length(len);
     let (span, point) = p.root_span(unit.file);
     p.positions.insert(0, Pos { addr: root, file: unit.file, span, point, def: false, switch: true, origin: None });
+    // The package's identifier where nothing placed it, by its unit:
+    // - the empty package's: `Parsers`' `PackageDef(Ident(nme.EMPTY_PACKAGE), stats)` has no span, so the identifier
+    //   reads back at the start of its statements' envelope, the file's first statement (Parsers.scala 5053-5054,
+    //   5090);
+    // - a `package object`'s: its package's at the definition's start, its `package` keyword (`package object foo`
+    //   is `package foo { object package }`, scalac's 0 in pos/t6084 and i2212);
+    // - a clause's package: none of its own, read back at its first tree's start, scalac's own place for it.
+    // Each with no extent, each where the parser read it (`WrittenPlaces`).
+    let places = &p.w.ast(unit.file).notes.places;
+    let place = if pkg == ROOT_PKG {
+        places.first_stat
+    } else {
+        places.package_object
+    };
+    if let Some(at) = place.filter(|_| !p.positions.iter().any(|q| q.addr == id_at)) {
+        p.positions.insert(1, Pos { addr: id_at, file: unit.file, span: Span { start: at, end: at }, point: None, def: false, switch: false, origin: None });
+    }
     let pending: Vec<String> = p
         .places
         .iter()
@@ -1152,6 +1178,41 @@ impl<'w, 'a> P<'w, 'a> {
         Some(Span { start: point, end: pos.end })
     }
 
+    /// A synthetic definition's own position: `synth_def_span` where set, else the synthetic span.
+    pub(super) fn def_position(&mut self, addr: usize) {
+        match self.synth_def_span {
+            Some((span, point)) => self.positions.push(Pos { addr, file: self.file, span, point: Some(point), def: false, switch: false, origin: None }),
+            None => self.synthetic_position(addr),
+        }
+    }
+
+    /// The span and point of an enum's lookup members, which the expansion of its last case holds
+    /// (`DefinesEnumLookupMethods` on `enumCases.last`, Desugar.scala 818):
+    /// - a value case written alone (`case A`, a `ModuleDef` from `Parsers.enumCase`'s `atSpan(start, nameStart)`):
+    ///   `expandEnumModule`'s `flatTree(vdef :: scaffolding).withSpan(span)`, the case from its statement's start (its
+    ///   annotations' or its `case` keyword's, `WrittenPlaces::enum_cases`), at its name (DesugarEnums.scala 283-293);
+    /// - the last name of `case A, B` (a `PatDef`): `Desugar.patDef`'s `Span(id.span.start, id.span.end, id.span.start)` (Desugar.scala 1449);
+    /// - a class case: `enumCaseMeths`'s scaffolding has no span, so `Positioned.envelope` gives it the end of the
+    ///   statements to its left, the class case's end (Positioned.scala 84-100).
+    fn enum_lookup_case(&self, e: ClassId) -> Option<(Span, u32)> {
+        let info = self.w.syms.class(e);
+        let &k = info.children.last()?;
+        let ki = self.w.syms.class(k);
+        if !self.is_unit_source(ki.file) {
+            return None;
+        }
+        if ki.singleton.is_none() {
+            let r = self.own_def_span(ki.file, ki.def)?;
+            return Some((Span { start: r.end, end: r.end }, r.end));
+        }
+        let id = ki.span;
+        let place = ki.def.and_then(|d| self.w.ast(ki.file).notes.places.enum_cases.get(&d).copied());
+        Some(match place {
+            Some(c) if !c.listed => (Span { start: c.start, end: id.end }, id.start),
+            _ => (id, id.start),
+        })
+    }
+
     fn synthetic_position(&mut self, addr: usize) {
         let s = self.synth_span;
         self.positions.push(Pos { addr, file: self.file, span: Span { start: s.start, end: s.start }, point: None, def: false, switch: false , origin: None });
@@ -1377,20 +1438,36 @@ impl<'w, 'a> P<'w, 'a> {
         (is_case || info.value_class || defaults) && !nested_companion && written.map_or(true, |co| self.w.syms.class(co).kind != ClassKind::Object)
     }
 
-    fn annotations_of_class(&mut self, c: ClassId, top: bool) {
+    fn annotations_of_class(&mut self, c: ClassId, top: bool, of: usize) {
         if top {
-            self.source_file_annotation();
+            let at = self.written_position(of);
+            self.source_file_annotation(at);
         }
         let _ = c;
     }
 
-    /// `@SourceFile("path")`, which scalac puts on every top-level class.
-    fn source_file_annotation(&mut self) {
+    /// The position written for the definition at `of`, where one is.
+    fn written_position(&self, of: usize) -> Option<Pos> {
+        self.positions.iter().rev().find(|p| p.addr == of).cloned()
+    }
+
+    /// `@SourceFile("path")`, which scalac puts on every top-level class, at the class's definition: PostTyper's
+    /// `Annotation(defn.SourceFileAnnot, Literal(..), tree.span)` (PostTyper.scala 626), `tree` the class's `TypeDef`.
+    /// Its trees have no span of their own, so the pickle carries the `Apply`'s alone. `at`: the class's definition's
+    /// position, none where it has none.
+    fn source_file_annotation(&mut self, at: Option<Pos>) {
         let path = self.source_path.clone();
         self.buf.byte(ANNOTATION);
         let len = self.buf.begin_length();
         let tpe = self.buf.addr();
         self.external_typeref("scala.annotation.internal", "SourceFile");
+        // Its trees, none with a span of its own, read back at the `Apply`'s start.
+        let saved = self.synth_span;
+        if let Some(p) = at {
+            let addr = self.buf.addr();
+            self.positions.push(Pos { addr, def: false, switch: false, origin: None, ..p });
+            self.synth_span = Span { start: p.span.start, end: p.span.start };
+        }
         self.buf.byte(APPLY);
         let app = self.buf.begin_length();
         self.buf.byte(SELECTIN);
@@ -1408,6 +1485,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.nat(s as u64);
         self.buf.end_length(app);
         self.buf.end_length(len);
+        self.synth_span = saved;
     }
 
     fn shared_type_at(&mut self, addr: usize) {
@@ -1482,8 +1560,8 @@ impl<'w, 'a> P<'w, 'a> {
         self.write_flags(&flags);
         let qualified = self.class_access_qualifier(&info);
         self.write_access_qualifier(qualified);
-        self.annotations_of_class(c, top);
-        self.child_annotations(c);
+        self.annotations_of_class(c, top, addr);
+        self.child_annotations(c, addr);
         self.class_source_annotations(c);
         self.buf.end_length(len);
     }
@@ -1584,8 +1662,10 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     /// `@Child[C]` for each direct subclass of a sealed class, the last found first, as
-    /// scalac's `PostTyper` adds them.
-    fn child_annotations(&mut self, c: ClassId) {
+    /// scalac's `PostTyper` adds them. Each at the class's point with no extent, Namer's
+    /// `Annotation.Child(child, cls.span.startPos)` (Namer.scala 502), the `Apply`'s the one position its trees have.
+    /// `of`: the class's TYPEDEF.
+    fn child_annotations(&mut self, c: ClassId, of: usize) {
         if self.w.syms.class(c).mods & mods::SEALED == 0 && self.w.syms.class(c).kind != ClassKind::Enum {
             return;
         }
@@ -1595,6 +1675,14 @@ impl<'w, 'a> P<'w, 'a> {
             let len = self.buf.begin_length();
             let tpe = self.buf.addr();
             self.external_typeref("scala.annotation.internal", "Child");
+            // Its trees, none with a span of its own, read back at the `Apply`'s.
+            let saved = self.synth_span;
+            if let Some(p) = self.written_position(of) {
+                let at = p.point.unwrap_or(p.span.start);
+                let addr = self.buf.addr();
+                self.positions.push(Pos { addr, span: Span { start: at, end: at }, point: None, def: false, switch: false, origin: None, ..p });
+                self.synth_span = Span { start: at, end: at };
+            }
             self.buf.byte(APPLY);
             let app = self.buf.begin_length();
             self.buf.byte(TYPEAPPLY);
@@ -1613,6 +1701,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.end_length(ta);
             self.buf.end_length(app);
             self.buf.end_length(len);
+            self.synth_span = saved;
         }
     }
 
@@ -1884,6 +1973,10 @@ impl<'w, 'a> P<'w, 'a> {
                 continue;
             }
             let ty = self.w.sig_of(s).ret;
+            // `Desugar.valDef`'s setter of the parameter, `cpy.DefDef(vdef)`: the parameter as written (`Parsers.param`'s
+            // span, `var value: Int`) and its name's point; its synthetic parameter, types and body at its start.
+            let span = if self.is_unit_source(si.file) { self.param_layout(s).map(|(full, _)| full) } else { None };
+            let saved_synth = span.map(|sp| std::mem::replace(&mut self.synth_span, Span { start: sp.start, end: sp.start }));
             let addr = self.buf.addr();
             self.buf.byte(DEFDEF);
             let len = self.buf.begin_length();
@@ -1910,7 +2003,13 @@ impl<'w, 'a> P<'w, 'a> {
                 self.scoped_access(s);
             }
             self.param_source_annotations(s, annot::Dest::Setter);
-            self.synthetic_position(addr);
+            match span {
+                Some(sp) => self.positions.push(Pos { addr, file: si.file, span: sp, point: Some(si.span.start), def: false, switch: false, origin: None }),
+                None => self.synthetic_position(addr),
+            }
+            if let Some(saved) = saved_synth {
+                self.synth_span = saved;
+            }
             self.buf.end_length(len);
         }
     }
@@ -1932,7 +2031,16 @@ impl<'w, 'a> P<'w, 'a> {
         if info.value_class && !parents.iter().any(|&p| self.w.types.underlying(p) == self.w.b.t_any_val) {
             if calls {
                 let t = self.w.b.t_any_val;
-                self.at_class_name(c, name_at, |p| p.parent_call(c, t));
+                // `extends AnyVal` as the source writes it: the call at the written type, as a written parent's
+                // (`parent_layouts`); the typer's parents do not hold it.
+                match self.parent_layouts(c, 1).and_then(|l| l.first().copied()).filter(|_| parents.is_empty()) {
+                    Some(layout) => {
+                        self.parent_layout = Some(layout);
+                        self.parent_or_elided(|w| w.parent_call(c, t));
+                        self.parent_layout = None;
+                    }
+                    None => self.at_class_name(c, name_at, |p| p.parent_call(c, t)),
+                }
             } else {
                 self.external_tpt("scala", "AnyVal");
             }
@@ -1955,8 +2063,16 @@ impl<'w, 'a> P<'w, 'a> {
             }
             let layout = layouts.as_ref().and_then(|l| l.get(i).copied());
             if calls && i == 0 && first_is_class {
+                // An enum's class case that extends nothing as written: its parent is the enum `DesugarEnums` gives it
+                // (`enumClassRef`), with no span, so after the constructor (`Positioned.envelope`).
+                let enum_parent = (info.kind == ClassKind::EnumCase && layout.is_none() && self.writes_no_parents(c))
+                    .then(|| self.written_ctor_end(c))
+                    .flatten();
                 self.parent_layout = layout;
-                self.parent_or_elided(|w| w.parent_call(c, p));
+                match enum_parent {
+                    Some(end) => self.at_class_name(c, Span { start: end, end }, |w| w.parent_or_elided(|w| w.parent_call(c, p))),
+                    None => self.parent_or_elided(|w| w.parent_call(c, p)),
+                }
                 self.parent_layout = None;
             } else if let Some((args, via, prelude)) = self.trait_args(c, p).filter(|_| calls) {
                 // A trait parent the class passes arguments to: its constructor call.
@@ -2012,8 +2128,14 @@ impl<'w, 'a> P<'w, 'a> {
         let info = self.w.syms.class(c);
         let Some(def) = info.def.filter(|_| self.is_unit_source(info.file)) else { return Vec::new() };
         let ast = self.w.ast(info.file);
+        // A variant parameter from its `+` or `-` (`Parsers.typeParam`'s `atSpan(start, nameStart)`).
+        let text = self.w.files.as_slice()[info.file.0 as usize].text.as_bytes();
+        let variance = |s: Span| match s.start.checked_sub(1).and_then(|i| text.get(i as usize)) {
+            Some(b'+') | Some(b'-') => Span { start: s.start - 1, end: s.end },
+            _ => s,
+        };
         match &ast.def(def).kind {
-            crate::ast::DefKind::Class(cd) if cd.tparams.len() == n => cd.tparams.iter().map(|t| t.span).collect(),
+            crate::ast::DefKind::Class(cd) if cd.tparams.len() == n => cd.tparams.iter().map(|t| variance(t.span)).collect(),
             _ => Vec::new(),
         }
     }
@@ -2058,6 +2180,13 @@ impl<'w, 'a> P<'w, 'a> {
     /// with no layout: the same tree has the same position however its unit was reached.
     pub(super) fn is_unit_source(&self, file: FileId) -> bool {
         file == self.file && self.is_own_source(file)
+    }
+
+    /// Whether a source class writes no parents (no `extends`).
+    fn writes_no_parents(&self, c: ClassId) -> bool {
+        let info = self.w.syms.class(c);
+        let Some(def) = info.def.filter(|_| self.is_unit_source(info.file)) else { return false };
+        matches!(&self.w.ast(info.file).def(def).kind, crate::ast::DefKind::Class(cd) if cd.parents.is_empty())
     }
 
     fn written_ctor_end(&self, c: ClassId) -> Option<u32> {
@@ -2265,9 +2394,6 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let ast = self.w.ast(info.file);
         let crate::ast::DefKind::Class(cd) = &ast.def(def).kind else { return None };
-        if cd.self_type.is_some() || cd.self_alias != crate::names::EMPTY {
-            return None;
-        }
         // `Parsers.classConstr`, `atSpan(in.lastOffset)` after the name through its clauses: from the name's end to
         // the last clause's `)`, or the type parameters' `]`, a span of its own where the class writes either.
         let name_end = info.span.end;
@@ -2286,9 +2412,25 @@ impl<'w, 'a> P<'w, 'a> {
             let end = p.ends.last().map_or(t.end, |&e| e);
             add(Span { start: t.start, end });
         }
+        // A written self definition (`this: T =>`, `self =>`), the template's first child after its parents: from its
+        // name, the body's first token, through its type or its name (`Parsers.selfType`'s `ValDef`), where the parser
+        // read it (`WrittenPlaces::self_starts`).
+        if cd.self_type.is_some() || cd.self_alias != crate::names::EMPTY {
+            let start = ast.notes.places.self_starts.get(&def).copied()?;
+            let end = match cd.self_type {
+                Some(t) => ast.ty_spans[t.idx()].end,
+                None => (start as usize + self.w.interner.get(cd.self_alias).len()) as u32,
+            };
+            add(Span { start, end });
+        }
         for st in &cd.body {
             match *st {
                 crate::ast::Stmt::Expr(e) => add(ast.expr_span(e)),
+                // An enum's case from its statement's start (`Parsers.enumCase`'s span; `case A, B` one statement).
+                crate::ast::Stmt::Def(d) if matches!(&ast.def(d).kind, crate::ast::DefKind::Class(k) if k.kind == crate::ast::ClassKind::EnumCase) => {
+                    let r = ast.def_range(d);
+                    add(Span { start: ast.notes.places.enum_cases.get(&d).map_or(r.start, |c| c.start), end: r.end });
+                }
                 crate::ast::Stmt::Def(d) => add(ast.def_range(d)),
                 crate::ast::Stmt::Import(i) => {
                     let r = ast.import_stmts[i as usize];
@@ -2299,7 +2441,16 @@ impl<'w, 'a> P<'w, 'a> {
                 }
             }
         }
-        let t = u?;
+        // A class or trait that writes nothing in its template (`abstract class C`, `trait A`): template and
+        // constructor at the definition's start, the empty template's place under the `TypeDef`.
+        let t = match u {
+            Some(t) => t,
+            None if matches!(cd.kind, crate::ast::ClassKind::Class | crate::ast::ClassKind::Trait) && written_ctor.is_none() => {
+                let at = ast.def_range(def).start;
+                return Some((Span { start: at, end: at }, Span { start: at, end: at }));
+            }
+            None => return None,
+        };
         let ctor = written_ctor.unwrap_or(Span { start: t.start, end: t.start });
         // An anonymous class's template in braces is `Parsers.newExpr`'s, repositioned to `Span(start, in.lastOffset)`:
         // from its `new` through its `}` (one whose body is indented keeps its envelope).
@@ -2705,7 +2856,11 @@ impl<'w, 'a> P<'w, 'a> {
         self.next_tree_pos = None;
         self.bounds(&info);
         if let Some(sp) = written {
-            self.positions.push(Pos { addr, file: self.src_ctx, span: sp, point: Some(sp.start), def: false, switch: false, origin: None });
+            // Its point is its name, after a variance's sign.
+            let text = self.w.files.as_slice().get(self.src_ctx.0 as usize).map(|f| f.text.as_bytes());
+            let signed = text.and_then(|t| t.get(sp.start as usize)).is_some_and(|&b| b == b'+' || b == b'-');
+            let point = if signed { sp.start + 1 } else { sp.start };
+            self.positions.push(Pos { addr, file: self.src_ctx, span: sp, point: Some(point), def: false, switch: false, origin: None });
         }
         let mut flags: Vec<u8> = extra.to_vec();
         if in_template && info.variance > 0 {
@@ -4158,6 +4313,13 @@ impl<'w, 'a> P<'w, 'a> {
     #[allow(clippy::too_many_arguments)]
     fn default_getter(&mut self, method: &str, index: u32, tparams: &[TParamId], before: &[ClauseSig], ty: TypeId, unchecked: bool, private: bool, synthetic: bool, exported: bool, inline: bool, producer: Producer, default: Option<crate::tir::TExprId>) {
         let addr = self.buf.addr();
+        // At its default as written: `Desugar.defaultGetters`' `withSpan(vparam.rhs.span)`, its trees without a
+        // span of their own at its start.
+        let at = default.filter(|_| producer == Producer::Default).and_then(|e| self.w.prog.span_of(e)).filter(|&(f, sp)| f == self.src_ctx && self.is_unit_source(f) && sp.end > sp.start).map(|(_, sp)| sp);
+        let saved_synth = self.synth_span;
+        if let Some(sp) = at {
+            self.synth_span = Span { start: sp.start, end: sp.start };
+        }
         self.buf.byte(DEFDEF);
         let len = self.buf.begin_length();
         let n = self.names.default_getter(method, index);
@@ -4210,7 +4372,11 @@ impl<'w, 'a> P<'w, 'a> {
             flags.push(INLINE);
         }
         self.write_flags(&flags);
-        self.synthetic_position(addr);
+        match at {
+            Some(sp) => self.positions.push(Pos { addr, file: self.src_ctx, span: sp, point: Some(sp.start), def: false, switch: false, origin: None }),
+            None => self.synthetic_position(addr),
+        }
+        self.synth_span = saved_synth;
         self.buf.end_length(len);
     }
 
@@ -4290,8 +4456,10 @@ impl<'w, 'a> P<'w, 'a> {
         if !self.is_own_source(file) {
             return None;
         }
-        let r = self.w.ast(file).def_range(d);
-        (r != crate::ast::NO_RANGE).then_some(r)
+        if self.w.ast(file).def_range(d) == crate::ast::NO_RANGE {
+            return None;
+        }
+        Some(self.written_def_range(file, d))
     }
 
     /// A type alias, an abstract type member, or a match type's alias.
@@ -4503,6 +4671,7 @@ impl<'w, 'a> P<'w, 'a> {
                     span: self.own_def_span(ki.file, ki.def).filter(|_| self.is_unit_source(ki.file)).unwrap_or(Span { start: ki.span.start, end: ki.span.start }),
                     origin_span: Span { start: ki.span.start, end: ki.span.start },
                     name_at: ki.span.start,
+                    origin_at: ki.span.start,
                     synthetic: true,
                     mods: ki.mods & mods::PRIVATE,
                 }
@@ -4512,9 +4681,20 @@ impl<'w, 'a> P<'w, 'a> {
                 companion,
                 name: self.name(info.name),
                 owner: info.owner,
-                span: self.def_span(info.file, info.def, info.span),
+                // An enum's companion `Desugar.classDef` made: `companionDefs`' `withSpan(cdef.span)` (Desugar.scala
+                // 984), the enum's span, its name the point.
+                span: companion
+                    .filter(|&k| made_companion && self.w.syms.class(k).kind == ClassKind::Enum)
+                    .and_then(|k| {
+                        let ki = self.w.syms.class(k);
+                        self.own_def_span(ki.file, ki.def).filter(|_| self.is_unit_source(ki.file))
+                    })
+                    .unwrap_or_else(|| self.def_span(info.file, info.def, info.span)),
                 origin_span: self.def_span(info.file, info.def, info.span),
-                name_at: info.span.start,
+                // The object's own name where the source writes it (a case class's companion the source writes has the
+                // class's span in its class's information).
+                name_at: info.def.filter(|_| self.is_unit_source(info.file)).map_or(info.span.start, |d| self.w.ast(info.file).def(d).span.start),
+                origin_at: info.span.start,
                 synthetic: info.def.is_none() || made_companion || info.synthetic_companion,
                 mods: info.mods | access,
             },
@@ -4544,6 +4724,7 @@ impl<'w, 'a> P<'w, 'a> {
             span: self.own_def_span(info.file, info.def).filter(|_| self.is_unit_source(info.file)).unwrap_or(Span { start: info.span.start, end: info.span.start }),
             origin_span: Span { start: info.span.start, end: info.span.start },
             name_at: info.span.start,
+            origin_at: info.span.start,
             synthetic: true,
             mods: info.mods & mods::PRIVATE,
         };
@@ -4578,7 +4759,13 @@ impl<'w, 'a> P<'w, 'a> {
         // The module val, at the object's start with no extent (`Desugar.moduleDef`'s `withSpan(mdef.span.startPos)`),
         // its type tree and its `New` with it.
         let val_span = Span { start: obj.span.start, end: obj.span.start };
-        let saved_synth = std::mem::replace(&mut self.synth_span, val_span);
+        // A made companion's val has its type and `New` at its template's start, as its template's trees
+        // (`Positioned.envelope`): an enum's first case, a class's first default.
+        let inner = match obj.companion.filter(|_| obj.synthetic && obj.span.end > obj.span.start).and_then(|_| self.made_companion_template(obj)) {
+            Some(t) => Span { start: t.start, end: t.start },
+            None => val_span,
+        };
+        let saved_synth = std::mem::replace(&mut self.synth_span, inner);
         let vaddr = self.buf.addr();
         self.define(vkey, vaddr);
         if let Some(ms) = obj.class.and_then(|o| self.w.syms.class(o).module_sym) {
@@ -4636,7 +4823,7 @@ impl<'w, 'a> P<'w, 'a> {
         // the val's own position moved: none where that span is empty.
         let o = obj.origin_span;
         let recorded = o.end >= o.start && o != Span::default();
-        let origin = if (o.start..=o.end).contains(&obj.name_at) { obj.name_at } else { o.start };
+        let origin = if (o.start..=o.end).contains(&obj.origin_at) { obj.origin_at } else { o.start };
         self.positions.push(Pos { addr: vaddr, file: self.src_ctx, span: vspan, point: Some(vpoint), def: recorded, switch: false, origin: Some(origin) });
         self.buf.end_length(vlen);
         self.synth_span = saved_synth;
@@ -4675,12 +4862,31 @@ impl<'w, 'a> P<'w, 'a> {
         self.write_flags(&flags);
         self.write_access_qualifier(qualified);
         if top {
-            self.source_file_annotation();
+            // The module class's `TypeDef` at the object's span (`moduleDef`'s `classDef(cls).withSpan(mdef.span)`),
+            // as `position` places it below.
+            let s = obj.span;
+            let at = (s.end >= s.start && s != Span::default()).then(|| Pos {
+                addr: caddr,
+                file: self.src_ctx,
+                span: s,
+                point: Some(if (s.start..=s.end).contains(&obj.name_at) { obj.name_at } else { s.start }),
+                def: false,
+                switch: false,
+                origin: None,
+            });
+            self.source_file_annotation(at);
         }
         if let Some(o) = obj.class {
             self.class_source_annotations(o);
         }
-        self.position(caddr, obj.span, obj.name_at);
+        // The module class at the object's span, its point its name; the origins record the definition point they
+        // recorded before `name_at` was the written object's own (`Obj::origin_at`), an input of names.
+        let s = obj.span;
+        if s.end >= s.start && s != Span::default() {
+            let inside = |at: u32| if (s.start..=s.end).contains(&at) { at } else { s.start };
+            let (point, origin) = (inside(obj.name_at), inside(obj.origin_at));
+            self.positions.push(Pos { addr: caddr, file: self.src_ctx, span: s, point: Some(point), def: true, switch: false, origin: (origin != point).then_some(origin) });
+        }
         self.buf.end_length(len);
     }
 
@@ -4694,6 +4900,34 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     /// The module class's template; how many parents it appends after the declared ones.
+    /// The template of a companion the desugaring made (`companionDefs`): an enum's (`enum_companion_layout`), a
+    /// case class's (`case_member_layout`).
+    fn made_companion_template(&mut self, obj: &Obj) -> Option<Span> {
+        let k = obj.companion?;
+        // A class's companion made for its default getters: their envelope. One made with no statement (a value
+        // class's, `companionDefs(anyRef, Nil)`) has an empty template at its class's start, scalac's `0..0`.
+        if self.w.syms.class(k).mods & mods::CASE == 0 && self.w.syms.class(k).kind == ClassKind::Class {
+            if let Some(t) = self.ctor_defaults_envelope(k) {
+                return Some(t);
+            }
+            let ki = self.w.syms.class(k);
+            if let Some(r) = self.own_def_span(ki.file, ki.def).filter(|_| self.is_unit_source(ki.file)) {
+                return Some(Span { start: r.start, end: r.start });
+            }
+        }
+        self.enum_companion_layout(k).or_else(|| self.case_member_layout(k)).map(|(t, _)| t)
+    }
+
+    /// A class's constructor defaults as written, their envelope: the template of the companion made for its default
+    /// getters (`companionDefs(anyRef, companionMembers)`, each getter at its default).
+    fn ctor_defaults_envelope(&self, k: ClassId) -> Option<Span> {
+        let info = self.w.syms.class(k);
+        let def = info.def.filter(|_| self.is_unit_source(info.file))?;
+        let ast = self.w.ast(info.file);
+        let crate::ast::DefKind::Class(cd) = &ast.def(def).kind else { return None };
+        cd.clauses.iter().flat_map(|c| c.params.iter()).filter_map(|p| p.default).map(|e| ast.expr_spans[e.idx()]).reduce(|a, b| Span { start: a.start.min(b.start), end: a.end.max(b.end) })
+    }
+
     fn object_template(&mut self, obj: &Obj) -> u32 {
         let companion_case = obj.companion.filter(|&k| {
             let ki = self.w.syms.class(k);
@@ -4705,7 +4939,7 @@ impl<'w, 'a> P<'w, 'a> {
         let case_object = obj.mods & mods::CASE != 0;
         let layout = match obj.class.filter(|_| !obj.synthetic) {
             Some(o) => self.template_layout(o),
-            None => obj.companion.and_then(|k| self.case_member_layout(k)).map(|(t, _)| (t, Span { start: t.start, end: t.start })),
+            None => self.made_companion_template(obj).map(|t| (t, Span { start: t.start, end: t.start })),
         };
         let taddr = self.buf.addr();
         self.buf.byte(TEMPLATE);
@@ -4715,7 +4949,9 @@ impl<'w, 'a> P<'w, 'a> {
         let made = obj.synthetic && obj.span.end > obj.span.start;
         let saved_parents_synth = self.synth_span;
         if made {
-            self.synth_span = Span { start: obj.span.start, end: obj.span.start };
+            // At the template's start, which `Positioned.envelope` gives them (an enum's companion: its first case).
+            let at = layout.map_or(obj.span.start, |(t, _)| t.start);
+            self.synth_span = Span { start: at, end: at };
         }
         // Parents.
         // The parents the desugaring gave the object are appended below, in scalac's spelling.
@@ -5029,6 +5265,14 @@ impl<'w, 'a> P<'w, 'a> {
                 }
             }
         }
+        // The lookup members are the expansion of the last case (`DesugarEnums.expandSimpleEnumCase`'s scaffolding,
+        // `flatTree(vdef :: scaffolding).withSpan(span)`): at its span, their trees at its start.
+        let lookup = self.enum_lookup_case(e);
+        let saved = (self.synth_span, self.synth_def_span);
+        if let Some((sp, point)) = lookup {
+            self.synth_span = Span { start: sp.start, end: sp.start };
+            self.synth_def_span = Some((sp, point));
+        }
         if all_values && !info.children.is_empty() {
             let array = self.w.b.array;
             let arr = self.w.types.class(array, &[enum_ty]);
@@ -5046,6 +5290,8 @@ impl<'w, 'a> P<'w, 'a> {
             self.define(Key::EnumNew(e), na);
             self.synth_def("$new", &[("_$ordinal", int), ("$name", string)], false, enum_ty, &[PRIVATE, LOCAL, SYNTHETIC], Synth::EnumNew(e));
         }
+        self.synth_span = saved.0;
+        self.synth_def_span = saved.1;
     }
 
     /// A value case scalac's `DesugarEnums` makes with `$new`: of an enum without type
@@ -5063,7 +5309,14 @@ impl<'w, 'a> P<'w, 'a> {
     fn enum_tail(&mut self, e: ClassId) {
         let enum_ty = self.enum_wild_type(e);
         let int = self.w.b.t_int;
+        let saved = (self.synth_span, self.synth_def_span);
+        if let Some((sp, point)) = self.enum_lookup_case(e) {
+            self.synth_span = Span { start: sp.start, end: sp.start };
+            self.synth_def_span = Some((sp, point));
+        }
         self.synth_def("fromOrdinal", &[("ordinal", int)], false, enum_ty, &[SYNTHETIC], Synth::FromOrdinal(e));
+        self.synth_span = saved.0;
+        self.synth_def_span = saved.1;
         self.sum_mirror_members(e, Synth::SelectOrdinal(e));
     }
 
@@ -5126,7 +5379,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.tpt(ty);
         self.synth_rhs(name, ty, body, &[]);
         self.write_flags(flags);
-        self.synthetic_position(addr);
+        self.def_position(addr);
         self.buf.end_length(len);
     }
 
@@ -5680,6 +5933,31 @@ impl<'w, 'a> P<'w, 'a> {
         Some((Span { start: range.start, end }, range))
     }
 
+    /// The template of the companion `Desugar.classDef` makes for an enum (`companionDefs(anyRef, companionMembers)`,
+    /// Desugar.scala 980-985): its statements are the enum's cases, so its span is theirs, from the first case's
+    /// `case` (`Parsers.enumCase`'s span) to the last case's end, and its trees without a span of their own stand at
+    /// its start (`Positioned.envelope`). As `case_member_layout`: the template and its start.
+    fn enum_companion_layout(&self, e: ClassId) -> Option<(Span, Span)> {
+        let info = self.w.syms.class(e);
+        let def = info.def?;
+        if info.kind != ClassKind::Enum || !self.is_unit_source(info.file) {
+            return None;
+        }
+        let ast = self.w.ast(info.file);
+        let crate::ast::DefKind::Class(cd) = &ast.def(def).kind else { return None };
+        let mut span: Option<Span> = None;
+        for st in &cd.body {
+            if let crate::ast::Stmt::Def(d) = *st {
+                if matches!(&ast.def(d).kind, crate::ast::DefKind::Class(k) if k.kind == crate::ast::ClassKind::EnumCase) {
+                    let r = ast.def_range(d);
+                    let s = Span { start: ast.notes.places.enum_cases.get(&d).map_or(r.start, |c| c.start), end: r.end };
+                    span = Some(span.map_or(s, |a| Span { start: a.start.min(s.start), end: a.end.max(s.end) }));
+                }
+            }
+        }
+        span.map(|t| (t, Span { start: t.start, end: t.start }))
+    }
+
     /// `type MirroredMonoType = C` and `def fromProduct(x$0: Product): MirroredMonoType`.
     fn mirror_members(&mut self, c: ClassId, tparams: &[TParamId]) {
         // dotty's `SyntheticMembers.addMirrorSupport`: a concrete `MirroredMonoType` the companion
@@ -5980,6 +6258,32 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn package_object(&mut self, pkg: PkgId, name: &str, defs: &[crate::ast::DefId]) {
         let f = self.file.0 as usize;
+        // `Desugar.packageDef`'s wrapper (Desugar.scala 1964-1967) has no span of its own: the envelope of the
+        // definitions it takes, from the first one's start to the last one's end. `moduleDef` puts its val at that start
+        // and its class at that span, the start its point, and its trees without a span there.
+        let envelope = if self.is_unit_source(self.file) {
+            // An extension method stands in its group, `Parsers.extension`'s `ExtMethods` from its `extension`
+            // (Parsers.scala 4658), which the wrapper takes: the keyword the parser read (`WrittenPlaces`).
+            let ast = self.w.ast(self.file);
+            let in_group = |d: crate::ast::DefId, r: Span| match &ast.def(d).kind {
+                crate::ast::DefKind::Fun(f) if f.is_extension => ast.notes.places.extension_keywords.get(&f.ext_group).map_or(r, |&k| Span { start: k.min(r.start), end: r.end }),
+                _ => r,
+            };
+            let e = defs.iter().map(|&d| (d, self.written_def_range(self.file, d))).filter(|(_, r)| *r != crate::ast::NO_RANGE).map(|(d, r)| in_group(d, r)).reduce(|a, b| Span { start: a.start.min(b.start), end: a.end.max(b.end) });
+            // A package object's statements are its `object package`'s, whose `objectDef(start, ..)` starts at its
+            // `package` keyword (Parsers.scala 5054-5059): `moduleDef` puts its val there.
+            let written = ast.notes.places.package_object;
+            match (e, written) {
+                (Some(e), Some(at)) => Some(Span { start: at.min(e.start), end: e.end }),
+                (e, _) => e,
+            }
+        } else {
+            None
+        };
+        let saved_synth = self.synth_span;
+        if let Some(e) = envelope {
+            self.synth_span = Span { start: e.start, end: e.start };
+        }
         let vaddr = self.buf.addr();
         self.buf.byte(VALDEF);
         let vlen = self.buf.begin_length();
@@ -6004,10 +6308,19 @@ impl<'w, 'a> P<'w, 'a> {
         self.synthetic_position(vaddr);
         self.buf.end_length(vlen);
         let caddr = self.buf.addr();
+        // No point of its own: one at its start reads back the same, and a written point is a definition's to the
+        // origins' roundtrip (tests/tasty's `origins roundtrip`).
+        let class_pos = envelope.map(|e| Pos { addr: caddr, file: self.src_ctx, span: e, point: None, def: false, switch: false, origin: None });
         self.buf.fill(fwd, caddr);
         self.buf.byte(TYPEDEF);
         let len = self.buf.begin_length();
         self.buf.nat(cn as u64);
+        // Its template has its statements' envelope too (the wrapper's `Template(.., nestedStats)`, no span of its
+        // own), its trees without a span at its start.
+        if let Some(e) = envelope {
+            let addr = self.buf.addr();
+            self.positions.push(Pos { addr, file: self.src_ctx, span: e, point: None, def: false, switch: false, origin: None });
+        }
         self.buf.byte(TEMPLATE);
         let tl = self.buf.begin_length();
         let t = self.w.b.t_any_ref;
@@ -6035,6 +6348,8 @@ impl<'w, 'a> P<'w, 'a> {
         self.package_members_this = Some((caddr, pkg));
         self.package_members_val = Some(self_type);
         self.in_package_object = true;
+        // The definitions it takes stand where they are written.
+        self.synth_span = saved_synth;
         for d in defs {
             if let Some(&s) = self.w.def_syms.get(f, d) {
                 let kind = self.w.syms.sym(s).kind;
@@ -6071,8 +6386,12 @@ impl<'w, 'a> P<'w, 'a> {
             flags.push(OPAQUE);
         }
         self.write_flags(&flags);
-        self.source_file_annotation();
-        self.synthetic_position(caddr);
+        self.source_file_annotation(class_pos);
+        match class_pos {
+            Some(p) => self.positions.push(p),
+            None => self.synthetic_position(caddr),
+        }
+        self.synth_span = saved_synth;
         self.buf.end_length(len);
     }
 
@@ -7253,9 +7572,19 @@ impl<'w, 'a> P<'w, 'a> {
     fn written_ty_pos(&self, file: FileId, t: crate::ast::TyExprId) -> (Span, Option<u32>) {
         let ast = self.w.ast(file);
         let span = ast.ty_spans[t.idx()];
+        // A function type whose parameters are in parentheses, `(A) => B` or `() ?=> B`, has its point at its arrow
+        // (`Parsers`' `typ`, the parenthesized parameters' `Function` at the arrow); `A => B` keeps its start
+        // (`atSpan(startOffset(t))`).
+        let text = self.w.files.as_slice()[file.0 as usize].text.as_bytes();
+        // A dependent one, its parameters named (`(x: C) => x.M`), keeps its start: `Typer.typedDependent` makes a
+        // `RefinedTypeTree` whose point is its span's start (Typer.scala 1788). So does a context function type
+        // (`(A, B) ?=> C`), as scalac's pickles of dotty's pos/i20206 and run/i13691 have it.
+        // The arrow where the parser read it (`WrittenPlaces::fun_arrows`).
+        if let (crate::ast::TyExpr::Fun(..), Some(&arrow), None) = (ast.ty(t), ast.notes.places.fun_arrows.get(&t), ast.fun_param_names(t)) {
+            return (span, Some(arrow));
+        }
         if let crate::ast::TyExpr::Select(_, name) = ast.ty(t) {
-            let text = &self.w.files.as_slice()[file.0 as usize].text;
-            let n = self.w.interner.get(name);
+            let n = self.w.interner.get(name).as_bytes();
             let end = span.end as usize;
             if end >= n.len() && text.get(end - n.len()..end) == Some(n) && (end - n.len()) as u32 >= span.start {
                 return (span, Some((end - n.len()) as u32));
@@ -7276,8 +7605,24 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn def_span(&self, file: FileId, def: Option<crate::ast::DefId>, fallback: Span) -> Span {
         match def {
-            Some(d) => self.w.ast(file).def_range(d),
+            Some(d) => self.written_def_range(file, d),
             None => fallback,
+        }
+    }
+
+    /// A definition's range as scalac's parser spans it: an enum's case written alone (`case C(x: Int)`, `case A`)
+    /// from its statement's start, its annotations' or its `case` keyword's (`Parsers.enumCase`'s
+    /// `atSpan(start, nameStart)`, `WrittenPlaces::enum_cases`), the name its point; a name of `case A, B` its own
+    /// (`Desugar.patDef`); any other definition its range.
+    fn written_def_range(&self, file: FileId, d: crate::ast::DefId) -> Span {
+        let ast = self.w.ast(file);
+        let r = ast.def_range(d);
+        if !matches!(&ast.def(d).kind, crate::ast::DefKind::Class(k) if k.kind == crate::ast::ClassKind::EnumCase) {
+            return r;
+        }
+        match ast.notes.places.enum_cases.get(&d) {
+            Some(c) if !c.listed => Span { start: c.start, end: r.end },
+            _ => r,
         }
     }
 
@@ -7560,6 +7905,8 @@ struct Obj {
     origin_span: Span,
     /// Where its name is.
     name_at: u32,
+    /// The point the origins record its definition by (`Pos.origin`), as before `name_at` was the written object's own.
+    origin_at: u32,
     synthetic: bool,
     mods: Mods,
 }

@@ -11,3 +11,4 @@ review-leading-package	first difference at line 5: scalac `Select [s1 9..12@11 2
 shape-sweep	first difference at line 116: scalac `Ident [s1 390..390@390 20:38-20:38] sym=<empty>.TryReturn.read#()scala.Int {method} pre=none` teq `CaseDef [s1 401..423@401 20:49-20:71]`
 synth	first difference at line 21: scalac `DefDef [s1 11..11@11 1:11-1:11] sym=<empty>.P.hashCode#()scala.Int {method,override,synthetic}` teq `ValDef [s1 13..19@13 1:13-1:19] sym=<empty>.P.a {paramAccessor
 transparent	first difference at line 25: scalac `Inlined [s1 78..85@82 3:10-3:17] call=<empty>.T callpos=[s1 78..85@82 3:10-3:17]` teq `Inlined [s1 78..85@82 3:10-3:17] call=? callpos=[s1 78..85@82 3:10-3:17]`
+value-class-companion	first difference at line 9: scalac `DefDef [s1 7..19@7 1:7-1:19] sym=<empty>.C.<init>#(scala.Int)scala.Int {method}` teq `DefDef [s1 7..19@7 1:7-1:19] sym=<empty>.C.<init>#(scala.Int)C {method}`

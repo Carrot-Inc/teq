@@ -7,8 +7,10 @@ case-std-number-scan-sorted	fail	-	first difference at line 400: scalac `Ident [
 companion-order	pass	-	
 ctor	pass	-	
 dead-branch	pass	-	
+dependent-function-type	pass	-	
 diamond	pass	-	
 diamond-self	fail	-	first difference at line 80: scalac `ValDef [s1 422..433@422 6:11-6:22] sym=<empty>.S1.self {deferred,private,local}` teq `ValDef [s1 428..430@428 6:17-6:19] sym=<empty>.S1.self {deferred,private,loca
+empty-package-import	pass	-	
 global-dead-branch	pass	-	
 hidden	fail	-	first difference at line 35: scalac `Select [s1 97..106@103 7:4-7:13] sym=scala.sys.package {module,lazy,final} qual=scala.sys` teq `Select [s1 97..106@97 7:4-7:13] sym=scala.sys.package {module,lazy,
 hidden-gadt	fail	-	first difference at line 32: scalac `DefDef [s1 31..31@31 2:11-2:11] sym=<empty>.IntBox.hashCode#()scala.Int {method,override,synthetic}` teq `ValDef [s1 38..44@38 2:18-2:24] sym=<empty>.IntBox.x {par
@@ -42,3 +44,4 @@ type-path	pass	-
 type-select	pass	-	
 type-trace	pass	-	
 unchecked	pass	-	
+value-class-companion	fail	-	first difference at line 9: scalac `DefDef [s1 7..19@7 1:7-1:19] sym=<empty>.C.<init>#(scala.Int)scala.Int {method}` teq `DefDef [s1 7..19@7 1:7-1:19] sym=<empty>.C.<init>#(scala.Int)C {method}`

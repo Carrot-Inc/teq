@@ -712,6 +712,45 @@ pub struct SyntaxNotes {
     /// The definitions a val or var of several names made (`val a, b: T`): one `PatDef` to the reference,
     /// no `ValDef` (`TreeInfo.defKind` tells them apart).
     pub several_names: crate::intern::FxMap<DefId, ()>,
+    /// Where the parser read the tokens the TASTy writer starts trees at (`WrittenPlaces`), always recorded.
+    pub places: WrittenPlaces,
+}
+
+/// The places of tokens the parser read where scalac's parser starts a tree it pickles, each the offset dotty's
+/// `Parsers` passes to `atSpan`: recorded as the parser consumes the token, so that a comment, a string or an identifier
+/// holding the word is never taken for it. The TASTy writer reads them and nothing of the file's text; a place not
+/// recorded is not written (the writer leaves the tree's position to its read-back).
+#[derive(Default, Debug)]
+pub struct WrittenPlaces {
+    /// The file's first statement, past its leading separators (`compilationUnit`'s `in.offset` after its `SEMI`s,
+    /// Parsers.scala 5053-5054, a script's header skipped by the lexer as SourceFile.scala 27-37 skips it): where the
+    /// empty package's identifier reads back where the file's statements are its own. On every AST of the file.
+    pub first_stat: Option<u32>,
+    /// A package object's `package` keyword, on its package block's AST, whose package is the object's
+    /// (`objectDef(start, ..)` of `topstats`, Parsers.scala 5054-5059). An offset alone: a name here would be the
+    /// parser thread's, which `frontend::remap_names` does not move into the build's interner.
+    pub package_object: Option<u32>,
+    /// Each extension group's `extension` keyword by the group's number (`FunDef::ext_group`): `Parsers.extension`'s
+    /// `start = in.skipToken()`, its `ExtMethods`' span start (Parsers.scala 4632, 4658).
+    pub extension_keywords: crate::intern::FxMap<u32, u32>,
+    /// Each enum case's place by its definition: its statement's start (`defOrDcl(in.offset, ..)`, its annotations'
+    /// or its `case` keyword's, Parsers.scala 4946, 4092, 4413), and whether its statement names several (`case A, B`,
+    /// a `PatDef`, Parsers.scala 4415-4426).
+    pub enum_cases: crate::intern::FxMap<DefId, CasePlace>,
+    /// A template's written self definition's start by its class's definition: the body's first token past its `{` or
+    /// colon and separators (`Parsers.selfType`'s `atSpan(in.offset)` at its name or `this`, Parsers.scala 4902).
+    pub self_starts: crate::intern::FxMap<DefId, u32>,
+    /// A function type written from a `(` (`(A) => B`), its arrow by the type: `Parsers.typ`'s parenthesized
+    /// parameters make the `Function` at the arrow (`functionRest`'s `atSpan(start, in.offset)`, Parsers.scala
+    /// 1724-1726). Not a context function's.
+    pub fun_arrows: crate::intern::FxMap<TyExprId, u32>,
+}
+
+/// An enum case's place (`WrittenPlaces::enum_cases`).
+#[derive(Clone, Copy, Debug)]
+pub struct CasePlace {
+    pub start: u32,
+    pub listed: bool,
 }
 
 /// An annotation of a binder (`SyntaxNotes::binder_annots`): its clause, the binder's place in it, the binder's span

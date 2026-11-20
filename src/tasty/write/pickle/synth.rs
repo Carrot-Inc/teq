@@ -103,7 +103,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.tpt(ret);
         self.synth_rhs(name, ret, body, &addrs);
         self.write_flags(flags);
-        self.synthetic_position(addr);
+        self.def_position(addr);
         self.buf.end_length(len);
     }
 

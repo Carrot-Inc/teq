@@ -1169,7 +1169,7 @@ impl<'w, 'a> P<'w, 'a> {
             TExpr::StrConcat(l) => match form {
                 None => {
                     let items = self.w.prog.expr_list(l).to_vec();
-                    self.concat(&items)
+                    self.concat(e, &items)
                 }
                 Some(Form::Interp { kind, parts }) => {
                     let items = self.w.prog.expr_list(l).to_vec();
@@ -1513,12 +1513,46 @@ impl<'w, 'a> P<'w, 'a> {
         self.owner_path(s);
     }
 
+    /// An implicit conversion the typer applied (`augmentString(s)`, `intWrapper(0)`) has the converted tree's span:
+    /// `Implicits.typedImplicit` makes `Apply(conversion, argument)` with no span of its own, its function at the
+    /// argument's start (Implicits.scala 1188, 1215), so the envelope is the argument's. The node of the call, placed
+    /// with no extent at the argument's start, takes the argument's span.
+    fn conversion_at_argument(&mut self, s: SymId, args: &[TExprId]) {
+        let [arg] = args else { return };
+        let info = self.w.syms.sym(s);
+        if info.mods & mods::IMPLICIT == 0 || info.kind != SymKind::Def {
+            return;
+        }
+        let Some((file, span)) = self.w.prog.span_of(*arg) else { return };
+        let here = self.buf.addr();
+        for i in 0..self.positions.len() {
+            let p = self.positions[i];
+            if p.addr == here && p.file == file && p.span.start == span.start && p.span.end == p.span.start && span.end > span.start {
+                self.positions[i].span = span;
+                self.positions[i].point = Some(span.start);
+            }
+        }
+    }
+
+    /// `point_at_name` where the selection stands in the unit's own source. A node of an expansion of another unit's
+    /// body keeps its place: the build over that unit's products reads it from the pickle, which gives no point there.
+    fn point_at_name_in_unit(&mut self, name: crate::intern::Name) {
+        let here = self.buf.addr();
+        if self.positions.iter().any(|p| p.addr == here && p.file == self.file) {
+            self.point_at_name(name);
+        }
+    }
+
     /// The selection about to be written at the position its node has: its point its name's start where the source
     /// writes the name at the span's end (`Parsers`' `selector`, `atSpan(start, nameStart)`).
     fn point_at_name(&mut self, name: crate::intern::Name) {
         let here = self.buf.addr();
-        if let Some(i) = self.positions.iter().rposition(|p| p.addr == here) {
+        // Every entry of the address: the section keeps the first (`positions_section`).
+        for i in (0..self.positions.len()).rev() {
             let p = self.positions[i];
+            if p.addr != here {
+                continue;
+            }
             if let Some(point) = self.name_point(p.file, p.span, name) {
                 self.positions[i].point = Some(point);
             }
@@ -1573,6 +1607,7 @@ impl<'w, 'a> P<'w, 'a> {
                 return self.fail("a member a refinement of its receiver's type types".to_string());
             }
         }
+        self.conversion_at_argument(s, args);
         match qual {
             Qual::Expr(r) => {
                 // `super.m` in a trait: the super accessor `SuperAccessors` made, on `this`.
@@ -2598,6 +2633,8 @@ impl<'w, 'a> P<'w, 'a> {
             qual(p);
             p.qual_place_next = None;
         };
+        // Whatever placed the selection, its point is its name's start where the source writes the name at its end.
+        self.point_at_name(name);
         let Some((params, result)) = sig else {
             self.buf.byte(SELECT);
             self.buf.nat(original as u64);
@@ -2965,6 +3002,12 @@ impl<'w, 'a> P<'w, 'a> {
                     |p| match wrapped {
                         None => p.term(recv),
                         Some((conv, conv_targs, param, result)) => {
+                            // The conversion at its argument, the receiver, as the scala-library build's typer makes
+                            // it (`conversion_at_argument`).
+                            if let Some((f, sp)) = p.w.prog.span_of(recv).filter(|&(f, sp)| f == p.src_ctx && f == p.file && sp.end > sp.start) {
+                                let addr = p.buf.addr();
+                                p.positions.push(Pos { addr, file: f, span: sp, point: Some(sp.start), def: false, switch: false, origin: None });
+                            }
                             p.term_at(None);
                             let l = p.open(APPLY);
                             let ta = conv_targs.then(|| p.open(TYPEAPPLY));
@@ -3771,6 +3814,10 @@ impl<'w, 'a> P<'w, 'a> {
         if let Some((span, point)) = fun.filter(|_| self.positions.last().map_or(true, |p| p.addr != self.buf.addr())) {
             self.place_here(span, Some(point));
         }
+        // Its point at its name, as `select`'s, so that a member of teq's std and scala-library's are one tree; in the
+        // unit's own source (an expansion of another unit's body keeps the place every build gives it).
+        let member = self.w.interner.intern(name);
+        self.point_at_name_in_unit(member);
         if by_name {
             self.buf.byte(SELECT);
             let n = self.names.simple(name);
@@ -4232,6 +4279,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The `new T(args)` the source writes at the node's span: its span and its type's.
     fn new_layout(&mut self, e: TExprId) -> Option<(Span, Span)> {
+        self.new_tpt_point = None;
         let (file, span) = match self.w.prog.span_of(e) {
             Some((f, sp)) if self.is_own_source(f) => (f, sp),
             _ => return self.pickled_new_layout(e),
@@ -4410,7 +4458,14 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.buf.byte(NEW);
         if let Some(t) = written {
-            self.place_here(t, Some(t.start));
+            // The `New`'s type tree, at the written type: a path's point is its last name (a `Select`'s, as
+            // `written_ty_pos` gives it). A layout read from a pickle takes that pickle's point (the source's text is
+            // not this one's).
+            let point = match self.new_tpt_point.take() {
+                Some(p) => p,
+                None => self.path_type_point(t),
+            };
+            self.place_here(t, Some(point));
         }
         if object {
             // A synthesized companion's parent is written `AnyRef()`, as `Desugar` makes it.
@@ -4468,6 +4523,18 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.buf.end_length(sl);
         self.ctor_args(targs, args, &clauses, &formals, ta, opens, block)
+    }
+
+    /// The point of a written type at `span` in the current source: a dotted path's (`a.b.C`) at its last name, as
+    /// the parser's `Select` points at its name; any other type's at its start.
+    fn path_type_point(&self, span: Span) -> u32 {
+        let Some(text) = self.w.files.as_slice().get(self.src_ctx.0 as usize).map(|f| f.text.as_bytes()) else { return span.start };
+        let Some(written) = text.get(span.start as usize..span.end as usize) else { return span.start };
+        let path = written.iter().all(|&b| b == b'.' || b == b'_' || b == b'$' || b.is_ascii_alphanumeric());
+        match written.iter().rposition(|&b| b == b'.') {
+            Some(i) if path && i + 1 < written.len() => span.start + i as u32 + 1,
+            _ => span.start,
+        }
     }
 
     /// Whether an expression is a stable path `path_type` writes: a local or parameter, `this`,
@@ -5203,8 +5270,11 @@ impl<'w, 'a> P<'w, 'a> {
         if !matches!(cur.tag, SELECT | SELECTIN) || !cur.pos.is_some_and(|p| p.point.is_some()) {
             return None;
         }
-        let new = ps.pickled_children(cur.addr).into_iter().next().filter(|c| c.tag == NEW)?.pos?;
+        let new_tree = ps.pickled_children(cur.addr).into_iter().next().filter(|c| c.tag == NEW)?;
+        let new = new_tree.pos?;
         let call = t.pos?;
+        // The type tree's point as the pickle reads back: its own, else its start, else the `New`'s.
+        self.new_tpt_point = Some(ps.pickled_children(new_tree.addr).first().and_then(|c| c.pos).map_or(new.start, |p| p.point.unwrap_or(p.start)));
         Some((Span { start: call.start, end: call.end }, Span { start: new.start, end: new.end }))
     }
 
@@ -6760,6 +6830,9 @@ impl<'w, 'a> P<'w, 'a> {
         if let Some((span, point)) = self.op_select.take() {
             self.place_here(span, Some(point));
         }
+        // Its point at its name, as every selection's (`select`, `std_applied_as`), in the unit's own source.
+        let member = self.w.interner.intern(name);
+        self.point_at_name_in_unit(member);
         if !clause && tps == 0 {
             self.buf.byte(SELECT);
             let n = self.names.simple(name);
@@ -6790,7 +6863,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// A chain of `+` of strings, left associated, each rendering the operand it renders.
     /// `a + b` of a concatenation: `String.+(Any)` where the left operand is a string, the
     /// number's or char's `+(String)` where it renders one.
-    fn concat(&mut self, items: &[TExprId]) {
+    fn concat(&mut self, e: TExprId, items: &[TExprId]) {
         let [a, b] = items else {
             return self.fail(format!("a concatenation of {} operands", items.len()));
         };
@@ -6809,7 +6882,14 @@ impl<'w, 'a> P<'w, 'a> {
                 _ => return self.fail("a concatenation whose left operand is no string or number".to_string()),
             }
         };
+        // Where the source writes the `+` (`Desugar.binop`'s `Select(l, op)`, from the left operand through the
+        // operator, its point the operator's start).
+        let interner = self.w.interner;
+        let select = self.call_layout(e).filter(|l| l.fun_name.map_or(true, |n| interner.get(n) == "+")).and_then(|l| l.select);
         let l = self.open(APPLY);
+        if let Some((span, point)) = select {
+            self.place_here(span, Some(point));
+        }
         let sl = self.open(SELECTIN);
         let n = self.names.signed("+", None, &[SigParam::Type(param.to_string())], "java.lang.String");
         self.buf.nat(n as u64);

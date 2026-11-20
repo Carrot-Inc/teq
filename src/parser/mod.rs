@@ -174,6 +174,9 @@ pub struct Parser<'a> {
     script_end: usize,
     /// The name of the wrapper's placeholder statement, `<script>`.
     script_body: Name,
+    /// The written self definition's start of the template body the parser last finished
+    /// (`WrittenPlaces::self_starts`), which its class's caller records once the class is a definition.
+    self_start: Option<u32>,
 }
 
 struct PendingDerives {
@@ -265,6 +268,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         dissolved: Vec::new(),
         script_end: usize::MAX,
         script_body: crate::names::EMPTY,
+        self_start: None,
     };
     // A script is read from its wrapper, past its own tokens and the layout that closes them.
     if let Some(at) = syntax.script {
@@ -283,9 +287,11 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
     asts.extend(p.package_blocks);
     // The scanner's record of its backquoted identifiers is the unit's, the file's AST's and each package block's
     // (`untpd.isBackquoted` of a token of the unit).
+    let first_stat = asts[0].notes.places.first_stat;
     for ast in &mut asts {
         ast.source_version = unit;
         ast.notes.backquoted_idents.clone_from(&backquoted);
+        ast.notes.places.first_stat = first_stat;
     }
     if syntax.keep {
         asts[0].notes.source = Some(Box::new(crate::ast::SourceKept { tokens: p.toks.clone(), end_markers: p.end_markers.clone() }));
@@ -1020,6 +1026,10 @@ impl<'a> Parser<'a> {
 
     fn parse_file(&mut self) {
         self.skip_separators();
+        // The file's first statement, past its separators (`compilationUnit`'s `in.offset` after its `SEMI`s).
+        if !self.at(Tok::Eof) {
+            self.ast.notes.places.first_stat = Some(self.span().start);
+        }
         while self.at(Tok::KwPackage) && self.kind_at(1) != Tok::KwObject && !self.package_block_follows() {
             let start = self.bump().span;
             loop {
@@ -1319,6 +1329,7 @@ impl<'a> Parser<'a> {
         if self.syntax.keep {
             self.ast.notes.package_object = Some((start, span));
         }
+        self.ast.notes.places.package_object = Some(start);
         self.ast.package.push(name);
         self.ast.package_clauses.push(self.ast.package.len() as u32);
         let parents = self.parse_parents();

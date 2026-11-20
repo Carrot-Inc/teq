@@ -28,3 +28,4 @@ type-path	first difference at line 18: scalac `Tpt [s1 38..38@38 3:9-3:9] paths=
 type-select	first difference at line 29: scalac `Tpt [s1 76..79@78 4:13-4:16] paths=[<empty>.TypeSelect.b]` teq `Tpt [s1 76..79@78 4:13-4:16] paths=[]`
 type-trace	first difference at line 20: scalac `Ident [s1 54..61@54 4:4-4:11] sym=scala.Predef$.println#(java.lang.Object)scala.Unit {method} pre=term(scala.Predef)` teq `Select [s1 54..61@54 4:4-4:11] sym=scala
 unchecked	first difference at line 19: scalac `Tpt [s1 30..30@30 2:12-2:12] paths=[<empty>.Unchecked.b]` teq `Tpt [s1 30..30@30 2:12-2:12] paths=[]`
+value-class-companion	first difference at line 9: scalac `DefDef [s1 7..19@7 1:7-1:19] sym=<empty>.C.<init>#(scala.Int)scala.Int {method}` teq `DefDef [s1 7..19@7 1:7-1:19] sym=<empty>.C.<init>#(scala.Int)C {method}`

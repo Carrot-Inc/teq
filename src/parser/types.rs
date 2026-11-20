@@ -69,6 +69,7 @@ impl<'a> Parser<'a> {
         if self.at(Tok::LBracket) && self.bracket_followed_by(Tok::Arrow) {
             return self.parse_poly_fun_type(start);
         }
+        let parenthesized = self.at(Tok::LParen);
         let mut t = self.parse_union_type();
         if self.at(Tok::KwMatch) {
             let keyword = self.bump().span;
@@ -77,7 +78,8 @@ impl<'a> Parser<'a> {
             self.ast.notes.match_keywords.push((t, keyword));
         }
         if matches!(self.kind(), Tok::Arrow | Tok::CtxArrow) {
-            let ctx = self.bump().kind == Tok::CtxArrow;
+            let arrow = self.bump();
+            let ctx = arrow.kind == Tok::CtxArrow;
             let (params, names) = match self.ast.ty(t) {
                 TyExpr::Tuple(l) => (l, None),
                 TyExpr::NamedTuple(names, l) => (l, Some(names)),
@@ -88,6 +90,9 @@ impl<'a> Parser<'a> {
             let span = start.to(self.prev_span());
             let node = if ctx { TyExpr::CtxFun(params, ret) } else { TyExpr::Fun(params, ret) };
             let id = self.ast.add_ty(node, span);
+            if parenthesized && !ctx {
+                self.ast.notes.places.fun_arrows.insert(id, arrow.span.start);
+            }
             if let (Some(clause), true) = (clause, self.syntax.keep) {
                 self.ast.notes.fun_param_clauses.push((id, clause));
             }

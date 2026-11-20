@@ -878,8 +878,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_extension_scoped(&mut self, m: Mods, out: &mut Vec<DefId>) {
-        self.bump();
+        let keyword = self.bump().span.start;
         self.ext_groups += 1;
+        self.ast.notes.places.extension_keywords.insert(self.ext_groups, keyword);
         let mark = self.error_events;
         let tparams = self.parse_type_params();
         let clauses = self.parse_param_clauses(None, 0);
@@ -1080,6 +1081,7 @@ impl<'a> Parser<'a> {
             m |= mods::INCOMPLETE;
         }
         let (body, exports, self_type, self_alias) = self.parse_template_body(kind == ClassKind::Enum);
+        let self_start = self.self_start.take();
         let has_case = |p: &Self| {
             body.iter().any(|s| {
                 matches!(s, Stmt::Def(d) if matches!(&p.ast.def(*d).kind, DefKind::Class(c) if c.kind == ClassKind::EnumCase))
@@ -1099,7 +1101,11 @@ impl<'a> Parser<'a> {
             self.pending_defaults.push((name, span));
         }
         let class = ClassDef { kind, tparams, clauses, parents, body, exports, self_type, self_alias };
-        self.ast.add_def(Def { name, span, mods: m, annots, kind: DefKind::Class(Box::new(class)) })
+        let d = self.ast.add_def(Def { name, span, mods: m, annots, kind: DefKind::Class(Box::new(class)) });
+        if let Some(s) = self_start {
+            self.ast.notes.places.self_starts.insert(d, s);
+        }
+        d
     }
 
     /// The rest of `new T(args) with U { ... }` after the first parent and its arguments: the
@@ -1124,6 +1130,7 @@ impl<'a> Parser<'a> {
     /// The template of an anonymous class with these parents, none for `new:` or `new { ... }`.
     pub(super) fn parse_anon_class_with(&mut self, parents: Vec<Parent>, start: Span) -> ExprId {
         let (body, exports, self_type, self_alias) = self.parse_template_body(false);
+        let self_start = self.self_start.take();
         let span = start.to(self.prev_span());
         let class = ClassDef { kind: ClassKind::Class, tparams: Vec::new(), clauses: Vec::new(), parents, body, exports, self_type, self_alias };
         let def = self.ast.add_def(Def {
@@ -1133,6 +1140,9 @@ impl<'a> Parser<'a> {
             annots: Vec::new(),
             kind: DefKind::Class(Box::new(class)),
         });
+        if let Some(s) = self_start {
+            self.ast.notes.places.self_starts.insert(def, s);
+        }
         // The class stands where its `new` does, to the end of its template, as scalac's tree
         // places it; not the definition whose body holds it (`close_def_ranges`).
         self.ast.def_ranges[def.idx()] = span;
@@ -1359,6 +1369,7 @@ impl<'a> Parser<'a> {
                 self.error_at(self.span(), "expected an indented body after ':'");
                 self.skip_token(RecoverySite::ColonBody);
             }
+            self.self_start = None;
             return (body, ListRef::EMPTY, None, names::EMPTY);
         } else {
             self.bump();
@@ -1369,7 +1380,9 @@ impl<'a> Parser<'a> {
         let cases_mark = self.pending_cases.len();
         let defaults_mark = self.pending_defaults.len();
         self.skip_separators();
+        let self_at = self.span().start;
         let (alias_indent, self_type, alias) = self.parse_self_alias();
+        let self_start = (self_type.is_some() || alias != names::EMPTY).then_some(self_at);
         let language = self.language_open.len();
         self.statements(RecoverySite::TemplateBody, |p| {
             let at_enum_case =
@@ -1415,6 +1428,8 @@ impl<'a> Parser<'a> {
             let companions = self.add_derived_givens(derives_mark, cases_mark, defaults_mark, &defs);
             self.place_companions(&mut body, companions, |s| if let Stmt::Def(d) = s { Some(*d) } else { None }, Stmt::Def);
         }
+        // Set last, past the bodies nested in this one.
+        self.self_start = self_start;
         (body, self.export_list(exports_mark), self_type, alias)
     }
 
@@ -1711,6 +1726,7 @@ impl<'a> Parser<'a> {
     /// `defOrDcl` starts the case's tree).
     fn parse_enum_cases(&mut self, body: &mut Vec<Stmt>, annots: Vec<Annot>, start: u32) {
         self.expect(Tok::KwCase);
+        let mut cases: Vec<DefId> = Vec::new();
         loop {
             let (name, span) = self.expect_ident();
             self.check_dollar_name(name, span);
@@ -1744,6 +1760,7 @@ impl<'a> Parser<'a> {
             if name != names::EMPTY {
                 body.push(Stmt::Def(d));
             }
+            cases.push(d);
             if self.eat(Tok::Comma) {
                 continue;
             }
@@ -1753,6 +1770,10 @@ impl<'a> Parser<'a> {
             }
             let (at, found) = self.found();
             self.error_at(at, format!("expected end of statement, found {}", found));
+        }
+        let listed = cases.len() > 1;
+        for d in cases {
+            self.ast.notes.places.enum_cases.insert(d, crate::ast::CasePlace { start, listed });
         }
     }
 
