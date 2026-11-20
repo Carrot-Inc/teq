@@ -3402,6 +3402,7 @@ impl<'a> Worker<'a> {
                 ast::Expr::StringLit(s) if ast.str(s).is_empty() => self.error(at, "target name cannot be empty"),
                 ast::Expr::StringLit(_)
                 | ast::Expr::IntLit(_)
+                | ast::Expr::Number(_)
                 | ast::Expr::LongLit(_)
                 | ast::Expr::DoubleLit(_)
                 | ast::Expr::DecimalLit(_)

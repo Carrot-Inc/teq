@@ -1343,10 +1343,10 @@ impl<'a> Parser<'a> {
             // the line (dotc's `prefixExpr`): `- 1.5` is the literal `-1.5`, a `Float` where one
             // is expected; `-(1.5)` stays the operation.
             if t.name == names::MINUS && matches!(self.kind(), Tok::IntLit | Tok::LongLit | Tok::DoubleLit | Tok::FloatLit) {
-                let lit = self.parse_literal();
+                // An integer's sign is read with its digits (`FromDigits` takes `-2147483648` and refuses
+                // `-2147483649`); a floating literal's is applied to it.
+                let lit = self.parse_literal_signed(matches!(self.kind(), Tok::IntLit | Tok::LongLit));
                 let negated = match self.ast.expr(lit) {
-                    Expr::IntLit(v) => Expr::IntLit(-v),
-                    Expr::LongLit(v) => Expr::LongLit(v.wrapping_neg()),
                     Expr::DoubleLit(v) => Expr::DoubleLit(-v),
                     Expr::DecimalLit(s) => {
                         self.ast.strings[s.idx()].insert(0, '-');
@@ -1368,27 +1368,44 @@ impl<'a> Parser<'a> {
     }
 
     pub(super) fn parse_literal(&mut self) -> ExprId {
+        self.parse_literal_signed(false)
+    }
+
+    /// The literal token at hand, with a `-` before it folded into an integer's digits when `neg` (dotc's
+    /// `literal(negOffset)`). An unsuffixed integer stays its digits (`Expr::Number`), which the expected type reads
+    /// (`Typer.typedNumber`); a `Long` is read here by `FromDigits.longFromDigits`, out of its range "number too
+    /// large" at the literal.
+    fn parse_literal_signed(&mut self, neg: bool) -> ExprId {
         let t = self.bump();
         let text = &self.text[t.span.start as usize..t.span.end as usize];
         let e = match t.kind {
-            Tok::IntLit | Tok::LongLit => {
-                let clean: String = text.chars().filter(|&c| c != '_').collect();
-                let parsed = if let Some(hex) = clean.strip_prefix("0x").or(clean.strip_prefix("0X")) {
-                    u64::from_str_radix(hex, 16).ok().map(|v| {
-                        if t.kind == Tok::IntLit && v <= u32::MAX as u64 {
-                            v as u32 as i32 as i64
-                        } else {
-                            v as i64
-                        }
-                    })
-                } else {
-                    clean.parse::<u64>().ok().map(|v| v as i64)
+            Tok::IntLit => {
+                let radix: u8 = match text.as_bytes().get(1) {
+                    Some(b'x' | b'X') if text.starts_with('0') => 16,
+                    Some(b'b' | b'B') if text.starts_with('0') => 2,
+                    _ => 10,
                 };
-                let v = parsed.unwrap_or_else(|| {
-                    self.error_at(t.span, "number too large");
-                    0
+                let body = if radix == 10 { text } else { &text[2..] };
+                // The content two literals are compared by: the digits' value where it fits 64 bits, else their text.
+                let value = body.bytes().filter(|&c| c != b'_').try_fold(0u64, |v, c| {
+                    let d = (c as char).to_digit(radix as u32)? as u64;
+                    v.checked_mul(radix as u64)?.checked_add(d)
                 });
-                if t.kind == Tok::IntLit { Expr::IntLit(v) } else { Expr::LongLit(v) }
+                let content = match value {
+                    Some(v) => crate::ast::NumberContent::Value(v),
+                    None => crate::ast::NumberContent::Text(self.ast.add_str(body.chars().filter(|&c| c != '_').collect())),
+                };
+                Expr::Number(self.ast.add_number(crate::ast::NumberLit { digits: t.span, radix, neg, content }))
+            }
+            Tok::LongLit => {
+                let (digits, radix) = crate::digits::literal_digits(text, neg);
+                match crate::digits::long_from_digits(&digits, radix) {
+                    Ok(v) => Expr::LongLit(v),
+                    Err(e) => {
+                        self.error_at(t.span, e.message());
+                        Expr::LongLit(0)
+                    }
+                }
             }
             Tok::DoubleLit => {
                 let clean: String = text.chars().filter(|&c| c != '_').collect();

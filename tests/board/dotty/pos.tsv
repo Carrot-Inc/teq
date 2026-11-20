@@ -3245,7 +3245,7 @@ t6091.scala	pass	check:pass
 t611.scala	pass	check:pass	
 t6117.scala	pass	check:pass	
 t6123-explaintypes-implicits.scala	pass	check:pass	
-t6124.scala	fail	check:fail	t6124.scala:8:18: expected end of statement, found identifier
+t6124.scala	pass	check:pass	
 t613.scala	pass	check:pass	
 t6145.scala	pass	check:pass	
 t6146.scala	pass	check:pass	

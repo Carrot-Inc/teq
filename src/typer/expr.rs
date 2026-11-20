@@ -813,7 +813,7 @@ impl<'a> Worker<'a> {
             // name) is a value the reference keeps under its `Typed`.
             Expr::Typed(..) if matches!(typed, TExpr::Lambda(..)) => true,
             Expr::Parens(inner) | Expr::Typed(inner, _) => self.told_as_written(inner, te),
-            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit | Expr::NullLit => literal,
+            Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit | Expr::NullLit => literal,
             Expr::This | Expr::QualThis(_) => matches!(typed, TExpr::This),
             // A pickle's reference to a local or a parameter, by its symbol.
             Expr::SymRef(s) => matches!(typed, TExpr::Local(l) if l == s),
@@ -923,7 +923,7 @@ impl<'a> Worker<'a> {
     fn plain_operand(&self, e: ExprId) -> bool {
         let ast = self.cur_ast();
         match ast.expr(e) {
-            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::Ident(_) => true,
+            Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::Ident(_) => true,
             Expr::Parens(x) | Expr::Prefix(_, x) => self.plain_operand(x),
             Expr::Infix(l, _, r, _) => self.plain_operand(l) && self.plain_operand(r),
             _ => false,
@@ -1671,6 +1671,13 @@ impl<'a> Worker<'a> {
 
     /// The error of a number out of its type's range (`FromDigits.NumberTooLarge` and
     /// `NumberTooSmall`, which dotty's `Typer.typedNumber` reports).
+    /// An integer literal's digits as `typedNumber` reads them, from the source text of the file typed: the separators
+    /// and a `0x` or `0b` out, the sign of a folded `-` in, with the radix.
+    pub(super) fn number_digits(&self, n: crate::ast::NumberLit) -> (String, i64) {
+        let text = self.source(self.env.file).text.get(n.digits.start as usize..n.digits.end as usize).unwrap_or("0");
+        crate::digits::literal_digits(text, n.neg)
+    }
+
     fn number_range(&mut self, large: bool, small: bool, span: Span) {
         if large {
             self.error(span, "number too large");
@@ -2080,6 +2087,79 @@ impl<'a> Worker<'a> {
         self.warn_as(span, msg, crate::source::Warning::id(crate::warnings::id::LOSSY_WIDENING_CONSTANT_CONVERSION));
     }
 
+    /// An `Int` constant `te` converted to the numeric class of `to` (`Constant.convertTo`, as `adapt` takes it): the
+    /// `Long`, `Double` or `Float` constant of its value, E167 where the `Float` does not keep the `Int`. A builtin
+    /// operator's constant right operand takes its left operand's class so (`prim_binop`); any other `te` is as it is.
+    /// The numeric class `v` is pinned to: one of its lower bounds is that class and one of its upper bounds the same.
+    fn pinned_numeric(&mut self, v: TVarId) -> Option<TypeId> {
+        // Read in place, by index: a variable without bounds on both sides (most of those a literal meets) is pinned
+        // by none, with nothing copied.
+        if self.tvars[v].lower.is_empty() || self.tvars[v].upper.is_empty() {
+            return None;
+        }
+        for i in 0..self.tvars[v].lower.len() {
+            let l = self.deref_canonical(self.tvars[v].lower[i]);
+            if self.is_numeric(l).is_none() {
+                continue;
+            }
+            for j in 0..self.tvars[v].upper.len() {
+                let u = self.deref_canonical(self.tvars[v].upper[j]);
+                if self.same_type(l, u) {
+                    return Some(l);
+                }
+            }
+        }
+        None
+    }
+
+    /// The source integer literal `e` is, through parentheses (`((0xffffffff))`): the literal's node.
+    fn source_number(&self, e: ExprId) -> Option<ExprId> {
+        match self.cur_ast().expr(e) {
+            Expr::Number(_) => Some(e),
+            Expr::Parens(inner) => self.source_number(inner),
+            _ => None,
+        }
+    }
+
+    pub(super) fn int_constant_as(&mut self, te: TExprId, ty: TypeId, to: TypeId, span: Span) -> (TExprId, TypeId) {
+        let TExpr::Int(i) = self.prog.expr(te) else { return (te, ty) };
+        let (made, made_ty) = self.int_constant_made(i, te, ty, to, span);
+        if made == te {
+            return (made, made_ty);
+        }
+        // The constant is a typed node as `type_expr` leaves one (its type, which a pickle's operator reads), and
+        // stands where the literal it replaces stood (its span, which a pickle's positions read).
+        self.prog.set_type(made, made_ty);
+        if self.prog.records_spans() && self.prog.span_of(made).is_none() {
+            if let Some((file, at)) = self.prog.span_of(te) {
+                self.prog.set_span(made, file, at);
+            }
+        }
+        (made, made_ty)
+    }
+
+    fn int_constant_made(&mut self, i: i32, te: TExprId, ty: TypeId, to: TypeId, span: Span) -> (TExprId, TypeId) {
+        let v = i as i64;
+        let to = self.deref_canonical(to);
+        let target = match self.ref_target(to) {
+            Some(super::check::RefSym::Class(c)) => c,
+            _ => return (te, ty),
+        };
+        if target == self.b.long {
+            return (self.prog.add(TExpr::Long(v)), self.literal_type(LitVal::Long(v)));
+        }
+        if target == self.b.double {
+            return (self.prog.add(TExpr::Double(v as f64)), self.literal_type(LitVal::Double((v as f64).to_bits())));
+        }
+        if target == self.b.float {
+            if (v as f32) as i64 != v {
+                self.warn_lossy_constant("Int", "Float", span);
+            }
+            return (self.prog.add(TExpr::Double(v as f32 as f64)), self.literal_type(LitVal::Float((v as f32).to_bits())));
+        }
+        (te, ty)
+    }
+
     fn literal_type(&mut self, value: LitVal) -> TypeId {
         if let Some(&t) = self.lit_types.get(&value) {
             return t;
@@ -2461,58 +2541,135 @@ impl<'a> Worker<'a> {
         (te, ty)
     }
 
+    /// An integer literal typed by its expected type (`typedNumber`), out of line: the match of
+    /// `type_expr_untracked` stays as small for every other expression.
+    #[inline(never)]
+    fn type_integer_literal(&mut self, lit: Expr, expected: Option<TypeId>, span: Span) -> (TExprId, TypeId) {
+        let ast = self.cur_ast();
+        // `typedNumber`'s `pt.dealias.isRef(..)` of a primitive numeric class (`is_ref`: an alias kept by name,
+        // a refinement, an annotation read through): a union is none (its numeric alternative is
+        // `adaptToSubType`'s `convertTo` to the union, or the view's), a variable its upper bound where that is a
+        // primitive class (`classBound`'s constraint entry, `hi.classSymbol`).
+        let mut exp = expected.map(|t| self.deref_canonical(t));
+        // A variable expected (a type parameter's formal, `Tuple2.apply`'s, `List.apply`'s) is no class to
+        // `isRef`: the digits are an `Int`'s, the constant converted below to the bound's class.
+        let mut from_var = false;
+        match exp.map(|t| self.types.get(t)) {
+            // A variable the constraint pins (the same numeric class above and below it: an invariant
+            // `T` of a `C[T]` expected as `C[Long]`) is that instance (`TypeVar.instanceOpt` under `dealias`),
+            // whose class `isRef` asks.
+            Some(Type::Var(var)) => match self.pinned_numeric(var) {
+                Some(pinned) => exp = Some(pinned),
+                None => {
+                    exp = self.numeric_upper_bound(var, false);
+                    from_var = true;
+                }
+            },
+            Some(Type::Union(..)) => exp = None,
+            _ => {}
+        }
+        // The class each `isRef` asks of the target, its walk taken once (`ref_target`).
+        let target = match exp.and_then(|t| self.ref_target(t)) {
+            Some(super::check::RefSym::Class(c)) => Some(c),
+            _ => None,
+        };
+        // An integer literal of the source is read from its digits by the class expected, as `typedNumber`
+        // reads them (`FromDigits`, its error at the literal and the number 0): a `Long`'s by
+        // `longFromDigits`; a `Float`'s or a `Double`'s, but for hexadecimal digits, as a floating number (a
+        // binary literal's digits as decimal ones); any other's by `intFromDigits`, whose `Int` the
+        // constant conversions below then take to the class expected (hexadecimal digits widened to a
+        // `Float` or `Double` among them). A constant made without source text is its value.
+        let v = match lit {
+            Expr::Number(n) => {
+                let num = ast.number(n);
+                let radix = num.radix as i64;
+                // A decimal literal of at most `Int.MaxValue` reads alike by `intFromDigits` and
+                // `longFromDigits`: its value, which the parser's carrier holds, with no text read again.
+                let small = crate::digits::small_decimal(num);
+                if !from_var && target == Some(self.b.long) {
+                    let v = match small {
+                        Some(v) => v,
+                        None => {
+                            let (digits, radix) = self.number_digits(num);
+                            crate::digits::long_from_digits(&digits, radix).unwrap_or_else(|err| {
+                                self.error(span, err.message());
+                                0
+                            })
+                        }
+                    };
+                    return (self.prog.add(TExpr::Long(v)), self.literal_type(LitVal::Long(v)));
+                }
+                if !from_var && radix != 16 && (target == Some(self.b.float) || target == Some(self.b.double)) {
+                    let (digits, _) = self.number_digits(num);
+                    let nonzero = digits.bytes().any(|c| matches!(c, b'1'..=b'9'));
+                    if target == Some(self.b.float) {
+                        let f = digits.parse::<f32>().unwrap_or(0.0);
+                        self.number_range(f.is_infinite(), f == 0.0 && nonzero, span);
+                        // E167 where the digits are an `Int` the `Float` does not keep.
+                        if digits.parse::<i32>().is_ok_and(|i| f as i32 != i) {
+                            self.warn_lossy_constant("Int", "Float", span);
+                        }
+                        return (self.prog.add(TExpr::Double(f as f64)), self.literal_type(LitVal::Float(f.to_bits())));
+                    }
+                    let d = digits.parse::<f64>().unwrap_or(0.0);
+                    self.number_range(d.is_infinite(), d == 0.0 && nonzero, span);
+                    return (self.prog.add(TExpr::Double(d)), self.literal_type(LitVal::Double(d.to_bits())));
+                }
+                match small {
+                    Some(v) => v,
+                    None => {
+                        let (digits, radix) = self.number_digits(num);
+                        match crate::digits::int_from_digits(&digits, radix) {
+                            Ok(i) => i as i64,
+                            Err(err) => {
+                                self.error(span, err.message());
+                                0
+                            }
+                        }
+                    }
+                }
+            }
+            Expr::IntLit(v) => v,
+            _ => unreachable!(),
+        };
+        // The constant converted to the numeric class expected, a constant of that class
+        // (`Constant.convertTo` in `adapt`): `1` where a `Long` is expected is a `1L`.
+        if target == Some(self.b.long) {
+            return (self.prog.add(TExpr::Long(v)), self.literal_type(LitVal::Long(v)));
+        }
+        if target == Some(self.b.double) {
+            return (self.prog.add(TExpr::Double(v as f64)), self.literal_type(LitVal::Double((v as f64).to_bits())));
+        }
+        if target == Some(self.b.float) {
+            // `typedNumber`'s `floatFromDigits`, E167 where the digits are an `Int` the `Float` does not keep.
+            if i32::try_from(v).is_ok_and(|i| (v as f32) as i32 != i) {
+                self.warn_lossy_constant("Int", "Float", span);
+            }
+            return (self.prog.add(TExpr::Double(v as f32 as f64)), self.literal_type(LitVal::Float((v as f32).to_bits())));
+        }
+        // An integer literal narrows to the Byte or Short that is expected when it fits.
+        let narrow = if exp == Some(self.b.t_byte) && (i8::MIN as i64..=i8::MAX as i64).contains(&v) {
+            Some(self.b.t_byte)
+        } else if exp == Some(self.b.t_short) && (i16::MIN as i64..=i16::MAX as i64).contains(&v) {
+            Some(self.b.t_short)
+        } else {
+            None
+        };
+        if let Some(t) = narrow {
+            return (self.prog.add(TExpr::Int(v as i32)), t);
+        }
+        if v < i32::MIN as i64 || v > i32::MAX as i64 {
+            self.error(span, "number too large for Int; use an L suffix for Long");
+        }
+        let ty = self.literal_type(LitVal::Int(v as i32));
+        (self.prog.add(TExpr::Int(v as i32)), ty)
+    }
+
     fn type_expr_untracked(&mut self, e: ExprId, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let ast = self.cur_ast();
         let span = ast.expr_span(e);
         match ast.expr(e) {
-            Expr::IntLit(v) => {
-                // `typedNumber`'s `pt.dealias.isRef(..)` of a primitive numeric class (`is_ref`: an alias kept by name,
-                // a refinement, an annotation read through): a union is none (its numeric alternative is
-                // `adaptToSubType`'s `convertTo` to the union, or the view's), a variable its upper bound where that is a
-                // primitive class (`classBound`'s constraint entry, `hi.classSymbol`).
-                let mut exp = expected.map(|t| self.deref_canonical(t));
-                match exp.map(|t| self.types.get(t)) {
-                    Some(Type::Var(var)) => exp = self.numeric_upper_bound(var, false),
-                    Some(Type::Union(..)) => exp = None,
-                    _ => {}
-                }
-                // The class each `isRef` asks of the target, its walk taken once (`ref_target`).
-                let target = match exp.and_then(|t| self.ref_target(t)) {
-                    Some(super::check::RefSym::Class(c)) => Some(c),
-                    _ => None,
-                };
-                // The constant converted to the numeric class expected, a constant of that class
-                // (`Constant.convertTo` in `adapt`): `1` where a `Long` is expected is a `1L`.
-                if target == Some(self.b.long) {
-                    return (self.prog.add(TExpr::Long(v)), self.literal_type(LitVal::Long(v)));
-                }
-                if target == Some(self.b.double) {
-                    return (self.prog.add(TExpr::Double(v as f64)), self.literal_type(LitVal::Double((v as f64).to_bits())));
-                }
-                if target == Some(self.b.float) {
-                    // `typedNumber`'s `floatFromDigits`, E167 where the digits are an `Int` the `Float` does not keep.
-                    if i32::try_from(v).is_ok_and(|i| (v as f32) as i32 != i) {
-                        self.warn_lossy_constant("Int", "Float", span);
-                    }
-                    return (self.prog.add(TExpr::Double(v as f32 as f64)), self.literal_type(LitVal::Float((v as f32).to_bits())));
-                }
-                // An integer literal narrows to the Byte or Short that is expected when it fits.
-                let narrow = if exp == Some(self.b.t_byte) && (i8::MIN as i64..=i8::MAX as i64).contains(&v) {
-                    Some(self.b.t_byte)
-                } else if exp == Some(self.b.t_short) && (i16::MIN as i64..=i16::MAX as i64).contains(&v) {
-                    Some(self.b.t_short)
-                } else {
-                    None
-                };
-                if let Some(t) = narrow {
-                    return (self.prog.add(TExpr::Int(v as i32)), t);
-                }
-                if v < i32::MIN as i64 || v > i32::MAX as i64 {
-                    self.error(span, "number too large for Int; use an L suffix for Long");
-                }
-                let ty = self.literal_type(LitVal::Int(v as i32));
-                (self.prog.add(TExpr::Int(v as i32)), ty)
-            }
+            lit @ (Expr::IntLit(_) | Expr::Number(_)) => self.type_integer_literal(lit, expected, span),
             Expr::LongLit(v) => {
                 let ty = self.literal_type(LitVal::Long(v));
                 (self.prog.add(TExpr::Long(v)), ty)
@@ -3178,7 +3335,18 @@ impl<'a> Worker<'a> {
                 Some(x) if self.deref_canonical(x) == self.b.t_float && self.decimal_result(id) => None,
                 _ => exp,
             };
-            let (te, ty) = self.type_expr(id, typed_exp);
+            // A source integer literal there is read as `typedNumber` reads it against that type variable: an
+            // `Int`'s digits (`(0xffffffff, 1)` for a `(Long, Int)` holds -1), the constant then converted to the
+            // element's class as for any constant.
+            let number = self.source_number(id);
+            let (te, ty) = match (number, exp.and_then(|x| self.concrete_expected(Some(x)))) {
+                (Some(n), Some(x)) => {
+                    let (te, ty) = self.type_expr(n, None);
+                    let at = self.cur_ast().expr_span(n);
+                    self.int_constant_as(te, ty, x, at)
+                }
+                _ => self.type_expr(id, typed_exp),
+            };
             // An element expected to be an open variable takes what its bounds ask, as an
             // argument of `Tuple2.apply` does under scalac: `(xs.size, m)` for a `(B, M)`
             // whose `B` the expected `Long` bounds is widened.

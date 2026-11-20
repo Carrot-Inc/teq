@@ -377,6 +377,7 @@ impl<'a> Cmp<'a> {
         }
         match (self.old.expr(a), self.new.expr(b)) {
             (IntLit(x), IntLit(y)) | (LongLit(x), LongLit(y)) => x == y,
+            (Number(x), Number(y)) => self.old.same_number(x, self.new, y),
             (DoubleLit(x), DoubleLit(y)) => x.to_bits() == y.to_bits(),
             (DecimalLit(x), DecimalLit(y)) => self.old.str(x) == self.new.str(y),
             (FloatLit(x), FloatLit(y)) => x.to_bits() == y.to_bits(),

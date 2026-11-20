@@ -529,7 +529,7 @@ impl<'a> Worker<'a> {
     fn unconsuming(&mut self, u: FileId, b: ExprId, m: Option<SymId>) -> bool {
         let ast = self.ast(u);
         match ast.expr(b) {
-            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit | Expr::NullLit => return true,
+            Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit | Expr::NullLit => return true,
             Expr::This | Expr::Throw(_) => return true,
             Expr::Typed(x, _) | Expr::Parens(x) => return self.unconsuming(u, x, None) || m.is_some_and(|m| self.unconsuming_typed(m)),
             Expr::Block(stmts) if ast.stmt_list(stmts).is_empty() => return true,

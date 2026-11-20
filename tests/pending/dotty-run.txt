@@ -22,7 +22,6 @@ array-existential-bound.scala	array-existential-bound.scala:2:18: value length i
 arrays-from-java	java source: teq reads none
 assert-stack.scala	output: line 5: the .check has 'Test$.main(assert-stack.scala:12)', the program printed 'Test$.main(assert-stack.scala:11)'
 beans	java source: teq reads none
-binaryLiterals.scala	binaryLiterals.scala:3:19: expected an expression, found a blank line
 bridges.scala	bridges.scala:64:21: error overriding method f in class Foo___ of type Foo___.this.I: method f in trait Bar_If of type I has incompatible type
 builder.scala	output: line 1: the .check has 'Table(Row(Cell(top left), Cell(top right)), Row(Cell(botttom left), Cell(bottom right)))', the program printed 'Table()'
 byname-given.scala	byname-given.scala:3:3: local givens cannot take parameters

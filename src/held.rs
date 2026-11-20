@@ -230,6 +230,7 @@ impl Ast {
             + array(&self.ty_spans)
             + owners(&self.defs, |d| array(&d.annots))
             + texts(&self.strings)
+            + array(&self.numbers)
             + array(&self.expr_lists)
             + array(&self.pat_lists)
             + array(&self.ty_lists)

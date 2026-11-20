@@ -584,7 +584,7 @@ fn all_args(ast: &Ast, items: &[ExprId], interner: &Interner) -> Vec<Arg> {
 /// What the text says of an expression's value.
 fn fact(ast: &Ast, e: ExprId, interner: &Interner) -> Fact {
     match ast.expr(e) {
-        Expr::IntLit(_) => Fact::Int,
+        Expr::IntLit(_) | Expr::Number(_) => Fact::Int,
         Expr::LongLit(_) => Fact::Long,
         Expr::DoubleLit(_) | Expr::DecimalLit(_) => Fact::Double,
         Expr::FloatLit(_) => Fact::Float,
@@ -597,7 +597,7 @@ fn fact(ast: &Ast, e: ExprId, interner: &Interner) -> Fact {
         Expr::This => Fact::This,
         Expr::Parens(x) => fact(ast, x, interner),
         // `-1`, `+2.0`: the literal's.
-        Expr::Prefix(op, x) if matches!(interner.get(op), "-" | "+") && matches!(ast.expr(x), Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_)) => fact(ast, x, interner),
+        Expr::Prefix(op, x) if matches!(interner.get(op), "-" | "+") && matches!(ast.expr(x), Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_)) => fact(ast, x, interner),
         _ => Fact::Other,
     }
 }

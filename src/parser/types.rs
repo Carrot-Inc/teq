@@ -1453,6 +1453,7 @@ impl Mentions<'_> {
             Expr::QuoteType(t) | Expr::ClassOf(t) | Expr::ThisOf(t) => self.ty(t),
             Expr::SplicePat(p) => self.pat(p),
             Expr::IntLit(_)
+            | Expr::Number(_)
             | Expr::LongLit(_)
             | Expr::DoubleLit(_)
             | Expr::DecimalLit(_)

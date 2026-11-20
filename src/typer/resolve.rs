@@ -6344,6 +6344,19 @@ impl<'a> Worker<'a> {
                 self.error_by(crate::source::Group::Parser, span, "number too large for Int; use an L suffix for Long");
                 return ERROR;
             }
+            // A literal of a type is read at once (`Parsers.literal`, `inTypeOrSingleton`): an integer's digits by
+            // `intFromDigits`, signed, with no expected type (`val y: 0xffffffff` is the `Int` -1), out of its range the
+            // reader's message.
+            ast::Expr::Number(n) => {
+                let (digits, radix) = self.number_digits(ast.number(n));
+                match crate::digits::int_from_digits(&digits, radix) {
+                    Ok(v) => LitVal::Int(v),
+                    Err(err) => {
+                        self.error_by(crate::source::Group::Parser, span, err.message());
+                        return ERROR;
+                    }
+                }
+            }
             ast::Expr::LongLit(v) => LitVal::Long(v),
             ast::Expr::DoubleLit(v) => LitVal::Double(v.to_bits()),
             // A literal type is never an untyped number (dotty's `Parsers.literal`, `inTypeOrSingleton`).

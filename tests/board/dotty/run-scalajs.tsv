@@ -59,7 +59,7 @@ better-fors-map-inlined.scala	pass	lean:pass
 better-fors.scala	pass	lean:pass	
 bigDecimalCache.scala	pass	lean:pass	
 bigDecimalTest.scala	pass	lean:pass	
-binaryLiterals.scala	fail	lean:fail	binaryLiterals.scala:3:19: expected an expression, found a blank line
+binaryLiterals.scala	pass	lean:pass	
 bind-tuple-pattern.scala	pass	lean:pass	
 bitsets.scala	pass	lean:fail	
 blame_eye_triple_eee-double.scala	pass	lean:pass	
@@ -216,7 +216,7 @@ function-arity.scala	pass	lean:pass
 functionXXL.scala	pass	lean:pass	
 gadts.scala	pass	lean:pass	
 generic	pass	lean:pass	
-genericNumLits.scala	fail	lean:fail	genericNumLits.scala:5:19: number too large
+genericNumLits.scala	fail	lean:fail	genericNumLits.scala:41:33: expected '=>', found ':'
 genericTupleMembers.scala	pass	lean:pass	
 genericValueClass.scala	pass	lean:pass	
 gestalt-optional-inline	pass	lean:pass	

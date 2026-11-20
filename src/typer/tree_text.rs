@@ -425,7 +425,8 @@ impl<'p> TreePrinter<'p> {
             Some(r) => (true, r.trim_start()),
             None => (false, written),
         };
-        let rest = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")).unwrap_or(rest);
+        // scalac's digits leave a radix's prefix out: `0x`, and `0b` of a binary number.
+        let rest = ["0x", "0X", "0b", "0B"].iter().find_map(|p| rest.strip_prefix(p)).unwrap_or(rest);
         let mut out = String::new();
         if neg {
             out.push('-');
@@ -437,7 +438,7 @@ impl<'p> TreePrinter<'p> {
     fn core(&mut self, e: ExprId) -> Text {
         let ast = self.ast;
         match ast.expr(e) {
-            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) => self.digits(e).into(),
+            Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) => self.digits(e).into(),
             Expr::BoolLit(b) => (if b { "true" } else { "false" }).into(),
             Expr::CharLit(c) => {
                 let mut out = String::from("'");

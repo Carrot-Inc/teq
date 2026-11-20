@@ -12,6 +12,7 @@ mod complete;
 mod crew;
 mod deflate;
 mod dialect;
+mod digits;
 mod directives;
 mod emit;
 mod fix;

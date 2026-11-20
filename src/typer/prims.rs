@@ -2599,7 +2599,17 @@ impl<'a> Worker<'a> {
         }
         let (Some(lrank), Some(class)) = (self.is_numeric(lty), classify(op)) else { return Binop::NotBuiltin };
         let literal_hint = if self.is_const_expr(r) && lrank >= R_LONG { Some(lty) } else { None };
-        let (tr, operand_ty) = self.typed_operand(r, literal_hint);
+        let (tr, operand_ty) = match (literal_hint, self.cur_ast().expr(r)) {
+            // A number literal of the source is the argument of an overloaded operator, which `typedNumber` reads
+            // with no expected type: an `Int` by `intFromDigits` (`n + 0xffffffff` adds -1 to a `Long`), that constant
+            // then converted to the left operand's class as for any constant.
+            (Some(hint), Expr::Number(_)) => {
+                let (tr, ty) = self.typed_operand(r, None);
+                let at = self.cur_ast().expr_span(r);
+                self.int_constant_as(tr, ty, hint, at)
+            }
+            _ => self.typed_operand(r, literal_hint),
+        };
         let done = self.prim_binop_typed(op, tl, lty, lrank, class, tr, operand_ty, span);
         if let Binop::Done(te, _) = done {
             self.binop_rhs = Some((te, tr, operand_ty));
@@ -4052,7 +4062,7 @@ impl<'a> Worker<'a> {
     pub fn is_const_expr(&self, e: ExprId) -> bool {
         matches!(
             self.cur_ast().expr(e),
-            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_)
+            Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_)
         )
     }
 }

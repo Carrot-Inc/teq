@@ -96,7 +96,7 @@ bad-selftype.scala	fail	-	marks: 1 errors where 3 are marked
 bad-unapplies.scala	fail	-	marks: 9 errors where 6 are marked: bad-unapplies.scala:22:10: Ambiguous overload. The overloaded alternatives of method unapply in object A with types
 badAuxConstr.scala	fail	-	marks: 3 errors where 2 are marked: badAuxConstr.scala:6:16: secondary constructor must call a preceding constructor
 beanAccessorsLeaking	pass	-	
-binaryLiterals.scala	fail	-	marks: 9 errors where 6 are marked: binaryLiterals.scala:3:12: expected end of statement, found identifier
+binaryLiterals.scala	fail	-	marks: 9 errors where 6 are marked: binaryLiterals.scala:5:11: number too large
 block-ending-in-def.scala	fail	-	marks: error on an unmarked line block-ending-in-def.scala:2: Found:    Unit
 blockescapesNeg.scala	fail	-	marks: no error where 1 are marked
 bounds.scala	fail	-	check: diagnostic 1 of 2: scalac's is error bounds.scala:4:5 Type argument String does not conform to upper bound Int; teq's is error bounds.scala:4:7 Found:    "foo"
@@ -242,7 +242,7 @@ errpos.scala	fail	-	marks: error on an unmarked line errpos.scala:3: expected an
 escapingRefs.scala	fail	-	check: diagnostic 1 of 2: scalac's is error escapingRefs.scala:6:27 Found:    O.B {...}; teq's is error escapingRefs.scala:6:27 Found:    B
 existentials.scala	fail	-	marks: no error where 8 are marked
 expeimental-flag.scala	fail	-	marks: no error where 5 are marked
-experimental-2.scala	fail	-	check: diagnostic 1 of 2: scalac's is error experimental-2.scala:5:10 no aliases can be used to refer to a language import; teq's is error experimental-2.scala:6:19 number too large
+experimental-2.scala	pass	-	
 experimental-imports.scala	fail	-	marks: 6 errors where 12 are marked
 experimental-message-experimental-flag	fail	-	marks: no error where 1 are marked
 experimental-message.scala	fail	-	marks: no error where 3 are marked
@@ -320,7 +320,7 @@ gadt-no-approx.scala	pass	-
 gadt-sngl-refined.scala	fail	-	check: diagnostic 1 of 1: scalac's is error gadt-sngl-refined.scala:13:5 Found:    (x : Any); teq's is error gadt-sngl-refined.scala:13:5 Found:    Any
 gadt-uninjectivity.scala	fail	-	check: diagnostic 1 of 4: scalac's is error gadt-uninjectivity.scala:7:7 Found:    (x : X); teq's is error gadt-uninjectivity.scala:7:7 Found:    X
 gadt-variant-hkt.scala	fail	-	check: diagnostic 1 of 10: scalac's is error gadt-variant-hkt.scala:11:9 Found:    (fi : F[Int]); teq's is warning gadt-variant-hkt.scala:8:44 Alphanumeric type SUB is not declared infix; it should not be used as infix operator.
-genericNumbers.scala	fail	-	marks: 10 errors where 8 are marked: genericNumbers.scala:5:19: number too large
+genericNumbers.scala	fail	-	marks: 10 errors where 8 are marked: genericNumbers.scala:28:33: expected '=>', found ':'
 genericTupleMembers.scala	fail	-	check: diagnostic 1 of 26: scalac's is error genericTupleMembers.scala:10:3 value _2 is not a member of Tuple1[Int] - did you mean Tuple1[Int]._1?; teq's is error genericTupleMembers.scala:10:3 value _2 is not a member of (Int)
 given-ambiguous-1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error given-ambiguous-1.scala:12:24 No best given instance of type B was found for parameter x of method summon in object Predef.; teq's is error given-ambiguous-1.scala:12:24 ambiguous given instances 
 given-ambiguous-2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error given-ambiguous-2.scala:10:16 Ambiguous given instances: both given instance a1 and given instance a2 match type A of parameter a of method g; teq's is error given-ambiguous-2.scala:10:16 ambiguou
@@ -1448,7 +1448,7 @@ language-import.scala	fail	-	check: diagnostic 4 of 5: scalac's is error languag
 leading-infix-miss.scala	fail	-	marks: error on an unmarked line leading-infix-miss.scala:2: Found:    Unit
 leak-type.scala	fail	-	marks: no error where 1 are marked
 leaks.scala	fail	-	marks: no error where 2 are marked
-literals.scala	fail	-	check: diagnostic 1 of 1: scalac's is error literals.scala:2:30 invalid literal number; teq's is error literals.scala:2:30 number too large
+literals.scala	fail	-	marks: 2 errors where 1 are marked: literals.scala:2:30: invalid literal number
 localReaches.scala	fail	-	option: -language:experimental.captureChecking (a check teq does not perform)
 lucre-23441-min.scala	fail	-	marks: error on an unmarked line lucre-23441-min.scala:6: type argument T does not conform to upper bound Txn[T]
 machine-state-encoding-with-implicit-match.scala	pass	-	
@@ -1716,7 +1716,7 @@ t5063.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t5063.scala:2:3 v
 t5702-neg-bad-and-wild.scala	fail	-	marks: 10 errors where 12 are marked
 t5702-neg-bad-brace.scala	fail	-	marks: 4 errors where 2 are marked: t5702-neg-bad-brace.scala:8:21: expected ',' or ')', found identifier
 t5729.scala	fail	-	check: diagnostic 1 of 2: scalac's is error t5729.scala:5:10 Ambiguous overload. The overloaded alternatives of method join in object C with types; teq's is warning t5729.scala:2:25 `_` is deprecated for wildcard arguments of types: use `?`
-t6124.scala	fail	-	marks: 8 errors where 16 are marked
+t6124.scala	fail	-	marks: 18 errors where 16 are marked: t6124.scala:3:15: trailing separator is not allowed
 t6355b.scala	pass	-	
 t6455.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t6455.scala:5:3 value withFilter is not a member of object O; teq's is error t6455.scala:5:3 value withFilter is not a member of O
 t6476.scala	fail	-	marks: 4 errors where 1 are marked: t6476.scala:3:7: invalid escape sequence

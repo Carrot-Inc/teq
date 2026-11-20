@@ -38,7 +38,6 @@ arrays-from-java	compile-error: test contains Java sources
 assert-stack	wrong-output
 backwardsCompat-implicitParens	compile-error: missing argument for parameter y
 beans	compile-error: test contains Java sources
-binaryLiterals	compile-error: expected an expression, found a blank line
 bitsets	compile-error: BitSet is not a member of the package
 boolord	compile-error: value < is not a member of Boolean
 box-to-byte	compile-error: value boxToByte is not a member of BoxesRunTime

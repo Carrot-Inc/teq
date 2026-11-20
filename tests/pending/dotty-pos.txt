@@ -714,7 +714,6 @@ t522.scala	t522.scala:14:5: foo is abstract; it cannot be instantiated
 t5330c.scala	t5330c.scala:3:28: type mismatch: found _, required String | Char
 t5886.scala	t5886.scala:8:6: type mismatch: found Class[_], required () => Any
 t5957	java source: teq reads none
-t6124.scala	t6124.scala:8:18: expected end of statement, found identifier
 t6205.scala	t6205.scala:6:19: type kt not found
 t628.scala	t628.scala:15:40: operator * cannot be applied to Double and Unit
 t6595.scala	option: -Wsafe-init with -Werror (teq has no flag for it)

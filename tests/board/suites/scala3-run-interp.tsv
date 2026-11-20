@@ -85,7 +85,7 @@ better-fors-map-elim	pass	-
 better-fors-map-inlined	pass	-	
 bigDecimalCache	pass	-	
 bigDecimalTest	pass	-	
-binaryLiterals	fail	-	compile-error: expected an expression, found a blank line
+binaryLiterals	pass	-	
 bind-tuple-pattern	pass	-	
 bitsets	fail	-	compile-error: BitSet is not a member of the package
 blame_eye_triple_eee-double	pass	-	
@@ -269,7 +269,7 @@ functionXXL	pass	-
 future-flatmap-exec-count	fail	-	run-error: no builtin for scala.concurrent.enqueueMicrotask (a @js template without a Scala body)
 gadts	pass	-	
 generic	pass	-	
-genericNumLits	fail	-	compile-error: number too large
+genericNumLits	fail	-	compile-error: expected '=>', found ':'
 genericTupleMembers	pass	-	
 genericValueClass	pass	-	
 gestalt-optional-inline	pass	-	

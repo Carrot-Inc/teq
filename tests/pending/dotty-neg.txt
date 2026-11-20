@@ -196,7 +196,6 @@ errpos.scala	marks: error on an unmarked line errpos.scala:3: expected an expres
 escapingRefs.scala	check: diagnostic 1 of 2: scalac's is error escapingRefs.scala:6:27 Found: O.B {...}; teq's is error escapingRefs.scala:6:27 type mismatch: found B, required A
 existentials.scala	marks: no error where 8 are marked
 expeimental-flag.scala	marks: no error where 5 are marked
-experimental-2.scala	check: diagnostic 1 of 2: scalac's is error experimental-2.scala:5:10 no aliases can be used to refer to a language import; teq's is error experimental-2.scala:6:19 number too large
 experimental-imports.scala	marks: 6 errors where 12 are marked
 experimental-message-experimental-flag	marks: no error where 1 are marked
 experimental-message.scala	marks: no error where 3 are marked

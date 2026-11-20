@@ -9143,7 +9143,7 @@ impl<'a> Worker<'a> {
         }
         match ast.expr(q) {
             Expr::Parens(inner) => self.plain_written(inner, te),
-            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::NullLit => Some(Plain::Literal),
+            Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::NullLit => Some(Plain::Literal),
             _ if ast.plain_path(q) => Some(Plain::Path(self.written_ref_symbol(q, te).is_some())),
             _ => None,
         }

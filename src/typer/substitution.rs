@@ -97,7 +97,7 @@ fn typed_without_effects(ast: &crate::ast::Ast, e: crate::ast::ExprId) -> bool {
     use crate::ast::Expr;
     let all = |l: crate::ast::ListRef| ast.expr_list(l).iter().all(|&x| typed_without_effects(ast, x));
     match ast.expr(e) {
-        Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit | Expr::NullLit | Expr::Ident(_) | Expr::This => true,
+        Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit | Expr::NullLit | Expr::Ident(_) | Expr::This => true,
         Expr::Select(r, _) | Expr::Parens(r) | Expr::Typed(r, _) | Expr::Prefix(_, r) | Expr::NamedArg(_, r) => typed_without_effects(ast, r),
         Expr::Apply(f, args) | Expr::UsingApply(f, args) => typed_without_effects(ast, f) && all(args),
         Expr::TypeApply(f, _) => typed_without_effects(ast, f),

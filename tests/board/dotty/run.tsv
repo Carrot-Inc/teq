@@ -80,7 +80,7 @@ better-fors-map-inlined.scala	pass	interp:pass
 better-fors.scala	pass	interp:pass	
 bigDecimalCache.scala	pass	interp:pass	
 bigDecimalTest.scala	pass	interp:pass	
-binaryLiterals.scala	fail	interp:fail	binaryLiterals.scala:3:19: expected an expression, found a blank line
+binaryLiterals.scala	pass	interp:pass	
 bind-tuple-pattern.scala	pass	interp:pass	
 bitsets.scala	pass	interp:fail	
 blame_eye_triple_eee-double.scala	pass	interp:pass	
@@ -259,7 +259,7 @@ future-flatmap-exec-count.scala	pass	interp:fail
 gadts.scala	pass	interp:pass	
 generic	pass	interp:pass	
 generic-java-signatures-erased.scala	fail	interp:fail	generic-java-signatures-erased.scala:5:13: 'erased' is not part of the supported Scala subset
-genericNumLits.scala	fail	interp:fail	genericNumLits.scala:5:19: number too large
+genericNumLits.scala	fail	interp:fail	genericNumLits.scala:41:33: expected '=>', found ':'
 genericTupleMembers.scala	pass	interp:pass	
 genericValueClass.scala	pass	interp:pass	
 gestalt-optional-inline	pass	interp:pass	

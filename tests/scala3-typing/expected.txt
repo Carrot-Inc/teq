@@ -253,7 +253,7 @@ neg/errpos.scala	syntax	expected an expression, found {}
 neg/escapingRefs.scala	same	
 neg/existentials.scala	accepts	
 neg/expeimental-flag.scala	accepts	
-neg/experimental-2.scala	syntax	number too large
+neg/experimental-2.scala	same	
 neg/experimental-imports.scala	syntax	'erased' is not part of the supported Scala subset
 neg/experimental-message-experimental-flag	accepts	
 neg/experimental-message.scala	accepts	
@@ -1552,7 +1552,7 @@ neg/language-import.scala	same
 neg/leading-infix-miss.scala	different	type mismatch
 neg/leak-type.scala	accepts	
 neg/leaks.scala	accepts	
-neg/literals.scala	syntax	number too large
+neg/literals.scala	same	
 neg/lucre-23441-min.scala	different	type argument T does not conform to upper bound Txn[T]
 neg/machine-state-encoding-with-implicit-match.scala	same	
 neg/macro.scala	syntax	expected end of statement, found {}
@@ -1860,7 +1860,7 @@ neg/t5063.scala	same
 neg/t5702-neg-bad-and-wild.scala	syntax	expected {}, found {}
 neg/t5702-neg-bad-brace.scala	syntax	expected {}, found {}
 neg/t5729.scala	same	
-neg/t6124.scala	subset	7/15 lines
+neg/t6124.scala	same	
 neg/t6355b.scala	same	
 neg/t6455.scala	same	
 neg/t6476.scala	superset	+3 lines: invalid escape sequence
@@ -5486,7 +5486,7 @@ pos/t6091.scala	accepts
 pos/t611.scala	accepts	
 pos/t6117.scala	accepts	
 pos/t6123-explaintypes-implicits.scala	accepts	
-pos/t6124.scala	syntax	expected end of statement, found {}
+pos/t6124.scala	accepts	
 pos/t613.scala	accepts	
 pos/t6145.scala	accepts	
 pos/t6146.scala	accepts	

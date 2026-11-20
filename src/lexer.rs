@@ -2065,24 +2065,48 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// `Scanners.checkNoTrailingSeparator`: a number's digits that end in `_` are refused, at the offset scalac reports:
+    /// the token's start plus the buffer's length less one, the buffer holding what was scanned from `buf_start` (after a
+    /// `0x` or `0b`, which scalac leaves out of it).
+    fn trailing_separator(&mut self, token_start: usize, buf_start: usize) {
+        if self.pos > buf_start && self.src[self.pos - 1] == b'_' {
+            let at = token_start + (self.pos - buf_start) - 1;
+            self.error(at, at + 1, "trailing separator is not allowed");
+        }
+    }
+
     fn lex_number(&mut self) {
         let start = self.pos;
         let mut kind = Tok::IntLit;
-        if self.peek(0) == b'0' && matches!(self.peek(1), b'x' | b'X') {
+        // `Scanners.fetchLeadingZero`: `0x` and `0b` open a hexadecimal and a binary number, whose digits (the buffer
+        // scalac counts a trailing separator's offset in) start after the prefix.
+        let radix = match (self.peek(0), self.peek(1)) {
+            (b'0', b'x' | b'X') => 16,
+            (b'0', b'b' | b'B') => 2,
+            _ => 10,
+        };
+        if radix != 10 {
             self.pos += 2;
-            while self.peek(0).is_ascii_hexdigit() || self.peek(0) == b'_' {
+            let digit = |c: u8| if radix == 16 { c.is_ascii_hexdigit() } else { matches!(c, b'0' | b'1') };
+            if self.peek(0) != b'_' && !digit(self.peek(0)) {
+                self.error(start, self.pos, "invalid literal number");
+            }
+            while digit(self.peek(0)) || self.peek(0) == b'_' {
                 self.pos += 1;
             }
+            self.trailing_separator(start, start + 2);
         } else {
             while self.peek(0).is_ascii_digit() || self.peek(0) == b'_' {
                 self.pos += 1;
             }
+            self.trailing_separator(start, start);
             if self.peek(0) == b'.' && self.peek(1).is_ascii_digit() {
                 kind = Tok::DoubleLit;
                 self.pos += 1;
                 while self.peek(0).is_ascii_digit() || self.peek(0) == b'_' {
                     self.pos += 1;
                 }
+                self.trailing_separator(start, start);
             }
             if matches!(self.peek(0), b'e' | b'E')
                 && (self.peek(1).is_ascii_digit()
@@ -2090,9 +2114,10 @@ impl<'a> Lexer<'a> {
             {
                 kind = Tok::DoubleLit;
                 self.pos += 2;
-                while self.peek(0).is_ascii_digit() {
+                while self.peek(0).is_ascii_digit() || self.peek(0) == b'_' {
                     self.pos += 1;
                 }
+                self.trailing_separator(start, start);
             }
         }
         let end = self.pos;
@@ -2101,11 +2126,11 @@ impl<'a> Lexer<'a> {
                 kind = Tok::LongLit;
                 self.pos += 1;
             }
-            b'd' | b'D' if !is_ident_part(self.peek(1)) => {
+            b'd' | b'D' if radix == 10 && !is_ident_part(self.peek(1)) => {
                 kind = Tok::DoubleLit;
                 self.pos += 1;
             }
-            b'f' | b'F' if !is_ident_part(self.peek(1)) => {
+            b'f' | b'F' if radix == 10 && !is_ident_part(self.peek(1)) => {
                 kind = Tok::FloatLit;
                 self.pos += 1;
             }

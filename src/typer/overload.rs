@@ -3251,7 +3251,7 @@ impl<'a> Worker<'a> {
         fn simple(ast: &crate::ast::Ast, e: crate::ast::ExprId) -> bool {
             let list_simple = |l: ListRef| ast.expr_list(l).iter().all(|&a| simple(ast, a));
             match ast.expr(e) {
-                Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit => true,
+                Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) | Expr::UnitLit => true,
                 Expr::Ident(_) | Expr::This => true,
                 Expr::Select(r, _) => simple(ast, r),
                 Expr::Apply(f, args) | Expr::UsingApply(f, args) => simple(ast, f) && list_simple(args),
@@ -4082,7 +4082,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        let written = matches!(self.cur_ast().expr(value), Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_));
+        let written = matches!(self.cur_ast().expr(value), Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_));
         let literal = match (agreed, written) {
             (false, true) => self.fold_constant(te).map(|v| self.types.lit(v)).filter(|&lit| lit != ty),
             _ => None,

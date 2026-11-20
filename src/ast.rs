@@ -12,7 +12,7 @@ macro_rules! id_type {
         }
     )*};
 }
-id_type!(ExprId, PatId, TyExprId, DefId, StrId);
+id_type!(ExprId, PatId, TyExprId, DefId, StrId, NumberId);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ListRef {
@@ -32,9 +32,34 @@ impl ListRef {
     }
 }
 
+/// An integer literal without a suffix as the source writes it (`255`, `0xff`, `0b1010`, `- 0x80000000`): the token's
+/// digits (`digits`: the radix's prefix and the separators in, a suffix never), their radix and whether the parser
+/// folded a `-` in. It is an untyped number, as dotty's `Parsers.literal` makes it, whose type and value the expected
+/// type gives (`Typer.typedNumber`), reading the digits from the source text; the expression's own span stays the
+/// diagnostic's. `content` is what two literals are compared by wherever they stand (`shape`): with the same radix
+/// and sign, the same content reads as the same number by every reader.
+#[derive(Clone, Copy, Debug)]
+pub struct NumberLit {
+    pub digits: Span,
+    pub radix: u8,
+    pub neg: bool,
+    pub content: NumberContent,
+}
+
+/// The digits' value where it fits 64 bits, else their text with the separators out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NumberContent {
+    Value(u64),
+    Text(StrId),
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Expr {
+    /// An integer constant made without source text (an index the parser generates, a body read from TASTy), and
+    /// an `Int` literal of a type (`val x: 0xff`), read at once.
     IntLit(i64),
+    /// An integer literal of an expression or a pattern, read by the expected type (`Ast::number`).
+    Number(NumberId),
     LongLit(i64),
     DoubleLit(f64),
     /// A decimal or exponent literal without a suffix (`1.5`, `1e3`, `-2.0`): its digits as
@@ -802,6 +827,8 @@ pub struct Ast {
     pub ty_spans: Vec<Span>,
     pub defs: Vec<Def>,
     pub strings: Vec<String>,
+    /// The integer literals `Expr::Number` names.
+    pub numbers: Vec<NumberLit>,
     pub expr_lists: Vec<ExprId>,
     pub pat_lists: Vec<PatId>,
     pub ty_lists: Vec<TyExprId>,
@@ -1165,6 +1192,7 @@ impl Ast {
             ty_spans: Vec::with_capacity(n / 4),
             defs: Vec::new(),
             strings: Vec::new(),
+            numbers: Vec::new(),
             expr_lists: Vec::with_capacity(n / 2),
             pat_lists: Vec::new(),
             ty_lists: Vec::new(),
@@ -1645,6 +1673,29 @@ impl Ast {
         let id = StrId(self.strings.len() as u32);
         self.strings.push(s);
         id
+    }
+
+    pub fn add_number(&mut self, n: NumberLit) -> NumberId {
+        let id = NumberId(self.numbers.len() as u32);
+        self.numbers.push(n);
+        id
+    }
+
+    #[inline]
+    pub fn number(&self, id: NumberId) -> NumberLit {
+        self.numbers[id.idx()]
+    }
+
+    /// Whether two literals of two trees are the same number (`NumberLit::content`).
+    pub fn same_number(&self, a: NumberId, other: &Ast, b: NumberId) -> bool {
+        let (x, y) = (self.number(a), other.number(b));
+        x.radix == y.radix
+            && x.neg == y.neg
+            && match (x.content, y.content) {
+                (NumberContent::Value(u), NumberContent::Value(v)) => u == v,
+                (NumberContent::Text(s), NumberContent::Text(t)) => self.str(s) == other.str(t),
+                _ => false,
+            }
     }
 }
 

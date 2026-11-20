@@ -75,6 +75,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
     zio's queues and the JDK objects the natives make run as before. A subclass of `java.awt.Point`, of a Java class
     whose constructor sets a field to anything but its default, or of an interface whose parent has an initializer
     and a method that is neither abstract nor static, is refused.
+- An integer literal is read by the type expected, as scalac reads it: `val x: Long = 0xffffffff` is 4294967295 (it
+  was -1), a `Long`'s digits past its range are refused ("number too large", never wrapped), `0b`/`0B` binary
+  literals are read (`0b1010`), a separator at the digits' end is refused ("trailing separator is not allowed"), and
+  a `Float` or `Double` expected reads decimal or binary digits as a floating number (`0b1010: Double` is 1010.0).
+  A literal against a type variable is an `Int`'s, as scalac reads it (`(0xffffffff, 1)` for a `(Long, Int)`, `Some`,
+  `List`, a generic method: -1), unless the variable is pinned to a class (`new C(0xffffffff)` for an invariant
+  `C[Long]`: 4294967295); an overloaded operator's argument is an `Int`'s (`n + 0xffffffff` adds -1).
 
 ## 0.1.11 (2026-11-20)
 

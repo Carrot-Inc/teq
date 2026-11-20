@@ -189,7 +189,7 @@ impl Dumper<'_> {
                     self.expr(f, owner);
                 }
             }
-            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_)
+            Expr::IntLit(_) | Expr::Number(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_)
             | Expr::StringLit(_) | Expr::UnitLit | Expr::Ident(_) | Expr::SymRef(_) | Expr::This | Expr::ThisOf(_)
             | Expr::QualThis(_) | Expr::ClassOf(_) | Expr::Unsupported(_) | Expr::Withheld(_) | Expr::Super(_) | Expr::Derived | Expr::NullLit
             | Expr::QuoteType(_) | Expr::SplicePat(_) | Expr::Error => {}

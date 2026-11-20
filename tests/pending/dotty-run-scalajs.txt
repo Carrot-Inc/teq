@@ -17,7 +17,6 @@ array-erasure.scala	array-erasure.scala:27:16: value apply is not a member of Ar
 array-existential-bound.scala	array-existential-bound.scala:2:18: value length is not a member of Q
 arraycopy.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
 arrays.scala	<jdk>:1:1: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition without an implementation in the std's platform layer)
-binaryLiterals.scala	binaryLiterals.scala:3:19: expected an expression, found a blank line
 bridges.scala	bridges.scala:64:21: error overriding method f in class Foo___ of type Foo___.this.I: method f in trait Bar_If of type I has incompatible type
 builder.scala	output: line 1: the .check has 'Table(Row(Cell(top left), Cell(top right)), Row(Cell(botttom left), Cell(bottom right)))', the program printed 'Table()'
 byname-given.scala	byname-given.scala:3:3: local givens cannot take parameters

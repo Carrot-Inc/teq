@@ -8,7 +8,7 @@
 // expect: 54:25: error: Found:    List[Int | Long]⏎Required: List[Long]
 // expect: 56:25: error: Found:    List[Int | Long]⏎Required: List[Long]
 // expect: 60:24: error: Found:    List[Char]⏎Required: List[Int]
-// expect: 73:16: error: number too large for Int; use an L suffix for Long
+// expect: 73:16: error: number too large
 // expect: 76:19: error: Found:    Int | Long⏎Required: Long
 // expect: 78:19: error: Found:    Int | Long⏎Required: Long
 object N:
