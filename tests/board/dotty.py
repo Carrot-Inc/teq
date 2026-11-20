@@ -108,6 +108,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -142,6 +143,10 @@ STOPPING = threading.Event()  # a signal is ending the run: no command starts, o
 PUBLISHING = []  # non-empty while the run publishes what it staged: a signal then is held (HELD) until the end
 HELD = []  # the signals that came during the publication, in their order
 STAGED = []  # what a run writes, held until it has ended clean: ("pending", suite, its tests) or ("file", path, bytes)
+SYSTEMD_RUN = os.environ.get("BOARD_SYSTEMD_RUN") or "/usr/bin/systemd-run"  # BOARD_SYSTEMD_RUN: a check's stand-in
+MARKER = os.path.join(HERE, "dotty", ".publication-interrupted")  # beside the lists while a publication runs
+FORWARDED = []  # the supervisor's signals, passed on to the run's scope
+SAID = []  # the run's last line, staged: a supervisor that refuses the run's lists says it again after its own
 PEAKS = {}  # a capped command's output file: its session's peak summed resident memory (never below its proportional)
 BACKSTOP = 0.75  # the run's scope's MemoryMax, of the machine's memory: one board row a machine, a session beside it
 NEAR = 3  # a test past a third of a limit is named after the run
@@ -205,38 +210,84 @@ def teq_command():
     return teq, {}, teq
 
 
-def in_scope():
-    """The run in one systemd scope of its own (a cgroup that dies charged with no more than the run's own page
-    cache, where a scope a test left one each): the board's process executed again by `systemd-run --user --scope`,
-    MemoryMax BACKSTOP of the machine's memory, no swap, OOMPolicy=continue (a process the kernel kills inside it is
-    that test's crash, not the scope's end). Not where the run is in one already (BOARD_SCOPE, or a cgroup whose leaf
-    is a board scope). Where the user's manager does not linger (a scope ends with a manager that ends with the
-    login) or does not start a scope, the run goes on bare: the line that says so, else nothing (the process is
-    replaced)."""
-    own = ""
-    try:
-        own = open("/proc/self/cgroup").read().strip().split("::")[-1]
-    except OSError:
-        pass
-    if os.environ.get("BOARD_SCOPE") or re.search(r"/board-\d+\.scope$", own):
-        return ""
-    run_ = "/usr/bin/systemd-run"
+def scope_available():
+    """Whether this machine starts the run's scope: the user's systemd manager lingers (a scope ends with a manager
+    that ends with the login) and starts a scope (`systemd-run --user --scope /bin/true`). (None, MemoryMax bytes:
+    BACKSTOP of the machine's memory) where it does, (why not, 0) where not."""
     try:
         linger = subprocess.run(["/usr/bin/loginctl", "show-user", str(os.getuid()), "--value", "-p", "Linger"], capture_output=True,
                                 text=True, timeout=20, stdin=subprocess.DEVNULL)
         if linger.returncode != 0 or linger.stdout.strip() != "yes":
-            return "board: the run has no memory backstop on this machine (the user's systemd manager is not one that lingers)"
-        probe = subprocess.run([run_, "--user", "--quiet", "--scope", "/bin/true"], capture_output=True, text=True, timeout=30,
+            return "the user's systemd manager is not one that lingers", 0
+        probe = subprocess.run([SYSTEMD_RUN, "--user", "--quiet", "--scope", "/bin/true"], capture_output=True, text=True, timeout=30,
                                stdin=subprocess.DEVNULL)
         if probe.returncode != 0:
-            return f"board: the run has no memory backstop on this machine ({' '.join((probe.stderr.strip() or f'exit {probe.returncode}').split())[:160]})"
+            return " ".join((probe.stderr.strip() or f"exit {probe.returncode}").split())[:160], 0
         total = next(int(l.split()[1]) * 1024 for l in open("/proc/meminfo") if l.startswith("MemTotal:"))
     except (OSError, subprocess.SubprocessError, StopIteration) as e:
-        return f"board: the run has no memory backstop on this machine ({' '.join(str(e).split())[:160]})"
-    unit = f"board-{os.getpid()}"
-    env = dict(os.environ, BOARD_SCOPE=unit)
-    os.execve(run_, [run_, "--user", "--quiet", "--scope", f"--unit={unit}", f"-pMemoryMax={int(total * BACKSTOP)}",
-                     "-pMemorySwapMax=0", "-pOOMPolicy=continue", sys.executable, os.path.abspath(__file__)] + sys.argv[1:], env)
+        return " ".join(str(e).split())[:160], 0
+    return None, int(os.environ.get("BOARD_BACKSTOP") or total * BACKSTOP)  # BOARD_BACKSTOP: a check's, in bytes
+
+
+def kills_of(cgroup):
+    """The kernel's kills in a cgroup and below it (memory.events, hierarchical: oom_kill and oom_group_kill), or
+    None where it cannot be read (the cgroup gone)."""
+    try:
+        with open(f"/sys/fs/cgroup{cgroup}/memory.events") as fh:
+            ev = dict(l.split() for l in fh if l.strip())
+        return int(ev.get("oom_kill", 0)) + int(ev.get("oom_group_kill", 0))
+    except (OSError, ValueError):
+        return None
+
+
+def write_stage(stage, staged):
+    """What the inner run would publish, into its stage directory: each file's bytes as <n>.bin and a manifest; the
+    manifest's `complete` the last write (a run killed before it has staged nothing whole). BOARD_KILL_AT=stage:<k>
+    or end, for a check, kills the run after its k-th staged entry or after the manifest."""
+    at = os.environ.get("BOARD_KILL_AT", "")
+    entries = []
+    for i, (kind, where, what) in enumerate(staged, 1):
+        if kind == "pending":
+            entries.append({"kind": "pending", "suite": where, "listed": what})
+        else:
+            with open(os.path.join(stage, f"{i}.bin"), "wb") as fh:
+                fh.write(what)
+            entries.append({"kind": "file", "where": where, "bytes": f"{i}.bin"})
+        if at == f"stage:{i}":
+            os.kill(os.getpid(), signal.SIGKILL)
+    with open(os.path.join(stage, "manifest.part"), "w", encoding="utf-8") as fh:
+        json.dump({"entries": entries, "said": SAID[0] if SAID else None, "complete": True}, fh)
+    os.replace(os.path.join(stage, "manifest.part"), os.path.join(stage, "manifest.json"))
+    if at == "end":
+        os.kill(os.getpid(), signal.SIGKILL)
+
+
+def said_of(stage):
+    """The run's last line as its stage keeps it, or None."""
+    try:
+        with open(os.path.join(stage, "manifest.json"), encoding="utf-8") as fh:
+            return json.load(fh).get("said")
+    except (OSError, ValueError):
+        return None
+
+
+def read_stage(stage):
+    """The staged entries of a run whose manifest is complete, else None."""
+    try:
+        with open(os.path.join(stage, "manifest.json"), encoding="utf-8") as fh:
+            m = json.load(fh)
+        if not m.get("complete"):
+            return None
+        out = []
+        for e in m["entries"]:
+            if e["kind"] == "pending":
+                out.append(("pending", e["suite"], e["listed"]))
+            else:
+                with open(os.path.join(stage, e["bytes"]), "rb") as fh:
+                    out.append(("file", e["where"], fh.read()))
+        return out
+    except (OSError, ValueError, KeyError):
+        return None
 
 
 def end_sessions(sig, _frame):
@@ -1613,18 +1664,25 @@ def jvm_fits(spec, jdk):
 
 
 def main():
-    """The board in the run's scope (in_scope), its tests' sessions ended with a signal to it, each capped test's
-    peak written to <out>/peaks.tsv. Whatever a run writes (<out>/lists/*.tsv, <out>/peaks.tsv, and under --update or
-    --add tests/pending/dotty-*.txt, tests/board/dotty/*.tsv, tests/board/dotty/self-checks.tsv) is written at its end
-    alone, once board_main has ended: not by a run an exception or a signal ended before its publication; a signal
-    during the publication is held to its end (`publish`). A process the kernel kills inside the scope (past its
-    MemoryMax, the machine's protection) is read as that test's crash, a row not as listed."""
-    bare = in_scope()
-    if bare:
-        print(bare, flush=True)  # before whatever ends the run on stderr: the gate keeps a log's last line
+    """The board's run in a scope of its own, its supervisor outside it.
+
+    The run (BOARD_INNER, its stage directory) is the board: its tests capped by the watchdog, their sessions ended
+    with a signal to it, and whatever it would write staged into its stage directory, never a public path (`inner`).
+    The supervisor (`supervise`) starts the run's scope, a new one of the run's own name, reads the kernel's kills in
+    it once the run has ended (from zero: no process of another run was ever in it), and publishes the run's lists only when the run ended by itself with its stage whole and no process of the scope
+    was killed by the kernel. Outputs on a tmpfs are charged to the scope (a tmpfs's pages are not reclaimed): a run
+    whose outputs fill its scope's memory can be killed, which the supervisor reads as a failed run. The gate's
+    BOARD_OUT is the checkout's out/, a disk."""
+    if os.environ.get("BOARD_INNER"):
+        return inner(os.environ["BOARD_INNER"])
+    return supervise(sys.argv[1:])
+
+
+def inner(stage):
+    """The run inside the scope: board_main, every list it writes staged (write_stage), nothing public; each capped
+    test's peak staged as <out>/peaks.tsv."""
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(sig, end_sessions)
-    write_pending = pending.write
     pending.write = lambda suite, listed: STAGED.append(("pending", suite, dict(listed)))
     status = board_main()
     out = os.path.abspath(os.environ.get("BOARD_OUT") or os.path.join(REPO, "out", "board", "dotty"))
@@ -1633,8 +1691,165 @@ def main():
             "# a capped teq run's output, its session's peak summed resident memory in bytes, never below its proportional "
             "(MEMORY_CAP %d; a run that ended within POLL reads 0)\n" % MEMORY_CAP
             + "".join(f"{os.path.relpath(path, out)}\t{peak}\n" for path, peak in sorted(PEAKS.items(), key=lambda kv: -kv[1]))).encode("utf-8")))
-    publish(STAGED, write_pending)
+    write_stage(stage, STAGED)
     return status
+
+
+def forward(sig, _frame):
+    """The supervisor's handler: held during the publication (`publish`); else passed on to the run's processes, the
+    supervisor then failing the run once it has ended."""
+    if PUBLISHING:
+        HELD.append(sig)
+        return
+    FORWARDED.append(sig)
+    for pid in SCOPE_PIDS():
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            pass
+
+
+def SCOPE_PIDS():
+    return []
+
+
+def selection(argv):
+    """A run's selection of rows and tests: its --row, --except, --only and --show, as given."""
+    out, i = {}, 0
+    while i < len(argv):
+        a = argv[i]
+        for opt in ("--row", "--except", "--only", "--show"):
+            if a == opt and i + 1 < len(argv):
+                out[opt] = argv[i + 1]
+                i += 1
+            elif a.startswith(opt + "="):
+                out[opt] = a.split("=", 1)[1]
+        i += 1
+    return out
+
+
+def marked():
+    """The selection of the run whose publication the marker says was cut ({} where it cannot be read: every row)."""
+    try:
+        return json.loads(open(MARKER).read().split("\n", 1)[1]).get("selection", {})
+    except (OSError, ValueError, IndexError, AttributeError):
+        return {}
+
+
+def covers(mine, cut):
+    """Whether a publishing run of the selection `mine` writes again every list the cut one could have written: no
+    test selection (--only, --show), and every row (no --row, no --except) or the cut run's own rows."""
+    if "--only" in mine or "--show" in mine:
+        return False
+    rows = lambda sel: (sel.get("--row"), sel.get("--except"))
+    return rows(mine) == (None, None) or rows(mine) == rows(cut)
+
+
+def supervise(argv):
+    """The run's supervisor, outside its scope (no MemoryMax over it). A marker beside the lists
+    (tests/board/dotty/.publication-interrupted) says a publication was cut, and of which rows: every run fails on it
+    but an --update or --add of every row or of the cut run's rows (`covers`), whose publication clears it. The run starts in `systemd-run --user --scope --unit=board-<pid>` (MemoryMax
+    BACKSTOP, no swap, OOMPolicy=continue) under a holder, `sh -c '<run>; echo $? > <stage>/exit; exec sleep infinity'`,
+    which keeps the scope until the supervisor has read it: the kernel's kills in the scope (kills_of) once the run
+    has ended. The scope is the run's from its start (its name is the run's, a unit of that name already there fails
+    before any test), so its counters count the run's kills alone, from zero: no reading before the run, which a
+    kill before the supervisor's first look at the scope would be absorbed into. The run's lists are published
+    (`publish`) only when its exit is 0, its stage whole and no kill counted (oom_kill and oom_group_kill, its own
+    scope's and below, a counter it cannot read a failure); else the run fails with one line, no public list changes, the stage kept for reading: a run not as
+    listed (exit 1), its --update's lists among them, writes none, its own last line said again after the
+    supervisor's. Without a
+    scope (no lingering manager, no systemd-run) the run goes on uncapped and unread, one line saying so; under
+    BOARD_REQUIRE_SCOPE (the gate's board lines set it) every run refuses without one, a checking run as a publishing
+    one: a gate line that ran uncapped and unread would be green by not checking."""
+    global SCOPE_PIDS
+    publishing = "--update" in argv or "--add" in argv
+    if os.path.exists(MARKER) and not (publishing and covers(selection(argv), marked())):
+        print("board: a publication was interrupted: run --update again", flush=True)
+        return 1
+    out = os.path.abspath(os.environ.get("BOARD_OUT") or os.path.join(REPO, "out", "board", "dotty"))
+    os.makedirs(out, exist_ok=True)
+    stage = tempfile.mkdtemp(prefix=".stage-", dir=out)
+    why, memory = scope_available()
+    run = [sys.executable, os.path.abspath(__file__)] + argv
+    env = dict(os.environ, BOARD_INNER=stage)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, forward)
+    if why:
+        if os.environ.get("BOARD_REQUIRE_SCOPE"):
+            print(f"board: no scope for the run ({why}): the run refuses without one (BOARD_REQUIRE_SCOPE, the gate's)", flush=True)
+            return 2
+        print(f"board: the run has no memory backstop on this machine ({why}): uncapped and unread", flush=True)
+        p = subprocess.Popen(run, env=env, stdin=subprocess.DEVNULL)
+        SCOPE_PIDS = lambda: [p.pid]
+        code = p.wait()
+        kills = 0
+    else:
+        unit = f"board-{os.getpid()}"
+        holder = 'r="$1"; shift; "$@"; echo $? > "$r/exit"; exec sleep infinity'
+        p = subprocess.Popen([SYSTEMD_RUN, "--user", "--quiet", "--scope", f"--unit={unit}", f"-pMemoryMax={memory}", "-pMemorySwapMax=0",
+                              "-pOOMPolicy=continue", "/bin/sh", "-c", holder, "sh", stage] + run, env=env, stdin=subprocess.DEVNULL)
+        if os.environ.get("BOARD_DELAY_LOOK"):
+            time.sleep(float(os.environ["BOARD_DELAY_LOOK"]))  # a check's: the supervisor late to its first look
+        cgroup, deadline = None, time.monotonic() + 30
+        while cgroup is None and time.monotonic() < deadline and p.poll() is None:
+            try:
+                own = open(f"/proc/{p.pid}/cgroup").read().strip().split("::")[-1]
+                cgroup = own if own.endswith(f"/{unit}.scope") else None
+            except OSError:
+                pass
+            time.sleep(0.01)
+        if cgroup is None:
+            p.kill() if p.poll() is None else None
+            print(f"board: the run's scope {unit} did not start (exit {p.wait()}): no test ran", flush=True)
+            return 1
+        def scope_pids():
+            try:
+                return [int(x) for x in open(f"/sys/fs/cgroup{cgroup}/cgroup.procs").read().split() if int(x) != p.pid]
+            except (OSError, ValueError):
+                return []
+        SCOPE_PIDS = scope_pids
+        while not os.path.exists(os.path.join(stage, "exit")) and p.poll() is None:
+            time.sleep(0.1)
+        if os.environ.get("BOARD_KILL_AT") == "holder":
+            p.kill()
+            p.wait()
+            time.sleep(0.5)
+        kills = kills_of(cgroup)
+        try:
+            code = int(open(os.path.join(stage, "exit")).read())
+        except (OSError, ValueError):
+            code = None
+        if p.poll() is None:
+            p.kill()
+        p.wait()
+        if code is None or kills is None:
+            print(f"board: the run's scope ended before it could be read: no list written (the stage kept in {stage})", flush=True)
+            return 1
+    staged = read_stage(stage)
+    if kills:
+        print(f"board: the kernel killed {kills} process{'es' if kills > 1 else ''} in the run's scope: no list written "
+              f"(the stage kept in {stage})", flush=True)
+        return 1
+    if FORWARDED:
+        print(f"board: the run was ended by signal {FORWARDED[0]}: no list written", flush=True)
+        return 128 + FORWARDED[0]
+    if staged is None and 0 < code < 128:
+        return code  # the run said why it stopped (die) and staged nothing: its own line stays the last
+    if code >= 128 or code < 0 or staged is None:
+        print(f"board: the run ended by signal {code - 128 if code >= 128 else -code if code < 0 else code} or with its stage not whole: "
+              f"no list written (the stage kept in {stage})", flush=True)
+        return 1
+    if code != 0:
+        # a run that is not as listed writes no list, its checking run's or its --update's: the stage is what it would
+        # have written; the run's own last line said again, the last (the gate's table keeps it)
+        print(f"board: the run exited {code}: no list written (the stage kept in {stage})", flush=True)
+        said = said_of(stage)
+        if said:
+            print(said, flush=True)
+        return code
+    publish(staged, pending.write)
+    shutil.rmtree(stage, ignore_errors=True)
+    return code
 
 
 def publish(staged, write_pending):
@@ -1642,11 +1857,20 @@ def publish(staged, write_pending):
     counts), once board_main has ended: one step a terminating signal
     does not cut. SIGTERM, SIGINT and SIGHUP that come during it are held to its end; then the run exits 128 + the
     first of them, its every list written (it had ended valid). What no handler holds off (a signal 9, the machine
-    going down) can leave some lists new and some old: the next run with --update writes every list again. Each
-    file is written whole (a file beside it, then renamed over it)."""
+    going down) can leave some lists new and some old: the marker (MARKER) is written before the first and removed after
+    the last, so that every later run fails on it until a whole --update writes every list again. Each file is written
+    whole (a file beside it, then renamed over it). BOARD_KILL_AT=rename:<k>, for a check, kills the supervisor after
+    its k-th write.""" 
     PUBLISHING.append(True)
+    at, renames = os.environ.get("BOARD_KILL_AT", ""), 0
+    pressure = int(os.environ.get("BOARD_ALLOC_AT_RENAME") or 0)  # a check's: bytes held at each rename
     try:
+        os.makedirs(os.path.dirname(MARKER), exist_ok=True)
+        with open(MARKER, "w") as fh:
+            fh.write("a publication of the board's lists began and has not ended\n" + json.dumps({"selection": selection(sys.argv[1:])}) + "\n")
         for kind, where, what in staged:
+            if pressure:
+                held = bytearray(pressure)
             if kind == "pending":
                 write_pending(where, what)
             else:
@@ -1655,6 +1879,10 @@ def publish(staged, write_pending):
                 with open(part, "wb") as fh:
                     fh.write(what)
                 os.replace(part, where)
+            renames += 1
+            if at == f"rename:{renames}":
+                os.kill(os.getpid(), signal.SIGKILL)
+        os.remove(MARKER)
     finally:
         PUBLISHING.clear()
     if HELD:
@@ -1803,7 +2031,8 @@ def board_main():
         # a selection that keeps no test checks nothing: it fails, never "0 tests"
         die(f"board: no test of the rows {', '.join(names)} matches {'--only ' + args.only if args.only else '--show ' + args.show}: nothing ran")
     if not (args.only or args.show):
-        print(last_line(unlisted + passing + stale_lists, totals))
+        SAID[:] = [last_line(unlisted + passing + stale_lists, totals)]
+        print(SAID[0])
     return status
 
 

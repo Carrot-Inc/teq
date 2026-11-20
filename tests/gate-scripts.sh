@@ -1665,7 +1665,7 @@ check "board: every scenario of the judge was held" "$work/board.log" eval '[ "$
 # test; a run in a board scope already is not executed again. No lingering manager, no systemd-run or no tmpfs:
 # each line is `skip` with the reason (not run, never a pass).
 python3 -B - "$work/memcap" > "$work/memcap.log" 2>&1 <<'PY'
-import os, re, shutil, signal, subprocess, sys, tempfile, time
+import json, os, re, shutil, signal, subprocess, sys, tempfile, time
 sys.path.insert(0, "tests/board")
 import dotty as D
 root = sys.argv[1]
@@ -1674,11 +1674,16 @@ def out(word, name, why=""):
 shm = next((m for m in ("/dev/shm", "/tmp") if any(l.split()[1] == m and l.split()[2] == "tmpfs" for l in open("/proc/mounts"))), None)
 lingers = subprocess.run(["/usr/bin/loginctl", "show-user", str(os.getuid()), "--value", "-p", "Linger"], capture_output=True, text=True).stdout.strip() == "yes" if os.path.exists("/usr/bin/loginctl") else False
 CHECKS = ["the tests run in at most ten cgroups", "a runaway is the memory cap, its child killed with it", "a test past the wall is a timeout, its child killed with it",
-          "a terminating signal to the run ends every test", "a run in a board scope already is not executed again",
+          "a terminating signal to the run ends every test", "a run started in a scope of another name runs in a board scope of its own",
           "two processes that share their pages are counted once: not killed", "a grandchild its parent left is the test's: the memory cap",
           "a test's own signal 9 is a crash, not the memory cap", "a child in a process group of its own is killed at the wall",
           "a green run writes its lists, the committed one the run's own bytes", "a test that dies by its own signal 9 past the cap is no kill of the watchdog's",
-          "a signal at any boundary of the publication leaves every list old or every list new, the exit 128 + the signal"]
+          "a signal at any boundary of the publication leaves every list old or every list new, the exit 128 + the signal",
+          "a test the kernel kills in the run's scope fails the run, no public list changed",
+          "a kill at every interval of the run and of its publication changes no public list (the supervisor's own kill: the marker), the control publishes all",
+          "without a scope a run goes on uncapped and unread; under BOARD_REQUIRE_SCOPE it refuses",
+          "every outcome (a listed test passing, an unlisted one failing, both, neither) of a plain run, --update, --add and --update --add: a nonzero exit changes no public list, its stage the ratchet's list; exit 0 is exactly the ratchet's change",
+          "a kernel kill before the supervisor's first look at the scope fails the run, no public list changed; one in a sibling scope fails no run"]
 why = None if shm and lingers and os.path.exists("/usr/bin/systemd-run") else ("no tmpfs" if not shm else "no lingering user manager or no systemd-run")
 if why:
     for c in CHECKS:
@@ -1712,6 +1717,7 @@ for a in "$@"; do case $a in
       share) exec python3 -c 'import os, time; a=bytearray(300000000); pid=os.fork(); time.sleep(2); os._exit(0) if pid == 0 else os.waitpid(pid, 0)' ;;
       orphan) exec python3 -c 'import os, time\nr, w = os.pipe()\nif os.fork() == 0:\n    if os.fork() == 0:\n        a = []\n        while True: a.append(bytearray(50000000))\n    os._exit(0)\nos.wait(); time.sleep(30)' ;;
       selfkill) exec sh -c 'kill -9 $$' ;;
+      fail) echo "$MEMCAP_TEST:1:1: error: a made-up failure" >&2; exit 1 ;;
       pgid) exec python3 -c 'import os, time\nif os.fork() == 0:\n    os.setpgid(0, 0); open(os.environ["MEMCAP_CHILD"], "w").write(str(os.getpid())); time.sleep(300)\ntime.sleep(60)' ;;
       *) exec sleep 60 ;;
     esac ;;
@@ -1771,10 +1777,10 @@ try:
         time.sleep(0.1)
     ok = code == 128 + signal.SIGTERM and os.path.exists(child) and gone(child)
     out("ok" if ok else "FAIL", CHECKS[3], "" if ok else f"exit {code}, the test {'gone' if gone(child) else 'left'}")
-    unit = f"board-{os.getpid()}9"
+    unit = f"memcap-outer-{os.getpid()}"
     r, note, _ = board("nested", only="^t06", wrap=["/usr/bin/systemd-run", "--user", "--quiet", "--scope", f"--unit={unit}"])
     cg = set(open(note).read().split()) if os.path.exists(note) else set()
-    ok = r.returncode == 0 and len(cg) == 1 and next(iter(cg)).endswith(f"/{unit}.scope")
+    ok = r.returncode == 0 and len(cg) == 1 and re.search(r"/board-\d+\.scope$", next(iter(cg))) is not None
     out("ok" if ok else "FAIL", CHECKS[4], "" if ok else f"{cg}, exit {r.returncode}")
     r, _, _ = board("share", only="^t07", do="share", test="t07.scala", extra={"TEQ_CAP": "450000000"})
     v = verdict("share", "t07.scala")
@@ -1858,6 +1864,129 @@ if k == 4:
         if got != want or r.returncode != 128 + int(sigs.split(",")[0]):
             bad.append(f"signals {sigs} at boundary {k}: exit {r.returncode}, the lists {sorted(got)} {r.stderr[-200:]}")
     out("ok" if not bad else "FAIL", CHECKS[11], f"{len(cases)} cases" + ("" if not bad else ": " + "; ".join(bad[:3])))
+    # the supervisor's two forms and its twin. The public lists: the copy's committed and pending lists of pos and
+    # the twin's BOARD_OUT list, read before and after each run (its peaks.tsv changes with every run: no list)
+    pub = lambda tag: {f: open(f, "rb").read() for f in [os.path.join(copy, "tests", "board", "dotty", "pos.tsv"), os.path.join(copy, "tests", "pending", "dotty-pos.txt"),
+                                                       os.path.join(outs, tag, "lists", "pos.tsv")] if os.path.exists(f)}  # peaks.tsv a measure, not a list
+    marker = os.path.join(copy, "tests", "board", "dotty", ".publication-interrupted")
+    before = pub("twin")
+    r, _, _ = board("twin", do="hold", test="t03.scala", jobs=2, extra={"BOARD_BACKSTOP": "250000000"})
+    last = (r.stdout.strip().splitlines() or [""])[-1]
+    ok = r.returncode == 1 and "the kernel killed" in last and pub("twin") == before
+    out("ok" if ok else "FAIL", CHECKS[12], "" if ok else f"exit {r.returncode}, {last!r}, the lists {'as they were' if pub('twin') == before else 'changed'}")
+    # the twin: t01 failing would change pos.tsv and the pending list; a kill at each interval must leave them
+    r, _, _ = board("twin")
+    base = pub("twin")
+    probe, _, _ = board("twin", do="fail", test="t01.scala", extra={"BOARD_KILL_AT": "end"})
+    kept = re.search(r"the stage kept in (\S+?)\)", probe.stdout)
+    n = len(json.load(open(os.path.join(kept.group(1), "manifest.json")))["entries"]) if kept else 0
+    bad, cases = [], 0
+    if probe.returncode == 0 or pub("twin") != base or n < 3:
+        bad.append(f"the probe: exit {probe.returncode}, {n} staged entries")
+    for at in [f"stage:{k}" for k in range(1, n + 1)] + ["end", "holder"]:
+        cases += 1
+        r, _, _ = board("twin", do="fail", test="t01.scala", extra={"BOARD_KILL_AT": at})
+        if r.returncode == 0 or pub("twin") != base:
+            bad.append(f"{at}: exit {r.returncode}, the lists {'as they were' if pub('twin') == base else 'changed'}")
+    for k in range(1, n + 1):
+        cases += 1
+        r, _, _ = board("twin", do="fail", test="t01.scala", extra={"BOARD_KILL_AT": f"rename:{k}"})
+        plain, _, _ = board("twin", only="^t02")
+        cleared, _, _ = board("twin")
+        if not (r.returncode != 0 and plain.returncode == 1 and "a publication was interrupted" in plain.stdout and cleared.returncode == 0
+                and not os.path.exists(marker) and pub("twin") == base):
+            bad.append(f"rename:{k}: exit {r.returncode}, a plain run's {plain.returncode} {(plain.stdout.strip().splitlines() or [''])[-1][:60]!r}, "
+                       f"the whole --update's {cleared.returncode}, the marker {'left' if os.path.exists(marker) else 'gone'}")
+    cases += 1
+    r, _, _ = board("twin", do="fail", test="t01.scala", extra={"BOARD_ALLOC_AT_RENAME": "300000000"})
+    changed = pub("twin")
+    if r.returncode != 0 or changed == base or b"t01.scala\tfail" not in changed.get(os.path.join(copy, "tests", "board", "dotty", "pos.tsv"), b""):
+        bad.append(f"the pressure at each rename: exit {r.returncode}, the lists {'as they were' if changed == base else 'changed'}")
+    out("ok" if not bad else "FAIL", CHECKS[13], f"{cases} cases, {n} staged entries" + ("" if not bad else ": " + "; ".join(bad[:3])))
+    bare, _, _ = board("noscope", only="^t11", extra={"BOARD_SYSTEMD_RUN": "/bin/false"})
+    gated, _, _ = board("noscope2", only="^t11", extra={"BOARD_SYSTEMD_RUN": "/bin/false", "BOARD_REQUIRE_SCOPE": "1"})
+    ok = (bare.returncode == 0 and "uncapped and unread" in bare.stdout and gated.returncode == 2 and "the run refuses without one" in gated.stdout
+          and not os.path.exists(os.path.join(outs, "noscope2", "lists")))
+    out("ok" if ok else "FAIL", CHECKS[14], "" if ok else f"bare: exit {bare.returncode}, gated: exit {gated.returncode} {(gated.stdout.strip().splitlines() or [''])[-1][:80]!r}")
+    # The counters from zero: the supervisor late to its first look at the scope (BOARD_DELAY_LOOK) while the kernel
+    # kills a test of the run (a kill no reading before the run may absorb), for each delay; and the control, a kill
+    # in a sibling scope during a clean run, which is not this run's
+    base = pub("twin")
+    bad = []
+    for delay in ("4", "8"):
+        r, _, _ = board("twin", do="hold", test="t03.scala", jobs=2, extra={"BOARD_BACKSTOP": "250000000", "BOARD_DELAY_LOOK": delay})
+        last = (r.stdout.strip().splitlines() or [""])[-1]
+        if r.returncode == 0 or "the kernel killed" not in last or pub("twin") != base:
+            bad.append(f"late {delay} s: exit {r.returncode}, {last[:80]!r}, the lists {'as they were' if pub('twin') == base else 'changed'}")
+    sibling = subprocess.Popen(["/usr/bin/systemd-run", "--user", "--quiet", "--scope", f"--unit=memcap-sibling-{os.getpid()}", "-pMemoryMax=100M",
+                                "-pMemorySwapMax=0", sys.executable, "-c", "import time; a = bytearray(300000000); time.sleep(5)"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    r, _, _ = board("twin", jobs=2, extra={"BOARD_DELAY_LOOK": "2"})
+    killed = sibling.wait(timeout=120)
+    if r.returncode != 0 or killed not in (-9, 137):
+        bad.append(f"a sibling's kill: the run's exit {r.returncode}, the sibling's {killed}, {(r.stdout.strip().splitlines() or [''])[-1][:80]!r}")
+    out("ok" if not bad else "FAIL", CHECKS[16], "two delays and a sibling" + ("" if not bad else ": " + "; ".join(bad)))
+    # The outcomes, generated: a corpus of a test that passes (was_bad) and one that fails (new_bad); a cell's pending
+    # list holds was_bad (a listed test that passes now) or not, and new_bad (else an unlisted failure) or not; the
+    # row's committed list is the run's own. By the ratchet (tests/support/pending.py hold): the run is as listed
+    # (exit 0) when no listed test passes that --update does not take out and no test fails unlisted that --add does
+    # not write in; the list after is the old one, less was_bad under --update, with new_bad under --add. Exit 0: the
+    # public lists are exactly that; else they are the bytes before, and the stage's pending list, if it staged one,
+    # is that list.
+    oc, ocopy = os.path.join(root, "outcomes"), os.path.join(root, "ocopy")
+    os.makedirs(os.path.join(oc, "tests", "pos"))
+    open(os.path.join(oc, "tests", "pos", "was_bad.scala"), "w").write("object WasBad { val x: Int = 1 }\n")
+    open(os.path.join(oc, "tests", "pos", "new_bad.scala"), "w").write('object NewBad { val x: Int = "wrong" }\n')
+    os.makedirs(os.path.join(oc, "compiler", "test", "dotc"))
+    open(os.path.join(oc, "compiler", "test", "dotc", "pos-linting.allowlist"), "w").close()
+    subprocess.run(["git", "init", "-q", oc], capture_output=True, timeout=60)
+    open(os.path.join(oc, ".git", "HEAD"), "w").write(D.TAG_COMMIT + "\n")
+    shutil.copytree(copy, ocopy, ignore=shutil.ignore_patterns("*.tsv", "dotty-*.txt", ".publication-interrupted"))
+    committed, pend = os.path.join(ocopy, "tests", "board", "dotty", "pos.tsv"), os.path.join(ocopy, "tests", "pending", "dotty-pos.txt")
+    def orun(tag, flags):
+        env = dict(os.environ, SCALA3_TAG=oc, BOARD_OUT=os.path.join(outs, tag))
+        env.pop("BOARD_SCOPE", None)
+        return subprocess.run([sys.executable, "-B", os.path.join(ocopy, "tests", "board", "dotty.py"), "--row", "pos", "--jobs", "2"] + flags,
+                              env=env, capture_output=True, text=True, timeout=300)
+    def names(path):
+        return {l.split("\t")[0] for l in open(path, encoding="utf-8") if l.strip()} if os.path.exists(path) else set()
+    # the committed list: the run's own, by a --add over an empty pending list (new_bad then listed)
+    first = orun("oseed", ["--update", "--add"])
+    seed = open(committed, "rb").read() if os.path.exists(committed) else b""
+    bad, cells = [] if first.returncode == 0 and b"was_bad.scala\tpass" in seed and b"new_bad.scala\tfail" in seed else [f"the seed: exit {first.returncode} {first.stdout[-200:]!r}"], 0
+    for listed_passes in (True, False):
+        for unlisted_fails in (True, False):
+            for flags in ([], ["--update"], ["--add"], ["--update", "--add"]):
+                cells += 1
+                old = ({"was_bad.scala": "previous failure"} if listed_passes else {}) | ({} if unlisted_fails else {"new_bad.scala": "listed failure"})
+                open(pend, "w").write("".join(f"{n}\t{w}\n" for n, w in sorted(old.items())))
+                open(committed, "wb").write(seed)
+                before = {committed: seed, pend: open(pend, "rb").read()}
+                update, add = "--update" in flags, "--add" in flags
+                want_exit = 1 if (listed_passes and not update) or (unlisted_fails and not add) else 0
+                want = (set(old) - ({"was_bad.scala"} if update else set())) | ({"new_bad.scala"} if add and unlisted_fails else set())
+                tag = f"o{cells}"
+                r = orun(tag, flags)
+                after = {committed: open(committed, "rb").read(), pend: open(pend, "rb").read()}
+                cell = f"{'listed passes' if listed_passes else ''}{'+' if listed_passes and unlisted_fails else ''}{'unlisted fails' if unlisted_fails else ''}{'neither' if not (listed_passes or unlisted_fails) else ''} {' '.join(flags) or 'plain'}"
+                kept = re.search(r"the stage kept in (\S+?)\)", r.stdout)
+                if r.returncode != want_exit:
+                    bad.append(f"{cell}: exit {r.returncode}, the rule's {want_exit}")
+                elif want_exit:
+                    staged = D.read_stage(kept.group(1)) if kept else None
+                    spend = next((dict(w) for k, s_, w in (staged or []) if k == "pending" and s_ == "dotty-pos"), None)
+                    if after != before:
+                        bad.append(f"{cell}: exit {want_exit} and a public list changed")
+                    elif (update or add) and (staged is None or (spend is not None and set(spend) != want)):
+                        bad.append(f"{cell}: the stage's list {sorted(spend) if spend is not None else staged and 'none'}, the ratchet's {sorted(want)}")
+                else:
+                    kept_lines = all(f"{n}\t{w}".encode() in after[pend] for n, w in old.items() if n in want)
+                    run_list = open(os.path.join(outs, tag, "lists", "pos.tsv"), "rb").read() if os.path.exists(os.path.join(outs, tag, "lists", "pos.tsv")) else None
+                    if names(pend) != want or not kept_lines:
+                        bad.append(f"{cell}: the list {sorted(names(pend))}, the ratchet's {sorted(want)}")
+                    elif (update or add) and after[committed] != run_list or not (update or add) and after[committed] != seed:
+                        bad.append(f"{cell}: the row's list is not {'the run' if update or add else 'the one before'}'s")
+    out("ok" if not bad else "FAIL", CHECKS[15], f"{cells} cells" + ("" if not bad else f", {len(bad)} wrong: " + "; ".join(bad[:4])))
 finally:
     shutil.rmtree(outs, ignore_errors=True)
 PY
@@ -1868,7 +1997,7 @@ while IFS=$'\t' read -r said scenario; do
   esac
 done < <(grep -E $'^(ok|FAIL|skip)\t' "$work/memcap.log")
 memcap_reported=$(grep -c -E $'^(ok|FAIL|skip)\t' "$work/memcap.log")
-check "the board's memory cap: every check reported" "$work/memcap.log" [ "$memcap_reported" = 12 ]
+check "the board's memory cap: every check reported" "$work/memcap.log" [ "$memcap_reported" = 17 ]
 
 # The board counts no check that did not run: a test's one outcome (a failure, then not run, then a pass) through
 # tests/support/pending.py in a copy of the tree's lists, tests/board/board.py's project rows over a made-up record,
