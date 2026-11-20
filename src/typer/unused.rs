@@ -1184,7 +1184,11 @@ impl<'a> Worker<'a> {
     fn consider_import(&mut self, imp: ResolvedImport, facts: &Facts, best: &mut Option<(ResolvedImport, u8)>) {
         let Facts { sym, owner, name, given, scala3_given, via } = *facts;
         let Some((_, bound)) = self.sel_of(imp) else { return };
-        if imp.name.is_some_and(|n| n != name) {
+        // A renamed selector is matched by the name the tree uses: an object's or a package's member found by a
+        // search is an identifier of its own name, which the rename does not match; a value's (or a path's) is a
+        // selection on that value, which CheckUnused resolves with no name and credits to the selector
+        // (`transformSelect`, `resolveUsage`'s `!name.exists(...)`).
+        if imp.name.is_some_and(|n| n != name) && !matches!(via, GivenScope::Value(_) | GivenScope::Path(_)) {
             return;
         }
         // CheckUnused's precedence: a named import 2, a wildcard 3; a later find replaces an

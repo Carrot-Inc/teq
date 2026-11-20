@@ -8,6 +8,7 @@ use super::apply::{ArgList, ArgSrc};
 use super::implicits::GivenIndex;
 use super::profile::{About, Kind, Outcome};
 use super::implicits::GivenScope;
+use super::site::SiteOwner;
 use super::{Frame, ImportTarget, ResolvedImport, Worker, ValueImport};
 use crate::ast::mods;
 use crate::intern::{FxMap, Name};
@@ -121,10 +122,9 @@ pub(super) struct Shape {
 /// A conversion and what it is called on.
 type ConvRef = (SymId, Via);
 
-/// The binding precedences `shadow_conversions` compares (dotty's `BindingPrec`).
-const PREC_WILD_IMPORT: u8 = 1;
-const PREC_NAMED_IMPORT: u8 = 2;
-const PREC_DEFINITION: u8 = 3;
+/// One context of the search (`ContextualImplicits`): the conversions it makes visible, each with the name it hides
+/// others by, and its binding precedence (`bindingPrec`).
+type Link = (Vec<(ConvRef, Name)>, super::implicits::Prec);
 
 /// What `Worker::conversion_site` answers.
 struct ConversionSite {
@@ -414,63 +414,493 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The conversions of the class of a value an import opens (`import dsl.*`), called on it.
+    /// The conversions of the class of a value an import opens (`import dsl.*`), called on it, and the conversion a
+    /// named member of the value is (`import dsl.conv`): for a named import `ImportInfo.importedImplicits` gives every
+    /// implicit member of the import's site by that name (`pre.implicitMembersNamed`), the site a value's path as an
+    /// object's.
     fn value_import_conversions(&mut self, imp: ResolvedImport, pick: Pick<'_>, out: &mut Vec<ConvRef>) {
-        let (v, givens) = match imp.target {
-            ImportTarget::ValueAll(v) => (v, false),
-            ImportTarget::ValueGivens(v) => (v, true),
+        let (v, givens, member) = match imp.target {
+            ImportTarget::ValueAll(v) => (v, false, None),
+            ImportTarget::ValueGivens(v) => (v, true, None),
+            // A named member, whichever it is: an implicit def, an implicit class's conversion, a given.
+            ImportTarget::ValueMember(v, n) if n != names::ERROR => (v, true, Some(n)),
             _ => return,
         };
         let ty = self.import_value_ret(v);
         let ty = self.zonk(ty);
         let Some(c) = self.class_of(ty) else { return };
         let mut found = Vec::new();
-        match imp.name {
-            None => self.class_conversions(c, pick, &mut found),
-            Some(_) => return,
+        match (imp.name, member) {
+            // The member of that name where it is implicit or given (`Types.implicitMembersNamed` keeps the
+            // alternatives that are `GivenOrImplicitVal`): a plain val or def of a conversion's type is none.
+            (_, Some(n)) => {
+                if let Some((s, _)) = self.find_member(ty, n) {
+                    if self.syms.is_scala2_implicit(s) || self.syms.is_scala3_given(s) {
+                        found.push(s);
+                    }
+                }
+            }
+            (None, None) => self.class_conversions(c, pick, &mut found),
+            (Some(_), None) => return,
         }
         // A wildcard leaves the value's givens out, as it does an object's: its Scala 2 implicit
         // conversions come in; `import v.given` brings both, as scalac's migration rule has it.
         found.retain(|&g| {
             (givens || !self.syms.is_scala3_given(g))
                 && (self.is_conversion_def(g) || self.is_conversion_given(g))
-                && !self.import_hides(imp, self.syms.sym(g).name)
+                && (member.is_some() || !self.import_hides(imp, self.syms.sym(g).name))
         });
         out.extend(found.into_iter().map(|g| (g, Via::Value(v))));
     }
 
-    /// dotty's `ContextualImplicits.combineEligibles` within a level: the conversions `added` of one
-    /// more binding of precedence `prec` (an import inside the definitions of its scope) beside
-    /// those of the bindings before it, by name: where an earlier binding of a higher precedence
-    /// has the name (a definition over an import, a named import over a wildcard), the new ones
-    /// of the name go; else the earlier ones of the name go, a later import of the same
-    /// precedence being the inner one. One binding's own alternatives all stay. An export's
-    /// forwarder and what it forwards, of one name, are so one candidate as scalac has them.
-    fn shadow_conversions(&self, scope: &mut Vec<(ConvRef, u8)>, values: &mut Vec<(ConvRef, u8)>, mut added: Vec<ConvRef>, prec: u8, to_values: bool) {
-        if added.is_empty() {
-            return;
-        }
-        // The level's first binding shadows nothing.
-        if scope.is_empty() && values.is_empty() {
-            let into = if to_values { values } else { scope };
-            into.extend(added.into_iter().map(|r| (r, prec)));
-            return;
-        }
-        let mut names: Vec<Name> = added.iter().map(|&(g, _)| self.syms.sym(g).name).collect();
-        names.sort_by_key(|n| n.0);
-        names.dedup();
-        for n in names {
-            let named = |&((g, _), _): &(ConvRef, u8)| self.syms.sym(g).name == n;
-            let higher = scope.iter().chain(values.iter()).any(|e| named(e) && e.1 > prec);
-            if higher {
-                added.retain(|&(g, _)| self.syms.sym(g).name != n);
-            } else {
-                scope.retain(|e| !named(e));
-                values.retain(|e| !named(e));
+    /// The contexts of the search inside the package clause (`ContextualImplicits`, Implicits.scala 307-357), by level,
+    /// outermost first, and each level's contexts outermost first. Level 0 is the file's import statements in the order
+    /// written (`stmt`, a clause's start; a root import is no statement of the file), all of the package's owner. Then
+    /// the enclosing frames' levels, as the given search builds them (`composed_frame_levels`): a frame with implicits
+    /// is a context of its own scope and opens a level (`level`: another scope); an import statement inside a frame is
+    /// a context at the level of the context outside it where both have one owner, and opens a level where not. A
+    /// context exists only where it makes an implicit visible (`Contexts.implicits`): a frame's (`frame_has_givens`),
+    /// an import's by `imported_implicits`.
+    fn conversion_contexts(&mut self, pick: Pick<'_>) -> (Vec<Vec<Link>>, Vec<SymId>) {
+        use super::implicits::Prec;
+        let mut levels: Vec<Vec<Link>> = vec![Vec::new()];
+        // The candidates that come too late (`comesTooLate`), left out after the hiding.
+        let mut late: Vec<SymId> = Vec::new();
+        let mut imports: Vec<ResolvedImport> = (0..self.import_count()).map(|k| self.import_at(k)).filter(|imp| imp.stmt != u32::MAX).collect();
+        imports.sort_by_key(|imp| (imp.depth, imp.stmt));
+        let mut k = 0;
+        while k < imports.len() && imports[k].depth == 0 {
+            let start = k;
+            while k < imports.len() && imports[k].depth == 0 && imports[k].stmt == imports[start].stmt {
+                k += 1;
+            }
+            if let Some(link) = self.import_link(&imports[start..k], pick) {
+                self.note_too_late(&link.0, None, &mut late);
+                levels[0].push(link);
             }
         }
-        let into = if to_values { values } else { scope };
-        into.extend(added.into_iter().map(|r| (r, prec)));
+        // The owner of the last context: a class's own, or the owner depth of a frame's scope.
+        let mut last: Option<(bool, u32)> = None;
+        for f in 0..self.env.frames.len() {
+            let owner = match &self.env.frames[f] {
+                Frame::Class(_) | Frame::Ctor(_) => (true, f as u32),
+                Frame::Locals { owner, .. } => (false, *owner),
+            };
+            // A stable member of a local value a block imports by name is entered as a local alias, a given of the
+            // block where the member is one (`enter_value_import`); in the reference it is an import context, a named
+            // import's, at its statement, not the block's own definition.
+            let aliases: Vec<SymId> = match &self.env.frames[f] {
+                Frame::Locals { givens, .. } => givens.iter().copied().filter(|g| self.inline.import_aliases.contains(g)).collect(),
+                _ => Vec::new(),
+            };
+            let own = match &self.env.frames[f] {
+                Frame::Locals { givens, .. } => givens.len() > aliases.len(),
+                _ => self.frame_has_givens(f),
+            };
+            if own {
+                let mut refs = self.frame_conversions(f, pick);
+                refs.retain(|((g, _), _)| !aliases.contains(g));
+                // A scope's local is owned by the definition its frame's owner depth names; a class's member by its class.
+                let elem = match &self.env.frames[f] {
+                    Frame::Locals { owner, .. } => (*owner as usize).checked_sub(1),
+                    _ => None,
+                };
+                self.note_too_late(&refs, elem, &mut late);
+                levels.push(vec![(refs, Prec::Def)]);
+                last = Some(owner);
+            }
+            let depth = f as u32 + 1;
+            // The frame's import statements and its aliases' in the order written.
+            let mut stmts: Vec<(u32, usize, usize, Option<SymId>)> = Vec::new();
+            while k < imports.len() && imports[k].depth == depth {
+                let start = k;
+                while k < imports.len() && imports[k].depth == depth && imports[k].stmt == imports[start].stmt {
+                    k += 1;
+                }
+                stmts.push((imports[start].stmt, start, k, None));
+            }
+            for &a in &aliases {
+                stmts.push((self.syms.sym(a).span.start, 0, 0, Some(a)));
+            }
+            stmts.sort_by_key(|e| e.0);
+            for (_, start, end, alias) in stmts {
+                let link = match alias {
+                    Some(a) => {
+                        let refs = if self.is_conversion_def(a) || self.is_conversion_given(a) { vec![((a, Via::Scope), self.syms.sym(a).name)] } else { Vec::new() };
+                        Some((refs, Prec::Named))
+                    }
+                    None => self.import_link(&imports[start..end], pick),
+                };
+                let Some(link) = link else { continue };
+                self.note_too_late(&link.0, None, &mut late);
+                if last != Some(owner) {
+                    levels.push(Vec::new());
+                }
+                levels.last_mut().expect("a level").push(link);
+                last = Some(owner);
+            }
+        }
+        (levels, late)
+    }
+
+    fn note_too_late(&self, refs: &[(ConvRef, Name)], elem: Option<usize>, late: &mut Vec<SymId>) {
+        if !self.site_in_given() {
+            return;
+        }
+        for &((g, _), _) in refs {
+            if !late.contains(&g) && self.comes_too_late(g, elem) {
+                late.push(g);
+            }
+        }
+    }
+
+    /// Whether an owner of the site is a given without parameters, which alone makes a candidate too late
+    /// (`comes_too_late`): the walk is spared everywhere else.
+    fn site_in_given(&self) -> bool {
+        self.sites.owners.iter().any(|o| match *o {
+            SiteOwner::Sym(s) => {
+                let info = self.syms.sym(s);
+                (info.kind == SymKind::Given || info.mods & mods::GIVEN != 0) && info.mods & mods::LAZY != 0
+            }
+            _ => false,
+        })
+    }
+
+    /// `comesTooLate` (Implicits.scala 1723-1738 at 3.8.4): whether the candidate `g` is defined in the scope of a
+    /// given alias whose right-hand side holds the search, at or after that given (`candSucceedsGiven`). The walk
+    /// goes from the site's owner out (`sites.owners`, scalac's owner chain), comparing each owner's owner with the
+    /// candidate's, and stops at the first class. A parameter is never too late. `elem` is the owner of a scope's
+    /// local, the element of the owner chain its frame names; any other candidate is owned by its class or
+    /// package.
+    fn comes_too_late(&self, g: SymId, elem: Option<usize>) -> bool {
+        #[derive(PartialEq)]
+        enum Of {
+            Elem(usize),
+            Class(ClassId),
+            Package(PkgId),
+            None,
+        }
+        let cand = self.syms.sym(g);
+        if cand.kind == SymKind::Param || cand.span.end == 0 {
+            return false;
+        }
+        let of_cand = match (elem, cand.owner) {
+            (Some(i), _) => Of::Elem(i),
+            (None, Owner::Class(c)) => Of::Class(c),
+            (None, Owner::Package(p)) => Of::Package(p),
+            _ => return false,
+        };
+        let owners = &self.sites.owners;
+        for i in (0..owners.len()).rev() {
+            // The owner of the chain's element `i`: a member's class or package, else the element outside it.
+            let (sym, of) = match owners[i] {
+                SiteOwner::Sym(s) => match self.syms.sym(s).owner {
+                    Owner::Class(c) => (Some(s), Of::Class(c)),
+                    Owner::Package(p) => (Some(s), Of::Package(p)),
+                    _ => (Some(s), if i > 0 { Of::Elem(i - 1) } else { Of::None }),
+                },
+                SiteOwner::Dummy(c) => (None, Of::Class(c)),
+                _ => (None, if i > 0 { Of::Elem(i - 1) } else { Of::None }),
+            };
+            if of == of_cand {
+                // `sym.is(GivenVal)`: a given without parameters, a lazy val (a member given is of the kind `Given`,
+                // `LAZY` where it is parameterless; a local given a lazy val marked `GIVEN`), at or before the
+                // candidate in its file.
+                let Some(s) = sym else { return false };
+                let info = self.syms.sym(s);
+                let given_val = (info.kind == SymKind::Given || info.mods & mods::GIVEN != 0) && info.mods & mods::LAZY != 0;
+                return given_val && info.file == cand.file && info.span.start <= cand.span.start;
+            }
+            if matches!(of, Of::Class(_) | Of::Package(_) | Of::None) {
+                return false;
+            }
+        }
+        false
+    }
+
+    /// The conversions frame `f` defines itself: its scope's (a using parameter's among them, as dotty's view
+    /// candidates are the context's implicit references) or its class's.
+    fn frame_conversions(&mut self, f: usize, pick: Pick<'_>) -> Vec<(ConvRef, Name)> {
+        let mut level: Vec<SymId> = Vec::new();
+        match &self.env.frames[f] {
+            Frame::Locals { givens, .. } => {
+                let locals: Vec<SymId> = givens.iter().rev().copied().collect();
+                for g in locals {
+                    if self.is_conversion_def(g) || self.is_conversion_given(g) {
+                        level.push(g);
+                    }
+                }
+            }
+            Frame::Class(c) if self.parent_args_of == Some(*c) => {}
+            Frame::Ctor(_) => {}
+            Frame::Class(c) => {
+                let c = *c;
+                self.class_conversions(c, pick, &mut level);
+            }
+        }
+        level.into_iter().map(|g| ((g, Via::Scope), self.syms.sym(g).name)).collect()
+    }
+
+    /// One import statement as a context (`Contexts.implicits`): what its selectors bring and its binding precedence
+    /// (`bindingPrec`: a wildcard's where a selector is `*` or `given`, `isWildcardImport`, a named import's else); none
+    /// where it brings no implicit reference.
+    fn import_link(&mut self, stmt: &[ResolvedImport], pick: Pick<'_>) -> Option<Link> {
+        use super::implicits::Prec;
+        // `importedImplicits` is the statement's one list (ImportInfo.scala 131-147): where a selector is a `given`
+        // wildcard (`isGivenImport`), every implicit member the clause neither excludes nor names comes in by the
+        // given bound (`givenBound`, the union of the clause's `given T` types: `bound`), an implicit and a given
+        // alike, which the `given` selector enumerates; the clause's `*` brings nothing of its own then.
+        let given_import = stmt.iter().any(|imp| matches!(imp.target, ImportTarget::ClassGivens(_) | ImportTarget::PkgGivens(_) | ImportTarget::ValueGivens(_)));
+        let (mut prec, mut brings, mut refs) = (Prec::Named, false, Vec::new());
+        for &imp in stmt {
+            if imp.name.is_none() {
+                prec = Prec::Wild;
+            }
+            if given_import && matches!(imp.target, ImportTarget::ClassAll(_) | ImportTarget::PkgAll(_) | ImportTarget::ValueAll(_)) {
+                continue;
+            }
+            let (any, found) = self.imported_implicits(imp, pick);
+            brings |= any;
+            refs.extend(found);
+        }
+        brings.then_some((refs, prec))
+    }
+
+    /// What one selector of an import brings (`ImportInfo.importedImplicits`, ImportInfo.scala 131-158), and whether it
+    /// brings any implicit reference at all: a given of another type, an old-style implicit def or an implicit class
+    /// among them.
+    fn imported_implicits(&mut self, imp: ResolvedImport, pick: Pick<'_>) -> (bool, Vec<(ConvRef, Name)>) {
+        let refs = self.imported_conversions(imp, pick);
+        if !refs.is_empty() {
+            return (true, refs);
+        }
+        // Whether it brings an implicit at all does not depend on the pick. An object's or a package's wildcard or
+        // `given` import with no hidden name and no bound is answered by its index's flags (the given search's
+        // `import_brings_implicits`: a wildcard its Scala 2 implicits, `given` any); the others are enumerated.
+        if imp.hidden.is_empty() && imp.bound.is_none() && matches!(imp.target, ImportTarget::ClassAll(_) | ImportTarget::ClassGivens(_) | ImportTarget::PkgAll(_) | ImportTarget::PkgGivens(_)) {
+            return (self.import_brings_implicits(imp), refs);
+        }
+        // A named selector of one member answers by that member's own flags, as the given search asks it
+        // (`import_givens_unfiltered`): an implicit or a given brings an implicit reference, any other member none.
+        // An overloaded name, or one no term holds, is enumerated as the others are.
+        if imp.bound.is_none() {
+            let named = match imp.target {
+                ImportTarget::ClassMember(c, n) => Some(self.module_term(c, n).and_then(|r| r.sym())),
+                ImportTarget::PkgMember(p, n) => Some(self.pkg_term(p, n).and_then(|r| r.sym())),
+                _ => None,
+            };
+            if let Some(Some(s)) = named {
+                if !matches!(self.syms.sym(s).kind, SymKind::Overloaded(_)) {
+                    return (self.syms.is_given(s), refs);
+                }
+            }
+        }
+        if !matches!(pick, Pick::Any) && !self.imported_conversions(imp, Pick::Any).is_empty() {
+            return (true, refs);
+        }
+        let mut givens = Vec::new();
+        self.import_givens(imp, super::implicits::Wanted::AnyClass, &mut givens);
+        (!givens.is_empty(), refs)
+    }
+
+    /// The conversions among a selector's implicit references for `pick`, each with the name it is visible by: an
+    /// object's, a package's or a value's (`import v.*`, `import v.conv`, the value's path its site as an object's
+    /// path is), through the clause's hidden names and its by-type bound (`matchesImportBound`). A wildcard `*` pulls
+    /// in Scala 2 implicits and no given, a `given` selector both (ImportInfo.scala 140-144); a named selector the
+    /// member it names.
+    fn imported_conversions(&mut self, imp: ResolvedImport, pick: Pick<'_>) -> Vec<(ConvRef, Name)> {
+        let mut syms = Vec::new();
+        self.import_conversions(imp, pick, &mut syms);
+        if matches!(imp.target, ImportTarget::ClassAll(_) | ImportTarget::PkgAll(_)) {
+            syms.retain(|&g| self.syms.is_scala2_implicit(g));
+        }
+        // A protected member reached through an object is a candidate only where the site may reach it there
+        // (`isAccessible`: `isAccessibleFrom` with the object as the prefix), from a subclass of its owner.
+        if let ImportTarget::ClassAll(c) | ImportTarget::ClassGivens(c) | ImportTarget::ClassMember(c, _) = imp.target {
+            if syms.iter().any(|&g| self.syms.sym(g).mods & mods::PROTECTED != 0) {
+                let ty = self.types.class(c, &[]);
+                syms.retain(|&g| self.syms.sym(g).mods & mods::PROTECTED == 0 || self.accessible_through_value(g, ty));
+            }
+        }
+        let mut refs: Vec<ConvRef> = syms.into_iter().map(|g| (g, Via::Scope)).collect();
+        self.value_import_conversions(imp, pick, &mut refs);
+        if let Some(bound) = imp.bound {
+            refs.retain(|&r| {
+                let given = match r.1 {
+                    Via::Value(v) => (r.0, GivenScope::Value(v)),
+                    _ => self.imported_given(imp, (r.0, GivenScope::Lexical)),
+                };
+                self.matches_import_bound(given, bound)
+            });
+        }
+        // A candidate hides by its symbol's name, a renamed one too: `combineEligibles` reads `cand.ref.implicitName`,
+        // and a candidate's `ref` is the underlying reference (`Candidate.ref`, Implicits.scala 61), not the alias.
+        refs.into_iter().map(|r| (r, self.syms.sym(r.0).name)).collect()
+    }
+
+    /// One level of the search composed (`computeEligible`): every candidate tested first (`filterMatching`,
+    /// `conversion_eligible`), then the contexts as `combineEligibles` composes them within a level (Implicits.scala
+    /// 339-354): an outer context whose precedence beats the inner's keeps its candidates and drops the inner's of the
+    /// same name, otherwise the inner's hide the outer's of the same name. Then the names `hidden` by a nearer level's
+    /// eligible candidates go (the else branch, 355-357), and this level's eligible names join them.
+    fn compose_conversion_level(&mut self, links: Vec<Link>, scope_tys: &[TypeId], pick: Pick<'_>, hidden: &mut Vec<Name>) -> Vec<ConvRef> {
+        use super::implicits::Prec;
+        let mut acc: Vec<(ConvRef, Name)> = Vec::new();
+        let mut outer: Option<Prec> = None;
+        let mut names: Vec<Name> = Vec::new();
+        for (refs, prec) in links {
+            let mut own: Vec<(ConvRef, Name)> = Vec::new();
+            for (r, n) in refs {
+                if !own.iter().any(|&(o, _)| o == r) && self.conversion_eligible(r, scope_tys, pick) {
+                    own.push((r, n));
+                    if !names.contains(&n) {
+                        names.push(n);
+                    }
+                }
+            }
+            if !own.is_empty() && !acc.is_empty() {
+                if outer.is_some_and(|o| o.beats(prec)) {
+                    own.retain(|&(_, n)| !acc.iter().any(|&(_, a)| a == n));
+                } else {
+                    acc.retain(|&(_, a)| !own.iter().any(|&(_, n)| n == a));
+                }
+            }
+            own.extend(acc);
+            acc = own;
+            outer = Some(prec);
+        }
+        if !hidden.is_empty() {
+            acc.retain(|&(_, n)| !hidden.contains(&n));
+        }
+        for n in names {
+            if !hidden.contains(&n) {
+                hidden.push(n);
+            }
+        }
+        acc.into_iter().map(|(r, _)| r).collect()
+    }
+
+    /// `filterMatching`'s test of a contextual candidate: accessible from the site through its prefix
+    /// (`ContextualImplicits.isAccessible`, Implicits.scala 394-395) and fitting the view (`conversion_fits`). A
+    /// candidate that comes too late is eligible here and hides its namesakes; the search leaves it out after the
+    /// hiding (`comes_too_late`, `conversion_levels_from`).
+    fn conversion_eligible(&mut self, r: ConvRef, scope_tys: &[TypeId], pick: Pick<'_>) -> bool {
+        let accessible = match r.1 {
+            Via::Value(v) => {
+                let ty = self.import_value_ret(v);
+                let ty = self.zonk(ty);
+                self.accessible_through_value(r.0, ty)
+            }
+            _ => self.is_accessible(r.0),
+        };
+        accessible && self.conversion_fits(r, scope_tys, pick)
+    }
+
+    /// Whether the member `s` of a value of type `ty` is accessible from the site through that value: dotty's
+    /// `isAccessibleFrom(pre)` (SymDenotations.scala 929-978), its prefix the value's path. A private member from its
+    /// class and its companion (`is_accessible`). A protected one from inside its boundary (its class, or `C` of a
+    /// `protected[C]`) or that class's companion (`accessWithin`, `accessWithinLinked`); else `isProtectedAccessOK`:
+    /// the innermost enclosing class that is a subclass of its owner (`enclosingSubClass`, 1392-1393, by
+    /// `isSubClass`: a class's base classes, never its self type), the value an instance of that class
+    /// (`pre.derivesFrom(cls)`), or the owner an object.
+    fn accessible_through_value(&mut self, s: SymId, ty: TypeId) -> bool {
+        if !self.is_accessible(s) {
+            return false;
+        }
+        if self.syms.sym(s).mods & mods::PROTECTED == 0 {
+            return true;
+        }
+        let s = self.access_declaration_of(s);
+        let (owner, file, filed_at) = {
+            let info = self.syms.sym(s);
+            let Owner::Class(owner) = info.owner else { return true };
+            (owner, info.file, info.span.start)
+        };
+        let companion = self.syms.class(owner).companion;
+        let classes: Vec<ClassId> = self.env.frames.iter().rev().filter_map(|f| match f {
+            Frame::Class(k) | Frame::Ctor(k) => Some(*k),
+            _ => None,
+        }).collect();
+        if classes.iter().any(|&k| k == owner || Some(k) == companion) || self.in_access_scope(file, filed_at, Owner::Class(owner)) {
+            return true;
+        }
+        let Some(cls) = classes.into_iter().find(|&k| self.syms.class(k).base_types.iter().any(|&(b, _)| b == owner)) else { return false };
+        self.derives_from_class(ty, cls) || self.syms.class(owner).kind == ClassKind::Object
+    }
+
+    /// dotty's `Type.derivesFrom(cls)` of a value's type: its class is `cls` or has it among its base classes (a
+    /// self type is none), a part of an intersection does, or both parts of a union do.
+    fn derives_from_class(&mut self, t: TypeId, cls: ClassId) -> bool {
+        let under = if self.types.is_path(t) { self.widen_path(t) } else { t };
+        let under = self.dealias(under);
+        match self.types.get(under) {
+            Type::Inter(a, b) => self.derives_from_class(a, cls) || self.derives_from_class(b, cls),
+            Type::Union(a, b, _) => self.derives_from_class(a, cls) && self.derives_from_class(b, cls),
+            _ => match self.class_of(under) {
+                Some(c) => c == cls || self.syms.class(c).base_types.iter().any(|&(b, _)| b == cls),
+                None => false,
+            },
+        }
+    }
+
+    /// `ContextualImplicits.widenSingleton` (Implicits.scala 113-117), which candidateKind applies to a method
+    /// candidate's parameter before the fit (138, `wildApprox` after it for a polymorphic one): a singleton, a path's
+    /// type or a literal's, widened to its class, and a type deriving from `Singleton` (a variable bounded by it) taken
+    /// as `Any`.
+    fn widen_singleton(&mut self, t: TypeId) -> TypeId {
+        let w = if self.types.is_path(t) { self.widen_path(t) } else { t };
+        let w = self.widen_lit(w);
+        if self.bounded_by_singleton(w) {
+            ANY
+        } else {
+            w
+        }
+    }
+
+    /// `filterMatching` of one candidate (`candidateKind`, Implicits.scala 130-260): it takes the argument by
+    /// `relaxed_<:<` against its parameter widened from a singleton (a primitive value class's widening admitted), and
+    /// gives the member asked for or a value of the expected type. No constraint is kept.
+    fn conversion_fits(&mut self, r: ConvRef, scope_tys: &[TypeId], pick: Pick<'_>) -> bool {
+        let Some(&arg) = scope_tys.first() else { return true };
+        let Some(shape) = self.shape_of(r.0) else { return true };
+        let mark = self.attempt();
+        let fits = match self.conversion_site(r.0, r.1, &shape) {
+            Some(ConversionSite { subst, from, to, .. }) => {
+                let from = self.types.subst(from, &subst);
+                let to = self.types.subst(to, &subst);
+                let formal = self.widen_singleton(from);
+                let arg_w = self.widen_lit(arg);
+                // Each test leaves no constraint where it fails (candidateKind's `explore` and `wildApprox`).
+                let takes = |t: &mut Self, sup: TypeId| {
+                    let mark = t.snapshot();
+                    let ok = t.is_sub(arg, sup);
+                    if !ok {
+                        t.rollback(&mark);
+                    }
+                    ok
+                };
+                (takes(self, from) || formal != from && takes(self, formal) || self.numeric_widening(arg_w, formal))
+                    && match pick {
+                        // `SelectionProto.isMatchedBy`: a member of the name, a builtin's operator or a function's
+                        // `apply` among them, or members nothing can list.
+                        Pick::Member(n) => {
+                            let to = self.zonk(to);
+                            matches!(self.types.get(to), Type::Var(_) | Type::AppVar(..) | Type::Nothing | Type::Wild | Type::BoundedWild(..) | Type::Error | Type::NoType)
+                                || if self.find_member(to, n).is_some() {
+                                    // as the application asks it: a member found must be one the site may select
+                                    self.accessible_member_of(to, n).is_some()
+                                } else {
+                                    n == names::APPLY && self.as_function(to).is_some() || self.prim_op_applies(to, n) || self.has_member_like(to, n)
+                                }
+                        }
+                        Pick::Result(_) | Pick::Results(_) => scope_tys.get(1).map_or(true, |&e| self.is_sub(to, e)),
+                        Pick::Any => true,
+                    }
+            }
+            None => false,
+        };
+        self.retract(mark);
+        fits
     }
 
     /// The candidate conversions level by level, as the given search orders its levels: the
@@ -479,54 +909,86 @@ impl<'a> Worker<'a> {
     /// the expected type where there is one, as it is (dotty's `wildProto`, a `ViewProto` of
     /// `argument.tpe.widen` and `pt`).
     fn conversion_levels(&mut self, scope_tys: &[TypeId], pick: Pick<'_>) -> Vec<Vec<ConvRef>> {
+        let (mut levels, scope, _) = self.conversion_levels_from(scope_tys, pick, 0);
+        if !scope.is_empty() {
+            levels.push(scope);
+        }
+        levels
+    }
+
+    /// `conversion_levels` without the `skip` innermost contexts (`outerImplicits`: the search's retry from the next
+    /// context out), and whether a candidate that comes too late was left out of the contexts' levels after their
+    /// hiding (searchImplicit's `eligible ne preEligible`, Implicits.scala 1741-1744).
+    /// The search's order, every searching caller's (`searchImplicit`, Implicits.scala 1700-1712, 1786-1809): the
+    /// contextual levels (`first`, `conversion_levels_from` at the innermost context); where they find nothing, no
+    /// ambiguity stopping them, and a candidate that comes too late was left out, the search again from the next
+    /// context out, while one was; then the implicit scope, where the contextual searches found nothing. `attempt`
+    /// asks a list of levels with the caller's predicate (`pick_conversion` and its acceptance: the first search's, a
+    /// deepened search's, the expected type's). The result, and the levels it was last asked over (where the caller
+    /// reports an ambiguity).
+    fn conversion_search<F>(
+        &mut self,
+        first: (Vec<Vec<ConvRef>>, Vec<ConvRef>, bool),
+        scope_tys: &[TypeId],
+        pick: Pick<'_>,
+        mut attempt: F,
+    ) -> (Option<Result<(SymId, TExprId, TypeId), ()>>, Vec<Vec<ConvRef>>)
+    where
+        F: FnMut(&mut Self, &[Vec<ConvRef>]) -> Option<Result<(SymId, TExprId, TypeId), ()>>,
+    {
+        let (mut last, scope, mut dropped) = first;
+        let mut picked = attempt(self, &last);
+        let mut skip = 0;
+        while picked.is_none() && dropped {
+            skip += 1;
+            let (levels, _, d) = self.conversion_levels_from(scope_tys, pick, skip);
+            dropped = d;
+            last = levels;
+            picked = attempt(self, &last);
+        }
+        if picked.is_none() && !scope.is_empty() {
+            last = vec![scope];
+            picked = attempt(self, &last);
+        }
+        (picked, last)
+    }
+
+    fn conversion_levels_from(&mut self, scope_tys: &[TypeId], pick: Pick<'_>, skip: usize) -> (Vec<Vec<ConvRef>>, Vec<ConvRef>, bool) {
         let mut levels: Vec<Vec<ConvRef>> = Vec::new();
         // One buffer for the conversions of a level, which the level's list takes as refs.
         let mut level: Vec<SymId> = Vec::new();
         let scoped = |level: &mut Vec<SymId>| -> Vec<ConvRef> { level.drain(..).map(|g| (g, Via::Scope)).collect() };
-        for frame in (0..self.env.frames.len()).rev() {
-            match &self.env.frames[frame] {
-                // Every given of the scope, a using parameter's included, as dotty's view
-                // candidates are the context's implicit references (`Implicits.candidateKind`).
-                Frame::Locals { givens, .. } => {
-                    let locals: Vec<SymId> = givens.iter().rev().copied().collect();
-                    for g in locals {
-                        if self.is_conversion_def(g) || self.is_conversion_given(g) {
-                            level.push(g);
-                        }
-                    }
-                }
-                Frame::Class(c) if self.parent_args_of == Some(*c) => {}
-                Frame::Ctor(_) => {}
-                Frame::Class(c) => {
-                    let c = *c;
-                    self.class_conversions(c, pick, &mut level);
-                }
+        // The contexts inside the package clause, composed level by level from the innermost (`computeEligible`): a
+        // level's candidates hide the same-named ones of every level outside it (`combineEligibles`' else branch).
+        let (mut contexts, late) = self.conversion_contexts(pick);
+        // The retry's contexts: the innermost ones left out, the file's level kept in its place.
+        let mut left = skip;
+        while left > 0 {
+            let Some(level) = contexts.last_mut() else { break };
+            if level.pop().is_some() {
+                left -= 1;
             }
-            let depth = frame as u32 + 1;
-            // A level without imports has its definitions alone, which shadow nothing.
-            if !self.env.imports.iter().any(|imp| imp.depth == depth) {
-                if !level.is_empty() {
-                    levels.push(scoped(&mut level));
+            if level.is_empty() {
+                if contexts.len() == 1 {
+                    break;
                 }
-                continue;
+                contexts.pop();
             }
-            let mut scope: Vec<(ConvRef, u8)> = level.drain(..).map(|g| ((g, Via::Scope), PREC_DEFINITION)).collect();
-            let mut values: Vec<(ConvRef, u8)> = Vec::new();
-            let mut from_values = Vec::new();
-            for i in 0..self.env.imports.len() {
-                let imp = self.env.imports[i];
-                if imp.depth == depth {
-                    let prec = if imp.name.is_some() { PREC_NAMED_IMPORT } else { PREC_WILD_IMPORT };
-                    self.import_conversions(imp, pick, &mut level);
-                    let added: Vec<ConvRef> = scoped(&mut level);
-                    self.shadow_conversions(&mut scope, &mut values, added, prec, false);
-                    self.value_import_conversions(imp, pick, &mut from_values);
-                    let added: Vec<ConvRef> = std::mem::take(&mut from_values);
-                    self.shadow_conversions(&mut scope, &mut values, added, prec, true);
-                }
+        }
+        let mut hidden: Vec<Name> = Vec::new();
+        let mut file_level: Vec<ConvRef> = Vec::new();
+        let mut dropped = false;
+        for (i, links) in contexts.into_iter().enumerate().rev() {
+            let mut refs = self.compose_conversion_level(links, scope_tys, pick, &mut hidden);
+            // The candidates that come too late, which hid their namesakes, are left out now.
+            if !late.is_empty() {
+                let before = refs.len();
+                refs.retain(|r| !late.contains(&r.0));
+                dropped |= refs.len() != before;
             }
-            if !scope.is_empty() || !values.is_empty() {
-                let refs: Vec<ConvRef> = scope.into_iter().chain(values).map(|(r, _)| r).collect();
+            if i == 0 {
+                file_level = refs;
+            } else if !refs.is_empty() {
                 levels.push(refs);
             }
         }
@@ -543,36 +1005,46 @@ impl<'a> Worker<'a> {
             if p == self.b.scala_pkg {
                 level.retain(|&g| self.syms.sym(g).name != crate::names::ANY2STRINGADD);
             }
-            if i == 0 {
-                let mut scope: Vec<(ConvRef, u8)> = level.drain(..).map(|g| ((g, Via::Scope), PREC_DEFINITION)).collect();
-                let mut values: Vec<(ConvRef, u8)> = Vec::new();
-                let n = self.import_count();
-                for k in 0..n {
-                    let imp = self.import_at(k);
-                    if imp.depth == 0 {
-                        let prec = if imp.name.is_some() { PREC_NAMED_IMPORT } else { PREC_WILD_IMPORT };
-                        self.import_conversions(imp, pick, &mut level);
-                        let added: Vec<ConvRef> = scoped(&mut level);
-                        self.shadow_conversions(&mut scope, &mut values, added, prec, false);
-                    }
-                }
-                level.extend(scope.into_iter().map(|((g, _), _)| g));
+            // A package's candidate that comes too late is left out where master left out the given being defined:
+            // the package's own definitions keep master's place.
+            if self.site_in_given() {
+                level.retain(|&g| !self.comes_too_late(g, None));
             }
-            if !level.is_empty() {
+            if i == 0 {
+                // The innermost package's own definitions keep master's place beside the file's imports: a
+                // definition hides the imports' candidates of its name, and comes first.
+                let mut own = scoped(&mut level);
+                if !own.is_empty() {
+                    let names: Vec<Name> = own.iter().map(|r| self.syms.sym(r.0).name).collect();
+                    file_level.retain(|r| !names.contains(&self.syms.sym(r.0).name));
+                }
+                own.append(&mut file_level);
+                if !own.is_empty() {
+                    levels.push(own);
+                }
+            } else if !level.is_empty() {
                 levels.push(scoped(&mut level));
             }
+        }
+        if !file_level.is_empty() {
+            levels.push(file_level);
         }
         // `scala.Predef` of a classpath is a level of its own outside the package clauses.
         if let Some(predef) = self.loaded.as_ref().and_then(|l| l.predef).filter(|_| !self.predef_unimported()) {
             self.class_conversions(predef, pick, &mut level);
             // The root import leaves `any2stringadd` out here too (`ImportInfo`'s `rootImport`).
             level.retain(|&g| self.syms.sym(g).name != crate::names::ANY2STRINGADD);
+            if self.site_in_given() {
+                level.retain(|&g| !self.comes_too_late(g, None));
+            }
             if !level.is_empty() {
                 levels.push(scoped(&mut level));
             }
         }
+        // The implicit scope is a search of its own, after the contextual ones (`searchImplicit` with no
+        // `ContextualImplicits`, Implicits.scala 1712, 1796-1802): read once, by the first search.
         let mut scope = Vec::new();
-        for (i, &t) in scope_tys.iter().enumerate() {
+        for (i, &t) in scope_tys.iter().enumerate().take(if skip == 0 { usize::MAX } else { 0 }) {
             let t = if i == 0 { self.view_scope_type(t) } else { t };
             // The objects of the implicit scope, and the paths it holds, whose members are
             // read on them (dotty's `OfTypeImplicits.refs` of the `addPath` references).
@@ -593,9 +1065,6 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        if !scope.is_empty() {
-            levels.push(scope);
-        }
         // One method reached through one value is one candidate, however many imports of the
         // value (`import v.*` twice) bring it.
         let values = &self.import_values;
@@ -606,6 +1075,11 @@ impl<'a> Worker<'a> {
             Via::Path(p) => (g, 3, types.canonical(p).0),
             Via::Scope => (g, 0, 0),
         };
+        // The implicit scope goes through the levels' dedup and access test as a level of its own, then out again.
+        let in_scope = !scope.is_empty();
+        if in_scope {
+            levels.push(scope);
+        }
         for level in &mut levels {
             level.sort_by_key(key);
             level.dedup_by_key(|r| key(r));
@@ -613,7 +1087,8 @@ impl<'a> Worker<'a> {
         for level in &mut levels {
             level.retain(|&(g, _)| self.is_accessible(g));
         }
-        levels
+        let scope = if in_scope { levels.pop().unwrap_or_default() } else { Vec::new() };
+        (levels, scope, dropped)
     }
 
     /// Where the conversion `g` found through `via` is called and what it takes and gives
@@ -1135,7 +1610,7 @@ impl<'a> Worker<'a> {
     /// several apply. Reported as ambiguous when `report` is set.
     fn pick_conversion(
         &mut self,
-        levels: Vec<Vec<ConvRef>>,
+        levels: &[Vec<ConvRef>],
         recv: TExprId,
         recv_ty: TypeId,
         span: Span,
@@ -1162,7 +1637,7 @@ impl<'a> Worker<'a> {
             // commits the winning candidate's state.
             let mut found: Vec<Candidate> = Vec::new();
             let mut aside: Vec<Option<super::state::SetAside>> = Vec::new();
-            for &g in &level {
+            for &g in level {
                 let mark = self.attempt();
                 if let Some((expr, ty)) = self.try_conversion(g, recv, recv_ty, span, accept, to_type) {
                     found.push(Candidate { sym: g.0, via: g.1, expr, ty });
@@ -1372,17 +1847,32 @@ impl<'a> Worker<'a> {
 
     /// Whether `to` has a member `name` that takes the arguments, as the selection through a
     /// conversion needs; extension methods of the result do not count.
+    /// The member `name` of a converted value's type `to` a selection may take: found, and accessible (one of its
+    /// alternatives where it is overloaded); `None` where there is none or the site cannot access it. The conversion's
+    /// fit and its application both ask it (`SelectionProto.isMatchedBy`'s accessible member).
+    fn accessible_member_of(&mut self, to: TypeId, name: Name) -> Option<Option<SymId>> {
+        let (sym, _) = self.find_member(to, name)?;
+        self.accessible_found(sym)
+    }
+
+    /// `accessible_member_of` of a member already found.
+    fn accessible_found(&mut self, sym: SymId) -> Option<Option<SymId>> {
+        // A member the selection could not access is none: a class parameter of the
+        // conversion's class (`TraversableOnceExt(as)`) leaves `as` to other conversions.
+        if !self.is_accessible(sym) {
+            return None;
+        }
+        if let Some(alts) = self.syms.alternatives(sym) {
+            return alts.to_vec().into_iter().any(|a| self.is_accessible(a)).then_some(None);
+        }
+        Some(Some(sym))
+    }
+
     fn result_has_member(&mut self, to: TypeId, name: Name, lists: &[ArgList], expected: Option<TypeId>) -> bool {
         let to = self.zonk(to);
         if let Some((sym, _)) = self.find_member(to, name) {
-            // A member the selection could not access is none: a class parameter of the
-            // conversion's class (`TraversableOnceExt(as)`) leaves `as` to other conversions.
-            if !self.is_accessible(sym) {
-                return false;
-            }
-            if let Some(alts) = self.syms.alternatives(sym) {
-                return alts.to_vec().into_iter().any(|a| self.is_accessible(a));
-            }
+            let Some(found) = self.accessible_found(sym) else { return false };
+            let Some(sym) = found else { return true };
             if self.syms.sym(sym).kind != SymKind::Def {
                 return true;
             }
@@ -1419,29 +1909,36 @@ impl<'a> Worker<'a> {
         if recv_ty == ERROR || self.types.contains_error(recv_ty) {
             return None;
         }
-        let levels = self.conversion_levels(&[recv_ty], Pick::Member(name));
-        if levels.is_empty() {
+        let first = self.conversion_levels_from(&[recv_ty], Pick::Member(name), 0);
+        if first.0.is_empty() && first.1.is_empty() && !first.2 {
             return None;
         }
-        self.member_candidates += levels.len() as u32;
+        self.member_candidates += first.0.len() as u32 + u32::from(!first.1.is_empty());
         let prof = self.prof(Kind::Conversion, span, About::Member(recv_ty, name));
         let mut accept = |t: &mut Self, to: TypeId| t.result_has_member(to, name, lists, expected);
         let wanted = |t: &mut Self| format!("?{{ {}: ? }}", t.name_str(name));
         let provided = |t: &mut Self| format!("provide an extension method `{}` on {}", t.name_str(name), t.show(recv_ty));
         self.blocked_conversion = None;
-        let mut picked = self.pick_conversion(levels.clone(), recv, recv_ty, span, false, &wanted, &provided, &mut accept, false);
+        let (mut picked, levels) = self.conversion_search(first, &[recv_ty], Pick::Member(name), |t: &mut Self, lv: &[Vec<ConvRef>]| {
+            t.pick_conversion(lv, recv, recv_ty, span, false, &wanted, &provided, &mut accept, false)
+        });
         // dotc's `inferImplicit` searches once more on an ambiguity with the expected type of the
         // member revealed (`deepenProto`): `7.days` for a `FiniteDuration` takes scala's
-        // `DurationInt`, whose `days` gives one, over zio's `durationInt`.
+        // `DurationInt`, whose `days` gives one, over zio's `durationInt`. It is a search anew (`bestImplicit`,
+        // Implicits.scala 1813-1830), in the search's one order.
         if matches!(picked, Some(Err(()))) {
             if let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && self.canon(t) != self.b.t_unit) {
                 let mut deep = |t: &mut Self, to: TypeId| t.result_has_member(to, name, lists, expected) && t.member_result_fits(to, name, lists, exp);
-                if let Some(Ok(found)) = self.pick_conversion(levels.clone(), recv, recv_ty, span, false, &wanted, &provided, &mut deep, false) {
+                let again = self.conversion_levels_from(&[recv_ty], Pick::Member(name), 0);
+                let (found, _) = self.conversion_search(again, &[recv_ty], Pick::Member(name), |t: &mut Self, lv: &[Vec<ConvRef>]| {
+                    t.pick_conversion(lv, recv, recv_ty, span, false, &wanted, &provided, &mut deep, false)
+                });
+                if let Some(Ok(found)) = found {
                     picked = Some(Ok(found));
                 }
             }
             if matches!(picked, Some(Err(()))) {
-                picked = self.pick_conversion(levels, recv, recv_ty, span, true, &wanted, &provided, &mut accept, false);
+                picked = self.pick_conversion(&levels, recv, recv_ty, span, true, &wanted, &provided, &mut accept, false);
             }
         }
         let picked = match (picked, self.blocked_conversion.take()) {
@@ -1468,8 +1965,8 @@ impl<'a> Worker<'a> {
         if recv_ty == ERROR || self.types.contains_error(recv_ty) {
             return false;
         }
-        let levels = self.conversion_levels(&[recv_ty], Pick::Member(name));
-        if levels.is_empty() {
+        let first = self.conversion_levels_from(&[recv_ty], Pick::Member(name), 0);
+        if first.0.is_empty() && first.1.is_empty() && !first.2 {
             return false;
         }
         let probe = self.prog.add(TExpr::Unit);
@@ -1477,7 +1974,9 @@ impl<'a> Worker<'a> {
         let provided = |t: &mut Self| format!("provide an extension method `{}` on {}", t.name_str(name), t.show(recv_ty));
         let mut deep = |t: &mut Self, to: TypeId| t.result_has_member(to, name, &[], None) && accept(t, to);
         self.blocked_conversion = None;
-        let picked = self.pick_conversion(levels, probe, recv_ty, span, false, &wanted, &provided, &mut deep, false);
+        let (picked, _) = self.conversion_search(first, &[recv_ty], Pick::Member(name), |t: &mut Self, lv: &[Vec<ConvRef>]| {
+            t.pick_conversion(lv, probe, recv_ty, span, false, &wanted, &provided, &mut deep, false)
+        });
         self.blocked_conversion = None;
         matches!(picked, Some(Ok(_)))
     }
@@ -1670,15 +2169,17 @@ impl<'a> Worker<'a> {
             }
             _ => Pick::Result(self.class_of(target)),
         };
-        let levels = self.conversion_levels(&[actual, expected], pick);
-        if levels.is_empty() {
+        let first = self.conversion_levels_from(&[actual, expected], pick, 0);
+        if first.0.is_empty() && first.1.is_empty() && !first.2 {
             return None;
         }
         let prof = self.prof(Kind::Conversion, span, About::Type(expected));
         let mut accept = |t: &mut Self, to: TypeId| t.is_sub(to, expected);
         let wanted = |t: &mut Self| t.show(expected);
         let provided = |t: &mut Self| format!("convert from {} to {}", t.show(actual), t.show(expected));
-        let picked = self.pick_conversion(levels, te, actual, span, report, &wanted, &provided, &mut accept, true);
+        let (picked, _) = self.conversion_search(first, &[actual, expected], pick, |t: &mut Self, lv: &[Vec<ConvRef>]| {
+            t.pick_conversion(lv, te, actual, span, report, &wanted, &provided, &mut accept, true)
+        });
         if let (Some(Ok((g, _, _))), true) = (&picked, report) {
             self.restrict_conversion_use(*g, span);
         }

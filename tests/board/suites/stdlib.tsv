@@ -3291,7 +3291,7 @@ vector_trie	pass	-
 view_after_unrelated_extension	pass	-	
 view_bound_variance	pass	-	
 view_contravariant_variable	pass	-	
-view_import_ineligible_shadow	fail	-	error: Found: 7
+view_import_ineligible_shadow	pass	-	
 view_import_renamed_prefixes	fail	-	error: Found: 1
 view_instance_open_variable	pass	-	
 view_kinds	fail	-	output differs

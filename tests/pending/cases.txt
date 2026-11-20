@@ -185,6 +185,5 @@ tuple_apply_known_prefix	< 2
 type_checks_nested_package_clauses	< mine 1
 unused_params_constant_bodies	> tests/cases/unused_params_constant_bodies.scala:18:10: warning: unused explicit parameter
 value_companion_strings	< object scala.Boolean
-view_import_ineligible_shadow	< 7
 view_import_renamed_prefixes	< 2
 wildcard_capture_param_bounds	< true

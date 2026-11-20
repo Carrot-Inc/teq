@@ -1,0 +1,141 @@
+# test	verdict	the other ways	the first line of the difference
+Any-byte-exp	pass	-	
+Any-byte-sel	pass	-	
+Any-char-exp	pass	-	
+Any-char-sel	pass	-	
+Any-lit-exp	pass	-	
+Any-lit-sel	pass	-	
+Any-long-exp	pass	-	
+Any-long-sel	pass	-	
+Any-var-exp	pass	-	
+Any-var-sel	pass	-	
+AnyVal-byte-exp	pass	-	
+AnyVal-byte-sel	pass	-	
+AnyVal-char-exp	pass	-	
+AnyVal-char-sel	pass	-	
+AnyVal-lit-exp	pass	-	
+AnyVal-lit-sel	pass	-	
+AnyVal-long-exp	pass	-	
+AnyVal-long-sel	pass	-	
+AnyVal-var-exp	pass	-	
+AnyVal-var-sel	pass	-	
+Byte-byte-exp	pass	-	
+Byte-byte-sel	pass	-	
+Byte-char-exp	pass	-	
+Byte-char-sel	pass	-	
+Byte-lit-exp	pass	-	
+Byte-lit-sel	pass	-	
+Byte-long-exp	pass	-	
+Byte-long-sel	pass	-	
+Byte-var-exp	pass	-	
+Byte-var-sel	pass	-	
+Char-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 8d1926b8a8ddca82 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+Char-byte-sel	pass	-	
+Char-char-exp	pass	-	
+Char-char-sel	pass	-	
+Char-lit-exp	pass	-	
+Char-lit-sel	pass	-	
+Char-long-exp	pass	-	
+Char-long-sel	pass	-	
+Char-var-exp	pass	-	
+Char-var-sel	pass	-	
+Double-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 940a68104d3b6904 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+Double-byte-sel	pass	-	
+Double-char-exp	pass	-	
+Double-char-sel	pass	-	
+Double-lit-exp	pass	-	
+Double-lit-sel	pass	-	
+Double-long-exp	pass	-	
+Double-long-sel	pass	-	
+Double-var-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 940a68104d3b6904 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+Double-var-sel	pass	-	
+Int-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 940a68104d3b6904 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+Int-byte-sel	pass	-	
+Int-char-exp	pass	-	
+Int-char-sel	pass	-	
+Int-lit-exp	pass	-	
+Int-lit-sel	pass	-	
+Int-long-exp	pass	-	
+Int-long-sel	pass	-	
+Int-var-exp	pass	-	
+Int-var-sel	pass	-	
+IntOrString-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 940a68104d3b6904 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+IntOrString-byte-sel	pass	-	
+IntOrString-char-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 940a68104d3b6904 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+IntOrString-char-sel	pass	-	
+IntOrString-lit-exp	pass	-	
+IntOrString-lit-sel	pass	-	
+IntOrString-long-exp	pass	-	
+IntOrString-long-sel	pass	-	
+IntOrString-var-exp	pass	-	
+IntOrString-var-sel	pass	-	
+Integer-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 8d1926b8a8ddca82 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+Integer-byte-sel	pass	-	
+Integer-char-exp	pass	-	
+Integer-char-sel	pass	-	
+Integer-lit-exp	pass	-	
+Integer-lit-sel	pass	-	
+Integer-long-exp	pass	-	
+Integer-long-sel	pass	-	
+Integer-var-exp	pass	-	
+Integer-var-sel	pass	-	
+Long-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 940a68104d3b6904 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+Long-byte-sel	pass	-	
+Long-char-exp	pass	-	
+Long-char-sel	pass	-	
+Long-lit-exp	pass	-	
+Long-lit-sel	pass	-	
+Long-long-exp	pass	-	
+Long-long-sel	pass	-	
+Long-var-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 940a68104d3b6904 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+Long-var-sel	pass	-	
+Short-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 8d1926b8a8ddca82 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+Short-byte-sel	pass	-	
+Short-char-exp	pass	-	
+Short-char-sel	pass	-	
+Short-lit-exp	pass	-	
+Short-lit-sel	pass	-	
+Short-long-exp	pass	-	
+Short-long-sel	pass	-	
+Short-var-exp	pass	-	
+Short-var-sel	pass	-	
+byname-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 940a68104d3b6904 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+byname-byte-sel	pass	-	
+byname-char-exp	pass	-	
+byname-char-sel	pass	-	
+byname-lit-exp	pass	-	
+byname-lit-sel	pass	-	
+byname-long-exp	pass	-	
+byname-long-sel	pass	-	
+byname-var-exp	pass	-	
+byname-var-sel	pass	-	
+poly-byte-exp	pass	-	
+poly-byte-sel	pass	-	
+poly-char-exp	pass	-	
+poly-char-sel	pass	-	
+poly-lit-exp	pass	-	
+poly-lit-sel	pass	-	
+poly-long-exp	pass	-	
+poly-long-sel	pass	-	
+poly-var-exp	pass	-	
+poly-var-sel	pass	-	
+polyAnyVal-byte-exp	pass	-	
+polyAnyVal-byte-sel	pass	-	
+polyAnyVal-char-exp	pass	-	
+polyAnyVal-char-sel	pass	-	
+polyAnyVal-lit-exp	pass	-	
+polyAnyVal-lit-sel	pass	-	
+polyAnyVal-long-exp	pass	-	
+polyAnyVal-long-sel	pass	-	
+polyAnyVal-var-exp	pass	-	
+polyAnyVal-var-sel	pass	-	
+polyString-byte-exp	fail	-	js, interp, jvm, sl: ran exit 0 stdout 8d1926b8a8ddca82 (known: a conversion's application: the argument widened numerically, or a Char taken for Int | String, inside the search)
+polyString-byte-sel	pass	-	
+polyString-char-exp	pass	-	
+polyString-char-sel	pass	-	
+polyString-lit-exp	pass	-	
+polyString-lit-sel	pass	-	
+polyString-long-exp	pass	-	
+polyString-long-sel	pass	-	
+polyString-var-exp	pass	-	
+polyString-var-sel	pass	-	

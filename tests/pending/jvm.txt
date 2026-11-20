@@ -218,6 +218,5 @@ typer_state_landing_paren_warning	output
 typer_state_macro_info	output
 union_erasure_bases	backend
 vector_retention	compile
-view_import_ineligible_shadow	compile
 view_import_renamed_prefixes	compile
 wildcard_capture_param_bounds	compile

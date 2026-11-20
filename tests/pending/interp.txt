@@ -227,6 +227,5 @@ union_erasure_bases	compile
 unit_printed	output
 url_encoder	output
 value_companion_strings	compile
-view_import_ineligible_shadow	compile
 view_import_renamed_prefixes	compile
 wildcard_capture_param_bounds	compile

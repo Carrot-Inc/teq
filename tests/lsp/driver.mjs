@@ -1184,9 +1184,24 @@ async function completion() {
     // An extension the enclosing class inherits, on a class nested in its base: seen from `Ctrl.this`.
     ;[text, offset, list] = await completeIn(c, completing, edit("def show = Ok.page", "def show = Ok.pa|ge"), ++v)
     check("member completion: an inherited extension on a nested class of the enclosing class", itemOf(list, "page")?.kind === 2 && /\(p: String\): String$/.test(itemOf(list, "page")?.detail), itemOf(list, "page") ?? labels(list))
-    ;[text, offset, list] = await completeIn(c, completing, edit("holder.own(1) + param", "5.|x + holder.own(1) + param"), ++v)
+    // The given conversion `intToPoint` comes in through a `given` selector, as scalac takes it.
+    ;[text, offset, list] = await completeIn(c, completing, edit("holder.own(1) + param", "5.|x + holder.own(1) + param").replace("import shapes.*", "import shapes.{given, *}"), ++v)
     ls = labels(list)
     check("member completion: the members through a conversion, after the receiver's own", ls.includes("x") && ls.includes("y") && ls.indexOf("x") > ls.indexOf("toInt") && /intToPoint/.test(itemOf(list, "x")?.detail), ls)
+    // A wildcard brings implicit members alone, never a given (scalac's `importedImplicits`): through `import shapes.*`
+    // alone the given conversion `intToPoint` is not one the receiver can take, as the compiler refuses `5.x` there
+    // (scalac 3.8.4: E008, "value x is not a member of Int, but could be made available as an extension method").
+    let wm = c.mark()
+    ;[text, offset, list] = await completeIn(c, completing, edit("holder.own(1) + param", "5.|x + holder.own(1) + param"), ++v)
+    ls = labels(list)
+    check("member completion: no members through a given a wildcard import does not bring", !ls.includes("x") && !ls.includes("y") && ls.includes("toInt"), ls)
+    const notMember = await c.waitDiagnostics(wm, uriOf(completing), (ds) => ds.some((d) => d.message.startsWith("value x is not a member of Int")))
+    const fiveX = text.indexOf("5.x")
+    check(
+      "a wildcard's given is no conversion: `5.x` reported as scalac reports it",
+      notMember?.some((d) => d.severity === 1 && d.message.startsWith("value x is not a member of Int") && same(d.range.start, positionAt(text, fiveX))),
+      notMember,
+    )
     ;[text, offset, list] = await completeIn(c, completing, edit("holder.own(1) + param", "Holder.fromC| + holder.own(1) + param"), ++v)
     check("member completion: the companion's member", same(labels(list), ["fromCompanion"]), labels(list))
     ;[text, offset, list] = await completeIn(c, completing, edit("holder.own(1) + param", "holder.fo|obar + param"), ++v)

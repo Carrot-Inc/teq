@@ -343,7 +343,7 @@ pub struct LevelList {
 /// statement naming what it brings, or one with a wildcard selector, `*` or `given`
 /// (`ImportInfo.isWildcardImport`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Prec {
+pub(super) enum Prec {
     Wild,
     Named,
     Def,
@@ -351,7 +351,7 @@ enum Prec {
 
 impl Prec {
     /// `BindingPrec.beats`: a definition beats a context inside it, a named import a wildcard.
-    fn beats(self, inner: Prec) -> bool {
+    pub(super) fn beats(self, inner: Prec) -> bool {
         self == Prec::Def || self == Prec::Named && inner == Prec::Wild
     }
 }
@@ -922,7 +922,7 @@ impl<'a> Worker<'a> {
     /// Whether frame `frame` is a context of the search (`Contexts.implicits`: its scope's or its
     /// class's implicits are not empty): a scope with givens, a class with a given in reach, the
     /// class whose deferred given's implementation is typed, with its using parameters.
-    fn frame_has_givens(&mut self, frame: usize) -> bool {
+    pub(super) fn frame_has_givens(&mut self, frame: usize) -> bool {
         match &self.env.frames[frame] {
             Frame::Locals { givens, .. } => !givens.is_empty(),
             Frame::Class(c) if self.parent_args_of == Some(*c) => self.deferred_impl_of == Some(*c),
@@ -937,7 +937,7 @@ impl<'a> Worker<'a> {
     /// Whether an import brings an implicit (`ImportInfo.importedImplicits` not empty), which
     /// makes it a context: a `given` selector any given of its prefix, `*` a Scala 2 implicit, a
     /// name the given or implicit it names.
-    fn import_brings_implicits(&mut self, imp: ResolvedImport) -> bool {
+    pub(super) fn import_brings_implicits(&mut self, imp: ResolvedImport) -> bool {
         // A `given T` selector's bound and the clause's exclusions first (`importedImplicits`):
         // an import they leave nothing is no context, whatever its prefix holds.
         if !imp.hidden.is_empty() || imp.bound.is_some() {
@@ -3172,7 +3172,7 @@ impl<'a> Worker<'a> {
 
     /// Whether `g` is the given `d` being defined or one `d` overrides: a member of a base class
     /// of `d`'s class under its name.
-    fn defined_here(&self, d: SymId, g: SymId) -> bool {
+    pub(super) fn defined_here(&self, d: SymId, g: SymId) -> bool {
         if g == d {
             return true;
         }

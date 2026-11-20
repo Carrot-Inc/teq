@@ -126,6 +126,9 @@ suite scala3-interp tests/scala3/run.sh --target interp
 suite scala3-macros tests/scala3/run.sh --suite run-macros
 suite scala3-macros-interp tests/scala3/run.sh --suite run-macros --target interp
 suite scala3-typing python3 tests/scala3-typing/harness.py
+# The conversion search's matrix (tests/conversion-matrix/run.py): every tenth program of each set on the lean std,
+# scalac 3.8.4's answers its oracle and known.tsv the departures; a whole run on the four legs writes its board rows.
+suite conversion-matrix python3 tests/conversion-matrix/run.py --tenth
 # The conformance board's rows (tests/board/dotty.py: dotty's own suites at the tag 3.8.4, each held to its list of
 # the tests expected to fail and to its committed list's verdicts), as four lines: the three longest rows one each,
 # every other row in the rest. They need dotty at the tag: SCALA3_TAG, else scala3-3.8.4 beside $SCALA3.

@@ -55,6 +55,29 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   program's sources and from products, a generic class's read on an instance as of that instance's type arguments.
   teq found it as its first parent alone, or its last from a product, as it still does in a compilation with a file
   under 3.6 or 3.7-migration.
+- The implicit conversion a selection or an expected type takes is searched as scalac searches it: over the
+  reference's chain of contexts, from the innermost block out to the file's imports, a level per owner.
+  - Within a level, an outer context of higher precedence keeps its candidates. Across levels, a level's eligible
+    candidate hides a candidate of its name farther out; under a rename it hides by its original name.
+  - An import brings implicits as scalac's `importedImplicits` does. A wildcard brings `implicit` members alone, a
+    `given` selector both kinds. A by-type bound, hidden names and renames apply, and a statement's `given` selector
+    bounds every candidate of the statement. A value's wildcard or named import is asked like an object's.
+  - A candidate is tested before it hides anything: it must be accessible through its prefix (a protected member of
+    an object only from a subclass of its owner) and fit the view. The given being defined, and a candidate of its
+    scope that comes after it, still hide their namesakes; they are left out after the hiding, and where nothing else
+    is found and no ambiguity stops it, the search starts again from the next context out. The implicit scope (the
+    companions of the types involved) is searched only after these contextual searches have found nothing, and not
+    after an ambiguity among them.
+  - Programs scalac refuses that teq built are now refused:
+    - a nearer candidate that is eligible and then fails (it needs a given the program lacks) hiding a candidate of
+      its name farther out;
+    - a wildcard's given conversion;
+    - a conversion outside a `given` selector's type bound;
+    - a candidate that is eligible and then fails hiding its rival in its level;
+    - a protected member of an object imported from outside;
+    - a given conversion used in its own right-hand side where its scope gives no other.
+  - Programs teq refused, or answered with another conversion, take scalac's. The package's own definitions against
+    an import, and the outer packages, keep their place as before.
 - A protected member reached from a trait whose self type is its class, outside the member's package, is refused
   as scalac refuses it: "illegal access to protected method m in class C from trait Side". It is refused by
   identifier, as a value, through `this`, inside a lambda, as a `protected[p]` member from outside `p`, and as the

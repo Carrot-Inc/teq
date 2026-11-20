@@ -1,0 +1,314 @@
+# The matrix's programs teq does not answer as scalac 3.8.4, wrong on master too: id, leg, owner, cause, the
+# outcome observed (run.py's `outcome`). A line whose job is right, or whose outcome changes, fails the check.
+access/val-subme-privlib-given-named-file	js	the import statement's access check	an import by name of a private[lib] given through a subclass's own value is reported private	refused
+access/val-subme-privlib-given-named-file	interp	the import statement's access check	an import by name of a private[lib] given through a subclass's own value is reported private	refused
+access/val-subme-privlib-given-named-file	jvm	the import statement's access check	an import by name of a private[lib] given through a subclass's own value is reported private	refused
+access/val-subme-privlib-given-named-file	sl	the import statement's access check	an import by name of a private[lib] given through a subclass's own value is reported private	refused
+access/val-subme-privlib-given-named-same	js	the import statement's access check	an import by name of a private[lib] given through a subclass's own value is reported private	refused
+access/val-subme-privlib-given-named-same	interp	the import statement's access check	an import by name of a private[lib] given through a subclass's own value is reported private	refused
+access/val-subme-privlib-given-named-same	jvm	the import statement's access check	an import by name of a private[lib] given through a subclass's own value is reported private	refused
+access/val-subme-privlib-given-named-same	sl	the import statement's access check	an import by name of a private[lib] given through a subclass's own value is reported private	refused
+axes/named-obj-def-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-def-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-def-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-def-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-def-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-def-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-def-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-def-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-given-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-given-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-given-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-given-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-given-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-given-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-given-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-given-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-iclass-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-iclass-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-iclass-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-iclass-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-iclass-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-iclass-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-iclass-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-obj-iclass-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-def-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-def-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-def-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-def-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-def-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-def-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-def-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-def-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-given-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-given-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-given-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-given-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-given-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-given-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-given-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-given-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-iclass-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-iclass-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-iclass-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-iclass-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-iclass-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-iclass-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-iclass-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/named-val-iclass-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-def-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-def-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-def-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-def-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-def-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-def-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-def-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-def-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-given-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-given-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-given-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-given-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-given-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-given-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-given-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-given-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-iclass-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-iclass-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-iclass-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-iclass-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-iclass-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-iclass-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-iclass-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-obj-iclass-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-def-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-def-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-def-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-def-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-def-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-def-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-def-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-def-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-given-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-given-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-given-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-given-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-given-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-given-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-given-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-given-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-iclass-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-iclass-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-iclass-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-iclass-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-iclass-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-iclass-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-iclass-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+axes/renamed-val-iclass-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+defining/top-exp-outer	js	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-exp-outer	interp	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-exp-outer	jvm	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-exp-outer	sl	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-lambda-outer	js	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-lambda-outer	interp	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-lambda-outer	jvm	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-lambda-outer	sl	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-localdef-outer	js	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-localdef-outer	interp	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-localdef-outer	jvm	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-localdef-outer	sl	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-sel-outer	js	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-sel-outer	interp	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-sel-outer	jvm	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+defining/top-sel-outer	sl	the package chain (the last piece)	the package's own given beside an imported conversion of another name: scalac takes the package's given	refused
+fits/Char-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Char-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Char-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Char-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Double-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Double-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Double-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Double-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Double-var-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Double-var-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Double-var-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Double-var-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Int-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Int-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Int-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Int-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/IntOrString-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/IntOrString-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/IntOrString-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/IntOrString-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/IntOrString-char-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/IntOrString-char-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/IntOrString-char-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/IntOrString-char-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Integer-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Integer-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Integer-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Integer-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Long-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Long-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Long-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Long-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Long-var-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Long-var-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Long-var-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Long-var-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/Short-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Short-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Short-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/Short-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/byname-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/byname-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/byname-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/byname-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 940a68104d3b6904
+fits/polyString-byte-exp	js	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/polyString-byte-exp	interp	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/polyString-byte-exp	jvm	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+fits/polyString-byte-exp	sl	a conversion's application	the argument widened numerically, or a Char taken for Int | String, inside the search	ran exit 0 stdout 8d1926b8a8ddca82
+frames/B1~B2-given-obj-def-arg	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-arg	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-arg	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-arg	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-fits	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-fits	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-fits	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-fits	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-member	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-member	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-member	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-member	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-private	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-private	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-private	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-def-private	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-arg	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-arg	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-arg	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-arg	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-fits	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-fits	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-fits	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-fits	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-member	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-member	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-member	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-member	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-private	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-private	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-private	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-given-private	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-arg	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-arg	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-arg	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-arg	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-fits	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-fits	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-fits	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-fits	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-member	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-member	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-member	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-member	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-private	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-private	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-private	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-obj-iclass-private	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-arg	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-arg	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-arg	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-arg	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-fits	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-fits	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-fits	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-fits	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-member	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-member	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-member	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-member	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-private	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-private	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-private	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-def-private	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-arg	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-arg	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-arg	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-arg	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-fits	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-fits	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-fits	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-fits	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-member	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-member	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-member	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-member	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-private	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-private	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-private	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-given-private	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-arg	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-arg	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-arg	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-arg	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-fits	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-fits	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-fits	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-fits	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-member	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-member	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-member	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-member	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-private	js	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-private	interp	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-private	jvm	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+frames/B1~B2-given-val-iclass-private	sl	the parser	`import lib.O.given` before a line that opens a block is read as a given bound	refused
+holes/named-pkg-def-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-def-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-def-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-def-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-def-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-def-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-def-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-def-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-given-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-given-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-given-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-given-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-given-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-given-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-given-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-given-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-iclass-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-iclass-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-iclass-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-iclass-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-iclass-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-iclass-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-iclass-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/named-pkg-iclass-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-def-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-def-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-def-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-def-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-def-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-def-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-def-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-def-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-given-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-given-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-given-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-given-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-given-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-given-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-given-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-given-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-iclass-pkg-fits	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-iclass-pkg-fits	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-iclass-pkg-fits	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-iclass-pkg-fits	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-iclass-pkg-missing	js	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-iclass-pkg-missing	interp	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-iclass-pkg-missing	jvm	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840
+holes/renamed-pkg-iclass-pkg-missing	sl	the package chain (the last piece)	the file's package definition against an import: scalac takes the named or renamed import	ran exit 0 stdout 4e9416efcf77b840

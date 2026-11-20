@@ -1,0 +1,33 @@
+# test	verdict	the other ways	the first line of the difference
+blk-exp-none	pass	-	
+blk-exp-outer	pass	-	
+blk-lambda-none	pass	-	
+blk-lambda-outer	pass	-	
+blk-localdef-none	pass	-	
+blk-localdef-outer	pass	-	
+blk-sel-none	pass	-	
+blk-sel-outer	pass	-	
+cls-exp-none	pass	-	
+cls-exp-outer	pass	-	
+cls-lambda-none	pass	-	
+cls-lambda-outer	pass	-	
+cls-localdef-none	pass	-	
+cls-localdef-outer	pass	-	
+cls-sel-none	pass	-	
+cls-sel-outer	pass	-	
+obj-exp-none	pass	-	
+obj-exp-outer	pass	-	
+obj-lambda-none	pass	-	
+obj-lambda-outer	pass	-	
+obj-localdef-none	pass	-	
+obj-localdef-outer	pass	-	
+obj-sel-none	pass	-	
+obj-sel-outer	pass	-	
+top-exp-none	pass	-	
+top-exp-outer	fail	-	js, interp, jvm, sl: refused (known: the package chain (the last piece): the package's own given beside an imported conversion of another name: scalac takes the package's given)
+top-lambda-none	pass	-	
+top-lambda-outer	fail	-	js, interp, jvm, sl: refused (known: the package chain (the last piece): the package's own given beside an imported conversion of another name: scalac takes the package's given)
+top-localdef-none	pass	-	
+top-localdef-outer	fail	-	js, interp, jvm, sl: refused (known: the package chain (the last piece): the package's own given beside an imported conversion of another name: scalac takes the package's given)
+top-sel-none	pass	-	
+top-sel-outer	fail	-	js, interp, jvm, sl: refused (known: the package chain (the last piece): the package's own given beside an imported conversion of another name: scalac takes the package's given)

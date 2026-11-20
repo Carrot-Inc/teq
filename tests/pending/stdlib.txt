@@ -479,7 +479,6 @@ unit_printed	output differs
 unused_params_constant_bodies	output differs
 value_class_library_equality	error: cannot resolve import: unieq not found
 value_class_library_equality_called	error: cannot resolve import: unieq not found
-view_import_ineligible_shadow	error: type mismatch: found 7, required Wrapped
 view_import_renamed_prefixes	error: type mismatch: found 1, required Box[Int]
 view_kinds	output differs
 view_lib_alias	error: cannot resolve import: viewlib not found
