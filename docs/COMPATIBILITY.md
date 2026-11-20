@@ -189,7 +189,7 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   file's, so an expansion naming one (a `derives` clause's macro) uses a wildcard import of the file's own
   package, which teq reports unused. `-feature` reports an implicit conversion's definition alone, not the use
   of a `Conversion` given or an extension of `scala.Dynamic`; on JavaScript the lean standard library
-  deprecates none of its members, so a use of one scalac's deprecates (`mapValues`, `JavaConverters`) gives no
+  marks few members deprecated, so a use of one it does not mark and scalac's deprecates (`mapValues`) gives no
   deprecation warning there (`--std=scala-library` and the JVM read scala-library's). A warning at a place an
   earlier diagnostic took is hidden as scalac's reporter hides it, but an error is hidden only by the same
   error, where scalac's hides any at a place another error took: teq's errors do not all stand where scalac's
@@ -244,8 +244,8 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   scalac accepts), a call being compiled as a call of the original.
 - `Shape.Circle(1)` has the type `Shape` right away, where scalac widens the case type only when it infers a
   type from it (a member selected from it still sees the case). Accepted beyond scalac: `Codec[Int]` for a
-  constructor `apply` that needs arguments, `xs.map(parse)` for a `parse` with a trailing default, a lambda's
-  value discarded for a type variable bounded above by `Unit`, a macro defined and used in one compilation.
+  constructor `apply` that needs arguments, `xs.map(parse)` for a `parse` with a trailing default, a macro
+  defined and used in one compilation.
 - A `lazy val (a, b) = (e1, e2)` whose tuple is written out evaluates each element once: a member's tuple at
   the first read of either variable, a local's element at the first read of its variable. scalac 3.8.4
   evaluates the element at every read (its `makePatDef` makes each variable a `def` of its element), a defect
