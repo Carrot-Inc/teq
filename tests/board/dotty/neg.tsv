@@ -496,7 +496,7 @@ i13487.scala	fail	-	marks: 2 errors where 1 are marked: i13487.scala:6:12: type 
 i13497.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13497.scala:10:30 No given instance of type Foo was found for parameter x of method summon in object Predef.; teq's is error i13497.scala:10:30 No given instance of type Foo was found for paramet
 i13513.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13513.scala:4:5 Type argument TwoTypes does not conform to upper bound [_] =>> Any; teq's is error i13513.scala:4:3 type argument TwoTypes does not have the same kind as its bound [_]
 i13570.scala	fail	-	check: diagnostic 1 of 1: error i13570.scala:8:3, line 2 of the message: scalac's is scrutinee:  seq$proxy1 : (seq$proxy1 : Seq[Int]); teq's is scrutinee:  seq : Seq[Int]
-i13580.scala	fail	-	marks: 3 errors where 1 are marked: i13580.scala:9:22: expected ')', found 'val'
+i13580.scala	fail	-	marks: 4 errors where 1 are marked: i13580.scala:9:8: `using` is already implied here, should not be given explicitly
 i13701.scala	fail	-	marks: no error where 1 are marked
 i13703.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i13703.scala:3:53 Found:    Object with Foo {...}; teq's is error i13703.scala:3:53 Found:    Foo{def i_=(x$1: Int): Unit}
 i13757-match-type-anykind.scala	fail	-	marks: 3 errors where 6 are marked
@@ -1764,7 +1764,7 @@ toplevel-overload	fail	-	check: diagnostic 1 of 2: scalac's is error moredefs_1.
 toplevel-package	fail	-	marks: no error where 1 are marked
 toplevel-privates	fail	-	marks: no error where 3 are marked
 toplevel.scala	fail	-	check: diagnostic 1 of 1: scalac's is error toplevel.scala:1:1 Illegal start of toplevel definition; teq's is error toplevel.scala:1:1 expected a definition, found identifier
-tracked.scala	fail	-	marks: 16 errors where 8 are marked: tracked.scala:2:17: expected ':', found identifier
+tracked.scala	fail	-	marks: 17 errors where 8 are marked: tracked.scala:2:17: expected ':', found identifier
 tracked2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error tracked2.scala:1:17 ':' expected, but 'val' found; teq's is error tracked2.scala:1:17 expected ':', found 'val'
 trailing-comma-pattern.scala	fail	-	marks: 3 errors where 1 are marked: trailing-comma-pattern.scala:2:7: a val needs a type or an initializer
 trailing-comma-pattern2.scala	fail	-	marks: error on an unmarked line trailing-comma-pattern2.scala:2: pattern definitions are only supported inside blocks

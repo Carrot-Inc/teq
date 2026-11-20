@@ -1630,7 +1630,7 @@ import shutil
 copy = os.path.join(root, "copy")
 for d in ("board/dotty", "support", "scala3-typing", "pending"):
     os.makedirs(os.path.join(copy, "tests", d))
-for f in ("board/dotty.py", "board/oracle.py", "board/rows.py", "support/pending.py", "support/jars.sh", "support/teq-capped.sh", "scala3-typing/harness.py",
+for f in ("board/dotty.py", "board/oracle.py", "board/rows.py", "support/pending.py", "support/jars.sh", "scala3-typing/harness.py",
           "board/dotty/init-neg.tsv", "pending/dotty-init-neg.txt"):
     shutil.copy(os.path.join("tests", f), os.path.join(copy, "tests", f))
 held_file([dict(good, digest="0" * 64)])
@@ -1656,6 +1656,219 @@ while IFS=$'\t' read -r said scenario; do
   check "board: $scenario" "$work/board.log" [ "$said" = ok ]
 done < <(grep -E $'^(ok|FAIL)\t' "$work/board.log")
 check "board: every scenario of the judge was held" "$work/board.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board.log")" = 121 ]'
+
+# The board's memory cap leaves no cgroup behind: a test's cap is the run's watchdog, the run in one scope of its
+# own (a cgroup a test's teq wrote files in outlives it while their page cache stays charged to it). Over a made-up
+# corpus of 30 pos tests, outputs on a tmpfs, the real teq behind a stand-in that notes the cgroup it runs in: the
+# tests ran in at most ten cgroups (a cgroup a test, the old form, is 30); a runaway killed with its child, read as
+# the memory cap; the timeout's path; a terminating signal ends every
+# test; a run in a board scope already is not executed again. No lingering manager, no systemd-run or no tmpfs:
+# each line is `skip` with the reason (not run, never a pass).
+python3 -B - "$work/memcap" > "$work/memcap.log" 2>&1 <<'PY'
+import os, re, shutil, signal, subprocess, sys, tempfile, time
+sys.path.insert(0, "tests/board")
+import dotty as D
+root = sys.argv[1]
+def out(word, name, why=""):
+    print(f"{word}\t{name}" + (f": {why}" if why else ""), flush=True)
+shm = next((m for m in ("/dev/shm", "/tmp") if any(l.split()[1] == m and l.split()[2] == "tmpfs" for l in open("/proc/mounts"))), None)
+lingers = subprocess.run(["/usr/bin/loginctl", "show-user", str(os.getuid()), "--value", "-p", "Linger"], capture_output=True, text=True).stdout.strip() == "yes" if os.path.exists("/usr/bin/loginctl") else False
+CHECKS = ["the tests run in at most ten cgroups", "a runaway is the memory cap, its child killed with it", "a test past the wall is a timeout, its child killed with it",
+          "a terminating signal to the run ends every test", "a run in a board scope already is not executed again",
+          "two processes that share their pages are counted once: not killed", "a grandchild its parent left is the test's: the memory cap",
+          "a test's own signal 9 is a crash, not the memory cap", "a child in a process group of its own is killed at the wall",
+          "a green run writes its lists, the committed one the run's own bytes", "a test that dies by its own signal 9 past the cap is no kill of the watchdog's",
+          "a signal at any boundary of the publication leaves every list old or every list new, the exit 128 + the signal"]
+why = None if shm and lingers and os.path.exists("/usr/bin/systemd-run") else ("no tmpfs" if not shm else "no lingering user manager or no systemd-run")
+if why:
+    for c in CHECKS:
+        out("skip", c, why)
+    sys.exit(0)
+os.makedirs(root)
+outs = tempfile.mkdtemp(prefix="gate-memcap.", dir=shm)
+corpus, copy = os.path.join(root, "corpus"), os.path.join(root, "copy")
+os.makedirs(os.path.join(corpus, "tests", "pos"))
+for i in range(1, 31):
+    with open(os.path.join(corpus, "tests", "pos", f"t{i:02d}.scala"), "w") as fh:
+        fh.write(f"object T{i:02d} {{ val x: Int = {i} }}\n")
+os.makedirs(os.path.join(corpus, "compiler", "test", "dotc"))
+open(os.path.join(corpus, "compiler", "test", "dotc", "pos-linting.allowlist"), "w").close()
+subprocess.run(["git", "init", "-q", corpus], capture_output=True, timeout=60)
+with open(os.path.join(corpus, ".git", "HEAD"), "w") as fh:
+    fh.write(D.TAG_COMMIT + "\n")
+for d in ("board/dotty", "support", "scala3-typing", "pending"):
+    os.makedirs(os.path.join(copy, "tests", d))
+for f in ("board/dotty.py", "board/oracle.py", "board/rows.py", "support/pending.py", "support/jars.sh", "scala3-typing/harness.py"):
+    shutil.copy(os.path.join("tests", f), os.path.join(copy, "tests", f))
+standin = os.path.join(root, "teq")
+with open(standin, "w") as fh:
+    fh.write("""#!/bin/sh
+sed -n 's/^0:://p' /proc/self/cgroup >> "$MEMCAP_NOTE"
+for a in "$@"; do case $a in
+  *"/$MEMCAP_TEST") sleep 300 & echo $! > "$MEMCAP_CHILD"
+    case $MEMCAP_DO in
+      grow) exec python3 -c 'a=[]\nwhile True: a.append(bytearray(50000000))' ;;
+      hold) exec python3 -c 'import time; a=bytearray(300000000); time.sleep(20)' ;;
+      share) exec python3 -c 'import os, time; a=bytearray(300000000); pid=os.fork(); time.sleep(2); os._exit(0) if pid == 0 else os.waitpid(pid, 0)' ;;
+      orphan) exec python3 -c 'import os, time\nr, w = os.pipe()\nif os.fork() == 0:\n    if os.fork() == 0:\n        a = []\n        while True: a.append(bytearray(50000000))\n    os._exit(0)\nos.wait(); time.sleep(30)' ;;
+      selfkill) exec sh -c 'kill -9 $$' ;;
+      pgid) exec python3 -c 'import os, time\nif os.fork() == 0:\n    os.setpgid(0, 0); open(os.environ["MEMCAP_CHILD"], "w").write(str(os.getpid())); time.sleep(300)\ntime.sleep(60)' ;;
+      *) exec sleep 60 ;;
+    esac ;;
+esac; done
+exec "$MEMCAP_TEQ" "$@"
+""")
+os.chmod(standin, 0o755)
+def board(tag, only=None, do="", test="", jobs=4, extra=None, wrap=None, wait=True):
+    note, child = os.path.join(root, tag + ".cgroups"), os.path.join(root, tag + ".child")
+    env = dict(os.environ, SCALA3_TAG=corpus, BOARD_OUT=os.path.join(outs, tag), TEQ=standin, MEMCAP_TEQ=os.environ["TEQ"], MEMCAP_NOTE=note,
+               MEMCAP_CHILD=child, MEMCAP_DO=do, MEMCAP_TEST=test)
+    env.pop("BOARD_SCOPE", None)
+    env.update(extra or {})
+    cmd = (wrap or []) + [sys.executable, "-B", os.path.join(copy, "tests", "board", "dotty.py"), "--row", "pos", "--update", "--add", "--jobs", str(jobs)] + (["--only", only] if only else [])
+    if not wait:
+        return subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True), note, child
+    r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
+    return r, note, child
+def verdict(tag, test):
+    p = os.path.join(outs, tag, "lists", "pos.tsv")
+    return next((l.rstrip("\n").split("\t") for l in open(p) if l.startswith(test + "\t")), None) if os.path.exists(p) else None
+def gone(child):
+    try:
+        os.kill(int(open(child).read()), 0)
+        return False
+    except (OSError, ValueError):
+        return True
+try:
+    U = "/sys/fs/cgroup/user.slice/user-%d.slice/user@%d.service/cgroup.stat" % (os.getuid(), os.getuid())
+    dying = lambda: int(next((l.split()[1] for l in open(U) if l.startswith("nr_dying_descendants")), 0)) if os.path.exists(U) else -1
+    before = dying()
+    r, note, _ = board("all")
+    cg = set(open(note).read().split()) if os.path.exists(note) else set()
+    ok = r.returncode == 0 and 1 <= len(cg) <= 10
+    out("ok" if ok else "FAIL", CHECKS[0], f"{len(cg)} cgroups, exit {r.returncode}; the user manager's dying cgroups {before} -> {dying()} (not judged)" + ("" if ok else " " + (r.stdout + r.stderr)[-300:]))
+    run_list, committed = os.path.join(outs, "all", "lists", "pos.tsv"), os.path.join(copy, "tests", "board", "dotty", "pos.tsv")
+    ok = (r.returncode == 0 and os.path.exists(run_list) and os.path.exists(committed) and open(run_list, "rb").read() == open(committed, "rb").read()
+          and os.path.exists(os.path.join(copy, "tests", "pending", "dotty-pos.txt")) and os.path.exists(os.path.join(outs, "all", "peaks.tsv")))
+    out("ok" if ok else "FAIL", CHECKS[9], "" if ok else f"exit {r.returncode}, {sorted(os.listdir(os.path.join(outs, 'all')))}")
+    r, _, child = board("grow", only="^t01", do="grow", test="t01.scala", extra={"TEQ_CAP": "600000000"})
+    v = verdict("grow", "t01.scala")
+    ok = v is not None and v[1] == "crash" and v[3] == "teq: signal 9 (the memory cap)" and gone(child)
+    out("ok" if ok else "FAIL", CHECKS[1], "" if ok else f"{v}, the child {'gone' if gone(child) else 'left'}")
+    r, _, child = board("wall", only="^t02", do="sleep", test="t02.scala", extra={"BOARD_WALL_LIMIT": "3"})
+    v = verdict("wall", "t02.scala")
+    ok = v is not None and v[1] == "timeout" and gone(child)
+    out("ok" if ok else "FAIL", CHECKS[2], "" if ok else f"{v}, the child {'gone' if gone(child) else 'left'}")
+    p, _, child = board("signal", only="^t05", do="sleep", test="t05.scala", wait=False)
+    deadline = time.time() + 120
+    while not os.path.exists(child) and time.time() < deadline:
+        time.sleep(0.2)
+    time.sleep(0.5)
+    p.send_signal(signal.SIGTERM)
+    code = p.wait(timeout=60)
+    deadline = time.time() + 5  # a killed process is gone once it is reaped, which a loaded machine does late
+    while os.path.exists(child) and not gone(child) and time.time() < deadline:
+        time.sleep(0.1)
+    ok = code == 128 + signal.SIGTERM and os.path.exists(child) and gone(child)
+    out("ok" if ok else "FAIL", CHECKS[3], "" if ok else f"exit {code}, the test {'gone' if gone(child) else 'left'}")
+    unit = f"board-{os.getpid()}9"
+    r, note, _ = board("nested", only="^t06", wrap=["/usr/bin/systemd-run", "--user", "--quiet", "--scope", f"--unit={unit}"])
+    cg = set(open(note).read().split()) if os.path.exists(note) else set()
+    ok = r.returncode == 0 and len(cg) == 1 and next(iter(cg)).endswith(f"/{unit}.scope")
+    out("ok" if ok else "FAIL", CHECKS[4], "" if ok else f"{cg}, exit {r.returncode}")
+    r, _, _ = board("share", only="^t07", do="share", test="t07.scala", extra={"TEQ_CAP": "450000000"})
+    v = verdict("share", "t07.scala")
+    ok = v is not None and v[1] == "pass"
+    out("ok" if ok else "FAIL", CHECKS[5], "" if ok else f"{v}")
+    r, _, _ = board("orphan", only="^t08", do="orphan", test="t08.scala", extra={"TEQ_CAP": "600000000"})
+    v = verdict("orphan", "t08.scala")
+    ok = v is not None and v[1] == "crash" and v[3] == "teq: signal 9 (the memory cap)"
+    out("ok" if ok else "FAIL", CHECKS[6], "" if ok else f"{v}")
+    r, _, _ = board("selfkill", only="^t09", do="selfkill", test="t09.scala")
+    v = verdict("selfkill", "t09.scala")
+    ok = v is not None and v[1] == "crash" and v[3] == "teq: signal 9"
+    out("ok" if ok else "FAIL", CHECKS[7], "" if ok else f"{v}")
+    r, _, child = board("pgid", only="^t10", do="pgid", test="t10.scala", extra={"BOARD_WALL_LIMIT": "3"})
+    time.sleep(0.5)
+    v = verdict("pgid", "t10.scala")
+    ok = v is not None and v[1] == "timeout" and os.path.exists(child) and gone(child)
+    out("ok" if ok else "FAIL", CHECKS[8], "" if ok else f"{v}, the child {'gone' if gone(child) else 'left'}")
+    # the watchdog sees the test past the cap and reads its proportional memory; the test kills itself before the
+    # kill, which then meets its zombie: the crash is the test's own
+    sys.path.insert(0, os.path.join(copy, "tests", "board"))
+    import importlib
+    B = importlib.import_module("dotty")
+    marker = os.path.join(root, "selfkill.go")
+    real = B.proportional
+    def proportional(pid):
+        n = real(pid)
+        if n > 32 << 20:
+            open(marker, "w").close()
+            until = time.monotonic() + 2
+            while time.monotonic() < until:
+                try:
+                    if open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[0] == "Z":
+                        break
+                except OSError:
+                    break
+                time.sleep(0.001)
+        return n
+    B.proportional = proportional
+    code = f"import os, time\na = bytearray(64 << 20)\nwhile not os.path.exists({marker!r}): time.sleep(0.001)\nos.kill(os.getpid(), 9)\n"
+    status = B.run([sys.executable, "-B", "-c", code], os.path.join(root, "selfkill.out"), 0, 10, cap=32 << 20)[0]
+    out("ok" if status == "signal 9" else "FAIL", CHECKS[10], "" if status == "signal 9" else f"read as {status!r}")
+    # the publication: four writes (two through pending's writer, two files), a signal before the first, between
+    # each pair, after the last; SIGTERM, SIGINT, SIGHUP, and two signals in a row
+    pub = """import os, signal, sys
+sys.path.insert(0, sys.argv[1])
+import dotty as B
+d, sigs, k = sys.argv[2], [int(x) for x in sys.argv[3].split(",")], int(sys.argv[4])
+for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+    signal.signal(s, B.end_sessions)
+def fire():
+    for s in sigs:
+        os.kill(os.getpid(), s)
+def write_pending(suite, listed):
+    if suite == "p2" and k == 2:
+        fire()
+    open(os.path.join(d, suite), "w").write("new")
+    if (suite, k) in (("p0", 1), ("p2", 3), ("p0", 5)):
+        fire()
+    if (suite, k) == ("p4", 5):
+        os.kill(os.getpid(), signal.SIGINT)
+staged = [("pending", "p0", None), ("file", os.path.join(d, "f1"), b"new"), ("pending", "p2", None), ("file", os.path.join(d, "f3"), b"new")]
+if k == 5:  # the handoff: a SIGTERM held at the first boundary, then a SIGINT after the last write
+    sigs = [signal.SIGTERM]
+    staged.append(("pending", "p4", None))
+if k == 0:
+    fire()
+B.publish(staged, write_pending)
+if k == 4:
+    fire()
+"""
+    bad = []
+    cases = [(str(s), k) for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP) for k in range(5)] + [(f"{int(signal.SIGTERM)},{int(signal.SIGINT)}", 2), (str(int(signal.SIGTERM)), 5)]
+    for sigs, k in cases:
+        d = tempfile.mkdtemp(dir=root)
+        for n in ("p0", "f1", "p2", "f3"):
+            open(os.path.join(d, n), "w").write("old")
+        r = subprocess.run([sys.executable, "-B", "-c", pub, os.path.join(copy, "tests", "board"), d, sigs, str(k)], capture_output=True, text=True, timeout=60)
+        got = {open(os.path.join(d, n)).read() for n in ("p0", "f1", "p2", "f3")}
+        want = {"old"} if k == 0 else {"new"}
+        if got != want or r.returncode != 128 + int(sigs.split(",")[0]):
+            bad.append(f"signals {sigs} at boundary {k}: exit {r.returncode}, the lists {sorted(got)} {r.stderr[-200:]}")
+    out("ok" if not bad else "FAIL", CHECKS[11], f"{len(cases)} cases" + ("" if not bad else ": " + "; ".join(bad[:3])))
+finally:
+    shutil.rmtree(outs, ignore_errors=True)
+PY
+while IFS=$'\t' read -r said scenario; do
+  case $said in
+    skip) echo "skip the board's memory cap: $scenario" ;;
+    *) check "the board's memory cap: $scenario" "$work/memcap.log" [ "$said" = ok ] ;;
+  esac
+done < <(grep -E $'^(ok|FAIL|skip)\t' "$work/memcap.log")
+memcap_reported=$(grep -c -E $'^(ok|FAIL|skip)\t' "$work/memcap.log")
+check "the board's memory cap: every check reported" "$work/memcap.log" [ "$memcap_reported" = 12 ]
 
 # The board counts no check that did not run: a test's one outcome (a failure, then not run, then a pass) through
 # tests/support/pending.py in a copy of the tree's lists, tests/board/board.py's project rows over a made-up record,

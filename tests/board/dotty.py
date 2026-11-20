@@ -93,8 +93,10 @@ board-rest, every other row. The gate's table keeps a line's last line, so a run
 was not as listed, row and test, or the counts of a run that was.
 
 The corpus is $SCALA3_TAG, else scala3-3.8.4 beside the checkout $SCALA3 names (tests/all.sh's variable and the
-gate's machines'). teq runs under tests/support/teq-capped.sh (a memory cap) where the user's systemd manager
-lingers and starts such a scope, bare where not, which the run's first line then says.
+gate's machines'). A teq whose memory (its children's with it) passes MEMORY_CAP is killed by the run's watchdog,
+a crash of the memory cap; the run itself is in one systemd scope, its backstop, where the user's systemd manager
+lingers and starts such a scope, bare where not, which the run's first line then says. A test has no cgroup of
+its own: one outlives its test while the page cache of what the test wrote stays charged to it.
 """
 import argparse
 import collections
@@ -103,8 +105,10 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -120,16 +124,26 @@ import rows as ROWS  # noqa: E402
 
 TAG_COMMIT = "7d4833b619d31ea9acac97fccf1e74b42b89c49f"
 SCALAC = "3.8.4"  # the scalac whose diagnostics the rows' oracles hold
-CAPPED = os.path.join(REPO, "tests", "support", "teq-capped.sh")
 LAST_LINE = 280  # the gate's table keeps 300 characters of a line's last line
 SRC = (".scala", ".java")
 
 # Limits. teq types on one thread, so its CPU seconds are its work, whatever else the machine runs; the wall
 # clock stands behind for a process that waits. A java or node child has dotty's 45 s for a run, on the wall.
 CPU_LIMIT = 30
-WALL_LIMIT = 150
+WALL_LIMIT = int(os.environ.get("BOARD_WALL_LIMIT") or 150)  # a check's shorter wall
 RUN_LIMIT = 45
 OUTPUT_LIMIT = 64 << 20
+# A teq's memory, its children's with it, read every POLL seconds: past MEMORY_CAP its session is killed, a crash
+# `signal 9 (the memory cap)` (one of dotty's neg tests once took 12.8 GB). TEQ_CAP sets it in bytes.
+MEMORY_CAP = int(os.environ.get("TEQ_CAP") or 4_000_000_000)
+POLL = 0.05
+LIVE = set()  # the sessions of the commands running now, which a signal to the run ends with them
+STOPPING = threading.Event()  # a signal is ending the run: no command starts, one that just started is ended
+PUBLISHING = []  # non-empty while the run publishes what it staged: a signal then is held (HELD) until the end
+HELD = []  # the signals that came during the publication, in their order
+STAGED = []  # what a run writes, held until it has ended clean: ("pending", suite, its tests) or ("file", path, bytes)
+PEAKS = {}  # a capped command's output file: its session's peak summed resident memory (never below its proportional)
+BACKSTOP = 0.75  # the run's scope's MemoryMax, of the machine's memory: one board row a machine, a session beside it
 NEAR = 3  # a test past a third of a limit is named after the run
 
 
@@ -182,35 +196,67 @@ def scala_library():
 
 
 def teq_command():
-    """teq under the memory cap, the tree's tests/support/teq-capped.sh (a systemd scope of the test's own), where
-    this machine starts such a scope and keeps it: the user's systemd manager must be one that outlives a login
-    (`loginctl enable-linger`), since a manager that ends with the login ends its scopes with it, and a gate's
-    shard runs on after the login that started it; then the scope is asked for once, with --version, the way
-    every test starts it. Where either fails (no systemd-run, no manager, one that goes) teq runs bare, and the
-    fourth value is the line that says so; no verdict of the lists comes from the cap.
-    (command, its environment, the binary, that line or nothing)."""
+    """The teq binary the tests run: $TEQ, else the checkout's release build. Its memory cap is `run`'s watchdog
+    (MEMORY_CAP), with no cgroup of a test's own. (the binary, its environment, the binary)."""
     teq = os.environ.get("TEQ") or os.path.join(REPO, "target", "release", "teq")
-    if os.path.basename(os.path.realpath(teq)) == os.path.basename(CAPPED):
-        if not os.environ.get("TEQ_REAL"):
-            die("TEQ is the capped wrapper: set TEQ_REAL to the binary")
-        return teq, {}, os.environ["TEQ_REAL"], ""
     if not os.path.exists(teq):
         die(f"no teq binary at {teq}; build it with cargo build --release")
     teq = os.path.abspath(teq)
-    env = {"TEQ_REAL": teq}
+    return teq, {}, teq
+
+
+def in_scope():
+    """The run in one systemd scope of its own (a cgroup that dies charged with no more than the run's own page
+    cache, where a scope a test left one each): the board's process executed again by `systemd-run --user --scope`,
+    MemoryMax BACKSTOP of the machine's memory, no swap, OOMPolicy=continue (a process the kernel kills inside it is
+    that test's crash, not the scope's end). Not where the run is in one already (BOARD_SCOPE, or a cgroup whose leaf
+    is a board scope). Where the user's manager does not linger (a scope ends with a manager that ends with the
+    login) or does not start a scope, the run goes on bare: the line that says so, else nothing (the process is
+    replaced)."""
+    own = ""
     try:
-        linger = subprocess.run(["loginctl", "show-user", str(os.getuid()), "--value", "-p", "Linger"], capture_output=True,
+        own = open("/proc/self/cgroup").read().strip().split("::")[-1]
+    except OSError:
+        pass
+    if os.environ.get("BOARD_SCOPE") or re.search(r"/board-\d+\.scope$", own):
+        return ""
+    run_ = "/usr/bin/systemd-run"
+    try:
+        linger = subprocess.run(["/usr/bin/loginctl", "show-user", str(os.getuid()), "--value", "-p", "Linger"], capture_output=True,
                                 text=True, timeout=20, stdin=subprocess.DEVNULL)
-        why = "" if linger.returncode == 0 and linger.stdout.strip() == "yes" else "the user's systemd manager is not one that lingers"
-        if not why:
-            probe = subprocess.run([CAPPED, "--version"], capture_output=True, text=True, timeout=30,
-                                   env={**os.environ, **env}, stdin=subprocess.DEVNULL)
-            why = "" if probe.returncode == 0 else (probe.stderr.strip().splitlines() or [f"exit {probe.returncode}"])[-1]
-    except (OSError, subprocess.SubprocessError) as e:
-        why = str(e)
-    if not why:
-        return CAPPED, env, teq, ""
-    return teq, {}, teq, f"board: teq runs without its memory cap on this machine ({' '.join(why.split())[:160]})"
+        if linger.returncode != 0 or linger.stdout.strip() != "yes":
+            return "board: the run has no memory backstop on this machine (the user's systemd manager is not one that lingers)"
+        probe = subprocess.run([run_, "--user", "--quiet", "--scope", "/bin/true"], capture_output=True, text=True, timeout=30,
+                               stdin=subprocess.DEVNULL)
+        if probe.returncode != 0:
+            return f"board: the run has no memory backstop on this machine ({' '.join((probe.stderr.strip() or f'exit {probe.returncode}').split())[:160]})"
+        total = next(int(l.split()[1]) * 1024 for l in open("/proc/meminfo") if l.startswith("MemTotal:"))
+    except (OSError, subprocess.SubprocessError, StopIteration) as e:
+        return f"board: the run has no memory backstop on this machine ({' '.join(str(e).split())[:160]})"
+    unit = f"board-{os.getpid()}"
+    env = dict(os.environ, BOARD_SCOPE=unit)
+    os.execve(run_, [run_, "--user", "--quiet", "--scope", f"--unit={unit}", f"-pMemoryMax={int(total * BACKSTOP)}",
+                     "-pMemorySwapMax=0", "-pOOMPolicy=continue", sys.executable, os.path.abspath(__file__)] + sys.argv[1:], env)
+
+
+def end_sessions(sig, _frame):
+    """A terminating signal to the run ends every test's session with it, then the run (128 + the signal): no command
+    starts once it has come (a worker thread may be about to start one), and the sessions are ended until none is
+    left. During the publication (`publish`) it is held instead: the run has ended valid, and a signal does not cut
+    what it writes into a mixed set."""
+    if PUBLISHING or HELD:  # held during the publication; after it, before the held one was honoured: the held one
+        HELD.append(sig) if PUBLISHING else os._exit(128 + HELD[0])
+        return
+    STOPPING.set()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        live = list(LIVE)
+        if not live:
+            break
+        for sid in live:
+            end_session(sid)
+        time.sleep(0.05)
+    os._exit(128 + sig)
 
 
 def major(cmd, rx):
@@ -660,45 +706,157 @@ class Ctx:
 
 
 def limited(cmd, cpu):
-    """The command under its limits, set by the shell that becomes it: CPU seconds (the soft limit signals, the
-    hard one behind it), the size of a file it writes, no core file."""
-    script = "ulimit -c 0; ulimit -f %d; " % (OUTPUT_LIMIT // 512)
+    """The command under its limits, set by the shell that becomes it: CPU seconds (the soft limit signals, the hard one
+    behind it), a file's size, no core file; oom_score_adj 1000: the kernel's first victim in the run's scope, never the run."""
+    script = "echo 1000 > /proc/self/oom_score_adj 2>/dev/null; ulimit -c 0; ulimit -f %d; " % (OUTPUT_LIMIT // 512)
     if cpu:
         script += "ulimit -S -t %d; ulimit -H -t %d; " % (cpu, cpu + 5)
     return ["/bin/sh", "-c", script + 'exec "$@"', "sh"] + cmd
 
 
-def run(cmd, out_path, cpu, wall, env=None, cwd=None):
-    """Runs a command, its stdout and stderr together in out_path. (status, text, seconds): status an exit code,
-    or `timeout`, or `signal <n>`."""
+PAGE = os.sysconf("SC_PAGE_SIZE")
+
+
+def sessions():
+    """Every process of the machine by its session: {session: [(pid, resident bytes, state)]}, one pass over
+    /proc/*/stat (its `state`, `session` and `rss` fields; state `Z` a process that has ended, not yet reaped)."""
+    out = {}
+    for d in os.listdir("/proc"):
+        if not d.isdigit():
+            continue
+        try:
+            with open(f"/proc/{d}/stat") as fh:
+                f = fh.read().rsplit(")", 1)[1].split()
+            out.setdefault(int(f[3]), []).append((int(d), int(f[21]) * PAGE, f[0]))
+        except (OSError, IndexError, ValueError):
+            continue
+    return out
+
+
+def proportional(pid):
+    """A process's proportional resident memory (`Pss` of /proc/<pid>/smaps_rollup): a page it shares with n others
+    counts 1/n, as the pages a cgroup charges once; 0 for one that has ended."""
+    try:
+        with open(f"/proc/{pid}/smaps_rollup") as fh:
+            return next((int(l.split()[1]) * 1024 for l in fh if l.startswith("Pss:")), 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def end_session(sid):
+    """Kills every process of a session (a process that made a process group of its own included), until a pass
+    finds none alive. Whether the kill reached the session's leader (the command itself, pid == sid) while it was
+    a live process: a command that had ended by itself (a zombie) is not the kill's."""
+    reached = False
+    for _ in range(20):
+        live = [(pid, state) for pid, _, state in sessions().get(sid, []) if state != "Z"]
+        if not live:
+            return reached
+        for pid, state in live:
+            try:
+                os.kill(pid, 9)
+                reached = reached or pid == sid
+            except OSError:
+                pass
+        time.sleep(0.01)
+    return reached
+
+
+class Watchdog:
+    """The memory cap of every capped test running now, one thread for all of them: each POLL seconds one pass over
+    /proc (`sessions`) sums each test's session's resident memory, its peak kept. Where the sum is past the test's
+    cap, its processes' proportional memory is read (`proportional`; the sum is never below it), and past the cap
+    of that the session is killed (`end_session`) and the kill recorded: the crash `signal 9 (the memory cap)` is
+    read off that record alone. What the cap counts is a test's session's processes' proportional resident memory:
+    not, as the per-test scope did, the page cache of the files the test wrote, its tmpfs outputs or the kernel's
+    memory of it; a process that leaves the session (setsid) is outside it."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.tests = {}
+        self.thread = None
+
+    def add(self, sid, cap):
+        with self.lock:
+            self.tests[sid] = {"cap": cap, "peak": 0, "killed": False, "killing": False, "decided": threading.Event()}
+            if self.thread is None:
+                self.thread = threading.Thread(target=self.loop, daemon=True)
+                self.thread.start()
+
+    def remove(self, sid):
+        """The test's record, once the watchdog has decided on a kill it began: its kill ends the command, whose
+        run then ends while the kill's passes go on."""
+        with self.lock:
+            rec = self.tests.pop(sid, None)
+        if rec and rec["killing"]:
+            rec["decided"].wait(10)
+        return rec
+
+    def loop(self):
+        while True:
+            time.sleep(POLL)
+            with self.lock:
+                live = list(self.tests.items())
+            if not live:
+                continue
+            procs = sessions()
+            for sid, rec in live:
+                own = procs.get(sid, [])
+                total = sum(r for _, r, _ in own)
+                rec["peak"] = max(rec["peak"], total)
+                if total > rec["cap"] and sum(proportional(pid) for pid, _, _ in own) > rec["cap"]:
+                    with self.lock:
+                        if self.tests.get(sid) is not rec:
+                            continue  # its run has ended: a command that ended before any kill is not the watchdog's
+                        rec["killing"] = True
+                    # the label is the kill's only where it reached the command alive
+                    rec["killed"] = end_session(sid) or rec["killed"]
+                    rec["decided"].set()
+
+
+WATCHDOG = Watchdog()
+
+
+def run(cmd, out_path, cpu, wall, env=None, cwd=None, cap=None):
+    """Runs a command in a session of its own, its stdout and stderr together in out_path. (status, text, seconds):
+    status an exit code, or `timeout`, or `signal <n>`, `signal 9 (the memory cap)` where the watchdog killed it.
+    With a cap (bytes), the command is one of the watchdog's tests (Watchdog): the memory cap of a test, with no
+    cgroup of the test's own (a cgroup a process wrote files in outlives it while their page cache stays charged
+    to it). At its end, or past the wall, every process of its session is killed."""
     start = time.monotonic()
     full_env = dict(os.environ)
     full_env.update(env or {})
+    if STOPPING.is_set():
+        return "cannot start: the run is ending", "", 0.0
     with open(out_path, "wb") as fh:
         try:
             p = subprocess.Popen(limited(cmd, cpu), stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=full_env,
                                  cwd=cwd, start_new_session=True)
         except OSError as e:
             return f"cannot start: {e}", "", 0.0
+        LIVE.add(p.pid)
+        if STOPPING.is_set():
+            end_session(p.pid)
+        if cap:
+            WATCHDOG.add(p.pid, cap)
         try:
-            code = p.wait(timeout=wall)
-            status = code
+            status = p.wait(timeout=wall)
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(p.pid, 9)
-            except OSError:
-                pass
+            end_session(p.pid)
             p.wait()
             status = "timeout"
     secs = time.monotonic() - start
-    try:
-        os.killpg(p.pid, 9)  # what the program left running
-    except OSError:
-        pass
+    end_session(p.pid)  # what the program left running, its whole session
+    LIVE.discard(p.pid)
+    rec = WATCHDOG.remove(p.pid) if cap else None
+    if rec:
+        PEAKS[out_path] = rec["peak"]
     with open(out_path, "rb") as fh:
         text = fh.read(1 << 20).decode("utf-8", "replace")
     if status != "timeout" and isinstance(status, int) and status < 0:
         status = "timeout" if -status == 24 else "output over the limit" if -status == 25 else f"signal {-status}"
+        if status == "signal 9" and rec and rec["killed"]:
+            status += " (the memory cap)"
     return status, text, secs
 
 
@@ -708,7 +866,7 @@ def teq(ctx, args, scratch, tag, target_env=None):
     diag = os.path.join(scratch, tag + ".diagnostics")
     env = dict(ctx.teq_env)
     env.update({"TEQ_THREADS": "1", "TEQ_CACHE_DIR": ctx.cache, "LC_ALL": "C.UTF-8"})
-    status, text, secs = run([ctx.teq] + args + ["--diagnostics", diag], os.path.join(scratch, tag + ".out"), CPU_LIMIT, WALL_LIMIT, env)
+    status, text, secs = run([ctx.teq] + args + ["--diagnostics", diag], os.path.join(scratch, tag + ".out"), CPU_LIMIT, WALL_LIMIT, env, cap=MEMORY_CAP)
     diags = []
     if os.path.exists(diag):
         with open(diag, encoding="utf-8", errors="replace") as fh:
@@ -744,7 +902,7 @@ def crashed(status, text):
     if status == "timeout":
         return None
     if isinstance(status, str):
-        return status + (" (the memory cap)" if status == "signal 9" else "")
+        return status
     if "panicked at" in text or "internal error" in text or "has overflowed its stack" in text:
         line = next((l for l in text.splitlines() if "panicked at" in l or "internal error" in l or "overflowed its stack" in l), "")
         return line.strip()[:200]
@@ -1342,9 +1500,9 @@ def run_interp(ctx, test, scratch):
     env = dict(ctx.teq_env)
     env.update({"TEQ_THREADS": "1", "TEQ_CACHE_DIR": ctx.cache, "LC_ALL": "C.UTF-8"})
     out = os.path.join(scratch, "interp.out")
-    status, text, secs = run([ctx.teq] + cmd, out, CPU_LIMIT, WALL_LIMIT, env, cwd=scratch)
+    status, text, secs = run([ctx.teq] + cmd, out, CPU_LIMIT, WALL_LIMIT, env, cwd=scratch, cap=MEMORY_CAP)
     if status == 1 and "several entry points" in text:
-        status, text, secs = run([ctx.teq] + cmd + ["--main", "Test"], out, CPU_LIMIT, WALL_LIMIT, env, cwd=scratch)
+        status, text, secs = run([ctx.teq] + cmd + ["--main", "Test"], out, CPU_LIMIT, WALL_LIMIT, env, cwd=scratch, cap=MEMORY_CAP)
     why = crashed(status, text)
     if status == "timeout":
         return "timeout", ""
@@ -1455,6 +1613,55 @@ def jvm_fits(spec, jdk):
 
 
 def main():
+    """The board in the run's scope (in_scope), its tests' sessions ended with a signal to it, each capped test's
+    peak written to <out>/peaks.tsv. Whatever a run writes (<out>/lists/*.tsv, <out>/peaks.tsv, and under --update or
+    --add tests/pending/dotty-*.txt, tests/board/dotty/*.tsv, tests/board/dotty/self-checks.tsv) is written at its end
+    alone, once board_main has ended: not by a run an exception or a signal ended before its publication; a signal
+    during the publication is held to its end (`publish`). A process the kernel kills inside the scope (past its
+    MemoryMax, the machine's protection) is read as that test's crash, a row not as listed."""
+    bare = in_scope()
+    if bare:
+        print(bare, flush=True)  # before whatever ends the run on stderr: the gate keeps a log's last line
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, end_sessions)
+    write_pending = pending.write
+    pending.write = lambda suite, listed: STAGED.append(("pending", suite, dict(listed)))
+    status = board_main()
+    out = os.path.abspath(os.environ.get("BOARD_OUT") or os.path.join(REPO, "out", "board", "dotty"))
+    if PEAKS and os.path.isdir(out):
+        STAGED.append(("file", os.path.join(out, "peaks.tsv"), (
+            "# a capped teq run's output, its session's peak summed resident memory in bytes, never below its proportional "
+            "(MEMORY_CAP %d; a run that ended within POLL reads 0)\n" % MEMORY_CAP
+            + "".join(f"{os.path.relpath(path, out)}\t{peak}\n" for path, peak in sorted(PEAKS.items(), key=lambda kv: -kv[1]))).encode("utf-8")))
+    publish(STAGED, write_pending)
+    return status
+
+
+def publish(staged, write_pending):
+    """What the run writes (its lists, the committed ones under --update and --add, the peaks, the self-checks'
+    counts), once board_main has ended: one step a terminating signal
+    does not cut. SIGTERM, SIGINT and SIGHUP that come during it are held to its end; then the run exits 128 + the
+    first of them, its every list written (it had ended valid). What no handler holds off (a signal 9, the machine
+    going down) can leave some lists new and some old: the next run with --update writes every list again. Each
+    file is written whole (a file beside it, then renamed over it)."""
+    PUBLISHING.append(True)
+    try:
+        for kind, where, what in staged:
+            if kind == "pending":
+                write_pending(where, what)
+            else:
+                os.makedirs(os.path.dirname(where), exist_ok=True)
+                part = where + ".part"
+                with open(part, "wb") as fh:
+                    fh.write(what)
+                os.replace(part, where)
+    finally:
+        PUBLISHING.clear()
+    if HELD:
+        os._exit(128 + HELD[0])
+
+
+def board_main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--row")
     ap.add_argument("--except", dest="rest_of")
@@ -1472,8 +1679,7 @@ def main():
         counts = self_check_counts(corpus())
         text = "# option\ttests carrying it (tests/board/dotty.py --self-checks --update)\n" + "".join(f"{f}\t{counts[f]}\n" for f in SELF_CHECKS)
         if args.update:
-            with open(self_checks_path(), "w", encoding="utf-8") as fh:
-                fh.write(text)
+            STAGED.append(("file", self_checks_path(), text.encode("utf-8")))
         print(text, end="")
         return 0
     if args.rows:
@@ -1491,9 +1697,7 @@ def main():
     ctx = Ctx()
     ctx.root = corpus()
     ctx.lib = scala_library()
-    ctx.teq, ctx.teq_env, ctx.binary, bare = teq_command()
-    if bare:
-        print(bare, flush=True)  # before whatever ends the run on stderr: the gate keeps a log's last line
+    ctx.teq, ctx.teq_env, ctx.binary = teq_command()
     ctx.out = os.path.abspath(os.environ.get("BOARD_OUT") or os.path.join(REPO, "out", "board", "dotty"))
     ctx.cache = os.path.join(ctx.out, ".cache")
     os.makedirs(ctx.cache, exist_ok=True)
@@ -1561,13 +1765,9 @@ def main():
         elapsed = time.monotonic() - start
         rows_out = [(t.name, v, o, short(ctx, l)) for t, (v, o, l) in zip(tests, results)]
         counts = collections.Counter(v for _, v, _, _ in rows_out)
-        os.makedirs(os.path.join(ctx.out, "lists"), exist_ok=True)
         header = f"# dotty 3.8.4 ({TAG_COMMIT[:8]}) {row.path}, {row.kind}; {row.source}; JDK {ctx.jdk}, node {ctx.node}\n# test\tverdict\tthe other ways\tthe first line of the difference\n"
-        fresh = os.path.join(ctx.out, "lists", row.name + ".tsv")
-        with open(fresh, "w", encoding="utf-8") as fh:
-            fh.write(header)
-            for r in sorted(rows_out):
-                fh.write("\t".join(r) + "\n")
+        fresh = (header + "".join("\t".join(r) + "\n" for r in sorted(rows_out))).encode("utf-8")
+        STAGED.append(("file", os.path.join(ctx.out, "lists", row.name + ".tsv"), fresh))
         others = collections.Counter(o for _, _, o, _ in rows_out if o != "-")
         print(f"{row.name}: {len(rows_out)} tests in {elapsed:.0f} s: " + ", ".join(f"{k} {counts[k]}" for k in ("pass", "marks", "fail", "timeout", "crash", "cannot run") if counts[k])
               + (" (" + ", ".join(f"{k} {n}" for k, n in sorted(others.items())) + ")" if others else ""))
@@ -1596,8 +1796,7 @@ def main():
         if not held or stale:
             status = 1
         elif args.update or args.add:
-            os.makedirs(os.path.join(HERE, "dotty"), exist_ok=True)
-            shutil.copyfile(fresh, os.path.join(HERE, "dotty", row.name + ".tsv"))
+            STAGED.append(("file", os.path.join(HERE, "dotty", row.name + ".tsv"), fresh))
         totals.update(counts)
         totals["rows"] += 1
     if (args.only or args.show) and not selected:
