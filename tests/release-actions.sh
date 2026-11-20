@@ -57,6 +57,33 @@ if command -v actionlint > /dev/null; then
 else
   echo "skip actionlint: not installed"
 fi
+# --- The products' number (bench/actions/products-abi.sh): a release binary reads products of the source's
+# PRODUCTS_ABI, which no build of the ship raises (TEQ_PRODUCTS_ABI_BUMP, tests/products-abi.sh's second binary's):
+# bench/ship.sh's builds unset it, no workflow or script sets it, and every qualification checks the binary, which
+# runs here on stand-ins answering --version --verbose.
+abi_source=$(sed -n 's/^pub const PRODUCTS_ABI: u32 = \([0-9][0-9]*\);$/\1/p' src/products.rs)
+check "src/products.rs: PRODUCTS_ABI is a number" "$(printf '%s\n' "$abi_source" | grep -cE '^[0-9]+$')" 1
+check "bench/ship.sh: its builds unset TEQ_PRODUCTS_ABI_BUMP" "$(grep -cE '^unset .* TEQ_PRODUCTS_ABI_BUMP( |$)' bench/ship.sh)" 1
+check "no workflow or ship script sets TEQ_PRODUCTS_ABI_BUMP" "$(grep -rnE 'TEQ_PRODUCTS_ABI_BUMP *[=:]' .github bench tests/support | grep -v '^bench/actions/products-abi.sh:')" ""
+check "bench/actions/qualify.sh: every binary's number checked, before the Windows smoke" \
+  "$(grep -n 'bench/actions/products-abi.sh "\$binary"' bench/actions/qualify.sh | cut -d: -f1 | awk -v w="$(grep -n 'tests/windows.sh 2>&1' bench/actions/qualify.sh | cut -d: -f1)" '$1 < w { n++ } END { print n + 0 }')" 1
+abi_standin() {
+  printf '#!/bin/sh\necho "teq 9.9.9 abc"\nif [ "$2" = --verbose ] && [ -n "%s" ]; then echo "products ABI %s"; fi\n' "$1" "$1" > "$work/abi-standin-$2"
+  chmod +x "$work/abi-standin-$2"
+}
+abi_standin "$abi_source" same
+abi_standin "$((abi_source + 1))" raised
+abi_standin "" none
+out=$(env -u TEQ_PRODUCTS_ABI_BUMP timeout 60 bench/actions/products-abi.sh "$work/abi-standin-same" 2>&1)
+check "products-abi: the source's number passes" "$?:$out" "0:products-abi: the binary reads products of ABI $abi_source, the source's"
+out=$(env -u TEQ_PRODUCTS_ABI_BUMP timeout 60 bench/actions/products-abi.sh "$work/abi-standin-raised" 2>&1)
+check "products-abi: a raised number is refused" "$?:$out" "1:products-abi: $work/abi-standin-raised reads products of ABI $((abi_source + 1)), the source's PRODUCTS_ABI is $abi_source"
+out=$(env -u TEQ_PRODUCTS_ABI_BUMP timeout 60 bench/actions/products-abi.sh "$work/abi-standin-none" 2>&1)
+check "products-abi: a binary that prints no number is refused" "$?:${out%%:*}" "1:products-abi"
+has "products-abi: a binary that prints no number is refused, saying so" <(printf '%s\n' "$out") "prints no products ABI"
+out=$(TEQ_PRODUCTS_ABI_BUMP=1 timeout 60 bench/actions/products-abi.sh "$work/abi-standin-same" 2>&1)
+check "products-abi: TEQ_PRODUCTS_ABI_BUMP in the environment is refused" "$?:$out" "1:products-abi: TEQ_PRODUCTS_ABI_BUMP is set ('1'), which no release build takes"
+
 if python3 -c 'import yaml' 2> /dev/null; then
   shape=$(python3 - << 'PY'
 import re, yaml

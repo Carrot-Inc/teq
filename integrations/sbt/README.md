@@ -343,6 +343,12 @@ TEQ_COMPILER=1 sbt api/compile api/test        # or: sbt; set every teqCompiler 
   under the other toggle state empties the directory and starts afresh, since zinc deletes only
   the products its analysis registered and a products' manifest left in a directory scalac
   rewrote would be read by a teq downstream as teq's.
+- The products' number (from 1.0.3; docs/TOOLING.md, "The products' number"): a class directory
+  whose manifest names another `abi` than the binary's (`teq --version --verbose`; none is 0) is
+  emptied with zinc's analysis before the compile, which compiles the configuration afresh, whole
+  (on sbt 2 its compile cache may restore the binary's own products instead, its key holding the
+  binary's digest); an upstream project's directory of another number is its own compile's to
+  settle so, which sbt runs first, and a batch never passes one still of another number to teq.
 - A known limit: Java sources, which the toggle refuses with an error naming the files (teq
   reads Java class files only; set `teqCompiler := false` for such a project or move them to a
   project of their own).

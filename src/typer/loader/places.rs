@@ -553,7 +553,7 @@ impl<'a> Worker<'a> {
             Some(m) => m.clone(),
             None => {
                 // Read outside the lock; two workers that both missed read the same file.
-                let read = crate::products::Manifest::read(std::path::Path::new(&dir)).and_then(Result::ok).map(Arc::new);
+                let read = crate::products::Manifest::read(std::path::Path::new(&dir)).and_then(Result::ok).filter(crate::products::Manifest::of_this_abi).map(Arc::new);
                 self.with_loader(|w| w.loaded_mut().manifests.insert(cp.jar, read.clone()));
                 read
             }

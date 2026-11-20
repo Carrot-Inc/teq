@@ -2017,6 +2017,11 @@ fn slot(state: &State, key: &Key) -> Slot {
 /// test configurations it serves. A resident started fetches the artifacts its classpath lacks,
 /// telling `progress` of each.
 fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, String>, resident: &mut Option<Resident>, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, Failure>, Vec<String>) {
+    if resident.is_none() {
+        if let Err(e) = settle_classes_abi(export, key) {
+            return (Err(e.into()), Vec::new());
+        }
+    }
     let closure = export.closure(key);
     let notes = match generators::run(export, &closure, resident_classes(export, key), env) {
         Ok(notes) => notes,
@@ -2109,6 +2114,38 @@ fn memory(key: &Key, resident: &Resident) -> String {
 /// The class directory a resident writes, which a `classDirectory` key of a generator names.
 fn resident_classes(export: &Export, key: &Key) -> PathBuf {
     export.path(&export.classes(key))
+}
+
+/// The marker beside a JVM resident's class directory, `classes.abi`: the number of the products
+/// whose class files it holds (`products::ABI`), beside rather than inside it so that no class path
+/// holds it.
+fn classes_abi_marker(classes: &Path) -> PathBuf {
+    classes.with_file_name(format!("{}.abi", classes.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()))
+}
+
+/// Before a JVM resident starts: a class directory whose marker names another number of products,
+/// or none (a teq up to 0.1.11 wrote it), is emptied, so that no class file of another number is
+/// left beside the ones the resident writes, which deletes only those of its own earlier builds;
+/// then the marker names this one's.
+fn settle_classes_abi(export: &Export, key: &Key) -> Result<(), String> {
+    if export.projects.get(&key.project).is_none_or(|p| p.platform != Platform::Jvm) {
+        return Ok(());
+    }
+    let classes = resident_classes(export, key);
+    let marker = classes_abi_marker(&classes);
+    let ours = crate::products::ABI.to_string();
+    let read = std::fs::read_to_string(&marker).ok();
+    if read.as_deref().map(str::trim) == Some(ours.as_str()) {
+        return Ok(());
+    }
+    if classes.exists() {
+        log(&format!("emptying {}: its class files are of products ABI {}, this teq's are of {}", classes.display(), read.as_deref().map_or("0 (no marker)", str::trim), ours));
+        std::fs::remove_dir_all(&classes).map_err(|e| format!("cannot empty {}: {}", classes.display(), e))?;
+    }
+    if let Some(parent) = marker.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {}", parent.display(), e))?;
+    }
+    std::fs::write(&marker, format!("{}\n", ours)).map_err(|e| format!("cannot write {}: {}", marker.display(), e))
 }
 
 /// A diagnostic of `key`'s build shown on stderr (`render`), and recorded where the request names

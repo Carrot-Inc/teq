@@ -1,0 +1,325 @@
+#!/bin/bash
+# tests/products-abi.sh <teq N> <teq N+1> <teq 0.1.11> <out dir>: the readers of teq's products against products of
+# another number (docs/TOOLING.md, "The products' number"; src/products.rs, PRODUCTS_ABI). <teq N> is a build of the
+# tree, <teq N+1> the same tree built with TEQ_PRODUCTS_ABI_BUMP=1 (another target directory), <teq 0.1.11> a teq
+# that writes no `abi` field (the release, or a build of its commit), whose products are of number 0. Each binary
+# says its number on `--version --verbose` (`products ABI <n>`; none printed is 0).
+#
+# A cell per reader, writer and reading binary: a module `up` (three sources) written by the writer, read by the
+# reader through one of the compiler's own commands, from one working directory (the products name it). A reader of
+# the products' own number reads them: what it builds is byte for byte what 0.1.11 builds over 0.1.11's products,
+# but `teq-products.json`, which is compared without its `abi` and `identity` fields. A reader of another number
+# refuses them with the line of src/products.rs's REFUSAL, filled and checked whole on its stderr (or a session's
+# answer), and writes nothing; or, where the products are its own directory's, rebuilds: none of their entries
+# kept, the directory what a fresh build of the sources given writes, byte for byte, and a downstream build that
+# needs an entry not rebuilt fails. The cells:
+#   build      `compiler build --target jvm --classpath <up>` of a downstream module `down`
+#   check      `compiler check --classpath <up>` of `down`
+#   own        `compiler build --products <up> --classpath <up>` of one of up's sources (the module's own directory)
+#   removed    `compiler build --products <up> --removed <source>`, no sources
+#   watch      `compiler watch --check --classpath <up>` over `down`, its first build over the reader's own
+#              products, then up published again by the writer (a build answered), then by the reader again
+#   jar        a jar `-o` wrote (`Teq-Products-ABI` in its manifest; 0.1.11's has none) on the class path of `down`'s
+#              build: a library whoever wrote it, never refused for its writer
+#   products-jar  up's directory of products packaged as a jar (`teq-products.json` in it) on the class path: a
+#              library too
+#   whole      `compiler build --products <up>` with <up> off `--classpath`, over a directory the writer wrote with a
+#              user's files beside its products, of one source less: whatever the numbers, the old entries' files
+#              it does not write again gone, the user's kept, and a downstream build that names the dropped source's
+#              definition refused as scalac's separate compilation refuses it; its twin on `--classpath` where the
+#              numbers differ
+# Prints a line per cell (`products-abi: <cell> <writer> -> <reader>: <what it did>`, FAIL first where it is not
+# the rule's) and the counts; exits 1 on a failure. Each command is bounded (120 s; a session's answer 30 s).
+set -uo pipefail
+[ $# = 4 ] || { echo "usage: tests/products-abi.sh <teq N> <teq N+1> <teq 0.1.11> <out dir>" >&2; exit 2; }
+cd "$(dirname "$0")/.." || exit 1
+. tests/support/jars.sh
+SL=$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar
+[ -f "$SL" ] || { echo "FAIL products-abi: scala-library 3.8.4 is not in the coursier cache (incomplete validation)"; exit 1; }
+template=$(sed -n 's/^pub const REFUSAL: &str = "\(.*\)";$/\1/p' src/products.rs)
+[ -n "$template" ] || { echo "FAIL products-abi: src/products.rs holds no REFUSAL"; exit 1; }
+absolute() { (cd "$(dirname "$1")" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$1")"); }
+mkdir -p "$4" || exit 1
+out=$(cd "$4" && pwd -P)
+declare -A BIN=([N]=$(absolute "$1") [N1]=$(absolute "$2") [O]=$(absolute "$3"))
+declare -A ABI VERSION NAME=([N]="N" [N1]="N+1" [O]="0.1.11")
+for b in N N1 O; do
+  [ -x "${BIN[$b]}" ] || { echo "FAIL products-abi: ${BIN[$b]} is no binary"; exit 1; }
+  VERSION[$b]=$(timeout 30 "${BIN[$b]}" --version | awk '{ print $2 }')
+  ABI[$b]=$(timeout 30 "${BIN[$b]}" --version --verbose | sed -n 's/^products ABI \([0-9][0-9]*\)$/\1/p')
+  ABI[$b]=${ABI[$b]:-0}
+done
+pass=0
+fail=0
+ok() { pass=$((pass + 1)); echo "products-abi: $1"; }
+bad() { fail=$((fail + 1)); echo "FAIL products-abi: $1"; }
+# The numbers: N's the source's, N+1's one more, 0.1.11's 0, which N reads.
+if [ "${ABI[N1]}" = $((ABI[N] + 1)) ] && [ "${ABI[O]}" = 0 ] && [ "${ABI[N]}" = 0 ]; then
+  ok "the binaries read ABI ${ABI[N]} (N, teq ${VERSION[N]}), ${ABI[N1]} (N+1, teq ${VERSION[N1]}) and ${ABI[O]} (teq ${VERSION[O]}, which prints none)"
+else
+  bad "the binaries' numbers: N ${ABI[N]}, N+1 ${ABI[N1]}, 0.1.11 ${ABI[O]}: N+1 must be N's plus one, 0.1.11 and N 0"
+fi
+
+src=$out/src
+rm -rf "$src" "$out/cells" "$out/ref"
+mkdir -p "$src/up" "$src/down" "$out/cells" "$out/ref"
+printf '%s\n' 'package up' '' 'object U:' '  def answer: Int = 42' > "$src/up/U.scala"
+printf '%s\n' 'package up' '' 'object V:' '  def v: Int = 7' > "$src/up/V.scala"
+printf '%s\n' 'package up' '' '@main def upMain(): Unit = println(U.answer + V.v)' > "$src/up/M.scala"
+printf '%s\n' 'package down' '' '@main def run(): Unit = println(up.U.answer + up.V.v)' > "$src/down/D.scala"
+ups=(up/M.scala up/U.scala up/V.scala)
+
+# run <binary> <log> <args...>: the binary from the sources' directory, bounded, its stderr in <log>.
+run() { local b=$1 log=$2; shift 2; (cd "$src" && timeout 120 "${BIN[$b]}" "$@" > "$log.out" 2> "$log"); }
+# The line of REFUSAL filled: <manifest> <its number> <its writer> <reading binary> <directory or jar>.
+refusal() {
+  python3 - "$template" "$1" "$2" "$3" "${VERSION[$4]}" "${ABI[$4]}" "$5" <<'PY'
+import sys
+t, manifest, abi, writer, version, ours, place = sys.argv[1:]
+for k, v in (("manifest", manifest), ("abi", abi), ("writer", writer), ("version", version), ("ours", ours), ("dir", place)):
+    t = t.replace("{" + k + "}", v)
+print(t)
+PY
+}
+# The directories' files, byte for byte, but teq-products.json, whose texts are compared without `abi` and
+# `identity`: nothing when they are the same, else what differs.
+same_products() {
+  python3 - "$1" "$2" <<'PY'
+import json, os, sys
+def files(d):
+    out = {}
+    for base, _, names in os.walk(d):
+        for n in names:
+            p = os.path.join(base, n)
+            out[os.path.relpath(p, d)] = open(p, "rb").read()
+    return out
+a, b = files(sys.argv[1]), files(sys.argv[2])
+diff = sorted(set(a) ^ set(b)) + sorted(p for p in set(a) & set(b) if p != "teq-products.json" and a[p] != b[p])
+def manifest(text):
+    m = json.loads(text)
+    m.pop("identity", None)
+    m.pop("abi", None)
+    return m
+if "teq-products.json" in a and "teq-products.json" in b and manifest(a["teq-products.json"]) != manifest(b["teq-products.json"]):
+    diff.append("teq-products.json")
+print(" ".join(diff))
+PY
+}
+# The sources the manifest of a directory names, sorted, and its `abi` (absent: none).
+sources_of() { python3 -c 'import json, sys; m = json.load(open(sys.argv[1])); print(" ".join(sorted({e["source"] for e in m["products"]})), m.get("abi", "none"))' "$1/teq-products.json"; }
+nothing_in() { [ -z "$(find "$1" -type f 2> /dev/null)" ]; }
+# A refusal: the exit code not 0, the line whole on stderr, and nothing written into <dir>.
+refused() {
+  local what=$1 log=$2 code=$3 line=$4 dir=$5
+  if [ "$code" != 0 ] && grep -qxF -- "$line" "$log" && nothing_in "$dir"; then
+    ok "$what: refused (exit $code), the line whole, nothing written"
+  else
+    bad "$what: not refused with the line (exit $code; wanted '$line'; stderr: $(head -c 400 "$log"); written: $(find "$dir" -type f 2> /dev/null | head -3 | tr '\n' ' '))"
+  fi
+}
+# A read: exit 0, and what it wrote 0.1.11's over 0.1.11's products (<ref>).
+read_as_ref() {
+  local what=$1 log=$2 code=$3 dir=$4 ref=$5 differs
+  differs=$(same_products "$dir" "$ref")
+  if [ "$code" = 0 ] && [ -f "$dir/teq-products.json" ] && [ -z "$differs" ]; then
+    ok "$what: read, its products 0.1.11's byte for byte (the manifest without abi and identity)"
+  else
+    bad "$what: exit $code, differs from 0.1.11's in: ${differs:-nothing} (stderr: $(head -c 400 "$log"))"
+  fi
+}
+# up's products by <writer> into <dir>.
+write_up() { run "$1" "$2.log" compiler build --target jvm --products "$2" --classpath "$SL" "${ups[@]}"; }
+# The jar of up's products directory <dir>, its files in order.
+pack() {
+  python3 - "$1" "$2" <<'PY'
+import os, sys, zipfile
+d, jar = sys.argv[1:]
+with zipfile.ZipFile(jar, "w") as z:
+    for base, dirs, names in sorted(os.walk(d)):
+        for n in sorted(names):
+            p = os.path.join(base, n)
+            z.write(p, os.path.relpath(p, d))
+PY
+}
+
+# What each writer's products say of their number: 0.1.11's no field, N's and N+1's theirs.
+for w in O N N1; do
+  write_up "$w" "$out/cells/written-$w"
+  got=$(sources_of "$out/cells/written-$w")
+  want="up/M.scala up/U.scala up/V.scala $([ "$w" = O ] && echo none || echo "${ABI[$w]}")"
+  if [ "$got" = "$want" ]; then ok "written by ${NAME[$w]}: the manifest's abi is ${got##* }"; else bad "written by ${NAME[$w]}: $got, not $want"; fi
+done
+
+# The references: 0.1.11 reading 0.1.11's products, per cell.
+r=$out/ref
+write_up O "$r/up"
+run O "$r/build.log" compiler build --target jvm --products "$r/build" --classpath "$r/up:$SL" down/D.scala
+run O "$r/check.log" compiler check --products "$r/check" --classpath "$r/up:$SL" down/D.scala
+write_up O "$r/own"
+run O "$r/own-1.log" compiler build --target jvm --products "$r/own" --classpath "$r/own:$SL" up/U.scala
+write_up O "$r/removed"
+run O "$r/removed-1.log" compiler build --target jvm --products "$r/removed" --removed up/V.scala
+run O "$r/jar.log" compiler build --target jvm -o "$r/up.jar" --classpath "$SL" "${ups[@]}"
+run O "$r/jar-down.log" compiler build --target jvm --products "$r/jar" --classpath "$r/up.jar:$SL" down/D.scala
+pack "$r/up" "$r/up-products.jar"
+run O "$r/products-jar.log" compiler build --target jvm --products "$r/products-jar" --classpath "$r/up-products.jar:$SL" down/D.scala
+for d in build check own removed jar products-jar; do
+  [ -f "$r/$d/teq-products.json" ] || bad "the reference $d: 0.1.11 wrote no products (see $r/$d*.log)"
+done
+
+for reader in N N1; do
+  for writer in N O; do
+    pair="${NAME[$writer]} -> ${NAME[$reader]}"
+    same=$([ "${ABI[$writer]}" = "${ABI[$reader]}" ] && echo 1 || echo 0)
+    c=$out/cells/$writer-$reader
+    mkdir -p "$c"
+    writer_name="teq ${VERSION[$writer]}"
+
+    # build and check over the class path.
+    for cell in build check; do
+      write_up "$writer" "$c/up-$cell"
+      verb=(compiler build --target jvm)
+      [ $cell = check ] && verb=(compiler check)
+      run "$reader" "$c/$cell.log" "${verb[@]}" --products "$c/$cell" --classpath "$c/up-$cell:$SL" down/D.scala
+      code=$?
+      if [ "$same" = 1 ]; then read_as_ref "$cell $pair" "$c/$cell.log" $code "$c/$cell" "$r/$cell"
+      else refused "$cell $pair" "$c/$cell.log" $code "$(refusal "$c/up-$cell/teq-products.json" "${ABI[$writer]}" "$writer_name" "$reader" "$c/up-$cell")" "$c/$cell"; fi
+    done
+
+    # The module's own directory: one source rebuilt over it.
+    write_up "$writer" "$c/own"
+    run "$reader" "$c/own-1.log" compiler build --target jvm --products "$c/own" --classpath "$c/own:$SL" up/U.scala
+    code=$?
+    if [ "$same" = 1 ]; then
+      read_as_ref "own $pair" "$c/own-1.log" $code "$c/own" "$r/own"
+    else
+      run "$reader" "$c/own-fresh.log" compiler build --target jvm --products "$c/own-fresh" --classpath "$c/own-fresh:$SL" up/U.scala
+      differs=$(cd "$c" && diff -r own own-fresh 2>&1 | head -3)
+      run "$reader" "$c/own-down.log" compiler build --target jvm --products "$c/own-down" --classpath "$c/own:$SL" down/D.scala
+      down=$?
+      if [ $code = 0 ] && [ "$(sources_of "$c/own")" = "up/U.scala ${ABI[$reader]}" ] && [ -z "$differs" ] && [ $down != 0 ] && nothing_in "$c/own-down"; then
+        ok "own $pair: rebuilt, no entry kept: the directory a fresh build's of up/U.scala byte for byte, and down, which needs up.V, not built over it"
+      else
+        bad "own $pair: exit $code, the manifest names $(sources_of "$c/own"), against a fresh build: ${differs:-the same}; down over it exits $down (stderr: $(head -c 300 "$c/own-1.log"))"
+      fi
+    fi
+
+    # --removed alone.
+    write_up "$writer" "$c/removed"
+    cp -R "$c/removed" "$c/removed-before"
+    run "$reader" "$c/removed-1.log" compiler build --target jvm --products "$c/removed" --removed up/V.scala
+    code=$?
+    if [ "$same" = 1 ]; then
+      read_as_ref "removed $pair" "$c/removed-1.log" $code "$c/removed" "$r/removed"
+    else
+      line=$(refusal "$c/removed/teq-products.json" "${ABI[$writer]}" "$writer_name" "$reader" "$c/removed")
+      if [ $code != 0 ] && grep -qxF -- "$line" "$c/removed-1.log" && diff -r "$c/removed" "$c/removed-before" > /dev/null; then
+        ok "removed $pair: refused (exit $code), the line whole, the directory as it was"
+      else
+        bad "removed $pair: exit $code (wanted '$line'; stderr: $(head -c 400 "$c/removed-1.log"); unchanged: $(diff -rq "$c/removed" "$c/removed-before" > /dev/null && echo yes || echo no))"
+      fi
+    fi
+
+    # A jar `-o` wrote: a library whatever number it names (a published jar's user cannot rebuild it), read as
+    # scalac's; the attribute names the writer's number.
+    run "$writer" "$c/jar-up.log" compiler build --target jvm -o "$c/up.jar" --classpath "$SL" "${ups[@]}"
+    run "$reader" "$c/jar.log" compiler build --target jvm --products "$c/jar" --classpath "$c/up.jar:$SL" down/D.scala
+    code=$?
+    attribute=$(python3 -c 'import sys, zipfile; m = zipfile.ZipFile(sys.argv[1]).read("META-INF/MANIFEST.MF").decode(); print(next((l.split(": ", 1)[1] for l in m.split("\r\n") if l.startswith("Teq-Products-ABI: ")), "none"))' "$c/up.jar")
+    read_as_ref "jar $pair (Teq-Products-ABI: $attribute)" "$c/jar.log" $code "$c/jar" "$r/jar"
+    [ "$attribute" = "$([ "$writer" = O ] && echo none || echo "${ABI[$writer]}")" ] || bad "jar $pair: the jar ${NAME[$writer]} wrote names Teq-Products-ABI $attribute"
+
+    # A directory of products packaged as a jar: a library, its manifest unread.
+    write_up "$writer" "$c/up-packed"
+    pack "$c/up-packed" "$c/up-products.jar"
+    run "$reader" "$c/products-jar.log" compiler build --target jvm --products "$c/products-jar" --classpath "$c/up-products.jar:$SL" down/D.scala
+    code=$?
+    read_as_ref "products-jar $pair" "$c/products-jar.log" $code "$c/products-jar" "$r/products-jar"
+
+    # A session meeting a publication of the writer's: its first build over the reader's own products, then the
+    # writer's (a build answered), then the reader's again.
+    w=$c/watch
+    rm -rf "$w" && mkdir -p "$w"
+    write_up "$reader" "$w/up"
+    mkfifo "$w/cmd" "$w/ans"
+    (cd "$src" && exec timeout 120 "${BIN[$reader]}" compiler watch --check --classpath "$w/up:$SL" down/D.scala < "$w/cmd" > "$w/ans" 2> "$w/err") &
+    session=$!
+    exec 3> "$w/cmd" 4< "$w/ans"
+    answers=()
+    for step in first writer reader; do
+      case $step in
+        writer) write_up "$writer" "$w/up"; echo build >&3 ;;
+        reader) write_up "$reader" "$w/up"; echo build >&3 ;;
+      esac
+      answer=
+      read -r -t 30 answer <&4 || answer="(no answer in 30 s)"
+      answers+=("$answer")
+    done
+    echo quit >&3
+    exec 3>&- 4<&-
+    wait "$session" 2> /dev/null
+    rm -f "$w/cmd" "$w/ans"
+    line=$(refusal "$w/up/teq-products.json" "${ABI[$writer]}" "$writer_name" "$reader" "$w/up")
+    first_ok=$([[ "${answers[0]}" == '{"ok":true'* ]] && [[ "${answers[2]}" == '{"ok":true'* ]] && echo 1 || echo 0)
+    if [ "$same" = 1 ] && [ "$first_ok" = 1 ] && [[ "${answers[1]}" == '{"ok":true'* ]]; then
+      ok "watch $pair: the writer's publication read, each build answered ok"
+    elif [ "$same" = 0 ] && [ "$first_ok" = 1 ] && [[ "${answers[1]}" == '{"ok":false'* ]] && [[ "${answers[1]}" == *"\"message\":\"$line\""* ]]; then
+      ok "watch $pair: the writer's publication refused with the line whole, the reader's next one read"
+    else
+      bad "watch $pair: answers ${answers[*]} (stderr: $(head -c 300 "$w/err"); wanted the line '$line')"
+    fi
+  done
+done
+
+# The whole-module build, `--products P` with P off `--classpath`, over a directory another build wrote: it writes
+# the whole directory, so of the manifest already there (whatever its number) no entry stays, every file it lists that
+# the build does not write again goes, and a file it does not list (a user's) stays. Up's module is written by the
+# writer from M.scala (a top-level `fromM`) and U.scala, a user's files put beside them, then built again by the
+# reader from U.scala alone; a downstream build over P that names `fromM` then fails as scalac's separate compilation
+# fails ("value fromM is not a member of up"), and the user's files are as they were. Its twin with P on
+# `--classpath` (the own directory's route) of another number removes M's files too.
+ws=$out/whole-src
+rm -rf "$ws" "$out/whole"
+mkdir -p "$ws/up" "$ws/down" "$out/whole"
+printf '%s\n' 'package up' '' 'object U:' '  def answer: Int = 42' > "$ws/up/U.scala"
+printf '%s\n' 'package up' '' 'def fromM: Int = 5' > "$ws/up/M.scala"
+printf '%s\n' 'package down' '' '@main def run(): Unit = println(up.U.answer + up.fromM)' > "$ws/down/D.scala"
+wrun() { local b=$1 log=$2; shift 2; (cd "$ws" && timeout 120 "${BIN[$b]}" "$@" > "$log.out" 2> "$log"); }
+user_files() {
+  mkdir -p "$1/up" "$1/assets"
+  printf 'read me\n' > "$1/README.txt"
+  printf 'a note\n' > "$1/up/notes.txt"
+  printf 'not teq'"'"'s\n' > "$1/assets/Own.class"
+}
+users_kept() { [ "$(cat "$1/README.txt" 2> /dev/null)" = "read me" ] && [ "$(cat "$1/up/notes.txt" 2> /dev/null)" = "a note" ] && [ "$(cat "$1/assets/Own.class" 2> /dev/null)" = "not teq's" ]; }
+for pair in "N N" "O N" "N N1" "O N1"; do
+  read -r writer reader <<< "$pair"
+  for route in whole own; do
+    # The own directory's route keeps a retained entry of this number (a batch of some sources): its twin is
+    # judged where the numbers differ alone.
+    [ "$route" = own ] && [ "${ABI[$writer]}" = "${ABI[$reader]}" ] && continue
+    c=$out/whole/$writer-$reader-$route
+    mkdir -p "$c"
+    P=$c/P
+    what="$route ${NAME[$writer]} -> ${NAME[$reader]}"
+    wrun "$writer" "$c/write.log" compiler build --target jvm --products "$P" --classpath "$SL" up/M.scala up/U.scala
+    user_files "$P"
+    if [ "$route" = whole ]; then
+      wrun "$reader" "$c/again.log" compiler build --target jvm --products "$P" --classpath "$SL" up/U.scala
+    else
+      wrun "$reader" "$c/again.log" compiler build --target jvm --products "$P" --classpath "$P:$SL" up/U.scala
+    fi
+    again=$?
+    left=$(cd "$P" && find . -path './up/M*' -type f | sort | tr '\n' ' ')
+    listed=$(sources_of "$P" 2> /dev/null)
+    wrun "$reader" "$c/down.log" compiler build --target jvm --products "$c/D" --classpath "$c/D:$P:$SL" down/D.scala
+    down=$?
+    if [ "$again" = 0 ] && [ -z "$left" ] && [ "$listed" = "up/U.scala ${ABI[$reader]}" ] && [ "$down" != 0 ] && grep -q "value fromM is not a member of up" "$c/down.log" && users_kept "$P"; then
+      ok "$what: M's products gone, the manifest up/U.scala of ABI ${ABI[$reader]}, the user's files kept, and down refused: value fromM is not a member of up"
+    else
+      bad "$what: rebuilt exit $again, left '$left', manifest '$listed', down exit $down ($(grep -m1 -o 'error: .*' "$c/down.log")), user files kept: $(users_kept "$P" && echo yes || echo no)"
+    fi
+  done
+done
+echo "products-abi: $pass passed, $fail failed"
+[ $fail = 0 ]

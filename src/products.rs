@@ -17,6 +17,52 @@ use std::path::{Path, PathBuf};
 
 pub const MANIFEST: &str = "teq-products.json";
 
+/// The number of what products mean, which a manifest carries as its `abi` field and a jar `-o`
+/// writes as `Teq-Products-ABI` in its manifest: a reader of a directory of products takes only
+/// products of its own number (docs/TOOLING.md, "The products' number"); a jar is a library
+/// whatever it names, never refused for its writer. A manifest without the field is of number 0,
+/// which every teq up to 0.1.11 wrote. A change of what a product means raises it.
+pub const PRODUCTS_ABI: u32 = 0;
+
+/// The attribute of a jar's manifest that names the number of the products it holds: provenance,
+/// which no class path refuses a jar for.
+pub const JAR_ATTRIBUTE: &str = "Teq-Products-ABI";
+
+/// The number this binary writes and reads: `PRODUCTS_ABI`, raised by `TEQ_PRODUCTS_ABI_BUMP` where
+/// the build sets it (a second binary of one source, for tests/products-abi.sh; no release sets it,
+/// which bench/actions/products-abi.sh checks).
+pub const ABI: u32 = PRODUCTS_ABI + bump(option_env!("TEQ_PRODUCTS_ABI_BUMP"));
+
+const fn bump(value: Option<&str>) -> u32 {
+    let Some(text) = value else { return 0 };
+    let bytes = text.as_bytes();
+    let mut n = 0u32;
+    let mut i = 0;
+    while i < bytes.len() {
+        assert!(bytes[i].is_ascii_digit(), "TEQ_PRODUCTS_ABI_BUMP is not a number");
+        n = n * 10 + (bytes[i] - b'0') as u32;
+        i += 1;
+    }
+    n
+}
+
+/// The line a reader of products of another number ends with, located at their manifest: the
+/// manifest (`{manifest}`), the products' number and the teq that wrote them (`{abi}`, `{writer}`),
+/// this teq's version and number (`{version}`, `{ours}`), and what to build again (`{dir}`).
+pub const REFUSAL: &str = "error: {manifest}: these products are of ABI {abi} (written by {writer}); this teq ({version}) reads ABI {ours}: rebuild {dir} with this teq";
+
+/// `REFUSAL` filled: `writer` is what the manifest names its writer (`teq 0.1.11`, or `teq` where it
+/// names no version).
+pub fn refusal(manifest: &str, abi: u32, writer: &str, dir: &str) -> String {
+    REFUSAL
+        .replace("{manifest}", manifest)
+        .replace("{abi}", &abi.to_string())
+        .replace("{writer}", writer)
+        .replace("{version}", env!("CARGO_PKG_VERSION"))
+        .replace("{ours}", &ABI.to_string())
+        .replace("{dir}", dir)
+}
+
 /// One product: a `.tasty` and the class files of its classes, or class files of a source
 /// with no `.tasty` of their own (an entry point's launcher).
 #[derive(Clone)]
@@ -68,6 +114,10 @@ pub struct Manifest {
     pub std: Vec<String>,
     /// A manifest before the entries held their `inits`, read alone.
     pub legacy_inits: Vec<String>,
+    /// The products' number (`abi`; 0 where the manifest names none) and the version of the teq
+    /// that wrote them (`teq`), as read; a manifest written holds this binary's.
+    pub abi: u32,
+    pub writer: Option<String>,
 }
 
 /// Entries in a manifest's order: by source, then by `.tasty`, a source's launcher (no `.tasty`)
@@ -119,6 +169,7 @@ impl Manifest {
             .collect();
         let json = Json::Obj(vec![
             ("teq".to_string(), Json::Str(env!("CARGO_PKG_VERSION").to_string())),
+            ("abi".to_string(), Json::Num(ABI as f64)),
             ("target".to_string(), Json::Str(self.target.clone())),
             ("root".to_string(), Json::Str(self.root.clone())),
             ("products".to_string(), Json::Arr(entries)),
@@ -171,7 +222,25 @@ impl Manifest {
                 uses: strings(e, "uses"),
             })
             .collect();
-        Ok(Manifest { target, root, entries, std: strings(&json, "std"), legacy_inits: strings(&json, "inits") })
+        let abi = json.get("abi").map_or(Ok(0), |n| n.uint().ok_or_else(|| "the products' ABI (`abi`) is not a number".to_string()))?;
+        let writer = json.get("teq").and_then(Json::str).map(str::to_string);
+        Ok(Manifest { target, root, entries, std: strings(&json, "std"), legacy_inits: strings(&json, "inits"), abi, writer })
+    }
+
+    /// Whether the products are of this binary's number.
+    pub fn of_this_abi(&self) -> bool {
+        self.abi == ABI
+    }
+
+    /// The teq that wrote the products, as the refusal names it: `teq <version>`, or `teq` where
+    /// the manifest names no version.
+    pub fn writer_name(&self) -> String {
+        self.writer.as_deref().map_or("teq".to_string(), |v| format!("teq {}", v))
+    }
+
+    /// The refusal of the manifest of `dir`, products of another number.
+    pub fn refusal(&self, dir: &Path) -> String {
+        refusal(&dir.join(MANIFEST).display().to_string(), self.abi, &self.writer_name(), &dir.display().to_string())
     }
 }
 
@@ -267,6 +336,10 @@ impl Publication {
     fn unchanged_by_manifest(&self, dir: &Path) -> crate::intern::FxMap<String, ()> {
         let mut out = crate::intern::FxMap::default();
         let (Some(Ok(old)), Ok(new)) = (Manifest::read(dir), Manifest::parse(&self.manifest)) else { return out };
+        // Another number's digests are not taken: every file is compared with its bytes.
+        if !old.of_this_abi() {
+            return out;
+        }
         // An entry is known by its first file, which one product alone holds.
         let digests: crate::intern::FxMap<&str, &str> =
             old.entries.iter().filter_map(|e| e.files().next().map(|f| (f, e.digest.as_str()))).collect();
@@ -655,6 +728,31 @@ pub fn add_class_attributes(bytes: &[u8], attrs: &[(&str, &[u8])]) -> Result<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The products' number: a manifest without `abi` is of 0, one written holds this binary's beside
+    /// the writer's version, and the refusal is REFUSAL filled.
+    #[test]
+    fn products_abi() {
+        let old = Manifest::parse(r#"{"identity":"0","teq":"0.1.11","target":"jvm","root":"/w","products":[],"std":[]}"#).unwrap();
+        assert_eq!((old.abi, old.writer_name().as_str()), (0, "teq 0.1.11"));
+        assert_eq!(Manifest::parse(r#"{"abi":3,"products":[]}"#).unwrap().abi, 3);
+        assert!(Manifest::parse(r#"{"abi":"x","products":[]}"#).is_err());
+        let written = Manifest { target: "jvm".to_string(), root: "/w".to_string(), entries: Vec::new(), std: Vec::new(), legacy_inits: Vec::new(), abi: ABI, writer: None };
+        let text = written.to_json();
+        assert!(text.contains(&format!(r#""teq":"{}","abi":{},"target":"jvm""#, env!("CARGO_PKG_VERSION"), ABI)), "{}", text);
+        assert!(Manifest::parse(&text).unwrap().of_this_abi());
+        // The line is REFUSAL with each placeholder filled, whatever its wording: one line, none left.
+        let line = refusal("/w/core/teq-products.json", old.abi, &old.writer_name(), "/w/core");
+        let ours = ABI.to_string();
+        let filled = [("{manifest}", "/w/core/teq-products.json"), ("{abi}", "0"), ("{writer}", "teq 0.1.11"), ("{version}", env!("CARGO_PKG_VERSION")), ("{ours}", ours.as_str()), ("{dir}", "/w/core")]
+            .iter()
+            .fold(REFUSAL.to_string(), |t, (k, v)| {
+                assert!(REFUSAL.contains(k), "REFUSAL names no {}", k);
+                t.replace(k, v)
+            });
+        assert_eq!(line, filled);
+        assert!(!line.contains('\n') && !line.contains("{"), "{}", line);
+    }
 
     /// FNV-1a's 64-bit test vectors: a fingerprint is persisted in the manifest.
     #[test]

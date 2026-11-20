@@ -9,6 +9,7 @@
 # printed, the first failure ending the run:
 #   - the machine is the classifier's natively (no Rosetta on an Intel Mac's job; Git's bash on Windows);
 #   - the binary is its manifest's (the digest), built from the checkout's commit, and prints the manifest's version;
+#   - it reads products of the source's number (bench/actions/products-abi.sh: TEQ_PRODUCTS_ABI_BUMP raised it in no build);
 #   - macOS arm64: its ad hoc signature verifies (codesign --verify --strict), as the linker made it;
 #   - tests/run.sh on the binary: every case passes and none is skipped for missing jars (the jars fetched by their
 #     coordinates and the built ones restored from the reference's, bench/actions/jars.sh); the cases of the JVM's
@@ -66,6 +67,9 @@ sha=$(manifest_sha256 "$binary")
 version=$(timeout 30 "$binary" --version | tr -d '\r') || fail "the binary does not run here"
 [ "$version" = "$(manifest_get "$manifest" version)" ] || fail "the binary prints '$version', its manifest says '$(manifest_get "$manifest" version)'"
 say "the binary $sha, '$version', runs"
+# The number of the products it reads, the source's: no build raised it (bench/actions/products-abi.sh).
+abi=$(timeout 60 bench/actions/products-abi.sh "$binary") || fail "$abi"
+say "${abi#products-abi: }"
 
 if [ "${classifier#windows-}" != "$classifier" ]; then
   TEQ_EXE=$binary timeout 2400 tests/windows.sh 2>&1 | tee out/qualify/$classifier.smoke | tee -a "$report"

@@ -296,7 +296,9 @@ impl Classpath {
                     // The own directory: its retained entries' files alone, nothing without a
                     // manifest.
                     Some(o) => {
-                        let retained: Vec<bool> = manifest.as_ref().map_or(Vec::new(), |m| m.entries.iter().map(|e| !o.dropped.contains(&entry_source(m, &e.source))).collect());
+                        // Products of another number: none of their entries is kept, every file
+                        // the build does not write again goes (`products_publication`).
+                        let retained: Vec<bool> = manifest.as_ref().map_or(Vec::new(), |m| m.entries.iter().map(|e| m.of_this_abi() && !o.dropped.contains(&entry_source(m, &e.source))).collect());
                         let kept: FxMap<&str, ()> = manifest.iter().flat_map(|m| m.entries.iter().zip(&retained).filter(|(_, &r)| r).flat_map(|(e, _)| e.files())).map(|f| (f, ())).collect();
                         files.retain(|f| kept.contains_key(f.as_str()));
                         if let Some(m) = &manifest {
@@ -308,6 +310,9 @@ impl Classpath {
                     }
                     None => {
                         if let Some(manifest) = manifest {
+                            if !manifest.of_this_abi() {
+                                return Err(manifest.refusal(&root));
+                            }
                             cp.products[j] = true;
                             js_products = manifest.target == "js";
                             cp.product_inits.extend(manifest.inits().map(|n| (n.clone(), ())));

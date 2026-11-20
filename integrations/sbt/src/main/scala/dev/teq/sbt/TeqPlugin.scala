@@ -381,6 +381,9 @@ object TeqPlugin extends AutoPlugin {
     teqCompilerCommand := compilerCommand.value,
     Compat.uncached(compileIncremental, incremental),
     Compat.uncached(compile / compileInputs, compileInputsWithTeq),
+    // The products manifest is the class directory's state, not the library's: a jar is read as a
+    // library whoever wrote it, and the manifest stays out of the one `packageBin` writes.
+    packageBin / mappings ~= (_.filterNot(_._2 == TeqCompile.manifestName)),
   ) ++ Compat.compileInputsSettings
 
   /** zinc's incremental compile, and under `teqCompiler` the manifest of the products reconciled after it. */
@@ -400,12 +403,14 @@ object TeqPlugin extends AutoPlugin {
       val cmd = teqCompilerCommand.value
       TeqCompile.refuseJava(cmd.sources)
       TeqCompile.Marker.check(classDirectory.value, compileAnalysisFile.value, teq = true, streams.value.log)
+      val afresh = TeqCompile.Abi.check(classDirectory.value, compileAnalysisFile.value, cmd.abi, streams.value.log)
       val journal = new TeqCompile.Journal(cmd.classes)
       val compilers = inputs.compilers.withScalac(new TeqCompile.Compiler(cmd, inputs.compilers.scalac, journal))
       val setup = inputs.setup
         .withIncrementalCompilerOptions(TeqCompile.withJournal(inputs.setup.incrementalCompilerOptions, journal))
         .withExtra(inputs.setup.extra :+ pair("teq", cmd.identity))
-      inputs.withCompilers(compilers).withSetup(setup)
+      val withTeq = inputs.withCompilers(compilers).withSetup(setup)
+      if (afresh) TeqCompile.Abi.afresh(withTeq) else withTeq
     }
     else {
       val inputs = (compile / compileInputs).value
@@ -433,7 +438,7 @@ object TeqPlugin extends AutoPlugin {
     val classpath = dependencyClasspath.value.map(entry => Compat.file(entry.data, converter))
     val identity = (Seq(binaryDigest(binary), if (jvm) "jvm" else "check") ++ flags).mkString(" ")
     val argsPlace = ArgsFile.of(baseDirectory.value, configuration.value.name, "batch")
-    TeqCompile.Command(teq, root, classDirectory.value, check = !jvm, Compat.platform.value, threads ++ flags, sources.value, classpath, identity, argsPlace)
+    TeqCompile.Command(teq, root, classDirectory.value, check = !jvm, Compat.platform.value, threads ++ flags, sources.value, classpath, identity, argsPlace, binaryAbi(binary))
   }
 
   private def pair(key: String, value: String): xsbti.T2[String, String] = new xsbti.T2[String, String] {
@@ -468,6 +473,14 @@ object TeqPlugin extends AutoPlugin {
   }
 
   private val versions = new java.util.concurrent.ConcurrentHashMap[(String, Long, Long), String]()
+  private val abis = new java.util.concurrent.ConcurrentHashMap[(String, Long, Long), Integer]()
+
+  /** The number of the products the binary reads, from `teq --version --verbose`, once per binary (path, size,
+    * modification time): 0 for a binary that prints none (`TeqCompile.Abi`). */
+  private def binaryAbi(binary: File): Int = {
+    val key = (binary.getPath, binary.length, binary.lastModified)
+    abis.computeIfAbsent(key, _ => Integer.valueOf(try TeqCompile.Abi.ofVersion(Process(Seq(binary.getPath, "--version", "--verbose")).!!.split("\n").toSeq) catch { case _: Exception => 0 })).intValue
+  }
 
   /** What the binary prints to `--version`, once per binary (path, size, modification time). */
   private def binaryVersion(binary: File): String = {

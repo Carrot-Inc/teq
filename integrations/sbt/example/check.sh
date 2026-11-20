@@ -377,6 +377,8 @@ for c in sources javadoc test-sources; do
   [ -n "$jar" ] && [ ! -e "${jar%.jar}-$c.jar" ] && python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1], "w").close()' "${jar%.jar}-$c.jar" && controls+=("${jar%.jar}-$c.jar")
 done
 if [ -f "$jar" ] && unzip -l "$jar" | grep -q "meridian/server/Main.class"; then echo "compiler: the jar packageBin answers holds the classes, its siblings beside it"; else echo "FAIL compiler: no jar with the classes at '$jar' (see $sbtlog)"; status=1; fi
+# The class directory's products manifest stays out of the jar: a jar is a library, read as scalac's whoever wrote it.
+if [ -f "$jar" ] && ! unzip -l "$jar" | grep -q "teq-products.json"; then echo "compiler: the jar packageBin answers holds no products manifest"; else echo "FAIL compiler: teq-products.json in the jar '$jar' (see $sbtlog)"; status=1; fi
 rm -f "${controls[@]}"
 # A body edit of a small file: the second compile is a retype.
 edited=src/api/business/ServiceError.scala
@@ -774,6 +776,34 @@ if ! client sjsapp/test && has_output "CoreSuite.scala:8" && has_output "values 
 if ! client jvmapp/test && has_output "CoreSuite.scala:8" && has_output "values are not the same"; then echo "upstream inline: and jvmapp's"; else echo "FAIL upstream inline: jvmapp (see $sbtlog)"; status=1; fi
 cp target-core.bak $core
 expect_ok "sjsapp/test; jvmapp/test" "upstream inline: the body taken back"
+# The products' number (docs/TOOLING.md, "The products' number"), the binary's as `--version --verbose` prints it:
+# a class directory whose manifest names another (here 99, the manifest edited, one binary throughout) is emptied
+# with its analysis and compiled afresh, every source in one batch, or, on sbt 2, restored by its compile cache,
+# whose key holds the binary's digest: either way the directory holds the binary's own products again. An upstream
+# project's directory of another, jvmcore's under jvmapp's test compile, is settled so by jvmcore's own compile,
+# which runs first, and jvmapp's batch never meets it as it was.
+abi=$("$TEQ" --version --verbose | sed -n 's/^products ABI //p')
+abi=${abi:-0}
+set_abi() { python3 -c 'import json, sys; f = sys.argv[1]; m = json.load(open(f)); m["abi"] = int(sys.argv[2]); open(f, "w").write(json.dumps(m, separators=(",", ":")))' "$1/teq-products.json" "$2"; }
+abi_in() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("abi", 0))' "$1/teq-products.json" 2> /dev/null || echo none; }
+jvmcore_classes=target/out/jvm/scala-3.8.4/jvmcore/classes
+sources_of_core=$(find sjscore-src -name '*.scala' | wc -l | tr -d ' ')
+afresh_or_restored() { [ -z "$(batches)" ] || [[ "$(batches)" == "teq: $sources_of_core source$([ "$sources_of_core" = 1 ] || echo s) of classes;"* ]]; }
+expect_ok jvmcore/compile "products' number: jvmcore compiled"
+set_abi $jvmcore_classes 99
+if client jvmcore/compile && has_output "teq: $(cd $jvmcore_classes && pwd) holds products of ABI 99" && has_output "teq compiles it afresh" &&
+  afresh_or_restored && [ "$(abi_in $jvmcore_classes)" = "$abi" ] && [ -f $jvmcore_classes/core/Core.class ]; then
+  echo "products' number: a class directory of ABI 99 is emptied and holds the binary's products again, of ABI $abi ($( [ -z "$(batches)" ] && echo "restored by sbt's compile cache" || echo "compiled afresh: $(batches)"))"
+else
+  echo "FAIL products' number: the own class directory of ABI 99 (batches $(batches); manifest $(abi_in $jvmcore_classes); see $sbtlog)"; status=1
+fi
+set_abi $jvmcore_classes 99
+if client jvmapp/Test/compile && has_output "teq: $(cd $jvmcore_classes && pwd) holds products of ABI 99" && afresh_or_restored &&
+  [ "$(abi_in $jvmcore_classes)" = "$abi" ] && ! has_output "compile the project of"; then
+  echo "products' number: an upstream directory of ABI 99 is settled by its project's compile first ($( [ -z "$(batches)" ] && echo "restored by sbt's compile cache" || echo "$(batches)")), then the downstream compiles over it"
+else
+  echo "FAIL products' number: the upstream directory of ABI 99 (batches $(batches); manifest $(abi_in $jvmcore_classes); see $sbtlog)"; status=1
+fi
 for side in sjs jvm; do
   if [ $side = sjs ]; then up=sjscore; down=sjsapp; dir=target/out/sjs1/scala-3.8.4/sjscore/classes/core; ir=Core.sjsir; total=3
   else up=jvmcore; down=jvmapp; dir=target/out/jvm/scala-3.8.4/jvmcore/classes/core; ir=Core.tasty; total=2; fi

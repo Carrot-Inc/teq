@@ -32,6 +32,18 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   class of one name, and one class declared by two Java sources, are refused as scalac refuses them ("J clashes
   with class J", "J is already defined as object J"); until now a directory's Java source was dropped and the
   Scala class taken.
+- A module's products carry the number of what they mean, the products ABI (`abi` in `teq-products.json`, 0 where a
+  manifest names none, as 0.1.11's; `Teq-Products-ABI` in a jar `-o` writes; `teq --version --verbose` prints the
+  binary's), and a teq reads only products of its own: a class path directory of another number is refused with one
+  line naming both numbers and what to rebuild, a build over its own `--products` directory of another number
+  rebuilds it keeping none of its entries, and the build tool empties a resident's class directory of another number.
+  A whole-module build (`--products` with the directory off `--classpath`) removes every file the directory's
+  manifest lists that it does not write again, whatever the number: a removed source's products no longer stay
+  beside the new ones, unlisted, for a downstream build to read.
+  A library jar is never refused for its writer: a jar is read as scalac's whoever wrote it. The sbt plugin, sbt-teq
+  1.0.3 with this release, compiles a class directory of another number afresh, passes no upstream one of another
+  number to teq, and leaves `teq-products.json` out of the jars it packages. This release's number is 0: 0.1.11's
+  products read as before.
 
 ## 0.1.11 (2026-11-20)
 

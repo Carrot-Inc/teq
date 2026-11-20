@@ -169,6 +169,13 @@ holds scalac's output on that major (`run_jvm.sh`'s header). `tests/all.sh` keep
 under `out/all/`. `bench/budget.sh` and `tests/runtime.sh` skip on any machine but the one that recorded their
 budgets.
 
+The readers of a module's products against products of another number (docs/TOOLING.md, "The products' number") are
+`tests/products-abi.sh <teq N> <teq N+1> <teq 0.1.11> <out dir>`, which no suite runs since it takes three binaries:
+the tree's build, the tree built again with `TEQ_PRODUCTS_ABI_BUMP=1` into another target directory (the variable
+raises `PRODUCTS_ABI` at compile time; no release build sets it, which every qualification checks), and a teq that
+writes no number (0.1.11, or a build of its commit). A change that raises the number runs it with the previous
+release as the third binary.
+
 `tests/semanticdb` is the SemanticDB oracle of `teq fix`'s forms: `harness.py --regen` records scalac 3.8.4's
 `-Xsemanticdb` documents of each group of its corpus as golds, `--check` holds the manifest and the golds to each other,
 `--self-test` proves the comparison refuses damaged documents, and `--teq <binary>` compares teq's documents
@@ -785,7 +792,8 @@ pinned by its commit. The order:
    cache to hold. The ship's `no-threads` step checks the build without the `threads` feature.
 3. **The qualification**, each binary on its platform as soon as its build made it (`bench/actions/qualify.sh`
    on the build's own products; the five builds are jobs of their own, `build-linux-x64`, `build-linux-arm64`,
-   `build-macos-arm64`, `build-macos-x64` and `build-windows`, each uploading its binary with its manifest):
+   `build-macos-arm64`, `build-macos-x64` and `build-windows`, each uploading its binary with its manifest; each
+   binary's products number the source's, `bench/actions/products-abi.sh`):
    `qualify-macos-arm64` (its signature verified), `qualify-macos-x64`, `qualify-linux-arm64` and
    `qualify-linux-x64` run `tests/run.sh` with no case skipped and the POSIX launcher's cold and warm fetch and its
    refusal of another sha1, the first three `tests/support/identity.sh --compare` against the reference too, which

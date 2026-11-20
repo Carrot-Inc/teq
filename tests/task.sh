@@ -539,6 +539,54 @@ task stop > /dev/null
 out=$(ulimit -v 8000000 && TEQ_THREADS=2 task compile core)
 if [ $? = 0 ] && [[ "$out" == *"teq: core: no memory mapping for the type store's overlays; one worker types the build"* ]]; then pass "a refused mapping's note reaches the client"; else fail "the refused mapping's note: $out"; fi
 task stop > /dev/null
+# The number of the products a resident's class directory holds, in the marker beside it (classes.abi): a resident
+# about to start empties a directory whose marker names another number, or none (a teq up to 0.1.11 wrote it).
+abi=$("$TEQ" --version --verbose | sed -n 's/^products ABI //p')
+classes=$b/target/teq/app/test/classes
+if [ -n "$abi" ] && [ "$(cat "$classes.abi" 2> /dev/null)" = "$abi" ]; then pass "the resident's class directory is marked with the products' number, $abi"; else fail "the class directory's marker: $(cat "$classes.abi" 2> /dev/null) (the binary's number: $abi)"; fi
+for marker in 99 none; do
+  mkdir -p "$classes/stale" && echo stale > "$classes/stale/Old.class"
+  if [ $marker = none ]; then rm -f "$classes.abi"; else echo $marker > "$classes.abi"; fi
+  out=$(task compile app)
+  if [ $? = 0 ] && [ ! -e "$classes/stale/Old.class" ] && [ "$(cat "$classes.abi" 2> /dev/null)" = "$abi" ] && [ -f "$classes/app/Main.class" ] && [ -f "$classes/core/Core\$.class" ] &&
+    grep -qF "emptying $classes: its class files are of products ABI $([ $marker = none ] && echo "0 (no marker)" || echo $marker)" "$b/target/teq/task.log"; then
+    pass "a class directory marked $marker is emptied before the resident starts, the class files written again and the marker this teq's"
+  else
+    fail "the class directory marked $marker: $out ($(ls "$classes" | tr '\n' ' '); marker $(cat "$classes.abi" 2> /dev/null))"
+  fi
+  task stop > /dev/null
+done
+# Across a bump, where TEQ_BUMPED names the same tree built with TEQ_PRODUCTS_ABI_BUMP (tests/products-abi.sh's N+1):
+# its compile empties the directory this teq's resident wrote and writes it again under its own number, its second
+# compile is incremental (up to date, nothing emptied), and this teq's next compile empties it back.
+if [ -n "${TEQ_BUMPED:-}" ]; then
+  bumped=$("$TEQ_BUMPED" --version --verbose | sed -n 's/^products ABI //p')
+  log=$b/target/teq/task.log
+  emptied() { grep -cF "emptying $classes: its class files are of products ABI $1" "$log" 2> /dev/null; }
+  before=$(emptied "$abi")
+  out=$( (cd "$b" && timeout 150 "$TEQ_BUMPED" compile app 2>&1) )
+  code=$?
+  if [ $code = 0 ] && [ "$bumped" = $((abi + 1)) ] && [ "$(cat "$classes.abi" 2> /dev/null)" = "$bumped" ] && [ "$(emptied "$abi")" = $((before + 1)) ] &&
+    [ -f "$classes/app/Main.class" ] && [ -f "$classes/core/Core\$.class" ]; then
+    pass "across a bump: the resident of ABI $bumped empties the class directory of ABI $abi, writes it again and marks it $bumped"
+  else
+    fail "across a bump: exit $code: $out (marker $(cat "$classes.abi" 2> /dev/null), emptied $(emptied "$abi") after $before)"
+  fi
+  out=$( (cd "$b" && timeout 150 "$TEQ_BUMPED" compile app 2>&1) )
+  if [ $? = 0 ] && [ "$(untold <<< "$out")" = "app: up to date" ] && [ "$(emptied "$abi")" = $((before + 1)) ] && [ "$(emptied "$bumped")" = 0 ]; then
+    pass "across a bump: the second compile is incremental, up to date and nothing emptied"
+  else
+    fail "across a bump, the second compile: $out (emptied of $bumped: $(emptied "$bumped"))"
+  fi
+  (cd "$b" && timeout 30 "$TEQ_BUMPED" stop > /dev/null 2>&1)
+  out=$(task compile app)
+  if [ $? = 0 ] && [ "$(cat "$classes.abi" 2> /dev/null)" = "$abi" ] && [ "$(emptied "$bumped")" = 1 ]; then
+    pass "across a bump back: this teq empties the directory of ABI $bumped and marks it $abi"
+  else
+    fail "across a bump back: $out (marker $(cat "$classes.abi" 2> /dev/null))"
+  fi
+  task stop > /dev/null
+fi
 
 # `test`: app's munit suites on the daemon's runner, a JVM for each run, the next started once a run ends.
 runner_pid() { pgrep -f "$b/target/teq/app/test/runner.args" | head -1; }

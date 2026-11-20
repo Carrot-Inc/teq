@@ -115,8 +115,8 @@ only_suite() { [ "$only" = linux-arm-suite ]; }
 . bench/ship-manifest.sh
 . bench/ship-release.sh
 fail() { echo "ship: $*"; exit 1; }
-# The canonical route: no flags, profile, qemu or revision of the caller's reach the builds.
-unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS TEQ_CROSS_PROFILE TEQ_CROSS_NAME TEQ_CROSS_QEMU TEQ_CROSS_METADATA TEQ_CROSS_KEEP_DEAD TEQ_STAGE_PLAIN TEQ_REVISION TEQ TEQ_TEST_OUT TEQ_TEST_TIMEOUT TEQ_PGO_RUN_BOUND
+# The canonical route: no flags, profile, qemu, revision or products number of the caller's reach the builds.
+unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS TEQ_CROSS_PROFILE TEQ_CROSS_NAME TEQ_CROSS_QEMU TEQ_CROSS_METADATA TEQ_CROSS_KEEP_DEAD TEQ_STAGE_PLAIN TEQ_REVISION TEQ TEQ_TEST_OUT TEQ_TEST_TIMEOUT TEQ_PGO_RUN_BOUND TEQ_PRODUCTS_ABI_BUMP
 # The jars of the corpus and the suites, where coursier keeps them on Linux unless told otherwise
 # (tests/support/jars.sh defaults to the Mac's place).
 export COURSIER_CACHE=${COURSIER_CACHE:-$HOME/.cache/coursier/v1}

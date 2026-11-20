@@ -10,7 +10,7 @@ import sbt.*
 import sbt.internal.inc.CompileFailed
 import sbt.util.Logger
 import xsbti.{AnalysisCallback, FileConverter, Position, Problem, Reporter, Severity, VirtualFile}
-import xsbti.compile.{ClassFileManager, ClasspathOptions, CompileProgress, DependencyChanges, ExternalHooks, IncOptions, Output, ScalaCompiler, ScalaInstance}
+import xsbti.compile.{ClassFileManager, ClasspathOptions, CompileAnalysis, CompileProgress, DependencyChanges, ExternalHooks, IncOptions, Inputs, MiniSetup, Output, PreviousResult, ScalaCompiler, ScalaInstance}
 
 import dev.teq.sbt.{ArgsFile, Json}
 
@@ -43,13 +43,63 @@ object TeqCompile {
         throw new MessageOnlyException(s"teq: $file is a products manifest of format ${other.str}, which teq ${Option(m("teq").str).filter(_.nonEmpty).getOrElse("(unknown)")} wrote and this sbt-teq does not read (it reads format $manifestFormat): use the sbt-teq that release names, or a teq that writes format $manifestFormat")
     }
 
+  /** The number of what teq's products mean (docs/TOOLING.md, "The products' number"), which a manifest carries as
+    * its `abi` field, 0 where it names none (a teq up to 0.1.11): the binary reads only products of its own number,
+    * which `teq --version --verbose` prints (`products ABI <n>`; a binary that prints none is of 0). A class
+    * directory of another number is compiled afresh, whole (`check`), before zinc's run; an upstream project's
+    * directory is its own project's to compile afresh, which sbt runs first, and one still of another number is
+    * never passed to teq (`refuseUpstream`). */
+  object Abi {
+    /** The number of the products manifest `m`. */
+    def of(m: Json.Value): Int = m("abi") match {
+      case Json.Num(n) => n.toIntOption.getOrElse(-1)
+      case _ => 0
+    }
+
+    /** The number of the products `dir` holds, and the teq that wrote them, where it holds a manifest. */
+    def in(dir: File): Option[(Int, String)] = {
+      val f = dir / manifestName
+      if (!f.isFile) None
+      else scala.util.Try(Json.parse(IO.read(f))).toOption.map(m => (of(m), Option(m("teq").str).filter(_.nonEmpty).fold("teq")("teq " + _)))
+    }
+
+    /** The binary's number, from what `teq --version --verbose` printed. */
+    def ofVersion(lines: Seq[String]): Int =
+      lines.iterator.map(_.trim).collectFirst { case l if l.startsWith("products ABI ") => l.stripPrefix("products ABI ").toIntOption }.flatten.getOrElse(0)
+
+    /** Before a compile: a class directory of products of another number than the binary's is emptied, with
+      * zinc's analysis; whether it was, for the compile to take no previous analysis (`afresh`), which sbt keeps
+      * in memory past its file, so that zinc compiles every source of the configuration. */
+    def check(classes: File, analysisFile: File, abi: Int, log: Logger): Boolean =
+      in(classes).filter(_._1 != abi) match {
+        case Some((n, writer)) =>
+          log.info(s"teq: $classes holds products of ABI $n (written by $writer), this teq reads ABI $abi; teq compiles it afresh")
+          IO.delete(classes)
+          IO.delete(analysisFile)
+          true
+        case None => false
+      }
+
+    /** zinc's inputs without a previous analysis: a compile of every source. */
+    def afresh(inputs: Inputs): Inputs =
+      inputs.withPreviousResult(PreviousResult.of(Optional.empty[CompileAnalysis](), Optional.empty[MiniSetup]()))
+
+    /** Before a batch: an upstream directory of products of another number is refused, never read by teq; its
+      * project's compile, which sbt runs before this one, compiles it afresh (`check`). */
+    def refuseUpstream(entries: Seq[File], classes: File, abi: Int): Unit =
+      for (entry <- entries if entry.isDirectory && entry.getAbsoluteFile != classes.getAbsoluteFile; (n, writer) <- in(entry) if n != abi)
+        throw new MessageOnlyException(
+          s"teq: ${entry / manifestName} holds products of ABI $n (written by $writer), this teq reads ABI $abi: compile the project of $entry first")
+  }
+
   /** One configuration's compile: the binary, the directory it runs in (the build's root, the
     * answer's paths relative to it), the class directory, whether it is a Scala.js project's
     * check (and its platform, which picks the TASTy jars it reads), the flags of the
     * configuration (its workers, its cacheable state and macro state, the scalac options it
     * maps), the configuration's current sources, its class path for the manifest's own
-    * operation, the identity that the setup and the cache carry, and where the argument file
-    * each process starts with goes (`ArgsFile`). */
+    * operation, the identity that the setup and the cache carry, where the argument file
+    * each process starts with goes (`ArgsFile`), and the number of the products the binary
+    * reads (`Abi`). */
   final case class Command(
       teq: String,
       root: File,
@@ -61,6 +111,7 @@ object TeqCompile {
       classpath: Seq[File],
       identity: String,
       argsPlace: ArgsFile.Place,
+      abi: Int = 0,
   ) {
     def build: Seq[String] =
       Seq("compiler") ++ (if (check) Seq("check") else Seq("build", "--target", "jvm", "--std=scala-library")) ++ Seq("--products", classes.getAbsolutePath)
@@ -136,6 +187,7 @@ object TeqCompile {
       refuseJava(files)
       val entries = classpath.toSeq.map(f => converter.toPath(f).toFile).filter(cmd.reads)
       val classes = cmd.classes.getAbsoluteFile
+      Abi.refuseUpstream(entries, classes, cmd.abi)
       val path = (classes +: entries.filterNot(_.getAbsoluteFile == classes)).map(_.getAbsolutePath).distinct
       val command = Seq(cmd.teq) ++ cmd.build ++ Seq("--classpath", path.mkString(File.pathSeparator), "--sourceroot", cmd.root.getAbsolutePath,
         "--analysis-version", TeqAnalysis.version.toString) ++ removed(cmd).flatMap(Seq("--removed", _)) ++ cmd.flags ++ files.map(_.getAbsolutePath)
@@ -225,6 +277,7 @@ object TeqCompile {
   def reconcile(cmd: Command, log: Logger): Unit = {
     val gone = removed(cmd)
     if (gone.nonEmpty) {
+      Abi.refuseUpstream(cmd.classpath.filter(cmd.reads), cmd.classes, cmd.abi)
       val path = (cmd.classes +: cmd.classpath.filter(cmd.reads)).map(_.getAbsolutePath).distinct
       val command = Seq(cmd.teq) ++ cmd.build ++ Seq("--classpath", path.mkString(File.pathSeparator), "--sourceroot", cmd.root.getAbsolutePath,
         "--analysis-version", TeqAnalysis.version.toString) ++ gone.flatMap(Seq("--removed", _)) ++ cmd.flags

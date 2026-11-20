@@ -7,7 +7,7 @@
 //! source file stands behind, which teq writes for the program, such as `scala.Tuple23`), its
 //! resource directories, and a manifest with the export's attributes, `Main-Class` among the
 //! staged project's own where the build did not set `Compile / mainClass` to `None`, as
-//! `packageBin` writes it; the script runs the main class over the jars in the classpath's
+//! `packageBin` writes it, and the number of teq's products (`Teq-Products-ABI`); the script runs the main class over the jars in the classpath's
 //! order, with `JAVA_OPTS`. The main class is the daemon's: the block's, which the build declared,
 //! else the one the products imply as `run` implies it. What the stage held before and
 //! the mappings no longer name is removed, as native-packager's own stage starts afresh. The
@@ -93,6 +93,9 @@ fn stage_one(export: &Export, name: &str, mapping: &Mapping, target: &Path, clas
             if own && in_manifest && !attributes.iter().any(|(k, _)| k == "Main-Class") {
                 attributes.push(("Main-Class".to_string(), main_class.to_string()));
             }
+            // The class files are teq's products: the jar names their number, as one `-o` writes.
+            attributes.retain(|(k, _)| k != crate::products::JAR_ATTRIBUTE);
+            attributes.push((crate::products::JAR_ATTRIBUTE.to_string(), crate::products::ABI.to_string()));
             write_if_changed(target, &jar(&attributes, &entries)?)
         }
         Staged::Script { classpath } => {

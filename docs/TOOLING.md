@@ -112,6 +112,24 @@ one names the first plugin that serves it here, and refuses an older plugin's re
 plugin refuses an analysis or a products manifest of a version it does not read before it touches the class
 directory.
 
+**The products' number.** What a module's products mean (the class files, the TASTy and `teq-products.json` that
+`--products` writes) has a number of its own, the products ABI, which `teq --version --verbose` prints (`products
+ABI <n>`) and the manifest carries as its `abi` field; a manifest without it, as every teq up to 0.1.11 wrote it, is
+of number 0. A release that changes what products mean raises it, and a teq reads only products of its own number:
+a directory of another on `--classpath` is refused with one line at its manifest, `error: <dir>/teq-products.json: these products are of ABI <n> (written by teq <version>); this teq
+(<version>) reads ABI <m>: rebuild <dir> with this teq`; a build over its own `--products` directory of another
+number keeps none of its entries, every file it does not write again removed, and `--removed` alone over one is
+refused. A whole-module build (`--products <dir>` with the directory off `--classpath`, which writes the whole
+directory) keeps none of the entries of the manifest already there, whatever its number: every file that manifest
+lists and the build does not write again is removed, and a file it does not list (a user's) stays. A jar is a library, read as scalac's whoever wrote it, and is never refused for its writer: a published
+jar's user cannot rebuild it (a jar `-o` writes names its number as `Teq-Products-ABI` in its manifest, for whoever
+reads its provenance, and the plugin leaves `teq-products.json` out of the jars it packages). The plugin (from 1.0.3) empties a class directory of another number with zinc's analysis, which compiles it
+afresh, whole (or sbt 2's compile cache restores the binary's own products, its key holding the binary's digest), and
+never passes an upstream project's directory of another number to teq, which that project's own compile, run first,
+settles so;
+the build tool empties a resident's class directory whose marker beside it (`classes.abi`) names another number, or
+none.
+
 | sbt-teq | serves teq |
 |---|---|
 | 1.0.0 | 0.1.7 and later |

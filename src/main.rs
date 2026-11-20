@@ -913,12 +913,12 @@ fn plain_panic_reports() {
     }));
 }
 
-fn print_version() -> ! {
-    // The assertion-enabled build (the `checks` profile) says so.
-    let checks = if cfg!(debug_assertions) { " assertions" } else { "" };
-    match env!("TEQ_GIT_HASH") {
-        "" => println!("teq {}{}", env!("CARGO_PKG_VERSION"), checks),
-        hash => println!("teq {} {}{}", env!("CARGO_PKG_VERSION"), hash, checks),
+/// `teq --version`, and with `--verbose` the number of the products it writes and reads on a line
+/// of its own (`products ABI <n>`).
+fn print_version(verbose: bool) -> ! {
+    println!("{}", task::version());
+    if verbose {
+        println!("products ABI {}", products::ABI);
     }
     std::process::exit(0);
 }
@@ -935,7 +935,7 @@ pub(crate) fn parse_options_from(args: impl Iterator<Item = String>) -> Options 
     let args: Vec<String> = args.collect();
     let Some(first) = args.first() else { task::run(&[]) };
     match first.as_str() {
-        "--version" => print_version(),
+        "--version" => print_version(args.get(1).is_some_and(|a| a == "--verbose")),
         "--help" | "-h" => task::help(),
         "tasty" => tasty::cli::run(&args[1..]),
         "classfile" => classfile::cli::run(&args[1..]),
@@ -3234,6 +3234,18 @@ fn products_publication(own: Option<&classpath::OwnRead>, dir: &str, target: &st
     let mut entries: Vec<products::Entry> = Vec::new();
     let mut dropped: Vec<&str> = Vec::new();
     let old = own.and_then(|o| o.manifest.as_ref().map(|m| (m, &o.retained)));
+    // A directory of products of another number: none of its entries is retained
+    // (`Classpath::open`), none of its files taken over, and every file it held that the build does
+    // not write goes.
+    let stale = old.is_some_and(|(m, _)| !m.of_this_abi());
+    // The whole-module build, the directory off the class path, writes the whole directory: of the
+    // manifest already there, whatever its number, no entry is kept and every file it lists that the
+    // build does not write again goes; a file it does not list (a user's) stays. A manifest that
+    // cannot be read leaves the directory's files as they are.
+    let whole_old: Option<products::Manifest> = match own {
+        None => products::Manifest::read(std::path::Path::new(dir)).and_then(Result::ok),
+        Some(_) => None,
+    };
     if let Some((m, retained)) = old {
         for (e, &keep) in m.entries.iter().zip(retained.iter()) {
             if !keep {
@@ -3260,7 +3272,7 @@ fn products_publication(own: Option<&classpath::OwnRead>, dir: &str, target: &st
     }
     let generated_rows = generated_journal(&fresh.entries, &fresh.shared);
     entries.extend(fresh.entries);
-    let mut manifest = products::Manifest { target: target.to_string(), root, entries, std: Vec::new(), legacy_inits: Vec::new() };
+    let mut manifest = products::Manifest { target: target.to_string(), root, entries, std: Vec::new(), legacy_inits: Vec::new(), abi: products::ABI, writer: None };
     manifest.sort();
     // A dropped entry's file another entry lists stays: the build's, or a retained entry's that
     // took it over in an earlier build.
@@ -3268,7 +3280,7 @@ fn products_publication(own: Option<&classpath::OwnRead>, dir: &str, target: &st
     let mut removed: Vec<String> = dropped.into_iter().filter(|f| !listed.contains_key(f)).map(str::to_string).collect();
     drop(listed);
     adopt_std_uses(&mut manifest);
-    settle_shared(&mut manifest, &mut removed, dir, old.map(|(m, _)| m), &fresh.files, &fresh.std);
+    settle_shared(&mut manifest, &mut removed, (!stale).then_some(dir), old.map(|(m, _)| m).filter(|_| !stale), &fresh.files, &fresh.std);
     let mut std: Vec<String> = manifest.entries.iter().flat_map(|e| e.std.iter().cloned()).collect();
     std.sort();
     std.dedup();
@@ -3286,6 +3298,18 @@ fn products_publication(own: Option<&classpath::OwnRead>, dir: &str, target: &st
     manifest.std = std;
     let mut files = fresh.files;
     files.extend(written_std);
+    let replaced: Option<&products::Manifest> = match old {
+        Some((m, _)) if stale => Some(m),
+        _ => whole_old.as_ref(),
+    };
+    if let Some(m) = replaced {
+        let written: intern::FxMap<&str, ()> = files.iter().map(|(p, _)| (p.as_str(), ())).collect();
+        removed = m.entries.iter().flat_map(|e| e.files().chain(e.uses.iter().map(String::as_str))).chain(m.std.iter().map(String::as_str)).filter(|f| !written.contains_key(f)).map(str::to_string).collect();
+        removed.sort();
+        removed.dedup();
+    }
+    // Only a path inside the directory goes: one a manifest names relative, with no `..`, as teq writes them.
+    removed.retain(|f| std::path::Path::new(f).components().all(|c| matches!(c, std::path::Component::Normal(_))));
     Ok((products::Publication { files, removed, manifest: manifest.to_json() }, Json::Arr(rows).to_text()))
 }
 
@@ -3328,15 +3352,16 @@ fn adopt_std_uses(manifest: &mut products::Manifest) {
 /// a class whose holder went (its source removed, or built again without the expansion) is kept for
 /// the first user; one a later source holds moves to an earlier user, the holder using it then.
 /// The holder's entry is one of its own, as a source's products hold another file's class, its
-/// digest and std classes those of its bytes by the fresh publication's rule (`std_closure`).
-fn settle_shared(manifest: &mut products::Manifest, removed: &mut Vec<String>, dir: &str, old: Option<&products::Manifest>, fresh_files: &[(String, Vec<u8>)], fresh_std: &[(String, Vec<u8>)]) {
+/// digest and std classes those of its bytes by the fresh publication's rule (`std_closure`). A file
+/// the build did not write is read from `dir`, the directory's, where it takes them.
+fn settle_shared(manifest: &mut products::Manifest, removed: &mut Vec<String>, dir: Option<&str>, old: Option<&products::Manifest>, fresh_files: &[(String, Vec<u8>)], fresh_std: &[(String, Vec<u8>)]) {
     let mut used: Vec<String> = manifest.entries.iter().flat_map(|e| e.uses.iter().cloned()).collect();
     if used.is_empty() {
         return;
     }
     used.sort();
     used.dedup();
-    let bytes_of = |f: &str| -> Option<Vec<u8>> { fresh_files.iter().chain(fresh_std).find(|(p, _)| p == f).map(|(_, b)| b.clone()).or_else(|| std::fs::read(std::path::Path::new(dir).join(f)).ok()) };
+    let bytes_of = |f: &str| -> Option<Vec<u8>> { fresh_files.iter().chain(fresh_std).find(|(p, _)| p == f).map(|(_, b)| b.clone()).or_else(|| dir.and_then(|d| std::fs::read(std::path::Path::new(d).join(f)).ok())) };
     // The std classes the directory holds, with the names each holds, for the closure.
     let mut std_files: Vec<String> = old.map_or(Vec::new(), |m| m.std.clone());
     std_files.extend(fresh_std.iter().map(|(p, _)| p.clone()));
@@ -3461,11 +3486,16 @@ fn publish_products(opts: &Options, dir: &str, publication: products::Publicatio
 
 /// `--removed` without sources: the module's manifest without the removed sources' entries, their
 /// files and the std classes no entry names any more removed, published as a build's products
-/// are; a directory without a manifest is left as it is.
+/// are; a directory without a manifest is left as it is, and one of products of another number is
+/// refused: there are no sources to build them again from.
 fn manifest_only(opts: &Options) -> ! {
     let dir = opts.products.as_deref().unwrap_or_default();
     let manifest = match products::Manifest::read(std::path::Path::new(dir)) {
         None => None,
+        Some(Ok(m)) if !m.of_this_abi() => {
+            eprintln!("{}", m.refusal(std::path::Path::new(dir)));
+            exit_failed(opts, 2);
+        }
         Some(Ok(m)) => Some(m),
         Some(Err(e)) => {
             eprintln!("{}", e);

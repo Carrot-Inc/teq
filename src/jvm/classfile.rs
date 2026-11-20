@@ -1116,10 +1116,12 @@ pub mod op {
     pub const IFNONNULL: u8 = 0xc7;
 }
 
-/// A jar is a zip archive; the entries are stored without compression.
+/// A jar is a zip archive; the entries are stored without compression. Its manifest names the
+/// number of the products it holds (`products::JAR_ATTRIBUTE`), for whoever reads the jar's
+/// provenance: a class path reads a jar as a library whatever number it names.
 pub fn write_jar(path: &str, main_class: Option<&str>, classes: &[(String, Vec<u8>)]) -> std::io::Result<()> {
     let mut entries: Vec<(String, std::borrow::Cow<[u8]>)> = Vec::with_capacity(classes.len() + 1);
-    let mut manifest = String::from("Manifest-Version: 1.0\r\nCreated-By: teq\r\n");
+    let mut manifest = format!("Manifest-Version: 1.0\r\nCreated-By: teq\r\n{}: {}\r\n", crate::products::JAR_ATTRIBUTE, crate::products::ABI);
     if let Some(m) = main_class {
         manifest.push_str(&format!("Main-Class: {}\r\n", m.replace('/', ".")));
     }
