@@ -1,0 +1,21 @@
+name: probe
+on: workflow_dispatch
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        group: [core, removed]
+        suites: [cases]
+        exclude:
+          - group: removed
+            suites: cases
+        include:
+          - group: extra
+            suites: errors
+          - group: empty
+            suites: ''
+    name: ${{ matrix.group }}
+    steps:
+      - if: matrix.suites
+        run: tests/all.sh ${{ matrix.suites }}

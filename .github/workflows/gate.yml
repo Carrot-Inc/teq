@@ -108,7 +108,7 @@ jobs:
             minutes: 40
             jars: true
           - group: libraries
-            suites: tasty init-view classfile classpath stdlib std-kinds
+            suites: init-view classfile classpath stdlib std-kinds
             minutes: 35
             jars: true
           # A java.lang class written in full, 863 programs on four legs: some eight minutes on four cores.
@@ -116,26 +116,40 @@ jobs:
             suites: java-lang-names
             minutes: 20
             jars: true
-          # The modules suite as its two pieces (tests/all.sh's `modules.1/2`): whole it is thirty minutes of the runner.
+          # The modules suite as four pieces (tests/all.sh's `modules.1/4`): whole it is up to 47 minutes of a slow
+          # runner, a piece about twelve, each job planned under twenty by the slowest of the last runs' times.
           - group: modules-1
-            suites: modules.1/2 workers tasty-exec
+            suites: modules.1/4 tasty-exec
             minutes: 35
             jars: true
           - group: modules-2
-            suites: modules.2/2 analysis-bytes
+            suites: modules.2/4
             minutes: 40
             jars: true
-          # The gate's own scripts apart: beside the modules' second piece they outgrew one job's bound on a slow runner.
+          - group: modules-3
+            suites: modules.3/4
+            minutes: 35
+            jars: true
+          - group: modules-4
+            suites: modules.4/4
+            minutes: 35
+            jars: true
+          # The gate's own scripts apart, the one job planned past twenty minutes (25 of its 40 by the slowest of the
+          # last runs): one suite, in no pieces of its own.
           - group: gate-scripts
             suites: gate-scripts
             minutes: 40
             jars: true
           - group: corpus
-            suites: app planted asymptotics conversion-matrix
+            suites: app planted asymptotics conversion-matrix workers
             minutes: 25
             jars: true
           - group: watch
-            suites: split-watch check-watch jvm-watch
+            suites: split-watch check-watch
+            minutes: 30
+            jars: true
+          - group: watch-2
+            suites: jvm-watch
             minutes: 30
             jars: true
           - group: lsp
@@ -147,7 +161,7 @@ jobs:
             minutes: 30
             jars: true
           - group: determinism
-            suites: split-determinism
+            suites: split-determinism analysis-bytes
             minutes: 25
             jars: true
           - group: scala3
@@ -157,7 +171,7 @@ jobs:
           # The conformance board: dotty's own suites at the tag 3.8.4, the three longest rows a line each and
           # the other rows in the rest; the JDK for the class files and the programs, the library's jar for all.
           - group: board
-            suites: board-run board-run-scalajs board-pos board-rest
+            suites: board-run board-run-scalajs board-pos board-rest tasty
             minutes: 30
             jars: true
             board: true

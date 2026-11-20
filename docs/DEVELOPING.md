@@ -295,7 +295,7 @@ added lands in one part (`tests/support/pieces.sh`); each unit's body stamps its
 unless every unit of its part ran exactly once. The gate deals each piece as a suite of its own (`lsp.1/4`, a
 row of `tests/gate-times.txt` of its own) and merges their summaries into the suite's row, which fails when a piece
 fails or is missing; `tests/all.sh` and a suite run by hand run it whole, or one piece when it is named as
-`modules.1/2`, which the GitHub gate's two modules jobs do.
+`modules.1/4`, which the GitHub gate's four modules jobs do.
 `tests/gate-scripts.sh` checks the gate's own decisions against stand-in machines (`tests/gate-agent/`).
 Its application lines (`--app`) read lists that stay outside the repository with the application.
 `bench/app/app-lists.sh <checkout> <project> <dir>` writes them from the application's sbt build, through

@@ -2160,5 +2160,10 @@ check "words: a placed expectation is held by a diagnostic's header, never by it
   [ "$(held_of "1:14: error: type mismatch" "$out")" = none ] && [ "$(held_of "1:14: error: Found:    \"1:14" "$out")" = held ] &&
   [ "$(held_of "p.scala:1:14: error: Found:" "$out")" = held ] && [ "$(held_of "Required: Int" "$out")" = held ]'
 
+# The workflow's jobs as tests/support/workflow-jobs.py reads them, failing closed: the gate's matrix with every
+# row's keys reversed reads the same suites by job, and a matrix of an axis and an `exclude` is refused.
+check "workflow-jobs: the gate's matrix read in any key order, a form the reader does not handle refused" "$work/workflow-jobs.log" \
+  eval 'python3 tests/support/workflow-jobs.py --self-test > "$work/workflow-jobs.log" 2>&1'
+
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]
