@@ -401,7 +401,7 @@ quotedPatterns.scala	fail	check:fail	quotedPatterns.scala:29:18: only classes ca
 scala2-macro-compat-1.scala	fail	check:fail	scala2-macro-compat-1.scala:5:31: expected end of statement, found identifier
 semanticdb-inline-unapply	pass	check:pass	
 semanticdb-macro-pos	pass	check:pass	
-skolem	fail	check:fail	Test_2.scala:7:3: not supported yet in a macro: reading stdin is an effect, which a compile-time evaluation cannot have (called by macr in object Macro) (in the body of Macro.macr)
+skolem	fail	check:fail	Test_2.scala:7:3: not supported yet in a macro: the creation of java.io.BufferedReader runs the constructor of the Java class java.io.BufferedReader, which does more than call its superclass's and store defaults (called by macr in object Ma
 splice-pat	pass	check:pass	
 splice-pat.scala	pass	check:pass	
 splice-with-explicit-context.scala	fail	check:fail	splice-with-explicit-context.scala:5:19: a splice takes an Expr, but this has type (<error>) ?=> Expr[Int]

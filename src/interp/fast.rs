@@ -378,7 +378,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// Whether constructing `c` as a superclass does nothing: no parameters, no body, no
     /// parent arguments, and the same of its own superclass.
-    fn trivial_ctor(&mut self, c: ClassId, depth: u32) -> bool {
+    pub(super) fn trivial_ctor(&mut self, c: ClassId, depth: u32) -> bool {
         if depth > 32 {
             return false;
         }

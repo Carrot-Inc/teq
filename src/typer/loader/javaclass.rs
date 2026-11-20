@@ -192,6 +192,8 @@ pub struct JdkProbe {
 }
 
 struct Jdk {
+    /// The JDK's home `jdk::find_home` gave the typing: its runtime image holds the class files `ct.sym` strips.
+    home: std::path::PathBuf,
     ct: CtSym,
     /// Per package, its path and the entries of its classes.
     packages: Vec<(String, Vec<u32>)>,
@@ -568,8 +570,27 @@ impl<'a> Worker<'a> {
         j.stats.ct_open = Some(opened);
         j.stats.ct_index = start.elapsed();
         j.stats.release = release;
-        j.jdk = Some(Jdk { ct, packages, names: FxMap::default(), parsed: FxMap::default() });
+        j.jdk = Some(Jdk { home, ct, packages, names: FxMap::default(), parsed: FxMap::default() });
         true
+    }
+
+    /// The class file of the Java class `c` with its code, from where the loader selected it: its class path entry
+    /// (the class path's order, a multi-release jar's versioned entry), or the resource of its `ct.sym` entry's class
+    /// in the runtime image of the JDK home the typing opened. `ct.sym`'s own files keep no code.
+    pub(crate) fn java_class_bytes(&self, c: ClassId) -> Result<Vec<u8>, String> {
+        let l = self.loaded.as_ref().ok_or("no class path is loaded")?;
+        let class = l.java.classes.get(&c).ok_or("the loader read no class file for it")?;
+        match class.source {
+            JSource::Cp(f) => l.cp.raw_bytes(f),
+            JSource::Jdk(entry) => {
+                let jdk = l.java.jdk.as_ref().ok_or("the JDK is not open")?;
+                let name = self.jdk_runtime_path(entry).ok_or("its ct.sym entry names no class")?;
+                let name = name.strip_prefix("/modules").unwrap_or(&name);
+                crate::classfile::jimage::with_shared(&jdk.home, |img| img.resource(name).map_err(|e| e.to_string()))?
+            }
+            JSource::Source(_) => Err("it is one of the program's Java sources, read for its declarations alone".to_string()),
+            JSource::Embedded => Err("its class file is the one compiled into teq, without code".to_string()),
+        }
     }
 
     /// The class file of the JDK's runtime image that holds the class of the `ct.sym` entry, as
@@ -1591,6 +1612,29 @@ impl<'a> Worker<'a> {
                 self.syms.class_mut(c).ctor.insert(0, ClauseSig { params: Vec::new(), is_using: false, is_implicit: false });
             }
         }
+    }
+
+    /// The superclass the loader's class file of the Java class `c` names (`java/lang/Object`), `Some(None)` for none;
+    /// `None` where the loader read no class file for it.
+    pub(crate) fn java_class_superclass(&self, c: ClassId) -> Option<Option<String>> {
+        let l = self.loaded.as_ref()?;
+        Some(l.java.classes.get(&c)?.cf.superclass.clone())
+    }
+
+    /// Whether the loader read the Java class `c` from the JDK (its `ct.sym` entry, its class file the runtime image's),
+    /// not from the class path.
+    pub(crate) fn java_class_from_jdk(&self, c: ClassId) -> bool {
+        self.loaded.as_ref().and_then(|l| l.java.classes.get(&c)).is_some_and(|k| matches!(k.source, JSource::Jdk(_)))
+    }
+
+    /// The JVM descriptor of the Java constructor `s` (`(II)V`), as its class file declares it; `None` for a symbol
+    /// no class file declares.
+    pub(crate) fn java_ctor_descriptor(&self, s: SymId) -> Option<String> {
+        let java = &self.loaded.as_ref()?.java;
+        let js = *java.syms.get(&s)?;
+        let JMember::Method(i) = js.member else { return None };
+        let m = java.classes.get(&js.class)?.cf.methods.get(i as usize)?;
+        (m.name == "<init>").then(|| m.descriptor.clone())
     }
 
     /// A Java constructor's access where it is not public: whether it is protected, a package-private one

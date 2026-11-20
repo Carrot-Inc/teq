@@ -5,7 +5,9 @@
 //! same way (`jdk.rs`).
 
 pub mod cli;
+pub mod ctor;
 pub mod jdk;
+pub mod jimage;
 pub mod shapes;
 pub mod show;
 pub mod sig;
@@ -234,7 +236,7 @@ impl<'a> Pool<'a> {
 
 /// The JVM's modified UTF-8: `\0` as two bytes and supplementary characters as surrogate pairs.
 /// ASCII, which every descriptor and nearly every name is, is copied as it stands.
-fn modified_utf8(bytes: &[u8]) -> String {
+pub(crate) fn modified_utf8(bytes: &[u8]) -> String {
     if bytes.is_ascii() {
         return String::from_utf8_lossy(bytes).into_owned();
     }

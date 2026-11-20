@@ -910,6 +910,7 @@ file_module_inline_class_literals	pass	-
 file_module_inline_reads	pass	-	
 file_module_overrides	fail	-	< holder
 file_module_storage	cannot run	-	the JVM's platform
+file_separator_macro	pass	-	
 files_directories	cannot run	-	the JVM's platform
 files_generator	cannot run	-	the JVM's platform
 files_open_options	cannot run	-	the JVM's platform

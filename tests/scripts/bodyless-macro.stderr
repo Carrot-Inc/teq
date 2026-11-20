@@ -1,0 +1,1 @@
+tests/scripts/bodyless-macro/main.scala:3:33: error: not supported yet in a macro: the creation of Macros.Wide runs the constructor of the Java class jlib.Span, which does more than call its superclass's and store defaults (called by width in object Macros)

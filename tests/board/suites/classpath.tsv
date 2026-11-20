@@ -24,6 +24,7 @@ java_errors	pass	-
 js/alleycats	pass	-	
 js/any_equals_null	pass	-	
 js/atto_parsers	pass	-	
+js/bodyless_java_proven	pass	-	
 js/bound_argument_over_scalac	pass	-	
 js/cake_fourth	pass	-	
 js/cake_outer	pass	-	
@@ -125,6 +126,7 @@ js/money	pass	-
 js/monocle_focus	pass	-	
 js/monocle_optics	pass	-	
 js/monocle_some_through_setter	pass	-	
+js/munit_location	pass	-	
 js/munit_read_file	pass	-	
 js/murmur	pass	-	
 js/nul_identifier	fail	-	js run, --std=lean: tests/classpath/js/nul_identifier.scala:13:13: error: value getDeclaredMethods is not a member of Class[_]

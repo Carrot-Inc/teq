@@ -110,7 +110,11 @@ impl<'a, 't> Interp<'a, 't> {
 
     pub(super) fn eval(&mut self, e: TExprId, fr: &Rc<Frame>, cx: &Ctx) -> R {
         self.step()?;
-        let v = self.eval_node(e, fr, cx)?;
+        let v = match self.eval_node(e, fr, cx) {
+            Ok(v) => v,
+            Err(Control::Fail(Failure::Refused(r))) if r.place.is_none() => return Err(self.place_refusal(r, e)),
+            Err(c) => return Err(c),
+        };
         let k = self.coerce_kind(e);
         Ok(if k != 0 { Self::adapt(v, k) } else { v })
     }
@@ -183,6 +187,9 @@ impl<'a, 't> Interp<'a, 't> {
             }
             TExpr::Default(of, at, args) => self.default_arg(of, at, args, fr, cx),
             TExpr::New(c, args) => {
+                if let Some(why) = self.creation_refusal(c, None) {
+                    return self.refuse(why.to_string());
+                }
                 self.init_file_of_class(c)?;
                 // A case class's companion is initialised before the arguments run, as scalac's
                 // `apply` is called on it.
@@ -195,6 +202,11 @@ impl<'a, 't> Interp<'a, 't> {
                 self.construct_new(c, vals, fr)
             }
             TExpr::NewVia(s, args) => {
+                if let Owner::Class(c) = self.syms().sym(s).owner {
+                    if let Some(why) = self.creation_refusal(c, Some(s)) {
+                        return self.refuse(why.to_string());
+                    }
+                }
                 let vals = self.eval_args(Some(s), args, fr, cx)?;
                 let env = self.via_scope(s, args, fr, cx)?;
                 self.construct_via_new(s, vals, &env)

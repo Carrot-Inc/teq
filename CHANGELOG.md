@@ -44,6 +44,37 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   1.0.3 with this release, compiles a class directory of another number afresh, passes no upstream one of another
   number to teq, and leaves `teq-products.json` out of the jars it packages. This release's number is 0: 0.1.11's
   products read as before.
+- `teq interp` refuses a Java definition the run must execute and has nothing to execute for: no typed body and no
+  native. It refuses where the run meets the definition, with the place in the sources and exit 3:
+  `a.scala:6:11: error: the creation of Wide runs the constructor of the Java class jlib.Span, which does more than
+  call its superclass's and store defaults`. Before, such a run went on without the Java code, often to a wrong
+  value (a field the constructor sets read as 0, a static constant as null), or failed without a place. Inside a
+  macro's run the refusal is the compile error at the expansion, in the same words.
+  - A creation (a `new`, an object's construction, a function literal's class, an enum's value, a method handle's
+    constructor) is checked once per class, in the interpreter's walk and in its lowered code alike. Each Java
+    class among its superclasses must have no static initializer, and the constructor its subclass calls must do
+    nothing but call its superclass's and store the defaults of its own fields. The class file read for this is the
+    jar's or directory's entry the loader read, or the class in the runtime image (`lib/modules`) of the JDK the
+    typing used. A typed class above a Java class must have a construction that does nothing. No Java interface the
+    creation initializes (one that declares a method neither abstract nor static: a default, a private instance
+    method) may have a static initializer.
+  - A static field of a Java class that no native gives, read or written, is refused. So is a call the interpreter
+    finds no member for that ends at a Java class's method or an interface's default no native gives. A Java class's
+    own `toString`, `equals` or `hashCode` is not refused: the interpreter answers it with Object's, as before.
+  - `java.io.File`'s `separator`, `separatorChar`, `pathSeparator` and `pathSeparatorChar` are the host's, as a JVM
+    running the macro has them (`/` and `:` on Linux and macOS, `\` and `;` on Windows), where the std's JavaScript
+    layer is not loaded (the JVM target, JavaScript over scala-library): a macro read them as null there, so munit's
+    `Location` kept a file's whole path where scalac gives its path from the working directory.
+  - A use that initializes a class (a creation, an object's construction, `Class.forName` with its initialization) is
+    refused where the JVM's initialization of it (JVMS 5.5) runs a Java class's or interface's static initializer: a
+    class's superclasses, then its superinterfaces that declare a method neither abstract nor static; an interface's own
+    alone, as initializing an interface initializes none of its superinterfaces, so `Class.forName` of a trait over such
+    an interface runs. `Class.forName("Shelf")` of `class Shelf extends jlib.Registry` skipped `Registry`'s initializer.
+    A JDK class a native of the interpreter answers a member of is its own implementation, its initialization included.
+  - Subclasses of `java.util.AbstractList` and `AbstractMap`, Java classes whose constructors store only defaults,
+    zio's queues and the JDK objects the natives make run as before. A subclass of `java.awt.Point`, of a Java class
+    whose constructor sets a field to anything but its default, or of an interface whose parent has an initializer
+    and a method that is neither abstract nor static, is refused.
 
 ## 0.1.11 (2026-11-20)
 

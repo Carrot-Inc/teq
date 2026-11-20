@@ -160,8 +160,8 @@ inline-macro-staged-interpreter	marks: error on an unmarked line Main_2.scala:6:
 inline-option	marks: 3 errors where 2 are marked: quotes.scala:193:35: no given instance of type FromExpr[T | Null] was found for parameter from
 inline-quote.scala	marks: no error where 1 are marked
 inline-tuples-1	marks: 41 errors where 44 are marked
-macro-class-not-found-1	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 exception in macro: java.lang.NoClassDefFoundError (called by myMacro in object Foo)
-macro-class-not-found-2	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 exception in macro: java.lang.NoClassDefFoundError (called by myMacro in object Foo)
+macro-class-not-found-1	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 not supported yet in a macro: the creation of java.lang.NoClassDefFoundError runs the Java class jav
+macro-class-not-found-2	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 not supported yet in a macro: the creation of java.lang.NoClassDefFoundError runs the constructor of
 macro-experimental.scala	marks: no error where 1 are marked
 macros-in-same-project-2.scala	check: diagnostic 1 of 1: error macros-in-same-project-2.scala:6:3, line 2 of the message: scalac's is ---------------------------------------------------------------------------------------------------------------------; teq's is nothing
 macros-in-same-project-4	check: diagnostic 1 of 0: scalac's is nothing; teq's is error :0:0 Cyclic macro dependencies in $SCALA3/tests/neg-macros/macros-in-same-project-4/Bar.scala.

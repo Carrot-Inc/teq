@@ -2626,8 +2626,38 @@ fn zio_queue_padding(it: &mut Interp, c: ClassId, statics: &Rc<Object>) -> R<()>
 /// Runs the static initialiser the interpreter knows for the Java class `c`, if any.
 pub(super) fn java_statics(it: &mut Interp, c: ClassId, statics: &Rc<Object>) -> R<()> {
     let path = it.class_path(c);
-    match path.as_str() {
+    match path.trim_end_matches('$') {
         "zio.internal.MutableQueueFieldsPadding" => zio_queue_padding(it, c, statics),
+        "java.io.File" => layer_statics(it, c, statics, &file_statics()),
         _ => Ok(()),
     }
+}
+
+/// `java.io.File`'s static fields, the host's as a JVM running on this machine has them (`File.separatorChar` is the
+/// file system's separator, `pathSeparatorChar` the path list's: `\\` and `;` on Windows, `/` and `:` elsewhere), as
+/// `System.getProperty`'s `file.separator` and `path.separator` give them (builtins.rs). The JDK classes of the std's
+/// JavaScript layer (main.rs `JS_ONLY_LAYER`) are the class file's where that layer is not loaded (the JVM target,
+/// JavaScript over scala-library): their primitive and string static fields are the natives'; this is
+/// the one class of that layer with such fields that are no constants (`statics/enumerate.py`).
+fn file_statics() -> [(&'static str, Value); 4] {
+    let path_separator = if cfg!(windows) { ';' } else { ':' };
+    [
+        ("separatorChar", Value::Char(std::path::MAIN_SEPARATOR as u16)),
+        ("separator", Value::string(std::path::MAIN_SEPARATOR.to_string())),
+        ("pathSeparatorChar", Value::Char(path_separator as u16)),
+        ("pathSeparator", Value::string(path_separator.to_string())),
+    ]
+}
+
+/// Writes the static fields `fields` the natives give into the statics object of the Java class `c`; a field the class
+/// does not declare is left out (a JDK without it).
+fn layer_statics(it: &mut Interp, c: ClassId, statics: &Rc<Object>, fields: &[(&'static str, Value)]) -> R<()> {
+    let this = Value::Obj(statics.clone());
+    for (name, value) in fields {
+        let n = it.typer.interner.intern(name);
+        let Some(sym) = it.syms().class(c).members.get(&n).copied() else { continue };
+        let key = it.field_key(sym);
+        it.write_slot(&this, key, value.clone());
+    }
+    Ok(())
 }

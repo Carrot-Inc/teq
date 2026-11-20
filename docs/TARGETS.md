@@ -162,7 +162,11 @@ Class files are 2.4 times the JavaScript text, and lazy vals are not thread-safe
 backends read, without writing an output; `--target interp` is no option of `teq compiler`, the interpreter
 being a verb of its own. It types the bodies of the standard library as the program reaches them, prints what `println`
 writes, and exits 1 with `Exception in thread "main" ...` on an uncaught exception, as the JVM does; a
-construct the interpreter lacks prints what it is and exits 3. The same engine runs macros at compile
+construct the interpreter lacks prints what it is and exits 3. Java code runs only where the interpreter has
+a body for it, its standard library's or a native's: a Java definition the run must execute without one (a
+class-path class's constructor that does more than store defaults, a static initializer, a static field no
+native gives) is refused where the run meets it, and a program's own Java sources are read for their
+declarations alone, so running their bodies needs the JVM target. The same engine runs macros at compile
 time, a quoted macro read from a jar's TASTy arriving as ordinary typed code, and evaluates `inline`
 arguments: an argument made of literals and calls of the standard library (`"ab".length + 1`) becomes a
 constant under a small budget, where an effect, an exception or an expensive computation leaves it as it

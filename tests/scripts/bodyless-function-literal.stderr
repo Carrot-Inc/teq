@@ -1,0 +1,1 @@
+tests/scripts/bodyless-function-literal.scala:3:23: error: the creation of bodyless-function-literal$package$$anon$18ynrpd_107 initializes the Java interface jlib.Meter, whose static initializer the interpreter has no body for

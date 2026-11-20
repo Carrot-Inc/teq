@@ -72,12 +72,13 @@ is read as Java. teq reads them for their declarations, as scalac does (dotty's 
 interface of a file by its own name, their members with their types and parameter names, a `static final` field's
 constant where its initializer is one literal. It compiles none of their bodies: a JVM build with Java sources writes
 the Scala program's classes to a directory (`-o out`, or `--products`) and prints one line saying so, and javac
-compiles the Java sources against it (`javac -cp out:scala-library.jar -d out-java *.java`; the program then runs
-with both on its class path); a build to a jar is refused, as the jar would lack the Java classes. On JavaScript and in
-the interpreter a call that reaches a Java source's method is refused. Not read yet, each refused where it is
-declared (`not supported yet`): an enum, a record, an annotation declaration, a sealed type, a member type, and a
-Java declaration naming a class of the same build's Scala sources (a Java method's body may name one). A Java source
-stands for its class over a class file of the same name on the class path.
+compiles the Java sources against it (`javac -cp out:scala-library.jar -d out-java *.java`; the program then runs with
+both on its class path); a build to a jar is refused, as the jar would lack the Java classes. On JavaScript and in the
+interpreter a call that reaches a Java source's method is refused, and in the interpreter the creation of a class with
+a Java source's class among its superclasses too (the interpreter runs no Java body: docs/TARGETS.md). Not read yet,
+each refused where it is declared (`not supported yet`): an enum, a record, an annotation declaration, a sealed type,
+a member type, and a Java declaration naming a class of the same build's Scala sources (a Java method's body may name
+one). A Java source stands for its class over a class file of the same name on the class path.
 
 `teq interp` runs a program in the compiler's interpreter: the files and directories named, one main among them
 (`@main def` or an object's `main`), the arguments after `--` its own. A file it runs can be a script:

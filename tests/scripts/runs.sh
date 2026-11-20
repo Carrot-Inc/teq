@@ -28,3 +28,25 @@ run indented-first-line indented-first-line.sc
 run indented-first-line-shebang indented-first-line-shebang.sc
 run indented-first-line-header-block indented-first-line-header-block.sc
 refusal_cp queue-version queue-version.scala dev/zio/zio_3/2.1.25/zio_3-2.1.25.jar dev/zio/zio-internal-macros_3/2.1.25/zio-internal-macros_3-2.1.25.jar dev/zio/zio-stacktracer_3/2.1.25/zio-stacktracer_3-2.1.25.jar dev/zio/izumi-reflect_3/3.0.9/izumi-reflect_3-3.0.9.jar dev/zio/izumi-reflect-thirdparty-boopickle-shaded_3/3.0.9/izumi-reflect-thirdparty-boopickle-shaded_3-3.0.9.jar org/scala-lang/modules/scala-collection-compat_3/2.14.0/scala-collection-compat_3-2.14.0.jar
+refusal_lib bodyless-argument bodyless-argument.scala bodylessjava-lib
+refusal_lib bodyless-default bodyless-default.scala bodylessjava-lib
+refusal_lib bodyless-function-literal bodyless-function-literal.scala bodylessjava-lib
+refusal_lib bodyless-inherited bodyless-inherited.scala bodylessjava-lib
+refusal_lib bodyless-interface-through-java bodyless-interface-through-java.scala bodylessjava-lib
+refusal_lib bodyless-interface bodyless-interface.scala bodylessjava-lib
+refusal_lib bodyless-jdk bodyless-jdk.scala bodylessjava-lib
+refusal_lib bodyless-static-field bodyless-static-field.scala bodylessjava-lib
+refusal_lib bodyless-static-initializer bodyless-static-initializer.scala bodylessjava-lib
+refusal_lib bodyless-typed-above bodyless-typed-above.scala bodylessjava-lib
+refusal_lib bodyless-macro bodyless-macro bodylessjava-lib
+refusal_lib bodyless-forname bodyless-forname.scala bodylessjava-lib
+refusal_lib bodyless-forname-trait bodyless-forname-trait.scala bodylessjava-lib
+refusal_lib bodyless-enum-value bodyless-enum-value.scala bodylessjava-lib
+refusal_lib bodyless-loop bodyless-loop.scala bodylessjava-lib
+refusal_lib bodyless-lowered bodyless-lowered.scala bodylessjava-lib
+refusal_lib bodyless-lowered-static bodyless-lowered-static.scala bodylessjava-lib
+refusal_lib bodyless-lowered-store bodyless-lowered-store.scala bodylessjava-lib
+refusal_lib bodyless-lowered-closure bodyless-lowered-closure.scala bodylessjava-lib
+refusal_lib bodyless-lowered-second-constructor bodyless-lowered-second-constructor.scala bodylessjava-lib
+refusal_lib bodyless-lowered-super bodyless-lowered-super.scala bodylessjava-lib
+refusal_lib bodyless-method-handle bodyless-method-handle.scala bodylessjava-lib

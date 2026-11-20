@@ -122,7 +122,7 @@ quoted-splice-pattern-applied.scala	quoted-splice-pattern-applied.scala:4:11: va
 quoted-with-precise-types.scala	quoted-with-precise-types.scala:3:19: type AnyKind not found
 quotedPatterns.scala	quotedPatterns.scala:29:18: only classes can have declared but undefined members
 scala2-macro-compat-1.scala	scala2-macro-compat-1.scala:5:31: expected end of statement, found identifier
-skolem	Test_2.scala:7:3: not supported yet in a macro: reading stdin is an effect, which a compile-time evaluation cannot have (called by macr in object Macro) (in the body of Macro.macr)
+skolem	Test_2.scala:7:3: not supported yet in a macro: the creation of java.io.BufferedReader runs the constructor of the Java class java.io.BufferedReader, which does more than call its superclass's and store defaults (called by macr in object Ma
 splice-with-explicit-context.scala	splice-with-explicit-context.scala:5:19: a splice takes an Expr, but this has type (<error>) ?=> Expr[Int]
 tasty-constant-type	Test_2.scala:4:14: Int is not a constant type; cannot take constValue
 toexproftuple.scala	toexproftuple.scala:5:43: type mismatch: found Expr[Int], required Expr[1]

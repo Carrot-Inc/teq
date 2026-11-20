@@ -88,6 +88,23 @@ refusal_cp() {
   : > "$out/$name.empty"
   judge "$name" $s tests/scripts "refusal " "$out/$name.empty"
 }
+# `refusal_lib <name> <path> <fixture>...`: tests/scripts/<path> (a file, or a directory of one program) under
+# --classpath of the fixture jars tests/support/jars.sh makes (`jar_of`), against <name>.status, <name>.stderr and
+# <name>.expected, else nothing on stdout: teq's own refusal, which no Scala CLI run records. A jar that cannot be
+# made fails the run.
+refusal_lib() {
+  local name=$1 file=$2
+  shift 2
+  [ $mode = record ] && return
+  local cp="" jar
+  for jar in "$@"; do cp="$cp:$(. tests/support/jars.sh && jar_of "$jar")"; done
+  timeout 120 "$TEQ" interp "tests/scripts/$file" --classpath "${cp#:}" > "$out/$name.actual" 2> "$out/$name.err"
+  local s=$?
+  : > "$out/$name.empty"
+  local expected="$out/$name.empty"
+  [ -f "tests/scripts/$name.expected" ] && expected="tests/scripts/$name.expected"
+  judge "$name" $s tests/scripts "refusal " "$expected"
+}
 . tests/scripts/runs.sh
 
 # The fixture: a small build's Scala CLI script whose `//> using dep` lines resolve through the build's committed
@@ -223,6 +240,30 @@ refusal() {
 }
 . tests/interp-script/runs.sh
 [ $mode = record ] && exit 0
+
+# The runtime image a creation's proof reads (src/interp/bodyless.rs) is the one of the JDK home the typing opened,
+# read by a run only where it executes a creation that needs it. Over a home whose `lib/modules` is a named pipe,
+# which an open waits on until a writer comes, a run that types Java names and creates a class proven from its jar
+# alone ends as over the JDK (bodyless-unread); a run that opened it would wait there until the timeout's KILL (teq
+# handles TERM for the program's shutdown hooks). Over a home whose `lib/modules` is no image, a creation over a JDK
+# class is refused, the image named (bodyless-no-image, the home written `<home>`).
+real_home=${JAVA_HOME:-}
+[ -f "$real_home/lib/ct.sym" ] || real_home=$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")
+image_home=$(mktemp -d)
+mkdir -p "$image_home/pipe/lib" "$image_home/empty/lib"
+ln -s "$real_home/lib/ct.sym" "$image_home/pipe/lib/ct.sym"
+ln -s "$real_home/lib/ct.sym" "$image_home/empty/lib/ct.sym"
+mkfifo "$image_home/pipe/lib/modules"
+: > "$image_home/empty/lib/modules"
+bodyless_lib=$(. tests/support/jars.sh && jar_of bodylessjava-lib)
+JAVA_HOME="$image_home/pipe" timeout -k 5 60 "$TEQ" interp tests/scripts/bodyless-unread.scala --classpath "$bodyless_lib" > "$out/bodyless-unread.actual" 2> "$out/bodyless-unread.err"
+judge bodyless-unread $? tests/scripts "image "
+JAVA_HOME="$image_home/empty" timeout -k 5 60 "$TEQ" interp tests/scripts/bodyless-jdk.scala --classpath "$bodyless_lib" > "$out/bodyless-no-image.actual" 2> "$out/bodyless-no-image.raw.err"
+s=$?
+sed -e "s|$image_home/empty|<home>|g" "$out/bodyless-no-image.raw.err" > "$out/bodyless-no-image.err"
+: > "$out/bodyless-no-image.empty"
+judge bodyless-no-image $s tests/scripts "image " "$out/bodyless-no-image.empty"
+rm -rf "${image_home:?}"
 
 touch "$out/passed" "$out/failed"
 sort -o "$out/passed" "$out/passed"

@@ -1,0 +1,1 @@
+tests/scripts/bodyless-enum-value.scala:7:11: error: the creation of Tone.Low initializes the Java interface jlib.Meter, whose static initializer the interpreter has no body for

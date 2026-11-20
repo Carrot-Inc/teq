@@ -1,0 +1,1 @@
+tests/scripts/bodyless-inherited.scala:4:33: error: bump of Tick is the Java definition jlib.Counter.bump, which the interpreter has no body for

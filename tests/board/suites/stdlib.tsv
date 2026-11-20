@@ -908,6 +908,7 @@ file_module_inline_class_literals	pass	-
 file_module_inline_reads	pass	-	
 file_module_overrides	fail	-	error: method toString does not take parameters
 file_module_storage	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+file_separator_macro	pass	-	
 files_directories	fail	-	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
 files_generator	fail	-	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
 files_open_options	fail	-	error: not supported on JavaScript: class FileOutputStream java.io.FileOutputStream (a Java definition without an implementation in the std'

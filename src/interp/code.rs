@@ -1001,8 +1001,8 @@ enum Op {
     /// where the walker's hint says, checked against the descriptor of the frame there or by the
     /// symbol in a frame without one (`hinted`), else as the walker reads it (`local`).
     LocalSym { e: TExprId, sym: SymId },
-    Static(SymId),
-    Module(ClassId),
+    Static { e: TExprId, sym: SymId },
+    Module { e: TExprId, class: ClassId },
     ClassOf(ClassId, u8),
     Field { e: TExprId, sym: SymId },
     /// `this.f`: `This` then `Field`.
@@ -1024,18 +1024,21 @@ enum Op {
     /// the getter read off the node at `e`.
     DefaultArg { e: TExprId, argc: u32 },
     /// A function value and its arguments (`apply_value`).
-    Apply { argc: u32 },
+    Apply { e: TExprId, argc: u32 },
     /// The file and companion of a class before its creation's arguments; a class with captures
     /// is created whole (`anon_args`), its arguments skipped.
     NewPrep { e: TExprId, class: ClassId, skip: u32 },
     New { class: ClassId, argc: u32 },
+    /// A creation through a second constructor's proof, before its arguments run, as `new`'s initialization comes
+    /// before them (`NewPrep`'s for a primary one).
+    NewViaPrep { e: TExprId, sym: SymId },
     NewVia { e: TExprId, sym: SymId, argc: u32 },
     Lambda { params: ListRef, body: TExprId },
     /// A template resolved before its arguments: a builtin's go on to `JsCall`, any other runs as
     /// the walker runs it, its arguments skipped.
     JsPrep { e: TExprId, s: StrRef, skip: u32, quote: bool },
     /// A builtin template's call; a quote's (`$quote`) leaves the renames of its binders after it.
-    JsCall { s: StrRef, argc: u32, quote: bool },
+    JsCall { e: TExprId, s: StrRef, argc: u32, quote: bool },
     Jump(u32),
     JumpIfFalse(u32),
     JumpIfTrue(u32),
@@ -1056,10 +1059,10 @@ enum Op {
     StoreLocal { e: TExprId, sym: SymId, depth: u16, slot: u16, scope: u16 },
     /// An assignment of a local outside the unit's frames, at its hint checked as `LocalSym`'s.
     StoreSym { e: TExprId, sym: SymId },
-    StoreField(SymId),
+    StoreField { e: TExprId, sym: SymId },
     /// `this.f = v`: `This` then `StoreField`.
-    StoreThisField(SymId),
-    StoreStatic(SymId),
+    StoreThisField { e: TExprId, sym: SymId },
+    StoreStatic { e: TExprId, sym: SymId },
     Prim(PrimOp),
     /// `Prim` then `JumpIfFalse`.
     PrimJumpIfFalse(PrimOp, u32),
@@ -1287,7 +1290,7 @@ impl Lowering {
         if let Some(last) = self.foldable() {
             let folded = match (last, op) {
                 (Op::This, Op::Field { e, sym }) => Some(Op::ThisField { e, sym }),
-                (Op::This, Op::StoreField(sym)) => Some(Op::StoreThisField(sym)),
+                (Op::This, Op::StoreField { e, sym }) => Some(Op::StoreThisField { e, sym }),
                 (Op::Prim(p), Op::JumpIfFalse(t)) => Some(Op::PrimJumpIfFalse(p, t)),
                 (Op::Unit | Op::Null | Op::This | Op::Int(_) | Op::Long(_) | Op::Double(_) | Op::Float(_) | Op::Byte(_) | Op::Short(_) | Op::Char(_) | Op::Bool(_) | Op::Str(_), Op::Pop) => {
                     self.unemit();
@@ -1465,8 +1468,8 @@ impl<'a, 't> Interp<'a, 't> {
             TExpr::Null => _ = b.emit(Op::Null),
             TExpr::Local(s) => self.lower_local(b, e, s),
             TExpr::This | TExpr::Super(_) => _ = b.emit(Op::This),
-            TExpr::Static(s) => _ = b.emit(Op::Static(s)),
-            TExpr::Module(c) => _ = b.emit(Op::Module(c)),
+            TExpr::Static(s) => _ = b.emit(Op::Static { e, sym: s }),
+            TExpr::Module(c) => _ = b.emit(Op::Module { e, class: c }),
             TExpr::ClassOf(c, dims) => _ = b.emit(Op::ClassOf(c, dims)),
             TExpr::Field(r, s) => {
                 self.lower(b, r);
@@ -1476,7 +1479,7 @@ impl<'a, 't> Interp<'a, 't> {
                 if self.syms().sym(s).owner == Owner::Local {
                     self.lower_local(b, e, s);
                     self.lower_list(b, args);
-                    b.emit(Op::Apply { argc: args.len });
+                    b.emit(Op::Apply { e, argc: args.len });
                 } else {
                     b.emit(Op::InitFile(s));
                     self.lower_list(b, args);
@@ -1509,7 +1512,7 @@ impl<'a, 't> Interp<'a, 't> {
             TExpr::CallClosure(f, args) => {
                 self.lower(b, f);
                 self.lower_list(b, args);
-                b.emit(Op::Apply { argc: args.len });
+                b.emit(Op::Apply { e, argc: args.len });
             }
             TExpr::New(c, args) => {
                 let prep = b.emit(Op::NewPrep { e, class: c, skip: 0 });
@@ -1519,6 +1522,7 @@ impl<'a, 't> Interp<'a, 't> {
                 b.patch(prep, to);
             }
             TExpr::NewVia(s, args) => {
+                b.emit(Op::NewViaPrep { e, sym: s });
                 // A local class's captures among the arguments stay in the scope (`via_scope`).
                 let own = self.ctor_own_captures(s);
                 let mut argc = 0;
@@ -1551,12 +1555,12 @@ impl<'a, 't> Interp<'a, 't> {
                     TExpr::Field(r, s) => {
                         self.lower(b, value);
                         self.lower(b, r);
-                        b.emit_folding(Op::StoreField(s));
+                        b.emit_folding(Op::StoreField { e, sym: s });
                     }
                     TExpr::Static(s) => {
                         b.emit(Op::InitFile(s));
                         self.lower(b, value);
-                        b.emit(Op::StoreStatic(s));
+                        b.emit(Op::StoreStatic { e, sym: s });
                     }
                     // Any other target the walker takes whole (`walked`, before this match).
                     _ => unreachable!("an assignment the walker takes"),
@@ -1590,7 +1594,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let quote = &*self.prog().strings[s.idx()] == "$quote";
                 let prep = b.emit(Op::JsPrep { e, s, skip: 0, quote });
                 self.lower_list(b, args);
-                b.emit(Op::JsCall { s, argc: args.len, quote });
+                b.emit(Op::JsCall { e, s, argc: args.len, quote });
                 let to = b.here();
                 b.patch(prep, to);
             }
@@ -2139,14 +2143,14 @@ impl<'a, 't> Interp<'a, 't> {
                     };
                     st.push(v);
                 }
-                Op::Static(s) => st.push(self.static_value(s)?),
-                Op::Module(c) => st.push(self.module(c)?),
+                Op::Static { e, sym } => st.push(self.static_value(sym).map_err(|c| self.place_op(c, e))?),
+                Op::Module { e, class } => st.push(self.module(class).map_err(|c| self.place_op(c, e))?),
                 Op::ClassOf(c, dims) => st.push(self.class_literal(c, dims)),
                 Op::Field { e, sym } => {
                     let recv = st.pop().expect("an operand");
-                    st.push(self.field_at(e, recv, sym)?);
+                    st.push(self.field_at(e, recv, sym).map_err(|c| self.place_op(c, e))?);
                 }
-                Op::ThisField { e, sym } => st.push(self.field_at(e, cx.this.clone(), sym)?),
+                Op::ThisField { e, sym } => st.push(self.field_at(e, cx.this.clone(), sym).map_err(|c| self.place_op(c, e))?),
                 Op::InitFile(s) => {
                     let info = self.syms().sym(s);
                     let (owner, file) = (info.owner, info.file);
@@ -2157,13 +2161,13 @@ impl<'a, 't> Interp<'a, 't> {
                     // An object's member through its module (`call_static_at`).
                     let v = match self.syms().sym(sym).owner {
                         Owner::Class(c) => {
-                            let module = self.module(c)?;
+                            let module = self.module(c).map_err(|c| self.place_op(c, e))?;
                             match self.site_fun(e, &module) {
-                                Some((f, owner, parent)) => self.call_fun(f, module, args, parent, Some(owner))?,
-                                None => self.invoke_at(e, module, sym, args)?,
+                                Some((f, owner, parent)) => self.call_fun(f, module, args, parent, Some(owner)).map_err(|c| self.place_op(c, e))?,
+                                None => self.invoke_at(e, module, sym, args).map_err(|c| self.place_op(c, e))?,
                             }
                         }
-                        _ => self.call_static(sym, args)?,
+                        _ => self.call_static(sym, args).map_err(|c| self.place_op(c, e))?,
                     };
                     st.push(v);
                 }
@@ -2171,36 +2175,36 @@ impl<'a, 't> Interp<'a, 't> {
                     let args = self.args_of(st, argc);
                     let recv = st.pop().expect("an operand");
                     let v = match self.site_fun(e, &recv) {
-                        Some((f, owner, parent)) => self.call_fun(f, recv, args, parent, Some(owner))?,
-                        None => self.invoke_at(e, recv, sym, args)?,
+                        Some((f, owner, parent)) => self.call_fun(f, recv, args, parent, Some(owner)).map_err(|c| self.place_op(c, e))?,
+                        None => self.invoke_at(e, recv, sym, args).map_err(|c| self.place_op(c, e))?,
                     };
                     st.push(v);
                 }
                 Op::CallSuper { e, sym, argc } => {
                     let args = self.args_of(st, argc);
-                    st.push(self.call_super_at(e, sym, args, cx)?);
+                    st.push(self.call_super_at(e, sym, args, cx).map_err(|c| self.place_op(c, e))?);
                 }
                 Op::SuperClassPrep { e, skip } => {
-                    if let Some(v) = self.super_class_prep(e, cur, cx)? {
+                    if let Some(v) = self.super_class_prep(e, cur, cx).map_err(|c| self.place_op(c, e))? {
                         st.push(v);
                         pc = skip as usize;
                     }
                 }
                 Op::CallSuperClass { e, argc } => {
                     let args = self.args_of(st, argc);
-                    st.push(self.call_super_class_with(e, args, cx)?);
+                    st.push(self.call_super_class_with(e, args, cx).map_err(|c| self.place_op(c, e))?);
                 }
                 Op::DefaultArg { e, argc } => {
                     let vals = self.args_of(st, argc);
                     st.push(self.default_at(e, vals, cur, cx)?);
                 }
-                Op::Apply { argc } => {
+                Op::Apply { e, argc } => {
                     let args = self.args_of(st, argc);
                     let f = st.pop().expect("an operand");
-                    st.push(self.apply_value(f, args)?);
+                    st.push(self.apply_value(f, args).map_err(|c| self.place_op(c, e))?);
                 }
                 Op::NewPrep { e, class, skip } => {
-                    if let Some(v) = self.new_prep(e, class, cur, cx)? {
+                    if let Some(v) = self.new_prep(e, class, cur, cx).map_err(|c| self.place_op(c, e))? {
                         st.push(v);
                         pc = skip as usize;
                     }
@@ -2208,6 +2212,14 @@ impl<'a, 't> Interp<'a, 't> {
                 Op::New { class, argc } => {
                     let args = self.args_of(st, argc);
                     st.push(self.construct_new(class, args, cur)?);
+                }
+                Op::NewViaPrep { e, sym } => {
+                    // The creation's proof, as the walker's `NewVia` arm asks it, placed at the creation.
+                    if let Owner::Class(c) = self.syms().sym(sym).owner {
+                        if let Some(why) = self.creation_refusal(c, Some(sym)) {
+                            return Err(self.place_op(self.refuse::<()>(why.to_string()).unwrap_err(), e));
+                        }
+                    }
                 }
                 Op::NewVia { e, sym, argc } => {
                     let args = self.args_of(st, argc);
@@ -2221,14 +2233,15 @@ impl<'a, 't> Interp<'a, 't> {
                     st.push(Value::Fun(Rc::new(Closure { kind: ClosureKind::Lambda(params, body), env: cur.clone(), this: cx.this.clone(), def_key: cx.def_key, class: cx.class, hash: Cell::new(0) })));
                 }
                 Op::JsPrep { e, s, skip, quote } => {
-                    if let Some(v) = self.js_prep(e, s, quote, cur, cx)? {
+                    if let Some(v) = self.js_prep(e, s, quote, cur, cx).map_err(|c| self.place_op(c, e))? {
                         st.push(v);
                         pc = skip as usize;
                     }
                 }
-                Op::JsCall { s, argc, quote } => {
+                Op::JsCall { e, s, argc, quote } => {
                     let args = self.args_of(st, argc);
-                    let r = self.js_call(s, args);
+                    // A builtin's refusal is placed at the call, as `eval`'s arm places it.
+                    let r = self.js_call(s, args).map_err(|c| self.place_op(c, e));
                     if quote {
                         self.exec.quote_renames.pop();
                     }
@@ -2299,18 +2312,18 @@ impl<'a, 't> Interp<'a, 't> {
                         self.assign_local(e, sym, v, cur, cx)?;
                     }
                 }
-                Op::StoreField(s) => {
+                Op::StoreField { e, sym } => {
                     let recv = st.pop().expect("an operand");
                     let v = st.pop().expect("an operand");
-                    self.set_field(recv, s, v)?;
+                    self.set_field(recv, sym, v).map_err(|c| self.place_op(c, e))?;
                 }
-                Op::StoreThisField(s) => {
+                Op::StoreThisField { e, sym } => {
                     let v = st.pop().expect("an operand");
-                    self.set_field(cx.this.clone(), s, v)?;
+                    self.set_field(cx.this.clone(), sym, v).map_err(|c| self.place_op(c, e))?;
                 }
-                Op::StoreStatic(s) => {
+                Op::StoreStatic { e, sym } => {
                     let v = st.pop().expect("an operand");
-                    self.set_static(s, v)?;
+                    self.set_static(sym, v).map_err(|c| self.place_op(c, e))?;
                 }
                 Op::PrimJumpIfFalse(op, t) => {
                     let y = st.pop().expect("an operand");
@@ -2681,6 +2694,10 @@ impl<'a, 't> Interp<'a, 't> {
     /// with captures created whole, its instance given.
     #[inline(never)]
     fn new_prep(&mut self, e: TExprId, c: ClassId, cur: &Rc<Frame>, cx: &Ctx) -> R<Option<Value>> {
+        // The creation's proof, as the walker's `New` arm asks it (`bodyless.rs`).
+        if let Some(why) = self.creation_refusal(c, None) {
+            return self.refuse(why.to_string());
+        }
         self.init_file_of_class(c)?;
         self.touch_companion(c)?;
         if self.capture_count(c) == 0 {

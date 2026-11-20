@@ -101,7 +101,7 @@ i21225	fail	interp:fail	Macro_1.scala:12:35: Not found: GivenSelector
 i22260	fail	interp:fail	Macros_1.scala:16:26: Not found: MethodTypeKind
 i22395	fail	interp:fail	output: line 1: the .check has 'TypeRef(AppliedType(TypeRef(ThisType(TypeRef(ThisType(TypeRef(NoPrefix,module class <root>)),module class <empty>)),Foo),List(TypeRef(TermRef(ThisType(TypeRef(NoPrefix,module class <root>)),object scala),Int)
 i22616c	fail	interp:pass	$SCALA3/tests/run-macros/i22616c/MyTypeRepr_3.scala: cannot write TASTy for the reflection API's type TypeRepr outside a method of a Quotes in MyTypeRepr
-i24006	fail	interp:fail	Test.scala:3:20: not supported yet in a macro: reading stdin is an effect, which a compile-time evaluation cannot have (called by eval in object Eval)
+i24006	fail	interp:fail	Test.scala:3:20: not supported yet in a macro: the creation of java.io.BufferedReader runs the constructor of the Java class java.io.BufferedReader, which does more than call its superclass's and store defaults (called by eval in object Eva
 i4431-b	pass	interp:pass	
 i4455	pass	interp:pass	
 i4492	pass	interp:pass	

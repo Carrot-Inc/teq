@@ -33,6 +33,8 @@ hyphen-package-main	pass	-
 hyphen-package-merge	pass	-	
 hyphen-package-raw-reference	pass	-	
 hyphen-package-reference	pass	-	
+image bodyless-no-image	pass	-	
+image bodyless-unread	pass	-	
 indented-first-line	pass	-	
 indented-first-line-header-block	pass	-	
 indented-first-line-shebang	pass	-	
@@ -45,6 +47,28 @@ products product-source	pass	-
 reads-other-args	pass	-	
 refusal ambiguous	pass	-	
 refusal ambiguous-classpath	pass	-	
+refusal bodyless-argument	pass	-	
+refusal bodyless-default	pass	-	
+refusal bodyless-enum-value	pass	-	
+refusal bodyless-forname	pass	-	
+refusal bodyless-forname-trait	pass	-	
+refusal bodyless-function-literal	pass	-	
+refusal bodyless-inherited	pass	-	
+refusal bodyless-interface	pass	-	
+refusal bodyless-interface-through-java	pass	-	
+refusal bodyless-jdk	pass	-	
+refusal bodyless-loop	pass	-	
+refusal bodyless-lowered	pass	-	
+refusal bodyless-lowered-closure	pass	-	
+refusal bodyless-lowered-second-constructor	pass	-	
+refusal bodyless-lowered-static	pass	-	
+refusal bodyless-lowered-store	pass	-	
+refusal bodyless-lowered-super	pass	-	
+refusal bodyless-macro	pass	-	
+refusal bodyless-method-handle	pass	-	
+refusal bodyless-static-field	pass	-	
+refusal bodyless-static-initializer	pass	-	
+refusal bodyless-typed-above	pass	-	
 refusal compile-only-version	pass	-	
 refusal dep-parameter	pass	-	
 refusal dep-unicode-invalid	pass	-	

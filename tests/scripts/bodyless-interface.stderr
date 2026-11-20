@@ -1,0 +1,1 @@
+tests/scripts/bodyless-interface.scala:5:33: error: the creation of Panel initializes the Java interface jlib.Meter, whose static initializer the interpreter has no body for

@@ -910,6 +910,7 @@ file_module_inline_class_literals	pass	-
 file_module_inline_reads	pass	-	
 file_module_overrides	fail	-	compile
 file_module_storage	fail	-	compile
+file_separator_macro	pass	-	
 files_directories	pass	-	
 files_generator	pass	-	
 files_open_options	pass	-	

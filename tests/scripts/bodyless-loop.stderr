@@ -1,0 +1,1 @@
+tests/scripts/bodyless-loop.scala:8:30: error: the creation of Wide runs the constructor of the Java class jlib.Span, which does more than call its superclass's and store defaults

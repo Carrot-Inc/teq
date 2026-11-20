@@ -173,8 +173,8 @@ inline-macro-staged-interpreter	fail	-	marks: error on an unmarked line Main_2.s
 inline-option	fail	-	marks: 3 errors where 2 are marked: quotes.scala:193:35: No given instance of type FromExpr[T | Null] was found for parameter from of method unapply in object Expr
 inline-quote.scala	fail	-	marks: no error where 1 are marked
 inline-tuples-1	fail	-	marks: 41 errors where 44 are marked
-macro-class-not-found-1	fail	-	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 exception in macro: java.lang.NoClassDefFoundError (called by myMacro in object Foo)
-macro-class-not-found-2	fail	-	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 exception in macro: java.lang.NoClassDefFoundError (called by myMacro in object Foo)
+macro-class-not-found-1	fail	-	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 not supported yet in a macro: the creation of java.lang.NoClassDefFoundError runs the Java class jav
+macro-class-not-found-2	fail	-	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 not supported yet in a macro: the creation of java.lang.NoClassDefFoundError runs the constructor of
 macro-cycle1.scala	pass	-	
 macro-deprecation.scala	pass	-	
 macro-experimental.scala	fail	-	marks: no error where 1 are marked

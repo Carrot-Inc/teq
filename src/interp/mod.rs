@@ -5,6 +5,7 @@
 
 pub(crate) mod archive;
 mod bignum;
+mod bodyless;
 mod builtins;
 pub(crate) mod char_tables;
 mod class;
@@ -163,6 +164,17 @@ pub enum Failure {
     /// The program called `System.exit` (`sys.exit`) with the status: it stops there, no `finally`
     /// running, as the JVM halts; `teq interp` exits with the status.
     Exit(i32),
+    /// A Java definition the run must execute and the interpreter has nothing to execute for: no typed body and no
+    /// native (`bodyless.rs`). Refused where the run meets it.
+    Refused(Box<Refusal>),
+}
+
+/// A refusal's words and its place: the innermost expression with a recorded source that the failure leaves
+/// (`Interp::eval`); none where no such expression is left, as in a macro's run, whose diagnostic is at the
+/// expansion.
+pub struct Refusal {
+    pub words: String,
+    pub place: Option<(FileId, crate::source::Span)>,
 }
 
 impl From<Failure> for Control {
@@ -839,6 +851,9 @@ pub fn forget_files() {
 /// happened, a macro's own state among it, which lasts a build (`Interp::forget_made`).
 pub struct Made {
     modules: crate::arena::Dense<Option<Rc<Object>>>,
+    /// Whether a Java class's statics object was made (`module`): until one is, no object is one, and a field
+    /// store asks nothing more (`java_statics_object`).
+    pub(super) any_java_statics: bool,
     /// Per module the run that made it (`Records::runs`), for what asks whether an object is
     /// the run's own or an earlier one's.
     module_runs: crate::arena::Dense<u32>,
@@ -1110,7 +1125,7 @@ impl Records {
 
 impl Default for Made {
     fn default() -> Made {
-        Made { modules: crate::arena::Dense::new(None), module_runs: crate::arena::Dense::new(0), statics: FxMap::default(), static_runs: FxMap::default(), static_born: FxMap::default(), static_made: FxMap::default(), file_done: Vec::new(), file_quiet: Vec::new() }
+        Made { modules: crate::arena::Dense::new(None), any_java_statics: false, module_runs: crate::arena::Dense::new(0), statics: FxMap::default(), static_runs: FxMap::default(), static_born: FxMap::default(), static_made: FxMap::default(), file_done: Vec::new(), file_quiet: Vec::new() }
     }
 }
 
@@ -1136,6 +1151,7 @@ pub struct InterpCaches {
     field_keys: FxMap<SymId, FieldKey>,
     members: FxMap<(ClassId, Name), Member>,
     alt_members: FxMap<(ClassId, SymId), Member>,
+    java_proofs: Box<bodyless::JavaProofs>,
     method_index: crate::arena::Dense<Option<Box<FxMap<Name, FunId>>>>,
     dispatch_syms: crate::arena::Dense<Option<Box<FxMap<Name, SymId>>>>,
     ext_names: FxMap<SymId, Name>,
@@ -1225,6 +1241,7 @@ impl InterpCaches {
             field_keys: _,
             members: _,
             alt_members: _,
+            java_proofs: _,
             method_index: _,
             dispatch_syms: _,
             ext_names: _,
@@ -1333,6 +1350,7 @@ pub struct Interp<'a, 't> {
     field_keys: FxMap<SymId, FieldKey>,
     members: FxMap<(ClassId, Name), Member>,
     alt_members: FxMap<(ClassId, SymId), Member>,
+    java_proofs: Box<bodyless::JavaProofs>,
     method_index: crate::arena::Dense<Option<Box<FxMap<Name, FunId>>>>,
     dispatch_syms: crate::arena::Dense<Option<Box<FxMap<Name, SymId>>>>,
     ext_names: FxMap<SymId, Name>,
@@ -1488,6 +1506,7 @@ impl<'a, 't> Interp<'a, 't> {
             field_keys: FxMap::default(),
             members: FxMap::default(),
             alt_members: FxMap::default(),
+            java_proofs: Box::default(),
             method_index: crate::arena::Dense::new(None),
             dispatch_syms: crate::arena::Dense::new(None),
             ext_names: FxMap::default(),
@@ -1580,6 +1599,7 @@ impl<'a, 't> Interp<'a, 't> {
             field_keys: self.field_keys,
             members: self.members,
             alt_members: self.alt_members,
+            java_proofs: self.java_proofs,
             method_index: self.method_index,
             dispatch_syms: self.dispatch_syms,
             ext_names: self.ext_names,
@@ -1650,6 +1670,7 @@ impl<'a, 't> Interp<'a, 't> {
         self.field_keys = c.field_keys;
         self.members = c.members;
         self.alt_members = c.alt_members;
+        self.java_proofs = c.java_proofs;
         self.method_index = c.method_index;
         self.dispatch_syms = c.dispatch_syms;
         self.ext_names = c.ext_names;
@@ -2006,6 +2027,14 @@ impl<'a, 't> Interp<'a, 't> {
             Failure::Budget => "the interpreter's step budget ran out".to_string(),
             Failure::Depth => "the interpreter's call depth ran out".to_string(),
             Failure::Unsupported(s) | Failure::Stale(s) => s.clone(),
+            Failure::Refused(r) => match r.place {
+                Some((f, span)) => {
+                    let src = self.typer.source(f);
+                    let (line, col, _) = crate::source::locate(&src.text, span.start as usize);
+                    format!("{}:{}:{}: error: {}", src.path, line, col, r.words)
+                }
+                None => format!("error: {}", r.words),
+            },
             Failure::Withheld => "the run needs a body withheld from its products and stops (the error below)".to_string(),
             Failure::Suspended => "the run needs a definition of a unit its round has not completed".to_string(),
             Failure::Exit(status) => format!("the program called System.exit({})", status),
@@ -2061,6 +2090,39 @@ impl<'a, 't> Interp<'a, 't> {
             eprintln!("  unsupported: {}", msg);
         }
         Err(Control::Fail(Failure::Unsupported(msg)))
+    }
+
+    /// The refusal of a Java definition the run must execute and has no body or native for, placed as it unwinds.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn refuse<T>(&self, words: String) -> R<T> {
+        if self.trace {
+            eprintln!("  refused: {}", words);
+        }
+        Err(Control::Fail(Failure::Refused(Box::new(Refusal { words, place: None }))))
+    }
+
+    /// A refusal raised under the lowered op of `e`, placed nowhere yet, takes `e`'s place as `eval` gives it one:
+    /// lowered code runs no `eval` of its own expressions.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn place_op(&self, c: Control, e: TExprId) -> Control {
+        match c {
+            Control::Fail(Failure::Refused(r)) if r.place.is_none() => self.place_refusal(r, e),
+            c => c,
+        }
+    }
+
+    /// A refusal leaving `e` unplaced takes `e`'s place where `e` has a source with text there.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn place_refusal(&self, mut r: Box<Refusal>, e: TExprId) -> Control {
+        if let Some((f, span)) = self.prog().span_of(e) {
+            if (span.start as usize) < self.typer.source(f).text.len() {
+                r.place = Some((f, span));
+            }
+        }
+        Control::Fail(Failure::Refused(r))
     }
 
     pub(super) fn stale<T>(&self, msg: impl Into<String>) -> R<T> {

@@ -1,0 +1,1 @@
+tests/scripts/bodyless-typed-above.scala:6:3: error: the creation of Sheet runs the Java class jlib.Ledger, above which the interpreter does not run the constructor of jlib.Tally

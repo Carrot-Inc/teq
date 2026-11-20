@@ -2071,6 +2071,8 @@ impl<'a> Worker<'a> {
             // Taken as the unit's suspension below.
             Err(Failure::Suspended) => Err(String::new()),
             Err(f @ Failure::Exit(_)) => Err(interp.describe(&f)),
+            // A Java definition the macro's run must execute and has no body for: the same words as a run's.
+            Err(Failure::Refused(r)) => Err(format!("not supported yet in a macro: {}", r.words)),
             Err(Failure::Unsupported(msg)) => Err(match msg.strip_prefix("no builtin for scala.quoted.") {
                 Some(rest) => format!("not supported yet: scala.quoted {}", rest.trim_end_matches(" (a @js template without a Scala body)")),
                 None => format!("not supported yet in a macro: {}", msg),

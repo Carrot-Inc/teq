@@ -126,6 +126,11 @@ impl<'a, 't> Interp<'a, 't> {
             return self.unsupported(format!("{} is a JavaScript object", name));
         }
         let java_statics = self.typer.is_java_class(c) && self.tclass_index(c).is_none();
+        if !java_statics {
+            if let Some(why) = self.creation_refusal(c, None) {
+                return self.refuse(why.to_string());
+            }
+        }
         // The module is made and initialised in an epoch of its own (`super::watch`).
         let outer = super::enter_epoch();
         let _init = super::enter_init(|| self.class_path(c));
@@ -149,6 +154,7 @@ impl<'a, 't> Interp<'a, 't> {
         // The statics of a Java class: its members are the natives the interpreter has for them,
         // and its static initialiser the one it knows for that class, if any (`java_statics`).
         if java_statics {
+            self.made.any_java_statics = true;
             let classes = self.syms().classes.len();
             self.made.set_module(c, obj.clone(), self.records.runs, classes);
             super::leave_epoch(outer);
@@ -542,6 +548,10 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     fn make_enum_value_now(&mut self, case: ClassId, sym: SymId) -> R {
+        // An enum's singleton value is a creation as a `new` is (`bodyless.rs`).
+        if let Some(why) = self.creation_refusal(case, None) {
+            return self.refuse(why.to_string());
+        }
         let info = self.syms().class(case);
         let name: Rc<str> = Rc::from(self.name(info.name));
         let ordinal = info.ordinal as i32;
@@ -1323,6 +1333,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let name = self.syms().dispatch_name(s);
                 let m = self.member(class, name);
                 match m {
+                    Member::Missing | Member::Field(_) if self.java_statics_object(o) => self.refuse_static(class, name),
                     Member::Missing | Member::Field(_) => Ok(self.field_zero(s)),
                     m => self.invoke_member(recv, m, name, Vec::new()),
                 }
@@ -1346,6 +1357,10 @@ impl<'a, 't> Interp<'a, 't> {
         match &recv {
             Value::Obj(o) if self.pure && self.macro_ctx.is_none() && self.made.modules.get(o.class.idx()).map_or(false, |m| m.as_ref().map_or(false, |m| Rc::ptr_eq(m, o))) => {
                 self.impure("an assignment to a field of an object")
+            }
+            Value::Obj(o) if self.java_statics_object(o) => {
+                let name = self.syms().dispatch_name(s);
+                self.refuse_static(o.class, name)
             }
             Value::Obj(_) => {
                 let key = self.field_key(s);
@@ -2490,7 +2505,12 @@ impl<'a, 't> Interp<'a, 't> {
                             return self.unsupported(format!("{} is a class of the Java source {}, whose body for {} the interpreter does not have", self.runtime_class_name(k), path, n));
                         }
                         let hint = if class.starts_with("java.time.") { " (java.time: scala-java-time)" } else { "" };
-                        return self.unsupported(format!("{} is a JDK class, which has no body for {} to run; put a library implementing it on the class path{}", class, n, hint));
+                        return self.refuse(format!("{} is a JDK class, which has no body for {} to run; put a library implementing it on the class path{}", class, n, hint));
+                    }
+                    // A call whose dispatch ends at a Java definition: an interface's default, a body-less class's method.
+                    if let Some(owner) = self.java_definition_of(o.class, name) {
+                        let owner = self.class_path(owner);
+                        return self.refuse(format!("{} of {} is the Java definition {}.{}, which the interpreter has no body for", n, class, owner, n));
                     }
                 }
                 self.unsupported(format!("{} has no member {}", class, n))

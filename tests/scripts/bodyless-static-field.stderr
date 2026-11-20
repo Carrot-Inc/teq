@@ -1,0 +1,1 @@
+tests/scripts/bodyless-static-field.scala:2:33: error: jlib.Registry.hits is a static field of a Java class, which the interpreter has no body for

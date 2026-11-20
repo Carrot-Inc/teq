@@ -1,0 +1,1 @@
+tests/scripts/bodyless-forname.scala:8:11: error: Class.forName("Shelf") initializes the Java class jlib.Registry, whose static initializer the interpreter has no body for

@@ -75,7 +75,7 @@ i21225	Macro_1.scala:12:35: not found: GivenSelector
 i22260	Macros_1.scala:16:26: not found: MethodTypeKind
 i22395	output: line 1: the .check has 'TypeRef(AppliedType(TypeRef(ThisType(TypeRef(ThisType(TypeRef(NoPrefix,module class <root>)),module class <empty>)),Foo),List(TypeRef(TermRef(ThisType(TypeRef(NoPrefix,module class <root>)),object scala),Int)
 i22616c	out/dotty-3.8.4/tests/run-macros/i22616c/MyTypeRepr_3.scala: cannot write TASTy for the reflection API's type TypeRepr outside a method of a Quotes in MyTypeRepr
-i24006	Test.scala:3:20: not supported yet in a macro: reading stdin is an effect, which a compile-time evaluation cannot have (called by eval in object Eval)
+i24006	Test.scala:3:20: not supported yet in a macro: the creation of java.io.BufferedReader runs the constructor of the Java class java.io.BufferedReader, which does more than call its superclass's and store defaults (called by eval in object Eva
 i5119	output: line 1: the .check has 'Select(Typed(Apply(Select(New(TypeIdent("StringContextOps")), "<init>"), List(Apply(Select(Select(Select(Ident("_root_"), "scala"), "StringContext"), "apply"), List(Typed(Repeated(List(Literal(StringConstant(
 i5119b	output: line 3: the .check has 'Apply(Ident("foo"), List(Literal(IntConstant(4))))', the program printed 'Ident("arg1$1")'
 i5941	usage_2.scala:12:15: Unsupported syntax. Example: `GenLens[Address](_.streetNumber)`

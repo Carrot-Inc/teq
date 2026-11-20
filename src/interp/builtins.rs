@@ -801,6 +801,10 @@ fn install_core(it: &mut Table) {
     reg!(it, "java.lang.invoke.handleNew", |it, a| {
         let Value::Class(c) = arg(a, 0) else { return it.throw_named("NullPointerException", "refc") };
         let Some(k) = c.class else { return it.unsupported(format!("a constructor of {} by a method handle", c.qname)) };
+        // A method handle's construction is a creation as a `new` is (`bodyless.rs`).
+        if let Some(why) = it.creation_refusal(k, None) {
+            return it.refuse(why.to_string());
+        }
         let args = it.elements_of(&arg(a, 1))?;
         it.construct_new(k, args, &Frame::new(None))
     });
@@ -2580,6 +2584,11 @@ impl Interp<'_, '_> {
             Some((c, false)) => {
                 if initialize && self.typer.initialised_by_name(c) {
                     self.module(c)?;
+                } else if initialize {
+                    // A class's initialization runs its body-less Java superclasses' static initializers (JLS 12.4.1).
+                    if let Some(why) = self.initialization_refusal(c, &format!("Class.forName(\"{}\")", name), false) {
+                        return self.refuse(why);
+                    }
                 }
                 return Ok(self.class_value_of(c));
             }

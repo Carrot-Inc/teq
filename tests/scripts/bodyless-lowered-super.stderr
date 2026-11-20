@@ -1,0 +1,1 @@
+tests/scripts/bodyless-lowered-super.scala:4:45: error: hum of Lamp is the Java definition jlib.Quiet.hum, which the interpreter has no body for

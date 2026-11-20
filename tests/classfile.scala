@@ -475,7 +475,11 @@ import java.nio.file.{Files, Path, Paths}
         println("FAIL owners: the public subclasses of the Java fixture declare members javac bridged")
         (declared.lines ++ declared.err.linesIterator).take(10).foreach(println)
       val interpreted = Sh(teq, "interp", "tests/classpath/jvm/hidden_owner.scala", "--classpath", hidden.toString).timeout(120).check(false).run()
-      if interpreted.status == 3 && interpreted.out.isEmpty && interpreted.err.contains("has no body for method to run") then pass += 1
+      // The fixture's Base has a static field with an initializer (javac writes its `<clinit>`): the creation of a
+      // subclass is refused where it initializes Base, which the interpreter has no body for.
+      val refused = "hidden_owner.scala:106:27: error: the creation of hidden.Shown initializes the Java class hidden.Base, " +
+        "whose static initializer the interpreter has no body for"
+      if interpreted.status == 3 && interpreted.out.isEmpty && interpreted.err.contains(refused) then pass += 1
       else
         fail += 1
         println(s"FAIL owners: the interpreter's run of the Java fixture's program, exit code ${interpreted.status}")

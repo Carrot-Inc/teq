@@ -1,0 +1,1 @@
+tests/scripts/bodyless-lowered-second-constructor.scala:8:5: error: the creation of Shelf initializes the Java class jlib.Registry, whose static initializer the interpreter has no body for
