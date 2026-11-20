@@ -1,0 +1,141 @@
+# The rows of the pairs part's claim (tests/support/pairs_claim.py, tests/support/pairs_equality.py): a leg of a
+# cell (or of a program) where the head's answer is master's and not scalac's, each by its family and reason. A leg
+# not scalac's and not listed fails; a listed one that now answers as scalac fails too, so the list stays exact.
+# program	leg	family	reason
+cells/def-val-mixing-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/def-val-before-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/def-val-deep-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-own-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-own-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-own-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-own-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-own-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-mixing-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-mixing-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-mixing-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-mixing-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-mixing-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-before-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-before-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-before-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-before-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-before-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-deep-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-deep-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-deep-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-deep-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/var-val-deep-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-own-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-own-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-own-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-own-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-own-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-mixing-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-mixing-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-mixing-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-mixing-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-mixing-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-before-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-before-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-before-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-before-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-before-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-deep-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-deep-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-deep-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-deep-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/lazy-val-deep-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-own-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-own-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-own-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-own-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-own-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-mixing-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-mixing-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-mixing-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-mixing-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-mixing-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-before-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-before-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-before-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-before-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-before-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-deep-run	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-deep-products	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-deep-jar	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-deep-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/given-val-deep-split	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/inline-def-own-twolibs	jvm	products-inline-jvm	an inline def implementing a library trait's method from teq's products: AbstractMethodError on the JVM, master's and the head's
+cells/inline-def-mixing-run	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-run	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-run	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-run	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-products	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-products	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-products	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-products	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-jar	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-jar	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-jar	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-jar	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-twolibs	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-twolibs	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-twolibs	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-twolibs	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-split	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-split	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-split	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-mixing-split	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-run	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-run	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-run	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-run	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-products	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-products	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-products	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-products	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-jar	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-jar	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-jar	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-jar	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-twolibs	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-twolibs	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-twolibs	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-twolibs	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-split	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-split	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-split	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-before-split	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-run	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-run	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-run	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-run	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-products	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-products	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-products	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-products	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-jar	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-jar	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-jar	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-jar	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-twolibs	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-twolibs	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-twolibs	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-twolibs	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-split	interp	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-split	js	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-split	js-sl	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-def-deep-split	jvm	inline-mixed	scalac's own program throws AbstractMethodError (an inline def mixed in implements nothing at run time); teq's leg fails as master's
+cells/inline-val-mixing-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/inline-val-before-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/inline-val-deep-twolibs	check	stable-val	scalac refuses a val implemented by a var, a lazy val, a given or (T and O in two libraries) a def; teq accepts as master does: the overriding checks are B3's
+cells/object-val-before-run	interp	interp-object-val	the interpreter reads null for an object member implementing a val, master's and the head's (booked)
+cells/object-val-before-products	interp	interp-object-val	the interpreter reads null for an object member implementing a val, master's and the head's (booked)
+cells/object-val-before-jar	interp	interp-object-val	the interpreter reads null for an object member implementing a val, master's and the head's (booked)
+cells/object-val-before-twolibs	interp	interp-object-val	the interpreter reads null for an object member implementing a val, master's and the head's (booked)
+cells/object-val-before-split	interp	interp-object-val	the interpreter reads null for an object member implementing a val, master's and the head's (booked)
+cells/genover-again-run	check	refused-again	the overridden-again generic overload: refused as master refuses, by teq's JavaScript naming (C's own f over members named f$Int and f$Any)
+cells/genover-again-bothscalac	check	refused-again	the overridden-again generic overload: refused as master refuses, by teq's JavaScript naming (C's own f over members named f$Int and f$Any)
+cells/genover-again-bothprod	check	refused-again	the overridden-again generic overload: refused as master refuses, by teq's JavaScript naming (C's own f over members named f$Int and f$Any)
+cells/genover-again-cscalac	interp	imported-c	an imported C (the class from scalac's classes): the loader's part, next on the line
+cells/genover-again-cprod	check	refused-again	the overridden-again generic overload: refused as master refuses, by teq's JavaScript naming (C's own f over members named f$Int and f$Any)

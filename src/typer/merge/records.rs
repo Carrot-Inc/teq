@@ -472,6 +472,10 @@ pub(in crate::typer) fn tclass<M: Mapping + ?Sized>(m: &M, tc: &mut TClass) {
         for (_, s) in &mut l.existing_defs {
             *s = m.sym(*s);
         }
+        for p in &mut l.inherited_pairs {
+            p.overriding = m.sym(p.overriding);
+            p.overridden = m.sym(p.overridden);
+        }
         if let Some(s) = &mut l.eq_outer {
             *s = m.sym(*s);
         }

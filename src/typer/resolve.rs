@@ -9191,7 +9191,7 @@ impl<'a> Worker<'a> {
 
     /// A parent's base type for `bc` (dotty's `baseTypeOf` of the parent), seen through its arguments and its
     /// prefix as `set_parents` sees them.
-    fn parent_base_instance(&mut self, p: TypeId, bc: ClassId) -> Option<TypeId> {
+    pub(super) fn parent_base_instance(&mut self, p: TypeId, bc: ClassId) -> Option<TypeId> {
         let p = self.deref_alias(p);
         let (class_p, prefix) = match self.types.get(p) {
             Type::Nested(q, x) => (x, Some(q)),

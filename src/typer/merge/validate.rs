@@ -143,7 +143,7 @@ impl<'a> Worker<'a> {
             // switches and counters among them hold no id.
             exprs: _, pats: _, strings: _, expr_lists: _, pat_lists: _, sym_lists: _, stmts: _, cases: _, tries: _,
             tests: _, deferred_tests: _, funs: _, classes: _, top_funs: _, top_vals: _, main: _, main_object: _,
-            overrides: _, partial_function: _, throwable: _, js_exception: _, js_imports: _, js_exports: _,
+            overrides: _, inherited_defaults: _, partial_function: _, throwable: _, js_exception: _, js_imports: _, js_exports: _,
             record_types: _, types_only: _, types_aside: _, template_calls: _, get_class_units: _,
             template_syms: _, class_bodies: _, expr_types: _, expr_spans: _, file_tags: _, quotes: _,
             quote_pats: _, expansions: _, block_classes: _, expansion_bits: _, chain_end_bits: _,

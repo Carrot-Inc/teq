@@ -2056,7 +2056,14 @@ impl<'a, 't> Interp<'a, 't> {
         }
         if let Some(ti) = self.tclass_index(k) {
             let bridges = self.prog().classes[ti].bridges.clone();
-            for (declared, implementation) in bridges {
+            for (at, (declared, implementation)) in bridges.into_iter().enumerate() {
+                // A bridge the class's inherited pairs made answers JavaScript's name; the interpreter
+                // finds the pair's method by its signature (`alternative_member`, then the pair,
+                // `pair_member`), so that a subclass overriding it again is found, as `this` finds it.
+                // The walk's bridges stand, as on master.
+                if self.prog().classes[ti].is_pair_bridge(at) && self.syms().sym(implementation).kind == SymKind::Def {
+                    continue;
+                }
                 if self.syms().dispatch_name(declared) == name {
                     // Not where another method of the class goes by the name: that method answers
                     // it (`Program::bridge_name_held`).
@@ -2248,6 +2255,14 @@ impl<'a, 't> Interp<'a, 't> {
             Member::Missing if !by_signature => self.alternative_member(class, s),
             m => m,
         };
+        // Where neither finds one, the method an inherited pair of the class makes implement `s` (a trait's
+        // alternative implementing another trait's declaration at an instance, `T[Int]`'s `f(a: A)` by `f(Int)`):
+        // the record's pair, never ahead of the lookup, whose order is the class's members' (a re-abstraction in
+        // a later trait hides an earlier trait's body, which the cursor pairs for the checks).
+        let m = match m {
+            Member::Missing => self.pair_member(class, s).unwrap_or(Member::Missing),
+            m => m,
+        };
         // By the method's own name: an overload's output name is set apart (`valueOf$Char`).
         if matches!(m, Member::Missing) && self.name(self.syms().sym(s).name) == "valueOf" && matches!(self.runtime_class_name(class).as_ref(), "scala.String$" | "java.lang.String$") {
             let takes_chars = self.syms().sym(s).sig.as_ref().and_then(|sig| sig.clauses.first()).and_then(|c| c.params.first()).map(|p| p.ty);
@@ -2258,6 +2273,28 @@ impl<'a, 't> Interp<'a, 't> {
             return (Member::StringValueOf(takes_chars), name);
         }
         (m, name)
+    }
+
+    /// The method an inherited pair of `class` makes implement `s` (`TClass::inherited_pairs`): a
+    /// trait's method implementing another trait's declaration in the class that mixes both, the
+    /// first such pair the latest one in the class's linearisation.
+    fn pair_member(&mut self, class: ClassId, s: SymId) -> Option<Member> {
+        let i = self.tclass_index(class)?;
+        let o = self.prog().classes[i].inherited_pairs().iter().find(|p| p.overridden == s).map(|p| p.overriding)?;
+        let Owner::Class(k) = self.syms().sym(o).owner else { return None };
+        if self.syms().sym(o).kind != SymKind::Def {
+            return None;
+        }
+        let f = self.fun_of(o).filter(|f| self.prog().funs[f.idx()].body.is_some())?;
+        Some(Member::Fun(f, k))
+    }
+
+    /// The member declaring parameter `index`'s default that an inherited pair of `class` makes
+    /// `implementation` implement, the latest in the class's linearisation first.
+    pub(super) fn pair_default_declarer(&mut self, class: ClassId, implementation: SymId, index: usize) -> Option<SymId> {
+        let i = self.tclass_index(class)?;
+        let candidates: Vec<SymId> = self.prog().classes[i].inherited_pairs().iter().filter(|p| p.overriding == implementation).map(|p| p.overridden).collect();
+        candidates.into_iter().find(|&p| self.syms().sym(p).sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|cl| cl.params.iter()).nth(index).map(|q| q.has_default)).unwrap_or(false))
     }
 
     pub(super) fn invoke(&mut self, recv: Value, s: SymId, args: Vec<Value>) -> R {

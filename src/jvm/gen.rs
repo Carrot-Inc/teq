@@ -388,6 +388,10 @@ pub struct Gen<'a> {
     /// whose static forwarders the class being written takes.
     pub module_table: Vec<(u16, String, String)>,
     pub keep_table: bool,
+    /// The bridges of the class being written that its inherited pairs made (`pair_bridges`), by name and
+    /// descriptor: a module class's are left out of the table its static forwarders are made from, where
+    /// an inherited method of that descriptor with a body takes a forwarder as scalac's has one.
+    pub pair_bridged: Vec<(String, String)>,
     pub forward_from: Option<(Rc<str>, Vec<(u16, String, String)>)>,
     pub wide: bool,
     pub overflow: bool,
@@ -463,6 +467,7 @@ impl<'a> Gen<'a> {
             extra_classes: Vec::new(),
             module_table: Vec::new(),
             keep_table: false,
+            pair_bridged: Vec::new(),
             forward_from: None,
             wide: false,
             overflow: false,
@@ -519,6 +524,7 @@ impl<'a> Gen<'a> {
 
     pub fn reset_class(&mut self) {
         self.pending.clear();
+        self.pair_bridged.clear();
         self.lifted.clear();
         self.lifted_lazy_inits.clear();
         self.lazy_holders.clear();

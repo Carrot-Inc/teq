@@ -727,6 +727,7 @@ impl<'a> Worker<'a> {
         self.complete_library_trait_fields();
         self.once(|t| t.check_inherited_conflicts());
         self.decide_override_pairs();
+        self.record_class_pairs(|_, _| true, true);
         self.settle_val_accessors();
         self.name_all_alternatives();
         self.choose_entry_point();
@@ -7714,7 +7715,7 @@ impl<'a> Worker<'a> {
 
     /// `abstract override def`: a member of a trait that still needs the implementation its
     /// `super` call goes to.
-    fn is_abstract_override(&self, sym: SymId) -> bool {
+    pub(super) fn is_abstract_override(&self, sym: SymId) -> bool {
         let stackable = mods::ABSTRACT | mods::OVERRIDE;
         self.syms.sym(sym).mods & stackable == stackable
     }
@@ -7887,7 +7888,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    fn in_std(&self, sym: SymId) -> bool {
+    pub(super) fn in_std(&self, sym: SymId) -> bool {
         self.source(self.syms.sym(sym).file).is_std
     }
 
@@ -8136,6 +8137,10 @@ impl<'a> Worker<'a> {
                     let overridden = self.check_override(c, m, None, p, bt);
                     if overridden && !copy && self.index.is_some() {
                         self.index_override(m, p);
+                    }
+                    // An extension method's pairs are the check's alone: the record leaves extension methods out.
+                    if overridden && !copy && !is_ext && crate::tir::pairs_dump().is_some() {
+                        self.dump_walk_pair(c, m, p);
                     }
                     overrides |= overridden;
                     let (alternative, meets_inherited, named) = {
@@ -8475,7 +8480,7 @@ impl<'a> Worker<'a> {
         info.ctor.iter().zip(&info.ctor_syms).any(|(clause, syms)| clause.is_using && syms.contains(&m))
     }
 
-    fn is_ctor_param(&self, c: ClassId, m: SymId) -> bool {
+    pub(super) fn is_ctor_param(&self, c: ClassId, m: SymId) -> bool {
         self.syms.class(c).ctor_syms.iter().any(|clause| clause.contains(&m))
     }
 
@@ -9556,7 +9561,7 @@ impl<'a> Worker<'a> {
 
     /// "method f", "value x in trait T".
     /// A member object: a static one's symbol, or the val of one nested in a class.
-    fn is_member_object(&self, m: SymId) -> bool {
+    pub(super) fn is_member_object(&self, m: SymId) -> bool {
         matches!(self.syms.sym(m).kind, SymKind::Object(_)) || self.inner_object_of_sym(m).is_some()
     }
 
@@ -10518,8 +10523,10 @@ impl<'a> Worker<'a> {
 
     /// A val that a class inherits next to the def it implements, from an ancestor that knows
     /// nothing of that def, is reached through a method as well.
-    fn reach_through_accessor(&mut self, implementation: SymId, declared: SymId) {
-        let is_field = matches!(self.syms.sym(implementation).kind, SymKind::Val | SymKind::Var);
+    pub(super) fn reach_through_accessor(&mut self, implementation: SymId, declared: SymId) {
+        // A given without parameters is a lazy val (`mark_accessors`).
+        let info = self.syms.sym(implementation);
+        let is_field = matches!(info.kind, SymKind::Val | SymKind::Var) || (info.kind == SymKind::Given && info.mods & mods::LAZY != 0);
         if is_field && self.syms.sym(declared).kind == SymKind::Def && !self.syms.sym(implementation).needs_accessor {
             self.shared_write(implementation, |w| w.syms.sym_mut(implementation).needs_accessor = true);
             self.vals_by_accessor = true;

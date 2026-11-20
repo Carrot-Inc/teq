@@ -2017,8 +2017,11 @@ impl<'a> Worker<'a> {
             if !of(&self.syms, c) {
                 continue;
             }
-            let bridges = self.bridges_of(c);
+            let bridges = self.bridges_of(c, Some(i));
             self.prog.classes[i].bridges = bridges;
+            if crate::tir::pairs_dump().is_some() {
+                self.dump_own_names_at(i);
+            }
         }
     }
 
@@ -2033,13 +2036,19 @@ impl<'a> Worker<'a> {
     /// met.
     pub(super) fn bridge_class(&mut self, c: ClassId) {
         self.inherit_overloads(c);
-        let bridges = self.bridges_of(c);
+        let at = (0..self.prog.classes.len()).rev().find(|&i| self.prog.classes[i].id == c);
+        if let Some(i) = at {
+            if self.record_pairs_at(i) {
+                self.add_inherited_defaults_at(i);
+            }
+        }
+        let bridges = self.bridges_of(c, at);
         if let Some(tc) = self.prog.classes.rfind_mut(|tc| tc.id == c) {
             tc.bridges = bridges;
         }
     }
 
-    fn bridges_of(&mut self, c: ClassId) -> Vec<(SymId, SymId)> {
+    fn bridges_of(&mut self, c: ClassId, at: Option<usize>) -> Vec<(SymId, SymId)> {
         let info = self.syms.class(c);
         if !info.has_overloads || info.kind == ClassKind::Trait || info.js != JsKind::Scala {
             return Vec::new();
@@ -2069,6 +2078,42 @@ impl<'a> Worker<'a> {
                 if declared != actual && !bridges.iter().any(|&(d, _)| self.dispatch_name(d) == declared) {
                     bridges.push((m, implementation));
                 }
+            }
+        }
+        // The class's inherited pairs (`class_pairs`) whose two members the output names apart: a
+        // trait's alternative implementing another trait's declaration in the class that mixes both,
+        // answered under the declaration's name where the superclass does not answer it already.
+        let pairs: Vec<crate::tir::ClassPair> = at.map(|i| self.prog.classes[i].inherited_pairs().to_vec()).unwrap_or_default();
+        let walk = bridges.len() as u32;
+        if let Some(l) = at.and_then(|i| self.prog.classes[i].lists.as_deref_mut()) {
+            l.pair_bridges_from = walk;
+        }
+        for p in pairs {
+            let (o, d) = (p.overriding, p.overridden);
+            let both_methods = self.syms.sym(o).kind == SymKind::Def && self.syms.sym(d).kind == SymKind::Def;
+            if p.bridged || !both_methods || self.is_abstract_member(o) {
+                continue;
+            }
+            let (declared, actual) = (self.dispatch_name(d), self.dispatch_name(o));
+            if declared == actual || bridges.iter().any(|&(x, _)| self.dispatch_name(x) == declared) {
+                continue;
+            }
+            // Not where a concrete member of the class's linearisation goes by that name already (another
+            // trait's `f(x: Double)` beside `T`'s `f(x: Int)`): it answers the name, as JavaScript's
+            // prototype has it.
+            let name = self.syms.sym(d).name;
+            let mut held = false;
+            for &(b, _) in &bases {
+                let mut k = 0;
+                while let Some(x) = self.own_alternative(b, name, k) {
+                    k += 1;
+                    if x != d && x != o && self.syms.sym(x).kind == SymKind::Def && !self.is_abstract_member(x) && self.dispatch_name(x) == declared {
+                        held = true;
+                    }
+                }
+            }
+            if !held {
+                bridges.push((d, o));
             }
         }
         bridges

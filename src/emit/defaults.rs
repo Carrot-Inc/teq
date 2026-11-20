@@ -136,7 +136,15 @@ impl<'a> Defaults<'a> {
                 }
             }
         }
-        None
+        // A member a class's inherited pair makes `m` implement (`Program::inherited_defaults`):
+        // the getter is the one on `this`, whichever class mixes `m` in.
+        // The function is one, its getter's name its own: where a class's pair makes it implement a member that the
+        // output names apart (`f$Int`), whose getter that name does not find, it computes none.
+        let implemented = self.prog.inherited_defaults.get(&m)?;
+        if implemented.iter().any(|&p| declares(p) && self.syms.dispatch_name(p) != name) {
+            return None;
+        }
+        implemented.iter().copied().find(|&p| self.syms.dispatch_name(p) == name && declares(p))
     }
 
     /// Whether no value of type `t` is JavaScript's `undefined`, which a parameter default of the

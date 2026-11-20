@@ -3753,7 +3753,10 @@ impl Walker {
                 alts.iter().any(|&a| cx.syms.sym(a).sig.as_ref().is_some_and(|sig| sig.clauses.iter().any(|cl| cl.params.iter().any(|p| p.has_default))))
             })
         });
-        if !any {
+        // Or where a class's inherited pair makes the method implement one with a default
+        // (`Program::inherited_defaults`): each such member's getter, on `this` in its class.
+        let implemented: Vec<SymId> = cx.prog.inherited_defaults.get(&s).cloned().unwrap_or_default();
+        if !any && implemented.is_empty() {
             return;
         }
         let d = defaults_of(cx);
@@ -3763,6 +3766,11 @@ impl Walker {
             }
             if let Some(declarer) = d.js_declarer(s, i).filter(|&x| x != s) {
                 self.reach_getter(cx, declarer, i as u32);
+            }
+            for &p in &implemented {
+                if d.param(DefaultOf::Method(p), i).is_some_and(|q| q.has_default) {
+                    self.reach_getter(cx, p, i as u32);
+                }
             }
         }
     }

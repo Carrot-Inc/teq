@@ -227,6 +227,7 @@ machine=(
   "java-lang-names ./tests/java-lang-names.sh"
   "jvm ./tests/run_jvm.sh"
   "jvm-21 ./tests/run_jvm.sh --java-output-version=21"
+  "pairs-twin ./tests/pairs-twin.sh"
   "interp ./tests/run_interp.sh"
   "interp-script ./tests/interp-script.sh"
   "fix ./teq interp tests/fix.scala"

@@ -990,9 +990,64 @@ pub struct TClass {
     pub deferred_givens: Vec<(SymId, SymId)>,
 }
 
+/// The file `TEQ_PAIRS_DUMP` names, where the record of every class's pairs and what the own pairs' walks record of
+/// them are written (tests/pairs-equality.sh, tests/pairs-twin.sh); read once.
+pub fn pairs_dump() -> Option<&'static std::ffi::OsStr> {
+    static DUMP: std::sync::OnceLock<Option<std::ffi::OsString>> = std::sync::OnceLock::new();
+    DUMP.get_or_init(|| std::env::var_os("TEQ_PAIRS_DUMP")).as_deref()
+}
+
+/// A control of the pairs' proofs (tests/pairs-controls.sh): `TEQ_PAIRS_CONTROL=<kind>:<class>:<member>[:<other>]`
+/// changes the record a class keeps before anything reads it, so the proofs must turn red on that pair. `drop`
+/// takes the pair out, `swap` makes another member of the overriding member's owner its target (`other` by name,
+/// else another alternative of the member's name), `unbridge` clears its bridged mark. `class` is the class's
+/// written name (`*`: every class), `member` the overridden member's name. It acts only under the dump
+/// (`pairs_dump`), so no build without the dump is changed.
+pub fn pairs_control() -> Option<&'static (String, String, String, Option<String>)> {
+    static CONTROL: std::sync::OnceLock<Option<(String, String, String, Option<String>)>> = std::sync::OnceLock::new();
+    CONTROL
+        .get_or_init(|| {
+            pairs_dump()?;
+            let spec = std::env::var("TEQ_PAIRS_CONTROL").ok()?;
+            let mut parts = spec.split(':').map(str::to_string);
+            let (kind, class, member) = (parts.next()?, parts.next()?, parts.next()?);
+            Some((kind, class, member, parts.next()))
+        })
+        .as_ref()
+}
+
+/// Appends `text` to the pairs' dump (`pairs_dump`).
+pub fn pairs_dump_write(text: &str) {
+    use std::io::Write;
+    if let Some(path) = pairs_dump() {
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = f.write_all(text.as_bytes());
+        }
+    }
+}
+
+/// A pair of a class whose overriding member the class inherits (`Worker::class_pairs`, dotty's
+/// `OverridingPairs.Cursor` over the class): `overriding` overrides or implements `overridden` as
+/// the class sees both, the two declared by two of its bases.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClassPair {
+    pub overriding: SymId,
+    pub overridden: SymId,
+    /// The superclass has the pair as its own (`Bridges.BridgesCursor`, whose one parent is the
+    /// superclass): its bridge is the superclass's.
+    pub bridged: bool,
+}
+
 /// The lists of a class body that most classes leave empty (`TClass::lists`).
 #[derive(Clone, Default)]
 pub struct TClassLists {
+    /// The class's pairs whose overriding member it inherits (`ClassPair`), which the back ends
+    /// read where the class is: its JavaScript bridges, its JVM bridges, the interpreter's
+    /// dispatch on its instances.
+    pub inherited_pairs: Vec<ClassPair>,
+    /// Where in `TClass::bridges` the bridges the class's inherited pairs made begin (`bridges_of`): the walk's come
+    /// first. The interpreter answers those pairs by their symbols, not by these JavaScript names.
+    pub pair_bridges_from: u32,
     /// The indices of a case class's fields in the order its synthesized `equals` compares them
     /// (`equals_order`), where that is not their declaration order; empty otherwise.
     pub equals_order: Vec<u16>,
@@ -1027,6 +1082,15 @@ impl TClass {
 
     pub fn existing_defs(&self) -> &[(u16, SymId)] {
         self.lists.as_deref().map_or(&[], |l| &l.existing_defs)
+    }
+
+    pub fn inherited_pairs(&self) -> &[ClassPair] {
+        self.lists.as_deref().map_or(&[], |l| &l.inherited_pairs)
+    }
+
+    /// The bridges the class's inherited pairs made (`TClassLists::pair_bridges_from`), none where it has no pair.
+    pub fn is_pair_bridge(&self, index: usize) -> bool {
+        self.lists.as_deref().is_some_and(|l| !l.inherited_pairs.is_empty() && index >= l.pair_bridges_from as usize)
     }
 
     pub fn constants(&self) -> &[(SymId, TExprId)] {
@@ -1133,6 +1197,12 @@ pub struct Program {
     /// backend that dispatches by name and erased parameters needs to bridge. And for each var
     /// that implements an abstract setter `x_=`, that setter (`typer::setters`).
     pub overrides: crate::arena::Layered<SymId, Vec<SymId>>,
+    /// For a method that a class's inherited pair makes implement a method declaring defaults
+    /// it does not declare itself (a trait's `f(a: Int)` mixed beside another's
+    /// `f(a: Int = 3)`), the members it so implements: the JavaScript function of the method
+    /// computes such a default from the getter on `this` (`emit::defaults::js_declarer`). Made
+    /// again from the classes' pairs at every build (`Worker::record_class_pairs`).
+    pub inherited_defaults: crate::intern::FxMap<SymId, Vec<SymId>>,
     /// The trait whose methods the runtime gives to partial function values.
     pub partial_function: Option<ClassId>,
     /// `scala.reflect.ClassTag`'s companion, whose tags a `@jvmEvidence` member is passed as
@@ -1598,6 +1668,7 @@ impl Program {
             main: None,
             main_object: None,
             overrides: self.overrides.attach(),
+            inherited_defaults: self.inherited_defaults.clone(),
             partial_function: self.partial_function,
             class_tag_module: self.class_tag_module,
             throwable: self.throwable,
@@ -1721,6 +1792,7 @@ impl Default for Program {
             main: None,
             main_object: None,
             overrides: Default::default(),
+            inherited_defaults: Default::default(),
             partial_function: None,
             class_tag_module: None,
             throwable: None,

@@ -480,7 +480,8 @@ impl<'a> Gen<'a> {
             self.static_forwarders(&module, &table);
         }
         if std::mem::take(&mut self.keep_table) {
-            self.module_table = self.cw.method_table();
+            let pair_bridged = std::mem::take(&mut self.pair_bridged);
+            self.module_table = self.cw.method_table().into_iter().filter(|(_, n, d)| !pair_bridged.iter().any(|(pn, pd)| pn == n && pd == d)).collect();
         }
         let cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
         (name.to_string(), cw.finish(self.cx.input.output_version))
@@ -594,7 +595,7 @@ impl<'a> Gen<'a> {
     /// The methods class `c` inherits, by name and descriptor: a jar class's from its class
     /// file, a program class's from its members; `concrete` keeps those with a body only.
     /// `java.lang.Object`'s are left out.
-    fn inherited_methods(&mut self, c: ClassId, concrete: bool) -> Vec<(String, String)> {
+    pub(super) fn inherited_methods(&mut self, c: ClassId, concrete: bool) -> Vec<(String, String)> {
         let cx = self.cx;
         let syms = cx.input.syms;
         let mut out: Vec<(String, String)> = Vec::new();

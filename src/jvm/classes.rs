@@ -715,22 +715,41 @@ impl<'a> Gen<'a> {
             if matches!(syms.sym(inherited).kind, SymKind::Object(_)) {
                 continue;
             }
+            // Under the pairs' dump each decision is written (tests/pairs-twin.sh holds them to the record).
+            // A var's setter is walked by the var under the setter's name: the dump names the setter, the member the
+            // record pairs.
+            let walked = if name == info.name { sym } else { syms.class(c).members.get(&name).copied().filter(|&x| syms.sym(x).owner == Owner::Class(c)).unwrap_or(sym) };
+            let dump = |this: &mut Self, decision: &str| {
+                if crate::tir::pairs_dump().is_some() {
+                    let bm = this.mref(inherited);
+                    let differs = if bm.desc == m.desc { "same-descriptor" } else { "descriptors-differ" };
+                    // whether the class's table holds the member (a member the back end makes by rule, a case
+                    // companion's `apply`, is in none: the record, which reads the table, has no pair of it)
+                    let held = if syms.class(c).member_order.contains(&walked) { "table" } else { "rule" };
+                    crate::tir::pairs_dump_write(&format!("@{}\tjvm-walk\t{}\t{}\t{decision}\t{differs}\t{held}\n", c.0, walked.0, inherited.0));
+                }
+            };
             // An alternative of an overloaded name is bridged when it takes the parameters
             // of the inherited one as the class sees them: the types agree after erasure of
             // the class's type arguments, which the bridge's own parameters show.
             if syms.sym(inherited).alternative || syms.sym(sym).alternative {
                 let overrides = cx.input.prog.overrides.get(&sym).map_or(false, |ps| ps.contains(&inherited));
                 if !overrides {
+                    dump(self, "not-overriding");
                     continue;
                 }
             }
             let bm = self.mref(inherited);
             if bm.name != m.name || bm.desc == m.desc || bm.params.len() != m.params.len() || self.cw.has_method(&bm.name, &bm.desc) {
+                let decision = if bm.name != m.name { "other-name" } else if bm.desc == m.desc { "same" } else if bm.params.len() != m.params.len() { "arity" } else { "declared" };
+                dump(self, decision);
                 continue;
             }
             if !self.params_may_override(inherited, &bm.params, &m.params) {
+                dump(self, "declined");
                 continue;
             }
+            dump(self, "bridge");
             self.bridge(sym, &bm, m);
             }
         }
@@ -1150,7 +1169,10 @@ impl<'a> Gen<'a> {
                 self.superclass_forwarders(c);
                 self.superclass_bridges(c);
             }
-            self.jar_bridges(c);
+            // After every member the class declares itself (a case object's `fromProduct`), which a
+            // pair's bridge would otherwise stand for; before the link mode's guesses (`jar_bridges`).
+            self.pair_bridges(tc);
+            self.jar_bridges(c, tc.inherited_pairs());
             self.jar_trait_mixins(c);
             self.inner_case_companion_getters(c);
             if let Some(k) = info.companion.filter(|_| info.inner_object.is_some()) {
@@ -2662,13 +2684,86 @@ impl<'a> Gen<'a> {
     /// Inherited alternatives of an overloaded name that implement an inherited declaration
     /// with another erased signature (`TClass::bridges`).
     fn emit_inherited_bridges(&mut self, tc: &TClass) {
+        let mut inherited: Option<Vec<(String, String)>> = None;
         for &(declared, implementation) in &tc.bridges {
             let bm = self.mref(declared);
             let m = self.mref(implementation);
             if bm.desc == m.desc || bm.params.len() != m.params.len() || self.cw.has_method(&bm.name, &bm.desc) {
                 continue;
             }
+            // A bridge an inherited pair made (`pair_bridges`' rule): not over a method with a body of that
+            // descriptor the class inherits.
+            if tc.inherited_pairs().iter().any(|p| p.overriding == implementation && p.overridden == declared) {
+                if inherited.is_none() {
+                    inherited = Some(self.inherited_methods(tc.id, true));
+                }
+                if inherited.as_ref().is_some_and(|ms| ms.iter().any(|(n, d)| *n == *bm.name && *d == *bm.desc)) {
+                    continue;
+                }
+            }
             self.bridge(implementation, &bm, &m);
+        }
+    }
+
+    /// The bridges of the class's inherited pairs (`TClass::inherited_pairs`, dotty's `Bridges.add`
+    /// over its `BridgesCursor`): a trait's method implementing another trait's declaration whose
+    /// erasure differs is answered under the declaration's descriptor by a call of the method.
+    /// Where the superclass has the pair (`bridged`) the bridge is its; where the method's trait
+    /// derives from the declaration's owner the pair is that trait's own, which a trait this build
+    /// makes bridges as a default method (`emit_bridges_as`) and a trait read from class files
+    /// bridges where its class file declares the descriptor with a body (teq's products do;
+    /// scalac's traits declare no bridge, its classes do).
+    fn pair_bridges(&mut self, tc: &TClass) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        // In the order the link mode's guesses meet them (`jar_bridges`): by the declaring base's place in the
+        // linearisation, then the method's place in its class file (or among its members, a class of this build).
+        let bases = &syms.class(tc.id).base_types;
+        let mut pairs: Vec<(usize, usize, crate::tir::ClassPair)> = Vec::new();
+        for &p in tc.inherited_pairs() {
+            let Owner::Class(dk) = syms.sym(p.overridden).owner else { continue };
+            let at = bases.iter().position(|&(b, _)| b == dk).unwrap_or(usize::MAX);
+            let place = match cx.class_files.get(&dk) {
+                Some(f) => {
+                    let r = self.mref(p.overridden);
+                    f.methods.iter().position(|x| x.name == r.name && x.descriptor == r.desc).unwrap_or(usize::MAX)
+                }
+                None => syms.class(dk).member_order.iter().position(|&m| m == p.overridden).unwrap_or(usize::MAX),
+            };
+            pairs.push((at, place, p));
+        }
+        pairs.sort_by_key(|&(at, place, _)| (at, place));
+        let mut inherited: Option<Vec<(String, String)>> = None;
+        for (_, _, p) in pairs {
+            let (o, d) = (p.overriding, p.overridden);
+            if p.bridged || syms.sym(o).kind != SymKind::Def || syms.sym(d).kind != SymKind::Def || syms.sym(o).is_extension {
+                continue;
+            }
+            let bm = self.mref(d);
+            let m = self.mref(o);
+            if bm.name != m.name || bm.desc == m.desc || bm.params.len() != m.params.len() || self.cw.has_method(&bm.name, &bm.desc) {
+                continue;
+            }
+            // Not over a method with a body of that descriptor the class inherits (a trait's own `f(Object)`
+            // beside its `f(Int)`): the class answers the descriptor by it.
+            if inherited.is_none() {
+                inherited = Some(self.inherited_methods(tc.id, true));
+            }
+            if inherited.as_ref().is_some_and(|ms| ms.iter().any(|(n, dsc)| *n == *bm.name && *dsc == *bm.desc)) {
+                continue;
+            }
+            if let (Owner::Class(k), Owner::Class(dk)) = (syms.sym(o).owner, syms.sym(d).owner) {
+                let own_pair = syms.class(k).base_types.iter().any(|&(b, _)| b == dk);
+                let bridged_there = match cx.class_files.get(&k) {
+                    Some(f) => f.methods.iter().any(|x| x.name == bm.name && x.descriptor == bm.desc && x.access & ACC_ABSTRACT == 0),
+                    None => cx.tclass_of[k.idx()] != u32::MAX,
+                };
+                if own_pair && bridged_there {
+                    continue;
+                }
+            }
+            self.pair_bridged.push((bm.name.to_string(), bm.desc.to_string()));
+            self.bridge(o, &bm, &m);
         }
     }
 
@@ -2677,7 +2772,7 @@ impl<'a> Gen<'a> {
     /// implements, where a method of its name and arity does, forwards to that method
     /// (`PartialOrdering.tryCompare` returning `Option` beside `Ordering`'s default returning
     /// `Some`, `IterableOnceOps.filter` returning `Object` beside `Iterator`'s).
-    fn jar_bridges(&mut self, c: ClassId) {
+    fn jar_bridges(&mut self, c: ClassId, pairs: &[crate::tir::ClassPair]) {
         let cx = self.cx;
         if self.is_interface || self.abstract_class {
             return;
@@ -2704,6 +2799,19 @@ impl<'a> Gen<'a> {
                 implemented.push((r.name.clone(), r.desc.clone()));
             }
         }
+        // The class's inherited pairs whose declaration is a jar's: the method that implements it is the pair's, not
+        // a guess by name and arity (`f(Object)` of `T[Int]` by `f(Int)`, never `f(String)` beside it).
+        let mut answered: Vec<(String, String, String)> = Vec::new();
+        for p in pairs {
+            if syms.sym(p.overriding).kind == SymKind::Def && syms.sym(p.overridden).kind == SymKind::Def {
+                let (r, o) = (self.mref(p.overridden), self.mref(p.overriding));
+                // A target of the declaration's own descriptor is no bridge's (an inline def a library's class
+                // file keeps no body of): the guess stands, as on master.
+                if o.name == r.name && o.params.len() == r.params.len() && o.desc != r.desc {
+                    answered.push((r.name.to_string(), r.desc.to_string(), o.desc.to_string()));
+                }
+            }
+        }
         let mut abstract_ones: Vec<(String, String)> = Vec::new();
         for f in &files {
             for m in f.methods.iter().filter(|m| usable(m) && m.access & ACC_ABSTRACT != 0) {
@@ -2718,6 +2826,11 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let (params, _) = parse_method_desc(&desc);
+            if let Some((_, _, target_desc)) = answered.iter().find(|(n, d, _)| *n == name && *d == desc) {
+                let target_desc = target_desc.clone();
+                self.self_bridge(&name, &desc, &target_desc);
+                continue;
+            }
             let target = implemented
                 .iter()
                 .filter(|(n, d)| *n == name && parse_method_desc(d).0.len() == params.len())

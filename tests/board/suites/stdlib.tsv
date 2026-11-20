@@ -1319,6 +1319,10 @@ inherited_extension_two_objects	pass	-
 inherited_inline_method_result	pass	-	
 inherited_main	pass	-	
 inherited_method_under_two_names_super	pass	-	
+inherited_pair_default	pass	-	
+inherited_pair_generic_overload	pass	-	
+inherited_pair_overload	pass	-	
+inherited_pair_stored_given	pass	-	
 inherited_result_conjunction	pass	-	
 inherited_result_own_parameters	pass	-	
 inherited_storage	pass	-	
@@ -2305,6 +2309,7 @@ overloads_by_using_clause	pass	-
 override_access_local_owner	pass	-	
 override_enclosing_type_member	pass	-	
 override_inferred	pass	-	
+override_marked_unchecked	pass	-	
 override_nullary_any	pass	-	
 override_param_chains	pass	-	
 override_param_enum_and_trait_route	pass	-	

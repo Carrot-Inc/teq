@@ -172,6 +172,7 @@ giveninline	pass	-
 givenladder	pass	-	
 givenlocalinline	pass	-	
 givenlocalobject	pass	-	
+givenobjectparents	pass	-	
 givenobjectself	pass	-	
 givenobjectsingleton	pass	-	
 givenopaqueprefix	pass	-	
@@ -434,6 +435,7 @@ twomains	pass	-
 typemembers	pass	-	
 typenamedbinding	pass	-	
 typeselecttrees	pass	-	
+uncheckedoverride	pass	-	
 unionarrays	fail	-	unionarrays scalac-run
 unionlub	fail	-	unionlub check
 unitmembers	pass	-	

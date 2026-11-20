@@ -1,0 +1,2 @@
+cases/sam_conversion_after_overloaded_apply	jvm @278: the record's pair Givens$$anon$ms75ld_1155.apply(_$0: Name): String > scala.Function1.apply(v1: T1): R differs in descriptor and the walk does not bridge it (not-overriding)
+cases/std_method_joined_and_called	jvm @243: the record's pair Ver.compareTo(o: Ver): Int > java.lang.Comparable.compareTo(that: T): Int differs in descriptor and the walk does not bridge it (not-overriding)

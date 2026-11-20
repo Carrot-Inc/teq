@@ -1,0 +1,7 @@
+# The tests/cases programs the pairs part claims, each held by tests/pairs-equality.sh to its .expected (scalac's
+# output) on every leg whatever its bytes; every other case is held to its .expected by its own suites and their
+# pending lists.
+cases/inherited_pair_default
+cases/inherited_pair_generic_overload
+cases/inherited_pair_overload
+cases/inherited_pair_stored_given

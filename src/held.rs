@@ -54,6 +54,7 @@ impl Program {
             main: _,
             main_object: _,
             overrides,
+            inherited_defaults,
             partial_function: _,
             class_tag_module: _,
             throwable: _,
@@ -119,12 +120,14 @@ impl Program {
             + classes
                 .own()
                 .iter()
-                .map(|c| array(&c.ctor_params) + array(&c.ctor_defaults) + array(&c.init) + array(&c.methods) + array(&c.ctors) + array(&c.super_accessors) + array(&c.bridges) + array(&c.deferred_givens) + c.lists.as_deref().map_or(0, |l| size_of::<crate::tir::TClassLists>() + array(&l.equals_order) + array(&l.existing_defs) + array(&l.constants) + array(&l.mirror_members)))
+                .map(|c| array(&c.ctor_params) + array(&c.ctor_defaults) + array(&c.init) + array(&c.methods) + array(&c.ctors) + array(&c.super_accessors) + array(&c.bridges) + array(&c.deferred_givens) + c.lists.as_deref().map_or(0, |l| size_of::<crate::tir::TClassLists>() + array(&l.equals_order) + array(&l.existing_defs) + array(&l.constants) + array(&l.mirror_members) + array(&l.inherited_pairs)))
                 .sum::<usize>()
             + top_funs.held()
             + top_vals.held()
             + overrides.held()
             + overrides.local.values().map(array).sum::<usize>()
+            + table(inherited_defaults)
+            + inherited_defaults.values().map(array).sum::<usize>()
             + array(js_imports)
             + array(js_exports)
             + array(template_calls)

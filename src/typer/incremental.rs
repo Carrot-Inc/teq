@@ -201,6 +201,7 @@ impl<'a> Worker<'a> {
         // build reached it), as a fresh build's do.
         self.name_late_alternatives(prefix.overloads as usize);
         let files: Vec<FileId> = changes.iter().map(|c| c.file).collect();
+        self.record_class_pairs(|syms, c| syms.class_of_files(c, &files), false);
         self.add_bridges_of(&files);
         self.finish_capture_of(Some(&files));
         self.choose_entry_point();

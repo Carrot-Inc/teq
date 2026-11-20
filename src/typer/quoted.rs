@@ -3564,6 +3564,8 @@ impl<'c> Copier<'c> {
                 mirror_members: l.mirror_members.iter().map(|&f| self.fun(t, f)).collect(),
                 constants,
                 eq_outer: l.eq_outer.map(|s| self.sym(s)),
+                inherited_pairs: l.inherited_pairs.iter().map(|p| crate::tir::ClassPair { overriding: self.sym(p.overriding), overridden: self.sym(p.overridden), ..*p }).collect(),
+                pair_bridges_from: l.pair_bridges_from,
             })
         });
         let ctors: Vec<FunId> = tc.ctors.iter().map(|&f| self.fun(t, f)).collect();

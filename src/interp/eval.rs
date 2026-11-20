@@ -714,7 +714,13 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                 };
                 let implementation = self.prog().funs[f.idx()].sym;
-                let declarer = declared(self, implementation);
+                // The getter is the receiver's (dotty's `findDefaultGetter` on the receiver): where
+                // the implementation and its ancestors declare no default, the member a pair of the
+                // receiver's class makes it implement does (`TClass::inherited_pairs`).
+                let declarer = match self.typer.default_declarer(implementation, index) {
+                    Some(d) => d,
+                    None => self.pair_default_declarer(class, implementation, index).unwrap_or(implementation),
+                };
                 if declarer == implementation {
                     let parent = match owner_class {
                         Some(k) if k == class => o.env.clone(),

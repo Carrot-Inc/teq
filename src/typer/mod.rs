@@ -43,6 +43,7 @@ mod members;
 mod namedtuple;
 mod namer;
 mod overload;
+mod pairs;
 pub use reflective::{reflective_proxy_name, Naming, ReflectiveSig};
 mod pat;
 pub mod prep;
