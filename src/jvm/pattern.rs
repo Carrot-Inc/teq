@@ -2,8 +2,9 @@
 //! per case against a scrutinee held in a local, with jumps to the next case in the place of
 //! nested `if`s.
 
+use crate::lir::{ErasedType, Invoke};
 use super::classfile::*;
-use super::gen::{Gen, Invoke, Mode};
+use super::gen::{Gen, Mode};
 use super::names::*;
 use crate::ast::ListRef;
 use crate::tir::*;
@@ -16,7 +17,7 @@ impl<'a> Gen<'a> {
         // A reference is matched as it comes, without a cast to its static type: the patterns
         // test its class, and an unchecked type argument may have promised too much.
         let t = self.static_type(scrut);
-        let t = if t.is_ref() || t == JType::V { JType::object() } else { t };
+        let t = if t.is_ref() || t == ErasedType::V { ErasedType::object() } else { t };
         // A value class's primitive underlying value stays as it is, and is boxed where a pattern
         // tests it.
         let vc = if t.is_ref() { None } else { self.expr_value_class(scrut).map(|(c, _)| c) };
@@ -38,7 +39,7 @@ impl<'a> Gen<'a> {
             self.code.locals_release(mark);
             if let Mode::Value(want) = mode {
                 self.goto(done);
-                if *want != JType::V {
+                if *want != ErasedType::V {
                     self.code.pop();
                 }
             }
@@ -47,7 +48,7 @@ impl<'a> Gen<'a> {
         self.match_error(slot, &t);
         self.m.vc_slots.truncate(vc_slots);
         if let Mode::Value(want) = mode {
-            if *want != JType::V {
+            if *want != ErasedType::V {
                 let vt = self.vt(want);
                 self.code.push(vt);
             }
@@ -58,7 +59,7 @@ impl<'a> Gen<'a> {
 
     /// Tests the value in `slot` against the pattern and binds its variables; jumps to `fail`
     /// when it does not match.
-    pub fn pattern(&mut self, pat: TPatId, slot: u16, ty: &JType, fail: Label) {
+    pub fn pattern(&mut self, pat: TPatId, slot: u16, ty: &ErasedType, fail: Label) {
         let cx = self.cx;
         let prog = cx.input.prog;
         match prog.pats[pat.idx()] {
@@ -95,21 +96,21 @@ impl<'a> Gen<'a> {
                 let vc_pattern = self.recorded_type(e).and_then(|rt| self.value_class_of(rt)).is_some();
                 if !ty.is_ref() && !vc_slot && !vc_pattern {
                     let et = self.static_type(e);
-                    if !et.is_ref() && et != JType::V {
+                    if !et.is_ref() && et != ErasedType::V {
                         use crate::typer::prims::*;
                         let k = match (ty.numeric_rank(), et.numeric_rank()) {
-                            (Some(a), Some(b)) if a.max(b) == R_DOUBLE => JType::D,
-                            (Some(a), Some(b)) if a.max(b) == R_FLOAT => JType::F,
-                            (Some(a), Some(b)) if a.max(b) == R_LONG => JType::J,
-                            _ => JType::I,
+                            (Some(a), Some(b)) if a.max(b) == R_DOUBLE => ErasedType::D,
+                            (Some(a), Some(b)) if a.max(b) == R_FLOAT => ErasedType::F,
+                            (Some(a), Some(b)) if a.max(b) == R_LONG => ErasedType::J,
+                            _ => ErasedType::I,
                         };
                         self.load(slot, ty);
                         self.adapt(ty, &k);
                         self.expr(e, &k);
                         let cmp = match k {
-                            JType::J => Some(op::LCMP),
-                            JType::F => Some(op::FCMPL),
-                            JType::D => Some(op::DCMPL),
+                            ErasedType::J => Some(op::LCMP),
+                            ErasedType::F => Some(op::FCMPL),
+                            ErasedType::D => Some(op::DCMPL),
                             _ => None,
                         };
                         match cmp {
@@ -124,7 +125,7 @@ impl<'a> Gen<'a> {
                         return;
                     }
                 }
-                let object = JType::object();
+                let object = ErasedType::object();
                 self.expr(e, &object);
                 self.load_slot_as(slot, ty, &object);
                 self.helper_call("equal", 2);
@@ -167,7 +168,7 @@ impl<'a> Gen<'a> {
                 if subs.iter().all(|&s| matches!(prog.pats[s.idx()], TPat::Wildcard)) {
                     return;
                 }
-                let class_type = JType::L(name.clone());
+                let class_type = ErasedType::L(name.clone());
                 self.load(slot, ty);
                 if *ty != class_type {
                     self.checkcast(&name);
@@ -215,8 +216,8 @@ impl<'a> Gen<'a> {
             }
             TPat::Seq(items, rest) => {
                 let items = &prog.pat_lists[items.range()];
-                let object = JType::object();
-                let array = JType::L(Rc::from(OBJECT_ARRAY));
+                let object = ErasedType::object();
+                let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
                 self.load(slot, ty);
                 self.adapt(ty, &object);
                 self.iconst(items.len() as i32);
@@ -242,18 +243,18 @@ impl<'a> Gen<'a> {
     }
 
     /// A primitive scrutinee is boxed for the tests that look at its class.
-    fn boxed_slot(&mut self, slot: u16, ty: &JType) -> (u16, JType) {
+    fn boxed_slot(&mut self, slot: u16, ty: &ErasedType) -> (u16, ErasedType) {
         if ty.is_ref() {
             return (slot, ty.clone());
         }
-        let object = JType::object();
+        let object = ErasedType::object();
         self.load_slot_as(slot, ty, &object);
         (self.store_new(&object), object)
     }
 
     /// Loads the value of `slot`, of type `ty`, as `want`: a value class's underlying value a
     /// match holds (`vc_slots`) as its box.
-    pub fn load_slot_as(&mut self, slot: u16, ty: &JType, want: &JType) {
+    pub fn load_slot_as(&mut self, slot: u16, ty: &ErasedType, want: &ErasedType) {
         self.load(slot, ty);
         match self.m.vc_slots.iter().rev().find(|&&(s, _)| s == slot) {
             Some(&(_, c)) if want.is_ref() => {
@@ -277,7 +278,7 @@ impl<'a> Gen<'a> {
     }
 
     /// Jumps to `target` when the test of the reference in `slot` comes out as `jump_if`.
-    pub fn test(&mut self, test: TestId, slot: u16, ty: &JType, tested: Option<crate::types::TypeId>, target: Label, jump_if: bool) {
+    pub fn test(&mut self, test: TestId, slot: u16, ty: &ErasedType, tested: Option<crate::types::TypeId>, target: Label, jump_if: bool) {
         let cx = self.cx;
         let prog = cx.input.prog;
         let class: Rc<str> = match prog.tests[test.idx()] {
@@ -305,10 +306,10 @@ impl<'a> Gen<'a> {
             // `Tuples.isInstanceOfTuple` and `isInstanceOfNonEmptyTuple`, which know the classes.
             TypeTest::Class(c) | TypeTest::Trait(c) if matches!(&*self.class_name(c), "scala/Tuple" | "scala/NonEmptyTuple" | "scala/$times$colon") => {
                 let method = if &*self.class_name(c) == "scala/Tuple" { "isInstanceOfTuple" } else { "isInstanceOfNonEmptyTuple" };
-                let object = JType::object();
+                let object = ErasedType::object();
                 self.load(slot, ty);
                 self.adapt(ty, &object);
-                self.invoke(Invoke::Static, "scala/runtime/Tuples", false, method, &[object], &JType::Z);
+                self.invoke(Invoke::Static, "scala/runtime/Tuples", false, method, &[object], &ErasedType::Z);
                 return self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
             }
             TypeTest::Class(c) | TypeTest::Trait(c) => self.class_name(c),
@@ -328,11 +329,11 @@ impl<'a> Gen<'a> {
             TypeTest::Array => match tested.map_or(Err(1), |t| self.array_test_of(t)) {
                 Ok(n) => n,
                 Err(layers) => {
-                    let object = JType::object();
+                    let object = ErasedType::object();
                     self.load(slot, ty);
                     self.adapt(ty, &object);
                     self.iconst(layers);
-                    self.erased_array_call("isArray", &[object, JType::I], JType::Z);
+                    self.erased_array_call("isArray", &[object, ErasedType::I], ErasedType::Z);
                     return self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
                 }
             },
@@ -352,7 +353,7 @@ impl<'a> Gen<'a> {
                 return self.jump_if(if jump_if { op::IFNONNULL } else { op::IFNULL }, 1, target);
             }
             TypeTest::Value(v) => {
-                let object = JType::object();
+                let object = ErasedType::object();
                 let vt = self.static_type(v);
                 self.expr(v, &object);
                 self.load(slot, ty);

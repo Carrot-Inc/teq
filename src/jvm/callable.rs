@@ -2,6 +2,7 @@
 //! bytecode, reflection and the `java` launcher. A case class's companion with `apply`,
 //! `unapply` and `fromProduct`, the case class's `copy`.
 
+use crate::lir::{ErasedType, Invoke, MethodRef};
 use super::classfile::*;
 use super::gen::*;
 use super::names::*;
@@ -44,28 +45,28 @@ fn forwarder_order(a_name: &str, a_desc: &str, b_name: &str, b_desc: &str) -> st
 
 /// Two erased types as scalac's signatures order their names: a class's own name first, then
 /// its owner's the same way, and a name without an owner before one with.
-fn type_name_order(a: &JType, b: &JType, result: bool) -> std::cmp::Ordering {
-    fn segments(t: &JType, result: bool) -> Vec<String> {
+fn type_name_order(a: &ErasedType, b: &ErasedType, result: bool) -> std::cmp::Ordering {
+    fn segments(t: &ErasedType, result: bool) -> Vec<String> {
         let scala = |name: &str| vec!["scala".to_string(), name.to_string()];
         match t {
-            JType::V if result => scala("Unit"),
-            JType::V => vec!["scala".to_string(), "runtime".to_string(), "BoxedUnit".to_string()],
-            JType::Z => scala("Boolean"),
-            JType::B => scala("Byte"),
-            JType::S => scala("Short"),
-            JType::C => scala("Char"),
-            JType::I => scala("Int"),
-            JType::J => scala("Long"),
-            JType::F => scala("Float"),
-            JType::D => scala("Double"),
-            JType::L(n) if n.starts_with('[') => {
+            ErasedType::V if result => scala("Unit"),
+            ErasedType::V => vec!["scala".to_string(), "runtime".to_string(), "BoxedUnit".to_string()],
+            ErasedType::Z => scala("Boolean"),
+            ErasedType::B => scala("Byte"),
+            ErasedType::S => scala("Short"),
+            ErasedType::C => scala("Char"),
+            ErasedType::I => scala("Int"),
+            ErasedType::J => scala("Long"),
+            ErasedType::F => scala("Float"),
+            ErasedType::D => scala("Double"),
+            ErasedType::L(n) if n.starts_with('[') => {
                 let mut of = segments(&parse_type(&n[1..]).0, false);
                 if let Some(last) = of.last_mut() {
                     last.push_str("[]");
                 }
                 of
             }
-            JType::L(n) => {
+            ErasedType::L(n) => {
                 let module = n.ends_with('$');
                 let mut of: Vec<String> = n.trim_end_matches('$').split(|c| c == '/' || c == '$').map(str::to_string).collect();
                 if let (true, Some(last)) = (module, of.last_mut()) {
@@ -526,7 +527,7 @@ impl<'a> Gen<'a> {
         let declared: Vec<bool> = table.iter().map(|(_, n, _)| self.cw.has_method_named(n) || inherited_names.contains(n)).collect();
         let entry = cx.input.prog.main.filter(|&m| matches!(cx.input.syms.sym(m).owner, Owner::Class(o) if cx.class_names[o.idx()] == module));
         let entry_ref = entry.map(|m| self.mref(m));
-        let module_type = JType::L(Rc::from(module));
+        let module_type = ErasedType::L(Rc::from(module));
         // A member's name expanded by a class of the module's (`T$$x`, a trait's private member)
         // gets no forwarder, a trait setter's (`T$_setter_$x_$eq`) a synthetic one, as dotty's
         // `addForwarders` has them (`ExpandedName`, `SyntheticSetterName`); a name the source
@@ -578,7 +579,7 @@ impl<'a> Gen<'a> {
                 }
             }
             let (params, ret) = parse_method_desc(desc);
-            let typed: Vec<(Option<SymId>, JType)> = params.iter().map(|t| (None, t.clone())).collect();
+            let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
             self.begin_method(true, false, &typed, ret.clone(), &[]);
             self.getstatic(module, "MODULE$", &module_type);
             let mut slot = 0u16;
@@ -621,7 +622,7 @@ impl<'a> Gen<'a> {
             if syms.class(b).has_exports {
                 for &a in syms.class(b).type_aliases.values() {
                     if let Some(k) = crate::typer::value_exports::exported_companion(syms, cx.input.types, a) {
-                        let t = JType::L(Rc::from(cx.companion_name(k)));
+                        let t = ErasedType::L(Rc::from(cx.companion_name(k)));
                         out.push((encode(cx.input.interner.get(syms.aliases[a.idx()].name)), method_desc(&[], &t)));
                     }
                 }
@@ -681,11 +682,11 @@ impl<'a> Gen<'a> {
         self.this_class = None;
         self.line_file = info.file;
         self.context = name.clone();
-        let this = JType::L(self.this_name.clone());
-        self.begin_method(false, true, &[], JType::V, &[]);
+        let this = ErasedType::L(self.this_name.clone());
+        self.begin_method(false, true, &[], ErasedType::V, &[]);
         self.load(0, &this);
-        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &JType::V);
-        self.return_value(&JType::V);
+        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &ErasedType::V);
+        self.return_value(&ErasedType::V);
         self.end_method(ACC_PUBLIC, "<init>", "()V");
         self.entry_main(main, None);
         let cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
@@ -726,25 +727,25 @@ impl<'a> Gen<'a> {
         let path = &cx.input.sources[info.file.0 as usize].path;
         self.cw.source_file(path.rsplit(std::path::is_separator).next().unwrap_or(path));
         self.line_file = info.file;
-        let this = JType::L(name.clone());
+        let this = ErasedType::L(name.clone());
         let outer = self.sym_type(tc.ctor_params[0]);
         let mut outer_desc = String::new();
         outer.desc(&mut outer_desc);
         self.cw.field(ACC_PRIVATE | ACC_FINAL, "$outer", &outer_desc);
-        self.begin_method(false, false, &[(None, outer.clone())], JType::V, &[]);
+        self.begin_method(false, false, &[(None, outer.clone())], ErasedType::V, &[]);
         self.load(0, &this);
-        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &JType::V);
+        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &ErasedType::V);
         self.load(0, &this);
         self.load(1, &outer);
         self.putfield(&name, "$outer", &outer);
-        self.return_value(&JType::V);
-        self.end_method(ACC_PUBLIC, "<init>", &method_desc(&[outer.clone()], &JType::V));
+        self.return_value(&ErasedType::V);
+        self.end_method(ACC_PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V));
 
         let case_name = self.class_name(c);
-        let case_type = JType::L(case_name.clone());
-        let params: Vec<(Option<SymId>, JType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-        let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
-        let init_types: Vec<JType> = std::iter::once(outer.clone()).chain(types.iter().cloned()).collect();
+        let case_type = ErasedType::L(case_name.clone());
+        let params: Vec<(Option<SymId>, ErasedType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
+        let init_types: Vec<ErasedType> = std::iter::once(outer.clone()).chain(types.iter().cloned()).collect();
         if info.mods & crate::ast::mods::ABSTRACT == 0 {
             self.begin_method(false, false, &params, case_type.clone(), &[]);
             self.new_object(&case_name);
@@ -755,7 +756,7 @@ impl<'a> Gen<'a> {
                 self.load(slot, t);
                 slot += if t.wide() { 2 } else { 1 };
             }
-            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &JType::V);
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &ErasedType::V);
             self.return_value(&case_type);
             self.end_method(ACC_PUBLIC, "apply", &method_desc(&types, &case_type));
         }
@@ -764,7 +765,7 @@ impl<'a> Gen<'a> {
             let repeated = first.and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
             let extractor = if repeated { "unapplySeq" } else { "unapply" };
             let no_params = first.map_or(true, |cl| cl.params.is_empty());
-            let ret = if no_params { JType::Z } else { case_type.clone() };
+            let ret = if no_params { ErasedType::Z } else { case_type.clone() };
             self.begin_method(false, false, &[(None, case_type.clone())], ret.clone(), &[]);
             if no_params {
                 self.iconst(1);
@@ -774,15 +775,15 @@ impl<'a> Gen<'a> {
             self.return_value(&ret);
             self.end_method(ACC_PUBLIC, extractor, &method_desc(&[case_type.clone()], &ret));
         }
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         self.begin_method(false, false, &[], string.clone(), &[]);
         self.sconst(cx.input.interner.get(info.name));
         self.return_value(&string);
         self.end_method(ACC_PUBLIC, "toString", "()Ljava/lang/String;");
         // `fromProduct`, each element in its place, the case made with the enclosing instance.
         if cx.has_product_mirror(c) {
-            let product = JType::L(Rc::from(PRODUCT));
-            let object_type = JType::object();
+            let product = ErasedType::L(Rc::from(PRODUCT));
+            let object_type = ErasedType::object();
             self.begin_method(false, false, &[(None, product.clone())], case_type.clone(), &[]);
             self.new_object(&case_name);
             self.load(0, &this);
@@ -790,10 +791,10 @@ impl<'a> Gen<'a> {
             for (i, t) in types.iter().enumerate() {
                 self.load(1, &product);
                 self.iconst(i as i32);
-                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[JType::I], &object_type);
+                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[ErasedType::I], &object_type);
                 self.adapt(&object_type, t);
             }
-            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &JType::V);
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &ErasedType::V);
             self.return_value(&case_type);
             let desc = method_desc(&[product.clone()], &case_type);
             self.end_method(ACC_PUBLIC, "fromProduct", &desc);
@@ -806,7 +807,7 @@ impl<'a> Gen<'a> {
         }
         self.inner_companion_default_getters(c, &outer, &|g: &mut Self| {
             let name = g.this_name.clone();
-            g.load(0, &JType::L(name.clone()));
+            g.load(0, &ErasedType::L(name.clone()));
             g.getfield(&name, "$outer", &outer);
         });
         // The outer accessor under scalac's name, which a downstream of either compiler calls
@@ -828,7 +829,7 @@ impl<'a> Gen<'a> {
     /// (`Desugar.addDefaultGetters`), each default read with the companion's enclosing instance,
     /// which `load_outer` leaves on the stack, where the class's stands; a by-name
     /// parameter's returning the value, as a companion's getter does (`companion_default_getters`).
-    fn inner_companion_default_getters(&mut self, k: ClassId, outer: &JType, load_outer: &dyn Fn(&mut Self)) {
+    fn inner_companion_default_getters(&mut self, k: ClassId, outer: &ErasedType, load_outer: &dyn Fn(&mut Self)) {
         let cx = self.cx;
         let syms = cx.input.syms;
         let tc = &cx.input.prog.classes[cx.tclass_of[k.idx()] as usize];
@@ -854,11 +855,11 @@ impl<'a> Gen<'a> {
 
     /// `inner_companion_default_getters` of one constructor: its enclosing instance `outer_sym`, its
     /// declared parameters and their defaults, parallel.
-    fn inner_getters_of(&mut self, outer_sym: SymId, params: &[SymId], defaults: &[Option<crate::tir::TExprId>], clauses: &[ClauseSig], outer: &JType, load_outer: &dyn Fn(&mut Self)) {
+    fn inner_getters_of(&mut self, outer_sym: SymId, params: &[SymId], defaults: &[Option<crate::tir::TExprId>], clauses: &[ClauseSig], outer: &ErasedType, load_outer: &dyn Fn(&mut Self)) {
         let mut start = 0;
         for cl in clauses {
-            let before: Vec<(Option<SymId>, JType)> = params[..start.min(params.len())].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-            let before_types: Vec<JType> = before.iter().map(|p| p.1.clone()).collect();
+            let before: Vec<(Option<SymId>, ErasedType)> = params[..start.min(params.len())].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+            let before_types: Vec<ErasedType> = before.iter().map(|p| p.1.clone()).collect();
             for (j, p) in cl.params.iter().enumerate() {
                 let i = start + j;
                 let Some(d) = defaults.get(i).copied().flatten() else { continue };
@@ -880,7 +881,7 @@ impl<'a> Gen<'a> {
     /// companion: scalac's `$lessinit$greater$default$N` (`Desugar.defaultGetters`), each taking the
     /// parameters of the clauses before its own and calling the class's static getter, which takes
     /// the enclosing instance first (`ctor_default_getters`), which `load_outer` loads.
-    fn forwarding_default_getters(&mut self, c: ClassId, tc: &crate::tir::TClass, outer: &JType, load_outer: impl Fn(&mut Self)) {
+    fn forwarding_default_getters(&mut self, c: ClassId, tc: &crate::tir::TClass, outer: &ErasedType, load_outer: impl Fn(&mut Self)) {
         let case_name = self.class_name(c);
         let clauses = self.cx.input.syms.class(c).ctor.clone();
         let mut start = 0;
@@ -890,8 +891,8 @@ impl<'a> Gen<'a> {
                 if tc.ctor_defaults.get(1 + i).copied().flatten().is_none() {
                     continue;
                 }
-                let before: Vec<(Option<SymId>, JType)> = tc.ctor_params[1..1 + start].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-                let before_types: Vec<JType> = before.iter().map(|p| p.1.clone()).collect();
+                let before: Vec<(Option<SymId>, ErasedType)> = tc.ctor_params[1..1 + start].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+                let before_types: Vec<ErasedType> = before.iter().map(|p| p.1.clone()).collect();
                 let ret = self.sym_type(tc.ctor_params[1 + i]);
                 let getter = format!("$lessinit$greater$default${}", i + 1);
                 if self.cw.has_method(&getter, &method_desc(&before_types, &ret)) {
@@ -904,7 +905,7 @@ impl<'a> Gen<'a> {
                     self.load(slot, t);
                     slot += if t.wide() { 2 } else { 1 };
                 }
-                let statics: Vec<JType> = std::iter::once(outer.clone()).chain(before_types.iter().cloned()).collect();
+                let statics: Vec<ErasedType> = std::iter::once(outer.clone()).chain(before_types.iter().cloned()).collect();
                 self.invoke(Invoke::Static, &case_name, false, &format!("$lessinit$greater$default${}", i + 2), &statics, &ret);
                 self.return_value(&ret);
                 self.end_method(ACC_PUBLIC, &getter, &method_desc(&before_types, &ret));
@@ -940,7 +941,7 @@ impl<'a> Gen<'a> {
             return;
         }
         let name = self.this_name.clone();
-        let this = JType::L(name.clone());
+        let this = ErasedType::L(name.clone());
         let outer = self.sym_type(tc.ctor_params[0]);
         // The companion's own outer accessor, by scalac's name (`Worker::outer_accessor`); a
         // companion of a class of a block's object has none, its enclosing instance a capture.
@@ -955,10 +956,10 @@ impl<'a> Gen<'a> {
             return;
         }
         let case_name = self.class_name(k);
-        let case_type = JType::L(case_name.clone());
-        let params: Vec<(Option<SymId>, JType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-        let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
-        let init_types: Vec<JType> = std::iter::once(outer.clone()).chain(types.iter().cloned()).collect();
+        let case_type = ErasedType::L(case_name.clone());
+        let params: Vec<(Option<SymId>, ErasedType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
+        let init_types: Vec<ErasedType> = std::iter::once(outer.clone()).chain(types.iter().cloned()).collect();
         let apply_desc = method_desc(&types, &case_type);
         // `apply` with every parameter, as `companionDefs` gives it whatever the defaults, which a
         // call fills in through the getters below.
@@ -971,7 +972,7 @@ impl<'a> Gen<'a> {
                 self.load(slot, t);
                 slot += if t.wide() { 2 } else { 1 };
             }
-            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &JType::V);
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &ErasedType::V);
             self.return_value(&case_type);
             self.end_method(ACC_PUBLIC, "apply", &apply_desc);
         }
@@ -980,7 +981,7 @@ impl<'a> Gen<'a> {
             let repeated = first.and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
             let extractor = if repeated { "unapplySeq" } else { "unapply" };
             let no_params = first.map_or(true, |cl| cl.params.is_empty());
-            let ret = if no_params { JType::Z } else { case_type.clone() };
+            let ret = if no_params { ErasedType::Z } else { case_type.clone() };
             let desc = method_desc(&[case_type.clone()], &ret);
             if !self.cw.has_method(extractor, &desc) {
                 self.begin_method(false, false, &[(None, case_type.clone())], ret.clone(), &[]);
@@ -994,7 +995,7 @@ impl<'a> Gen<'a> {
             }
         }
         // The `toString` `Desugar.classDef` gives the companion it makes.
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         if syms.class(c).synthetic_companion && !self.cw.has_method("toString", "()Ljava/lang/String;") {
             self.begin_method(false, false, &[], string.clone(), &[]);
             self.sconst(cx.input.interner.get(info.name));
@@ -1004,20 +1005,20 @@ impl<'a> Gen<'a> {
         // `fromProduct` of the companion that is the case's mirror (`Mirror.Product` among its
         // bases, `SyntheticMembers.addMirrorSupport`), the case made with the enclosing instance.
         let mirror = syms.class(c).base_types.iter().any(|&(b, _)| &*cx.class_names[b.idx()] == MIRROR_PRODUCT);
-        let product = JType::L(Rc::from(PRODUCT));
+        let product = ErasedType::L(Rc::from(PRODUCT));
         let from_desc = method_desc(&[product.clone()], &case_type);
         if mirror && !self.cw.has_method("fromProduct", &from_desc) {
-            let object_type = JType::object();
+            let object_type = ErasedType::object();
             self.begin_method(false, false, &[(None, product.clone())], case_type.clone(), &[]);
             self.new_object(&case_name);
             self.load_companion_outer(&this, &name, &accessor, &outer, &captured);
             for (i, t) in types.iter().enumerate() {
                 self.load(1, &product);
                 self.iconst(i as i32);
-                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[JType::I], &object_type);
+                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[ErasedType::I], &object_type);
                 self.adapt(&object_type, t);
             }
-            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &JType::V);
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &ErasedType::V);
             self.return_value(&case_type);
             self.end_method(ACC_PUBLIC, "fromProduct", &from_desc);
             self.begin_method(false, false, &[(None, product.clone())], object_type.clone(), &[]);
@@ -1048,7 +1049,7 @@ impl<'a> Gen<'a> {
 
     /// The enclosing instance of the companion being written, on the stack: through its outer
     /// accessor, or its capture where it has none (`inner_written_companion_members`).
-    fn load_companion_outer(&mut self, this: &JType, name: &str, accessor: &str, outer: &JType, captured: &Option<(String, JType)>) {
+    fn load_companion_outer(&mut self, this: &ErasedType, name: &str, accessor: &str, outer: &ErasedType, captured: &Option<(String, ErasedType)>) {
         self.load(0, this);
         match captured {
             Some((field, ty)) => self.getfield(name, field, ty),
@@ -1073,7 +1074,7 @@ impl<'a> Gen<'a> {
             }
             let getter = cx.input.interner.get(n).to_string();
             let module: Rc<str> = Rc::from(cx.companion_name(k));
-            let ty = JType::L(module.clone());
+            let ty = ErasedType::L(module.clone());
             let desc = method_desc(&[], &ty);
             if self.cw.has_method(&getter, &desc) {
                 continue;
@@ -1106,27 +1107,27 @@ impl<'a> Gen<'a> {
         let path = &cx.input.sources[info.file.0 as usize].path;
         self.cw.source_file(path.rsplit(std::path::is_separator).next().unwrap_or(path));
         self.line_file = info.file;
-        let this = JType::L(name.clone());
+        let this = ErasedType::L(name.clone());
         let outer_name = self.class_name(o);
-        let outer = JType::L(outer_name.clone());
+        let outer = ErasedType::L(outer_name.clone());
         let mut d = String::new();
         outer.desc(&mut d);
         self.cw.field(ACC_PRIVATE | ACC_FINAL | ACC_SYNTHETIC, "$outer", &d);
-        self.begin_method(false, false, &[(None, outer.clone())], JType::V, &[]);
+        self.begin_method(false, false, &[(None, outer.clone())], ErasedType::V, &[]);
         self.load(0, &this);
         self.load(1, &outer);
         self.putfield(&name, "$outer", &outer);
         self.load(0, &this);
-        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &JType::V);
-        self.return_value(&JType::V);
-        self.end_method(ACC_PUBLIC, "<init>", &method_desc(&[outer.clone()], &JType::V));
+        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &ErasedType::V);
+        self.return_value(&ErasedType::V);
+        self.end_method(ACC_PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V));
 
         let tc = &cx.input.prog.classes[idx];
         let case_name = self.class_name(c);
-        let case_type = JType::L(case_name.clone());
-        let all: Vec<JType> = tc.ctor_params.iter().map(|&p| self.sym_type(p)).collect();
-        let declared: Vec<(Option<SymId>, JType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-        let declared_types: Vec<JType> = declared.iter().map(|p| p.1.clone()).collect();
+        let case_type = ErasedType::L(case_name.clone());
+        let all: Vec<ErasedType> = tc.ctor_params.iter().map(|&p| self.sym_type(p)).collect();
+        let declared: Vec<(Option<SymId>, ErasedType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let declared_types: Vec<ErasedType> = declared.iter().map(|p| p.1.clone()).collect();
         self.begin_method(false, false, &declared, case_type.clone(), &[]);
         self.new_object(&case_name);
         self.load(0, &this);
@@ -1136,7 +1137,7 @@ impl<'a> Gen<'a> {
             self.load(slot, t);
             slot += if t.wide() { 2 } else { 1 };
         }
-        self.invoke(Invoke::Special, &case_name, false, "<init>", &all, &JType::V);
+        self.invoke(Invoke::Special, &case_name, false, "<init>", &all, &ErasedType::V);
         self.return_value(&case_type);
         self.end_method(ACC_PUBLIC, "apply", &method_desc(&declared_types, &case_type));
 
@@ -1144,7 +1145,7 @@ impl<'a> Gen<'a> {
         let repeated = first.and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
         let extractor = if repeated { "unapplySeq" } else { "unapply" };
         let no_params = first.map_or(true, |cl| cl.params.is_empty());
-        let ret = if no_params { JType::Z } else { case_type.clone() };
+        let ret = if no_params { ErasedType::Z } else { case_type.clone() };
         self.begin_method(false, false, &[(None, case_type.clone())], ret.clone(), &[]);
         if no_params {
             self.iconst(1);
@@ -1154,7 +1155,7 @@ impl<'a> Gen<'a> {
         self.return_value(&ret);
         self.end_method(ACC_PUBLIC, extractor, &method_desc(&[case_type.clone()], &ret));
 
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         self.begin_method(false, false, &[], string.clone(), &[]);
         let shown = cx.input.interner.get(cx.input.syms.class(c).name).to_string();
         self.sconst(&shown);
@@ -1162,8 +1163,8 @@ impl<'a> Gen<'a> {
         self.end_method(ACC_PUBLIC, "toString", &method_desc(&[], &string));
 
         if cx.has_product_mirror(c) {
-            let product = JType::L(Rc::from(PRODUCT));
-            let object_type = JType::object();
+            let product = ErasedType::L(Rc::from(PRODUCT));
+            let object_type = ErasedType::object();
             self.begin_method(false, false, &[(None, product.clone())], case_type.clone(), &[]);
             self.new_object(&case_name);
             self.load(0, &this);
@@ -1171,10 +1172,10 @@ impl<'a> Gen<'a> {
             for (i, t) in declared_types.iter().enumerate() {
                 self.load(1, &product);
                 self.iconst(i as i32);
-                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[JType::I], &object_type);
+                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[ErasedType::I], &object_type);
                 self.adapt(&object_type, t);
             }
-            self.invoke(Invoke::Special, &case_name, false, "<init>", &all, &JType::V);
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &all, &ErasedType::V);
             self.return_value(&case_type);
             let desc = method_desc(&[product.clone()], &case_type);
             self.end_method(ACC_PUBLIC, "fromProduct", &desc);
@@ -1198,7 +1199,7 @@ impl<'a> Gen<'a> {
             let cx = self.cx;
             let accessor = encode(cx.input.interner.get(cx.input.syms.class(k).name));
             let module: Rc<str> = Rc::from(cx.companion_name(k));
-            let ty = JType::L(module.clone());
+            let ty = ErasedType::L(module.clone());
             let outer = self.this_name.clone();
             self.thread_safe_member(&accessor, &ty, super::classes::HolderInit::Module { class: module, outer }, ACC_PUBLIC | ACC_FINAL);
         }
@@ -1269,8 +1270,8 @@ impl<'a> Gen<'a> {
         let mut start = 0;
         for cl in clauses {
             let size = cl.params.len();
-            let before: Vec<(Option<SymId>, JType)> = params[..start.min(params.len())].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-            let before_types: Vec<JType> = before.iter().map(|p| p.1.clone()).collect();
+            let before: Vec<(Option<SymId>, ErasedType)> = params[..start.min(params.len())].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+            let before_types: Vec<ErasedType> = before.iter().map(|p| p.1.clone()).collect();
             for i in start..(start + size).min(params.len()) {
                 let Some(d) = defaults.get(i).copied().flatten() else { continue };
                 let by_name = cl.params[i - start].by_name;
@@ -1315,7 +1316,7 @@ impl<'a> Gen<'a> {
             if self.cw.has_method(&name, &desc) {
                 continue;
             }
-            let params: Vec<(Option<SymId>, JType)> = types.iter().map(|t| (None, t.clone())).collect();
+            let params: Vec<(Option<SymId>, ErasedType)> = types.iter().map(|t| (None, t.clone())).collect();
             self.begin_method(false, false, &params, m.ret.clone(), &[]);
             let mut slot = 1u16;
             for t in &types {
@@ -1342,9 +1343,9 @@ impl<'a> Gen<'a> {
             let m = self.mref(fun.sym);
             let info = cx.input.syms.sym(fun.sym);
             self.context = format!("{}.{}$extension", self.this_name, m.name);
-            let mut params: Vec<(Option<SymId>, JType)> = vec![(None, u.clone())];
+            let mut params: Vec<(Option<SymId>, ErasedType)> = vec![(None, u.clone())];
             params.extend(fun.params.iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
-            let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
+            let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
             self.begin_method(false, false, &params, m.ret.clone(), &[body]);
             self.m.this_slot = Some(1);
             self.m.this_underlying = Some(u.clone());
@@ -1369,7 +1370,7 @@ impl<'a> Gen<'a> {
         for (member, params, ret) in self.vc_synthesized(c) {
             let mut types = vec![u.clone()];
             types.extend(params.iter().cloned());
-            let typed: Vec<(Option<SymId>, JType)> = types.iter().map(|t| (None, t.clone())).collect();
+            let typed: Vec<(Option<SymId>, ErasedType)> = types.iter().map(|t| (None, t.clone())).collect();
             self.context = format!("{}.{}$extension", self.this_name, member);
             self.begin_method(false, false, &typed, ret.clone(), &[]);
             let ps = if u.wide() { 3 } else { 2 };
@@ -1380,7 +1381,7 @@ impl<'a> Gen<'a> {
             let x = cx.input.syms.class(c).ctor.first().and_then(|cl| cl.params.first()).map(|p| self.sym_type(p.sym)).unwrap_or_else(|| u.clone());
             let slot_x = if u.wide() { 3 } else { 2 };
             for (name, params, slot) in [("copy$extension", vec![u.clone(), x.clone()], slot_x), ("copy$default$1$extension", vec![u.clone()], 1), ("_1$extension", vec![u.clone()], 1)] {
-                let typed: Vec<(Option<SymId>, JType)> = params.iter().map(|t| (None, t.clone())).collect();
+                let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
                 self.begin_method(false, false, &typed, u.clone(), &[]);
                 self.load(slot, &u);
                 self.return_value(&u);
@@ -1408,23 +1409,23 @@ impl<'a> Gen<'a> {
         let path = &cx.input.sources[info.file.0 as usize].path;
         self.cw.source_file(path.rsplit(std::path::is_separator).next().unwrap_or(path));
         self.line_file = info.file;
-        let this = JType::L(name.clone());
+        let this = ErasedType::L(name.clone());
         self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
 
         self.begin_module_clinit(&name, &[]);
         let enum_values = if info.kind == ClassKind::Enum { self.enum_value_fields(c) } else { Vec::new() };
         if !enum_values.is_empty() && !cx.has_enum_fields(c) {
             let enum_name = self.class_name(c);
-            self.invoke(Invoke::Static, &enum_name, false, "$touch", &[], &JType::V);
+            self.invoke(Invoke::Static, &enum_name, false, "$touch", &[], &ErasedType::V);
         }
         self.store_enum_fields(&name, &enum_values);
-        self.return_value(&JType::V);
+        self.return_value(&ErasedType::V);
         self.end_method(ACC_STATIC, "<clinit>", "()V");
 
-        self.begin_method(false, true, &[], JType::V, &[]);
+        self.begin_method(false, true, &[], ErasedType::V, &[]);
         self.load(0, &this);
-        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &JType::V);
-        self.return_value(&JType::V);
+        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &ErasedType::V);
+        self.return_value(&ErasedType::V);
         self.end_method(ACC_PRIVATE, "<init>", "()V");
         name
     }
@@ -1437,17 +1438,17 @@ impl<'a> Gen<'a> {
         let syms = cx.input.syms;
         let tc = &cx.input.prog.classes[cx.tclass_of[c.idx()] as usize];
         let own = self.cw.method_table();
-        let written = |name: &str, params: &[JType]| {
-            let prefix = method_desc(params, &JType::V);
+        let written = |name: &str, params: &[ErasedType]| {
+            let prefix = method_desc(params, &ErasedType::V);
             let prefix = &prefix[..prefix.len() - 1];
             own.iter().any(|(_, n, d)| n == name && d.starts_with(prefix))
         };
         let case_name = self.class_name(c);
-        let case_type = JType::L(case_name.clone());
-        let object_type = JType::object();
-        let product = JType::L(Rc::from(PRODUCT));
-        let params: Vec<(Option<SymId>, JType)> = tc.ctor_params.iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-        let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
+        let case_type = ErasedType::L(case_name.clone());
+        let object_type = ErasedType::object();
+        let product = ErasedType::L(Rc::from(PRODUCT));
+        let params: Vec<(Option<SymId>, ErasedType)> = tc.ctor_params.iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
 
         // A value case class's are scalac's erased ones, over the underlying value.
         if cx.input.syms.class(c).value_class {
@@ -1469,7 +1470,7 @@ impl<'a> Gen<'a> {
                 self.load(slot, t);
                 slot += if t.wide() { 2 } else { 1 };
             }
-            self.invoke(Invoke::Special, &case_name, false, "<init>", &types, &JType::V);
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &types, &ErasedType::V);
             self.return_value(&case_type);
             self.end_method(ACC_PUBLIC, "apply", &method_desc(&types, &case_type));
         }
@@ -1484,7 +1485,7 @@ impl<'a> Gen<'a> {
         // as scalac emits both.
         let unapply_params = [case_type.clone()];
         let no_params = first.map_or(true, |cl| cl.params.is_empty());
-        let ret = if no_params { JType::Z } else { case_type.clone() };
+        let ret = if no_params { ErasedType::Z } else { case_type.clone() };
         let unapply_desc = method_desc(&unapply_params, &ret);
         let same_desc = own.iter().any(|(_, n, d)| n == extractor && *d == unapply_desc);
         if !tc.retracted_unapply && !same_desc && !cx.input.syms.class(c).value_class {
@@ -1504,16 +1505,16 @@ impl<'a> Gen<'a> {
             for (i, t) in types.iter().enumerate() {
                 self.load(1, &product);
                 self.iconst(i as i32);
-                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[JType::I], &object_type);
+                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[ErasedType::I], &object_type);
                 self.adapt(&object_type, t);
             }
-            self.invoke(Invoke::Special, &case_name, false, "<init>", &types, &JType::V);
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &types, &ErasedType::V);
             self.return_value(&case_type);
             let desc = method_desc(&[product.clone()], &case_type);
             self.end_method(ACC_PUBLIC, "fromProduct", &desc);
 
             self.begin_method(false, false, &[(None, product.clone())], object_type.clone(), &[]);
-            self.load(0, &JType::L(self.this_name.clone()));
+            self.load(0, &ErasedType::L(self.this_name.clone()));
             self.load(1, &product);
             let owner = self.this_name.clone();
             self.invoke_desc(Invoke::Virtual, &owner, false, "fromProduct", &desc, 1, &case_type);
@@ -1524,7 +1525,7 @@ impl<'a> Gen<'a> {
         self.extension_copies(c);
         // The `toString` `Desugar.classDef` gives the companion it makes.
         if object.map_or(true, |o| syms.class(o).synthetic_companion) {
-            let string = JType::L(Rc::from(STRING));
+            let string = ErasedType::L(Rc::from(STRING));
             self.begin_method(false, false, &[], string.clone(), &[]);
             self.sconst(cx.input.interner.get(syms.class(c).name));
             self.return_value(&string);
@@ -1566,18 +1567,18 @@ impl<'a> Gen<'a> {
         let desc = self.desc_of(&enum_type);
         let enum_name = self.class_name(e);
         let makes = self.cx.has_enum_fields(e);
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         for (name, v) in values {
             self.cw.field(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_ENUM, name, &desc);
             let SymKind::EnumValue(case) = self.cx.input.syms.sym(*v).kind else { continue };
             let case_name = self.class_name(case);
-            let t = JType::L(case_name.clone());
+            let t = ErasedType::L(case_name.clone());
             if makes {
                 let cinfo = self.cx.input.syms.class(case);
                 self.new_object(&case_name);
                 self.sconst(self.cx.input.interner.get(cinfo.name));
                 self.iconst(cinfo.ordinal as i32);
-                self.invoke(Invoke::Special, &case_name, false, "<init>", &[string.clone(), JType::I], &JType::V);
+                self.invoke(Invoke::Special, &case_name, false, "<init>", &[string.clone(), ErasedType::I], &ErasedType::V);
                 self.dup();
                 self.putstatic(&case_name, "$instance", &t);
             } else {
@@ -1587,7 +1588,7 @@ impl<'a> Gen<'a> {
             self.putstatic(module, name, &enum_type);
         }
         if values.len() == self.cx.input.syms.class(e).children.len() {
-            let array = JType::L(Rc::from(format!("[{}", desc)));
+            let array = ErasedType::L(Rc::from(format!("[{}", desc)));
             self.cw.field(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, "$values", &format!("[{}", desc));
             self.iconst(values.len() as i32);
             let class = self.cw.cp.class(&enum_name);
@@ -1620,31 +1621,31 @@ impl<'a> Gen<'a> {
         }
         let enum_type = self.class_type(e);
         let enum_name = self.class_name(e);
-        let object_type = JType::object();
-        let desc = method_desc(&[enum_type.clone()], &JType::I);
-        self.begin_method(false, false, &[(None, enum_type.clone())], JType::I, &[]);
+        let object_type = ErasedType::object();
+        let desc = method_desc(&[enum_type.clone()], &ErasedType::I);
+        self.begin_method(false, false, &[(None, enum_type.clone())], ErasedType::I, &[]);
         self.load(1, &enum_type);
         if cx.is_java_enum(e) {
-            self.invoke(Invoke::Virtual, &enum_name, false, "ordinal", &[], &JType::I);
+            self.invoke(Invoke::Virtual, &enum_name, false, "ordinal", &[], &ErasedType::I);
         } else {
-            self.invoke(Invoke::Interface, ENUM, true, "ordinal", &[], &JType::I);
+            self.invoke(Invoke::Interface, ENUM, true, "ordinal", &[], &ErasedType::I);
         }
-        self.return_value(&JType::I);
+        self.return_value(&ErasedType::I);
         self.end_method(ACC_PUBLIC, "ordinal", &desc);
-        self.begin_method(false, false, &[(None, object_type.clone())], JType::I, &[]);
-        let this = JType::L(self.this_name.clone());
+        self.begin_method(false, false, &[(None, object_type.clone())], ErasedType::I, &[]);
+        let this = ErasedType::L(self.this_name.clone());
         self.load(0, &this);
         self.load(1, &object_type);
         self.adapt(&object_type, &enum_type);
         let owner = self.this_name.clone();
-        self.invoke_desc(Invoke::Virtual, &owner, false, "ordinal", &desc, 1, &JType::I);
-        self.return_value(&JType::I);
-        self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, "ordinal", &method_desc(&[object_type], &JType::I));
+        self.invoke_desc(Invoke::Virtual, &owner, false, "ordinal", &desc, 1, &ErasedType::I);
+        self.return_value(&ErasedType::I);
+        self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, "ordinal", &method_desc(&[object_type], &ErasedType::I));
     }
 
     /// An enum's value as its companion's own code reads it: a static field, or the field of the
     /// companion's instance where it is one.
-    fn enum_value_read(&mut self, v: SymId, instance: bool) -> JType {
+    fn enum_value_read(&mut self, v: SymId, instance: bool) -> ErasedType {
         if !instance {
             return self.static_value(v);
         }
@@ -1663,7 +1664,7 @@ impl<'a> Gen<'a> {
         let syms = cx.input.syms;
         let written = |name: &str| cx.input.interner.lookup(name).map_or(false, |n| syms.class(object).members.contains_key(&n));
         let enum_type = self.class_type(e);
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         let display = match cx.input.prog.local_enum_names.iter().find(|&&(x, _)| x == e) {
             Some((_, name)) => name.clone(),
             None => syms.scala_full_name(cx.input.interner, e),
@@ -1676,7 +1677,7 @@ impl<'a> Gen<'a> {
             .filter_map(|&k| syms.class(k).singleton.map(|v| (v, syms.class(k).ordinal, cx.input.interner.get(syms.class(k).name).to_string())))
             .collect();
         let all_values = values.len() == syms.class(e).children.len();
-        let object_type = JType::object();
+        let object_type = ErasedType::object();
         // A class's enum's companion is an instance, its values its fields.
         let instance = cx.instance_enum(e);
         if cx.has_enum_fields(e) || instance {
@@ -1687,39 +1688,39 @@ impl<'a> Gen<'a> {
         // failure is the `NoSuchElementException`, else the value case of the ordinal.
         let stored = all_values && cx.has_enum_fields(e) && values.len() == syms.class(e).children.len();
         if !written("fromOrdinal") && stored {
-            let array = JType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
+            let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
             let module = self.this_name.clone();
-            self.begin_method(false, false, &[(None, JType::I)], enum_type.clone(), &[]);
+            self.begin_method(false, false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
             let fail = self.code.new_label();
             self.getstatic(&module, "$values", &array);
             let store = self.store_new(&array);
             self.load(store, &array);
             self.jump_if(op::IFNULL, 1, fail);
-            self.load(1, &JType::I);
+            self.load(1, &ErasedType::I);
             self.jump_if(op::IFLT, 1, fail);
-            self.load(1, &JType::I);
+            self.load(1, &ErasedType::I);
             self.load(store, &array);
             self.code.op(op::ARRAYLENGTH);
             self.code.pop();
             self.code.push(VT::Int);
             self.jump_if(op::IF_ICMPGE, 2, fail);
             self.load(store, &array);
-            self.load(1, &JType::I);
+            self.load(1, &ErasedType::I);
             self.code.op(op::AALOAD);
             self.code.popn(2);
             let vt = self.vt(&enum_type);
             self.code.push(vt);
             self.return_value(&enum_type);
             self.code.bind(fail);
-            self.load(1, &JType::I);
-            self.invoke(Invoke::Static, STRING, false, "valueOf", &[JType::I], &string);
+            self.load(1, &ErasedType::I);
+            self.invoke(Invoke::Static, STRING, false, "valueOf", &[ErasedType::I], &string);
             self.throw_with("java/util/NoSuchElementException", &format!("enum {} has no case with ordinal: ", display));
-            self.end_method(ACC_PUBLIC, "fromOrdinal", &method_desc(&[JType::I], &enum_type));
+            self.end_method(ACC_PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type));
         } else if !written("fromOrdinal") {
-            self.begin_method(false, false, &[(None, JType::I)], enum_type.clone(), &[]);
+            self.begin_method(false, false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
             for (v, ordinal, _) in &values {
                 let next = self.code.new_label();
-                self.load(1, &JType::I);
+                self.load(1, &ErasedType::I);
                 self.iconst(*ordinal as i32);
                 self.jump_if(op::IF_ICMPNE, 2, next);
                 let t = self.enum_value_read(*v, instance);
@@ -1727,17 +1728,17 @@ impl<'a> Gen<'a> {
                 self.return_value(&enum_type);
                 self.code.bind(next);
             }
-            self.load(1, &JType::I);
-            self.invoke(Invoke::Static, STRING, false, "valueOf", &[JType::I], &string);
+            self.load(1, &ErasedType::I);
+            self.invoke(Invoke::Static, STRING, false, "valueOf", &[ErasedType::I], &string);
             self.throw_with("java/util/NoSuchElementException", &format!("enum {} has no case with ordinal: ", display));
-            self.end_method(ACC_PUBLIC, "fromOrdinal", &method_desc(&[JType::I], &enum_type));
+            self.end_method(ACC_PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type));
         }
         if !all_values {
             return;
         }
         if !written("values") && cx.has_enum_fields(e) && values.len() == syms.class(e).children.len() {
-            let array = JType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
-            let JType::L(array_name) = &array else { unreachable!() };
+            let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
+            let ErasedType::L(array_name) = &array else { unreachable!() };
             let array_name = array_name.clone();
             self.begin_method(false, false, &[], array.clone(), &[]);
             let module = self.this_name.clone();
@@ -1748,7 +1749,7 @@ impl<'a> Gen<'a> {
             self.end_method(ACC_PUBLIC, "values", &method_desc(&[], &array));
         }
         if !written("values") {
-            let array = JType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
+            let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
             self.begin_method(false, false, &[], array.clone(), &[]);
             self.iconst(values.len() as i32);
             let element = self.class_name(e);
@@ -1774,7 +1775,7 @@ impl<'a> Gen<'a> {
                 let next = self.code.new_label();
                 self.sconst(name);
                 self.load(1, &string);
-                self.invoke(Invoke::Virtual, STRING, false, "equals", &[JType::object()], &JType::Z);
+                self.invoke(Invoke::Virtual, STRING, false, "equals", &[ErasedType::object()], &ErasedType::Z);
                 self.jump_if(op::IFEQ, 1, next);
                 let t = self.enum_value_read(*v, instance);
                 self.adapt(&t, &enum_type);
@@ -1789,19 +1790,19 @@ impl<'a> Gen<'a> {
 
     /// Throws a new `class` whose message is `prefix` and the string on the stack.
     fn throw_with(&mut self, class: &str, prefix: &str) {
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         let rest = self.store_new(&string);
         self.new_object(class);
         self.sconst(prefix);
         self.load(rest, &string);
         self.invoke(Invoke::Virtual, STRING, false, "concat", &[string.clone()], &string);
-        self.invoke(Invoke::Special, class, false, "<init>", &[string], &JType::V);
+        self.invoke(Invoke::Special, class, false, "<init>", &[string], &ErasedType::V);
         self.code.op(op::ATHROW);
         self.code.pop();
         self.code.end_path();
     }
 
-    pub(super) fn desc_of(&self, t: &JType) -> String {
+    pub(super) fn desc_of(&self, t: &ErasedType) -> String {
         let mut d = String::new();
         t.desc(&mut d);
         d
@@ -1812,29 +1813,29 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let tc = &cx.input.prog.classes[cx.tclass_of[c.idx()] as usize];
         let owner = self.this_name.clone();
-        let this = JType::L(owner.clone());
-        let all: Vec<(Option<SymId>, JType)> = tc.ctor_params.iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-        let all_types: Vec<JType> = all.iter().map(|p| p.1.clone()).collect();
+        let this = ErasedType::L(owner.clone());
+        let all: Vec<(Option<SymId>, ErasedType)> = tc.ctor_params.iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let all_types: Vec<ErasedType> = all.iter().map(|p| p.1.clone()).collect();
         // A class of a class takes its enclosing instance first, which `copy` passes on from its
         // own field: scalac's `copy` of an inner case class takes the class's parameters alone.
         // The constructor takes what the class captures as `class_captured` expands it (the
         // captures a local def or a local lazy val brings beside the declared ones), each passed on
         // from the field holding it.
-        let mut captured: Vec<(String, JType)> = self.class_captures.clone().into_iter().map(|(s, f, _, _)| (f, self.anon_capture_type(s))).collect();
+        let mut captured: Vec<(String, ErasedType)> = self.class_captures.clone().into_iter().map(|(s, f, _, _)| (f, self.anon_capture_type(s))).collect();
         // Its `Extras` after them, from their fields too.
         for (h, f) in self.class_homes.clone() {
             let t = self.class_type(h);
             captured.push((f, t));
         }
-        captured.extend(self.class_keys.iter().map(|(_, f)| (f.clone(), JType::object())));
+        captured.extend(self.class_keys.iter().map(|(_, f)| (f.clone(), ErasedType::object())));
         if captured.len() < tc.captures || tc.captures > all.len() {
             return;
         }
         let k = tc.captures;
-        let params: Vec<(Option<SymId>, JType)> = all[k..].to_vec();
-        let types: Vec<JType> = all_types[k..].to_vec();
-        let init_types: Vec<JType> = captured.iter().map(|(_, t)| t.clone()).chain(types.iter().cloned()).collect();
-        let prefix = method_desc(&types, &JType::V);
+        let params: Vec<(Option<SymId>, ErasedType)> = all[k..].to_vec();
+        let types: Vec<ErasedType> = all_types[k..].to_vec();
+        let init_types: Vec<ErasedType> = captured.iter().map(|(_, t)| t.clone()).chain(types.iter().cloned()).collect();
+        let prefix = method_desc(&types, &ErasedType::V);
         let prefix = &prefix[..prefix.len() - 1];
         // A value case class's `copy` answers the underlying value, as scalac's erasure has it.
         if cx.input.syms.class(c).value_class && types.len() == 1 {
@@ -1857,7 +1858,7 @@ impl<'a> Gen<'a> {
                 self.load(slot, t);
                 slot += if t.wide() { 2 } else { 1 };
             }
-            self.invoke(Invoke::Special, &owner, false, "<init>", &init_types, &JType::V);
+            self.invoke(Invoke::Special, &owner, false, "<init>", &init_types, &ErasedType::V);
             self.return_value(&this);
             self.end_method(ACC_PUBLIC, "copy", &method_desc(&types, &this));
         }
@@ -1893,11 +1894,11 @@ impl<'a> Gen<'a> {
             let outer = self.anon_ctor_params(k);
             let mut ctor = outer.clone();
             ctor.extend(self.ctor_param_types(k));
-            let typed: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
+            let typed: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
             self.begin_method(false, false, &typed, m.ret.clone(), &[]);
             self.new_object(&class);
             if let Some(t) = outer.first() {
-                let this = JType::L(self.this_name.clone());
+                let this = ErasedType::L(self.this_name.clone());
                 self.load(0, &this);
                 self.adapt(&this, t);
             }
@@ -1907,7 +1908,7 @@ impl<'a> Gen<'a> {
                 self.adapt(from, to);
                 slot += if from.wide() { 2 } else { 1 };
             }
-            self.invoke(Invoke::Special, &class, false, "<init>", &ctor, &JType::V);
+            self.invoke(Invoke::Special, &class, false, "<init>", &ctor, &ErasedType::V);
             self.return_value(&m.ret);
             if self.is_interface {
                 self.end_method(ACC_PUBLIC, &m.name, &m.desc);
@@ -1921,10 +1922,10 @@ impl<'a> Gen<'a> {
     /// scalac's `Mirror.Singleton` of a case object, in its module class being written:
     /// `fromProduct(Product)` answering the object, and the bridge to it.
     pub fn singleton_mirror_members(&mut self) {
-        let this = JType::L(self.this_name.clone());
-        let product = JType::L(Rc::from(PRODUCT));
-        let singleton = JType::L(Rc::from(MIRROR_SINGLETON));
-        let object = JType::object();
+        let this = ErasedType::L(self.this_name.clone());
+        let product = ErasedType::L(Rc::from(PRODUCT));
+        let singleton = ErasedType::L(Rc::from(MIRROR_SINGLETON));
+        let object = ErasedType::object();
         let desc = method_desc(&[product.clone()], &singleton);
         self.begin_method(false, false, &[(None, product.clone())], singleton.clone(), &[]);
         self.load(0, &this);
@@ -1951,7 +1952,7 @@ impl<'a> Gen<'a> {
             let Some(k) = crate::typer::value_exports::exported_companion(cx.input.syms, cx.input.types, a) else { continue };
             let name = encode(cx.input.interner.get(cx.input.syms.aliases[a.idx()].name));
             let module: Rc<str> = Rc::from(cx.companion_name(k));
-            let t = JType::L(module.clone());
+            let t = ErasedType::L(module.clone());
             self.begin_method(false, false, &[], t.clone(), &[]);
             self.getstatic(&module, "MODULE$", &t);
             self.return_value(&t);
@@ -1965,7 +1966,7 @@ impl<'a> Gen<'a> {
     /// The erased parameters and result of an export forwarder of member `s` whose signature the
     /// qualifier sees as `sig`: the member's own where nothing of it was substituted (a jar's as
     /// its class file has it), else the erasure of the substituted types.
-    fn erase_seen_sig(&mut self, s: SymId, sig: &MethodSig) -> (Vec<JType>, JType) {
+    fn erase_seen_sig(&mut self, s: SymId, sig: &MethodSig) -> (Vec<ErasedType>, ErasedType) {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
         let same = info.sig.as_ref().map_or(false, |o| {
@@ -1976,7 +1977,7 @@ impl<'a> Gen<'a> {
         if same || m.params.len() != sig.clauses.iter().map(|c| c.params.len()).sum::<usize>() {
             return (m.params.clone(), m.ret.clone());
         }
-        let mut params: Vec<JType> = Vec::new();
+        let mut params: Vec<ErasedType> = Vec::new();
         for p in sig.clauses.iter().flat_map(|c| c.params.iter()) {
             params.push(if p.by_name || p.repeated { self.sym_type(p.sym) } else { self.storage(p.ty) });
         }
@@ -1997,7 +1998,7 @@ impl<'a> Gen<'a> {
     /// interface: the member as the trait sees it (`SuperAccessors`' `superInfo`), a generic
     /// parent's type parameters bound as the trait's base type binds them, erased; what the
     /// trait's body calls, the trait declares and a class that mixes it in implements.
-    pub fn super_accessor_ref(&mut self, t: ClassId, member: SymId) -> MRef {
+    pub fn super_accessor_ref(&mut self, t: ClassId, member: SymId) -> MethodRef {
         let cx = self.cx;
         let mut accessor = (*self.mref(member)).clone();
         accessor.name = self.super_accessor_name(t, member);
@@ -2077,7 +2078,7 @@ impl<'a> Gen<'a> {
     /// the definition that follows the trait in the class's linearisation.
     pub fn super_accessors(&mut self, tc: &crate::tir::TClass) {
         let cx = self.cx;
-        let this = JType::L(self.this_name.clone());
+        let this = ErasedType::L(self.this_name.clone());
         for a in tc.super_accessors.clone() {
             if let Some(i) = a.getter {
                 self.super_getter_accessor(tc.id, a.of_trait, a.member, a.target, i as usize);
@@ -2095,7 +2096,7 @@ impl<'a> Gen<'a> {
                     continue;
                 }
             }
-            let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
+            let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
             self.begin_method(false, false, &params, m.ret.clone(), &[]);
             self.load(0, &this);
             let target = a.target.and_then(|t| match cx.input.syms.sym(t).owner {
@@ -2104,7 +2105,7 @@ impl<'a> Gen<'a> {
             });
             // The arguments as the definition the call runs takes them (`Base.id(String)` for
             // the trait's `id(Object)` of a generic parent), as scalac's erasure casts them.
-            let taken: Vec<JType> = match target {
+            let taken: Vec<ErasedType> = match target {
                 Some((t, _)) => self.mref(t).params.clone(),
                 None => self.mref(a.member).params.clone(),
             };
@@ -2140,7 +2141,7 @@ impl<'a> Gen<'a> {
     /// The accessor through which trait `t` selects the getter of `member`'s default `i` on
     /// `super` (`T$$super$m$default$N`, `SuperAccessors`): the getter's shape, a method of the
     /// trait's interface.
-    pub fn super_getter_accessor_ref(&mut self, t: ClassId, member: SymId, i: usize) -> MRef {
+    pub fn super_getter_accessor_ref(&mut self, t: ClassId, member: SymId, i: usize) -> MethodRef {
         let m = self.mref(member);
         let shape = self.default_getter_shape(member, i);
         let mut accessor = (*m).clone();
@@ -2165,13 +2166,13 @@ impl<'a> Gen<'a> {
         if self.cw.has_method(&m.name, &m.desc) {
             return;
         }
-        let this = JType::L(self.this_name.clone());
-        let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
+        let this = ErasedType::L(self.this_name.clone());
+        let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
         self.begin_method(false, false, &params, m.ret.clone(), &[]);
         self.load(0, &this);
         let shape = self.default_getter_shape(target, i);
         let tm = self.mref(target);
-        let taken: Vec<JType> = tm.params[..shape.before].to_vec();
+        let taken: Vec<ErasedType> = tm.params[..shape.before].to_vec();
         let mut slot = 1u16;
         for (k, t) in m.params.iter().enumerate() {
             self.load(slot, t);
@@ -2193,10 +2194,10 @@ impl<'a> Gen<'a> {
 
     /// The accessor `m` of a `super` call bound to the member `t` of the local trait `o` that takes
     /// `proxies`: the trait's static `t$` on `this`, the proxies as this class holds them.
-    fn proxied_super_accessor(&mut self, m: &MRef, t: SymId, o: ClassId, proxies: &[SymId]) {
-        let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
+    fn proxied_super_accessor(&mut self, m: &MethodRef, t: SymId, o: ClassId, proxies: &[SymId]) {
+        let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
         self.begin_method(false, false, &params, m.ret.clone(), &[]);
-        let this = JType::L(self.this_name.clone());
+        let this = ErasedType::L(self.this_name.clone());
         self.load(0, &this);
         for &p in proxies {
             let want = self.anon_capture_type(p);
@@ -2216,7 +2217,7 @@ impl<'a> Gen<'a> {
             slot += if ty.wide() { 2 } else { 1 };
         }
         let owner = self.class_name(o);
-        let mut all = vec![JType::L(owner.clone())];
+        let mut all = vec![ErasedType::L(owner.clone())];
         all.extend(pm.params.iter().cloned());
         let desc = method_desc(&all, &pm.ret);
         self.invoke_desc(Invoke::Static, &owner, true, &format!("{}$", pm.name), &desc, all.len(), &pm.ret);
@@ -2265,7 +2266,7 @@ impl<'a> Gen<'a> {
             return;
         }
         let inherited = |t: ClassId| syms.class(c).superclass.map_or(false, |s| syms.class(s).base_types.iter().any(|&(b, _)| b == t));
-        let this = JType::L(self.this_name.clone());
+        let this = ErasedType::L(self.this_name.clone());
         let mut wanted: Vec<(String, String, Option<(ClassId, String)>)> = Vec::new();
         for &t in &jar_traits {
             let cf = &cx.class_files[&t];
@@ -2316,7 +2317,7 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let (params, ret) = parse_method_desc(&desc);
-            let typed: Vec<(Option<SymId>, JType)> = params.iter().map(|t| (None, t.clone())).collect();
+            let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
             self.begin_method(false, false, &typed, ret.clone(), &[]);
             self.load(0, &this);
             let mut slot = 1u16;

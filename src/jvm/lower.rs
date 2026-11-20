@@ -3,10 +3,10 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use super::gen::{CallRoute, FieldRoute, Fit, Gen, Invoke, MRef, Site, ThisValue};
+use crate::lir::{ErasedType, Invoke, Kind, LirId, List, MethodRef};
+use super::gen::{CallRoute, FieldRoute, Fit, Gen, Site, ThisValue};
 use super::names::*;
 use crate::ast::ListRef;
-use crate::lir::{Kind, LirId, List};
 use crate::tir::*;
 use crate::types::*;
 use std::rc::Rc;
@@ -24,7 +24,7 @@ impl<'a> Gen<'a> {
     }
 
     /// `e` brought to the type `want`.
-    pub(super) fn lower_expr(&mut self, e: TExprId, want: &JType) -> LirId {
+    pub(super) fn lower_expr(&mut self, e: TExprId, want: &ErasedType) -> LirId {
         let id = self.lower_marked(e, want);
         let node = &mut self.lir.nodes[id.0 as usize];
         // A node not lowered takes its position as it is generated.
@@ -34,11 +34,11 @@ impl<'a> Gen<'a> {
         id
     }
 
-    fn lower_legacy(&mut self, e: TExprId, want: &JType) -> LirId {
+    fn lower_legacy(&mut self, e: TExprId, want: &ErasedType) -> LirId {
         self.lir.push(Kind::Legacy(e), want.clone())
     }
 
-    fn lower_marked(&mut self, e: TExprId, want: &JType) -> LirId {
+    fn lower_marked(&mut self, e: TExprId, want: &ErasedType) -> LirId {
         let prog = self.cx.input.prog;
         if want.is_ref() {
             if let Some(wider) = self.widened_branches(e) {
@@ -51,13 +51,13 @@ impl<'a> Gen<'a> {
             TExpr::Try(index) => {
                 let t = &prog.tries[index as usize];
                 let body = self.lower_expr(t.body, want);
-                let finalizer = t.finalizer.map(|f| self.lower_expr(f, &JType::V));
+                let finalizer = t.finalizer.map(|f| self.lower_expr(f, &ErasedType::V));
                 self.lir.push(Kind::Try { index, body, finalizer }, want.clone())
             }
-            TExpr::Int(v) if matches!(want, JType::D) => self.lir.push(Kind::Double(v as f64), JType::D),
-            TExpr::Int(v) if matches!(want, JType::J) => self.lir.push(Kind::Long(v as i64), JType::J),
-            TExpr::Int(v) if matches!(want, JType::F) => self.lir.push(Kind::Float(v as f32), JType::F),
-            TExpr::Double(v) if matches!(want, JType::F) => self.lir.push(Kind::Float(v as f32), JType::F),
+            TExpr::Int(v) if matches!(want, ErasedType::D) => self.lir.push(Kind::Double(v as f64), ErasedType::D),
+            TExpr::Int(v) if matches!(want, ErasedType::J) => self.lir.push(Kind::Long(v as i64), ErasedType::J),
+            TExpr::Int(v) if matches!(want, ErasedType::F) => self.lir.push(Kind::Float(v as f32), ErasedType::F),
+            TExpr::Double(v) if matches!(want, ErasedType::F) => self.lir.push(Kind::Float(v as f32), ErasedType::F),
             _ => {
                 let Some(node) = self.lower_node(e) else { return self.lower_legacy(e, want) };
                 let t = self.lir.ty(node).clone();
@@ -81,19 +81,19 @@ impl<'a> Gen<'a> {
                 // A literal the typer narrowed to the `Byte`, `Short` or `Char` expected keeps that
                 // type, so that boxing it gives the narrow class (`(1: Byte): Any` is a `java.lang.Byte`).
                 let ty = match self.recorded_type(e).map(|t| self.erase(t)) {
-                    Some(narrow @ (JType::B | JType::S | JType::C)) => narrow,
-                    _ => JType::I,
+                    Some(narrow @ (ErasedType::B | ErasedType::S | ErasedType::C)) => narrow,
+                    _ => ErasedType::I,
                 };
                 self.lir.push(Kind::Int(v), ty)
             }
-            TExpr::Long(v) => self.lir.push(Kind::Long(v), JType::J),
+            TExpr::Long(v) => self.lir.push(Kind::Long(v), ErasedType::J),
             // A literal the typer narrowed to the `Float` expected is a float constant.
-            TExpr::Double(v) if self.recorded_type(e).map(|t| self.erase(t)) == Some(JType::F) => self.lir.push(Kind::Float(v as f32), JType::F),
-            TExpr::Double(v) => self.lir.push(Kind::Double(v), JType::D),
-            TExpr::Bool(v) => self.lir.push(Kind::Bool(v), JType::Z),
-            TExpr::Char(c) => self.lir.push(Kind::Char(c), JType::C),
-            TExpr::Str(s) => self.lir.push(Kind::Str(s), JType::L(Rc::from(STRING))),
-            TExpr::Unit => self.lir.push(Kind::Unit, JType::V),
+            TExpr::Double(v) if self.recorded_type(e).map(|t| self.erase(t)) == Some(ErasedType::F) => self.lir.push(Kind::Float(v as f32), ErasedType::F),
+            TExpr::Double(v) => self.lir.push(Kind::Double(v), ErasedType::D),
+            TExpr::Bool(v) => self.lir.push(Kind::Bool(v), ErasedType::Z),
+            TExpr::Char(c) => self.lir.push(Kind::Char(c), ErasedType::C),
+            TExpr::Str(s) => self.lir.push(Kind::Str(s), ErasedType::L(Rc::from(STRING))),
+            TExpr::Unit => self.lir.push(Kind::Unit, ErasedType::V),
             // A lazy local, a captured one and a cell are not lowered yet.
             TExpr::Local(s) => {
                 let ty = self.plain_local(s)?.ty.clone();
@@ -101,10 +101,10 @@ impl<'a> Gen<'a> {
             }
             // An object without a body that only its exports are reached through is not emitted,
             // and a Java class's statics have no object (`Gen::load_module`).
-            TExpr::Module(c) if !self.cx.input.reach.classes[c.idx()] || self.cx.input.java_class(c).is_some() => self.lir.push(Kind::Unit, JType::V),
+            TExpr::Module(c) if !self.cx.input.reach.classes[c.idx()] || self.cx.input.java_class(c).is_some() => self.lir.push(Kind::Unit, ErasedType::V),
             TExpr::Module(c) => {
                 let name = self.class_name(c);
-                self.lir.push(Kind::Module(name.clone()), JType::L(name))
+                self.lir.push(Kind::Module(name.clone()), ErasedType::L(name))
             }
             TExpr::This | TExpr::Super(_) => return self.lower_this(),
             TExpr::Field(r, s) => return self.lower_field_read(r, s),
@@ -112,11 +112,11 @@ impl<'a> Gen<'a> {
             TExpr::CallClosure(f, args) => {
                 let items: Vec<TExprId> = prog.expr_list(args).to_vec();
                 let ft = self.function_type(items.len());
-                let JType::L(owner) = ft.clone() else { unreachable!("a function's class") };
-                let object = JType::object();
+                let ErasedType::L(owner) = ft.clone() else { unreachable!("a function's class") };
+                let object = ErasedType::object();
                 let params = vec![object.clone(); items.len()];
                 let desc = method_desc(&params, &object);
-                let method = Rc::new(MRef { owner, owner_is_interface: true, name: "apply".to_string(), params, ret: object.clone(), desc, kind: Invoke::Interface });
+                let method = Rc::new(MethodRef { owner, owner_is_interface: true, name: "apply".to_string(), params, ret: object.clone(), desc, kind: Invoke::Interface });
                 let receiver = self.lower_expr(f, &ft);
                 let lowered: Vec<LirId> = items.into_iter().map(|a| self.lower_expr(a, &object)).collect();
                 let args = self.lir.list(&lowered);
@@ -130,7 +130,7 @@ impl<'a> Gen<'a> {
     /// The instance the method runs on; None where the method has none.
     fn lower_this(&mut self) -> Option<LirId> {
         Some(match self.this_value()? {
-            ThisValue::Module(module) => self.lir.push(Kind::Module(module.clone()), JType::L(module)),
+            ThisValue::Module(module) => self.lir.push(Kind::Module(module.clone()), ErasedType::L(module)),
             ThisValue::Slot(_, ty) => self.lir.push(Kind::This, ty),
         })
     }
@@ -151,7 +151,7 @@ impl<'a> Gen<'a> {
                 let ty = self.sym_type(s);
                 let name: Rc<str> = Rc::from(self.field_name(s));
                 let owner = self.class_name(c);
-                let receiver = self.lower_expr(r, &JType::L(owner.clone()));
+                let receiver = self.lower_expr(r, &ErasedType::L(owner.clone()));
                 Some(self.lir.push(Kind::Field { receiver, owner, name }, ty))
             }
             FieldRoute::Accessor => {
@@ -173,7 +173,7 @@ impl<'a> Gen<'a> {
 
     /// The arguments of a call of `callee` against its parameters' types, as they are written,
     /// and the order a right-associative extension takes them in (`Gen::jvm_param_order`).
-    pub(super) fn lower_arguments(&mut self, callee: Option<SymId>, args: ListRef, params: &[JType]) -> (List, Option<Rc<[usize]>>) {
+    pub(super) fn lower_arguments(&mut self, callee: Option<SymId>, args: ListRef, params: &[ErasedType]) -> (List, Option<Rc<[usize]>>) {
         let order = callee.and_then(|s| self.jvm_param_order(s)).filter(|o| o.len() == params.len());
         let written = match &order {
             Some(order) => self.signature_order(order, params),
@@ -182,9 +182,9 @@ impl<'a> Gen<'a> {
         let items: Vec<TExprId> = self.cx.input.prog.expr_list(args).to_vec();
         let mut lowered = Vec::with_capacity(items.len());
         for (i, a) in items.into_iter().enumerate() {
-            let want = written.get(i).cloned().unwrap_or_else(JType::object);
+            let want = written.get(i).cloned().unwrap_or_else(ErasedType::object);
             lowered.push(match &want {
-                JType::L(n) if n.starts_with('[') => self.lir.push(Kind::JavaArrayArgument(a), want.clone()),
+                ErasedType::L(n) if n.starts_with('[') => self.lir.push(Kind::JavaArrayArgument(a), want.clone()),
                 _ => self.lower_expr(a, &want),
             });
         }
@@ -203,7 +203,7 @@ impl<'a> Gen<'a> {
     }
 
     /// `value`, of the type `from`, as a value of the type `to`.
-    pub(super) fn lower_adapt(&mut self, value: LirId, from: &JType, to: &JType) -> LirId {
+    pub(super) fn lower_adapt(&mut self, value: LirId, from: &ErasedType, to: &ErasedType) -> LirId {
         if from == to {
             return value;
         }

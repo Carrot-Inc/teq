@@ -2,6 +2,7 @@
 //! 3.8.4), over scala-library's runtime: a local's holder of the `LazyRef` family, read through an accessor and
 //! computed by an initialiser under the holder's monitor (`transformLocalDef`, `transformStats`).
 
+use crate::lir::{ErasedType, Invoke};
 use super::classfile::*;
 use super::gen::*;
 use super::names::*;
@@ -22,32 +23,32 @@ impl<'a> Gen<'a> {
     /// The holder class of the local lazy val `s` and the type its `value` and `initialize` take:
     /// `Definitions.LazyHolder` (1551-1564) over the local's erased type, the eight primitives'
     /// classes, `LazyRef` for every other type (`Unit` among them).
-    pub fn lazy_holder_class(&mut self, s: SymId) -> (Rc<str>, JType) {
+    pub fn lazy_holder_class(&mut self, s: SymId) -> (Rc<str>, ErasedType) {
         let t = self.sym_type(s);
         let class = match t {
-            JType::I => "scala/runtime/LazyInt",
-            JType::J => "scala/runtime/LazyLong",
-            JType::Z => "scala/runtime/LazyBoolean",
-            JType::F => "scala/runtime/LazyFloat",
-            JType::D => "scala/runtime/LazyDouble",
-            JType::B => "scala/runtime/LazyByte",
-            JType::C => "scala/runtime/LazyChar",
-            JType::S => "scala/runtime/LazyShort",
-            _ => return (Rc::from(LAZY_REF), JType::object()),
+            ErasedType::I => "scala/runtime/LazyInt",
+            ErasedType::J => "scala/runtime/LazyLong",
+            ErasedType::Z => "scala/runtime/LazyBoolean",
+            ErasedType::F => "scala/runtime/LazyFloat",
+            ErasedType::D => "scala/runtime/LazyDouble",
+            ErasedType::B => "scala/runtime/LazyByte",
+            ErasedType::C => "scala/runtime/LazyChar",
+            ErasedType::S => "scala/runtime/LazyShort",
+            _ => return (Rc::from(LAZY_REF), ErasedType::object()),
         };
         (Rc::from(class), t)
     }
 
-    pub fn lazy_holder_type(&mut self, s: SymId) -> JType {
-        JType::L(self.lazy_holder_class(s).0)
+    pub fn lazy_holder_type(&mut self, s: SymId) -> ErasedType {
+        ErasedType::L(self.lazy_holder_class(s).0)
     }
 
     /// `val x$lzyN = new LazyX()`, the local `s` standing for its holder.
     pub fn new_lazy_holder(&mut self, s: SymId) {
         let (class, _) = self.lazy_holder_class(s);
         self.new_object(&class);
-        self.invoke(Invoke::Special, &class, false, "<init>", &[], &JType::V);
-        let holder = JType::L(class);
+        self.invoke(Invoke::Special, &class, false, "<init>", &[], &ErasedType::V);
+        let holder = ErasedType::L(class);
         let slot = self.store_new(&holder);
         self.m.locals.insert(s, Local { slot, ty: holder, cell: false });
     }
@@ -113,7 +114,7 @@ impl<'a> Gen<'a> {
                 let ty = self.lazy_holder_type(f);
                 captures.push(Capture { sym: f, cell: false, ty, key: false });
                 if self.lazy_keyed(f) {
-                    captures.push(Capture { sym: f, cell: false, ty: JType::object(), key: true });
+                    captures.push(Capture { sym: f, cell: false, ty: ErasedType::object(), key: true });
                 }
                 continue;
             }
@@ -121,15 +122,15 @@ impl<'a> Gen<'a> {
             let ty = if info.by_name { self.function_type(0) } else { self.sym_type(f) };
             captures.push(Capture { sym: f, cell, ty, key: false });
         }
-        let mut all: Vec<JType> = Vec::new();
+        let mut all: Vec<ErasedType> = Vec::new();
         if let Some(h) = home {
             all.push(self.class_type(h));
         }
         if free.nonlocal {
-            all.push(JType::object());
+            all.push(ErasedType::object());
         }
         for c in &captures {
-            all.push(if c.cell { JType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
+            all.push(if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
         }
         let holder = self.lazy_holder_type(s);
         all.push(holder.clone());
@@ -172,7 +173,7 @@ impl<'a> Gen<'a> {
     }
 
     /// A read of the local lazy val `s`: its accessor over its holder.
-    pub fn lazy_read(&mut self, s: SymId) -> JType {
+    pub fn lazy_read(&mut self, s: SymId) -> ErasedType {
         let lifted = self.lazy_method(s, false);
         self.call_lazy_lifted(s, &lifted);
         lifted.ret.clone()
@@ -188,12 +189,12 @@ impl<'a> Gen<'a> {
     }
 
     /// `x$lzy.initialized()`, `x$lzy.value()` and `x$lzy.initialize(v)` of the holder in `slot`.
-    fn holder_call(&mut self, class: &str, slot: u16, method: &str, value: &JType) {
-        let holder = JType::L(Rc::from(class));
+    fn holder_call(&mut self, class: &str, slot: u16, method: &str, value: &ErasedType) {
+        let holder = ErasedType::L(Rc::from(class));
         match method {
             "initialized" => {
                 self.load(slot, &holder);
-                self.invoke(Invoke::Virtual, class, false, "initialized", &[], &JType::Z);
+                self.invoke(Invoke::Virtual, class, false, "initialized", &[], &ErasedType::Z);
             }
             "value" => {
                 self.load(slot, &holder);
@@ -206,7 +207,7 @@ impl<'a> Gen<'a> {
     /// The body of the accessor of `s`, its holder in `slot` (`PendingBody::LazyAccessor`).
     pub fn lazy_accessor_body(&mut self, s: SymId, slot: u16) {
         let (class, value) = self.lazy_holder_class(s);
-        let holder = JType::L(class.clone());
+        let holder = ErasedType::L(class.clone());
         self.m.locals.insert(s, Local { slot, ty: holder, cell: false });
         let ret = self.m.ret.clone();
         let compute = self.code.new_label();
@@ -225,7 +226,7 @@ impl<'a> Gen<'a> {
     /// (`PendingBody::LazyInit`): the holder's monitor held as `synchronized` holds it.
     pub fn lazy_init_body(&mut self, s: SymId, init: TExprId, slot: u16) {
         let (class, value) = self.lazy_holder_class(s);
-        let holder = JType::L(class.clone());
+        let holder = ErasedType::L(class.clone());
         self.m.locals.insert(s, Local { slot, ty: holder.clone(), cell: false });
         let ret = self.m.ret.clone();
         let t = self.monitor_block(
@@ -258,7 +259,7 @@ impl<'a> Gen<'a> {
 #[derive(Clone)]
 pub struct LazyHolder {
     pub getter: String,
-    pub ty: JType,
+    pub ty: ErasedType,
     pub container: String,
     pub handle: String,
     pub init: String,
@@ -268,14 +269,14 @@ impl<'a> Gen<'a> {
     /// The holder of the lazy member `getter` of the class being written, made at its first asking
     /// with its names (§8) and its handle declared before the class's other fields (`addInFront`),
     /// so that the later one comes first (`varHandleInfo.defs = h :: defs`).
-    pub fn lazy_holder(&mut self, getter: &str, ty: &JType) -> LazyHolder {
+    pub fn lazy_holder(&mut self, getter: &str, ty: &ErasedType) -> LazyHolder {
         if let Some(h) = self.lazy_holders.iter().find(|h| h.getter == getter) {
             return h.clone();
         }
         let (container, init) = self.lazy_member_names(getter);
         let handle = format!("{}$lzyHandle", container);
         let mut d = String::new();
-        JType::L(Rc::from(VAR_HANDLE)).desc(&mut d);
+        ErasedType::L(Rc::from(VAR_HANDLE)).desc(&mut d);
         self.cw.field_first(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, &handle, &d);
         let h = LazyHolder { getter: getter.to_string(), ty: ty.clone(), container, handle, init };
         self.lazy_holders.push(h.clone());
@@ -285,7 +286,7 @@ impl<'a> Gen<'a> {
     /// A lazy member the class holds beside its fields' (a made companion, a Scala 2 trait's private
     /// lazy val or object): its container, its getter `getter` of the given access, its
     /// initialiser computing `init`.
-    pub fn thread_safe_member(&mut self, getter: &str, ty: &JType, init: super::classes::HolderInit, access: u16) {
+    pub fn thread_safe_member(&mut self, getter: &str, ty: &ErasedType, init: super::classes::HolderInit, access: u16) {
         let h = self.lazy_holder(getter, ty);
         self.cw.field(ACC_PRIVATE | ACC_VOLATILE, &h.container, "Ljava/lang/Object;");
         let desc = method_desc(&[], ty);
@@ -301,9 +302,9 @@ impl<'a> Gen<'a> {
     /// .findVarHandle(classOf[C], "x$lzyN", classOf[Object])`, in the handles' order.
     pub fn var_handle_lookups(&mut self) {
         let owner = self.this_name.clone();
-        let lookup = JType::L(Rc::from("java/lang/invoke/MethodHandles$Lookup"));
-        let class = JType::L(Rc::from("java/lang/Class"));
-        let handle_type = JType::L(Rc::from(VAR_HANDLE));
+        let lookup = ErasedType::L(Rc::from("java/lang/invoke/MethodHandles$Lookup"));
+        let class = ErasedType::L(Rc::from("java/lang/Class"));
+        let handle_type = ErasedType::L(Rc::from(VAR_HANDLE));
         for h in self.lazy_holders.clone().iter().rev() {
             self.invoke(Invoke::Static, "java/lang/invoke/MethodHandles", false, "lookup", &[], &lookup);
             let class_index = self.cw.cp.class(&owner);
@@ -313,7 +314,7 @@ impl<'a> Gen<'a> {
             let object_index = self.cw.cp.class(OBJECT);
             self.ldc(object_index);
             self.code.push(VT::Object(self.cw.cp.class("java/lang/Class")));
-            self.invoke(Invoke::Virtual, "java/lang/invoke/MethodHandles$Lookup", false, "findVarHandle", &[class.clone(), JType::L(Rc::from(STRING)), class.clone()], &handle_type);
+            self.invoke(Invoke::Virtual, "java/lang/invoke/MethodHandles$Lookup", false, "findVarHandle", &[class.clone(), ErasedType::L(Rc::from(STRING)), class.clone()], &handle_type);
             self.putstatic(&owner, &h.handle, &handle_type);
         }
     }
@@ -329,8 +330,8 @@ impl<'a> Gen<'a> {
     }
 
     /// Whether the erased type `tp` is a class `LazyValControlState` derives from (2.5).
-    fn control_state_super(&self, tp: &JType) -> bool {
-        matches!(tp, JType::L(n) if self.cx.control_state_bases.iter().any(|b| **b == **n))
+    fn control_state_super(&self, tp: &ErasedType) -> bool {
+        matches!(tp, ErasedType::L(n) if self.cx.control_state_bases.iter().any(|b| **b == **n))
     }
 
     /// The getter's body over the holder (`mkThreadSafeDef` 374-389), its value left on the stack
@@ -338,8 +339,8 @@ impl<'a> Gen<'a> {
     /// (`immediateValueCondition`), null where it holds `NullValue`, else the initialiser's.
     pub fn thread_safe_getter(&mut self, h: &LazyHolder) {
         let owner = self.this_name.clone();
-        let this = JType::L(owner.clone());
-        let object = JType::object();
+        let this = ErasedType::L(owner.clone());
+        let object = ErasedType::object();
         let tp = h.ty.clone();
         self.load(0, &this);
         self.getfield(&owner, &h.container, &object);
@@ -356,7 +357,7 @@ impl<'a> Gen<'a> {
         } else {
             self.load(r, &object);
             let tested: String = match &tp {
-                JType::L(n) => n.to_string(),
+                ErasedType::L(n) => n.to_string(),
                 prim => prim.box_class().to_string(),
             };
             self.instance_of(&tested);
@@ -367,7 +368,7 @@ impl<'a> Gen<'a> {
         self.goto(done);
         self.code.bind(slow);
         self.load(r, &object);
-        let null_value = JType::L(Rc::from(NULL_VALUE));
+        let null_value = ErasedType::L(Rc::from(NULL_VALUE));
         self.getstatic(NULL_VALUE, "MODULE$", &null_value);
         self.jump_if(op::IF_ACMPNE, 2, call);
         self.code.op(op::ACONST_NULL);
@@ -390,10 +391,10 @@ impl<'a> Gen<'a> {
     pub fn thread_safe_init(&mut self, h: &LazyHolder, rhs: &super::classes::HolderInit) {
         use super::classes::HolderInit;
         let owner = self.this_name.clone();
-        let this = JType::L(owner.clone());
-        let object = JType::object();
-        let handle_type = JType::L(Rc::from(VAR_HANDLE));
-        let evaluating = JType::L(Rc::from(LAZY_EVALUATING));
+        let this = ErasedType::L(owner.clone());
+        let object = ErasedType::object();
+        let handle_type = ErasedType::L(Rc::from(VAR_HANDLE));
+        let evaluating = ErasedType::L(Rc::from(LAZY_EVALUATING));
         let waiting: Rc<str> = Rc::from(LAZY_WAITING);
         let roots: Vec<TExprId> = match rhs {
             HolderInit::Expr(e) => vec![*e],
@@ -437,12 +438,12 @@ impl<'a> Gen<'a> {
             HolderInit::Expr(e) => self.expr(*e, &h.ty),
             HolderInit::TraitStatic(base) => {
                 self.load(0, &this);
-                self.invoke(Invoke::Static, base, true, &format!("{}$", h.getter), &[JType::L(base.clone())], &h.ty);
+                self.invoke(Invoke::Static, base, true, &format!("{}$", h.getter), &[ErasedType::L(base.clone())], &h.ty);
             }
             HolderInit::Module { class, outer } => {
                 self.new_object(class);
                 self.load(0, &this);
-                self.invoke(Invoke::Special, class, false, "<init>", &[JType::L(outer.clone())], &JType::V);
+                self.invoke(Invoke::Special, class, false, "<init>", &[ErasedType::L(outer.clone())], &ErasedType::V);
             }
         }
         let ty = h.ty.clone();
@@ -455,7 +456,7 @@ impl<'a> Gen<'a> {
         let set = self.code.new_label();
         self.load(nullable, &object);
         self.jump_if(op::IFNONNULL, 1, present);
-        let null_value = JType::L(Rc::from(NULL_VALUE));
+        let null_value = ErasedType::L(Rc::from(NULL_VALUE));
         self.getstatic(NULL_VALUE, "MODULE$", &null_value);
         self.store(result, &object);
         self.goto(set);
@@ -472,7 +473,7 @@ impl<'a> Gen<'a> {
         self.return_value(&object);
         self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
         self.code.locals_release(protected);
-        let throwable = JType::L(Rc::from(THROWABLE));
+        let throwable = ErasedType::L(Rc::from(THROWABLE));
         let tvt = self.vt(&throwable);
         self.code.bind_handler(handler, tvt);
         let thrown = self.store_new(&throwable);
@@ -497,9 +498,9 @@ impl<'a> Gen<'a> {
         self.load(0, &this);
         self.load(cur, &object);
         self.new_object(&waiting);
-        self.invoke(Invoke::Special, &waiting, false, "<init>", &[], &JType::V);
+        self.invoke(Invoke::Special, &waiting, false, "<init>", &[], &ErasedType::V);
         self.var_handle_cas();
-        self.pop_value(&JType::Z);
+        self.pop_value(&ErasedType::Z);
         self.goto(lp);
         self.code.bind(not_evaluating);
         self.load(cur, &object);
@@ -507,7 +508,7 @@ impl<'a> Gen<'a> {
         self.jump_if(op::IFEQ, 1, answer_null);
         self.load(cur, &object);
         self.checkcast(&waiting);
-        self.invoke(Invoke::Virtual, &waiting, false, "await", &[], &JType::V);
+        self.invoke(Invoke::Virtual, &waiting, false, "await", &[], &ErasedType::V);
         self.goto(lp);
         self.code.bind(answer_null);
         self.code.op(op::ACONST_NULL);
@@ -523,11 +524,11 @@ impl<'a> Gen<'a> {
     /// x$lzy.asInstanceOf[Waiting]; CAS(this, lock, result); lock.countDown() }`.
     fn thread_safe_publish(&mut self, h: &LazyHolder, result: u16) {
         let owner = self.this_name.clone();
-        let this = JType::L(owner.clone());
-        let object = JType::object();
-        let handle_type = JType::L(Rc::from(VAR_HANDLE));
-        let evaluating = JType::L(Rc::from(LAZY_EVALUATING));
-        let waiting = JType::L(Rc::from(LAZY_WAITING));
+        let this = ErasedType::L(owner.clone());
+        let object = ErasedType::object();
+        let handle_type = ErasedType::L(Rc::from(VAR_HANDLE));
+        let evaluating = ErasedType::L(Rc::from(LAZY_EVALUATING));
+        let waiting = ErasedType::L(Rc::from(LAZY_WAITING));
         let done = self.code.new_label();
         self.getstatic(&owner, &h.handle, &handle_type);
         self.load(0, &this);
@@ -544,9 +545,9 @@ impl<'a> Gen<'a> {
         self.load(lock, &waiting);
         self.load(result, &object);
         self.var_handle_cas();
-        self.pop_value(&JType::Z);
+        self.pop_value(&ErasedType::Z);
         self.load(lock, &waiting);
-        self.invoke(Invoke::Virtual, LAZY_WAITING, false, "countDown", &[], &JType::V);
+        self.invoke(Invoke::Virtual, LAZY_WAITING, false, "countDown", &[], &ErasedType::V);
         self.code.bind(done);
     }
 }

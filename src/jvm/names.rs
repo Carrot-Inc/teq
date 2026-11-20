@@ -1,6 +1,7 @@
 //! JVM names: scalac's `$`-encoding of operator characters, the binary names of classes, and
 //! the erased types the backend computes with.
 
+use crate::lir::ErasedType;
 use std::rc::Rc;
 
 /// scalac's NameTransformer: operator characters become `$plus`, `$colon` and so on.
@@ -606,65 +607,63 @@ pub const TUPLE_XXL: &str = "scala/runtime/TupleXXL";
 pub const RUNTIME_MODULE: &str = "scala/runtime/jvm$package$";
 pub const ENUM: &str = "scala/reflect/Enum";
 
-pub use crate::lir::Type as JType;
-
-impl JType {
-    pub fn object() -> JType {
-        JType::L(Rc::from(OBJECT))
+impl ErasedType {
+    pub fn object() -> ErasedType {
+        ErasedType::L(Rc::from(OBJECT))
     }
 
     pub fn is_object(&self) -> bool {
-        matches!(self, JType::L(n) if &**n == OBJECT)
+        matches!(self, ErasedType::L(n) if &**n == OBJECT)
     }
 
     pub fn is_ref(&self) -> bool {
-        matches!(self, JType::L(_))
+        matches!(self, ErasedType::L(_))
     }
 
     pub fn is_string(&self) -> bool {
-        matches!(self, JType::L(n) if &**n == STRING)
+        matches!(self, ErasedType::L(n) if &**n == STRING)
     }
 
     pub fn wide(&self) -> bool {
-        matches!(self, JType::J | JType::D)
+        matches!(self, ErasedType::J | ErasedType::D)
     }
 
     /// The typer's numeric ranks (`prims::R_BYTE` to `R_DOUBLE`).
     pub fn numeric_rank(&self) -> Option<u8> {
         use crate::typer::prims::*;
         match self {
-            JType::B => Some(R_BYTE),
-            JType::S => Some(R_SHORT),
-            JType::C => Some(R_CHAR),
-            JType::I => Some(R_INT),
-            JType::J => Some(R_LONG),
-            JType::F => Some(R_FLOAT),
-            JType::D => Some(R_DOUBLE),
+            ErasedType::B => Some(R_BYTE),
+            ErasedType::S => Some(R_SHORT),
+            ErasedType::C => Some(R_CHAR),
+            ErasedType::I => Some(R_INT),
+            ErasedType::J => Some(R_LONG),
+            ErasedType::F => Some(R_FLOAT),
+            ErasedType::D => Some(R_DOUBLE),
             _ => None,
         }
     }
 
     /// What a value of this type is on the operand stack: the small integer types are ints.
-    pub fn stack_type(&self) -> JType {
+    pub fn stack_type(&self) -> ErasedType {
         match self {
-            JType::Z | JType::B | JType::S | JType::C => JType::I,
+            ErasedType::Z | ErasedType::B | ErasedType::S | ErasedType::C => ErasedType::I,
             other => other.clone(),
         }
     }
 
     pub fn desc(&self, out: &mut String) {
         match self {
-            JType::V => out.push('V'),
-            JType::Z => out.push('Z'),
-            JType::B => out.push('B'),
-            JType::S => out.push('S'),
-            JType::C => out.push('C'),
-            JType::I => out.push('I'),
-            JType::J => out.push('J'),
-            JType::F => out.push('F'),
-            JType::D => out.push('D'),
-            JType::L(n) if n.starts_with('[') => out.push_str(n),
-            JType::L(n) => {
+            ErasedType::V => out.push('V'),
+            ErasedType::Z => out.push('Z'),
+            ErasedType::B => out.push('B'),
+            ErasedType::S => out.push('S'),
+            ErasedType::C => out.push('C'),
+            ErasedType::I => out.push('I'),
+            ErasedType::J => out.push('J'),
+            ErasedType::F => out.push('F'),
+            ErasedType::D => out.push('D'),
+            ErasedType::L(n) if n.starts_with('[') => out.push_str(n),
+            ErasedType::L(n) => {
                 out.push('L');
                 out.push_str(n);
                 out.push(';');
@@ -675,20 +674,20 @@ impl JType {
     /// The class that boxes a primitive.
     pub fn box_class(&self) -> &'static str {
         match self {
-            JType::Z => "java/lang/Boolean",
-            JType::B => "java/lang/Byte",
-            JType::S => "java/lang/Short",
-            JType::C => "java/lang/Character",
-            JType::I => "java/lang/Integer",
-            JType::J => "java/lang/Long",
-            JType::F => "java/lang/Float",
-            JType::D => "java/lang/Double",
+            ErasedType::Z => "java/lang/Boolean",
+            ErasedType::B => "java/lang/Byte",
+            ErasedType::S => "java/lang/Short",
+            ErasedType::C => "java/lang/Character",
+            ErasedType::I => "java/lang/Integer",
+            ErasedType::J => "java/lang/Long",
+            ErasedType::F => "java/lang/Float",
+            ErasedType::D => "java/lang/Double",
             _ => OBJECT,
         }
     }
 }
 
-pub fn method_desc(params: &[JType], ret: &JType) -> String {
+pub fn method_desc(params: &[ErasedType], ret: &ErasedType) -> String {
     let mut s = String::with_capacity(16 + params.len() * 18);
     s.push('(');
     for p in params {
@@ -701,33 +700,33 @@ pub fn method_desc(params: &[JType], ret: &JType) -> String {
 
 /// Parses a field descriptor; arrays come back as `Object`-like references under their
 /// descriptor text.
-pub fn parse_type(desc: &str) -> (JType, &str) {
+pub fn parse_type(desc: &str) -> (ErasedType, &str) {
     let b = desc.as_bytes();
     match b.first() {
-        Some(b'V') => (JType::V, &desc[1..]),
-        Some(b'Z') => (JType::Z, &desc[1..]),
-        Some(b'B') => (JType::B, &desc[1..]),
-        Some(b'S') => (JType::S, &desc[1..]),
-        Some(b'C') => (JType::C, &desc[1..]),
-        Some(b'I') => (JType::I, &desc[1..]),
-        Some(b'J') => (JType::J, &desc[1..]),
-        Some(b'F') => (JType::F, &desc[1..]),
-        Some(b'D') => (JType::D, &desc[1..]),
+        Some(b'V') => (ErasedType::V, &desc[1..]),
+        Some(b'Z') => (ErasedType::Z, &desc[1..]),
+        Some(b'B') => (ErasedType::B, &desc[1..]),
+        Some(b'S') => (ErasedType::S, &desc[1..]),
+        Some(b'C') => (ErasedType::C, &desc[1..]),
+        Some(b'I') => (ErasedType::I, &desc[1..]),
+        Some(b'J') => (ErasedType::J, &desc[1..]),
+        Some(b'F') => (ErasedType::F, &desc[1..]),
+        Some(b'D') => (ErasedType::D, &desc[1..]),
         Some(b'L') => {
             let end = desc.find(';').unwrap_or(desc.len() - 1);
-            (JType::L(Rc::from(&desc[1..end])), &desc[end + 1..])
+            (ErasedType::L(Rc::from(&desc[1..end])), &desc[end + 1..])
         }
         Some(b'[') => {
             let (_, rest) = parse_type(&desc[1..]);
             let len = desc.len() - rest.len();
-            (JType::L(Rc::from(&desc[..len])), rest)
+            (ErasedType::L(Rc::from(&desc[..len])), rest)
         }
-        _ => (JType::object(), ""),
+        _ => (ErasedType::object(), ""),
     }
 }
 
 /// The parameter types and the result of a method descriptor.
-pub fn parse_method_desc(desc: &str) -> (Vec<JType>, JType) {
+pub fn parse_method_desc(desc: &str) -> (Vec<ErasedType>, ErasedType) {
     let mut params = Vec::new();
     let mut rest = desc.strip_prefix('(').unwrap_or(desc);
     while !rest.is_empty() && !rest.starts_with(')') {

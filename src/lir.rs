@@ -14,7 +14,7 @@ use std::rc::Rc;
 /// of a method that returns `Unit`. The variants are spelled as the class file's descriptors
 /// spell them (docs/LIR.md, "The vocabulary").
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Type {
+pub enum ErasedType {
     V,
     Z,
     B,
@@ -39,12 +39,12 @@ pub enum Invoke {
 
 /// An erased method: the class that declares it, its encoded name and its erased signature.
 #[derive(Clone)]
-pub struct Method {
+pub struct MethodRef {
     pub owner: Rc<str>,
     pub owner_is_interface: bool,
     pub name: String,
-    pub params: Vec<Type>,
-    pub ret: Type,
+    pub params: Vec<ErasedType>,
+    pub ret: ErasedType,
     /// The signature as a class file spells it, made once with the reference.
     pub desc: String,
     pub kind: Invoke,
@@ -62,8 +62,8 @@ pub struct List {
 
 pub struct Node {
     pub kind: Kind,
-    /// The erased type of the value the node leaves, `Type::V` for none.
-    pub ty: Type,
+    /// The erased type of the value the node leaves, `ErasedType::V` for none.
+    pub ty: ErasedType,
     /// The expression of the typed IR the node is the whole of, whose position its code takes.
     pub of: Option<TExprId>,
 }
@@ -94,7 +94,7 @@ pub enum Kind {
     /// is an interface. `order`, where the method takes its parameters in another order than
     /// the arguments are written and evaluated in (a right-associative extension), is the
     /// argument each parameter takes.
-    Call { method: Rc<Method>, at: Option<(Rc<str>, bool)>, receiver: LirId, args: List, order: Option<Rc<[usize]>> },
+    Call { method: Rc<MethodRef>, at: Option<(Rc<str>, bool)>, receiver: LirId, args: List, order: Option<Rc<[usize]>> },
     /// An argument of the typed IR for a Java array parameter, at the node's type (a varargs
     /// literal's elements, an array spliced in, a sequence copied); not lowered yet
     /// (`Gen::java_array_argument`).
@@ -104,12 +104,12 @@ pub enum Kind {
     Try { index: u32, body: LirId, finalizer: Option<LirId> },
     /// A value of the type `from` as one of the node's type: dropped, the unit value or a zero
     /// for none, a cast, a box or its content, a primitive conversion (`Gen::adapt`).
-    Adapt { value: LirId, from: Type },
+    Adapt { value: LirId, from: ErasedType },
     /// A value of the value class `class` applied to `args`, left as `from`, as one of the
     /// node's type: the box opened or the underlying value boxed; a null reference gives the
     /// underlying type's zero where `null_safe`. The cases are not lowered yet
     /// (`Gen::adapt_vc_as`).
-    ValueClass { value: LirId, from: Type, class: ClassId, args: TList, null_safe: bool },
+    ValueClass { value: LirId, from: ErasedType, class: ClassId, args: TList, null_safe: bool },
 }
 
 /// The nodes of one method.
@@ -131,7 +131,7 @@ impl Body {
         List { start, len: items.len() as u32 }
     }
 
-    pub fn push(&mut self, kind: Kind, ty: Type) -> LirId {
+    pub fn push(&mut self, kind: Kind, ty: ErasedType) -> LirId {
         self.nodes.push(Node { kind, ty, of: None });
         LirId(self.nodes.len() as u32 - 1)
     }
@@ -140,7 +140,7 @@ impl Body {
         &self.nodes[id.0 as usize]
     }
 
-    pub fn ty(&self, id: LirId) -> &Type {
+    pub fn ty(&self, id: LirId) -> &ErasedType {
         &self.nodes[id.0 as usize].ty
     }
 }

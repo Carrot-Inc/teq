@@ -2,6 +2,7 @@
 //! stack, brought to the static type the typer recorded for it (a cast or an unboxing where a
 //! generic result is used at a concrete type), and then to the type its consumer wants.
 
+use crate::lir::{ErasedType, Invoke, LirId, MethodRef};
 use super::classfile::*;
 use super::free::{Analysis, Free};
 use super::names::*;
@@ -14,7 +15,6 @@ use crate::symbols::*;
 use crate::tir::*;
 use crate::typer::loader::javaclass::JMember;
 use crate::types::*;
-use crate::lir::LirId;
 use std::rc::Rc;
 
 /// scalac's `MaxIndySlots`: a concatenation's call is written before the operand that would
@@ -29,7 +29,7 @@ const RECIPE_BYTES: usize = 65535;
 struct ConcatCall {
     recipe: String,
     bytes: usize,
-    arguments: Vec<JType>,
+    arguments: Vec<ErasedType>,
     constants: Vec<String>,
     slots: usize,
 }
@@ -46,7 +46,7 @@ impl ConcatCall {
         self.slots += 1;
     }
 
-    fn argument(&mut self, t: JType, slots: usize) {
+    fn argument(&mut self, t: ErasedType, slots: usize) {
         self.text("\u{1}");
         self.arguments.push(t);
         self.slots += slots;
@@ -57,13 +57,11 @@ fn recipe_bytes(text: &str) -> usize {
     text.chars().map(|c| if c == '\0' { 2 } else if c as u32 >= 0x10000 { 6 } else { c.len_utf8() }).sum()
 }
 
-pub use crate::lir::{Invoke, Method as MRef};
-
 /// Where a virtual call or a field access on a qualifier points (`Gen::qualifier_site`): the
 /// class the qualifier is evaluated at and the owner the instruction names, chosen per site
-/// where `MRef` holds the declaration's.
+/// where `MethodRef` holds the declaration's.
 pub struct Site {
-    pub qualifier: JType,
+    pub qualifier: ErasedType,
     pub owner: Rc<str>,
     pub interface: bool,
 }
@@ -72,7 +70,7 @@ pub struct Site {
 /// the slot that holds it with the type it is held at.
 pub enum ThisValue {
     Module(Rc<str>),
-    Slot(u16, JType),
+    Slot(u16, ErasedType),
 }
 
 /// How the value a node left is brought to the type wanted: one decision (`Gen::fit`), read
@@ -82,7 +80,7 @@ pub enum Fit {
     /// where the flag is set.
     ValueClass(ClassId, TList, bool),
     /// Through the type the typer recorded, where it knows more than the erased signature.
-    Through(JType),
+    Through(ErasedType),
     Direct,
 }
 
@@ -158,7 +156,7 @@ impl Site {
 pub struct Local {
     pub slot: u16,
     /// The declared type; a cell holds a value of this type as an `Object`.
-    pub ty: JType,
+    pub ty: ErasedType,
     pub cell: bool,
 }
 
@@ -175,7 +173,7 @@ pub enum Held {
 pub struct Capture {
     pub sym: SymId,
     pub cell: bool,
-    pub ty: JType,
+    pub ty: ErasedType,
     /// The capture is the non-local-return key that travels with the holder of the local lazy val
     /// `sym` (`Extras::keys`), not the val.
     pub key: bool,
@@ -203,8 +201,8 @@ pub struct Lifted {
     /// (`Free::nonlocal`).
     pub key: bool,
     pub captures: Vec<Capture>,
-    pub params: Vec<JType>,
-    pub ret: JType,
+    pub params: Vec<ErasedType>,
+    pub ret: ErasedType,
     /// Where `this` is the instance of a class other than the one being written: a class's copy of a
     /// local def or lazy val declared in that class's code (`Gen::copy_home`), and what it lifts.
     pub home: Option<ClassId>,
@@ -243,7 +241,7 @@ pub struct GetterShape {
     pub index: usize,
     /// How many of the method's parameters, in the class file's order, it takes.
     pub before: usize,
-    pub ret: JType,
+    pub ret: ErasedType,
     pub by_name: bool,
 }
 
@@ -253,7 +251,7 @@ pub struct JarGetter {
     pub owner_is_interface: bool,
     pub name: String,
     pub desc: String,
-    pub ret: JType,
+    pub ret: ErasedType,
 }
 
 pub struct Pending {
@@ -270,7 +268,7 @@ pub struct TailLoop {
 pub struct MethodCx {
     pub locals: FxMap<SymId, Local>,
     pub this_slot: Option<u16>,
-    pub ret: JType,
+    pub ret: ErasedType,
     pub tail: Option<TailLoop>,
     /// The locals of the method that live in a cell (`free::cells`).
     pub cells: Vec<SymId>,
@@ -285,7 +283,7 @@ pub struct MethodCx {
     /// The slot of that key: the def's, which it makes, or the closure's capture of it.
     pub return_key: Option<u16>,
     /// In a value class's `m$extension`, `this` is the underlying value of this type.
-    pub this_underlying: Option<JType>,
+    pub this_underlying: Option<ErasedType>,
     /// In a class's copy of a local lazy val's accessor or initialiser or of a local def that stands in a
     /// method of an object (or of a file's top level), `this` is that object's `MODULE$`
     /// (`Gen::copy_home_module`).
@@ -325,7 +323,7 @@ impl Default for MethodCx {
         MethodCx {
             locals: FxMap::default(),
             this_slot: None,
-            ret: JType::V,
+            ret: ErasedType::V,
             tail: None,
             cells: Vec::new(),
             before_super: false,
@@ -354,7 +352,7 @@ pub struct Gen<'a> {
     /// The program's references this target cannot write, refused at their place as dotty's
     /// erasure refuses them (`refuse`).
     pub refused: Vec<super::Refusal>,
-    erased: Vec<Option<JType>>,
+    erased: Vec<Option<ErasedType>>,
     /// Whether the erasures are kept in `erased_overlay` alone: for a Gen that emits a few units
     /// (a session's retype), whose types are the store's last ids, the table by id would be made
     /// for every type before them.
@@ -362,23 +360,23 @@ pub struct Gen<'a> {
     /// The erasures of the types with an overlay's id (`arena::LOCAL_BASE` on), which the parallel
     /// typer's overlays keep past the merge: a table by the id would
     /// take gigabytes per class. A sparse Gen keeps every erasure here.
-    erased_overlay: FxMap<TypeId, JType>,
+    erased_overlay: FxMap<TypeId, ErasedType>,
     /// Whether the types erased are a Java member's signature's, dotty's `TypeErasure` of
     /// `SourceLanguage.Java`: `Array[T]` of a type parameter is `T[]`, never `Object`, the
     /// parameter being `JavaDefined` (`isGenericArrayElement`). Its erasures are `erased_java`.
     java_erasure: bool,
-    erased_java: FxMap<TypeId, JType>,
+    erased_java: FxMap<TypeId, ErasedType>,
     /// Whether the types erased are a signature's (a result, a value's or a parameter's type, a
     /// bound): `Nothing` and `Null` erase to the runtime's `Nothing$` and `Null$` through the whole
     /// erasure, a union's lub, an intersection's glb, a refinement's parent and an abstract member's
     /// bound included, as dotty's erasure keeps the bottom classes and its backend maps them
     /// (`CoreBTypesFromSymbols`); elsewhere they erase to `Object`. Its erasures are `erased_bottoms`.
     bottom_markers: bool,
-    erased_bottoms: FxMap<TypeId, JType>,
+    erased_bottoms: FxMap<TypeId, ErasedType>,
     /// The declared views met (`MethodSig::declared`), expanded (`declared_type`).
     declared: std::cell::RefCell<FxMap<TypeId, TypeId>>,
     class_rc: Vec<Option<Rc<str>>>,
-    mrefs: FxMap<SymId, Rc<MRef>>,
+    mrefs: FxMap<SymId, Rc<MethodRef>>,
     /// The function arities past 1 an erasure or a method's reference used when it was made,
     /// added again when the memo answers it, so that a unit's `function_arities` do not depend on
     /// the units the Gen emitted before it (a session keeps them per unit, `kept.rs`).
@@ -422,7 +420,7 @@ pub struct Gen<'a> {
     pub an: Analysis,
     pub counter: u32,
     /// The locals an anonymous class holds in fields: symbol, field name, type, and how.
-    pub class_captures: Vec<(SymId, String, JType, Held)>,
+    pub class_captures: Vec<(SymId, String, ErasedType, Held)>,
     /// The fields of the class being written holding its `Extras`: the other classes' instances and
     /// the keys of the lazy vals.
     pub class_homes: Vec<(ClassId, String)>,
@@ -467,7 +465,7 @@ pub struct Gen<'a> {
 
 #[derive(Clone, Copy)]
 pub enum Mode<'t> {
-    Value(&'t JType),
+    Value(&'t ErasedType),
     /// Return position: every path ends in a return or in a jump of the tail loop.
     Tail,
 }
@@ -601,18 +599,18 @@ impl<'a> Gen<'a> {
         n
     }
 
-    pub fn class_type(&mut self, c: ClassId) -> JType {
-        JType::L(self.class_name(c))
+    pub fn class_type(&mut self, c: ClassId) -> ErasedType {
+        ErasedType::L(self.class_name(c))
     }
 
-    pub fn function_type(&mut self, arity: usize) -> JType {
+    pub fn function_type(&mut self, arity: usize) -> ErasedType {
         self.function_arities |= 1u64 << arity.min(63);
-        JType::L(Rc::from(format!("scala/Function{}", arity)))
+        ErasedType::L(Rc::from(format!("scala/Function{}", arity)))
     }
 
-    pub fn erase(&mut self, t: TypeId) -> JType {
+    pub fn erase(&mut self, t: TypeId) -> ErasedType {
         if t == NO_TYPE {
-            return JType::object();
+            return ErasedType::object();
         }
         let t = self.cx.input.types.underlying(t);
         if t.0 >= crate::arena::LOCAL_BASE || self.sparse || self.java_erasure || self.bottom_markers {
@@ -635,7 +633,7 @@ impl<'a> Gen<'a> {
         j
     }
 
-    fn erase_overlay(&mut self, t: TypeId) -> JType {
+    fn erase_overlay(&mut self, t: TypeId) -> ErasedType {
         let memo = if self.java_erasure {
             &self.erased_java
         } else if self.bottom_markers {
@@ -691,7 +689,7 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn erase_uncached(&mut self, t: TypeId) -> JType {
+    fn erase_uncached(&mut self, t: TypeId) -> ErasedType {
         fn context_function_arity(cx: &Cx, c: ClassId) -> Option<usize> {
             let info = cx.input.syms.class(c);
             let Owner::Package(p) = info.owner else { return None };
@@ -714,28 +712,28 @@ impl<'a> Gen<'a> {
                     return self.function_type(n);
                 }
                 if let Some(name) = special_erasure(cx, c) {
-                    return JType::L(Rc::from(name));
+                    return ErasedType::L(Rc::from(name));
                 }
                 // A `*:` chain is the tuple class of its arity where it ends in one, `Product`
                 // where it does not (`Int *: EmptyTuple`, `H *: T`), as scalac's `erasePair`.
                 if scala_class(cx, c) == Some("*:") {
                     return match cx.input.types.cons_arity(t, c, &|k| tuple_arity(cx, k)) {
-                        Some(n) if n <= 22 => JType::L(Rc::from(format!("scala/Tuple{}", n))),
-                        Some(_) => JType::L(Rc::from(TUPLE_XXL)),
-                        None => JType::L(Rc::from(PRODUCT)),
+                        Some(n) if n <= 22 => ErasedType::L(Rc::from(format!("scala/Tuple{}", n))),
+                        Some(_) => ErasedType::L(Rc::from(TUPLE_XXL)),
+                        None => ErasedType::L(Rc::from(PRODUCT)),
                     };
                 }
                 match info.kind {
                     ClassKind::Builtin => match cx.input.interner.get(info.name) {
-                        "Int" => JType::I,
-                        "Long" => JType::J,
-                        "Double" => JType::D,
-                        "Byte" => JType::B,
-                        "Short" => JType::S,
-                        "Float" => JType::F,
-                        "Boolean" => JType::Z,
-                        "Char" => JType::C,
-                        "Unit" => JType::V,
+                        "Int" => ErasedType::I,
+                        "Long" => ErasedType::J,
+                        "Double" => ErasedType::D,
+                        "Byte" => ErasedType::B,
+                        "Short" => ErasedType::S,
+                        "Float" => ErasedType::F,
+                        "Boolean" => ErasedType::Z,
+                        "Char" => ErasedType::C,
+                        "Unit" => ErasedType::V,
                         "Array" => {
                             let elem = cx.input.types.items(args).first().copied();
                             self.array_type(elem)
@@ -757,10 +755,10 @@ impl<'a> Gen<'a> {
                             }
                             _ => self.erase(u),
                         },
-                        None => JType::object(),
+                        None => ErasedType::object(),
                     },
                     _ if info.value_class => self.vc_erasure(c, args),
-                    _ if info.js != JsKind::Scala => JType::object(),
+                    _ if info.js != JsKind::Scala => ErasedType::object(),
                     _ => self.class_type(c),
                 }
             }
@@ -776,7 +774,7 @@ impl<'a> Gen<'a> {
                     self.bottom_markers = before;
                     j
                 }
-                None => JType::object(),
+                None => ErasedType::object(),
             },
             Type::Union(a, b, _) => self.erase_union(a, b, false, &mut Vec::new()),
             Type::Inter(a, b) => {
@@ -796,15 +794,15 @@ impl<'a> Gen<'a> {
                 if self.erased_glb_first(&ea, &eb) { ea } else { eb }
             }
             Type::Lit(l) => match cx.input.types.lit_val(l) {
-                LitVal::Int(_) => JType::I,
-                LitVal::Byte(_) => JType::B,
-                LitVal::Short(_) => JType::S,
-                LitVal::Long(_) => JType::J,
-                LitVal::Double(_) => JType::D,
-                LitVal::Float(_) => JType::F,
-                LitVal::Char(_) => JType::C,
-                LitVal::Bool(_) => JType::Z,
-                LitVal::Str(_) => JType::L(Rc::from(STRING)),
+                LitVal::Int(_) => ErasedType::I,
+                LitVal::Byte(_) => ErasedType::B,
+                LitVal::Short(_) => ErasedType::S,
+                LitVal::Long(_) => ErasedType::J,
+                LitVal::Double(_) => ErasedType::D,
+                LitVal::Float(_) => ErasedType::F,
+                LitVal::Char(_) => ErasedType::C,
+                LitVal::Bool(_) => ErasedType::Z,
+                LitVal::Str(_) => ErasedType::L(Rc::from(STRING)),
                 LitVal::Class(class) => return self.erase(class),
             },
             // As scalac erases them: a path to its type (a given object's to its class, the
@@ -817,11 +815,11 @@ impl<'a> Gen<'a> {
             }
             Type::Term(s) | Type::Select(_, s) => match cx.input.syms.sym(s).sig.as_ref().map(|sig| sig.ret) {
                 Some(ret) => self.erase(ret),
-                None => JType::object(),
+                None => ErasedType::object(),
             },
             Type::Member(prefix, name) => match self.member_upper_bound(prefix, name) {
                 Some(upper) => self.erase(upper),
-                None => JType::object(),
+                None => ErasedType::object(),
             },
             Type::AppMember(m, _) => self.erase(m),
             // A class through its prefix erases to the class (dotty's `TypeErasure` of a
@@ -829,7 +827,7 @@ impl<'a> Gen<'a> {
             Type::Nested(_, class) => self.erase(class),
             Type::Decl(a) => match self.member_upper(a) {
                 Some(upper) => self.erase(upper),
-                None => JType::object(),
+                None => ErasedType::object(),
             },
             Type::Lambda(_, body) | Type::Poly(_, body) => self.erase(body),
             Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) => self.erase(parent),
@@ -843,9 +841,9 @@ impl<'a> Gen<'a> {
             // application's arguments.
             Type::Alias(a, args) => match self.alias_expansion(a, args) {
                 Some(x) => self.erase(x),
-                None => JType::object(),
+                None => ErasedType::object(),
             },
-            _ => JType::object(),
+            _ => ErasedType::object(),
         }
     }
 
@@ -880,9 +878,9 @@ impl<'a> Gen<'a> {
     /// `f[T <: String](t: T): T` is `(String)String`, `f[T <: Unit](t: T): T`
     /// `(BoxedUnit)BoxedUnit`. A bound that names the parameter again where it erases
     /// (`T <: Array[T]`, which scalac refuses) gives `Object` there.
-    fn erase_param(&mut self, p: TParamId) -> JType {
+    fn erase_param(&mut self, p: TParamId) -> ErasedType {
         if self.erasing_params.contains(&p) {
-            return JType::object();
+            return ErasedType::object();
         }
         self.erasing_params.push(p);
         let upper = self.param_upper(p);
@@ -893,9 +891,9 @@ impl<'a> Gen<'a> {
 
     /// `F[A]` of a higher-kinded parameter erases as its bound applied to the arguments:
     /// `F[Int]` with `F[X] <: Array[X]` is an `int[]`.
-    fn erase_applied_param(&mut self, p: TParamId, args: TList) -> JType {
+    fn erase_applied_param(&mut self, p: TParamId, args: TList) -> ErasedType {
         if self.erasing_params.contains(&p) {
-            return JType::object();
+            return ErasedType::object();
         }
         self.erasing_params.push(p);
         let j = match self.applied_upper(p, args) {
@@ -932,7 +930,7 @@ impl<'a> Gen<'a> {
     /// The runtime's class of `t` where it is `Nothing` or `Null`, scala-library's `Nothing$` and
     /// `Null$`, which a scalac caller's descriptor names (dotty's `CoreBTypesFromSymbols`,
     /// `srNothingRef` and `srNullRef`): a signature's erasure (`bottom_markers`).
-    fn bottom_class(&self, t: TypeId) -> Option<JType> {
+    fn bottom_class(&self, t: TypeId) -> Option<ErasedType> {
         let cx = self.cx;
         let which = match cx.input.types.get(t) {
             Type::Nothing => 0,
@@ -943,7 +941,7 @@ impl<'a> Gen<'a> {
             },
             _ => return None,
         };
-        Some(JType::L(Rc::from(super::runtime::ARRAY_MARKERS[which])))
+        Some(ErasedType::L(Rc::from(super::runtime::ARRAY_MARKERS[which])))
     }
 
     /// The erasure of `A | B`, scalac's `erasedLub` of the parts' erasures (`Lub`): `Nothing | T`
@@ -952,7 +950,7 @@ impl<'a> Gen<'a> {
     /// that no other common one derives from (`erased_lub`), `Object` where the parts erase to
     /// other kinds. `boxed` erases a value class as its class (an array's elements); `seen`
     /// holds the type parameters on the way to the union.
-    fn erase_union(&mut self, a: TypeId, b: TypeId, boxed: bool, seen: &mut Vec<TParamId>) -> JType {
+    fn erase_union(&mut self, a: TypeId, b: TypeId, boxed: bool, seen: &mut Vec<TParamId>) -> ErasedType {
         let (la, lb) = (self.lub_part(a, boxed, seen), self.lub_part(b, boxed, seen));
         let l = self.lub(la, lb);
         self.lub_type(&l)
@@ -972,7 +970,7 @@ impl<'a> Gen<'a> {
                         "Array" => {
                             return match cx.input.types.items(args).first() {
                                 Some(&e) if !self.generic_array_element(e) => Lub::Array(Box::new(self.lub_part(e, true, seen))),
-                                _ => Lub::Erased(JType::object()),
+                                _ => Lub::Erased(ErasedType::object()),
                             }
                         }
                         _ => return Lub::Erased(self.lub_erasure(t, boxed)),
@@ -991,14 +989,14 @@ impl<'a> Gen<'a> {
             }
             Type::Param(p) | Type::AppParam(p, _) => {
                 if seen.contains(&p) {
-                    return Lub::Erased(JType::object());
+                    return Lub::Erased(ErasedType::object());
                 }
                 seen.push(p);
                 let l = match cx.input.types.get(t) {
                     Type::AppParam(_, args) => match self.applied_upper(p, args) {
                         Applied::Is(u) => self.lub_part(u, boxed, seen),
                         Applied::ArrayOf(e) if !self.generic_array_element(e) => Lub::Array(Box::new(self.lub_part(e, true, seen))),
-                        Applied::ArrayOf(_) => Lub::Erased(JType::object()),
+                        Applied::ArrayOf(_) => Lub::Erased(ErasedType::object()),
                     },
                     _ => self.lub_part(self.param_upper(p), boxed, seen),
                 };
@@ -1023,25 +1021,25 @@ impl<'a> Gen<'a> {
             }
             Type::Var(v) => match cx.input.insts.inst(v) {
                 Some(inst) => self.lub_part(inst, boxed, seen),
-                None => Lub::Erased(JType::object()),
+                None => Lub::Erased(ErasedType::object()),
             },
             Type::Term(s) | Type::Select(_, s) => match cx.input.syms.sym(s).sig.as_ref().map(|sig| sig.ret) {
                 Some(ret) => self.lub_part(ret, boxed, seen),
-                None => Lub::Erased(JType::object()),
+                None => Lub::Erased(ErasedType::object()),
             },
             Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) => self.lub_part(parent, boxed, seen),
             Type::Member(..) | Type::Decl(_) => match self.abstract_upper(t) {
                 Some(upper) => self.lub_part(upper, boxed, seen),
-                None => Lub::Erased(JType::object()),
+                None => Lub::Erased(ErasedType::object()),
             },
             _ => Lub::Erased(self.lub_erasure(t, boxed)),
         }
     }
 
     /// A part's own erasure, `Unit` as its box.
-    fn lub_erasure(&mut self, t: TypeId, boxed: bool) -> JType {
+    fn lub_erasure(&mut self, t: TypeId, boxed: bool) -> ErasedType {
         match if boxed { self.erase_boxed_vc(t) } else { self.erase(t) } {
-            JType::V => JType::L(Rc::from(BOXED_UNIT)),
+            ErasedType::V => ErasedType::L(Rc::from(BOXED_UNIT)),
             j => j,
         }
     }
@@ -1070,7 +1068,7 @@ impl<'a> Gen<'a> {
         // two value classes, which scalac's lub takes to `Object` even where they are one class
         // (`V | V`, `V | W` over one `Int`).
         if matches!(x, Lub::Value(..)) || matches!(y, Lub::Value(..)) {
-            return Lub::Erased(JType::object());
+            return Lub::Erased(ErasedType::object());
         }
         if x == y || self.lub_type(&x) == self.lub_type(&y) {
             return x;
@@ -1078,8 +1076,8 @@ impl<'a> Gen<'a> {
         match (x, y) {
             (Lub::Array(ex), Lub::Array(ey)) if reference(&ex) && reference(&ey) => Lub::Array(Box::new(self.lub(*ex, *ey))),
             (x, y) => match (self.lub_bases(&x), self.lub_bases(&y)) {
-                (Some(a), Some(b)) => self.erased_lub(&a, &b).map_or(Lub::Erased(JType::object()), Lub::Class),
-                _ => Lub::Erased(JType::object()),
+                (Some(a), Some(b)) => self.erased_lub(&a, &b).map_or(Lub::Erased(ErasedType::object()), Lub::Class),
+                _ => Lub::Erased(ErasedType::object()),
             },
         }
     }
@@ -1098,7 +1096,7 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn lub_type(&mut self, l: &Lub) -> JType {
+    fn lub_type(&mut self, l: &Lub) -> ErasedType {
         match l {
             Lub::Class(c) => self.class_type(*c),
             Lub::Array(e) => {
@@ -1109,11 +1107,11 @@ impl<'a> Gen<'a> {
                 };
                 let mut d = String::from("[");
                 e.desc(&mut d);
-                JType::L(Rc::from(d.as_str()))
+                ErasedType::L(Rc::from(d.as_str()))
             }
             Lub::Nothing if self.bottom_markers => self.array_marker(0),
             Lub::Null if self.bottom_markers => self.array_marker(1),
-            Lub::Nothing | Lub::Null => JType::object(),
+            Lub::Nothing | Lub::Null => ErasedType::object(),
             Lub::Value(_, j) | Lub::Erased(j) => j.clone(),
         }
     }
@@ -1154,18 +1152,18 @@ impl<'a> Gen<'a> {
     /// The kind of JVM array that holds every value of `t`, scalac's `arrayUpperBound`: the
     /// primitive's for a primitive type, `Object` for a reference type, none for a type whose
     /// values may be either (`Any`, `AnyVal`, `Matchable`, `Singleton`, `Int | String`).
-    fn array_bound(&mut self, t: TypeId) -> Option<JType> {
+    fn array_bound(&mut self, t: TypeId) -> Option<ErasedType> {
         let cx = self.cx;
         match cx.input.types.get(t) {
             Type::Any => None,
-            Type::Nothing | Type::This(_) => Some(JType::object()),
+            Type::Nothing | Type::This(_) => Some(ErasedType::object()),
             Type::Class(c, args) => {
                 let info = cx.input.syms.class(c);
                 match info.kind {
                     ClassKind::Builtin => match cx.input.interner.get(info.name) {
                         "AnyVal" => None,
                         "Int" | "Long" | "Double" | "Byte" | "Short" | "Float" | "Boolean" | "Char" | "Unit" => Some(self.erase(t)),
-                        _ => Some(JType::object()),
+                        _ => Some(ErasedType::object()),
                     },
                     ClassKind::Opaque => {
                         let u = info.underlying?;
@@ -1178,7 +1176,7 @@ impl<'a> Gen<'a> {
                         }
                     }
                     _ if matches!(scala_class(cx, c), Some("Matchable" | "Singleton")) => None,
-                    _ => Some(JType::object()),
+                    _ => Some(ErasedType::object()),
                 }
             }
             Type::Lit(_) => Some(self.erase(t)),
@@ -1190,7 +1188,7 @@ impl<'a> Gen<'a> {
                 let b = match cx.input.types.get(t) {
                     Type::AppParam(_, args) => match self.applied_upper(p, args) {
                         Applied::Is(u) => self.array_bound(u),
-                        Applied::ArrayOf(_) => Some(JType::object()),
+                        Applied::ArrayOf(_) => Some(ErasedType::object()),
                     },
                     _ => self.array_bound(self.param_upper(p)),
                 };
@@ -1245,11 +1243,11 @@ impl<'a> Gen<'a> {
     /// The erasure of a type where a value class is its class, not its underlying value
     /// (scalac's erasure with `semiEraseVCs` off): the elements of an array, the underlying
     /// value of a value class over a type parameter (`W[V]` holds a `V`).
-    fn erase_boxed_vc(&mut self, t: TypeId) -> JType {
+    fn erase_boxed_vc(&mut self, t: TypeId) -> ErasedType {
         self.erase_boxed_vc_in(t, &mut Vec::new())
     }
 
-    fn erase_boxed_vc_in(&mut self, t: TypeId, seen: &mut Vec<TParamId>) -> JType {
+    fn erase_boxed_vc_in(&mut self, t: TypeId, seen: &mut Vec<TParamId>) -> ErasedType {
         let cx = self.cx;
         let mut t = t;
         loop {
@@ -1261,11 +1259,11 @@ impl<'a> Gen<'a> {
                 }
                 Type::Var(v) => match cx.input.insts.inst(v) {
                     Some(inst) => t = inst,
-                    None => return JType::object(),
+                    None => return ErasedType::object(),
                 },
                 Type::Alias(a, args) => match self.alias_expansion(a, args) {
                     Some(x) => t = x,
-                    None => return JType::object(),
+                    None => return ErasedType::object(),
                 },
                 Type::Inter(a, b) => {
                     let at = seen.len();
@@ -1332,12 +1330,12 @@ impl<'a> Gen<'a> {
     /// a `String`), a primitive boxed where the declared underlying type is a type parameter
     /// (`W[Int]` is an `Integer`), and an array's erasure as the class declares it.
     /// The result is marked as `vc_marked` says.
-    fn vc_erasure(&mut self, c: ClassId, args: TList) -> JType {
+    fn vc_erasure(&mut self, c: ClassId, args: TList) -> ErasedType {
         let j = self.vc_erasure_plain(c, args);
         self.vc_marked(c, j)
     }
 
-    fn vc_erasure_plain(&mut self, c: ClassId, args: TList) -> JType {
+    fn vc_erasure_plain(&mut self, c: ClassId, args: TList) -> ErasedType {
         let cx = self.cx;
         let syms = cx.input.syms;
         let info = syms.class(c);
@@ -1357,7 +1355,7 @@ impl<'a> Gen<'a> {
                         let info = cx.input.syms.class(k);
                         let array = info.kind == ClassKind::Builtin && cx.input.interner.get(info.name) == "Array";
                         return match special_erasure(cx, k) {
-                            Some(name) => JType::L(Rc::from(name)),
+                            Some(name) => ErasedType::L(Rc::from(name)),
                             None if array => self.array_type(applied.first().copied()),
                             None if info.kind == ClassKind::Opaque || info.kind == ClassKind::Builtin || info.js != JsKind::Scala => self.vc_underlying(c),
                             None => self.class_type(k),
@@ -1375,8 +1373,8 @@ impl<'a> Gen<'a> {
         };
         let Some(arg) = arg else { return self.vc_underlying(c) };
         match self.erase_boxed_vc(arg) {
-            j if j.is_object() => JType::L(self.vc_object.clone()),
-            j if !j.is_ref() => JType::L(Rc::from(j.box_class())),
+            j if j.is_object() => ErasedType::L(self.vc_object.clone()),
+            j if !j.is_ref() => ErasedType::L(Rc::from(j.box_class())),
             j => j,
         }
     }
@@ -1384,12 +1382,12 @@ impl<'a> Gen<'a> {
     /// Whether the erasure of `A & B` is `A`'s, by scalac's order (`TypeErasure.erasedGlb`): an
     /// array, then a primitive, then a class before a trait, then a subclass before its
     /// superclass, then the first by its full name.
-    fn erased_glb_first(&self, a: &JType, b: &JType) -> bool {
+    fn erased_glb_first(&self, a: &ErasedType, b: &ErasedType) -> bool {
         if a == b {
             return true;
         }
-        let array = |t: &JType| match t {
-            JType::L(n) => n.strip_prefix('[').map(desc_type),
+        let array = |t: &ErasedType| match t {
+            ErasedType::L(n) => n.strip_prefix('[').map(desc_type),
             _ => None,
         };
         match (array(a), array(b)) {
@@ -1398,7 +1396,7 @@ impl<'a> Gen<'a> {
             (None, Some(_)) => return false,
             (None, None) => {}
         }
-        let (JType::L(x), JType::L(y)) = (a, b) else {
+        let (ErasedType::L(x), ErasedType::L(y)) = (a, b) else {
             return match (a.is_ref(), b.is_ref()) {
                 (false, true) => true,
                 (true, false) => false,
@@ -1487,21 +1485,21 @@ impl<'a> Gen<'a> {
     /// `Array[T]` as scalac erases it: a JVM array of the element's erasure, a value class's
     /// elements boxed (`[LMeters;`), and `Object` where the element is a type parameter,
     /// `Any` or an abstract type, whose arrays may be of any kind.
-    fn array_type(&mut self, elem: Option<TypeId>) -> JType {
-        let Some(elem) = elem else { return JType::object() };
+    fn array_type(&mut self, elem: Option<TypeId>) -> ErasedType {
+        let Some(elem) = elem else { return ErasedType::object() };
         let cx = self.cx;
         let mut t = elem;
         loop {
             match cx.input.types.get(t) {
                 Type::Var(v) => match cx.input.insts.inst(v) {
                     Some(inst) => t = inst,
-                    None => return JType::object(),
+                    None => return ErasedType::object(),
                 },
                 Type::Nested(_, class) => t = class,
                 // `Array[Id[Int]]` is an `int[]`, `Array[Id[V]]` a `V[]`.
                 Type::Alias(a, args) => match self.alias_expansion(a, args) {
                     Some(x) => t = x,
-                    None => return JType::object(),
+                    None => return ErasedType::object(),
                 },
                 _ => break,
             }
@@ -1517,21 +1515,21 @@ impl<'a> Gen<'a> {
                 let e = self.class_type(c);
                 let mut d = String::from("[");
                 e.desc(&mut d);
-                return JType::L(Rc::from(d.as_str()));
+                return ErasedType::L(Rc::from(d.as_str()));
             }
             _ => {}
         }
         if self.generic_array_element(t) {
-            return JType::object();
+            return ErasedType::object();
         }
         let e = match cx.input.types.get(t) {
-            Type::Any => JType::object(),
+            Type::Any => ErasedType::object(),
             Type::Nothing => self.array_marker(0),
             // A bound that fits one kind of array is the element's: `Array[T <: String]` is a
             // `String[]`, `Array[T <: Int]` an `int[]`, `Array[T <: V]` a `V[]`.
             Type::Param(p) | Type::AppParam(p, _) => {
                 if self.erasing_params.contains(&p) {
-                    return JType::object();
+                    return ErasedType::object();
                 }
                 self.erasing_params.push(p);
                 let a = match cx.input.types.get(t) {
@@ -1541,7 +1539,7 @@ impl<'a> Gen<'a> {
                             let inner = self.array_type(Some(e));
                             let mut d = String::from("[");
                             inner.desc(&mut d);
-                            JType::L(Rc::from(d.as_str()))
+                            ErasedType::L(Rc::from(d.as_str()))
                         }
                     },
                     _ => self.array_type(Some(self.param_upper(p))),
@@ -1551,7 +1549,7 @@ impl<'a> Gen<'a> {
             }
             Type::Member(..) | Type::Decl(_) => match self.abstract_upper(t) {
                 Some(upper) => return self.array_type(Some(upper)),
-                None => return JType::object(),
+                None => return ErasedType::object(),
             },
             Type::Inter(..) | Type::Union(..) => self.erase_boxed_vc(t),
             Type::Class(c, _) if cx.input.syms.class(c).value_class => self.class_type(c),
@@ -1561,22 +1559,22 @@ impl<'a> Gen<'a> {
                 _ => self.storage(t),
             },
             Type::Class(..) | Type::Lit(_) | Type::Nested(..) => self.storage(t),
-            _ => return JType::object(),
+            _ => return ErasedType::object(),
         };
         let mut d = String::from("[");
         e.desc(&mut d);
-        JType::L(Rc::from(d.as_str()))
+        ErasedType::L(Rc::from(d.as_str()))
     }
 
     /// The class scalac erases `Nothing` (0) or `Null` (1) to, scala-library's, which is also
     /// the component of their arrays.
-    fn array_marker(&mut self, which: usize) -> JType {
-        JType::L(Rc::from(super::runtime::ARRAY_MARKERS[which]))
+    fn array_marker(&mut self, which: usize) -> ErasedType {
+        ErasedType::L(Rc::from(super::runtime::ARRAY_MARKERS[which]))
     }
 
     /// An operation on an array whose kind only the value knows, its operands on the stack:
     /// `ScalaRunTime`'s method of the name.
-    pub fn erased_array_call(&mut self, name: &str, params: &[JType], ret: JType) -> JType {
+    pub fn erased_array_call(&mut self, name: &str, params: &[ErasedType], ret: ErasedType) -> ErasedType {
         self.invoke(Invoke::Static, SCALA_RUNTIME, false, name, params, &ret);
         ret
     }
@@ -1630,7 +1628,7 @@ impl<'a> Gen<'a> {
             cur = elem;
         }
         let erased_array = |g: &mut Self, t: TypeId| match g.erase(t) {
-            JType::L(n) if n.starts_with('[') => Some(n),
+            ErasedType::L(n) if n.starts_with('[') => Some(n),
             _ => None,
         };
         match innermost {
@@ -1701,32 +1699,32 @@ impl<'a> Gen<'a> {
             return None;
         }
         match self.array_type(Some(t)) {
-            JType::L(n) if n.starts_with('[') => Some(n),
+            ErasedType::L(n) if n.starts_with('[') => Some(n),
             _ => None,
         }
     }
 
-    pub fn array_element(t: &JType) -> Option<JType> {
+    pub fn array_element(t: &ErasedType) -> Option<ErasedType> {
         match t {
-            JType::L(n) if n.starts_with('[') => Some(parse_type(&n[1..]).0),
+            ErasedType::L(n) if n.starts_with('[') => Some(parse_type(&n[1..]).0),
             _ => None,
         }
     }
 
     /// `array(i)` with the array and the index on the stack: the load instruction of a JVM
     /// array's kind, `ScalaRunTime.array_apply` on an erased one.
-    pub fn array_load(&mut self, array: &JType) -> JType {
+    pub fn array_load(&mut self, array: &ErasedType) -> ErasedType {
         let Some(elem) = Self::array_element(array) else {
-            return self.erased_array_call("array_apply", &[JType::object(), JType::I], JType::object());
+            return self.erased_array_call("array_apply", &[ErasedType::object(), ErasedType::I], ErasedType::object());
         };
         let opcode = match elem {
-            JType::I => op::IALOAD,
-            JType::J => op::LALOAD,
-            JType::F => op::FALOAD,
-            JType::D => op::DALOAD,
-            JType::Z | JType::B => op::BALOAD,
-            JType::C => op::CALOAD,
-            JType::S => op::SALOAD,
+            ErasedType::I => op::IALOAD,
+            ErasedType::J => op::LALOAD,
+            ErasedType::F => op::FALOAD,
+            ErasedType::D => op::DALOAD,
+            ErasedType::Z | ErasedType::B => op::BALOAD,
+            ErasedType::C => op::CALOAD,
+            ErasedType::S => op::SALOAD,
             _ => op::AALOAD,
         };
         self.code.op(opcode);
@@ -1737,31 +1735,31 @@ impl<'a> Gen<'a> {
     }
 
     /// `array(i) = v` with the array, the index and the value (of type `value`) on the stack.
-    pub fn array_store(&mut self, array: &JType, value: &JType) {
+    pub fn array_store(&mut self, array: &ErasedType, value: &ErasedType) {
         let Some(elem) = Self::array_element(array) else {
-            let object = JType::object();
+            let object = ErasedType::object();
             self.adapt(value, &object);
-            self.erased_array_call("array_update", &[object.clone(), JType::I, object], JType::V);
+            self.erased_array_call("array_update", &[object.clone(), ErasedType::I, object], ErasedType::V);
             return;
         };
         self.adapt(value, &elem);
         let opcode = match elem {
-            JType::I => op::IASTORE,
-            JType::J => op::LASTORE,
-            JType::F => op::FASTORE,
-            JType::D => op::DASTORE,
-            JType::Z | JType::B => op::BASTORE,
-            JType::C => op::CASTORE,
-            JType::S => op::SASTORE,
+            ErasedType::I => op::IASTORE,
+            ErasedType::J => op::LASTORE,
+            ErasedType::F => op::FASTORE,
+            ErasedType::D => op::DASTORE,
+            ErasedType::Z | ErasedType::B => op::BASTORE,
+            ErasedType::C => op::CASTORE,
+            ErasedType::S => op::SASTORE,
             _ => op::AASTORE,
         };
         self.code.op(opcode);
         self.code.popn(3);
     }
 
-    pub fn array_length(&mut self, array: &JType) {
+    pub fn array_length(&mut self, array: &ErasedType) {
         if Self::array_element(array).is_none() {
-            self.erased_array_call("array_length", &[JType::object()], JType::I);
+            self.erased_array_call("array_length", &[ErasedType::object()], ErasedType::I);
             return;
         }
         self.code.op(op::ARRAYLENGTH);
@@ -1769,37 +1767,37 @@ impl<'a> Gen<'a> {
         self.code.push(VT::Int);
     }
 
-    pub fn array_clone(&mut self, array: &JType) -> JType {
+    pub fn array_clone(&mut self, array: &ErasedType) -> ErasedType {
         if Self::array_element(array).is_none() {
-            return self.erased_array_call("array_clone", &[JType::object()], JType::object());
+            return self.erased_array_call("array_clone", &[ErasedType::object()], ErasedType::object());
         }
-        let JType::L(name) = array else { return array.clone() };
-        let object = JType::object();
+        let ErasedType::L(name) = array else { return array.clone() };
+        let object = ErasedType::object();
         self.invoke_desc(Invoke::Virtual, name, false, "clone", "()Ljava/lang/Object;", 0, &object);
         self.checkcast(name);
         array.clone()
     }
 
     /// A new array of type `array` whose length is on the stack.
-    pub fn new_array(&mut self, array: &JType) {
+    pub fn new_array(&mut self, array: &ErasedType) {
         let Some(elem) = Self::array_element(array) else {
             self.unsupported("a new array of an element type only a ClassTag knows");
             return;
         };
         let atype = match elem {
-            JType::Z => Some(4),
-            JType::C => Some(5),
-            JType::F => Some(6),
-            JType::D => Some(7),
-            JType::B => Some(8),
-            JType::S => Some(9),
-            JType::I => Some(10),
-            JType::J => Some(11),
+            ErasedType::Z => Some(4),
+            ErasedType::C => Some(5),
+            ErasedType::F => Some(6),
+            ErasedType::D => Some(7),
+            ErasedType::B => Some(8),
+            ErasedType::S => Some(9),
+            ErasedType::I => Some(10),
+            ErasedType::J => Some(11),
             _ => None,
         };
         match (atype, &elem) {
             (Some(code), _) => self.code.op_u8(op::NEWARRAY, code),
-            (None, JType::L(n)) => {
+            (None, ErasedType::L(n)) => {
                 let index = self.cw.cp.class(n);
                 self.code.op_u16(op::ANEWARRAY, index);
             }
@@ -1814,32 +1812,32 @@ impl<'a> Gen<'a> {
 
     /// The erasure of a value class in link mode, as scalac's: the erasure of its underlying
     /// type, the type of its one parameter.
-    pub fn vc_underlying(&mut self, c: ClassId) -> JType {
+    pub fn vc_underlying(&mut self, c: ClassId) -> ErasedType {
         let syms = self.cx.input.syms;
-        let Some(field) = syms.class(c).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym) else { return JType::object() };
-        let Some(ret) = syms.sym(field).sig.as_ref().map(|sig| sig.ret) else { return JType::object() };
+        let Some(field) = syms.class(c).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym) else { return ErasedType::object() };
+        let Some(ret) = syms.sym(field).sig.as_ref().map(|sig| sig.ret) else { return ErasedType::object() };
         let t = self.storage(ret);
         self.vc_marked(c, t)
     }
 
-    pub fn is_vc_object(&self, t: &JType) -> bool {
-        matches!(t, JType::L(n) if Rc::ptr_eq(n, &self.vc_object))
+    pub fn is_vc_object(&self, t: &ErasedType) -> bool {
+        matches!(t, ErasedType::L(n) if Rc::ptr_eq(n, &self.vc_object))
     }
 
     /// Whether `t` is the marked type of a value class's underlying value (`vc_object`,
     /// `vc_marks`), which a reference of the same descriptor is not.
-    pub fn is_vc_mark(&self, t: &JType) -> bool {
+    pub fn is_vc_mark(&self, t: &ErasedType) -> bool {
         match t {
-            JType::L(n) => Rc::ptr_eq(n, &self.vc_object) || self.vc_marks.get(n).map_or(false, |m| Rc::ptr_eq(m, n)),
+            ErasedType::L(n) => Rc::ptr_eq(n, &self.vc_object) || self.vc_marks.get(n).map_or(false, |m| Rc::ptr_eq(m, n)),
             _ => false,
         }
     }
 
     /// `u` without the mark of a value class's underlying value (`vc_marked`): the ordinary type of
     /// that descriptor, which a parameter declared with the type takes.
-    fn vc_unmarked(&self, u: &JType) -> JType {
+    fn vc_unmarked(&self, u: &ErasedType) -> ErasedType {
         match u {
-            JType::L(n) if self.is_vc_mark(u) => JType::L(Rc::from(&**n)),
+            ErasedType::L(n) if self.is_vc_mark(u) => ErasedType::L(Rc::from(&**n)),
             _ => u.clone(),
         }
     }
@@ -1847,19 +1845,19 @@ impl<'a> Gen<'a> {
     /// The erasure `j` of the underlying value of value class `c`, marked where a reference of
     /// that descriptor could be the box: `Object`, or a class `c` conforms to. dotty keeps the
     /// two apart as `ErasedValueType` and the class (`Erasure.scala` 385-406).
-    fn vc_marked(&mut self, c: ClassId, j: JType) -> JType {
-        let JType::L(n) = &j else { return j };
+    fn vc_marked(&mut self, c: ClassId, j: ErasedType) -> ErasedType {
+        let ErasedType::L(n) = &j else { return j };
         if self.is_vc_mark(&j) {
             return j;
         }
         if j.is_object() {
-            return JType::L(self.vc_object.clone());
+            return ErasedType::L(self.vc_object.clone());
         }
         if n.starts_with('[') || !self.vc_conforms(c, n) {
             return j;
         }
         let n = n.clone();
-        JType::L(self.vc_marks.entry(n.clone()).or_insert_with(|| Rc::from(&*n)).clone())
+        ErasedType::L(self.vc_marks.entry(n.clone()).or_insert_with(|| Rc::from(&*n)).clone())
     }
 
     /// The value class a type is an instance of.
@@ -1927,7 +1925,7 @@ impl<'a> Gen<'a> {
     /// Whether a value of erased type `t` is the underlying value of a value class that
     /// erases to `u`, rather than its box; the `Object` of the class's own erasure is one where
     /// its arguments make it another reference (`W[String]` is a `String`).
-    fn holds_underlying(&self, t: &JType, u: &JType) -> bool {
+    fn holds_underlying(&self, t: &ErasedType, u: &ErasedType) -> bool {
         // A marked type is a value class's underlying value, whichever mark: the declaration's
         // `Object` of `V[A]` holds `V[U]`'s marked `U`, and the marked bound `U` of
         // `V[A <: U]` holds `V[R]`'s `R`.
@@ -1939,7 +1937,7 @@ impl<'a> Gen<'a> {
     }
 
     /// Boxes the underlying value on the stack in its value class.
-    pub fn vc_box(&mut self, c: ClassId, u: &JType) {
+    pub fn vc_box(&mut self, c: ClassId, u: &ErasedType) {
         let slot = self.store_new(u);
         let name = self.class_name(c);
         self.new_object(&name);
@@ -1952,16 +1950,16 @@ impl<'a> Gen<'a> {
             .map(|m| m.descriptor.clone())
             .unwrap_or_else(|| {
                 let declared = self.vc_underlying(c);
-                method_desc(std::slice::from_ref(&declared), &JType::V)
+                method_desc(std::slice::from_ref(&declared), &ErasedType::V)
             });
         let param = parse_method_desc(&desc).0.remove(0);
         self.adapt(u, &param);
-        self.invoke_desc(Invoke::Special, &name, false, "<init>", &desc, 1, &JType::V);
+        self.invoke_desc(Invoke::Special, &name, false, "<init>", &desc, 1, &ErasedType::V);
     }
 
     /// The underlying value of the value class box on the stack, through the accessor of its
     /// field (`self()`, or the expanded `scala$collection$StringOps$$s()` of a private one).
-    pub fn vc_unbox(&mut self, c: ClassId, u: &JType) {
+    pub fn vc_unbox(&mut self, c: ClassId, u: &ErasedType) {
         let name = self.class_name(c);
         let accessor = match self.cx.class_files.get(&c) {
             Some(cf) => {
@@ -1989,7 +1987,7 @@ impl<'a> Gen<'a> {
 
     /// Brings a value to the type a symbol is declared with; where that is a value class, a
     /// generic value (a lambda's parameter, a pattern's binding) arrives as its box.
-    pub fn adapt_to_sym(&mut self, from: &JType, s: SymId) -> JType {
+    pub fn adapt_to_sym(&mut self, from: &ErasedType, s: SymId) -> ErasedType {
         let declared = self.sym_type(s);
         let vc = self.cx.input.syms.sym(s).sig.as_ref().and_then(|sig| self.value_class_type(sig.ret));
         match vc {
@@ -2001,7 +1999,7 @@ impl<'a> Gen<'a> {
 
     /// Brings the value of `s`, stored as `from`, to `want`: a value class's underlying value
     /// is boxed where a reference is wanted (a case class's `productElement` of a field of one).
-    pub fn adapt_from_sym(&mut self, s: SymId, from: &JType, want: &JType) {
+    pub fn adapt_from_sym(&mut self, s: SymId, from: &ErasedType, want: &ErasedType) {
         let info = self.cx.input.syms.sym(s);
         match info.sig.as_ref().and_then(|sig| self.value_class_type(sig.ret)) {
             Some((c, args)) if !info.by_name => self.adapt_vc(c, args, from.clone(), want),
@@ -2013,7 +2011,7 @@ impl<'a> Gen<'a> {
     /// `want`: a boxed one is unboxed, and the underlying value is boxed where a reference
     /// other than the class's erasure is wanted (a type parameter, `Any`, a trait the class
     /// extends).
-    pub(super) fn adapt_vc(&mut self, c: ClassId, args: TList, t: JType, want: &JType) {
+    pub(super) fn adapt_vc(&mut self, c: ClassId, args: TList, t: ErasedType, want: &ErasedType) {
         self.adapt_vc_as(c, args, t, want, true)
     }
 
@@ -2021,17 +2019,17 @@ impl<'a> Gen<'a> {
     /// (`null_safe`), a null giving the underlying type's zero, as dotty's `Boxing.unbox` does for
     /// a tree that is no subtype of the class (`Erasure.scala` 292-317); a box that is
     /// statically one, and a selection of the class's parameter, go through the accessor.
-    pub(super) fn adapt_vc_as(&mut self, c: ClassId, args: TList, t: JType, want: &JType, null_safe: bool) {
+    pub(super) fn adapt_vc_as(&mut self, c: ClassId, args: TList, t: ErasedType, want: &ErasedType, null_safe: bool) {
         // A value dropped is adapted to nothing (dotty adapts toward a consumer alone,
         // `Erasure.Boxing.adaptToType`): a cast to the class whose value is dropped tests nothing.
-        if *want == JType::V {
+        if *want == ErasedType::V {
             return self.pop_value(&t);
         }
         let u = self.vc_erasure(c, args);
         // A reference wanted that the value class is not (a jar descriptor's `Encoder` for
         // circe's `Exported[ConfiguredEncoder[Mode]]`, scalac's erasure of the type the
         // parameter declares) is the underlying value's own.
-        let underlying_wanted = u.is_ref() && matches!(want, JType::L(n) if !n.starts_with('[') && !self.is_vc_mark(want) && !want.is_object() && !self.vc_conforms(c, n));
+        let underlying_wanted = u.is_ref() && matches!(want, ErasedType::L(n) if !n.starts_with('[') && !self.is_vc_mark(want) && !want.is_object() && !self.vc_conforms(c, n));
         let boxing = want.is_ref() && !self.holds_underlying(want, &u) && !underlying_wanted;
         // A reference that holds the box goes to a destination that takes the box as it is, a
         // null and the reference's identity kept: dotty keeps a tree that conforms (`Erasure.scala`
@@ -2076,12 +2074,12 @@ impl<'a> Gen<'a> {
 
     /// The zero of a value class's underlying type, what a null unboxes to; a `null` is of the
     /// underlying type in the frame of the join it flows to.
-    fn vc_zero(&mut self, u: &JType) {
+    fn vc_zero(&mut self, u: &ErasedType) {
         match u {
-            JType::J => self.lconst(0),
-            JType::D => self.dconst(0.0),
-            JType::F => self.fconst(0.0),
-            JType::L(_) => {
+            ErasedType::J => self.lconst(0),
+            ErasedType::D => self.dconst(0.0),
+            ErasedType::F => self.fconst(0.0),
+            ErasedType::L(_) => {
                 self.code.op(op::ACONST_NULL);
                 let vt = self.vt(u);
                 self.code.push(vt);
@@ -2100,15 +2098,15 @@ impl<'a> Gen<'a> {
     }
 
     /// The type of a local, a field or a parameter: `Unit` is a reference there.
-    pub fn storage(&mut self, t: TypeId) -> JType {
+    pub fn storage(&mut self, t: TypeId) -> ErasedType {
         match self.erase(t) {
-            JType::V => JType::L(Rc::from(BOXED_UNIT)),
+            ErasedType::V => ErasedType::L(Rc::from(BOXED_UNIT)),
             j => j,
         }
     }
 
     /// The type a symbol's value has where it is stored.
-    pub fn sym_type(&mut self, s: SymId) -> JType {
+    pub fn sym_type(&mut self, s: SymId) -> ErasedType {
         // A given object of an instance is read as scalac's inner module class.
         if let Some(&k) = self.cx.inner_given_objects.get(&s) {
             return self.class_type(k);
@@ -2124,18 +2122,18 @@ impl<'a> Gen<'a> {
                 self.in_signature(|g| g.storage(declared))
             }
             Some(sig) => self.in_signature(|g| g.storage(sig.ret)),
-            None => JType::object(),
+            None => ErasedType::object(),
         }
     }
 
-    pub fn vt(&mut self, t: &JType) -> VT {
+    pub fn vt(&mut self, t: &ErasedType) -> VT {
         match t {
-            JType::V => VT::Top,
-            JType::Z | JType::B | JType::S | JType::C | JType::I => VT::Int,
-            JType::J => VT::Long,
-            JType::F => VT::Float,
-            JType::D => VT::Double,
-            JType::L(n) => VT::Object(self.cw.cp.class(n)),
+            ErasedType::V => VT::Top,
+            ErasedType::Z | ErasedType::B | ErasedType::S | ErasedType::C | ErasedType::I => VT::Int,
+            ErasedType::J => VT::Long,
+            ErasedType::F => VT::Float,
+            ErasedType::D => VT::Double,
+            ErasedType::L(n) => VT::Object(self.cw.cp.class(n)),
         }
     }
 
@@ -2219,7 +2217,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The flattened parameters of a def: by-name ones are functions, repeated ones sequences.
-    pub fn param_types(&mut self, s: SymId) -> Vec<JType> {
+    pub fn param_types(&mut self, s: SymId) -> Vec<ErasedType> {
         let cx = self.cx;
         if let Some((_, JMember::Method(_))) = cx.input.java_member(s) {
             return self.mref(s).params.clone();
@@ -2233,15 +2231,15 @@ impl<'a> Gen<'a> {
     /// A parameter's type as the signature spells it where that is a `*:` chain, which the
     /// body reads as the tuple class of its elements (`ParamSig::ty`). In the order the class
     /// file takes them (`jvm_param_order`).
-    fn erased_param_types(&mut self, s: SymId) -> Vec<JType> {
+    fn erased_param_types(&mut self, s: SymId) -> Vec<ErasedType> {
         self.in_language_of(s, |g| g.erased_params_of(s))
     }
 
-    fn erased_params_of(&mut self, s: SymId) -> Vec<JType> {
+    fn erased_params_of(&mut self, s: SymId) -> Vec<ErasedType> {
         let cx = self.cx;
         let Some(sig) = cx.input.syms.sym(s).info.sig.as_ref() else { return Vec::new() };
         let params: Vec<(SymId, Option<TypeId>)> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| (p.sym, (!p.by_name && !p.repeated).then_some(p.ty)))).collect();
-        let types: Vec<JType> = params
+        let types: Vec<ErasedType> = params
             .into_iter()
             .map(|(p, declared)| match declared {
                 Some(_) if cx.input.syms.sym(p).sig.as_ref().is_some_and(|sig| sig.declared != NO_TYPE) => self.sym_type(p),
@@ -2297,7 +2295,7 @@ impl<'a> Gen<'a> {
         }
     }
 
-    pub fn return_type(&mut self, s: SymId) -> JType {
+    pub fn return_type(&mut self, s: SymId) -> ErasedType {
         let cx = self.cx;
         if let Some((_, JMember::Method(_))) = cx.input.java_member(s) {
             let ret = self.mref(s).ret.clone();
@@ -2309,14 +2307,14 @@ impl<'a> Gen<'a> {
         self.erased_return_type(s)
     }
 
-    fn erased_return_type(&mut self, s: SymId) -> JType {
+    fn erased_return_type(&mut self, s: SymId) -> ErasedType {
         self.in_language_of(s, |g| g.erased_result_of(s))
     }
 
-    fn erased_result_of(&mut self, s: SymId) -> JType {
+    fn erased_result_of(&mut self, s: SymId) -> ErasedType {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
-        let Some(sig) = info.sig.as_ref() else { return JType::object() };
+        let Some(sig) = info.sig.as_ref() else { return ErasedType::object() };
         let ret = sig.ret;
         // `x.type` of a parameter the signature spells as a `*:` chain is the chain's.
         let spelled = match cx.input.types.get(ret) {
@@ -2333,7 +2331,7 @@ impl<'a> Gen<'a> {
         self.erase(ret)
     }
 
-    pub fn mref(&mut self, s: SymId) -> Rc<MRef> {
+    pub fn mref(&mut self, s: SymId) -> Rc<MethodRef> {
         if let Some(m) = self.mrefs.get(&s) {
             let m = m.clone();
             if let Some(&used) = self.mref_arities.get(&s) {
@@ -2347,7 +2345,7 @@ impl<'a> Gen<'a> {
         m
     }
 
-    fn make_mref(&mut self, s: SymId) -> Rc<MRef> {
+    fn make_mref(&mut self, s: SymId) -> Rc<MethodRef> {
         let cx = self.cx;
         // A Java member is called as its class file declares it: the descriptor is exact.
         if let Some((cf, JMember::Method(i))) = cx.input.java_member(s) {
@@ -2360,7 +2358,7 @@ impl<'a> Gen<'a> {
             } else {
                 Invoke::Virtual
             };
-            let m = Rc::new(MRef {
+            let m = Rc::new(MethodRef {
                 owner: Rc::from(cf.name.as_str()),
                 owner_is_interface: cf.is_interface(),
                 name: jm.name.clone(),
@@ -2384,7 +2382,7 @@ impl<'a> Gen<'a> {
         // `@jvmWide`: a def of the standard library whose result is not always what its type
         // says (`Map.map` reached through `Iterable` gives a `List` for a function without pairs).
         let wide = info.def.map_or(false, |d| cx.input.asts[info.file.0 as usize].def(d).annots.iter().any(|a| a.name == crate::names::JVM_WIDE));
-        let ret = if wide && ret.is_ref() { JType::object() } else { ret };
+        let ret = if wide && ret.is_ref() { ErasedType::object() } else { ret };
         let (owner, owner_is_interface, kind): (Rc<str>, bool, Invoke) = match info.owner {
             Owner::Class(c) if cx.is_interface(c) => (self.class_name(c), true, Invoke::Interface),
             // An interface's static is an `InterfaceMethodref` (`Function.identity`).
@@ -2402,7 +2400,7 @@ impl<'a> Gen<'a> {
             None => ret,
         };
         let desc = method_desc(&params, &ret);
-        let m = Rc::new(MRef { owner, owner_is_interface, name, params, ret, desc, kind });
+        let m = Rc::new(MethodRef { owner, owner_is_interface, name, params, ret, desc, kind });
         self.mrefs.insert(s, m.clone());
         m
     }
@@ -2419,7 +2417,7 @@ impl<'a> Gen<'a> {
     /// A member of a jar class is called as its class file declares it, as a Java member is:
     /// the method of its name and arity whose parameters match teq's erasure best. Where the
     /// descriptor's types are not the erasure's, the call's arguments and result adapt to them.
-    fn linked_mref(&mut self, s: SymId, is_value: bool, params: &[JType], ret: &JType) -> Option<MRef> {
+    fn linked_mref(&mut self, s: SymId, is_value: bool, params: &[ErasedType], ret: &ErasedType) -> Option<MethodRef> {
         let cf = self.linked_owner(s)?;
         let cx = self.cx;
         let name = self.target_name(s).unwrap_or_else(|| encode(cx.input.interner.get(cx.input.syms.sym(s).name)).to_string());
@@ -2464,13 +2462,13 @@ impl<'a> Gen<'a> {
         // where the descriptor names the instantiated underlying type's erasure (`Encoder` for
         // kantan's `Exported[CellEncoder[LocalDate]]`): a jar passes the value class as its
         // underlying value wherever its signature names the class.
-        let retag = |d: JType, o: Option<&JType>| match o {
+        let retag = |d: ErasedType, o: Option<&ErasedType>| match o {
             Some(o) if *o == d || (self.is_vc_object(o) && d.is_ref()) => o.clone(),
             _ => d,
         };
         let params = desc_params.into_iter().enumerate().map(|(i, d)| retag(d, params.get(i))).collect();
         let ret = retag(desc_ret, Some(ret));
-        Some(MRef {
+        Some(MethodRef {
             owner: Rc::from(cf.name.as_str()),
             owner_is_interface: cf.is_interface(),
             name,
@@ -2555,14 +2553,14 @@ impl<'a> Gen<'a> {
         self.code.push(t);
     }
 
-    pub fn load(&mut self, slot: u16, t: &JType) {
+    pub fn load(&mut self, slot: u16, t: &ErasedType) {
         let (base, short) = match t {
-            JType::Z | JType::B | JType::S | JType::C | JType::I => (op::ILOAD, op::ILOAD_0),
-            JType::J => (op::LLOAD, op::LLOAD_0),
-            JType::F => (op::FLOAD, op::FLOAD_0),
-            JType::D => (op::DLOAD, op::DLOAD_0),
-            JType::L(_) => (op::ALOAD, op::ALOAD_0),
-            JType::V => return,
+            ErasedType::Z | ErasedType::B | ErasedType::S | ErasedType::C | ErasedType::I => (op::ILOAD, op::ILOAD_0),
+            ErasedType::J => (op::LLOAD, op::LLOAD_0),
+            ErasedType::F => (op::FLOAD, op::FLOAD_0),
+            ErasedType::D => (op::DLOAD, op::DLOAD_0),
+            ErasedType::L(_) => (op::ALOAD, op::ALOAD_0),
+            ErasedType::V => return,
         };
         self.code.var_insn(base, short, slot);
         let vt = match self.code.locals.get(slot as usize) {
@@ -2572,31 +2570,31 @@ impl<'a> Gen<'a> {
         self.code.push(vt);
     }
 
-    pub fn store(&mut self, slot: u16, t: &JType) {
+    pub fn store(&mut self, slot: u16, t: &ErasedType) {
         let (base, short) = match t {
-            JType::Z | JType::B | JType::S | JType::C | JType::I => (op::ISTORE, op::ISTORE_0),
-            JType::J => (op::LSTORE, op::LSTORE_0),
-            JType::F => (op::FSTORE, op::FSTORE_0),
-            JType::D => (op::DSTORE, op::DSTORE_0),
-            JType::L(_) => (op::ASTORE, op::ASTORE_0),
-            JType::V => return,
+            ErasedType::Z | ErasedType::B | ErasedType::S | ErasedType::C | ErasedType::I => (op::ISTORE, op::ISTORE_0),
+            ErasedType::J => (op::LSTORE, op::LSTORE_0),
+            ErasedType::F => (op::FSTORE, op::FSTORE_0),
+            ErasedType::D => (op::DSTORE, op::DSTORE_0),
+            ErasedType::L(_) => (op::ASTORE, op::ASTORE_0),
+            ErasedType::V => return,
         };
         self.code.var_insn(base, short, slot);
         self.code.pop();
     }
 
     /// A fresh slot holding the value on the stack.
-    pub fn store_new(&mut self, t: &JType) -> u16 {
+    pub fn store_new(&mut self, t: &ErasedType) -> u16 {
         let vt = self.vt(t);
         let slot = self.code.new_local(vt);
         self.store(slot, t);
         slot
     }
 
-    pub fn pop_value(&mut self, t: &JType) {
+    pub fn pop_value(&mut self, t: &ErasedType) {
         match t {
-            JType::V => {}
-            JType::J | JType::D => {
+            ErasedType::V => {}
+            ErasedType::J | ErasedType::D => {
                 self.code.op(op::POP2);
                 self.code.pop();
             }
@@ -2659,12 +2657,12 @@ impl<'a> Gen<'a> {
         syms.pkg(p).parent.is_some() && syms.pkg(p).name == crate::names::JAVA
     }
 
-    pub fn invoke(&mut self, kind: Invoke, owner: &str, owner_is_interface: bool, name: &str, params: &[JType], ret: &JType) {
+    pub fn invoke(&mut self, kind: Invoke, owner: &str, owner_is_interface: bool, name: &str, params: &[ErasedType], ret: &ErasedType) {
         let desc = method_desc(params, ret);
         self.invoke_desc(kind, owner, owner_is_interface, name, &desc, params.len(), ret);
     }
 
-    pub fn invoke_desc(&mut self, kind: Invoke, owner: &str, owner_is_interface: bool, name: &str, desc: &str, n_params: usize, ret: &JType) {
+    pub fn invoke_desc(&mut self, kind: Invoke, owner: &str, owner_is_interface: bool, name: &str, desc: &str, n_params: usize, ret: &ErasedType) {
         // An `invokespecial` of an interface's method links only where the interface is a direct
         // superinterface of the class: every one written is recorded for the class's list
         // (`BCodeBodyBuilder.genCallMethod` adds to `superCallTargets`). A trait's call of its
@@ -2705,13 +2703,13 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        if *ret != JType::V {
+        if *ret != ErasedType::V {
             let vt = self.vt(ret);
             self.code.push(vt);
         }
     }
 
-    pub fn invoke_mref(&mut self, m: &MRef) {
+    pub fn invoke_mref(&mut self, m: &MethodRef) {
         self.invoke_desc(m.kind, &m.owner, m.owner_is_interface, &m.name, &m.desc, m.params.len(), &m.ret);
     }
 
@@ -2723,7 +2721,7 @@ impl<'a> Gen<'a> {
         self.dup();
     }
 
-    pub fn getstatic(&mut self, owner: &str, name: &str, t: &JType) {
+    pub fn getstatic(&mut self, owner: &str, name: &str, t: &ErasedType) {
         let mut d = String::new();
         t.desc(&mut d);
         let f = self.cw.cp.field(owner, name, &d);
@@ -2732,7 +2730,7 @@ impl<'a> Gen<'a> {
         self.code.push(vt);
     }
 
-    pub fn putstatic(&mut self, owner: &str, name: &str, t: &JType) {
+    pub fn putstatic(&mut self, owner: &str, name: &str, t: &ErasedType) {
         let mut d = String::new();
         t.desc(&mut d);
         let f = self.cw.cp.field(owner, name, &d);
@@ -2740,7 +2738,7 @@ impl<'a> Gen<'a> {
         self.code.pop();
     }
 
-    pub fn getfield(&mut self, owner: &str, name: &str, t: &JType) {
+    pub fn getfield(&mut self, owner: &str, name: &str, t: &ErasedType) {
         let mut d = String::new();
         t.desc(&mut d);
         let f = self.cw.cp.field(owner, name, &d);
@@ -2750,7 +2748,7 @@ impl<'a> Gen<'a> {
         self.code.push(vt);
     }
 
-    pub fn putfield(&mut self, owner: &str, name: &str, t: &JType) {
+    pub fn putfield(&mut self, owner: &str, name: &str, t: &ErasedType) {
         let mut d = String::new();
         t.desc(&mut d);
         let f = self.cw.cp.field(owner, name, &d);
@@ -2782,24 +2780,24 @@ impl<'a> Gen<'a> {
         self.code.jump(op::GOTO, target);
     }
 
-    pub fn return_value(&mut self, t: &JType) {
+    pub fn return_value(&mut self, t: &ErasedType) {
         let opcode = match t {
-            JType::V => op::RETURN,
-            JType::Z | JType::B | JType::S | JType::C | JType::I => op::IRETURN,
-            JType::J => op::LRETURN,
-            JType::F => op::FRETURN,
-            JType::D => op::DRETURN,
-            JType::L(_) => op::ARETURN,
+            ErasedType::V => op::RETURN,
+            ErasedType::Z | ErasedType::B | ErasedType::S | ErasedType::C | ErasedType::I => op::IRETURN,
+            ErasedType::J => op::LRETURN,
+            ErasedType::F => op::FRETURN,
+            ErasedType::D => op::DRETURN,
+            ErasedType::L(_) => op::ARETURN,
         };
         self.code.op(opcode);
-        if *t != JType::V {
+        if *t != ErasedType::V {
             self.code.pop();
         }
         self.code.end_path();
     }
 
     pub fn unit_value(&mut self) {
-        let t = JType::L(Rc::from(BOXED_UNIT));
+        let t = ErasedType::L(Rc::from(BOXED_UNIT));
         self.getstatic(BOXED_UNIT, "UNIT", &t);
     }
 
@@ -2833,22 +2831,22 @@ impl<'a> Gen<'a> {
         syms.class(f).base_types.iter().any(|&(b, _)| b == t)
     }
 
-    pub fn adapt(&mut self, from: &JType, to: &JType) {
+    pub fn adapt(&mut self, from: &ErasedType, to: &ErasedType) {
         if from == to {
             return;
         }
         match (from, to) {
-            (_, JType::V) => self.pop_value(from),
-            (JType::V, JType::L(_)) => {
+            (_, ErasedType::V) => self.pop_value(from),
+            (ErasedType::V, ErasedType::L(_)) => {
                 self.unit_value();
                 let vt = self.vt(to);
                 self.code.retype_top(vt);
             }
-            (JType::V, JType::J) => self.lconst(0),
-            (JType::V, JType::F) => self.fconst(0.0),
-            (JType::V, JType::D) => self.dconst(0.0),
-            (JType::V, _) => self.iconst(0),
-            (JType::L(f), JType::L(t)) => {
+            (ErasedType::V, ErasedType::J) => self.lconst(0),
+            (ErasedType::V, ErasedType::F) => self.fconst(0.0),
+            (ErasedType::V, ErasedType::D) => self.dconst(0.0),
+            (ErasedType::V, _) => self.iconst(0),
+            (ErasedType::L(f), ErasedType::L(t)) => {
                 if &**t == OBJECT || self.is_subclass(f, t) {
                     let vt = self.vt(to);
                     self.code.retype_top(vt);
@@ -2857,22 +2855,22 @@ impl<'a> Gen<'a> {
                 }
             }
             // A Char is a String of one character where the typer takes one for the other.
-            (JType::L(f), JType::C) if &**f == STRING => {
+            (ErasedType::L(f), ErasedType::C) if &**f == STRING => {
                 self.iconst(0);
-                self.invoke_desc(Invoke::Virtual, STRING, false, "charAt", "(I)C", 1, &JType::C);
+                self.invoke_desc(Invoke::Virtual, STRING, false, "charAt", "(I)C", 1, &ErasedType::C);
             }
-            (JType::C, JType::L(t)) if &**t == STRING => {
+            (ErasedType::C, ErasedType::L(t)) if &**t == STRING => {
                 self.invoke_desc(Invoke::Static, STRING, false, "valueOf", "(C)Ljava/lang/String;", 1, to);
             }
-            (JType::L(_), prim) => {
+            (ErasedType::L(_), prim) => {
                 let (class, method, desc) = match prim {
-                    JType::Z => ("java/lang/Boolean", "booleanValue", "()Z"),
-                    JType::C => ("java/lang/Character", "charValue", "()C"),
-                    JType::B => ("java/lang/Number", "byteValue", "()B"),
-                    JType::S => ("java/lang/Number", "shortValue", "()S"),
-                    JType::I => ("java/lang/Number", "intValue", "()I"),
-                    JType::J => ("java/lang/Number", "longValue", "()J"),
-                    JType::F => ("java/lang/Number", "floatValue", "()F"),
+                    ErasedType::Z => ("java/lang/Boolean", "booleanValue", "()Z"),
+                    ErasedType::C => ("java/lang/Character", "charValue", "()C"),
+                    ErasedType::B => ("java/lang/Number", "byteValue", "()B"),
+                    ErasedType::S => ("java/lang/Number", "shortValue", "()S"),
+                    ErasedType::I => ("java/lang/Number", "intValue", "()I"),
+                    ErasedType::J => ("java/lang/Number", "longValue", "()J"),
+                    ErasedType::F => ("java/lang/Number", "floatValue", "()F"),
                     _ => ("java/lang/Number", "doubleValue", "()D"),
                 };
                 // scalac's erasure unboxes through `BoxesRunTime.unboxToX(Object)` (Erasure.scala:
@@ -2884,42 +2882,42 @@ impl<'a> Gen<'a> {
                 // wider types.
                 if self.cx.boxes_runtime {
                     let (m, d) = match prim {
-                        JType::Z => ("unboxToBoolean", "(Ljava/lang/Object;)Z"),
-                        JType::C => ("unboxToChar", "(Ljava/lang/Object;)C"),
-                        JType::B => ("unboxToByte", "(Ljava/lang/Object;)B"),
-                        JType::S => ("unboxToShort", "(Ljava/lang/Object;)S"),
-                        JType::I => ("unboxToInt", "(Ljava/lang/Object;)I"),
-                        JType::J => ("unboxToLong", "(Ljava/lang/Object;)J"),
-                        JType::F => ("unboxToFloat", "(Ljava/lang/Object;)F"),
+                        ErasedType::Z => ("unboxToBoolean", "(Ljava/lang/Object;)Z"),
+                        ErasedType::C => ("unboxToChar", "(Ljava/lang/Object;)C"),
+                        ErasedType::B => ("unboxToByte", "(Ljava/lang/Object;)B"),
+                        ErasedType::S => ("unboxToShort", "(Ljava/lang/Object;)S"),
+                        ErasedType::I => ("unboxToInt", "(Ljava/lang/Object;)I"),
+                        ErasedType::J => ("unboxToLong", "(Ljava/lang/Object;)J"),
+                        ErasedType::F => ("unboxToFloat", "(Ljava/lang/Object;)F"),
                         _ => ("unboxToDouble", "(Ljava/lang/Object;)D"),
                     };
                     self.invoke_desc(Invoke::Static, "scala/runtime/BoxesRunTime", false, m, d, 1, prim);
                     return;
                 }
-                let object = JType::object();
+                let object = ErasedType::object();
                 match prim {
-                    JType::Z => self.getstatic("java/lang/Boolean", "FALSE", &JType::L(Rc::from("java/lang/Boolean"))),
-                    JType::C => {
+                    ErasedType::Z => self.getstatic("java/lang/Boolean", "FALSE", &ErasedType::L(Rc::from("java/lang/Boolean"))),
+                    ErasedType::C => {
                         self.iconst(0);
-                        self.invoke_desc(Invoke::Static, "java/lang/Character", false, "valueOf", "(C)Ljava/lang/Character;", 1, &JType::L(Rc::from("java/lang/Character")));
+                        self.invoke_desc(Invoke::Static, "java/lang/Character", false, "valueOf", "(C)Ljava/lang/Character;", 1, &ErasedType::L(Rc::from("java/lang/Character")));
                     }
                     _ => {
                         self.iconst(0);
-                        self.invoke_desc(Invoke::Static, "java/lang/Integer", false, "valueOf", "(I)Ljava/lang/Integer;", 1, &JType::L(Rc::from("java/lang/Integer")));
+                        self.invoke_desc(Invoke::Static, "java/lang/Integer", false, "valueOf", "(I)Ljava/lang/Integer;", 1, &ErasedType::L(Rc::from("java/lang/Integer")));
                     }
                 }
                 self.invoke_desc(Invoke::Static, "java/util/Objects", false, "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", 2, &object);
                 self.checkcast(class);
                 self.invoke_desc(Invoke::Virtual, class, false, method, desc, 0, prim);
             }
-            (prim, JType::L(t)) => {
+            (prim, ErasedType::L(t)) => {
                 let class = prim.box_class();
                 let mut desc = String::from("(");
                 prim.desc(&mut desc);
                 desc.push_str(")L");
                 desc.push_str(class);
                 desc.push(';');
-                let boxed = JType::L(Rc::from(class));
+                let boxed = ErasedType::L(Rc::from(class));
                 self.invoke_desc(Invoke::Static, class, false, "valueOf", &desc, 1, &boxed);
                 if &**t != class {
                     let vt = self.vt(to);
@@ -2931,26 +2929,26 @@ impl<'a> Gen<'a> {
                 // narrowed to the small integer type wanted.
                 let mut insns: Vec<u8> = Vec::with_capacity(2);
                 match (a.stack_type(), b.stack_type()) {
-                    (JType::I, JType::J) => insns.push(op::I2L),
-                    (JType::I, JType::F) => insns.push(op::I2F),
-                    (JType::I, JType::D) => insns.push(op::I2D),
-                    (JType::J, JType::I) => insns.push(op::L2I),
-                    (JType::J, JType::F) => insns.push(op::L2F),
-                    (JType::J, JType::D) => insns.push(op::L2D),
-                    (JType::F, JType::I) => insns.push(op::F2I),
-                    (JType::F, JType::J) => insns.push(op::F2L),
-                    (JType::F, JType::D) => insns.push(op::F2D),
-                    (JType::D, JType::I) => insns.push(op::D2I),
-                    (JType::D, JType::J) => insns.push(op::D2L),
-                    (JType::D, JType::F) => insns.push(op::D2F),
+                    (ErasedType::I, ErasedType::J) => insns.push(op::I2L),
+                    (ErasedType::I, ErasedType::F) => insns.push(op::I2F),
+                    (ErasedType::I, ErasedType::D) => insns.push(op::I2D),
+                    (ErasedType::J, ErasedType::I) => insns.push(op::L2I),
+                    (ErasedType::J, ErasedType::F) => insns.push(op::L2F),
+                    (ErasedType::J, ErasedType::D) => insns.push(op::L2D),
+                    (ErasedType::F, ErasedType::I) => insns.push(op::F2I),
+                    (ErasedType::F, ErasedType::J) => insns.push(op::F2L),
+                    (ErasedType::F, ErasedType::D) => insns.push(op::F2D),
+                    (ErasedType::D, ErasedType::I) => insns.push(op::D2I),
+                    (ErasedType::D, ErasedType::J) => insns.push(op::D2L),
+                    (ErasedType::D, ErasedType::F) => insns.push(op::D2F),
                     _ => {}
                 }
-                let narrowed_already = matches!((a, b), (JType::B, JType::S) | (JType::B | JType::S | JType::Z, JType::I));
+                let narrowed_already = matches!((a, b), (ErasedType::B, ErasedType::S) | (ErasedType::B | ErasedType::S | ErasedType::Z, ErasedType::I));
                 if !narrowed_already {
                     match b {
-                        JType::B => insns.push(op::I2B),
-                        JType::S => insns.push(op::I2S),
-                        JType::C => insns.push(op::I2C),
+                        ErasedType::B => insns.push(op::I2B),
+                        ErasedType::S => insns.push(op::I2S),
+                        ErasedType::C => insns.push(op::I2C),
                         _ => {}
                     }
                 }
@@ -2972,11 +2970,11 @@ impl<'a> Gen<'a> {
         self.cx.input.prog.expr_types.get(e.0).filter(|&t| t != NO_TYPE)
     }
 
-    pub fn recorded_erasure(&mut self, e: TExprId) -> JType {
-        self.recorded(e).unwrap_or_else(JType::object)
+    pub fn recorded_erasure(&mut self, e: TExprId) -> ErasedType {
+        self.recorded(e).unwrap_or_else(ErasedType::object)
     }
 
-    pub(super) fn recorded(&mut self, e: TExprId) -> Option<JType> {
+    pub(super) fn recorded(&mut self, e: TExprId) -> Option<ErasedType> {
         let t = self.cx.input.prog.expr_types.get(e.0)?;
         if t == NO_TYPE {
             return None;
@@ -2984,7 +2982,7 @@ impl<'a> Gen<'a> {
         Some(self.erase(t))
     }
 
-    fn join(&self, a: JType, b: JType) -> JType {
+    fn join(&self, a: ErasedType, b: ErasedType) -> ErasedType {
         if a == b {
             return a;
         }
@@ -2996,22 +2994,22 @@ impl<'a> Gen<'a> {
                     b
                 }
             }
-            _ if a == JType::V || b == JType::V => JType::V,
-            _ => JType::object(),
+            _ if a == ErasedType::V || b == ErasedType::V => ErasedType::V,
+            _ => ErasedType::object(),
         }
     }
 
     /// The numeric type the typer gave a literal where that is narrower than its node (a `1`
     /// that is a `Byte`, a `1.5f` that is a `Float`).
-    fn literal_type(&mut self, e: TExprId) -> Option<JType> {
-        self.recorded(e).filter(|t| matches!(t, JType::B | JType::S | JType::F))
+    fn literal_type(&mut self, e: TExprId) -> Option<ErasedType> {
+        self.recorded(e).filter(|t| matches!(t, ErasedType::B | ErasedType::S | ErasedType::F))
     }
 
     /// `shape`, the type a node's code leaves, or the wider numeric type the typer recorded on
     /// it: a widening between two kinds of box has a node of its own (`xs.head.toDouble` is
     /// `IntToDouble` over the selection, whose Int is unboxed as one), a literal typed narrower
     /// than its node (`val s: Short = 2`) is read through `literal_type`.
-    fn widened(&mut self, e: TExprId, shape: JType) -> JType {
+    fn widened(&mut self, e: TExprId, shape: ErasedType) -> ErasedType {
         match self.recorded(e) {
             Some(t) if shape.numeric_rank().is_some() && t.numeric_rank() > shape.numeric_rank() => t,
             _ => shape,
@@ -3021,7 +3019,7 @@ impl<'a> Gen<'a> {
     /// The numeric type the typer recorded on a conditional, a match, a block or a `try` where
     /// it is wider than what its branches leave (`(if c then 1 else 2).toDouble`): a consumer
     /// that takes a reference boxes the widened value, not each branch's own.
-    pub(super) fn widened_branches(&mut self, e: TExprId) -> Option<JType> {
+    pub(super) fn widened_branches(&mut self, e: TExprId) -> Option<ErasedType> {
         let prog = self.cx.input.prog;
         if !matches!(prog.expr(e), TExpr::If(_, _, Some(_)) | TExpr::Match(..) | TExpr::Block(..) | TExpr::Try(_)) {
             return None;
@@ -3039,7 +3037,7 @@ impl<'a> Gen<'a> {
             _ => return None,
         };
         // A branch that throws leaves nothing to join.
-        let mut branches: Option<JType> = None;
+        let mut branches: Option<ErasedType> = None;
         for r in results {
             if matches!(prog.expr(r), TExpr::Throw(..)) || self.recorded_type(r).map(|t| self.cx.input.types.canonical(t)) == Some(NOTHING) {
                 continue;
@@ -3055,19 +3053,19 @@ impl<'a> Gen<'a> {
     }
 
     /// The type the expression has for a consumer without a wish of its own.
-    pub fn static_type(&mut self, e: TExprId) -> JType {
+    pub fn static_type(&mut self, e: TExprId) -> ErasedType {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             TExpr::Int(_) => match self.literal_type(e) {
                 Some(t) => t,
-                None => self.widened(e, JType::I),
+                None => self.widened(e, ErasedType::I),
             },
-            TExpr::Long(_) => JType::J,
-            TExpr::Double(_) => self.literal_type(e).unwrap_or(JType::D),
-            TExpr::Bool(_) | TExpr::TypeTest(..) => JType::Z,
-            TExpr::Char(_) => JType::C,
-            TExpr::Str(_) | TExpr::StrConcat(_) | TExpr::ToStr(..) => JType::L(Rc::from(STRING)),
-            TExpr::Unit | TExpr::While(..) | TExpr::Assign(..) | TExpr::If(_, _, None) | TExpr::Return(_) => JType::V,
+            TExpr::Long(_) => ErasedType::J,
+            TExpr::Double(_) => self.literal_type(e).unwrap_or(ErasedType::D),
+            TExpr::Bool(_) | TExpr::TypeTest(..) => ErasedType::Z,
+            TExpr::Char(_) => ErasedType::C,
+            TExpr::Str(_) | TExpr::StrConcat(_) | TExpr::ToStr(..) => ErasedType::L(Rc::from(STRING)),
+            TExpr::Unit | TExpr::While(..) | TExpr::Assign(..) | TExpr::If(_, _, None) | TExpr::Return(_) => ErasedType::V,
             TExpr::Prim(op, ..) => self.widened(e, prim_type(op)),
             TExpr::Unary(op, _) => self.widened(e, unary_type(op)),
             TExpr::Block(_, res) => match self.recorded(e) {
@@ -3084,7 +3082,7 @@ impl<'a> Gen<'a> {
             TExpr::Match(_, cases) => match self.recorded(e) {
                 Some(t) => t,
                 None => {
-                    let mut out: Option<JType> = None;
+                    let mut out: Option<ErasedType> = None;
                     for c in &prog.cases[cases.range()] {
                         let t = self.static_type(c.body);
                         out = Some(match out {
@@ -3092,7 +3090,7 @@ impl<'a> Gen<'a> {
                             None => t,
                         });
                     }
-                    out.unwrap_or(JType::V)
+                    out.unwrap_or(ErasedType::V)
                 }
             },
             _ => match self.recorded(e) {
@@ -3104,7 +3102,7 @@ impl<'a> Gen<'a> {
 
     /// What the code of a node leaves on the stack, for the nodes whose static type is not read
     /// off their shape.
-    fn natural_type(&mut self, e: TExprId) -> JType {
+    fn natural_type(&mut self, e: TExprId) -> ErasedType {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             TExpr::Local(s) => {
@@ -3114,39 +3112,39 @@ impl<'a> Gen<'a> {
             TExpr::Static(s) | TExpr::Field(_, s) => self.sym_type(s),
             TExpr::This | TExpr::Super(_) => match self.m.this_home.or(self.this_class) {
                 Some(c) => self.class_type(c),
-                None => JType::object(),
+                None => ErasedType::object(),
             },
             TExpr::Module(c) | TExpr::New(c, _) => self.class_type(c),
-            TExpr::ClassOf(..) => JType::L(Rc::from("java/lang/Class")),
+            TExpr::ClassOf(..) => ErasedType::L(Rc::from("java/lang/Class")),
             TExpr::NewVia(s, _) => match self.cx.input.syms.sym(s).owner {
                 Owner::Class(c) => self.class_type(c),
-                _ => JType::object(),
+                _ => ErasedType::object(),
             },
             TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) => self.return_type(s),
             TExpr::Lambda(params, _) => self.function_type(params.len as usize),
             TExpr::SeqLit(_) => match self.cx.input.array_seq {
                 Some(c) => self.class_type(c),
-                None => JType::object(),
+                None => ErasedType::object(),
             },
             TExpr::ArrayLit(_) => match self.recorded(e) {
-                Some(JType::L(n)) if n.starts_with('[') => JType::L(n),
-                _ => JType::L(Rc::from(OBJECT_ARRAY)),
+                Some(ErasedType::L(n)) if n.starts_with('[') => ErasedType::L(n),
+                _ => ErasedType::L(Rc::from(OBJECT_ARRAY)),
             },
             TExpr::Spread(inner) => self.static_type(inner),
-            _ => JType::object(),
+            _ => ErasedType::object(),
         }
     }
 
     // ---- expressions ----
 
     /// Emits `e` and brings its value to the type `want`: lowered, then written.
-    pub fn expr(&mut self, e: TExprId, want: &JType) {
+    pub fn expr(&mut self, e: TExprId, want: &ErasedType) {
         let lowered = self.lowering(|g| g.lower_expr(e, want));
         self.write(lowered);
     }
 
     /// `expr` for a node the lowering does not make yet.
-    pub(super) fn expr_legacy(&mut self, e: TExprId, want: &JType) {
+    pub(super) fn expr_legacy(&mut self, e: TExprId, want: &ErasedType) {
         let lines = (self.line_floor, self.line_hold);
         self.mark_line(e);
         self.expr_marked(e, want);
@@ -3155,7 +3153,7 @@ impl<'a> Gen<'a> {
 
     /// A widened conditional's wider type and a literal's specialisation by the type wanted are
     /// the lowering's (`Gen::lower_marked`).
-    fn expr_marked(&mut self, e: TExprId, want: &JType) {
+    fn expr_marked(&mut self, e: TExprId, want: &ErasedType) {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             TExpr::If(c, t, els) => self.if_(c, t, els, Mode::Value(want)),
@@ -3177,9 +3175,9 @@ impl<'a> Gen<'a> {
         }
     }
 
-    pub(super) fn fit(&mut self, e: TExprId, t: &JType, want: &JType) -> Fit {
+    pub(super) fn fit(&mut self, e: TExprId, t: &ErasedType, want: &ErasedType) -> Fit {
         if let Some((c, args)) = self.expr_value_class(e) {
-            if *t != JType::V {
+            if *t != ErasedType::V {
                 // A selection of the class's parameter (`Gen::vc_field_read`) opens the box with no
                 // null test.
                 return Fit::ValueClass(c, args, self.vc_select != Some(e));
@@ -3199,7 +3197,7 @@ impl<'a> Gen<'a> {
             // Between two references the consumer's type decides; going through the
             // static type would unbox a generic result only to box it again. A value
             // that is dropped is not unboxed either: a Java method's null result stays.
-            Some(s) if s != *t && s != JType::V && *t != JType::V && *want != JType::V && !(t.is_ref() && want.is_ref() && (!s.is_ref() || want.is_object())) => Fit::Through(s),
+            Some(s) if s != *t && s != ErasedType::V && *t != ErasedType::V && *want != ErasedType::V && !(t.is_ref() && want.is_ref() && (!s.is_ref() || want.is_object())) => Fit::Through(s),
             _ => Fit::Direct,
         }
     }
@@ -3245,18 +3243,18 @@ impl<'a> Gen<'a> {
         self.code.line(cx.line_of(file, point));
     }
 
-    pub fn expr_static(&mut self, e: TExprId) -> JType {
+    pub fn expr_static(&mut self, e: TExprId) -> ErasedType {
         let t = self.static_type(e);
         self.expr(e, &t);
         t
     }
 
     pub fn statement(&mut self, e: TExprId) {
-        self.expr(e, &JType::V);
+        self.expr(e, &ErasedType::V);
     }
 
     /// Emits the code of one node and returns what it leaves on the stack.
-    fn node(&mut self, e: TExprId) -> JType {
+    fn node(&mut self, e: TExprId) -> ErasedType {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             // What the lowering takes whole is written from its node (`Gen::write`), never here.
@@ -3286,11 +3284,11 @@ impl<'a> Gen<'a> {
                 self.code.locals_release(mark);
                 self.goto(head);
                 self.code.bind(exit);
-                JType::V
+                ErasedType::V
             }
             TExpr::Assign(target, value) => {
                 self.assign(target, value);
-                JType::V
+                ErasedType::V
             }
             TExpr::Prim(op, a, b) => self.prim(op, a, b),
             TExpr::Unary(op, a) => self.unary(op, a),
@@ -3300,9 +3298,9 @@ impl<'a> Gen<'a> {
                 // dotty's `typedSelect` boxes an erased value class qualifier (`Erasure.scala`
                 // 733): the program's `v.toString` is the box's method, which a null reference
                 // the box stayed throws on, where a rendering writes `null`.
-                let string = JType::L(Rc::from(STRING));
+                let string = ErasedType::L(Rc::from(STRING));
                 if self.expr_value_class(inner).is_some() && conv.is_rendering() {
-                    let object = JType::object();
+                    let object = ErasedType::object();
                     self.expr(inner, &object);
                     self.string_value_of(&object);
                     return string;
@@ -3331,31 +3329,31 @@ impl<'a> Gen<'a> {
             TExpr::SeqLit(items) => {
                 let Some(seq) = self.cx.input.array_seq else {
                     self.unsupported("varargs without ArraySeq");
-                    return JType::V;
+                    return ErasedType::V;
                 };
                 let name = self.class_name(seq);
                 self.new_object(&name);
                 // A JVM array of the boxed elements, which scala-library's `ArraySeq.ofRef`
                 // wraps and the std's `ArraySeq` holds as the array of any kind it takes.
-                let array = JType::L(Rc::from(OBJECT_ARRAY));
+                let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
                 let elem = self.seq_literal_element(e);
                 self.boxed_array(items, &elem);
-                let param = if self.cx.linked_class(seq) { array.clone() } else { JType::object() };
+                let param = if self.cx.linked_class(seq) { array.clone() } else { ErasedType::object() };
                 self.adapt(&array, &param);
-                self.invoke(Invoke::Special, &name, false, "<init>", &[param], &JType::V);
-                JType::L(name)
+                self.invoke(Invoke::Special, &name, false, "<init>", &[param], &ErasedType::V);
+                ErasedType::L(name)
             }
             // A JVM array of the kind its type names (an enum's `values` is a `Color[]`).
             TExpr::ArrayLit(items) => {
                 let array = match self.recorded(e) {
-                    Some(JType::L(n)) if n.starts_with('[') => n,
+                    Some(ErasedType::L(n)) if n.starts_with('[') => n,
                     _ => Rc::from(OBJECT_ARRAY),
                 };
                 self.java_array(items, &array);
-                JType::L(array)
+                ErasedType::L(array)
             }
             TExpr::Index(r, i) => {
-                let array = JType::L(Rc::from(OBJECT_ARRAY));
+                let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
                 self.expr(r, &array);
                 self.iconst(i as i32);
                 self.array_load(&array)
@@ -3367,19 +3365,19 @@ impl<'a> Gen<'a> {
                 if self.m.closure {
                     let Some(key) = self.m.return_key else {
                         self.unsupported("a non-local return of a def that makes no key");
-                        return JType::V;
+                        return ErasedType::V;
                     };
-                    let object = JType::object();
+                    let object = ErasedType::object();
                     self.new_object(NON_LOCAL_RETURN);
                     self.load(key, &object);
                     self.expr(v, &object);
-                    self.invoke(Invoke::Special, NON_LOCAL_RETURN, false, "<init>", &[object.clone(), object], &JType::V);
+                    self.invoke(Invoke::Special, NON_LOCAL_RETURN, false, "<init>", &[object.clone(), object], &ErasedType::V);
                     self.code.op(op::ATHROW);
                     self.code.pop();
                     self.code.end_path();
                     self.code.op(op::ACONST_NULL);
                     self.code.push(VT::Null);
-                    return JType::object();
+                    return ErasedType::object();
                 }
                 let ret = self.m.ret.clone();
                 if let Some(frame) = self.m.finalizers.last().copied() {
@@ -3392,7 +3390,7 @@ impl<'a> Gen<'a> {
                     }
                     let dropped = self.drop_stack();
                     self.iconst(1);
-                    self.store(frame.pending, &JType::I);
+                    self.store(frame.pending, &ErasedType::I);
                     self.m.exits_taken.push(frame.exit);
                     self.goto(frame.exit);
                     // The code after the jump is dead but verified, as after a `throw`: the operands
@@ -3404,20 +3402,20 @@ impl<'a> Gen<'a> {
                     }
                     self.code.op(op::ACONST_NULL);
                     self.code.push(VT::Null);
-                    return JType::object();
+                    return ErasedType::object();
                 }
                 self.expr(v, &ret);
                 self.return_value(&ret);
-                JType::V
+                ErasedType::V
             }
             TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => {
                 self.unsupported("JavaScript interop");
-                JType::V
+                ErasedType::V
             }
             TExpr::Null => {
                 self.code.op(op::ACONST_NULL);
                 self.code.push(VT::Null);
-                JType::object()
+                ErasedType::object()
             }
             TExpr::Throw(..) | TExpr::Try(_) => unreachable!("emitted by expr"),
             TExpr::Splice(_) => unreachable!("a stored inline body is emitted nowhere"),
@@ -3436,8 +3434,8 @@ impl<'a> Gen<'a> {
     /// A cast as the typer decided it (`CastOp`): the unboxing to the primitive, or the
     /// `checkcast` of the erasure the typer decided, the type's own (`TypeErasure.erasure`), not
     /// the backend's erasure of the type written.
-    fn cast(&mut self, inner: TExprId, op: CastOp) -> JType {
-        let object = JType::object();
+    fn cast(&mut self, inner: TExprId, op: CastOp) -> ErasedType {
+        let object = ErasedType::object();
         let (test, erased) = match op {
             CastOp::Written | CastOp::Erased => return self.expr_static(inner),
             CastOp::Nothing => {
@@ -3445,7 +3443,7 @@ impl<'a> Gen<'a> {
                 let exception = "java/lang/ClassCastException";
                 self.new_object(exception);
                 self.sconst("Cannot cast to scala.Nothing");
-                self.invoke(Invoke::Special, exception, false, "<init>", &[JType::L(Rc::from(STRING))], &JType::V);
+                self.invoke(Invoke::Special, exception, false, "<init>", &[ErasedType::L(Rc::from(STRING))], &ErasedType::V);
                 self.code.op(op::ATHROW);
                 self.code.pop();
                 self.code.end_path();
@@ -3465,7 +3463,7 @@ impl<'a> Gen<'a> {
             TypeTest::Null => {
                 let null = "scala/runtime/Null$";
                 self.checkcast(null);
-                return JType::L(Rc::from(null));
+                return ErasedType::L(Rc::from(null));
             }
             // `FunctionXXL`, which teq's output has no class of: a function past 22 parameters is
             // an interface of its own arity here (docs/TARGETS.md), which no one class takes all of.
@@ -3473,21 +3471,21 @@ impl<'a> Gen<'a> {
             _ => {}
         }
         match self.erase(erased) {
-            JType::L(c) if &*c != OBJECT && self.value_class_type(erased).is_none() => {
+            ErasedType::L(c) if &*c != OBJECT && self.value_class_type(erased).is_none() => {
                 self.checkcast(&c);
-                JType::L(c)
+                ErasedType::L(c)
             }
             _ => object,
         }
     }
 
-    fn throw_(&mut self, inner: TExprId, want: &JType) {
-        let throwable = JType::L(Rc::from(THROWABLE));
+    fn throw_(&mut self, inner: TExprId, want: &ErasedType) {
+        let throwable = ErasedType::L(Rc::from(THROWABLE));
         self.expr(inner, &throwable);
         self.code.op(op::ATHROW);
         self.code.pop();
         self.code.end_path();
-        if *want != JType::V {
+        if *want != ErasedType::V {
             let vt = self.vt(want);
             self.code.push(vt);
         }
@@ -3498,21 +3496,21 @@ impl<'a> Gen<'a> {
     /// takes every exception of the body and the cases and throws it again, as javac lays it
     /// out. A `try` with operands on the stack spills them to locals first, since a handler
     /// starts with an empty stack.
-    pub(super) fn write_try(&mut self, i: u32, want: &JType, body: LirId, finalizer: Option<LirId>) {
+    pub(super) fn write_try(&mut self, i: u32, want: &ErasedType, body: LirId, finalizer: Option<LirId>) {
         let cx = self.cx;
         let prog = cx.input.prog;
         let t = &prog.tries[i as usize];
         let outer = self.code.locals_mark();
         let spilled = self.spill_stack();
-        let result = if *want == JType::V {
+        let result = if *want == ErasedType::V {
             None
         } else {
             match want {
-                JType::L(_) => {
+                ErasedType::L(_) => {
                     self.code.op(op::ACONST_NULL);
                     self.code.push(VT::Null);
                 }
-                _ => self.adapt(&JType::V, want),
+                _ => self.adapt(&ErasedType::V, want),
             }
             Some(self.store_new(want))
         };
@@ -3522,22 +3520,22 @@ impl<'a> Gen<'a> {
         // `finally ran` before `fin: 1` for `try { return 1 } finally { println("finally ran") }`).
         let pending = finalizer.map(|_| {
             self.iconst(0);
-            self.store_new(&JType::I)
+            self.store_new(&ErasedType::I)
         });
         let ret = self.m.ret.clone();
         let return_slot = match (finalizer, &ret) {
-            (None, _) | (Some(_), JType::V) => None,
-            (Some(_), JType::L(_)) => {
+            (None, _) | (Some(_), ErasedType::V) => None,
+            (Some(_), ErasedType::L(_)) => {
                 self.code.op(op::ACONST_NULL);
                 self.code.push(VT::Null);
                 Some(self.store_new(&ret))
             }
             (Some(_), _) => {
-                self.adapt(&JType::V, &ret);
+                self.adapt(&ErasedType::V, &ret);
                 Some(self.store_new(&ret))
             }
         };
-        let throwable = JType::L(Rc::from(THROWABLE));
+        let throwable = ErasedType::L(Rc::from(THROWABLE));
         let throwable_vt = self.vt(&throwable);
         let (start, end, normal_exit, after) =
             (self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label());
@@ -3610,12 +3608,12 @@ impl<'a> Gen<'a> {
             self.write(f);
             if let Some(pending) = pending {
                 let skip = self.code.new_label();
-                self.load(pending, &JType::I);
+                self.load(pending, &ErasedType::I);
                 self.jump_if(op::IFEQ, 1, skip);
                 match self.m.finalizers.last().copied() {
                     Some(outer) => {
                         self.iconst(1);
-                        self.store(outer.pending, &JType::I);
+                        self.store(outer.pending, &ErasedType::I);
                         if let (Some(slot), Some(outer_slot)) = (return_slot, outer.value) {
                             self.load(slot, &ret);
                             self.store(outer_slot, &ret);
@@ -3651,16 +3649,16 @@ impl<'a> Gen<'a> {
     /// return took it (`shouldEmitCleanup`), exits the monitor and goes on to the next enclosing frame's exit or
     /// returns (`pendingCleanups`). The value's type is the body's; the operands under the block stay where they
     /// are, a `return` inside dropping them as it leaves (`drop_stack`).
-    pub fn synchronized_(&mut self, recv: TExprId, body: TExprId) -> JType {
-        let object = JType::object();
+    pub fn synchronized_(&mut self, recv: TExprId, body: TExprId) -> ErasedType {
+        let object = ErasedType::object();
         let t = self.static_type(body);
         self.monitor_block(|g| g.expr(recv, &object), t, |g, t| g.expr(body, t))
     }
 
     /// `genSynchronized`'s layout around the code `body` writes at the type `t`, the monitor the
     /// object `recv` loads (`synchronized_`, a local lazy val's initialiser over its holder).
-    pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: JType, body: impl FnOnce(&mut Self, &JType)) -> JType {
-        let object = JType::object();
+    pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: ErasedType, body: impl FnOnce(&mut Self, &ErasedType)) -> ErasedType {
+        let object = ErasedType::object();
         recv(self);
         self.dup();
         let monitor = self.store_new(&object);
@@ -3669,32 +3667,32 @@ impl<'a> Gen<'a> {
         // `monitorResult`, and the frame's slots, made before the protected range, whose handler's frame
         // holds the locals made before it alone.
         let result = match &t {
-            JType::V => None,
-            JType::L(_) => {
+            ErasedType::V => None,
+            ErasedType::L(_) => {
                 self.code.op(op::ACONST_NULL);
                 self.code.push(VT::Null);
                 Some(self.store_new(&t))
             }
             _ => {
-                self.adapt(&JType::V, &t);
+                self.adapt(&ErasedType::V, &t);
                 Some(self.store_new(&t))
             }
         };
         let ret = self.m.ret.clone();
         let return_slot = match &ret {
-            JType::V => None,
-            JType::L(_) => {
+            ErasedType::V => None,
+            ErasedType::L(_) => {
                 self.code.op(op::ACONST_NULL);
                 self.code.push(VT::Null);
                 Some(self.store_new(&ret))
             }
             _ => {
-                self.adapt(&JType::V, &ret);
+                self.adapt(&ErasedType::V, &ret);
                 Some(self.store_new(&ret))
             }
         };
         self.iconst(0);
-        let pending = self.store_new(&JType::I);
+        let pending = self.store_new(&ErasedType::I);
         let (start, end, handler, cleanup, post) =
             (self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label());
         self.m.finalizers.push(FinallyFrame { pending, value: return_slot, exit: cleanup });
@@ -3717,7 +3715,7 @@ impl<'a> Gen<'a> {
         self.goto(post);
         self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
         self.code.locals_release(protected);
-        let throwable = JType::L(Rc::from(THROWABLE));
+        let throwable = ErasedType::L(Rc::from(THROWABLE));
         let throwable_vt = self.vt(&throwable);
         self.code.bind_handler(handler, throwable_vt);
         self.load(monitor, &object);
@@ -3734,7 +3732,7 @@ impl<'a> Gen<'a> {
             match self.m.finalizers.last().copied() {
                 Some(outer) => {
                     self.iconst(1);
-                    self.store(outer.pending, &JType::I);
+                    self.store(outer.pending, &ErasedType::I);
                     if let (Some(slot), Some(outer_slot)) = (return_slot, outer.value) {
                         self.load(slot, &ret);
                         self.store(outer_slot, &ret);
@@ -3773,15 +3771,15 @@ impl<'a> Gen<'a> {
         dropped
     }
 
-    fn spill_stack(&mut self) -> Vec<(u16, JType)> {
+    fn spill_stack(&mut self) -> Vec<(u16, ErasedType)> {
         let mut spilled = Vec::new();
         while let Some(&top) = self.code.stack.last() {
             let t = match top {
-                VT::Int => JType::I,
-                VT::Long => JType::J,
-                VT::Float => JType::F,
-                VT::Double => JType::D,
-                VT::Object(_) | VT::Null => JType::object(),
+                VT::Int => ErasedType::I,
+                VT::Long => ErasedType::J,
+                VT::Float => ErasedType::F,
+                VT::Double => ErasedType::D,
+                VT::Object(_) | VT::Null => ErasedType::object(),
                 _ => {
                     self.unsupported("not supported on the JVM yet: try as an argument of a constructor");
                     return spilled;
@@ -3795,7 +3793,7 @@ impl<'a> Gen<'a> {
         spilled
     }
 
-    fn reload_stack(&mut self, spilled: Vec<(u16, JType)>) {
+    fn reload_stack(&mut self, spilled: Vec<(u16, ErasedType)>) {
         for (slot, t) in spilled {
             self.load(slot, &t);
         }
@@ -3804,34 +3802,34 @@ impl<'a> Gen<'a> {
     /// The parameter type under which the JDK renders a value of type `t`: `String.valueOf`,
     /// `StringBuilder.append` and `insert` have an overload per primitive, one for a `String`
     /// and one for any other reference.
-    pub fn rendered_as(t: &JType) -> JType {
+    pub fn rendered_as(t: &ErasedType) -> ErasedType {
         match t {
-            JType::L(n) if &**n == STRING => t.clone(),
-            JType::L(_) | JType::V => JType::object(),
-            JType::B | JType::S => JType::I,
+            ErasedType::L(n) if &**n == STRING => t.clone(),
+            ErasedType::L(_) | ErasedType::V => ErasedType::object(),
+            ErasedType::B | ErasedType::S => ErasedType::I,
             p => p.clone(),
         }
     }
 
-    pub fn string_value_of(&mut self, t: &JType) {
+    pub fn string_value_of(&mut self, t: &ErasedType) {
         let param = match t {
-            JType::L(n) if &**n == STRING => return,
-            JType::L(_) => JType::object(),
-            JType::V => {
+            ErasedType::L(n) if &**n == STRING => return,
+            ErasedType::L(_) => ErasedType::object(),
+            ErasedType::V => {
                 self.sconst("()");
                 return;
             }
-            JType::B | JType::S => JType::I,
+            ErasedType::B | ErasedType::S => ErasedType::I,
             p => p.clone(),
         };
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         self.invoke(Invoke::Static, STRING, false, "valueOf", &[param], &string);
     }
 
     /// `a + b + c` on strings: one `invokedynamic` call of `makeConcatWithConstants`, as scalac
     /// writes it. Every operand of the chain is evaluated, left to right, before the call
     /// renders the first; the string literals are the text of the recipe.
-    fn str_concat(&mut self, items: ListRef) -> JType {
+    fn str_concat(&mut self, items: ListRef) -> ErasedType {
         let prog = self.cx.input.prog;
         let mark = self.code.locals_mark();
         let mut operands = Vec::new();
@@ -3852,7 +3850,7 @@ impl<'a> Gen<'a> {
             let value = value_of(operand);
             let text = match prog.expr(value) {
                 TExpr::Str(text) => Some(prog.strings[text.0 as usize].clone()),
-                TExpr::Int(v) if i < folded && self.static_type(value) == JType::I => Some(v.to_string()),
+                TExpr::Int(v) if i < folded && self.static_type(value) == ErasedType::I => Some(v.to_string()),
                 TExpr::Long(v) if i < folded => Some(v.to_string()),
                 TExpr::Bool(v) if i < folded => Some(v.to_string()),
                 TExpr::Char(v) if i < folded => char::from_u32(v as u32).map(|c| c.to_string()),
@@ -3862,7 +3860,7 @@ impl<'a> Gen<'a> {
             if text.as_deref() == Some("") {
                 continue;
             }
-            let string = JType::L(Rc::from(STRING));
+            let string = ErasedType::L(Rc::from(STRING));
             let t = match text {
                 Some(_) => string.clone(),
                 None => self.static_type(value),
@@ -3870,12 +3868,12 @@ impl<'a> Gen<'a> {
             // A value class's instance reaches the call as its box, whatever it holds.
             let boxed = text.is_none() && self.recorded_type(value).and_then(|rt| self.value_class_of(rt)).is_some();
             let param = match t {
-                JType::L(ref n) if &**n == STRING && !boxed => t.clone(),
-                JType::L(_) | JType::V => JType::object(),
-                _ if boxed => JType::object(),
+                ErasedType::L(ref n) if &**n == STRING && !boxed => t.clone(),
+                ErasedType::L(_) | ErasedType::V => ErasedType::object(),
+                _ if boxed => ErasedType::object(),
                 ref p => p.clone(),
             };
-            let slots = if matches!(param, JType::J | JType::D) { 2 } else { 1 };
+            let slots = if matches!(param, ErasedType::J | ErasedType::D) { 2 } else { 1 };
             if call.slots + slots >= CONCAT_SLOTS {
                 self.concat_call(std::mem::take(&mut call));
                 flushed += 1;
@@ -3888,7 +3886,7 @@ impl<'a> Gen<'a> {
                 }
                 Some(text) => call.text(&text),
                 None => {
-                    if t == JType::V {
+                    if t == ErasedType::V {
                         self.statement(value);
                         self.unit_value();
                     } else if boxed {
@@ -3900,7 +3898,7 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         self.concat_call(call);
         if flushed > 0 {
             let mut joined = ConcatCall::default();
@@ -3937,7 +3935,7 @@ impl<'a> Gen<'a> {
         if call.arguments.is_empty() && call.constants.is_empty() {
             return self.sconst(&call.recipe);
         }
-        let string = JType::L(Rc::from(STRING));
+        let string = ErasedType::L(Rc::from(STRING));
         let cp = &mut self.cw.cp;
         let factory = cp.method(
             "java/lang/invoke/StringConcatFactory",
@@ -3968,12 +3966,12 @@ impl<'a> Gen<'a> {
             (Some(home), _, _) => self.class_type(home),
             (None, Some(underlying), _) => underlying,
             (None, None, Some(c)) => self.class_type(c),
-            (None, None, None) => JType::object(),
+            (None, None, None) => ErasedType::object(),
         };
         Some(ThisValue::Slot(slot, t))
     }
 
-    pub fn load_this(&mut self) -> JType {
+    pub fn load_this(&mut self) -> ErasedType {
         match self.this_value() {
             Some(ThisValue::Module(module)) => self.get_module(&module),
             Some(ThisValue::Slot(slot, t)) => {
@@ -3986,7 +3984,7 @@ impl<'a> Gen<'a> {
                 self.code.push(VT::Null);
                 match self.this_class {
                     Some(c) => self.class_type(c),
-                    None => JType::object(),
+                    None => ErasedType::object(),
                 }
             }
         }
@@ -4000,7 +3998,7 @@ impl<'a> Gen<'a> {
         self.m.locals.get(&s).filter(|l| !l.cell)
     }
 
-    fn captured_field(&self, s: SymId) -> Option<(String, JType, Held)> {
+    fn captured_field(&self, s: SymId) -> Option<(String, ErasedType, Held)> {
         self.class_captures.iter().find(|c| c.0 == s).map(|c| (c.1.clone(), c.2.clone(), c.3))
     }
 
@@ -4013,8 +4011,8 @@ impl<'a> Gen<'a> {
     }
 
     /// Pushes the cell of a local, or its value when it has none: what a closure captures.
-    pub fn load_capture(&mut self, s: SymId) -> JType {
-        let cell_type = JType::L(Rc::from(OBJECT_REF));
+    pub fn load_capture(&mut self, s: SymId) -> ErasedType {
+        let cell_type = ErasedType::L(Rc::from(OBJECT_REF));
         if let Some(l) = self.m.locals.get(&s).cloned() {
             let t = if l.cell { cell_type } else { l.ty };
             self.load(l.slot, &t);
@@ -4034,10 +4032,10 @@ impl<'a> Gen<'a> {
         self.unsupported(&format!("the local {} is not in scope of the generated method", name));
         self.code.op(op::ACONST_NULL);
         self.code.push(VT::Null);
-        JType::object()
+        ErasedType::object()
     }
 
-    fn load_local(&mut self, s: SymId) -> JType {
+    fn load_local(&mut self, s: SymId) -> ErasedType {
         let info = self.cx.input.syms.sym(s);
         if self.is_lazy_local(s) {
             return self.lazy_read(s);
@@ -4045,7 +4043,7 @@ impl<'a> Gen<'a> {
         let declared = if info.by_name { self.function_type(0) } else { self.sym_type(s) };
         let t = self.load_capture(s);
         if self.is_cell(s) {
-            let object = JType::object();
+            let object = ErasedType::object();
             self.getfield(OBJECT_REF, "elem", &object);
             self.adapt(&object, &declared);
             return declared;
@@ -4057,7 +4055,7 @@ impl<'a> Gen<'a> {
         let declared = self.sym_type(s);
         if self.is_cell(s) {
             self.load_capture(s);
-            let object = JType::object();
+            let object = ErasedType::object();
             self.expr(value, &declared);
             self.adapt(&declared, &object);
             self.putfield(OBJECT_REF, "elem", &object);
@@ -4073,15 +4071,15 @@ impl<'a> Gen<'a> {
     }
 
     /// Declares a local with the value on the stack (of the local's declared type).
-    pub fn declare_local(&mut self, s: SymId, ty: JType, cell: bool) {
+    pub fn declare_local(&mut self, s: SymId, ty: ErasedType, cell: bool) {
         if cell {
-            let object = JType::object();
+            let object = ErasedType::object();
             self.adapt(&ty, &object);
             let tmp = self.store_new(&object);
             self.new_object(OBJECT_REF);
             self.load(tmp, &object);
-            self.invoke(Invoke::Special, OBJECT_REF, false, "<init>", &[object], &JType::V);
-            let cell_type = JType::L(Rc::from(OBJECT_REF));
+            self.invoke(Invoke::Special, OBJECT_REF, false, "<init>", &[object], &ErasedType::V);
+            let cell_type = ErasedType::L(Rc::from(OBJECT_REF));
             let slot = self.store_new(&cell_type);
             self.m.locals.insert(s, Local { slot, ty, cell: true });
         } else {
@@ -4091,14 +4089,14 @@ impl<'a> Gen<'a> {
     }
 
     /// `classOf[C]`: the class constant, or a primitive's `TYPE` (`push_class`).
-    fn class_of(&mut self, e: TExprId, c: ClassId, dims: u8) -> JType {
+    fn class_of(&mut self, e: TExprId, c: ClassId, dims: u8) -> ErasedType {
         // An array of a known element says its dimensions (`TExpr::ClassOf`).
         let kind = if dims > 0 {
             let element = match crate::emit::class_of_name(self.cx.input.syms, self.cx.input.interner, c) {
                 Some(n) => n,
                 None => self.class_name(c).to_string(),
             };
-            JType::L(Rc::from(crate::emit::array_class_name(&element, dims).replace('.', "/")))
+            ErasedType::L(Rc::from(crate::emit::array_class_name(&element, dims).replace('.', "/")))
         } else {
             // `classOf[Array[T]]` is the array class of `T`'s erasure, which the node's type says.
             let types = self.cx.input.types;
@@ -4116,13 +4114,13 @@ impl<'a> Gen<'a> {
 
     /// The constant `classOf[t]` of the constant type `class_type`, `Class[t]` (`LitVal::Class`), through the
     /// class literal `class_of` writes for the tree (`class_kind`).
-    pub(super) fn class_constant(&mut self, class_type: TypeId) -> JType {
+    pub(super) fn class_constant(&mut self, class_type: TypeId) -> ErasedType {
         let types = self.cx.input.types;
         let kind = match types.get(class_type) {
             Type::Class(_, args) if !types.items(args).is_empty() => self.class_literal_kind(types.items(args)[0]),
             _ => {
                 self.unsupported("internal error: a class constant whose type is no `Class[T]`");
-                JType::object()
+                ErasedType::object()
             }
         };
         self.push_class(&kind)
@@ -4130,7 +4128,7 @@ impl<'a> Gen<'a> {
 
     /// `CoreBTypes.toTypeKind` of a class constant's type `t` (`typeToTypeKind` 159-198): a class's by `class_kind`
     /// (`getClassBType`), `Nothing`'s `srNothingRef`, `Any`'s `Object`, an alias's its expansion's.
-    fn class_literal_kind(&mut self, t: TypeId) -> JType {
+    fn class_literal_kind(&mut self, t: TypeId) -> ErasedType {
         let types = self.cx.input.types;
         match types.get(t) {
             Type::Class(c, args) => {
@@ -4138,14 +4136,14 @@ impl<'a> Gen<'a> {
                 self.class_kind(c, element)
             }
             Type::Nothing => self.array_marker(0),
-            Type::Any => JType::object(),
+            Type::Any => ErasedType::object(),
             Type::Alias(a, args) => match self.alias_expansion(a, args) {
                 Some(x) => self.class_literal_kind(x),
-                None => JType::object(),
+                None => ErasedType::object(),
             },
             _ => {
                 self.unsupported("internal error: a class constant of no class type");
-                JType::object()
+                ErasedType::object()
             }
         }
     }
@@ -4154,14 +4152,14 @@ impl<'a> Gen<'a> {
     /// `Array`'s the array class of `element`'s erasure, `Nothing`'s and `Null`'s scala-library's `Nothing$` and
     /// `Null$` (`srNothingRef`, `srNullRef`), an opaque type's its underlying type's erasure (scalac's `ClassTag` of
     /// one over `Int` is `Int`'s), a primitive's or `Unit`'s its own, any other class's the class.
-    fn class_kind(&mut self, c: ClassId, element: Option<TypeId>) -> JType {
+    fn class_kind(&mut self, c: ClassId, element: Option<TypeId>) -> ErasedType {
         let info = self.cx.input.syms.class(c);
         if info.kind == ClassKind::Builtin {
             match self.cx.input.interner.get(info.name) {
                 "Array" => {
                     return match element {
                         Some(elem) => self.array_type(Some(elem)),
-                        None => JType::L(Rc::from(OBJECT_ARRAY)),
+                        None => ErasedType::L(Rc::from(OBJECT_ARRAY)),
                     };
                 }
                 "Nothing" => return self.array_marker(0),
@@ -4176,83 +4174,83 @@ impl<'a> Gen<'a> {
         }
         if info.kind == ClassKind::Builtin {
             let primitive = match self.cx.input.interner.get(info.name) {
-                "Int" => Some(JType::I),
-                "Long" => Some(JType::J),
-                "Double" => Some(JType::D),
-                "Float" => Some(JType::F),
-                "Boolean" => Some(JType::Z),
-                "Char" => Some(JType::C),
-                "Byte" => Some(JType::B),
-                "Short" => Some(JType::S),
-                "Unit" => Some(JType::V),
+                "Int" => Some(ErasedType::I),
+                "Long" => Some(ErasedType::J),
+                "Double" => Some(ErasedType::D),
+                "Float" => Some(ErasedType::F),
+                "Boolean" => Some(ErasedType::Z),
+                "Char" => Some(ErasedType::C),
+                "Byte" => Some(ErasedType::B),
+                "Short" => Some(ErasedType::S),
+                "Unit" => Some(ErasedType::V),
                 _ => None,
             };
             if let Some(t) = primitive {
                 return t;
             }
         }
-        JType::L(self.class_name(c))
+        ErasedType::L(self.class_name(c))
     }
 
     /// `genConstant`'s `ClazzTag` (BCodeBodyBuilder.scala 597-614) for the class of `kind`: a primitive's or `Unit`'s
     /// boxed class's `TYPE` (`boxedClassOfPrimitive`, `Unit`'s `java.lang.Void`), a reference or array class by `ldc`.
-    fn push_class(&mut self, kind: &JType) -> JType {
-        let class = JType::L(Rc::from("java/lang/Class"));
+    fn push_class(&mut self, kind: &ErasedType) -> ErasedType {
+        let class = ErasedType::L(Rc::from("java/lang/Class"));
         match kind {
-            JType::L(name) => {
+            ErasedType::L(name) => {
                 let i = self.cw.cp.class(name);
                 self.ldc(i);
                 let t = VT::Object(self.cw.cp.class("java/lang/Class"));
                 self.code.push(t);
             }
-            JType::V => self.getstatic("java/lang/Void", "TYPE", &class),
+            ErasedType::V => self.getstatic("java/lang/Void", "TYPE", &class),
             primitive => self.getstatic(primitive.box_class(), "TYPE", &class),
         }
         class
     }
 
-    pub fn load_module(&mut self, c: ClassId) -> JType {
+    pub fn load_module(&mut self, c: ClassId) -> ErasedType {
         // An object without a body that only its exports are reached through is not emitted,
         // and a Java class's statics have no object.
         if !self.cx.input.reach.classes[c.idx()] || self.cx.input.java_class(c).is_some() {
-            return JType::V;
+            return ErasedType::V;
         }
         let name = self.class_name(c);
         self.get_module(&name)
     }
 
     /// The instance of the object whose class is `name`.
-    pub(super) fn get_module(&mut self, name: &Rc<str>) -> JType {
-        let t = JType::L(name.clone());
+    pub(super) fn get_module(&mut self, name: &Rc<str>) -> ErasedType {
+        let t = ErasedType::L(name.clone());
         self.getstatic(name, "MODULE$", &t);
         t
     }
 
     pub fn load_file_module(&mut self, file: crate::source::FileId) -> Rc<str> {
         let name: Rc<str> = Rc::from(self.cx.file_modules[file.0 as usize].as_str());
-        let t = JType::L(name.clone());
+        let t = ErasedType::L(name.clone());
         self.getstatic(&name, "MODULE$", &t);
         name
     }
 
-    pub fn static_value(&mut self, s: SymId) -> JType {
+    pub fn static_value(&mut self, s: SymId) -> ErasedType {
         self.load_static(s)
     }
 
     /// A given object of a package or of objects, read as scalac reads it: its module, as a
     /// value of the given's declared type, which its class implements, so that a build over the
     /// object's products, which may not see its class's parents, casts no more than this one.
-    fn given_object_read(&mut self, s: SymId) -> Option<JType> {
+    fn given_object_read(&mut self, s: SymId) -> Option<ErasedType> {
         let &k = self.cx.given_objects.get(&s)?;
         let name = self.class_name(k);
-        self.getstatic(&name, "MODULE$", &JType::L(name.clone()));
+        self.getstatic(&name, "MODULE$", &ErasedType::L(name.clone()));
         let declared = self.sym_type(s);
         let vt = self.vt(&declared);
         self.code.retype_top(vt);
         Some(declared)
     }
 
-    fn load_static(&mut self, s: SymId) -> JType {
+    fn load_static(&mut self, s: SymId) -> ErasedType {
         let cx = self.cx;
         if let Some(t) = self.given_object_read(s) {
             return t;
@@ -4285,11 +4283,11 @@ impl<'a> Gen<'a> {
                     // one that initialised the value's class first would wait for the enum, as
                     // its superclass, while another thread making the values waited for it.
                     let enum_name = self.class_name(e);
-                    self.invoke(Invoke::Static, &enum_name, false, "$touch", &[], &JType::V);
+                    self.invoke(Invoke::Static, &enum_name, false, "$touch", &[], &ErasedType::V);
                 }
             }
             let name = self.class_name(case);
-            let t = JType::L(name.clone());
+            let t = ErasedType::L(name.clone());
             self.getstatic(&name, "$instance", &t);
             return t;
         }
@@ -4334,11 +4332,11 @@ impl<'a> Gen<'a> {
     }
 
     /// The class a reference to `s` evaluates its receiver at: the site's, or the declaring one.
-    pub(super) fn receiver_type(&mut self, s: SymId, site: &Option<Site>) -> JType {
+    pub(super) fn receiver_type(&mut self, s: SymId, site: &Option<Site>) -> ErasedType {
         match (site, self.cx.input.syms.sym(s).owner) {
             (Some(site), _) => site.qualifier.clone(),
             (None, Owner::Class(c)) => self.class_type(c),
-            (None, _) => JType::object(),
+            (None, _) => ErasedType::object(),
         }
     }
 
@@ -4380,7 +4378,7 @@ impl<'a> Gen<'a> {
                 },
             },
         };
-        let JType::L(name) = erased else { return None };
+        let ErasedType::L(name) = erased else { return None };
         if name.starts_with('[') || super::runtime::ARRAY_MARKERS.contains(&&*name) {
             return None;
         }
@@ -4394,7 +4392,7 @@ impl<'a> Gen<'a> {
             return None;
         } else {
             match self.recorded(r) {
-                Some(JType::L(n)) if n != name && !n.starts_with('[') && self.erased_derives(&n, owner) && self.jvm_accessible(&n) => n,
+                Some(ErasedType::L(n)) if n != name && !n.starts_with('[') && self.erased_derives(&n, owner) && self.jvm_accessible(&n) => n,
                 _ => {
                     let message = self.unwritable_reference(member, owner);
                     self.refuse(r, message);
@@ -4403,7 +4401,7 @@ impl<'a> Gen<'a> {
             }
         };
         let interface = cx.classes_named(&target).any(|c| cx.is_interface(c));
-        Some(Site { qualifier: JType::L(target.clone()), owner: target, interface })
+        Some(Site { qualifier: ErasedType::L(target.clone()), owner: target, interface })
     }
 
     /// dotty's message of a reference `typedSelect` cannot adapt: "Unable to emit reference to
@@ -4492,7 +4490,7 @@ impl<'a> Gen<'a> {
     /// workaround of JDK-8154587 (`isTraitMethodOverridingObjectMember`). dotty's `isScalaStatic`
     /// leaves out no member here: teq writes an `@static` member as its object's instance member,
     /// reached through the object, whose class is the declaring one (`qualifier_site`'s `None`).
-    pub(super) fn invoke_site(&mut self, r: TExprId, s: SymId, m: &MRef) -> Option<Site> {
+    pub(super) fn invoke_site(&mut self, r: TExprId, s: SymId, m: &MethodRef) -> Option<Site> {
         if !self.virtual_member(s, m) {
             return None;
         }
@@ -4517,16 +4515,16 @@ impl<'a> Gen<'a> {
 
     /// Whether `s`, called through `m`, is called in `genApply`'s virtual style: a class's or a
     /// trait's member that is neither private nor static (`InvokeStyle.Virtual`).
-    fn virtual_member(&self, s: SymId, m: &MRef) -> bool {
+    fn virtual_member(&self, s: SymId, m: &MethodRef) -> bool {
         let info = self.cx.input.syms.sym(s);
         matches!(m.kind, Invoke::Virtual | Invoke::Interface) && matches!(info.owner, Owner::Class(_)) && info.mods & mods::PRIVATE == 0
     }
 
     /// `Object`'s member `name` called on the qualifier `r` emitted at `site`'s class
     /// (`qualifier_site`, its `None` `Object` itself), the call's arguments emitted by `args`.
-    pub(super) fn object_member_call(&mut self, r: TExprId, name: &str, params: &[JType], ret: &JType, args: impl FnOnce(&mut Self)) {
+    pub(super) fn object_member_call(&mut self, r: TExprId, name: &str, params: &[ErasedType], ret: &ErasedType, args: impl FnOnce(&mut Self)) {
         let site = self.qualifier_site(r, OBJECT, Referenced::Method(name));
-        let object = JType::object();
+        let object = ErasedType::object();
         self.expr(r, site.as_ref().map_or(&object, |s| &s.qualifier));
         args(self);
         match site {
@@ -4580,12 +4578,12 @@ impl<'a> Gen<'a> {
         FieldRoute::Accessor
     }
 
-    fn field_read(&mut self, r: TExprId, s: SymId) -> JType {
+    fn field_read(&mut self, r: TExprId, s: SymId) -> ErasedType {
         let cx = self.cx;
         match self.field_route(r, s) {
             FieldRoute::Js => {
                 self.unsupported("a member of a JavaScript type");
-                JType::V
+                ErasedType::V
             }
             FieldRoute::Java => {
                 let Some((cf, JMember::Field(i))) = cx.input.java_member(s) else { unreachable!("a Java field, by the route") };
@@ -4602,7 +4600,7 @@ impl<'a> Gen<'a> {
                             self.getfield(&site.owner, &f.name, &t);
                         }
                         None => {
-                            let owner = JType::L(Rc::from(cf.name.as_str()));
+                            let owner = ErasedType::L(Rc::from(cf.name.as_str()));
                             self.expr(r, &owner);
                             self.getfield(&cf.name, &f.name, &t);
                         }
@@ -4619,7 +4617,7 @@ impl<'a> Gen<'a> {
                 if !matches!(cx.input.prog.expr(r), TExpr::Module(_) | TExpr::This) {
                     self.statement(r);
                 }
-                self.given_object_read(s).unwrap_or(JType::V)
+                self.given_object_read(s).unwrap_or(ErasedType::V)
             }
             FieldRoute::Underlying(c) => self.vc_field_read(r, c),
             FieldRoute::Early => self.load_local(s),
@@ -4673,7 +4671,7 @@ impl<'a> Gen<'a> {
         Some(c)
     }
 
-    fn vc_field_read(&mut self, r: TExprId, c: ClassId) -> JType {
+    fn vc_field_read(&mut self, r: TExprId, c: ClassId) -> ErasedType {
         let cx = self.cx;
         let u = self.vc_underlying(c);
         // `missing[V].u` is the box's accessor on the reference, as scalac casts the qualifier to
@@ -4739,7 +4737,7 @@ impl<'a> Gen<'a> {
                         self.expr(r, &site.qualifier);
                         named = site.owner;
                     }
-                    None => self.expr(r, &JType::L(named.clone())),
+                    None => self.expr(r, &ErasedType::L(named.clone())),
                 }
             }
             self.expr(value, &t);
@@ -4754,8 +4752,8 @@ impl<'a> Gen<'a> {
         self.expr(value, &m.ret);
         let name = format!("{}_$eq", m.name);
         match site {
-            Some(site) => self.invoke(site.kind(), &site.owner, site.interface, &name, &[m.ret.clone()], &JType::V),
-            None => self.invoke(m.kind, &m.owner, m.owner_is_interface, &name, &[m.ret.clone()], &JType::V),
+            Some(site) => self.invoke(site.kind(), &site.owner, site.interface, &name, &[m.ret.clone()], &ErasedType::V),
+            None => self.invoke(m.kind, &m.owner, m.owner_is_interface, &name, &[m.ret.clone()], &ErasedType::V),
         }
     }
 
@@ -4763,14 +4761,14 @@ impl<'a> Gen<'a> {
 
     /// The arguments of a call against the parameter types, evaluated as they stand: an
     /// argument the source left out is its default getter's application (`TExpr::Default`).
-    fn arguments(&mut self, callee: Option<SymId>, args: ListRef, params: &[JType]) {
+    fn arguments(&mut self, callee: Option<SymId>, args: ListRef, params: &[ErasedType]) {
         let (args, order) = self.lowering(|g| g.lower_arguments(callee, args, params));
         self.write_arguments(args, order.as_deref());
     }
 
     /// Parameter types in the class file's order (`jvm_param_order`) put back in the signature's.
-    pub(super) fn signature_order(&self, order: &[usize], params: &[JType]) -> Vec<JType> {
-        let mut written = vec![JType::object(); params.len()];
+    pub(super) fn signature_order(&self, order: &[usize], params: &[ErasedType]) -> Vec<ErasedType> {
+        let mut written = vec![ErasedType::object(); params.len()];
         for (j, &k) in order.iter().enumerate() {
             written[k] = params[j].clone();
         }
@@ -4778,18 +4776,18 @@ impl<'a> Gen<'a> {
     }
 
     /// The arguments an enum case passes to the constructor of its enum.
-    pub fn super_arguments(&mut self, enum_class: ClassId, args: ListRef, params: &[JType]) {
+    pub fn super_arguments(&mut self, enum_class: ClassId, args: ListRef, params: &[ErasedType]) {
         self.ctor_arguments(enum_class, args, params);
     }
 
     /// The arguments of the constructor of `c`, a left-out one through its default getter; a
     /// class of the JDK has no getters, so its default is evaluated where it stands.
-    pub fn ctor_arguments(&mut self, c: ClassId, args: ListRef, params: &[JType]) {
+    pub fn ctor_arguments(&mut self, c: ClassId, args: ListRef, params: &[ErasedType]) {
         self.ctor_arguments_of(c, None, args, params);
     }
 
     /// The same for the secondary constructor `via` of `c` when one is named.
-    pub fn ctor_arguments_of(&mut self, _c: ClassId, _via: Option<SymId>, args: ListRef, params: &[JType]) {
+    pub fn ctor_arguments_of(&mut self, _c: ClassId, _via: Option<SymId>, args: ListRef, params: &[ErasedType]) {
         self.arguments_with(args, params);
     }
 
@@ -4799,7 +4797,7 @@ impl<'a> Gen<'a> {
     /// from its static getter, which takes the captures first; the companion's getter where the
     /// companion holds them (scalac's layout), each taking the parameters of the clauses before
     /// the default's; a jar class's as its class files declare it; else the class's static one.
-    fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[(u16, JType)], types: &[JType]) {
+    fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[(u16, ErasedType)], types: &[ErasedType]) {
         let cx = self.cx;
         if cx.jvm_class(c).is_some() {
             let defaults: Vec<Option<TExprId>> = match (via, cx.tclass_of.get(c.idx()).copied().filter(|&i| i != u32::MAX)) {
@@ -4809,7 +4807,7 @@ impl<'a> Gen<'a> {
             };
             match defaults.get(i).copied().flatten() {
                 Some(d) => self.expr(d, &types[i]),
-                None => self.adapt(&JType::V, &types[i]),
+                None => self.adapt(&ErasedType::V, &types[i]),
             }
             return;
         }
@@ -4817,7 +4815,7 @@ impl<'a> Gen<'a> {
         if cx.ctor_defaults_on_local_companion(c) {
             let m = cx.input.syms.class(c).companion.expect("a local companion");
             let module = self.class_name(m);
-            let mt = JType::L(module.clone());
+            let mt = ErasedType::L(module.clone());
             match recv {
                 Some(r) => self.expr(r, &mt),
                 None => {
@@ -4856,7 +4854,7 @@ impl<'a> Gen<'a> {
                     };
                     let (before, by_name) = clause_shape(&clauses, i);
                     let outer_name = self.class_name(o);
-                    let outer = JType::L(outer_name.clone());
+                    let outer = ErasedType::L(outer_name.clone());
                     match recv {
                         Some(r) => self.expr(r, &outer),
                         None => {
@@ -4875,7 +4873,7 @@ impl<'a> Gen<'a> {
                     // A trait's companion is reached through the interface's accessor, which the
                     // classes mixing it in implement.
                     let kind = if trait_owner { Invoke::Interface } else { Invoke::Virtual };
-                    self.invoke(kind, &outer_name, trait_owner, &getter, &[], &JType::L(module.clone()));
+                    self.invoke(kind, &outer_name, trait_owner, &getter, &[], &ErasedType::L(module.clone()));
                     let ret = match by_name {
                         Some(t) => self.erase(t),
                         None => types[i].clone(),
@@ -4895,7 +4893,7 @@ impl<'a> Gen<'a> {
                 // The enclosing instance the creation passes, the getter's receiver, for the
                 // capture that stands for it (`Worker::retarget_defaults`).
                 Some(r) => {
-                    let t = before.first().cloned().unwrap_or_else(JType::object);
+                    let t = before.first().cloned().unwrap_or_else(ErasedType::object);
                     self.expr(r, &t);
                     self.load_class_captures_after(c, 1);
                 }
@@ -4918,7 +4916,7 @@ impl<'a> Gen<'a> {
             };
             let (before, by_name) = clause_shape(&clauses, i);
             let module: Rc<str> = Rc::from(cx.companion_name(c));
-            self.getstatic(&module, "MODULE$", &JType::L(module.clone()));
+            self.getstatic(&module, "MODULE$", &ErasedType::L(module.clone()));
             let ret = match by_name {
                 Some(t) => self.erase(t),
                 None => types[i].clone(),
@@ -4934,7 +4932,7 @@ impl<'a> Gen<'a> {
         for (slot, t) in temps {
             self.load(*slot, t);
         }
-        let before: Vec<JType> = temps.iter().map(|(_, t)| t.clone()).collect();
+        let before: Vec<ErasedType> = temps.iter().map(|(_, t)| t.clone()).collect();
         let interface = self.cx.is_interface(c);
         self.invoke(Invoke::Static, &owner, interface, &name, &before, &types[i]);
     }
@@ -4943,7 +4941,7 @@ impl<'a> Gen<'a> {
     /// taking the arguments of the clauses before the default's only, called on the companion as
     /// scalac calls it, or through the static forwarder of the class where the companion's class
     /// file is not read.
-    fn jar_ctor_default(&mut self, c: ClassId, name: &str, temps: &[(u16, JType)], want: &JType) -> bool {
+    fn jar_ctor_default(&mut self, c: ClassId, name: &str, temps: &[(u16, ErasedType)], want: &ErasedType) -> bool {
         let cx = self.cx;
         let companion = cx.input.syms.class(c).companion;
         let forwarder = cx.class_files.get(&c).and_then(|cf| cf.methods.iter().find(|m| m.name == name && m.access & ACC_STATIC != 0)).map(|m| m.descriptor.clone());
@@ -4954,7 +4952,7 @@ impl<'a> Gen<'a> {
         };
         let (kind, owner, desc) = match (on_companion(), forwarder) {
             (Some((module, desc)), _) => {
-                self.getstatic(&module, "MODULE$", &JType::L(Rc::clone(&module)));
+                self.getstatic(&module, "MODULE$", &ErasedType::L(Rc::clone(&module)));
                 (Invoke::Virtual, module, desc)
             }
             (None, Some(desc)) => (Invoke::Static, self.class_name(c), desc),
@@ -4971,11 +4969,11 @@ impl<'a> Gen<'a> {
     }
 
     /// The arguments as written, each against its parameter's type.
-    fn arguments_with(&mut self, args: ListRef, params: &[JType]) {
+    fn arguments_with(&mut self, args: ListRef, params: &[ErasedType]) {
         self.arguments(None, args, params);
     }
 
-    fn call_static(&mut self, s: SymId, args: ListRef) -> JType {
+    fn call_static(&mut self, s: SymId, args: ListRef) -> ErasedType {
         let cx = self.cx;
         if let Some(array) = self.spread_conversion(s, args) {
             return self.wrapped_spread(array);
@@ -4994,12 +4992,12 @@ impl<'a> Gen<'a> {
                 let n = cx.input.prog.expr_list(args).len();
                 let ft = self.function_type(n);
                 self.adapt(&t, &ft);
-                let object = JType::object();
+                let object = ErasedType::object();
                 for &a in cx.input.prog.expr_list(args) {
                     self.expr(a, &object);
                 }
-                let JType::L(owner) = &ft else { unreachable!() };
-                self.invoke(Invoke::Interface, owner, true, "apply", &vec![JType::object(); n], &object);
+                let ErasedType::L(owner) = &ft else { unreachable!() };
+                self.invoke(Invoke::Interface, owner, true, "apply", &vec![ErasedType::object(); n], &object);
                 return object;
             }
             let lifted = self.lifted_fun(s);
@@ -5024,7 +5022,7 @@ impl<'a> Gen<'a> {
     /// object (`m$default$N`), a local def's lifted getter, a constructor's (`ctor_default`), a
     /// value class's method's `m$default$N$extension`. What it leaves is the parameter's type, a
     /// by-name parameter's value, which the typer's thunk around it passes.
-    fn default_arg(&mut self, of: DefaultOf, at: u32, args: ListRef) -> JType {
+    fn default_arg(&mut self, of: DefaultOf, at: u32, args: ListRef) -> ErasedType {
         let cx = self.cx;
         let items = cx.input.prog.expr_list(args).to_vec();
         let index = (at & !DEFAULT_RECEIVER) as usize;
@@ -5034,17 +5032,17 @@ impl<'a> Gen<'a> {
                 let types = self.ctor_param_types(c);
                 let temps = self.default_priors(&priors, &types);
                 self.ctor_default(c, None, recv, index, &temps, &types);
-                types.get(index).cloned().unwrap_or_else(JType::object)
+                types.get(index).cloned().unwrap_or_else(ErasedType::object)
             }
             DefaultOf::Method(s) if cx.input.syms.sym(s).name == crate::names::INIT => {
                 let Owner::Class(c) = cx.input.syms.sym(s).owner else {
                     self.unsupported("the default of a constructor of no class");
-                    return JType::V;
+                    return ErasedType::V;
                 };
                 let types = self.param_types(s);
                 let temps = self.default_priors(&priors, &types);
                 self.ctor_default(c, Some(s), recv, index, &temps, &types);
-                types.get(index).cloned().unwrap_or_else(JType::object)
+                types.get(index).cloned().unwrap_or_else(ErasedType::object)
             }
             DefaultOf::Method(s) => self.method_default(s, index, recv, &priors),
         }
@@ -5061,9 +5059,9 @@ impl<'a> Gen<'a> {
 
     /// The arguments of a constructor of `c` whose every parameter has a default and which a
     /// parent passes nothing: each default's getter applied to the values before its clause.
-    pub fn all_ctor_defaults(&mut self, c: ClassId, types: &[JType]) {
+    pub fn all_ctor_defaults(&mut self, c: ClassId, types: &[ErasedType]) {
         let clauses = self.cx.input.syms.class(c).ctor.clone();
-        let mut temps: Vec<(u16, JType)> = Vec::with_capacity(types.len());
+        let mut temps: Vec<(u16, ErasedType)> = Vec::with_capacity(types.len());
         for (i, t) in types.iter().enumerate() {
             let before = clause_shape(&clauses, i).0.min(temps.len());
             let prior = temps[..before].to_vec();
@@ -5078,10 +5076,10 @@ impl<'a> Gen<'a> {
 
     /// The arguments of a getter's application in locals, each of its parameter's type in the
     /// signature's order.
-    fn default_priors(&mut self, priors: &[TExprId], types: &[JType]) -> Vec<(u16, JType)> {
+    fn default_priors(&mut self, priors: &[TExprId], types: &[ErasedType]) -> Vec<(u16, ErasedType)> {
         let mut temps = Vec::with_capacity(priors.len());
         for (k, &a) in priors.iter().enumerate() {
-            let t = types.get(k).cloned().unwrap_or_else(JType::object);
+            let t = types.get(k).cloned().unwrap_or_else(ErasedType::object);
             self.expr(a, &t);
             let slot = self.store_new(&t);
             temps.push((slot, t));
@@ -5090,7 +5088,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The default `i` of method `s`'s parameters, `recv` its receiver where the call has one.
-    fn method_default(&mut self, s: SymId, i: usize, recv: Option<TExprId>, priors: &[TExprId]) -> JType {
+    fn method_default(&mut self, s: SymId, i: usize, recv: Option<TExprId>, priors: &[TExprId]) -> ErasedType {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
         if recv.is_none() && info.owner == Owner::Local {
@@ -5116,7 +5114,7 @@ impl<'a> Gen<'a> {
                 let TExpr::Super(SuperTarget::Mixin(t)) = cx.input.prog.expr(r) else { unreachable!() };
                 let accessor = self.super_getter_accessor_ref(t, s, i);
                 self.receiver(r, s);
-                let owner_type = JType::L(accessor.owner.clone());
+                let owner_type = ErasedType::L(accessor.owner.clone());
                 let slot = self.store_new(&owner_type);
                 let temps = self.default_priors(priors, &types);
                 self.load(slot, &owner_type);
@@ -5145,10 +5143,10 @@ impl<'a> Gen<'a> {
                 let owner_type = match &special {
                     Some((Invoke::Special, ..)) | None => {
                         self.receiver(r, s);
-                        JType::L(m.owner.clone())
+                        ErasedType::L(m.owner.clone())
                     }
                     Some((_, owner, _)) => {
-                        let t = JType::L(owner.clone());
+                        let t = ErasedType::L(owner.clone());
                         self.expr(r, &t);
                         t
                     }
@@ -5169,7 +5167,7 @@ impl<'a> Gen<'a> {
     /// The getter of default `i` of method `s` called on the receiver on the stack with the
     /// arguments in `temps`, leaving the parameter's type, a by-name one's value; through
     /// `site`'s instruction and owner where given, else the method's.
-    fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[(u16, JType)], site: Option<(Invoke, Rc<str>, bool)>) -> JType {
+    fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[(u16, ErasedType)], site: Option<(Invoke, Rc<str>, bool)>) -> ErasedType {
         let m = self.mref(s);
         let shape = self.default_getter_shape(s, i);
         let want = if shape.by_name {
@@ -5181,7 +5179,7 @@ impl<'a> Gen<'a> {
             }
         };
         let args = self.getter_args(s, shape.before, temps);
-        let before: Vec<JType> = args.iter().map(|(_, t)| t.clone()).collect();
+        let before: Vec<ErasedType> = args.iter().map(|(_, t)| t.clone()).collect();
         let (name, desc) = self.default_getter_ref(s, i, &before);
         match site {
             Some((kind, owner, interface)) => self.getter_call(kind, &owner, interface, name, &desc, &args, &want, false),
@@ -5193,7 +5191,7 @@ impl<'a> Gen<'a> {
     /// The default of a method a value class declares, as `call_extension` calls the method: its
     /// getter on the underlying value, the companion's `m$default$N$extension` where it holds
     /// them, the class's `m$default$N` on the box otherwise; None for any other method.
-    fn value_class_default(&mut self, r: TExprId, s: SymId, i: usize, priors: &[TExprId]) -> Option<JType> {
+    fn value_class_default(&mut self, r: TExprId, s: SymId, i: usize, priors: &[TExprId]) -> Option<ErasedType> {
         let cx = self.cx;
         let Owner::Class(c) = cx.input.syms.sym(s).owner else { return None };
         if !cx.input.syms.class(c).value_class || cx.input.syms.sym(s).kind != SymKind::Def {
@@ -5203,7 +5201,7 @@ impl<'a> Gen<'a> {
         if cx.vc_on_companion(c) {
             let rest = self.erased_param_types(s);
             let module: Rc<str> = Rc::from(cx.companion_name(c));
-            let module_type = JType::L(module.clone());
+            let module_type = ErasedType::L(module.clone());
             self.expr(r, &u);
             let recv = self.store_new(&u);
             let temps = self.default_priors(priors, &rest);
@@ -5239,10 +5237,10 @@ impl<'a> Gen<'a> {
         let getter = format!("{}$default${}$extension", base, i + 1);
         let Some(gm) = companion.methods.iter().find(|m| m.name == getter) else {
             self.unsupported("a default argument of a value class's extension method without its getter");
-            return Some(JType::V);
+            return Some(ErasedType::V);
         };
         let (gparams, gret) = parse_method_desc(&gm.descriptor);
-        let module = JType::L(Rc::from(companion.name.as_str()));
+        let module = ErasedType::L(Rc::from(companion.name.as_str()));
         self.expr(r, &u);
         let recv = self.store_new(&u);
         let temps = self.default_priors(priors, &gparams[1..]);
@@ -5260,7 +5258,7 @@ impl<'a> Gen<'a> {
     /// The name and descriptor of the getter of default `i` of method `s`: a jar's as its class
     /// file declares it, the program's as `emit_fun` writes it; `before` are the types of the
     /// parameters before the default, which a jar member without its getter takes.
-    pub fn default_getter_ref(&mut self, s: SymId, i: usize, before: &[JType]) -> (String, String) {
+    pub fn default_getter_ref(&mut self, s: SymId, i: usize, before: &[ErasedType]) -> (String, String) {
         let m = self.mref(s);
         let shape = self.default_getter_shape(s, i);
         let name = format!("{}$default${}", self.source_method_name(s), shape.index);
@@ -5279,7 +5277,7 @@ impl<'a> Gen<'a> {
     /// `want`: a by-name parameter's default is passed as a thunk that calls the getter, as
     /// scalac's caller passes it, its value a function or not (`y: => (() => Long)`, whose getter
     /// and thunk both erase to `Function0`).
-    fn getter_call(&mut self, kind: Invoke, owner: &Rc<str>, interface: bool, name: String, desc: &str, temps: &[(u16, JType)], want: &JType, by_name: bool) {
+    fn getter_call(&mut self, kind: Invoke, owner: &Rc<str>, interface: bool, name: String, desc: &str, temps: &[(u16, ErasedType)], want: &ErasedType, by_name: bool) {
         let (params, ret) = parse_method_desc(desc);
         for ((slot, t), p) in temps.iter().zip(&params) {
             self.load(*slot, t);
@@ -5334,7 +5332,7 @@ impl<'a> Gen<'a> {
 
     /// The arguments of a default's getter among `temps`, the arguments before the default in the
     /// signature's order: those of the clauses before the default's as the class file orders them.
-    pub fn getter_args(&self, s: SymId, before: usize, temps: &[(u16, JType)]) -> Vec<(u16, JType)> {
+    pub fn getter_args(&self, s: SymId, before: usize, temps: &[(u16, ErasedType)]) -> Vec<(u16, ErasedType)> {
         match self.jvm_param_order(s) {
             Some(order) => order[..before.min(order.len())].iter().filter_map(|&k| temps.get(k).cloned()).collect(),
             None => temps.to_vec(),
@@ -5343,7 +5341,7 @@ impl<'a> Gen<'a> {
 
     /// A static method of a Java class: no receiver, `invokestatic`.
     /// A member of a std object standing for a JDK class's statics: the static, no receiver.
-    fn call_jdk_static(&mut self, s: SymId, args: ListRef) -> Option<JType> {
+    fn call_jdk_static(&mut self, s: SymId, args: ListRef) -> Option<ErasedType> {
         let cx = self.cx;
         if !matches!(cx.input.syms.sym(s).owner, Owner::Class(c) if cx.jdk_statics(c)) {
             return None;
@@ -5358,7 +5356,7 @@ impl<'a> Gen<'a> {
         Some(m.ret.clone())
     }
 
-    fn call_java_static(&mut self, s: SymId, args: ListRef) -> JType {
+    fn call_java_static(&mut self, s: SymId, args: ListRef) -> ErasedType {
         let m = self.mref(s);
         let params = m.params.clone();
         self.arguments(Some(s), args, &params);
@@ -5368,12 +5366,12 @@ impl<'a> Gen<'a> {
 
     /// The value of a Java member as the program sees it: what the member leaves, a JVM array
     /// included.
-    fn java_value(&mut self, t: JType) -> JType {
+    fn java_value(&mut self, t: ErasedType) -> ErasedType {
         t
     }
 
     /// The type `java_value` leaves for a Java member's declared type.
-    fn java_value_type(&self, t: JType) -> JType {
+    fn java_value_type(&self, t: ErasedType) -> ErasedType {
         t
     }
 
@@ -5384,14 +5382,14 @@ impl<'a> Gen<'a> {
         let items = self.cx.input.prog.expr_list(items).to_vec();
         self.iconst(items.len() as i32);
         let (store, atype): (u8, Option<u8>) = match elem_type {
-            JType::Z => (op::BASTORE, Some(4)),
-            JType::C => (op::CASTORE, Some(5)),
-            JType::F => (op::FASTORE, Some(6)),
-            JType::D => (op::DASTORE, Some(7)),
-            JType::B => (op::BASTORE, Some(8)),
-            JType::S => (op::SASTORE, Some(9)),
-            JType::I => (op::IASTORE, Some(10)),
-            JType::J => (op::LASTORE, Some(11)),
+            ErasedType::Z => (op::BASTORE, Some(4)),
+            ErasedType::C => (op::CASTORE, Some(5)),
+            ErasedType::F => (op::FASTORE, Some(6)),
+            ErasedType::D => (op::DASTORE, Some(7)),
+            ErasedType::B => (op::BASTORE, Some(8)),
+            ErasedType::S => (op::SASTORE, Some(9)),
+            ErasedType::I => (op::IASTORE, Some(10)),
+            ErasedType::J => (op::LASTORE, Some(11)),
             _ => (op::AASTORE, None),
         };
         match atype {
@@ -5403,7 +5401,7 @@ impl<'a> Gen<'a> {
             }
         }
         self.code.pop();
-        let array_type = JType::L(Rc::from(array));
+        let array_type = ErasedType::L(Rc::from(array));
         let vt = self.vt(&array_type);
         self.code.push(vt);
         for (i, item) in items.into_iter().enumerate() {
@@ -5417,31 +5415,31 @@ impl<'a> Gen<'a> {
 
     /// The erasure of the elements of a varargs literal's sequence type; a value class's
     /// instances are its boxes there, whatever the class holds.
-    fn seq_literal_element(&mut self, e: TExprId) -> JType {
+    fn seq_literal_element(&mut self, e: TExprId) -> ErasedType {
         let types = self.cx.input.types;
         match self.recorded_type(e).map(|t| types.get(t)) {
             Some(Type::Class(_, args)) => match types.items(args).first() {
-                Some(&elem) if self.value_class_of(elem).is_some() => JType::object(),
+                Some(&elem) if self.value_class_of(elem).is_some() => ErasedType::object(),
                 Some(&elem) => self.erase(elem),
-                None => JType::object(),
+                None => ErasedType::object(),
             },
-            _ => JType::object(),
+            _ => ErasedType::object(),
         }
     }
 
     /// An `Object[]` of the items boxed, each brought to `elem` first: an `Int` where the
     /// sequence's elements are `Double`s is a `Double`, which the typer leaves implicit.
-    fn boxed_array(&mut self, items: ListRef, elem: &JType) {
+    fn boxed_array(&mut self, items: ListRef, elem: &ErasedType) {
         if elem.is_ref() {
             return self.java_array(items, OBJECT_ARRAY);
         }
         let items = self.cx.input.prog.expr_list(items).to_vec();
-        let object = JType::object();
+        let object = ErasedType::object();
         self.iconst(items.len() as i32);
         let index = self.cw.cp.class(OBJECT);
         self.code.op_u16(op::ANEWARRAY, index);
         self.code.pop();
-        let array_type = JType::L(Rc::from(OBJECT_ARRAY));
+        let array_type = ErasedType::L(Rc::from(OBJECT_ARRAY));
         let vt = self.vt(&array_type);
         self.code.push(vt);
         for (i, item) in items.into_iter().enumerate() {
@@ -5461,18 +5459,18 @@ impl<'a> Gen<'a> {
     pub(super) fn java_array_argument(&mut self, a: TExprId, want: &str) {
         if let Some(array) = self.spliced_array(a, want) {
             let t = self.expr_static(array);
-            self.adapt(&t, &JType::L(Rc::from(want)));
+            self.adapt(&t, &ErasedType::L(Rc::from(want)));
             return;
         }
         match self.cx.input.prog.expr(a) {
             TExpr::SeqLit(items) => self.java_array(items, want),
             _ => {
                 let t = self.expr_static(a);
-                if matches!(&t, JType::L(name) if !name.starts_with('[') && &**name != OBJECT) {
-                    self.adapt(&t, &JType::L(Rc::from(SEQ)));
-                    let class = JType::L(Rc::from("java/lang/Class"));
+                if matches!(&t, ErasedType::L(name) if !name.starts_with('[') && &**name != OBJECT) {
+                    self.adapt(&t, &ErasedType::L(Rc::from(SEQ)));
+                    let class = ErasedType::L(Rc::from("java/lang/Class"));
                     match parse_type(&want[1..]).0 {
-                        JType::L(name) => {
+                        ErasedType::L(name) => {
                             let i = self.cw.cp.class(&name);
                             self.ldc(i);
                             let vt = self.vt(&class);
@@ -5481,10 +5479,10 @@ impl<'a> Gen<'a> {
                         elem => self.getstatic(elem.box_class(), "TYPE", &class),
                     }
                     let desc = format!("(L{};Ljava/lang/Class;)Ljava/lang/Object;", SEQ);
-                    self.invoke_desc(Invoke::Static, "scala/runtime/Arrays", false, "seqToArray", &desc, 2, &JType::object());
-                    self.adapt(&JType::object(), &JType::L(Rc::from(want)));
+                    self.invoke_desc(Invoke::Static, "scala/runtime/Arrays", false, "seqToArray", &desc, 2, &ErasedType::object());
+                    self.adapt(&ErasedType::object(), &ErasedType::L(Rc::from(want)));
                 } else {
-                    self.adapt(&t, &JType::L(Rc::from(want)));
+                    self.adapt(&t, &ErasedType::L(Rc::from(want)));
                 }
             }
         }
@@ -5504,7 +5502,7 @@ impl<'a> Gen<'a> {
             _ => return None,
         };
         let array = self.spread_conversion(s, args)?;
-        let JType::L(class) = self.erase(self.recorded_type(array)?) else { return None };
+        let ErasedType::L(class) = self.erase(self.recorded_type(array)?) else { return None };
         let references = |d: &str| d.starts_with("[L") || d.starts_with("[[");
         let fits = &*class == want || (references(want) && references(&class));
         fits.then_some(array)
@@ -5530,12 +5528,12 @@ impl<'a> Gen<'a> {
     /// `ElimRepeated.arrayToSeq` (`tpd.wrapArray`), `ScalaRunTime.wrapRefArray` for an array of
     /// references, `wrapIntArray` and its siblings for a primitive one, `genericWrapArray` for one
     /// of a type parameter, so a later write to the array shows in the sequence.
-    fn wrapped_spread(&mut self, array: TExprId) -> JType {
+    fn wrapped_spread(&mut self, array: TExprId) -> ErasedType {
         let t = self.static_type(array);
         let wrap = match &t {
-            JType::L(d) if &**d == "[Lscala/runtime/BoxedUnit;" => "wrapUnitArray",
-            JType::L(d) if d.starts_with("[L") || d.starts_with("[[") => "wrapRefArray",
-            JType::L(d) => match &d[..] {
+            ErasedType::L(d) if &**d == "[Lscala/runtime/BoxedUnit;" => "wrapUnitArray",
+            ErasedType::L(d) if d.starts_with("[L") || d.starts_with("[[") => "wrapRefArray",
+            ErasedType::L(d) => match &d[..] {
                 "[Z" => "wrapBooleanArray",
                 "[B" => "wrapByteArray",
                 "[C" => "wrapCharArray",
@@ -5549,15 +5547,15 @@ impl<'a> Gen<'a> {
             _ => "genericWrapArray",
         };
         let param = match wrap {
-            "wrapRefArray" => JType::L(Rc::from("[Ljava/lang/Object;")),
-            "genericWrapArray" => JType::object(),
+            "wrapRefArray" => ErasedType::L(Rc::from("[Ljava/lang/Object;")),
+            "genericWrapArray" => ErasedType::object(),
             _ => t.clone(),
         };
         let module = "scala/runtime/ScalaRunTime$";
-        let module_type = JType::L(Rc::from(module));
+        let module_type = ErasedType::L(Rc::from(module));
         self.getstatic(module, "MODULE$", &module_type);
         self.expr(array, &param);
-        let seq = JType::L(Rc::from("scala/collection/immutable/ArraySeq"));
+        let seq = ErasedType::L(Rc::from("scala/collection/immutable/ArraySeq"));
         self.invoke(Invoke::Virtual, module, false, wrap, &[param], &seq);
         seq
     }
@@ -5604,7 +5602,7 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn call_method(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> JType {
+    fn call_method(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> ErasedType {
         let cx = self.cx;
         let target = match self.call_route(r, s, args) {
             CallRoute::Spread(array) => {
@@ -5613,7 +5611,7 @@ impl<'a> Gen<'a> {
             }
             CallRoute::Js => {
                 self.unsupported("a member of a JavaScript type");
-                return JType::V;
+                return ErasedType::V;
             }
             CallRoute::Extension => return self.call_extension(r, s, args).expect("a value class's method, by the route"),
             CallRoute::Interpolator(helper) => return self.call_interpolator(r, s, helper, args),
@@ -5702,7 +5700,7 @@ impl<'a> Gen<'a> {
     /// `r.s(proxies, args)` of a local trait's lifted member, as dotty's `LambdaLift.addFreeArgs`
     /// leaves it: the interface's method over the proxies and the parameters, which a class's
     /// method of the source descriptor does not implement; `super.s(..)` through the superclass.
-    fn call_lifted(&mut self, r: TExprId, s: SymId, m: &MRef, proxies: &[SymId], args: ListRef) -> JType {
+    fn call_lifted(&mut self, r: TExprId, s: SymId, m: &MethodRef, proxies: &[SymId], args: ListRef) -> ErasedType {
         let cx = self.cx;
         let fun = &cx.input.prog.funs[cx.fun_of_sym[s.idx()] as usize];
         let k = fun.captures as usize;
@@ -5752,13 +5750,13 @@ impl<'a> Gen<'a> {
 
     /// `super[T].s(proxies, args)` of a member of a local trait, as scalac's forwarder calls it:
     /// the trait's static `s$` on `this`, the proxies as this class holds them.
-    fn call_proxied(&mut self, t: ClassId, s: SymId, m: &MRef, proxies: &[SymId], args: ListRef) -> JType {
+    fn call_proxied(&mut self, t: ClassId, s: SymId, m: &MethodRef, proxies: &[SymId], args: ListRef) -> ErasedType {
         let cx = self.cx;
         let fun = &cx.input.prog.funs[cx.fun_of_sym[s.idx()] as usize];
         let k = fun.captures as usize;
         let declared: Vec<SymId> = fun.params[..k].to_vec();
         let owner = self.class_name(t);
-        let this = JType::L(owner.clone());
+        let this = ErasedType::L(owner.clone());
         let extras = self.extras_of(&declared, None);
         let pm = self.proxied_mref(m, proxies, &extras);
         self.load_this();
@@ -5788,7 +5786,7 @@ impl<'a> Gen<'a> {
     /// with the companion, the signature teq erases `s` to behind the underlying value, and the
     /// method's name.
     #[allow(clippy::type_complexity)]
-    fn jar_extension(&mut self, c: ClassId, s: SymId) -> Option<(&'a crate::classfile::ClassFile, &'a crate::classfile::Method, Vec<JType>, JType, String)> {
+    fn jar_extension(&mut self, c: ClassId, s: SymId) -> Option<(&'a crate::classfile::ClassFile, &'a crate::classfile::Method, Vec<ErasedType>, ErasedType, String)> {
         let cx = self.cx;
         let companion: &'a crate::classfile::ClassFile = cx.vc_companions.get(&c)?;
         let mut own = vec![self.vc_underlying(c)];
@@ -5801,7 +5799,7 @@ impl<'a> Gen<'a> {
 
     /// In link mode, a method a value class declares is called as scalac calls it: the
     /// companion's `m$extension` on the underlying value, `C$.MODULE$.m$extension(u, args)`.
-    fn call_extension(&mut self, r: TExprId, s: SymId, args: ListRef) -> Option<JType> {
+    fn call_extension(&mut self, r: TExprId, s: SymId, args: ListRef) -> Option<ErasedType> {
         let cx = self.cx;
         let Owner::Class(c) = cx.input.syms.sym(s).owner else { return None };
         if !cx.input.syms.class(c).value_class || cx.input.syms.sym(s).kind != SymKind::Def {
@@ -5816,7 +5814,7 @@ impl<'a> Gen<'a> {
             let ret = self.erased_return_type(s);
             let name = format!("{}$extension", self.method_name(s));
             let module: Rc<str> = Rc::from(cx.companion_name(c));
-            let module_type = JType::L(module.clone());
+            let module_type = ErasedType::L(module.clone());
             self.expr(r, &u);
             let recv = self.store_new(&u);
             self.getstatic(&module, "MODULE$", &module_type);
@@ -5844,13 +5842,13 @@ impl<'a> Gen<'a> {
         let (companion, m, own, ret, name) = self.jar_extension(c, s)?;
         let (params, desc_ret) = parse_method_desc(&m.descriptor);
         let desc = m.descriptor.clone();
-        let module = JType::L(Rc::from(companion.name.as_str()));
+        let module = ErasedType::L(Rc::from(companion.name.as_str()));
         self.expr(r, &u);
         let recv = self.store_new(&u);
         self.getstatic(&companion.name, "MODULE$", &module);
         self.load(recv, &u);
         self.adapt(&u, &params[0]);
-        let rest: Vec<JType> = params[1..].iter().zip(&own[1..]).map(|(d, o)| if d == o { o.clone() } else { d.clone() }).collect();
+        let rest: Vec<ErasedType> = params[1..].iter().zip(&own[1..]).map(|(d, o)| if d == o { o.clone() } else { d.clone() }).collect();
         self.arguments(Some(s), args, &rest);
         self.invoke_desc(Invoke::Virtual, &companion.name, false, &name, &desc, params.len(), &desc_ret);
         Some(if desc_ret == ret { ret } else { desc_ret })
@@ -5858,7 +5856,7 @@ impl<'a> Gen<'a> {
 
     /// `context.s(args)` of scala-library, which has no bytecode: the runtime's definition
     /// that lowers it as scalac does.
-    fn call_interpolator(&mut self, r: TExprId, s: SymId, helper: SymId, args: ListRef) -> JType {
+    fn call_interpolator(&mut self, r: TExprId, s: SymId, helper: SymId, args: ListRef) -> ErasedType {
         let m = self.mref(helper);
         let params = m.params.clone();
         self.expr(r, &params[0]);
@@ -5868,13 +5866,13 @@ impl<'a> Gen<'a> {
     }
 
     /// `new C(args)` through the secondary constructor `s`: scalac's own `<init>` overload.
-    fn new_via(&mut self, s: SymId, args: ListRef) -> JType {
+    fn new_via(&mut self, s: SymId, args: ListRef) -> ErasedType {
         let cx = self.cx;
-        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return JType::V };
-        let Some(name) = self.new_object_of(c) else { return JType::V };
+        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return ErasedType::V };
+        let Some(name) = self.new_object_of(c) else { return ErasedType::V };
         let params = self.via_arguments(c, s, args);
-        self.invoke(Invoke::Special, &name, false, "<init>", &params, &JType::V);
-        JType::L(name)
+        self.invoke(Invoke::Special, &name, false, "<init>", &params, &ErasedType::V);
+        ErasedType::L(name)
     }
 
     /// For each capture of `c` its second constructor `s` has a parameter for, whether the parameter is
@@ -5893,7 +5891,7 @@ impl<'a> Gen<'a> {
     /// Loads the arguments of the secondary constructor `s` of `c` and gives its parameter
     /// types: a class nested in a class takes the enclosing instance first, as every one of its
     /// constructors does (dotty's `ExplicitOuter`, the typer's `new_outer_arg`).
-    pub fn via_arguments(&mut self, c: ClassId, s: SymId, args: ListRef) -> Vec<JType> {
+    pub fn via_arguments(&mut self, c: ClassId, s: SymId, args: ListRef) -> Vec<ErasedType> {
         // A class this build does not write: the secondary as its class file declares it.
         if let Some(types) = self.unwritten_ctor_arguments(c, Some(s), args) {
             return types;
@@ -5925,7 +5923,7 @@ impl<'a> Gen<'a> {
 
     /// The type of the enclosing instance a secondary constructor of `c` takes first: a class
     /// nested in a class, called with one argument more than the secondary declares.
-    fn via_outer(&mut self, c: ClassId, n_args: usize, n_params: usize) -> Option<JType> {
+    fn via_outer(&mut self, c: ClassId, n_args: usize, n_params: usize) -> Option<ErasedType> {
         let cx = self.cx;
         let info = cx.input.syms.class(c);
         match info.owner {
@@ -5953,7 +5951,7 @@ impl<'a> Gen<'a> {
         Some(name)
     }
 
-    fn new_(&mut self, e: TExprId, c: ClassId, args: ListRef) -> JType {
+    fn new_(&mut self, e: TExprId, c: ClassId, args: ListRef) -> ErasedType {
         // A value class erases to its underlying value in link mode.
         if self.cx.input.syms.class(c).value_class {
             let u = match self.recorded_type(e).and_then(|rt| self.value_class_type(rt)) {
@@ -5970,15 +5968,15 @@ impl<'a> Gen<'a> {
                 return u;
             }
         }
-        let Some(name) = self.new_object_of(c) else { return JType::V };
+        let Some(name) = self.new_object_of(c) else { return ErasedType::V };
         let params = self.new_arguments(c, args);
-        self.invoke(Invoke::Special, &name, false, "<init>", &params, &JType::V);
-        JType::L(name)
+        self.invoke(Invoke::Special, &name, false, "<init>", &params, &ErasedType::V);
+        ErasedType::L(name)
     }
 
     /// The superclass of an anonymous class, the secondary constructor its arguments go to,
     /// and the parameter types of that constructor.
-    pub fn anon_super_params(&mut self, c: ClassId) -> Option<(ClassId, Option<SymId>, Vec<JType>)> {
+    pub fn anon_super_params(&mut self, c: ClassId) -> Option<(ClassId, Option<SymId>, Vec<ErasedType>)> {
         let cx = self.cx;
         let idx = cx.tclass_of[c.idx()];
         if idx == u32::MAX || cx.input.syms.class(c).kind != ClassKind::Anon {
@@ -6018,14 +6016,14 @@ impl<'a> Gen<'a> {
 
     /// The arguments of a constructor of `c` with what it captures in front: the parameter
     /// types they were loaded as.
-    pub fn new_arguments(&mut self, c: ClassId, args: ListRef) -> Vec<JType> {
+    pub fn new_arguments(&mut self, c: ClassId, args: ListRef) -> Vec<ErasedType> {
         let info = self.cx.input.syms.class(c);
         let n_captures = self.capture_count(c);
         if n_captures > 0 || info.kind == ClassKind::Anon {
             if n_captures > 0 {
                 self.load_new_captures(c, args, n_captures);
             }
-            let mut params: Vec<JType> = self.anon_ctor_params(c);
+            let mut params: Vec<ErasedType> = self.anon_ctor_params(c);
             if let Some((sup, via, types)) = self.anon_super_params(c) {
                 let rest = ListRef { start: args.start + n_captures as u32, len: args.len - n_captures as u32 };
                 match via {
@@ -6050,8 +6048,8 @@ impl<'a> Gen<'a> {
                 let (name, ordinal) = (info.name, info.ordinal);
                 self.sconst(self.cx.input.interner.get(name));
                 self.iconst(ordinal as i32);
-                params.push(JType::L(Rc::from(STRING)));
-                params.push(JType::I);
+                params.push(ErasedType::L(Rc::from(STRING)));
+                params.push(ErasedType::I);
             }
             params
         } else if let Some(params) = self.unwritten_ctor_arguments(c, None, args) {
@@ -6081,7 +6079,7 @@ impl<'a> Gen<'a> {
     /// write `c` and its class file's constructors do not say (`unwritten_ctor_layout`): a class,
     /// a given's class or an enum's class case nested in a class or trait (a class's enum's
     /// companion), made with one argument more than its constructor declares.
-    fn outer_of_unwritten(&mut self, c: ClassId, args: ListRef) -> Option<JType> {
+    fn outer_of_unwritten(&mut self, c: ClassId, args: ListRef) -> Option<ErasedType> {
         let cx = self.cx;
         if cx.tclass_of[c.idx()] != u32::MAX {
             return None;
@@ -6103,13 +6101,13 @@ impl<'a> Gen<'a> {
     /// the one whose parameters are the selected symbol's, alone or after the owner's instance,
     /// never one of the same arity; nothing where two of the class file's constructors fit, or
     /// none does, and for a class of this build or one without a class file (lean products).
-    pub(crate) fn unwritten_ctor_layout(&mut self, c: ClassId, via: Option<SymId>) -> Option<(Option<JType>, Vec<JType>)> {
+    pub(crate) fn unwritten_ctor_layout(&mut self, c: ClassId, via: Option<SymId>) -> Option<(Option<ErasedType>, Vec<ErasedType>)> {
         let cx = self.cx;
         if cx.tclass_of[c.idx()] != u32::MAX {
             return None;
         }
         let cf = cx.class_files.get(&c)?;
-        let own: Vec<JType> = match via {
+        let own: Vec<ErasedType> = match via {
             Some(v) => self.param_types(v),
             None => {
                 let params: Vec<SymId> = cx.input.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
@@ -6120,7 +6118,7 @@ impl<'a> Gen<'a> {
             Owner::Class(o) => Some(self.class_type(o)),
             _ => None,
         };
-        let mut found: Option<(Option<JType>, Vec<JType>)> = None;
+        let mut found: Option<(Option<ErasedType>, Vec<ErasedType>)> = None;
         for m in cf.methods.iter().filter(|m| m.name == "<init>" && m.access & (ACC_STATIC | ACC_BRIDGE) == 0) {
             let (params, _) = parse_method_desc(&m.descriptor);
             let layout = if params == own {
@@ -6144,7 +6142,7 @@ impl<'a> Gen<'a> {
     /// its parameter's type where the constructor takes one, neither loaded nor evaluated where
     /// it takes none. Nothing where the layout says nothing (`unwritten_ctor_layout`) or no
     /// instance was passed: the call is then emitted from the declared parameters.
-    pub(crate) fn unwritten_ctor_arguments(&mut self, c: ClassId, via: Option<SymId>, args: ListRef) -> Option<Vec<JType>> {
+    pub(crate) fn unwritten_ctor_arguments(&mut self, c: ClassId, via: Option<SymId>, args: ListRef) -> Option<Vec<ErasedType>> {
         let (outer, declared) = self.unwritten_ctor_layout(c, via)?;
         if args.len as usize != declared.len() + 1 {
             return None;
@@ -6165,7 +6163,7 @@ impl<'a> Gen<'a> {
             self.expr(first, &outer);
         } else {
             let own = self.expr_static(first);
-            if let (JType::L(from), JType::L(to)) = (&own, &outer) {
+            if let (ErasedType::L(from), ErasedType::L(to)) = (&own, &outer) {
                 if from != to && !self.is_subclass(from, to) {
                     self.checkcast(to);
                 }
@@ -6177,7 +6175,7 @@ impl<'a> Gen<'a> {
 
     /// Loads the argument `a` that hands a lifted class or a local trait's lifted member the
     /// local `p` it takes, as `p` is held there (`anon_capture_type`).
-    fn load_capture_arg(&mut self, a: TExprId, p: SymId) -> JType {
+    fn load_capture_arg(&mut self, a: TExprId, p: SymId) -> ErasedType {
         let cx = self.cx;
         match cx.input.prog.expr(a) {
             // A value the class takes where the creation reads another local (the outer
@@ -6194,18 +6192,18 @@ impl<'a> Gen<'a> {
             TExpr::Lambda(params, body) if params.len == 0 && self.is_lazy_local(p) => {
                 let (class, value) = self.lazy_holder_class(p);
                 self.new_object(&class);
-                self.invoke(Invoke::Special, &class, false, "<init>", &[], &JType::V);
+                self.invoke(Invoke::Special, &class, false, "<init>", &[], &ErasedType::V);
                 self.dup();
                 self.expr(body, &value);
                 self.invoke(Invoke::Virtual, &class, false, "initialize", &[value.clone()], &value);
                 self.pop_value(&value);
-                JType::L(class)
+                ErasedType::L(class)
             }
             _ => {
                 let t = self.expr_static(a);
-                if t == JType::V {
+                if t == ErasedType::V {
                     self.unit_value();
-                    return JType::object();
+                    return ErasedType::object();
                 }
                 t
             }
@@ -6234,7 +6232,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The declared arguments of a named local class's constructor, after its captures.
-    fn ctor_arguments_after_captures(&mut self, _c: ClassId, _args: ListRef, _captured: &[JType], rest: ListRef, params: &[JType]) {
+    fn ctor_arguments_after_captures(&mut self, _c: ClassId, _args: ListRef, _captured: &[ErasedType], rest: ListRef, params: &[ErasedType]) {
         self.arguments_with(rest, params);
     }
 
@@ -6264,13 +6262,13 @@ impl<'a> Gen<'a> {
         self.cx.input.syms.sym(s).owner == Owner::Local
     }
 
-    pub fn ctor_param_types(&mut self, c: ClassId) -> Vec<JType> {
+    pub fn ctor_param_types(&mut self, c: ClassId) -> Vec<ErasedType> {
         let cx = self.cx;
         let params: Vec<SymId> = cx.input.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
-        let own: Vec<JType> = params.into_iter().map(|p| self.sym_type(p)).collect();
+        let own: Vec<ErasedType> = params.into_iter().map(|p| self.sym_type(p)).collect();
         // A jar class's constructor is called as its class file declares it.
         let Some(cf) = cx.class_files.get(&c) else { return own };
-        match pick_method(cf, "<init>", own.len(), &method_desc(&own, &JType::V)) {
+        match pick_method(cf, "<init>", own.len(), &method_desc(&own, &ErasedType::V)) {
             Some(m) => parse_method_desc(&m.descriptor).0.into_iter().zip(&own).map(|(d, o)| if d == *o { o.clone() } else { d }).collect(),
             None => own,
         }
@@ -6295,13 +6293,13 @@ impl<'a> Gen<'a> {
 
     /// The constructor of a lifted class takes what its body captured first, a `var` as its cell, then
     /// its `Extras` (`class_extras`).
-    pub fn anon_ctor_params(&mut self, c: ClassId) -> Vec<JType> {
+    pub fn anon_ctor_params(&mut self, c: ClassId) -> Vec<ErasedType> {
         let cx = self.cx;
         let idx = cx.tclass_of[c.idx()];
         if idx == u32::MAX {
             return Vec::new();
         }
-        let mut out: Vec<JType> = self.class_captured(c).into_iter().map(|s| self.anon_capture_type(s)).collect();
+        let mut out: Vec<ErasedType> = self.class_captured(c).into_iter().map(|s| self.anon_capture_type(s)).collect();
         let extras = self.class_extras(c);
         out.extend(self.extras_types(&extras));
         out
@@ -6438,9 +6436,9 @@ impl<'a> Gen<'a> {
     }
 
     /// The types the `Extras` `e` are passed as.
-    pub fn extras_types(&mut self, e: &Extras) -> Vec<JType> {
-        let mut out: Vec<JType> = e.homes.iter().map(|&h| self.class_type(h)).collect();
-        out.extend(e.keys.iter().map(|_| JType::object()));
+    pub fn extras_types(&mut self, e: &Extras) -> Vec<ErasedType> {
+        let mut out: Vec<ErasedType> = e.homes.iter().map(|&h| self.class_type(h)).collect();
+        out.extend(e.keys.iter().map(|_| ErasedType::object()));
         out
     }
 
@@ -6481,7 +6479,7 @@ impl<'a> Gen<'a> {
 
     /// Pushes the instance of the class `h` where the code being written reads it: its `MODULE$`, the
     /// code's own `this`, a parameter holding it, or the field of the class of `this` holding it.
-    pub fn load_instance_of(&mut self, h: ClassId) -> JType {
+    pub fn load_instance_of(&mut self, h: ClassId) -> ErasedType {
         let t = self.class_type(h);
         if self.static_home(h) {
             let module = self.class_name(h);
@@ -6524,7 +6522,7 @@ impl<'a> Gen<'a> {
     /// Pushes the key travelling with the holder of the local lazy val `x`: a parameter or a field of the
     /// code holding the holder, or in the method declaring the val, that method's own key.
     pub fn load_lazy_key(&mut self, x: SymId) {
-        let object = JType::object();
+        let object = ErasedType::object();
         if let Some(&slot) = self.m.lazy_keys.get(&x) {
             self.load(slot, &object);
             return;
@@ -6623,12 +6621,12 @@ impl<'a> Gen<'a> {
     }
 
     /// The method `m` taking the proxies first, then their `Extras`.
-    pub fn proxied_mref(&mut self, m: &MRef, proxies: &[SymId], extras: &Extras) -> MRef {
-        let mut params: Vec<JType> = proxies.iter().map(|&p| self.anon_capture_type(p)).collect();
+    pub fn proxied_mref(&mut self, m: &MethodRef, proxies: &[SymId], extras: &Extras) -> MethodRef {
+        let mut params: Vec<ErasedType> = proxies.iter().map(|&p| self.anon_capture_type(p)).collect();
         params.extend(self.extras_types(extras));
         params.extend(m.params.iter().cloned());
         let desc = method_desc(&params, &m.ret);
-        MRef { params, desc, ..m.clone() }
+        MethodRef { params, desc, ..m.clone() }
     }
 
     /// The proxies a method takes first, bound as the locals they stand for: a `var` read
@@ -6670,10 +6668,10 @@ impl<'a> Gen<'a> {
         self.load_extras(&extras);
     }
 
-    pub fn anon_capture_type(&mut self, s: SymId) -> JType {
+    pub fn anon_capture_type(&mut self, s: SymId) -> ErasedType {
         let info = self.cx.input.syms.sym(s);
         if self.held(s) == Held::Cell {
-            JType::L(Rc::from(OBJECT_REF))
+            ErasedType::L(Rc::from(OBJECT_REF))
         } else if self.is_lazy_local(s) {
             self.lazy_holder_type(s)
         } else if info.by_name {
@@ -6701,7 +6699,7 @@ impl<'a> Gen<'a> {
     /// The lifted method `name` of the code whose captures are `free`: of a lambda, or the copy of the local def
     /// or lazy val `copy_of`, its `this` the instance of the class whose code declares it where that is another
     /// class's (`Lifted::home`), else the code's own.
-    pub(super) fn make_lifted(&mut self, name: String, free: &Free, params: Vec<JType>, ret: JType, copy_of: Option<SymId>) -> Rc<Lifted> {
+    pub(super) fn make_lifted(&mut self, name: String, free: &Free, params: Vec<ErasedType>, ret: ErasedType, copy_of: Option<SymId>) -> Rc<Lifted> {
         let home = copy_of.and_then(|s| self.copy_home(s));
         let mut captures = Vec::new();
         for &s in &free.syms {
@@ -6715,7 +6713,7 @@ impl<'a> Gen<'a> {
                 let ty = self.lazy_holder_type(s);
                 captures.push(Capture { sym: s, cell: false, ty, key: false });
                 if self.lazy_keyed(s) {
-                    captures.push(Capture { sym: s, cell: false, ty: JType::object(), key: true });
+                    captures.push(Capture { sym: s, cell: false, ty: ErasedType::object(), key: true });
                 }
                 continue;
             }
@@ -6727,18 +6725,18 @@ impl<'a> Gen<'a> {
         // In code whose `this` is a module read statically, so is the lifted code's.
         let module = if free.this && home.is_none() { self.m.this_module.clone() } else { None };
         let this = free.this && module.is_none();
-        let mut all: Vec<JType> = Vec::new();
+        let mut all: Vec<ErasedType> = Vec::new();
         if this {
             all.push(match home.or(self.this_class) {
                 Some(c) => self.class_type(c),
-                None => JType::object(),
+                None => ErasedType::object(),
             });
         }
         if free.nonlocal {
-            all.push(JType::object());
+            all.push(ErasedType::object());
         }
         for c in &captures {
-            all.push(if c.cell { JType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
+            all.push(if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
         }
         all.extend(params.iter().cloned());
         let desc = method_desc(&all, &ret);
@@ -6771,7 +6769,7 @@ impl<'a> Gen<'a> {
         if lifted.key {
             match (key_of, self.m.return_key) {
                 (Some(x), _) => self.load_lazy_key(x),
-                (None, Some(slot)) => self.load(slot, &JType::object()),
+                (None, Some(slot)) => self.load(slot, &ErasedType::object()),
                 (None, None) => {
                     self.unsupported("a non-local return of a def that makes no key");
                     self.code.op(op::ACONST_NULL);
@@ -6788,12 +6786,12 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn lambda(&mut self, params: ListRef, body: TExprId) -> JType {
+    fn lambda(&mut self, params: ListRef, body: TExprId) -> ErasedType {
         let cx = self.cx;
         let params: Vec<SymId> = cx.input.prog.sym_list(params).to_vec();
         let free = self.an.of_lambda(cx, &params, body);
         let name = self.fresh_name("$anonfun");
-        let object = JType::object();
+        let object = ErasedType::object();
         let lifted = self.make_lifted(name, &free, vec![object.clone(); params.len()], object, None);
         self.load_captures(&lifted);
         let ft = self.function_type(params.len());
@@ -6804,14 +6802,14 @@ impl<'a> Gen<'a> {
 
     /// The receiver (unless the getter is static) and its arguments are on the stack: they
     /// become a `Function0` whose `apply` calls the getter.
-    fn jar_default_thunk(&mut self, getter: JarGetter, params: &[JType]) {
-        let mut captured: Vec<JType> = Vec::new();
+    fn jar_default_thunk(&mut self, getter: JarGetter, params: &[ErasedType]) {
+        let mut captured: Vec<ErasedType> = Vec::new();
         if getter.kind != Invoke::Static {
-            captured.push(JType::L(getter.owner.clone()));
+            captured.push(ErasedType::L(getter.owner.clone()));
         }
         captured.extend(params.iter().cloned());
         let name = self.fresh_name("$default$thunk");
-        let object = JType::object();
+        let object = ErasedType::object();
         let desc = method_desc(&captured, &object);
         let lifted = Rc::new(Lifted { name, desc, this: false, key: false, captures: Vec::new(), params: Vec::new(), ret: object, home: None, module: None });
         self.defer(Pending { lifted: lifted.clone(), body: PendingBody::JarGetter(getter) });
@@ -6823,15 +6821,15 @@ impl<'a> Gen<'a> {
     /// of the function interface whose `apply` is the lifted method.
     /// The type of `this` a lifted method takes: the class's whose code it is, the box of a value
     /// class whose body its companion holds (`extension_bodies`) too.
-    pub fn lifted_this_type(&mut self) -> JType {
+    pub fn lifted_this_type(&mut self) -> ErasedType {
         match self.m.this_home.or(self.this_class) {
             Some(c) => self.class_type(c),
-            None => JType::L(self.this_name.clone()),
+            None => ErasedType::L(self.this_name.clone()),
         }
     }
 
-    fn lambda_call_site(&mut self, lifted: &Lifted, interface: &JType, method: &str) {
-        let mut captured: Vec<JType> = Vec::new();
+    fn lambda_call_site(&mut self, lifted: &Lifted, interface: &ErasedType, method: &str) {
+        let mut captured: Vec<ErasedType> = Vec::new();
         if lifted.this {
             let this = match lifted.home {
                 Some(h) => self.class_type(h),
@@ -6840,17 +6838,17 @@ impl<'a> Gen<'a> {
             captured.push(this);
         }
         if lifted.key {
-            captured.push(JType::object());
+            captured.push(ErasedType::object());
         }
         for c in &lifted.captures {
-            captured.push(if c.cell { JType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
+            captured.push(if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
         }
         self.call_site(lifted, interface, method, &captured);
     }
 
-    fn call_site(&mut self, lifted: &Lifted, interface: &JType, method: &str, captured: &[JType]) {
+    fn call_site(&mut self, lifted: &Lifted, interface: &ErasedType, method: &str, captured: &[ErasedType]) {
         let n = lifted.params.len();
-        let sam = method_desc(&vec![JType::object(); n], &JType::object());
+        let sam = method_desc(&vec![ErasedType::object(); n], &ErasedType::object());
         let owner = self.this_name.clone();
         let cp = &mut self.cw.cp;
         let impl_ref = if self.is_interface {
@@ -6904,12 +6902,12 @@ impl<'a> Gen<'a> {
     }
 
     /// The default `i` of the local def `s`, its getter applied to `temps`: the value it leaves.
-    fn local_default(&mut self, s: SymId, i: usize, temps: &[(u16, JType)]) -> JType {
+    fn local_default(&mut self, s: SymId, i: usize, temps: &[(u16, ErasedType)]) -> ErasedType {
         let cx = self.cx;
         let f = cx.fun_of_sym[s.idx()];
         if f == u32::MAX {
             self.unsupported("the default of a local def without a body");
-            return JType::V;
+            return ErasedType::V;
         }
         let lifted = match self.lifted_defaults.get(&(s, i)) {
             Some(l) => l.clone(),
@@ -6918,7 +6916,7 @@ impl<'a> Gen<'a> {
         let free = self.copy_free(s, free);
                 let fun = self.lifted_fun(s);
                 let name = format!("{}$default${}", fun.name, i + 1);
-                let params: Vec<JType> = fun.params[..self.clause_start(s, i)].to_vec();
+                let params: Vec<ErasedType> = fun.params[..self.clause_start(s, i)].to_vec();
                 // A by-name parameter's getter returns the value (`Desugar.addDefaultGetters`).
                 let by_name = cx.input.syms.sym(s).sig.as_ref().and_then(|sig| clause_shape(&sig.clauses, i).1);
                 let ret = match by_name {
@@ -6983,10 +6981,10 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let tail = self.m.tail.as_ref().unwrap();
         let (params, head) = (tail.params.clone(), tail.head);
-        let types: Vec<JType> = params.iter().map(|p| self.m.locals[p].ty.clone()).collect();
+        let types: Vec<ErasedType> = params.iter().map(|p| self.m.locals[p].ty.clone()).collect();
         let items = cx.input.prog.expr_list(args).to_vec();
         let mark = self.code.locals_mark();
-        let mut temps: Vec<(u16, JType)> = Vec::new();
+        let mut temps: Vec<(u16, ErasedType)> = Vec::new();
         for (i, &a) in items.iter().enumerate() {
             self.expr(a, &types[i]);
             let slot = self.store_new(&types[i]);
@@ -6995,7 +6993,7 @@ impl<'a> Gen<'a> {
         if let Some(r) = recv {
             let this_type = match self.this_class {
                 Some(c) => self.class_type(c),
-                None => JType::object(),
+                None => ErasedType::object(),
             };
             self.expr(r, &this_type);
             let slot = self.m.this_slot.unwrap_or(0);
@@ -7014,7 +7012,7 @@ impl<'a> Gen<'a> {
         let mark = self.code.locals_mark();
         self.block_statements(stmts);
         // The pure result of an ascribed block that is a statement is not evaluated (`Program::removed_bits`).
-        if !(matches!(mode, Mode::Value(JType::V)) && self.cx.input.prog.is_removed(res)) {
+        if !(matches!(mode, Mode::Value(ErasedType::V)) && self.cx.input.prog.is_removed(res)) {
             self.finish(res, mode);
         }
         if matches!(mode, Mode::Value(_)) {
@@ -7056,10 +7054,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    pub fn materialise_unit(&mut self, t: JType) -> JType {
-        if t == JType::V {
+    pub fn materialise_unit(&mut self, t: ErasedType) -> ErasedType {
+        if t == ErasedType::V {
             self.unit_value();
-            JType::L(Rc::from(BOXED_UNIT))
+            ErasedType::L(Rc::from(BOXED_UNIT))
         } else {
             t
         }
@@ -7068,7 +7066,7 @@ impl<'a> Gen<'a> {
     pub fn local_val(&mut self, sym: SymId, init: TExprId) {
         let cx = self.cx;
         let info = cx.input.syms.sym(sym);
-        let cell_type = JType::L(Rc::from(OBJECT_REF));
+        let cell_type = ErasedType::L(Rc::from(OBJECT_REF));
         // A block's lazy vals have their holders at its head (`hoist_lazy_holders`); a prelude's here.
         if info.mods & mods::LAZY != 0 {
             self.an.lazy_inits.insert(sym, init);
@@ -7081,11 +7079,11 @@ impl<'a> Gen<'a> {
             self.new_object(OBJECT_REF);
             self.code.op(op::ACONST_NULL);
             self.code.push(VT::Null);
-            self.invoke(Invoke::Special, OBJECT_REF, false, "<init>", &[JType::object()], &JType::V);
+            self.invoke(Invoke::Special, OBJECT_REF, false, "<init>", &[ErasedType::object()], &ErasedType::V);
             let slot = self.store_new(&cell_type);
             self.m.locals.insert(sym, Local { slot, ty: ty.clone(), cell: true });
             self.load(slot, &cell_type);
-            let object = JType::object();
+            let object = ErasedType::object();
             self.expr(init, &ty);
             self.adapt(&ty, &object);
             self.putfield(OBJECT_REF, "elem", &object);
@@ -7106,15 +7104,15 @@ impl<'a> Gen<'a> {
             (None, Mode::Value(want)) => {
                 self.statement(t);
                 self.code.locals_release(mark);
-                if *want == JType::V {
+                if *want == ErasedType::V {
                     self.code.bind(otherwise);
                 } else {
                     let done = self.code.new_label();
-                    self.adapt(&JType::V, want);
+                    self.adapt(&ErasedType::V, want);
                     self.goto(done);
                     self.code.pop();
                     self.code.bind(otherwise);
-                    self.adapt(&JType::V, want);
+                    self.adapt(&ErasedType::V, want);
                     self.code.bind(done);
                 }
             }
@@ -7123,7 +7121,7 @@ impl<'a> Gen<'a> {
                 self.code.locals_release(mark);
                 self.code.bind(otherwise);
                 let ret = self.m.ret.clone();
-                self.adapt(&JType::V, &ret);
+                self.adapt(&ErasedType::V, &ret);
                 self.return_value(&ret);
             }
             (Some(els), Mode::Tail) => {
@@ -7138,7 +7136,7 @@ impl<'a> Gen<'a> {
                 self.expr(t, want);
                 self.code.locals_release(mark);
                 self.goto(done);
-                if *want != JType::V {
+                if *want != ErasedType::V {
                     self.code.pop();
                 }
                 self.code.bind(otherwise);
@@ -7201,7 +7199,7 @@ impl<'a> Gen<'a> {
                 // No cast to the static type: `box.fruit.isInstanceOf[Apple]` asks because the
                 // static type may be wrong. The tested type goes with the test, as a pattern's does:
                 // an array's test reads its element there.
-                let boxed = JType::object();
+                let boxed = ErasedType::object();
                 self.expr(inner, &boxed);
                 let mark = self.code.locals_mark();
                 let slot = self.store_new(&boxed);
@@ -7209,7 +7207,7 @@ impl<'a> Gen<'a> {
                 self.code.locals_release(mark);
             }
             _ => {
-                self.expr(e, &JType::Z);
+                self.expr(e, &ErasedType::Z);
                 self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
             }
         }
@@ -7218,7 +7216,7 @@ impl<'a> Gen<'a> {
     fn compare(&mut self, op_: PrimOp, a: TExprId, b: TExprId, target: Label, jump_if: bool) {
         if let PrimOp::Same | PrimOp::NotSame = op_ {
             // `eq` and `ne` are reference identity, a string's and a box's too (scalac's `ID`).
-            let object = JType::object();
+            let object = ErasedType::object();
             self.expr(a, &object);
             self.expr(b, &object);
             let same = (op_ == PrimOp::Same) == jump_if;
@@ -7250,7 +7248,7 @@ impl<'a> Gen<'a> {
             self.expr(a, &k);
             self.expr(b, &k);
             match k {
-                JType::I => {
+                ErasedType::I => {
                     let insn = match op_ {
                         PrimOp::Lt => op::IF_ICMPLT,
                         PrimOp::Le => op::IF_ICMPLE,
@@ -7263,9 +7261,9 @@ impl<'a> Gen<'a> {
                 }
                 _ => {
                     let cmp = match (&k, nan_high) {
-                        (JType::J, _) => op::LCMP,
-                        (JType::F, true) => op::FCMPG,
-                        (JType::F, false) => op::FCMPL,
+                        (ErasedType::J, _) => op::LCMP,
+                        (ErasedType::F, true) => op::FCMPG,
+                        (ErasedType::F, false) => op::FCMPL,
                         (_, true) => op::DCMPG,
                         (_, false) => op::DCMPL,
                     };
@@ -7287,11 +7285,11 @@ impl<'a> Gen<'a> {
         }
         if !is_eq {
             // Strings and other comparables: `compareTo`.
-            let comparable = JType::L(Rc::from("java/lang/Comparable"));
+            let comparable = ErasedType::L(Rc::from("java/lang/Comparable"));
             self.expr(a, &comparable);
-            let object = JType::object();
+            let object = ErasedType::object();
             self.expr(b, &object);
-            self.invoke(Invoke::Interface, "java/lang/Comparable", true, "compareTo", &[object], &JType::I);
+            self.invoke(Invoke::Interface, "java/lang/Comparable", true, "compareTo", &[object], &ErasedType::I);
             let insn = match op_ {
                 PrimOp::Lt => op::IFLT,
                 PrimOp::Le => op::IFLE,
@@ -7300,12 +7298,12 @@ impl<'a> Gen<'a> {
             };
             return self.jump_if(insn, 1, target);
         }
-        if ta == JType::Z && tb == JType::Z {
-            self.expr(a, &JType::Z);
-            self.expr(b, &JType::Z);
+        if ta == ErasedType::Z && tb == ErasedType::Z {
+            self.expr(a, &ErasedType::Z);
+            self.expr(b, &ErasedType::Z);
             return self.jump_if(if op_ == PrimOp::RefEq { op::IF_ICMPEQ } else { op::IF_ICMPNE }, 2, target);
         }
-        if ta == JType::V && tb == JType::V {
+        if ta == ErasedType::V && tb == ErasedType::V {
             self.statement(a);
             self.statement(b);
             if op_ == PrimOp::RefEq {
@@ -7314,13 +7312,13 @@ impl<'a> Gen<'a> {
             }
             return;
         }
-        let object = JType::object();
+        let object = ErasedType::object();
         let by_value = ta.is_string() || tb.is_string() || !ta.is_ref() || !tb.is_ref();
         self.expr(a, &object);
         self.expr(b, &object);
         if by_value {
             // Strings and boxed primitives compare by value, as `===` does on the JS side.
-            self.invoke(Invoke::Static, "java/util/Objects", false, "equals", &[object.clone(), object], &JType::Z);
+            self.invoke(Invoke::Static, "java/util/Objects", false, "equals", &[object.clone(), object], &ErasedType::Z);
             self.jump_if(if op_ == PrimOp::RefEq { op::IFNE } else { op::IFEQ }, 1, target);
         } else {
             self.jump_if(if op_ == PrimOp::RefEq { op::IF_ACMPEQ } else { op::IF_ACMPNE }, 2, target);
@@ -7329,52 +7327,52 @@ impl<'a> Gen<'a> {
 
     // ---- primitive operations ----
 
-    fn prim(&mut self, op_: PrimOp, a: TExprId, b: TExprId) -> JType {
+    fn prim(&mut self, op_: PrimOp, a: TExprId, b: TExprId) -> ErasedType {
         use PrimOp::*;
         let (t, insn) = match op_ {
-            IntAdd => (JType::I, op::IADD),
-            IntSub => (JType::I, op::ISUB),
-            IntMul => (JType::I, op::IMUL),
-            IntDiv => (JType::I, op::IDIV),
-            IntRem => (JType::I, op::IREM),
-            IntAnd => (JType::I, op::IAND),
-            IntOr => (JType::I, op::IOR),
-            IntXor => (JType::I, op::IXOR),
-            IntShl => (JType::I, op::ISHL),
-            IntShr => (JType::I, op::ISHR),
-            IntUshr => (JType::I, op::IUSHR),
-            LongAdd => (JType::J, op::LADD),
-            LongSub => (JType::J, op::LSUB),
-            LongMul => (JType::J, op::LMUL),
-            LongDiv => (JType::J, op::LDIV),
-            LongRem => (JType::J, op::LREM),
-            LongAnd => (JType::J, op::LAND),
-            LongOr => (JType::J, op::LOR),
-            LongXor => (JType::J, op::LXOR),
-            LongShl => (JType::J, op::LSHL),
-            LongShr => (JType::J, op::LSHR),
-            LongUshr => (JType::J, op::LUSHR),
-            DoubleAdd => (JType::D, op::DADD),
-            DoubleSub => (JType::D, op::DSUB),
-            DoubleMul => (JType::D, op::DMUL),
-            DoubleDiv => (JType::D, op::DDIV),
-            DoubleRem => (JType::D, op::DREM),
-            FloatAdd => (JType::F, op::FADD),
-            FloatSub => (JType::F, op::FSUB),
-            FloatMul => (JType::F, op::FMUL),
-            FloatDiv => (JType::F, op::FDIV),
-            FloatRem => (JType::F, op::FREM),
-            BoolStrictAnd => (JType::Z, op::IAND),
-            BoolStrictOr => (JType::Z, op::IOR),
+            IntAdd => (ErasedType::I, op::IADD),
+            IntSub => (ErasedType::I, op::ISUB),
+            IntMul => (ErasedType::I, op::IMUL),
+            IntDiv => (ErasedType::I, op::IDIV),
+            IntRem => (ErasedType::I, op::IREM),
+            IntAnd => (ErasedType::I, op::IAND),
+            IntOr => (ErasedType::I, op::IOR),
+            IntXor => (ErasedType::I, op::IXOR),
+            IntShl => (ErasedType::I, op::ISHL),
+            IntShr => (ErasedType::I, op::ISHR),
+            IntUshr => (ErasedType::I, op::IUSHR),
+            LongAdd => (ErasedType::J, op::LADD),
+            LongSub => (ErasedType::J, op::LSUB),
+            LongMul => (ErasedType::J, op::LMUL),
+            LongDiv => (ErasedType::J, op::LDIV),
+            LongRem => (ErasedType::J, op::LREM),
+            LongAnd => (ErasedType::J, op::LAND),
+            LongOr => (ErasedType::J, op::LOR),
+            LongXor => (ErasedType::J, op::LXOR),
+            LongShl => (ErasedType::J, op::LSHL),
+            LongShr => (ErasedType::J, op::LSHR),
+            LongUshr => (ErasedType::J, op::LUSHR),
+            DoubleAdd => (ErasedType::D, op::DADD),
+            DoubleSub => (ErasedType::D, op::DSUB),
+            DoubleMul => (ErasedType::D, op::DMUL),
+            DoubleDiv => (ErasedType::D, op::DDIV),
+            DoubleRem => (ErasedType::D, op::DREM),
+            FloatAdd => (ErasedType::F, op::FADD),
+            FloatSub => (ErasedType::F, op::FSUB),
+            FloatMul => (ErasedType::F, op::FMUL),
+            FloatDiv => (ErasedType::F, op::FDIV),
+            FloatRem => (ErasedType::F, op::FREM),
+            BoolStrictAnd => (ErasedType::Z, op::IAND),
+            BoolStrictOr => (ErasedType::Z, op::IOR),
             BoolXor => {
-                self.expr(a, &JType::Z);
-                self.expr(b, &JType::Z);
+                self.expr(a, &ErasedType::Z);
+                self.expr(b, &ErasedType::Z);
                 self.code.op(op::IXOR);
                 self.code.pop();
-                return JType::Z;
+                return ErasedType::Z;
             }
             Eq | Ne => {
-                let object = JType::object();
+                let object = ErasedType::object();
                 self.expr(a, &object);
                 self.expr(b, &object);
                 self.helper_call("equal", 2);
@@ -7383,7 +7381,7 @@ impl<'a> Gen<'a> {
                     self.code.op(op::IXOR);
                     self.code.pop();
                 }
-                return JType::Z;
+                return ErasedType::Z;
             }
             Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame | BoolAnd | BoolOr => return self.cond_of_prim(op_, a, b),
         };
@@ -7393,7 +7391,7 @@ impl<'a> Gen<'a> {
         if shift {
             let tb = self.static_type(b);
             self.expr(b, &tb);
-            self.adapt(&tb, &JType::I);
+            self.adapt(&tb, &ErasedType::I);
         } else {
             self.expr(b, &t);
         }
@@ -7402,7 +7400,7 @@ impl<'a> Gen<'a> {
         t
     }
 
-    fn cond_of_prim(&mut self, op_: PrimOp, a: TExprId, b: TExprId) -> JType {
+    fn cond_of_prim(&mut self, op_: PrimOp, a: TExprId, b: TExprId) -> ErasedType {
         let no = self.code.new_label();
         let done = self.code.new_label();
         match op_ {
@@ -7424,61 +7422,61 @@ impl<'a> Gen<'a> {
         self.code.bind(no);
         self.iconst(0);
         self.code.bind(done);
-        JType::Z
+        ErasedType::Z
     }
 
-    fn unary(&mut self, op_: UnOp, a: TExprId) -> JType {
+    fn unary(&mut self, op_: UnOp, a: TExprId) -> ErasedType {
         use UnOp::*;
         // A literal widened to a double is the double constant, as scalac types the literal.
         if let (IntToDouble, TExpr::Int(v)) = (op_, self.cx.input.prog.expr(a)) {
             self.dconst(v as f64);
-            return JType::D;
+            return ErasedType::D;
         }
-        let (from, to, insns): (JType, JType, &[u8]) = match op_ {
-            IntNeg => (JType::I, JType::I, &[op::INEG]),
-            LongNeg => (JType::J, JType::J, &[op::LNEG]),
-            DoubleNeg => (JType::D, JType::D, &[op::DNEG]),
-            FloatNeg => (JType::F, JType::F, &[op::FNEG]),
-            IntToLong => (JType::I, JType::J, &[op::I2L]),
-            LongToDouble => (JType::J, JType::D, &[op::L2D]),
-            LongToInt => (JType::J, JType::I, &[op::L2I]),
-            DoubleToInt => (JType::D, JType::I, &[op::D2I]),
-            DoubleToLong => (JType::D, JType::J, &[op::D2L]),
-            CharToInt => (JType::C, JType::I, &[]),
-            CharToLong => (JType::C, JType::J, &[op::I2L]),
-            IntToChar => (JType::I, JType::C, &[op::I2C]),
-            IntToByte => (JType::I, JType::B, &[op::I2B]),
-            IntToShort => (JType::I, JType::S, &[op::I2S]),
-            IntToFloat => (JType::I, JType::F, &[op::I2F]),
-            IntToDouble => (JType::I, JType::D, &[op::I2D]),
-            ByteToShort => (JType::B, JType::S, &[]),
-            ByteToInt => (JType::B, JType::I, &[]),
-            ShortToInt => (JType::S, JType::I, &[]),
-            LongToFloat => (JType::J, JType::F, &[op::L2F]),
-            FloatToInt => (JType::F, JType::I, &[op::F2I]),
-            FloatToLong => (JType::F, JType::J, &[op::F2L]),
-            FloatToDouble => (JType::F, JType::D, &[op::F2D]),
-            DoubleToFloat => (JType::D, JType::F, &[op::D2F]),
+        let (from, to, insns): (ErasedType, ErasedType, &[u8]) = match op_ {
+            IntNeg => (ErasedType::I, ErasedType::I, &[op::INEG]),
+            LongNeg => (ErasedType::J, ErasedType::J, &[op::LNEG]),
+            DoubleNeg => (ErasedType::D, ErasedType::D, &[op::DNEG]),
+            FloatNeg => (ErasedType::F, ErasedType::F, &[op::FNEG]),
+            IntToLong => (ErasedType::I, ErasedType::J, &[op::I2L]),
+            LongToDouble => (ErasedType::J, ErasedType::D, &[op::L2D]),
+            LongToInt => (ErasedType::J, ErasedType::I, &[op::L2I]),
+            DoubleToInt => (ErasedType::D, ErasedType::I, &[op::D2I]),
+            DoubleToLong => (ErasedType::D, ErasedType::J, &[op::D2L]),
+            CharToInt => (ErasedType::C, ErasedType::I, &[]),
+            CharToLong => (ErasedType::C, ErasedType::J, &[op::I2L]),
+            IntToChar => (ErasedType::I, ErasedType::C, &[op::I2C]),
+            IntToByte => (ErasedType::I, ErasedType::B, &[op::I2B]),
+            IntToShort => (ErasedType::I, ErasedType::S, &[op::I2S]),
+            IntToFloat => (ErasedType::I, ErasedType::F, &[op::I2F]),
+            IntToDouble => (ErasedType::I, ErasedType::D, &[op::I2D]),
+            ByteToShort => (ErasedType::B, ErasedType::S, &[]),
+            ByteToInt => (ErasedType::B, ErasedType::I, &[]),
+            ShortToInt => (ErasedType::S, ErasedType::I, &[]),
+            LongToFloat => (ErasedType::J, ErasedType::F, &[op::L2F]),
+            FloatToInt => (ErasedType::F, ErasedType::I, &[op::F2I]),
+            FloatToLong => (ErasedType::F, ErasedType::J, &[op::F2L]),
+            FloatToDouble => (ErasedType::F, ErasedType::D, &[op::F2D]),
+            DoubleToFloat => (ErasedType::D, ErasedType::F, &[op::D2F]),
             BoolNot => {
-                self.expr(a, &JType::Z);
+                self.expr(a, &ErasedType::Z);
                 self.iconst(1);
                 self.code.op(op::IXOR);
                 self.code.pop();
-                return JType::Z;
+                return ErasedType::Z;
             }
             IntNot => {
-                self.expr(a, &JType::I);
+                self.expr(a, &ErasedType::I);
                 self.iconst(-1);
                 self.code.op(op::IXOR);
                 self.code.pop();
-                return JType::I;
+                return ErasedType::I;
             }
             LongNot => {
-                self.expr(a, &JType::J);
+                self.expr(a, &ErasedType::J);
                 self.lconst(-1);
                 self.code.op(op::LXOR);
                 self.code.pop();
-                return JType::J;
+                return ErasedType::J;
             }
         };
         self.expr(a, &from);
@@ -7492,11 +7490,11 @@ impl<'a> Gen<'a> {
     }
 
     /// Calls a definition of `std/jvm.scala`; the arguments are on the stack.
-    pub fn helper_call(&mut self, name: &str, n_args: usize) -> JType {
+    pub fn helper_call(&mut self, name: &str, n_args: usize) -> ErasedType {
         let Some(&s) = self.cx.helpers.defs.get(name) else {
             self.unsupported(&format!("the runtime helper {} is missing", name));
             self.code.popn(n_args);
-            return JType::V;
+            return ErasedType::V;
         };
         let m = self.mref(s);
         // The module goes under the arguments, which are already evaluated.
@@ -7505,7 +7503,7 @@ impl<'a> Gen<'a> {
         for t in m.params.iter().rev() {
             temps.push((self.store_new(t), t.clone()));
         }
-        let owner_type = JType::L(m.owner.clone());
+        let owner_type = ErasedType::L(m.owner.clone());
         self.getstatic(&m.owner, "MODULE$", &owner_type);
         for (slot, t) in temps.iter().rev() {
             self.load(*slot, t);
@@ -7515,11 +7513,11 @@ impl<'a> Gen<'a> {
         m.ret.clone()
     }
 
-    pub fn match_error(&mut self, slot: u16, t: &JType) {
+    pub fn match_error(&mut self, slot: u16, t: &ErasedType) {
         self.new_object(MATCH_ERROR);
-        let object = JType::object();
+        let object = ErasedType::object();
         self.load_slot_as(slot, t, &object);
-        self.invoke(Invoke::Special, MATCH_ERROR, false, "<init>", &[object], &JType::V);
+        self.invoke(Invoke::Special, MATCH_ERROR, false, "<init>", &[object], &ErasedType::V);
         self.code.op(op::ATHROW);
         self.code.pop();
         self.code.end_path();
@@ -7527,39 +7525,39 @@ impl<'a> Gen<'a> {
 }
 
 /// The stack type of a comparison or operation between operands of the given ranks.
-fn rank_type(rank: u8) -> JType {
+fn rank_type(rank: u8) -> ErasedType {
     use crate::typer::prims::*;
     match rank {
-        R_LONG => JType::J,
-        R_FLOAT => JType::F,
-        R_DOUBLE => JType::D,
-        _ => JType::I,
+        R_LONG => ErasedType::J,
+        R_FLOAT => ErasedType::F,
+        R_DOUBLE => ErasedType::D,
+        _ => ErasedType::I,
     }
 }
 
-fn prim_type(op: PrimOp) -> JType {
+fn prim_type(op: PrimOp) -> ErasedType {
     use PrimOp::*;
     match op {
-        IntAdd | IntSub | IntMul | IntDiv | IntRem | IntAnd | IntOr | IntXor | IntShl | IntShr | IntUshr => JType::I,
-        LongAdd | LongSub | LongMul | LongDiv | LongRem | LongAnd | LongOr | LongXor | LongShl | LongShr | LongUshr => JType::J,
-        DoubleAdd | DoubleSub | DoubleMul | DoubleDiv | DoubleRem => JType::D,
-        FloatAdd | FloatSub | FloatMul | FloatDiv | FloatRem => JType::F,
-        _ => JType::Z,
+        IntAdd | IntSub | IntMul | IntDiv | IntRem | IntAnd | IntOr | IntXor | IntShl | IntShr | IntUshr => ErasedType::I,
+        LongAdd | LongSub | LongMul | LongDiv | LongRem | LongAnd | LongOr | LongXor | LongShl | LongShr | LongUshr => ErasedType::J,
+        DoubleAdd | DoubleSub | DoubleMul | DoubleDiv | DoubleRem => ErasedType::D,
+        FloatAdd | FloatSub | FloatMul | FloatDiv | FloatRem => ErasedType::F,
+        _ => ErasedType::Z,
     }
 }
 
-fn unary_type(op: UnOp) -> JType {
+fn unary_type(op: UnOp) -> ErasedType {
     use UnOp::*;
     match op {
-        IntNeg | IntNot | LongToInt | DoubleToInt | CharToInt | FloatToInt | ByteToInt | ShortToInt => JType::I,
-        LongNeg | LongNot | IntToLong | DoubleToLong | CharToLong | FloatToLong => JType::J,
-        DoubleNeg | LongToDouble | FloatToDouble | IntToDouble => JType::D,
-        FloatNeg | IntToFloat | LongToFloat | DoubleToFloat => JType::F,
-        BoolNot => JType::Z,
-        IntToChar => JType::C,
-        ByteToShort => JType::S,
-        IntToByte => JType::B,
-        IntToShort => JType::S,
+        IntNeg | IntNot | LongToInt | DoubleToInt | CharToInt | FloatToInt | ByteToInt | ShortToInt => ErasedType::I,
+        LongNeg | LongNot | IntToLong | DoubleToLong | CharToLong | FloatToLong => ErasedType::J,
+        DoubleNeg | LongToDouble | FloatToDouble | IntToDouble => ErasedType::D,
+        FloatNeg | IntToFloat | LongToFloat | DoubleToFloat => ErasedType::F,
+        BoolNot => ErasedType::Z,
+        IntToChar => ErasedType::C,
+        ByteToShort => ErasedType::S,
+        IntToByte => ErasedType::B,
+        IntToShort => ErasedType::S,
     }
 }
 
@@ -7579,11 +7577,11 @@ enum Applied {
 enum Lub {
     Class(ClassId),
     /// A value class and its erasure, its underlying value's.
-    Value(ClassId, JType),
+    Value(ClassId, ErasedType),
     Array(Box<Lub>),
     Nothing,
     Null,
-    Erased(JType),
+    Erased(ErasedType),
 }
 
 /// scalac's `specialErasure`: no tuple class at run time extends the tuple supertypes, which
@@ -7633,33 +7631,33 @@ fn pick_method<'c>(cf: &'c crate::classfile::ClassFile, name: &str, arity: usize
 }
 
 /// A primitive's class in scalac's names, which orders two primitives in an intersection.
-fn scala_name_of(t: &JType) -> &'static str {
+fn scala_name_of(t: &ErasedType) -> &'static str {
     match t {
-        JType::Z => "scala.Boolean",
-        JType::B => "scala.Byte",
-        JType::C => "scala.Char",
-        JType::S => "scala.Short",
-        JType::I => "scala.Int",
-        JType::J => "scala.Long",
-        JType::F => "scala.Float",
-        JType::D => "scala.Double",
+        ErasedType::Z => "scala.Boolean",
+        ErasedType::B => "scala.Byte",
+        ErasedType::C => "scala.Char",
+        ErasedType::S => "scala.Short",
+        ErasedType::I => "scala.Int",
+        ErasedType::J => "scala.Long",
+        ErasedType::F => "scala.Float",
+        ErasedType::D => "scala.Double",
         _ => "scala.Unit",
     }
 }
 
 /// The type an element descriptor of an array names.
-fn desc_type(d: &str) -> JType {
+fn desc_type(d: &str) -> ErasedType {
     match d.as_bytes().first() {
-        Some(b'Z') => JType::Z,
-        Some(b'B') => JType::B,
-        Some(b'C') => JType::C,
-        Some(b'S') => JType::S,
-        Some(b'I') => JType::I,
-        Some(b'J') => JType::J,
-        Some(b'F') => JType::F,
-        Some(b'D') => JType::D,
-        Some(b'L') => JType::L(Rc::from(d[1..].trim_end_matches(';'))),
-        _ => JType::L(Rc::from(d)),
+        Some(b'Z') => ErasedType::Z,
+        Some(b'B') => ErasedType::B,
+        Some(b'C') => ErasedType::C,
+        Some(b'S') => ErasedType::S,
+        Some(b'I') => ErasedType::I,
+        Some(b'J') => ErasedType::J,
+        Some(b'F') => ErasedType::F,
+        Some(b'D') => ErasedType::D,
+        Some(b'L') => ErasedType::L(Rc::from(d[1..].trim_end_matches(';'))),
+        _ => ErasedType::L(Rc::from(d)),
     }
 }
 

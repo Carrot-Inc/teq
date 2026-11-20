@@ -1,10 +1,8 @@
 //! Bytecode from the lowered IR (`crate::lir`): each node's code in the order the generator
 //! wrote it from the typed IR, so that the class files are the same byte for byte.
 
-use super::gen::Invoke;
+use crate::lir::{ErasedType, Invoke, Kind, LirId, List};
 use super::gen::Gen;
-use super::names::JType;
-use crate::lir::{Kind, LirId, List};
 
 impl<'a> Gen<'a> {
     pub(super) fn write(&mut self, id: LirId) {
@@ -54,7 +52,7 @@ impl<'a> Gen<'a> {
                 }
             }
             Kind::JavaArrayArgument(a) => {
-                let JType::L(array) = &ty else { unreachable!("an array's type") };
+                let ErasedType::L(array) = &ty else { unreachable!("an array's type") };
                 self.java_array_argument(a, array);
             }
             Kind::Try { index, body, finalizer } => self.write_try(index, &ty, body, finalizer),
@@ -79,7 +77,7 @@ impl<'a> Gen<'a> {
         }
         let Some(order) = order else { return };
         debug_assert_eq!(order.len(), args.len as usize);
-        let written: Vec<JType> = (0..order.len()).map(|k| self.lir.ty(self.lir.lists[args.start as usize + k]).clone()).collect();
+        let written: Vec<ErasedType> = (0..order.len()).map(|k| self.lir.ty(self.lir.lists[args.start as usize + k]).clone()).collect();
         let mut slots = vec![0u16; written.len()];
         for k in (0..written.len()).rev() {
             slots[k] = self.store_new(&written[k]);
