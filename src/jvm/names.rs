@@ -606,22 +606,7 @@ pub const TUPLE_XXL: &str = "scala/runtime/TupleXXL";
 pub const RUNTIME_MODULE: &str = "scala/runtime/jvm$package$";
 pub const ENUM: &str = "scala/reflect/Enum";
 
-/// An erased type: what a value is on the JVM stack, in a local, a field or a descriptor.
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum JType {
-    /// No value; the result of a method that returns `Unit`.
-    V,
-    Z,
-    B,
-    S,
-    C,
-    I,
-    J,
-    F,
-    D,
-    /// A class or interface by its internal name.
-    L(Rc<str>),
-}
+pub use crate::lir::Type as JType;
 
 impl JType {
     pub fn object() -> JType {

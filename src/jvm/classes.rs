@@ -93,6 +93,7 @@ impl<'a> Gen<'a> {
         m.cells = free::cells(self.cx, &mut self.an, &syms, roots);
         self.code = Code::new(locals);
         self.code.wide = self.wide;
+        self.lir.clear();
         self.m = m;
     }
 

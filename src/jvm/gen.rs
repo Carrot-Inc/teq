@@ -14,6 +14,7 @@ use crate::symbols::*;
 use crate::tir::*;
 use crate::typer::loader::javaclass::JMember;
 use crate::types::*;
+use crate::lir::LirId;
 use std::rc::Rc;
 
 /// scalac's `MaxIndySlots`: a concatenation's call is written before the operand that would
@@ -56,25 +57,7 @@ fn recipe_bytes(text: &str) -> usize {
     text.chars().map(|c| if c == '\0' { 2 } else if c as u32 >= 0x10000 { 6 } else { c.len_utf8() }).sum()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Invoke {
-    Virtual,
-    Interface,
-    Static,
-    Special,
-}
-
-/// How a method of the program is called.
-#[derive(Clone)]
-pub struct MRef {
-    pub owner: Rc<str>,
-    pub owner_is_interface: bool,
-    pub name: String,
-    pub params: Vec<JType>,
-    pub ret: JType,
-    pub desc: String,
-    pub kind: Invoke,
-}
+pub use crate::lir::{Invoke, Method as MRef};
 
 /// Where a virtual call or a field access on a qualifier points (`Gen::qualifier_site`): the
 /// class the qualifier is evaluated at and the owner the instruction names, chosen per site
@@ -83,6 +66,74 @@ pub struct Site {
     pub qualifier: JType,
     pub owner: Rc<str>,
     pub interface: bool,
+}
+
+/// The instance a method runs on (`Gen::this_value`): an object's own, by its class's name, or
+/// the slot that holds it with the type it is held at.
+pub enum ThisValue {
+    Module(Rc<str>),
+    Slot(u16, JType),
+}
+
+/// How the value a node left is brought to the type wanted: one decision (`Gen::fit`), read
+/// by the lowering and by the old code.
+pub enum Fit {
+    /// A value class's value, its box made or opened (`Gen::adapt_vc_as`), a null tested for
+    /// where the flag is set.
+    ValueClass(ClassId, TList, bool),
+    /// Through the type the typer recorded, where it knows more than the erased signature.
+    Through(JType),
+    Direct,
+}
+
+/// The way a member read `r.s` is generated: one decision (`Gen::field_route`), read by the
+/// lowering and by `Gen::field_read`, which holds the routes not lowered yet.
+pub enum FieldRoute {
+    /// A member of a JavaScript type, which the JVM has none of.
+    Js,
+    /// A Java class's field.
+    Java,
+    /// An object selected through its owner: its instance.
+    Object(ClassId),
+    /// A given object through its owner.
+    GivenObject,
+    /// A value class's parameter on a value of it: the value itself.
+    Underlying(ClassId),
+    /// A constructor's parameter read before the superclass's constructor ran: its local.
+    Early,
+    /// A field of this class's own instance (`Gen::own_field`).
+    Own,
+    /// A parameter of no accessor, read by its class's own code alone (`Cx::private_params`).
+    PrivateParam(ClassId),
+    /// The member's accessor.
+    Accessor,
+}
+
+/// The way a call `r.s(args)` is generated: one decision (`Gen::call_route`), read by the
+/// lowering and by `Gen::call_method`, which holds the routes not lowered yet.
+pub enum CallRoute {
+    /// The typer's conversion of a spread array to a sequence: the array, wrapped.
+    Spread(TExprId),
+    /// A member of a JavaScript type, which the JVM has none of.
+    Js,
+    /// A value class's method, called as scalac calls it (`Gen::call_extension`).
+    Extension,
+    /// An interpolator of scala-library that has no bytecode: the runtime's helper.
+    Interpolator(SymId),
+    /// An object selected through its owner: its instance, not a call.
+    Object(ClassId),
+    /// A static method of a Java class.
+    JavaStatic,
+    /// A member of a std object standing for a JDK class's statics.
+    JdkStatic,
+    /// `super[T].s(..)` of a member of a local trait, the proxies first.
+    Proxied(ClassId, Vec<SymId>),
+    /// A local trait's lifted member, the proxies first.
+    Lifted(Vec<SymId>),
+    /// `super.s(..)`.
+    Super,
+    /// The method on its receiver.
+    Plain,
 }
 
 /// The member a reference names, as dotty's refusal of an unwritable reference shows it
@@ -377,6 +428,8 @@ pub struct Gen<'a> {
     pub class_homes: Vec<(ClassId, String)>,
     pub class_keys: Vec<(SymId, String)>,
     pub code: Code,
+    /// The lowered nodes of the method being generated (`crate::lir`).
+    pub lir: crate::lir::Body,
     pub m: MethodCx,
     pub context: String,
     /// The arities of the function interfaces the emitted code names, as a bit set.
@@ -404,7 +457,7 @@ pub struct Gen<'a> {
     vc_marks: FxMap<Rc<str>, Rc<str>>,
     /// The receiver of a value class's parameter selected (`missing[V].u`), which is unboxed
     /// through the box's accessor without the null test (`vc_field_read`).
-    vc_select: Option<TExprId>,
+    pub(super) vc_select: Option<TExprId>,
     /// The expansions of applied aliases (`alias_expansion`).
     alias_expansions: std::cell::RefCell<FxMap<(AliasId, TList), TypeId>>,
     /// The type parameters whose bounds are being erased, which a bound that names its own
@@ -461,6 +514,7 @@ impl<'a> Gen<'a> {
             class_homes: Vec::new(),
             class_keys: Vec::new(),
             code: Code::new(Vec::new()),
+            lir: crate::lir::Body::default(),
             m: MethodCx::default(),
             context: String::new(),
             function_arities: 0b11,
@@ -1967,7 +2021,7 @@ impl<'a> Gen<'a> {
     /// (`null_safe`), a null giving the underlying type's zero, as dotty's `Boxing.unbox` does for
     /// a tree that is no subtype of the class (`Erasure.scala` 292-317); a box that is
     /// statically one, and a selection of the class's parameter, go through the accessor.
-    fn adapt_vc_as(&mut self, c: ClassId, args: TList, t: JType, want: &JType, null_safe: bool) {
+    pub(super) fn adapt_vc_as(&mut self, c: ClassId, args: TList, t: JType, want: &JType, null_safe: bool) {
         // A value dropped is adapted to nothing (dotty adapts toward a consumer alone,
         // `Erasure.Boxing.adaptToType`): a cast to the class whose value is dropped tests nothing.
         if *want == JType::V {
@@ -2922,7 +2976,7 @@ impl<'a> Gen<'a> {
         self.recorded(e).unwrap_or_else(JType::object)
     }
 
-    fn recorded(&mut self, e: TExprId) -> Option<JType> {
+    pub(super) fn recorded(&mut self, e: TExprId) -> Option<JType> {
         let t = self.cx.input.prog.expr_types.get(e.0)?;
         if t == NO_TYPE {
             return None;
@@ -2967,7 +3021,7 @@ impl<'a> Gen<'a> {
     /// The numeric type the typer recorded on a conditional, a match, a block or a `try` where
     /// it is wider than what its branches leave (`(if c then 1 else 2).toDouble`): a consumer
     /// that takes a reference boxes the widened value, not each branch's own.
-    fn widened_branches(&mut self, e: TExprId) -> Option<JType> {
+    pub(super) fn widened_branches(&mut self, e: TExprId) -> Option<JType> {
         let prog = self.cx.input.prog;
         if !matches!(prog.expr(e), TExpr::If(_, _, Some(_)) | TExpr::Match(..) | TExpr::Block(..) | TExpr::Try(_)) {
             return None;
@@ -3085,64 +3139,68 @@ impl<'a> Gen<'a> {
 
     // ---- expressions ----
 
-    /// Emits `e` and brings its value to the type `want`.
+    /// Emits `e` and brings its value to the type `want`: lowered, then written.
     pub fn expr(&mut self, e: TExprId, want: &JType) {
+        let lowered = self.lowering(|g| g.lower_expr(e, want));
+        self.write(lowered);
+    }
+
+    /// `expr` for a node the lowering does not make yet.
+    pub(super) fn expr_legacy(&mut self, e: TExprId, want: &JType) {
         let lines = (self.line_floor, self.line_hold);
         self.mark_line(e);
         self.expr_marked(e, want);
         (self.line_floor, self.line_hold) = lines;
     }
 
+    /// A widened conditional's wider type and a literal's specialisation by the type wanted are
+    /// the lowering's (`Gen::lower_marked`).
     fn expr_marked(&mut self, e: TExprId, want: &JType) {
         let prog = self.cx.input.prog;
-        if want.is_ref() {
-            if let Some(wider) = self.widened_branches(e) {
-                self.expr(e, &wider);
-                return self.adapt(&wider, want);
-            }
-        }
         match prog.expr(e) {
             TExpr::If(c, t, els) => self.if_(c, t, els, Mode::Value(want)),
             TExpr::Match(scrut, cases) => self.match_(scrut, cases, Mode::Value(want)),
             TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Value(want)),
             TExpr::Throw(inner, _) => self.throw_(inner, want),
-            TExpr::Try(i) => self.try_(i, want),
-            TExpr::Int(v) if matches!(want, JType::D) => self.dconst(v as f64),
-            TExpr::Int(v) if matches!(want, JType::J) => self.lconst(v as i64),
-            TExpr::Int(v) if matches!(want, JType::F) => self.fconst(v as f32),
-            TExpr::Double(v) if matches!(want, JType::F) => self.fconst(v as f32),
+            TExpr::Try(_) => unreachable!("a try is lowered (`Gen::lower_expr`)"),
             _ => {
                 let t = self.node(e);
-                if let Some((c, args)) = self.expr_value_class(e) {
-                    if t != JType::V {
-                        if self.vc_select == Some(e) {
-                            return self.adapt_vc_as(c, args, t, want, false);
-                        }
-                        return self.adapt_vc(c, args, t, want);
-                    }
-                }
-                // The typer knows more than the erased signature: `xs.head` of a `List[Int]`. A
-                // given object's read is of the given's declared type (`given_object_read`), whatever
-                // class the typer records for the module it is, so that no build casts it more than
-                // another, whichever of a search and its name gave the read.
-                let known = match prog.expr(e) {
-                    TExpr::Int(_) | TExpr::Double(_) => Some(self.static_type(e)),
-                    TExpr::Long(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) => None,
-                    TExpr::Static(s) | TExpr::Field(_, s) if self.cx.given_objects.contains_key(&s) || self.cx.inner_given_objects.contains_key(&s) => None,
-                    _ => self.recorded(e),
-                };
-                let t = match known {
-                    // Between two references the consumer's type decides; going through the
-                    // static type would unbox a generic result only to box it again. A value
-                    // that is dropped is not unboxed either: a Java method's null result stays.
-                    Some(s) if s != t && s != JType::V && t != JType::V && *want != JType::V && !(t.is_ref() && want.is_ref() && (!s.is_ref() || want.is_object())) => {
+                match self.fit(e, &t, want) {
+                    Fit::ValueClass(c, args, null_safe) => self.adapt_vc_as(c, args, t, want, null_safe),
+                    Fit::Through(s) => {
                         self.adapt(&t, &s);
-                        s
+                        self.adapt(&s, want);
                     }
-                    _ => t,
-                };
-                self.adapt(&t, want);
+                    Fit::Direct => self.adapt(&t, want),
+                }
             }
+        }
+    }
+
+    pub(super) fn fit(&mut self, e: TExprId, t: &JType, want: &JType) -> Fit {
+        if let Some((c, args)) = self.expr_value_class(e) {
+            if *t != JType::V {
+                // A selection of the class's parameter (`Gen::vc_field_read`) opens the box with no
+                // null test.
+                return Fit::ValueClass(c, args, self.vc_select != Some(e));
+            }
+        }
+        // The typer knows more than the erased signature: `xs.head` of a `List[Int]`. A
+        // given object's read is of the given's declared type (`given_object_read`), whatever
+        // class the typer records for the module it is, so that no build casts it more than
+        // another, whichever of a search and its name gave the read.
+        let known = match self.cx.input.prog.expr(e) {
+            TExpr::Int(_) | TExpr::Double(_) => Some(self.static_type(e)),
+            TExpr::Long(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) => None,
+            TExpr::Static(s) | TExpr::Field(_, s) if self.cx.given_objects.contains_key(&s) || self.cx.inner_given_objects.contains_key(&s) => None,
+            _ => self.recorded(e),
+        };
+        match known {
+            // Between two references the consumer's type decides; going through the
+            // static type would unbox a generic result only to box it again. A value
+            // that is dropped is not unboxed either: a Java method's null result stays.
+            Some(s) if s != *t && s != JType::V && *t != JType::V && *want != JType::V && !(t.is_ref() && want.is_ref() && (!s.is_ref() || want.is_object())) => Fit::Through(s),
+            _ => Fit::Direct,
         }
     }
 
@@ -3154,7 +3212,7 @@ impl<'a> Gen<'a> {
     /// (a given, a default) spans the call it is in and takes the line of the call's end, where
     /// scalac places it, through its whole tree: a given's copy keeps the spans of the site that
     /// searched first, which a worker may have made at another line.
-    fn mark_line(&mut self, e: TExprId) {
+    pub(super) fn mark_line(&mut self, e: TExprId) {
         let cx = self.cx;
         let prog = cx.input.prog;
         if self.line_hold {
@@ -3201,63 +3259,19 @@ impl<'a> Gen<'a> {
     fn node(&mut self, e: TExprId) -> JType {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
-            TExpr::Int(v) => {
-                self.iconst(v);
-                // A literal the typer narrowed to the `Byte`, `Short` or `Char` expected keeps that
-                // type, so that boxing it gives the narrow class (`(1: Byte): Any` is a `java.lang.Byte`).
-                match self.recorded_type(e).map(|t| self.erase(t)) {
-                    Some(narrow @ (JType::B | JType::S | JType::C)) => narrow,
-                    _ => JType::I,
-                }
+            // What the lowering takes whole is written from its node (`Gen::write`), never here.
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Module(_) | TExpr::CallClosure(..) => {
+                unreachable!("lowered (`Gen::lower_node`)")
             }
-            TExpr::Long(v) => {
-                self.lconst(v);
-                JType::J
-            }
-            TExpr::Double(v) => {
-                // A literal the typer narrowed to the `Float` expected is a float constant.
-                if self.recorded_type(e).map(|t| self.erase(t)) == Some(JType::F) {
-                    self.fconst(v as f32);
-                    return JType::F;
-                }
-                self.dconst(v);
-                JType::D
-            }
-            TExpr::Bool(v) => {
-                self.iconst(v as i32);
-                JType::Z
-            }
-            TExpr::Char(c) => {
-                self.iconst(c as i32);
-                JType::C
-            }
-            TExpr::Str(s) => {
-                self.sconst(&prog.strings[s.idx()]);
-                JType::L(Rc::from(STRING))
-            }
-            TExpr::Unit => JType::V,
+            TExpr::Local(s) if self.plain_local(s).is_some() => unreachable!("a local held as its value is lowered (`Gen::lower_node`)"),
             TExpr::Local(s) => self.load_local(s),
-            TExpr::This => self.load_this(),
-            TExpr::Super(_) => self.load_this(),
+            TExpr::This | TExpr::Super(_) if self.this_value().is_some() => unreachable!("`this` is lowered (`Gen::lower_node`)"),
+            TExpr::This | TExpr::Super(_) => self.load_this(),
             TExpr::Static(s) => self.load_static(s),
-            TExpr::Module(c) => self.load_module(c),
             TExpr::ClassOf(c, dims) => self.class_of(e, c, dims),
             TExpr::Field(r, s) => self.field_read(r, s),
             TExpr::CallStatic(s, args) => self.call_static(s, args),
             TExpr::CallMethod(r, s, args) => self.call_method(e, r, s, args),
-            TExpr::CallClosure(f, args) => {
-                let items = prog.expr_list(args);
-                let ft = self.function_type(items.len());
-                self.expr(f, &ft);
-                let object = JType::object();
-                for &a in items {
-                    self.expr(a, &object);
-                }
-                let JType::L(owner) = &ft else { unreachable!() };
-                let params = vec![JType::object(); items.len()];
-                self.invoke(Invoke::Interface, owner, true, "apply", &params, &object);
-                object
-            }
             TExpr::New(c, args) => self.new_(e, c, args),
             TExpr::NewVia(s, args) => self.new_via(s, args),
             TExpr::Default(of, at, args) => self.default_arg(of, at, args),
@@ -3484,7 +3498,7 @@ impl<'a> Gen<'a> {
     /// takes every exception of the body and the cases and throws it again, as javac lays it
     /// out. A `try` with operands on the stack spills them to locals first, since a handler
     /// starts with an empty stack.
-    fn try_(&mut self, i: u32, want: &JType) {
+    pub(super) fn write_try(&mut self, i: u32, want: &JType, body: LirId, finalizer: Option<LirId>) {
         let cx = self.cx;
         let prog = cx.input.prog;
         let t = &prog.tries[i as usize];
@@ -3506,12 +3520,12 @@ impl<'a> Gen<'a> {
         // it on every exit: the value is kept in a slot, a flag set, and the normal exit taken, where
         // the finalizer runs once and the flag sends the method on (javac's lowering; scalac's prints
         // `finally ran` before `fin: 1` for `try { return 1 } finally { println("finally ran") }`).
-        let pending = t.finalizer.map(|_| {
+        let pending = finalizer.map(|_| {
             self.iconst(0);
             self.store_new(&JType::I)
         });
         let ret = self.m.ret.clone();
-        let return_slot = match (t.finalizer, &ret) {
+        let return_slot = match (finalizer, &ret) {
             (None, _) | (Some(_), JType::V) => None,
             (Some(_), JType::L(_)) => {
                 self.code.op(op::ACONST_NULL);
@@ -3534,7 +3548,7 @@ impl<'a> Gen<'a> {
         let protected = self.code.locals_mark();
         self.code.bind(start);
         let from = self.code.pc();
-        self.expr(t.body, want);
+        self.write(body);
         if let Some(slot) = result {
             self.store(slot, want);
         }
@@ -3575,7 +3589,7 @@ impl<'a> Gen<'a> {
             self.code.locals_release(mark);
             any_ranges.push((handler, catch_end));
         }
-        if let Some(f) = t.finalizer {
+        if let Some(f) = finalizer {
             // A `return` inside the finalizer itself belongs to the enclosing frame.
             self.m.finalizers.pop();
             let any = self.code.new_label();
@@ -3586,14 +3600,14 @@ impl<'a> Gen<'a> {
             self.code.bind_handler(any, throwable_vt);
             let mark = self.code.locals_mark();
             let thrown = self.store_new(&throwable);
-            self.statement(f);
+            self.write(f);
             self.load(thrown, &throwable);
             self.code.op(op::ATHROW);
             self.code.pop();
             self.code.end_path();
             self.code.locals_release(mark);
             self.code.bind(normal_exit);
-            self.statement(f);
+            self.write(f);
             if let Some(pending) = pending {
                 let skip = self.code.new_label();
                 self.load(pending, &JType::I);
@@ -3944,34 +3958,46 @@ impl<'a> Gen<'a> {
 
     // ---- locals, fields, statics ----
 
-    pub fn load_this(&mut self) -> JType {
+    /// The instance the method runs on; None where the method has none.
+    pub(super) fn this_value(&mut self) -> Option<ThisValue> {
         if let Some(module) = self.m.this_module.clone() {
-            let t = JType::L(module.clone());
-            self.getstatic(&module, "MODULE$", &t);
-            return t;
+            return Some(ThisValue::Module(module));
         }
-        if let (Some(h), Some(slot)) = (self.m.this_home, self.m.this_slot) {
-            let t = self.class_type(h);
-            self.load(slot, &t);
-            return t;
-        }
-        if let (Some(u), Some(slot)) = (self.m.this_underlying.clone(), self.m.this_slot) {
-            self.load(slot, &u);
-            return u;
-        }
-        let t = match self.this_class {
-            Some(c) => self.class_type(c),
-            None => JType::object(),
+        let slot = self.m.this_slot?;
+        let t = match (self.m.this_home, self.m.this_underlying.clone(), self.this_class) {
+            (Some(home), _, _) => self.class_type(home),
+            (None, Some(underlying), _) => underlying,
+            (None, None, Some(c)) => self.class_type(c),
+            (None, None, None) => JType::object(),
         };
-        match self.m.this_slot {
-            Some(slot) => self.load(slot, &t),
+        Some(ThisValue::Slot(slot, t))
+    }
+
+    pub fn load_this(&mut self) -> JType {
+        match self.this_value() {
+            Some(ThisValue::Module(module)) => self.get_module(&module),
+            Some(ThisValue::Slot(slot, t)) => {
+                self.load(slot, &t);
+                t
+            }
             None => {
                 self.unsupported("`this` outside of an instance");
                 self.code.op(op::ACONST_NULL);
                 self.code.push(VT::Null);
+                match self.this_class {
+                    Some(c) => self.class_type(c),
+                    None => JType::object(),
+                }
             }
         }
-        t
+    }
+
+    /// A local or a parameter held as its value in a slot of the method: neither lazy nor a cell.
+    pub(super) fn plain_local(&self, s: SymId) -> Option<&Local> {
+        if self.is_lazy_local(s) {
+            return None;
+        }
+        self.m.locals.get(&s).filter(|l| !l.cell)
     }
 
     fn captured_field(&self, s: SymId) -> Option<(String, JType, Held)> {
@@ -4192,8 +4218,13 @@ impl<'a> Gen<'a> {
             return JType::V;
         }
         let name = self.class_name(c);
+        self.get_module(&name)
+    }
+
+    /// The instance of the object whose class is `name`.
+    pub(super) fn get_module(&mut self, name: &Rc<str>) -> JType {
         let t = JType::L(name.clone());
-        self.getstatic(&name, "MODULE$", &t);
+        self.getstatic(name, "MODULE$", &t);
         t
     }
 
@@ -4293,25 +4324,21 @@ impl<'a> Gen<'a> {
     }
 
     fn receiver(&mut self, r: TExprId, s: SymId) {
-        let cx = self.cx;
-        match cx.input.syms.sym(s).owner {
-            Owner::Class(c) => {
-                let t = self.class_type(c);
-                self.expr(r, &t);
-            }
-            _ => {
-                let object = JType::object();
-                self.expr(r, &object);
-            }
-        }
+        self.site_receiver(r, s, &None);
     }
 
-    /// The receiver of a reference to `s` evaluated where the reference points: at the site's
-    /// class, or at the declaring class as `receiver` evaluates it.
+    /// The receiver of a reference to `s` evaluated where the reference points.
     fn site_receiver(&mut self, r: TExprId, s: SymId, site: &Option<Site>) {
-        match site {
-            Some(site) => self.expr(r, &site.qualifier),
-            None => self.receiver(r, s),
+        let t = self.receiver_type(s, site);
+        self.expr(r, &t);
+    }
+
+    /// The class a reference to `s` evaluates its receiver at: the site's, or the declaring one.
+    pub(super) fn receiver_type(&mut self, s: SymId, site: &Option<Site>) -> JType {
+        match (site, self.cx.input.syms.sym(s).owner) {
+            (Some(site), _) => site.qualifier.clone(),
+            (None, Owner::Class(c)) => self.class_type(c),
+            (None, _) => JType::object(),
         }
     }
 
@@ -4465,7 +4492,7 @@ impl<'a> Gen<'a> {
     /// workaround of JDK-8154587 (`isTraitMethodOverridingObjectMember`). dotty's `isScalaStatic`
     /// leaves out no member here: teq writes an `@static` member as its object's instance member,
     /// reached through the object, whose class is the declaring one (`qualifier_site`'s `None`).
-    fn invoke_site(&mut self, r: TExprId, s: SymId, m: &MRef) -> Option<Site> {
+    pub(super) fn invoke_site(&mut self, r: TExprId, s: SymId, m: &MRef) -> Option<Site> {
         if !self.virtual_member(s, m) {
             return None;
         }
@@ -4508,95 +4535,103 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn field_read(&mut self, r: TExprId, s: SymId) -> JType {
+    /// Whether `r.s` reads the field of this class's own instance: a val that a subclass may override is read
+    /// through its accessor, a qualified private one's (`private[p]`, no `Private` flag in dotty) among them.
+    pub(super) fn own_field(&self, r: TExprId, s: SymId) -> bool {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
-        if cx.input.syms.js_member(s) {
-            self.unsupported("a member of a JavaScript type");
-            return JType::V;
-        }
-        if let Some((cf, JMember::Field(i))) = cx.input.java_member(s) {
-            let f = &cf.fields[i as usize];
-            let t = parse_type(&f.descriptor).0;
-            if f.access & ACC_STATIC != 0 {
-                self.getstatic(&cf.name, &f.name, &t);
-            } else {
-                // Named on the qualifier's class, as dotty's `fieldOp` names the receiver it is
-                // given (`BCodeBodyBuilder.scala` 549-560).
-                match self.qualifier_site(r, &cf.name, Referenced::Sym(s)) {
-                    Some(site) => {
-                        self.expr(r, &site.qualifier);
-                        self.getfield(&site.owner, &f.name, &t);
-                    }
-                    None => {
-                        let owner = JType::L(Rc::from(cf.name.as_str()));
-                        self.expr(r, &owner);
-                        self.getfield(&cf.name, &f.name, &t);
-                    }
-                }
-            }
-            return self.java_value(t);
-        }
-        if let SymKind::Object(c) = info.kind {
-            self.statement(r);
-            return self.load_module(c);
-        }
-        // A given object through its owner: the owner is not initialised for it, as under scalac.
-        if cx.given_objects.contains_key(&s) {
-            if !matches!(cx.input.prog.expr(r), TExpr::Module(_) | TExpr::This) {
-                self.statement(r);
-            }
-            return self.given_object_read(s).unwrap_or(JType::V);
-        }
-        if let Some(t) = self.vc_field_read(r, s) {
-            return t;
-        }
-        if self.m.before_super && matches!(cx.input.prog.expr(r), TExpr::This) && self.m.locals.contains_key(&s) {
-            return self.load_local(s);
-        }
-        // A val that a subclass may override is read through its accessor, a qualified private one's (`private[p]`,
-        // no `Private` flag in dotty) among them.
-        let own_field = matches!(cx.input.prog.expr(r), TExpr::This)
+        matches!(cx.input.prog.expr(r), TExpr::This)
             && matches!(info.owner, Owner::Class(c) if Some(c) == self.this_class
                 && !cx.is_interface(c)
                 && (info.mods & mods::PRIVATE != 0 && !info.scoped_private || cx.input.syms.class(c).subclasses.is_empty() && (!cx.input.open_world || cx.input.syms.class(c).mods & mods::FINAL != 0)))
             && !cx.is_lazy_member(s)
             && info.kind != SymKind::Def
             && self.m.this_slot == Some(0)
-            && self.this_class.map_or(false, |c| *cx.class_names[c.idx()] == *self.this_name);
-        if own_field {
-            let t = self.sym_type(s);
-            let name = self.field_name(s);
-            self.load_this();
-            let owner = self.this_name.clone();
-            self.getfield(&owner, &name, &t);
-            return t;
+            && self.this_class.map_or(false, |c| *cx.class_names[c.idx()] == *self.this_name)
+    }
+
+    pub(super) fn field_route(&self, r: TExprId, s: SymId) -> FieldRoute {
+        let cx = self.cx;
+        let info = cx.input.syms.sym(s);
+        if cx.input.syms.js_member(s) {
+            return FieldRoute::Js;
         }
-        // A parameter of no accessor, read by its class's own code alone (`Cx::private_params`).
+        if let Some((_, JMember::Field(_))) = cx.input.java_member(s) {
+            return FieldRoute::Java;
+        }
+        if let SymKind::Object(c) = info.kind {
+            return FieldRoute::Object(c);
+        }
+        if cx.given_objects.contains_key(&s) {
+            return FieldRoute::GivenObject;
+        }
+        if let Some(c) = self.vc_field(r, s) {
+            return FieldRoute::Underlying(c);
+        }
+        if self.m.before_super && matches!(cx.input.prog.expr(r), TExpr::This) && self.m.locals.contains_key(&s) {
+            return FieldRoute::Early;
+        }
+        if self.own_field(r, s) {
+            return FieldRoute::Own;
+        }
         if let (true, Owner::Class(c)) = (cx.private_params.contains_key(&s), info.owner) {
-            let t = self.sym_type(s);
-            let name = self.field_name(s);
-            let owner = self.class_name(c);
-            self.expr(r, &JType::L(owner.clone()));
-            self.getfield(&owner, &name, &t);
-            return t;
+            return FieldRoute::PrivateParam(c);
         }
-        let s = self.deferred_implementation(r, s).unwrap_or(s);
-        let m = self.mref(s);
-        let site = self.invoke_site(r, s, &m);
-        self.site_receiver(r, s, &site);
-        match site {
-            Some(site) => self.invoke_desc(site.kind(), &site.owner, site.interface, &m.name, &m.desc, m.params.len(), &m.ret),
-            None => self.invoke_mref(&m),
+        FieldRoute::Accessor
+    }
+
+    fn field_read(&mut self, r: TExprId, s: SymId) -> JType {
+        let cx = self.cx;
+        match self.field_route(r, s) {
+            FieldRoute::Js => {
+                self.unsupported("a member of a JavaScript type");
+                JType::V
+            }
+            FieldRoute::Java => {
+                let Some((cf, JMember::Field(i))) = cx.input.java_member(s) else { unreachable!("a Java field, by the route") };
+                let f = &cf.fields[i as usize];
+                let t = parse_type(&f.descriptor).0;
+                if f.access & ACC_STATIC != 0 {
+                    self.getstatic(&cf.name, &f.name, &t);
+                } else {
+                    // Named on the qualifier's class, as dotty's `fieldOp` names the receiver it is
+                    // given (`BCodeBodyBuilder.scala` 549-560).
+                    match self.qualifier_site(r, &cf.name, Referenced::Sym(s)) {
+                        Some(site) => {
+                            self.expr(r, &site.qualifier);
+                            self.getfield(&site.owner, &f.name, &t);
+                        }
+                        None => {
+                            let owner = JType::L(Rc::from(cf.name.as_str()));
+                            self.expr(r, &owner);
+                            self.getfield(&cf.name, &f.name, &t);
+                        }
+                    }
+                }
+                self.java_value(t)
+            }
+            FieldRoute::Object(c) => {
+                self.statement(r);
+                self.load_module(c)
+            }
+            // The owner is not initialised for it, as under scalac.
+            FieldRoute::GivenObject => {
+                if !matches!(cx.input.prog.expr(r), TExpr::Module(_) | TExpr::This) {
+                    self.statement(r);
+                }
+                self.given_object_read(s).unwrap_or(JType::V)
+            }
+            FieldRoute::Underlying(c) => self.vc_field_read(r, c),
+            FieldRoute::Early => self.load_local(s),
+            FieldRoute::Own | FieldRoute::PrivateParam(_) | FieldRoute::Accessor => unreachable!("lowered (`Gen::lower_field_read`)"),
         }
-        m.ret.clone()
     }
 
     /// The implementation a program class was given for the deferred given `s`
     /// (`TClass::deferred_givens`) where the receiver `r` is an instance of that class or of a
     /// subclass: read on the class, as a class read from its module's products is, whose pickle
     /// holds the implementation as its member, so that a whole build and a split one agree.
-    fn deferred_implementation(&self, r: TExprId, s: SymId) -> Option<SymId> {
+    pub(super) fn deferred_implementation(&self, r: TExprId, s: SymId) -> Option<SymId> {
         let cx = self.cx;
         if cx.input.syms.sym(s).mods & mods::DEFERRED == 0 {
             return None;
@@ -4620,8 +4655,9 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// In link mode, the parameter of a value class read on a value of it is the value itself.
-    fn vc_field_read(&mut self, r: TExprId, s: SymId) -> Option<JType> {
+    /// In link mode, the parameter of a value class read on a value of it is the value itself:
+    /// the class, where `r.s` is such a read.
+    fn vc_field(&self, r: TExprId, s: SymId) -> Option<ClassId> {
         let cx = self.cx;
         let Owner::Class(c) = cx.input.syms.sym(s).owner else { return None };
         if !cx.input.syms.class(c).value_class {
@@ -4634,6 +4670,11 @@ impl<'a> Gen<'a> {
         if matches!(cx.input.prog.expr(r), TExpr::This) && Some(c) == self.this_class && self.m.this_underlying.is_none() {
             return None;
         }
+        Some(c)
+    }
+
+    fn vc_field_read(&mut self, r: TExprId, c: ClassId) -> JType {
+        let cx = self.cx;
         let u = self.vc_underlying(c);
         // `missing[V].u` is the box's accessor on the reference, as scalac casts the qualifier to
         // the class and selects (`Erasure.scala` 733-737): a null throws. A block's result is
@@ -4646,7 +4687,7 @@ impl<'a> Gen<'a> {
         let outer = self.vc_select.replace(target);
         self.expr(r, &u);
         self.vc_select = outer;
-        Some(u)
+        u
     }
 
     fn assign(&mut self, target: TExprId, value: TExprId) {
@@ -4723,26 +4764,12 @@ impl<'a> Gen<'a> {
     /// The arguments of a call against the parameter types, evaluated as they stand: an
     /// argument the source left out is its default getter's application (`TExpr::Default`).
     fn arguments(&mut self, callee: Option<SymId>, args: ListRef, params: &[JType]) {
-        // A right-associative extension takes its arguments in another order than they are
-        // written and evaluated: evaluated in theirs into locals, then loaded in its.
-        let order = callee.and_then(|s| self.jvm_param_order(s)).filter(|o| o.len() == params.len());
-        let Some(order) = order else {
-            self.arguments_with(args, params);
-            return;
-        };
-        let written = self.signature_order(&order, params);
-        self.arguments_with(args, &written);
-        let mut slots = vec![0u16; written.len()];
-        for k in (0..written.len()).rev() {
-            slots[k] = self.store_new(&written[k]);
-        }
-        for &k in &order {
-            self.load(slots[k], &written[k]);
-        }
+        let (args, order) = self.lowering(|g| g.lower_arguments(callee, args, params));
+        self.write_arguments(args, order.as_deref());
     }
 
     /// Parameter types in the class file's order (`jvm_param_order`) put back in the signature's.
-    fn signature_order(&self, order: &[usize], params: &[JType]) -> Vec<JType> {
+    pub(super) fn signature_order(&self, order: &[usize], params: &[JType]) -> Vec<JType> {
         let mut written = vec![JType::object(); params.len()];
         for (j, &k) in order.iter().enumerate() {
             written[k] = params[j].clone();
@@ -4943,21 +4970,9 @@ impl<'a> Gen<'a> {
         true
     }
 
-    /// The arguments as written, each against its parameter's type: a Java method's array
-    /// parameter takes an array of its own.
+    /// The arguments as written, each against its parameter's type.
     fn arguments_with(&mut self, args: ListRef, params: &[JType]) {
-        let cx = self.cx;
-        for (i, &a) in cx.input.prog.expr_list(args).iter().enumerate() {
-            let want = params.get(i).cloned().unwrap_or_else(JType::object);
-            if let JType::L(n) = &want {
-                if n.starts_with('[') {
-                    let n = n.to_string();
-                    self.java_array_argument(a, &n);
-                    continue;
-                }
-            }
-            self.expr(a, &want);
-        }
+        self.arguments(None, args, params);
     }
 
     fn call_static(&mut self, s: SymId, args: ListRef) -> JType {
@@ -5443,7 +5458,7 @@ impl<'a> Gen<'a> {
     /// An array spliced in (`Stream.of(arr*)`) is passed itself, as scalac passes it, where its
     /// class is the parameter's; another sequence (`Stream.of(xs*)`) is copied into an array of
     /// the parameter's element class, as scalac's `scala.runtime.Arrays.seqToArray` does.
-    fn java_array_argument(&mut self, a: TExprId, want: &str) {
+    pub(super) fn java_array_argument(&mut self, a: TExprId, want: &str) {
         if let Some(array) = self.spliced_array(a, want) {
             let t = self.expr_static(array);
             self.adapt(&t, &JType::L(Rc::from(want)));
@@ -5498,7 +5513,7 @@ impl<'a> Gen<'a> {
     /// The array `arr*` of the typer's conversion `s(args)` to the sequence a varargs parameter
     /// takes (`copyArrayToImmutableIndexedSeq`, `wrapRefArray`, ..), where the typer marked it
     /// spread (`Program::spread_bits`); a conversion the program writes has none.
-    fn spread_conversion(&mut self, s: SymId, args: ListRef) -> Option<TExprId> {
+    pub(super) fn spread_conversion(&mut self, s: SymId, args: ListRef) -> Option<TExprId> {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
         let name = cx.input.interner.get(info.name);
@@ -5547,48 +5562,84 @@ impl<'a> Gen<'a> {
         seq
     }
 
-    fn call_method(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> JType {
+    pub(super) fn call_route(&mut self, r: TExprId, s: SymId, args: ListRef) -> CallRoute {
         let cx = self.cx;
         if let Some(array) = self.spread_conversion(s, args) {
-            self.statement(r);
-            return self.wrapped_spread(array);
+            return CallRoute::Spread(array);
         }
         if cx.input.syms.js_member(s) {
-            self.unsupported("a member of a JavaScript type");
-            return JType::V;
+            return CallRoute::Js;
         }
-        if let Some(t) = self.call_extension(r, s, args) {
-            return t;
+        if self.extension_callable(s) {
+            return CallRoute::Extension;
         }
         if let Some(&(_, helper)) = cx.input.reach.interpolators.iter().find(|&&(m, _)| m == s) {
-            return self.call_interpolator(r, s, helper, args);
+            return CallRoute::Interpolator(helper);
         }
-        // An object selected through its owner (a jar's `CanEqual.derived`) is its instance, not
-        // a call.
         if let SymKind::Object(c) = cx.input.syms.sym(s).kind {
-            self.statement(r);
-            return self.load_module(c);
+            return CallRoute::Object(c);
         }
-        let mut m = self.mref(s);
-        let java = cx.input.java_member(s).is_some();
-        if java && m.kind == Invoke::Static {
-            return self.call_java_static(s, args);
+        if self.mref(s).kind == Invoke::Static {
+            if cx.input.java_member(s).is_some() {
+                return CallRoute::JavaStatic;
+            }
+            if matches!(cx.input.syms.sym(s).owner, Owner::Class(c) if cx.jdk_statics(c)) {
+                return CallRoute::JdkStatic;
+            }
         }
-        if let Some(t) = self.call_jdk_static(s, args) {
-            return t;
-        }
-        if let TExpr::Super(SuperTarget::Class(t)) = cx.input.prog.expr(r) {
+        let receiver = cx.input.prog.expr(r);
+        if let TExpr::Super(SuperTarget::Class(t)) = receiver {
             if let Some(proxies) = self.member_proxies(s) {
+                return CallRoute::Proxied(t, proxies);
+            }
+        }
+        if let Some(proxies) = self.lifted_proxies(s, args) {
+            if !matches!(receiver, TExpr::Super(SuperTarget::Mixin(_))) {
+                return CallRoute::Lifted(proxies);
+            }
+        }
+        match receiver {
+            TExpr::Super(_) => CallRoute::Super,
+            _ => CallRoute::Plain,
+        }
+    }
+
+    fn call_method(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> JType {
+        let cx = self.cx;
+        let target = match self.call_route(r, s, args) {
+            CallRoute::Spread(array) => {
+                self.statement(r);
+                return self.wrapped_spread(array);
+            }
+            CallRoute::Js => {
+                self.unsupported("a member of a JavaScript type");
+                return JType::V;
+            }
+            CallRoute::Extension => return self.call_extension(r, s, args).expect("a value class's method, by the route"),
+            CallRoute::Interpolator(helper) => return self.call_interpolator(r, s, helper, args),
+            CallRoute::Object(c) => {
+                self.statement(r);
+                return self.load_module(c);
+            }
+            CallRoute::JavaStatic => return self.call_java_static(s, args),
+            CallRoute::JdkStatic => return self.call_jdk_static(s, args).expect("a JDK class's static, by the route"),
+            CallRoute::Proxied(t, proxies) => {
+                let m = self.mref(s);
                 return self.call_proxied(t, s, &m, &proxies, args);
             }
-        }
-        // A call of a local trait's lifted member: its lifted method, the proxies first.
-        if let Some(proxies) = self.lifted_proxies(s, args) {
-            if !matches!(cx.input.prog.expr(r), TExpr::Super(SuperTarget::Mixin(_))) {
+            CallRoute::Lifted(proxies) => {
+                let m = self.mref(s);
                 return self.call_lifted(r, s, &m, &proxies, args);
             }
-        }
-        if let TExpr::Super(target) = cx.input.prog.expr(r) {
+            CallRoute::Super => {
+                let TExpr::Super(target) = cx.input.prog.expr(r) else { unreachable!("a super call, by the route") };
+                target
+            }
+            CallRoute::Plain => unreachable!("lowered (`Gen::lower_call_method`)"),
+        };
+        let mut m = self.mref(s);
+        let java = cx.input.java_member(s).is_some();
+        {
             // `invokespecial` on the superclass, or on the interface of a trait of this class. A
             // Java interface's method is called on the interface itself, whatever brings it: the
             // receiver of a super call is the method's owner (`BCodeBodyBuilder.genCallMethod`),
@@ -5620,18 +5671,11 @@ impl<'a> Gen<'a> {
                 _ => self.unsupported("not supported on the JVM yet: this super call"),
             }
         }
-        let is_super = matches!(cx.input.prog.expr(r), TExpr::Super(_));
-        let site = if is_super { None } else { self.invoke_site(r, s, &m) };
-        self.site_receiver(r, s, &site);
+        self.receiver(r, s);
         let params = m.params.clone();
         self.arguments(Some(s), args, &params);
-        if is_super {
-            self.super_call_at = cx.input.prog.span_of(e).filter(|&(f, _)| f == self.line_file).map(|(_, span)| span.end);
-        }
-        match site {
-            Some(site) => self.invoke_desc(site.kind(), &site.owner, site.interface, &m.name, &m.desc, m.params.len(), &m.ret),
-            None => self.invoke_mref(&m),
-        }
+        self.super_call_at = cx.input.prog.span_of(e).filter(|&(f, _)| f == self.line_file).map(|(_, span)| span.end);
+        self.invoke_mref(&m);
         self.super_call_at = None;
         if java {
             return self.java_value(m.ret.clone());
@@ -5642,7 +5686,7 @@ impl<'a> Gen<'a> {
     /// The proxies a call of `s` with `args` passes first, when `s` is a local trait's member
     /// that takes them (a lifted member, `TFun::lifted`, or a lazy val's initialiser read by the
     /// block) called with them.
-    fn lifted_proxies(&mut self, s: SymId, args: ListRef) -> Option<Vec<SymId>> {
+    pub(super) fn lifted_proxies(&mut self, s: SymId, args: ListRef) -> Option<Vec<SymId>> {
         let cx = self.cx;
         let f = *cx.fun_of_sym.get(s.idx())?;
         if f == u32::MAX {
@@ -5730,6 +5774,31 @@ impl<'a> Gen<'a> {
         pm.ret.clone()
     }
 
+    /// Whether `s` is a value class's method that `call_extension` calls.
+    fn extension_callable(&mut self, s: SymId) -> bool {
+        let cx = self.cx;
+        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return false };
+        if !cx.input.syms.class(c).value_class || cx.input.syms.sym(s).kind != SymKind::Def {
+            return false;
+        }
+        cx.vc_on_companion(c) || cx.tclass_of[c.idx()] != u32::MAX && !cx.input.link.jar_classes.contains_key(&c) || self.jar_extension(c, s).is_some()
+    }
+
+    /// The method of a jar's companion that stands for the method `s` of the value class `c`,
+    /// with the companion, the signature teq erases `s` to behind the underlying value, and the
+    /// method's name.
+    #[allow(clippy::type_complexity)]
+    fn jar_extension(&mut self, c: ClassId, s: SymId) -> Option<(&'a crate::classfile::ClassFile, &'a crate::classfile::Method, Vec<JType>, JType, String)> {
+        let cx = self.cx;
+        let companion: &'a crate::classfile::ClassFile = cx.vc_companions.get(&c)?;
+        let mut own = vec![self.vc_underlying(c)];
+        own.extend(self.erased_param_types(s));
+        let ret = self.erased_return_type(s);
+        let name = format!("{}$extension", self.target_name(s).unwrap_or_else(|| encode(cx.input.interner.get(cx.input.syms.sym(s).name))));
+        let m = pick_method(companion, &name, own.len(), &method_desc(&own, &ret))?;
+        Some((companion, m, own, ret, name))
+    }
+
     /// In link mode, a method a value class declares is called as scalac calls it: the
     /// companion's `m$extension` on the underlying value, `C$.MODULE$.m$extension(u, args)`.
     fn call_extension(&mut self, r: TExprId, s: SymId, args: ListRef) -> Option<JType> {
@@ -5772,13 +5841,7 @@ impl<'a> Gen<'a> {
             self.invoke(Invoke::Static, &owner, false, &name, &own, &ret);
             return Some(ret);
         }
-        let companion: &'a crate::classfile::ClassFile = cx.vc_companions.get(&c)?;
-        let mut own = vec![u.clone()];
-        own.extend(self.erased_param_types(s));
-        let ret = self.erased_return_type(s);
-        let name = format!("{}$extension", self.target_name(s).unwrap_or_else(|| encode(cx.input.interner.get(cx.input.syms.sym(s).name))));
-        let arity = own.len();
-        let m = pick_method(companion, &name, arity, &method_desc(&own, &ret))?;
+        let (companion, m, own, ret, name) = self.jar_extension(c, s)?;
         let (params, desc_ret) = parse_method_desc(&m.descriptor);
         let desc = m.descriptor.clone();
         let module = JType::L(Rc::from(companion.name.as_str()));
@@ -6622,7 +6685,15 @@ impl<'a> Gen<'a> {
 
     // ---- lambdas and lifted definitions ----
 
+    /// Queues a lifted body. The queue's order is the order of the class's methods, so nothing
+    /// is queued while a lowering runs (docs/LIR.md, "What a slice may not do").
+    pub(super) fn defer(&mut self, body: Pending) {
+        assert!(!self.code.frozen, "a lifted body is queued while a lowering runs");
+        self.pending.push(body);
+    }
+
     pub(super) fn fresh_name(&mut self, base: &str) -> String {
+        assert!(!self.code.frozen, "a name is numbered while a lowering runs");
         self.counter += 1;
         format!("{}${}", base, self.counter)
     }
@@ -6726,7 +6797,7 @@ impl<'a> Gen<'a> {
         let lifted = self.make_lifted(name, &free, vec![object.clone(); params.len()], object, None);
         self.load_captures(&lifted);
         let ft = self.function_type(params.len());
-        self.pending.push(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params.clone(), body) });
+        self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params.clone(), body) });
         self.lambda_call_site(&lifted, &ft, "apply");
         ft
     }
@@ -6743,7 +6814,7 @@ impl<'a> Gen<'a> {
         let object = JType::object();
         let desc = method_desc(&captured, &object);
         let lifted = Rc::new(Lifted { name, desc, this: false, key: false, captures: Vec::new(), params: Vec::new(), ret: object, home: None, module: None });
-        self.pending.push(Pending { lifted: lifted.clone(), body: PendingBody::JarGetter(getter) });
+        self.defer(Pending { lifted: lifted.clone(), body: PendingBody::JarGetter(getter) });
         let ft = self.function_type(0);
         self.call_site(&lifted, &ft, "apply", &captured);
     }
@@ -6822,7 +6893,7 @@ impl<'a> Gen<'a> {
         // take their names from it.
         let f = cx.fun_of_sym[s.idx()];
         if f != u32::MAX && cx.input.prog.funs[f as usize].body.is_some() {
-            self.pending.push(Pending { lifted: lifted.clone(), body: PendingBody::Fun(FunId(f)) });
+            self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Fun(FunId(f)) });
         }
         lifted
     }
@@ -6856,7 +6927,7 @@ impl<'a> Gen<'a> {
                 };
                 let l = self.make_lifted(name, &free, params, ret, Some(s));
                 self.lifted_defaults.insert((s, i), l.clone());
-                self.pending.push(Pending { lifted: l.clone(), body: PendingBody::Default(FunId(f), i) });
+                self.defer(Pending { lifted: l.clone(), body: PendingBody::Default(FunId(f), i) });
                 l
             }
         };

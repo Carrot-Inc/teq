@@ -12,12 +12,14 @@ mod free;
 mod gen;
 mod intrinsic;
 mod lazy;
+mod lower;
 pub mod kept;
 pub mod names;
 mod pattern;
 pub mod analysis;
 pub mod api;
 mod runtime;
+mod write;
 
 use crate::ast::mods;
 use crate::emit::layout::Layout;

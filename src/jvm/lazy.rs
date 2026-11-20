@@ -152,7 +152,7 @@ impl<'a> Gen<'a> {
                 _ => Some(PendingBody::LazyAccessor(s)),
             };
             if let Some(body) = body {
-                self.pending.push(Pending { lifted: lifted.clone(), body });
+                self.defer(Pending { lifted: lifted.clone(), body });
             }
         }
         lifted
@@ -165,9 +165,9 @@ impl<'a> Gen<'a> {
         for &s in cx.owned_lazies(home, file) {
             let Some(init) = cx.lazy_local_init(s) else { continue };
             let accessor = self.lazy_method(s, false);
-            self.pending.push(Pending { lifted: accessor, body: PendingBody::LazyAccessor(s) });
+            self.defer(Pending { lifted: accessor, body: PendingBody::LazyAccessor(s) });
             let initialiser = self.lazy_method(s, true);
-            self.pending.push(Pending { lifted: initialiser, body: PendingBody::LazyInit(s, init) });
+            self.defer(Pending { lifted: initialiser, body: PendingBody::LazyInit(s, init) });
         }
     }
 

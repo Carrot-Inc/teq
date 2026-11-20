@@ -53,17 +53,20 @@ pub struct ConstPool {
     count: u16,
     utf8: FxMap<Box<str>, u16>,
     consts: FxMap<Const, u16>,
+    /// A lowering runs (`Gen::lowering`): nothing may enter the pool, whose order is the output's.
+    pub frozen: bool,
 }
 
 impl ConstPool {
     fn new() -> ConstPool {
-        ConstPool { bytes: Vec::with_capacity(1024), count: 1, utf8: FxMap::default(), consts: FxMap::default() }
+        ConstPool { bytes: Vec::with_capacity(1024), count: 1, utf8: FxMap::default(), consts: FxMap::default(), frozen: false }
     }
 
     pub fn utf8(&mut self, s: &str) -> u16 {
         if let Some(&i) = self.utf8.get(s) {
             return i;
         }
+        assert!(!self.frozen, "the constant pool is written while a lowering runs");
         let i = self.count;
         self.count += 1;
         self.bytes.push(1);
@@ -78,6 +81,7 @@ impl ConstPool {
         if let Some(&i) = self.consts.get(&c) {
             return i;
         }
+        assert!(!self.frozen, "the constant pool is written while a lowering runs");
         let i = self.count;
         let b = &mut self.bytes;
         let mut wide = false;
@@ -346,6 +350,9 @@ pub struct Code {
     /// Set when a pop met an empty model: the method's code is wrong and is reported, not
     /// written.
     pub underflow: bool,
+    /// A lowering runs (`Gen::lowering`): nothing may be written, since what a lowering decides
+    /// must not depend on what is written, nor the output on the order of the lowerings.
+    pub frozen: bool,
 }
 
 impl Code {
@@ -368,7 +375,13 @@ impl Code {
             wide: false,
             overflow: false,
             underflow: false,
+            frozen: false,
         }
+    }
+
+    #[inline]
+    fn writing(&self) {
+        assert!(!self.frozen, "the code is written while a lowering runs");
     }
 
     pub fn pc(&self) -> u32 {
@@ -381,6 +394,7 @@ impl Code {
     }
 
     pub fn line(&mut self, line: u32) {
+        self.writing();
         let pc = self.pc() as u16;
         let line = line.min(u16::MAX as u32) as u16;
         match self.lines.last_mut() {
@@ -393,6 +407,7 @@ impl Code {
     // ---- the model ----
 
     pub fn push(&mut self, t: VT) {
+        self.writing();
         self.depth += if t.wide() { 2 } else { 1 };
         self.max_stack = self.max_stack.max(self.depth);
         self.stack.push(t);
@@ -404,6 +419,7 @@ impl Code {
     }
 
     pub fn pop(&mut self) -> VT {
+        self.writing();
         let Some(t) = self.stack.pop() else {
             self.underflow = true;
             return VT::Null;
@@ -421,6 +437,7 @@ impl Code {
     /// Gives the top of the stack the type the emitter takes it for from here on; the verifier
     /// sees a type assignable to it.
     pub fn retype_top(&mut self, t: VT) {
+        self.writing();
         let old = self.pop();
         debug_assert_eq!(old.wide(), t.wide());
         self.push(t);
@@ -428,6 +445,7 @@ impl Code {
 
     /// Reserves the next free slot (two for a long or double) and returns it.
     pub fn new_local(&mut self, t: VT) -> u16 {
+        self.writing();
         let slot = self.locals.len() as u16;
         self.locals.push(t);
         if t.wide() {
@@ -443,12 +461,14 @@ impl Code {
 
     /// Leaves a scope: the slots above the mark are free again.
     pub fn locals_release(&mut self, mark: usize) {
+        self.writing();
         self.locals.truncate(mark);
     }
 
     // ---- labels and frames ----
 
     pub fn new_label(&mut self) -> Label {
+        self.writing();
         self.labels.push(LabelInfo { offset: None, locals_len: self.locals.len(), frame: None });
         Label(self.labels.len() as u32 - 1)
     }
@@ -465,6 +485,7 @@ impl Code {
     /// Binds the label here. The state becomes the one recorded at the first jump to it; code
     /// that falls into it has to agree with that state.
     pub fn bind(&mut self, l: Label) {
+        self.writing();
         let offset = self.pc();
         let info = &mut self.labels[l.0 as usize];
         info.offset = Some(offset);
@@ -499,6 +520,7 @@ impl Code {
     /// Code after an unconditional transfer that no label leads to is unreachable, and the
     /// verifier still wants a frame in front of it.
     fn before_insn(&mut self) {
+        self.writing();
         if !self.reachable {
             self.reachable = true;
             let offset = self.pc();
@@ -507,11 +529,13 @@ impl Code {
     }
 
     pub fn add_handler(&mut self, h: Handler) {
+        self.writing();
         self.handlers.push(h);
     }
 
     /// Binds the entry of an exception handler: the locals as they are, the exception on the stack.
     pub fn bind_handler(&mut self, l: Label, exception: VT) {
+        self.writing();
         self.stack.clear();
         self.depth = 0;
         self.push(exception);
@@ -594,6 +618,7 @@ impl Code {
 
     /// Marks the end of a path: after a return or `athrow`.
     pub fn end_path(&mut self) {
+        self.writing();
         self.reachable = false;
     }
 

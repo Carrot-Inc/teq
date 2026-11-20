@@ -25,6 +25,7 @@ mod interp;
 mod java;
 mod jvm;
 mod lexer;
+mod lir;
 mod lsp;
 mod measure;
 mod memory;
