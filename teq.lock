@@ -1,8 +1,8 @@
-teq: 0.1.10
+teq: 0.1.11
 format: 1
 binaries:
-  linux-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.10/teq-0.1.10-linux-aarch_64 9b46971817609c7dce2fef732258b3797b9e9fdc 32022448
-  linux-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.10/teq-0.1.10-linux-x86_64 e775dbfefbffd8142c84db4682500955e82cf8dd 35059320
-  osx-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.10/teq-0.1.10-osx-aarch_64 ded585b6848f00add8e815cd331100a074f34ac7 29877920
-  osx-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.10/teq-0.1.10-osx-x86_64 70adba1edded768c6ebe6d7b481caaa143778ae8 33117832
-  windows-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.10/teq-0.1.10-windows-x86_64.exe ee8509ad2fe76cebcb6f3f3237c4307c7694dd11 32073216
+  linux-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.11/teq-0.1.11-linux-aarch_64 77b556ca4fa78ae151c2fefd48ee523e227782ed 33584904
+  linux-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.11/teq-0.1.11-linux-x86_64 ac5e0098ecbd478297c745ede6701b2ecc1145cf 36742304
+  osx-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.11/teq-0.1.11-osx-aarch_64 eeb82dfd59b86a5cdd48cedbd694803e06383326 31338416
+  osx-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.11/teq-0.1.11-osx-x86_64 c2c170d51d0bf91b241c0800478bf06347dd67d0 34777296
+  windows-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.11/teq-0.1.11-windows-x86_64.exe 6942b3a2017a391cf0db4c0e4b94c8748dd632e8 33771520
