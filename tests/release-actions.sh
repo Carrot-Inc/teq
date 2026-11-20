@@ -34,7 +34,7 @@ export GIT_CONFIG_NOSYSTEM=1
 for f in bench/actions/*.sh tests/windows.sh tests/support/identity.sh tests/support/identity-across.sh bench/ship.sh; do
   check "bash -n $f" "$(bash -n "$f" 2>&1)" ""
 done
-for f in .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml; do
+for f in .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml .github/workflows/native-assets.yml; do
   check "$f: every action pinned by a commit" "$(grep -E '^\s*(- )?uses:' "$f" | grep -vE 'uses: [A-Za-z0-9-]+/[a-z0-9-]+@[0-9a-f]{40} # v[0-9.]+$')" ""
   check "$f: no permission by default" "$(grep -c '^permissions: {}$' "$f")" 1
 done
@@ -53,7 +53,7 @@ check "bench/actions/tools.sh: scala-cli at the image's version and digest (benc
   "$(sed -n 's/^scala_cli_version=//p; s/^scala_cli_sha256=//p' bench/actions/tools.sh | tr '\n' ' ')" \
   "$(sed -n 's/^scala_cli_version=//p' bench/actions/toolchain.sh) $(sed -n 's/^ *scala_cli_arch=x86_64 scala_cli_sha256=\([0-9a-f]\{64\}\).*/\1/p' bench/actions/toolchain.sh) "
 if command -v actionlint > /dev/null; then
-  check "actionlint" "$(timeout 120 actionlint .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml 2>&1)" ""
+  check "actionlint" "$(timeout 120 actionlint .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml .github/workflows/native-assets.yml 2>&1)" ""
 else
   echo "skip actionlint: not installed"
 fi

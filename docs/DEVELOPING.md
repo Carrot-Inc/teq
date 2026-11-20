@@ -921,3 +921,15 @@ GitHub holds). The workflow never rewrites master, never forces a push, and make
 which its publication makes.
 `tests/release-actions.sh` checks the workflows' shape and the scripts' decisions without GitHub, against
 stand-ins and local repositories.
+
+### The native assets
+
+What the native target fetches is published by `.github/workflows/native-assets.yml`, run by hand from master, each
+set under a tag of its own as a pre-release, never GitHub's latest release, which stays teq's: `zig-<version>`,
+upstream's archive of zig for each host `bench/zig.sh` pins, its minisign signature verified with zig's key and its
+digest held to that pin; `native-libs-<n>`, the static archives of the C libraries with their headers, built from their
+pinned sources by `bench/native-libs.scala`; `jdk-signatures-<n>`, the JDK's signatures of the releases 17 to 24, cut
+from a pinned JDK by `bench/jdk-signatures.scala`. Two runners make the assets apart, each with the teq it builds
+from the commit: the first's are published under each tag that has no release yet, a tag that has one is never
+touched, and the second's are compared byte for byte with what the releases hold, a difference failing the run
+(`bench/native-assets.scala`, which prints each asset's digest). A new set is a new tag (`native-libs-2`).

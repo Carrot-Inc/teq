@@ -722,3 +722,14 @@ Its license, as the JDK carries it:
     not be used in advertising or otherwise to promote the sale, use or other
     dealings in these Data Files or Software without prior written
     authorization of the copyright holder.
+
+teq's releases also publish, as assets of their own outside teq's binary (.github/workflows/native-assets.yml), what
+a native build fetches, each with its licence: zig 0.16.0 (https://ziglang.org), upstream's archive unchanged, under
+the MIT License, its LICENSE inside it; the static archives, with their headers, of zlib 1.3.1 (https://zlib.net),
+Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler, under the zlib License, of OpenSSL 3.5.9
+(https://www.openssl.org), under the Apache License, Version 2.0, and of s2n-tls 1.5.27
+(https://github.com/aws/s2n-tls), Copyright Amazon.com, Inc. or its affiliates, under the Apache License, Version 2.0
+with its NOTICE, each zip holding its licence texts under licenses/; and the JDK's signatures of the releases 17 to
+24, cut from Eclipse Temurin 24.0.2+12's lib/ct.sym, under the GNU General Public License, version 2, with the
+Classpath Exception, its LICENSE and ASSEMBLY_EXCEPTION at the top of that archive. A native executable carries the
+archives of the libraries its program links, and their notices accompany a distribution of it.

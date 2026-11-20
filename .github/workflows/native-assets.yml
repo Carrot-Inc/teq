@@ -1,0 +1,93 @@
+# The assets the native target fetches from teq's releases, each under a tag of its own, a pre-release, none made by
+# hand (docs/DEVELOPING.md, "The native assets"): upstream's zig 0.16.0 for every host bench/zig.sh pins, its
+# signature verified with zig's minisign key and its digest held to the pin, copied byte for byte (zig-0.16.0); the
+# static archives of the C libraries, built from their pinned sources by bench/native-libs.scala (native-libs-1); the
+# JDK's signatures of the releases 17 to 24, cut from a pinned JDK's ct.sym by bench/jdk-signatures.scala
+# (jdk-signatures-1). Run by hand, from master. Two runners make the assets apart (`make`, its matrix), each running
+# the scripts under the teq it builds from the commit; `publish` releases the first runner's under each tag that has
+# no release yet and never touches one that has; `compare` holds the second runner's to what the releases then hold,
+# byte for byte, and fails on a difference, publishing nothing. bench/native-assets.scala has the steps; each prints
+# the assets' digests, which the native target's pins then take.
+name: native-assets
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  make:
+    if: github.repository == 'Carrot-Inc/teq' && github.ref == 'refs/heads/master'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 185
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        copy: [first, second]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: timeout 300 sudo apt-get update
+      - run: timeout 300 sudo apt-get install -y --no-install-recommends minisign
+      - run: timeout 600 rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" --profile minimal
+      - run: timeout 1800 cargo build --release --locked
+      - run: timeout 1800 target/release/teq interp bench/native-assets.scala -- zig out/assets
+      - run: timeout 300 tar -xJf out/assets/zig-0.16.0/zig-x86_64-linux-0.16.0.tar.xz -C "$RUNNER_TEMP"
+      - run: |
+          timeout 2400 target/release/teq interp bench/native-libs.scala -- --zig "$RUNNER_TEMP/zig-x86_64-linux-0.16.0/zig" --out out/libs --jobs "$(nproc)"
+          mv out/libs/assets out/assets/native-libs-1
+      - run: |
+          timeout 2400 target/release/teq interp bench/jdk-signatures.scala -- --out out/jdk
+          mv out/jdk/assets out/assets/jdk-signatures-1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: assets-${{ matrix.copy }}
+          path: out/assets/
+          if-no-files-found: error
+      - if: matrix.copy == 'first'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: teq
+          path: target/release/teq
+          if-no-files-found: error
+  publish:
+    needs: make
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 70
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: assets-first
+          path: out/assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: teq
+          path: out/bin
+      - run: chmod +x out/bin/teq && timeout 3000 out/bin/teq interp bench/native-assets.scala -- publish out/assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+  compare:
+    needs: publish
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: assets-second
+          path: out/assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: teq
+          path: out/bin
+      - run: chmod +x out/bin/teq && timeout 1500 out/bin/teq interp bench/native-assets.scala -- compare out/assets
+        env:
+          GH_TOKEN: ${{ github.token }}
