@@ -4,11 +4,11 @@ eq.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 erasure.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 flow.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 from-nullable.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
-generic-java-array-src	fail	-	java source: teq reads none
+generic-java-array-src	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i11332.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i25208	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 instanceof-nothing.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
-interop-unsound-src	fail	-	java source: teq reads none
+interop-unsound-src	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 nn.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 pattern-matching.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
 tasty-flexible-type	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)

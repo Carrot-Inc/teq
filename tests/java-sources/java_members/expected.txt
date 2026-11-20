@@ -1,0 +1,7 @@
+true
+6 9
+2 1
+k
+12
+guarded
+area 1.0

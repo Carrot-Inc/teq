@@ -1,0 +1,1 @@
+class J { java.util.List<? extends> x; }

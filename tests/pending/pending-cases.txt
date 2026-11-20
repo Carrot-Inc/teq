@@ -12,7 +12,6 @@ binary_int_literal	< 5
 case_companion_initialising_apply	< k2 |
 class_header_then_blank_line_brace	< log:block
 class_header_then_comment_blank_line_brace	< log:block
-classfile_reader_lone_surrogate	< d83d
 condition_over_line_of_own_width	< 1
 conflicting_base_types_through_trait	< scalac 3.8.4: rejected, 1 error(s)
 conversion_ambiguity_member_order	< scalac 3.8.4: rejected, 1 error(s)

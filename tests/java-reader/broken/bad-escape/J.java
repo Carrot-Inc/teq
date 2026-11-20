@@ -1,0 +1,1 @@
+class J { String s="\q"; }

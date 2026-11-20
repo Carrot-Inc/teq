@@ -37,6 +37,8 @@ stdlib 427
 app 17
 jvm 99
 jvm-21 85
+java-sources 7
+java-reader 17
 interp 45
 fold 0
 workers 320

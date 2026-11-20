@@ -18,11 +18,11 @@ flow-varref-in-closure.scala	fail	-	option: -Yexplicit-nulls (teq has no flag fo
 i21380.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 i21380b.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 i21619.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
-i21629	fail	-	java source: teq reads none
-i21629_override	fail	-	java source: teq reads none
+i21629	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
+i21629_override	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 i7883.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 interop-return.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
-notnull	fail	-	java source: teq reads none
+notnull	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 null-classtag.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 null-subtype-any.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 nullnull.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)

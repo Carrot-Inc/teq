@@ -13,7 +13,6 @@ binary_int_literal	fail	-	< 5
 case_companion_initialising_apply	fail	-	< k2 |
 class_header_then_blank_line_brace	fail	-	< log:block
 class_header_then_comment_blank_line_brace	fail	-	< log:block
-classfile_reader_lone_surrogate	fail	-	< d83d
 condition_over_line_of_own_width	fail	-	< 1
 conflicting_base_types_through_trait	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 console_without_println_value	pass	-	

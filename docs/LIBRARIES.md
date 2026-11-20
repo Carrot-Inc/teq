@@ -137,9 +137,10 @@ only where teq's platform layer implements it (`java.lang` and `java.util`: the 
 `not supported on JavaScript: <member> (a Java definition without an implementation)`. `java.time`
 on JavaScript comes from scala-java-time's jar, as under Scala.js.
 
-**Java sources in an sbt project** are refused: teq reads Java class files only, and javac ran inside
-the compile task the plugin replaces. A configuration with `.java` sources fails with an error naming
-them; set `teqCompiler := false` for that project, or move the sources into a project of their own.
+**Java sources in an sbt project** are refused: teq reads a Java source's declarations but compiles none
+of its bodies (docs/CLI.md), and javac ran inside the compile task the plugin replaces. A configuration with
+`.java` sources fails with an error naming them; set `teqCompiler := false` for that project, or move the
+sources into a project of their own.
 
 ## Not yet
 

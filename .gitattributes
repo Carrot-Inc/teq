@@ -9,3 +9,5 @@
 /tests/fix/support/probes/newline_found_cr.scala -text
 /tests/fix/support/probes/newline_found_crlf.scala -text
 /tests/fix/scalameta/Probes.txt -text
+# The Java reader's broken sources, kept byte for byte: a CRLF, a BOM, a byte that is not UTF-8 (tests/java-reader/progress.py).
+/tests/java-reader/broken/** -text

@@ -118,14 +118,12 @@ The comparison then fails:
 - where teq refuses a file whose row does not pin the refusal: a `finding:` saying teq refuses it, at the
   `<file>:<line>:<column>` it names when it names one.
 
-Before the groups, `--teq` checks its own verdict over `given` and `java-order-source`. The binary must pass both,
-and each damaged run must fail its group, through the same path:
-- over `given`: the documents deleted after teq writes them, their MD5 zeroed, the document written twice, a status
-  of 101, a status of 2 over every document, and `/bin/false`;
-- over `java-order-source`: an unexpected document written beside its pinned refusal.
+Before the groups, `--teq` checks its own verdict over `given`. The binary must pass it, and each damaged run must
+fail it, through the same path: the documents deleted after teq writes them, their MD5 zeroed, the document written
+twice, a status of 101, a status of 2 over every document, and `/bin/false`.
 
-`VERBOSE=1` prints every differing document's first differences. A `.java` source among them too: teq reads no Java source, so the group of the Java
-class from source is its finding, the class file's group its own comparison. teq also writes, beside each document,
+`VERBOSE=1` prints every differing document's first differences. A group's `.java` source is given to teq as to
+scalac, which reads it for its declarations; it has no document of its own. teq also writes, beside each document,
 `<file>.forms`, its members' types with the retained forms the typer keeps; where `forms/<group>/<uri>.forms` holds
 the view of scalac's typed tree (`-Xprint:typer`), the two must agree whatever the document's status. A view
 listed in `forms-rebase.txt` is marked for the rebase (below). The identity run types every case of

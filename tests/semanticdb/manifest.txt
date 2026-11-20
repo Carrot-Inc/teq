@@ -84,7 +84,7 @@ fun-param/v1/S.scala	pending	unstable occurrences 12:22 13:6: dotty names the na
 fun-param/v2/S.scala	pending	unstable occurrences 19:22 20:6: dotty names the named argument x of f(x = ...) by funParamSymbol's HashMap[Symbol, Int] order (symbol ids): the parameter at v0-v2, the body's val at v3; the two occurrences' symbols are compared against nothing, the rest of the document as any other
 fun-param/v3/S.scala	pending	unstable occurrences 26:22 27:6: dotty names the named argument x of f(x = ...) by funParamSymbol's HashMap[Symbol, Int] order (symbol ids): the parameter at v0-v2, the body's val at v3; the two occurrences' symbols are compared against nothing, the rest of the document as any other
 java-order-classes/javaorder/UseHolder.scala	pending	the Java class loaded from its class file: fields before methods (ClassfileParser), the method size(+1)
-java-order-source/javaorder/UseHolder.scala	finding: teq reads no Java source: given Holder.java with its consumer, it parses it as Scala and refuses it, so the consumer does not type (scalac parses the Java source, its members in written order: the method size()); from javac's class file teq reads the class in the class file's order (java-order-classes)
+java-order-source/javaorder/UseHolder.scala	pending	the Java class read from its source with its consumer: scalac's Java parser enters its members in written order, the method size() (from javac's class file: java-order-classes)
 lib-jar/client/Use.scala	pending	the jar consumer: CC's synthetic apply before its written one in the pickled scope
 lib-source/client/Use.scala	pending
 lib-source/lib/Lib.scala	pending

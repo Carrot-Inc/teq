@@ -9,7 +9,7 @@ boundsInterfaces.scala	fail	interp:fail	output: line 1: the .check has 'T <: jav
 derivedNames.scala	fail	interp:fail	derivedNames.scala:6:22: value getGenericReturnType is not a member of Method
 higherKinded.scala	fail	interp:fail	output: line 1: the .check has 't <: java.lang.Object', the program printed nothing
 i10834.scala	fail	interp:fail	output: line 3: the .check has 'public A1(X)', the program printed 'public A1(java.lang.Object)'
-i15385	fail	-	java source: teq reads none
+i15385	pass	interp:fail	
 i3411.scala	fail	interp:fail	i3411.scala:8:13: value toGenericString is not a member of Method
 i3476.scala	fail	interp:fail	i3476.scala:6:26: value getTypeParameters is not a member of Method
 i3653.scala	fail	interp:fail	i3653.scala:14:13: value toGenericString is not a member of Method

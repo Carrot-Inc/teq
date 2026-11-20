@@ -42,8 +42,9 @@ shell can differ, and `set every teqCompiler := true` switches a session. The to
 project and configuration, so one build can hold both compilers: a project with it off keeps sbt's stock tasks
 and its class directory to scalac alone, one with it on reads an upstream project's products, scalac's or
 teq's, through TASTy, and scalac reads teq's in the other direction. What stays with scalac is `doc`,
-`console` and scalafix, and Java sources, which teq reads as class files only: a configuration with `.java`
-sources is refused with an error naming them, and takes `teqCompiler := false` or a project of its own. JUnit
+`console` and scalafix, and Java sources, whose declarations teq reads but whose bodies it does not compile
+(docs/CLI.md): a configuration with `.java` sources is refused with an error naming them, and takes
+`teqCompiler := false` or a project of its own. JUnit
 suites are found by their `@Test` methods but not run yet.
 
 sbt 1's `test` runs every suite each time, as sbt 1 runs it (`testQuick` is a task of its own there), and sbt 1

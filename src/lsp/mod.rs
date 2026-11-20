@@ -762,9 +762,11 @@ fn names_an_export(params: &Json) -> bool {
 }
 
 /// The globs of the build definition files the server watches: sbt's and Mill's (the files
-/// `task::export::input_digests` reads of either) and the exports.
-const WATCHED: [&str; 16] = [
+/// `task::export::input_digests` reads of either) and the exports; and the sources, the Java ones among them, whose
+/// declarations a build reads (`crate::java`).
+const WATCHED: [&str; 17] = [
     "**/*.scala",
+    "**/*.java",
     "**/teq.lock",
     "**/*.sbt",
     "**/project/build.properties",

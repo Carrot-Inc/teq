@@ -21,7 +21,7 @@ byte.scala	fail	-	check: line 1: the .check has '5: Match case Unreachable', teq
 dotty-trees.scala	pass	-	
 dotty-unreachable.scala	pass	-	
 dotty.scala	pass	-	
-enum	fail	-	java source: teq reads none
+enum	fail	-	check: line 1: the .check has '4: Pattern Match Exhaustivity: SUNDAY, THURSDAY, FRIDAY, SATURDAY', teq gives '1: (error) not supported yet: a Java enum (the Java reader reads classes and interfaces)'
 enum-HList.scala	fail	-	check: line 1: the .check has nothing, teq gives '9: (error) Found:    Any'
 enum-Tree.scala	pass	-	
 enum-approx.scala	fail	-	check: line 1: the .check has '24: Pattern Match Exhaustivity: Fun.ConstNullClass(_)', teq gives '24: Pattern Match Exhaustivity: ConstNullClass(_)'
@@ -137,7 +137,7 @@ i9841.scala	pass	-
 identifier.scala	pass	-	
 irrefutable.scala	fail	-	check: line 1: the .check has '22: Pattern Match Exhaustivity: _: A, _: B, C(_, _)', teq gives '12: Pattern Match Exhaustivity: _: A, _: B, C(_, _)'
 isSubspace-Typ-Prod.scala	pass	-	
-java-enum1	fail	-	java source: teq reads none
+java-enum1	fail	-	check: line 1: the .check has nothing, teq gives '1: (error) not supported yet: a Java enum (the Java reader reads classes and interfaces)'
 nontrivial-andtype.scala	fail	-	check: line 1: the .check has '16: Pattern Match Exhaustivity: _: A, B(), _: C, D', teq gives "17: (error) expected an expression, found ';'"
 null.scala	fail	-	check: line 1: the .check has '6: Match case Unreachable', teq gives '5: Match case Unreachable'
 optionless.scala	pass	-	
@@ -164,7 +164,7 @@ t11620b.scala	pass	-
 t11649.scala	pass	-	
 t12237.scala	fail	-	check: line 1: the .check has '21: Pattern Match Exhaustivity: Root, PathAndQuery./(_, _), PathAndQuery.===(_, _), PathAndQuery.:&(_, PathAndQuery.===(_, _)), PathAndQuery.+?(_, PathAndQuery.===(_, _))', teq gives '21: Pattern Match Exhaust
 t2425.scala	fail	-	check: line 1: the .check has nothing, teq gives '6: Pattern Match'
-t2442	fail	-	java source: teq reads none
+t2442	fail	-	check: line 1: the .check has '4: Pattern Match Exhaustivity: THREE', teq gives '1: (error) not supported yet: a Java enum (the Java reader reads classes and interfaces)'
 t3097.scala	pass	-	
 t3098	pass	-	
 t3111.scala	pass	-	
@@ -201,7 +201,7 @@ t8430.scala	pass	-
 t8511.scala	pass	-	
 t8546.scala	pass	-	
 t8606.scala	fail	-	check: line 1: the .check has nothing, teq gives '4: Pattern Match Exhaustivity: AObj(), BObj()'
-t8700a	fail	-	java source: teq reads none
+t8700a	fail	-	check: line 1: the .check has '2: Pattern Match Exhaustivity: B', teq gives '3: (error) value A is not a member of Foo'
 t9129.scala	pass	-	
 t9232.scala	fail	-	check: line 3: the .check has '21: Pattern Match Exhaustivity: Node1(Foo()), Node2()', teq gives '21: Pattern Match Exhaustivity: Node1(_), Node2()'
 t9289.scala	fail	-	check: line 1: the .check has '9: Pattern Match Exhaustivity: module.LetR()', teq gives '9: Pattern Match Exhaustivity: LetR()'

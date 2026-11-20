@@ -2485,6 +2485,10 @@ impl<'a, 't> Interp<'a, 't> {
                         if let Some(v) = self.jdk_member(&recv, name, &args)? {
                             return Ok(v);
                         }
+                        if let Some((k, path)) = self.typer.java_source_of(o.class) {
+                            let path = path.to_string();
+                            return self.unsupported(format!("{} is a class of the Java source {}, whose body for {} the interpreter does not have", self.runtime_class_name(k), path, n));
+                        }
                         let hint = if class.starts_with("java.time.") { " (java.time: scala-java-time)" } else { "" };
                         return self.unsupported(format!("{} is a JDK class, which has no body for {} to run; put a library implementing it on the class path{}", class, n, hint));
                     }

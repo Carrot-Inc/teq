@@ -63,7 +63,7 @@ NoneMatch.scala	fail	-	check: diagnostic 2 of 2: scalac's is error NoneMatch.sca
 OpaqueEscape.scala	fail	-	marks: 3 errors where 2 are marked: OpaqueEscape.scala:9:7: class Escaper needs to be abstract, since def unwrap(i: Wrapped): Int in class EscaperBase is not defined
 OrType.scala	pass	-	
 SummonFrom.scala	pass	-	
-WrongBounds.java	fail	-	java source: teq reads none
+WrongBounds.java	fail	-	marks: 3 errors where 1 are marked: WrongBounds.java:4:9: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 abstract-givens-new.scala	fail	-	marks: 4 errors where 1 are marked: abstract-givens-new.scala:7:23: This defines an abstract given, which is no longer supported. Use a `deferred` given instead.
 abstract-givens.scala	fail	-	check: diagnostic 1 of 3: scalac's is error abstract-givens.scala:11:9 instance cannot be created, since def iterator: Iterator[A] in trait IterableOnce in package scala.collection is not defined; teq's is error abstract-givens.scala:8:9 gi
 abstract-inline-val.scala	fail	-	marks: 1 errors where 2 are marked
@@ -404,7 +404,7 @@ i11565.gadt.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11565.gadt
 i11567.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i11567.scala:4:13 view bounds `<%' are no longer supported, use a context bound `:' instead; teq's is error i11567.scala:4:13 expected ',' or ']', found identifier
 i11581.scala	fail	-	marks: no error where 4 are marked
 i11614.scala	pass	-	
-i11616	fail	-	java source: teq reads none
+i11616	fail	-	marks: no error where 2 are marked
 i11637.scala	fail	-	marks: no error where 2 are marked
 i1169.scala	fail	-	marks: no error where 1 are marked
 i11694.scala	fail	-	marks: 9 errors where 6 are marked: i11694.scala:16:51: missing parameter type
@@ -661,7 +661,7 @@ i16888.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i16888.scala:3:3
 i16920.scala	fail	-	check: diagnostic 1 of 7: scalac's is error i16920.scala:19:5 value wow is not a member of String.; teq's is error i16920.scala:19:5 value wow is not a member of String
 i17002.scala	fail	-	marks: no error where 3 are marked
 i1701.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i1701.scala:2:17 Expected a type, but found a term: test; teq's is error i1701.scala:2:17 Not found: type test
-i17021.ext-java	fail	-	java source: teq reads none
+i17021.ext-java	fail	-	marks: no error where 1 are marked
 i1703.scala	fail	-	marks: no error where 1 are marked
 i1706.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1706.scala:2:12 value reflect is not a member of object Object; teq's is error i1706.scala:2:12 Not found: Object
 i1707.scala	fail	-	marks: 8 errors where 3 are marked: i1707.scala:16:22: expected end of statement, found '{'
@@ -731,7 +731,7 @@ i18453.min.scala	pass	-
 i18453.scala	pass	-	
 i18458.scala	fail	-	marks: no error where 1 are marked
 i1846.scala	fail	-	marks: 21 errors where 12 are marked: i1846.scala:6:20: expected a pattern, found indented block
-i18533	fail	-	java source: teq reads none
+i18533	fail	-	marks: 3 errors where 2 are marked: Non_SCALA_ONLY.java:4:8: Identifier 'non' is not allowed here
 i18545.scala	fail	-	marks: 2 errors where 5 are marked
 i18552.scala	fail	-	marks: no error where 1 are marked
 i18584	cannot run	-	jdk: the test is for JDK 25+, this is 24
@@ -777,7 +777,7 @@ i19414.scala	fail	-	marks: 2 errors where 1 are marked: i19414.scala:12:42: Foun
 i19445.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19445.scala:17:16 Found:    Test.UnwrapTypes[FooBar.Bar[Int]]; teq's is error i19445.scala:17:16 Found:    UnwrapTypes[FooBar.Bar[Int]]
 i19506.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19506.scala:7:19 No given instance of type Reader[Object] was found for a context parameter of method read; teq's is error i19506.scala:7:19 No given instance of type Reader[AnyRef] was found for
 i19594.scala	fail	-	check: diagnostic 5 of 6: scalac's is error i19594.scala:26:3 No given instance of type String was found; teq's is error i19594.scala:26:13 No given instance of type String was found for parameter s of method h in object updated
-i19619	fail	-	java source: teq reads none
+i19619	fail	-	marks: 18 errors where 2 are marked: InnerClass.java:7:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i19731.scala	fail	-	check: diagnostic 2 of 3: scalac's is error i19731.scala:7:7 class F2 needs to be abstract, since:; teq's is error i19731.scala:7:7 class F2 needs to be abstract, since def foo(): Unit in class F2 is not defined
 i19746.scala	fail	-	marks: error on an unmarked line i19746.scala:10: Found:    Any
 i19762.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19762.scala:8:32 Missing return type; teq's is error i19762.scala:8:32 unmatched closing bracket
@@ -814,8 +814,8 @@ i20511.scala	fail	-	marks: 4 errors where 3 are marked: i20511.scala:7:20: expec
 i20517.scala	fail	-	marks: 2 errors where 1 are marked: i20517.scala:9:44: Found:    (elem : String)
 i20533.scala	fail	-	marks: 3 errors where 1 are marked: i20533.scala:5:5: Found:    [X] => (x: <error>, y: <error>) => Map[Nothing, Nothing]
 i20546.scala	fail	-	marks: error on an unmarked line i20546.scala:1: cannot resolve import: NamedTuple is not an object or a package
-i20554-a	fail	-	java source: teq reads none
-i20554-b	fail	-	java source: teq reads none
+i20554-a	fail	-	marks: 1 errors where 2 are marked
+i20554-b	fail	-	marks: error on an unmarked line SimpleAnnotation.java:2: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i2066.scala	fail	-	marks: no error where 2 are marked
 i2086a.scala	fail	-	marks: no error where 1 are marked
 i2086b.scala	fail	-	marks: no error where 1 are marked
@@ -829,7 +829,7 @@ i21207.scala	fail	-	marks: 6 errors where 5 are marked: i21207.scala:20:11: meth
 i21212.scala	fail	-	marks: no error where 1 are marked
 i21239.orig.scala	pass	-	
 i21239.scala	pass	-	
-i21303	fail	-	java source: teq reads none
+i21303	fail	-	marks: 2 errors where 1 are marked: JavaEnum.java:1:13: not supported yet: a Java enum (the Java reader reads classes and interfaces)
 i21321.scala	fail	-	marks: 1 errors where 4 are marked
 i21335.scala	pass	-	
 i21351.scala	fail	-	marks: 1 errors where 2 are marked
@@ -876,7 +876,7 @@ i22721	fail	-	check: diagnostic 1 of 1: scalac's is error test2.scala:3:1 foobar
 i22752.scala	fail	-	marks: no error where 1 are marked
 i22792.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22792.scala:8:18 missing argument for parameter ev of method run in class Foo: (implicit ev: Permit): Unit; teq's is error i22792.scala:8:18 missing argument for parameter ev
 i22851.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i22851.scala:8:20 MirroredElemTypes mismatch, expected: EmptyTuple.type, found:  <: NonEmptyTuple.; teq's is error i22851.scala:8:20 No given instance of type ProductOf[EmptyTuple]{type MirroredEl
-i22890	fail	-	java source: teq reads none
+i22890	fail	-	marks: no error where 1 are marked
 i22903.scala	fail	-	marks: 3 errors where 1 are marked: i22903.scala:1:7: class CustomProduct needs to be abstract, since it has 2 unimplemented members: productArity, productElement
 i22906.scala	fail	-	option: -rewrite (teq has no flag for it)
 i2292.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2292.scala:1:12 ';' expected, but identifier found; teq's is error i2292.scala:1:12 expected a definition, found identifier
@@ -986,7 +986,7 @@ i2971.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2971.scala:17:24
 i2973.scala	fail	-	check: diagnostic 1 of 34: scalac's is error i2973.scala:10:1 contravariant type T occurs in invariant position in type InvClass[T] {...} of class Contra; teq's is error i2973.scala:10:7 contravariant type T occurs in invariant position in 
 i2974.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i2974.scala:15:21 Ambiguous given instances: both value ba and value fa match type Foo[Int] of parameter x of method summon in object Predef; teq's is error i2974.scala:15:21 ambiguous given insta
 i2979.scala	pass	-	
-i3012	fail	-	java source: teq reads none
+i3012	fail	-	check: diagnostic 1 of 2: scalac's is error a.scala:4:3 missing argument for parameter i of method apply in class StringOps: (i: Int): Char; teq's is error a.scala:4:3 method str in object a does not take parameters
 i3067.scala	fail	-	marks: 2 errors where 6 are marked
 i3067b.scala	fail	-	marks: 1 errors where 2 are marked
 i3083.scala	fail	-	marks: 2 errors where 3 are marked
@@ -1120,13 +1120,13 @@ i5327-a.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5327-a.scala:8
 i5327-b.scala	fail	-	marks: 3 errors where 2 are marked: i5327-b.scala:3:39: a polymorphic function type takes a function type after `=>`
 i5327-c.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5327-c.scala:8:21 Found:    (xs2 : Int); teq's is error i5327-c.scala:8:21 Found:    Int
 i5328.scala	fail	-	marks: 4 errors where 1 are marked: i5328.scala:7:7: expected ']', found '='
-i533	fail	-	java source: teq reads none
+i533	fail	-	marks: no error where 1 are marked
 i5332.scala	pass	-	
 i5397.scala	fail	-	marks: error on an unmarked line i5397.scala:7: Cannot rewrite recursive call: it is not in tail position
 i5427.scala	fail	-	marks: 6 errors where 2 are marked: i5427.scala:11:8: No given instance of type Foo[A] was found for parameter f1 of method test2 in object Test
 i5433.scala	fail	-	marks: no error where 1 are marked
 i5445.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5445.scala:4:11 object creation impossible, since def polymorphic[x]: Int in trait A in object Test is not defined; teq's is error i5445.scala:4:11 object creation impossible, since def polymorph
-i5453	fail	-	java source: teq reads none
+i5453	fail	-	check: diagnostic 1 of 1: scalac's is error S.scala:2:16 error overriding method foo in class J of type (): String;; teq's is error S.scala:2:16 error overriding method foo in class J of type (): String: method foo of type (): Int has incom
 i5455.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i5455.scala:32:18 type Nat is not a member of object Library.Nat; teq's is error i5455.scala:32:18 type Nat not found
 i5481.scala	fail	-	marks: 3 errors where 1 are marked: i5481.scala:15:38: missing parameter type
 i5495.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i5495.scala:1:1 This modifier is not allowed on an enum; teq's is error i5495.scala:1:1 modifier lazy is not allowed for this definition
@@ -1321,7 +1321,7 @@ i9051.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9051.scala:11:11
 i9061.scala	fail	-	check: diagnostic 2 of 3: scalac's is error i9061.scala:4:51 covariant type A occurs in invariant position in type F[Int][A] of value fa; teq's is error i9061.scala:4:55 this type does not take type arguments
 i9100.scala	fail	-	marks: 3 errors where 1 are marked: i9100.scala:2:30: expected end of statement, found identifier
 i9109.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9109.scala:5:16 method foo has a different signature than the overridden declaration; teq's is error i9109.scala:5:16 method foo overrides nothing
-i9115	fail	-	java source: teq reads none
+i9115	fail	-	check: diagnostic 1 of 1: error B.scala:2:16, line 2 of the message: scalac's is value foo of type String cannot override final member variable foo in class A; teq's is value foo of type String cannot override a mutable variable
 i9160.scala	fail	-	check: diagnostic 1 of 12: scalac's is error i9160.scala:14:5 Found:    (foo.Test.F : foo.Test.F[Int]); teq's is error i9160.scala:14:5 Found:    F[Int]
 i9168.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9168.scala:3:29 expression expected but ';' found; teq's is error i9168.scala:3:29 expected an expression, found ';'
 i9185.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i9185.scala:7:16 value pure is not a member of String.; teq's is error i9185.scala:7:26 ambiguous given instances for M[<error>]: listMonad, optionMonad
@@ -1427,16 +1427,16 @@ invariant-gadt.scala	fail	-	check: diagnostic 1 of 4: scalac's is error invarian
 irrefutable-genfrom.scala	pass	-	
 irrefutable.scala	fail	-	check: diagnostic 1 of 2: scalac's is error irrefutable.scala:27:30 value withFilter is not a member of Lst[Foo[Any]]; teq's is error irrefutable.scala:27:5 value withFilter is not a member of Lst[Foo[Any]]
 isRef.scala	fail	-	check: diagnostic 1 of 2: scalac's is error isRef.scala:6:22 Found:    Foo.this.B; teq's is error isRef.scala:6:22 Found:    Any{type S = String}
-java-ann-extends	fail	-	java source: teq reads none
-java-ann-extends-separate	fail	-	java source: teq reads none
-java-ann-super-class	fail	-	java source: teq reads none
-java-ann-super-class2	fail	-	java source: teq reads none
-java-ann-super-class3	fail	-	java source: teq reads none
-java-annot	fail	-	java source: teq reads none
-java-fake-ann	fail	-	java source: teq reads none
-java-fake-ann-separate	fail	-	java source: teq reads none
-java-trait-access	fail	-	java source: teq reads none
-java-wrong-bounds	fail	-	java source: teq reads none
+java-ann-extends	fail	-	marks: 2 errors where 1 are marked: Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-ann-extends-separate	fail	-	marks: 2 errors where 1 are marked: Ann_1.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-ann-super-class	fail	-	marks: 5 errors where 3 are marked: Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-ann-super-class2	fail	-	marks: 2 errors where 1 are marked: Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-ann-super-class3	fail	-	marks: 2 errors where 1 are marked: Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-annot	fail	-	marks: error on an unmarked line J.java:4: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-fake-ann	fail	-	marks: no error where 2 are marked
+java-fake-ann-separate	fail	-	marks: no error where 2 are marked
+java-trait-access	fail	-	marks: no error where 2 are marked
+java-wrong-bounds	fail	-	marks: no error where 5 are marked
 kind-projector-underscores.scala	fail	-	option: -Xkind-projector:underscores (teq has no flag for it)
 kind-projector.scala	fail	-	marks: 5 errors where 3 are marked: kind-projector.scala:7:24: type argument [_$kp$1, _$kp$2] =>> Either[_$kp$1, _$kp$2] does not have the same kind as its bound [_]
 kinds1.scala	fail	-	check: diagnostic 1 of 1: scalac's is error kinds1.scala:8:12 Type argument Test.C does not have the same kind as its bound; teq's is error kinds1.scala:8:12 type argument C does not have the same kind as its bound
@@ -1624,7 +1624,7 @@ refinedSubtyping.scala	fail	-	check: diagnostic 1 of 2: scalac's is error refine
 refutable-pattern-binding-messages-old.scala	fail	-	check: diagnostic 1 of 6: scalac's is error refutable-pattern-binding-messages-old.scala:6:7 pattern binding uses refutable extractor `Test.Positive`; teq's is warning refutable-pattern-binding-messages-old.scala:5:7 pattern binding uses re
 refutable-pattern-binding-messages.scala	fail	-	check: diagnostic 1 of 6: scalac's is error refutable-pattern-binding-messages.scala:6:7 pattern binding uses refutable extractor `Test.Positive`; teq's is warning refutable-pattern-binding-messages.scala:5:7 pattern binding uses refutable 
 renaming-imports.scala	fail	-	marks: 3 errors where 2 are marked: renaming-imports.scala:8:10: foo is not a member of the package
-repeatable	fail	-	java source: teq reads none
+repeatable	fail	-	marks: error on an unmarked line FirstLevel_0.java:7: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 repeatedArgs213.scala	fail	-	check: diagnostic 1 of 4: scalac's is error repeatedArgs213.scala:10:9 Found:    (ys : scala.collection.Seq[String]); teq's is error repeatedArgs213.scala:10:9 Found:    scala.collection.Seq[String]
 rightassoc-extmethod.scala	fail	-	check: diagnostic 1 of 1: scalac's is error rightassoc-extmethod.scala:2:20 right-associative extension method must start with a single parameter, consider a tupled parameter instead; teq's is error rightassoc-extmethod.scala:2:24 right-ass
 rootImplicits.scala	fail	-	check: diagnostic 1 of 2: scalac's is error rootImplicits.scala:7:11 value + is not a member of Object; teq's is error rootImplicits.scala:7:11 value + is not a member of AnyRef
@@ -1689,7 +1689,7 @@ syntax-error-recovery.scala	fail	-	marks: 22 errors where 19 are marked: syntax-
 t10035.scala	pass	-	
 t11437.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t11437.scala:5:17 Unbound placeholder parameter; incorrect use of _; teq's is error t11437.scala:5:17 Not found: _$0
 t11900.scala	fail	-	marks: 1 errors where 4 are marked
-t12290	fail	-	java source: teq reads none
+t12290	pass	-	
 t12494.scala	fail	-	check: diagnostic 1 of 1: scalac's is error t12494.scala:11:26 error overriding method f in trait C of type => Int;; teq's is error t12494.scala:11:26 method f has weaker access privileges than method f in trait C; it should be at least pro
 t12715.scala	pass	-	
 t12715b.scala	fail	-	marks: 3 errors where 1 are marked: t12715b.scala:7:3: modifier abstract is not allowed for this definition
@@ -1748,8 +1748,8 @@ targetName-illegal.scala	fail	-	marks: no error where 1 are marked
 targetName-late.scala	fail	-	check: diagnostic 1 of 1: error targetName-late.scala:10:7, line 4 of the message: scalac's is have the same name and type (): Int after erasure.; teq's is have the same name and type Int after erasure.
 targetName-override-2.scala	fail	-	check: diagnostic 1 of 1: error targetName-override-2.scala:11:7, line 2 of the message: scalac's is def foo(x: String): String in class Alpha at line 9 and; teq's is def baz(x: String): String in class Alpha at line 9 and
 targetName-override.scala	fail	-	marks: 6 errors where 4 are marked: targetName-override.scala:14:7: class Beta needs to be abstract, since def foo(x: String): String in class Alpha is not defined
-targetName-override0	fail	-	java source: teq reads none
-targetName-override1	fail	-	java source: teq reads none
+targetName-override0	fail	-	check: diagnostic 1 of 1: error C_2.scala:2:7, line 2 of the message: scalac's is def bar(): Int in class B_1 and; teq's is def bar(): Int in class B_1 at line 1 and
+targetName-override1	fail	-	marks: 2 errors where 1 are marked: D_2.scala:2:7: Name clash between defined and inherited member:
 targetName-refine.scala	pass	-	
 targetName-toplevel.scala	fail	-	marks: 3 errors where 6 are marked
 tate.scala	fail	-	marks: 2 errors where 1 are marked: tate.scala:9:18: Found:    Bound[U, _]

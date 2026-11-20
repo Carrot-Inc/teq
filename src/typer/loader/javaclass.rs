@@ -26,6 +26,17 @@ const JDK_ROOTS: &[&str] = &["java", "javax", "jdk", "sun", "com.sun", "org.w3c"
 
 const MAX_NESTING: u32 = 8;
 
+/// The root of a package's slash path, as the JDK's packages give theirs: its first segment, its first two where the
+/// first is `com` or `org` (`java`, `jdk`, `com.sun`, `org.w3c`), dotted.
+pub(crate) fn jdk_root(path: &str) -> String {
+    let mut segs = path.split('/').filter(|s| !s.is_empty());
+    let first = segs.next().unwrap_or("");
+    match (first, segs.next()) {
+        ("com" | "org", Some(second)) => format!("{}.{}", first, second),
+        _ => first.to_string(),
+    }
+}
+
 pub struct Java {
     /// `ct.sym` for the questions of what the JDK declares, opened on the first one (`None` inside
     /// where no JDK is found).
@@ -37,6 +48,8 @@ pub struct Java {
     jdk_missing: bool,
     /// The packages of the JDK by their id, once it is open, with their index in `Jdk::packages`.
     jdk_pkgs: FxMap<PkgId, u32>,
+    /// The JDK's roots, once it is open, derived from its packages (`jdk_root`): `java`, `jdk`, `com.sun`, `org.w3c`.
+    jdk_roots: Vec<String>,
     /// The Java classes entered, read outside the loader's lock (`Worker::is_java_class`).
     pub classes: SharedMap<ClassId, JClass>,
     /// The members entered: the lock holder's.
@@ -62,6 +75,100 @@ pub struct Java {
     pub ctors_done: crate::arena::SharedMap<ClassId, ()>,
     pub builtin_done: [std::sync::atomic::AtomicBool; 2],
     pub stats: JavaStats,
+    /// The program's Java sources' classes by their package and simple name, every top-level
+    /// declaration of every selected `.java` (`OutlineJavaParser`): asked before the class path, a
+    /// source standing for its class over a class file of the same name.
+    pub sources: FxMap<(PkgId, Name), SourceClass>,
+    /// Whether any is: the one test the loader's lookups make on a program without Java sources.
+    pub has_sources: bool,
+}
+
+/// A top-level class of one of the program's Java sources (`crate::java`): its file, its unit's declarations, and
+/// its record once something asked for the class.
+pub struct SourceClass {
+    pub file: FileId,
+    pub unit: Arc<crate::java::parser::Unit>,
+    pub decl: usize,
+    pub record: Option<Arc<ClassFile>>,
+    /// The record's refusals owed once a Scala reader asks for the class (`Problem::when_read`).
+    pub when_read: Vec<crate::java::record::Problem>,
+    /// Whether its record is being built (a walk of parents that comes back to it stops).
+    pub building: bool,
+    /// The written paths of the names its record did not resolve (`crate::java::record::build`), which bind nothing: a
+    /// check of parents skips them.
+    pub unresolved: Vec<String>,
+}
+
+/// Java's name resolution for a source's record (`crate::java::record::Resolve`), answered from what the loader
+/// knows without entering a class: the program's Java sources, the program's and the std's classes, the class
+/// path's and the JDK's class files.
+struct JavaNames<'w, 'a> {
+    w: &'w mut Worker<'a>,
+}
+
+impl crate::java::record::Resolve for JavaNames<'_, '_> {
+    fn class_in(&mut self, pkg: &str, simple: &str) -> Option<crate::java::record::Found> {
+        let p = self.w.java_source_pkg(pkg)?;
+        self.w.java_source_class_in(p, pkg, simple)
+    }
+
+    fn member_of(&mut self, outer: &str, simple: &str) -> Option<crate::java::record::Found> {
+        let (pkg, top) = outer.rsplit_once('/').unwrap_or(("", outer));
+        let p = self.w.java_source_pkg(pkg)?;
+        let stem = format!("{}${}", top, simple);
+        self.w.java_source_class_in(p, pkg, &stem)
+    }
+
+    fn package(&mut self, pkg: &str) -> bool {
+        self.w.java_source_pkg(pkg).is_some()
+    }
+
+    fn parents_of(&mut self, binary: &str) -> Vec<String> {
+        self.w.java_parents(binary)
+    }
+
+    fn member_types(&mut self, binary: &str) -> Vec<(String, String)> {
+        self.w.java_member_types(binary)
+    }
+
+    fn jdk_rooted(&mut self, pkg: &str) -> bool {
+        if !self.w.java().jdk_open() && !self.w.open_jdk_for(None) {
+            return false;
+        }
+        let root = jdk_root(pkg);
+        self.w.java().jdk_roots.iter().any(|r| *r == root)
+    }
+
+    fn member_unseen(&mut self, outer: &str, simple: &str) -> bool {
+        let (pkg, stem) = outer.rsplit_once('/').unwrap_or(("", outer));
+        let Some(p) = self.w.java_source_pkg(pkg) else { return false };
+        let name = self.w.interner.intern(stem);
+        if let Some(s) = self.w.java().sources.get(&(p, name)) {
+            return s.unit.types[s.decl].members.iter().any(|m| matches!(m, crate::java::parser::Member::Type(t) if t.name == simple));
+        }
+        // a JDK class: its index holds the API alone
+        self.w.java().jdk_pkgs.contains_key(&p)
+    }
+
+    fn is_interface(&mut self, binary: &str) -> bool {
+        // a program's Java source by its declaration, without its record (two interfaces bounding each other's type
+        // parameters ask it of each other while their records are being built)
+        let (pkg, stem) = binary.rsplit_once('/').unwrap_or(("", binary));
+        let p = self.w.java_source_pkg(pkg);
+        if let Some(p) = p {
+            let name = self.w.interner.intern(stem);
+            if let Some(s) = self.w.java().sources.get(&(p, name)) {
+                return matches!(s.unit.types[s.decl].kind, crate::java::parser::Kind::Interface | crate::java::parser::Kind::Annotation);
+            }
+        }
+        if let Some(cf) = self.w.java_class_of_binary(binary) {
+            return cf.access & ACC_INTERFACE != 0;
+        }
+        // a class of the program's or the std's Scala sources: a trait is an interface
+        let Some(p) = p else { return false };
+        let name = self.w.interner.intern(stem);
+        self.w.syms.entry_at(p, name).and_then(|e| e.class).is_some_and(|c| self.w.syms.class(c).kind == ClassKind::Trait)
+    }
 }
 
 #[derive(Default)]
@@ -97,6 +204,8 @@ struct Jdk {
 pub enum JSource {
     Cp(CpFile),
     Jdk(u32),
+    /// A Java source of the program, read for its declarations (`crate::java`): the file it is.
+    Source(FileId),
     /// A class file compiled into teq: the JDK's `String.sig` and `Object.sig`, whose members
     /// the builtins get without `ct.sym`.
     Embedded,
@@ -151,6 +260,7 @@ impl Java {
             jdk_file,
             jdk_missing: false,
             jdk_pkgs: FxMap::default(),
+            jdk_roots: Vec::new(),
             classes: SharedMap::new(),
             syms: FxMap::default(),
             placeholders: SharedMap::new(),
@@ -164,6 +274,8 @@ impl Java {
             builtin_done: Default::default(),
             stats: JavaStats::default(),
             jdk_probe: None,
+            sources: FxMap::default(),
+            has_sources: false,
         }
     }
 
@@ -286,6 +398,19 @@ impl<'a> Worker<'a> {
         self.java().classes.get(&c).is_some_and(|j| j.cf.own_inner_entry().is_some_and(|e| e.access & ACC_PRIVATE != 0))
     }
 
+    /// The class of the program's Java source a class (or the object of its statics) was read from, and the
+    /// source's path.
+    pub fn java_source_of(&self, c: ClassId) -> Option<(ClassId, &str)> {
+        let java = &self.loaded.as_ref()?.java;
+        let class = java.classes.get(&c)?;
+        let k = class.companion_of.unwrap_or(c);
+        let source = if k == c { class.source } else { java.classes.get(&k).map_or(class.source, |j| j.source) };
+        match source {
+            JSource::Source(file) => Some((k, self.source(file).path.as_str())),
+            _ => None,
+        }
+    }
+
     pub fn is_java_class(&self, c: ClassId) -> bool {
         self.loaded.as_ref().map_or(false, |l| l.java.classes.contains_key(&c))
     }
@@ -317,6 +442,7 @@ impl<'a> Worker<'a> {
         match source {
             JSource::Cp(f) => loaded.jar_files[f.jar as usize],
             JSource::Jdk(_) | JSource::Embedded => loaded.java.jdk_file,
+            JSource::Source(file) => file,
         }
     }
 
@@ -434,7 +560,11 @@ impl<'a> Worker<'a> {
             }
             self.java_mut().jdk_pkgs.insert(p, i as u32);
         }
+        let mut roots: Vec<String> = packages.iter().map(|(path, _)| jdk_root(path)).collect();
+        roots.sort();
+        roots.dedup();
         let j = self.java_mut();
+        j.jdk_roots = roots;
         j.stats.ct_open = Some(opened);
         j.stats.ct_index = start.elapsed();
         j.stats.release = release;
@@ -595,8 +725,365 @@ impl<'a> Worker<'a> {
         Some(cf.inner_outer().is_none())
     }
 
-    /// The class file `name` of the classpath package `slot`, or of the JDK package `p`.
+    /// Enters the program's Java sources (`crate::java`): every top-level declaration of every `.java` under its
+    /// package and simple name (`OutlineJavaParser`), the package made where nothing else made it, for
+    /// `locate_java_class` to find before the class path. What the reader refuses is reported at its place: the
+    /// scanner's and the parser's errors in the reference's words, and a form past this reader ("not supported yet").
+    pub fn enter_java_sources(&mut self) {
+        let mut found = Vec::new();
+        for i in 0..self.files.len() {
+            let f = &self.files[i];
+            if f.is_std || !f.path.ends_with(".java") {
+                continue;
+            }
+            found.push((FileId(i as u32), crate::java::parser::parse(&f.text)));
+        }
+        // TEQ_JAVA_RECORDS=raw prints each source's top-level declarations as they are entered, by binary name with
+        // where each starts and where its name stands (`DECL`), and a compact source's first member (`COMPACT`): what
+        // a fence places a refusal by.
+        let raw = std::env::var("TEQ_JAVA_RECORDS").as_deref() == Ok("raw");
+        for (file, unit) in found {
+            if raw {
+                let path = &self.source(file).path;
+                let pkg = unit.package.join("/");
+                let mut out = String::new();
+                if let Some(at) = unit.compact {
+                    out.push_str(&format!("COMPACT\t{}\t{}\n", path, at));
+                }
+                for d in &unit.types {
+                    out.push_str(&format!("DECL\t{}\t{}\t{}\t{}\n", path, if pkg.is_empty() { d.name.clone() } else { format!("{}/{}", pkg, d.name) }, d.start, d.offset));
+                }
+                eprint!("{}", out);
+            }
+            for (at, msg) in &unit.errors {
+                self.diags.error_by(crate::source::Group::Parser, file, Span { start: *at, end: *at + 1 }, msg.clone());
+            }
+            // A member outside any type, a compact source file: the reference drops the whole unit (`compilationUnit`),
+            // whose classes no Scala source then finds; refused here as a form the reader does not read, at the first one.
+            if let Some(at) = unit.compact {
+                self.diags.error_by(crate::source::Group::Own, file, Span { start: at, end: at + 1 }, "not supported yet: a compact source file (the Java reader reads classes and interfaces)".to_string());
+                continue;
+            }
+            let unit = Arc::new(unit);
+            let mut p = ROOT_PKG;
+            for seg in &unit.package {
+                let name = self.interner.intern(seg);
+                p = self.syms.sub_pkg(self.interner, p, name);
+            }
+            for (k, decl) in unit.types.iter().enumerate() {
+                for (at, form) in crate::java::refused_forms(decl) {
+                    self.diags.error_by(crate::source::Group::Own, file, Span { start: at, end: at + 1 }, format!("not supported yet: {} (the Java reader reads classes and interfaces)", form));
+                }
+                for (at, msg) in crate::java::conflicts(decl) {
+                    self.diags.error_by(crate::source::Group::Typer, file, Span { start: at, end: at + 1 }, msg);
+                }
+                let key = self.interner.intern(&decl.name);
+                // A second declaration of one class (`Namer.checkNoConflict`, E161): refused where it stands, the first
+                // one's statics object already defined; the first is the class.
+                if let Some(first) = self.java().sources.get(&(p, key)).map(|s| s.file) {
+                    let path = self.source(first).path.clone();
+                    let msg = format!("{} is already defined as object {} in {}", decl.name, decl.name, path);
+                    self.diags.error_by(crate::source::Group::Typer, file, Span { start: decl.start, end: decl.start + 1 }, msg);
+                    continue;
+                }
+                let java = &mut self.loaded_mut().java;
+                java.sources.insert((p, key), SourceClass { file, unit: unit.clone(), decl: k, record: None, when_read: Vec::new(), building: false, unresolved: Vec::new() });
+                java.has_sources = true;
+            }
+        }
+    }
+
+    /// Every Java source's record built and its problems reported, as scalac types every Java unit's signatures
+    /// whether a Scala source names its classes or not: once the Scala sources' classes are entered (a Java
+    /// declaration naming one is told so), in the sources' order. Nothing to do without Java sources.
+    pub fn build_java_source_records(&mut self) {
+        let Some(loaded) = self.loaded.as_ref() else { return };
+        if loaded.java.sources.is_empty() {
+            return;
+        }
+        let mut keys: Vec<(FileId, u32, PkgId, Name)> = loaded.java.sources.iter().filter(|(_, s)| s.record.is_none()).map(|(&(p, n), s)| (s.file, s.unit.types[s.decl].start, p, n)).collect();
+        keys.sort_by_key(|&(f, at, _, _)| (f.0, at));
+        for (_, _, p, n) in keys {
+            self.java_source_record(p, n, false);
+        }
+    }
+
+    /// A Java source's parents as the reference checks them (`Checking.checkParents`, `checkNonCyclic`), once every
+    /// record is built: a final class extended (E093, at the class's name), a class implemented as an interface
+    /// (E104, at its name), a chain of parents through the sources or the class path back to the class (E110, at its
+    /// parent; once a cycle). An interface extended as a class and an interface extending `Object` are accepted, as
+    /// scalac accepts them.
+    pub fn check_java_source_parents(&mut self) {
+        let Some(loaded) = self.loaded.as_ref() else { return };
+        if loaded.java.sources.is_empty() {
+            return;
+        }
+        #[allow(clippy::type_complexity)]
+        let mut entries: Vec<(FileId, u32, Arc<crate::java::parser::Unit>, usize, Arc<ClassFile>, Vec<String>)> = loaded
+            .java
+            .sources
+            .values()
+            .filter_map(|s| s.record.clone().map(|r| (s.file, s.unit.types[s.decl].start, s.unit.clone(), s.decl, r, s.unresolved.clone())))
+            .collect();
+        entries.sort_by_key(|e| (e.0 .0, e.1));
+        let at_of = |t: Option<&crate::java::parser::Ty>| match t {
+            Some(crate::java::parser::Ty::Named(_, at)) => Some(*at),
+            _ => None,
+        };
+        let simple = |b: &str| b.rsplit(['/', '$']).next().unwrap_or(b).to_string();
+        let mut cyclic: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for (file, _, unit, k, cf, unresolved) in entries {
+            let decl = &unit.types[k];
+            let mut errors: Vec<(u32, String)> = Vec::new();
+            // a parent its record did not resolve names no class: nothing to check
+            let resolved = |b: &String| !unresolved.contains(b);
+            if let Some(sup) = cf.superclass.as_ref().filter(|b| resolved(b)) {
+                if self.java_class_of_binary(sup).is_some_and(|p| p.access & ACC_FINAL != 0) {
+                    errors.push((decl.offset, format!("class {} cannot extend final class {}", decl.name, simple(sup))));
+                }
+            }
+            if decl.kind != crate::java::parser::Kind::Interface {
+                for (i, iface) in cf.interfaces.iter().enumerate().filter(|(_, b)| resolved(b)) {
+                    if self.java_class_of_binary(iface).is_some_and(|p| p.access & ACC_INTERFACE == 0) {
+                        if let Some(at) = at_of(decl.interfaces.get(i)) {
+                            errors.push((at, format!("class {} is not a trait", simple(iface))));
+                        }
+                    }
+                }
+            }
+            if !cyclic.contains(&cf.name) {
+                let mut stack: Vec<String> = cf.superclass.iter().chain(&cf.interfaces).filter(|b| resolved(b)).cloned().collect();
+                let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+                let mut back = false;
+                while let Some(b) = stack.pop() {
+                    if b == cf.name {
+                        back = true;
+                        break;
+                    }
+                    if !seen.insert(b.clone()) {
+                        continue;
+                    }
+                    stack.extend(self.java_parents(&b));
+                }
+                if back {
+                    let parent = decl.superclass.as_ref().or(decl.interfaces.first());
+                    if let Some(at) = at_of(parent) {
+                        let kind = if decl.kind == crate::java::parser::Kind::Interface { "trait" } else { "class" };
+                        errors.push((at, format!("Cyclic inheritance: {} {} extends itself", kind, decl.name)));
+                    }
+                    cyclic.extend(seen);
+                    cyclic.insert(cf.name.clone());
+                }
+            }
+            for (at, msg) in errors {
+                self.diags.error_by(crate::source::Group::Typer, file, Span { start: at, end: at + 1 }, msg);
+            }
+        }
+    }
+
+    /// The record or class file of a Java class by its binary name (`java/lang/String`, `p/Outer$Inner`), as the loader
+    /// locates it: a program's Java source first.
+    fn java_class_of_binary(&mut self, binary: &str) -> Option<Arc<ClassFile>> {
+        let (pkg, stem) = binary.rsplit_once('/').unwrap_or(("", binary));
+        let p = self.java_source_pkg(pkg)?;
+        // a source's record read for its parents, not asked for by a Scala reader
+        let key = self.interner.intern(stem);
+        if let Some(s) = self.java().sources.get(&(p, key)) {
+            // none while it is being built
+            if s.building {
+                return s.record.clone();
+            }
+            return Some(self.java_source_record(p, key, false).1);
+        }
+        self.locate_java_class(p, stem, true).map(|(_, cf)| cf)
+    }
+
+    /// The superclass and the interfaces of the Java class `binary` that a check reads: its record's or its class
+    /// file's, but a name a source's record did not resolve, which names no class.
+    fn java_parents(&mut self, binary: &str) -> Vec<String> {
+        let Some(cf) = self.java_class_of_binary(binary) else { return Vec::new() };
+        let unresolved = self.java_unresolved(binary);
+        cf.superclass.iter().chain(&cf.interfaces).filter(|b| !unresolved.contains(b)).cloned().collect()
+    }
+
+    /// The names the record of the program's Java class `binary` did not resolve; none for a class file.
+    fn java_unresolved(&mut self, binary: &str) -> Vec<String> {
+        let (pkg, stem) = binary.rsplit_once('/').unwrap_or(("", binary));
+        let Some(p) = self.java_source_pkg(pkg) else { return Vec::new() };
+        let key = self.interner.intern(stem);
+        self.java().sources.get(&(p, key)).map(|s| s.unresolved.clone()).unwrap_or_default()
+    }
+
+    /// The member types the Java class `binary` declares, whatever their access, each by its simple and its binary
+    /// name: a program's Java source's member declarations, a class file's `InnerClasses` entries of which it is the
+    /// outer class.
+    fn java_member_types(&mut self, binary: &str) -> Vec<(String, String)> {
+        let (pkg, stem) = binary.rsplit_once('/').unwrap_or(("", binary));
+        let Some(p) = self.java_source_pkg(pkg) else { return Vec::new() };
+        let key = self.interner.intern(stem);
+        if let Some(s) = self.java().sources.get(&(p, key)) {
+            return s.unit.types[s.decl]
+                .members
+                .iter()
+                .filter_map(|m| match m {
+                    crate::java::parser::Member::Type(t) => Some((t.name.clone(), format!("{}${}", binary, t.name))),
+                    _ => None,
+                })
+                .collect();
+        }
+        let Some((_, cf)) = self.locate_java_class(p, stem, true) else { return Vec::new() };
+        cf.inner_classes.iter().filter(|i| i.outer.as_deref() == Some(binary)).filter_map(|i| i.name.clone().map(|n| (n, i.inner.clone()))).collect()
+    }
+
+    /// The package of a Java name's path (`java/util`), `None` where none is: the JDK opened for a JDK-rooted path
+    /// that is not entered yet.
+    fn java_source_pkg(&mut self, path: &str) -> Option<PkgId> {
+        let lookup = |w: &mut Self| {
+            let mut p = ROOT_PKG;
+            for seg in path.split('/').filter(|s| !s.is_empty()) {
+                let n = w.interner.intern(seg);
+                p = w.syms.entry_at(p, n).and_then(|e| e.pkg)?;
+            }
+            Some(p)
+        };
+        if let Some(p) = lookup(self) {
+            return Some(p);
+        }
+        // The JDK is opened at the first path the program's names do not hold (every package of its index entered),
+        // whatever was resolved before, so that a package's answer does not depend on the order the names come in.
+        if !self.java().jdk_open() && self.open_jdk_for(None) {
+            return lookup(self);
+        }
+        None
+    }
+
+    /// The class `stem` of package `p` (path `pkg`) as a Java name finds it, without entering it.
+    fn java_source_class_in(&mut self, p: PkgId, pkg: &str, stem: &str) -> Option<crate::java::record::Found> {
+        let binary = if pkg.is_empty() { stem.to_string() } else { format!("{}/{}", pkg, stem) };
+        let found = |run_scala| Some(crate::java::record::Found { binary: binary.clone(), run_scala });
+        let name = self.interner.intern(stem);
+        if self.java().sources.contains_key(&(p, name)) {
+            return found(false);
+        }
+        // A class or an object of the std (entered for the lookup) or of the program, where the JVM holds a class of
+        // this name: no type alias, no opaque type, no std stand-in of a JDK class (`scala.String`, whose class is
+        // `java.lang.String`), which javac does not see; the lookup goes on past one, as javac's does.
+        if self.std.index().by_name.contains_key(&(p, name)) {
+            self.demand_std(p, name, crate::stdindex::TYPE | crate::stdindex::TERM);
+        }
+        let entered = self.syms.entry_at(p, name).and_then(|e| e.class.or_else(|| e.term.and_then(|t| match self.syms.sym(t).kind {
+            SymKind::Object(c) => Some(c),
+            _ => None,
+        })));
+        if let Some(c) = entered.filter(|&c| self.jvm_class_named(c, &binary)) {
+            let f = self.syms.class(c).file;
+            let src = self.source(f);
+            let program_scala = !src.is_std && !self.in_jar(f) && !src.path.ends_with(".java") && !self.is_java_class(c);
+            return found(program_scala);
+        }
+        // `Foo$`, the class of the program's Scala object `Foo` (its JVM name), is that object's.
+        if let Some(object) = stem.strip_suffix('$').filter(|o| !o.is_empty()) {
+            let oname = self.interner.intern(object);
+            let entry = self.syms.entry_at(p, oname);
+            let file = entry.as_ref().and_then(|e| e.term.map(|t| self.syms.sym(t).file).or(e.class.filter(|&c| !self.is_java_class(c)).map(|c| self.syms.class(c).file)));
+            if let Some(f) = file {
+                let src = self.source(f);
+                if !src.is_std && !self.in_jar(f) && !src.path.ends_with(".java") {
+                    return found(true);
+                }
+            }
+        }
+        if let Some(slot) = self.loaded.as_ref().unwrap().slot(p) {
+            if self.java_class_file_named(slot, stem).is_some() || self.loaded.as_ref().unwrap().pkg_names(slot).contains_key(stem) {
+                return found(false);
+            }
+        }
+        // the JDK's class, its package one of the JDK's (`jdk_entry`); the JDK missing is told where the name looks the
+        // JDK's
+        let open = self.java().jdk_open() || if self.jdk_rooted(p) { self.open_jdk(&binary.replace('/', ".")) } else { self.open_jdk_for(None) };
+        if open && self.jdk_entry(p, stem).is_some() {
+            return found(false);
+        }
+        None
+    }
+
+    /// Whether the JVM holds the class `c` by the binary name `binary`: not an opaque type, nor a builtin (teq's own
+    /// `scala.Int`, `scala.String`, `scala.Array`: javac sees the class path's class files, `scala/Int.class` of
+    /// scala-library, which the lookup reaches after this), nor a std stand-in of a JDK class (one whose `@jvmClass`
+    /// names another class, or a `@javaDefined` one outside the JDK's packages).
+    fn jvm_class_named(&self, c: ClassId, binary: &str) -> bool {
+        if matches!(self.syms.class(c).kind, ClassKind::Opaque | ClassKind::Builtin) {
+            return false;
+        }
+        match self.std_jvm_class(c) {
+            Some(j) => j == binary,
+            None => !(self.java_stand_in(c) && !self.jdk_rooted(self.package_of_class(c))),
+        }
+    }
+
+    /// The record of the program's Java class `name` of `p`, built the first time it is asked for, its problems
+    /// reported at their places in the source; a refusal owed only to a Scala reader (`Problem::when_read`) is held
+    /// until one asks (`asked`).
+    fn java_source_record(&mut self, p: PkgId, name: Name, asked: bool) -> (JSource, Arc<ClassFile>) {
+        let (file, unit, decl, record) = {
+            let s = &self.java().sources[&(p, name)];
+            (s.file, s.unit.clone(), s.decl, s.record.clone())
+        };
+        if let Some(r) = record {
+            if asked {
+                let owed = self.loaded_mut().java.sources.get_mut(&(p, name)).map(|s| std::mem::take(&mut s.when_read)).unwrap_or_default();
+                for pr in owed {
+                    self.diags.error_by(crate::source::Group::Own, file, Span { start: pr.offset, end: pr.offset + 1 }, pr.message);
+                }
+            }
+            return (JSource::Source(file), r);
+        }
+        let text = self.source(file).text.clone();
+        if let Some(s) = self.loaded_mut().java.sources.get_mut(&(p, name)) {
+            s.building = true;
+        }
+        let (cf, problems, unresolved) = crate::java::record::build(&unit, &unit.types[decl], &text, &mut JavaNames { w: self });
+        let mut owed = Vec::new();
+        for pr in problems {
+            if pr.when_read && !asked {
+                owed.push(pr);
+                continue;
+            }
+            self.diags.error_by(crate::source::Group::Own, file, Span { start: pr.offset, end: pr.offset + 1 }, pr.message);
+        }
+        // TEQ_JAVA_RECORDS=raw prints each record a member a line with the problems held for a Scala reader
+        // (`record::raw`), to set beside javac's class files; any other value prints it as `teq classfile --full`
+        // prints a class file.
+        match std::env::var("TEQ_JAVA_RECORDS").as_deref() {
+            Ok("raw") => eprint!("{}", crate::java::record::raw(&cf, &owed)),
+            Ok(_) => {
+                let mut printer = crate::classfile::show::Printer::new(&cf, true);
+                let pkg = printer.package();
+                printer.class();
+                eprint!("// {} (Java source record)\n{}{}", self.source(file).path, if pkg.is_empty() { String::new() } else { format!("package {}\n", pkg) }, printer.out);
+            }
+            Err(_) => {}
+        }
+        let cf = Arc::new(cf);
+        if let Some(s) = self.loaded_mut().java.sources.get_mut(&(p, name)) {
+            s.record = Some(cf.clone());
+            s.when_read = owed;
+            s.building = false;
+            s.unresolved = unresolved;
+        }
+        (JSource::Source(file), cf)
+    }
+
+    /// The class file `name` of the classpath package `slot`, or of the JDK package `p`; a Java source of the
+    /// program's first (`java_source_record`).
     fn locate_java_class(&mut self, p: PkgId, name: &str, open_jdk: bool) -> Option<(JSource, Arc<ClassFile>)> {
+        // A Java source of the program stands for its class over a class file of the same name.
+        if self.java().has_sources {
+            let key = self.interner.intern(name);
+            if self.java().sources.contains_key(&(p, key)) {
+                return Some(self.java_source_record(p, key, true));
+            }
+        }
         if let Some(slot) = self.loaded.as_ref().unwrap().slot(p) {
             if let Some(f) = self.java_class_file_named(slot, name) {
                 let file = self.loaded.as_ref().unwrap().jar_files[f.jar as usize];
@@ -709,6 +1196,11 @@ impl<'a> Worker<'a> {
             if e.class.is_some() {
                 return false;
             }
+        }
+        // A class of the program's Java sources not entered yet is the lock's to enter.
+        let java = &self.loaded.as_ref().unwrap().java;
+        if java.has_sources && java.sources.contains_key(&(p, name)) {
+            return false;
         }
         match slot {
             Some(slot) => match self.loaded.as_ref().unwrap().java_names(slot) {

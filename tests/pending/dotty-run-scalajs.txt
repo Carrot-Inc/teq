@@ -273,7 +273,6 @@ structural.scala	structural.scala:83:21: missing parameter type
 sysprops.scala	lang.scala:1:1: not supported on JavaScript: method clearProperty of java.lang.System (a Java definition without an implementation in the std's platform layer)
 t0017.scala	run: exit 1: TypeError: Cannot read properties of undefined (reading '0')
 t10290.scala	t10290.scala:14:16: expected an identifier, found 'super'
-t12290	java source: teq reads none
 t1406b.scala	t1406b.scala:23:30: expected ',' or ')', found identifier
 t1423.scala	output: line 1: the .check has '1', the program printed '????'
 t1505.scala	t1505.scala:2:11: not found: Value

@@ -5,6 +5,34 @@ support, and the platforms the binaries run on. The newest release comes first; 
 notes of its GitHub release, which carries the binaries (`teq-<version>-<classifier>`, the Windows one with `.exe`) beside their
 `SHA256SUMS`.
 
+## Unreleased
+
+- A program's Java sources are read for their declarations, as scalac reads the `.java` it is given: a directory
+  gives its `.java` files with its `.scala` ones, a `.java` named on the command line is read as Java (it was
+  parsed as Scala), and the Scala program sees each Java class and interface with its members, their types and
+  parameter names, and a `static final` field's constant where the field is one literal (`static final int A = 1;`,
+  not `1 + 1`). The Java sources' bodies are not compiled: on the JVM a build to a class directory writes the Scala
+  program's classes and says so in one line, and javac compiles the Java sources against that directory
+  (`javac -cp out:scala-library.jar -d out-java *.java`); a build to a jar, the JVM's default output, is refused, as
+  the jar would lack the Java classes. On JavaScript and in the interpreter a call that reaches a Java source's
+  method is refused, naming the source. The Java reader reads classes and interfaces: an enum, a record, an
+  annotation declaration, a sealed type and a member type are refused where they are declared ("not supported
+  yet"), a compact source file (members outside any type) at its first member, and so is a Java declaration that
+  names a class of the same build's Scala sources; a Java body may name them. Names resolve by Java's rules, the
+  JDK's packages known whatever was read before: an import whose qualifier names nothing is refused at the import in
+  scalac's words ("value nope is not a member of <root>"), a name a qualifier does not hold where it is used ("Not
+  found: type Nope", "type Missing is not a member of object p.Outer"), and a name an import claims is bound by no
+  later scope; a lookup in a package finds a class the JVM holds there, never a type alias or the std's stand-in
+  for a JDK class (`import scala.*` leaves `String` java.lang's). A simple type name in a Java class's members that a parent of the class declares as a member type of
+  another class than the one its imports, its package or `java.lang` give (`Entry` beside `import q.Entry` in a
+  class extending `AbstractMap`), which javac and scalac take, is refused at the name once a Scala source reads the
+  class: this reader does not look up inherited member types. A `teq compiler watch` session and the language server read a Java source again when it changes.
+- A Java source given with the program now defines its classes over a class file of the same name on the class
+  path, as under scalac: a stale `J.class` on the class path beside `J.java` is no longer read. A Java and a Scala
+  class of one name, and one class declared by two Java sources, are refused as scalac refuses them ("J clashes
+  with class J", "J is already defined as object J"); until now a directory's Java source was dropped and the
+  Scala class taken.
+
 ## 0.1.11 (2026-11-20)
 
 - A module built for the JVM by an earlier teq must be built again: the descriptors of members over `X | Null` are

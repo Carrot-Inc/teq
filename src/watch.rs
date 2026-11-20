@@ -2133,6 +2133,11 @@ fn changed_files(
                 .collect()
         }
     };
+    // A Java source changed is a change of declarations its readers type against (`crate::java`): the full build
+    // reads every Java source again and types every unit.
+    if indices.iter().any(|&i| entries[i].path.ends_with(".java")) {
+        return Err("a Java source changed".to_string());
+    }
     let mut changed = Vec::new();
     for i in indices {
         let (text, mtime) = read_file(&entries[i].canonical, &entries[i].path, overlays).map_err(|_| "files added or removed".to_string())?;

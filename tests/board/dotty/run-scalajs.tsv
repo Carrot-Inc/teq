@@ -944,7 +944,7 @@ t107.scala	pass	lean:pass
 t1074.scala	pass	lean:fail	
 t1192.scala	pass	lean:pass	
 t1220.scala	pass	lean:pass	
-t12290	fail	-	java source: teq reads none
+t12290	pass	lean:pass	
 t1300.scala	pass	lean:pass	
 t13033.scala	pass	lean:pass	
 t1309.scala	pass	lean:pass	

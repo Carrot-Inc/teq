@@ -3204,7 +3204,9 @@ impl<'a> Worker<'a> {
     /// that the std's platform layer does not define has no implementation on JavaScript.
     pub fn report_reached_library(&mut self, reach: &crate::emit::reach::Reach) {
         let Some(loaded) = &self.loaded else { return };
-        let mut java_reached: Vec<(FileId, String)> = Vec::new();
+        // Each reached definition: its file, its words, and for a class its kind and full name once (a Java source's
+        // class is named so: `object p.J`).
+        let mut java_reached: Vec<(FileId, String, Option<String>)> = Vec::new();
         // The JVM target calls Java classes as the jars and the JDK hold them.
         let java = !self.jvm;
         for &s in &reach.asked {
@@ -3214,7 +3216,7 @@ impl<'a> Worker<'a> {
                     Owner::Class(c) => format!(" of {}", self.class_path(c)),
                     _ => String::new(),
                 };
-                java_reached.push((info.file, format!("{}{}", self.member_description(s, None), owner)));
+                java_reached.push((info.file, format!("{}{}", self.member_description(s, None), owner), None));
             }
         }
         // A class of the platform layer that absorbed the JDK's members is implemented; a class
@@ -3222,13 +3224,26 @@ impl<'a> Worker<'a> {
         for (&c, _) in loaded.java.classes.iter().filter(|_| java) {
             let info = self.syms.class(c);
             if reach.classes.get(c.idx()).copied().unwrap_or(false) && info.kind != ClassKind::Builtin && info.def.is_none() {
-                java_reached.push((info.file, format!("{} {}", self.class_description(c), self.class_path(c))));
+                let (file, name) = (info.file, self.name_str(info.name));
+                let (described, path) = (self.class_description(c), self.class_path(c));
+                let kind = described.strip_suffix(name.as_str()).map_or(described.as_str(), str::trim_end).to_string();
+                java_reached.push((file, format!("{} {}", described, path), Some(format!("{} {}", kind, path))));
             }
         }
         java_reached.sort_by(|a, b| a.1.cmp(&b.1));
         java_reached.dedup();
-        for (file, what) in java_reached {
-            self.diags.error_by(crate::source::Group::Own, file, Span::default(), format!("not supported on JavaScript: {} (a Java definition without an implementation in the std's platform layer)", what));
+        for (file, what, class) in java_reached {
+            // A Java source's class or member: its body is javac's, which JavaScript does not have.
+            let msg = if self.source(file).path.ends_with(".java") {
+                let source = &self.source(file).path;
+                match class {
+                    Some(class) => format!("not supported on JavaScript: {} of the Java source {}, whose body JavaScript does not have", class, source),
+                    None => format!("not supported on JavaScript: {} (a member of the Java source {}, whose body JavaScript does not have)", what, source),
+                }
+            } else {
+                format!("not supported on JavaScript: {} (a Java definition without an implementation in the std's platform layer)", what)
+            };
+            self.diags.error_by(crate::source::Group::Own, file, Span::default(), msg);
         }
     }
 

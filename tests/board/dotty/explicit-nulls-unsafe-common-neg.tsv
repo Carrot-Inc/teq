@@ -5,9 +5,9 @@ unsafe-chain.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 unsafe-implicit.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 unsafe-implicit2.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 unsafe-implicit3.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
-unsafe-java-call	fail	-	java source: teq reads none
-unsafe-java-chain	fail	-	java source: teq reads none
-unsafe-java-varargs-src	fail	-	java source: teq reads none
+unsafe-java-call	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-java-chain	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-java-varargs-src	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 unsafe-java-varargs.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 unsafe-overload.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 unsafe-path.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)

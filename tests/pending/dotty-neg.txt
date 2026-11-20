@@ -1504,7 +1504,6 @@ symlits.scala	marks: 4 errors where 1 are marked: symlits.scala:3:11: No given i
 syntax-error-recovery.scala	marks: 22 errors where 19 are marked: syntax-error-recovery.scala:3:17: expected ')', found 'then'
 t11437.scala	check: diagnostic 1 of 1: scalac's is error t11437.scala:5:17 Unbound placeholder parameter; incorrect use of _; teq's is error t11437.scala:5:17 not found: _$0
 t11900.scala	marks: 1 errors where 4 are marked
-t12290	java source: teq reads none
 t12494.scala	check: diagnostic 1 of 1: scalac's is error t12494.scala:11:26 error overriding method f in trait C of type => Int;; teq's is error t12494.scala:11:26 method f has weaker access privileges than method f in trait C; it should be at least pro
 t12715b.scala	marks: 3 errors where 1 are marked: t12715b.scala:7:3: modifier abstract is not allowed for this definition
 t1292.scala	marks: 3 errors where 1 are marked: t1292.scala:2:14: Enum is not a legal path

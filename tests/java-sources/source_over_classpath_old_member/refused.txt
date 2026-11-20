@@ -1,0 +1,1 @@
+Main.scala:2:61: error: value old is not a member of

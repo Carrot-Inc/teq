@@ -1,8 +1,6 @@
 10838	java source: teq reads none
 16405.scala	16405.scala:14:15: type a not found
 1938-2.scala	1938-2.scala:23:12: this is not a case class or enum case
-25-1	java source: teq reads none
-25-2	java source: teq reads none
 9416.scala	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
 CollectionTests.scala	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
 IArrayOps.scala	IArrayOps.scala:245:7: type mismatch: found Int => IArray[(Int, Int)], required Int => IterableOnce[Any]
@@ -95,7 +93,6 @@ hmap.scala	hmap.scala:76:22: expected ']', found '='
 i10068d.scala	i10068d.scala:26:20: type mismatch: found () => it, required SAM_B2
 i10511.scala	i10511.scala:27:29: type mismatch: found (t : (Bool.True : Bool)), required Not[(Bool.False : Bool)]
 i10846	i10846.scala:19:12: value getReturnType is not a member of Method
-i10884	java source: teq reads none
 i10889.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: min 4, max 4, ran g at 16
 i10997.scala	i10997.scala:13:60: no given instance of type Of[(ClassWrapper.this.Qux : Qux)] was found for parameter x
 i11008b.scala	i11008b.scala:7:17: a sequence wildcard can only end a sequence pattern
@@ -114,7 +111,6 @@ i11938.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: a
 i11996.scala	i11996.scala:10:38: 'erased' is not part of the supported Scala subset
 i12032.scala	i12032.scala:11:22: method append overrides nothing
 i12086	java source: teq reads none
-i12204	java source: teq reads none
 i12328.scala	i12328.scala:34:23: No given instance of type Schema[A] was found.
 i1240.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i12492	java source: teq reads none
@@ -165,11 +161,9 @@ i16006.scala	i16006.scala:6:37: None of the overloaded alternatives of method to
 i16458.scala	i16458.scala:5:38: expected end of statement, found identifier
 i16459.scala	i16459.scala:6:6: expected end of statement, found identifier
 i16464.scala	i16464.scala:10:20: operator - cannot be applied to Int and Seq[Int]
-i16474	java source: teq reads none
 i1692.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: a was Test$$$Lambda/0x…@…, null expected
 i1692b.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: a was Test$$$Lambda/0x…@…, null expected
 i16943.scala	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError: 'java.lang.Object scala.caps.unsafe$.unsafeErasedValue()'
-i17021.ext-java	java source: teq reads none
 i17115.scala	i17115.scala:3:7: object creation impossible, since def apply(v1: A[Tail[Tup]]): A[Tup] in trait Function1 is not defined
 i17255	java source: teq reads none
 i18150.scala	i18150.scala:4:7: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
@@ -191,7 +185,6 @@ i21213.scala	i21213.scala:4:18: expected ':', found 'val'
 i21346.scala	i21346.scala:4:33: expected '=', found '['
 i22150.scala	i22150.scala:7:17: expected ')', found '@'
 i22497.scala	output: line 2: the .check has 'public Foo(int)', the program printed 'public Foo(java.lang.String)'
-i22628	java source: teq reads none
 i22649	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Was TypeRef(NoPrefix(), "{z1 => AnyRef{type T; def make: z1.T}}")
 i22900.scala	i22900.scala:10:28: a named pattern is only allowed in a tuple or constructor pattern
 i22968.scala	i22968.scala:5:13: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
@@ -237,7 +230,6 @@ i4984c.scala	i4984c.scala:16:10: this is not a case class or enum case
 i4984d.scala	i4984d.scala:19:10: this is not a case class or enum case
 i4984e.scala	i4984e.scala:20:10: this is not a case class or enum case
 i5077.scala	i5077.scala:21:25: value < is not a member of Any
-i533	java source: teq reads none
 i5455.scala	i5455.scala:16:22: value asInstanceOf is not a member of Int
 i5527.scala	i5527.scala:11:7: missing parameter type
 i6219.scala	i6219.scala:5:22: expected an expression, found '}'
@@ -250,12 +242,9 @@ i7488.scala	i7488.scala:9:16: not supported yet: scala.compiletime.testing.typeC
 i7788.scala	i7788.scala:8:3: value fold is not a member of Show[B]
 i7868.scala	i7868.scala:6:22: No singleton value available for S[0]; eligible singleton types for `ValueOf` synthesis include literals and stable paths.
 i789.scala	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class Phase cannot be cast to class java.lang.Integer (Phase is in unnamed module of loader 'app'; java.lang.Integer is in module java.base of loader 'bootstrap')
-i7990	java source: teq reads none
-i8001	java source: teq reads none
 i8033.scala	run: exit 1: Exception in thread "main" java.io.NotSerializableException: Foo
 i8073.scala	i8073.scala:17:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
 i8073b.scala	i8073b.scala:18:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
-i8101	java source: teq reads none
 i8531	java source: teq reads none
 i8577a.scala	i8577a.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577b.scala	i8577b.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
@@ -267,9 +256,6 @@ i8577g.scala	i8577g.scala:11:7: mac is not an extractor: it has no unapply or un
 i8577h.scala	i8577h.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577i.scala	i8577i.scala:12:10: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8582.scala	i8582.scala:10:7: run in trait BeforeAndAfterAll cannot override the concrete run in trait Suite without a member that both override
-i8599	java source: teq reads none
-i8602	java source: teq reads none
-i8661	java source: teq reads none
 i876.scala	i876.scala:7:16: type mismatch: found String, required Int
 i9155.scala	teq: jvm backend: i9155$package$.Test: no @jvm intrinsic or body for getMethods of java/lang/Class
 i9225.scala	i9225.scala:8:33: expected an identifier, found 'super'
@@ -301,13 +287,8 @@ java-ann-super-class-separate	java source: teq reads none
 java-annot-params	java source: teq reads none
 java-intersection	java source: teq reads none
 java-longnames	java source: teq reads none
-java-no-scala-import	java source: teq reads none
 java-package-private-bridge	java source: teq reads none
-java-package-protected	java source: teq reads none
-java-varargs	java source: teq reads none
-java-varargs-2	java source: teq reads none
 java-varargs-3	java source: teq reads none
-java-vc-overload	java source: teq reads none
 junitForwarders	java source: teq reads none
 lambda-serialization-gc.scala	lambda-serialization-gc.scala:28:98: ClassLoader is abstract; it cannot be instantiated
 lambda-serialization-security.scala	run: exit 1: Exception in thread "main" java.io.NotSerializableException: Test$$$Lambda/0x…
@@ -337,7 +318,6 @@ null-var.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError:
 numbereq.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: 0.0/class java.lang.Double != /class java.lang.Character
 option-extract.scala	option-extract.scala:20:11: value orElse is not a member of ExtractResult[B]
 ordinal-innerclass.scala	ordinal-innerclass.scala:18:65: value asInstanceOf is not a member of Test.o.T
-overload_repeated	java source: teq reads none
 paramForwarding.scala	output: line 2: the .check has 'private final int B.theValue', the program printed 'private int B.theValue'
 paramForwarding_separate	output: line 2: the .check has 'private final int A.member', the program printed 'private int A.member'
 paramForwarding_together.scala	output: line 2: the .check has 'private final int A.member', the program printed 'private int A.member'
@@ -379,8 +359,6 @@ t10232.scala	run: exit 1: Exception in thread "main" java.io.NotSerializableExce
 t10290.scala	t10290.scala:14:16: expected an identifier, found 'super'
 t10889	java source: teq reads none
 t11255	run: exit 1: Exception in thread "main" java.io.NotSerializableException: A$$Lambda/0x…
-t12290	java source: teq reads none
-t12300	java source: teq reads none
 t12348.scala	t12348.scala:11:18: type mismatch: found AnyRef, required Int
 t1406b.scala	t1406b.scala:23:30: expected ',' or ')', found identifier
 t1505.scala	t1505.scala:2:11: not found: Value
@@ -390,9 +368,6 @@ t3186.scala	t3186.scala:1:59: not found: Value
 t3220-3.scala	t3220-3.scala:42:18: value in backtick quoted identifier is not a member of Literals
 t3346g.scala	t3346g.scala:8:11: value copy is not a member of String
 t3346h.scala	t3346h.scala:8:11: value y is not a member of String
-t3452a	java source: teq reads none
-t3452b	java source: teq reads none
-t3452b-bcode	java source: teq reads none
 t3452d	java source: teq reads none
 t3452e	java source: teq reads none
 t3452g	java source: teq reads none
@@ -404,11 +379,8 @@ t3887.scala	t3887.scala:9:18: expected a pattern, found 'this'
 t3950.scala	t3950.scala:3:18: not found: Value
 t4023.scala	output: line 1: the .check has 'Try 1: (6 classes)', the program printed 'Try 1: (0 classes)'
 t4024.scala	teq: jvm backend: Test$: no @jvm intrinsic or body for getMethod of java/lang/Class
-t4119	java source: teq reads none
 t4148.scala	output: line 3: the .check has '100', the program printed 'cce3'
-t4238	java source: teq reads none
 t4300.scala	t4300.scala:9:17: expected an identifier, found 'super'
-t4317	java source: teq reads none
 t4536.scala	t4536.scala:25:7: applyDynamic is a member of a JS trait, which can only hold abstract members and vals set to js.undefined
 t4570.scala	t4570.scala:2:13: not found: Value
 t4859.scala	output: line 8: the .check has 'About to reference O.N.apply()', the program printed nothing
@@ -429,7 +401,6 @@ t6443b.scala	t6443b.scala:11:8: object creation impossible, since def foo(d: A.t
 t7120b.scala	teq: jvm backend: Test$: no @jvm intrinsic or body for getMethods of java/lang/Class
 t7200.scala	t7200.scala:19:9: recursive use of coflatMap needs an explicit result type
 t7214.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
-t7374	java source: teq reads none
 t7912.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: A$@41 (of class A$)
 t7932.scala	t7932.scala:16:16: method category overrides nothing
 t7992.scala	t7992.scala:9:9: expected an identifier, found 'super'
@@ -438,10 +409,8 @@ t8177f.scala	t8177f.scala:21:25: value toGenericString is not a member of Method
 t8199.scala	teq: This construct can be rewritten automatically under -rewrite -source 3.4-migration.
 t8346.scala	t8346.scala:5:33: not found: Value
 t8549b.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
-t8601e	java source: teq reads none
 t8803.scala	t8803.scala:20:68: expected an identifier, found 'super'
 t949.scala	t949.scala:6:20: not found: Value
-t9915	java source: teq reads none
 tailrec-return.scala	tailrec-return.scala:4:7: Cannot rewrite recursive call: it is not in tail position
 targetName-interop	java source: teq reads none
 targetName-modules-1	java source: teq reads none

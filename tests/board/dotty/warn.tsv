@@ -162,7 +162,7 @@ i21036b.scala	fail	-	marks: 0 warnings where 1 are marked
 i21036c.scala	pass	-	
 i21187.scala	fail	-	marks: an error where warnings are marked: i21187.scala:9:55: missing parameter type
 i21190.scala	fail	-	marks: an error where warnings are marked: i21190.scala:20:29: Found:    FromEnd
-i21207	fail	-	java source: teq reads none
+i21207	fail	-	marks: an error where warnings are marked: usage.scala:16:11: method g in class P must be called with () argument
 i21218.scala	pass	-	
 i21239.Frac.scala	fail	-	marks: 0 warnings where 1 are marked
 i21258.scala	fail	-	marks: 0 warnings where 1 are marked
@@ -204,7 +204,7 @@ i22744.scala	pass	-
 i22746.scala	pass	-	
 i22787.scala	pass	-	
 i22795	fail	-	marks: 0 warnings where 1 are marked
-i22896	fail	-	java source: teq reads none
+i22896	pass	-	
 i22899.scala	fail	-	marks: an error where warnings are marked: i22899.scala:20:30: a named pattern is only allowed in a tuple or constructor pattern
 i22969.scala	pass	-	
 i22971.scala	pass	-	

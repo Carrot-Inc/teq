@@ -324,7 +324,15 @@ pub fn parse_files(
     roots: &[(std::path::PathBuf, crate::source_version::SourceVersion)],
     keep: &[bool],
 ) {
-    let todo: Vec<usize> = todo.filter(|&i| slots[i].is_none()).collect();
+    let mut todo: Vec<usize> = todo.filter(|&i| slots[i].is_none()).collect();
+    // A Java source is no Scala tree: the loader reads its declarations (`Worker::enter_java_sources`).
+    todo.retain(|&i| {
+        let java = !files[i].is_std && files[i].path.ends_with(".java");
+        if java {
+            slots[i] = Some(vec![Ast::new(0)]);
+        }
+        !java
+    });
     let workers = crate::workers().min(todo.len()).min(max_workers);
     if !parallel || workers < 2 {
         for &i in &todo {

@@ -1,16 +1,16 @@
 # dotty 3.8.4 (7d4833b6) pos-java-interop-separate, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:103; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
-array-annot	fail	-	java source: teq reads none
-forwarder	fail	-	java source: teq reads none
-i10225	fail	-	java source: teq reads none
-i3273	fail	-	java source: teq reads none
-i3533	fail	-	java source: teq reads none
-i6152	fail	-	java source: teq reads none
-i6868	fail	-	java source: teq reads none
-i8435	fail	-	java source: teq reads none
-i8588	fail	-	java source: teq reads none
-i9492	fail	-	java source: teq reads none
-inner-fbounds	fail	-	java source: teq reads none
-java-object-any-unification-1	fail	-	java source: teq reads none
-static-cycle	fail	-	java source: teq reads none
-t11469_2	fail	-	java source: teq reads none
+array-annot	fail	check:fail	Annot_1.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+forwarder	pass	check:fail	
+i10225	pass	check:pass	
+i3273	fail	check:fail	Bar_1.java:2:24: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i3533	pass	check:pass	
+i6152	fail	check:fail	A_1.java:4:32: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i6868	fail	check:fail	MyJava_1.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+i8435	pass	check:pass	
+i8588	fail	check:fail	Test_2.scala:3:28: Found:    Map[String, Int]
+i9492	fail	check:fail	A_1.java:3:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+inner-fbounds	fail	check:fail	Configurer_1.java:2:20: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+java-object-any-unification-1	fail	check:fail	J_1.java:4:25: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+static-cycle	fail	check:fail	A_1.java:4:23: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+t11469_2	fail	check:fail	Test_1.java:4:32: not supported yet: a Java member type (the Java reader reads classes and interfaces)

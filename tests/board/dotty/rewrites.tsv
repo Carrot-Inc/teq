@@ -2,7 +2,7 @@
 # test	verdict	the other ways	the first line of the difference
 alphanumeric-infix-operator.scala	fail	-	option: -rewrite (teq has no flag for it)
 ambiguous-named-tuple-assignment.scala	fail	-	option: -rewrite (teq has no flag for it)
-annotation-named-pararamters	fail	-	java source: teq reads none
+annotation-named-pararamters	fail	-	option: -rewrite (teq has no flag for it)
 filtering-fors.scala	fail	-	option: -rewrite (teq has no flag for it)
 i11895.scala	fail	-	option: -rewrite (teq has no flag for it)
 i12340.scala	fail	-	option: -no-indent (teq has no flag for it)

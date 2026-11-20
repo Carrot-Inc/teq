@@ -7,8 +7,8 @@
 10747-shapeless-min.scala	pass	check:pass	
 10867.scala	pass	check:pass	
 11463.scala	pass	check:pass	
-11484	fail	-	java source: teq reads none
-11512	fail	-	java source: teq reads none
+11484	fail	check:fail	javac: tests/pos/11484/A_2.java:1: error: type C does not take parameters
+11512	fail	check:fail	javac: tests/pos/11512/A_2.java:1: error: A_2 is not abstract and does not override abstract method m() in T
 11973.scala	pass	check:pass	
 11982-a	pass	check:pass	
 12093.scala	pass	check:pass	
@@ -25,7 +25,7 @@
 1567	pass	check:pass	
 16583.scala	pass	check:fail	
 16654.scala	pass	check:fail	
-16727	fail	-	java source: teq reads none
+16727	pass	check:fail	
 17077.scala	fail	check:fail	17077.scala:15:12: this is not a case class or enum case
 18789.scala	pass	check:pass	
 20088.scala	pass	check:pass	
@@ -42,7 +42,7 @@
 22219b.scala	pass	check:pass	
 23056.scala	pass	check:fail	
 3190.scala	fail	check:fail	3190.scala:8:3: None of the overloaded alternatives of method overload in object Test with types
-3403	fail	-	java source: teq reads none
+3403	fail	check:fail	Named_1.java:3:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 6322.scala	pass	check:pass	
 6362.scala	pass	check:pass	
 6687.scala	fail	check:fail	6687.scala:9:26: Found:    ""
@@ -131,7 +131,7 @@ annot-19846b.scala	pass	check:pass
 annot-5789.scala	pass	check:pass	
 annot-body.scala	pass	check:pass	
 annot-bootstrap.scala	pass	check:pass	
-annot-constant	fail	-	java source: teq reads none
+annot-constant	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 annot-default-arg-22874.scala	pass	check:fail	
 annot-inner.scala	pass	check:pass	
 annot-main-22364.scala	pass	check:pass	
@@ -140,13 +140,13 @@ annot-main-22364c.scala	pass	check:pass
 annot-refining-avoid.scala	pass	check:fail	
 annot.scala	pass	check:fail	
 annotDepMethType.scala	pass	check:fail	
-annotations	fail	-	java source: teq reads none
-annotations-in-java	fail	-	java source: teq reads none
+annotations	fail	check:fail	MyAnnotation.java:7:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+annotations-in-java	fail	check:fail	AnnoJava.java:30:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 annotations.scala	pass	check:pass	
 annotations1	pass	check:pass	
 annotations2.scala	pass	check:fail	
-annotationsJava	fail	-	java source: teq reads none
-annotationsJavaRepeatable	fail	-	java source: teq reads none
+annotationsJava	fail	check:fail	Annot1.java:5:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+annotationsJavaRepeatable	fail	check:fail	Annot1.java:6:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 anonBridge.scala	pass	check:pass	
 anonClassSubtyping.scala	pass	check:pass	
 anykind.scala	fail	check:fail	anykind.scala:25:18: Not found: type AnyKind
@@ -216,7 +216,7 @@ cc-self-fluid	fail	check:fail	option: -language:experimental.captureChecking (a 
 cc-use-alternatives.scala	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
 cfcrash.scala	pass	check:pass	
 chan.scala	pass	check:pass	
-chang	fail	-	java source: teq reads none
+chang	fail	check:fail	Outer.java:5:10: Not found: type Inner
 change-lambda.scala	pass	check:pass	
 checkInstantiable.scala	pass	check:pass	
 class-dependent-extension-method.scala	pass	check:pass	
@@ -258,7 +258,7 @@ covariant-opaque.scala	pass	check:pass
 creators	pass	check:pass	
 curried-colon-lambda.scala	pass	check:pass	
 curried.scala	pass	check:pass	
-cycle	fail	-	java source: teq reads none
+cycle	fail	check:fail	J_1.java:14:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 cyclics-pos.scala	pass	check:pass	
 debug-reset-local-attrs.scala	pass	check:pass	
 default-getter-variance.scala	pass	check:pass	
@@ -330,7 +330,7 @@ eta.scala	pass	check:pass
 exbound.scala	pass	check:pass	
 exhaust_2.scala	pass	check:pass	
 exhaust_alternatives.scala	pass	check:pass	
-existential-java-case-class	fail	-	java source: teq reads none
+existential-java-case-class	pass	check:pass	
 existentials-harmful.scala	pass	check:fail	
 existentials.scala	pass	check:pass	
 expeimental-flag-with-lang-feature-2.scala	fail	check:fail	expeimental-flag-with-lang-feature-2.scala:6:27: expected ']', found '='
@@ -459,7 +459,7 @@ i10295.scala	fail	check:fail	i10295.scala:22:12: (m : => (m : M)) is not a valid
 i10311.scala	pass	check:pass	
 i10325.scala	fail	check:fail	i10325.scala:11:43: Found:    Map[Any, Option[Any]]
 i10343.scala	pass	check:pass	
-i10347	fail	-	java source: teq reads none
+i10347	fail	check:fail	javac: tests/pos/i10347/C_2.java:2: error: incompatible types: Object cannot be converted to String
 i1036.scala	pass	check:pass	
 i10366.scala	fail	check:fail	i10366.scala:7:3: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 i10369.scala	fail	check:fail	i10369.scala:9:22: value unary_! is not a member of Boolean & t
@@ -477,13 +477,13 @@ i10511.scala	fail	check:fail	i10511.scala:16:26: Found:    (t : (Bool.True : Boo
 i1052.scala	pass	check:pass	
 i10521.scala	pass	check:pass	
 i10542.scala	pass	check:pass	
-i10567	fail	-	java source: teq reads none
+i10567	fail	check:fail	SchemaBuilder_1.java:2:23: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i1059.scala	fail	check:fail	i1059.scala:5:26: expected ')', found '@'
 i10634	pass	check:pass	
 i10638.scala	pass	check:pass	
 i10667.scala	fail	check:fail	i10667.scala:10:29: Found:    Nums
 i10693.scala	pass	check:pass	
-i10715-java	fail	-	java source: teq reads none
+i10715-java	pass	check:pass	
 i10715-scala	fail	check:fail	test.scala:17:3: value + is not a member of Int
 i10769.scala	pass	check:pass	
 i10769b.scala	pass	check:pass	
@@ -495,7 +495,7 @@ i10900.scala	pass	check:pass
 i10927.scala	pass	check:pass	
 i10929-new-syntax.scala	fail	check:fail	i10929-new-syntax.scala:9:9: a parent has to be a class or a trait
 i10929.scala	fail	check:fail	i10929.scala:12:40: expected ')', found 'val'
-i10945	fail	-	java source: teq reads none
+i10945	fail	check:fail	Built_1.java:2:15: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i10951.scala	pass	check:pass	
 i10964.scala	pass	check:pass	
 i10964a.scala	pass	check:pass	
@@ -561,7 +561,7 @@ i11420.scala	pass	check:pass
 i11421.scala	pass	check:pass	
 i11464.scala	fail	check:fail	i11464.scala:10:21: Found:    Type[Any, AnyRef{type R <: [~ <: Txn[~]] =>> Expr[~, Any]}#R]
 i11481.scala	pass	check:pass	
-i11490	fail	-	java source: teq reads none
+i11490	fail	check:fail	First.java:7:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i11499.scala	pass	check:pass	
 i11538a.scala	pass	check:pass	
 i11538b.scala	pass	check:pass	
@@ -695,11 +695,11 @@ i12973.scala	pass	check:pass
 i12991.scala	pass	check:pass	
 i12997.scala	pass	check:pass	
 i13001	fail	check:fail	Main_1.scala:28:48: value asInstanceOf is not a member of Product{type Kind = K0; type MirroredType = T; type MirroredElemTypes <: Tuple}
-i13043	fail	-	java source: teq reads none
+i13043	pass	check:pass	
 i13044.scala	pass	check:pass	
-i13046	fail	-	java source: teq reads none
+i13046	pass	check:pass	
 i1307.scala	pass	check:pass	
-i13106.java	fail	-	java source: teq reads none
+i13106.java	fail	check:fail	i13106.java:2:29: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i13120	pass	check:pass	
 i13128	pass	check:pass	
 i13134.scala	pass	check:pass	
@@ -707,7 +707,7 @@ i13161.scala	pass	check:pass
 i1318.scala	pass	check:pass	
 i13197.scala	fail	check:fail	i13197.scala:4:3: value asInstanceOf is not a member of T | String
 i13282.scala	fail	check:fail	i13282.scala:8:3: this expression cannot be assigned to
-i13310.java	fail	-	java source: teq reads none
+i13310.java	pass	check:pass	
 i13331.scala	pass	check:pass	
 i13332.scala	pass	check:pass	
 i13334.scala	pass	check:pass	
@@ -716,7 +716,7 @@ i13349.scala	pass	check:pass
 i13349min.scala	pass	check:pass	
 i13392.scala	pass	check:fail	
 i13411.scala	fail	check:fail	i13411.scala:12:12: cannot reduce inline match with
-i13411b	fail	-	java source: teq reads none
+i13411b	fail	check:fail	Test.scala:31:3: cannot reduce inline match with
 i13426.scala	fail	check:fail	i13426.scala:2:18: missing parameter type
 i13433.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i13433b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -852,7 +852,7 @@ i15154.scala	pass	check:pass
 i15155.scala	pass	check:fail	
 i15160.scala	pass	check:pass	
 i15165.scala	pass	check:pass	
-i15166	fail	-	java source: teq reads none
+i15166	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i15171.scala	pass	check:pass	
 i15174.scala	pass	check:pass	
 i15177.FakeEnum.min.alt2.scala	pass	check:pass	
@@ -1046,7 +1046,7 @@ i17008.scala	pass	check:pass
 i1704.scala	fail	check:fail	i1704.scala:3:22: AnyRef is a trait; it cannot be instantiated
 i17052.scala	pass	check:pass	
 i17064.scala	pass	check:pass	
-i17066	fail	-	java source: teq reads none
+i17066	pass	check:pass	
 i17100.scala	pass	check:pass	
 i17100a.scala	fail	check:fail	i17100a.scala:11:12: Found:    (sel2 : Sel{def foo: String})
 i17135.scala	pass	check:pass	
@@ -1067,13 +1067,13 @@ i17227.scala	pass	check:pass
 i1723.scala	pass	check:pass	
 i17230.bootstrap.scala	pass	check:pass	
 i17245.scala	pass	check:pass	
-i17255	fail	-	java source: teq reads none
+i17255	pass	check:fail	
 i17257.min.scala	pass	check:pass	
 i17310.scala	pass	check:pass	
 i1737.scala	pass	check:pass	
 i17380.scala	pass	check:pass	
 i17381.scala	pass	check:pass	
-i17391	fail	-	java source: teq reads none
+i17391	pass	check:pass	
 i17394	fail	check:fail	teq: jvm backend: two classes are named example/_1$package
 i17394b	fail	check:pass	teq: jvm backend: two classes are named example/_1$package
 i17395-spec.ordered.scala	pass	check:pass	
@@ -1095,7 +1095,7 @@ i17735.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag f
 i17735a.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17741.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i1776.scala	pass	check:pass	
-i17763	fail	-	java source: teq reads none
+i17763	pass	check:pass	
 i1777.scala	pass	check:fail	
 i1786.scala	fail	check:fail	i1786.scala:12:3: value package is not a member of meta
 i1790.scala	pass	check:pass	
@@ -1150,11 +1150,11 @@ i18364.Tup.scala	pass	check:pass
 i18450.scala	fail	check:fail	i18450.scala:14:14: expected an identifier, found 'this'
 i18453.workaround.scala	pass	check:pass	
 i18453.zio.scala	pass	check:pass	
-i18529	fail	-	java source: teq reads none
-i18530	fail	-	java source: teq reads none
-i18531	fail	-	java source: teq reads none
+i18529	pass	check:pass	
+i18530	fail	check:fail	Code.java:8:25: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i18531	fail	check:fail	Code.java:6:26: Not found: type LoadableConstant
 i18533	cannot run	-	jdk: the test is for JDK 17, this is 24
-i18533b	fail	-	java source: teq reads none
+i18533b	fail	check:fail	Dog.java:3:25: not supported yet: a sealed Java type (the Java reader reads classes and interfaces)
 i18555.scala	pass	check:pass	
 i18569.reg1.scala	pass	check:pass	
 i18569.scala	pass	check:pass	
@@ -1170,7 +1170,7 @@ i18626.scala	pass	check:pass
 i18645.scala	pass	check:pass	
 i18649.scala	pass	check:pass	
 i1865.scala	pass	check:pass	
-i18654	fail	-	java source: teq reads none
+i18654	pass	check:pass	
 i1866.scala	pass	check:pass	
 i1867.scala	pass	check:pass	
 i1868.scala	pass	check:pass	
@@ -1196,7 +1196,7 @@ i19001.case2.scala	pass	check:pass
 i19001.case3.scala	pass	check:pass	
 i19006a.scala	pass	check:pass	
 i19006b.scala	pass	check:pass	
-i19007	fail	-	java source: teq reads none
+i19007	fail	check:pass	atomic.scala:262:37: String cannot be instantiated
 i19009.case1.scala	pass	check:pass	
 i19009.case2.scala	pass	check:pass	
 i19009.case3.scala	pass	check:pass	
@@ -1217,7 +1217,7 @@ i1932	pass	check:pass
 i19354.orig.scala	pass	check:fail	
 i19354.scala	pass	check:pass	
 i19385.scala	pass	check:pass	
-i19386	fail	-	java source: teq reads none
+i19386	fail	check:fail	FromScala.scala:2:16: value i is not a member of R1
 i19404.scala	pass	check:pass	
 i19407.scala	pass	check:pass	
 i19415.scala	pass	check:pass	
@@ -1246,7 +1246,7 @@ i19623.scala	fail	check:fail	i19623.scala:22:11: expected '=', found '{'
 i19629.scala	pass	check:pass	
 i19633.scala	pass	check:pass	
 i19637.scala	fail	check:fail	i19637.scala:7:3: missing parameter type
-i19642	fail	-	java source: teq reads none
+i19642	fail	check:fail	Valid.java:17:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i19687.scala	pass	check:pass	
 i19687a.scala	pass	check:pass	
 i19687b.scala	pass	check:pass	
@@ -1262,7 +1262,7 @@ i19724.scala	pass	check:pass
 i19749.scala	pass	check:pass	
 i1975.scala	pass	check:pass	
 i19789.scala	pass	check:pass	
-i19806	fail	-	java source: teq reads none
+i19806	fail	check:fail	option: -Xjava-tasty (teq has no flag for it)
 i19808.scala	pass	check:pass	
 i19809.scala	fail	check:fail	i19809.scala:3:29: Found:    AnyRef
 i19821.scala	pass	check:pass	
@@ -1283,11 +1283,11 @@ i19955b.scala	pass	check:pass
 i19962.scala	pass	check:pass	
 i19988.scala	pass	check:pass	
 i19999.scala	pass	check:pass	
-i20026	fail	-	java source: teq reads none
+i20026	fail	check:fail	TestInstance.java:12:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i20053b.scala	pass	check:pass	
-i20063	fail	-	java source: teq reads none
+i20063	fail	check:fail	TestInstance.java:12:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i20070.scala	pass	check:pass	
-i20078	fail	-	java source: teq reads none
+i20078	pass	check:pass	
 i20080.scala	fail	check:fail	i20080.scala:8:5: Found:    (<error>, <error>) => <error>
 i2009.scala	pass	check:pass	
 i20107.scala	pass	check:pass	
@@ -1317,8 +1317,8 @@ i20498	pass	check:pass
 i2051.scala	pass	check:pass	
 i20512.scala	fail	check:fail	i20512.scala:8:67: type Names not found
 i20521.scala	pass	check:pass	
-i20554-a	fail	-	java source: teq reads none
-i20554-b	fail	-	java source: teq reads none
+i20554-a	fail	check:fail	Annotation.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+i20554-b	fail	check:fail	SimpleAnnotation.java:2:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i20554-c.scala	pass	check:pass	
 i2056.scala	pass	check:pass	
 i20572.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -1352,9 +1352,9 @@ i21275.scala	pass	check:pass
 i21282.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i21295.scala	pass	check:pass	
 i21300.scala	pass	check:pass	
-i21303	fail	-	java source: teq reads none
-i21303a	fail	-	java source: teq reads none
-i21319	fail	-	java source: teq reads none
+i21303	fail	check:fail	JavaEnum.java:1:13: not supported yet: a Java enum (the Java reader reads classes and interfaces)
+i21303a	fail	check:fail	JavaEnum.java:1:13: not supported yet: a Java enum (the Java reader reads classes and interfaces)
+i21319	fail	check:fail	Valid.java:17:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i21320a.scala	pass	check:pass	
 i21320b.scala	pass	check:pass	
 i21352a	pass	check:pass	
@@ -1373,8 +1373,8 @@ i21544.scala	pass	check:pass
 i21558.orig.scala	pass	check:pass	
 i21558.scala	pass	check:pass	
 i21568.scala	pass	check:pass	
-i21631_joint	fail	-	java source: teq reads none
-i21631_separ	fail	-	java source: teq reads none
+i21631_joint	fail	check:fail	AbstractChannel.java:3:24: Not found: type AbstractUnsafe
+i21631_separ	fail	check:fail	AbstractChannel_1.java:4:30: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i21635.scala	pass	check:pass	
 i2166.scala	pass	check:pass	
 i21676.scala	fail	check:pass	i21676.scala:3:3: None of the overloaded alternatives of method collect in trait SortedSetOps with types
@@ -1521,13 +1521,13 @@ i2397.scala	pass	check:pass
 i24007.scala	pass	check:pass	
 i24038a.scala	fail	check:fail	i24038a.scala:27:7: Found:    *:[BufferOf[h], Tuple]
 i24038b.scala	pass	check:pass	
-i24074	fail	-	java source: teq reads none
+i24074	fail	check:fail	JavaPart.java:2:20: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i24076.scala	pass	check:pass	
 i24094.scala	pass	check:pass	
 i24097-a.scala	pass	check:pass	
 i24097-b.scala	pass	check:pass	
-i24134	fail	-	java source: teq reads none
-i24134-nested	fail	-	java source: teq reads none
+i24134	fail	check:fail	javac: tests/pos/i24134/JavaTestServer.java:2: error: type Flow does not take parameters
+i24134-nested	fail	check:fail	javac: tests/pos/i24134-nested/Main.java:3: error: type Container does not take parameters
 i24192.scala	pass	check:pass	
 i24206.scala	fail	check:fail	i24206.scala:7:26: missing parameter type
 i24207.scala	pass	check:pass	
@@ -1543,7 +1543,7 @@ i24507-jframe.scala	fail	check:fail	i24507-jframe.scala:1:59: None of the overlo
 i24543.scala	fail	check:fail	option: -language:experimental.captureChecking (a check teq does not perform)
 i24557.scala	pass	check:pass	
 i24571.scala	pass	check:pass	
-i24631	fail	-	java source: teq reads none
+i24631	fail	check:fail	TestJava.java:9:23: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i24631b.scala	fail	check:fail	i24631b.scala:4:3: indented definitions expected, def found
 i2468.scala	pass	check:pass	
 i24686.scala	fail	check:fail	i24686.scala:1:75: No given instance of type InPlaceImpl2[DenseMatrix[Double], DenseMatrix[Double]] was found for parameter x$2 of method horzcat in object DenseMatrix
@@ -1556,9 +1556,9 @@ i24750.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag f
 i24813.scala	fail	check:fail	i24813.scala:4:21: Not found: type t
 i24869	fail	check:fail	Utils_1.scala:7:30: expected 'extends' or a template body, found '@'
 i24891.scala	pass	check:pass	
-i24894a	fail	-	java source: teq reads none
+i24894a	fail	check:fail	Param.java:11:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i24894b	pass	check:pass	
-i24894c	fail	-	java source: teq reads none
+i24894c	fail	check:fail	OutputTimeUnit.java:11:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i24917.scala	pass	check:pass	
 i24990.scala	pass	check:fail	
 i25002.scala	pass	check:pass	
@@ -1645,7 +1645,7 @@ i3246.scala	pass	check:pass
 i3248.scala	fail	check:fail	i3248.scala:8:20: a sequence wildcard can only end a sequence pattern
 i3252.scala	pass	check:pass	
 i3264.scala	pass	check:pass	
-i3273	fail	-	java source: teq reads none
+i3273	pass	check:pass	
 i3302	pass	check:pass	
 i3323b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
 i3343.scala	pass	check:pass	
@@ -1760,7 +1760,7 @@ i4674.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag fo
 i4678.scala	pass	check:pass	
 i4720.scala	pass	check:pass	
 i4725.scala	fail	check:fail	i4725.scala:7:17: No given instance of type (T[Int]) ?=> T[List[Int]] was found for parameter ev of method foo in object Test1
-i4739.java	fail	-	java source: teq reads none
+i4739.java	pass	check:pass	
 i4742.scala	pass	check:pass	
 i4753.scala	pass	check:pass	
 i4753b.scala	pass	check:pass	
@@ -1793,7 +1793,7 @@ i5068-gadt.scala	pass	check:pass
 i5090.scala	pass	check:pass	
 i5107.scala	pass	check:pass	
 i5139.scala	pass	check:pass	
-i5140	fail	-	java source: teq reads none
+i5140	pass	check:pass	
 i5145.scala	pass	check:pass	
 i518.scala	pass	check:pass	
 i5188.scala	pass	check:pass	
@@ -1826,7 +1826,7 @@ i5592.scala	pass	check:pass
 i5625.scala	pass	check:pass	
 i5625b.scala	fail	check:fail	i5625b.scala:11:13: type argument t does not conform to upper bound AnyVal
 i5650.scala	pass	check:pass	
-i5655	fail	-	java source: teq reads none
+i5655	fail	check:fail	J_1.java:2:18: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i566.scala	pass	check:pass	
 i5666.scala	pass	check:pass	
 i5699.scala	pass	check:pass	
@@ -1867,7 +1867,7 @@ i6116.scala	pass	check:pass
 i6126.scala	pass	check:pass	
 i6127.scala	pass	check:pass	
 i6146.scala	pass	check:pass	
-i6151	fail	-	java source: teq reads none
+i6151	fail	check:fail	Expect.java:1:13: not supported yet: a Java enum (the Java reader reads classes and interfaces)
 i6159.scala	pass	check:pass	
 i618.scala	pass	check:pass	
 i6190a.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -1982,7 +1982,7 @@ i7467.scala	fail	check:fail	i7467.scala:9:16: method getListCellRendererComponen
 i7477.scala	pass	check:pass	
 i7515.scala	pass	check:pass	
 i7516.scala	pass	check:pass	
-i7525	fail	-	java source: teq reads none
+i7525	pass	check:pass	
 i7532.scala	pass	check:pass	
 i7575.scala	pass	check:pass	
 i7586.scala	fail	check:fail	i7586.scala:37:37: Cannot prove that (m4_2 : S[S[S[Nat]]]) <:< S[S[S[S[Z]]]].
@@ -2023,14 +2023,14 @@ i7893.scala	pass	check:pass
 i7894.scala	pass	check:pass	
 i7920.scala	fail	check:fail	i7920.scala:6:14: value glass is not a member of Foo
 i7944.scala	pass	check:pass	
-i7959.java	fail	-	java source: teq reads none
+i7959.java	fail	check:fail	i7959.java:2:24: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i7964.scala	fail	check:fail	i7964.scala:9:10: cannot reduce inline match with
 i7965.scala	pass	check:pass	
 i7993.scala	pass	check:pass	
 i7998.scala	pass	check:pass	
 i801.scala	pass	check:pass	
 i8031.scala	pass	check:pass	
-i8042	fail	-	java source: teq reads none
+i8042	pass	check:pass	
 i8049.scala	pass	check:pass	
 i8056.scala	pass	check:pass	
 i8067.scala	pass	check:pass	
@@ -2072,7 +2072,7 @@ i8404.scala	pass	check:pass
 i8424.scala	pass	check:fail	
 i8449.scala	pass	check:pass	
 i8491.scala	fail	check:fail	i8491.scala:5:38: Found:    Bar
-i851.java	fail	-	java source: teq reads none
+i851.java	pass	check:pass	
 i8516.scala	pass	check:pass	
 i8530.scala	pass	check:pass	
 i8537.scala	pass	check:pass	
@@ -2165,7 +2165,7 @@ i9355	pass	check:pass
 i9363.scala	pass	check:pass	
 i939.scala	pass	check:pass	
 i9391.scala	pass	check:pass	
-i9392	fail	-	java source: teq reads none
+i9392	pass	check:pass	
 i94-nada.scala	pass	check:pass	
 i9403.scala	fail	check:fail	i9403.scala:7:30: Found:    false
 i941.scala	pass	check:pass	
@@ -2177,7 +2177,7 @@ i9479.scala	pass	check:pass
 i9482.scala	fail	check:fail	i9482.scala:9:26: No given instance of type OptManifest[Int] was found for a context parameter of method make in object Ref
 i9509.scala	pass	check:pass	
 i9515.scala	pass	check:pass	
-i9525	fail	-	java source: teq reads none
+i9525	pass	check:pass	
 i9529.scala	pass	check:pass	
 i9530.scala	pass	check:pass	
 i9531.scala	pass	check:pass	
@@ -2218,8 +2218,8 @@ i9999.scala	fail	check:fail	i9999.scala:10:16: Found:    A
 i9999a.scala	fail	check:fail	i9999a.scala:9:8: Found:    Any
 if-parse.scala	pass	check:pass	
 ift-assign.scala	pass	check:pass	
-ilya	fail	-	java source: teq reads none
-ilya2	fail	-	java source: teq reads none
+ilya	pass	check:pass	
+ilya2	fail	check:fail	Nullable.java:5:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 imp2-pos.scala	pass	check:pass	
 implicit-conversion.scala	pass	check:pass	
 implicit-dep.scala	pass	check:pass	
@@ -2320,14 +2320,14 @@ isApplicableSafe.scala	pass	check:pass
 isRef.scala	pass	check:pass	
 itay.scala	pass	check:pass	
 iterator-traversable-mix.scala	pass	check:pass	
-java-annot	fail	-	java source: teq reads none
+java-annot	fail	check:fail	J.java:4:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 java-futures.scala	pass	check:fail	
-java-inherited-type	fail	-	java source: teq reads none
-java-inherited-type1	fail	-	java source: teq reads none
-java-override	fail	-	java source: teq reads none
-java-records	fail	-	java source: teq reads none
+java-inherited-type	fail	check:fail	Client.scala:3:5: value Outer is not a member of Test
+java-inherited-type1	fail	check:fail	J.java:1:17: not supported yet: a Java declaration naming S, a class of this program's Scala sources
+java-override	pass	check:pass	
+java-records	fail	check:fail	FromScala.scala:8:13: None of the overloaded alternatives of constructor R1 in class R1 with types
 javaConversions-2.10-ambiguity.scala	pass	check:fail	
-javaReadsSigs	fail	-	java source: teq reads none
+javaReadsSigs	pass	check:pass	
 jzon	pass	check:pass	
 kind-projector-underscores.scala	fail	check:fail	option: -Xkind-projector:underscores (teq has no flag for it)
 kind-projector.scala	fail	check:fail	kind-projector.scala:19:24: Not found: type *
@@ -2400,7 +2400,7 @@ mirror-implicit-scope.scala	fail	check:fail	mirror-implicit-scope.scala:7:57: va
 misc-unapply_pos.scala	pass	check:pass	
 mixin-forwarder-clash1.scala	fail	check:fail	mixin-forwarder-clash1.scala:19:7: class Bar2 inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int): X, which are both called concat$Int in the JavaScript output, since no ancestor declares the two together; declare the alternativ
 mixin-forwarder-clash2	pass	check:pass	
-mixin-generic-extended-by-java	fail	-	java source: teq reads none
+mixin-generic-extended-by-java	fail	check:fail	JavaExtension_2.java:3:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 mixins.scala	pass	check:pass	
 modules.scala	pass	check:pass	
 modules1.scala	pass	check:pass	
@@ -2559,7 +2559,7 @@ profile-test.scala	pass	check:pass
 projection.scala	pass	check:pass	
 projections.scala	pass	check:pass	
 propagate.scala	pass	check:pass	
-protected-static	fail	-	java source: teq reads none
+protected-static	fail	check:fail	JavaClass.java:4:26: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 provably-disjoint-infinite-recursion-1.scala	pass	check:pass	
 provably-disjoint-infinite-recursion-2.scala	pass	check:pass	
 pseudo-thistype-constraints.scala	fail	check:fail	pseudo-thistype-constraints.scala:6:28: Found:    Boolean
@@ -2568,7 +2568,7 @@ range.scala	pass	check:fail
 rangepos-anonapply.scala	pass	check:pass	
 rangepos-patmat.scala	pass	check:pass	
 rangepos.scala	pass	check:pass	
-raw-map	fail	-	java source: teq reads none
+raw-map	pass	check:pass	
 rbtree.scala	fail	check:fail	rbtree.scala:28:1: expected a definition, found new line
 realizable-mut.scala	fail	check:fail	realizable-mut.scala:8:10: a singleton type needs a val, a parameter or an object
 rebind.scala	fail	check:fail	rebind.scala:11:7: error overriding method foo in class Foo of type Inner: method foo in trait Bar of type Bar.this.Inner has incompatible type
@@ -2607,7 +2607,7 @@ selftypes.scala	pass	check:pass
 sepComp	pass	check:pass	
 seq-ordering.scala	pass	check:pass	
 seqtest2.scala	pass	check:pass	
-sequence-argument	fail	-	java source: teq reads none
+sequence-argument	pass	check:fail	
 sets-tc.scala	fail	check:fail	sets-tc.scala:12:9: type argument ListSet does not have the same kind as its bound
 sets.scala	pass	check:pass	
 sigs.scala	pass	check:pass	
@@ -2791,7 +2791,7 @@ t1027.scala	pass	check:pass
 t1029	pass	check:pass	
 t1034.scala	pass	check:pass	
 t1035.scala	pass	check:pass	
-t10350	fail	-	java source: teq reads none
+t10350	pass	check:pass	
 t10387b.scala	pass	check:pass	
 t1048.scala	pass	check:pass	
 t1049.scala	pass	check:pass	
@@ -2820,9 +2820,9 @@ t11593	pass	check:pass
 t116.scala	pass	check:pass	
 t1164.scala	pass	check:pass	
 t1168.scala	pass	check:fail	
-t11788	fail	-	java source: teq reads none
-t11788b	fail	-	java source: teq reads none
-t11788c	fail	-	java source: teq reads none
+t11788	pass	check:pass	
+t11788b	fail	check:fail	Foo.java:6:14: value lang is not a member of object p.java
+t11788c	fail	check:fail	Foo.java:7:14: value lang is not a member of object p.java
 t1185.scala	pass	check:pass	
 t119.scala	pass	check:pass	
 t11921.scala	pass	check:pass	
@@ -2835,7 +2835,7 @@ t1226.scala	pass	check:pass
 t1236.scala	pass	check:pass	
 t1236a.scala	pass	check:pass	
 t1237.scala	pass	check:pass	
-t12396	fail	-	java source: teq reads none
+t12396	fail	check:fail	A_1.java:14:15: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 t124.scala	pass	check:pass	
 t12494.scala	pass	check:pass	
 t1260.scala	pass	check:pass	
@@ -2996,7 +2996,7 @@ t3071.scala	pass	check:pass
 t3076	pass	check:pass	
 t3079.scala	pass	check:pass	
 t3106.scala	pass	check:pass	
-t3120	fail	-	java source: teq reads none
+t3120	fail	check:fail	J1.java:2:18: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 t3136.scala	pass	check:pass	
 t3152.scala	pass	check:pass	
 t3160.scala	pass	check:pass	
@@ -3005,14 +3005,14 @@ t3174b.scala	pass	check:pass
 t3177.scala	pass	check:pass	
 t318.scala	pass	check:pass	
 t319.scala	pass	check:pass	
-t3236	fail	-	java source: teq reads none
-t3249	fail	-	java source: teq reads none
+t3236	fail	check:fail	BooleanAnnotation.java:5:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+t3249	fail	check:fail	javac: tests/pos/t3249/Test.java:3: error: type A does not take parameters
 t3252.scala	pass	check:pass	
 t3274.scala	pass	check:pass	
 t3278.scala	pass	check:fail	
 t3312.scala	pass	check:pass	
 t3343.scala	pass	check:pass	
-t3349	fail	-	java source: teq reads none
+t3349	pass	check:pass	
 t3371.scala	pass	check:pass	
 t3373.scala	pass	check:pass	
 t3374.scala	pass	check:pass	
@@ -3020,22 +3020,22 @@ t3384.scala	pass	check:pass
 t3411.scala	pass	check:pass	
 t3419	pass	check:pass	
 t3420.scala	pass	check:pass	
-t3429	fail	-	java source: teq reads none
+t3429	fail	check:fail	Test.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 t3430.scala	pass	check:pass	
 t344.scala	pass	check:pass	
 t3440.scala	pass	check:pass	
 t3452f.scala	pass	check:pass	
 t3477.scala	pass	check:pass	
-t3486	fail	-	java source: teq reads none
+t3486	fail	check:fail	javac: tests/pos/t3486/JTest.java:1: error: type T2 does not take parameters
 t348plus.scala	pass	check:pass	
 t3494.scala	pass	check:pass	
 t3495.scala	pass	check:pass	
 t3498-new.scala	pass	check:pass	
-t3521	fail	-	java source: teq reads none
+t3521	fail	check:fail	DoubleValue.java:5:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 t3528.scala	pass	check:pass	
 t3534.scala	pass	check:pass	
 t3560.scala	pass	check:pass	
-t3567	fail	-	java source: teq reads none
+t3567	fail	check:fail	Outer.java:2:9: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 t3570.scala	pass	check:pass	
 t3577.scala	pass	check:pass	
 t3578.scala	pass	check:pass	
@@ -3045,10 +3045,10 @@ t359.scala	pass	check:pass
 t360.scala	pass	check:pass	
 t361.scala	pass	check:pass	
 t3612.scala	pass	check:pass	
-t3622	fail	-	java source: teq reads none
+t3622	pass	check:pass	
 t3631.scala	pass	check:pass	
 t3636.scala	pass	check:pass	
-t3642	fail	-	java source: teq reads none
+t3642	pass	check:pass	
 t3670.scala	pass	check:pass	
 t3671.scala	pass	check:pass	
 t3672.scala	pass	check:pass	
@@ -3075,8 +3075,8 @@ t3890.scala	pass	check:pass
 t3898.scala	pass	check:pass	
 t3924.scala	pass	check:pass	
 t3927.scala	pass	check:fail	
-t3936	fail	-	java source: teq reads none
-t3946	fail	-	java source: teq reads none
+t3936	pass	check:pass	
+t3946	fail	check:fail	Test_1.scala:10:5: method f in class A cannot be accessed as a member of A from object T; protected method f can only be accessed from class A or one of its subclasses
 t3960.scala	pass	check:pass	
 t397.scala	pass	check:pass	
 t3972.scala	pass	check:pass	
@@ -3111,7 +3111,7 @@ t4305.scala	pass	check:fail
 t432.scala	pass	check:pass	
 t4336.scala	pass	check:pass	
 t439.scala	pass	check:pass	
-t4402	fail	-	java source: teq reads none
+t4402	fail	check:fail	Bar.java:4:29: type Inner is not a member of object test.Foo
 t443.scala	pass	check:pass	
 t4430.scala	pass	check:pass	
 t4432.scala	pass	check:pass	
@@ -3125,14 +3125,14 @@ t4547.scala	pass	check:pass
 t4579.scala	fail	check:fail	t4579.scala:45:8: object creation impossible, since it has 2 unimplemented members: evaluate, lisp2string
 t4593.scala	pass	check:pass	
 t460.scala	pass	check:pass	
-t4603	fail	-	java source: teq reads none
+t4603	pass	check:pass	
 t464.scala	pass	check:pass	
 t4651.scala	pass	check:pass	
 t4692.scala	pass	check:pass	
 t4716.scala	pass	check:pass	
 t4717.scala	pass	check:pass	
-t4737	fail	-	java source: teq reads none
-t4744	fail	-	java source: teq reads none
+t4737	fail	check:fail	J_1.java:4:21: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+t4744	pass	check:pass	
 t4757	pass	check:pass	
 t4758.scala	pass	check:pass	
 t4760.scala	pass	check:fail	
@@ -3192,11 +3192,11 @@ t5577.scala	pass	check:fail
 t5606.scala	pass	check:pass	
 t5639	pass	check:pass	
 t5643.scala	pass	check:pass	
-t5644	fail	-	java source: teq reads none
+t5644	pass	check:pass	
 t566.scala	pass	check:pass	
 t5683.scala	pass	check:pass	
 t5702-pos-infix-star.scala	pass	check:fail	
-t5703	fail	-	java source: teq reads none
+t5703	pass	check:pass	
 t5720-ownerous.scala	pass	check:pass	
 t5726.scala	pass	check:pass	
 t5727.scala	pass	check:pass	
@@ -3220,11 +3220,11 @@ t5886.scala	fail	check:fail	t5886.scala:8:6: Found:    Class[_]
 t5892.scala	pass	check:pass	
 t5897.scala	pass	check:pass	
 t5900a.scala	pass	check:pass	
-t5910.java	fail	-	java source: teq reads none
+t5910.java	pass	check:pass	
 t592.scala	pass	check:pass	
 t5930.scala	pass	check:pass	
 t5932.scala	pass	check:pass	
-t5957	fail	-	java source: teq reads none
+t5957	fail	check:fail	Test.java:2:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 t5958.scala	pass	check:pass	
 t596.scala	pass	check:pass	
 t5967.scala	pass	check:pass	
@@ -3263,7 +3263,7 @@ t6225b.scala	pass	check:pass
 t6231.scala	pass	check:pass	
 t6231b.scala	pass	check:pass	
 t6231c.scala	pass	check:pass	
-t6245	fail	-	java source: teq reads none
+t6245	pass	check:pass	
 t6274.scala	pass	check:pass	
 t6275.scala	pass	check:pass	
 t6278-synth-def.scala	pass	check:pass	
@@ -3305,7 +3305,7 @@ t6921.scala	pass	check:pass
 t6925.scala	pass	check:pass	
 t6925b.scala	pass	check:pass	
 t694.scala	pass	check:pass	
-t6942	fail	-	java source: teq reads none
+t6942	fail	check:fail	Bar.java:3:13: not supported yet: a Java enum (the Java reader reads classes and interfaces)
 t6948.scala	pass	check:pass	
 t6963c.scala	fail	check:fail	option: -Xmigration:2.9 (teq has no flag for it)
 t6966.scala	pass	check:fail	
@@ -3314,7 +3314,7 @@ t6976	pass	check:pass
 t698.scala	pass	check:pass	
 t6994.scala	pass	check:pass	
 t7011.scala	pass	check:pass	
-t7014	fail	-	java source: teq reads none
+t7014	fail	check:fail	ThreadSafety.java:7:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 t7022.scala	pass	check:pass	
 t703.scala	pass	check:pass	
 t7033.scala	fail	check:fail	t7033.scala:3:18: only classes can be instantiated with new
@@ -3324,9 +3324,9 @@ t7183.scala	pass	check:pass
 t720.scala	pass	check:pass	
 t7200b.scala	fail	check:fail	t7200b.scala:11:7: recursive use of coflatMap needs an explicit result type
 t7226.scala	pass	check:pass	
-t7232	fail	-	java source: teq reads none
-t7232c	fail	-	java source: teq reads none
-t7232d	fail	-	java source: teq reads none
+t7232	pass	check:pass	
+t7232c	fail	check:fail	Foo.java:6:25: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+t7232d	pass	check:pass	
 t7233.scala	pass	check:pass	
 t7233b.scala	fail	check:fail	t7233b.scala:3:49: Not found: toS
 t7264	pass	check:pass	
@@ -3335,7 +3335,7 @@ t7296.scala	pass	check:pass
 t7315.scala	pass	check:pass	
 t7322.scala	pass	check:pass	
 t7329.scala	pass	check:pass	
-t7364	fail	-	java source: teq reads none
+t7364	pass	check:pass	
 t7369.scala	pass	check:pass	
 t7377b.scala	pass	check:pass	
 t7426.scala	pass	check:pass	
@@ -3348,7 +3348,7 @@ t7475e.scala	pass	check:pass
 t7486.scala	pass	check:pass	
 t7517.scala	pass	check:pass	
 t7520.scala	pass	check:pass	
-t7532	fail	-	java source: teq reads none
+t7532	fail	check:fail	A_1.java:2:15: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 t7532b	pass	check:pass	
 t756.scala	pass	check:pass	
 t757.scala	pass	check:pass	
@@ -3409,7 +3409,7 @@ t8207.scala	fail	check:fail	t8207.scala:2:10: cannot resolve import: me is not a
 t8219.scala	pass	check:pass	
 t8230a.scala	pass	check:pass	
 t8237.scala	pass	check:pass	
-t8244d	fail	-	java source: teq reads none
+t8244d	pass	check:pass	
 t8300-conversions-a.scala	pass	check:pass	
 t8300-conversions-b.scala	pass	check:pass	
 t8300-patmat-a.scala	pass	check:pass	
@@ -3425,7 +3425,7 @@ t8363.scala	pass	check:pass
 t8364.scala	pass	check:pass	
 t8367.scala	pass	check:pass	
 t8369a.scala	pass	check:pass	
-t8376	fail	-	java source: teq reads none
+t8376	pass	check:pass	
 t839.scala	pass	check:pass	
 t851.scala	pass	check:pass	
 t873.scala	pass	check:pass	
@@ -3436,7 +3436,7 @@ t9123.scala	pass	check:pass
 t927.scala	pass	check:fail	
 t9419.jackson.scala	pass	check:pass	
 t9419.specs2.scala	pass	check:pass	
-t942	fail	-	java source: teq reads none
+t942	pass	check:pass	
 t946.scala	pass	check:pass	
 t9795.scala	pass	check:pass	
 t9844.scala	pass	check:pass	
@@ -3446,7 +3446,7 @@ tailrec-super.scala	fail	check:fail	tailrec-super.scala:13:20: recursive use of 
 tailrec.scala	fail	check:fail	tailrec.scala:9:11: Cannot rewrite recursive call: it is not in tail position
 tangledCompanion.scala	pass	check:pass	
 targetName-infer-result.scala	fail	check:fail	targetName-infer-result.scala:13:9: recursive use of app needs an explicit result type
-targetName-override	fail	-	java source: teq reads none
+targetName-override	pass	check:fail	
 targetName-override.scala	pass	check:pass	
 targetName.scala	pass	check:pass	
 tasty-named-arguments.scala	fail	check:fail	tasty-named-arguments.scala:3:52: missing parameter type

@@ -1,0 +1,1 @@
+non class Non {}

@@ -122,7 +122,6 @@ i22672	marks: 2 warnings where 1 are marked
 i22705.scala	marks: an error where warnings are marked: i22705.scala:15:22: Node cannot be instantiated
 i22706.scala	marks: an error where warnings are marked: i22706.scala:17:22: N cannot be instantiated
 i22795	marks: 0 warnings where 1 are marked
-i22896	java source: teq reads none
 i22899.scala	marks: an error where warnings are marked: i22899.scala:20:30: a named pattern is only allowed in a tuple or constructor pattern
 i22981.scala	marks: an error where warnings are marked: i22981.scala:8:31: expected an identifier, found 'type'
 i23018.scala	marks: an error where warnings are marked: i23018.scala:18:31: type mismatch: found 42, required C

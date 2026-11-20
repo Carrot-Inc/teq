@@ -1,11 +1,11 @@
 # dotty 3.8.4 (7d4833b6) run, run; compiler/test/dotty/tools/dotc/CompilationTests.scala:179; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
-10838	fail	-	java source: teq reads none
+10838	fail	interp:fail	A.java:2:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 16405.scala	fail	interp:fail	16405.scala:14:15: Not found: type a
 1938-2.scala	fail	interp:fail	1938-2.scala:23:12: this is not a case class or enum case
 1938.scala	pass	interp:pass	
-25-1	fail	-	java source: teq reads none
-25-2	fail	-	java source: teq reads none
+25-1	pass	interp:fail	
+25-2	pass	interp:fail	
 26071.scala	pass	interp:pass	
 2772.scala	pass	interp:pass	
 3179.scala	pass	interp:pass	
@@ -57,7 +57,7 @@ UnrolledBuffer.scala	pass	interp:fail
 absoverride.scala	pass	interp:fail	
 abstract-givens.scala	pass	interp:fail	
 adding-growing-set.scala	pass	interp:pass	
-annotation-info-not-erased	fail	-	java source: teq reads none
+annotation-info-not-erased	fail	interp:fail	Test.scala:6:4: expected an identifier, found '('
 anon-mirror-gen-local.scala	fail	interp:fail	anon-mirror-gen-local.scala:85:47: not supported yet: an instance of Seed, a class nested in a class, made outside that class
 applydynamic_sip.scala	pass	interp:pass	
 array-addition.scala	pass	interp:fail	
@@ -66,7 +66,7 @@ array-erasure.scala	fail	interp:fail	array-erasure.scala:27:16: value apply is n
 array-existential-bound.scala	fail	interp:fail	array-existential-bound.scala:2:18: value length is not a member of Q
 arrayclone-new.scala	pass	interp:pass	
 arraycopy.scala	pass	interp:pass	
-arrays-from-java	fail	-	java source: teq reads none
+arrays-from-java	fail	interp:fail	javac: tests/run/arrays-from-java/C_2.java:5: error: name clash: foo1(T[]) in B and foo1(Serializable[]) in A have the same erasure, yet neither overrides the other
 arrays.scala	pass	interp:pass	
 arrayview.scala	pass	interp:pass	
 arybufgrow.scala	pass	interp:pass	
@@ -74,7 +74,7 @@ assert-stack.scala	fail	interp:fail	output: line 5: the .check has 'Test$.main(a
 automatic-tupling-of-function-parameters-implicit-conversion.scala	pass	interp:pass	
 automatic-tupling-of-function-parameters-spec.scala	pass	interp:pass	
 backwardsCompat-implicitParens	cannot run	-	an older compiler: a group is compiled by scalac 3.0.2
-beans	fail	-	java source: teq reads none
+beans	fail	interp:fail	LibraryAnnotation_1.java:7:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 better-fors-map-elim.scala	pass	interp:pass	
 better-fors-map-inlined.scala	pass	interp:pass	
 better-fors.scala	pass	interp:pass	
@@ -186,8 +186,8 @@ enum-constrs.scala	pass	interp:fail
 enum-custom-toString.scala	pass	interp:fail	
 enum-efficient-collections.scala	pass	interp:fail	
 enum-in-trait.scala	pass	interp:pass	
-enum-java	fail	-	java source: teq reads none
-enum-java-scala	fail	-	java source: teq reads none
+enum-java	fail	interp:fail	javac: tests/run/enum-java/Test.java:35: error: type argument A is not within bounds of type-variable K
+enum-java-scala	fail	interp:fail	javac: tests/run/enum-java-scala/Test.java:7: error: cannot find symbol
 enum-nat.scala	fail	interp:fail	enum-nat.scala:22:32: Found:    Any
 enum-ordinal-java	pass	interp:pass	
 enum-values-order.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
@@ -241,7 +241,7 @@ flat-flat-flat.scala	pass	interp:pass
 for-desugar-strawman.scala	pass	interp:pass	
 fors.scala	pass	interp:pass	
 forvaleq.scala	pass	interp:pass	
-forwarder-java-package-private	fail	-	java source: teq reads none
+forwarder-java-package-private	fail	interp:fail	Test_2.scala:11:23: value getModifiers is not a member of Method
 forwarder.scala	fail	interp:fail	forwarder.scala:19:23: value getModifiers is not a member of Method
 fragables-extension.scala	fail	interp:fail	fragables-extension.scala:11:3: missing parameter type
 fully-abstract-interface.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.StackOverflowError
@@ -293,7 +293,7 @@ i10724.scala	pass	interp:pass
 i10846	fail	interp:fail	i10846.scala:19:12: value getReturnType is not a member of Method
 i10857.scala	pass	interp:pass	
 i10866.scala	pass	interp:pass	
-i10884	fail	-	java source: teq reads none
+i10884	pass	interp:fail	
 i10889.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: min 4, max 4, ran g at 16
 i10905.scala	pass	interp:pass	
 i10930.scala	pass	interp:fail	
@@ -331,20 +331,20 @@ i11966.scala	pass	interp:pass
 i11996.scala	fail	interp:fail	i11996.scala:10:38: 'erased' is not part of the supported Scala subset
 i12032.scala	fail	interp:fail	i12032.scala:11:22: method append overrides nothing
 i12052	pass	interp:pass	
-i12086	fail	-	java source: teq reads none
+i12086	fail	interp:fail	Test_2.java:2:9: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i12160.scala	pass	interp:pass	
 i12170.scala	pass	interp:pass	
-i12204	fail	-	java source: teq reads none
+i12204	pass	interp:fail	
 i12328.scala	fail	interp:fail	i12328.scala:34:23: No given instance of type Schema[A] was found.
 i12328a.scala	pass	interp:pass	
 i12328b.scala	pass	interp:pass	
 i1240.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
-i12492	fail	-	java source: teq reads none
+i12492	fail	interp:fail	MyTable.scala:8:4: expected an identifier, found '('
 i12597.scala	pass	interp:pass	
 i1263.scala	pass	interp:pass	
 i12656.scala	fail	interp:fail	i12656.scala:13:11: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 i12729.scala	pass	interp:pass	
-i12753	fail	-	java source: teq reads none
+i12753	fail	interp:fail	output: line 13: the .check has 'synthetic public static C D.foo(int)', the program printed 'public static D D.foo(int)'
 i12759.scala	pass	interp:pass	
 i12759b.scala	pass	interp:pass	
 i12796	pass	interp:pass	
@@ -437,14 +437,14 @@ i14983.scala	pass	interp:pass
 i1503.scala	pass	interp:pass	
 i15101.scala	pass	interp:pass	
 i15190.scala	pass	interp:pass	
-i15199	fail	-	java source: teq reads none
+i15199	fail	interp:fail	Child_1.java:2:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i15234.scala	fail	interp:fail	i15234.scala:18:10: value fromProduct is not a member of Mirror{type MirroredType = (Nil : Nil); type MirroredMonoType = (Nil : Nil); type MirroredElemTypes <: Tuple}
 i15287.scala	fail	interp:fail	i15287.scala:6:3: Not found: f
 i15302a.scala	fail	interp:fail	i15302a.scala:6:28: Found:    *:[Int, *:[bh, bt] & (Int, Int)]
 i15302b.scala	pass	interp:pass	
 i15315.scala	pass	interp:pass	
 i15317.scala	pass	interp:pass	
-i15318	fail	-	java source: teq reads none
+i15318	fail	interp:fail	Bean.scala:8:4: expected an identifier, found '('
 i1533.scala	pass	interp:pass	
 i15374.scala	fail	interp:fail	teq: jvm backend: C: the local $this1qacu60_6 is not in scope of the generated method
 i15399.scala	pass	interp:pass	
@@ -472,7 +472,7 @@ i16390.scala	pass	interp:pass
 i16458.scala	fail	interp:fail	i16458.scala:5:38: expected end of statement, found identifier
 i16459.scala	fail	interp:fail	i16459.scala:6:6: expected end of statement, found identifier
 i16464.scala	fail	interp:fail	i16464.scala:10:20: operator - cannot be applied to Int and Seq[Int]
-i16474	fail	-	java source: teq reads none
+i16474	pass	interp:pass	
 i16728.scala	pass	interp:fail	
 i16785.scala	pass	interp:fail	
 i16806.scala	pass	interp:pass	
@@ -481,10 +481,10 @@ i1692.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.A
 i1692b.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: a was Test$$$Lambda/0x…@…, null expected
 i16943.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError: 'java.lang.Object scala.caps.unsafe$.unsafeErasedValue()'
 i17021.defs.scala	pass	interp:pass	
-i17021.ext-java	fail	-	java source: teq reads none
+i17021.ext-java	pass	interp:fail	
 i17021.scala	pass	interp:pass	
 i17115.scala	fail	interp:fail	i17115.scala:7:48: No given instance of type A[(String, String, String)] was found for parameter x of method summon in object Predef
-i17255	fail	-	java source: teq reads none
+i17255	fail	interp:fail	J.java:10:17: not supported yet: a Java declaration naming Module$, a class of this program's Scala sources
 i17317-b.scala	pass	interp:pass	
 i17317.scala	pass	interp:pass	
 i1732.scala	pass	interp:pass	
@@ -524,7 +524,7 @@ i19394.scala	fail	interp:fail	i19394.scala:11:7: bar is already defined as metho
 i19396.scala	pass	interp:pass	
 i19587.scala	pass	interp:pass	
 i1960.scala	pass	interp:pass	
-i19619	fail	-	java source: teq reads none
+i19619	fail	interp:fail	InnerClass.java:7:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i19629	pass	interp:pass	
 i19641.scala	pass	interp:pass	
 i19711.scala	pass	interp:pass	
@@ -553,7 +553,7 @@ i22150.scala	fail	interp:fail	i22150.scala:7:17: expected ')', found '@'
 i22345.scala	pass	interp:pass	
 i22497.scala	fail	interp:fail	output: line 2: the .check has 'public Foo(int)', the program printed 'public Foo(java.lang.String)'
 i22498.scala	pass	interp:pass	
-i22628	fail	-	java source: teq reads none
+i22628	pass	interp:fail	
 i22649	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Was TypeRef(NoPrefix(), "{z1 => AnyRef{type T; def make: z1.T}}")
 i2266.scala	pass	interp:pass	
 i2275.scala	pass	interp:pass	
@@ -561,7 +561,7 @@ i22888.scala	pass	interp:pass
 i22900.scala	fail	interp:fail	i22900.scala:10:28: a named pattern is only allowed in a tuple or constructor pattern
 i22900a.scala	pass	interp:pass	
 i22968.scala	fail	interp:fail	i22968.scala:5:13: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
-i22991	fail	-	java source: teq reads none
+i22991	fail	interp:fail	Foo.java:4:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i23131.scala	fail	interp:fail	i23131.scala:5:10: name is not a field of Some[(name : String)]
 i2314.scala	pass	interp:pass	
 i23179.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Receiver class Test$$anon$13ynqzq_735 does not define or inherit an implementation of the resolved method 'abstract java.lang.Object f(java.lang.Object[])' of interface 
@@ -576,7 +576,7 @@ i23409b.scala	pass	interp:pass
 i23440.scala	fail	interp:fail	i23440.scala:9:28: Found:    (<error>, <error>) => Unit
 i23444.scala	pass	interp:fail	
 i23477.scala	pass	interp:pass	
-i23479	fail	-	java source: teq reads none
+i23479	fail	interp:fail	NonSeal.java:2:29: not supported yet: a sealed Java type (the Java reader reads classes and interfaces)
 i23479b.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i2360.scala	pass	interp:pass	
 i23693.scala	pass	interp:pass	
@@ -593,7 +593,7 @@ i24201b.scala	pass	interp:pass
 i24204.scala	pass	interp:fail	
 i24272.scala	fail	interp:fail	i24272.scala:8:13: value toGenericString is not a member of Method
 i24357.scala	pass	interp:pass	
-i24507	fail	-	java source: teq reads none
+i24507	fail	interp:fail	A.java:4:19: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 i24553.scala	fail	interp:fail	i24553.scala:8:32: value toGenericString is not a member of Method
 i2456.scala	pass	interp:pass	
 i24573.scala	pass	interp:pass	
@@ -610,8 +610,8 @@ i25089.scala	pass	interp:pass
 i25291	pass	interp:pass	
 i2567.scala	pass	interp:pass	
 i2738.scala	fail	interp:fail	output: line 1: the .check has 'Test$qux$2$', the program printed 'bar$2'
-i2760	fail	-	java source: teq reads none
-i2780	fail	-	java source: teq reads none
+i2760	fail	interp:fail	Fork.java:4:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+i2780	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.IllegalAccessError: class Foo$Inner tried to access protected method 'java.lang.String bla.Base.foo()' (Foo$Inner and bla.Base are in unnamed module of loader 'app')
 i2795.scala	pass	interp:pass	
 i2808.scala	pass	interp:pass	
 i2883.scala	pass	interp:fail	
@@ -693,7 +693,7 @@ i5077.scala	fail	interp:fail	i5077.scala:21:25: value < is not a member of Any
 i5224.scala	pass	interp:pass	
 i5257.scala	pass	interp:pass	
 i5260.scala	pass	interp:pass	
-i533	fail	-	java source: teq reads none
+i533	pass	interp:fail	
 i5340.scala	pass	interp:pass	
 i5350.scala	pass	interp:pass	
 i5350b.scala	pass	interp:pass	
@@ -734,7 +734,7 @@ i7031.scala	pass	interp:pass
 i7049.scala	pass	interp:pass	
 i7086.scala	pass	interp:pass	
 i7110.scala	pass	interp:pass	
-i7212	fail	-	java source: teq reads none
+i7212	fail	interp:fail	javac: tests/run/i7212/Test.java:6: error: incompatible types: String cannot be converted to Seq
 i7281.scala	pass	interp:pass	
 i7287	pass	interp:pass	
 i7359.scala	pass	interp:fail	
@@ -761,10 +761,10 @@ i789.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.Cl
 i7926.scala	pass	interp:pass	
 i7960.scala	pass	interp:fail	
 i7963.scala	pass	interp:fail	
-i7990	fail	-	java source: teq reads none
+i7990	pass	interp:pass	
 i7991	pass	interp:pass	
 i7991.scala	pass	interp:pass	
-i8001	fail	-	java source: teq reads none
+i8001	pass	interp:fail	
 i8033.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.io.NotSerializableException: Foo
 i8035.scala	pass	interp:pass	
 i8058.scala	pass	interp:pass	
@@ -773,14 +773,14 @@ i8064.scala	pass	interp:pass
 i8073.scala	fail	interp:fail	i8073.scala:17:46: No given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x of method summon in object Predef
 i8073b.scala	fail	interp:fail	i8073b.scala:18:46: No given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x of method summon in object Predef
 i8096.scala	pass	interp:pass	
-i8101	fail	-	java source: teq reads none
+i8101	pass	interp:pass	
 i8314.scala	pass	interp:pass	
 i8396.scala	pass	interp:pass	
 i8398.scala	pass	interp:pass	
 i8425.scala	pass	interp:pass	
 i8530-b.scala	pass	interp:fail	
 i8530.scala	pass	interp:pass	
-i8531	fail	-	java source: teq reads none
+i8531	fail	interp:fail	Named.java:5:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 i8577a.scala	fail	interp:fail	i8577a.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577b.scala	fail	interp:fail	i8577b.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577c.scala	fail	interp:fail	i8577c.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
@@ -791,9 +791,9 @@ i8577g.scala	fail	interp:fail	i8577g.scala:11:7: mac is not an extractor: it has
 i8577h.scala	fail	interp:fail	i8577h.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577i.scala	fail	interp:fail	i8577i.scala:12:10: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8582.scala	fail	interp:fail	i8582.scala:10:7: run in trait BeforeAndAfterAll cannot override the concrete run in trait Suite without a member that both override
-i8599	fail	-	java source: teq reads none
-i8602	fail	-	java source: teq reads none
-i8661	fail	-	java source: teq reads none
+i8599	pass	interp:fail	
+i8602	pass	interp:fail	
+i8661	pass	interp:fail	
 i8662.scala	pass	interp:pass	
 i8726.scala	pass	interp:pass	
 i876.scala	fail	interp:fail	i876.scala:7:16: Found:    String
@@ -872,19 +872,19 @@ iterator-from.scala	fail	interp:fail	iterator-from.scala:53:45: Not found: Value
 iterator-iterate-lazy.scala	pass	interp:pass	
 iterator3444.scala	pass	interp:pass	
 iterators.scala	pass	interp:pass	
-java-ann-super-class	fail	-	java source: teq reads none
-java-ann-super-class-separate	fail	-	java source: teq reads none
-java-annot-params	fail	-	java source: teq reads none
-java-intersection	fail	-	java source: teq reads none
-java-longnames	fail	-	java source: teq reads none
-java-no-scala-import	fail	-	java source: teq reads none
-java-package-private-bridge	fail	-	java source: teq reads none
-java-package-protected	fail	-	java source: teq reads none
-java-varargs	fail	-	java source: teq reads none
-java-varargs-2	fail	-	java source: teq reads none
-java-varargs-3	fail	-	java source: teq reads none
-java-vc-overload	fail	-	java source: teq reads none
-junitForwarders	fail	-	java source: teq reads none
+java-ann-super-class	fail	interp:fail	Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-ann-super-class-separate	fail	interp:fail	Ann_1.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-annot-params	fail	interp:fail	Annots_0.java:6:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-intersection	fail	interp:fail	Test_2.scala:17:36: Found:    Serializable
+java-longnames	fail	interp:fail	Long_1.java:4:25: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+java-no-scala-import	pass	interp:fail	
+java-package-private-bridge	fail	interp:fail	Test.scala:7:7: value getReturnType is not a member of Method
+java-package-protected	pass	interp:fail	
+java-varargs	pass	interp:fail	
+java-varargs-2	pass	interp:fail	
+java-varargs-3	fail	interp:fail	Test.scala:13:13: type argument String does not conform to upper bound Serializable
+java-vc-overload	pass	interp:fail	
+junitForwarders	fail	interp:fail	Test.java:12:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 kmpSliceSearch.scala	pass	interp:fail	
 lambda-null.scala	pass	interp:fail	
 lambda-sam-bridge.scala	pass	interp:pass	
@@ -984,7 +984,7 @@ ordinal-innerclass.scala	fail	interp:fail	ordinal-innerclass.scala:18:65: value 
 outer-accessors.scala	pass	interp:pass	
 outerPatternMatch	pass	interp:pass	
 overload_directly_applicable.scala	pass	interp:pass	
-overload_repeated	fail	-	java source: teq reads none
+overload_repeated	pass	interp:fail	
 overloading-specifity.scala	pass	interp:pass	
 overloads.scala	pass	interp:pass	
 paramForwarding.scala	fail	interp:fail	output: line 2: the .check has 'private final int B.theValue', the program printed 'private int B.theValue'
@@ -1030,7 +1030,7 @@ recursive-with-option.scala	pass	interp:pass
 reducable.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: 4
 reduce-projections.scala	pass	interp:pass	
 redundantParents.scala	pass	interp:fail	
-repeatable	fail	-	java source: teq reads none
+repeatable	fail	interp:fail	FirstLevel_0.java:7:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
 rescue-boundary.scala	pass	interp:fail	
 rescue.scala	pass	interp:fail	
 retclosure.scala	pass	interp:fail	
@@ -1116,12 +1116,12 @@ t1048.scala	pass	interp:fail
 t10594.scala	pass	interp:pass	
 t107.scala	pass	interp:pass	
 t1074.scala	pass	interp:fail	
-t10889	fail	-	java source: teq reads none
+t10889	fail	interp:fail	javac: tests/run/t10889/Test.java:6: error: cannot find symbol
 t11255	fail	interp:fail	run: exit 1: Exception in thread "main" java.io.NotSerializableException: A$$Lambda/0x…
 t1192.scala	pass	interp:pass	
 t1220.scala	pass	interp:pass	
-t12290	fail	-	java source: teq reads none
-t12300	fail	-	java source: teq reads none
+t12290	pass	interp:pass	
+t12300	pass	interp:fail	
 t12348.scala	fail	interp:fail	t12348.scala:11:18: Found:    AnyRef
 t1300.scala	pass	interp:pass	
 t13033.scala	pass	interp:pass	
@@ -1220,14 +1220,14 @@ t3353.scala	pass	interp:pass
 t3395.scala	pass	interp:pass	
 t3397.scala	pass	interp:pass	
 t3452.scala	pass	interp:fail	
-t3452a	fail	-	java source: teq reads none
-t3452b	fail	-	java source: teq reads none
-t3452b-bcode	fail	-	java source: teq reads none
+t3452a	pass	interp:fail	
+t3452b	pass	interp:fail	
+t3452b-bcode	pass	interp:fail	
 t3452c.scala	pass	interp:pass	
-t3452d	fail	-	java source: teq reads none
-t3452e	fail	-	java source: teq reads none
+t3452d	fail	interp:fail	javac: tests/run/t3452d/Test.java:5: error: type C does not take parameters
+t3452e	fail	interp:fail	B.java:1:17: not supported yet: a Java declaration naming C1, a class of this program's Scala sources
 t3452f.scala	pass	interp:pass	
-t3452g	fail	-	java source: teq reads none
+t3452g	fail	interp:fail	javac: tests/run/t3452g/Test.java:13: error: type C does not take parameters
 t3452h.scala	fail	interp:fail	t3452h.scala:1:7: error overriding method f in class Foo of type I: method f in trait Bar of type Bar.this.I has incompatible type
 t3487.scala	pass	interp:pass	
 t3488.scala	pass	interp:fail	
@@ -1280,17 +1280,17 @@ t405.scala	pass	interp:pass
 t4054.scala	pass	interp:pass	
 t4062.scala	pass	interp:fail	
 t408.scala	pass	interp:pass	
-t4119	fail	-	java source: teq reads none
+t4119	pass	interp:fail	
 t4122.scala	pass	interp:pass	
 t4147.scala	pass	interp:fail	
 t4148.scala	fail	interp:fail	output: line 3: the .check has '100', the program printed 'cce3'
 t4190.scala	pass	interp:pass	
-t4238	fail	-	java source: teq reads none
+t4238	pass	interp:fail	
 t4288.scala	pass	interp:pass	
 t429.scala	pass	interp:pass	
 t4297.scala	pass	interp:pass	
 t4300.scala	fail	interp:fail	t4300.scala:9:17: expected an identifier, found 'super'
-t4317	fail	-	java source: teq reads none
+t4317	pass	interp:fail	
 t4332b.scala	pass	interp:fail	
 t4351.scala	pass	interp:pass	
 t4398.scala	pass	interp:pass	
@@ -1393,11 +1393,11 @@ t6104.scala	pass	interp:pass
 t6111.scala	pass	interp:pass	
 t6114.scala	pass	interp:fail	
 t6126.scala	pass	interp:pass	
-t6138	fail	-	java source: teq reads none
-t6138-2	fail	-	java source: teq reads none
+t6138	fail	interp:fail	JavaClass.java:3:29: type Bar is not a member of object Foo
+t6138-2	fail	interp:fail	JavaClass.java:3:29: type Bar is not a member of object Foo
 t6154.scala	pass	interp:pass	
-t6168	fail	-	java source: teq reads none
-t6168b	fail	-	java source: teq reads none
+t6168	fail	interp:fail	Context.java:28:27: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+t6168b	fail	interp:fail	Context.java:28:34: not supported yet: a Java member type (the Java reader reads classes and interfaces)
 t6188.scala	pass	interp:pass	
 t6206.scala	pass	interp:fail	
 t6246.scala	fail	interp:fail	t6246.scala:7:13: value <:< is not a member of ClassTag[_]
@@ -1467,7 +1467,7 @@ t7278.scala	pass	interp:pass
 t7300.scala	pass	interp:pass	
 t7336.scala	pass	interp:fail	
 t7341.scala	pass	interp:pass	
-t7374	fail	-	java source: teq reads none
+t7374	pass	interp:fail	
 t7396.scala	pass	interp:fail	
 t7406.scala	pass	interp:pass	
 t7407.scala	pass	interp:pass	
@@ -1514,7 +1514,7 @@ t8601.scala	pass	interp:pass
 t8601b.scala	pass	interp:pass	
 t8601c.scala	pass	interp:fail	
 t8601d.scala	pass	interp:pass	
-t8601e	fail	-	java source: teq reads none
+t8601e	pass	interp:fail	
 t8607.scala	pass	interp:pass	
 t8610.scala	pass	interp:pass	
 t8611a.scala	pass	interp:pass	
@@ -1538,13 +1538,13 @@ t9400.scala	pass	interp:fail
 t949.scala	fail	interp:fail	t949.scala:6:20: Not found: Value
 t9516.scala	pass	interp:pass	
 t978.scala	pass	interp:pass	
-t9915	fail	-	java source: teq reads none
+t9915	pass	interp:fail	
 tagless.scala	pass	interp:pass	
 tailrec-return.scala	fail	interp:fail	tailrec-return.scala:4:7: Cannot rewrite recursive call: it is not in tail position
 takeAndDrop.scala	pass	interp:pass	
-targetName-interop	fail	-	java source: teq reads none
-targetName-modules-1	fail	-	java source: teq reads none
-targetName-modules-2	fail	-	java source: teq reads none
+targetName-interop	fail	interp:fail	javac: tests/run/targetName-interop/Test_2.java:7: error: type Alpha does not take parameters
+targetName-modules-1	fail	interp:fail	javac: tests/run/targetName-modules-1/Test_2.java:6: error: cannot find symbol
+targetName-modules-2	fail	interp:fail	javac: tests/run/targetName-modules-2/Test_2.java:6: error: cannot find symbol
 targetName-separate	pass	interp:pass	
 targetName.scala	pass	interp:pass	
 targetName1.scala	pass	interp:pass	
@@ -1558,7 +1558,7 @@ toplevel-defs	pass	interp:pass
 toplevel-implicits	fail	interp:pass	Test_2.scala:5:12: value pair is not a member of C
 toplevel-mixed	fail	interp:fail	A_1.scala:4:7: x is already defined as value x; overloading a value with a method is not supported
 trailingCommas.scala	pass	interp:fail	
-trait-static-forwarder	fail	-	java source: teq reads none
+trait-static-forwarder	fail	interp:fail	javac: tests/run/trait-static-forwarder/Test.java:5: error: cannot find symbol
 traitInit.scala	pass	interp:pass	
 traitNoInit.scala	fail	interp:fail	teq: This construct can be rewritten automatically under -rewrite -source 3.4-migration.
 traitParamInit.scala	pass	interp:pass	
@@ -1671,9 +1671,9 @@ value-class-partial-func-depmet.scala	pass	interp:pass
 valueclasses-constr.scala	pass	interp:pass	
 valueclasses-nested-object.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class M cannot be cast to class java.lang.Integer (M is in unnamed module of loader 'app'; java.lang.Integer is in module java.base of loader 'bootstrap')
 valueclasses-pavlov.scala	pass	interp:pass	
-varargs-abstract	fail	-	java source: teq reads none
-varargs-extend-java	fail	-	java source: teq reads none
-varargs-extend-java-2	fail	-	java source: teq reads none
+varargs-abstract	fail	interp:fail	javac: tests/run/varargs-abstract/Test.java:9: error: method x in class VarargImplClass cannot be applied to given types;
+varargs-extend-java	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Receiver class VarargImpl does not define or inherit an implementation of the resolved method 'abstract void v1(java.lang.String[])' of abstract class VarargAbstract.
+varargs-extend-java-2	fail	interp:fail	Test.scala:6:9: class Concrete needs to be abstract, since def doStuff(params: Any*): Unit in class AbstractBase is not defined
 variable-pattern-access.scala	fail	interp:fail	output: line 2: the .check has 'private final int A.a', the program printed 'private int A.a'
 vc-equals.scala	pass	interp:pass	
 verify-ctor.scala	pass	interp:pass	

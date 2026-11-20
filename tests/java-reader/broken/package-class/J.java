@@ -1,0 +1,1 @@
+package J; class J {}

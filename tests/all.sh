@@ -107,6 +107,8 @@ suite tasty-exec    ./teq interp tests/tasty-exec.scala
 suite analysis-bytes ./tests/analysis-bytes.sh
 suite classfile     ./teq interp tests/classfile.scala
 suite classpath     ./tests/classpath.sh
+suite java-sources  ./tests/java-sources.sh
+suite java-reader   ./tests/java-reader.sh
 suite stdlib        ./tests/run_stdlib.sh
 suite app           ./tests/app.sh
 suite lila-test-verb ./tests/lila-test-verb.sh

@@ -1,0 +1,1 @@
+@SuppressWarnings({) class J {}

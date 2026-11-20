@@ -228,6 +228,7 @@ jvm/chimney_enum_cases	pass	-
 jvm/chimney_jdk_time	pass	-	
 jvm/chimney_list_field	pass	-	
 jvm/chimney_with_fallback	pass	-	
+jvm/classfile_reader_lone_surrogate	fail	-	< d83d
 jvm/ctor_byname_defaults	pass	-	
 jvm/date_instant	pass	-	
 jvm/defaults_layout	pass	-	

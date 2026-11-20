@@ -1,0 +1,1 @@
+class J { static final int n=0x; }

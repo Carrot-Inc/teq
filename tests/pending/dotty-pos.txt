@@ -5,7 +5,6 @@
 13455.scala	13455.scala:5:9: type z not found
 13633.scala	13633.scala:26:31: expected '=>', found identifier
 14952.scala	option: -Xkind-projector:underscores (teq has no flag for it)
-16727	java source: teq reads none
 17077.scala	17077.scala:15:12: this is not a case class or enum case
 21400.scala	option: -Xkind-projector:underscores (teq has no flag for it)
 21400b.scala	option: -Xkind-projector:underscores (teq has no flag for it)
@@ -86,7 +85,6 @@ erased-pathdep-2.scala	erased-pathdep-2.scala:9:18: expected ':', found 'val'
 erased-pure.scala	erased-pure.scala:8:12: 'erased' is not part of the supported Scala subset
 erased-singleton.scala	erased-singleton.scala:6:3: 'erased' is not part of the supported Scala subset
 erased-soft-keyword.scala	erased-soft-keyword.scala:3:16: 'erased' is not part of the supported Scala subset
-existential-java-case-class	java source: teq reads none
 expeimental-flag-with-lang-feature-2.scala	expeimental-flag-with-lang-feature-2.scala:6:27: expected ']', found '='
 experimental-imports-top.scala	experimental-imports-top.scala:7:1: 'erased' is not part of the supported Scala subset
 experimentalErased.scala	experimentalErased.scala:10:1: 'erased' is not part of the supported Scala subset
@@ -135,7 +133,6 @@ i10511.scala	i10511.scala:16:26: type mismatch: found (t : (Bool.True : Bool)), 
 i10567	java source: teq reads none
 i1059.scala	i1059.scala:5:26: expected ')', found '@'
 i10667.scala	i10667.scala:10:29: type mismatch: found Nums, required Nums & A
-i10715-java	java source: teq reads none
 i10715-scala	test.scala:17:3: value + is not a member of Int
 i10848a.scala	i10848a.scala:6:3: 'erased' is not part of the supported Scala subset
 i10848b.scala	i10848b.scala:4:3: 'erased' is not part of the supported Scala subset
@@ -179,12 +176,9 @@ i12723.scala	i12723.scala:8:12: expected a pattern, found identifier
 i12945	A_1.scala:10:32: Cannot prove that Int =:= 7.
 i12950	test_2.scala:4:19: no given instance of type Mul[Two, 2] was found for parameter m
 i13001	Main_1.scala:28:48: value asInstanceOf is not a member of Product{type Kind = K0; type MirroredType = T; type MirroredElemTypes <: Tuple}
-i13043	java source: teq reads none
-i13046	java source: teq reads none
 i13106.java	java source: teq reads none
 i13197.scala	i13197.scala:4:3: value asInstanceOf is not a member of T | String
 i13282.scala	i13282.scala:8:3: this expression cannot be assigned to
-i13310.java	java source: teq reads none
 i13411.scala	i13411.scala:12:12: cannot reduce inline match with
 i13411b	java source: teq reads none
 i13426.scala	i13426.scala:2:18: missing parameter type
@@ -274,12 +268,9 @@ i16777.scala	option: -Xkind-projector:underscores (teq has no flag for it)
 i16808.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i16997.scala	i16997.scala:34:11: type mismatch: found F$1[A$1], required F[?4]
 i1704.scala	i1704.scala:3:22: AnyRef is a trait; it cannot be instantiated
-i17066	java source: teq reads none
 i17100a.scala	i17100a.scala:11:12: type mismatch: found (sel2 : Sel{def foo: String}), required Selectable | Dynamic
 i17192.scala	i17192.scala:11:14: value v1 is not a member of RT
 i17222.izumi.rep	InspectorBase.scala:7:7: recursive value qctx needs type
-i17255	java source: teq reads none
-i17391	java source: teq reads none
 i17394	teq: jvm backend: two classes are named example/_1$package
 i17394b	teq: jvm backend: two classes are named example/_1$package
 i17465.scala	i17465.scala:3:53: type mismatch: found "Hello", required (StringOps | String){def *(y: Int): StringOps | String}
@@ -289,7 +280,6 @@ i17631.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17735.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17735a.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17741.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-i17763	java source: teq reads none
 i1786.scala	i1786.scala:12:3: value package is not a member of meta
 i1812b.scala	i1812b.scala:7:24: type S not found
 i18135.scala	i18135.scala:16:12: not found: conf
@@ -298,14 +288,12 @@ i18160	repro_1.scala:10:40: type argument EventCompatBundle.this.State does not 
 i18175.scala	i18175.scala:45:18: expected '=>', found identifier
 i18211.scala	i18211.scala:24:43: expected ':', found '['
 i18450.scala	i18450.scala:14:14: expected an identifier, found 'this'
-i18529	java source: teq reads none
 i18530	java source: teq reads none
 i18531	java source: teq reads none
 i18533b	java source: teq reads none
 i18601.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i18601b.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i18623.scala	i18623.scala:10:18: a parent has to be a class or a trait
-i18654	java source: teq reads none
 i18715.scala	i18715.scala:5:14: no eligible member apply at foo
 i18768.scala	i18768.scala:32:38: type mismatch: found (id : Long), required Exportee.Id
 i18808.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -338,7 +326,6 @@ i1990a.scala	teq: jvm backend: Test$.main: the local $this1lqplm6_6 is not in sc
 i19950.scala	i19950.scala:10:58: missing parameter type
 i20026	java source: teq reads none
 i20063	java source: teq reads none
-i20078	java source: teq reads none
 i20080.scala	i20080.scala:8:5: type mismatch: found (<error>, <error>) => <error>, required Zippable[A, B]{type Out = Append[A, B]}
 i20166.scala	i20166.scala:17:15: type mismatch: found "4", required M[1]
 i20176.scala	i20176.scala:6:5: None of the overloaded alternatives of method use in object Accumulator with types
@@ -440,7 +427,6 @@ i2949.scala	i2949.scala:1:14: type A is not a member of Foo
 i3130a.scala	teq: jvm backend: O$: the local $thistnx516_43 is not in scope of the generated method
 i3130d.scala	teq: jvm backend: Test$: the local $thisolpor1_6 is not in scope of the generated method
 i3248.scala	i3248.scala:8:20: a sequence wildcard can only end a sequence pattern
-i3273	java source: teq reads none
 i3323b.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i3412.scala	i3412.scala:2:9: expected '=', found '@'
 i3538.scala	i3538.scala:14:3: type mismatch: found Test, required ?{ right: ? }. Note that implicit extension methods cannot be applied because they are ambiguous; both method Wrong in class Test and method Right in class Test provide an extension meth
@@ -466,12 +452,10 @@ i4471-gadt.scala	i4471-gadt.scala:25:11: type mismatch: found Shuffle[((v, w), u
 i4509.scala	i4509.scala:4:26: expected ',' or ')', found identifier
 i4674.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i4725.scala	i4725.scala:7:17: no given instance of type (T[Int]) ?=> T[List[Int]] was found for parameter ev
-i4739.java	java source: teq reads none
 i4785.scala	i4785.scala:10:24: type mismatch: found Array[String], required Seq[String]
 i4819.scala	i4819.scala:9:7: class Foo inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int): X, which are both called concat$Int in the JavaScript output, since no ancestor declares the two together; declare the alternatives in one trait
 i4984.scala	i4984.scala:16:10: this is not a case class or enum case
 i5006.scala	i5006.scala:2:16: not found: asInstanceOf
-i5140	java source: teq reads none
 i5328.scala	i5328.scala:7:7: expected ']', found '='
 i5402.scala	i5402.scala:12:17: expected ')', found '@'
 i5427.scala	i5427.scala:35:17: no given instance of type f1.Out was found for parameter f2
@@ -512,7 +496,6 @@ i7424b.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i7424c.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i7452.scala	i7452.scala:23:23: no given instance of type Aux[Option, Option[String], Nothing] was found for parameter abs
 i7467.scala	i7467.scala:9:16: method getListCellRendererComponent overrides nothing
-i7525	java source: teq reads none
 i7586.scala	i7586.scala:37:37: Cannot prove that (m4_2 : S[S[S[Nat]]]) <:< S[S[S[S[Z]]]].
 i7653.scala	i7653.scala:9:5: type mismatch: found AnyRef, required Option[Nothing]
 i7741.scala	i7741.scala:7:5: 'erased' is not part of the supported Scala subset
@@ -523,7 +506,6 @@ i7877.scala	i7877.scala:20:49: Cannot prove that Int =:= Nothing.
 i7920.scala	i7920.scala:6:14: value glass is not a member of Foo
 i7959.java	java source: teq reads none
 i7964.scala	i7964.scala:9:10: cannot reduce inline match with
-i8042	java source: teq reads none
 i8069.scala	i8069.scala:12:19: type mismatch: found (d : a.B), required c.a.B
 i8083.scala	i8083.scala:6:68: type mismatch: found (A, that.a.B), required ((that.a : A), that.a.B)
 i8182.scala	i8182.scala:10:12: value show is not a member of Option[String]
@@ -532,7 +514,6 @@ i8338.scala	i8338.scala:6:23: error overriding method mkX in trait B of type (i:
 i8344-1.scala	i8344-1.scala:9:35: type mismatch: found Datatype[T], required Datatype[*:[H, T]]
 i8378.scala	i8378.scala:15:25: type mismatch: found (A, B) => C, required (A, A) => C
 i8491.scala	i8491.scala:5:38: type mismatch: found Bar, required Foo[?0]
-i851.java	java source: teq reads none
 i8577.scala	i8577.scala:21:10: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8581	Test_2.scala:14:5: None of the overloaded alternatives of method expectMsgType in class Test with types
 i8758.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -549,10 +530,8 @@ i9213.scala	teq: jvm backend: O$: no @jvm intrinsic or body for newString of jav
 i9260.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i9266.scala	i9266.scala:3:23: expected a definition, found identifier
 i9295d.scala	teq: jvm backend: i9295d$package$.baz: JavaScript interop
-i9392	java source: teq reads none
 i9403.scala	i9403.scala:7:30: type mismatch: found false, required AnyRef{def compareTo(y: Boolean): Int}
 i9482.scala	i9482.scala:9:26: no given instance of type OptManifest[Int] was found for parameter evidence$1
-i9525	java source: teq reads none
 i9676.scala	i9676.scala:6:33: type mismatch: found SubtypeOf[F, G], required SubtypeOf[[A] =>> List[A], [A] =>> Seq[A]]
 i9751.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i9751b.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -561,7 +540,6 @@ i9804.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i9833.scala	i9833.scala:6:28: type mismatch: found A, required B
 i9999.scala	i9999.scala:10:16: type mismatch: found A, required M2[(x : A | B)]
 i9999a.scala	i9999a.scala:9:8: type mismatch: found Any, required T[(x : Any)]
-ilya	java source: teq reads none
 ilya2	java source: teq reads none
 implicit-lower-bound.scala	implicit-lower-bound.scala:13:7: No implicit view available from Int => Any.
 implicit-match-and-inline-match.scala	implicit-match-and-inline-match.scala:9:44: type t not found
@@ -603,9 +581,7 @@ into-separate	option: -preview (teq has no flag for it)
 java-annot	java source: teq reads none
 java-inherited-type	java source: teq reads none
 java-inherited-type1	java source: teq reads none
-java-override	java source: teq reads none
 java-records	java source: teq reads none
-javaReadsSigs	java source: teq reads none
 kind-projector-underscores.scala	option: -Xkind-projector:underscores (teq has no flag for it)
 kind-projector.scala	kind-projector.scala:19:24: type * not found
 kindPolySemiGroup.scala	kindPolySemiGroup.scala:84:32: expected ']', found '='
@@ -675,7 +651,6 @@ preview-flag.scala	option: -preview (teq has no flag for it)
 protected-static	java source: teq reads none
 pseudo-thistype-constraints.scala	pseudo-thistype-constraints.scala:6:28: type mismatch: found Boolean, required TT
 puretest.scala	puretest.scala:7:3: type argument Int does not conform to upper bound Pure
-raw-map	java source: teq reads none
 rbtree.scala	rbtree.scala:28:1: expected a definition, found new line
 realizable-mut.scala	realizable-mut.scala:8:10: a singleton type needs a val, a parameter or an object
 rebind.scala	rebind.scala:11:7: error overriding method foo in class Foo of type Inner: method foo in trait Bar of type Bar.this.Inner has incompatible type
@@ -686,7 +661,6 @@ sams.scala	sams.scala:20:14: type mismatch: found Int => 2, required V
 scala-days-2019-slides	metaprogramming-1-match.scala:9:28: type mismatch: found Any, required Nat
 scala2-macro-compat-2.scala	scala2-macro-compat-2.scala:8:33: expected end of statement, found identifier
 scala2-macro-compat-3.scala	scala2-macro-compat-3.scala:5:31: expected end of statement, found identifier
-sequence-argument	java source: teq reads none
 sets-tc.scala	sets-tc.scala:12:9: type argument ListSet does not have the same kind as its bound
 simpleRefinement.scala	simpleRefinement.scala:6:10: error overriding type U in trait Bar with bounds[X] <: Any;
 single-additional-import.scala	option: -Yimports:scala.annotation (teq has no flag for it)
@@ -701,9 +675,7 @@ t0231.scala	t0231.scala:10:25: expected an identifier, found 'super'
 t0599.scala	t0599.scala:11:23: expected an identifier, found 'super'
 t0851.scala	t0851.scala:10:13: missing argument for parameter
 t0872.scala	t0872.scala:5:13: missing argument for parameter
-t10350	java source: teq reads none
 t1131.scala	t1131.scala:6:3: expected an identifier, found 'def'
-t11788	java source: teq reads none
 t11788b	java source: teq reads none
 t11788c	java source: teq reads none
 t122.scala	t122.scala:2:12: recursive value v needs type
@@ -725,35 +697,25 @@ t2913.scala	t2913.scala:42:13: missing argument for parameter
 t3120	java source: teq reads none
 t3236	java source: teq reads none
 t3249	java source: teq reads none
-t3349	java source: teq reads none
 t3429	java source: teq reads none
 t3486	java source: teq reads none
 t3521	java source: teq reads none
 t3567	java source: teq reads none
-t3622	java source: teq reads none
-t3642	java source: teq reads none
 t374.scala	t374.scala:3:17: not found: Value
 t3866.scala	t3866.scala:13:3: Ambiguous overload. The overloaded alternatives of method f in class ImplicitRepeated with types
-t3936	java source: teq reads none
 t3946	java source: teq reads none
 t3999	a_1.scala:7:41: type Val not found
 t4070.scala	t4070.scala:4:61: type argument tv does not have the same kind as its bound [X]
 t4402	java source: teq reads none
 t4579.scala	t4579.scala:45:8: object creation impossible, since it has 2 unimplemented members: evaluate, lisp2string
-t4603	java source: teq reads none
 t4737	java source: teq reads none
-t4744	java source: teq reads none
 t5178.scala	t5178.scala:8:16: method withLock overrides nothing
 t522.scala	t522.scala:14:5: foo is abstract; it cannot be instantiated
 t5330c.scala	t5330c.scala:3:28: type mismatch: found _, required String | Char
-t5644	java source: teq reads none
-t5703	java source: teq reads none
 t5886.scala	t5886.scala:8:6: type mismatch: found Class[_], required () => Any
-t5910.java	java source: teq reads none
 t5957	java source: teq reads none
 t6124.scala	t6124.scala:8:18: expected end of statement, found identifier
 t6205.scala	t6205.scala:6:19: type kt not found
-t6245	java source: teq reads none
 t628.scala	t628.scala:15:40: operator * cannot be applied to Double and Unit
 t6595.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 t661.scala	t661.scala:12:22: expected an identifier, found 'super'
@@ -763,11 +725,8 @@ t6963c.scala	option: -Xmigration:2.9 (teq has no flag for it)
 t7014	java source: teq reads none
 t7033.scala	t7033.scala:3:18: only classes can be instantiated with new
 t7200b.scala	t7200b.scala:11:7: recursive use of coflatMap needs an explicit result type
-t7232	java source: teq reads none
 t7232c	java source: teq reads none
-t7232d	java source: teq reads none
 t7233b.scala	t7233b.scala:3:49: not found: toS
-t7364	java source: teq reads none
 t7532	java source: teq reads none
 t762.scala	t762.scala:2:66: type mismatch: found Bar1.this, required Foo{type T <: Bar1.this.T}
 t802.scala	t802.scala:11:30: expected an identifier, found 'super'
@@ -776,14 +735,10 @@ t8046b.scala	t8046b.scala:10:23: a parent has to be a class or a trait
 t8046c.scala	t8046c.scala:10:35: value apply is not a member of Any
 t805.scala	t805.scala:8:27: expected an identifier, found 'super'
 t8207.scala	t8207.scala:2:10: cannot resolve import: me is not an object or a package
-t8244d	java source: teq reads none
-t8376	java source: teq reads none
 t9004.scala	t9004.scala:23:32: type mismatch: found _, required ?
-t942	java source: teq reads none
 tailrec-super.scala	tailrec-super.scala:13:20: recursive use of transform needs an explicit result type
 tailrec.scala	tailrec.scala:9:11: Cannot rewrite recursive call: it is not in tail position
 targetName-infer-result.scala	targetName-infer-result.scala:13:9: recursive use of app needs an explicit result type
-targetName-override	java source: teq reads none
 tasty-named-arguments.scala	tasty-named-arguments.scala:3:52: missing parameter type
 tasty-parent-unapply.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 tasty-tags-obscure.scala	tasty-tags-obscure.scala:13:36: expected ']', found '.'

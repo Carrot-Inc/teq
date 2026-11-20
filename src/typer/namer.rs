@@ -40,6 +40,42 @@ impl<'a> Worker<'a> {
             self.enter_file_defs(file);
         }
         self.check_root_scope_conflicts();
+        self.check_java_conflicts();
+        self.build_java_source_records();
+        self.check_java_source_parents();
+    }
+
+    /// A class of the program's Java sources and a class of its Scala sources of one name (`Namer.checkNoConflict`
+    /// over the entered scope, E161), as the reference counts them by the order of the sources: the Scala one first,
+    /// the Java declaration clashes with it; the Java one first, the Scala class is already defined, and the Java
+    /// declaration's companion clashes too.
+    fn check_java_conflicts(&mut self) {
+        let Some(loaded) = self.loaded.as_ref() else { return };
+        let mut java: Vec<(PkgId, crate::intern::Name, FileId, u32)> = loaded.java.sources.iter().map(|(&(p, n), s)| (p, n, s.file, s.unit.types[s.decl].start)).collect();
+        java.sort_by_key(|&(_, _, f, at)| (f.0, at));
+        let mut found: Vec<(FileId, crate::source::Span, String)> = Vec::new();
+        for (p, name, jfile, at) in java {
+            let Some(c) = self.syms.entry_at(p, name).and_then(|e| e.class) else { continue };
+            let sfile = self.syms.class(c).file;
+            if self.source(sfile).is_std || self.source(sfile).path.ends_with(".java") || self.is_java_class(c) {
+                continue;
+            }
+            let n = self.interner.get(name).to_string();
+            let jpath = self.source(jfile).path.clone();
+            let span = crate::source::Span { start: at, end: at + 1 };
+            if jfile.0 < sfile.0 {
+                found.push((sfile, self.syms.class(c).span, format!("{} is already defined as class {} in {}", n, n, jpath)));
+                found.push((jfile, span, format!("{} clashes with class {} in {}; the two must be defined together", n, n, jpath)));
+            } else {
+                let spath = self.source(sfile).path.clone();
+                found.push((jfile, span, format!("{} clashes with class {} in {}; the two must be defined together", n, n, spath)));
+            }
+        }
+        found.sort_by_key(|&(file, span, _)| (file.0, span.start));
+        for (file, span, msg) in found {
+            self.env.file = file;
+            self.error(span, msg);
+        }
     }
 
     /// dotty's `Namer.checkNoConflict` across the root package's two scopes, once every file is entered. A

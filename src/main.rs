@@ -22,6 +22,7 @@ mod init;
 mod intern;
 mod jarcache;
 mod interp;
+mod java;
 mod jvm;
 mod lexer;
 mod lsp;
@@ -1423,7 +1424,9 @@ fn try_collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(St
             // A directory's scripts are its sources beside its `.scala` files under `teq interp` and the compiler's
             // check, one preprocessing for both (Scala CLI's `ElementsUtils.singleFilesFromDirectory`).
             let scripts = opts.interp || opts.command == "check";
-            if s.ends_with(".scala") || (scripts && s.ends_with(".sc")) || (!hidden && e.is_dir()) {
+            // A directory's Java sources are read for their declarations (`crate::java`), as scalac reads the
+            // `.java` it is given.
+            if s.ends_with(".scala") || s.ends_with(".java") || (scripts && s.ends_with(".sc")) || (!hidden && e.is_dir()) {
                 try_collect_files(opts, &s, true, out, root, roots)?;
             }
         }
@@ -1431,10 +1434,17 @@ fn try_collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(St
         if listed && script::is_script(path) {
             roots.insert(path.to_string(), root.to_string());
         }
+        if path.ends_with(".java") {
+            JAVA_SELECTED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         out.push((path.to_string(), listed));
     }
     Ok(())
 }
+
+/// Whether a collection of the program's files selected a Java source (`try_collect_files`): the one test that opens
+/// the class path for the Java reader where nothing else asks for it. A program without one asks nothing more.
+pub(crate) static JAVA_SELECTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// `teq interp`'s sources of the configurations whose products a script's configuration's classpath holds
 /// (`scriptdeps::classpath`): the `.scala` files under those inputs, the hidden ones left out as a
@@ -1827,7 +1837,7 @@ pub(crate) fn open_jars(opts: &Options) -> Option<classpath::Classpath> {
 
 /// The jars of the class path, or why one cannot be opened.
 pub(crate) fn try_open_jars(opts: &Options) -> Result<Option<classpath::Classpath>, String> {
-    if opts.classpath.is_empty() && !opts.jvm {
+    if opts.classpath.is_empty() && !opts.jvm && !JAVA_SELECTED.load(std::sync::atomic::Ordering::Relaxed) {
         return Ok(None);
     }
     let cache = if opts.no_cache { None } else { jarcache::dir() };
@@ -1851,6 +1861,7 @@ pub(crate) fn open_classpath(opts: &Options, typer: &mut typer::Worker, cp: Opti
     if let Some(cp) = cp {
         typer.set_classpath(cp, jar_files, jdk_file, opts.jdk_release, opts.std);
         typer.loaded_mut().sources.candidates = opts.library_sources.iter().cloned().collect();
+        typer.enter_java_sources();
     }
 }
 
@@ -2692,6 +2703,18 @@ fn build_jvm(
         product_inits: Some(&product_inits),
         named: &named,
     };
+    // The program's Java sources are read for typing and compiled by none of teq's targets (javac compiles them
+    // against teq's output): a jar would lack their classes, so none is written.
+    let java_sources: Vec<source::FileId> = (0..all_sources.len()).filter(|&i| !all_sources[i].is_std && all_sources[i].path.ends_with(".java")).map(|i| source::FileId(i as u32)).collect();
+    if !java_sources.is_empty() && opts.products.is_none() && opts.output.as_deref().unwrap_or("out/main.jar").ends_with(".jar") {
+        let mut refused = source::Diagnostics::default();
+        refused.error(java_sources[0], source::Span::default(), "not supported yet: a jar of a program with Java sources, whose classes teq does not compile: build to a directory (-o <dir>) and compile the Java sources with javac against it".to_string());
+        eprint!("{}", refused.render(&all_sources));
+        source::errors_found(1);
+        answer_more_diagnostics(&refused, &all_sources);
+        answer_failure(opts);
+        exit_with_report(opts, &report, 1);
+    }
     let t_emit_start = Instant::now();
     let output = jvm::emit(input, cp, None);
     let t_emit = Instant::now();
@@ -2748,6 +2771,10 @@ fn build_jvm(
             (out_path, None)
         }
     };
+    if !java_sources.is_empty() {
+        let n = java_sources.len();
+        eprintln!("teq: {} Java source{} read for typing and not compiled: javac compiles {} against {}", n, if n == 1 { "" } else { "s" }, if n == 1 { "it" } else { "them" }, out_path);
+    }
     let answer = opts.analysis_version.map(|_| {
         let tasty_time = products.as_ref().map_or(Duration::ZERO, |(_, d)| *d);
         answer_phase("reach", t[4] - t[3]);

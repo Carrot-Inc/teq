@@ -2,10 +2,10 @@
 # test	verdict	the other ways	the first line of the difference
 AnyValOrNull.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 after-termination.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-annotaions-args	fail	-	java source: teq reads none
+annotaions-args	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 anyref-equal-nulls.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 array.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-dont-widen-src	fail	-	java source: teq reads none
+dont-widen-src	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 enums.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 eq-ne.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 flow-basic.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
@@ -22,7 +22,7 @@ flow-while-loop.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag 
 force-track-var-fields.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i10001.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i11694.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-i13040	fail	-	java source: teq reads none
+i13040	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i13197.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i13486.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i13608.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
@@ -36,18 +36,18 @@ i23933.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i23936.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i24440.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i24599.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-i25228	fail	-	java source: teq reads none
+i25228	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 i8981.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-interop-applied-types	fail	-	java source: teq reads none
-interop-constructor-src	fail	-	java source: teq reads none
+interop-applied-types	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-constructor-src	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 interop-constructor.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-interop-enum-src-separate	fail	-	java source: teq reads none
+interop-enum-src-separate	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 interop-java-varargs.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-interop-nn-src	fail	-	java source: teq reads none
-interop-ortype-src	fail	-	java source: teq reads none
-interop-poly-src	fail	-	java source: teq reads none
-interop-sam-src	fail	-	java source: teq reads none
-interop-static-src	fail	-	java source: teq reads none
+interop-nn-src	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-ortype-src	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-poly-src	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-sam-src	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-static-src	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 interop-tostring.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 interop-valuetypes.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 java-collectors.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
@@ -58,16 +58,16 @@ matchable.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it
 nn.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 nn2.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 notNull.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-notnull	fail	-	java source: teq reads none
-notnull-separate	fail	-	java source: teq reads none
+notnull	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+notnull-separate	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 nullable-union.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 option-transform.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-override-java	fail	-	java source: teq reads none
-override-java-object-arg-src	fail	-	java source: teq reads none
+override-java	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+override-java-object-arg-src	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 override-java-object-arg.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-override-java-varargs	fail	-	java source: teq reads none
+override-java-varargs	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 override-type-params.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
-sam-parameter-javadefined	fail	-	java source: teq reads none
+sam-parameter-javadefined	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 sam-type.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 test-not-null.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 union-contains-contextual-function.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)

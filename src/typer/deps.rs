@@ -1812,6 +1812,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 super::loader::javaclass::JSource::Cp(f) => f,
                 super::loader::javaclass::JSource::Jdk(entry) => return self.w.jdk_runtime_path(entry).map(|p| format!("jrt:{}", p)),
                 super::loader::javaclass::JSource::Embedded => return Some(format!("jrt:/modules/java.base/{}.class", self.binary_class_name(own).replace('.', "/"))),
+                super::loader::javaclass::JSource::Source(file) => return Some(self.w.source(file).path.clone()),
             }
         } else {
             return None;

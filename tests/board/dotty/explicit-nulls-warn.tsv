@@ -3,6 +3,6 @@
 expose-flexible-types.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 flow-match.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 i21577.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
-interop	fail	-	java source: teq reads none
+interop	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 pattern-matching.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
 unnecessary-nn.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)

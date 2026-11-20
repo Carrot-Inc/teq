@@ -31,6 +31,7 @@
 # javadefault-lib, tests/support/hidden_owner/javadefault's Java sources compiled by that javac; nesting-lib,
 # tests/support/hidden_owner/nesting's compiled the same way; stubparent-lib, tests/support/hidden_owner/stubparent's
 # compiled the same way and Gone.class deleted; javactors-lib, tests/support/java_ctors's compiled the same way;
+# lonesurrogate-lib, tests/support/lone_surrogate's compiled the same way;
 # ctorbodies-lib, tests/support/ctor_bodies compiled by scalac; pstraits-lib, tests/support/printstream_traits
 # compiled by scalac; and
 # genericclone-lib, polyclone-lib, mixedclone-lib and privateclone-lib, tests/support/hidden_owner's
@@ -295,6 +296,20 @@ java_ctors_jar() {
   if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
     rm -rf "$work" && mkdir -p "$work"
     timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/jlib/*.java > /dev/null 2>&1 \
+      && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/lone_surrogate's Java class compiled by javac into a jar: string constants whose class file entries
+# hold a lone UTF-16 surrogate (the JVM's modified UTF-8).
+lone_surrogate_jar() {
+  local src=tests/support/lone_surrogate
+  local jar=$scratch/lonesurrogate-lib.jar
+  local work=$scratch/lonesurrogate-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
+    rm -rf "$work" && mkdir -p "$work"
+    timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/*.java > /dev/null 2>&1 \
       && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
     rm -rf "$work"
   fi
@@ -1237,6 +1252,7 @@ jar_of() {
     javadefault-scalac) scalac_use_jar javadefault javadefault-lib ;;
     nesting-lib) java_nesting_jar ;;
     javactors-lib) java_ctors_jar ;;
+    lonesurrogate-lib) lone_surrogate_jar ;;
     ctorbodies-lib) ctor_bodies_jar ;;
     pstraits-lib) printstream_traits_jar ;;
     stubparent-lib) java_stub_parent_jar ;;

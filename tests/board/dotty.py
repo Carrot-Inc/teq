@@ -72,8 +72,9 @@ list, and a test that leaves it for `fail` is a moved verdict as any other. A te
 whatever the oracle has. A warn test without a single mark has an entry of no diagnostic (dotty's WarnTest fails
 on an error and on a count of warnings other than the marks'), and passes where teq's are none, but under an
 option whose warnings teq does not give (`warns` in OPTIONS), where its silence says nothing: that test fails as
-one under a check teq does not perform. A test with a Java source fails: teq reads
-none. An option of the test or of its row is given to teq where teq has the flag, dropped where it is scalac's
+one under a check teq does not perform. A group's Java sources are teq's as they are scalac's (but a JAVA_ONLY
+one), and javac compiles them after it (but a SCALA_ONLY one), as vulpix's compile does, into a directory beside
+the products that every later class path holds; javac's failure fails the test. An option of the test or of its row is given to teq where teq has the flag, dropped where it is scalac's
 own machinery, and fails the test (`option: <flag>`) where it changes what is accepted, warned or run and teq
 has no flag for it (OPTIONS below).
 
@@ -1029,11 +1030,15 @@ def compile_groups(ctx, test, scratch, target, tag, extra=None):
     steps = test.steps or [{"files": None} for _ in test.groups]
     outs = []
     lib = [ctx.lib] if target != "check" or extra else []
+    javac_out = products + ".javac"
+    shutil.rmtree(javac_out, ignore_errors=True)
     for i, group in enumerate(test.groups):
         step = steps[i]
-        # a file of the other platform (`//> using target.platform`) is not this run's (ParallelTesting.compile)
-        files = [f for f in group if f.endswith(".scala") and f not in ctx.other_platform(test)]
-        if not files:
+        # a file of the other platform (`//> using target.platform`) is not this run's (ParallelTesting.compile); a
+        # Java source goes to teq with the group's Scala, as to scalac, but for a JAVA_ONLY one (javac's alone)
+        files = teq_files(ctx, test, group)
+        java = javac_files(ctx, test, group)
+        if not files and not java:
             outs.append(None)
             continue
         cp = list(lib)
@@ -1052,10 +1057,17 @@ def compile_groups(ctx, test, scratch, target, tag, extra=None):
         outs.append(products)
         # One group is one compilation, as scalac's: its class files in a directory. Several are compiled each
         # against the products (class files and TASTy) of those before, which the later ones read.
-        separate = bool(test.steps) or len([g for g in test.groups if any(f.endswith(".scala") and f not in ctx.other_platform(test) for f in g)]) > 1
+        separate = bool(test.steps) or len([g for g in test.groups if teq_files(ctx, test, g) or javac_files(ctx, test, g)]) > 1
         if not separate:
             cp = [c for c in cp if c != products]
+        if os.path.isdir(javac_out):
+            cp = cp + [javac_out]
         classpath = ["--classpath", ":".join(cp)] if cp else []
+        if not files:
+            javac_line = javac_group(ctx, test, scratch, f"{tag}.{i}", java, cp, javac_out)
+            if javac_line and outcome == "ok":
+                outcome, line = "errors", javac_line
+            continue
         if target == "check":
             cmd = ["compiler", "check"] + files + (["--products", products] if separate else []) + classpath + (extra or []) + flags
         else:
@@ -1074,11 +1086,44 @@ def compile_groups(ctx, test, scratch, target, tag, extra=None):
             outcome, line = "errors", first_error(text, diags) or f"teq: exit {status}"
             if status == 3:
                 line = "teq: " + (line or "exit 3")
-        # dotty compiles every group whatever the one before gave
+        # dotty compiles every group whatever the one before gave, and javac the group's Java after it
+        # (ParallelTesting.compile 560-569), against the group's output
+        javac_line = javac_group(ctx, test, scratch, f"{tag}.{i}", java, ([products] if os.path.isdir(products) else []) + [c for c in cp if c != products], javac_out)
+        if javac_line and outcome == "ok":
+            outcome, line = "errors", javac_line
     if all(o is None for o in outs):
         # every group's files are the other platform's or none: nothing was compiled, so nothing passes
         return "nothing", "no source of this platform: nothing compiled", all_diags, None
     return outcome, line, all_diags, products
+
+
+def teq_files(ctx, test, group):
+    """A group's sources teq compiles: its Scala and its Java (scalac reads the `.java` it is given), but for
+    another platform's file and a JAVA_ONLY one (ParallelTesting.compile 549-560)."""
+    return [f for f in group if f.endswith((".scala", ".java")) and f not in ctx.other_platform(test) and "JAVA_ONLY" not in os.path.basename(f)]
+
+
+def javac_files(ctx, test, group):
+    """A group's Java sources javac compiles after it: all but a SCALA_ONLY one, whatever their platform
+    (ParallelTesting.compile 563)."""
+    return [f for f in group if f.endswith(".java") and "SCALA_ONLY" not in os.path.basename(f)]
+
+
+def javac_group(ctx, test, scratch, tag, java, cp, out):
+    """javac over a group's Java, vulpix's command (ParallelTesting.compile 515-525, TestFlags.javacFlags: the
+    compile's class path, its output, no --release; then the test's `//> using javacOpt` options), into a directory
+    of its own on every later class path (teq reads no class file written into its products). The first line of its
+    failure, or None."""
+    if not java:
+        return None
+    os.makedirs(out, exist_ok=True)
+    classpath = ":".join([c for c in cp if c] + ([ctx.lib] if ctx.lib not in cp else []) + [out])
+    options = ctx.tool_args[test.name][0].get("javac", [])
+    status, text, _ = run(["javac", "-encoding", "UTF-8", "-classpath", classpath, "-d", out] + options + java, os.path.join(scratch, tag + ".javac.out"), CPU_LIMIT, WALL_LIMIT)
+    if status == 0:
+        return None
+    first = next((l for l in text.splitlines() if ": error:" in l), text.strip().splitlines()[0] if text.strip() else f"exit {status}")
+    return "javac: " + first.replace(ctx.root + "/", "")
 
 
 def check_file(test, platform=None):
@@ -1107,12 +1152,6 @@ def build_summary():
 
 
 BUILD_SUMMARY = build_summary()
-
-
-def java_sources(ctx, test):
-    _, platform, _ = ctx.args_of(test)
-    other = set(platform.get("scala-js" if test.row.platform == "jvm" else "jvm", []))
-    return [f for f in test.files if f.endswith(".java") and f not in other]
 
 
 def marks(files, rx, prefixes):
@@ -1484,7 +1523,7 @@ def run_program(ctx, test, scratch, products):
     # option keeps a test's verdict the same on every JDK.
     unsafe = ["--sun-misc-unsafe-memory-access=allow"] if ctx.jdk >= 24 else []
     cmd = ["java", "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8", "-Duser.language=en",
-           "-Duser.country=US", "-Xmx1g", "-XX:-UsePerfData"] + unsafe + ["-cp", products + ":" + ctx.lib, "Test"]
+           "-Duser.country=US", "-Xmx1g", "-XX:-UsePerfData"] + unsafe + ["-cp", products + (":" + products + ".javac" if os.path.isdir(products + ".javac") else "") + ":" + ctx.lib, "Test"]
     status, text, secs = run(cmd, os.path.join(scratch, "java.out"), 0, RUN_LIMIT, {"LC_ALL": "C.UTF-8"}, cwd=scratch)
     return program_outcome(test, status, text, "jvm")
 
@@ -1521,7 +1560,7 @@ def run_js(ctx, test, scratch, std, tag):
     flags, bad = teq_options([f for f in test.flags if f != "-scalajs"] + options, "js")
     if bad:
         return "fail", option_reason(bad)
-    files = [f for f in test.files if f.endswith(".scala") and f not in ctx.other_platform(test)]
+    files = teq_files(ctx, test, test.files)
     js = os.path.join(scratch, tag + ".js")
     cmd = ["compiler", "build"] + files + ["-o", js] + (["--std", "scala-library", "--classpath", ctx.lib] if std else []) + flags
     status, text, diags, _ = teq(ctx, cmd, scratch, tag)
@@ -1546,7 +1585,7 @@ def run_interp(ctx, test, scratch):
     flags, bad = teq_options(test.flags + options, "interp")
     if bad:
         return "fail", f"option: {bad}"
-    files = [f for f in test.files if f.endswith(".scala") and f not in ctx.other_platform(test)]
+    files = teq_files(ctx, test, test.files)
     cmd = ["interp"] + files + flags
     env = dict(ctx.teq_env)
     env.update({"TEQ_THREADS": "1", "TEQ_CACHE_DIR": ctx.cache, "LC_ALL": "C.UTF-8"})
@@ -1590,8 +1629,6 @@ def judge(ctx, test):
     if any(re.search(r"_c[\d.]+\.(scala|java)$", os.path.basename(f)) for f in test.files):
         return "cannot run", "-", "an older compiler: a file is compiled by another scalac"
     other = "-"
-    if java_sources(ctx, test):
-        return "fail", other, "java source: teq reads none"
     kind = row.kind
     if kind in ("pos", "run"):
         outcome, line, diags, products = compile_groups(ctx, test, scratch, "jvm", "jvm")

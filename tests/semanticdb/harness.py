@@ -94,8 +94,7 @@ def teq(binary, root, sources, target, classpath=(), extra=(), cwd=None):
     type writes no document, which the collection then names). Its status is returned, `None` past the bound: 0, 1
     for a rule's finding, 2 for a program that does not type (src/fix/engine.rs's `round`), which a refusal must
     explain; any other is the run's failure (`teq_group`). The sources are given as
-    scalac's are, a `.java` one too, which teq does not read: the group of the Java class from source compares
-    teq's answer for it with scalac's. scalac's options (`extra`) are not teq's: the documents do not depend on them.
+    scalac's are, a `.java` one too, which teq reads for its declarations and writes no document of. scalac's options (`extra`) are not teq's: the documents do not depend on them.
     The program is typed under scala-library, the library scalac's documents name (README.md, "Provenance")."""
     target.mkdir(parents=True, exist_ok=True)
     # The standard library is teq's own scala-library 3.8.4, as scalac's is its own: a dependency's older
@@ -662,7 +661,7 @@ def teq_group(binary, g, compiler_cp):
             statuses, sources_given = [], set()
             def compile(root, sources, target, cwd=None, **k):
                 kept = [x for x in sources if given_uri(x, root, cwd or root) not in refused]
-                # With every Scala source refused there is nothing of teq's to type (it reads no Java source).
+                # With every Scala source refused there is nothing of teq's to type (a Java source has no document).
                 if any(str(x).endswith(".scala") for x in kept):
                     sources_given.update(given_uri(x, root, cwd or root) for x in kept)
                     statuses.append(teq(binary, root, kept, target, cwd=cwd, **k))
@@ -845,23 +844,16 @@ def self_test():
     return 0 if refused == tried else 1
 
 
-# A whole document of its own (schema 4, the uri `unexpected.scala`, language SCALA) in a TextDocuments message.
-UNEXPECTED = b"\x0a\x16\x08\x04\x12\x10unexpected.scala\x50\x01"
-
 # The --teq path's own damage, each a run of the real binary that the verdict must fail, by the group it runs over:
 # over `given` (one document, typed), its documents deleted after teq wrote them, their MD5 zeroed (the protobuf still
 # whole), the document written twice, a status no run of teq ends with, the status of a program that does not type
-# over every document written; over `java-order-source` (one document, its pinned refusal), an unexpected document
-# written beside the refusal. /bin/false over `given` too.
+# over every document written. /bin/false over `given` too.
 DAMAGE = [
     ("given", "the documents deleted", "for f in docs: f.unlink()"),
     ("given", "the MD5 zeroed", "for f in docs:\n    b, n = re.subn(rb'[0-9A-F]{32}', b'0' * 32, f.read_bytes())\n    assert n == 1, f\n    f.write_bytes(b)"),
     ("given", "the document written twice", "for f in docs: f.with_name('Twice-' + f.name).write_bytes(f.read_bytes())"),
     ("given", "a status of 101", "code = 101"),
     ("given", "a status of 2 over every document", "code = 2"),
-    ("java-order-source", "an unexpected document beside a pinned refusal",
-     f"if code == 2:\n    out = pathlib.Path(os.environ['TEQ_FIX_SEMANTICDB']) / 'META-INF' / 'semanticdb'\n"
-     f"    out.mkdir(parents=True, exist_ok=True)\n    (out / 'unexpected.scala.semanticdb').write_bytes({UNEXPECTED!r})"),
 ]
 
 
