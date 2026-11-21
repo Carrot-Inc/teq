@@ -56,6 +56,12 @@ impl Iterator for Units<'_> {
     }
 }
 
+/// A decimal digit's value, `Character.digit(unit, 10)` of a unit `Character.isDigit` holds, of any script: the
+/// runs of ten of the Unicode Character Database's decimal digits, by their zeros.
+pub fn decimal_digit(unit: u16) -> Option<u16> {
+    crate::interp::char_tables::DIGIT_ZEROS.iter().find(|&&zero| unit.wrapping_sub(zero) < 10).map(|&zero| unit - zero)
+}
+
 /// The number of UTF-16 units `c` takes.
 #[inline]
 pub fn len_utf16(c: char) -> usize {

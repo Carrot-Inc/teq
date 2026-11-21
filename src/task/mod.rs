@@ -251,7 +251,7 @@ pub fn run(args: &[String]) -> ! {
         daemon::run(&file, identity);
     }
     if let Some(word) = verb.as_deref().filter(|v| !PROJECT_VERBS.contains(v)) {
-        if let Some(option) = prefix.filter(|_| matches!(word, "compiler" | "interp" | "lsp" | "tasty" | "classfile" | "--version")) {
+        if let Some(option) = prefix.filter(|_| matches!(word, "compiler" | "interp" | "lsp" | "tasty" | "classfile" | "nir" | "--version")) {
             eprintln!("teq: {} applies to the project verbs", option);
             std::process::exit(2);
         }

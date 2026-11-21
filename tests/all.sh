@@ -5,7 +5,8 @@
 # output of a failing suite is printed in full, a passing one is summed up by its last line. The
 # scala3 harnesses fail without a checkout in $SCALA3. These leave checks not run then, which pass nothing: the
 # classpath suite without its jars in the coursier cache, parts of the classfile suite without a JDK
-# or javap, the app suite without the jars its corpus reads, and the budget and
+# or javap, the nir suite's jars without them in the coursier cache, the app suite without the jars its corpus
+# reads, and the budget and
 # runtime suites on a machine other than the one that recorded bench/budgets.txt and
 # bench/runtime-budgets.txt, the prop suite without the crates of proptests/ fetched, and the
 # test runner's classes without a javac (a javac other than 17's only notes a difference). Such a suite exits 0, and
@@ -106,6 +107,7 @@ suite modules       ./tests/modules.sh
 suite tasty-exec    ./teq interp tests/tasty-exec.scala
 suite analysis-bytes ./tests/analysis-bytes.sh
 suite classfile     ./teq interp tests/classfile.scala
+suite nir           ./teq interp tests/nir.scala
 suite classpath     ./tests/classpath.sh
 suite java-sources  ./tests/java-sources.sh
 suite java-reader   ./tests/java-reader.sh

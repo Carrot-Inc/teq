@@ -17,7 +17,7 @@ struct Dec {
 /// The digits of `Double.toString`, which `java.util.Formatter` rounds from.
 fn dec_of_f64(x: f64) -> Dec {
     let neg = x.is_sign_negative();
-    let sci = java_digits(x.abs());
+    let sci = crate::javanum::double_digits(x.abs());
     let (mantissa, exp) = sci.split_once('e').unwrap_or((&sci, "0"));
     let exp: i32 = exp.parse().unwrap_or(0);
     let digits: String = mantissa.chars().filter(|c| c.is_ascii_digit()).collect();

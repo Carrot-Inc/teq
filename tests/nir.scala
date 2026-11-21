@@ -1,0 +1,115 @@
+//> using file ../tools/script
+// Tests of the NIR reader: `teq nir` over the fixtures under tests/nir/fixtures (written by Scala
+// Native's compiler plugin from tests/nir/src; see tests/nir/README) has to print, byte for byte,
+// what Scala Native's own reader and printer printed for them, tests/nir/expected.txt; damaged
+// files have to be refused with a message, never a crash, and so has a file that nests deeper than
+// the reader follows; and for each jar of tests/nir/digests.txt
+// the listing has to have the SHA-256 of Scala Native's own. A jar that is not in the coursier
+// cache (tests/support/jars.sh names them for the fetch) is skipped on a line that says so, and
+// passes nothing. Run from the repository's root:
+// `./teq interp tests/nir.scala [-- --teq <binary>]`, the compiler `--teq`, else $TEQ, else
+// target/release/teq.
+import java.nio.file.{Files, Path, Paths}
+
+@main def nir(argv: String*): Unit = Script.run {
+  val args = new Args(argv, "tests/nir.scala [--teq <binary>]")
+  val teq = args.teq("./target/release/teq")
+  args.exactly(0)
+  if !Files.isDirectory(Paths.get("tests/nir")) then Log.die("tests/nir.scala runs from the repository's root")
+  var pass = 0
+  var fail = 0
+
+  // The fixtures against Scala Native's own printing of them.
+  val listing = Sh(teq, "nir", "tests/nir/fixtures").timeout(60).check(false).run()
+  if listing.ok && java.util.Arrays.equals(Files.readAllBytes(listing.outFile), Files.readAllBytes(Paths.get("tests/nir/expected.txt"))) then pass += 1
+  else
+    fail += 1
+    println(s"FAIL fixtures: exit code ${listing.status}")
+    Sh("diff", listing.outFile.toString, "tests/nir/expected.txt").check(false).run().lines.take(20).foreach(println)
+    listing.err.linesIterator.take(3).foreach(println)
+
+  // A filter selects the files whose name holds it.
+  val one = Sh(teq, "nir", "tests/nir/fixtures", "fix/Shape.nir").timeout(60).check(false).run()
+  if one.ok && one.lines.count(_.startsWith("## ")) == 1 && one.lines.headOption.contains("## fix/Shape.nir") then pass += 1
+  else
+    fail += 1
+    println("FAIL filter")
+
+  // Damaged input: a message and exit code 1, or a listing where the damage fell into a text,
+  // never a panic (101) or a signal.
+  val bad = Files.createTempDirectory("teq-nir.")
+  Script.atExit(Sh.remove(bad))
+  val data = Files.readAllBytes(Paths.get("tests/nir/fixtures/fix/Shapes$.nir"))
+  for n <- List(0, 4, 44, 45, 46, 100, 1000, data.length / 2, data.length - 1) do Files.write(bad.resolve(s"trunc$n.nir"), data.take(n))
+  var seed = 7L
+  def draw(bound: Int): Int =
+    seed = (seed * 6364136223846793005L + 1442695040888963407L)
+    ((seed >>> 33) % bound).toInt
+  for i <- 0 until 120 do
+    val d = data.clone()
+    for _ <- 0 to draw(4) do
+      // Half of them within the prelude and the tables that follow it.
+      val at = if i % 2 == 0 then draw(400) else draw(d.length)
+      d(at) = draw(256).toByte
+    Files.write(bad.resolve(s"corrupt$i.nir"), d)
+  // A file nested deeper than the reader follows, with no circle in it: a method whose one instruction
+  // jumps to a successor of 5000 handlers, each inside the one before.
+  val sections = List(
+    List(0, 0, 5, 0), // the table: the method, then its end
+    List(1, 65, 0, 6, 68, 49, 102, 117, 69, 79), // the strings "A", "" and "D1fuEO"
+    List(2, 0, 0), // a position in no file
+    List(3, 3, 3, 2, 0, 1), // the symbols: the method A.f, the class A, none
+    List(13, 0, 3, 18), // the types () => unit and unit
+    List(4, 0, 0, 0, 0, 0, 0, 0), // the method: its type, its instructions, no names, no scopes
+    List(), // no values
+    List(1, 5, 0) ++ List.fill(5000)(List(2, 0, 3)).flatten ++ List(1))
+  val starts = sections.scanLeft(45)(_ + _.length).init
+  val prelude = (List(0x2e4e4952, 6, 11) ++ starts).flatMap(w => List(w >>> 24, w >>> 16, w >>> 8, w)) ++ List(0)
+  Files.write(bad.resolve("deep.nir"), (prelude ++ sections.flatten).map(_.toByte).toArray)
+  var crashed = false
+  var refused = 0
+  val damaged =
+    val s = Files.list(bad)
+    try s.toArray.toVector.map(_.asInstanceOf[Path]).sortBy(_.getFileName.toString)
+    finally s.close()
+  for f <- damaged do
+    val r = Sh(teq, "nir", f.toString).timeout(30).check(false).run()
+    if r.status == 1 then refused += 1
+    if r.status > 1 || r.err.contains("panicked") then
+      crashed = true
+      println(s"FAIL ${f.getFileName}: exit code ${r.status}")
+      r.err.linesIterator.take(3).foreach(println)
+  if !crashed && refused >= 40 then pass += 1
+  else
+    fail += 1
+    println(s"FAIL damaged input: $refused of ${damaged.length} refused")
+  val short = Sh(teq, "nir", bad.resolve("trunc44.nir").toString).mergeErr.timeout(30).check(false).run()
+  if short.status == 1 && short.out.contains("no NIR file: shorter than a prelude") then pass += 1
+  else
+    fail += 1
+    println(s"FAIL a file shorter than a prelude: ${short.out}")
+  val deep = Sh(teq, "nir", bad.resolve("deep.nir").toString).mergeErr.timeout(30).check(false).run()
+  if deep.status == 1 && deep.out.contains("nested deeper than") then pass += 1
+  else
+    fail += 1
+    println(s"FAIL a file nested deeper than the reader follows: exit code ${deep.status}, ${deep.out.take(120)}")
+
+  // Whole jars against the digests of Scala Native's own listings.
+  val caches = Option(System.getenv("COURSIER_CACHE")).filter(_.nonEmpty).toList ++
+    List("/Library/Caches/Coursier/v1", "/.cache/coursier/v1").map(System.getProperty("user.home") + _)
+  for line <- Files.readString(Paths.get("tests/nir/digests.txt")).linesIterator if line.nonEmpty && !line.startsWith("#") do
+    val Array(sha, files, definitions, path) = line.split(" ")
+    val name = path.substring(path.lastIndexOf('/') + 1)
+    caches.map(c => Paths.get(s"$c/https/repo1.maven.org/maven2/$path")).find(Files.isRegularFile(_)) match
+      case None => println(s"skip $name: not in the coursier cache")
+      case Some(jar) =>
+        val verified = Sh(teq, "nir", "--verify", jar.toString).mergeErr.timeout(120).check(false).run()
+        val said = verified.out.trim
+        if verified.ok && said == s"$files files, $definitions definitions, listing sha256 $sha" then pass += 1
+        else
+          fail += 1
+          println(s"FAIL $name: $said")
+
+  println(s"nir: $pass passed, $fail failed")
+  Script.exit(if fail == 0 then 0 else 1)
+}

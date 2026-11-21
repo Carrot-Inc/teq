@@ -323,9 +323,9 @@ impl<'a> Worker<'a> {
                     out.push('L');
                 }
                 // scalac's printer writes a constant by the JVM's `toString` (`1.0`, `3.4028235E38f`).
-                LitVal::Double(bits) => out.push_str(&crate::types::java_double_string(f64::from_bits(bits))),
+                LitVal::Double(bits) => out.push_str(&crate::javanum::double_string(f64::from_bits(bits))),
                 LitVal::Float(bits) => {
-                    out.push_str(&crate::types::java_float_string(f32::from_bits(bits)));
+                    out.push_str(&crate::javanum::float_string(f32::from_bits(bits)));
                     out.push('f');
                 }
                 LitVal::Char(c) => {

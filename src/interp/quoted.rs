@@ -8765,8 +8765,8 @@ impl<'a, 't> Interp<'a, 't> {
                 out
             }
             Value::Long(l) => format!("{}L", l),
-            Value::Float(f) => format!("{}f", java_float(*f)),
-            Value::Double(d) => java_double(*d),
+            Value::Float(f) => format!("{}f", crate::javanum::float_string(*f)),
+            Value::Double(d) => crate::javanum::double_string(*d),
             Value::Unit => "()".to_string(),
             Value::Null => "null".to_string(),
             Value::Type(t) => format!("classOf[{}]", self.show_type_repr(*t)),

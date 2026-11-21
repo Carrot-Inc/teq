@@ -6066,8 +6066,8 @@ pub(super) fn eval_type_op(module: &str, op: &str, args: &[LitVal], text: impl F
         Short(h) => h.to_string(),
         Long(l) => l.to_string(),
         // The JVM's `toString`, as `TypeEval` applies it (`1.0`, `3.4028235E38`).
-        Double(d) => crate::types::java_double_string(f64::from_bits(*d)),
-        Float(f) => crate::types::java_float_string(f32::from_bits(*f)),
+        Double(d) => crate::javanum::double_string(f64::from_bits(*d)),
+        Float(f) => crate::javanum::float_string(f32::from_bits(*f)),
         Bool(b) => b.to_string(),
         Char(c) => char::from_u32(*c as u32).map_or(String::new(), |c| c.to_string()),
         Str(s) => text(*s),

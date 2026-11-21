@@ -3447,8 +3447,8 @@ impl<'r, 'a> Renderer<'r, 'a> {
             Const::Char(v) => (scala_type(g, "Char"), char::from_u32(*v).map(|c| c.to_string()).unwrap_or_default()),
             Const::Int(v) => (scala_type(g, "Int"), v.to_string()),
             Const::Long(v) => (scala_type(g, "Long"), v.to_string()),
-            Const::Float(bits) => (scala_type(g, "Float"), java_float(f32::from_bits(*bits) as f64, true)),
-            Const::Double(bits) => (scala_type(g, "Double"), java_float(f64::from_bits(*bits), false)),
+            Const::Float(bits) => (scala_type(g, "Float"), crate::javanum::float_string(f32::from_bits(*bits))),
+            Const::Double(bits) => (scala_type(g, "Double"), crate::javanum::double_string(f64::from_bits(*bits))),
             Const::Str(n) => (java_lang_type(g, "String"), f.name(*n)),
             Const::Null => (scala_type(g, "Null"), "null".to_string()),
             Const::Class(t) => {
@@ -3784,42 +3784,6 @@ fn type_key(t: &TType) -> Vec<u32> {
     out
 }
 
-/// Java's `Float.toString` and `Double.toString`: the shortest digits that read back, in plain
-/// notation between 10^-3 and 10^7 and in computerized scientific notation outside.
-fn java_float(v: f64, single: bool) -> String {
-    if v.is_nan() {
-        return "NaN".to_string();
-    }
-    if v.is_infinite() {
-        return if v > 0.0 { "Infinity" } else { "-Infinity" }.to_string();
-    }
-    if v == 0.0 {
-        return if v.is_sign_negative() { "-0.0" } else { "0.0" }.to_string();
-    }
-    let text = if single { format!("{:e}", v as f32) } else { format!("{:e}", v) };
-    let (mantissa, exp) = text.split_once('e').unwrap_or((&text, "0"));
-    let exp: i32 = exp.parse().unwrap_or(0);
-    let negative = mantissa.starts_with('-');
-    let digits: String = mantissa.chars().filter(|c| c.is_ascii_digit()).collect();
-    let sign = if negative { "-" } else { "" };
-    let abs = v.abs();
-    if (1e-3..1e7).contains(&abs) {
-        let point = exp + 1;
-        let (int_part, frac_part) = if point <= 0 {
-            ("0".to_string(), format!("{}{}", "0".repeat((-point) as usize), digits))
-        } else if (point as usize) >= digits.len() {
-            (format!("{}{}", digits, "0".repeat(point as usize - digits.len())), String::new())
-        } else {
-            (digits[..point as usize].to_string(), digits[point as usize..].to_string())
-        };
-        let frac = if frac_part.is_empty() { "0".to_string() } else { frac_part };
-        format!("{}{}.{}", sign, int_part, frac)
-    } else {
-        let frac = if digits.len() > 1 { digits[1..].to_string() } else { "0".to_string() };
-        format!("{}{}.{}E{}", sign, &digits[..1], frac, exp)
-    }
-}
-
 fn fnv(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
     for &b in bytes {
@@ -4143,17 +4107,5 @@ mod tests {
         h = murmur::mix(h, TERM_NAME_HASH);
         h = murmur::mix(h, java_hash("<init>"));
         assert_eq!(murmur::finalize(h, 0), EMPTY_ANNOTATION_HASH);
-    }
-
-    #[test]
-    fn java_float_formats_as_java_does() {
-        assert_eq!(java_float(1.0, false), "1.0");
-        assert_eq!(java_float(0.5, false), "0.5");
-        assert_eq!(java_float(1e7, false), "1.0E7");
-        assert_eq!(java_float(123456.75, false), "123456.75");
-        assert_eq!(java_float(0.001, false), "0.001");
-        assert_eq!(java_float(0.0001, false), "1.0E-4");
-        assert_eq!(java_float(-2.5, false), "-2.5");
-        assert_eq!(java_float(0.1, true), "0.1");
     }
 }

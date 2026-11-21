@@ -2,7 +2,7 @@
 //! of the def each one stands for, and the templates the typer makes itself, keyed by their text.
 
 use super::bignum::Big;
-use super::char_tables::{DIGIT_ZEROS, LETTERS, NUMERIC_RUNS};
+use super::char_tables::{LETTERS, NUMERIC_RUNS};
 use super::value::*;
 use super::*;
 use std::cell::Cell;
@@ -486,7 +486,7 @@ fn sort_values(it: &mut Interp, items: &mut Vec<Value>, cmp: &mut dyn FnMut(&mut
 
 /// A decimal digit's value, -1 for anything else.
 fn decimal(u: u16) -> i32 {
-    DIGIT_ZEROS.iter().find(|&&zero| u.wrapping_sub(zero) < 10).map_or(-1, |&zero| (u - zero) as i32)
+    crate::text::decimal_digit(u).map_or(-1, i32::from)
 }
 
 /// `Character.digit`: a decimal digit, or a Latin letter, ASCII or fullwidth, as 10 to 35.
@@ -1992,7 +1992,7 @@ fn install_java(it: &mut Table) {
             None => number_format(it, &s),
         }
     });
-    reg!(it, "java.lang.Double.toString", |it, a| Ok(Value::string(java_double(dbl(it, a, 1)?))));
+    reg!(it, "java.lang.Double.toString", |it, a| Ok(Value::string(crate::javanum::double_string(dbl(it, a, 1)?))));
     reg!(it, "java.lang.Double.hashCode", |it, a| Ok(Value::Int(double_hash_code(dbl(it, a, 1)?))));
     reg!(it, "java.lang.Double.isNaN", |it, a| Ok(Value::Bool(static_or_instance_dbl(it, a)?.is_nan())));
     reg!(it, "java.lang.Double.isInfinite", |it, a| Ok(Value::Bool(static_or_instance_dbl(it, a)?.is_infinite())));
@@ -2013,7 +2013,7 @@ fn install_java(it: &mut Table) {
     });
     reg!(it, "java.lang.Float.floatToRawIntBits", |it, a| Ok(Value::Int(flt(it, a, 1)?.to_bits() as i32)));
     reg!(it, "java.lang.Float.intBitsToFloat", |it, a| Ok(Value::Float(f32::from_bits(int(it, a, 1)? as u32))));
-    reg!(it, "java.lang.Float.toString", |it, a| Ok(Value::string(java_float(dbl(it, a, 1)? as f32))));
+    reg!(it, "java.lang.Float.toString", |it, a| Ok(Value::string(crate::javanum::float_string(dbl(it, a, 1)? as f32))));
     reg!(it, "java.lang.Boolean.booleanValue", |it, a| Ok(Value::Bool(boolean(it, a, 0)?)));
     reg!(it, "java.lang.Boolean.compareTo", |it, a| Ok(Value::Int(boolean(it, a, 0)? as i32 - boolean(it, a, 1)? as i32)));
     reg!(it, "java.lang.Boolean.compare", |it, a| Ok(Value::Int(boolean(it, a, 1)? as i32 - boolean(it, a, 2)? as i32)));

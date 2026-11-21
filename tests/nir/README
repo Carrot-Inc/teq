@@ -1,0 +1,13 @@
+Fixtures of the NIR reader's tests (tests/nir.scala). NIR is Scala Native's intermediate
+representation: the files its compiler plugin writes into a library's jar.
+
+src/          the Scala source the fixtures were compiled from
+fixtures/     the .nir files, written by the compiler plugin of Scala Native 0.5.12 for Scala 3.8.4:
+                scala-cli compile with `//> using platform native` and `//> using nativeVersion 0.5.12`,
+                the files taken from the classes directory
+expected.txt  what Scala Native's own reader and printer (nir.serialization and nir.Show of its
+              tools 0.5.12) print for the fixtures: under `## <file>`, each definition of the file
+              in the order of the mangled names. It is their output, never teq's: `teq nir` has
+              to print the same bytes
+digests.txt   the same for whole jars, as the SHA-256 of that text with the counts of files and
+              definitions, which `teq nir --verify` prints

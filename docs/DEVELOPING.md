@@ -14,8 +14,8 @@ the headers do not.
 
 ```
 src/main.rs        the command line: `teq compiler build|check|watch`, `teq interp`, `teq tasty`,
-                   `teq classfile`, `teq lsp`, and the project verbs (compile, test, run, stage, watch,
-                   build, dev, stop), which src/task/ serves
+                   `teq classfile`, `teq nir`, `teq lsp`, and the project verbs (compile, test, run, stage,
+                   watch, build, dev, stop), which src/task/ serves
 src/lexer.rs       tokens plus Scala 3 indentation (INDENT / OUTDENT / NEWLINE); token.rs the tokens,
                    intern.rs interned names, names.rs the well-known ones
 src/parser/        recursive descent into the flat AST (src/ast.rs)
@@ -39,6 +39,8 @@ src/jvm/           typed IR → class files and jars: classfile.rs (stack map fr
 src/interp/        the interpreter over the typed IR: `teq interp` and macro expansion
 src/tasty/         the TASTy reader and printer (`teq tasty`); write/ the TASTy writer
 src/scala2/        Scala 2 pickles rewritten as TASTy; src/classfile/ Java class files
+src/native/        the native target; nir/ Scala Native's intermediate representation, its reader and its
+                   printer (`teq nir`)
 src/classpath.rs   `--classpath`; zip.rs jars, jarcache.rs the jar cache, products.rs `--products`
 src/write.rs       the output file, or the changed modules of a split build
 src/watch.rs       `teq compiler watch`; held.rs its `stats`, index.rs and complete.rs the resident check's

@@ -1,0 +1,9 @@
+# The SHA-256 of what Scala Native 0.5.12's own reader and nir.Show print for each jar (tests/nir/README),
+# with the jar's NIR files and definitions and its path in a Maven repository.
+a3e7dde97bce7e1c865168988a9832f150a4bf304365be808e7bb5a6346b535e 3503 38102 org/scala-native/javalib_native0.5_3/0.5.12/javalib_native0.5_3-0.5.12.jar
+25eb8144a11b14c443c2c39a40123990e0d4c41a3bd477d190069a73f1342a49 4982 60946 org/scala-native/scalalib_native0.5_3/3.8.4%2B0.5.12/scalalib_native0.5_3-3.8.4%2B0.5.12.jar
+5a80e67d50da498ca11167d5ba1774b47c6cd3f290714dbd64cc42501328cf97 721 10874 org/scala-native/nativelib_native0.5_3/0.5.12/nativelib_native0.5_3-0.5.12.jar
+c749b5e55feea969a46add813f91a4b77267e1a47d82dc5e1573e72d2a053e72 270 3730 org/scala-native/posixlib_native0.5_3/0.5.12/posixlib_native0.5_3-0.5.12.jar
+deb373e31f97ff4d5eab7357cdf28712eb15a5829943d16f8b8d1ae3e1d365fc 115 2762 org/scala-native/clib_native0.5_3/0.5.12/clib_native0.5_3-0.5.12.jar
+00ee9de2050fbf8158796f2e8adf5bb553e80ec7488f080917084536b4ccba54 130 2364 org/scala-native/windowslib_native0.5_3/0.5.12/windowslib_native0.5_3-0.5.12.jar
+07a933bdf9a7bf8ea70e4f81cbc4b8461c4e6fd612de5a2c8e25305a4e682a25 86 614 org/scala-native/auxlib_native0.5_3/0.5.12/auxlib_native0.5_3-0.5.12.jar

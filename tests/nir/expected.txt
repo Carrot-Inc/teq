@@ -1,0 +1,2029 @@
+## fix/Circle$.nir
+def @"M11fix.Circle$D11fromProductL13scala.ProductL10fix.CircleEO" : (@"T11fix.Circle$", @"T13scala.Product") => @"T10fix.Circle" {
+%3(%2 <this> : @"T11fix.Circle$", %1 <x$0> : @"T13scala.Product"):
+  %4 = method %1 <x$0> : @"T13scala.Product", "D14productElementiL16java.lang.ObjectEO"
+  %5 = call[(@"T13scala.Product", int) => @"T16java.lang.Object"] %4 : ptr(%1 <x$0> : @"T13scala.Product", int 0)
+  %6 <r$1> = unbox[@"T16java.lang.Double"] %5 : @"T16java.lang.Object"
+  %7 = classalloc @"T10fix.Circle"
+  %8 = call[(@"T10fix.Circle", double) => unit] @"M10fix.CircleRdE" : ptr(%7 : !?@"T10fix.Circle", %6 <r$1> : double)
+  ret %7 : !?@"T10fix.Circle"
+}
+alwaysinline def @"M11fix.Circle$D11fromProductL13scala.ProductL16java.lang.ObjectEO" : (@"T11fix.Circle$", @"T13scala.Product") => @"T16java.lang.Object" {
+%3(%2 <this> : @"T11fix.Circle$", %1 <p> : @"T13scala.Product"):
+  %4 = method %2 <this> : @"T11fix.Circle$", "D11fromProductL13scala.ProductL10fix.CircleEO"
+  %5 = call[(@"T11fix.Circle$", @"T13scala.Product") => @"T10fix.Circle"] %4 : ptr(%2 <this> : @"T11fix.Circle$", %1 <p> : @"T13scala.Product")
+  ret %5 : @"T10fix.Circle"
+}
+def @"M11fix.Circle$D12writeReplaceL16java.lang.ObjectEPT11fix.Circle$" : (@"T11fix.Circle$") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T11fix.Circle$"):
+  %3 = classalloc @"T38scala.runtime.ModuleSerializationProxy"
+  %4 = call[(@"T38scala.runtime.ModuleSerializationProxy", @"T15java.lang.Class") => unit] @"M38scala.runtime.ModuleSerializationProxyRL15java.lang.ClassE" : ptr(%3 : !?@"T38scala.runtime.ModuleSerializationProxy", classOf[@"T11fix.Circle$"])
+  ret %3 : !?@"T38scala.runtime.ModuleSerializationProxy"
+}
+def @"M11fix.Circle$D5applydL10fix.CircleEO" : (@"T11fix.Circle$", double) => @"T10fix.Circle" {
+%3(%2 <this> : @"T11fix.Circle$", %1 <r> : double):
+  %4 = classalloc @"T10fix.Circle"
+  %5 = call[(@"T10fix.Circle", double) => unit] @"M10fix.CircleRdE" : ptr(%4 : !?@"T10fix.Circle", %1 <r> : double)
+  ret %4 : !?@"T10fix.Circle"
+}
+def @"M11fix.Circle$D7unapplyL10fix.CircleL10fix.CircleEO" : (@"T11fix.Circle$", @"T10fix.Circle") => @"T10fix.Circle" {
+%3(%2 <this> : @"T11fix.Circle$", %1 <x$1> : @"T10fix.Circle"):
+  ret %1 <x$1> : @"T10fix.Circle"
+}
+def @"M11fix.Circle$D8toStringL16java.lang.StringEO" : (@"T11fix.Circle$") => @"T16java.lang.String" {
+%2(%1 <this> : @"T11fix.Circle$"):
+  ret "Circle"
+}
+def @"M11fix.Circle$RE" : (@"T11fix.Circle$") => unit {
+%2(%1 <this> : @"T11fix.Circle$"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T11fix.Circle$")
+  ret unit
+}
+module @"T11fix.Circle$" : @"T16java.lang.Object", @"T29scala.deriving.Mirror$Product"
+## fix/Circle.nir
+inlinehint def @"M10fix.CircleD11fromProductL13scala.ProductL10fix.CircleEo" : (@"T13scala.Product") => @"T10fix.Circle" {
+%2(%1 : @"T13scala.Product"):
+  %3 = module @"T11fix.Circle$"
+  %4 = call[(@"T11fix.Circle$", @"T13scala.Product") => @"T10fix.Circle"] @"M11fix.Circle$D11fromProductL13scala.ProductL10fix.CircleEO" : ptr(%3 : !?@"T11fix.Circle$", %1 : @"T13scala.Product")
+  ret %4 : @"T10fix.Circle"
+}
+inlinehint def @"M10fix.CircleD11fromProductL13scala.ProductL16java.lang.ObjectEo" : (@"T13scala.Product") => @"T16java.lang.Object" {
+%2(%1 : @"T13scala.Product"):
+  %3 = module @"T11fix.Circle$"
+  %4 = call[(@"T11fix.Circle$", @"T13scala.Product") => @"T16java.lang.Object"] @"M11fix.Circle$D11fromProductL13scala.ProductL16java.lang.ObjectEO" : ptr(%3 : !?@"T11fix.Circle$", %1 : @"T13scala.Product")
+  ret %4 : @"T16java.lang.Object"
+}
+def @"M10fix.CircleD12productArityiEO" : (@"T10fix.Circle") => int {
+%2(%1 <this> : @"T10fix.Circle"):
+  ret int 1
+}
+def @"M10fix.CircleD13productPrefixL16java.lang.StringEO" : (@"T10fix.Circle") => @"T16java.lang.String" {
+%2(%1 <this> : @"T10fix.Circle"):
+  ret "Circle"
+}
+def @"M10fix.CircleD14copy$default$1dEO" : (@"T10fix.Circle") => double {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = method %1 <this> : @"T10fix.Circle", "D1rdEO"
+  %4 = call[(@"T10fix.Circle") => double] %3 : ptr(%1 <this> : @"T10fix.Circle")
+  ret %4 : double
+}
+def @"M10fix.CircleD14productElementiL16java.lang.ObjectEO" : (@"T10fix.Circle", int) => @"T16java.lang.Object" {
+%3(%2 <this> : @"T10fix.Circle", %1 <n> : int):
+  jump %4
+%4:
+  1: %11 = ieq[int] int 0, %1 <n> : int
+  if %11 : bool then %7 else %8
+%7:
+  1: %12 = method %2 <this> : @"T10fix.Circle", "D2_1dEO"
+  1: %13 = call[(@"T10fix.Circle") => double] %12 : ptr(%2 <this> : @"T10fix.Circle")
+  jump %5(%13 : double)
+%8:
+  jump %9
+%9:
+  1: %15 = classalloc @"T35java.lang.IndexOutOfBoundsException"
+  1: %16 = box[@"T17java.lang.Integer"] %1 <n> : int
+  1: %17 = method %16 : !?@"T17java.lang.Integer", "D8toStringL16java.lang.StringEO"
+  1: %18 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %17 : ptr(%16 : !?@"T17java.lang.Integer")
+  1: %19 = call[(@"T35java.lang.IndexOutOfBoundsException", @"T16java.lang.String") => unit] @"M35java.lang.IndexOutOfBoundsExceptionRL16java.lang.StringE" : ptr(%15 : !?@"T35java.lang.IndexOutOfBoundsException", %18 : @"T16java.lang.String")
+  throw %15 : !?@"T35java.lang.IndexOutOfBoundsException"
+%5(%6 : double):
+  %21 = box[@"T16java.lang.Double"] %6 : double
+  ret %21 : !?@"T16java.lang.Double"
+}
+def @"M10fix.CircleD15productIteratorL25scala.collection.IteratorEO" : (@"T10fix.Circle") => @"T25scala.collection.Iterator" {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = call[(@"T13scala.Product") => @"T25scala.collection.Iterator"] @"M13scala.ProductD15productIteratorL25scala.collection.IteratorEO" : ptr(%1 <this> : @"T10fix.Circle")
+  ret %3 : @"T25scala.collection.Iterator"
+}
+def @"M10fix.CircleD18productElementNameiL16java.lang.StringEO" : (@"T10fix.Circle", int) => @"T16java.lang.String" {
+%3(%2 <this> : @"T10fix.Circle", %1 <n> : int):
+  jump %4
+%4:
+  1: %11 = ieq[int] int 0, %1 <n> : int
+  if %11 : bool then %7 else %8
+%7:
+  jump %5("r")
+%8:
+  jump %9
+%9:
+  1: %13 = classalloc @"T35java.lang.IndexOutOfBoundsException"
+  1: %14 = box[@"T17java.lang.Integer"] %1 <n> : int
+  1: %15 = method %14 : !?@"T17java.lang.Integer", "D8toStringL16java.lang.StringEO"
+  1: %16 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %15 : ptr(%14 : !?@"T17java.lang.Integer")
+  1: %17 = call[(@"T35java.lang.IndexOutOfBoundsException", @"T16java.lang.String") => unit] @"M35java.lang.IndexOutOfBoundsExceptionRL16java.lang.StringE" : ptr(%13 : !?@"T35java.lang.IndexOutOfBoundsException", %16 : @"T16java.lang.String")
+  throw %13 : !?@"T35java.lang.IndexOutOfBoundsException"
+%5(%6 : @"T16java.lang.String"):
+  ret %6 : @"T16java.lang.String"
+}
+def @"M10fix.CircleD19productElementNamesL25scala.collection.IteratorEO" : (@"T10fix.Circle") => @"T25scala.collection.Iterator" {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = call[(@"T13scala.Product") => @"T25scala.collection.Iterator"] @"M13scala.ProductD19productElementNamesL25scala.collection.IteratorEO" : ptr(%1 <this> : @"T10fix.Circle")
+  ret %3 : @"T25scala.collection.Iterator"
+}
+alwaysinline def @"M10fix.CircleD1rdEO" : (@"T10fix.Circle") => double {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = fieldload[double] %1 <this> : @"T10fix.Circle", @"M10fix.CircleF1rPT10fix.Circle"
+  ret %3 : double
+}
+def @"M10fix.CircleD2_1dEO" : (@"T10fix.Circle") => double {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = method %1 <this> : @"T10fix.Circle", "D1rdEO"
+  %4 = call[(@"T10fix.Circle") => double] %3 : ptr(%1 <this> : @"T10fix.Circle")
+  ret %4 : double
+}
+def @"M10fix.CircleD4areadEO" : (@"T10fix.Circle") => double {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = method %1 <this> : @"T10fix.Circle", "D1rdEO"
+  %4 = call[(@"T10fix.Circle") => double] %3 : ptr(%1 <this> : @"T10fix.Circle")
+  %5 = fmul[double] double 3.141592653589793, %4 : double
+  %6 = method %1 <this> : @"T10fix.Circle", "D1rdEO"
+  %7 = call[(@"T10fix.Circle") => double] %6 : ptr(%1 <this> : @"T10fix.Circle")
+  %8 = fmul[double] %5 : double, %7 : double
+  ret %8 : double
+}
+def @"M10fix.CircleD4copydL10fix.CircleEO" : (@"T10fix.Circle", double) => @"T10fix.Circle" {
+%3(%2 <this> : @"T10fix.Circle", %1 <r> : double):
+  %4 = classalloc @"T10fix.Circle"
+  %5 = call[(@"T10fix.Circle", double) => unit] @"M10fix.CircleRdE" : ptr(%4 : !?@"T10fix.Circle", %1 <r> : double)
+  ret %4 : !?@"T10fix.Circle"
+}
+inlinehint def @"M10fix.CircleD5applydL10fix.CircleEo" : (double) => @"T10fix.Circle" {
+%2(%1 : double):
+  %3 = module @"T11fix.Circle$"
+  %4 = call[(@"T11fix.Circle$", double) => @"T10fix.Circle"] @"M11fix.Circle$D5applydL10fix.CircleEO" : ptr(%3 : !?@"T11fix.Circle$", %1 : double)
+  ret %4 : @"T10fix.Circle"
+}
+def @"M10fix.CircleD6equalsL16java.lang.ObjectzEO" : (@"T10fix.Circle", @"T16java.lang.Object") => bool {
+%3(%2 <this> : @"T10fix.Circle", %1 <x$0> : @"T16java.lang.Object"):
+  %8 = ieq[@"T16java.lang.Object"] %2 <this> : @"T10fix.Circle", %1 <x$0> : @"T16java.lang.Object"
+  if %8 : bool then %4 else %5
+%4:
+  jump %6(true)
+%5:
+  jump %9
+%9:
+  1: %16 = is[@"T10fix.Circle"] %1 <x$0> : @"T16java.lang.Object"
+  if %16 : bool then %12 else %13
+%12:
+  2: %17 <x$0> = as[@"T10fix.Circle"] %1 <x$0> : @"T16java.lang.Object"
+  2: %18 = method %2 <this> : @"T10fix.Circle", "D1rdEO"
+  2: %19 = call[(@"T10fix.Circle") => double] %18 : ptr(%2 <this> : @"T10fix.Circle")
+  2: %20 = method %17 <x$0> : @"T10fix.Circle", "D1rdEO"
+  2: %21 = call[(@"T10fix.Circle") => double] %20 : ptr(%17 <x$0> : @"T10fix.Circle")
+  2: %22 = feq[double] %19 : double, %21 : double
+  jump %10(%22 : bool)
+%13:
+  jump %14
+%14:
+  jump %10(false)
+%10(%11 : bool):
+  jump %6(%11 : bool)
+%6(%7 : bool):
+  ret %7 : bool
+}
+inlinehint def @"M10fix.CircleD7unapplyL10fix.CircleL10fix.CircleEo" : (@"T10fix.Circle") => @"T10fix.Circle" {
+%2(%1 : @"T10fix.Circle"):
+  %3 = module @"T11fix.Circle$"
+  %4 = call[(@"T11fix.Circle$", @"T10fix.Circle") => @"T10fix.Circle"] @"M11fix.Circle$D7unapplyL10fix.CircleL10fix.CircleEO" : ptr(%3 : !?@"T11fix.Circle$", %1 : @"T10fix.Circle")
+  ret %4 : @"T10fix.Circle"
+}
+def @"M10fix.CircleD8canEqualL16java.lang.ObjectzEO" : (@"T10fix.Circle", @"T16java.lang.Object") => bool {
+%3(%2 <this> : @"T10fix.Circle", %1 <that> : @"T16java.lang.Object"):
+  %4 = is[@"T10fix.Circle"] %1 <that> : @"T16java.lang.Object"
+  ret %4 : bool
+}
+def @"M10fix.CircleD8hashCodeiEO" : (@"T10fix.Circle") => int {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 <acc> = var[int]
+  %4 <acc> = copy int -889275714
+  %5 = varstore %3 <acc> : var[int], %4 <acc> : int
+  %6 = varload %3 <acc> : var[int]
+  %7 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%6 : int, int 2018617584)
+  %8 = varstore %3 <acc> : var[int], %7 : int
+  %9 = varload %3 <acc> : var[int]
+  %10 = method %1 <this> : @"T10fix.Circle", "D1rdEO"
+  %11 = call[(@"T10fix.Circle") => double] %10 : ptr(%1 <this> : @"T10fix.Circle")
+  %12 = call[(double) => int] @"M21scala.runtime.StaticsD10doubleHashdiEo" : ptr(%11 : double)
+  %13 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%9 : int, %12 : int)
+  %14 = varstore %3 <acc> : var[int], %13 : int
+  %15 = varload %3 <acc> : var[int]
+  %16 = call[(int, int) => int] @"M21scala.runtime.StaticsD12finalizeHashiiiEo" : ptr(%15 : int, int 1)
+  ret %16 : int
+}
+def @"M10fix.CircleD8toStringL16java.lang.StringEO" : (@"T10fix.Circle") => @"T16java.lang.String" {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = module @"T27scala.runtime.ScalaRunTime$"
+  %4 = method %3 : !?@"T27scala.runtime.ScalaRunTime$", "D9_toStringL13scala.ProductL16java.lang.StringEO"
+  %5 = call[(@"T27scala.runtime.ScalaRunTime$", @"T13scala.Product") => @"T16java.lang.String"] %4 : ptr(%3 : !?@"T27scala.runtime.ScalaRunTime$", %1 <this> : @"T10fix.Circle")
+  ret %5 : @"T16java.lang.String"
+}
+inlinehint def @"M10fix.CircleD8toStringL16java.lang.StringEo" : () => @"T16java.lang.String" {
+%1:
+  %2 = module @"T11fix.Circle$"
+  %3 = call[(@"T11fix.Circle$") => @"T16java.lang.String"] @"M11fix.Circle$D8toStringL16java.lang.StringEO" : ptr(%2 : !?@"T11fix.Circle$")
+  ret %3 : @"T16java.lang.String"
+}
+final var @"M10fix.CircleF1rPT10fix.Circle" : double = zero[double]
+def @"M10fix.CircleRdE" : (@"T10fix.Circle", double) => unit {
+%3(%2 <this> : @"T10fix.Circle", %1 <r> : double):
+  %4 = fieldstore[double] %2 <this> : @"T10fix.Circle", @"M10fix.CircleF1rPT10fix.Circle", %1 <r> : double
+  %5 = call[(@"T9fix.Named", @"T16java.lang.String") => unit] @"M9fix.NamedRL16java.lang.StringE" : ptr(%2 <this> : @"T10fix.Circle", "circle")
+  ret unit
+}
+class @"T10fix.Circle" : @"T9fix.Named", @"T13scala.Product", @"T20java.io.Serializable"
+## fix/Colour$$anon$1.nir
+alwaysinline def @"M18fix.Colour$$anon$1D11fromProductL13scala.ProductL16java.lang.ObjectEO" : (@"T18fix.Colour$$anon$1", @"T13scala.Product") => @"T16java.lang.Object" {
+%3(%2 <this> : @"T18fix.Colour$$anon$1", %1 <p> : @"T13scala.Product"):
+  %4 = method %2 <this> : @"T18fix.Colour$$anon$1", "D11fromProductL13scala.ProductL31scala.deriving.Mirror$SingletonEO"
+  %5 = call[(@"T31scala.deriving.Mirror$Singleton", @"T13scala.Product") => @"T31scala.deriving.Mirror$Singleton"] %4 : ptr(%2 <this> : @"T18fix.Colour$$anon$1", %1 <p> : @"T13scala.Product")
+  ret %5 : @"T31scala.deriving.Mirror$Singleton"
+}
+def @"M18fix.Colour$$anon$1D11fromProductL13scala.ProductL31scala.deriving.Mirror$SingletonEO" : (@"T18fix.Colour$$anon$1", @"T13scala.Product") => @"T31scala.deriving.Mirror$Singleton" {
+%3(%2 <this> : @"T18fix.Colour$$anon$1", %1 <p> : @"T13scala.Product"):
+  %4 = call[(@"T31scala.deriving.Mirror$Singleton", @"T13scala.Product") => @"T31scala.deriving.Mirror$Singleton"] @"M31scala.deriving.Mirror$SingletonD11fromProductL13scala.ProductL31scala.deriving.Mirror$SingletonEO" : ptr(%2 <this> : @"T18fix.Colour$$anon$1", %1 <p> : @"T13scala.Product")
+  ret %4 : @"T31scala.deriving.Mirror$Singleton"
+}
+def @"M18fix.Colour$$anon$1D11readResolveL16java.lang.ObjectEPT18fix.Colour$$anon$1" : (@"T18fix.Colour$$anon$1") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T18fix.Colour$$anon$1"):
+  %3 = module @"T11fix.Colour$"
+  %4 = method %1 <this> : @"T18fix.Colour$$anon$1", "D7ordinaliEO"
+  %5 = call[(@"T18scala.reflect.Enum") => int] %4 : ptr(%1 <this> : @"T18fix.Colour$$anon$1")
+  %6 = method %3 : !?@"T11fix.Colour$", "D11fromOrdinaliL10fix.ColourEO"
+  %7 = call[(@"T11fix.Colour$", int) => @"T10fix.Colour"] %6 : ptr(%3 : !?@"T11fix.Colour$", %5 : int)
+  ret %7 : @"T10fix.Colour"
+}
+def @"M18fix.Colour$$anon$1D12productArityiEO" : (@"T18fix.Colour$$anon$1") => int {
+%2(%1 <this> : @"T18fix.Colour$$anon$1"):
+  %3 = call[(@"T23scala.runtime.EnumValue") => int] @"M23scala.runtime.EnumValueD12productArityiEO" : ptr(%1 <this> : @"T18fix.Colour$$anon$1")
+  ret %3 : int
+}
+def @"M18fix.Colour$$anon$1D13productPrefixL16java.lang.StringEO" : (@"T18fix.Colour$$anon$1") => @"T16java.lang.String" {
+%2(%1 <this> : @"T18fix.Colour$$anon$1"):
+  %3 = fieldload[@"T16java.lang.String"] %1 <this> : @"T18fix.Colour$$anon$1", @"M18fix.Colour$$anon$1F7$name$1PT18fix.Colour$$anon$1"
+  ret %3 : @"T16java.lang.String"
+}
+def @"M18fix.Colour$$anon$1D14productElementiL16java.lang.ObjectEO" : (@"T18fix.Colour$$anon$1", int) => @"T16java.lang.Object" {
+%3(%2 <this> : @"T18fix.Colour$$anon$1", %1 <n> : int):
+  %4 = call[(@"T23scala.runtime.EnumValue", int) => @"T16java.lang.Object"] @"M23scala.runtime.EnumValueD14productElementiL16java.lang.ObjectEO" : ptr(%2 <this> : @"T18fix.Colour$$anon$1", %1 <n> : int)
+  ret %4 : @"T16java.lang.Object"
+}
+def @"M18fix.Colour$$anon$1D18productElementNameiL16java.lang.StringEO" : (@"T18fix.Colour$$anon$1", int) => @"T16java.lang.String" {
+%3(%2 <this> : @"T18fix.Colour$$anon$1", %1 <n> : int):
+  %4 = call[(@"T23scala.runtime.EnumValue", int) => @"T16java.lang.String"] @"M23scala.runtime.EnumValueD18productElementNameiL16java.lang.StringEO" : ptr(%2 <this> : @"T18fix.Colour$$anon$1", %1 <n> : int)
+  ret %4 : @"T16java.lang.String"
+}
+def @"M18fix.Colour$$anon$1D7ordinaliEO" : (@"T18fix.Colour$$anon$1") => int {
+%2(%1 <this> : @"T18fix.Colour$$anon$1"):
+  %3 = fieldload[int] %1 <this> : @"T18fix.Colour$$anon$1", @"M18fix.Colour$$anon$1F11_$ordinal$1PT18fix.Colour$$anon$1"
+  ret %3 : int
+}
+def @"M18fix.Colour$$anon$1D8canEqualL16java.lang.ObjectzEO" : (@"T18fix.Colour$$anon$1", @"T16java.lang.Object") => bool {
+%3(%2 <this> : @"T18fix.Colour$$anon$1", %1 <that> : @"T16java.lang.Object"):
+  %4 = call[(@"T23scala.runtime.EnumValue", @"T16java.lang.Object") => bool] @"M23scala.runtime.EnumValueD8canEqualL16java.lang.ObjectzEO" : ptr(%2 <this> : @"T18fix.Colour$$anon$1", %1 <that> : @"T16java.lang.Object")
+  ret %4 : bool
+}
+def @"M18fix.Colour$$anon$1D8hashCodeiEO" : (@"T18fix.Colour$$anon$1") => int {
+%2(%1 <this> : @"T18fix.Colour$$anon$1"):
+  %3 = fieldload[@"T16java.lang.String"] %1 <this> : @"T18fix.Colour$$anon$1", @"M18fix.Colour$$anon$1F7$name$1PT18fix.Colour$$anon$1"
+  %4 = method %3 : @"T16java.lang.String", "D8hashCodeiEO"
+  %5 = call[(@"T16java.lang.String") => int] %4 : ptr(%3 : @"T16java.lang.String")
+  ret %5 : int
+}
+def @"M18fix.Colour$$anon$1D8toStringL16java.lang.StringEO" : (@"T18fix.Colour$$anon$1") => @"T16java.lang.String" {
+%2(%1 <this> : @"T18fix.Colour$$anon$1"):
+  %3 = fieldload[@"T16java.lang.String"] %1 <this> : @"T18fix.Colour$$anon$1", @"M18fix.Colour$$anon$1F7$name$1PT18fix.Colour$$anon$1"
+  ret %3 : @"T16java.lang.String"
+}
+final var @"M18fix.Colour$$anon$1F11_$ordinal$1PT18fix.Colour$$anon$1" : int = zero[int]
+final var @"M18fix.Colour$$anon$1F7$name$1PT18fix.Colour$$anon$1" : @"T16java.lang.String" = zero[@"T16java.lang.String"]
+def @"M18fix.Colour$$anon$1RL16java.lang.StringiE" : (@"T18fix.Colour$$anon$1", @"T16java.lang.String", int) => unit {
+%4(%3 <this> : @"T18fix.Colour$$anon$1", %1 <$name$2> : @"T16java.lang.String", %2 <_$ordinal$2> : int):
+  %5 = fieldstore[@"T16java.lang.String"] %3 <this> : @"T18fix.Colour$$anon$1", @"M18fix.Colour$$anon$1F7$name$1PT18fix.Colour$$anon$1", %1 <$name$2> : @"T16java.lang.String"
+  %6 = fieldstore[int] %3 <this> : @"T18fix.Colour$$anon$1", @"M18fix.Colour$$anon$1F11_$ordinal$1PT18fix.Colour$$anon$1", %2 <_$ordinal$2> : int
+  %7 = call[(@"T10fix.Colour") => unit] @"M10fix.ColourRE" : ptr(%3 <this> : @"T18fix.Colour$$anon$1")
+  ret unit
+}
+class @"T18fix.Colour$$anon$1" : @"T10fix.Colour", @"T23scala.runtime.EnumValue", @"T31scala.deriving.Mirror$Singleton"
+## fix/Colour$.nir
+def @"M11fix.Colour$D11fromOrdinaliL10fix.ColourEO" : (@"T11fix.Colour$", int) => @"T10fix.Colour" {
+%3(%2 <this> : @"T11fix.Colour$", %1 <ordinal> : int):
+  jump %4
+%4:
+  1: %11 = ieq[int] int 0, %1 <ordinal> : int
+  if %11 : bool then %7 else %8
+%7:
+  2: %12 = call[() => @"T10fix.Colour"] @"M10fix.ColourD3RedL10fix.ColourEo" : ptr()
+  jump %5(%12 : @"T10fix.Colour")
+%8:
+  jump %9
+%9:
+  1: %18 = ieq[int] int 1, %1 <ordinal> : int
+  if %18 : bool then %14 else %15
+%14:
+  3: %19 = call[() => @"T10fix.Colour"] @"M10fix.ColourD5GreenL10fix.ColourEo" : ptr()
+  jump %5(%19 : @"T10fix.Colour")
+%15:
+  jump %16
+%16:
+  1: %21 = classalloc @"T32java.util.NoSuchElementException"
+  1: %22 = classalloc @"T23java.lang.StringBuilder"
+  1: %23 = call[(@"T23java.lang.StringBuilder", int) => unit] @"M23java.lang.StringBuilderRiE" : ptr(%22 : !?@"T23java.lang.StringBuilder", int 42)
+  1: %24 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%22 : !?@"T23java.lang.StringBuilder", "enum fix.Colour has no case with ordinal: ")
+  1: %25 = box[@"T17java.lang.Integer"] %1 <ordinal> : int
+  1: %26 = method %25 : !?@"T17java.lang.Integer", "D8toStringL16java.lang.StringEO"
+  1: %27 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %26 : ptr(%25 : !?@"T17java.lang.Integer")
+  1: %28 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%22 : !?@"T23java.lang.StringBuilder", %27 : @"T16java.lang.String")
+  1: %29 = call[(@"T23java.lang.StringBuilder") => @"T16java.lang.String"] @"M23java.lang.StringBuilderD8toStringL16java.lang.StringEO" : ptr(%22 : !?@"T23java.lang.StringBuilder")
+  1: %30 = call[(@"T32java.util.NoSuchElementException", @"T16java.lang.String") => unit] @"M32java.util.NoSuchElementExceptionRL16java.lang.StringE" : ptr(%21 : !?@"T32java.util.NoSuchElementException", %29 : @"T16java.lang.String")
+  throw %21 : !?@"T32java.util.NoSuchElementException"
+%5(%6 : @"T10fix.Colour"):
+  ret %6 : @"T10fix.Colour"
+}
+def @"M11fix.Colour$D12writeReplaceL16java.lang.ObjectEPT11fix.Colour$" : (@"T11fix.Colour$") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T11fix.Colour$"):
+  %3 = classalloc @"T38scala.runtime.ModuleSerializationProxy"
+  %4 = call[(@"T38scala.runtime.ModuleSerializationProxy", @"T15java.lang.Class") => unit] @"M38scala.runtime.ModuleSerializationProxyRL15java.lang.ClassE" : ptr(%3 : !?@"T38scala.runtime.ModuleSerializationProxy", classOf[@"T11fix.Colour$"])
+  ret %3 : !?@"T38scala.runtime.ModuleSerializationProxy"
+}
+def @"M11fix.Colour$D4$newiL16java.lang.StringL10fix.ColourEPT11fix.Colour$" : (@"T11fix.Colour$", int, @"T16java.lang.String") => @"T10fix.Colour" {
+%4(%3 <this> : @"T11fix.Colour$", %1 <_$ordinal> : int, %2 <$name> : @"T16java.lang.String"):
+  %5 = classalloc @"T18fix.Colour$$anon$1"
+  %6 = call[(@"T18fix.Colour$$anon$1", @"T16java.lang.String", int) => unit] @"M18fix.Colour$$anon$1RL16java.lang.StringiE" : ptr(%5 : !?@"T18fix.Colour$$anon$1", %2 <$name> : @"T16java.lang.String", %1 <_$ordinal> : int)
+  ret %5 : !?@"T18fix.Colour$$anon$1"
+}
+def @"M11fix.Colour$D7ordinalL10fix.ColouriEO" : (@"T11fix.Colour$", @"T10fix.Colour") => int {
+%3(%2 <this> : @"T11fix.Colour$", %1 <x$0> : @"T10fix.Colour"):
+  %4 = method %1 <x$0> : @"T10fix.Colour", "D7ordinaliEO"
+  %5 = call[(@"T18scala.reflect.Enum") => int] %4 : ptr(%1 <x$0> : @"T10fix.Colour")
+  ret %5 : int
+}
+alwaysinline def @"M11fix.Colour$D7ordinalL16java.lang.ObjectiEO" : (@"T11fix.Colour$", @"T16java.lang.Object") => int {
+%3(%2 <this> : @"T11fix.Colour$", %1 <x> : @"T16java.lang.Object"):
+  %4 = as[@"T10fix.Colour"] %1 <x> : @"T16java.lang.Object"
+  %5 = method %2 <this> : @"T11fix.Colour$", "D7ordinalL10fix.ColouriEO"
+  %6 = call[(@"T11fix.Colour$", @"T10fix.Colour") => int] %5 : ptr(%2 <this> : @"T11fix.Colour$", %4 : @"T10fix.Colour")
+  ret %6 : int
+}
+final var @"M11fix.Colour$F3RedO" : @"T10fix.Colour" = zero[@"T10fix.Colour"]
+final var @"M11fix.Colour$F5GreenO" : @"T10fix.Colour" = zero[@"T10fix.Colour"]
+def @"M11fix.Colour$RE" : (@"T11fix.Colour$") => unit {
+%2(%1 <this> : @"T11fix.Colour$"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T11fix.Colour$")
+  %4 = module @"T11fix.Colour$"
+  %5 = method %1 <this> : @"T11fix.Colour$", "D4$newiL16java.lang.StringL10fix.ColourEPT11fix.Colour$"
+  %6 = call[(@"T11fix.Colour$", int, @"T16java.lang.String") => @"T10fix.Colour"] %5 : ptr(%1 <this> : @"T11fix.Colour$", int 0, "Red")
+  %7 = fieldstore[@"T10fix.Colour"] %4 : !?@"T11fix.Colour$", @"M11fix.Colour$F3RedO", %6 : @"T10fix.Colour"
+  %8 = module @"T11fix.Colour$"
+  %9 = method %1 <this> : @"T11fix.Colour$", "D4$newiL16java.lang.StringL10fix.ColourEPT11fix.Colour$"
+  %10 = call[(@"T11fix.Colour$", int, @"T16java.lang.String") => @"T10fix.Colour"] %9 : ptr(%1 <this> : @"T11fix.Colour$", int 1, "Green")
+  %11 = fieldstore[@"T10fix.Colour"] %8 : !?@"T11fix.Colour$", @"M11fix.Colour$F5GreenO", %10 : @"T10fix.Colour"
+  ret unit
+}
+module @"T11fix.Colour$" : @"T16java.lang.Object", @"T25scala.deriving.Mirror$Sum"
+## fix/Colour$Mixed$.nir
+def @"M17fix.Colour$Mixed$D11fromProductL13scala.ProductL16fix.Colour$MixedEO" : (@"T17fix.Colour$Mixed$", @"T13scala.Product") => @"T16fix.Colour$Mixed" {
+%3(%2 <this> : @"T17fix.Colour$Mixed$", %1 <x$0> : @"T13scala.Product"):
+  %4 = method %1 <x$0> : @"T13scala.Product", "D14productElementiL16java.lang.ObjectEO"
+  %5 = call[(@"T13scala.Product", int) => @"T16java.lang.Object"] %4 : ptr(%1 <x$0> : @"T13scala.Product", int 0)
+  %6 <parts$1> = unbox[@"T17java.lang.Integer"] %5 : @"T16java.lang.Object"
+  %7 = classalloc @"T16fix.Colour$Mixed"
+  %8 = call[(@"T16fix.Colour$Mixed", int) => unit] @"M16fix.Colour$MixedRiE" : ptr(%7 : !?@"T16fix.Colour$Mixed", %6 <parts$1> : int)
+  ret %7 : !?@"T16fix.Colour$Mixed"
+}
+alwaysinline def @"M17fix.Colour$Mixed$D11fromProductL13scala.ProductL16java.lang.ObjectEO" : (@"T17fix.Colour$Mixed$", @"T13scala.Product") => @"T16java.lang.Object" {
+%3(%2 <this> : @"T17fix.Colour$Mixed$", %1 <p> : @"T13scala.Product"):
+  %4 = method %2 <this> : @"T17fix.Colour$Mixed$", "D11fromProductL13scala.ProductL16fix.Colour$MixedEO"
+  %5 = call[(@"T17fix.Colour$Mixed$", @"T13scala.Product") => @"T16fix.Colour$Mixed"] %4 : ptr(%2 <this> : @"T17fix.Colour$Mixed$", %1 <p> : @"T13scala.Product")
+  ret %5 : @"T16fix.Colour$Mixed"
+}
+def @"M17fix.Colour$Mixed$D12writeReplaceL16java.lang.ObjectEPT17fix.Colour$Mixed$" : (@"T17fix.Colour$Mixed$") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T17fix.Colour$Mixed$"):
+  %3 = classalloc @"T38scala.runtime.ModuleSerializationProxy"
+  %4 = call[(@"T38scala.runtime.ModuleSerializationProxy", @"T15java.lang.Class") => unit] @"M38scala.runtime.ModuleSerializationProxyRL15java.lang.ClassE" : ptr(%3 : !?@"T38scala.runtime.ModuleSerializationProxy", classOf[@"T17fix.Colour$Mixed$"])
+  ret %3 : !?@"T38scala.runtime.ModuleSerializationProxy"
+}
+def @"M17fix.Colour$Mixed$D5applyiL16fix.Colour$MixedEO" : (@"T17fix.Colour$Mixed$", int) => @"T16fix.Colour$Mixed" {
+%3(%2 <this> : @"T17fix.Colour$Mixed$", %1 <parts> : int):
+  %4 = classalloc @"T16fix.Colour$Mixed"
+  %5 = call[(@"T16fix.Colour$Mixed", int) => unit] @"M16fix.Colour$MixedRiE" : ptr(%4 : !?@"T16fix.Colour$Mixed", %1 <parts> : int)
+  ret %4 : !?@"T16fix.Colour$Mixed"
+}
+def @"M17fix.Colour$Mixed$D7unapplyL16fix.Colour$MixedL16fix.Colour$MixedEO" : (@"T17fix.Colour$Mixed$", @"T16fix.Colour$Mixed") => @"T16fix.Colour$Mixed" {
+%3(%2 <this> : @"T17fix.Colour$Mixed$", %1 <x$1> : @"T16fix.Colour$Mixed"):
+  ret %1 <x$1> : @"T16fix.Colour$Mixed"
+}
+def @"M17fix.Colour$Mixed$D8toStringL16java.lang.StringEO" : (@"T17fix.Colour$Mixed$") => @"T16java.lang.String" {
+%2(%1 <this> : @"T17fix.Colour$Mixed$"):
+  ret "Mixed"
+}
+def @"M17fix.Colour$Mixed$RE" : (@"T17fix.Colour$Mixed$") => unit {
+%2(%1 <this> : @"T17fix.Colour$Mixed$"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T17fix.Colour$Mixed$")
+  ret unit
+}
+module @"T17fix.Colour$Mixed$" : @"T16java.lang.Object", @"T29scala.deriving.Mirror$Product"
+## fix/Colour$Mixed.nir
+def @"M16fix.Colour$MixedD12productArityiEO" : (@"T16fix.Colour$Mixed") => int {
+%2(%1 <this> : @"T16fix.Colour$Mixed"):
+  ret int 1
+}
+def @"M16fix.Colour$MixedD13productPrefixL16java.lang.StringEO" : (@"T16fix.Colour$Mixed") => @"T16java.lang.String" {
+%2(%1 <this> : @"T16fix.Colour$Mixed"):
+  ret "Mixed"
+}
+def @"M16fix.Colour$MixedD14copy$default$1iEO" : (@"T16fix.Colour$Mixed") => int {
+%2(%1 <this> : @"T16fix.Colour$Mixed"):
+  %3 = method %1 <this> : @"T16fix.Colour$Mixed", "D5partsiEO"
+  %4 = call[(@"T16fix.Colour$Mixed") => int] %3 : ptr(%1 <this> : @"T16fix.Colour$Mixed")
+  ret %4 : int
+}
+def @"M16fix.Colour$MixedD14productElementiL16java.lang.ObjectEO" : (@"T16fix.Colour$Mixed", int) => @"T16java.lang.Object" {
+%3(%2 <this> : @"T16fix.Colour$Mixed", %1 <n> : int):
+  jump %4
+%4:
+  1: %11 = ieq[int] int 0, %1 <n> : int
+  if %11 : bool then %7 else %8
+%7:
+  1: %12 = method %2 <this> : @"T16fix.Colour$Mixed", "D2_1iEO"
+  1: %13 = call[(@"T16fix.Colour$Mixed") => int] %12 : ptr(%2 <this> : @"T16fix.Colour$Mixed")
+  jump %5(%13 : int)
+%8:
+  jump %9
+%9:
+  1: %15 = classalloc @"T35java.lang.IndexOutOfBoundsException"
+  1: %16 = box[@"T17java.lang.Integer"] %1 <n> : int
+  1: %17 = method %16 : !?@"T17java.lang.Integer", "D8toStringL16java.lang.StringEO"
+  1: %18 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %17 : ptr(%16 : !?@"T17java.lang.Integer")
+  1: %19 = call[(@"T35java.lang.IndexOutOfBoundsException", @"T16java.lang.String") => unit] @"M35java.lang.IndexOutOfBoundsExceptionRL16java.lang.StringE" : ptr(%15 : !?@"T35java.lang.IndexOutOfBoundsException", %18 : @"T16java.lang.String")
+  throw %15 : !?@"T35java.lang.IndexOutOfBoundsException"
+%5(%6 : int):
+  %21 = box[@"T17java.lang.Integer"] %6 : int
+  ret %21 : !?@"T17java.lang.Integer"
+}
+def @"M16fix.Colour$MixedD18productElementNameiL16java.lang.StringEO" : (@"T16fix.Colour$Mixed", int) => @"T16java.lang.String" {
+%3(%2 <this> : @"T16fix.Colour$Mixed", %1 <n> : int):
+  jump %4
+%4:
+  1: %11 = ieq[int] int 0, %1 <n> : int
+  if %11 : bool then %7 else %8
+%7:
+  jump %5("parts")
+%8:
+  jump %9
+%9:
+  1: %13 = classalloc @"T35java.lang.IndexOutOfBoundsException"
+  1: %14 = box[@"T17java.lang.Integer"] %1 <n> : int
+  1: %15 = method %14 : !?@"T17java.lang.Integer", "D8toStringL16java.lang.StringEO"
+  1: %16 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %15 : ptr(%14 : !?@"T17java.lang.Integer")
+  1: %17 = call[(@"T35java.lang.IndexOutOfBoundsException", @"T16java.lang.String") => unit] @"M35java.lang.IndexOutOfBoundsExceptionRL16java.lang.StringE" : ptr(%13 : !?@"T35java.lang.IndexOutOfBoundsException", %16 : @"T16java.lang.String")
+  throw %13 : !?@"T35java.lang.IndexOutOfBoundsException"
+%5(%6 : @"T16java.lang.String"):
+  ret %6 : @"T16java.lang.String"
+}
+def @"M16fix.Colour$MixedD2_1iEO" : (@"T16fix.Colour$Mixed") => int {
+%2(%1 <this> : @"T16fix.Colour$Mixed"):
+  %3 = method %1 <this> : @"T16fix.Colour$Mixed", "D5partsiEO"
+  %4 = call[(@"T16fix.Colour$Mixed") => int] %3 : ptr(%1 <this> : @"T16fix.Colour$Mixed")
+  ret %4 : int
+}
+def @"M16fix.Colour$MixedD4copyiL16fix.Colour$MixedEO" : (@"T16fix.Colour$Mixed", int) => @"T16fix.Colour$Mixed" {
+%3(%2 <this> : @"T16fix.Colour$Mixed", %1 <parts> : int):
+  %4 = classalloc @"T16fix.Colour$Mixed"
+  %5 = call[(@"T16fix.Colour$Mixed", int) => unit] @"M16fix.Colour$MixedRiE" : ptr(%4 : !?@"T16fix.Colour$Mixed", %1 <parts> : int)
+  ret %4 : !?@"T16fix.Colour$Mixed"
+}
+alwaysinline def @"M16fix.Colour$MixedD5partsiEO" : (@"T16fix.Colour$Mixed") => int {
+%2(%1 <this> : @"T16fix.Colour$Mixed"):
+  %3 = fieldload[int] %1 <this> : @"T16fix.Colour$Mixed", @"M16fix.Colour$MixedF5partsPT16fix.Colour$Mixed"
+  ret %3 : int
+}
+def @"M16fix.Colour$MixedD6equalsL16java.lang.ObjectzEO" : (@"T16fix.Colour$Mixed", @"T16java.lang.Object") => bool {
+%3(%2 <this> : @"T16fix.Colour$Mixed", %1 <x$0> : @"T16java.lang.Object"):
+  %8 = ieq[@"T16java.lang.Object"] %2 <this> : @"T16fix.Colour$Mixed", %1 <x$0> : @"T16java.lang.Object"
+  if %8 : bool then %4 else %5
+%4:
+  jump %6(true)
+%5:
+  jump %9
+%9:
+  1: %16 = is[@"T16fix.Colour$Mixed"] %1 <x$0> : @"T16java.lang.Object"
+  if %16 : bool then %12 else %13
+%12:
+  2: %17 <x$0> = as[@"T16fix.Colour$Mixed"] %1 <x$0> : @"T16java.lang.Object"
+  2: %18 = method %2 <this> : @"T16fix.Colour$Mixed", "D5partsiEO"
+  2: %19 = call[(@"T16fix.Colour$Mixed") => int] %18 : ptr(%2 <this> : @"T16fix.Colour$Mixed")
+  2: %20 = method %17 <x$0> : @"T16fix.Colour$Mixed", "D5partsiEO"
+  2: %21 = call[(@"T16fix.Colour$Mixed") => int] %20 : ptr(%17 <x$0> : @"T16fix.Colour$Mixed")
+  2: %22 = ieq[int] %19 : int, %21 : int
+  jump %10(%22 : bool)
+%13:
+  jump %14
+%14:
+  jump %10(false)
+%10(%11 : bool):
+  jump %6(%11 : bool)
+%6(%7 : bool):
+  ret %7 : bool
+}
+def @"M16fix.Colour$MixedD7ordinaliEO" : (@"T16fix.Colour$Mixed") => int {
+%2(%1 <this> : @"T16fix.Colour$Mixed"):
+  ret int 2
+}
+def @"M16fix.Colour$MixedD8canEqualL16java.lang.ObjectzEO" : (@"T16fix.Colour$Mixed", @"T16java.lang.Object") => bool {
+%3(%2 <this> : @"T16fix.Colour$Mixed", %1 <that> : @"T16java.lang.Object"):
+  %4 = is[@"T16fix.Colour$Mixed"] %1 <that> : @"T16java.lang.Object"
+  ret %4 : bool
+}
+def @"M16fix.Colour$MixedD8hashCodeiEO" : (@"T16fix.Colour$Mixed") => int {
+%2(%1 <this> : @"T16fix.Colour$Mixed"):
+  %3 <acc> = var[int]
+  %4 <acc> = copy int -889275714
+  %5 = varstore %3 <acc> : var[int], %4 <acc> : int
+  %6 = varload %3 <acc> : var[int]
+  %7 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%6 : int, int 74357723)
+  %8 = varstore %3 <acc> : var[int], %7 : int
+  %9 = varload %3 <acc> : var[int]
+  %10 = method %1 <this> : @"T16fix.Colour$Mixed", "D5partsiEO"
+  %11 = call[(@"T16fix.Colour$Mixed") => int] %10 : ptr(%1 <this> : @"T16fix.Colour$Mixed")
+  %12 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%9 : int, %11 : int)
+  %13 = varstore %3 <acc> : var[int], %12 : int
+  %14 = varload %3 <acc> : var[int]
+  %15 = call[(int, int) => int] @"M21scala.runtime.StaticsD12finalizeHashiiiEo" : ptr(%14 : int, int 1)
+  ret %15 : int
+}
+def @"M16fix.Colour$MixedD8toStringL16java.lang.StringEO" : (@"T16fix.Colour$Mixed") => @"T16java.lang.String" {
+%2(%1 <this> : @"T16fix.Colour$Mixed"):
+  %3 = module @"T27scala.runtime.ScalaRunTime$"
+  %4 = method %3 : !?@"T27scala.runtime.ScalaRunTime$", "D9_toStringL13scala.ProductL16java.lang.StringEO"
+  %5 = call[(@"T27scala.runtime.ScalaRunTime$", @"T13scala.Product") => @"T16java.lang.String"] %4 : ptr(%3 : !?@"T27scala.runtime.ScalaRunTime$", %1 <this> : @"T16fix.Colour$Mixed")
+  ret %5 : @"T16java.lang.String"
+}
+final var @"M16fix.Colour$MixedF5partsPT16fix.Colour$Mixed" : int = zero[int]
+def @"M16fix.Colour$MixedRiE" : (@"T16fix.Colour$Mixed", int) => unit {
+%3(%2 <this> : @"T16fix.Colour$Mixed", %1 <parts> : int):
+  %4 = fieldstore[int] %2 <this> : @"T16fix.Colour$Mixed", @"M16fix.Colour$MixedF5partsPT16fix.Colour$Mixed", %1 <parts> : int
+  %5 = call[(@"T10fix.Colour") => unit] @"M10fix.ColourRE" : ptr(%2 <this> : @"T16fix.Colour$Mixed")
+  ret unit
+}
+class @"T16fix.Colour$Mixed" : @"T10fix.Colour"
+## fix/Colour.nir
+inlinehint def @"M10fix.ColourD11fromOrdinaliL10fix.ColourEo" : (int) => @"T10fix.Colour" {
+%2(%1 : int):
+  %3 = module @"T11fix.Colour$"
+  %4 = call[(@"T11fix.Colour$", int) => @"T10fix.Colour"] @"M11fix.Colour$D11fromOrdinaliL10fix.ColourEO" : ptr(%3 : !?@"T11fix.Colour$", %1 : int)
+  ret %4 : @"T10fix.Colour"
+}
+def @"M10fix.ColourD13productPrefixL16java.lang.StringEO" : (@"T10fix.Colour") => @"T16java.lang.String" {
+%2(%1 <this> : @"T10fix.Colour"):
+  %3 = call[(@"T13scala.Product") => @"T16java.lang.String"] @"M13scala.ProductD13productPrefixL16java.lang.StringEO" : ptr(%1 <this> : @"T10fix.Colour")
+  ret %3 : @"T16java.lang.String"
+}
+def @"M10fix.ColourD15productIteratorL25scala.collection.IteratorEO" : (@"T10fix.Colour") => @"T25scala.collection.Iterator" {
+%2(%1 <this> : @"T10fix.Colour"):
+  %3 = call[(@"T13scala.Product") => @"T25scala.collection.Iterator"] @"M13scala.ProductD15productIteratorL25scala.collection.IteratorEO" : ptr(%1 <this> : @"T10fix.Colour")
+  ret %3 : @"T25scala.collection.Iterator"
+}
+def @"M10fix.ColourD18productElementNameiL16java.lang.StringEO" : (@"T10fix.Colour", int) => @"T16java.lang.String" {
+%3(%2 <this> : @"T10fix.Colour", %1 <n> : int):
+  %4 = call[(@"T13scala.Product", int) => @"T16java.lang.String"] @"M13scala.ProductD18productElementNameiL16java.lang.StringEO" : ptr(%2 <this> : @"T10fix.Colour", %1 <n> : int)
+  ret %4 : @"T16java.lang.String"
+}
+def @"M10fix.ColourD19productElementNamesL25scala.collection.IteratorEO" : (@"T10fix.Colour") => @"T25scala.collection.Iterator" {
+%2(%1 <this> : @"T10fix.Colour"):
+  %3 = call[(@"T13scala.Product") => @"T25scala.collection.Iterator"] @"M13scala.ProductD19productElementNamesL25scala.collection.IteratorEO" : ptr(%1 <this> : @"T10fix.Colour")
+  ret %3 : @"T25scala.collection.Iterator"
+}
+inlinehint def @"M10fix.ColourD3RedL10fix.ColourEo" : () => @"T10fix.Colour" {
+%1:
+  %2 = module @"T11fix.Colour$"
+  %3 = fieldload[@"T10fix.Colour"] %2 : !?@"T11fix.Colour$", @"M11fix.Colour$F3RedO"
+  ret %3 : @"T10fix.Colour"
+}
+inlinehint def @"M10fix.ColourD5GreenL10fix.ColourEo" : () => @"T10fix.Colour" {
+%1:
+  %2 = module @"T11fix.Colour$"
+  %3 = fieldload[@"T10fix.Colour"] %2 : !?@"T11fix.Colour$", @"M11fix.Colour$F5GreenO"
+  ret %3 : @"T10fix.Colour"
+}
+inlinehint def @"M10fix.ColourD7ordinalL10fix.ColouriEo" : (@"T10fix.Colour") => int {
+%2(%1 : @"T10fix.Colour"):
+  %3 = module @"T11fix.Colour$"
+  %4 = call[(@"T11fix.Colour$", @"T10fix.Colour") => int] @"M11fix.Colour$D7ordinalL10fix.ColouriEO" : ptr(%3 : !?@"T11fix.Colour$", %1 : @"T10fix.Colour")
+  ret %4 : int
+}
+inlinehint def @"M10fix.ColourD7ordinalL16java.lang.ObjectiEo" : (@"T16java.lang.Object") => int {
+%2(%1 : @"T16java.lang.Object"):
+  %3 = module @"T11fix.Colour$"
+  %4 = call[(@"T11fix.Colour$", @"T16java.lang.Object") => int] @"M11fix.Colour$D7ordinalL16java.lang.ObjectiEO" : ptr(%3 : !?@"T11fix.Colour$", %1 : @"T16java.lang.Object")
+  ret %4 : int
+}
+def @"M10fix.ColourRE" : (@"T10fix.Colour") => unit {
+%2(%1 <this> : @"T10fix.Colour"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T10fix.Colour")
+  ret unit
+}
+abstract class @"T10fix.Colour" : @"T16java.lang.Object", @"T18scala.reflect.Enum"
+## fix/Counters$$Lambda$1.nir
+def @"M22fix.Counters$$Lambda$1D13apply$mcII$spiiEO" : (@"T22fix.Counters$$Lambda$1", int) => int {
+%3(%1 : @"T22fix.Counters$$Lambda$1", %2 : int):
+  %4 = call[(int) => int] @"M12fix.CountersD25table$lzyINIT1$$anonfun$1iiEpT12fix.Counters" : ptr(%2 : int)
+  ret %4 : int
+}
+def @"M22fix.Counters$$Lambda$1RE" : (@"T22fix.Counters$$Lambda$1") => unit {
+%2(%1 : @"T22fix.Counters$$Lambda$1"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 : @"T22fix.Counters$$Lambda$1")
+  ret unit
+}
+class @"T22fix.Counters$$Lambda$1" : @"T16java.lang.Object", @"T38scala.runtime.java8.JFunction1$mcII$sp", @"T15scala.Function1", @"T20java.io.Serializable"
+## fix/Counters$.nir
+final var @"M13fix.Counters$F20table$lzy1$lzyHandlePT13fix.Counters$" : @"T26java.lang.invoke.VarHandle" = zero[@"T26java.lang.invoke.VarHandle"]
+## fix/Counters.nir
+alwaysinline def @"M12fix.CountersD10padded_$eqiuEO" : (@"T12fix.Counters", int) => unit {
+%3(%2 <this> : @"T12fix.Counters", %1 <x$1> : int):
+  %4 = fieldstore[int] %2 <this> : @"T12fix.Counters", @"M12fix.CountersF6paddedO", %1 <x$1> : int
+  ret unit
+}
+def @"M12fix.CountersD14table$lzyINIT1L16java.lang.ObjectEPT12fix.Counters" : (@"T12fix.Counters") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T12fix.Counters"):
+  %3 <resultNullable> = var[@"T16java.lang.Object"]
+  %4 <result> = var[@"T16java.lang.Object"]
+  jump %5
+%5:
+  if true then %6 else %7
+%6:
+  1: %8 <current> = fieldload[@"T16java.lang.Object"] %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  1: %13 = ieq[@"T16java.lang.Object"] %8 <current> : @"T16java.lang.Object", null
+  if %13 : bool then %9 else %10
+%9:
+  1: %18 = module @"T35scala.scalanative.runtime.LazyVals$"
+  1: %19 = field %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  1: %20 = module @"T34scala.runtime.LazyVals$Evaluating$"
+  1: %21 = method %18 : !?@"T35scala.scalanative.runtime.LazyVals$", "D6objCASR_L16java.lang.ObjectL16java.lang.ObjectzEO"
+  1: %22 = call[(@"T35scala.scalanative.runtime.LazyVals$", ptr, @"T16java.lang.Object", @"T16java.lang.Object") => bool] %21 : ptr(%18 : !?@"T35scala.scalanative.runtime.LazyVals$", %19 : ptr, null, %20 : !?@"T34scala.runtime.LazyVals$Evaluating$")
+  if %22 : bool then %14 else %15
+%14:
+  2: %23 <result> = copy null
+  2: %24 = varstore %4 <result> : var[@"T16java.lang.Object"], %23 <result> : null
+  2: %25 <resultNullable> = copy null
+  2: %26 = varstore %3 <resultNullable> : var[@"T16java.lang.Object"], %25 <resultNullable> : null
+  jump %28
+%28:
+  4: %33 = module @"T12scala.Array$" unwind %32 : @"T19java.lang.Throwable" to %27(%32 : @"T19java.lang.Throwable")
+  5: %35 = classalloc @"T22fix.Counters$$Lambda$1" unwind %34 : @"T19java.lang.Throwable" to %27(%34 : @"T19java.lang.Throwable")
+  5: %37 = call[(@"T22fix.Counters$$Lambda$1") => unit] @"M22fix.Counters$$Lambda$1RE" : ptr(%35 : !?@"T22fix.Counters$$Lambda$1") unwind %36 : @"T19java.lang.Throwable" to %27(%36 : @"T19java.lang.Throwable")
+  4: %39 = module @"T23scala.reflect.ClassTag$" unwind %38 : @"T19java.lang.Throwable" to %27(%38 : @"T19java.lang.Throwable")
+  4: %41 = method %39 : !?@"T23scala.reflect.ClassTag$", "D5applyL15java.lang.ClassL22scala.reflect.ClassTagEO" unwind %40 : @"T19java.lang.Throwable" to %27(%40 : @"T19java.lang.Throwable")
+  4: %43 = call[(@"T23scala.reflect.ClassTag$", @"T15java.lang.Class") => @"T22scala.reflect.ClassTag"] %41 : ptr(%39 : !?@"T23scala.reflect.ClassTag$", classOf[@"T38scala.scalanative.runtime.PrimitiveInt"]) unwind %42 : @"T19java.lang.Throwable" to %27(%42 : @"T19java.lang.Throwable")
+  4: %45 = method %33 : !?@"T12scala.Array$", "D8tabulateiL15scala.Function1L22scala.reflect.ClassTagL16java.lang.ObjectEO" unwind %44 : @"T19java.lang.Throwable" to %27(%44 : @"T19java.lang.Throwable")
+  4: %47 = call[(@"T12scala.Array$", int, @"T15scala.Function1", @"T22scala.reflect.ClassTag") => @"T16java.lang.Object"] %45 : ptr(%33 : !?@"T12scala.Array$", int 8, %35 : !?@"T22fix.Counters$$Lambda$1", %43 : @"T22scala.reflect.ClassTag") unwind %46 : @"T19java.lang.Throwable" to %27(%46 : @"T19java.lang.Throwable")
+  4: %49 = as[array[int]] %47 : @"T16java.lang.Object" unwind %48 : @"T19java.lang.Throwable" to %27(%48 : @"T19java.lang.Throwable")
+  4: %51 = varstore %3 <resultNullable> : var[@"T16java.lang.Object"], %49 : array[int] unwind %50 : @"T19java.lang.Throwable" to %27(%50 : @"T19java.lang.Throwable")
+  4: %57 = varload %3 <resultNullable> : var[@"T16java.lang.Object"] unwind %56 : @"T19java.lang.Throwable" to %27(%56 : @"T19java.lang.Throwable")
+  4: %59 = ieq[@"T16java.lang.Object"] %57 : @"T16java.lang.Object", null unwind %58 : @"T19java.lang.Throwable" to %27(%58 : @"T19java.lang.Throwable")
+  if %59 : bool then %52 else %53
+%52:
+  4: %61 = module @"T33scala.runtime.LazyVals$NullValue$" unwind %60 : @"T19java.lang.Throwable" to %27(%60 : @"T19java.lang.Throwable")
+  4: %63 = varstore %4 <result> : var[@"T16java.lang.Object"], %61 : !?@"T33scala.runtime.LazyVals$NullValue$" unwind %62 : @"T19java.lang.Throwable" to %27(%62 : @"T19java.lang.Throwable")
+  jump %54
+%53:
+  4: %65 = varload %3 <resultNullable> : var[@"T16java.lang.Object"] unwind %64 : @"T19java.lang.Throwable" to %27(%64 : @"T19java.lang.Throwable")
+  4: %67 = varstore %4 <result> : var[@"T16java.lang.Object"], %65 : @"T16java.lang.Object" unwind %66 : @"T19java.lang.Throwable" to %27(%66 : @"T19java.lang.Throwable")
+  jump %54
+%54:
+  jump %69
+%27(%30 : @"T19java.lang.Throwable"):
+  jump %90
+%69:
+  7: %74 = module @"T35scala.scalanative.runtime.LazyVals$"
+  7: %75 = field %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  7: %76 = module @"T34scala.runtime.LazyVals$Evaluating$"
+  7: %77 = varload %4 <result> : var[@"T16java.lang.Object"]
+  7: %78 = method %74 : !?@"T35scala.scalanative.runtime.LazyVals$", "D6objCASR_L16java.lang.ObjectL16java.lang.ObjectzEO"
+  7: %79 = call[(@"T35scala.scalanative.runtime.LazyVals$", ptr, @"T16java.lang.Object", @"T16java.lang.Object") => bool] %78 : ptr(%74 : !?@"T35scala.scalanative.runtime.LazyVals$", %75 : ptr, %76 : !?@"T34scala.runtime.LazyVals$Evaluating$", %77 : @"T16java.lang.Object")
+  7: %80 = xor[bool] true, %79 : bool
+  if %80 : bool then %70 else %71
+%70:
+  8: %81 = fieldload[@"T16java.lang.Object"] %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  8: %82 <lock> = as[@"T30scala.runtime.LazyVals$Waiting"] %81 : @"T16java.lang.Object"
+  8: %83 = module @"T35scala.scalanative.runtime.LazyVals$"
+  8: %84 = field %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  8: %85 = varload %4 <result> : var[@"T16java.lang.Object"]
+  8: %86 = method %83 : !?@"T35scala.scalanative.runtime.LazyVals$", "D6objCASR_L16java.lang.ObjectL16java.lang.ObjectzEO"
+  8: %87 = call[(@"T35scala.scalanative.runtime.LazyVals$", ptr, @"T16java.lang.Object", @"T16java.lang.Object") => bool] %86 : ptr(%83 : !?@"T35scala.scalanative.runtime.LazyVals$", %84 : ptr, %82 <lock> : @"T30scala.runtime.LazyVals$Waiting", %85 : @"T16java.lang.Object")
+  8: %88 = method %82 <lock> : @"T30scala.runtime.LazyVals$Waiting", "D9countDownuEO"
+  8: %89 = call[(@"T35java.util.concurrent.CountDownLatch") => unit] %88 : ptr(%82 <lock> : @"T30scala.runtime.LazyVals$Waiting")
+  jump %72
+%71:
+  jump %72
+%72:
+  jump %29
+%90:
+  9: %95 = module @"T35scala.scalanative.runtime.LazyVals$"
+  9: %96 = field %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  9: %97 = module @"T34scala.runtime.LazyVals$Evaluating$"
+  9: %98 = varload %4 <result> : var[@"T16java.lang.Object"]
+  9: %99 = method %95 : !?@"T35scala.scalanative.runtime.LazyVals$", "D6objCASR_L16java.lang.ObjectL16java.lang.ObjectzEO"
+  9: %100 = call[(@"T35scala.scalanative.runtime.LazyVals$", ptr, @"T16java.lang.Object", @"T16java.lang.Object") => bool] %99 : ptr(%95 : !?@"T35scala.scalanative.runtime.LazyVals$", %96 : ptr, %97 : !?@"T34scala.runtime.LazyVals$Evaluating$", %98 : @"T16java.lang.Object")
+  9: %101 = xor[bool] true, %100 : bool
+  if %101 : bool then %91 else %92
+%91:
+  10: %102 = fieldload[@"T16java.lang.Object"] %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  10: %103 <lock> = as[@"T30scala.runtime.LazyVals$Waiting"] %102 : @"T16java.lang.Object"
+  10: %104 = module @"T35scala.scalanative.runtime.LazyVals$"
+  10: %105 = field %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  10: %106 = varload %4 <result> : var[@"T16java.lang.Object"]
+  10: %107 = method %104 : !?@"T35scala.scalanative.runtime.LazyVals$", "D6objCASR_L16java.lang.ObjectL16java.lang.ObjectzEO"
+  10: %108 = call[(@"T35scala.scalanative.runtime.LazyVals$", ptr, @"T16java.lang.Object", @"T16java.lang.Object") => bool] %107 : ptr(%104 : !?@"T35scala.scalanative.runtime.LazyVals$", %105 : ptr, %103 <lock> : @"T30scala.runtime.LazyVals$Waiting", %106 : @"T16java.lang.Object")
+  10: %109 = method %103 <lock> : @"T30scala.runtime.LazyVals$Waiting", "D9countDownuEO"
+  10: %110 = call[(@"T35java.util.concurrent.CountDownLatch") => unit] %109 : ptr(%103 <lock> : @"T30scala.runtime.LazyVals$Waiting")
+  jump %93
+%92:
+  jump %93
+%93:
+  throw %30 : @"T19java.lang.Throwable"
+%29:
+  2: %132 = varload %3 <resultNullable> : var[@"T16java.lang.Object"]
+  ret %132 : @"T16java.lang.Object"
+%15:
+  jump %16
+%16:
+  jump %11
+%10:
+  1: %138 = is[@"T42scala.runtime.LazyVals$LazyValControlState"] %8 <current> : @"T16java.lang.Object"
+  if %138 : bool then %134 else %135
+%134:
+  1: %143 = module @"T34scala.runtime.LazyVals$Evaluating$"
+  1: %144 = ieq[@"T16java.lang.Object"] %8 <current> : @"T16java.lang.Object", %143 : !?@"T34scala.runtime.LazyVals$Evaluating$"
+  if %144 : bool then %139 else %140
+%139:
+  13: %145 = module @"T35scala.scalanative.runtime.LazyVals$"
+  13: %146 = field %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  13: %147 = classalloc @"T30scala.runtime.LazyVals$Waiting"
+  13: %148 = call[(@"T30scala.runtime.LazyVals$Waiting") => unit] @"M30scala.runtime.LazyVals$WaitingRE" : ptr(%147 : !?@"T30scala.runtime.LazyVals$Waiting")
+  13: %149 = method %145 : !?@"T35scala.scalanative.runtime.LazyVals$", "D6objCASR_L16java.lang.ObjectL16java.lang.ObjectzEO"
+  13: %150 = call[(@"T35scala.scalanative.runtime.LazyVals$", ptr, @"T16java.lang.Object", @"T16java.lang.Object") => bool] %149 : ptr(%145 : !?@"T35scala.scalanative.runtime.LazyVals$", %146 : ptr, %8 <current> : @"T16java.lang.Object", %147 : !?@"T30scala.runtime.LazyVals$Waiting")
+  jump %141
+%140:
+  1: %155 = is[@"T30scala.runtime.LazyVals$Waiting"] %8 <current> : @"T16java.lang.Object"
+  if %155 : bool then %151 else %152
+%151:
+  1: %156 = as[@"T30scala.runtime.LazyVals$Waiting"] %8 <current> : @"T16java.lang.Object"
+  1: %157 = method %156 : @"T30scala.runtime.LazyVals$Waiting", "D5awaituEO"
+  1: %158 = call[(@"T35java.util.concurrent.CountDownLatch") => unit] %157 : ptr(%156 : @"T30scala.runtime.LazyVals$Waiting")
+  jump %153
+%152:
+  ret null
+%153:
+  jump %141
+%141:
+  jump %136
+%135:
+  ret %8 <current> : @"T16java.lang.Object"
+%136:
+  jump %11
+%11:
+  jump %5
+%7:
+  ret zero[@"T16java.lang.Object"]
+}
+inlinehint def @"M12fix.CountersD20table$lzy1$lzyHandleL26java.lang.invoke.VarHandleEpT12fix.Counters" : () => @"T26java.lang.invoke.VarHandle" {
+%1:
+  %2 = module @"T13fix.Counters$"
+  %3 = fieldload[@"T26java.lang.invoke.VarHandle"] %2 : !?@"T13fix.Counters$", @"M13fix.Counters$F20table$lzy1$lzyHandlePT13fix.Counters$"
+  ret %3 : @"T26java.lang.invoke.VarHandle"
+}
+def @"M12fix.CountersD25table$lzyINIT1$$anonfun$1iiEpT12fix.Counters" : (int) => int {
+%2(%1 <i> : int):
+  %3 = imul[int] %1 <i> : int, %1 <i> : int
+  ret %3 : int
+}
+alwaysinline def @"M12fix.CountersD4seenjEO" : (@"T12fix.Counters") => long {
+%2(%1 <this> : @"T12fix.Counters"):
+  %3 = fieldload[long] %1 <this> : @"T12fix.Counters", @"M12fix.CountersF4seenO"
+  ret %3 : long
+}
+alwaysinline def @"M12fix.CountersD5tableLAi_EO" : (@"T12fix.Counters") => array[int] {
+%2(%1 <this> : @"T12fix.Counters"):
+  %3 <result> = fieldload[@"T16java.lang.Object"] %1 <this> : @"T12fix.Counters", @"M12fix.CountersF10table$lzy1O"
+  %8 = is[array[int]] %3 <result> : @"T16java.lang.Object"
+  if %8 : bool then %4 else %5
+%4:
+  %9 = as[array[int]] %3 <result> : @"T16java.lang.Object"
+  jump %6(%9 : array[int])
+%5:
+  %14 = module @"T33scala.runtime.LazyVals$NullValue$"
+  %15 = ieq[@"T16java.lang.Object"] %3 <result> : @"T16java.lang.Object", %14 : !?@"T33scala.runtime.LazyVals$NullValue$"
+  if %15 : bool then %10 else %11
+%10:
+  %16 = as[array[int]] null
+  jump %12(%16 : array[int])
+%11:
+  %17 = method %1 <this> : @"T12fix.Counters", "D14table$lzyINIT1L16java.lang.ObjectEPT12fix.Counters"
+  %18 = call[(@"T12fix.Counters") => @"T16java.lang.Object"] %17 : ptr(%1 <this> : @"T12fix.Counters")
+  %19 = as[array[int]] %18 : @"T16java.lang.Object"
+  jump %12(%19 : array[int])
+%12(%13 : array[int]):
+  jump %6(%13 : array[int])
+%6(%7 : array[int]):
+  ret %7 : array[int]
+}
+alwaysinline def @"M12fix.CountersD6paddediEO" : (@"T12fix.Counters") => int {
+%2(%1 <this> : @"T12fix.Counters"):
+  %3 = fieldload[int] %1 <this> : @"T12fix.Counters", @"M12fix.CountersF6paddedO"
+  ret %3 : int
+}
+alwaysinline def @"M12fix.CountersD8seen_$eqjuEO" : (@"T12fix.Counters", long) => unit {
+%3(%2 <this> : @"T12fix.Counters", %1 <x$1> : long):
+  %4 = fieldstore[long] %2 <this> : @"T12fix.Counters", @"M12fix.CountersF4seenO", %1 <x$1> : long
+  ret unit
+}
+volatile var @"M12fix.CountersF10table$lzy1O" : @"T16java.lang.Object" = zero[@"T16java.lang.Object"]
+volatile var @"M12fix.CountersF4seenO" : long = zero[long]
+align(64) var @"M12fix.CountersF6paddedO" : int = zero[int]
+def @"M12fix.CountersRE" : (@"T12fix.Counters") => unit {
+%2(%1 <this> : @"T12fix.Counters"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T12fix.Counters")
+  %4 = fieldstore[long] %1 <this> : @"T12fix.Counters", @"M12fix.CountersF4seenO", long 0
+  %5 = fieldstore[int] %1 <this> : @"T12fix.Counters", @"M12fix.CountersF6paddedO", int 0
+  ret unit
+}
+class @"T12fix.Counters" : @"T16java.lang.Object"
+## fix/Named.nir
+def @"M9fix.NamedD4nameL16java.lang.StringEO" : (@"T9fix.Named") => @"T16java.lang.String" {
+%2(%1 <this> : @"T9fix.Named"):
+  %3 = method %1 <this> : @"T9fix.Named", "D5labelL16java.lang.StringEO"
+  %4 = call[(@"T9fix.Named") => @"T16java.lang.String"] %3 : ptr(%1 <this> : @"T9fix.Named")
+  ret %4 : @"T16java.lang.String"
+}
+alwaysinline def @"M9fix.NamedD5labelL16java.lang.StringEO" : (@"T9fix.Named") => @"T16java.lang.String" {
+%2(%1 <this> : @"T9fix.Named"):
+  %3 = fieldload[@"T16java.lang.String"] %1 <this> : @"T9fix.Named", @"M9fix.NamedF5labelPT9fix.Named"
+  ret %3 : @"T16java.lang.String"
+}
+final var @"M9fix.NamedF5labelPT9fix.Named" : @"T16java.lang.String" = zero[@"T16java.lang.String"]
+def @"M9fix.NamedRL16java.lang.StringE" : (@"T9fix.Named", @"T16java.lang.String") => unit {
+%3(%2 <this> : @"T9fix.Named", %1 <label> : @"T16java.lang.String"):
+  %4 = fieldstore[@"T16java.lang.String"] %2 <this> : @"T9fix.Named", @"M9fix.NamedF5labelPT9fix.Named", %1 <label> : @"T16java.lang.String"
+  %5 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%2 <this> : @"T9fix.Named")
+  ret unit
+}
+abstract class @"T9fix.Named" : @"T16java.lang.Object", @"T9fix.Shape"
+## fix/Rect$.nir
+alwaysinline def @"M9fix.Rect$D11fromProductL13scala.ProductL16java.lang.ObjectEO" : (@"T9fix.Rect$", @"T13scala.Product") => @"T16java.lang.Object" {
+%3(%2 <this> : @"T9fix.Rect$", %1 <p> : @"T13scala.Product"):
+  %4 = method %2 <this> : @"T9fix.Rect$", "D11fromProductL13scala.ProductL8fix.RectEO"
+  %5 = call[(@"T9fix.Rect$", @"T13scala.Product") => @"T8fix.Rect"] %4 : ptr(%2 <this> : @"T9fix.Rect$", %1 <p> : @"T13scala.Product")
+  ret %5 : @"T8fix.Rect"
+}
+def @"M9fix.Rect$D11fromProductL13scala.ProductL8fix.RectEO" : (@"T9fix.Rect$", @"T13scala.Product") => @"T8fix.Rect" {
+%3(%2 <this> : @"T9fix.Rect$", %1 <x$0> : @"T13scala.Product"):
+  %4 = method %1 <x$0> : @"T13scala.Product", "D14productElementiL16java.lang.ObjectEO"
+  %5 = call[(@"T13scala.Product", int) => @"T16java.lang.Object"] %4 : ptr(%1 <x$0> : @"T13scala.Product", int 0)
+  %6 <w$1> = unbox[@"T16java.lang.Double"] %5 : @"T16java.lang.Object"
+  %7 = method %1 <x$0> : @"T13scala.Product", "D14productElementiL16java.lang.ObjectEO"
+  %8 = call[(@"T13scala.Product", int) => @"T16java.lang.Object"] %7 : ptr(%1 <x$0> : @"T13scala.Product", int 1)
+  %9 <h$1> = unbox[@"T16java.lang.Double"] %8 : @"T16java.lang.Object"
+  %10 = classalloc @"T8fix.Rect"
+  %11 = call[(@"T8fix.Rect", double, double) => unit] @"M8fix.RectRddE" : ptr(%10 : !?@"T8fix.Rect", %6 <w$1> : double, %9 <h$1> : double)
+  ret %10 : !?@"T8fix.Rect"
+}
+def @"M9fix.Rect$D12writeReplaceL16java.lang.ObjectEPT9fix.Rect$" : (@"T9fix.Rect$") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T9fix.Rect$"):
+  %3 = classalloc @"T38scala.runtime.ModuleSerializationProxy"
+  %4 = call[(@"T38scala.runtime.ModuleSerializationProxy", @"T15java.lang.Class") => unit] @"M38scala.runtime.ModuleSerializationProxyRL15java.lang.ClassE" : ptr(%3 : !?@"T38scala.runtime.ModuleSerializationProxy", classOf[@"T9fix.Rect$"])
+  ret %3 : !?@"T38scala.runtime.ModuleSerializationProxy"
+}
+def @"M9fix.Rect$D5applyddL8fix.RectEO" : (@"T9fix.Rect$", double, double) => @"T8fix.Rect" {
+%4(%3 <this> : @"T9fix.Rect$", %1 <w> : double, %2 <h> : double):
+  %5 = classalloc @"T8fix.Rect"
+  %6 = call[(@"T8fix.Rect", double, double) => unit] @"M8fix.RectRddE" : ptr(%5 : !?@"T8fix.Rect", %1 <w> : double, %2 <h> : double)
+  ret %5 : !?@"T8fix.Rect"
+}
+def @"M9fix.Rect$D7unapplyL8fix.RectL8fix.RectEO" : (@"T9fix.Rect$", @"T8fix.Rect") => @"T8fix.Rect" {
+%3(%2 <this> : @"T9fix.Rect$", %1 <x$1> : @"T8fix.Rect"):
+  ret %1 <x$1> : @"T8fix.Rect"
+}
+def @"M9fix.Rect$D8toStringL16java.lang.StringEO" : (@"T9fix.Rect$") => @"T16java.lang.String" {
+%2(%1 <this> : @"T9fix.Rect$"):
+  ret "Rect"
+}
+def @"M9fix.Rect$RE" : (@"T9fix.Rect$") => unit {
+%2(%1 <this> : @"T9fix.Rect$"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T9fix.Rect$")
+  ret unit
+}
+module @"T9fix.Rect$" : @"T16java.lang.Object", @"T29scala.deriving.Mirror$Product"
+## fix/Rect.nir
+inlinehint def @"M8fix.RectD11fromProductL13scala.ProductL16java.lang.ObjectEo" : (@"T13scala.Product") => @"T16java.lang.Object" {
+%2(%1 : @"T13scala.Product"):
+  %3 = module @"T9fix.Rect$"
+  %4 = call[(@"T9fix.Rect$", @"T13scala.Product") => @"T16java.lang.Object"] @"M9fix.Rect$D11fromProductL13scala.ProductL16java.lang.ObjectEO" : ptr(%3 : !?@"T9fix.Rect$", %1 : @"T13scala.Product")
+  ret %4 : @"T16java.lang.Object"
+}
+inlinehint def @"M8fix.RectD11fromProductL13scala.ProductL8fix.RectEo" : (@"T13scala.Product") => @"T8fix.Rect" {
+%2(%1 : @"T13scala.Product"):
+  %3 = module @"T9fix.Rect$"
+  %4 = call[(@"T9fix.Rect$", @"T13scala.Product") => @"T8fix.Rect"] @"M9fix.Rect$D11fromProductL13scala.ProductL8fix.RectEO" : ptr(%3 : !?@"T9fix.Rect$", %1 : @"T13scala.Product")
+  ret %4 : @"T8fix.Rect"
+}
+def @"M8fix.RectD12productArityiEO" : (@"T8fix.Rect") => int {
+%2(%1 <this> : @"T8fix.Rect"):
+  ret int 2
+}
+def @"M8fix.RectD13productPrefixL16java.lang.StringEO" : (@"T8fix.Rect") => @"T16java.lang.String" {
+%2(%1 <this> : @"T8fix.Rect"):
+  ret "Rect"
+}
+def @"M8fix.RectD14copy$default$1dEO" : (@"T8fix.Rect") => double {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = method %1 <this> : @"T8fix.Rect", "D1wdEO"
+  %4 = call[(@"T8fix.Rect") => double] %3 : ptr(%1 <this> : @"T8fix.Rect")
+  ret %4 : double
+}
+def @"M8fix.RectD14copy$default$2dEO" : (@"T8fix.Rect") => double {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = method %1 <this> : @"T8fix.Rect", "D1hdEO"
+  %4 = call[(@"T8fix.Rect") => double] %3 : ptr(%1 <this> : @"T8fix.Rect")
+  ret %4 : double
+}
+def @"M8fix.RectD14productElementiL16java.lang.ObjectEO" : (@"T8fix.Rect", int) => @"T16java.lang.Object" {
+%3(%2 <this> : @"T8fix.Rect", %1 <n> : int):
+  jump %4
+%4:
+  1: %11 = ieq[int] int 0, %1 <n> : int
+  if %11 : bool then %7 else %8
+%7:
+  1: %12 = method %2 <this> : @"T8fix.Rect", "D2_1dEO"
+  1: %13 = call[(@"T8fix.Rect") => double] %12 : ptr(%2 <this> : @"T8fix.Rect")
+  jump %5(%13 : double)
+%8:
+  jump %9
+%9:
+  1: %19 = ieq[int] int 1, %1 <n> : int
+  if %19 : bool then %15 else %16
+%15:
+  1: %20 = method %2 <this> : @"T8fix.Rect", "D2_2dEO"
+  1: %21 = call[(@"T8fix.Rect") => double] %20 : ptr(%2 <this> : @"T8fix.Rect")
+  jump %5(%21 : double)
+%16:
+  jump %17
+%17:
+  1: %23 = classalloc @"T35java.lang.IndexOutOfBoundsException"
+  1: %24 = box[@"T17java.lang.Integer"] %1 <n> : int
+  1: %25 = method %24 : !?@"T17java.lang.Integer", "D8toStringL16java.lang.StringEO"
+  1: %26 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %25 : ptr(%24 : !?@"T17java.lang.Integer")
+  1: %27 = call[(@"T35java.lang.IndexOutOfBoundsException", @"T16java.lang.String") => unit] @"M35java.lang.IndexOutOfBoundsExceptionRL16java.lang.StringE" : ptr(%23 : !?@"T35java.lang.IndexOutOfBoundsException", %26 : @"T16java.lang.String")
+  throw %23 : !?@"T35java.lang.IndexOutOfBoundsException"
+%5(%6 : double):
+  %29 = box[@"T16java.lang.Double"] %6 : double
+  ret %29 : !?@"T16java.lang.Double"
+}
+def @"M8fix.RectD15productIteratorL25scala.collection.IteratorEO" : (@"T8fix.Rect") => @"T25scala.collection.Iterator" {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = call[(@"T13scala.Product") => @"T25scala.collection.Iterator"] @"M13scala.ProductD15productIteratorL25scala.collection.IteratorEO" : ptr(%1 <this> : @"T8fix.Rect")
+  ret %3 : @"T25scala.collection.Iterator"
+}
+def @"M8fix.RectD18productElementNameiL16java.lang.StringEO" : (@"T8fix.Rect", int) => @"T16java.lang.String" {
+%3(%2 <this> : @"T8fix.Rect", %1 <n> : int):
+  jump %4
+%4:
+  1: %11 = ieq[int] int 0, %1 <n> : int
+  if %11 : bool then %7 else %8
+%7:
+  jump %5("w")
+%8:
+  jump %9
+%9:
+  1: %17 = ieq[int] int 1, %1 <n> : int
+  if %17 : bool then %13 else %14
+%13:
+  jump %5("h")
+%14:
+  jump %15
+%15:
+  1: %19 = classalloc @"T35java.lang.IndexOutOfBoundsException"
+  1: %20 = box[@"T17java.lang.Integer"] %1 <n> : int
+  1: %21 = method %20 : !?@"T17java.lang.Integer", "D8toStringL16java.lang.StringEO"
+  1: %22 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %21 : ptr(%20 : !?@"T17java.lang.Integer")
+  1: %23 = call[(@"T35java.lang.IndexOutOfBoundsException", @"T16java.lang.String") => unit] @"M35java.lang.IndexOutOfBoundsExceptionRL16java.lang.StringE" : ptr(%19 : !?@"T35java.lang.IndexOutOfBoundsException", %22 : @"T16java.lang.String")
+  throw %19 : !?@"T35java.lang.IndexOutOfBoundsException"
+%5(%6 : @"T16java.lang.String"):
+  ret %6 : @"T16java.lang.String"
+}
+def @"M8fix.RectD19productElementNamesL25scala.collection.IteratorEO" : (@"T8fix.Rect") => @"T25scala.collection.Iterator" {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = call[(@"T13scala.Product") => @"T25scala.collection.Iterator"] @"M13scala.ProductD19productElementNamesL25scala.collection.IteratorEO" : ptr(%1 <this> : @"T8fix.Rect")
+  ret %3 : @"T25scala.collection.Iterator"
+}
+alwaysinline def @"M8fix.RectD1hdEO" : (@"T8fix.Rect") => double {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = fieldload[double] %1 <this> : @"T8fix.Rect", @"M8fix.RectF1hPT8fix.Rect"
+  ret %3 : double
+}
+alwaysinline def @"M8fix.RectD1wdEO" : (@"T8fix.Rect") => double {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = fieldload[double] %1 <this> : @"T8fix.Rect", @"M8fix.RectF1wPT8fix.Rect"
+  ret %3 : double
+}
+def @"M8fix.RectD2_1dEO" : (@"T8fix.Rect") => double {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = method %1 <this> : @"T8fix.Rect", "D1wdEO"
+  %4 = call[(@"T8fix.Rect") => double] %3 : ptr(%1 <this> : @"T8fix.Rect")
+  ret %4 : double
+}
+def @"M8fix.RectD2_2dEO" : (@"T8fix.Rect") => double {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = method %1 <this> : @"T8fix.Rect", "D1hdEO"
+  %4 = call[(@"T8fix.Rect") => double] %3 : ptr(%1 <this> : @"T8fix.Rect")
+  ret %4 : double
+}
+def @"M8fix.RectD4areadEO" : (@"T8fix.Rect") => double {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = method %1 <this> : @"T8fix.Rect", "D1wdEO"
+  %4 = call[(@"T8fix.Rect") => double] %3 : ptr(%1 <this> : @"T8fix.Rect")
+  %5 = method %1 <this> : @"T8fix.Rect", "D1hdEO"
+  %6 = call[(@"T8fix.Rect") => double] %5 : ptr(%1 <this> : @"T8fix.Rect")
+  %7 = fmul[double] %4 : double, %6 : double
+  ret %7 : double
+}
+def @"M8fix.RectD4copyddL8fix.RectEO" : (@"T8fix.Rect", double, double) => @"T8fix.Rect" {
+%4(%3 <this> : @"T8fix.Rect", %1 <w> : double, %2 <h> : double):
+  %5 = classalloc @"T8fix.Rect"
+  %6 = call[(@"T8fix.Rect", double, double) => unit] @"M8fix.RectRddE" : ptr(%5 : !?@"T8fix.Rect", %1 <w> : double, %2 <h> : double)
+  ret %5 : !?@"T8fix.Rect"
+}
+inlinehint def @"M8fix.RectD5applyddL8fix.RectEo" : (double, double) => @"T8fix.Rect" {
+%3(%1 : double, %2 : double):
+  %4 = module @"T9fix.Rect$"
+  %5 = call[(@"T9fix.Rect$", double, double) => @"T8fix.Rect"] @"M9fix.Rect$D5applyddL8fix.RectEO" : ptr(%4 : !?@"T9fix.Rect$", %1 : double, %2 : double)
+  ret %5 : @"T8fix.Rect"
+}
+def @"M8fix.RectD6equalsL16java.lang.ObjectzEO" : (@"T8fix.Rect", @"T16java.lang.Object") => bool {
+%3(%2 <this> : @"T8fix.Rect", %1 <x$0> : @"T16java.lang.Object"):
+  %8 = ieq[@"T16java.lang.Object"] %2 <this> : @"T8fix.Rect", %1 <x$0> : @"T16java.lang.Object"
+  if %8 : bool then %4 else %5
+%4:
+  jump %6(true)
+%5:
+  jump %9
+%9:
+  1: %16 = is[@"T8fix.Rect"] %1 <x$0> : @"T16java.lang.Object"
+  if %16 : bool then %12 else %13
+%12:
+  2: %17 <x$0> = as[@"T8fix.Rect"] %1 <x$0> : @"T16java.lang.Object"
+  2: %22 = method %2 <this> : @"T8fix.Rect", "D1wdEO"
+  2: %23 = call[(@"T8fix.Rect") => double] %22 : ptr(%2 <this> : @"T8fix.Rect")
+  2: %24 = method %17 <x$0> : @"T8fix.Rect", "D1wdEO"
+  2: %25 = call[(@"T8fix.Rect") => double] %24 : ptr(%17 <x$0> : @"T8fix.Rect")
+  2: %26 = feq[double] %23 : double, %25 : double
+  if %26 : bool then %18 else %19
+%18:
+  2: %27 = method %2 <this> : @"T8fix.Rect", "D1hdEO"
+  2: %28 = call[(@"T8fix.Rect") => double] %27 : ptr(%2 <this> : @"T8fix.Rect")
+  2: %29 = method %17 <x$0> : @"T8fix.Rect", "D1hdEO"
+  2: %30 = call[(@"T8fix.Rect") => double] %29 : ptr(%17 <x$0> : @"T8fix.Rect")
+  2: %31 = feq[double] %28 : double, %30 : double
+  jump %20(%31 : bool)
+%19:
+  jump %20(false)
+%20(%21 : bool):
+  jump %10(%21 : bool)
+%13:
+  jump %14
+%14:
+  jump %10(false)
+%10(%11 : bool):
+  jump %6(%11 : bool)
+%6(%7 : bool):
+  ret %7 : bool
+}
+inlinehint def @"M8fix.RectD7unapplyL8fix.RectL8fix.RectEo" : (@"T8fix.Rect") => @"T8fix.Rect" {
+%2(%1 : @"T8fix.Rect"):
+  %3 = module @"T9fix.Rect$"
+  %4 = call[(@"T9fix.Rect$", @"T8fix.Rect") => @"T8fix.Rect"] @"M9fix.Rect$D7unapplyL8fix.RectL8fix.RectEO" : ptr(%3 : !?@"T9fix.Rect$", %1 : @"T8fix.Rect")
+  ret %4 : @"T8fix.Rect"
+}
+def @"M8fix.RectD8canEqualL16java.lang.ObjectzEO" : (@"T8fix.Rect", @"T16java.lang.Object") => bool {
+%3(%2 <this> : @"T8fix.Rect", %1 <that> : @"T16java.lang.Object"):
+  %4 = is[@"T8fix.Rect"] %1 <that> : @"T16java.lang.Object"
+  ret %4 : bool
+}
+def @"M8fix.RectD8hashCodeiEO" : (@"T8fix.Rect") => int {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 <acc> = var[int]
+  %4 <acc> = copy int -889275714
+  %5 = varstore %3 <acc> : var[int], %4 <acc> : int
+  %6 = varload %3 <acc> : var[int]
+  %7 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%6 : int, int 2543108)
+  %8 = varstore %3 <acc> : var[int], %7 : int
+  %9 = varload %3 <acc> : var[int]
+  %10 = method %1 <this> : @"T8fix.Rect", "D1wdEO"
+  %11 = call[(@"T8fix.Rect") => double] %10 : ptr(%1 <this> : @"T8fix.Rect")
+  %12 = call[(double) => int] @"M21scala.runtime.StaticsD10doubleHashdiEo" : ptr(%11 : double)
+  %13 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%9 : int, %12 : int)
+  %14 = varstore %3 <acc> : var[int], %13 : int
+  %15 = varload %3 <acc> : var[int]
+  %16 = method %1 <this> : @"T8fix.Rect", "D1hdEO"
+  %17 = call[(@"T8fix.Rect") => double] %16 : ptr(%1 <this> : @"T8fix.Rect")
+  %18 = call[(double) => int] @"M21scala.runtime.StaticsD10doubleHashdiEo" : ptr(%17 : double)
+  %19 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%15 : int, %18 : int)
+  %20 = varstore %3 <acc> : var[int], %19 : int
+  %21 = varload %3 <acc> : var[int]
+  %22 = call[(int, int) => int] @"M21scala.runtime.StaticsD12finalizeHashiiiEo" : ptr(%21 : int, int 2)
+  ret %22 : int
+}
+def @"M8fix.RectD8toStringL16java.lang.StringEO" : (@"T8fix.Rect") => @"T16java.lang.String" {
+%2(%1 <this> : @"T8fix.Rect"):
+  %3 = module @"T27scala.runtime.ScalaRunTime$"
+  %4 = method %3 : !?@"T27scala.runtime.ScalaRunTime$", "D9_toStringL13scala.ProductL16java.lang.StringEO"
+  %5 = call[(@"T27scala.runtime.ScalaRunTime$", @"T13scala.Product") => @"T16java.lang.String"] %4 : ptr(%3 : !?@"T27scala.runtime.ScalaRunTime$", %1 <this> : @"T8fix.Rect")
+  ret %5 : @"T16java.lang.String"
+}
+inlinehint def @"M8fix.RectD8toStringL16java.lang.StringEo" : () => @"T16java.lang.String" {
+%1:
+  %2 = module @"T9fix.Rect$"
+  %3 = call[(@"T9fix.Rect$") => @"T16java.lang.String"] @"M9fix.Rect$D8toStringL16java.lang.StringEO" : ptr(%2 : !?@"T9fix.Rect$")
+  ret %3 : @"T16java.lang.String"
+}
+final var @"M8fix.RectF1hPT8fix.Rect" : double = zero[double]
+final var @"M8fix.RectF1wPT8fix.Rect" : double = zero[double]
+def @"M8fix.RectRddE" : (@"T8fix.Rect", double, double) => unit {
+%4(%3 <this> : @"T8fix.Rect", %1 <w> : double, %2 <h> : double):
+  %5 = fieldstore[double] %3 <this> : @"T8fix.Rect", @"M8fix.RectF1wPT8fix.Rect", %1 <w> : double
+  %6 = fieldstore[double] %3 <this> : @"T8fix.Rect", @"M8fix.RectF1hPT8fix.Rect", %2 <h> : double
+  %7 = call[(@"T9fix.Named", @"T16java.lang.String") => unit] @"M9fix.NamedRL16java.lang.StringE" : ptr(%3 <this> : @"T8fix.Rect", "rect")
+  ret unit
+}
+class @"T8fix.Rect" : @"T9fix.Named", @"T13scala.Product", @"T20java.io.Serializable"
+## fix/Shape.nir
+decl @"M9fix.ShapeD4areadEO" : (@"T9fix.Shape") => double
+def @"M9fix.ShapeD4nameL16java.lang.StringEO" : (@"T9fix.Shape") => @"T16java.lang.String" {
+%2(%1 <this> : @"T9fix.Shape"):
+  ret "shape"
+}
+decl @"M9fix.ShapeD6$init$uEO" : (@"T9fix.Shape") => unit
+trait @"T9fix.Shape"
+## fix/Shapes$$$Lambda$1.nir
+def @"M21fix.Shapes$$$Lambda$1D13apply$mcII$spiiEO" : (@"T21fix.Shapes$$$Lambda$1", int) => int {
+%3(%1 : @"T21fix.Shapes$$$Lambda$1", %2 : int):
+  %4 = fieldload[int] %1 : @"T21fix.Shapes$$$Lambda$1", @"M21fix.Shapes$$$Lambda$1F8capture0O"
+  %5 = call[(int, int) => int] @"M11fix.Shapes$D10$anonfun$1iiiEpT11fix.Shapes$" : ptr(%4 : int, %2 : int)
+  ret %5 : int
+}
+var @"M21fix.Shapes$$$Lambda$1F8capture0O" : int = zero[int]
+def @"M21fix.Shapes$$$Lambda$1RiE" : (@"T21fix.Shapes$$$Lambda$1", int) => unit {
+%3(%1 : @"T21fix.Shapes$$$Lambda$1", %2 : int):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 : @"T21fix.Shapes$$$Lambda$1")
+  %5 = fieldstore[int] %1 : @"T21fix.Shapes$$$Lambda$1", @"M21fix.Shapes$$$Lambda$1F8capture0O", %2 : int
+  ret unit
+}
+class @"T21fix.Shapes$$$Lambda$1" : @"T16java.lang.Object", @"T38scala.runtime.java8.JFunction1$mcII$sp", @"T15scala.Function1", @"T20java.io.Serializable"
+## fix/Shapes$$$Lambda$2.nir
+def @"M21fix.Shapes$$$Lambda$2D13apply$mcZI$spizEO" : (@"T21fix.Shapes$$$Lambda$2", int) => bool {
+%3(%1 : @"T21fix.Shapes$$$Lambda$2", %2 : int):
+  %4 = call[(int) => bool] @"M11fix.Shapes$D19closures$$anonfun$1izEpT11fix.Shapes$" : ptr(%2 : int)
+  ret %4 : bool
+}
+def @"M21fix.Shapes$$$Lambda$2RE" : (@"T21fix.Shapes$$$Lambda$2") => unit {
+%2(%1 : @"T21fix.Shapes$$$Lambda$2"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 : @"T21fix.Shapes$$$Lambda$2")
+  ret unit
+}
+class @"T21fix.Shapes$$$Lambda$2" : @"T16java.lang.Object", @"T38scala.runtime.java8.JFunction1$mcZI$sp", @"T15scala.Function1", @"T20java.io.Serializable"
+## fix/Shapes$$$Lambda$3.nir
+def @"M21fix.Shapes$$$Lambda$3D14apply$mcIII$spiiiEO" : (@"T21fix.Shapes$$$Lambda$3", int, int) => int {
+%4(%1 : @"T21fix.Shapes$$$Lambda$3", %2 : int, %3 : int):
+  %5 = call[(int, int) => int] @"M11fix.Shapes$D19closures$$anonfun$2iiiEpT11fix.Shapes$" : ptr(%2 : int, %3 : int)
+  ret %5 : int
+}
+def @"M21fix.Shapes$$$Lambda$3RE" : (@"T21fix.Shapes$$$Lambda$3") => unit {
+%2(%1 : @"T21fix.Shapes$$$Lambda$3"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 : @"T21fix.Shapes$$$Lambda$3")
+  ret unit
+}
+class @"T21fix.Shapes$$$Lambda$3" : @"T16java.lang.Object", @"T39scala.runtime.java8.JFunction2$mcIII$sp", @"T15scala.Function2", @"T20java.io.Serializable"
+## fix/Shapes$$$Lambda$4.nir
+def @"M21fix.Shapes$$$Lambda$4D9applyVoidL16java.lang.ObjectuEO" : (@"T21fix.Shapes$$$Lambda$4", @"T16java.lang.Object") => unit {
+%3(%1 : @"T21fix.Shapes$$$Lambda$4", %2 : @"T16java.lang.Object"):
+  %4 = bitcast[@"T9fix.Shape"] %2 : @"T16java.lang.Object"
+  %5 = call[(@"T9fix.Shape") => unit] @"M11fix.Shapes$D15main$$anonfun$1L9fix.ShapeuEpT11fix.Shapes$" : ptr(%4 : @"T9fix.Shape")
+  ret %5 : unit
+}
+def @"M21fix.Shapes$$$Lambda$4RE" : (@"T21fix.Shapes$$$Lambda$4") => unit {
+%2(%1 : @"T21fix.Shapes$$$Lambda$4"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 : @"T21fix.Shapes$$$Lambda$4")
+  ret unit
+}
+class @"T21fix.Shapes$$$Lambda$4" : @"T16java.lang.Object", @"T34scala.runtime.function.JProcedure1", @"T15scala.Function1", @"T20java.io.Serializable"
+## fix/Shapes$.nir
+def @"M11fix.Shapes$D10$anonfun$1iiiEpT11fix.Shapes$" : (int, int) => int {
+%3(%1 <offset$1> : int, %2 <_$1> : int):
+  %4 = iadd[int] %2 <_$1> : int, %1 <offset$1> : int
+  ret %4 : int
+}
+def @"M11fix.Shapes$D12writeReplaceL16java.lang.ObjectEPT11fix.Shapes$" : (@"T11fix.Shapes$") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T11fix.Shapes$"):
+  %3 = classalloc @"T38scala.runtime.ModuleSerializationProxy"
+  %4 = call[(@"T38scala.runtime.ModuleSerializationProxy", @"T15java.lang.Class") => unit] @"M38scala.runtime.ModuleSerializationProxyRL15java.lang.ClassE" : ptr(%3 : !?@"T38scala.runtime.ModuleSerializationProxy", classOf[@"T11fix.Shapes$"])
+  ret %3 : !?@"T38scala.runtime.ModuleSerializationProxy"
+}
+def @"M11fix.Shapes$D15main$$anonfun$1L9fix.ShapeuEpT11fix.Shapes$" : (@"T9fix.Shape") => unit {
+%2(%1 <s> : @"T9fix.Shape"):
+  %3 = module @"T13scala.Predef$"
+  %4 = classalloc @"T23java.lang.StringBuilder"
+  %5 = call[(@"T23java.lang.StringBuilder", int) => unit] @"M23java.lang.StringBuilderRiE" : ptr(%4 : !?@"T23java.lang.StringBuilder", int 1)
+  %6 = module @"T11fix.Shapes$"
+  %7 = method %6 : !?@"T11fix.Shapes$", "D8describeL9fix.ShapeL16java.lang.StringEO"
+  %8 = call[(@"T11fix.Shapes$", @"T9fix.Shape") => @"T16java.lang.String"] %7 : ptr(%6 : !?@"T11fix.Shapes$", %1 <s> : @"T9fix.Shape")
+  %9 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%4 : !?@"T23java.lang.StringBuilder", %8 : @"T16java.lang.String")
+  %10 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%4 : !?@"T23java.lang.StringBuilder", " ")
+  %11 = method %1 <s> : @"T9fix.Shape", "D4areadEO"
+  %12 = call[(@"T9fix.Shape") => double] %11 : ptr(%1 <s> : @"T9fix.Shape")
+  %13 = call[(@"T23java.lang.StringBuilder", double) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appenddL23java.lang.StringBuilderEO" : ptr(%4 : !?@"T23java.lang.StringBuilder", %12 : double)
+  %14 = call[(@"T23java.lang.StringBuilder") => @"T16java.lang.String"] @"M23java.lang.StringBuilderD8toStringL16java.lang.StringEO" : ptr(%4 : !?@"T23java.lang.StringBuilder")
+  %15 = method %3 : !?@"T13scala.Predef$", "D7printlnL16java.lang.ObjectuEO"
+  %16 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %15 : ptr(%3 : !?@"T13scala.Predef$", %14 : @"T16java.lang.String")
+  ret unit
+}
+def @"M11fix.Shapes$D19closures$$anonfun$1izEpT11fix.Shapes$" : (int) => bool {
+%2(%1 <_$2> : int):
+  %3 = srem[int] %1 <_$2> : int, int 2
+  %4 = ieq[int] %3 : int, int 0
+  ret %4 : bool
+}
+def @"M11fix.Shapes$D19closures$$anonfun$2iiiEpT11fix.Shapes$" : (int, int) => int {
+%3(%1 <_$3> : int, %2 <_$4> : int):
+  %4 = iadd[int] %1 <_$3> : int, %2 <_$4> : int
+  ret %4 : int
+}
+def @"M11fix.Shapes$D4mainLAL16java.lang.String_uEO" : (@"T11fix.Shapes$", array[@"T16java.lang.String"]) => unit {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <args> : array[@"T16java.lang.String"]):
+  %4 = classalloc @"T39scala.collection.immutable.$colon$colon"
+  %5 = module @"T11fix.Circle$"
+  %6 = method %5 : !?@"T11fix.Circle$", "D5applydL10fix.CircleEO"
+  %7 = call[(@"T11fix.Circle$", double) => @"T10fix.Circle"] %6 : ptr(%5 : !?@"T11fix.Circle$", double 2.0)
+  %8 = classalloc @"T39scala.collection.immutable.$colon$colon"
+  %9 = module @"T9fix.Rect$"
+  %10 = method %9 : !?@"T9fix.Rect$", "D5applyddL8fix.RectEO"
+  %11 = call[(@"T9fix.Rect$", double, double) => @"T8fix.Rect"] %10 : ptr(%9 : !?@"T9fix.Rect$", double 1.0, double 2.0)
+  %12 = module @"T31scala.collection.immutable.Nil$"
+  %13 = call[(@"T39scala.collection.immutable.$colon$colon", @"T16java.lang.Object", @"T31scala.collection.immutable.List") => unit] @"M39scala.collection.immutable.$colon$colonRL16java.lang.ObjectL31scala.collection.immutable.ListE" : ptr(%8 : !?@"T39scala.collection.immutable.$colon$colon", %11 : @"T8fix.Rect", %12 : !?@"T31scala.collection.immutable.Nil$")
+  %14 = call[(@"T39scala.collection.immutable.$colon$colon", @"T16java.lang.Object", @"T31scala.collection.immutable.List") => unit] @"M39scala.collection.immutable.$colon$colonRL16java.lang.ObjectL31scala.collection.immutable.ListE" : ptr(%4 : !?@"T39scala.collection.immutable.$colon$colon", %7 : @"T10fix.Circle", %8 : !?@"T39scala.collection.immutable.$colon$colon")
+  %15 = as[@"T16java.lang.Object"] %4 : !?@"T39scala.collection.immutable.$colon$colon"
+  %16 <shapes> = as[@"T31scala.collection.immutable.List"] %15 : @"T16java.lang.Object"
+  1: %17 = classalloc @"T21fix.Shapes$$$Lambda$4"
+  1: %18 = call[(@"T21fix.Shapes$$$Lambda$4") => unit] @"M21fix.Shapes$$$Lambda$4RE" : ptr(%17 : !?@"T21fix.Shapes$$$Lambda$4")
+  %19 = method %16 <shapes> : @"T31scala.collection.immutable.List", "D7foreachL15scala.Function1uEO"
+  %20 = call[(@"T31scala.collection.immutable.List", @"T15scala.Function1") => unit] %19 : ptr(%16 <shapes> : @"T31scala.collection.immutable.List", %17 : !?@"T21fix.Shapes$$$Lambda$4")
+  %21 = module @"T13scala.Predef$"
+  %22 = classalloc @"T23java.lang.StringBuilder"
+  %23 = call[(@"T23java.lang.StringBuilder", int) => unit] @"M23java.lang.StringBuilderRiE" : ptr(%22 : !?@"T23java.lang.StringBuilder", int 0)
+  %24 = arraylength %1 <args> : array[@"T16java.lang.String"]
+  %25 = method %2 <this> : @"T11fix.Shapes$", "D8classifyiL16java.lang.StringEO"
+  %26 = call[(@"T11fix.Shapes$", int) => @"T16java.lang.String"] %25 : ptr(%2 <this> : @"T11fix.Shapes$", %24 : int)
+  %27 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%22 : !?@"T23java.lang.StringBuilder", %26 : @"T16java.lang.String")
+  %28 = method %2 <this> : @"T11fix.Shapes$", "D4wordL16java.lang.StringiEO"
+  %29 = call[(@"T11fix.Shapes$", @"T16java.lang.String") => int] %28 : ptr(%2 <this> : @"T11fix.Shapes$", "one")
+  %30 = call[(@"T23java.lang.StringBuilder", int) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendiL23java.lang.StringBuilderEO" : ptr(%22 : !?@"T23java.lang.StringBuilder", %29 : int)
+  %31 = arrayalloc[int] arrayvalue int {int 1, int 2}
+  %32 = method %2 <this> : @"T11fix.Shapes$", "D7guardedLAi_iiEO"
+  %33 = call[(@"T11fix.Shapes$", array[int], int) => int] %32 : ptr(%2 <this> : @"T11fix.Shapes$", %31 : ?array[int], int 1)
+  %34 = call[(@"T23java.lang.StringBuilder", int) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendiL23java.lang.StringBuilderEO" : ptr(%22 : !?@"T23java.lang.StringBuilder", %33 : int)
+  %35 = classalloc @"T12fix.Counters"
+  %36 = call[(@"T12fix.Counters") => unit] @"M12fix.CountersRE" : ptr(%35 : !?@"T12fix.Counters")
+  %37 = method %2 <this> : @"T11fix.Shapes$", "D6lockedL12fix.CountersjEO"
+  %38 = call[(@"T11fix.Shapes$", @"T12fix.Counters") => long] %37 : ptr(%2 <this> : @"T11fix.Shapes$", %35 : !?@"T12fix.Counters")
+  %39 = call[(@"T23java.lang.StringBuilder", long) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendjL23java.lang.StringBuilderEO" : ptr(%22 : !?@"T23java.lang.StringBuilder", %38 : long)
+  %40 = call[(@"T23java.lang.StringBuilder") => @"T16java.lang.String"] @"M23java.lang.StringBuilderD8toStringL16java.lang.StringEO" : ptr(%22 : !?@"T23java.lang.StringBuilder")
+  %41 = method %21 : !?@"T13scala.Predef$", "D7printlnL16java.lang.ObjectuEO"
+  %42 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %41 : ptr(%21 : !?@"T13scala.Predef$", %40 : @"T16java.lang.String")
+  %43 = module @"T13scala.Predef$"
+  %44 = method %2 <this> : @"T11fix.Shapes$", "D6nativeidEO"
+  %45 = call[(@"T11fix.Shapes$", int) => double] %44 : ptr(%2 <this> : @"T11fix.Shapes$", int 3)
+  %46 = box[@"T16java.lang.Double"] %45 : double
+  %47 = method %43 : !?@"T13scala.Predef$", "D7printlnL16java.lang.ObjectuEO"
+  %48 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %47 : ptr(%43 : !?@"T13scala.Predef$", %46 : !?@"T16java.lang.Double")
+  %49 = module @"T13scala.Predef$"
+  %50 = classalloc @"T23java.lang.StringBuilder"
+  %51 = call[(@"T23java.lang.StringBuilder", int) => unit] @"M23java.lang.StringBuilderRiE" : ptr(%50 : !?@"T23java.lang.StringBuilder", int 0)
+  %52 = method %2 <this> : @"T11fix.Shapes$", "D8platformL16java.lang.StringEO"
+  %53 = call[(@"T11fix.Shapes$") => @"T16java.lang.String"] %52 : ptr(%2 <this> : @"T11fix.Shapes$")
+  %54 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%50 : !?@"T23java.lang.StringBuilder", %53 : @"T16java.lang.String")
+  %55 = classalloc @"T39scala.collection.immutable.$colon$colon"
+  %56 = box[@"T17java.lang.Integer"] int 1
+  %57 = classalloc @"T39scala.collection.immutable.$colon$colon"
+  %58 = box[@"T17java.lang.Integer"] int 2
+  %59 = classalloc @"T39scala.collection.immutable.$colon$colon"
+  %60 = box[@"T17java.lang.Integer"] int 3
+  %61 = module @"T31scala.collection.immutable.Nil$"
+  %62 = call[(@"T39scala.collection.immutable.$colon$colon", @"T16java.lang.Object", @"T31scala.collection.immutable.List") => unit] @"M39scala.collection.immutable.$colon$colonRL16java.lang.ObjectL31scala.collection.immutable.ListE" : ptr(%59 : !?@"T39scala.collection.immutable.$colon$colon", %60 : !?@"T17java.lang.Integer", %61 : !?@"T31scala.collection.immutable.Nil$")
+  %63 = call[(@"T39scala.collection.immutable.$colon$colon", @"T16java.lang.Object", @"T31scala.collection.immutable.List") => unit] @"M39scala.collection.immutable.$colon$colonRL16java.lang.ObjectL31scala.collection.immutable.ListE" : ptr(%57 : !?@"T39scala.collection.immutable.$colon$colon", %58 : !?@"T17java.lang.Integer", %59 : !?@"T39scala.collection.immutable.$colon$colon")
+  %64 = call[(@"T39scala.collection.immutable.$colon$colon", @"T16java.lang.Object", @"T31scala.collection.immutable.List") => unit] @"M39scala.collection.immutable.$colon$colonRL16java.lang.ObjectL31scala.collection.immutable.ListE" : ptr(%55 : !?@"T39scala.collection.immutable.$colon$colon", %56 : !?@"T17java.lang.Integer", %57 : !?@"T39scala.collection.immutable.$colon$colon")
+  %65 = as[@"T16java.lang.Object"] %55 : !?@"T39scala.collection.immutable.$colon$colon"
+  %66 = as[@"T31scala.collection.immutable.List"] %65 : @"T16java.lang.Object"
+  %67 = method %2 <this> : @"T11fix.Shapes$", "D8closuresL31scala.collection.immutable.ListiEO"
+  %68 = call[(@"T11fix.Shapes$", @"T31scala.collection.immutable.List") => int] %67 : ptr(%2 <this> : @"T11fix.Shapes$", %66 : @"T31scala.collection.immutable.List")
+  %69 = call[(@"T23java.lang.StringBuilder", int) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendiL23java.lang.StringBuilderEO" : ptr(%50 : !?@"T23java.lang.StringBuilder", %68 : int)
+  %70 = box[@"T17java.lang.Integer"] int 1
+  %71 = method %2 <this> : @"T11fix.Shapes$", "D5boxesL16java.lang.ObjectL16java.lang.ObjectEO"
+  %72 = call[(@"T11fix.Shapes$", @"T16java.lang.Object") => @"T16java.lang.Object"] %71 : ptr(%2 <this> : @"T11fix.Shapes$", %70 : !?@"T17java.lang.Integer")
+  %73 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.Object") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.ObjectL23java.lang.StringBuilderEO" : ptr(%50 : !?@"T23java.lang.StringBuilder", %72 : @"T16java.lang.Object")
+  %74 = module @"T17fix.Colour$Mixed$"
+  %75 = method %74 : !?@"T17fix.Colour$Mixed$", "D5applyiL16fix.Colour$MixedEO"
+  %76 = call[(@"T17fix.Colour$Mixed$", int) => @"T16fix.Colour$Mixed"] %75 : ptr(%74 : !?@"T17fix.Colour$Mixed$", int 2)
+  %77 = method %76 : @"T16fix.Colour$Mixed", "D8toStringL16java.lang.StringEO"
+  %78 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %77 : ptr(%76 : @"T16fix.Colour$Mixed")
+  %79 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%50 : !?@"T23java.lang.StringBuilder", %78 : @"T16java.lang.String")
+  %80 = method %2 <this> : @"T11fix.Shapes$", "D5twiceiiEO"
+  %81 = call[(@"T11fix.Shapes$", int) => int] %80 : ptr(%2 <this> : @"T11fix.Shapes$", int 4)
+  %82 = call[(@"T23java.lang.StringBuilder", int) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendiL23java.lang.StringBuilderEO" : ptr(%50 : !?@"T23java.lang.StringBuilder", %81 : int)
+  %83 = call[(@"T23java.lang.StringBuilder") => @"T16java.lang.String"] @"M23java.lang.StringBuilderD8toStringL16java.lang.StringEO" : ptr(%50 : !?@"T23java.lang.StringBuilder")
+  %84 = method %49 : !?@"T13scala.Predef$", "D7printlnL16java.lang.ObjectuEO"
+  %85 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %84 : ptr(%49 : !?@"T13scala.Predef$", %83 : @"T16java.lang.String")
+  %86 = module @"T13scala.Predef$"
+  %87 = classalloc @"T23java.lang.StringBuilder"
+  %88 = call[(@"T23java.lang.StringBuilder", int) => unit] @"M23java.lang.StringBuilderRiE" : ptr(%87 : !?@"T23java.lang.StringBuilder", int 0)
+  %89 = method %2 <this> : @"T11fix.Shapes$", "D5textsL31scala.collection.immutable.ListEO"
+  %90 = call[(@"T11fix.Shapes$") => @"T31scala.collection.immutable.List"] %89 : ptr(%2 <this> : @"T11fix.Shapes$")
+  %91 = method %90 : @"T31scala.collection.immutable.List", "D8mkStringL16java.lang.StringEO"
+  %92 = call[(@"T32scala.collection.IterableOnceOps") => @"T16java.lang.String"] %91 : ptr(%90 : @"T31scala.collection.immutable.List")
+  %93 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%87 : !?@"T23java.lang.StringBuilder", %92 : @"T16java.lang.String")
+  %94 = module @"T13scala.Predef$"
+  %95 = method %2 <this> : @"T11fix.Shapes$", "D7numbersLAd_EO"
+  %96 = call[(@"T11fix.Shapes$") => array[double]] %95 : ptr(%2 <this> : @"T11fix.Shapes$")
+  %97 = method %94 : !?@"T13scala.Predef$", "D15wrapDoubleArrayLAd_L42scala.collection.mutable.ArraySeq$ofDoubleEO"
+  %98 = call[(@"T26scala.LowPriorityImplicits", array[double]) => @"T42scala.collection.mutable.ArraySeq$ofDouble"] %97 : ptr(%94 : !?@"T13scala.Predef$", %96 : array[double])
+  %99 = module @"T38scala.math.Numeric$DoubleIsFractional$"
+  %100 = method %98 : @"T42scala.collection.mutable.ArraySeq$ofDouble", "D3sumL18scala.math.NumericL16java.lang.ObjectEO"
+  %101 = call[(@"T32scala.collection.IterableOnceOps", @"T18scala.math.Numeric") => @"T16java.lang.Object"] %100 : ptr(%98 : @"T42scala.collection.mutable.ArraySeq$ofDouble", %99 : !?@"T38scala.math.Numeric$DoubleIsFractional$")
+  %102 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.Object") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.ObjectL23java.lang.StringBuilderEO" : ptr(%87 : !?@"T23java.lang.StringBuilder", %101 : @"T16java.lang.Object")
+  %103 = module @"T13scala.Predef$"
+  %104 = method %2 <this> : @"T11fix.Shapes$", "D6floatsLAf_EO"
+  %105 = call[(@"T11fix.Shapes$") => array[float]] %104 : ptr(%2 <this> : @"T11fix.Shapes$")
+  %106 = method %103 : !?@"T13scala.Predef$", "D14wrapFloatArrayLAf_L41scala.collection.mutable.ArraySeq$ofFloatEO"
+  %107 = call[(@"T26scala.LowPriorityImplicits", array[float]) => @"T41scala.collection.mutable.ArraySeq$ofFloat"] %106 : ptr(%103 : !?@"T13scala.Predef$", %105 : array[float])
+  %108 = module @"T37scala.math.Numeric$FloatIsFractional$"
+  %109 = method %107 : @"T41scala.collection.mutable.ArraySeq$ofFloat", "D3sumL18scala.math.NumericL16java.lang.ObjectEO"
+  %110 = call[(@"T32scala.collection.IterableOnceOps", @"T18scala.math.Numeric") => @"T16java.lang.Object"] %109 : ptr(%107 : @"T41scala.collection.mutable.ArraySeq$ofFloat", %108 : !?@"T37scala.math.Numeric$FloatIsFractional$")
+  %111 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.Object") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.ObjectL23java.lang.StringBuilderEO" : ptr(%87 : !?@"T23java.lang.StringBuilder", %110 : @"T16java.lang.Object")
+  %112 = module @"T13scala.Predef$"
+  %113 = method %2 <this> : @"T11fix.Shapes$", "D5longsLAj_EO"
+  %114 = call[(@"T11fix.Shapes$") => array[long]] %113 : ptr(%2 <this> : @"T11fix.Shapes$")
+  %115 = method %112 : !?@"T13scala.Predef$", "D13wrapLongArrayLAj_L40scala.collection.mutable.ArraySeq$ofLongEO"
+  %116 = call[(@"T26scala.LowPriorityImplicits", array[long]) => @"T40scala.collection.mutable.ArraySeq$ofLong"] %115 : ptr(%112 : !?@"T13scala.Predef$", %114 : array[long])
+  %117 = module @"T34scala.math.Numeric$LongIsIntegral$"
+  %118 = method %116 : @"T40scala.collection.mutable.ArraySeq$ofLong", "D3sumL18scala.math.NumericL16java.lang.ObjectEO"
+  %119 = call[(@"T32scala.collection.IterableOnceOps", @"T18scala.math.Numeric") => @"T16java.lang.Object"] %118 : ptr(%116 : @"T40scala.collection.mutable.ArraySeq$ofLong", %117 : !?@"T34scala.math.Numeric$LongIsIntegral$")
+  %120 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.Object") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.ObjectL23java.lang.StringBuilderEO" : ptr(%87 : !?@"T23java.lang.StringBuilder", %119 : @"T16java.lang.Object")
+  %121 = module @"T13scala.Predef$"
+  %122 = method %2 <this> : @"T11fix.Shapes$", "D5charsLAc_EO"
+  %123 = call[(@"T11fix.Shapes$") => array[char]] %122 : ptr(%2 <this> : @"T11fix.Shapes$")
+  %124 = method %121 : !?@"T13scala.Predef$", "D13wrapCharArrayLAc_L40scala.collection.mutable.ArraySeq$ofCharEO"
+  %125 = call[(@"T26scala.LowPriorityImplicits", array[char]) => @"T40scala.collection.mutable.ArraySeq$ofChar"] %124 : ptr(%121 : !?@"T13scala.Predef$", %123 : array[char])
+  %126 = method %125 : @"T40scala.collection.mutable.ArraySeq$ofChar", "D8mkStringL16java.lang.StringEO"
+  %127 = call[(@"T32scala.collection.IterableOnceOps") => @"T16java.lang.String"] %126 : ptr(%125 : @"T40scala.collection.mutable.ArraySeq$ofChar")
+  %128 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%87 : !?@"T23java.lang.StringBuilder", %127 : @"T16java.lang.String")
+  %129 = call[(@"T23java.lang.StringBuilder") => @"T16java.lang.String"] @"M23java.lang.StringBuilderD8toStringL16java.lang.StringEO" : ptr(%87 : !?@"T23java.lang.StringBuilder")
+  %130 = method %86 : !?@"T13scala.Predef$", "D7printlnL16java.lang.ObjectuEO"
+  %131 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %130 : ptr(%86 : !?@"T13scala.Predef$", %129 : @"T16java.lang.String")
+  ret unit
+}
+nospecialize def @"M11fix.Shapes$D4wordL16java.lang.StringiEO" : (@"T11fix.Shapes$", @"T16java.lang.String") => int {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <s> : @"T16java.lang.String"):
+  jump %4
+%4:
+  1: %11 = method "one", "D6equalsL16java.lang.ObjectzEO"
+  1: %12 = call[(@"T16java.lang.Object", @"T16java.lang.Object") => bool] %11 : ptr("one", %1 <s> : @"T16java.lang.String")
+  if %12 : bool then %7 else %8
+%7:
+  jump %5(int 1)
+%8:
+  jump %9
+%9:
+  1: %18 = method "two", "D6equalsL16java.lang.ObjectzEO"
+  1: %19 = call[(@"T16java.lang.Object", @"T16java.lang.Object") => bool] %18 : ptr("two", %1 <s> : @"T16java.lang.String")
+  if %19 : bool then %14 else %15
+%14:
+  jump %5(int 2)
+%15:
+  jump %16
+%16:
+  jump %5(int -1)
+%5(%6 : int):
+  ret %6 : int
+}
+def @"M11fix.Shapes$D5boxesL16java.lang.ObjectL16java.lang.ObjectEO" : (@"T11fix.Shapes$", @"T16java.lang.Object") => @"T16java.lang.Object" {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <x> : @"T16java.lang.Object"):
+  jump %4
+%4:
+  1: %11 = is[@"T17java.lang.Integer"] %1 <x> : @"T16java.lang.Object"
+  if %11 : bool then %7 else %8
+%7:
+  2: %12 <i> = unbox[@"T17java.lang.Integer"] %1 <x> : @"T16java.lang.Object"
+  3: %13 = iadd[int] %12 <i> : int, int 1
+  3: %14 = box[@"T17java.lang.Integer"] %13 : int
+  jump %5(%14 : !?@"T17java.lang.Integer")
+%8:
+  jump %9
+%9:
+  1: %20 = is[@"T14java.lang.Long"] %1 <x> : @"T16java.lang.Object"
+  if %20 : bool then %16 else %17
+%16:
+  4: %21 <l> = unbox[@"T14java.lang.Long"] %1 <x> : @"T16java.lang.Object"
+  5: %22 = iadd[long] %21 <l> : long, long 1
+  5: %23 = box[@"T14java.lang.Long"] %22 : long
+  jump %5(%23 : !?@"T14java.lang.Long")
+%17:
+  jump %18
+%18:
+  1: %29 = is[@"T19java.lang.Character"] %1 <x> : @"T16java.lang.Object"
+  if %29 : bool then %25 else %26
+%25:
+  6: %30 <c> = unbox[@"T19java.lang.Character"] %1 <x> : @"T16java.lang.Object"
+  7: %31 = zext[int] %30 <c> : char
+  7: %32 = box[@"T17java.lang.Integer"] %31 : int
+  jump %5(%32 : !?@"T17java.lang.Integer")
+%26:
+  jump %27
+%27:
+  1: %38 = is[@"T17java.lang.Boolean"] %1 <x> : @"T16java.lang.Object"
+  if %38 : bool then %34 else %35
+%34:
+  8: %39 <b> = unbox[@"T17java.lang.Boolean"] %1 <x> : @"T16java.lang.Object"
+  9: %40 = xor[bool] true, %39 <b> : bool
+  9: %41 = box[@"T17java.lang.Boolean"] %40 : bool
+  jump %5(%41 : !?@"T17java.lang.Boolean")
+%35:
+  jump %36
+%36:
+  1: %47 = is[@"T23scala.runtime.BoxedUnit"] %1 <x> : @"T16java.lang.Object"
+  if %47 : bool then %43 else %44
+%43:
+  jump %5(unit)
+%44:
+  jump %45
+%45:
+  1: %53 = ieq[@"T16java.lang.Object"] null, %1 <x> : @"T16java.lang.Object"
+  if %53 : bool then %49 else %50
+%49:
+  jump %5("null")
+%50:
+  jump %51
+%51:
+  jump %5(%1 <x> : @"T16java.lang.Object")
+%5(%6 : @"T16java.lang.Object"):
+  ret %6 : @"T16java.lang.Object"
+}
+alwaysinline def @"M11fix.Shapes$D5charsLAc_EO" : (@"T11fix.Shapes$") => array[char] {
+%2(%1 <this> : @"T11fix.Shapes$"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = fieldload[array[char]] %3 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F5charsPT11fix.Shapes$"
+  ret %4 : array[char]
+}
+alwaysinline def @"M11fix.Shapes$D5longsLAj_EO" : (@"T11fix.Shapes$") => array[long] {
+%2(%1 <this> : @"T11fix.Shapes$"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = fieldload[array[long]] %3 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F5longsPT11fix.Shapes$"
+  ret %4 : array[long]
+}
+alwaysinline def @"M11fix.Shapes$D5textsL31scala.collection.immutable.ListEO" : (@"T11fix.Shapes$") => @"T31scala.collection.immutable.List" {
+%2(%1 <this> : @"T11fix.Shapes$"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = fieldload[@"T31scala.collection.immutable.List"] %3 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F5textsPT11fix.Shapes$"
+  ret %4 : @"T31scala.collection.immutable.List"
+}
+alwaysinline def @"M11fix.Shapes$D5twiceiiEO" : (@"T11fix.Shapes$", int) => int {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <x> : int):
+  %4 = imul[int] %1 <x> : int, int 2
+  ret %4 : int
+}
+alwaysinline def @"M11fix.Shapes$D6floatsLAf_EO" : (@"T11fix.Shapes$") => array[float] {
+%2(%1 <this> : @"T11fix.Shapes$"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = fieldload[array[float]] %3 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F6floatsPT11fix.Shapes$"
+  ret %4 : array[float]
+}
+def @"M11fix.Shapes$D6lockedL12fix.CountersjEO" : (@"T11fix.Shapes$", @"T12fix.Counters") => long {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <c> : @"T12fix.Counters"):
+  %7 = call[(@"T16java.lang.Object") => unit] @"M33scala.scalanative.runtime.packageD12enterMonitorL16java.lang.ObjectuEo" : ptr(%1 <c> : @"T12fix.Counters")
+  jump %4
+%4:
+  1: %9 = method %1 <c> : @"T12fix.Counters", "D4seenjEO" unwind %8 : @"T19java.lang.Throwable" to %5(%8 : @"T19java.lang.Throwable")
+  1: %11 = call[(@"T12fix.Counters") => long] %9 : ptr(%1 <c> : @"T12fix.Counters") unwind %10 : @"T19java.lang.Throwable" to %5(%10 : @"T19java.lang.Throwable")
+  1: %13 = sext[long] int 1 unwind %12 : @"T19java.lang.Throwable" to %5(%12 : @"T19java.lang.Throwable")
+  1: %15 = iadd[long] %11 : long, %13 : long unwind %14 : @"T19java.lang.Throwable" to %5(%14 : @"T19java.lang.Throwable")
+  1: %17 = method %1 <c> : @"T12fix.Counters", "D8seen_$eqjuEO" unwind %16 : @"T19java.lang.Throwable" to %5(%16 : @"T19java.lang.Throwable")
+  1: %19 = call[(@"T12fix.Counters", long) => unit] %17 : ptr(%1 <c> : @"T12fix.Counters", %15 : long) unwind %18 : @"T19java.lang.Throwable" to %5(%18 : @"T19java.lang.Throwable")
+  1: %21 = method %1 <c> : @"T12fix.Counters", "D4seenjEO" unwind %20 : @"T19java.lang.Throwable" to %5(%20 : @"T19java.lang.Throwable")
+  1: %23 = call[(@"T12fix.Counters") => long] %21 : ptr(%1 <c> : @"T12fix.Counters") unwind %22 : @"T19java.lang.Throwable" to %5(%22 : @"T19java.lang.Throwable")
+  jump %27
+%5(%25 : @"T19java.lang.Throwable"):
+  jump %29
+%27:
+  2: %28 = call[(@"T16java.lang.Object") => unit] @"M33scala.scalanative.runtime.packageD11exitMonitorL16java.lang.ObjectuEo" : ptr(%1 <c> : @"T12fix.Counters")
+  jump %6(%23 : long)
+%29:
+  3: %30 = call[(@"T16java.lang.Object") => unit] @"M33scala.scalanative.runtime.packageD11exitMonitorL16java.lang.ObjectuEo" : ptr(%1 <c> : @"T12fix.Counters")
+  throw %25 : @"T19java.lang.Throwable"
+%6(%24 : long):
+  ret %24 : long
+}
+def @"M11fix.Shapes$D6nativeidEO" : (@"T11fix.Shapes$", int) => double {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <n> : int):
+  %4 <i> = var[int]
+  1: %5 <ptr> = stackalloc[int] size 4
+  1: %6 = module @"T34scala.scalanative.runtime.package$"
+  1: %7 = method %6 : !?@"T34scala.scalanative.runtime.package$", "D10fromRawPtrR_L28scala.scalanative.unsafe.PtrEO"
+  1: %8 <buffer> = call[(@"T34scala.scalanative.runtime.package$", ptr) => @"T28scala.scalanative.unsafe.Ptr"] %7 : ptr(%6 : !?@"T34scala.scalanative.runtime.package$", %5 <ptr> : ptr)
+  %9 <i> = copy int 0
+  %10 = varstore %4 <i> : var[int], %9 <i> : int
+  jump %11
+%11:
+  %14 = varload %4 <i> : var[int]
+  %15 = slt[int] %14 : int, int 4
+  if %15 : bool then %12 else %13
+%12:
+  2: %16 = varload %4 <i> : var[int]
+  2: %17 = varload %4 <i> : var[int]
+  2: %18 = iadd[int] %1 <n> : int, %17 : int
+  2: %19 = box[@"T17java.lang.Integer"] %18 : int
+  2: %20 = module @"T29scala.scalanative.unsafe.Tag$"
+  2: %21 = method %20 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  2: %22 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %21 : ptr(%20 : !?@"T29scala.scalanative.unsafe.Tag$")
+  2: %23 = method %8 <buffer> : @"T28scala.scalanative.unsafe.Ptr", "D6updateiL16java.lang.ObjectL28scala.scalanative.unsafe.TaguEO"
+  2: %24 = call[(@"T28scala.scalanative.unsafe.Ptr", int, @"T16java.lang.Object", @"T28scala.scalanative.unsafe.Tag") => unit] %23 : ptr(%8 <buffer> : @"T28scala.scalanative.unsafe.Ptr", %16 : int, %19 : !?@"T17java.lang.Integer", %22 : @"T28scala.scalanative.unsafe.Tag")
+  2: %25 = varload %4 <i> : var[int]
+  2: %26 = iadd[int] %25 : int, int 1
+  2: %27 = varstore %4 <i> : var[int], %26 : int
+  jump %11
+%13:
+  3: %28 <ptr> = stackalloc[{int, double}] size 1
+  3: %29 = module @"T34scala.scalanative.runtime.package$"
+  3: %30 = method %29 : !?@"T34scala.scalanative.runtime.package$", "D10fromRawPtrR_L28scala.scalanative.unsafe.PtrEO"
+  %31 <pair> = call[(@"T34scala.scalanative.runtime.package$", ptr) => @"T28scala.scalanative.unsafe.Ptr"] %30 : ptr(%29 : !?@"T34scala.scalanative.runtime.package$", %28 <ptr> : ptr)
+  %32 = module @"T29scala.scalanative.unsafe.Ptr$"
+  %33 = module @"T29scala.scalanative.unsafe.Tag$"
+  %34 = module @"T29scala.scalanative.unsafe.Tag$"
+  %35 = method %34 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %36 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %35 : ptr(%34 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %37 = module @"T29scala.scalanative.unsafe.Tag$"
+  %38 = method %37 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %39 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %38 : ptr(%37 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %40 = method %33 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %41 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %40 : ptr(%33 : !?@"T29scala.scalanative.unsafe.Tag$", %36 : @"T28scala.scalanative.unsafe.Tag", %39 : @"T28scala.scalanative.unsafe.Tag")
+  %42 = method %32 : !?@"T29scala.scalanative.unsafe.Ptr$", "D12ptrToCStructL28scala.scalanative.unsafe.PtrL28scala.scalanative.unsafe.TagL32scala.scalanative.unsafe.CStructEO"
+  %43 = call[(@"T29scala.scalanative.unsafe.Ptr$", @"T28scala.scalanative.unsafe.Ptr", @"T28scala.scalanative.unsafe.Tag") => @"T32scala.scalanative.unsafe.CStruct"] %42 : ptr(%32 : !?@"T29scala.scalanative.unsafe.Ptr$", %31 <pair> : @"T28scala.scalanative.unsafe.Ptr", %41 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %44 = as[@"T33scala.scalanative.unsafe.CStruct2"] %43 : @"T32scala.scalanative.unsafe.CStruct"
+  %45 = module @"T29scala.scalanative.unsafe.Tag$"
+  %46 = method %45 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %47 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %46 : ptr(%45 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %48 = method %8 <buffer> : @"T28scala.scalanative.unsafe.Ptr", "D11unary_$bangL28scala.scalanative.unsafe.TagL16java.lang.ObjectEO"
+  %49 = call[(@"T28scala.scalanative.unsafe.Ptr", @"T28scala.scalanative.unsafe.Tag") => @"T16java.lang.Object"] %48 : ptr(%8 <buffer> : @"T28scala.scalanative.unsafe.Ptr", %47 : @"T28scala.scalanative.unsafe.Tag")
+  %50 = module @"T29scala.scalanative.unsafe.Tag$"
+  %51 = module @"T29scala.scalanative.unsafe.Tag$"
+  %52 = method %51 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %53 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %52 : ptr(%51 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %54 = module @"T29scala.scalanative.unsafe.Tag$"
+  %55 = method %54 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %56 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %55 : ptr(%54 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %57 = method %50 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %58 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %57 : ptr(%50 : !?@"T29scala.scalanative.unsafe.Tag$", %53 : @"T28scala.scalanative.unsafe.Tag", %56 : @"T28scala.scalanative.unsafe.Tag")
+  %59 = method %44 : @"T33scala.scalanative.unsafe.CStruct2", "D6_1_$eqL16java.lang.ObjectL37scala.scalanative.unsafe.Tag$CStruct2uEO"
+  %60 = call[(@"T33scala.scalanative.unsafe.CStruct2", @"T16java.lang.Object", @"T37scala.scalanative.unsafe.Tag$CStruct2") => unit] %59 : ptr(%44 : @"T33scala.scalanative.unsafe.CStruct2", %49 : @"T16java.lang.Object", %58 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %61 = module @"T29scala.scalanative.unsafe.Ptr$"
+  %62 = module @"T29scala.scalanative.unsafe.Tag$"
+  %63 = module @"T29scala.scalanative.unsafe.Tag$"
+  %64 = method %63 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %65 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %64 : ptr(%63 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %66 = module @"T29scala.scalanative.unsafe.Tag$"
+  %67 = method %66 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %68 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %67 : ptr(%66 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %69 = method %62 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %70 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %69 : ptr(%62 : !?@"T29scala.scalanative.unsafe.Tag$", %65 : @"T28scala.scalanative.unsafe.Tag", %68 : @"T28scala.scalanative.unsafe.Tag")
+  %71 = method %61 : !?@"T29scala.scalanative.unsafe.Ptr$", "D12ptrToCStructL28scala.scalanative.unsafe.PtrL28scala.scalanative.unsafe.TagL32scala.scalanative.unsafe.CStructEO"
+  %72 = call[(@"T29scala.scalanative.unsafe.Ptr$", @"T28scala.scalanative.unsafe.Ptr", @"T28scala.scalanative.unsafe.Tag") => @"T32scala.scalanative.unsafe.CStruct"] %71 : ptr(%61 : !?@"T29scala.scalanative.unsafe.Ptr$", %31 <pair> : @"T28scala.scalanative.unsafe.Ptr", %70 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %73 = as[@"T33scala.scalanative.unsafe.CStruct2"] %72 : @"T32scala.scalanative.unsafe.CStruct"
+  %74 = module @"T9fix.libm$"
+  %75 = call[(double) => double] @"M9fix.libm$C4cbrt" : ptr(double 27.0)
+  %76 = box[@"T16java.lang.Double"] %75 : double
+  %77 = module @"T29scala.scalanative.unsafe.Tag$"
+  %78 = module @"T29scala.scalanative.unsafe.Tag$"
+  %79 = method %78 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %80 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %79 : ptr(%78 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %81 = module @"T29scala.scalanative.unsafe.Tag$"
+  %82 = method %81 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %83 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %82 : ptr(%81 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %84 = method %77 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %85 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %84 : ptr(%77 : !?@"T29scala.scalanative.unsafe.Tag$", %80 : @"T28scala.scalanative.unsafe.Tag", %83 : @"T28scala.scalanative.unsafe.Tag")
+  %86 = method %73 : @"T33scala.scalanative.unsafe.CStruct2", "D6_2_$eqL16java.lang.ObjectL37scala.scalanative.unsafe.Tag$CStruct2uEO"
+  %87 = call[(@"T33scala.scalanative.unsafe.CStruct2", @"T16java.lang.Object", @"T37scala.scalanative.unsafe.Tag$CStruct2") => unit] %86 : ptr(%73 : @"T33scala.scalanative.unsafe.CStruct2", %76 : !?@"T16java.lang.Double", %85 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %88 = module @"T9fix.libm$"
+  %89 = box[@"T28scala.scalanative.unsafe.Ptr"] const c"%d \"cubes\"\n\ %f\n"
+  %90 = unbox[@"T28scala.scalanative.unsafe.Ptr"] %89 : !@"T28scala.scalanative.unsafe.Ptr"
+  %91 = module @"T29scala.scalanative.unsafe.Ptr$"
+  %92 = module @"T29scala.scalanative.unsafe.Tag$"
+  %93 = module @"T29scala.scalanative.unsafe.Tag$"
+  %94 = method %93 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %95 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %94 : ptr(%93 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %96 = module @"T29scala.scalanative.unsafe.Tag$"
+  %97 = method %96 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %98 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %97 : ptr(%96 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %99 = method %92 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %100 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %99 : ptr(%92 : !?@"T29scala.scalanative.unsafe.Tag$", %95 : @"T28scala.scalanative.unsafe.Tag", %98 : @"T28scala.scalanative.unsafe.Tag")
+  %101 = method %91 : !?@"T29scala.scalanative.unsafe.Ptr$", "D12ptrToCStructL28scala.scalanative.unsafe.PtrL28scala.scalanative.unsafe.TagL32scala.scalanative.unsafe.CStructEO"
+  %102 = call[(@"T29scala.scalanative.unsafe.Ptr$", @"T28scala.scalanative.unsafe.Ptr", @"T28scala.scalanative.unsafe.Tag") => @"T32scala.scalanative.unsafe.CStruct"] %101 : ptr(%91 : !?@"T29scala.scalanative.unsafe.Ptr$", %31 <pair> : @"T28scala.scalanative.unsafe.Ptr", %100 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %103 = as[@"T33scala.scalanative.unsafe.CStruct2"] %102 : @"T32scala.scalanative.unsafe.CStruct"
+  %104 = module @"T29scala.scalanative.unsafe.Tag$"
+  %105 = module @"T29scala.scalanative.unsafe.Tag$"
+  %106 = method %105 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %107 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %106 : ptr(%105 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %108 = module @"T29scala.scalanative.unsafe.Tag$"
+  %109 = method %108 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %110 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %109 : ptr(%108 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %111 = method %104 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %112 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %111 : ptr(%104 : !?@"T29scala.scalanative.unsafe.Tag$", %107 : @"T28scala.scalanative.unsafe.Tag", %110 : @"T28scala.scalanative.unsafe.Tag")
+  %113 = method %103 : @"T33scala.scalanative.unsafe.CStruct2", "D2_1L37scala.scalanative.unsafe.Tag$CStruct2L16java.lang.ObjectEO"
+  %114 = call[(@"T33scala.scalanative.unsafe.CStruct2", @"T37scala.scalanative.unsafe.Tag$CStruct2") => @"T16java.lang.Object"] %113 : ptr(%103 : @"T33scala.scalanative.unsafe.CStruct2", %112 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %115 = unbox[@"T17java.lang.Integer"] %114 : @"T16java.lang.Object"
+  %116 = module @"T29scala.scalanative.unsafe.Ptr$"
+  %117 = module @"T29scala.scalanative.unsafe.Tag$"
+  %118 = module @"T29scala.scalanative.unsafe.Tag$"
+  %119 = method %118 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %120 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %119 : ptr(%118 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %121 = module @"T29scala.scalanative.unsafe.Tag$"
+  %122 = method %121 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %123 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %122 : ptr(%121 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %124 = method %117 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %125 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %124 : ptr(%117 : !?@"T29scala.scalanative.unsafe.Tag$", %120 : @"T28scala.scalanative.unsafe.Tag", %123 : @"T28scala.scalanative.unsafe.Tag")
+  %126 = method %116 : !?@"T29scala.scalanative.unsafe.Ptr$", "D12ptrToCStructL28scala.scalanative.unsafe.PtrL28scala.scalanative.unsafe.TagL32scala.scalanative.unsafe.CStructEO"
+  %127 = call[(@"T29scala.scalanative.unsafe.Ptr$", @"T28scala.scalanative.unsafe.Ptr", @"T28scala.scalanative.unsafe.Tag") => @"T32scala.scalanative.unsafe.CStruct"] %126 : ptr(%116 : !?@"T29scala.scalanative.unsafe.Ptr$", %31 <pair> : @"T28scala.scalanative.unsafe.Ptr", %125 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %128 = as[@"T33scala.scalanative.unsafe.CStruct2"] %127 : @"T32scala.scalanative.unsafe.CStruct"
+  %129 = module @"T29scala.scalanative.unsafe.Tag$"
+  %130 = module @"T29scala.scalanative.unsafe.Tag$"
+  %131 = method %130 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %132 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %131 : ptr(%130 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %133 = module @"T29scala.scalanative.unsafe.Tag$"
+  %134 = method %133 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %135 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %134 : ptr(%133 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %136 = method %129 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %137 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %136 : ptr(%129 : !?@"T29scala.scalanative.unsafe.Tag$", %132 : @"T28scala.scalanative.unsafe.Tag", %135 : @"T28scala.scalanative.unsafe.Tag")
+  %138 = method %128 : @"T33scala.scalanative.unsafe.CStruct2", "D2_2L37scala.scalanative.unsafe.Tag$CStruct2L16java.lang.ObjectEO"
+  %139 = call[(@"T33scala.scalanative.unsafe.CStruct2", @"T37scala.scalanative.unsafe.Tag$CStruct2") => @"T16java.lang.Object"] %138 : ptr(%128 : @"T33scala.scalanative.unsafe.CStruct2", %137 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %140 = unbox[@"T16java.lang.Double"] %139 : @"T16java.lang.Object"
+  %141 = call[(ptr, ...) => int] @"M9fix.libm$C6printf" : ptr(%90 : ptr, %115 : int, %140 : double)
+  %142 = sizeOf[{int, double}] 
+  %143 = ssizecast[int] %142 : size
+  %144 = sitofp[double] %143 : int
+  %145 = alignmentOf[size] 
+  %146 = ssizecast[int] %145 : size
+  %147 = sitofp[double] %146 : int
+  %148 = fadd[double] %144 : double, %147 : double
+  %149 = module @"T29scala.scalanative.unsafe.Ptr$"
+  %150 = module @"T29scala.scalanative.unsafe.Tag$"
+  %151 = module @"T29scala.scalanative.unsafe.Tag$"
+  %152 = method %151 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %153 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %152 : ptr(%151 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %154 = module @"T29scala.scalanative.unsafe.Tag$"
+  %155 = method %154 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %156 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %155 : ptr(%154 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %157 = method %150 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %158 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %157 : ptr(%150 : !?@"T29scala.scalanative.unsafe.Tag$", %153 : @"T28scala.scalanative.unsafe.Tag", %156 : @"T28scala.scalanative.unsafe.Tag")
+  %159 = method %149 : !?@"T29scala.scalanative.unsafe.Ptr$", "D12ptrToCStructL28scala.scalanative.unsafe.PtrL28scala.scalanative.unsafe.TagL32scala.scalanative.unsafe.CStructEO"
+  %160 = call[(@"T29scala.scalanative.unsafe.Ptr$", @"T28scala.scalanative.unsafe.Ptr", @"T28scala.scalanative.unsafe.Tag") => @"T32scala.scalanative.unsafe.CStruct"] %159 : ptr(%149 : !?@"T29scala.scalanative.unsafe.Ptr$", %31 <pair> : @"T28scala.scalanative.unsafe.Ptr", %158 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %161 = as[@"T33scala.scalanative.unsafe.CStruct2"] %160 : @"T32scala.scalanative.unsafe.CStruct"
+  %162 = module @"T29scala.scalanative.unsafe.Tag$"
+  %163 = module @"T29scala.scalanative.unsafe.Tag$"
+  %164 = method %163 : !?@"T29scala.scalanative.unsafe.Tag$", "D17materializeIntTagL28scala.scalanative.unsafe.TagEO"
+  %165 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %164 : ptr(%163 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %166 = module @"T29scala.scalanative.unsafe.Tag$"
+  %167 = method %166 : !?@"T29scala.scalanative.unsafe.Tag$", "D20materializeDoubleTagL28scala.scalanative.unsafe.TagEO"
+  %168 = call[(@"T29scala.scalanative.unsafe.Tag$") => @"T28scala.scalanative.unsafe.Tag"] %167 : ptr(%166 : !?@"T29scala.scalanative.unsafe.Tag$")
+  %169 = method %162 : !?@"T29scala.scalanative.unsafe.Tag$", "D22materializeCStruct2TagL28scala.scalanative.unsafe.TagL28scala.scalanative.unsafe.TagL37scala.scalanative.unsafe.Tag$CStruct2EO"
+  %170 = call[(@"T29scala.scalanative.unsafe.Tag$", @"T28scala.scalanative.unsafe.Tag", @"T28scala.scalanative.unsafe.Tag") => @"T37scala.scalanative.unsafe.Tag$CStruct2"] %169 : ptr(%162 : !?@"T29scala.scalanative.unsafe.Tag$", %165 : @"T28scala.scalanative.unsafe.Tag", %168 : @"T28scala.scalanative.unsafe.Tag")
+  %171 = method %161 : @"T33scala.scalanative.unsafe.CStruct2", "D2_2L37scala.scalanative.unsafe.Tag$CStruct2L16java.lang.ObjectEO"
+  %172 = call[(@"T33scala.scalanative.unsafe.CStruct2", @"T37scala.scalanative.unsafe.Tag$CStruct2") => @"T16java.lang.Object"] %171 : ptr(%161 : @"T33scala.scalanative.unsafe.CStruct2", %170 : @"T37scala.scalanative.unsafe.Tag$CStruct2")
+  %173 = unbox[@"T16java.lang.Double"] %172 : @"T16java.lang.Object"
+  %174 = fadd[double] %148 : double, %173 : double
+  ret %174 : double
+}
+def @"M11fix.Shapes$D7guardedLAi_iiEO" : (@"T11fix.Shapes$", array[int], int) => int {
+%4(%3 <this> : @"T11fix.Shapes$", %1 <xs> : array[int], %2 <i> : int):
+  jump %6
+%6:
+  1: %11 = arrayload[int] %1 <xs> : array[int], %2 <i> : int unwind %10 : @"T19java.lang.Throwable" to %5(%10 : @"T19java.lang.Throwable")
+  1: %13 = arraylength %1 <xs> : array[int] unwind %12 : @"T19java.lang.Throwable" to %5(%12 : @"T19java.lang.Throwable")
+  1: %15 = sdiv[int] %11 : int, %13 : int unwind %14 : @"T19java.lang.Throwable" to %5(%14 : @"T19java.lang.Throwable")
+  jump %38
+%5(%8 : @"T19java.lang.Throwable"):
+  2: %16 = is[@"T29java.lang.ArithmeticException"] %8 : @"T19java.lang.Throwable"
+  if %16 : bool then %17 else %18
+%17:
+  jump %42
+%18:
+  2: %22 = is[@"T40java.lang.ArrayIndexOutOfBoundsException"] %8 : @"T19java.lang.Throwable"
+  if %22 : bool then %23 else %24
+%23:
+  4: %27 <e> = as[@"T40java.lang.ArrayIndexOutOfBoundsException"] %8 : @"T19java.lang.Throwable"
+  5: %28 = classalloc @"T31java.lang.IllegalStateException"
+  5: %29 = classalloc @"T23java.lang.StringBuilder"
+  5: %30 = call[(@"T23java.lang.StringBuilder", int) => unit] @"M23java.lang.StringBuilderRiE" : ptr(%29 : !?@"T23java.lang.StringBuilder", int 3)
+  5: %31 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%29 : !?@"T23java.lang.StringBuilder", "at ")
+  5: %32 = call[(@"T23java.lang.StringBuilder", int) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendiL23java.lang.StringBuilderEO" : ptr(%29 : !?@"T23java.lang.StringBuilder", %2 <i> : int)
+  5: %33 = call[(@"T23java.lang.StringBuilder") => @"T16java.lang.String"] @"M23java.lang.StringBuilderD8toStringL16java.lang.StringEO" : ptr(%29 : !?@"T23java.lang.StringBuilder")
+  5: %34 = call[(@"T31java.lang.IllegalStateException", @"T16java.lang.String", @"T19java.lang.Throwable") => unit] @"M31java.lang.IllegalStateExceptionRL16java.lang.StringL19java.lang.ThrowableE" : ptr(%28 : !?@"T31java.lang.IllegalStateException", %33 : @"T16java.lang.String", %27 <e> : @"T40java.lang.ArrayIndexOutOfBoundsException")
+  jump %46
+%24:
+  jump %54
+%38:
+  6: %39 = arrayload[int] %1 <xs> : array[int], int 0
+  6: %40 = iadd[int] %39 : int, int 1
+  6: %41 = arraystore[int] %1 <xs> : array[int], int 0, %40 : int
+  jump %7(%15 : int)
+%42:
+  7: %43 = arrayload[int] %1 <xs> : array[int], int 0
+  7: %44 = iadd[int] %43 : int, int 1
+  7: %45 = arraystore[int] %1 <xs> : array[int], int 0, %44 : int
+  jump %7(int -1)
+%46:
+  8: %47 = arrayload[int] %1 <xs> : array[int], int 0
+  8: %48 = iadd[int] %47 : int, int 1
+  8: %49 = arraystore[int] %1 <xs> : array[int], int 0, %48 : int
+  throw %28 : !?@"T31java.lang.IllegalStateException"
+%54:
+  10: %55 = arrayload[int] %1 <xs> : array[int], int 0
+  10: %56 = iadd[int] %55 : int, int 1
+  10: %57 = arraystore[int] %1 <xs> : array[int], int 0, %56 : int
+  throw %8 : @"T19java.lang.Throwable"
+%7(%9 : int):
+  ret %9 : int
+}
+alwaysinline def @"M11fix.Shapes$D7numbersLAd_EO" : (@"T11fix.Shapes$") => array[double] {
+%2(%1 <this> : @"T11fix.Shapes$"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = fieldload[array[double]] %3 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F7numbersPT11fix.Shapes$"
+  ret %4 : array[double]
+}
+noopt def @"M11fix.Shapes$D8classifyiL16java.lang.StringEO" : (@"T11fix.Shapes$", int) => @"T16java.lang.String" {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <n> : int):
+  jump %4
+%4:
+  switch %1 <n> : int { case int 0 => %7 case int 1 => %8 case int 2 => %9 case int 100 => %10 default => %11 }
+%11:
+  jump %5("other")
+%7:
+  jump %5("zero")
+%8:
+  jump %5("small")
+%9:
+  jump %5("small")
+%10:
+  jump %5("hundred")
+%5(%6 : @"T16java.lang.String"):
+  ret %6 : @"T16java.lang.String"
+}
+def @"M11fix.Shapes$D8closuresL31scala.collection.immutable.ListiEO" : (@"T11fix.Shapes$", @"T31scala.collection.immutable.List") => int {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <xs> : @"T31scala.collection.immutable.List"):
+  %4 = method %1 <xs> : @"T31scala.collection.immutable.List", "D6lengthiEO"
+  %5 <offset> = call[(@"T31scala.collection.immutable.List") => int] %4 : ptr(%1 <xs> : @"T31scala.collection.immutable.List")
+  %6 <add> = classalloc @"T21fix.Shapes$$$Lambda$1"
+  1: %7 = call[(@"T21fix.Shapes$$$Lambda$1", int) => unit] @"M21fix.Shapes$$$Lambda$1RiE" : ptr(%6 <add> : !?@"T21fix.Shapes$$$Lambda$1", %5 <offset> : int)
+  %8 = method %1 <xs> : @"T31scala.collection.immutable.List", "D3mapL15scala.Function1L31scala.collection.immutable.ListEO"
+  %9 = call[(@"T31scala.collection.immutable.List", @"T15scala.Function1") => @"T31scala.collection.immutable.List"] %8 : ptr(%1 <xs> : @"T31scala.collection.immutable.List", %6 <add> : !?@"T21fix.Shapes$$$Lambda$1")
+  2: %10 = classalloc @"T21fix.Shapes$$$Lambda$2"
+  2: %11 = call[(@"T21fix.Shapes$$$Lambda$2") => unit] @"M21fix.Shapes$$$Lambda$2RE" : ptr(%10 : !?@"T21fix.Shapes$$$Lambda$2")
+  %12 = method %9 : @"T31scala.collection.immutable.List", "D6filterL15scala.Function1L31scala.collection.immutable.ListEO"
+  %13 = call[(@"T31scala.collection.immutable.List", @"T15scala.Function1") => @"T31scala.collection.immutable.List"] %12 : ptr(%9 : @"T31scala.collection.immutable.List", %10 : !?@"T21fix.Shapes$$$Lambda$2")
+  %14 = box[@"T17java.lang.Integer"] int 0
+  3: %15 = classalloc @"T21fix.Shapes$$$Lambda$3"
+  3: %16 = call[(@"T21fix.Shapes$$$Lambda$3") => unit] @"M21fix.Shapes$$$Lambda$3RE" : ptr(%15 : !?@"T21fix.Shapes$$$Lambda$3")
+  %17 = method %13 : @"T31scala.collection.immutable.List", "D8foldLeftL16java.lang.ObjectL15scala.Function2L16java.lang.ObjectEO"
+  %18 = call[(@"T29scala.collection.LinearSeqOps", @"T16java.lang.Object", @"T15scala.Function2") => @"T16java.lang.Object"] %17 : ptr(%13 : @"T31scala.collection.immutable.List", %14 : !?@"T17java.lang.Integer", %15 : !?@"T21fix.Shapes$$$Lambda$3")
+  %19 = unbox[@"T17java.lang.Integer"] %18 : @"T16java.lang.Object"
+  ret %19 : int
+}
+noinline def @"M11fix.Shapes$D8describeL9fix.ShapeL16java.lang.StringEO" : (@"T11fix.Shapes$", @"T9fix.Shape") => @"T16java.lang.String" {
+%3(%2 <this> : @"T11fix.Shapes$", %1 <s> : @"T9fix.Shape"):
+  jump %4
+%4:
+  1: %11 = is[@"T10fix.Circle"] %1 <s> : @"T9fix.Shape"
+  if %11 : bool then %7 else %8
+%7:
+  2: %12 <x20> = as[@"T10fix.Circle"] %1 <s> : @"T9fix.Shape"
+  3: %13 = module @"T11fix.Circle$"
+  3: %14 = method %13 : !?@"T11fix.Circle$", "D7unapplyL10fix.CircleL10fix.CircleEO"
+  3: %15 <x21> = call[(@"T11fix.Circle$", @"T10fix.Circle") => @"T10fix.Circle"] %14 : ptr(%13 : !?@"T11fix.Circle$", %12 <x20> : @"T10fix.Circle")
+  3: %16 = method %15 <x21> : @"T10fix.Circle", "D2_1dEO"
+  3: %17 <x22> = call[(@"T10fix.Circle") => double] %16 : ptr(%15 <x21> : @"T10fix.Circle")
+  3: %22 = fgt[double] %17 <x22> : double, double 1.0
+  if %22 : bool then %18 else %19
+%18:
+  jump %5("big circle")
+%19:
+  jump %20
+%20:
+  4: %24 = classalloc @"T23java.lang.StringBuilder"
+  4: %25 = call[(@"T23java.lang.StringBuilder", int) => unit] @"M23java.lang.StringBuilderRiE" : ptr(%24 : !?@"T23java.lang.StringBuilder", int 7)
+  4: %26 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%24 : !?@"T23java.lang.StringBuilder", "circle ")
+  4: %27 = method %12 <x20> : @"T10fix.Circle", "D1rdEO"
+  4: %28 = call[(@"T10fix.Circle") => double] %27 : ptr(%12 <x20> : @"T10fix.Circle")
+  4: %29 = call[(@"T23java.lang.StringBuilder", double) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appenddL23java.lang.StringBuilderEO" : ptr(%24 : !?@"T23java.lang.StringBuilder", %28 : double)
+  4: %30 = call[(@"T23java.lang.StringBuilder") => @"T16java.lang.String"] @"M23java.lang.StringBuilderD8toStringL16java.lang.StringEO" : ptr(%24 : !?@"T23java.lang.StringBuilder")
+  jump %5(%30 : @"T16java.lang.String")
+%8:
+  jump %9
+%9:
+  1: %36 = is[@"T8fix.Rect"] %1 <s> : @"T9fix.Shape"
+  if %36 : bool then %32 else %33
+%32:
+  5: %37 = module @"T9fix.Rect$"
+  5: %38 = as[@"T8fix.Rect"] %1 <s> : @"T9fix.Shape"
+  5: %39 = method %37 : !?@"T9fix.Rect$", "D7unapplyL8fix.RectL8fix.RectEO"
+  5: %40 <x16> = call[(@"T9fix.Rect$", @"T8fix.Rect") => @"T8fix.Rect"] %39 : ptr(%37 : !?@"T9fix.Rect$", %38 : @"T8fix.Rect")
+  5: %41 = method %40 <x16> : @"T8fix.Rect", "D2_1dEO"
+  5: %42 <x17> = call[(@"T8fix.Rect") => double] %41 : ptr(%40 <x16> : @"T8fix.Rect")
+  5: %43 = method %40 <x16> : @"T8fix.Rect", "D2_2dEO"
+  5: %44 <x18> = call[(@"T8fix.Rect") => double] %43 : ptr(%40 <x16> : @"T8fix.Rect")
+  6: %45 = classalloc @"T23java.lang.StringBuilder"
+  6: %46 = call[(@"T23java.lang.StringBuilder", int) => unit] @"M23java.lang.StringBuilderRiE" : ptr(%45 : !?@"T23java.lang.StringBuilder", int 9)
+  6: %47 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%45 : !?@"T23java.lang.StringBuilder", "rect ")
+  6: %48 = call[(@"T23java.lang.StringBuilder", double) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appenddL23java.lang.StringBuilderEO" : ptr(%45 : !?@"T23java.lang.StringBuilder", %42 <x17> : double)
+  6: %49 = call[(@"T23java.lang.StringBuilder", @"T16java.lang.String") => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appendL16java.lang.StringL23java.lang.StringBuilderEO" : ptr(%45 : !?@"T23java.lang.StringBuilder", " by ")
+  6: %50 = call[(@"T23java.lang.StringBuilder", double) => @"T23java.lang.StringBuilder"] @"M23java.lang.StringBuilderD6appenddL23java.lang.StringBuilderEO" : ptr(%45 : !?@"T23java.lang.StringBuilder", %44 <x18> : double)
+  6: %51 = call[(@"T23java.lang.StringBuilder") => @"T16java.lang.String"] @"M23java.lang.StringBuilderD8toStringL16java.lang.StringEO" : ptr(%45 : !?@"T23java.lang.StringBuilder")
+  jump %5(%51 : @"T16java.lang.String")
+%33:
+  jump %34
+%34:
+  7: %53 = method %1 <s> : @"T9fix.Shape", "D4nameL16java.lang.StringEO"
+  7: %54 = call[(@"T9fix.Shape") => @"T16java.lang.String"] %53 : ptr(%1 <s> : @"T9fix.Shape")
+  jump %5(%54 : @"T16java.lang.String")
+%5(%6 : @"T16java.lang.String"):
+  ret %6 : @"T16java.lang.String"
+}
+linktime def @"M11fix.Shapes$D8platformL16java.lang.StringEO" : (@"T11fix.Shapes$") => @"T16java.lang.String" {
+%2(%1 <this> : @"T11fix.Shapes$"):
+  linktime if M36scala.scalanative.meta.LinktimeInfo$D9isWindowszEO ieq true then %3 else %4
+%3:
+  jump %5("windows")
+%4:
+  linktime if M36scala.scalanative.meta.LinktimeInfo$D7isLinuxzEO ieq true or M36scala.scalanative.meta.LinktimeInfo$D5isMaczEO ieq true then %7 else %8
+%7:
+  jump %9("unix")
+%8:
+  jump %9("other")
+%9(%10 : @"T16java.lang.String"):
+  jump %5(%10 : @"T16java.lang.String")
+%5(%6 : @"T16java.lang.String"):
+  ret %6 : @"T16java.lang.String"
+}
+final var @"M11fix.Shapes$F5charsPT11fix.Shapes$" : array[char] = zero[array[char]]
+final var @"M11fix.Shapes$F5longsPT11fix.Shapes$" : array[long] = zero[array[long]]
+final var @"M11fix.Shapes$F5textsPT11fix.Shapes$" : @"T31scala.collection.immutable.List" = zero[@"T31scala.collection.immutable.List"]
+final var @"M11fix.Shapes$F6floatsPT11fix.Shapes$" : array[float] = zero[array[float]]
+final var @"M11fix.Shapes$F7numbersPT11fix.Shapes$" : array[double] = zero[array[double]]
+def @"M11fix.Shapes$RE" : (@"T11fix.Shapes$") => unit {
+%2(%1 <this> : @"T11fix.Shapes$"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T11fix.Shapes$")
+  %4 = module @"T11fix.Shapes$"
+  %5 = module @"T14scala.package$"
+  %6 = method %5 : !?@"T14scala.package$", "D4ListL32scala.collection.immutable.List$EO"
+  %7 = call[(@"T14scala.package$") => @"T32scala.collection.immutable.List$"] %6 : ptr(%5 : !?@"T14scala.package$")
+  %8 = module @"T27scala.runtime.ScalaRunTime$"
+  %9 = arrayalloc[@"T16java.lang.String"] int 10
+  %10 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 0, "plain"
+  %11 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 1, "quo\"te"
+  %12 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 2, "back\slash"
+  %13 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 3, "line\nfeed"
+  %14 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 4, "\nfirst"
+  %15 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 5, "two\n
+feeds"
+  %16 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 6, "tab	"
+  %17 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 7, "é"
+  %18 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 8, "😀"
+  %19 = arraystore[@"T16java.lang.String"] %9 : ?array[@"T16java.lang.String"], int 9, "\""
+  %20 = method %8 : !?@"T27scala.runtime.ScalaRunTime$", "D12wrapRefArrayLAL16java.lang.Object_L35scala.collection.immutable.ArraySeqEO"
+  %21 = call[(@"T27scala.runtime.ScalaRunTime$", array[@"T16java.lang.Object"]) => @"T35scala.collection.immutable.ArraySeq"] %20 : ptr(%8 : !?@"T27scala.runtime.ScalaRunTime$", %9 : ?array[@"T16java.lang.String"])
+  %22 = method %7 : @"T32scala.collection.immutable.List$", "D5applyL30scala.collection.immutable.SeqL16java.lang.ObjectEO"
+  %23 = call[(@"T32scala.collection.IterableFactory", @"T30scala.collection.immutable.Seq") => @"T16java.lang.Object"] %22 : ptr(%7 : @"T32scala.collection.immutable.List$", %21 : @"T35scala.collection.immutable.ArraySeq")
+  %24 = as[@"T31scala.collection.immutable.List"] %23 : @"T16java.lang.Object"
+  %25 = fieldstore[@"T31scala.collection.immutable.List"] %4 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F5textsPT11fix.Shapes$", %24 : @"T31scala.collection.immutable.List"
+  %26 = module @"T11fix.Shapes$"
+  %27 = arrayalloc[double] arrayvalue double {double 0.0, double -0.0, double 1.5, double 1.0E-7, double 1.0E21, double NaN, double Infinity, double 4.9E-324, double 1.7976931348623157E308}
+  %28 = fieldstore[array[double]] %26 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F7numbersPT11fix.Shapes$", %27 : ?array[double]
+  %29 = module @"T11fix.Shapes$"
+  %30 = arrayalloc[float] arrayvalue float {float 0.1, float -3.4028235E38, float NaN, float 1.4E-45}
+  %31 = fieldstore[array[float]] %29 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F6floatsPT11fix.Shapes$", %30 : ?array[float]
+  %32 = module @"T11fix.Shapes$"
+  %33 = arrayalloc[long] arrayvalue long {long -9223372036854775808, long -1, long 0, long 9223372036854775807}
+  %34 = fieldstore[array[long]] %32 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F5longsPT11fix.Shapes$", %33 : ?array[long]
+  %35 = module @"T11fix.Shapes$"
+  %36 = arrayalloc[char] arrayvalue char {char 97, char 0, char 65535, char 34}
+  %37 = fieldstore[array[char]] %35 : !?@"T11fix.Shapes$", @"M11fix.Shapes$F5charsPT11fix.Shapes$", %36 : ?array[char]
+  ret unit
+}
+module @"T11fix.Shapes$" : @"T16java.lang.Object"
+## fix/Shapes.nir
+inlinehint def @"M10fix.ShapesD4mainLAL16java.lang.String_uEo" : (array[@"T16java.lang.String"]) => unit {
+%2(%1 : array[@"T16java.lang.String"]):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", array[@"T16java.lang.String"]) => unit] @"M11fix.Shapes$D4mainLAL16java.lang.String_uEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : array[@"T16java.lang.String"])
+  ret %4 : unit
+}
+inlinehint def @"M10fix.ShapesD4wordL16java.lang.StringiEo" : (@"T16java.lang.String") => int {
+%2(%1 : @"T16java.lang.String"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", @"T16java.lang.String") => int] @"M11fix.Shapes$D4wordL16java.lang.StringiEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : @"T16java.lang.String")
+  ret %4 : int
+}
+inlinehint def @"M10fix.ShapesD5boxesL16java.lang.ObjectL16java.lang.ObjectEo" : (@"T16java.lang.Object") => @"T16java.lang.Object" {
+%2(%1 : @"T16java.lang.Object"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", @"T16java.lang.Object") => @"T16java.lang.Object"] @"M11fix.Shapes$D5boxesL16java.lang.ObjectL16java.lang.ObjectEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : @"T16java.lang.Object")
+  ret %4 : @"T16java.lang.Object"
+}
+inlinehint def @"M10fix.ShapesD5charsLAc_Eo" : () => array[char] {
+%1:
+  %2 = module @"T11fix.Shapes$"
+  %3 = call[(@"T11fix.Shapes$") => array[char]] @"M11fix.Shapes$D5charsLAc_EO" : ptr(%2 : !?@"T11fix.Shapes$")
+  ret %3 : array[char]
+}
+inlinehint def @"M10fix.ShapesD5longsLAj_Eo" : () => array[long] {
+%1:
+  %2 = module @"T11fix.Shapes$"
+  %3 = call[(@"T11fix.Shapes$") => array[long]] @"M11fix.Shapes$D5longsLAj_EO" : ptr(%2 : !?@"T11fix.Shapes$")
+  ret %3 : array[long]
+}
+inlinehint def @"M10fix.ShapesD5textsL31scala.collection.immutable.ListEo" : () => @"T31scala.collection.immutable.List" {
+%1:
+  %2 = module @"T11fix.Shapes$"
+  %3 = call[(@"T11fix.Shapes$") => @"T31scala.collection.immutable.List"] @"M11fix.Shapes$D5textsL31scala.collection.immutable.ListEO" : ptr(%2 : !?@"T11fix.Shapes$")
+  ret %3 : @"T31scala.collection.immutable.List"
+}
+inlinehint def @"M10fix.ShapesD5twiceiiEo" : (int) => int {
+%2(%1 : int):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", int) => int] @"M11fix.Shapes$D5twiceiiEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : int)
+  ret %4 : int
+}
+inlinehint def @"M10fix.ShapesD6floatsLAf_Eo" : () => array[float] {
+%1:
+  %2 = module @"T11fix.Shapes$"
+  %3 = call[(@"T11fix.Shapes$") => array[float]] @"M11fix.Shapes$D6floatsLAf_EO" : ptr(%2 : !?@"T11fix.Shapes$")
+  ret %3 : array[float]
+}
+inlinehint def @"M10fix.ShapesD6lockedL12fix.CountersjEo" : (@"T12fix.Counters") => long {
+%2(%1 : @"T12fix.Counters"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", @"T12fix.Counters") => long] @"M11fix.Shapes$D6lockedL12fix.CountersjEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : @"T12fix.Counters")
+  ret %4 : long
+}
+inlinehint def @"M10fix.ShapesD6nativeidEo" : (int) => double {
+%2(%1 : int):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", int) => double] @"M11fix.Shapes$D6nativeidEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : int)
+  ret %4 : double
+}
+inlinehint def @"M10fix.ShapesD7guardedLAi_iiEo" : (array[int], int) => int {
+%3(%1 : array[int], %2 : int):
+  %4 = module @"T11fix.Shapes$"
+  %5 = call[(@"T11fix.Shapes$", array[int], int) => int] @"M11fix.Shapes$D7guardedLAi_iiEO" : ptr(%4 : !?@"T11fix.Shapes$", %1 : array[int], %2 : int)
+  ret %5 : int
+}
+inlinehint def @"M10fix.ShapesD7numbersLAd_Eo" : () => array[double] {
+%1:
+  %2 = module @"T11fix.Shapes$"
+  %3 = call[(@"T11fix.Shapes$") => array[double]] @"M11fix.Shapes$D7numbersLAd_EO" : ptr(%2 : !?@"T11fix.Shapes$")
+  ret %3 : array[double]
+}
+inlinehint def @"M10fix.ShapesD8classifyiL16java.lang.StringEo" : (int) => @"T16java.lang.String" {
+%2(%1 : int):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", int) => @"T16java.lang.String"] @"M11fix.Shapes$D8classifyiL16java.lang.StringEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : int)
+  ret %4 : @"T16java.lang.String"
+}
+inlinehint def @"M10fix.ShapesD8closuresL31scala.collection.immutable.ListiEo" : (@"T31scala.collection.immutable.List") => int {
+%2(%1 : @"T31scala.collection.immutable.List"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", @"T31scala.collection.immutable.List") => int] @"M11fix.Shapes$D8closuresL31scala.collection.immutable.ListiEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : @"T31scala.collection.immutable.List")
+  ret %4 : int
+}
+inlinehint def @"M10fix.ShapesD8describeL9fix.ShapeL16java.lang.StringEo" : (@"T9fix.Shape") => @"T16java.lang.String" {
+%2(%1 : @"T9fix.Shape"):
+  %3 = module @"T11fix.Shapes$"
+  %4 = call[(@"T11fix.Shapes$", @"T9fix.Shape") => @"T16java.lang.String"] @"M11fix.Shapes$D8describeL9fix.ShapeL16java.lang.StringEO" : ptr(%3 : !?@"T11fix.Shapes$", %1 : @"T9fix.Shape")
+  ret %4 : @"T16java.lang.String"
+}
+inlinehint def @"M10fix.ShapesD8platformL16java.lang.StringEo" : () => @"T16java.lang.String" {
+%1:
+  %2 = module @"T11fix.Shapes$"
+  %3 = call[(@"T11fix.Shapes$") => @"T16java.lang.String"] @"M11fix.Shapes$D8platformL16java.lang.StringEO" : ptr(%2 : !?@"T11fix.Shapes$")
+  ret %3 : @"T16java.lang.String"
+}
+class @"T10fix.Shapes" : @"T16java.lang.Object"
+## fix/libm$.nir
+extern decl @"M9fix.libm$C4cbrt" : (double) => double
+extern decl @"M9fix.libm$C6printf" : (ptr, ...) => int
+extern blocking decl @"M9fix.libm$C6usleep" : (int) => int
+extern link("m") define("FIX_SHAPES") module @"T9fix.libm$" : @"T16java.lang.Object"
+## fix/libm.nir
+class @"T8fix.libm" : @"T16java.lang.Object"

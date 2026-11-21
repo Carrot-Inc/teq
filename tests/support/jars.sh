@@ -78,7 +78,8 @@
 # 3.8.4 from the coursier cache; reactivemongo-bson-api 1.1.0-noshaded.RC21, play-json and play-functional 3.0.6
 # and macwire-macros 2.6.7 (macwire's `macros` artifact) with macwire-util (its `util`, the Java `@Module`),
 # scala-parser-combinators 2.4.0, lichess' (lila's) JVM `_3` jars. maven_extras lists the other Maven files the suites
-# read (sources jars, the example's test class path), which bench/actions/jars.sh fetch fetches with these.
+# read (sources jars, the example's test class path, the jars of Scala Native 0.5.12 that tests/nir/digests.txt
+# names), which bench/actions/jars.sh fetch fetches with these.
 M2=${COURSIER_CACHE:-$HOME/Library/Caches/Coursier/v1}/https/repo1.maven.org/maven2
 # The jars built here live in a directory named for the checkout, so that the suites of two worktrees running
 # at once do not rewrite each other's, under names that are the same in every checkout: the compiler names what
@@ -1562,7 +1563,14 @@ maven_extras() {
     "$M2/io/github/cquiroz/scala-java-time_sjs1_3/2.6.0/scala-java-time_sjs1_3-2.6.0.jar" \
     "$M2/io/github/cquiroz/scala-java-time-tzdb_sjs1_3/2.6.0/scala-java-time-tzdb_sjs1_3-2.6.0.jar" \
     "$M2/io/github/cquiroz/scala-java-locales_sjs1_3/1.5.4/scala-java-locales_sjs1_3-1.5.4.jar" \
-    "$M2/io/github/cquiroz/cldr-api_sjs1_3/4.5.0/cldr-api_sjs1_3-4.5.0.jar"
+    "$M2/io/github/cquiroz/cldr-api_sjs1_3/4.5.0/cldr-api_sjs1_3-4.5.0.jar" \
+    "$M2/org/scala-native/javalib_native0.5_3/0.5.12/javalib_native0.5_3-0.5.12.jar" \
+    "$M2/org/scala-native/scalalib_native0.5_3/3.8.4%2B0.5.12/scalalib_native0.5_3-3.8.4%2B0.5.12.jar" \
+    "$M2/org/scala-native/nativelib_native0.5_3/0.5.12/nativelib_native0.5_3-0.5.12.jar" \
+    "$M2/org/scala-native/posixlib_native0.5_3/0.5.12/posixlib_native0.5_3-0.5.12.jar" \
+    "$M2/org/scala-native/clib_native0.5_3/0.5.12/clib_native0.5_3-0.5.12.jar" \
+    "$M2/org/scala-native/windowslib_native0.5_3/0.5.12/windowslib_native0.5_3-0.5.12.jar" \
+    "$M2/org/scala-native/auxlib_native0.5_3/0.5.12/auxlib_native0.5_3-0.5.12.jar"
 }
 # The scala-library jar a JVM build links against when --classpath names none, for `run_jvm`: the jar the compiler
 # takes from the coursier caches by src/scala_release.rs's rule, whose tracked release and TASTy minor this reads

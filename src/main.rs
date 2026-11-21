@@ -24,6 +24,7 @@ mod intern;
 mod jarcache;
 mod interp;
 mod java;
+mod javanum;
 mod jvm;
 mod lexer;
 mod lir;
@@ -31,6 +32,7 @@ mod lsp;
 mod measure;
 mod memory;
 mod names;
+mod native;
 mod parser;
 mod planted;
 mod products;
@@ -940,6 +942,7 @@ pub(crate) fn parse_options_from(args: impl Iterator<Item = String>) -> Options 
         "--help" | "-h" => task::help(),
         "tasty" => tasty::cli::run(&args[1..]),
         "classfile" => classfile::cli::run(&args[1..]),
+        "nir" => native::nir::cli::run(&args[1..]),
         "lsp" => lsp::run(&args[1..]),
         "compiler" => parse_compiler_options(&args[1..]),
         "interp" => parse_file_options("interp", &args[1..]),

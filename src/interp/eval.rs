@@ -483,8 +483,8 @@ impl<'a, 't> Interp<'a, 't> {
         match (kind, v) {
             (_, Value::Str(s)) => push_text(out, late, s),
             (_, Value::Char(c)) => push_text(out, late, crate::text::unit_char(*c).encode_utf8(&mut [0; 4])),
-            (StrKind::Double, Value::Float(f)) => out.push_str(&java_float(*f)),
-            (StrKind::Double, v) if v.is_number() => out.push_str(&java_double(v.as_f64().unwrap())),
+            (StrKind::Double, Value::Float(f)) => out.push_str(&crate::javanum::float_string(*f)),
+            (StrKind::Double, v) if v.is_number() => out.push_str(&crate::javanum::double_string(v.as_f64().unwrap())),
             (StrKind::Long, v) if v.is_number() => out.push_str(&v.as_i64().unwrap().to_string()),
             _ => push_text(out, late, &self.to_str(v)?),
         }

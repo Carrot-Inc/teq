@@ -33,8 +33,8 @@ impl<'a, 't> Interp<'a, 't> {
             Value::Byte(b) => b.to_string(),
             Value::Short(s) => s.to_string(),
             Value::Char(c) => char_to_string(*c),
-            Value::Double(d) => java_double(*d),
-            Value::Float(f) => java_float(*f),
+            Value::Double(d) => crate::javanum::double_string(*d),
+            Value::Float(f) => crate::javanum::float_string(*f),
             Value::Str(s) => s.to_string(),
             Value::Obj(o) => {
                 let class = o.class;
