@@ -30,6 +30,7 @@ inlined	fix.reader.RdCalls	def outerScope	reader.scala:82:44	#13	from fix.rdecl.
 inlined	fix.reader.RdCalls	def outerScope	reader_decl_v1.scala	#11	from the caller's scope	0 bindings
 inlined	fix.reader.RdCalls	def outerScope	reader_decl_v1.scala	#12	from the caller's scope	0 bindings
 origin	fix.rdecl.RdApi	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdArr	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdBox	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdCustom	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdFoo	none: the pseudo files' tags and the converted text's offsets
@@ -37,12 +38,17 @@ origin	fix.rdecl.RdFooBox	none: the pseudo files' tags and the converted text's 
 origin	fix.rdecl.RdIn	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdInBox	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdMarker	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdNamed	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdShape	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdSquare	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdTok	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdTokA	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
 origin	fix.reader.RdCalls	none: the pseudo files' tags and the converted text's offsets
 origin	fix.reader.RdStart	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rjava.RdJava	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
 select	fix.reader.RdCalls	def arr	reader.scala:84:43	scala.collection.IterableOnceOps.toArray([1], scala.reflect.ClassTag): java.lang.Object	one member scala.collection.IterableOnceOps.toArray(ClassTag[B]): Array[B]	: Array[Int]
 select	fix.reader.RdCalls	def capturedArray	reader.scala:88:44	scala.Any.$asInstanceOf$([1]): java.lang.Object	by name (a builtin's member)	: Array[Any]

@@ -132,6 +132,12 @@ suite scala3-typing python3 tests/scala3-typing/harness.py
 # The conversion search's matrix (tests/conversion-matrix/run.py): every tenth program of each set on the lean std,
 # scalac 3.8.4's answers its oracle and known.tsv the departures; a whole run on the four legs writes its board rows.
 suite conversion-matrix python3 tests/conversion-matrix/run.py --tenth
+# The cut of the kept body's clause question (tests/kept-body-cut/run.py): the programs generated from the std's
+# definitions, over lean products on two legs, held to their recorded observables.
+suite kept-body-cut python3 tests/kept-body-cut/run.py
+# A kept body's lists of user-defined callees (tests/kept-body-lists/run.py): the generated programs over lean products
+# on two legs, held to scalac 3.8.4's answers and tests/pending/kept-body-lists.txt (mutants/controls.sh: its controls).
+suite kept-body-lists python3 tests/kept-body-lists/run.py
 # The conformance board's rows (tests/board/dotty.py: dotty's own suites at the tag 3.8.4, each held to its list of
 # the tests expected to fail and to its committed list's verdicts), as four lines: the three longest rows one each,
 # every other row in the rest. They need dotty at the tag: SCALA3_TAG, else scala3-3.8.4 beside $SCALA3.

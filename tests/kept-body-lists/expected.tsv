@@ -1,0 +1,1785 @@
+# program	scalac 3.8.4's observable (its run's output; REFUSED, then after a tab the error's header, information)
+kb_method_using_pos_def_comp	1 1 2 3
+kb_method_using_pos_def_comp_prim	1 1 w 3
+kb_method_using_pos_def_none	1 1 2 3
+kb_method_using_pos_def_none_prim	1 1 w 3
+kb_method_using_pos_val_comp	1 1 2 3
+kb_method_using_pos_val_comp_prim	1 1 w 3
+kb_method_using_pos_val_none	1 1 2 3
+kb_method_using_pos_val_none_prim	1 1 w 3
+kb_method_usingfirst_pos_def_comp	0 1 2 3
+kb_method_usingfirst_pos_def_comp_prim	0 1 w 3
+kb_method_usingfirst_pos_def_none	0 1 2 3
+kb_method_usingfirst_pos_def_none_prim	0 1 w 3
+kb_method_usingfirst_pos_val_comp	0 1 2 3
+kb_method_usingfirst_pos_val_comp_prim	0 1 w 3
+kb_method_usingfirst_pos_val_none	0 1 2 3
+kb_method_usingfirst_pos_val_none_prim	0 1 w 3
+kb_method_using_named_def_comp	1 1 2 3
+kb_method_using_named_def_comp_prim	1 1 w 3
+kb_method_using_named_def_none	1 1 2 3
+kb_method_using_named_def_none_prim	1 1 w 3
+kb_method_using_named_val_comp	1 1 2 3
+kb_method_using_named_val_comp_prim	1 1 w 3
+kb_method_using_named_val_none	1 1 2 3
+kb_method_using_named_val_none_prim	1 1 w 3
+kb_method_usingfirst_named_def_comp	0 1 2 3
+kb_method_usingfirst_named_def_comp_prim	0 1 w 3
+kb_method_usingfirst_named_def_none	0 1 2 3
+kb_method_usingfirst_named_def_none_prim	0 1 w 3
+kb_method_usingfirst_named_val_comp	0 1 2 3
+kb_method_usingfirst_named_val_comp_prim	0 1 w 3
+kb_method_usingfirst_named_val_none	0 1 2 3
+kb_method_usingfirst_named_val_none_prim	0 1 w 3
+kb_method_using_swapped_def_comp	1 1 2 3
+kb_method_using_swapped_def_comp_prim	1 1 w 3
+kb_method_using_swapped_def_none	1 1 2 3
+kb_method_using_swapped_def_none_prim	1 1 w 3
+kb_method_using_swapped_val_comp	1 1 2 3
+kb_method_using_swapped_val_comp_prim	1 1 w 3
+kb_method_using_swapped_val_none	1 1 2 3
+kb_method_using_swapped_val_none_prim	1 1 w 3
+kb_method_usingfirst_swapped_def_comp	0 1 2 3
+kb_method_usingfirst_swapped_def_comp_prim	0 1 w 3
+kb_method_usingfirst_swapped_def_none	0 1 2 3
+kb_method_usingfirst_swapped_def_none_prim	0 1 w 3
+kb_method_usingfirst_swapped_val_comp	0 1 2 3
+kb_method_usingfirst_swapped_val_comp_prim	0 1 w 3
+kb_method_usingfirst_swapped_val_none	0 1 2 3
+kb_method_usingfirst_swapped_val_none_prim	0 1 w 3
+kb_method_using_short_def_comp	1 1 2 300
+kb_method_using_short_def_comp_prim	1 1 w 300
+kb_method_using_short_def_none	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_using_short_val_comp	1 1 2 300
+kb_method_using_short_val_comp_prim	1 1 w 300
+kb_method_using_short_val_none	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_usingfirst_short_def_comp	0 1 2 300
+kb_method_usingfirst_short_def_comp_prim	0 1 w 300
+kb_method_usingfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_usingfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_usingfirst_short_val_comp	0 1 2 300
+kb_method_usingfirst_short_val_comp_prim	0 1 w 300
+kb_method_usingfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_usingfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_using_shortnamed_def_comp	1 1 200 3
+kb_method_using_shortnamed_def_comp_prim	1 1 g 3
+kb_method_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_using_shortnamed_val_comp	1 1 200 3
+kb_method_using_shortnamed_val_comp_prim	1 1 g 3
+kb_method_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_usingfirst_shortnamed_def_comp	0 1 200 3
+kb_method_usingfirst_shortnamed_def_comp_prim	0 1 g 3
+kb_method_usingfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_usingfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_usingfirst_shortnamed_val_comp	0 1 200 3
+kb_method_usingfirst_shortnamed_val_comp_prim	0 1 g 3
+kb_method_usingfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_usingfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_using_searched_def_chosen	1 1 2 3
+kb_method_using_searched_def_chosen_prim	1 1 w 3
+kb_method_using_searched_val_chosen	1 1 2 3
+kb_method_using_searched_val_chosen_prim	1 1 w 3
+kb_method_usingfirst_searched_def_chosen	0 1 2 3
+kb_method_usingfirst_searched_def_chosen_prim	0 1 w 3
+kb_method_usingfirst_searched_val_chosen	0 1 2 3
+kb_method_usingfirst_searched_val_chosen_prim	0 1 w 3
+kb_method_implicit_pos_def_comp	1 1 2 3
+kb_method_implicit_pos_def_comp_prim	1 1 w 3
+kb_method_implicit_pos_def_none	1 1 2 3
+kb_method_implicit_pos_def_none_prim	1 1 w 3
+kb_method_implicit_pos_val_comp	1 1 2 3
+kb_method_implicit_pos_val_comp_prim	1 1 w 3
+kb_method_implicit_pos_val_none	1 1 2 3
+kb_method_implicit_pos_val_none_prim	1 1 w 3
+kb_method_implicitfirst_pos_def_comp	0 1 2 3
+kb_method_implicitfirst_pos_def_comp_prim	0 1 w 3
+kb_method_implicitfirst_pos_def_none	0 1 2 3
+kb_method_implicitfirst_pos_def_none_prim	0 1 w 3
+kb_method_implicitfirst_pos_val_comp	0 1 2 3
+kb_method_implicitfirst_pos_val_comp_prim	0 1 w 3
+kb_method_implicitfirst_pos_val_none	0 1 2 3
+kb_method_implicitfirst_pos_val_none_prim	0 1 w 3
+kb_method_implicit_named_def_comp	1 1 2 3
+kb_method_implicit_named_def_comp_prim	1 1 w 3
+kb_method_implicit_named_def_none	1 1 2 3
+kb_method_implicit_named_def_none_prim	1 1 w 3
+kb_method_implicit_named_val_comp	1 1 2 3
+kb_method_implicit_named_val_comp_prim	1 1 w 3
+kb_method_implicit_named_val_none	1 1 2 3
+kb_method_implicit_named_val_none_prim	1 1 w 3
+kb_method_implicitfirst_named_def_comp	0 1 2 3
+kb_method_implicitfirst_named_def_comp_prim	0 1 w 3
+kb_method_implicitfirst_named_def_none	0 1 2 3
+kb_method_implicitfirst_named_def_none_prim	0 1 w 3
+kb_method_implicitfirst_named_val_comp	0 1 2 3
+kb_method_implicitfirst_named_val_comp_prim	0 1 w 3
+kb_method_implicitfirst_named_val_none	0 1 2 3
+kb_method_implicitfirst_named_val_none_prim	0 1 w 3
+kb_method_implicit_swapped_def_comp	1 1 2 3
+kb_method_implicit_swapped_def_comp_prim	1 1 w 3
+kb_method_implicit_swapped_def_none	1 1 2 3
+kb_method_implicit_swapped_def_none_prim	1 1 w 3
+kb_method_implicit_swapped_val_comp	1 1 2 3
+kb_method_implicit_swapped_val_comp_prim	1 1 w 3
+kb_method_implicit_swapped_val_none	1 1 2 3
+kb_method_implicit_swapped_val_none_prim	1 1 w 3
+kb_method_implicitfirst_swapped_def_comp	0 1 2 3
+kb_method_implicitfirst_swapped_def_comp_prim	0 1 w 3
+kb_method_implicitfirst_swapped_def_none	0 1 2 3
+kb_method_implicitfirst_swapped_def_none_prim	0 1 w 3
+kb_method_implicitfirst_swapped_val_comp	0 1 2 3
+kb_method_implicitfirst_swapped_val_comp_prim	0 1 w 3
+kb_method_implicitfirst_swapped_val_none	0 1 2 3
+kb_method_implicitfirst_swapped_val_none_prim	0 1 w 3
+kb_method_implicit_short_def_comp	1 1 2 300
+kb_method_implicit_short_def_comp_prim	1 1 w 300
+kb_method_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_implicit_short_val_comp	1 1 2 300
+kb_method_implicit_short_val_comp_prim	1 1 w 300
+kb_method_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_implicitfirst_short_def_comp	0 1 2 300
+kb_method_implicitfirst_short_def_comp_prim	0 1 w 300
+kb_method_implicitfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_implicitfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_implicitfirst_short_val_comp	0 1 2 300
+kb_method_implicitfirst_short_val_comp_prim	0 1 w 300
+kb_method_implicitfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_implicitfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_implicit_shortnamed_def_comp	1 1 200 3
+kb_method_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_method_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_implicit_shortnamed_val_comp	1 1 200 3
+kb_method_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_method_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:29
+kb_method_implicitfirst_shortnamed_def_comp	0 1 200 3
+kb_method_implicitfirst_shortnamed_def_comp_prim	0 1 g 3
+kb_method_implicitfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_implicitfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_implicitfirst_shortnamed_val_comp	0 1 200 3
+kb_method_implicitfirst_shortnamed_val_comp_prim	0 1 g 3
+kb_method_implicitfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_implicitfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:26
+kb_method_implicit_searched_def_chosen	1 1 2 3
+kb_method_implicit_searched_def_chosen_prim	1 1 w 3
+kb_method_implicit_searched_val_chosen	1 1 2 3
+kb_method_implicit_searched_val_chosen_prim	1 1 w 3
+kb_method_implicitfirst_searched_def_chosen	0 1 2 3
+kb_method_implicitfirst_searched_def_chosen_prim	0 1 w 3
+kb_method_implicitfirst_searched_val_chosen	0 1 2 3
+kb_method_implicitfirst_searched_val_chosen_prim	0 1 w 3
+kb_overload_using_pos_def_comp	1 1 2 3
+kb_overload_using_pos_def_comp_prim	1 1 w 3
+kb_overload_using_pos_def_none	1 1 2 3
+kb_overload_using_pos_def_none_prim	1 1 w 3
+kb_overload_using_pos_val_comp	1 1 2 3
+kb_overload_using_pos_val_comp_prim	1 1 w 3
+kb_overload_using_pos_val_none	1 1 2 3
+kb_overload_using_pos_val_none_prim	1 1 w 3
+kb_overload_using_named_def_comp	1 1 2 3
+kb_overload_using_named_def_comp_prim	1 1 w 3
+kb_overload_using_named_def_none	1 1 2 3
+kb_overload_using_named_def_none_prim	1 1 w 3
+kb_overload_using_named_val_comp	1 1 2 3
+kb_overload_using_named_val_comp_prim	1 1 w 3
+kb_overload_using_named_val_none	1 1 2 3
+kb_overload_using_named_val_none_prim	1 1 w 3
+kb_overload_using_swapped_def_comp	1 1 2 3
+kb_overload_using_swapped_def_comp_prim	1 1 w 3
+kb_overload_using_swapped_def_none	1 1 2 3
+kb_overload_using_swapped_def_none_prim	1 1 w 3
+kb_overload_using_swapped_val_comp	1 1 2 3
+kb_overload_using_swapped_val_comp_prim	1 1 w 3
+kb_overload_using_swapped_val_none	1 1 2 3
+kb_overload_using_swapped_val_none_prim	1 1 w 3
+kb_overload_using_short_def_comp	1 1 2 300
+kb_overload_using_short_def_comp_prim	1 1 w 300
+kb_overload_using_short_def_none	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_using_short_val_comp	1 1 2 300
+kb_overload_using_short_val_comp_prim	1 1 w 300
+kb_overload_using_short_val_none	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_using_shortnamed_def_comp	1 1 200 3
+kb_overload_using_shortnamed_def_comp_prim	1 1 g 3
+kb_overload_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_using_shortnamed_val_comp	1 1 200 3
+kb_overload_using_shortnamed_val_comp_prim	1 1 g 3
+kb_overload_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_using_searched_def_chosen	1 1 2 3
+kb_overload_using_searched_def_chosen_prim	1 1 w 3
+kb_overload_using_searched_val_chosen	1 1 2 3
+kb_overload_using_searched_val_chosen_prim	1 1 w 3
+kb_overload_implicit_pos_def_comp	1 1 2 3
+kb_overload_implicit_pos_def_comp_prim	1 1 w 3
+kb_overload_implicit_pos_def_none	1 1 2 3
+kb_overload_implicit_pos_def_none_prim	1 1 w 3
+kb_overload_implicit_pos_val_comp	1 1 2 3
+kb_overload_implicit_pos_val_comp_prim	1 1 w 3
+kb_overload_implicit_pos_val_none	1 1 2 3
+kb_overload_implicit_pos_val_none_prim	1 1 w 3
+kb_overload_implicit_named_def_comp	1 1 2 3
+kb_overload_implicit_named_def_comp_prim	1 1 w 3
+kb_overload_implicit_named_def_none	1 1 2 3
+kb_overload_implicit_named_def_none_prim	1 1 w 3
+kb_overload_implicit_named_val_comp	1 1 2 3
+kb_overload_implicit_named_val_comp_prim	1 1 w 3
+kb_overload_implicit_named_val_none	1 1 2 3
+kb_overload_implicit_named_val_none_prim	1 1 w 3
+kb_overload_implicit_swapped_def_comp	1 1 2 3
+kb_overload_implicit_swapped_def_comp_prim	1 1 w 3
+kb_overload_implicit_swapped_def_none	1 1 2 3
+kb_overload_implicit_swapped_def_none_prim	1 1 w 3
+kb_overload_implicit_swapped_val_comp	1 1 2 3
+kb_overload_implicit_swapped_val_comp_prim	1 1 w 3
+kb_overload_implicit_swapped_val_none	1 1 2 3
+kb_overload_implicit_swapped_val_none_prim	1 1 w 3
+kb_overload_implicit_short_def_comp	1 1 2 300
+kb_overload_implicit_short_def_comp_prim	1 1 w 300
+kb_overload_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_implicit_short_val_comp	1 1 2 300
+kb_overload_implicit_short_val_comp_prim	1 1 w 300
+kb_overload_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_implicit_shortnamed_def_comp	1 1 200 3
+kb_overload_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_overload_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_implicit_shortnamed_val_comp	1 1 200 3
+kb_overload_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_overload_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:9:31
+kb_overload_implicit_searched_def_chosen	1 1 2 3
+kb_overload_implicit_searched_def_chosen_prim	1 1 w 3
+kb_overload_implicit_searched_val_chosen	1 1 2 3
+kb_overload_implicit_searched_val_chosen_prim	1 1 w 3
+kb_overloadtop_using_pos_def_comp	1 1 2 3
+kb_overloadtop_using_pos_def_comp_prim	1 1 w 3
+kb_overloadtop_using_pos_def_none	1 1 2 3
+kb_overloadtop_using_pos_def_none_prim	1 1 w 3
+kb_overloadtop_using_pos_val_comp	1 1 2 3
+kb_overloadtop_using_pos_val_comp_prim	1 1 w 3
+kb_overloadtop_using_pos_val_none	1 1 2 3
+kb_overloadtop_using_pos_val_none_prim	1 1 w 3
+kb_overloadtop_using_named_def_comp	1 1 2 3
+kb_overloadtop_using_named_def_comp_prim	1 1 w 3
+kb_overloadtop_using_named_def_none	1 1 2 3
+kb_overloadtop_using_named_def_none_prim	1 1 w 3
+kb_overloadtop_using_named_val_comp	1 1 2 3
+kb_overloadtop_using_named_val_comp_prim	1 1 w 3
+kb_overloadtop_using_named_val_none	1 1 2 3
+kb_overloadtop_using_named_val_none_prim	1 1 w 3
+kb_overloadtop_using_swapped_def_comp	1 1 2 3
+kb_overloadtop_using_swapped_def_comp_prim	1 1 w 3
+kb_overloadtop_using_swapped_def_none	1 1 2 3
+kb_overloadtop_using_swapped_def_none_prim	1 1 w 3
+kb_overloadtop_using_swapped_val_comp	1 1 2 3
+kb_overloadtop_using_swapped_val_comp_prim	1 1 w 3
+kb_overloadtop_using_swapped_val_none	1 1 2 3
+kb_overloadtop_using_swapped_val_none_prim	1 1 w 3
+kb_overloadtop_using_short_def_comp	1 1 2 300
+kb_overloadtop_using_short_def_comp_prim	1 1 w 300
+kb_overloadtop_using_short_def_none	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_using_short_val_comp	1 1 2 300
+kb_overloadtop_using_short_val_comp_prim	1 1 w 300
+kb_overloadtop_using_short_val_none	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_using_shortnamed_def_comp	1 1 200 3
+kb_overloadtop_using_shortnamed_def_comp_prim	1 1 g 3
+kb_overloadtop_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_using_shortnamed_val_comp	1 1 200 3
+kb_overloadtop_using_shortnamed_val_comp_prim	1 1 g 3
+kb_overloadtop_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_using_searched_def_chosen	1 1 2 3
+kb_overloadtop_using_searched_def_chosen_prim	1 1 w 3
+kb_overloadtop_using_searched_val_chosen	1 1 2 3
+kb_overloadtop_using_searched_val_chosen_prim	1 1 w 3
+kb_overloadtop_implicit_pos_def_comp	1 1 2 3
+kb_overloadtop_implicit_pos_def_comp_prim	1 1 w 3
+kb_overloadtop_implicit_pos_def_none	1 1 2 3
+kb_overloadtop_implicit_pos_def_none_prim	1 1 w 3
+kb_overloadtop_implicit_pos_val_comp	1 1 2 3
+kb_overloadtop_implicit_pos_val_comp_prim	1 1 w 3
+kb_overloadtop_implicit_pos_val_none	1 1 2 3
+kb_overloadtop_implicit_pos_val_none_prim	1 1 w 3
+kb_overloadtop_implicit_named_def_comp	1 1 2 3
+kb_overloadtop_implicit_named_def_comp_prim	1 1 w 3
+kb_overloadtop_implicit_named_def_none	1 1 2 3
+kb_overloadtop_implicit_named_def_none_prim	1 1 w 3
+kb_overloadtop_implicit_named_val_comp	1 1 2 3
+kb_overloadtop_implicit_named_val_comp_prim	1 1 w 3
+kb_overloadtop_implicit_named_val_none	1 1 2 3
+kb_overloadtop_implicit_named_val_none_prim	1 1 w 3
+kb_overloadtop_implicit_swapped_def_comp	1 1 2 3
+kb_overloadtop_implicit_swapped_def_comp_prim	1 1 w 3
+kb_overloadtop_implicit_swapped_def_none	1 1 2 3
+kb_overloadtop_implicit_swapped_def_none_prim	1 1 w 3
+kb_overloadtop_implicit_swapped_val_comp	1 1 2 3
+kb_overloadtop_implicit_swapped_val_comp_prim	1 1 w 3
+kb_overloadtop_implicit_swapped_val_none	1 1 2 3
+kb_overloadtop_implicit_swapped_val_none_prim	1 1 w 3
+kb_overloadtop_implicit_short_def_comp	1 1 2 300
+kb_overloadtop_implicit_short_def_comp_prim	1 1 w 300
+kb_overloadtop_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_implicit_short_val_comp	1 1 2 300
+kb_overloadtop_implicit_short_val_comp_prim	1 1 w 300
+kb_overloadtop_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_implicit_shortnamed_def_comp	1 1 200 3
+kb_overloadtop_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_overloadtop_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_implicit_shortnamed_val_comp	1 1 200 3
+kb_overloadtop_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_overloadtop_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:29
+kb_overloadtop_implicit_searched_def_chosen	1 1 2 3
+kb_overloadtop_implicit_searched_def_chosen_prim	1 1 w 3
+kb_overloadtop_implicit_searched_val_chosen	1 1 2 3
+kb_overloadtop_implicit_searched_val_chosen_prim	1 1 w 3
+kb_overusing_using_pos_def_comp	1 1 2 3
+kb_overusing_using_pos_def_comp_prim	1 1 w 3
+kb_overusing_using_pos_def_none	1 1 2 3
+kb_overusing_using_pos_def_none_prim	1 1 w 3
+kb_overusing_using_pos_val_comp	1 1 2 3
+kb_overusing_using_pos_val_comp_prim	1 1 w 3
+kb_overusing_using_pos_val_none	1 1 2 3
+kb_overusing_using_pos_val_none_prim	1 1 w 3
+kb_overusing_using_named_def_comp	1 1 2 3
+kb_overusing_using_named_def_comp_prim	1 1 w 3
+kb_overusing_using_named_def_none	1 1 2 3
+kb_overusing_using_named_def_none_prim	1 1 w 3
+kb_overusing_using_named_val_comp	1 1 2 3
+kb_overusing_using_named_val_comp_prim	1 1 w 3
+kb_overusing_using_named_val_none	1 1 2 3
+kb_overusing_using_named_val_none_prim	1 1 w 3
+kb_overusing_using_swapped_def_comp	1 1 2 3
+kb_overusing_using_swapped_def_comp_prim	1 1 w 3
+kb_overusing_using_swapped_def_none	1 1 2 3
+kb_overusing_using_swapped_def_none_prim	1 1 w 3
+kb_overusing_using_swapped_val_comp	1 1 2 3
+kb_overusing_using_swapped_val_comp_prim	1 1 w 3
+kb_overusing_using_swapped_val_none	1 1 2 3
+kb_overusing_using_swapped_val_none_prim	1 1 w 3
+kb_overusing_using_short_def_comp	two 1 1 2
+kb_overusing_using_short_def_comp_prim	two 1 1 w
+kb_overusing_using_short_def_none	two 1 1 2
+kb_overusing_using_short_def_none_prim	two 1 1 w
+kb_overusing_using_short_val_comp	two 1 1 2
+kb_overusing_using_short_val_comp_prim	two 1 1 w
+kb_overusing_using_short_val_none	two 1 1 2
+kb_overusing_using_short_val_none_prim	two 1 1 w
+kb_overusing_using_shortnamed_def_comp	REFUSED	Error: A.scala:12:50
+kb_overusing_using_shortnamed_def_comp_prim	REFUSED	Error: A.scala:12:47
+kb_overusing_using_shortnamed_def_none	REFUSED	Error: A.scala:9:50
+kb_overusing_using_shortnamed_def_none_prim	REFUSED	Error: A.scala:9:47
+kb_overusing_using_shortnamed_val_comp	REFUSED	Error: A.scala:12:50
+kb_overusing_using_shortnamed_val_comp_prim	REFUSED	Error: A.scala:12:47
+kb_overusing_using_shortnamed_val_none	REFUSED	Error: A.scala:9:50
+kb_overusing_using_shortnamed_val_none_prim	REFUSED	Error: A.scala:9:47
+kb_overusing_using_searched_def_chosen	REFUSED	[E051] Reference Error: A.scala:20:24
+kb_overusing_using_searched_def_chosen_prim	REFUSED	[E051] Reference Error: A.scala:14:24
+kb_overusing_using_searched_val_chosen	REFUSED	[E051] Reference Error: A.scala:20:24
+kb_overusing_using_searched_val_chosen_prim	REFUSED	[E051] Reference Error: A.scala:14:24
+kb_overusing_implicit_pos_def_comp	1 1 2 3
+kb_overusing_implicit_pos_def_comp_prim	1 1 w 3
+kb_overusing_implicit_pos_def_none	1 1 2 3
+kb_overusing_implicit_pos_def_none_prim	1 1 w 3
+kb_overusing_implicit_pos_val_comp	1 1 2 3
+kb_overusing_implicit_pos_val_comp_prim	1 1 w 3
+kb_overusing_implicit_pos_val_none	1 1 2 3
+kb_overusing_implicit_pos_val_none_prim	1 1 w 3
+kb_overusing_implicit_named_def_comp	1 1 2 3
+kb_overusing_implicit_named_def_comp_prim	1 1 w 3
+kb_overusing_implicit_named_def_none	1 1 2 3
+kb_overusing_implicit_named_def_none_prim	1 1 w 3
+kb_overusing_implicit_named_val_comp	1 1 2 3
+kb_overusing_implicit_named_val_comp_prim	1 1 w 3
+kb_overusing_implicit_named_val_none	1 1 2 3
+kb_overusing_implicit_named_val_none_prim	1 1 w 3
+kb_overusing_implicit_swapped_def_comp	1 1 2 3
+kb_overusing_implicit_swapped_def_comp_prim	1 1 w 3
+kb_overusing_implicit_swapped_def_none	1 1 2 3
+kb_overusing_implicit_swapped_def_none_prim	1 1 w 3
+kb_overusing_implicit_swapped_val_comp	1 1 2 3
+kb_overusing_implicit_swapped_val_comp_prim	1 1 w 3
+kb_overusing_implicit_swapped_val_none	1 1 2 3
+kb_overusing_implicit_swapped_val_none_prim	1 1 w 3
+kb_overusing_implicit_short_def_comp	two 1 1 2
+kb_overusing_implicit_short_def_comp_prim	two 1 1 w
+kb_overusing_implicit_short_def_none	two 1 1 2
+kb_overusing_implicit_short_def_none_prim	two 1 1 w
+kb_overusing_implicit_short_val_comp	two 1 1 2
+kb_overusing_implicit_short_val_comp_prim	two 1 1 w
+kb_overusing_implicit_short_val_none	two 1 1 2
+kb_overusing_implicit_short_val_none_prim	two 1 1 w
+kb_overusing_implicit_shortnamed_def_comp	REFUSED	Error: A.scala:12:50
+kb_overusing_implicit_shortnamed_def_comp_prim	REFUSED	Error: A.scala:12:47
+kb_overusing_implicit_shortnamed_def_none	REFUSED	Error: A.scala:9:50
+kb_overusing_implicit_shortnamed_def_none_prim	REFUSED	Error: A.scala:9:47
+kb_overusing_implicit_shortnamed_val_comp	REFUSED	Error: A.scala:12:50
+kb_overusing_implicit_shortnamed_val_comp_prim	REFUSED	Error: A.scala:12:47
+kb_overusing_implicit_shortnamed_val_none	REFUSED	Error: A.scala:9:50
+kb_overusing_implicit_shortnamed_val_none_prim	REFUSED	Error: A.scala:9:47
+kb_overusing_implicit_searched_def_chosen	REFUSED	[E051] Reference Error: A.scala:20:24
+kb_overusing_implicit_searched_def_chosen_prim	REFUSED	[E051] Reference Error: A.scala:14:24
+kb_overusing_implicit_searched_val_chosen	REFUSED	[E051] Reference Error: A.scala:20:24
+kb_overusing_implicit_searched_val_chosen_prim	REFUSED	[E051] Reference Error: A.scala:14:24
+kb_overusingtop_using_pos_def_comp	1 1 2 3
+kb_overusingtop_using_pos_def_comp_prim	1 1 w 3
+kb_overusingtop_using_pos_def_none	1 1 2 3
+kb_overusingtop_using_pos_def_none_prim	1 1 w 3
+kb_overusingtop_using_pos_val_comp	1 1 2 3
+kb_overusingtop_using_pos_val_comp_prim	1 1 w 3
+kb_overusingtop_using_pos_val_none	1 1 2 3
+kb_overusingtop_using_pos_val_none_prim	1 1 w 3
+kb_overusingtop_using_named_def_comp	1 1 2 3
+kb_overusingtop_using_named_def_comp_prim	1 1 w 3
+kb_overusingtop_using_named_def_none	1 1 2 3
+kb_overusingtop_using_named_def_none_prim	1 1 w 3
+kb_overusingtop_using_named_val_comp	1 1 2 3
+kb_overusingtop_using_named_val_comp_prim	1 1 w 3
+kb_overusingtop_using_named_val_none	1 1 2 3
+kb_overusingtop_using_named_val_none_prim	1 1 w 3
+kb_overusingtop_using_swapped_def_comp	1 1 2 3
+kb_overusingtop_using_swapped_def_comp_prim	1 1 w 3
+kb_overusingtop_using_swapped_def_none	1 1 2 3
+kb_overusingtop_using_swapped_def_none_prim	1 1 w 3
+kb_overusingtop_using_swapped_val_comp	1 1 2 3
+kb_overusingtop_using_swapped_val_comp_prim	1 1 w 3
+kb_overusingtop_using_swapped_val_none	1 1 2 3
+kb_overusingtop_using_swapped_val_none_prim	1 1 w 3
+kb_overusingtop_using_short_def_comp	two 1 1 2
+kb_overusingtop_using_short_def_comp_prim	two 1 1 w
+kb_overusingtop_using_short_def_none	two 1 1 2
+kb_overusingtop_using_short_def_none_prim	two 1 1 w
+kb_overusingtop_using_short_val_comp	two 1 1 2
+kb_overusingtop_using_short_val_comp_prim	two 1 1 w
+kb_overusingtop_using_short_val_none	two 1 1 2
+kb_overusingtop_using_short_val_none_prim	two 1 1 w
+kb_overusingtop_using_shortnamed_def_comp	REFUSED	Error: A.scala:11:48
+kb_overusingtop_using_shortnamed_def_comp_prim	REFUSED	Error: A.scala:11:45
+kb_overusingtop_using_shortnamed_def_none	REFUSED	Error: A.scala:8:48
+kb_overusingtop_using_shortnamed_def_none_prim	REFUSED	Error: A.scala:8:45
+kb_overusingtop_using_shortnamed_val_comp	REFUSED	Error: A.scala:11:48
+kb_overusingtop_using_shortnamed_val_comp_prim	REFUSED	Error: A.scala:11:45
+kb_overusingtop_using_shortnamed_val_none	REFUSED	Error: A.scala:8:48
+kb_overusingtop_using_shortnamed_val_none_prim	REFUSED	Error: A.scala:8:45
+kb_overusingtop_using_searched_def_chosen	REFUSED	[E051] Reference Error: A.scala:19:22
+kb_overusingtop_using_searched_def_chosen_prim	REFUSED	[E051] Reference Error: A.scala:13:22
+kb_overusingtop_using_searched_val_chosen	REFUSED	[E051] Reference Error: A.scala:19:22
+kb_overusingtop_using_searched_val_chosen_prim	REFUSED	[E051] Reference Error: A.scala:13:22
+kb_overusingtop_implicit_pos_def_comp	1 1 2 3
+kb_overusingtop_implicit_pos_def_comp_prim	1 1 w 3
+kb_overusingtop_implicit_pos_def_none	1 1 2 3
+kb_overusingtop_implicit_pos_def_none_prim	1 1 w 3
+kb_overusingtop_implicit_pos_val_comp	1 1 2 3
+kb_overusingtop_implicit_pos_val_comp_prim	1 1 w 3
+kb_overusingtop_implicit_pos_val_none	1 1 2 3
+kb_overusingtop_implicit_pos_val_none_prim	1 1 w 3
+kb_overusingtop_implicit_named_def_comp	1 1 2 3
+kb_overusingtop_implicit_named_def_comp_prim	1 1 w 3
+kb_overusingtop_implicit_named_def_none	1 1 2 3
+kb_overusingtop_implicit_named_def_none_prim	1 1 w 3
+kb_overusingtop_implicit_named_val_comp	1 1 2 3
+kb_overusingtop_implicit_named_val_comp_prim	1 1 w 3
+kb_overusingtop_implicit_named_val_none	1 1 2 3
+kb_overusingtop_implicit_named_val_none_prim	1 1 w 3
+kb_overusingtop_implicit_swapped_def_comp	1 1 2 3
+kb_overusingtop_implicit_swapped_def_comp_prim	1 1 w 3
+kb_overusingtop_implicit_swapped_def_none	1 1 2 3
+kb_overusingtop_implicit_swapped_def_none_prim	1 1 w 3
+kb_overusingtop_implicit_swapped_val_comp	1 1 2 3
+kb_overusingtop_implicit_swapped_val_comp_prim	1 1 w 3
+kb_overusingtop_implicit_swapped_val_none	1 1 2 3
+kb_overusingtop_implicit_swapped_val_none_prim	1 1 w 3
+kb_overusingtop_implicit_short_def_comp	two 1 1 2
+kb_overusingtop_implicit_short_def_comp_prim	two 1 1 w
+kb_overusingtop_implicit_short_def_none	two 1 1 2
+kb_overusingtop_implicit_short_def_none_prim	two 1 1 w
+kb_overusingtop_implicit_short_val_comp	two 1 1 2
+kb_overusingtop_implicit_short_val_comp_prim	two 1 1 w
+kb_overusingtop_implicit_short_val_none	two 1 1 2
+kb_overusingtop_implicit_short_val_none_prim	two 1 1 w
+kb_overusingtop_implicit_shortnamed_def_comp	REFUSED	Error: A.scala:11:48
+kb_overusingtop_implicit_shortnamed_def_comp_prim	REFUSED	Error: A.scala:11:45
+kb_overusingtop_implicit_shortnamed_def_none	REFUSED	Error: A.scala:8:48
+kb_overusingtop_implicit_shortnamed_def_none_prim	REFUSED	Error: A.scala:8:45
+kb_overusingtop_implicit_shortnamed_val_comp	REFUSED	Error: A.scala:11:48
+kb_overusingtop_implicit_shortnamed_val_comp_prim	REFUSED	Error: A.scala:11:45
+kb_overusingtop_implicit_shortnamed_val_none	REFUSED	Error: A.scala:8:48
+kb_overusingtop_implicit_shortnamed_val_none_prim	REFUSED	Error: A.scala:8:45
+kb_overusingtop_implicit_searched_def_chosen	REFUSED	[E051] Reference Error: A.scala:19:22
+kb_overusingtop_implicit_searched_def_chosen_prim	REFUSED	[E051] Reference Error: A.scala:13:22
+kb_overusingtop_implicit_searched_val_chosen	REFUSED	[E051] Reference Error: A.scala:19:22
+kb_overusingtop_implicit_searched_val_chosen_prim	REFUSED	[E051] Reference Error: A.scala:13:22
+kb_extractor_using_searched_def_chosen	1 1 2 3
+kb_extractor_using_searched_def_chosen_prim	1 1 w 3
+kb_extractor_using_searched_val_chosen	1 1 2 3
+kb_extractor_using_searched_val_chosen_prim	1 1 w 3
+kb_extractor_implicit_searched_def_chosen	1 1 2 3
+kb_extractor_implicit_searched_def_chosen_prim	1 1 w 3
+kb_extractor_implicit_searched_val_chosen	1 1 2 3
+kb_extractor_implicit_searched_val_chosen_prim	1 1 w 3
+kb_extractorseq_using_searched_def_chosen	1 1 2 3
+kb_extractorseq_using_searched_def_chosen_prim	1 1 w 3
+kb_extractorseq_using_searched_val_chosen	1 1 2 3
+kb_extractorseq_using_searched_val_chosen_prim	1 1 w 3
+kb_extractorseq_implicit_searched_def_chosen	1 1 2 3
+kb_extractorseq_implicit_searched_def_chosen_prim	1 1 w 3
+kb_extractorseq_implicit_searched_val_chosen	1 1 2 3
+kb_extractorseq_implicit_searched_val_chosen_prim	1 1 w 3
+kb_new_using_pos_def_comp	1 1 2 3
+kb_new_using_pos_def_comp_prim	1 1 w 3
+kb_new_using_pos_def_none	1 1 2 3
+kb_new_using_pos_def_none_prim	1 1 w 3
+kb_new_using_pos_val_comp	1 1 2 3
+kb_new_using_pos_val_comp_prim	1 1 w 3
+kb_new_using_pos_val_none	1 1 2 3
+kb_new_using_pos_val_none_prim	1 1 w 3
+kb_new_usingfirst_pos_def_comp	0 1 2 3
+kb_new_usingfirst_pos_def_comp_prim	0 1 w 3
+kb_new_usingfirst_pos_def_none	0 1 2 3
+kb_new_usingfirst_pos_def_none_prim	0 1 w 3
+kb_new_usingfirst_pos_val_comp	0 1 2 3
+kb_new_usingfirst_pos_val_comp_prim	0 1 w 3
+kb_new_usingfirst_pos_val_none	0 1 2 3
+kb_new_usingfirst_pos_val_none_prim	0 1 w 3
+kb_new_using_named_def_comp	1 1 2 3
+kb_new_using_named_def_comp_prim	1 1 w 3
+kb_new_using_named_def_none	1 1 2 3
+kb_new_using_named_def_none_prim	1 1 w 3
+kb_new_using_named_val_comp	1 1 2 3
+kb_new_using_named_val_comp_prim	1 1 w 3
+kb_new_using_named_val_none	1 1 2 3
+kb_new_using_named_val_none_prim	1 1 w 3
+kb_new_usingfirst_named_def_comp	0 1 2 3
+kb_new_usingfirst_named_def_comp_prim	0 1 w 3
+kb_new_usingfirst_named_def_none	0 1 2 3
+kb_new_usingfirst_named_def_none_prim	0 1 w 3
+kb_new_usingfirst_named_val_comp	0 1 2 3
+kb_new_usingfirst_named_val_comp_prim	0 1 w 3
+kb_new_usingfirst_named_val_none	0 1 2 3
+kb_new_usingfirst_named_val_none_prim	0 1 w 3
+kb_new_using_swapped_def_comp	1 1 2 3
+kb_new_using_swapped_def_comp_prim	1 1 w 3
+kb_new_using_swapped_def_none	1 1 2 3
+kb_new_using_swapped_def_none_prim	1 1 w 3
+kb_new_using_swapped_val_comp	1 1 2 3
+kb_new_using_swapped_val_comp_prim	1 1 w 3
+kb_new_using_swapped_val_none	1 1 2 3
+kb_new_using_swapped_val_none_prim	1 1 w 3
+kb_new_usingfirst_swapped_def_comp	0 1 2 3
+kb_new_usingfirst_swapped_def_comp_prim	0 1 w 3
+kb_new_usingfirst_swapped_def_none	0 1 2 3
+kb_new_usingfirst_swapped_def_none_prim	0 1 w 3
+kb_new_usingfirst_swapped_val_comp	0 1 2 3
+kb_new_usingfirst_swapped_val_comp_prim	0 1 w 3
+kb_new_usingfirst_swapped_val_none	0 1 2 3
+kb_new_usingfirst_swapped_val_none_prim	0 1 w 3
+kb_new_using_short_def_comp	1 1 2 300
+kb_new_using_short_def_comp_prim	1 1 w 300
+kb_new_using_short_def_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_using_short_val_comp	1 1 2 300
+kb_new_using_short_val_comp_prim	1 1 w 300
+kb_new_using_short_val_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_usingfirst_short_def_comp	0 1 2 300
+kb_new_usingfirst_short_def_comp_prim	0 1 w 300
+kb_new_usingfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_usingfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_usingfirst_short_val_comp	0 1 2 300
+kb_new_usingfirst_short_val_comp_prim	0 1 w 300
+kb_new_usingfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_usingfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_using_shortnamed_def_comp	1 1 200 3
+kb_new_using_shortnamed_def_comp_prim	1 1 g 3
+kb_new_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_using_shortnamed_val_comp	1 1 200 3
+kb_new_using_shortnamed_val_comp_prim	1 1 g 3
+kb_new_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_usingfirst_shortnamed_def_comp	REFUSED	[E100] Syntax Error: A.scala:11:22
+kb_new_usingfirst_shortnamed_def_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:22
+kb_new_usingfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_usingfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_usingfirst_shortnamed_val_comp	REFUSED	[E100] Syntax Error: A.scala:11:22
+kb_new_usingfirst_shortnamed_val_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:22
+kb_new_usingfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_usingfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_using_searched_def_chosen	1 1 2 3
+kb_new_using_searched_def_chosen_prim	1 1 w 3
+kb_new_using_searched_val_chosen	1 1 2 3
+kb_new_using_searched_val_chosen_prim	1 1 w 3
+kb_new_usingfirst_searched_def_chosen	0 1 2 3
+kb_new_usingfirst_searched_def_chosen_prim	0 1 w 3
+kb_new_usingfirst_searched_val_chosen	0 1 2 3
+kb_new_usingfirst_searched_val_chosen_prim	0 1 w 3
+kb_new_implicit_pos_def_comp	1 1 2 3
+kb_new_implicit_pos_def_comp_prim	1 1 w 3
+kb_new_implicit_pos_def_none	1 1 2 3
+kb_new_implicit_pos_def_none_prim	1 1 w 3
+kb_new_implicit_pos_val_comp	1 1 2 3
+kb_new_implicit_pos_val_comp_prim	1 1 w 3
+kb_new_implicit_pos_val_none	1 1 2 3
+kb_new_implicit_pos_val_none_prim	1 1 w 3
+kb_new_implicitfirst_pos_def_comp	0 1 2 3
+kb_new_implicitfirst_pos_def_comp_prim	0 1 w 3
+kb_new_implicitfirst_pos_def_none	0 1 2 3
+kb_new_implicitfirst_pos_def_none_prim	0 1 w 3
+kb_new_implicitfirst_pos_val_comp	0 1 2 3
+kb_new_implicitfirst_pos_val_comp_prim	0 1 w 3
+kb_new_implicitfirst_pos_val_none	0 1 2 3
+kb_new_implicitfirst_pos_val_none_prim	0 1 w 3
+kb_new_implicit_named_def_comp	1 1 2 3
+kb_new_implicit_named_def_comp_prim	1 1 w 3
+kb_new_implicit_named_def_none	1 1 2 3
+kb_new_implicit_named_def_none_prim	1 1 w 3
+kb_new_implicit_named_val_comp	1 1 2 3
+kb_new_implicit_named_val_comp_prim	1 1 w 3
+kb_new_implicit_named_val_none	1 1 2 3
+kb_new_implicit_named_val_none_prim	1 1 w 3
+kb_new_implicitfirst_named_def_comp	0 1 2 3
+kb_new_implicitfirst_named_def_comp_prim	0 1 w 3
+kb_new_implicitfirst_named_def_none	0 1 2 3
+kb_new_implicitfirst_named_def_none_prim	0 1 w 3
+kb_new_implicitfirst_named_val_comp	0 1 2 3
+kb_new_implicitfirst_named_val_comp_prim	0 1 w 3
+kb_new_implicitfirst_named_val_none	0 1 2 3
+kb_new_implicitfirst_named_val_none_prim	0 1 w 3
+kb_new_implicit_swapped_def_comp	1 1 2 3
+kb_new_implicit_swapped_def_comp_prim	1 1 w 3
+kb_new_implicit_swapped_def_none	1 1 2 3
+kb_new_implicit_swapped_def_none_prim	1 1 w 3
+kb_new_implicit_swapped_val_comp	1 1 2 3
+kb_new_implicit_swapped_val_comp_prim	1 1 w 3
+kb_new_implicit_swapped_val_none	1 1 2 3
+kb_new_implicit_swapped_val_none_prim	1 1 w 3
+kb_new_implicitfirst_swapped_def_comp	0 1 2 3
+kb_new_implicitfirst_swapped_def_comp_prim	0 1 w 3
+kb_new_implicitfirst_swapped_def_none	0 1 2 3
+kb_new_implicitfirst_swapped_def_none_prim	0 1 w 3
+kb_new_implicitfirst_swapped_val_comp	0 1 2 3
+kb_new_implicitfirst_swapped_val_comp_prim	0 1 w 3
+kb_new_implicitfirst_swapped_val_none	0 1 2 3
+kb_new_implicitfirst_swapped_val_none_prim	0 1 w 3
+kb_new_implicit_short_def_comp	1 1 2 300
+kb_new_implicit_short_def_comp_prim	1 1 w 300
+kb_new_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicit_short_val_comp	1 1 2 300
+kb_new_implicit_short_val_comp_prim	1 1 w 300
+kb_new_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicitfirst_short_def_comp	0 1 2 300
+kb_new_implicitfirst_short_def_comp_prim	0 1 w 300
+kb_new_implicitfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicitfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicitfirst_short_val_comp	0 1 2 300
+kb_new_implicitfirst_short_val_comp_prim	0 1 w 300
+kb_new_implicitfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicitfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicit_shortnamed_def_comp	1 1 200 3
+kb_new_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_new_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicit_shortnamed_val_comp	1 1 200 3
+kb_new_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_new_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicitfirst_shortnamed_def_comp	0 1 200 3
+kb_new_implicitfirst_shortnamed_def_comp_prim	0 1 g 3
+kb_new_implicitfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicitfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicitfirst_shortnamed_val_comp	0 1 200 3
+kb_new_implicitfirst_shortnamed_val_comp_prim	0 1 g 3
+kb_new_implicitfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicitfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:22
+kb_new_implicit_searched_def_chosen	1 1 2 3
+kb_new_implicit_searched_def_chosen_prim	1 1 w 3
+kb_new_implicit_searched_val_chosen	1 1 2 3
+kb_new_implicit_searched_val_chosen_prim	1 1 w 3
+kb_new_implicitfirst_searched_def_chosen	0 1 2 3
+kb_new_implicitfirst_searched_def_chosen_prim	0 1 w 3
+kb_new_implicitfirst_searched_val_chosen	0 1 2 3
+kb_new_implicitfirst_searched_val_chosen_prim	0 1 w 3
+kb_classparent_using_pos_def_comp	1 1 2 3
+kb_classparent_using_pos_def_comp_prim	1 1 w 3
+kb_classparent_using_pos_def_none	1 1 2 3
+kb_classparent_using_pos_def_none_prim	1 1 w 3
+kb_classparent_using_pos_val_comp	1 1 2 3
+kb_classparent_using_pos_val_comp_prim	1 1 w 3
+kb_classparent_using_pos_val_none	1 1 2 3
+kb_classparent_using_pos_val_none_prim	1 1 w 3
+kb_classparent_usingfirst_pos_def_comp	0 1 2 3
+kb_classparent_usingfirst_pos_def_comp_prim	0 1 w 3
+kb_classparent_usingfirst_pos_def_none	0 1 2 3
+kb_classparent_usingfirst_pos_def_none_prim	0 1 w 3
+kb_classparent_usingfirst_pos_val_comp	0 1 2 3
+kb_classparent_usingfirst_pos_val_comp_prim	0 1 w 3
+kb_classparent_usingfirst_pos_val_none	0 1 2 3
+kb_classparent_usingfirst_pos_val_none_prim	0 1 w 3
+kb_classparent_using_named_def_comp	1 1 2 3
+kb_classparent_using_named_def_comp_prim	1 1 w 3
+kb_classparent_using_named_def_none	1 1 2 3
+kb_classparent_using_named_def_none_prim	1 1 w 3
+kb_classparent_using_named_val_comp	1 1 2 3
+kb_classparent_using_named_val_comp_prim	1 1 w 3
+kb_classparent_using_named_val_none	1 1 2 3
+kb_classparent_using_named_val_none_prim	1 1 w 3
+kb_classparent_usingfirst_named_def_comp	0 1 2 3
+kb_classparent_usingfirst_named_def_comp_prim	0 1 w 3
+kb_classparent_usingfirst_named_def_none	0 1 2 3
+kb_classparent_usingfirst_named_def_none_prim	0 1 w 3
+kb_classparent_usingfirst_named_val_comp	0 1 2 3
+kb_classparent_usingfirst_named_val_comp_prim	0 1 w 3
+kb_classparent_usingfirst_named_val_none	0 1 2 3
+kb_classparent_usingfirst_named_val_none_prim	0 1 w 3
+kb_classparent_using_swapped_def_comp	1 1 2 3
+kb_classparent_using_swapped_def_comp_prim	1 1 w 3
+kb_classparent_using_swapped_def_none	1 1 2 3
+kb_classparent_using_swapped_def_none_prim	1 1 w 3
+kb_classparent_using_swapped_val_comp	1 1 2 3
+kb_classparent_using_swapped_val_comp_prim	1 1 w 3
+kb_classparent_using_swapped_val_none	1 1 2 3
+kb_classparent_using_swapped_val_none_prim	1 1 w 3
+kb_classparent_usingfirst_swapped_def_comp	0 1 2 3
+kb_classparent_usingfirst_swapped_def_comp_prim	0 1 w 3
+kb_classparent_usingfirst_swapped_def_none	0 1 2 3
+kb_classparent_usingfirst_swapped_def_none_prim	0 1 w 3
+kb_classparent_usingfirst_swapped_val_comp	0 1 2 3
+kb_classparent_usingfirst_swapped_val_comp_prim	0 1 w 3
+kb_classparent_usingfirst_swapped_val_none	0 1 2 3
+kb_classparent_usingfirst_swapped_val_none_prim	0 1 w 3
+kb_classparent_using_short_def_comp	1 1 2 300
+kb_classparent_using_short_def_comp_prim	1 1 w 300
+kb_classparent_using_short_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_using_short_val_comp	1 1 2 300
+kb_classparent_using_short_val_comp_prim	1 1 w 300
+kb_classparent_using_short_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_usingfirst_short_def_comp	0 1 2 300
+kb_classparent_usingfirst_short_def_comp_prim	0 1 w 300
+kb_classparent_usingfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_usingfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_usingfirst_short_val_comp	0 1 2 300
+kb_classparent_usingfirst_short_val_comp_prim	0 1 w 300
+kb_classparent_usingfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_usingfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_using_shortnamed_def_comp	1 1 200 3
+kb_classparent_using_shortnamed_def_comp_prim	1 1 g 3
+kb_classparent_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_using_shortnamed_val_comp	1 1 200 3
+kb_classparent_using_shortnamed_val_comp_prim	1 1 g 3
+kb_classparent_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_usingfirst_shortnamed_def_comp	REFUSED	[E100] Syntax Error: A.scala:11:18
+kb_classparent_usingfirst_shortnamed_def_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:18
+kb_classparent_usingfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_usingfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_usingfirst_shortnamed_val_comp	REFUSED	[E100] Syntax Error: A.scala:11:18
+kb_classparent_usingfirst_shortnamed_val_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:18
+kb_classparent_usingfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_usingfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_using_searched_def_chosen	1 1 2 3
+kb_classparent_using_searched_def_chosen_prim	1 1 w 3
+kb_classparent_using_searched_val_chosen	1 1 2 3
+kb_classparent_using_searched_val_chosen_prim	1 1 w 3
+kb_classparent_usingfirst_searched_def_chosen	0 1 2 3
+kb_classparent_usingfirst_searched_def_chosen_prim	0 1 w 3
+kb_classparent_usingfirst_searched_val_chosen	0 1 2 3
+kb_classparent_usingfirst_searched_val_chosen_prim	0 1 w 3
+kb_classparent_implicit_pos_def_comp	1 1 2 3
+kb_classparent_implicit_pos_def_comp_prim	1 1 w 3
+kb_classparent_implicit_pos_def_none	1 1 2 3
+kb_classparent_implicit_pos_def_none_prim	1 1 w 3
+kb_classparent_implicit_pos_val_comp	1 1 2 3
+kb_classparent_implicit_pos_val_comp_prim	1 1 w 3
+kb_classparent_implicit_pos_val_none	1 1 2 3
+kb_classparent_implicit_pos_val_none_prim	1 1 w 3
+kb_classparent_implicitfirst_pos_def_comp	0 1 2 3
+kb_classparent_implicitfirst_pos_def_comp_prim	0 1 w 3
+kb_classparent_implicitfirst_pos_def_none	0 1 2 3
+kb_classparent_implicitfirst_pos_def_none_prim	0 1 w 3
+kb_classparent_implicitfirst_pos_val_comp	0 1 2 3
+kb_classparent_implicitfirst_pos_val_comp_prim	0 1 w 3
+kb_classparent_implicitfirst_pos_val_none	0 1 2 3
+kb_classparent_implicitfirst_pos_val_none_prim	0 1 w 3
+kb_classparent_implicit_named_def_comp	1 1 2 3
+kb_classparent_implicit_named_def_comp_prim	1 1 w 3
+kb_classparent_implicit_named_def_none	1 1 2 3
+kb_classparent_implicit_named_def_none_prim	1 1 w 3
+kb_classparent_implicit_named_val_comp	1 1 2 3
+kb_classparent_implicit_named_val_comp_prim	1 1 w 3
+kb_classparent_implicit_named_val_none	1 1 2 3
+kb_classparent_implicit_named_val_none_prim	1 1 w 3
+kb_classparent_implicitfirst_named_def_comp	0 1 2 3
+kb_classparent_implicitfirst_named_def_comp_prim	0 1 w 3
+kb_classparent_implicitfirst_named_def_none	0 1 2 3
+kb_classparent_implicitfirst_named_def_none_prim	0 1 w 3
+kb_classparent_implicitfirst_named_val_comp	0 1 2 3
+kb_classparent_implicitfirst_named_val_comp_prim	0 1 w 3
+kb_classparent_implicitfirst_named_val_none	0 1 2 3
+kb_classparent_implicitfirst_named_val_none_prim	0 1 w 3
+kb_classparent_implicit_swapped_def_comp	1 1 2 3
+kb_classparent_implicit_swapped_def_comp_prim	1 1 w 3
+kb_classparent_implicit_swapped_def_none	1 1 2 3
+kb_classparent_implicit_swapped_def_none_prim	1 1 w 3
+kb_classparent_implicit_swapped_val_comp	1 1 2 3
+kb_classparent_implicit_swapped_val_comp_prim	1 1 w 3
+kb_classparent_implicit_swapped_val_none	1 1 2 3
+kb_classparent_implicit_swapped_val_none_prim	1 1 w 3
+kb_classparent_implicitfirst_swapped_def_comp	0 1 2 3
+kb_classparent_implicitfirst_swapped_def_comp_prim	0 1 w 3
+kb_classparent_implicitfirst_swapped_def_none	0 1 2 3
+kb_classparent_implicitfirst_swapped_def_none_prim	0 1 w 3
+kb_classparent_implicitfirst_swapped_val_comp	0 1 2 3
+kb_classparent_implicitfirst_swapped_val_comp_prim	0 1 w 3
+kb_classparent_implicitfirst_swapped_val_none	0 1 2 3
+kb_classparent_implicitfirst_swapped_val_none_prim	0 1 w 3
+kb_classparent_implicit_short_def_comp	1 1 2 300
+kb_classparent_implicit_short_def_comp_prim	1 1 w 300
+kb_classparent_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicit_short_val_comp	1 1 2 300
+kb_classparent_implicit_short_val_comp_prim	1 1 w 300
+kb_classparent_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicitfirst_short_def_comp	0 1 2 300
+kb_classparent_implicitfirst_short_def_comp_prim	0 1 w 300
+kb_classparent_implicitfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicitfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicitfirst_short_val_comp	0 1 2 300
+kb_classparent_implicitfirst_short_val_comp_prim	0 1 w 300
+kb_classparent_implicitfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicitfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicit_shortnamed_def_comp	1 1 200 3
+kb_classparent_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_classparent_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicit_shortnamed_val_comp	1 1 200 3
+kb_classparent_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_classparent_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicitfirst_shortnamed_def_comp	0 1 200 3
+kb_classparent_implicitfirst_shortnamed_def_comp_prim	0 1 g 3
+kb_classparent_implicitfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicitfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicitfirst_shortnamed_val_comp	0 1 200 3
+kb_classparent_implicitfirst_shortnamed_val_comp_prim	0 1 g 3
+kb_classparent_implicitfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicitfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_classparent_implicit_searched_def_chosen	1 1 2 3
+kb_classparent_implicit_searched_def_chosen_prim	1 1 w 3
+kb_classparent_implicit_searched_val_chosen	1 1 2 3
+kb_classparent_implicit_searched_val_chosen_prim	1 1 w 3
+kb_classparent_implicitfirst_searched_def_chosen	0 1 2 3
+kb_classparent_implicitfirst_searched_def_chosen_prim	0 1 w 3
+kb_classparent_implicitfirst_searched_val_chosen	0 1 2 3
+kb_classparent_implicitfirst_searched_val_chosen_prim	0 1 w 3
+kb_classanon_using_pos_def_comp	1 1 2 3
+kb_classanon_using_pos_def_comp_prim	1 1 w 3
+kb_classanon_using_pos_def_none	1 1 2 3
+kb_classanon_using_pos_def_none_prim	1 1 w 3
+kb_classanon_using_pos_val_comp	1 1 2 3
+kb_classanon_using_pos_val_comp_prim	1 1 w 3
+kb_classanon_using_pos_val_none	1 1 2 3
+kb_classanon_using_pos_val_none_prim	1 1 w 3
+kb_classanon_usingfirst_pos_def_comp	0 1 2 3
+kb_classanon_usingfirst_pos_def_comp_prim	0 1 w 3
+kb_classanon_usingfirst_pos_def_none	0 1 2 3
+kb_classanon_usingfirst_pos_def_none_prim	0 1 w 3
+kb_classanon_usingfirst_pos_val_comp	0 1 2 3
+kb_classanon_usingfirst_pos_val_comp_prim	0 1 w 3
+kb_classanon_usingfirst_pos_val_none	0 1 2 3
+kb_classanon_usingfirst_pos_val_none_prim	0 1 w 3
+kb_classanon_using_named_def_comp	1 1 2 3
+kb_classanon_using_named_def_comp_prim	1 1 w 3
+kb_classanon_using_named_def_none	1 1 2 3
+kb_classanon_using_named_def_none_prim	1 1 w 3
+kb_classanon_using_named_val_comp	1 1 2 3
+kb_classanon_using_named_val_comp_prim	1 1 w 3
+kb_classanon_using_named_val_none	1 1 2 3
+kb_classanon_using_named_val_none_prim	1 1 w 3
+kb_classanon_usingfirst_named_def_comp	0 1 2 3
+kb_classanon_usingfirst_named_def_comp_prim	0 1 w 3
+kb_classanon_usingfirst_named_def_none	0 1 2 3
+kb_classanon_usingfirst_named_def_none_prim	0 1 w 3
+kb_classanon_usingfirst_named_val_comp	0 1 2 3
+kb_classanon_usingfirst_named_val_comp_prim	0 1 w 3
+kb_classanon_usingfirst_named_val_none	0 1 2 3
+kb_classanon_usingfirst_named_val_none_prim	0 1 w 3
+kb_classanon_using_swapped_def_comp	1 1 2 3
+kb_classanon_using_swapped_def_comp_prim	1 1 w 3
+kb_classanon_using_swapped_def_none	1 1 2 3
+kb_classanon_using_swapped_def_none_prim	1 1 w 3
+kb_classanon_using_swapped_val_comp	1 1 2 3
+kb_classanon_using_swapped_val_comp_prim	1 1 w 3
+kb_classanon_using_swapped_val_none	1 1 2 3
+kb_classanon_using_swapped_val_none_prim	1 1 w 3
+kb_classanon_usingfirst_swapped_def_comp	0 1 2 3
+kb_classanon_usingfirst_swapped_def_comp_prim	0 1 w 3
+kb_classanon_usingfirst_swapped_def_none	0 1 2 3
+kb_classanon_usingfirst_swapped_def_none_prim	0 1 w 3
+kb_classanon_usingfirst_swapped_val_comp	0 1 2 3
+kb_classanon_usingfirst_swapped_val_comp_prim	0 1 w 3
+kb_classanon_usingfirst_swapped_val_none	0 1 2 3
+kb_classanon_usingfirst_swapped_val_none_prim	0 1 w 3
+kb_classanon_using_short_def_comp	1 1 2 300
+kb_classanon_using_short_def_comp_prim	1 1 w 300
+kb_classanon_using_short_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_using_short_val_comp	1 1 2 300
+kb_classanon_using_short_val_comp_prim	1 1 w 300
+kb_classanon_using_short_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_usingfirst_short_def_comp	0 1 2 300
+kb_classanon_usingfirst_short_def_comp_prim	0 1 w 300
+kb_classanon_usingfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_usingfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_usingfirst_short_val_comp	0 1 2 300
+kb_classanon_usingfirst_short_val_comp_prim	0 1 w 300
+kb_classanon_usingfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_usingfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_using_shortnamed_def_comp	1 1 200 3
+kb_classanon_using_shortnamed_def_comp_prim	1 1 g 3
+kb_classanon_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_using_shortnamed_val_comp	1 1 200 3
+kb_classanon_using_shortnamed_val_comp_prim	1 1 g 3
+kb_classanon_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_usingfirst_shortnamed_def_comp	REFUSED	[E100] Syntax Error: A.scala:11:27
+kb_classanon_usingfirst_shortnamed_def_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:27
+kb_classanon_usingfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_usingfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_usingfirst_shortnamed_val_comp	REFUSED	[E100] Syntax Error: A.scala:11:27
+kb_classanon_usingfirst_shortnamed_val_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:27
+kb_classanon_usingfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_usingfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_using_searched_def_chosen	1 1 2 3
+kb_classanon_using_searched_def_chosen_prim	1 1 w 3
+kb_classanon_using_searched_val_chosen	1 1 2 3
+kb_classanon_using_searched_val_chosen_prim	1 1 w 3
+kb_classanon_usingfirst_searched_def_chosen	0 1 2 3
+kb_classanon_usingfirst_searched_def_chosen_prim	0 1 w 3
+kb_classanon_usingfirst_searched_val_chosen	0 1 2 3
+kb_classanon_usingfirst_searched_val_chosen_prim	0 1 w 3
+kb_classanon_implicit_pos_def_comp	1 1 2 3
+kb_classanon_implicit_pos_def_comp_prim	1 1 w 3
+kb_classanon_implicit_pos_def_none	1 1 2 3
+kb_classanon_implicit_pos_def_none_prim	1 1 w 3
+kb_classanon_implicit_pos_val_comp	1 1 2 3
+kb_classanon_implicit_pos_val_comp_prim	1 1 w 3
+kb_classanon_implicit_pos_val_none	1 1 2 3
+kb_classanon_implicit_pos_val_none_prim	1 1 w 3
+kb_classanon_implicitfirst_pos_def_comp	0 1 2 3
+kb_classanon_implicitfirst_pos_def_comp_prim	0 1 w 3
+kb_classanon_implicitfirst_pos_def_none	0 1 2 3
+kb_classanon_implicitfirst_pos_def_none_prim	0 1 w 3
+kb_classanon_implicitfirst_pos_val_comp	0 1 2 3
+kb_classanon_implicitfirst_pos_val_comp_prim	0 1 w 3
+kb_classanon_implicitfirst_pos_val_none	0 1 2 3
+kb_classanon_implicitfirst_pos_val_none_prim	0 1 w 3
+kb_classanon_implicit_named_def_comp	1 1 2 3
+kb_classanon_implicit_named_def_comp_prim	1 1 w 3
+kb_classanon_implicit_named_def_none	1 1 2 3
+kb_classanon_implicit_named_def_none_prim	1 1 w 3
+kb_classanon_implicit_named_val_comp	1 1 2 3
+kb_classanon_implicit_named_val_comp_prim	1 1 w 3
+kb_classanon_implicit_named_val_none	1 1 2 3
+kb_classanon_implicit_named_val_none_prim	1 1 w 3
+kb_classanon_implicitfirst_named_def_comp	0 1 2 3
+kb_classanon_implicitfirst_named_def_comp_prim	0 1 w 3
+kb_classanon_implicitfirst_named_def_none	0 1 2 3
+kb_classanon_implicitfirst_named_def_none_prim	0 1 w 3
+kb_classanon_implicitfirst_named_val_comp	0 1 2 3
+kb_classanon_implicitfirst_named_val_comp_prim	0 1 w 3
+kb_classanon_implicitfirst_named_val_none	0 1 2 3
+kb_classanon_implicitfirst_named_val_none_prim	0 1 w 3
+kb_classanon_implicit_swapped_def_comp	1 1 2 3
+kb_classanon_implicit_swapped_def_comp_prim	1 1 w 3
+kb_classanon_implicit_swapped_def_none	1 1 2 3
+kb_classanon_implicit_swapped_def_none_prim	1 1 w 3
+kb_classanon_implicit_swapped_val_comp	1 1 2 3
+kb_classanon_implicit_swapped_val_comp_prim	1 1 w 3
+kb_classanon_implicit_swapped_val_none	1 1 2 3
+kb_classanon_implicit_swapped_val_none_prim	1 1 w 3
+kb_classanon_implicitfirst_swapped_def_comp	0 1 2 3
+kb_classanon_implicitfirst_swapped_def_comp_prim	0 1 w 3
+kb_classanon_implicitfirst_swapped_def_none	0 1 2 3
+kb_classanon_implicitfirst_swapped_def_none_prim	0 1 w 3
+kb_classanon_implicitfirst_swapped_val_comp	0 1 2 3
+kb_classanon_implicitfirst_swapped_val_comp_prim	0 1 w 3
+kb_classanon_implicitfirst_swapped_val_none	0 1 2 3
+kb_classanon_implicitfirst_swapped_val_none_prim	0 1 w 3
+kb_classanon_implicit_short_def_comp	1 1 2 300
+kb_classanon_implicit_short_def_comp_prim	1 1 w 300
+kb_classanon_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicit_short_val_comp	1 1 2 300
+kb_classanon_implicit_short_val_comp_prim	1 1 w 300
+kb_classanon_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicitfirst_short_def_comp	0 1 2 300
+kb_classanon_implicitfirst_short_def_comp_prim	0 1 w 300
+kb_classanon_implicitfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicitfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicitfirst_short_val_comp	0 1 2 300
+kb_classanon_implicitfirst_short_val_comp_prim	0 1 w 300
+kb_classanon_implicitfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicitfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicit_shortnamed_def_comp	1 1 200 3
+kb_classanon_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_classanon_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicit_shortnamed_val_comp	1 1 200 3
+kb_classanon_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_classanon_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicitfirst_shortnamed_def_comp	0 1 200 3
+kb_classanon_implicitfirst_shortnamed_def_comp_prim	0 1 g 3
+kb_classanon_implicitfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicitfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicitfirst_shortnamed_val_comp	0 1 200 3
+kb_classanon_implicitfirst_shortnamed_val_comp_prim	0 1 g 3
+kb_classanon_implicitfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicitfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_classanon_implicit_searched_def_chosen	1 1 2 3
+kb_classanon_implicit_searched_def_chosen_prim	1 1 w 3
+kb_classanon_implicit_searched_val_chosen	1 1 2 3
+kb_classanon_implicit_searched_val_chosen_prim	1 1 w 3
+kb_classanon_implicitfirst_searched_def_chosen	0 1 2 3
+kb_classanon_implicitfirst_searched_def_chosen_prim	0 1 w 3
+kb_classanon_implicitfirst_searched_val_chosen	0 1 2 3
+kb_classanon_implicitfirst_searched_val_chosen_prim	0 1 w 3
+kb_traitparent_using_pos_def_comp	1 1 2 3
+kb_traitparent_using_pos_def_comp_prim	1 1 w 3
+kb_traitparent_using_pos_def_none	1 1 2 3
+kb_traitparent_using_pos_def_none_prim	1 1 w 3
+kb_traitparent_using_pos_val_comp	1 1 2 3
+kb_traitparent_using_pos_val_comp_prim	1 1 w 3
+kb_traitparent_using_pos_val_none	1 1 2 3
+kb_traitparent_using_pos_val_none_prim	1 1 w 3
+kb_traitparent_usingfirst_pos_def_comp	0 1 2 3
+kb_traitparent_usingfirst_pos_def_comp_prim	0 1 w 3
+kb_traitparent_usingfirst_pos_def_none	0 1 2 3
+kb_traitparent_usingfirst_pos_def_none_prim	0 1 w 3
+kb_traitparent_usingfirst_pos_val_comp	0 1 2 3
+kb_traitparent_usingfirst_pos_val_comp_prim	0 1 w 3
+kb_traitparent_usingfirst_pos_val_none	0 1 2 3
+kb_traitparent_usingfirst_pos_val_none_prim	0 1 w 3
+kb_traitparent_using_named_def_comp	1 1 2 3
+kb_traitparent_using_named_def_comp_prim	1 1 w 3
+kb_traitparent_using_named_def_none	1 1 2 3
+kb_traitparent_using_named_def_none_prim	1 1 w 3
+kb_traitparent_using_named_val_comp	1 1 2 3
+kb_traitparent_using_named_val_comp_prim	1 1 w 3
+kb_traitparent_using_named_val_none	1 1 2 3
+kb_traitparent_using_named_val_none_prim	1 1 w 3
+kb_traitparent_usingfirst_named_def_comp	0 1 2 3
+kb_traitparent_usingfirst_named_def_comp_prim	0 1 w 3
+kb_traitparent_usingfirst_named_def_none	0 1 2 3
+kb_traitparent_usingfirst_named_def_none_prim	0 1 w 3
+kb_traitparent_usingfirst_named_val_comp	0 1 2 3
+kb_traitparent_usingfirst_named_val_comp_prim	0 1 w 3
+kb_traitparent_usingfirst_named_val_none	0 1 2 3
+kb_traitparent_usingfirst_named_val_none_prim	0 1 w 3
+kb_traitparent_using_swapped_def_comp	1 1 2 3
+kb_traitparent_using_swapped_def_comp_prim	1 1 w 3
+kb_traitparent_using_swapped_def_none	1 1 2 3
+kb_traitparent_using_swapped_def_none_prim	1 1 w 3
+kb_traitparent_using_swapped_val_comp	1 1 2 3
+kb_traitparent_using_swapped_val_comp_prim	1 1 w 3
+kb_traitparent_using_swapped_val_none	1 1 2 3
+kb_traitparent_using_swapped_val_none_prim	1 1 w 3
+kb_traitparent_usingfirst_swapped_def_comp	0 1 2 3
+kb_traitparent_usingfirst_swapped_def_comp_prim	0 1 w 3
+kb_traitparent_usingfirst_swapped_def_none	0 1 2 3
+kb_traitparent_usingfirst_swapped_def_none_prim	0 1 w 3
+kb_traitparent_usingfirst_swapped_val_comp	0 1 2 3
+kb_traitparent_usingfirst_swapped_val_comp_prim	0 1 w 3
+kb_traitparent_usingfirst_swapped_val_none	0 1 2 3
+kb_traitparent_usingfirst_swapped_val_none_prim	0 1 w 3
+kb_traitparent_using_short_def_comp	1 1 2 300
+kb_traitparent_using_short_def_comp_prim	1 1 w 300
+kb_traitparent_using_short_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_using_short_val_comp	1 1 2 300
+kb_traitparent_using_short_val_comp_prim	1 1 w 300
+kb_traitparent_using_short_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_usingfirst_short_def_comp	0 1 2 300
+kb_traitparent_usingfirst_short_def_comp_prim	0 1 w 300
+kb_traitparent_usingfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_usingfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_usingfirst_short_val_comp	0 1 2 300
+kb_traitparent_usingfirst_short_val_comp_prim	0 1 w 300
+kb_traitparent_usingfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_usingfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_using_shortnamed_def_comp	1 1 200 3
+kb_traitparent_using_shortnamed_def_comp_prim	1 1 g 3
+kb_traitparent_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_using_shortnamed_val_comp	1 1 200 3
+kb_traitparent_using_shortnamed_val_comp_prim	1 1 g 3
+kb_traitparent_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_usingfirst_shortnamed_def_comp	REFUSED	[E100] Syntax Error: A.scala:11:18
+kb_traitparent_usingfirst_shortnamed_def_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:18
+kb_traitparent_usingfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_usingfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_usingfirst_shortnamed_val_comp	REFUSED	[E100] Syntax Error: A.scala:11:18
+kb_traitparent_usingfirst_shortnamed_val_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:18
+kb_traitparent_usingfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_usingfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_using_searched_def_chosen	1 1 2 3
+kb_traitparent_using_searched_def_chosen_prim	1 1 w 3
+kb_traitparent_using_searched_val_chosen	1 1 2 3
+kb_traitparent_using_searched_val_chosen_prim	1 1 w 3
+kb_traitparent_usingfirst_searched_def_chosen	0 1 2 3
+kb_traitparent_usingfirst_searched_def_chosen_prim	0 1 w 3
+kb_traitparent_usingfirst_searched_val_chosen	0 1 2 3
+kb_traitparent_usingfirst_searched_val_chosen_prim	0 1 w 3
+kb_traitparent_implicit_pos_def_comp	1 1 2 3
+kb_traitparent_implicit_pos_def_comp_prim	1 1 w 3
+kb_traitparent_implicit_pos_def_none	1 1 2 3
+kb_traitparent_implicit_pos_def_none_prim	1 1 w 3
+kb_traitparent_implicit_pos_val_comp	1 1 2 3
+kb_traitparent_implicit_pos_val_comp_prim	1 1 w 3
+kb_traitparent_implicit_pos_val_none	1 1 2 3
+kb_traitparent_implicit_pos_val_none_prim	1 1 w 3
+kb_traitparent_implicitfirst_pos_def_comp	0 1 2 3
+kb_traitparent_implicitfirst_pos_def_comp_prim	0 1 w 3
+kb_traitparent_implicitfirst_pos_def_none	0 1 2 3
+kb_traitparent_implicitfirst_pos_def_none_prim	0 1 w 3
+kb_traitparent_implicitfirst_pos_val_comp	0 1 2 3
+kb_traitparent_implicitfirst_pos_val_comp_prim	0 1 w 3
+kb_traitparent_implicitfirst_pos_val_none	0 1 2 3
+kb_traitparent_implicitfirst_pos_val_none_prim	0 1 w 3
+kb_traitparent_implicit_named_def_comp	1 1 2 3
+kb_traitparent_implicit_named_def_comp_prim	1 1 w 3
+kb_traitparent_implicit_named_def_none	1 1 2 3
+kb_traitparent_implicit_named_def_none_prim	1 1 w 3
+kb_traitparent_implicit_named_val_comp	1 1 2 3
+kb_traitparent_implicit_named_val_comp_prim	1 1 w 3
+kb_traitparent_implicit_named_val_none	1 1 2 3
+kb_traitparent_implicit_named_val_none_prim	1 1 w 3
+kb_traitparent_implicitfirst_named_def_comp	0 1 2 3
+kb_traitparent_implicitfirst_named_def_comp_prim	0 1 w 3
+kb_traitparent_implicitfirst_named_def_none	0 1 2 3
+kb_traitparent_implicitfirst_named_def_none_prim	0 1 w 3
+kb_traitparent_implicitfirst_named_val_comp	0 1 2 3
+kb_traitparent_implicitfirst_named_val_comp_prim	0 1 w 3
+kb_traitparent_implicitfirst_named_val_none	0 1 2 3
+kb_traitparent_implicitfirst_named_val_none_prim	0 1 w 3
+kb_traitparent_implicit_swapped_def_comp	1 1 2 3
+kb_traitparent_implicit_swapped_def_comp_prim	1 1 w 3
+kb_traitparent_implicit_swapped_def_none	1 1 2 3
+kb_traitparent_implicit_swapped_def_none_prim	1 1 w 3
+kb_traitparent_implicit_swapped_val_comp	1 1 2 3
+kb_traitparent_implicit_swapped_val_comp_prim	1 1 w 3
+kb_traitparent_implicit_swapped_val_none	1 1 2 3
+kb_traitparent_implicit_swapped_val_none_prim	1 1 w 3
+kb_traitparent_implicitfirst_swapped_def_comp	0 1 2 3
+kb_traitparent_implicitfirst_swapped_def_comp_prim	0 1 w 3
+kb_traitparent_implicitfirst_swapped_def_none	0 1 2 3
+kb_traitparent_implicitfirst_swapped_def_none_prim	0 1 w 3
+kb_traitparent_implicitfirst_swapped_val_comp	0 1 2 3
+kb_traitparent_implicitfirst_swapped_val_comp_prim	0 1 w 3
+kb_traitparent_implicitfirst_swapped_val_none	0 1 2 3
+kb_traitparent_implicitfirst_swapped_val_none_prim	0 1 w 3
+kb_traitparent_implicit_short_def_comp	1 1 2 300
+kb_traitparent_implicit_short_def_comp_prim	1 1 w 300
+kb_traitparent_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicit_short_val_comp	1 1 2 300
+kb_traitparent_implicit_short_val_comp_prim	1 1 w 300
+kb_traitparent_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicitfirst_short_def_comp	0 1 2 300
+kb_traitparent_implicitfirst_short_def_comp_prim	0 1 w 300
+kb_traitparent_implicitfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicitfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicitfirst_short_val_comp	0 1 2 300
+kb_traitparent_implicitfirst_short_val_comp_prim	0 1 w 300
+kb_traitparent_implicitfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicitfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicit_shortnamed_def_comp	1 1 200 3
+kb_traitparent_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_traitparent_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicit_shortnamed_val_comp	1 1 200 3
+kb_traitparent_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_traitparent_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicitfirst_shortnamed_def_comp	0 1 200 3
+kb_traitparent_implicitfirst_shortnamed_def_comp_prim	0 1 g 3
+kb_traitparent_implicitfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicitfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicitfirst_shortnamed_val_comp	0 1 200 3
+kb_traitparent_implicitfirst_shortnamed_val_comp_prim	0 1 g 3
+kb_traitparent_implicitfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicitfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:18
+kb_traitparent_implicit_searched_def_chosen	1 1 2 3
+kb_traitparent_implicit_searched_def_chosen_prim	1 1 w 3
+kb_traitparent_implicit_searched_val_chosen	1 1 2 3
+kb_traitparent_implicit_searched_val_chosen_prim	1 1 w 3
+kb_traitparent_implicitfirst_searched_def_chosen	0 1 2 3
+kb_traitparent_implicitfirst_searched_def_chosen_prim	0 1 w 3
+kb_traitparent_implicitfirst_searched_val_chosen	0 1 2 3
+kb_traitparent_implicitfirst_searched_val_chosen_prim	0 1 w 3
+kb_traitanon_using_pos_def_comp	1 1 2 3
+kb_traitanon_using_pos_def_comp_prim	1 1 w 3
+kb_traitanon_using_pos_def_none	1 1 2 3
+kb_traitanon_using_pos_def_none_prim	1 1 w 3
+kb_traitanon_using_pos_val_comp	1 1 2 3
+kb_traitanon_using_pos_val_comp_prim	1 1 w 3
+kb_traitanon_using_pos_val_none	1 1 2 3
+kb_traitanon_using_pos_val_none_prim	1 1 w 3
+kb_traitanon_usingfirst_pos_def_comp	0 1 2 3
+kb_traitanon_usingfirst_pos_def_comp_prim	0 1 w 3
+kb_traitanon_usingfirst_pos_def_none	0 1 2 3
+kb_traitanon_usingfirst_pos_def_none_prim	0 1 w 3
+kb_traitanon_usingfirst_pos_val_comp	0 1 2 3
+kb_traitanon_usingfirst_pos_val_comp_prim	0 1 w 3
+kb_traitanon_usingfirst_pos_val_none	0 1 2 3
+kb_traitanon_usingfirst_pos_val_none_prim	0 1 w 3
+kb_traitanon_using_named_def_comp	1 1 2 3
+kb_traitanon_using_named_def_comp_prim	1 1 w 3
+kb_traitanon_using_named_def_none	1 1 2 3
+kb_traitanon_using_named_def_none_prim	1 1 w 3
+kb_traitanon_using_named_val_comp	1 1 2 3
+kb_traitanon_using_named_val_comp_prim	1 1 w 3
+kb_traitanon_using_named_val_none	1 1 2 3
+kb_traitanon_using_named_val_none_prim	1 1 w 3
+kb_traitanon_usingfirst_named_def_comp	0 1 2 3
+kb_traitanon_usingfirst_named_def_comp_prim	0 1 w 3
+kb_traitanon_usingfirst_named_def_none	0 1 2 3
+kb_traitanon_usingfirst_named_def_none_prim	0 1 w 3
+kb_traitanon_usingfirst_named_val_comp	0 1 2 3
+kb_traitanon_usingfirst_named_val_comp_prim	0 1 w 3
+kb_traitanon_usingfirst_named_val_none	0 1 2 3
+kb_traitanon_usingfirst_named_val_none_prim	0 1 w 3
+kb_traitanon_using_swapped_def_comp	1 1 2 3
+kb_traitanon_using_swapped_def_comp_prim	1 1 w 3
+kb_traitanon_using_swapped_def_none	1 1 2 3
+kb_traitanon_using_swapped_def_none_prim	1 1 w 3
+kb_traitanon_using_swapped_val_comp	1 1 2 3
+kb_traitanon_using_swapped_val_comp_prim	1 1 w 3
+kb_traitanon_using_swapped_val_none	1 1 2 3
+kb_traitanon_using_swapped_val_none_prim	1 1 w 3
+kb_traitanon_usingfirst_swapped_def_comp	0 1 2 3
+kb_traitanon_usingfirst_swapped_def_comp_prim	0 1 w 3
+kb_traitanon_usingfirst_swapped_def_none	0 1 2 3
+kb_traitanon_usingfirst_swapped_def_none_prim	0 1 w 3
+kb_traitanon_usingfirst_swapped_val_comp	0 1 2 3
+kb_traitanon_usingfirst_swapped_val_comp_prim	0 1 w 3
+kb_traitanon_usingfirst_swapped_val_none	0 1 2 3
+kb_traitanon_usingfirst_swapped_val_none_prim	0 1 w 3
+kb_traitanon_using_short_def_comp	1 1 2 300
+kb_traitanon_using_short_def_comp_prim	1 1 w 300
+kb_traitanon_using_short_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_using_short_val_comp	1 1 2 300
+kb_traitanon_using_short_val_comp_prim	1 1 w 300
+kb_traitanon_using_short_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_usingfirst_short_def_comp	0 1 2 300
+kb_traitanon_usingfirst_short_def_comp_prim	0 1 w 300
+kb_traitanon_usingfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_usingfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_usingfirst_short_val_comp	0 1 2 300
+kb_traitanon_usingfirst_short_val_comp_prim	0 1 w 300
+kb_traitanon_usingfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_usingfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_using_shortnamed_def_comp	1 1 200 3
+kb_traitanon_using_shortnamed_def_comp_prim	1 1 g 3
+kb_traitanon_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_using_shortnamed_val_comp	1 1 200 3
+kb_traitanon_using_shortnamed_val_comp_prim	1 1 g 3
+kb_traitanon_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_usingfirst_shortnamed_def_comp	REFUSED	[E100] Syntax Error: A.scala:11:27
+kb_traitanon_usingfirst_shortnamed_def_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:27
+kb_traitanon_usingfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_usingfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_usingfirst_shortnamed_val_comp	REFUSED	[E100] Syntax Error: A.scala:11:27
+kb_traitanon_usingfirst_shortnamed_val_comp_prim	REFUSED	[E100] Syntax Error: A.scala:11:27
+kb_traitanon_usingfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_usingfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_using_searched_def_chosen	1 1 2 3
+kb_traitanon_using_searched_def_chosen_prim	1 1 w 3
+kb_traitanon_using_searched_val_chosen	1 1 2 3
+kb_traitanon_using_searched_val_chosen_prim	1 1 w 3
+kb_traitanon_usingfirst_searched_def_chosen	0 1 2 3
+kb_traitanon_usingfirst_searched_def_chosen_prim	0 1 w 3
+kb_traitanon_usingfirst_searched_val_chosen	0 1 2 3
+kb_traitanon_usingfirst_searched_val_chosen_prim	0 1 w 3
+kb_traitanon_implicit_pos_def_comp	1 1 2 3
+kb_traitanon_implicit_pos_def_comp_prim	1 1 w 3
+kb_traitanon_implicit_pos_def_none	1 1 2 3
+kb_traitanon_implicit_pos_def_none_prim	1 1 w 3
+kb_traitanon_implicit_pos_val_comp	1 1 2 3
+kb_traitanon_implicit_pos_val_comp_prim	1 1 w 3
+kb_traitanon_implicit_pos_val_none	1 1 2 3
+kb_traitanon_implicit_pos_val_none_prim	1 1 w 3
+kb_traitanon_implicitfirst_pos_def_comp	0 1 2 3
+kb_traitanon_implicitfirst_pos_def_comp_prim	0 1 w 3
+kb_traitanon_implicitfirst_pos_def_none	0 1 2 3
+kb_traitanon_implicitfirst_pos_def_none_prim	0 1 w 3
+kb_traitanon_implicitfirst_pos_val_comp	0 1 2 3
+kb_traitanon_implicitfirst_pos_val_comp_prim	0 1 w 3
+kb_traitanon_implicitfirst_pos_val_none	0 1 2 3
+kb_traitanon_implicitfirst_pos_val_none_prim	0 1 w 3
+kb_traitanon_implicit_named_def_comp	1 1 2 3
+kb_traitanon_implicit_named_def_comp_prim	1 1 w 3
+kb_traitanon_implicit_named_def_none	1 1 2 3
+kb_traitanon_implicit_named_def_none_prim	1 1 w 3
+kb_traitanon_implicit_named_val_comp	1 1 2 3
+kb_traitanon_implicit_named_val_comp_prim	1 1 w 3
+kb_traitanon_implicit_named_val_none	1 1 2 3
+kb_traitanon_implicit_named_val_none_prim	1 1 w 3
+kb_traitanon_implicitfirst_named_def_comp	0 1 2 3
+kb_traitanon_implicitfirst_named_def_comp_prim	0 1 w 3
+kb_traitanon_implicitfirst_named_def_none	0 1 2 3
+kb_traitanon_implicitfirst_named_def_none_prim	0 1 w 3
+kb_traitanon_implicitfirst_named_val_comp	0 1 2 3
+kb_traitanon_implicitfirst_named_val_comp_prim	0 1 w 3
+kb_traitanon_implicitfirst_named_val_none	0 1 2 3
+kb_traitanon_implicitfirst_named_val_none_prim	0 1 w 3
+kb_traitanon_implicit_swapped_def_comp	1 1 2 3
+kb_traitanon_implicit_swapped_def_comp_prim	1 1 w 3
+kb_traitanon_implicit_swapped_def_none	1 1 2 3
+kb_traitanon_implicit_swapped_def_none_prim	1 1 w 3
+kb_traitanon_implicit_swapped_val_comp	1 1 2 3
+kb_traitanon_implicit_swapped_val_comp_prim	1 1 w 3
+kb_traitanon_implicit_swapped_val_none	1 1 2 3
+kb_traitanon_implicit_swapped_val_none_prim	1 1 w 3
+kb_traitanon_implicitfirst_swapped_def_comp	0 1 2 3
+kb_traitanon_implicitfirst_swapped_def_comp_prim	0 1 w 3
+kb_traitanon_implicitfirst_swapped_def_none	0 1 2 3
+kb_traitanon_implicitfirst_swapped_def_none_prim	0 1 w 3
+kb_traitanon_implicitfirst_swapped_val_comp	0 1 2 3
+kb_traitanon_implicitfirst_swapped_val_comp_prim	0 1 w 3
+kb_traitanon_implicitfirst_swapped_val_none	0 1 2 3
+kb_traitanon_implicitfirst_swapped_val_none_prim	0 1 w 3
+kb_traitanon_implicit_short_def_comp	1 1 2 300
+kb_traitanon_implicit_short_def_comp_prim	1 1 w 300
+kb_traitanon_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicit_short_val_comp	1 1 2 300
+kb_traitanon_implicit_short_val_comp_prim	1 1 w 300
+kb_traitanon_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicitfirst_short_def_comp	0 1 2 300
+kb_traitanon_implicitfirst_short_def_comp_prim	0 1 w 300
+kb_traitanon_implicitfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicitfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicitfirst_short_val_comp	0 1 2 300
+kb_traitanon_implicitfirst_short_val_comp_prim	0 1 w 300
+kb_traitanon_implicitfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicitfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicit_shortnamed_def_comp	1 1 200 3
+kb_traitanon_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_traitanon_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicit_shortnamed_val_comp	1 1 200 3
+kb_traitanon_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_traitanon_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicitfirst_shortnamed_def_comp	0 1 200 3
+kb_traitanon_implicitfirst_shortnamed_def_comp_prim	0 1 g 3
+kb_traitanon_implicitfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicitfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicitfirst_shortnamed_val_comp	0 1 200 3
+kb_traitanon_implicitfirst_shortnamed_val_comp_prim	0 1 g 3
+kb_traitanon_implicitfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicitfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:8:27
+kb_traitanon_implicit_searched_def_chosen	1 1 2 3
+kb_traitanon_implicit_searched_def_chosen_prim	1 1 w 3
+kb_traitanon_implicit_searched_val_chosen	1 1 2 3
+kb_traitanon_implicit_searched_val_chosen_prim	1 1 w 3
+kb_traitanon_implicitfirst_searched_def_chosen	0 1 2 3
+kb_traitanon_implicitfirst_searched_def_chosen_prim	0 1 w 3
+kb_traitanon_implicitfirst_searched_val_chosen	0 1 2 3
+kb_traitanon_implicitfirst_searched_val_chosen_prim	0 1 w 3
+kb_enumcase_using_pos_def_comp	1 1 2 3
+kb_enumcase_using_pos_def_comp_prim	1 1 w 3
+kb_enumcase_using_pos_def_none	1 1 2 3
+kb_enumcase_using_pos_def_none_prim	1 1 w 3
+kb_enumcase_using_pos_val_comp	1 1 2 3
+kb_enumcase_using_pos_val_comp_prim	1 1 w 3
+kb_enumcase_using_pos_val_none	1 1 2 3
+kb_enumcase_using_pos_val_none_prim	1 1 w 3
+kb_enumcase_usingfirst_pos_def_comp	0 1 2 3
+kb_enumcase_usingfirst_pos_def_comp_prim	0 1 w 3
+kb_enumcase_usingfirst_pos_def_none	0 1 2 3
+kb_enumcase_usingfirst_pos_def_none_prim	0 1 w 3
+kb_enumcase_usingfirst_pos_val_comp	0 1 2 3
+kb_enumcase_usingfirst_pos_val_comp_prim	0 1 w 3
+kb_enumcase_usingfirst_pos_val_none	0 1 2 3
+kb_enumcase_usingfirst_pos_val_none_prim	0 1 w 3
+kb_enumcase_using_named_def_comp	1 1 2 3
+kb_enumcase_using_named_def_comp_prim	1 1 w 3
+kb_enumcase_using_named_def_none	1 1 2 3
+kb_enumcase_using_named_def_none_prim	1 1 w 3
+kb_enumcase_using_named_val_comp	1 1 2 3
+kb_enumcase_using_named_val_comp_prim	1 1 w 3
+kb_enumcase_using_named_val_none	1 1 2 3
+kb_enumcase_using_named_val_none_prim	1 1 w 3
+kb_enumcase_usingfirst_named_def_comp	0 1 2 3
+kb_enumcase_usingfirst_named_def_comp_prim	0 1 w 3
+kb_enumcase_usingfirst_named_def_none	0 1 2 3
+kb_enumcase_usingfirst_named_def_none_prim	0 1 w 3
+kb_enumcase_usingfirst_named_val_comp	0 1 2 3
+kb_enumcase_usingfirst_named_val_comp_prim	0 1 w 3
+kb_enumcase_usingfirst_named_val_none	0 1 2 3
+kb_enumcase_usingfirst_named_val_none_prim	0 1 w 3
+kb_enumcase_using_swapped_def_comp	1 1 2 3
+kb_enumcase_using_swapped_def_comp_prim	1 1 w 3
+kb_enumcase_using_swapped_def_none	1 1 2 3
+kb_enumcase_using_swapped_def_none_prim	1 1 w 3
+kb_enumcase_using_swapped_val_comp	1 1 2 3
+kb_enumcase_using_swapped_val_comp_prim	1 1 w 3
+kb_enumcase_using_swapped_val_none	1 1 2 3
+kb_enumcase_using_swapped_val_none_prim	1 1 w 3
+kb_enumcase_usingfirst_swapped_def_comp	0 1 2 3
+kb_enumcase_usingfirst_swapped_def_comp_prim	0 1 w 3
+kb_enumcase_usingfirst_swapped_def_none	0 1 2 3
+kb_enumcase_usingfirst_swapped_def_none_prim	0 1 w 3
+kb_enumcase_usingfirst_swapped_val_comp	0 1 2 3
+kb_enumcase_usingfirst_swapped_val_comp_prim	0 1 w 3
+kb_enumcase_usingfirst_swapped_val_none	0 1 2 3
+kb_enumcase_usingfirst_swapped_val_none_prim	0 1 w 3
+kb_enumcase_using_short_def_comp	1 1 2 300
+kb_enumcase_using_short_def_comp_prim	1 1 w 300
+kb_enumcase_using_short_def_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_using_short_val_comp	1 1 2 300
+kb_enumcase_using_short_val_comp_prim	1 1 w 300
+kb_enumcase_using_short_val_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_usingfirst_short_def_comp	0 1 2 300
+kb_enumcase_usingfirst_short_def_comp_prim	0 1 w 300
+kb_enumcase_usingfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_usingfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_usingfirst_short_val_comp	0 1 2 300
+kb_enumcase_usingfirst_short_val_comp_prim	0 1 w 300
+kb_enumcase_usingfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_usingfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_using_shortnamed_def_comp	1 1 200 3
+kb_enumcase_using_shortnamed_def_comp_prim	1 1 g 3
+kb_enumcase_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_using_shortnamed_val_comp	1 1 200 3
+kb_enumcase_using_shortnamed_val_comp_prim	1 1 g 3
+kb_enumcase_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_usingfirst_shortnamed_def_comp	REFUSED	[E100] Syntax Error: A.scala:10:19
+kb_enumcase_usingfirst_shortnamed_def_comp_prim	REFUSED	[E100] Syntax Error: A.scala:10:19
+kb_enumcase_usingfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_usingfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_usingfirst_shortnamed_val_comp	REFUSED	[E100] Syntax Error: A.scala:10:19
+kb_enumcase_usingfirst_shortnamed_val_comp_prim	REFUSED	[E100] Syntax Error: A.scala:10:19
+kb_enumcase_usingfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_usingfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_using_searched_def_chosen	1 1 2 3
+kb_enumcase_using_searched_def_chosen_prim	1 1 w 3
+kb_enumcase_using_searched_val_chosen	1 1 2 3
+kb_enumcase_using_searched_val_chosen_prim	1 1 w 3
+kb_enumcase_usingfirst_searched_def_chosen	0 1 2 3
+kb_enumcase_usingfirst_searched_def_chosen_prim	0 1 w 3
+kb_enumcase_usingfirst_searched_val_chosen	0 1 2 3
+kb_enumcase_usingfirst_searched_val_chosen_prim	0 1 w 3
+kb_enumcase_implicit_pos_def_comp	1 1 2 3
+kb_enumcase_implicit_pos_def_comp_prim	1 1 w 3
+kb_enumcase_implicit_pos_def_none	1 1 2 3
+kb_enumcase_implicit_pos_def_none_prim	1 1 w 3
+kb_enumcase_implicit_pos_val_comp	1 1 2 3
+kb_enumcase_implicit_pos_val_comp_prim	1 1 w 3
+kb_enumcase_implicit_pos_val_none	1 1 2 3
+kb_enumcase_implicit_pos_val_none_prim	1 1 w 3
+kb_enumcase_implicitfirst_pos_def_comp	0 1 2 3
+kb_enumcase_implicitfirst_pos_def_comp_prim	0 1 w 3
+kb_enumcase_implicitfirst_pos_def_none	0 1 2 3
+kb_enumcase_implicitfirst_pos_def_none_prim	0 1 w 3
+kb_enumcase_implicitfirst_pos_val_comp	0 1 2 3
+kb_enumcase_implicitfirst_pos_val_comp_prim	0 1 w 3
+kb_enumcase_implicitfirst_pos_val_none	0 1 2 3
+kb_enumcase_implicitfirst_pos_val_none_prim	0 1 w 3
+kb_enumcase_implicit_named_def_comp	1 1 2 3
+kb_enumcase_implicit_named_def_comp_prim	1 1 w 3
+kb_enumcase_implicit_named_def_none	1 1 2 3
+kb_enumcase_implicit_named_def_none_prim	1 1 w 3
+kb_enumcase_implicit_named_val_comp	1 1 2 3
+kb_enumcase_implicit_named_val_comp_prim	1 1 w 3
+kb_enumcase_implicit_named_val_none	1 1 2 3
+kb_enumcase_implicit_named_val_none_prim	1 1 w 3
+kb_enumcase_implicitfirst_named_def_comp	0 1 2 3
+kb_enumcase_implicitfirst_named_def_comp_prim	0 1 w 3
+kb_enumcase_implicitfirst_named_def_none	0 1 2 3
+kb_enumcase_implicitfirst_named_def_none_prim	0 1 w 3
+kb_enumcase_implicitfirst_named_val_comp	0 1 2 3
+kb_enumcase_implicitfirst_named_val_comp_prim	0 1 w 3
+kb_enumcase_implicitfirst_named_val_none	0 1 2 3
+kb_enumcase_implicitfirst_named_val_none_prim	0 1 w 3
+kb_enumcase_implicit_swapped_def_comp	1 1 2 3
+kb_enumcase_implicit_swapped_def_comp_prim	1 1 w 3
+kb_enumcase_implicit_swapped_def_none	1 1 2 3
+kb_enumcase_implicit_swapped_def_none_prim	1 1 w 3
+kb_enumcase_implicit_swapped_val_comp	1 1 2 3
+kb_enumcase_implicit_swapped_val_comp_prim	1 1 w 3
+kb_enumcase_implicit_swapped_val_none	1 1 2 3
+kb_enumcase_implicit_swapped_val_none_prim	1 1 w 3
+kb_enumcase_implicitfirst_swapped_def_comp	0 1 2 3
+kb_enumcase_implicitfirst_swapped_def_comp_prim	0 1 w 3
+kb_enumcase_implicitfirst_swapped_def_none	0 1 2 3
+kb_enumcase_implicitfirst_swapped_def_none_prim	0 1 w 3
+kb_enumcase_implicitfirst_swapped_val_comp	0 1 2 3
+kb_enumcase_implicitfirst_swapped_val_comp_prim	0 1 w 3
+kb_enumcase_implicitfirst_swapped_val_none	0 1 2 3
+kb_enumcase_implicitfirst_swapped_val_none_prim	0 1 w 3
+kb_enumcase_implicit_short_def_comp	1 1 2 300
+kb_enumcase_implicit_short_def_comp_prim	1 1 w 300
+kb_enumcase_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicit_short_val_comp	1 1 2 300
+kb_enumcase_implicit_short_val_comp_prim	1 1 w 300
+kb_enumcase_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicitfirst_short_def_comp	0 1 2 300
+kb_enumcase_implicitfirst_short_def_comp_prim	0 1 w 300
+kb_enumcase_implicitfirst_short_def_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicitfirst_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicitfirst_short_val_comp	0 1 2 300
+kb_enumcase_implicitfirst_short_val_comp_prim	0 1 w 300
+kb_enumcase_implicitfirst_short_val_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicitfirst_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicit_shortnamed_def_comp	1 1 200 3
+kb_enumcase_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_enumcase_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicit_shortnamed_val_comp	1 1 200 3
+kb_enumcase_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_enumcase_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicitfirst_shortnamed_def_comp	0 1 200 3
+kb_enumcase_implicitfirst_shortnamed_def_comp_prim	0 1 g 3
+kb_enumcase_implicitfirst_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicitfirst_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicitfirst_shortnamed_val_comp	0 1 200 3
+kb_enumcase_implicitfirst_shortnamed_val_comp_prim	0 1 g 3
+kb_enumcase_implicitfirst_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicitfirst_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:19
+kb_enumcase_implicit_searched_def_chosen	1 1 2 3
+kb_enumcase_implicit_searched_def_chosen_prim	1 1 w 3
+kb_enumcase_implicit_searched_val_chosen	1 1 2 3
+kb_enumcase_implicit_searched_val_chosen_prim	1 1 w 3
+kb_enumcase_implicitfirst_searched_def_chosen	0 1 2 3
+kb_enumcase_implicitfirst_searched_def_chosen_prim	0 1 w 3
+kb_enumcase_implicitfirst_searched_val_chosen	0 1 2 3
+kb_enumcase_implicitfirst_searched_val_chosen_prim	0 1 w 3
+kb_extension_using_pos_def_comp	1 1 2 3
+kb_extension_using_pos_def_comp_prim	1 1 w 3
+kb_extension_using_pos_def_none	1 1 2 3
+kb_extension_using_pos_def_none_prim	1 1 w 3
+kb_extension_using_pos_val_comp	1 1 2 3
+kb_extension_using_pos_val_comp_prim	1 1 w 3
+kb_extension_using_pos_val_none	1 1 2 3
+kb_extension_using_pos_val_none_prim	1 1 w 3
+kb_extension_using_named_def_comp	1 1 2 3
+kb_extension_using_named_def_comp_prim	1 1 w 3
+kb_extension_using_named_def_none	1 1 2 3
+kb_extension_using_named_def_none_prim	1 1 w 3
+kb_extension_using_named_val_comp	1 1 2 3
+kb_extension_using_named_val_comp_prim	1 1 w 3
+kb_extension_using_named_val_none	1 1 2 3
+kb_extension_using_named_val_none_prim	1 1 w 3
+kb_extension_using_swapped_def_comp	1 1 2 3
+kb_extension_using_swapped_def_comp_prim	1 1 w 3
+kb_extension_using_swapped_def_none	1 1 2 3
+kb_extension_using_swapped_def_none_prim	1 1 w 3
+kb_extension_using_swapped_val_comp	1 1 2 3
+kb_extension_using_swapped_val_comp_prim	1 1 w 3
+kb_extension_using_swapped_val_none	1 1 2 3
+kb_extension_using_swapped_val_none_prim	1 1 w 3
+kb_extension_using_short_def_comp	1 1 2 300
+kb_extension_using_short_def_comp_prim	1 1 w 300
+kb_extension_using_short_def_none	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_using_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_using_short_val_comp	1 1 2 300
+kb_extension_using_short_val_comp_prim	1 1 w 300
+kb_extension_using_short_val_none	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_using_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_using_shortnamed_def_comp	1 1 200 3
+kb_extension_using_shortnamed_def_comp_prim	1 1 g 3
+kb_extension_using_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_using_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_using_shortnamed_val_comp	1 1 200 3
+kb_extension_using_shortnamed_val_comp_prim	1 1 g 3
+kb_extension_using_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_using_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_using_searched_def_chosen	1 1 2 3
+kb_extension_using_searched_def_chosen_prim	1 1 w 3
+kb_extension_using_searched_val_chosen	1 1 2 3
+kb_extension_using_searched_val_chosen_prim	1 1 w 3
+kb_extension_implicit_pos_def_comp	1 1 2 3
+kb_extension_implicit_pos_def_comp_prim	1 1 w 3
+kb_extension_implicit_pos_def_none	1 1 2 3
+kb_extension_implicit_pos_def_none_prim	1 1 w 3
+kb_extension_implicit_pos_val_comp	1 1 2 3
+kb_extension_implicit_pos_val_comp_prim	1 1 w 3
+kb_extension_implicit_pos_val_none	1 1 2 3
+kb_extension_implicit_pos_val_none_prim	1 1 w 3
+kb_extension_implicit_named_def_comp	1 1 2 3
+kb_extension_implicit_named_def_comp_prim	1 1 w 3
+kb_extension_implicit_named_def_none	1 1 2 3
+kb_extension_implicit_named_def_none_prim	1 1 w 3
+kb_extension_implicit_named_val_comp	1 1 2 3
+kb_extension_implicit_named_val_comp_prim	1 1 w 3
+kb_extension_implicit_named_val_none	1 1 2 3
+kb_extension_implicit_named_val_none_prim	1 1 w 3
+kb_extension_implicit_swapped_def_comp	1 1 2 3
+kb_extension_implicit_swapped_def_comp_prim	1 1 w 3
+kb_extension_implicit_swapped_def_none	1 1 2 3
+kb_extension_implicit_swapped_def_none_prim	1 1 w 3
+kb_extension_implicit_swapped_val_comp	1 1 2 3
+kb_extension_implicit_swapped_val_comp_prim	1 1 w 3
+kb_extension_implicit_swapped_val_none	1 1 2 3
+kb_extension_implicit_swapped_val_none_prim	1 1 w 3
+kb_extension_implicit_short_def_comp	1 1 2 300
+kb_extension_implicit_short_def_comp_prim	1 1 w 300
+kb_extension_implicit_short_def_none	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_implicit_short_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_implicit_short_val_comp	1 1 2 300
+kb_extension_implicit_short_val_comp_prim	1 1 w 300
+kb_extension_implicit_short_val_none	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_implicit_short_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_implicit_shortnamed_def_comp	1 1 200 3
+kb_extension_implicit_shortnamed_def_comp_prim	1 1 g 3
+kb_extension_implicit_shortnamed_def_none	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_implicit_shortnamed_def_none_prim	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_implicit_shortnamed_val_comp	1 1 200 3
+kb_extension_implicit_shortnamed_val_comp_prim	1 1 g 3
+kb_extension_implicit_shortnamed_val_none	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_implicit_shortnamed_val_none_prim	REFUSED	[E172] Type Error: A.scala:7:28
+kb_extension_implicit_searched_def_chosen	1 1 2 3
+kb_extension_implicit_searched_def_chosen_prim	1 1 w 3
+kb_extension_implicit_searched_val_chosen	1 1 2 3
+kb_extension_implicit_searched_val_chosen_prim	1 1 w 3
+kb_ctxvalue_using_pos_def_comp	1 1 2 3
+kb_ctxvalue_using_pos_def_comp_prim	1 1 w 3
+kb_ctxvalue_using_pos_def_none	1 1 2 3
+kb_ctxvalue_using_pos_def_none_prim	1 1 w 3
+kb_ctxvalue_using_pos_val_comp	1 1 2 3
+kb_ctxvalue_using_pos_val_comp_prim	1 1 w 3
+kb_ctxvalue_using_pos_val_none	1 1 2 3
+kb_ctxvalue_using_pos_val_none_prim	1 1 w 3
+kb_ctxresult_using_pos_def_comp	1 1 2 3
+kb_ctxresult_using_pos_def_comp_prim	1 1 w 3
+kb_ctxresult_using_pos_def_none	1 1 2 3
+kb_ctxresult_using_pos_def_none_prim	1 1 w 3
+kb_ctxresult_using_pos_val_comp	1 1 2 3
+kb_ctxresult_using_pos_val_comp_prim	1 1 w 3
+kb_ctxresult_using_pos_val_none	1 1 2 3
+kb_ctxresult_using_pos_val_none_prim	1 1 w 3
+kc_emptyafter_new_def	1
+kc_emptyafter_new_val	1
+kc_emptyafter_parent_def	1
+kc_emptyafter_parent_val	1
+kc_emptyafter_anon_def	1
+kc_emptyafter_anon_val	1
+kc_emptybefore_new_def	1
+kc_emptybefore_new_val	1
+kc_emptybefore_parent_def	1
+kc_emptybefore_parent_val	1
+kc_emptybefore_anon_def	1
+kc_emptybefore_anon_val	1
+kc_emptytwice_new_def	1
+kc_emptytwice_new_val	1
+kc_emptytwice_parent_def	1
+kc_emptytwice_parent_val	1
+kc_emptytwice_anon_def	1
+kc_emptytwice_anon_val	1
+kc_emptybetween_new_def	1 1 2 3
+kc_emptybetween_new_val	1 1 2 3
+kc_emptybetween_parent_def	1 1 2 3
+kc_emptybetween_parent_val	1 1 2 3
+kc_emptybetween_anon_def	1 1 2 3
+kc_emptybetween_anon_val	1 1 2 3
+kc_emptybetweenshort_new_def	1 1 2 300
+kc_emptybetweenshort_new_val	1 1 2 300
+kc_emptybetweenshort_parent_def	1 1 2 300
+kc_emptybetweenshort_parent_val	1 1 2 300
+kc_emptybetweenshort_anon_def	1 1 2 300
+kc_emptybetweenshort_anon_val	1 1 2 300
+kc_usingadded_new_def	1 2 3
+kc_usingadded_new_val	1 2 3
+kc_usingadded_parent_def	1 2 3
+kc_usingadded_parent_val	1 2 3
+kc_usingadded_anon_def	1 2 3
+kc_usingadded_anon_val	1 2 3
+kc_usingwritten_new_def	1 2 3
+kc_usingwritten_new_val	1 2 3
+kc_usingwritten_parent_def	1 2 3
+kc_usingwritten_parent_val	1 2 3
+kc_usingwritten_anon_def	1 2 3
+kc_usingwritten_anon_val	1 2 3
+kc_implicitadded_new_def	1 2 3
+kc_implicitadded_new_val	1 2 3
+kc_implicitadded_parent_def	1 2 3
+kc_implicitadded_parent_val	1 2 3
+kc_implicitadded_anon_def	1 2 3
+kc_implicitadded_anon_val	1 2 3
+kc_implicitwritten_new_def	1 2 3
+kc_implicitwritten_new_val	1 2 3
+kc_implicitwritten_parent_def	1 2 3
+kc_implicitwritten_parent_val	1 2 3
+kc_implicitwritten_anon_def	1 2 3
+kc_implicitwritten_anon_val	1 2 3
+kc_secondary_new_def	2
+kc_secondary_new_val	2
+kc_secondary_parent_def	2
+kc_secondary_parent_val	2
+kc_secondary_anon_def	2
+kc_secondary_anon_val	2
+kr_using_one_op_def	2 1 1 2 3
+kr_using_one_op_val	2 1 1 2 3
+kr_using_one_sel_def	2 1 4 5 6
+kr_using_one_sel_val	2 1 4 5 6
+kr_using_one_short_def	2 1 4 5 3
+kr_using_one_short_val	2 1 4 5 3
+kr_using_two_op_def	2 1 1 2 3
+kr_using_two_op_val	2 1 1 2 3
+kr_using_two_sel_def	2 1 4 5 6
+kr_using_two_sel_val	2 1 4 5 6
+kr_implicit_one_op_def	2 1 1 2 3
+kr_implicit_one_op_val	2 1 1 2 3
+kr_implicit_one_sel_def	2 1 4 5 6
+kr_implicit_one_sel_val	2 1 4 5 6
+kr_implicit_one_short_def	2 1 4 5 3
+kr_implicit_one_short_val	2 1 4 5 3
+kr_implicit_two_op_def	REFUSED	[E040] Syntax Error: A.scala:10:48
+kr_implicit_two_op_val	REFUSED	[E040] Syntax Error: A.scala:10:48
+kr_implicit_two_sel_def	REFUSED	[E040] Syntax Error: A.scala:10:48
+kr_implicit_two_sel_val	REFUSED	[E040] Syntax Error: A.scala:10:48

@@ -161,7 +161,7 @@ conformance_extras	pass	-
 constructor_access	pass	-	
 constructor_access_anonymous	pass	-	
 constructor_access_default_getter	pass	-	
-constructor_access_default_getter_beside_inline_val	fail	-	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
+constructor_access_default_getter_beside_inline_val	fail	-	missing '1 error found'
 constructor_access_default_getter_beside_syntax_error	pass	-	
 constructor_access_sealed_parent	pass	-	
 constructor_access_self_type_default	pass	-	
@@ -398,6 +398,7 @@ given_divergence_open_variables	pass	-
 given_divergence_sibling_givens	pass	-	
 given_export_given_alternative	pass	-	
 given_failed_heal_reports_original	fail	-	missing '19:26: error: ambiguous given instances for TC: a, b'
+given_implicit_ambiguous	pass	-	
 given_import_bound_admits	pass	-	
 given_import_bound_constrained	pass	-	
 given_import_bound_error_order	pass	-	
@@ -408,6 +409,7 @@ given_local_inline_nested	pass	-
 given_local_inline_recursive	pass	-	
 given_macro_failure	pass	-	
 given_missing_at_call_end	pass	-	
+given_named_condition_type	pass	-	
 given_names	pass	-	
 given_not_given_user	pass	-	
 given_not_imported_note	fail	-	missing 'was not considered because it was not imported with `import given`.'
@@ -610,15 +612,21 @@ jar_private_ctors	pass	-
 java_ambiguous_on_demand_imports	pass	-	
 java_body_on_javascript	pass	-	
 java_char_two_units	pass	-	
+java_compact_source	pass	-	
 java_constants_as_written	pass	-	
 java_declaration_naming_program_scala	pass	-	
 java_forms_past_the_reader	pass	-	
+java_import_claims	pass	-	
+java_import_jdk_unexported	pass	-	
+java_import_name_not_found	pass	-	
+java_import_qualifier_not_found	pass	-	
 java_inherited_member_type_not_read	pass	-	
 java_members_twice	pass	-	
 java_module_not_a_value	fail	-	missing 'error: Java defined class Future is not a value'
 java_names_entered_twice	pass	-	
 java_package_source_nullary	pass	-	
 java_parents_checked	pass	-	
+java_qualified_member_not_found	pass	-	
 java_same_class_two_sources	pass	-	
 java_scala_same_class_java_first	pass	-	
 java_scala_same_class_scala_first	pass	-	
@@ -674,6 +682,7 @@ lexical_extension_trailing_ambiguous	pass	-
 lexical_extension_trailing_missing	pass	-	
 lifted_block_error_argument	pass	-	
 literal_constant_boundaries	pass	-	
+literal_number_too_large	pass	-	
 literal_soft_union_inferred	pass	-	
 literal_types	pass	-	
 local_final	pass	-	
@@ -911,8 +920,8 @@ private_trait_ctor	pass	-
 private_var_setter	pass	-	
 projection_type_constructor_qualifier	pass	-	
 projection_type_constructor_qualifier.check	fail	-	< tests/errors/projection_type_constructor_qualifier.scala:4:18: error: Found: Outer.C
-protected_accessor_before_inline_val	fail	-	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
-protected_accessor_beside_inline_val	fail	-	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
+protected_accessor_before_inline_val	fail	-	missing '1 error found'
+protected_accessor_beside_inline_val	fail	-	missing '1 error found'
 protected_accessor_beside_syntax_error	pass	-	
 protected_accessor_beside_syntax_error_same_file	pass	-	
 protected_accessor_kept	pass	-	
@@ -1165,7 +1174,7 @@ using_list_splice_call	pass	-
 using_list_splice_forms	pass	-	
 using_list_splice_overloads	pass	-	
 using_list_splice_quote_arg	pass	-	
-using_list_trait_implicit_clause	pass	-	
+using_list_trait_implicit_named	pass	-	
 value_class_rules	pass	-	
 value_import_given_conversion	pass	-	
 value_import_wildcard_givens	pass	-	

@@ -761,7 +761,7 @@ i789.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.Cl
 i7926.scala	pass	interp:pass	
 i7960.scala	pass	interp:fail	
 i7963.scala	pass	interp:fail	
-i7990	pass	interp:pass	
+i7990	pass	interp:fail	
 i7991	pass	interp:pass	
 i7991.scala	pass	interp:pass	
 i8001	pass	interp:fail	
@@ -773,7 +773,7 @@ i8064.scala	pass	interp:pass
 i8073.scala	fail	interp:fail	i8073.scala:17:46: No given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x of method summon in object Predef
 i8073b.scala	fail	interp:fail	i8073b.scala:18:46: No given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x of method summon in object Predef
 i8096.scala	pass	interp:pass	
-i8101	pass	interp:pass	
+i8101	pass	interp:fail	
 i8314.scala	pass	interp:pass	
 i8396.scala	pass	interp:pass	
 i8398.scala	pass	interp:pass	
@@ -1672,7 +1672,7 @@ valueclasses-constr.scala	pass	interp:pass
 valueclasses-nested-object.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class M cannot be cast to class java.lang.Integer (M is in unnamed module of loader 'app'; java.lang.Integer is in module java.base of loader 'bootstrap')
 valueclasses-pavlov.scala	pass	interp:pass	
 varargs-abstract	fail	interp:fail	javac: tests/run/varargs-abstract/Test.java:9: error: method x in class VarargImplClass cannot be applied to given types;
-varargs-extend-java	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Receiver class VarargImpl does not define or inherit an implementation of the resolved method 'abstract void v1(java.lang.String[])' of abstract class VarargAbstract.
+varargs-extend-java	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Receiver class VarargImpl does not define or inherit an implementation of the resolved method 'abstract void v1(java.lang.String[])' of abstract class VarargAbstract.
 varargs-extend-java-2	fail	interp:fail	Test.scala:6:9: class Concrete needs to be abstract, since def doStuff(params: Any*): Unit in class AbstractBase is not defined
 variable-pattern-access.scala	fail	interp:fail	output: line 2: the .check has 'private final int A.a', the program printed 'private int A.a'
 vc-equals.scala	pass	interp:pass	

@@ -243,6 +243,8 @@ machine=(
   "scala3-macros-interp tests/scala3/run.sh --suite run-macros --target interp \${JOBS:+--jobs \$JOBS}"
   "scala3-typing python3 tests/scala3-typing/harness.py \${JOBS:+--jobs \$JOBS}"
   "conversion-matrix python3 tests/conversion-matrix/run.py --tenth"
+  "kept-body-cut python3 tests/kept-body-cut/run.py"
+  "kept-body-lists python3 tests/kept-body-lists/run.py"
   "board-run BOARD_REQUIRE_SCOPE=1 python3 tests/board/dotty.py --row run \${JOBS:+--jobs \$JOBS}"
   "board-run-scalajs BOARD_REQUIRE_SCOPE=1 python3 tests/board/dotty.py --row run-scalajs \${JOBS:+--jobs \$JOBS}"
   "board-pos BOARD_REQUIRE_SCOPE=1 python3 tests/board/dotty.py --row pos \${JOBS:+--jobs \$JOBS}"

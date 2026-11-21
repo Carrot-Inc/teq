@@ -7106,10 +7106,7 @@ impl<'a> Worker<'a> {
             if !evidence_only && !lists.iter().any(|l| !l.using) {
                 lists.insert(0, ArgList { args: Vec::new(), using: false, span, fun: ArgList::NO_FUN });
             }
-            // A trait's implicit clause applied with a `using` list keeps master's refusal: a body kept in lean products
-            // loses that list's written arguments, a given in scope taking their place (another value at run time).
-            let implicit_clause = sig.clauses.iter().any(|cl| cl.is_implicit);
-            super::apply::limit_using_search(&mut lists, (evidence_only && empty_aside) || implicit_clause);
+            super::apply::limit_using_search(&mut lists, evidence_only && empty_aside);
             let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             let applied = self.with_env(outside.clone(), |t| {
                 let outer = t.parent_args_of.replace(c);

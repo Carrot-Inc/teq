@@ -8,7 +8,6 @@ any_kind_bound	< K1$ K2$
 applied_member_through_subtype_prefix	< ok
 array_concat_null_right_operand	< thrown: null right operand
 array_concat_null_right_operand_beside_a_tag	< thrown: null right operand
-binary_int_literal	< 5
 case_companion_initialising_apply	< k2 |
 class_header_then_blank_line_brace	< log:block
 class_header_then_comment_blank_line_brace	< log:block
@@ -52,7 +51,6 @@ extension_view_too_unspecific_applied	< scalac 3.8.4: rejected, 2 error(s)
 fbound_path_in_type_arg	< show
 for_braces_then_indented_body	< 6
 function_xxl_deep_array_signature	< 325
-given_alias_converts_inside_its_own_right_side	< in given 2
 given_alias_of_bounded_param_part	< 13
 given_block_later_local	< 3
 given_double_definition_one_error	< scalac 3.8.4: rejected, 1 error(s)
@@ -82,7 +80,6 @@ jar_inline_forwarder_argument_order	< eval b
 jar_inline_forwarder_inline_param_default	< 1279
 jar_toplevel_alias_names_program_val	< in:int
 java_enum_ordinal_through_enum_js	< 4
-java_lang_string_type	< a
 java_wildcard_object_bound	< 1
 kind_error_argument_in_match_scrutinee	< scalac 3.8.4: rejected, 1 error(s)
 lambda_param_refined_type	< 2

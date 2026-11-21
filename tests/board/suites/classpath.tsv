@@ -77,23 +77,23 @@ js/jar_array_for_guard	pass	-
 js/jar_array_index_defaults	pass	-	
 js/jar_constructor	pass	-	
 js/jar_constructor_release	pass	-	
-js/jar_copy_hidden_defaults	fail	-	js run, --std=lean: tests/classpath/js/jar_copy_hidden_defaults.scala:9:14: error: not found: Settings
+js/jar_copy_hidden_defaults	fail	-	js run, --std=lean: tests/classpath/js/jar_copy_hidden_defaults.scala:9:14: error: Not found: Settings
 js/jar_dependent_functions	pass	-	
 js/jar_enum_ordinals	pass	-	
-js/jar_extension_forwarder_defaults	fail	-	js run, --std=lean: tests/classpath/js/jar_extension_forwarder_defaults.scala:11:11: error: not found: InlExports
+js/jar_extension_forwarder_defaults	fail	-	js run, --std=lean: tests/classpath/js/jar_extension_forwarder_defaults.scala:11:11: error: Not found: InlExports
 js/jar_hk_lower_bound	pass	-	
 js/jar_local_case_class	pass	-	
 js/jar_nested_projection	pass	-	
-js/jar_opaque_constructor_argument	fail	-	js run, --std=lean: tests/classpath/js/jar_opaque_constructor_argument.scala:9:11: error: not found: PosWrapOps
+js/jar_opaque_constructor_argument	fail	-	js run, --std=lean: tests/classpath/js/jar_opaque_constructor_argument.scala:9:11: error: Not found: PosWrapOps
 js/jar_overload_keeps_std_name	pass	-	
 js/jar_override_erased_evidence	pass	-	
 js/jar_param_qualified	pass	-	
-js/jar_parent_call_inferred_arguments	fail	-	js run, --std=lean: tests/classpath/js/jar_parent_call_inferred_arguments.scala:10:17: error: type HeldHook not found
+js/jar_parent_call_inferred_arguments	fail	-	js run, --std=lean: tests/classpath/js/jar_parent_call_inferred_arguments.scala:10:17: error: Not found: type HeldHook
 js/jar_predef_bodies	pass	-	
 js/jar_qualified_access	pass	-	
 js/jar_repeated_value	pass	-	
 js/jar_sorted_evidence	pass	-	
-js/jar_splice_self_given	fail	-	js run, --std=lean: tests/classpath/js/jar_splice_self_given.scala:8:11: error: not found: Sized
+js/jar_splice_self_given	fail	-	js run, --std=lean: tests/classpath/js/jar_splice_self_given.scala:8:11: error: Not found: Sized
 js/jar_unicode_name	pass	-	
 js/jar_unzip_evidence	pass	-	
 js/jar_val_accessor	pass	-	
@@ -254,7 +254,7 @@ jvm/intersection_erasure_abi	pass	-
 jvm/ioapp_run	pass	-	
 jvm/izumi_refinement_tag	pass	-	
 jvm/jar_bounded_overloads	pass	-	
-jvm/jar_copy_guarded_defaults	fail	-	tests/classpath/jvm/jar_copy_guarded_defaults.scala:8:14: error: not found: Guarded
+jvm/jar_copy_guarded_defaults	fail	-	tests/classpath/jvm/jar_copy_guarded_defaults.scala:8:14: error: Not found: Guarded
 jvm/jar_ctor_defaults	pass	-	
 jvm/jar_deferred_givens	pass	-	
 jvm/jar_erasure_signature	pass	-	
@@ -359,6 +359,7 @@ jvm/narrowed_literal_boxed	pass	-
 jvm/nested_object_codec	pass	-	
 jvm/nested_object_dollar_name	pass	-	
 jvm/nonlocal_return_control	pass	-	
+jvm/object_statement_scala2_classes	pass	-	
 jvm/opaque_tag	pass	-	
 jvm/pureconfig_derived_reader	pass	-	
 jvm/reflected_java_member_classes	pass	-	

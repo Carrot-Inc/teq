@@ -252,10 +252,7 @@ impl ArgList {
 /// would be placed after it, which teq's lifting of a trait parent's arguments out of their order does not do (a
 /// written `T(using b = y, a = x)` fails the same way on master); kept for a trait of using clauses alone where a `()`
 /// is written where the reference's empty clause is not: before its last using list, or after the first where its first
-/// clause is implicit; and kept for a trait with an implicit clause, a class's parent or an anonymous class's alike: a
-/// body kept in lean products loses such a list's written arguments, a given of their type in scope taking their place
-/// (`trait Tr(implicit a: Int, b: Int)`, `new Tr(using 10) {}` beside `given Int = 20`: another value at run time, as
-/// master's whole list does), so the part adds no program to that.
+/// clause is implicit.
 pub(super) fn limit_using_search(lists: &mut [ArgList], kept: bool) {
     for l in lists.iter_mut().filter(|l| l.using) {
         l.fun = l.fun.search_limited(kept);

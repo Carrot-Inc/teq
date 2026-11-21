@@ -63,6 +63,7 @@ inlined	fix.reader.RdCalls	def outerScope	reader.scala:82:44	#13	from fix.rdecl.
 inlined	fix.reader.RdCalls	def outerScope	reader_decl_v1.scala	#11	from the caller's scope	0 bindings
 inlined	fix.reader.RdCalls	def outerScope	reader_decl_v1.scala	#12	from the caller's scope	0 bindings
 origin	fix.rdecl.RdApi	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdArr	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdBox	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdCustom	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdF1	none: the pseudo files' tags and the converted text's offsets
@@ -71,7 +72,11 @@ origin	fix.rdecl.RdFooBox	none: the pseudo files' tags and the converted text's 
 origin	fix.rdecl.RdIn	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdInBox	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdMarker	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdNamed	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdShape	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdSquare	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdTok	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdTokA	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
@@ -84,6 +89,7 @@ origin	fix.reader.RdMemo	none: the pseudo files' tags and the converted text's o
 origin	fix.reader.RdNow	none: the pseudo files' tags and the converted text's offsets
 origin	fix.reader.RdPick	none: the pseudo files' tags and the converted text's offsets
 origin	fix.reader.RdStart	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rjava.RdJava	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
 select	fix.rdecl.RdBox	def put	reader_decl.scala:11:37	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 select	fix.rdecl.RdBox	def put	reader_decl.scala:12:63	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String

@@ -1074,7 +1074,7 @@ i1737.scala	pass	check:pass
 i17380.scala	pass	check:pass	
 i17381.scala	pass	check:pass	
 i17391	pass	check:pass	
-i17394	fail	check:fail	teq: jvm backend: two classes are named example/_1$package
+i17394	fail	check:pass	teq: jvm backend: two classes are named example/_1$package
 i17394b	fail	check:pass	teq: jvm backend: two classes are named example/_1$package
 i17395-spec.ordered.scala	pass	check:pass	
 i17395-spec.scala	pass	check:pass	

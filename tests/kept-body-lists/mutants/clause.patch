@@ -1,0 +1,21 @@
+diff --git a/src/typer/loader/bodies.rs b/src/typer/loader/bodies.rs
+index c1e5036a5c..a2898d0200 100644
+--- a/src/typer/loader/bodies.rs
++++ b/src/typer/loader/bodies.rs
+@@ -4662,7 +4662,7 @@ impl<'a> Worker<'a> {
+                 (info.is_extension && self.name_str(info.name).ends_with(':'), info.ext_clauses as usize)
+             };
+             let sig = self.sig_of(m).clone();
+-            let at = if right_assoc { sig.right_assoc_order(ext_clauses).map_or(Some(applied), |o| o.get(applied).copied()) } else { Some(applied) };
++            let at = if right_assoc { sig.right_assoc_order(ext_clauses).map_or(Some(applied), |o| o.get(applied).copied()) } else { Some(applied ^ 1) };
+             if let Some(c) = at.and_then(|i| sig.clauses.get(i)) {
+                 answers.push(Filled { using: c.is_using || c.is_implicit, names: c.params.iter().map(|p| p.name).collect(), added: false });
+             }
+@@ -4674,6 +4674,7 @@ impl<'a> Worker<'a> {
+     /// primary or a secondary constructor), else every constructor where they agree; its clauses as the reference
+     /// numbers them.
+     fn filled_ctor_clause(&mut self, cv: &mut Conv, k: ClassId, n: NameRef, applied: usize) -> Option<Filled> {
++        let applied = applied ^ 1;
+         self.complete_class(k);
+         let tasty = cv.tasty.clone();
+         let candidates: Vec<Vec<ClauseSig>> = match self.signed_ctor(k, &tasty, n) {

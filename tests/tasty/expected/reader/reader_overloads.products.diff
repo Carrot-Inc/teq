@@ -1,4 +1,4 @@
-36,52c36,52
+40,56c40,56
 < origin	fix.rdecl.RdApi	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (5 definitions)
 < origin	fix.rdecl.RdArr	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (6 definitions)
 < origin	fix.rdecl.RdBox	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (9 definitions)
@@ -34,15 +34,17 @@
 > origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
-56c56
+60,61c60,61
+< origin	fix.rjava.RdJava	decl.jar	key reader_java.scala	token 108331611 recorded	definitions v1 (6 definitions)
 < origin	fix.rjava.RdSub	decl.jar	key reader_java.scala	token 108331611 recorded	definitions v1 (1 definitions)
 ---
+> origin	fix.rjava.RdJava	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
-61c61
+66c66
 < select	fix.rdecl.RdNamed	def sum	reader_decl.scala:29:59	scala.List (the pickle's scala.collection.immutable.List).sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
 ---
 > select	fix.rdecl.RdNamed	def sum	reader_decl.scala:29:59	scala.collection.IterableOnceOps.sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
-64c64
+69c69
 < select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:79	scala.List (the pickle's scala.collection.immutable.List).sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
 ---
 > select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:79	scala.collection.IterableOnceOps.sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int

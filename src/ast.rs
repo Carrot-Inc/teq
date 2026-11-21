@@ -951,6 +951,10 @@ pub struct Ast {
     /// AST leaves to the typer, with the call passing the body's own givens: what is typed where
     /// the type arguments are inferred again.
     pub inferred_alternatives: Vec<(ExprId, ExprId)>,
+    /// A library body's extractor pattern with the implicit arguments its pickle holds (UNAPPLY's `IMPLICITarg`s,
+    /// TreeUnpickler.scala 1638-1647), by the extractor's path: the unapply's using list as the typer chose it, which
+    /// the pattern's typing applies rather than search again (Applications.scala `typedUnApply`'s `unapplyImplicits`).
+    pub extractor_implicits: Vec<(ExprId, ListRef)>,
     /// A library body's declared types of lambda parameters and local vals that scalac
     /// inferred, ascending: where they do not admit what the context gives, that is taken.
     pub inferred_types: Vec<u32>,
@@ -1243,6 +1247,7 @@ impl Ast {
             inferred_type_lists: Vec::new(),
             js_alias_types: Vec::new(),
             inferred_alternatives: Vec::new(),
+            extractor_implicits: Vec::new(),
             inferred_types: Vec::new(),
             this_type_trees: Vec::new(),
             def_ranges: Vec::new(),

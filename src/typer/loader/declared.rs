@@ -155,6 +155,59 @@ impl<'a> Worker<'a> {
         Some(self.declared_alternatives(k, name, target, &wanted))
     }
 
+    /// The alternatives among `alternatives` whose erased parameters the signed name `n` states, as
+    /// `signed_alternatives` reads a signature; `None` for a name that is not signed. A kept body's
+    /// overloaded name is the alternative TASTy names, applied without choosing again.
+    pub(super) fn signed_among(&mut self, alternatives: &[SymId], tasty: &crate::tasty::TastyFile, n: NameRef) -> Option<Vec<SymId>> {
+        let Some(TName::Signed { params, .. }) = tasty.names.get(n as usize) else { return None };
+        let params = params.clone();
+        let wanted: Vec<SigParam> = params
+            .iter()
+            .map(|&p| if p < 0 { SigParam::Types(-p as usize) } else { SigParam::Term(self.pickled_sig_name(&tasty.name(p as u32))) })
+            .collect();
+        let type_params: usize = wanted.iter().map(|p| if let SigParam::Types(n) = p { *n } else { 0 }).sum();
+        let mut out = Vec::new();
+        for &s in alternatives {
+            let sig = self.sig_arc(s);
+            if sig.tparams.len() == type_params && self.signature_matches(&sig, &wanted, self.is_java_defined(s)) {
+                out.push(s);
+            }
+        }
+        Some(out)
+    }
+
+    /// The constructor of the class `k` a signed `<init>` names: `Some(None)` for the primary, `Some(Some(s))` for the
+    /// secondary `s`, `None` where not exactly one matches. The primary is matched by the class's clauses (`ctor`), which
+    /// the typer reads it by: a loaded class's primary symbol has no sealed signature (`seal_primary_ctor`). A
+    /// constructor's type parameters are its class's, which the count of the signature's need not hold.
+    pub(super) fn signed_ctor(&mut self, k: ClassId, tasty: &crate::tasty::TastyFile, n: NameRef) -> Option<Option<SymId>> {
+        let Some(TName::Signed { params, .. }) = tasty.names.get(n as usize) else { return None };
+        let params = params.clone();
+        let wanted: Vec<SigParam> = params
+            .iter()
+            .filter(|&&p| p >= 0)
+            .map(|&p| SigParam::Term(self.pickled_sig_name(&tasty.name(p as u32))))
+            .collect();
+        let info = self.syms.class(k);
+        let primary = MethodSig { tparams: Vec::new(), clauses: info.ctor.clone(), ret: crate::tir::NO_TYPE, declared: crate::tir::NO_TYPE };
+        let secondaries = info.ctors.clone();
+        let java = self.is_java_class(k);
+        let mut out: Vec<Option<SymId>> = Vec::new();
+        if self.signature_matches(&primary, &wanted, java) {
+            out.push(None);
+        }
+        for s in secondaries {
+            let sig = self.sig_arc(s);
+            if self.signature_matches(&sig, &wanted, java) {
+                out.push(Some(s));
+            }
+        }
+        match out.as_slice() {
+            [one] => Some(*one),
+            _ => None,
+        }
+    }
+
     /// The members named `name` that the class `k` declares itself whose target name and erased
     /// parameters are those of the signature.
     fn declared_alternatives(&mut self, k: ClassId, name: Name, target: Option<Name>, wanted: &[SigParam]) -> Vec<SymId> {

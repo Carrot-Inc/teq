@@ -356,7 +356,9 @@ impl<'a> Worker<'a> {
         if rty == ERROR || !(self.stable_receiver(recv) || self.is_body_file(self.env.file)) {
             return None;
         }
-        self.extractor_pattern_on(recv, rty, subs, sty, span, chosen)
+        // A library body's extractor carries the implicit arguments its pickle holds (`Ast::extractor_implicits`).
+        let implicits = self.cur_ast().extractor_implicits.iter().find(|&&(e, _)| e == path).map(|&(_, l)| l);
+        self.extractor_pattern_on(recv, rty, subs, sty, span, chosen, implicits)
     }
 
     /// `case s"a-$x"`: `StringContext(parts).s.unapplySeq(scrutinee)` with the holes as the
@@ -387,7 +389,7 @@ impl<'a> Worker<'a> {
         if self.diags.items.len() > n || rty == ERROR {
             return self.prog.add_pat(TPat::Wildcard);
         }
-        match self.extractor_pattern_on(recv, rty, holes, sty, span, None) {
+        match self.extractor_pattern_on(recv, rty, holes, sty, span, None, None) {
             Some(p) => p,
             None => {
                 let msg = format!("{} is not an extractor: it has no unapply or unapplySeq for an interpolated pattern", self.name_str(kind));
@@ -399,7 +401,7 @@ impl<'a> Worker<'a> {
 
     /// The extraction `recv.unapply(scrutinee)` of a pattern, through the alternative `chosen`
     /// where the caller selected it, else the one `select_unapply` selects.
-    fn extractor_pattern_on(&mut self, recv: TExprId, rty: TypeId, subs: &[crate::ast::PatId], sty: TypeId, span: Span, chosen: Option<SymId>) -> Option<TPatId> {
+    fn extractor_pattern_on(&mut self, recv: TExprId, rty: TypeId, subs: &[crate::ast::PatId], sty: TypeId, span: Span, chosen: Option<SymId>, implicits: Option<crate::ast::ListRef>) -> Option<TPatId> {
         let (name, unapply, owner_ty) = match self.find_member(rty, names::UNAPPLY) {
             Some((s, o)) => (names::UNAPPLY, s, o),
             None => {
@@ -421,7 +423,7 @@ impl<'a> Worker<'a> {
             },
             None => unapply,
         };
-        let pat = self.extractor_pattern_by(recv, rty, subs, sty, span, name, unapply, owner_ty, overloaded || chosen.is_some());
+        let pat = self.extractor_pattern_by(recv, rty, subs, sty, span, name, unapply, owner_ty, overloaded || chosen.is_some(), implicits);
         // The extractor the pattern applies, once its sub-patterns' are typed (`Typer.typedInfixOp`'s
         // `app.symbol`), by the pattern's span.
         self.last_unapply = Some((span, unapply));
@@ -431,7 +433,7 @@ impl<'a> Worker<'a> {
     /// The extraction through `unapply`, a member `name` of the receiver's type `owner_ty`, `explicit`
     /// where an overload or the caller selected it.
     #[allow(clippy::too_many_arguments)]
-    fn extractor_pattern_by(&mut self, recv: TExprId, rty: TypeId, subs: &[crate::ast::PatId], sty: TypeId, span: Span, name: Name, unapply: SymId, owner_ty: TypeId, explicit: bool) -> Option<TPatId> {
+    fn extractor_pattern_by(&mut self, recv: TExprId, rty: TypeId, subs: &[crate::ast::PatId], sty: TypeId, span: Span, name: Name, unapply: SymId, owner_ty: TypeId, explicit: bool, implicits: Option<crate::ast::ListRef>) -> Option<TPatId> {
         // A scrutinee wider than what `unapply` takes is tested against that type first.
         // The parameter is seen from the receiver's type (`m: Matcher[A, B]`).
         // The scrutinee goes to the first clause that is not a using clause: an extractor of a
@@ -485,7 +487,22 @@ impl<'a> Worker<'a> {
         let scrut = self.fresh_local("u", narrowed, span);
         let arg = self.prog.add(TExpr::Local(scrut));
         self.prog.set_type(arg, narrowed);
-        let lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, narrowed)], using: false, span, fun: ArgList::NO_FUN }];
+        let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, narrowed)], using: false, span, fun: ArgList::NO_FUN }];
+        // A library body's pickled implicit arguments, applied as the using lists the typer chose there: the pickle
+        // holds the arguments of every clause after the scrutinee's in one sequence (`unapplyImplicits`,
+        // Applications.scala 1896-1906), split back by those clauses' parameters; where they do not add up, none.
+        if let Some(l) = implicits {
+            let items: Vec<crate::ast::ExprId> = self.cur_ast().expr_list(l).to_vec();
+            let after: Vec<usize> = self.sig_of(unapply).clauses.iter().skip_while(|cl| cl.is_using || cl.is_implicit).skip(1).map(|cl| cl.params.len()).collect();
+            if !after.is_empty() && after.iter().sum::<usize>() == items.len() {
+                let mut rest = items.as_slice();
+                for n in after {
+                    let (now, later) = rest.split_at(n);
+                    lists.push(ArgList { args: now.iter().map(|&a| ArgSrc::Ast(a)).collect(), using: true, span, fun: ArgList::NO_FUN });
+                    rest = later;
+                }
+            }
+        }
         // The alternative selected is applied, not resolved again for the narrowed scrutinee.
         let (call, rty) = if explicit {
             let callee = self.member_callee_in(recv, rty, Some(owner_ty), unapply);

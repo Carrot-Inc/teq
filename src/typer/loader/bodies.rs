@@ -135,6 +135,11 @@ pub(super) struct Conv {
     /// The definitions made, each with the address of the tree it stands for: what places a
     /// product's definitions in their source.
     pub def_at: Vec<(DefId, Addr)>,
+    /// The lists a call applies to its callee, by the callee's TASTy address (not its address in memory, which a dropped
+    /// temporary hands on; the two trees made here at a tree's address, inline accessors' paths, are never asked): what
+    /// the alternative an overloaded name's signature names must take to be applied as the pickle writes the call
+    /// (`signed_alternative`).
+    call_lists: FxMap<Addr, usize>,
 }
 
 impl Conv {
@@ -160,6 +165,7 @@ impl Conv {
 
     fn new(tasty: Arc<TastyFile>, file: u32) -> Conv {
         Conv {
+            call_lists: FxMap::default(),
             tasty,
             file,
             ast: Ast::new(64),
@@ -803,38 +809,85 @@ impl<'a> Worker<'a> {
             // A list is a using one where the parent's constructor's clause it fills is
             // (`TreeUnpickler.constructorApply`, by the constructor's method type): `Parent(k)` of
             // a using parameter `k` fills the ordinary clause.
-            let ctor_clauses: Vec<bool> = match parent_class {
-                Some(k) => {
-                    self.complete_class(k);
-                    self.syms.class(k).ctor.iter().map(|c| c.is_using || c.is_implicit).collect()
+            // The parent's constructor as TASTy names it (`<init>` with its signature).
+            let parent_head = {
+                let mut h = p;
+                while let TermKind::Apply(f, _) | TermKind::TypeApply(f, ..) = &h.kind {
+                    h = f;
                 }
-                None => Vec::new(),
+                h
+            };
+            let init = match &parent_head.kind {
+                TermKind::Select(_, n) | TermKind::SelectIn(_, n, ..) => Some(*n),
+                _ => None,
+            };
+            // The cut (`lean_std_callee`): a lean-std class's constructor takes master's reading of its lists.
+            let master_clauses: Option<Vec<bool>> = match parent_class {
+                Some(k) if self.lean_std_callee(cv, parent_head) => {
+                    self.complete_class(k);
+                    Some(self.syms.class(k).ctor.iter().map(|c| c.is_using || c.is_implicit).collect())
+                }
+                _ => None,
             };
             let mut args = Vec::with_capacity(lists.len());
             for (i, list) in lists.into_iter().enumerate().filter(|(_, l)| !l.is_empty()) {
+                // The one question (`filled_clause`): the clause this list fills, as TASTy numbers the lists.
+                // A list of arguments where the normalization adds an empty one is not the reference's: no answer.
+                let filled = match (parent_class, init) {
+                    (Some(k), Some(n)) if master_clauses.is_none() => self.filled_ctor_clause(cv, k, n, i).filter(|c| !c.added),
+                    _ => None,
+                };
                 cv.lambda_targets.extend(list.iter().flat_map(lambda_targets));
                 cv.lambda_targets.extend(hoisted.iter().flat_map(|(_, rhs)| lambda_targets(rhs)));
+                // A list of named arguments with one the typer searched (the pickle's given, in its parameter's place):
+                // that one is printed under its parameter's name too, so that no positional argument lands on a named
+                // one's parameter (`K(1)(using a = A(1), c = C(3))`, `b` searched).
+                let names: Vec<Name> = match &filled {
+                    Some(c) if list.iter().any(|a| matches!(a.kind, TermKind::NamedArg(..))) => c.names.clone(),
+                    _ => Vec::new(),
+                };
+                let named_in_place = |cv: &mut Conv, a: &Term, e: ExprId| -> ExprId {
+                    match list.iter().position(|x| std::ptr::eq(x, a)).and_then(|j| names.get(j)) {
+                        Some(&name) if !matches!(a.kind, TermKind::NamedArg(..)) => cv.expr(Expr::NamedArg(name, e)),
+                        _ => e,
+                    }
+                };
                 let items: Vec<ExprId> = if hoisted.is_empty() {
-                    list.iter().map(|a| self.conv_arg(cv, a)).collect()
+                    list.iter()
+                        .map(|a| {
+                            let e = self.conv_arg(cv, a);
+                            named_in_place(cv, a, e)
+                        })
+                        .collect()
                 } else {
                     let mut items = Vec::with_capacity(list.len());
                     for a in source_order(list, &hoisted) {
                         let item = match hoisted_arg(a, &hoisted) {
-                            Some((None, i)) => self.conv_expr(cv, hoisted[i].1),
+                            Some((None, i)) => {
+                                let e = self.conv_expr(cv, hoisted[i].1);
+                                named_in_place(cv, a, e)
+                            }
                             Some((Some(n), i)) => {
                                 let value = self.conv_expr(cv, hoisted[i].1);
                                 let name = self.conv_name(cv, n);
                                 cv.expr(Expr::NamedArg(name, value))
                             }
-                            None => self.conv_arg(cv, a),
+                            None => {
+                                let e = self.conv_arg(cv, a);
+                                named_in_place(cv, a, e)
+                            }
                         };
                         items.push(item);
                     }
                     items
                 };
-                let using = match ctor_clauses.get(i) {
-                    Some(&using) => using,
-                    None => list.iter().all(|a| self.is_given_argument(cv, a)),
+                let using = match (&master_clauses, filled) {
+                    (Some(clauses), _) => match clauses.get(i) {
+                        Some(&using) => using,
+                        None => list.iter().all(|a| self.is_given_argument(cv, a)),
+                    },
+                    (None, Some(c)) => c.using,
+                    (None, None) => list.iter().all(|a| self.is_given_argument(cv, a)),
                 };
                 args.push((push_list(&mut cv.ast.expr_lists, &items), using));
             }
@@ -2713,7 +2766,17 @@ impl<'a> Worker<'a> {
                 let l = push_list(&mut cv.ast.expr_lists, &items);
                 cv.expr(Expr::SeqLit(l, elem))
             }
-            TermKind::Path(p) => self.conv_path(cv, p),
+            TermKind::Path(p) => {
+                // An overloaded name on a static path: the alternative TASTy names by its signature, which the body file
+                // applies without choosing again (`Expr::SymRef`, the typer's `referenced_alternative`).
+                if let TType::TermRef(prefix, n) = p {
+                    let lists = cv.call_lists.get(&t.at).copied().unwrap_or(0);
+                    if let Some(alt) = self.signed_alternative(cv, prefix, *n, lists) {
+                        return cv.expr(Expr::SymRef(alt));
+                    }
+                }
+                self.conv_path(cv, p)
+            }
             TermKind::Const(c) => self.conv_const(cv, c),
             // `var x: T = _`, the zero of the variable's type.
             TermKind::Ident(n, _) if cv.tasty.simple(*n) == Some("_") => {
@@ -2738,6 +2801,14 @@ impl<'a> Worker<'a> {
                 if let Some(acc) = self.accessor_of(cv, t) {
                     if let Some(e) = self.conv_accessor(cv, acc) {
                         return e;
+                    }
+                }
+                // An overloaded name selected on a static path (`p.F$package.take`, `O.take`): the alternative TASTy
+                // names by its signature, which the body file applies without choosing again (`Expr::SymRef`).
+                if let TermKind::Path(prefix @ TType::TermRef(..)) = &q.kind {
+                    let lists = cv.call_lists.get(&t.at).copied().unwrap_or(0);
+                    if let Some(alt) = self.signed_alternative(cv, prefix, *n, lists) {
+                        return cv.expr(Expr::SymRef(alt));
                     }
                 }
                 // `$anon.this.C` for the companion of a case class of the local class being
@@ -3994,6 +4065,9 @@ impl<'a> Worker<'a> {
     }
 
     fn conv_apply(&mut self, cv: &mut Conv, f: &Term, args: &[Term]) -> ExprId {
+        // The outermost application of a callee is converted first: its count of lists is the call's.
+        let (callee, before) = applied_head(f);
+        cv.call_lists.entry(callee.at).or_insert(before + 1);
         // The default getters' applications a body passes stay, as `TreeUnpickler` reads them:
         // the typer types each as the plan's (`Worker::getter_application`). Through an array's
         // `ArrayOps`, whose std members lack some of scala-library's parameters, a library
@@ -4134,22 +4208,61 @@ impl<'a> Worker<'a> {
             }
         }
         let l = push_list(&mut cv.ast.expr_lists, &items);
-        // `new C[T](args)(using)`: the AST keeps the first argument list of a constructor call
-        // and the typer supplies the using clauses again.
-        if self.constructed_new(cv, f).is_some() && args.iter().all(|a| self.is_given_argument(cv, a)) {
-            let new = self.conv_expr(cv, f);
-            // After the `()` scalac puts before a leading using clause (`new C()(q)(a)`), the
-            // list is the one written.
-            if matches!(&f.kind, TermKind::Apply(_, first) if first.is_empty()) {
-                return cv.expr(Expr::UsingApply(new, l));
+        // `new C[T](args)(..)`: the one question (`filled_clause`) of the list, numbered as the reference numbers a
+        // constructor's lists.
+        if self.constructed_new(cv, f).is_some() && self.lean_std_callee(cv, applied_head(f).0) {
+            // The cut (`lean_std_callee`): master's reading of a lean-std class's constructor lists.
+            if args.iter().all(|a| self.is_given_argument(cv, a)) {
+                let new = self.conv_expr(cv, f);
+                if matches!(&f.kind, TermKind::Apply(_, first) if first.is_empty()) {
+                    return cv.expr(Expr::UsingApply(new, l));
+                }
+                if matches!(&f.kind, TermKind::Apply(g, _) if matches!(&g.kind, TermKind::TypeApply(_, _, true))) {
+                    let passing = cv.expr(Expr::UsingApply(new, l));
+                    cv.ast.inferred_alternatives.push((new, passing));
+                }
+                return new;
             }
-            // With its type arguments inferred again, the constructor takes the givens the
-            // body passes, which the class path's definitions may be alone to provide.
-            if matches!(&f.kind, TermKind::Apply(g, _) if matches!(&g.kind, TermKind::TypeApply(_, _, true))) {
-                let passing = cv.expr(Expr::UsingApply(new, l));
-                cv.ast.inferred_alternatives.push((new, passing));
+        } else if self.constructed_new(cv, f).is_some() {
+            let (head, applied) = applied_head(f);
+            // A list of arguments where the normalization adds an empty one is not the reference's: no answer.
+            match self.filled_clause(cv, head, applied).filter(|c| !c.added || args.is_empty()) {
+                // The `()` the reference's normalization adds after using clauses alone (`new K(using a)()`,
+                // NamerOps.normalizeIfConstructor): no clause of teq's constructor.
+                Some(c) if c.added => return self.conv_expr(cv, f),
+                // The list the pickle holds for a using or implicit clause, printed: a kept body never searches again.
+                Some(c) if c.using && !args.is_empty() => {
+                    let new = self.conv_expr(cv, f);
+                    let after_empty = matches!(&f.kind, TermKind::Apply(_, first) if first.is_empty());
+                    // With its type arguments inferred again, the constructor takes the givens the
+                    // body passes, which the class path's definitions may be alone to provide.
+                    let inferred = matches!(&f.kind, TermKind::Apply(g, _) if matches!(&g.kind, TermKind::TypeApply(_, _, true)));
+                    if !after_empty && inferred && args.iter().all(|a| self.is_given_argument(cv, a)) {
+                        let passing = cv.expr(Expr::UsingApply(new, l));
+                        cv.ast.inferred_alternatives.push((new, passing));
+                        return new;
+                    }
+                    return cv.expr(Expr::UsingApply(new, l));
+                }
+                // An ordinary clause: applied below as written.
+                Some(_) => {}
+                // No answer (TASTy names no class teq holds there, or its constructors differ there): master's reading,
+                // a list of givens alone is the using clauses, which the typer supplies again.
+                None if args.iter().all(|a| self.is_given_argument(cv, a)) => {
+                    let new = self.conv_expr(cv, f);
+                    // After the `()` scalac puts before a leading implicit clause (`new C()(q)(a)`), the
+                    // list is the one written.
+                    if matches!(&f.kind, TermKind::Apply(_, first) if first.is_empty()) {
+                        return cv.expr(Expr::UsingApply(new, l));
+                    }
+                    if matches!(&f.kind, TermKind::Apply(g, _) if matches!(&g.kind, TermKind::TypeApply(_, _, true))) {
+                        let passing = cv.expr(Expr::UsingApply(new, l));
+                        cv.ast.inferred_alternatives.push((new, passing));
+                    }
+                    return new;
+                }
+                None => {}
             }
-            return new;
         }
         let mut head = f;
         let mut targs: &[TType] = &[];
@@ -4180,13 +4293,20 @@ impl<'a> Worker<'a> {
                 let tys: Vec<TyExprId> = ext_targs.iter().chain(targs.iter()).map(|a| self.conv_type_arg(cv, a)).collect();
                 let tl = push_list(&mut cv.ast.ty_lists, &tys);
                 let mut applied = cv.expr(Expr::TypeApply(callee, tl));
-                for list in ext_lists {
+                let master = self.lean_std_callee(cv, g);
+                for (j, list) in ext_lists.into_iter().enumerate() {
                     let items: Vec<ExprId> = list.iter().map(|a| self.conv_arg(cv, a)).collect();
                     let il = push_list(&mut cv.ast.expr_lists, &items);
-                    let using = !list.is_empty() && list.iter().all(|a| self.is_given_argument(cv, a));
+                    let using = if master { !list.is_empty() && list.iter().all(|a| self.is_given_argument(cv, a)) } else { self.applies_using_at(cv, g, j, list) };
                     applied = cv.expr(if using { Expr::UsingApply(applied, il) } else { Expr::Apply(applied, il) });
                 }
-                let using = !args.is_empty() && args.iter().all(|a| self.is_given_argument(cv, a));
+                // The site's own fallback, master's here: a list of givens alone.
+                let using = if master {
+                    !args.is_empty() && args.iter().all(|a| self.is_given_argument(cv, a))
+                } else {
+                    let (h, applied) = applied_head(f);
+                    self.applies_using_at(cv, h, applied, args)
+                };
                 return cv.expr(if using { Expr::UsingApply(applied, l) } else { Expr::Apply(applied, l) });
             }
         }
@@ -4255,7 +4375,7 @@ impl<'a> Worker<'a> {
                     }
                     callee = cv.expr(Expr::TypeApply(callee, tl));
                 }
-                let using = !args.is_empty() && args.iter().all(|a| self.is_given_argument(cv, a)) && !self.fills_plain_clause(cv, f);
+                let using = self.applies_using(cv, f, args);
                 return cv.expr(if using { Expr::UsingApply(callee, l) } else { Expr::Apply(callee, l) });
             }
         }
@@ -4308,7 +4428,7 @@ impl<'a> Worker<'a> {
             }
             None => self.conv_expr(cv, f),
         };
-        let using = !args.is_empty() && args.iter().all(|a| self.is_given_argument(cv, a)) && !self.fills_plain_clause(cv, f);
+        let using = self.applies_using(cv, f, args);
         cv.expr(if using { Expr::UsingApply(fe, l) } else { Expr::Apply(fe, l) })
     }
 
@@ -4404,10 +4524,11 @@ impl<'a> Worker<'a> {
         let tys: Vec<TyExprId> = ext_targs.iter().chain(targs.iter()).map(|a| self.conv_type_arg(cv, a)).collect();
         let tl = push_list(&mut cv.ast.ty_lists, &tys);
         let mut applied = cv.expr(Expr::TypeApply(callee, tl));
-        for clause in clauses {
+        let master = self.lean_std_callee(cv, g);
+        for (j, clause) in clauses.iter().enumerate() {
             let items: Vec<ExprId> = clause.iter().map(|a| self.conv_arg(cv, a)).collect();
             let rl = push_list(&mut cv.ast.expr_lists, &items);
-            let using = !clause.is_empty() && clause.iter().all(|a| self.is_given_argument(cv, a));
+            let using = if master { !clause.is_empty() && clause.iter().all(|a| self.is_given_argument(cv, a)) } else { self.applies_using_at(cv, g, j, clause) };
             applied = cv.expr(if using { Expr::UsingApply(applied, rl) } else { Expr::Apply(applied, rl) });
         }
         applied
@@ -4470,12 +4591,193 @@ impl<'a> Worker<'a> {
         self.sig_of(s).clauses.get(applied).map_or(false, |c| c.is_using || c.is_implicit)
     }
 
-    /// Whether the clause a call `f(..)` fills is a using one, for each method `f` may name that
+    /// The one question of a kept body's application, whose using and implicit arguments are the pickle's and never
+    /// searched again (TreeUnpickler.scala 1505-1520), asked by every place that converts one (a call, an overloaded
+    /// name's call, a creation by `new`, a parent's or an anonymous class's constructor call): of the
+    /// call whose callee is `head`, the clause its list number `applied` fills, AS TASTy NUMBERS THE LISTS, of the
+    /// alternative TASTy names: whether that clause is a using or an implicit one, and its parameters' names. The
+    /// alternative is the one a signed name names where the name is overloaded (`signed_among`: SELECTin's and
+    /// TERMREFin's signature, TastyFormat.scala 91, 148, 242), else every alternative the name may name where they
+    /// agree; a constructor's clauses are numbered as the reference normalizes them (`tasty_ctor_clauses`,
+    /// NamerOps.scala 89-105), a list the normalization adds answering a plain clause of no parameter. `None` where
+    /// TASTy names no symbol teq holds there or the alternatives differ. An alternative of no clause there takes none
+    /// (`mkString` beside `mkString(sep)`): given arguments of an ordinary clause are written for its parameters
+    /// (`xs.mkString(sep)` of a using parameter `sep`), no using application, which would apply `mkString()`'s result.
+    fn filled_clause(&mut self, cv: &mut Conv, head: &Term, applied: usize) -> Option<Filled> {
+        if let TermKind::Select(q, n) | TermKind::SelectIn(q, n, ..) = &head.kind {
+            if cv.tasty.simple(cv.tasty.source_name(*n)) == Some("<init>") {
+                let TermKind::New(tpt) = &q.kind else { return None };
+                let k = self.class_of_new(cv, tpt)?;
+                return self.filled_ctor_clause(cv, k, *n, applied);
+            }
+        }
+        let (entries, signed): (Vec<SymId>, Option<NameRef>) = match &head.kind {
+            TermKind::SelectIn(_, n, owner, _) => {
+                let c = self.this_class_of(cv, owner)?;
+                let name = self.select_name(cv, *n);
+                // A class of the lean std has no answer here (`lean_std_callee` takes its calls to master's reading): it is not
+                // completed from a body's conversion, which before the output's walk reaches it leaves a method that walk
+                // types on demand out of the JavaScript output (`MurmurHash3.rangeHash`, emit/reach.rs).
+                if self.std_source(self.syms.class(c).file) {
+                    return None;
+                }
+                self.complete_class(c);
+                // An extension of an object the std writes is among its extensions, not its members.
+                let mut found = Vec::new();
+                for &(b, _) in self.syms.class(c).base_types.iter() {
+                    let info = self.syms.class(b);
+                    found.extend(info.members.get(&name).copied());
+                    found.extend(info.extensions.iter().copied().filter(|&e| self.syms.sym(e).name == name));
+                }
+                (found, Some(*n))
+            }
+            TermKind::Select(q, n) => match &q.kind {
+                TermKind::Path(prefix @ TType::TermRef(..)) => (self.static_entry(cv, prefix, *n).into_iter().collect(), Some(*n)),
+                _ => return None,
+            },
+            TermKind::Path(TType::TermRef(prefix, n)) => (self.static_entry(cv, prefix, *n).into_iter().collect(), Some(*n)),
+            TermKind::Path(TType::LocalTerm(addr, _)) => (self.term_sym(cv, *addr).into_iter().collect(), None),
+            _ => return None,
+        };
+        let mut methods: Vec<SymId> = entries.iter().flat_map(|&e| self.syms.alternatives(e).map_or_else(|| vec![e], |a| a.to_vec())).collect();
+        if methods.len() > 1 {
+            if let Some(n) = signed {
+                let tasty = cv.tasty.clone();
+                if let Some(&[one]) = self.signed_among(&methods, &tasty, n).as_deref() {
+                    // One of no clause there is named by its erasure alone (`signed_alternative`): every alternative
+                    // answers.
+                    if self.sig_of(one).clauses.len() > applied {
+                        methods = vec![one];
+                    }
+                }
+            }
+        }
+        // An alternative of no clause there (`mkString` beside `mkString(sep)`) takes none. A right-associative
+        // extension's signature keeps its receiver's clause first, which TASTy numbers after the method's first
+        // (`right_assoc_order`, dotty's `Desugar.extMethod`).
+        let mut answers: Vec<Filled> = Vec::new();
+        for m in methods {
+            let (right_assoc, ext_clauses) = {
+                let info = self.syms.sym(m);
+                (info.is_extension && self.name_str(info.name).ends_with(':'), info.ext_clauses as usize)
+            };
+            let sig = self.sig_of(m).clone();
+            let at = if right_assoc { sig.right_assoc_order(ext_clauses).map_or(Some(applied), |o| o.get(applied).copied()) } else { Some(applied) };
+            if let Some(c) = at.and_then(|i| sig.clauses.get(i)) {
+                answers.push(Filled { using: c.is_using || c.is_implicit, names: c.params.iter().map(|p| p.name).collect(), added: false });
+            }
+        }
+        agreed(answers)
+    }
+
+    /// `filled_clause` of a constructor of the class `k`: the alternative the signed `<init>` names (`signed_ctor`: the
+    /// primary or a secondary constructor), else every constructor where they agree; its clauses as the reference
+    /// numbers them.
+    fn filled_ctor_clause(&mut self, cv: &mut Conv, k: ClassId, n: NameRef, applied: usize) -> Option<Filled> {
+        self.complete_class(k);
+        let tasty = cv.tasty.clone();
+        let candidates: Vec<Vec<ClauseSig>> = match self.signed_ctor(k, &tasty, n) {
+            Some(None) => vec![self.syms.class(k).ctor.clone()],
+            Some(Some(s)) => vec![self.sig_of(s).clauses.clone()],
+            None => {
+                let mut all = vec![self.syms.class(k).ctor.clone()];
+                for s in self.syms.class(k).ctors.clone() {
+                    all.push(self.sig_of(s).clauses.clone());
+                }
+                all
+            }
+        };
+        let answers: Vec<Option<Filled>> = candidates
+            .iter()
+            .map(|clauses| {
+                let lead = usize::from(clauses.first().is_some_and(|c| c.is_implicit && !c.params.is_empty()));
+                match tasty_ctor_clauses(clauses).get(applied)? {
+                    None => Some(Filled { using: false, names: Vec::new(), added: true }),
+                    Some(_) => {
+                        let c = &clauses[applied - lead];
+                        Some(Filled { using: c.is_using || c.is_implicit, names: c.params.iter().map(|p| p.name).collect(), added: false })
+                    }
+                }
+            })
+            .collect();
+        agreed(answers.into_iter().flatten().collect())
+    }
+
+    /// The class a `new`'s type constructs (its type arguments left to inference or not).
+    fn class_of_new(&mut self, cv: &mut Conv, tpt: &TType) -> Option<ClassId> {
+        if self.mentions_local_type(cv, tpt) {
+            return None;
+        }
+        let bare = match tpt {
+            TType::Lambda { kind: LambdaKind::Type, result, .. } => match &**result {
+                TType::Applied(f, _) => Some((**f).clone()),
+                _ => None,
+            },
+            _ => None,
+        };
+        let mut cx = super::MapCx::new(cv.file);
+        let resolved = match &bare {
+            Some(f) => self.map_type_ctor(&mut cx, f),
+            None => self.map_type(&mut cx, tpt),
+        };
+        match self.types.get(resolved) {
+            Type::Class(k, _) | Type::Ctor(k) => Some(k),
+            _ => None,
+        }
+    }
+
+    /// The cut of the clause question: whether the callee `head` of a call is a
+    /// member of the lean std's own source: a member of a module, or a top-level definition, that the lean std's source
+    /// declares (`lean_std_static`), `new` of a class it declares, or a member a selection names in a class it declares. For those a kept body's lists
+    /// take master's reading (`master_fills_plain_clause`), and the clause question is not asked: answering it looks
+    /// the callee's class up from a body's conversion, which, before the output's walk reaches that class, leaves a
+    /// method the walk types on demand out of the JavaScript output (cats-kernel's call of `MurmurHash3.rangeHash`,
+    /// tests/classpath/js/cats_validated_mapn), a defect of its own.
+    fn lean_std_callee(&mut self, cv: &mut Conv, head: &Term) -> bool {
+        match &head.kind {
+            TermKind::Select(q, n) | TermKind::SelectIn(q, n, ..) if cv.tasty.simple(cv.tasty.source_name(*n)) == Some("<init>") => match &q.kind {
+                TermKind::New(tpt) => self.class_of_new(cv, tpt).is_some_and(|k| self.std_source(self.syms.class(k).file)),
+                _ => false,
+            },
+            TermKind::Path(TType::TermRef(prefix, n)) => self.lean_std_static(cv, prefix, *n),
+            TermKind::SelectIn(q, n, owner, _) => match &q.kind {
+                TermKind::Path(prefix @ TType::TermRef(..)) if self.lean_std_static(cv, prefix, *n) => true,
+                // A member of a class the lean std declares, by the selection's owner: its completion from here is the
+                // defect the cut keeps out, and an answer that waited for it would depend on what ran before.
+                _ => self.this_class_of(cv, owner).is_some_and(|c| self.std_source(self.syms.class(c).file)),
+            },
+            TermKind::Select(q, n) => match &q.kind {
+                TermKind::Path(prefix @ TType::TermRef(..)) => self.lean_std_static(cv, prefix, *n),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// `lean_std_callee` of the name `n` on the static path `prefix`, without a lookup that completes anything: `Predef`
+    /// as the conversion takes it, a module the lean std's source declares, or a package entry whose term it declares.
+    fn lean_std_static(&mut self, cv: &mut Conv, prefix: &TType, n: NameRef) -> bool {
+        // `scala.Predef`, which the conversion takes to the std's (`conv_path`) whatever object the class path holds.
+        if self.is_unloaded_predef(cv, prefix) {
+            return true;
+        }
+        match self.static_path_scope(cv, prefix) {
+            Some(PathScope::Module(c)) => self.std_source(self.syms.class(c).file),
+            Some(PathScope::Pkg(p)) => {
+                let name = self.conv_name(cv, n);
+                let term = self.syms.entry_named(self.interner, p, name).and_then(|e| e.term);
+                term.is_some_and(|s| self.std_source(self.syms.sym(s).file))
+            }
+            None => false,
+        }
+    }
+
+    /// Master's question of the cut (`lean_std_callee`), as master asks it: whether the clause a call `f(..)` fills is a using one, for each method `f` may name that
     /// has a clause there: a member its selection names in the class that declares it, or the
     /// method on a static or local path. Given arguments of an ordinary clause are written for its
     /// parameters (`xs.mkString(sep)` of a using parameter `sep`), no using application, which
     /// would apply `mkString()`'s result.
-    fn filled_clauses(&mut self, cv: &mut Conv, f: &Term) -> Vec<bool> {
+    fn master_filled_clauses(&mut self, cv: &mut Conv, f: &Term) -> Vec<bool> {
         let mut applied = 0;
         let mut head = f;
         loop {
@@ -4521,9 +4823,75 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether the clause a call `f(..)` fills is an ordinary one of every method `f` may name.
-    fn fills_plain_clause(&mut self, cv: &mut Conv, f: &Term) -> bool {
-        let clauses = self.filled_clauses(cv, f);
+    fn master_fills_plain_clause(&mut self, cv: &mut Conv, f: &Term) -> bool {
+        let clauses = self.master_filled_clauses(cv, f);
         !clauses.is_empty() && clauses.into_iter().all(|using| !using)
+    }
+
+    /// The entry a name on a static path names (an overloaded one's alternatives under it); never asked of the lean std's
+    /// (`lean_std_callee`).
+    fn static_entry(&mut self, cv: &mut Conv, prefix: &TType, n: NameRef) -> Option<SymId> {
+        let name = self.conv_name(cv, n);
+        match self.static_path_scope(cv, prefix)? {
+            PathScope::Pkg(p) => self.pkg_term(p, name).and_then(|r| r.sym()),
+            PathScope::Module(c) => self.module_term(c, name).and_then(|r| r.sym()),
+        }
+    }
+
+    /// Whether the list `args` a call `f(..)` applies is printed as a using one: the one question's answer, else, where
+    /// it has none (TASTy names no symbol teq holds, or the alternatives differ), a list of givens alone.
+    fn applies_using(&mut self, cv: &mut Conv, f: &Term, args: &[Term]) -> bool {
+        let (head, applied) = applied_head(f);
+        // The cut (`lean_std_callee`), and a call the question has no answer for: master's reading, a list of givens
+        // alone to a clause that is not an ordinary one.
+        let master = |this: &mut Self, cv: &mut Conv| !args.is_empty() && args.iter().all(|a| this.is_given_argument(cv, a)) && !this.master_fills_plain_clause(cv, f);
+        if self.lean_std_callee(cv, head) || args.is_empty() {
+            return master(self, cv);
+        }
+        match self.filled_clause(cv, head, applied) {
+            Some(c) => c.using,
+            None => master(self, cv),
+        }
+    }
+
+    /// `applies_using` of the list number `applied` (as TASTy numbers them) applied to the callee `head`.
+    fn applies_using_at(&mut self, cv: &mut Conv, head: &Term, applied: usize, args: &[Term]) -> bool {
+        if args.is_empty() {
+            return false;
+        }
+        match self.filled_clause(cv, head, applied) {
+            Some(c) => c.using,
+            None => args.iter().all(|a| self.is_given_argument(cv, a)),
+        }
+    }
+
+    /// The alternative an overloaded name `n` on the static path `prefix` names by the signature TASTy pickles it
+    /// with; `None` where the name is not overloaded there, not signed, or the signature does not single one out.
+    /// Not an alternative another class declares, which the object the path names inherits: it is selected on the
+    /// object as written (`O.take` of `object O extends Ops`), which a reference to the symbol alone would take on
+    /// another receiver. A top-level one is the package's (the loader spills a package object's members into it). And
+    /// one that takes the `lists` the call applies: an alternative of fewer clauses is one the signature names by its
+    /// erasure alone (a library compiled against another version, whose call names the method kept for binary
+    /// compatibility, its arguments in one clause), which the name's overloads resolve as written.
+    fn signed_alternative(&mut self, cv: &mut Conv, prefix: &TType, n: NameRef, lists: usize) -> Option<SymId> {
+        if self.lean_std_static(cv, prefix, n) {
+            return None;
+        }
+        let scope = self.static_path_scope(cv, prefix)?;
+        let entry = self.static_entry(cv, prefix, n)?;
+        let alternatives = self.syms.alternatives(entry)?.to_vec();
+        let tasty = cv.tasty.clone();
+        let one = match self.signed_among(&alternatives, &tasty, n)?.as_slice() {
+            [one] => *one,
+            _ => return None,
+        };
+        if self.sig_of(one).clauses.len() < lists {
+            return None;
+        }
+        match scope {
+            PathScope::Module(c) if matches!(self.syms.sym(one).owner, Owner::Class(o) if o != c) => None,
+            _ => Some(one),
+        }
     }
 
     fn static_path_scope(&mut self, cv: &mut Conv, t: &TType) -> Option<PathScope> {
@@ -6007,6 +6375,14 @@ impl<'a> Worker<'a> {
                     }
                     _ => cv.refuse("an extractor of that shape"),
                 };
+                // The unapply's implicit arguments as the pickle holds them: the pattern's typing applies them, a kept
+                // body never searches again; an extractor of the lean std's own source takes master's reading, which
+                // searches them (`lean_std_callee`).
+                if !implicits.is_empty() && !self.lean_std_callee(cv, head) {
+                    let items: Vec<ExprId> = implicits.iter().map(|a| self.conv_arg(cv, a)).collect();
+                    let il = push_list(&mut cv.ast.expr_lists, &items);
+                    cv.ast.extractor_implicits.push((extractor, il));
+                }
                 cv.pat(Pat::Ctor(extractor, l))
             }
             TermKind::QuotePattern { body, bindings, .. } => self.conv_quote_pattern(cv, body, bindings),
@@ -6189,6 +6565,60 @@ fn count_pattern_holes(tasty: &TastyFile, t: &Term) -> usize {
 }
 
 /// The addresses of the local methods that the closures of `t` are over.
+
+/// The one question's answer (`Worker::filled_clause`): the clause a list fills is a using or an implicit one, and its
+/// parameters' names; or the list is one the reference's normalization adds to a constructor (`added`: the `()`
+/// before a leading implicit clause or after using clauses alone, `tasty_ctor_clauses`), no clause of teq's.
+#[derive(Clone)]
+struct Filled {
+    using: bool,
+    names: Vec<Name>,
+    added: bool,
+}
+
+/// The callee under a call's applications and type applications, and how many lists are applied to it before the one
+/// a call `f(..)` applies (the list's number, as TASTy numbers them).
+fn applied_head(f: &Term) -> (&Term, usize) {
+    let mut applied = 0;
+    let mut head = f;
+    loop {
+        match &head.kind {
+            TermKind::Apply(g, _) => {
+                applied += 1;
+                head = g;
+            }
+            TermKind::TypeApply(g, ..) => head = g,
+            _ => return (head, applied),
+        }
+    }
+}
+
+/// The answer the alternatives agree on: their common using flag, and their parameters' names where those agree too.
+fn agreed(answers: Vec<Filled>) -> Option<Filled> {
+    let first = answers.first()?.clone();
+    if !answers.iter().all(|a| a.using == first.using && a.added == first.added) {
+        return None;
+    }
+    let names = if answers.iter().all(|a| a.names == first.names) { first.names } else { Vec::new() };
+    Some(Filled { using: first.using, names, added: first.added })
+}
+
+/// A constructor's clauses as TASTy numbers them: the reference normalizes a constructor's parameter lists
+/// (NamerOps.scala 89-105, `normalizeIfConstructor`) with a LEADING empty list before an implicit first clause and a
+/// TRAILING one after a constructor of using clauses alone (or of none), and its pickled calls follow that numbering
+/// (TreeUnpickler.scala 1396, `constructorApply`); teq's constructor holds neither. Each `Some(using or implicit)` for
+/// teq's own clause, `None` for a list the normalization adds. The constructor's answer to the one question of a
+/// kept body's application (which clause a list fills, and its kind).
+fn tasty_ctor_clauses(clauses: &[ClauseSig]) -> Vec<Option<bool>> {
+    let mut out: Vec<Option<bool>> = clauses.iter().map(|c| Some(c.is_using || c.is_implicit)).collect();
+    if clauses.first().is_some_and(|c| c.is_implicit && !c.params.is_empty()) {
+        out.insert(0, None);
+    } else if clauses.iter().all(|c| c.is_using && !c.params.is_empty()) {
+        out.push(None);
+    }
+    out
+}
+
 fn lambda_targets(t: &Term) -> Vec<Addr> {
     let mut out = Vec::new();
     let mut walk = crate::tasty::terms::Walk {

@@ -1,0 +1,15 @@
+diff --git a/src/typer/loader/declared.rs b/src/typer/loader/declared.rs
+index cb808d8567..ab8d879966 100644
+--- a/src/typer/loader/declared.rs
++++ b/src/typer/loader/declared.rs
+@@ -173,6 +173,10 @@ impl<'a> Worker<'a> {
+                 out.push(s);
+             }
+         }
++        // the control: an alternative other than the one the signed name names
++        if out.len() == 1 && alternatives.len() > 1 {
++            return Some(alternatives.iter().copied().filter(|s| !out.contains(s)).take(1).collect());
++        }
+         Some(out)
+     }
+ 

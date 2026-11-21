@@ -1,5 +1,6 @@
-65,77c65,77
+65,82c65,82
 < origin	fix.rdecl.RdApi	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (5 definitions)
+< origin	fix.rdecl.RdArr	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (6 definitions)
 < origin	fix.rdecl.RdBox	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (9 definitions)
 < origin	fix.rdecl.RdCustom	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (9 definitions)
 < origin	fix.rdecl.RdF1	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (5 definitions)
@@ -8,12 +9,17 @@
 < origin	fix.rdecl.RdIn	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (1 definitions)
 < origin	fix.rdecl.RdInBox	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (5 definitions)
 < origin	fix.rdecl.RdMarker	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (1 definitions)
+< origin	fix.rdecl.RdNamed	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (6 definitions)
+< origin	fix.rdecl.RdShape	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (3 definitions)
 < origin	fix.rdecl.RdSquare	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (3 definitions)
+< origin	fix.rdecl.RdTok	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (14 definitions)
+< origin	fix.rdecl.RdTokA	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (3 definitions)
 < origin	fix.rdecl.RdTokB	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (3 definitions)
 < origin	fix.rdecl.RdTraces	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (7 definitions)
 < origin	fix.rdecl.RdWrap	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (5 definitions)
 ---
 > origin	fix.rdecl.RdApi	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdArr	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdBox	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdCustom	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdF1	none: the pseudo files' tags and the converted text's offsets
@@ -22,11 +28,17 @@
 > origin	fix.rdecl.RdIn	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdInBox	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdMarker	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdNamed	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdShape	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdSquare	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdTok	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdTokA	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
-87c87
+92,93c92,93
+< origin	fix.rjava.RdJava	decl.jar	key reader_java.scala	token 108331611 recorded	definitions v1 (6 definitions)
 < origin	fix.rjava.RdSub	decl.jar	key reader_java.scala	token 108331611 recorded	definitions v1 (1 definitions)
 ---
+> origin	fix.rjava.RdJava	none: the pseudo files' tags and the converted text's offsets
 > origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets

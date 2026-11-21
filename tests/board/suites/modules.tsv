@@ -225,6 +225,12 @@ javapackagenullary	pass	-
 javasuperstable	fail	-	javasuperstable bundle
 javavarargs	pass	-	
 joinedfunction	fail	-	known classes: the JVM class files of the library trait and of the class that adds a third `apply` differ between the whole build and the build in part (jfa/Measure.class, jfb/Wider.class): a class be
+keptbodyextractor	pass	-	
+keptbodyinherit	pass	-	
+keptbodynamed	pass	-	
+keptbodyoverload	pass	-	
+keptbodyprivateclash	pass	-	
+keptbodytrait	pass	-	
 leanaliasowner	fail	-	leanaliasowner scalac-lean-b
 ledgerlocalclass	fail	-	known classes: the class an expansion of the product's inline body makes carries the pseudo file's SourceFile and line numbers (`a!lla.Lib$package`, line 6), the whole build's Lib.scala's: the JVM pro
 ledgeroverride	pass	-	
@@ -316,10 +322,11 @@ outerequals	pass	-
 outersuper	pass	-	
 overload	pass	-	
 overloadexpand	pass	-	
-overloadusing	fail	-	overloadusing js-run
+overloadusing	pass	-	
 overrideparamlevels	pass	-	
 overrideparamtrait	pass	-	
 overscalactraitvalwritten	fail	-	overscalactraitvalwritten over-scalac-js
+packageobjectparallel	pass	-	
 parentargsread	fail	-	parentargsread classes
 patdefsynthetic	pass	-	
 patdefvalueclass	pass	-	

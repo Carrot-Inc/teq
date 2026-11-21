@@ -1,0 +1,22 @@
+diff --git a/src/typer/loader/bodies.rs b/src/typer/loader/bodies.rs
+index c1e5036a5c..1f7172ea00 100644
+--- a/src/typer/loader/bodies.rs
++++ b/src/typer/loader/bodies.rs
+@@ -4664,7 +4664,7 @@ impl<'a> Worker<'a> {
+             let sig = self.sig_of(m).clone();
+             let at = if right_assoc { sig.right_assoc_order(ext_clauses).map_or(Some(applied), |o| o.get(applied).copied()) } else { Some(applied) };
+             if let Some(c) = at.and_then(|i| sig.clauses.get(i)) {
+-                answers.push(Filled { using: c.is_using || c.is_implicit, names: c.params.iter().map(|p| p.name).collect(), added: false });
++                answers.push(Filled { using: !(c.is_using || c.is_implicit), names: c.params.iter().map(|p| p.name).collect(), added: false });
+             }
+         }
+         agreed(answers)
+@@ -4695,7 +4695,7 @@ impl<'a> Worker<'a> {
+                     None => Some(Filled { using: false, names: Vec::new(), added: true }),
+                     Some(_) => {
+                         let c = &clauses[applied - lead];
+-                        Some(Filled { using: c.is_using || c.is_implicit, names: c.params.iter().map(|p| p.name).collect(), added: false })
++                        Some(Filled { using: !(c.is_using || c.is_implicit), names: c.params.iter().map(|p| p.name).collect(), added: false })
+                     }
+                 }
+             })

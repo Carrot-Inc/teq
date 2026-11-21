@@ -82,6 +82,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   A literal against a type variable is an `Int`'s, as scalac reads it (`(0xffffffff, 1)` for a `(Long, Int)`, `Some`,
   `List`, a generic method: -1), unless the variable is pinned to a class (`new C(0xffffffff)` for an invariant
   `C[Long]`: 4294967295); an overloaded operator's argument is an `Int`'s (`n + 0xffffffff` adds -1).
+- A library's method body kept in its lean products (`--products`) is built over them with the arguments its compiled
+  form holds: a `using` or implicit list it applies (written whole, short, named, or searched where the library was
+  compiled), an extractor's implicit arguments in a pattern (`case E(n) =>` of an `unapply` with a using clause), and
+  the alternative an overloaded call names. A program built over the products on JavaScript or in the interpreter
+  searched those givens again in its own scope or chose another alternative: it printed another value (`101` for
+  scalac's `8`), stopped with `has no member`, or was refused. A call of a method or a constructor of the lean std
+  keeps the earlier reading.
+- A trait's implicit clause applied with a short `using` list by an anonymous class or a class's parent
+  (`new Tr(using 10) {}` of `trait Tr(implicit a: Int, b: Int)`) has its omitted trailing parameters searched as givens,
+  as scalac does, where teq refused it ("missing argument for parameter b").
 
 ## 0.1.11 (2026-11-20)
 

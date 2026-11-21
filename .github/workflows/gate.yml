@@ -141,7 +141,7 @@ jobs:
             minutes: 40
             jars: true
           - group: corpus
-            suites: app planted asymptotics conversion-matrix workers
+            suites: app planted asymptotics conversion-matrix kept-body-cut kept-body-lists workers
             minutes: 25
             jars: true
           - group: watch

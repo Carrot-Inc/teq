@@ -1,0 +1,14 @@
+--- a/src/typer/loader/bodies.rs
++++ b/src/typer/loader/bodies.rs
+@@ -4608,7 +4608,10 @@
+             if cv.tasty.simple(cv.tasty.source_name(*n)) == Some("<init>") {
+                 let TermKind::New(tpt) = &q.kind else { return None };
+                 let k = self.class_of_new(cv, tpt)?;
+-                return self.filled_ctor_clause(cv, k, *n, applied);
++                return self.filled_ctor_clause(cv, k, *n, applied).map(|mut c| {
++                    if applied == 1 { c.added = true; }
++                    c
++                });
+             }
+         }
+         let (entries, signed): (Vec<SymId>, Option<NameRef>) = match &head.kind {

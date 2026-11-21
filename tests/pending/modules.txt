@@ -16,7 +16,6 @@ macroinlinearg	macroinlinearg build
 macrosuperseen	macrosuperseen build
 macrousingoverload	macrousingoverload scalac-b
 matchtypeinferred	matchtypeinferred build
-overloadusing	overloadusing js-run
 overscalactraitvalwritten	overscalactraitvalwritten over-scalac-js
 parentargsread	parentargsread classes
 productserrorcall	productserrorcall diags

@@ -1805,6 +1805,7 @@ list_map_conserve	pass	-
 list_range_last_element	pass	-	
 list_reverse_prepend	pass	-	
 literal_constant_types	pass	-	
+literal_digits_by_expected_type	pass	-	
 literal_overload_constant	pass	-	
 literal_union_members	pass	-	
 local_alias_after_path	pass	-	
@@ -3248,6 +3249,7 @@ using_default	pass	-
 using_lambda_argument	pass	-	
 using_list_overloads_narrowed	pass	-	
 using_list_short_searched	pass	-	
+using_list_trait_implicit_clause	pass	-	
 using_search	pass	-	
 util_sorting	pass	-	
 uuid	pass	-	

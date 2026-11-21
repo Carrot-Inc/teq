@@ -2,6 +2,10 @@ adapted	fix.reader.RdCalls	def arr	reader.scala:84:40	the ClassTag argument clau
 adapted	fix.reader.RdCalls	def capturedArray	reader.scala:88:44	a Predef wrapper applied by the pickle, the wrapped value
 adapted	fix.reader.RdCalls	def tokens	reader.scala:17:67	the ClassTag argument clause dropped
 adapted	fix.reader.RdCalls	def unz	reader.scala:85:65	the type arguments and the <:< argument clause dropped
+address	fix.reader.RdCalls	def boundedArray	reader.scala:21:37	fix.rdecl.RdArr.f(Array[? <: AnyVal]): String
+address	fix.reader.RdCalls	def tokens	reader.scala:17:31	fix.rdecl.RdTok.f(Token): String
+address	fix.reader.RdCalls	def tokens	reader.scala:17:66	fix.rdecl.RdTok.g(A): String
+address	fix.reader.RdCalls	def tokens	reader.scala:17:95	fix.rdecl.RdTok.h(Any): String
 binder	fix.reader.RdCalls	def bounded	reader.scala:34:22	_$6	? <: RdFoo
 binder	fix.reader.RdCalls	def contraLower	reader.scala:71:21	_$13	? >: Predef.String
 binder	fix.reader.RdCalls	def customLower	reader.scala:77:19	_$15	? >: RdCustom.Nothing
@@ -53,6 +57,7 @@ origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's of
 origin	fix.reader.RdCalls	none: the pseudo files' tags and the converted text's offsets
 origin	fix.reader.RdLocal	none: the pseudo files' tags and the converted text's offsets
 origin	fix.reader.RdStart	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rjava.RdJava	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
 select	fix.rdecl.RdBox	def put	reader_decl.scala:11:37	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 select	fix.rdecl.RdBox	def put	reader_decl.scala:12:63	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
@@ -68,20 +73,16 @@ select	fix.reader.RdCalls	def applied	reader.scala:11:45	fix.rdecl.RdBox.put(jav
 select	fix.reader.RdCalls	def applied	reader.scala:11:54	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 select	fix.reader.RdCalls	def applied	reader.scala:11:61	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 select	fix.reader.RdCalls	def applied	reader.scala:11:65	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String @putAny	declared fix.rdecl.RdBox.put(Any): String @putAny	: String
-select	fix.reader.RdCalls	def boundedArray	reader.scala:21:36	fix.rdecl.RdArr.f(java.lang.Object): java.lang.String	declared fix.rdecl.RdArr.f(Array[? <: AnyVal]): String	: String
 select	fix.reader.RdCalls	def generic	reader.scala:12:49	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String	declared fix.rdecl.RdBox.put(T): String	: String
 select	fix.reader.RdCalls	def inherited	reader.scala:15:42	fix.rdecl.RdSquare.area(scala.Int): java.lang.String	inherited fix.rdecl.RdShape.area(Int): String	: String
 select	fix.reader.RdCalls	def localGeneric	reader.scala:25:26	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 select	fix.reader.RdCalls	def targets	reader.scala:13:30	fix.rdecl.RdNamed.sum(scala.collection.immutable.List): scala.Int @sumInts	declared fix.rdecl.RdNamed.sum(List[Int]): Int @sumInts	: Int
 select	fix.reader.RdCalls	def targets	reader.scala:13:46	scala.Int.+(scala.Int): scala.Int	by name (a builtin's member)	: Int
 select	fix.reader.RdCalls	def targets	reader.scala:13:56	fix.rdecl.RdNamed.sum(scala.collection.immutable.List): scala.Int @sumStrings	declared fix.rdecl.RdNamed.sum(List[String]): Int @sumStrings	: Int
-select	fix.reader.RdCalls	def tokens	reader.scala:17:30	fix.rdecl.RdTok.f(fix.rdecl.RdTokA$.Token): java.lang.String	declared fix.rdecl.RdTok.f(Token): String	: String
 select	fix.reader.RdCalls	def tokens	reader.scala:17:50	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 select	fix.reader.RdCalls	def tokens	reader.scala:17:57	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
-select	fix.reader.RdCalls	def tokens	reader.scala:17:65	fix.rdecl.RdTok.g([1], java.lang.Object): java.lang.String	declared fix.rdecl.RdTok.g(A): String	: String
 select	fix.reader.RdCalls	def tokens	reader.scala:17:79	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
 select	fix.reader.RdCalls	def tokens	reader.scala:17:86	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
-select	fix.reader.RdCalls	def tokens	reader.scala:17:94	fix.rdecl.RdTok.h(java.lang.Object): java.lang.String	declared fix.rdecl.RdTok.h(Any): String	: String
 select	fix.reader.RdCalls	def viaInter	reader.scala:20:49	fix.rdecl.RdApi.f(java.lang.Object): java.lang.String	declared fix.rdecl.RdApi.f(Any): String	: String
 select	fix.reader.RdLocal	def other	reader.scala:117:27	fix.reader.RdLocal.put(java.lang.Object): java.lang.String @putAny	declared fix.reader.RdLocal.put(Any): String @putAny	: String
 select	fix.reader.RdLocal	def put	reader.scala:113:43	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String

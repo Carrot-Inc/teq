@@ -1,0 +1,13 @@
+diff --git a/src/typer/loader/bodies.rs b/src/typer/loader/bodies.rs
+index c1e5036a5c..3d7e131f54 100644
+--- a/src/typer/loader/bodies.rs
++++ b/src/typer/loader/bodies.rs
+@@ -6381,7 +6381,7 @@ impl<'a> Worker<'a> {
+                 if !implicits.is_empty() && !self.lean_std_callee(cv, head) {
+                     let items: Vec<ExprId> = implicits.iter().map(|a| self.conv_arg(cv, a)).collect();
+                     let il = push_list(&mut cv.ast.expr_lists, &items);
+-                    cv.ast.extractor_implicits.push((extractor, il));
++                    let _ = (extractor, il);
+                 }
+                 cv.pat(Pat::Ctor(extractor, l))
+             }

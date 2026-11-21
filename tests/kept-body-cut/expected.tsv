@@ -1,0 +1,797 @@
+# program	leg	observable (the run's output, or the first line of a refusal; `varies` where two runs differ)
+cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_whole	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_whole.Lib.value is withheld from the products of ap (elided: unstated the std's BuildFrom.buildFromSortedMapOps, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_whole.Lib.value)
+cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_whole	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_none	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_none.Lib.value is withheld from the products of ap (elided: unstated the std's BuildFrom.buildFromSortedMapOps, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_none.Lib.value)
+cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_none	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_local	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_local.Lib.value is withheld from the products of ap (elided: unstated the std's BuildFrom.buildFromSortedMapOps, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_local.Lib.value)
+cut_static_scala_collection_BuildFrom_buildFromSortedMapOps_164_local	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_collection_BuildFrom_buildFromArray_175_whole	js	BuildFrom$$anon@<identity>
+cut_static_scala_collection_BuildFrom_buildFromArray_175_whole	interp	BuildFrom$$anon@<identity>
+cut_static_scala_collection_BuildFrom_buildFromArray_175_none	js	BuildFrom$$anon@<identity>
+cut_static_scala_collection_BuildFrom_buildFromArray_175_none	interp	BuildFrom$$anon@<identity>
+cut_static_scala_collection_BuildFrom_buildFromArray_175_local	js	BuildFrom$$anon@<identity>
+cut_static_scala_collection_BuildFrom_buildFromArray_175_local	interp	BuildFrom$$anon@<identity>
+cut_static_scala_reflect_classTag_31_whole	js	A's products REFUSED: A.scala:3:61: error: Not found: type ClassTag
+cut_static_scala_reflect_classTag_31_whole	interp	A's products REFUSED: A.scala:3:61: error: Not found: type ClassTag
+cut_static_scala_reflect_classTag_31_none	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_reflect_classTag_31_none.Lib.value is withheld from the products of ap (elided: unstated the std's classtag.classTag, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_reflect_classTag_31_none.Lib.value)
+cut_static_scala_reflect_classTag_31_none	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_reflect_classTag_31_named	js	A's products REFUSED: A.scala:3:66: error: Not found: type ClassTag
+cut_static_scala_reflect_classTag_31_named	interp	A's products REFUSED: A.scala:3:66: error: Not found: type ClassTag
+cut_static_scala_reflect_classTag_31_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type ClassTag
+cut_static_scala_reflect_classTag_31_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type ClassTag
+cut_member_scala_ArraySeq_toArray_24_whole	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_member_scala_ArraySeq_toArray_24_whole.Lib.value is withheld from the products of ap (elided: unstated the std's ArraySeq.apply, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_member_scala_ArraySeq_toArray_24_whole.Lib.value)
+cut_member_scala_ArraySeq_toArray_24_whole	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_member_scala_ArraySeq_toArray_24_none	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_member_scala_ArraySeq_toArray_24_none.Lib.value is withheld from the products of ap (elided: unstated the std's ArraySeq.apply, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_member_scala_ArraySeq_toArray_24_none.Lib.value)
+cut_member_scala_ArraySeq_toArray_24_none	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_member_scala_ArraySeq_toArray_24_local	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_member_scala_ArraySeq_toArray_24_local.Lib.value is withheld from the products of ap (elided: unstated the std's ArraySeq.apply, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_member_scala_ArraySeq_toArray_24_local.Lib.value)
+cut_member_scala_ArraySeq_toArray_24_local	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_ArraySeq_apply_36_whole	js	REFUSED: ap!A.scala:3:58: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_apply_36_whole	interp	REFUSED: Exception in thread "main" java.lang.ClassCastException: class scala.reflect.PrimitiveClassTag cannot be cast to class java.lang.Integer
+cut_static_scala_ArraySeq_apply_36_none	js	REFUSED: ap!A.scala:3:20: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_apply_36_none	interp	REFUSED: Lt on Int and 0
+cut_static_scala_ArraySeq_apply_36_named	js	REFUSED: ap!A.scala:3:20: error: there is no parameter named tag (in the body of g_cut_static_scala_ArraySeq_apply_36_named.Lib.value)
+cut_static_scala_ArraySeq_apply_36_named	interp	REFUSED: Lt on () and 0
+cut_static_scala_ArraySeq_apply_36_local	js	REFUSED: ap!A.scala:5:5: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_apply_36_local	interp	REFUSED: Lt on Int and 0
+cut_static_scala_ArraySeq_empty_38_whole	js	REFUSED: ap!A.scala:3:52: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_empty_38_whole	interp	REFUSED: Exception in thread "main" java.lang.ClassCastException: class scala.reflect.PrimitiveClassTag cannot be cast to class java.lang.Integer
+cut_static_scala_ArraySeq_empty_38_none	js	REFUSED: ap!A.scala:3:20: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_empty_38_none	interp	REFUSED: Lt on Int and 0
+cut_static_scala_ArraySeq_empty_38_named	js	REFUSED: ap!A.scala:3:35: error: there is no parameter named tag (in the body of g_cut_static_scala_ArraySeq_empty_38_named.Lib.value)
+cut_static_scala_ArraySeq_empty_38_named	interp	REFUSED: Lt on () and 0
+cut_static_scala_ArraySeq_empty_38_local	js	REFUSED: ap!A.scala:5:20: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_empty_38_local	interp	REFUSED: Lt on Int and 0
+cut_static_scala_ArraySeq_from_40_whole	js	REFUSED: ap!A.scala:3:63: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_from_40_whole	interp	REFUSED: Exception in thread "main" java.lang.ClassCastException: class scala.reflect.PrimitiveClassTag cannot be cast to class java.lang.Integer
+cut_static_scala_ArraySeq_from_40_none	js	REFUSED: ap!A.scala:3:35: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_from_40_none	interp	REFUSED: Lt on Int and 0
+cut_static_scala_ArraySeq_from_40_named	js	REFUSED: ap!A.scala:3:20: error: there is no parameter named tag (in the body of g_cut_static_scala_ArraySeq_from_40_named.Lib.value)
+cut_static_scala_ArraySeq_from_40_named	interp	REFUSED: Lt on () and 0
+cut_static_scala_ArraySeq_from_40_local	js	REFUSED: ap!A.scala:5:5: error: Found:    ClassTag[Int]
+cut_static_scala_ArraySeq_from_40_local	interp	REFUSED: Lt on Int and 0
+cut_static_scala_ArraySeq_evidenceIterableFactory_44_whole	js	REFUSED: ap!A.scala:3:35: error: not supported yet: value evidenceIterableFactory of ArraySeq (needed by g_cut_static_scala_ArraySeq_evidenceIterableFactory_44_whole.Lib.value)
+cut_static_scala_ArraySeq_evidenceIterableFactory_44_whole	interp	REFUSED: ap!A.scala:3:35: error: not supported yet: value evidenceIterableFactory of ArraySeq (needed by g_cut_static_scala_ArraySeq_evidenceIterableFactory_44_whole.Lib.value)
+cut_static_scala_ArraySeq_evidenceIterableFactory_44_none	js	REFUSED: ap!A.scala:3:20: error: not supported yet: value evidenceIterableFactory of ArraySeq (needed by g_cut_static_scala_ArraySeq_evidenceIterableFactory_44_none.Lib.value)
+cut_static_scala_ArraySeq_evidenceIterableFactory_44_none	interp	REFUSED: ap!A.scala:3:20: error: not supported yet: value evidenceIterableFactory of ArraySeq (needed by g_cut_static_scala_ArraySeq_evidenceIterableFactory_44_none.Lib.value)
+cut_static_scala_ArraySeq_evidenceIterableFactory_44_named	js	REFUSED: ap!A.scala:3:35: error: not supported yet: value evidenceIterableFactory of ArraySeq (needed by g_cut_static_scala_ArraySeq_evidenceIterableFactory_44_named.Lib.value)
+cut_static_scala_ArraySeq_evidenceIterableFactory_44_named	interp	REFUSED: ap!A.scala:3:35: error: not supported yet: value evidenceIterableFactory of ArraySeq (needed by g_cut_static_scala_ArraySeq_evidenceIterableFactory_44_named.Lib.value)
+cut_static_scala_ArraySeq_evidenceIterableFactory_44_local	js	REFUSED: ap!A.scala:5:20: error: not supported yet: value evidenceIterableFactory of ArraySeq (needed by g_cut_static_scala_ArraySeq_evidenceIterableFactory_44_local.Lib.value)
+cut_static_scala_ArraySeq_evidenceIterableFactory_44_local	interp	REFUSED: ap!A.scala:5:20: error: not supported yet: value evidenceIterableFactory of ArraySeq (needed by g_cut_static_scala_ArraySeq_evidenceIterableFactory_44_local.Lib.value)
+cut_static_scala_Array_apply_810_whole	js	Array(1, 1)
+cut_static_scala_Array_apply_810_whole	interp	Array(1, 1)
+cut_static_scala_Array_apply_810_none	js	Array(1, 1)
+cut_static_scala_Array_apply_810_none	interp	Array(1, 1)
+cut_static_scala_Array_apply_810_named	js	Array(1, 1)
+cut_static_scala_Array_apply_810_named	interp	Array(1, 1)
+cut_static_scala_Array_apply_810_local	js	Array(1, 1)
+cut_static_scala_Array_apply_810_local	interp	Array(1, 1)
+cut_static_scala_Array_copyAs_824_whole	js	Array(1)
+cut_static_scala_Array_copyAs_824_whole	interp	Array(1)
+cut_static_scala_Array_copyAs_824_none	js	Array(1)
+cut_static_scala_Array_copyAs_824_none	interp	Array(1)
+cut_static_scala_Array_copyAs_824_named	js	Array(1)
+cut_static_scala_Array_copyAs_824_named	interp	Array(1)
+cut_static_scala_Array_copyAs_824_local	js	Array(1)
+cut_static_scala_Array_copyAs_824_local	interp	Array(1)
+cut_static_scala_Array_ofDim_839_whole	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_839_whole.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_839_whole.Lib.value)
+cut_static_scala_Array_ofDim_839_whole	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_839_none	js	Array(0)
+cut_static_scala_Array_ofDim_839_none	interp	Array(0)
+cut_static_scala_Array_ofDim_839_named	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_839_named.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_839_named.Lib.value)
+cut_static_scala_Array_ofDim_839_named	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_839_local	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_839_local.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_839_local.Lib.value)
+cut_static_scala_Array_ofDim_839_local	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_concat_841_whole	js	Array(1, 1, 1, 1)
+cut_static_scala_Array_concat_841_whole	interp	Array(1, 1, 1, 1)
+cut_static_scala_Array_concat_841_none	js	Array(1, 1, 1, 1)
+cut_static_scala_Array_concat_841_none	interp	Array(1, 1, 1, 1)
+cut_static_scala_Array_concat_841_named	js	Array(1, 1, 1, 1)
+cut_static_scala_Array_concat_841_named	interp	Array(1, 1, 1, 1)
+cut_static_scala_Array_concat_841_local	js	Array(1, 1, 1, 1)
+cut_static_scala_Array_concat_841_local	interp	Array(1, 1, 1, 1)
+cut_static_scala_Array_ofDim_853_whole	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_853_whole.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_853_whole.Lib.value)
+cut_static_scala_Array_ofDim_853_whole	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_853_none	js	Array(Array(0))
+cut_static_scala_Array_ofDim_853_none	interp	Array(Array(0))
+cut_static_scala_Array_ofDim_853_named	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_853_named.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_853_named.Lib.value)
+cut_static_scala_Array_ofDim_853_named	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_853_local	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_853_local.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_853_local.Lib.value)
+cut_static_scala_Array_ofDim_853_local	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_860_whole	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_860_whole.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_860_whole.Lib.value)
+cut_static_scala_Array_ofDim_860_whole	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_860_none	js	Array(Array(Array(0)))
+cut_static_scala_Array_ofDim_860_none	interp	Array(Array(Array(0)))
+cut_static_scala_Array_ofDim_860_named	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_860_named.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_860_named.Lib.value)
+cut_static_scala_Array_ofDim_860_named	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_860_local	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_860_local.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_860_local.Lib.value)
+cut_static_scala_Array_ofDim_860_local	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_862_whole	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_862_whole.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_862_whole.Lib.value)
+cut_static_scala_Array_ofDim_862_whole	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_862_none	js	Array(Array(Array(Array(0))))
+cut_static_scala_Array_ofDim_862_none	interp	Array(Array(Array(Array(0))))
+cut_static_scala_Array_ofDim_862_named	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_862_named.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_862_named.Lib.value)
+cut_static_scala_Array_ofDim_862_named	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_862_local	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_862_local.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_862_local.Lib.value)
+cut_static_scala_Array_ofDim_862_local	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_864_whole	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_864_whole.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_864_whole.Lib.value)
+cut_static_scala_Array_ofDim_864_whole	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_864_none	js	Array(Array(Array(Array(Array(0)))))
+cut_static_scala_Array_ofDim_864_none	interp	Array(Array(Array(Array(Array(0)))))
+cut_static_scala_Array_ofDim_864_named	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_864_named.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_864_named.Lib.value)
+cut_static_scala_Array_ofDim_864_named	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_ofDim_864_local	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_Array_ofDim_864_local.Lib.value is withheld from the products of ap (elided: unstated a call of apply with 0 of its 1 type arguments): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_Array_ofDim_864_local.Lib.value)
+cut_static_scala_Array_ofDim_864_local	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_Array_newBuilder_867_whole	js	ArrayBuilder@<identity>
+cut_static_scala_Array_newBuilder_867_whole	interp	scala.collection.mutable.ArrayBuilder@<identity>
+cut_static_scala_Array_newBuilder_867_none	js	ArrayBuilder@<identity>
+cut_static_scala_Array_newBuilder_867_none	interp	scala.collection.mutable.ArrayBuilder@<identity>
+cut_static_scala_Array_newBuilder_867_named	js	ArrayBuilder@<identity>
+cut_static_scala_Array_newBuilder_867_named	interp	scala.collection.mutable.ArrayBuilder@<identity>
+cut_static_scala_Array_newBuilder_867_local	js	ArrayBuilder@<identity>
+cut_static_scala_Array_newBuilder_867_local	interp	scala.collection.mutable.ArrayBuilder@<identity>
+cut_static_scala_Array_empty_883_whole	js	Array()
+cut_static_scala_Array_empty_883_whole	interp	Array()
+cut_static_scala_Array_empty_883_none	js	Array()
+cut_static_scala_Array_empty_883_none	interp	Array()
+cut_static_scala_Array_empty_883_named	js	Array()
+cut_static_scala_Array_empty_883_named	interp	Array()
+cut_static_scala_Array_empty_883_local	js	Array()
+cut_static_scala_Array_empty_883_local	interp	Array()
+cut_static_scala_Array_fill_890_whole	js	Array(1)
+cut_static_scala_Array_fill_890_whole	interp	Array(1)
+cut_static_scala_Array_fill_890_none	js	Array(1)
+cut_static_scala_Array_fill_890_none	interp	Array(1)
+cut_static_scala_Array_fill_890_named	js	Array(1)
+cut_static_scala_Array_fill_890_named	interp	Array(1)
+cut_static_scala_Array_fill_890_local	js	Array(1)
+cut_static_scala_Array_fill_890_local	interp	Array(1)
+cut_static_scala_Array_tabulate_909_whole	js	Array(1)
+cut_static_scala_Array_tabulate_909_whole	interp	Array(1)
+cut_static_scala_Array_tabulate_909_none	js	Array(1)
+cut_static_scala_Array_tabulate_909_none	interp	Array(1)
+cut_static_scala_Array_tabulate_909_named	js	Array(1)
+cut_static_scala_Array_tabulate_909_named	interp	Array(1)
+cut_static_scala_Array_tabulate_909_local	js	Array(1)
+cut_static_scala_Array_tabulate_909_local	interp	Array(1)
+cut_member_scala_Range_sum_993_whole	js	6
+cut_member_scala_Range_sum_993_whole	interp	6
+cut_member_scala_Range_sum_993_none	js	6
+cut_member_scala_Range_sum_993_none	interp	6
+cut_member_scala_Range_sum_993_named	js	6
+cut_member_scala_Range_sum_993_named	interp	6
+cut_member_scala_Range_sum_993_local	js	6
+cut_member_scala_Range_sum_993_local	interp	6
+cut_static_scala_util_CommandLineParser_parseString_10_whole	js	1
+cut_static_scala_util_CommandLineParser_parseString_10_whole	interp	1
+cut_static_scala_util_CommandLineParser_parseString_10_none	js	1
+cut_static_scala_util_CommandLineParser_parseString_10_none	interp	1
+cut_static_scala_util_CommandLineParser_parseString_10_named	js	1
+cut_static_scala_util_CommandLineParser_parseString_10_named	interp	1
+cut_static_scala_util_CommandLineParser_parseString_10_local	js	1
+cut_static_scala_util_CommandLineParser_parseString_10_local	interp	1
+cut_static_scala_util_CommandLineParser_parseArgument_15_whole	js	1
+cut_static_scala_util_CommandLineParser_parseArgument_15_whole	interp	1
+cut_static_scala_util_CommandLineParser_parseArgument_15_none	js	1
+cut_static_scala_util_CommandLineParser_parseArgument_15_none	interp	1
+cut_static_scala_util_CommandLineParser_parseArgument_15_named	js	1
+cut_static_scala_util_CommandLineParser_parseArgument_15_named	interp	1
+cut_static_scala_util_CommandLineParser_parseArgument_15_local	js	1
+cut_static_scala_util_CommandLineParser_parseArgument_15_local	interp	1
+cut_static_scala_util_CommandLineParser_parseRemainingArguments_20_whole	js	List(1)
+cut_static_scala_util_CommandLineParser_parseRemainingArguments_20_whole	interp	List(1)
+cut_static_scala_util_CommandLineParser_parseRemainingArguments_20_none	js	List(1)
+cut_static_scala_util_CommandLineParser_parseRemainingArguments_20_none	interp	List(1)
+cut_static_scala_util_CommandLineParser_parseRemainingArguments_20_named	js	List(1)
+cut_static_scala_util_CommandLineParser_parseRemainingArguments_20_named	interp	List(1)
+cut_static_scala_util_CommandLineParser_parseRemainingArguments_20_local	js	List(1)
+cut_static_scala_util_CommandLineParser_parseRemainingArguments_20_local	interp	List(1)
+cut_static_scala_concurrent_Future_apply_120_whole	js	A's products REFUSED: A.scala:3:71: error: Not found: type ExecutionContext
+cut_static_scala_concurrent_Future_apply_120_whole	interp	A's products REFUSED: A.scala:3:71: error: Not found: type ExecutionContext
+cut_static_scala_concurrent_Future_apply_120_none	js	A's products REFUSED: A.scala:3:57: error: No given instance of type ExecutionContext was found for parameter executor of method apply in object Future
+cut_static_scala_concurrent_Future_apply_120_none	interp	A's products REFUSED: A.scala:3:57: error: No given instance of type ExecutionContext was found for parameter executor of method apply in object Future
+cut_static_scala_concurrent_Future_apply_120_named	js	A's products REFUSED: A.scala:3:82: error: Not found: type ExecutionContext
+cut_static_scala_concurrent_Future_apply_120_named	interp	A's products REFUSED: A.scala:3:82: error: Not found: type ExecutionContext
+cut_static_scala_concurrent_Future_apply_120_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type ExecutionContext
+cut_static_scala_concurrent_Future_apply_120_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type ExecutionContext
+cut_static_scala_IArray_apply_16_whole	js	Array(1, 1)
+cut_static_scala_IArray_apply_16_whole	interp	Array(1, 1)
+cut_static_scala_IArray_apply_16_none	js	Array(1, 1)
+cut_static_scala_IArray_apply_16_none	interp	Array(1, 1)
+cut_static_scala_IArray_apply_16_named	js	Array(1, 1)
+cut_static_scala_IArray_apply_16_named	interp	Array(1, 1)
+cut_static_scala_IArray_apply_16_local	js	Array(1, 1)
+cut_static_scala_IArray_apply_16_local	interp	Array(1, 1)
+cut_static_scala_IArray_empty_18_whole	js	Array()
+cut_static_scala_IArray_empty_18_whole	interp	Array()
+cut_static_scala_IArray_empty_18_none	js	Array()
+cut_static_scala_IArray_empty_18_none	interp	Array()
+cut_static_scala_IArray_empty_18_named	js	Array()
+cut_static_scala_IArray_empty_18_named	interp	Array()
+cut_static_scala_IArray_empty_18_local	js	Array()
+cut_static_scala_IArray_empty_18_local	interp	Array()
+cut_static_scala_IArray_from_20_whole	js	Array(1, 1)
+cut_static_scala_IArray_from_20_whole	interp	Array(1, 1)
+cut_static_scala_IArray_from_20_none	js	Array(1, 1)
+cut_static_scala_IArray_from_20_none	interp	Array(1, 1)
+cut_static_scala_IArray_from_20_named	js	Array(1, 1)
+cut_static_scala_IArray_from_20_named	interp	Array(1, 1)
+cut_static_scala_IArray_from_20_local	js	Array(1, 1)
+cut_static_scala_IArray_from_20_local	interp	Array(1, 1)
+cut_static_scala_IArray_fill_23_whole	js	Array(1)
+cut_static_scala_IArray_fill_23_whole	interp	Array(1)
+cut_static_scala_IArray_fill_23_none	js	Array(1)
+cut_static_scala_IArray_fill_23_none	interp	Array(1)
+cut_static_scala_IArray_fill_23_named	js	Array(1)
+cut_static_scala_IArray_fill_23_named	interp	Array(1)
+cut_static_scala_IArray_fill_23_local	js	Array(1)
+cut_static_scala_IArray_fill_23_local	interp	Array(1)
+cut_static_scala_IArray_tabulate_25_whole	js	Array(1)
+cut_static_scala_IArray_tabulate_25_whole	interp	Array(1)
+cut_static_scala_IArray_tabulate_25_none	js	Array(1)
+cut_static_scala_IArray_tabulate_25_none	interp	Array(1)
+cut_static_scala_IArray_tabulate_25_named	js	Array(1)
+cut_static_scala_IArray_tabulate_25_named	interp	Array(1)
+cut_static_scala_IArray_tabulate_25_local	js	Array(1)
+cut_static_scala_IArray_tabulate_25_local	interp	Array(1)
+cut_static_scala_collection_immutable_SortedSet_empty_191_whole	js	TreeSet()
+cut_static_scala_collection_immutable_SortedSet_empty_191_whole	interp	TreeSet()
+cut_static_scala_collection_immutable_SortedSet_empty_191_none	js	TreeSet()
+cut_static_scala_collection_immutable_SortedSet_empty_191_none	interp	TreeSet()
+cut_static_scala_collection_immutable_SortedSet_empty_191_named	js	TreeSet()
+cut_static_scala_collection_immutable_SortedSet_empty_191_named	interp	TreeSet()
+cut_static_scala_collection_immutable_SortedSet_empty_191_local	js	TreeSet()
+cut_static_scala_collection_immutable_SortedSet_empty_191_local	interp	TreeSet()
+cut_static_scala_collection_immutable_SortedSet_apply_192_whole	js	TreeSet(1)
+cut_static_scala_collection_immutable_SortedSet_apply_192_whole	interp	TreeSet(1)
+cut_static_scala_collection_immutable_SortedSet_apply_192_none	js	TreeSet(1)
+cut_static_scala_collection_immutable_SortedSet_apply_192_none	interp	TreeSet(1)
+cut_static_scala_collection_immutable_SortedSet_apply_192_named	js	TreeSet(1)
+cut_static_scala_collection_immutable_SortedSet_apply_192_named	interp	TreeSet(1)
+cut_static_scala_collection_immutable_SortedSet_apply_192_local	js	TreeSet(1)
+cut_static_scala_collection_immutable_SortedSet_apply_192_local	interp	TreeSet(1)
+cut_static_scala_collection_immutable_SortedSet_from_195_whole	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_collection_immutable_SortedSet_from_195_whole.Lib.value is withheld from the products of ap (elided: unstated the std's SortedSet.from, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_collection_immutable_SortedSet_from_195_whole.Lib.value)
+cut_static_scala_collection_immutable_SortedSet_from_195_whole	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_collection_immutable_SortedSet_from_195_none	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_collection_immutable_SortedSet_from_195_none.Lib.value is withheld from the products of ap (elided: unstated the std's SortedSet.from, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_collection_immutable_SortedSet_from_195_none.Lib.value)
+cut_static_scala_collection_immutable_SortedSet_from_195_none	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_collection_immutable_SortedSet_from_195_named	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_collection_immutable_SortedSet_from_195_named.Lib.value is withheld from the products of ap (elided: unstated the std's SortedSet.from, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_collection_immutable_SortedSet_from_195_named.Lib.value)
+cut_static_scala_collection_immutable_SortedSet_from_195_named	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_collection_immutable_SortedSet_from_195_local	js	REFUSED: ap!A.scala:3:7: error: the body of g_cut_static_scala_collection_immutable_SortedSet_from_195_local.Lib.value is withheld from the products of ap (elided: unstated the std's SortedSet.from, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of g_cut_static_scala_collection_immutable_SortedSet_from_195_local.Lib.value)
+cut_static_scala_collection_immutable_SortedSet_from_195_local	interp	REFUSED: the run needs a body withheld from its products and stops (the error below)
+cut_static_scala_collection_immutable_SortedSet_newBuilder_203_whole	js	TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_SortedSet_newBuilder_203_whole	interp	scala.collection.immutable.TreeSet$TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_SortedSet_newBuilder_203_none	js	TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_SortedSet_newBuilder_203_none	interp	scala.collection.immutable.TreeSet$TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_SortedSet_newBuilder_203_named	js	TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_SortedSet_newBuilder_203_named	interp	scala.collection.immutable.TreeSet$TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_SortedSet_newBuilder_203_local	js	TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_SortedSet_newBuilder_203_local	interp	scala.collection.immutable.TreeSet$TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_TreeSet_empty_227_whole	js	TreeSet()
+cut_static_scala_collection_immutable_TreeSet_empty_227_whole	interp	TreeSet()
+cut_static_scala_collection_immutable_TreeSet_empty_227_none	js	TreeSet()
+cut_static_scala_collection_immutable_TreeSet_empty_227_none	interp	TreeSet()
+cut_static_scala_collection_immutable_TreeSet_empty_227_named	js	TreeSet()
+cut_static_scala_collection_immutable_TreeSet_empty_227_named	interp	TreeSet()
+cut_static_scala_collection_immutable_TreeSet_empty_227_local	js	TreeSet()
+cut_static_scala_collection_immutable_TreeSet_empty_227_local	interp	TreeSet()
+cut_static_scala_collection_immutable_TreeSet_apply_228_whole	js	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_apply_228_whole	interp	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_apply_228_none	js	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_apply_228_none	interp	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_apply_228_named	js	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_apply_228_named	interp	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_apply_228_local	js	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_apply_228_local	interp	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_from_229_whole	js	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_from_229_whole	interp	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_from_229_none	js	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_from_229_none	interp	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_from_229_named	js	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_from_229_named	interp	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_from_229_local	js	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_from_229_local	interp	TreeSet(1)
+cut_static_scala_collection_immutable_TreeSet_newBuilder_230_whole	js	TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_TreeSet_newBuilder_230_whole	interp	scala.collection.immutable.TreeSet$TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_TreeSet_newBuilder_230_none	js	TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_TreeSet_newBuilder_230_none	interp	scala.collection.immutable.TreeSet$TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_TreeSet_newBuilder_230_named	js	TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_TreeSet_newBuilder_230_named	interp	scala.collection.immutable.TreeSet$TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_TreeSet_newBuilder_230_local	js	TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_TreeSet_newBuilder_230_local	interp	scala.collection.immutable.TreeSet$TreeSetBuilder@<identity>
+cut_static_scala_collection_immutable_SortedMap_empty_771_whole	js	TreeMap()
+cut_static_scala_collection_immutable_SortedMap_empty_771_whole	interp	TreeMap()
+cut_static_scala_collection_immutable_SortedMap_empty_771_none	js	TreeMap()
+cut_static_scala_collection_immutable_SortedMap_empty_771_none	interp	TreeMap()
+cut_static_scala_collection_immutable_SortedMap_empty_771_named	js	TreeMap()
+cut_static_scala_collection_immutable_SortedMap_empty_771_named	interp	TreeMap()
+cut_static_scala_collection_immutable_SortedMap_empty_771_local	js	TreeMap()
+cut_static_scala_collection_immutable_SortedMap_empty_771_local	interp	TreeMap()
+cut_static_scala_collection_immutable_SortedMap_apply_772_whole	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_apply_772_whole	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_apply_772_none	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_apply_772_none	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_apply_772_named	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_apply_772_named	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_apply_772_local	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_apply_772_local	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_from_775_whole	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_from_775_whole	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_from_775_none	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_from_775_none	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_from_775_named	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_from_775_named	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_from_775_local	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_from_775_local	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_SortedMap_newBuilder_781_whole	js	TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_SortedMap_newBuilder_781_whole	interp	scala.collection.immutable.TreeMap$TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_SortedMap_newBuilder_781_none	js	TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_SortedMap_newBuilder_781_none	interp	scala.collection.immutable.TreeMap$TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_SortedMap_newBuilder_781_named	js	TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_SortedMap_newBuilder_781_named	interp	scala.collection.immutable.TreeMap$TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_SortedMap_newBuilder_781_local	js	TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_SortedMap_newBuilder_781_local	interp	scala.collection.immutable.TreeMap$TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_TreeMap_empty_805_whole	js	TreeMap()
+cut_static_scala_collection_immutable_TreeMap_empty_805_whole	interp	TreeMap()
+cut_static_scala_collection_immutable_TreeMap_empty_805_none	js	TreeMap()
+cut_static_scala_collection_immutable_TreeMap_empty_805_none	interp	TreeMap()
+cut_static_scala_collection_immutable_TreeMap_empty_805_named	js	TreeMap()
+cut_static_scala_collection_immutable_TreeMap_empty_805_named	interp	TreeMap()
+cut_static_scala_collection_immutable_TreeMap_empty_805_local	js	TreeMap()
+cut_static_scala_collection_immutable_TreeMap_empty_805_local	interp	TreeMap()
+cut_static_scala_collection_immutable_TreeMap_apply_806_whole	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_apply_806_whole	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_apply_806_none	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_apply_806_none	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_apply_806_named	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_apply_806_named	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_apply_806_local	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_apply_806_local	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_from_807_whole	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_from_807_whole	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_from_807_none	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_from_807_none	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_from_807_named	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_from_807_named	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_from_807_local	js	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_from_807_local	interp	TreeMap(1 -> 1)
+cut_static_scala_collection_immutable_TreeMap_newBuilder_808_whole	js	TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_TreeMap_newBuilder_808_whole	interp	scala.collection.immutable.TreeMap$TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_TreeMap_newBuilder_808_none	js	TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_TreeMap_newBuilder_808_none	interp	scala.collection.immutable.TreeMap$TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_TreeMap_newBuilder_808_named	js	TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_TreeMap_newBuilder_808_named	interp	scala.collection.immutable.TreeMap$TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_TreeMap_newBuilder_808_local	js	TreeMapBuilder@<identity>
+cut_static_scala_collection_immutable_TreeMap_newBuilder_808_local	interp	scala.collection.immutable.TreeMap$TreeMapBuilder@<identity>
+cut_member_scala_IterableOnce_toMap_7_whole	js	A's products REFUSED: A.scala:3:62: error: Not found: type A
+cut_member_scala_IterableOnce_toMap_7_whole	interp	A's products REFUSED: A.scala:3:62: error: Not found: type A
+cut_member_scala_IterableOnce_toMap_7_none	js	A's products REFUSED: A.scala:3:48: error: Cannot prove that Int <:< (Int, Int).
+cut_member_scala_IterableOnce_toMap_7_none	interp	A's products REFUSED: A.scala:3:48: error: Cannot prove that Int <:< (Int, Int).
+cut_member_scala_IterableOnce_toMap_7_named	js	A's products REFUSED: A.scala:3:67: error: Not found: type A
+cut_member_scala_IterableOnce_toMap_7_named	interp	A's products REFUSED: A.scala:3:67: error: Not found: type A
+cut_member_scala_IterableOnce_toMap_7_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type A
+cut_member_scala_IterableOnce_toMap_7_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type A
+cut_member_scala_IterableOps_toArray_102_whole	js	Array(1, 2)
+cut_member_scala_IterableOps_toArray_102_whole	interp	Array(1, 2)
+cut_member_scala_IterableOps_toArray_102_none	js	Array(1, 2)
+cut_member_scala_IterableOps_toArray_102_none	interp	Array(1, 2)
+cut_member_scala_IterableOps_toArray_102_local	js	Array(1, 2)
+cut_member_scala_IterableOps_toArray_102_local	interp	Array(1, 2)
+cut_member_scala_IterableOps_sum_233_whole	js	3
+cut_member_scala_IterableOps_sum_233_whole	interp	3
+cut_member_scala_IterableOps_sum_233_none	js	3
+cut_member_scala_IterableOps_sum_233_none	interp	3
+cut_member_scala_IterableOps_sum_233_named	js	3
+cut_member_scala_IterableOps_sum_233_named	interp	3
+cut_member_scala_IterableOps_sum_233_local	js	3
+cut_member_scala_IterableOps_sum_233_local	interp	3
+cut_member_scala_IterableOps_product_234_whole	js	2
+cut_member_scala_IterableOps_product_234_whole	interp	2
+cut_member_scala_IterableOps_product_234_none	js	2
+cut_member_scala_IterableOps_product_234_none	interp	2
+cut_member_scala_IterableOps_product_234_named	js	2
+cut_member_scala_IterableOps_product_234_named	interp	2
+cut_member_scala_IterableOps_product_234_local	js	2
+cut_member_scala_IterableOps_product_234_local	interp	2
+cut_member_scala_IterableOps_maxOption_235_whole	js	Some(2)
+cut_member_scala_IterableOps_maxOption_235_whole	interp	Some(2)
+cut_member_scala_IterableOps_maxOption_235_none	js	Some(2)
+cut_member_scala_IterableOps_maxOption_235_none	interp	Some(2)
+cut_member_scala_IterableOps_maxOption_235_named	js	Some(2)
+cut_member_scala_IterableOps_maxOption_235_named	interp	Some(2)
+cut_member_scala_IterableOps_maxOption_235_local	js	Some(2)
+cut_member_scala_IterableOps_maxOption_235_local	interp	Some(2)
+cut_member_scala_IterableOps_minOption_237_whole	js	Some(1)
+cut_member_scala_IterableOps_minOption_237_whole	interp	Some(1)
+cut_member_scala_IterableOps_minOption_237_none	js	Some(1)
+cut_member_scala_IterableOps_minOption_237_none	interp	Some(1)
+cut_member_scala_IterableOps_minOption_237_named	js	Some(1)
+cut_member_scala_IterableOps_minOption_237_named	interp	Some(1)
+cut_member_scala_IterableOps_minOption_237_local	js	Some(1)
+cut_member_scala_IterableOps_minOption_237_local	interp	Some(1)
+cut_member_scala_IterableOps_max_243_whole	js	2
+cut_member_scala_IterableOps_max_243_whole	interp	2
+cut_member_scala_IterableOps_max_243_none	js	2
+cut_member_scala_IterableOps_max_243_none	interp	2
+cut_member_scala_IterableOps_max_243_named	js	2
+cut_member_scala_IterableOps_max_243_named	interp	2
+cut_member_scala_IterableOps_max_243_local	js	2
+cut_member_scala_IterableOps_max_243_local	interp	2
+cut_member_scala_IterableOps_min_246_whole	js	1
+cut_member_scala_IterableOps_min_246_whole	interp	1
+cut_member_scala_IterableOps_min_246_none	js	1
+cut_member_scala_IterableOps_min_246_none	interp	1
+cut_member_scala_IterableOps_min_246_named	js	1
+cut_member_scala_IterableOps_min_246_named	interp	1
+cut_member_scala_IterableOps_min_246_local	js	1
+cut_member_scala_IterableOps_min_246_local	interp	1
+cut_member_scala_IterableOps_flatten_268_whole	js	A's products REFUSED: A.scala:3:59: error: Not found: type A
+cut_member_scala_IterableOps_flatten_268_whole	interp	A's products REFUSED: A.scala:3:59: error: Not found: type A
+cut_member_scala_IterableOps_flatten_268_none	js	A's products REFUSED: A.scala:3:45: error: No given instance of type Int => IterableOnce[Int] was found for parameter asIterable of method flatten in trait IterableOps
+cut_member_scala_IterableOps_flatten_268_none	interp	A's products REFUSED: A.scala:3:45: error: No given instance of type Int => IterableOnce[Int] was found for parameter asIterable of method flatten in trait IterableOps
+cut_member_scala_IterableOps_flatten_268_named	js	A's products REFUSED: A.scala:3:72: error: Not found: type A
+cut_member_scala_IterableOps_flatten_268_named	interp	A's products REFUSED: A.scala:3:72: error: Not found: type A
+cut_member_scala_IterableOps_flatten_268_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type A
+cut_member_scala_IterableOps_flatten_268_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type A
+cut_member_scala_SeqOps_sorted_502_whole	js	List(1, 2)
+cut_member_scala_SeqOps_sorted_502_whole	interp	List(1, 2)
+cut_member_scala_SeqOps_sorted_502_none	js	List(1, 2)
+cut_member_scala_SeqOps_sorted_502_none	interp	List(1, 2)
+cut_member_scala_SeqOps_sorted_502_named	js	List(1, 2)
+cut_member_scala_SeqOps_sorted_502_named	interp	List(1, 2)
+cut_member_scala_SeqOps_sorted_502_local	js	List(1, 2)
+cut_member_scala_SeqOps_sorted_502_local	interp	List(1, 2)
+cut_static_Arrays_newGenericArray_1855_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1855_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1855_none	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1855_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1855_named	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1855_named	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1855_local	js	A's products REFUSED: A.scala:5:5: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1855_local	interp	A's products REFUSED: A.scala:5:5: error: Not found: Arrays
+cut_member_scala_Map_toMap_344_whole	js	A's products REFUSED: A.scala:3:65: error: Not found: type K
+cut_member_scala_Map_toMap_344_whole	interp	A's products REFUSED: A.scala:3:65: error: Not found: type K
+cut_member_scala_Map_toMap_344_none	js	Map(1 -> 1)
+cut_member_scala_Map_toMap_344_none	interp	Map(1 -> 1)
+cut_member_scala_Map_toMap_344_named	js	A's products REFUSED: A.scala:3:70: error: Not found: type K
+cut_member_scala_Map_toMap_344_named	interp	A's products REFUSED: A.scala:3:70: error: Not found: type K
+cut_member_scala_Map_toMap_344_local	js	A's products REFUSED: A.scala:4:15: error: Not found: type K
+cut_member_scala_Map_toMap_344_local	interp	A's products REFUSED: A.scala:4:15: error: Not found: type K
+cut_member_scala_collection_mutable_ArrayBuffer_sortInPlace_93_whole	js	ArrayBuffer(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_sortInPlace_93_whole	interp	ArrayBuffer(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_sortInPlace_93_none	js	ArrayBuffer(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_sortInPlace_93_none	interp	ArrayBuffer(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_sortInPlace_93_named	js	ArrayBuffer(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_sortInPlace_93_named	interp	ArrayBuffer(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_sortInPlace_93_local	js	ArrayBuffer(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_sortInPlace_93_local	interp	ArrayBuffer(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_toArray_126_whole	js	Array(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_toArray_126_whole	interp	Array(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_toArray_126_none	js	Array(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_toArray_126_none	interp	Array(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_toArray_126_local	js	Array(1, 2)
+cut_member_scala_collection_mutable_ArrayBuffer_toArray_126_local	interp	Array(1, 2)
+cut_static_scala_collection_mutable_SortedSet_empty_599_whole	js	TreeSet()
+cut_static_scala_collection_mutable_SortedSet_empty_599_whole	interp	TreeSet()
+cut_static_scala_collection_mutable_SortedSet_empty_599_none	js	TreeSet()
+cut_static_scala_collection_mutable_SortedSet_empty_599_none	interp	TreeSet()
+cut_static_scala_collection_mutable_SortedSet_empty_599_named	js	TreeSet()
+cut_static_scala_collection_mutable_SortedSet_empty_599_named	interp	TreeSet()
+cut_static_scala_collection_mutable_SortedSet_empty_599_local	js	TreeSet()
+cut_static_scala_collection_mutable_SortedSet_empty_599_local	interp	TreeSet()
+cut_static_scala_collection_mutable_SortedSet_apply_600_whole	js	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_apply_600_whole	interp	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_apply_600_none	js	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_apply_600_none	interp	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_apply_600_named	js	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_apply_600_named	interp	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_apply_600_local	js	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_apply_600_local	interp	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_from_601_whole	js	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_from_601_whole	interp	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_from_601_none	js	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_from_601_none	interp	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_from_601_named	js	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_from_601_named	interp	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_from_601_local	js	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_from_601_local	interp	TreeSet(1)
+cut_static_scala_collection_mutable_SortedSet_newBuilder_605_whole	js	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_SortedSet_newBuilder_605_whole	interp	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_SortedSet_newBuilder_605_none	js	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_SortedSet_newBuilder_605_none	interp	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_SortedSet_newBuilder_605_named	js	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_SortedSet_newBuilder_605_named	interp	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_SortedSet_newBuilder_605_local	js	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_SortedSet_newBuilder_605_local	interp	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_TreeSet_empty_614_whole	js	TreeSet()
+cut_static_scala_collection_mutable_TreeSet_empty_614_whole	interp	TreeSet()
+cut_static_scala_collection_mutable_TreeSet_empty_614_none	js	TreeSet()
+cut_static_scala_collection_mutable_TreeSet_empty_614_none	interp	TreeSet()
+cut_static_scala_collection_mutable_TreeSet_empty_614_named	js	TreeSet()
+cut_static_scala_collection_mutable_TreeSet_empty_614_named	interp	TreeSet()
+cut_static_scala_collection_mutable_TreeSet_empty_614_local	js	TreeSet()
+cut_static_scala_collection_mutable_TreeSet_empty_614_local	interp	TreeSet()
+cut_static_scala_collection_mutable_TreeSet_apply_615_whole	js	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_apply_615_whole	interp	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_apply_615_none	js	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_apply_615_none	interp	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_apply_615_named	js	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_apply_615_named	interp	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_apply_615_local	js	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_apply_615_local	interp	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_from_616_whole	js	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_from_616_whole	interp	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_from_616_none	js	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_from_616_none	interp	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_from_616_named	js	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_from_616_named	interp	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_from_616_local	js	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_from_616_local	interp	TreeSet(1)
+cut_static_scala_collection_mutable_TreeSet_newBuilder_619_whole	js	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_TreeSet_newBuilder_619_whole	interp	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_TreeSet_newBuilder_619_none	js	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_TreeSet_newBuilder_619_none	interp	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_TreeSet_newBuilder_619_named	js	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_TreeSet_newBuilder_619_named	interp	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_TreeSet_newBuilder_619_local	js	TreeSet$$anon@<identity>
+cut_static_scala_collection_mutable_TreeSet_newBuilder_619_local	interp	TreeSet$$anon@<identity>
+cut_ctor_scala_collection_mutable_PriorityQueue_635_whole	js	PriorityQueue()
+cut_ctor_scala_collection_mutable_PriorityQueue_635_whole	interp	PriorityQueue()
+cut_ctor_scala_collection_mutable_PriorityQueue_635_none	js	PriorityQueue()
+cut_ctor_scala_collection_mutable_PriorityQueue_635_none	interp	PriorityQueue()
+cut_ctor_scala_collection_mutable_PriorityQueue_635_named	js	PriorityQueue()
+cut_ctor_scala_collection_mutable_PriorityQueue_635_named	interp	PriorityQueue()
+cut_ctor_scala_collection_mutable_PriorityQueue_635_local	js	PriorityQueue()
+cut_ctor_scala_collection_mutable_PriorityQueue_635_local	interp	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_empty_710_whole	js	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_empty_710_whole	interp	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_empty_710_none	js	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_empty_710_none	interp	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_empty_710_named	js	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_empty_710_named	interp	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_empty_710_local	js	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_empty_710_local	interp	PriorityQueue()
+cut_static_scala_collection_mutable_PriorityQueue_apply_711_whole	js	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_apply_711_whole	interp	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_apply_711_none	js	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_apply_711_none	interp	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_apply_711_named	js	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_apply_711_named	interp	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_apply_711_local	js	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_apply_711_local	interp	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_from_712_whole	js	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_from_712_whole	interp	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_from_712_none	js	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_from_712_none	interp	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_from_712_named	js	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_from_712_named	interp	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_from_712_local	js	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_PriorityQueue_from_712_local	interp	PriorityQueue(1, 1)
+cut_static_scala_collection_mutable_ArrayBuilder_make_815_whole	js	ArrayBuilder@<identity>
+cut_static_scala_collection_mutable_ArrayBuilder_make_815_whole	interp	scala.collection.mutable.ArrayBuilder@<identity>
+cut_static_scala_collection_mutable_ArrayBuilder_make_815_none	js	ArrayBuilder@<identity>
+cut_static_scala_collection_mutable_ArrayBuilder_make_815_none	interp	scala.collection.mutable.ArrayBuilder@<identity>
+cut_static_scala_collection_mutable_ArrayBuilder_make_815_named	js	ArrayBuilder@<identity>
+cut_static_scala_collection_mutable_ArrayBuilder_make_815_named	interp	scala.collection.mutable.ArrayBuilder@<identity>
+cut_static_scala_collection_mutable_ArrayBuilder_make_815_local	js	ArrayBuilder@<identity>
+cut_static_scala_collection_mutable_ArrayBuilder_make_815_local	interp	scala.collection.mutable.ArrayBuilder@<identity>
+cut_ctor_scala_collection_mutable_ArrayBuilder_ofRef_826_whole	js	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound AnyRef
+cut_ctor_scala_collection_mutable_ArrayBuilder_ofRef_826_whole	interp	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound AnyRef
+cut_ctor_scala_collection_mutable_ArrayBuilder_ofRef_826_none	js	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound AnyRef
+cut_ctor_scala_collection_mutable_ArrayBuilder_ofRef_826_none	interp	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound AnyRef
+cut_ctor_scala_collection_mutable_ArrayBuilder_ofRef_826_named	js	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound AnyRef
+cut_ctor_scala_collection_mutable_ArrayBuilder_ofRef_826_named	interp	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound AnyRef
+cut_ctor_scala_collection_mutable_ArrayBuilder_ofRef_826_local	js	A's products REFUSED: A.scala:5:5: error: type argument Int does not conform to upper bound AnyRef
+cut_ctor_scala_collection_mutable_ArrayBuilder_ofRef_826_local	interp	A's products REFUSED: A.scala:5:5: error: type argument Int does not conform to upper bound AnyRef
+cut_static_scala_collection_immutable_NumericRange_apply_44_whole	js	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_apply_44_whole	interp	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_apply_44_none	js	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_apply_44_none	interp	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_apply_44_named	js	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_apply_44_named	interp	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_apply_44_local	js	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_apply_44_local	interp	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_inclusive_46_whole	js	NumericRange 1 to 1
+cut_static_scala_collection_immutable_NumericRange_inclusive_46_whole	interp	NumericRange 1 to 1
+cut_static_scala_collection_immutable_NumericRange_inclusive_46_none	js	NumericRange 1 to 1
+cut_static_scala_collection_immutable_NumericRange_inclusive_46_none	interp	NumericRange 1 to 1
+cut_static_scala_collection_immutable_NumericRange_inclusive_46_named	js	NumericRange 1 to 1
+cut_static_scala_collection_immutable_NumericRange_inclusive_46_named	interp	NumericRange 1 to 1
+cut_static_scala_collection_immutable_NumericRange_inclusive_46_local	js	NumericRange 1 to 1
+cut_static_scala_collection_immutable_NumericRange_inclusive_46_local	interp	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Inclusive_48_whole	js	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Inclusive_48_whole	interp	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Inclusive_48_none	js	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Inclusive_48_none	interp	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Inclusive_48_named	js	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Inclusive_48_named	interp	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Inclusive_48_local	js	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Inclusive_48_local	interp	NumericRange 1 to 1
+cut_ctor_scala_collection_immutable_NumericRange_Exclusive_53_whole	js	empty NumericRange 1 until 1
+cut_ctor_scala_collection_immutable_NumericRange_Exclusive_53_whole	interp	empty NumericRange 1 until 1
+cut_ctor_scala_collection_immutable_NumericRange_Exclusive_53_none	js	empty NumericRange 1 until 1
+cut_ctor_scala_collection_immutable_NumericRange_Exclusive_53_none	interp	empty NumericRange 1 until 1
+cut_ctor_scala_collection_immutable_NumericRange_Exclusive_53_named	js	empty NumericRange 1 until 1
+cut_ctor_scala_collection_immutable_NumericRange_Exclusive_53_named	interp	empty NumericRange 1 until 1
+cut_ctor_scala_collection_immutable_NumericRange_Exclusive_53_local	js	empty NumericRange 1 until 1
+cut_ctor_scala_collection_immutable_NumericRange_Exclusive_53_local	interp	empty NumericRange 1 until 1
+cut_static_scala_collection_immutable_NumericRange_count_68_whole	js	1
+cut_static_scala_collection_immutable_NumericRange_count_68_whole	interp	1
+cut_static_scala_collection_immutable_NumericRange_count_68_none	js	1
+cut_static_scala_collection_immutable_NumericRange_count_68_none	interp	1
+cut_static_scala_collection_immutable_NumericRange_count_68_named	js	1
+cut_static_scala_collection_immutable_NumericRange_count_68_named	interp	1
+cut_static_scala_collection_immutable_NumericRange_count_68_local	js	1
+cut_static_scala_collection_immutable_NumericRange_count_68_local	interp	1
+cut_static_scala_Ordering_apply_59_whole	js	FunctionOrdering@<identity>
+cut_static_scala_Ordering_apply_59_whole	interp	scala.FunctionOrdering@<identity>
+cut_static_scala_Ordering_apply_59_none	js	FunctionOrdering@<identity>
+cut_static_scala_Ordering_apply_59_none	interp	scala.FunctionOrdering@<identity>
+cut_static_scala_Ordering_apply_59_named	js	FunctionOrdering@<identity>
+cut_static_scala_Ordering_apply_59_named	interp	scala.FunctionOrdering@<identity>
+cut_static_scala_Ordering_apply_59_local	js	FunctionOrdering@<identity>
+cut_static_scala_Ordering_apply_59_local	interp	scala.FunctionOrdering@<identity>
+cut_static_scala_Ordering_by_72_whole	js	FunctionOrdering@<identity>
+cut_static_scala_Ordering_by_72_whole	interp	scala.FunctionOrdering@<identity>
+cut_static_scala_Ordering_by_72_none	js	FunctionOrdering@<identity>
+cut_static_scala_Ordering_by_72_none	interp	scala.FunctionOrdering@<identity>
+cut_static_scala_Ordering_by_72_named	js	FunctionOrdering@<identity>
+cut_static_scala_Ordering_by_72_named	interp	scala.FunctionOrdering@<identity>
+cut_static_scala_Ordering_by_72_local	js	FunctionOrdering@<identity>
+cut_static_scala_Ordering_by_72_local	interp	scala.FunctionOrdering@<identity>
+cut_static_scala_Ordering_ordered_98_whole	js	A's products REFUSED: A.scala:3:99: error: No given instance of type Int => Comparable[? >: Int] was found for parameter x of method summon in package scala
+cut_static_scala_Ordering_ordered_98_whole	interp	A's products REFUSED: A.scala:3:99: error: No given instance of type Int => Comparable[? >: Int] was found for parameter x of method summon in package scala
+cut_static_scala_Ordering_ordered_98_none	js	A's products REFUSED: A.scala:3:47: error: No given instance of type Int => Comparable[? >: Int] was found for parameter asComparable of method ordered in object Ordering
+cut_static_scala_Ordering_ordered_98_none	interp	A's products REFUSED: A.scala:3:47: error: No given instance of type Int => Comparable[? >: Int] was found for parameter asComparable of method ordered in object Ordering
+cut_static_scala_Ordering_ordered_98_named	js	A's products REFUSED: A.scala:3:114: error: No given instance of type Int => Comparable[? >: Int] was found for parameter x of method summon in package scala
+cut_static_scala_Ordering_ordered_98_named	interp	A's products REFUSED: A.scala:3:114: error: No given instance of type Int => Comparable[? >: Int] was found for parameter x of method summon in package scala
+cut_static_scala_Ordering_ordered_98_local	js	A's products REFUSED: A.scala:4:98: error: No given instance of type Int => Comparable[? >: Int] was found for parameter x of method summon in package scala
+cut_static_scala_Ordering_ordered_98_local	interp	A's products REFUSED: A.scala:4:98: error: No given instance of type Int => Comparable[? >: Int] was found for parameter x of method summon in package scala
+cut_static_scala_Numeric_apply_240_whole	js	IntIsIntegral@<identity>
+cut_static_scala_Numeric_apply_240_whole	interp	scala.Numeric$IntIsIntegral@<identity>
+cut_static_scala_Numeric_apply_240_none	js	IntIsIntegral@<identity>
+cut_static_scala_Numeric_apply_240_none	interp	scala.Numeric$IntIsIntegral@<identity>
+cut_static_scala_Numeric_apply_240_named	js	IntIsIntegral@<identity>
+cut_static_scala_Numeric_apply_240_named	interp	scala.Numeric$IntIsIntegral@<identity>
+cut_static_scala_Numeric_apply_240_local	js	IntIsIntegral@<identity>
+cut_static_scala_Numeric_apply_240_local	interp	scala.Numeric$IntIsIntegral@<identity>
+cut_static_scala_Integral_apply_324_whole	js	IntIsIntegral@<identity>
+cut_static_scala_Integral_apply_324_whole	interp	scala.Numeric$IntIsIntegral@<identity>
+cut_static_scala_Integral_apply_324_none	js	IntIsIntegral@<identity>
+cut_static_scala_Integral_apply_324_none	interp	scala.Numeric$IntIsIntegral@<identity>
+cut_static_scala_Integral_apply_324_named	js	IntIsIntegral@<identity>
+cut_static_scala_Integral_apply_324_named	interp	scala.Numeric$IntIsIntegral@<identity>
+cut_static_scala_Integral_apply_324_local	js	IntIsIntegral@<identity>
+cut_static_scala_Integral_apply_324_local	interp	scala.Numeric$IntIsIntegral@<identity>
+cut_static_scala_Fractional_apply_327_whole	js	A's products REFUSED: A.scala:3:77: error: No given instance of type Fractional[Int] was found for parameter x of method summon in package scala
+cut_static_scala_Fractional_apply_327_whole	interp	A's products REFUSED: A.scala:3:77: error: No given instance of type Fractional[Int] was found for parameter x of method summon in package scala
+cut_static_scala_Fractional_apply_327_none	js	A's products REFUSED: A.scala:3:47: error: No given instance of type Fractional[Int] was found for parameter num of method apply in object Fractional
+cut_static_scala_Fractional_apply_327_none	interp	A's products REFUSED: A.scala:3:47: error: No given instance of type Fractional[Int] was found for parameter num of method apply in object Fractional
+cut_static_scala_Fractional_apply_327_named	js	A's products REFUSED: A.scala:3:83: error: No given instance of type Fractional[Int] was found for parameter x of method summon in package scala
+cut_static_scala_Fractional_apply_327_named	interp	A's products REFUSED: A.scala:3:83: error: No given instance of type Fractional[Int] was found for parameter x of method summon in package scala
+cut_static_scala_Fractional_apply_327_local	js	A's products REFUSED: A.scala:4:54: error: No given instance of type Fractional[Int] was found for parameter x of method summon in package scala
+cut_static_scala_Fractional_apply_327_local	interp	A's products REFUSED: A.scala:4:54: error: No given instance of type Fractional[Int] was found for parameter x of method summon in package scala
+cut_static_scala_Tuple_fromProductTyped_103_whole	js	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Product
+cut_static_scala_Tuple_fromProductTyped_103_whole	interp	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Product
+cut_static_scala_Tuple_fromProductTyped_103_none	js	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Product
+cut_static_scala_Tuple_fromProductTyped_103_none	interp	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Product
+cut_static_scala_Tuple_fromProductTyped_103_named	js	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Product
+cut_static_scala_Tuple_fromProductTyped_103_named	interp	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Product
+cut_static_scala_Tuple_fromProductTyped_103_local	js	A's products REFUSED: A.scala:4:96: error: No given instance of type Mirror.ProductOf[Int] was found.
+cut_static_scala_Tuple_fromProductTyped_103_local	interp	A's products REFUSED: A.scala:4:96: error: No given instance of type Mirror.ProductOf[Int] was found.
+cut_static_scala_summon_196_whole	js	A's products REFUSED: A.scala:3:55: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_summon_196_whole	interp	A's products REFUSED: A.scala:3:55: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_summon_196_none	js	A's products REFUSED: A.scala:3:37: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_summon_196_none	interp	A's products REFUSED: A.scala:3:37: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_summon_196_named	js	A's products REFUSED: A.scala:3:59: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_summon_196_named	interp	A's products REFUSED: A.scala:3:59: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_summon_196_local	js	A's products REFUSED: A.scala:4:30: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_summon_196_local	interp	A's products REFUSED: A.scala:4:30: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_implicitly_202_whole	js	A's products REFUSED: A.scala:3:59: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_implicitly_202_whole	interp	A's products REFUSED: A.scala:3:59: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_implicitly_202_none	js	A's products REFUSED: A.scala:3:41: error: No given instance of type Int was found for parameter x of method implicitly in package scala
+cut_static_scala_implicitly_202_none	interp	A's products REFUSED: A.scala:3:41: error: No given instance of type Int was found for parameter x of method implicitly in package scala
+cut_static_scala_implicitly_202_named	js	A's products REFUSED: A.scala:3:63: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_implicitly_202_named	interp	A's products REFUSED: A.scala:3:63: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_implicitly_202_local	js	A's products REFUSED: A.scala:4:30: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_implicitly_202_local	interp	A's products REFUSED: A.scala:4:30: error: No given instance of type Int was found for parameter x of method summon in package scala
+cut_static_scala_quoted_Expr_apply_44_whole	js	A's products REFUSED: A.scala:3:65: error: Not found: type ToExpr
+cut_static_scala_quoted_Expr_apply_44_whole	interp	A's products REFUSED: A.scala:3:65: error: Not found: type ToExpr
+cut_static_scala_quoted_Expr_apply_44_none	js	A's products REFUSED: A.scala:3:51: error: No given instance of type Quotes was found for parameter x$3 of method apply in object Expr
+cut_static_scala_quoted_Expr_apply_44_none	interp	A's products REFUSED: A.scala:3:51: error: No given instance of type Quotes was found for parameter x$3 of method apply in object Expr
+cut_static_scala_quoted_Expr_apply_44_named	js	A's products REFUSED: A.scala:3:70: error: Not found: type ToExpr
+cut_static_scala_quoted_Expr_apply_44_named	interp	A's products REFUSED: A.scala:3:70: error: Not found: type ToExpr
+cut_static_scala_quoted_Expr_apply_44_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type ToExpr
+cut_static_scala_quoted_Expr_apply_44_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type ToExpr
+cut_static_scala_quoted_Expr_summon_65_whole	js	A's products REFUSED: A.scala:3:63: error: Not found: type Type
+cut_static_scala_quoted_Expr_summon_65_whole	interp	A's products REFUSED: A.scala:3:63: error: Not found: type Type
+cut_static_scala_quoted_Expr_summon_65_none	js	A's products REFUSED: A.scala:3:49: error: No given instance of type Quotes was found for parameter x$2 of method summon in object Expr
+cut_static_scala_quoted_Expr_summon_65_none	interp	A's products REFUSED: A.scala:3:49: error: No given instance of type Quotes was found for parameter x$2 of method summon in object Expr
+cut_static_scala_quoted_Expr_summon_65_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Expr_summon_65_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Expr_summonIgnoring_70_whole	js	A's products REFUSED: A.scala:3:20: error: missing argument list for method summonIgnoring in object Expr
+cut_static_scala_quoted_Expr_summonIgnoring_70_whole	interp	A's products REFUSED: A.scala:3:20: error: missing argument list for method summonIgnoring in object Expr
+cut_static_scala_quoted_Expr_summonIgnoring_70_none	js	A's products REFUSED: A.scala:3:20: error: missing argument list for method summonIgnoring in object Expr
+cut_static_scala_quoted_Expr_summonIgnoring_70_none	interp	A's products REFUSED: A.scala:3:20: error: missing argument list for method summonIgnoring in object Expr
+cut_static_scala_quoted_Expr_summonIgnoring_70_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Expr_summonIgnoring_70_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Type_of_73_whole	js	A's products REFUSED: A.scala:3:59: error: Not found: type Quotes
+cut_static_scala_quoted_Type_of_73_whole	interp	A's products REFUSED: A.scala:3:59: error: Not found: type Quotes
+cut_static_scala_quoted_Type_of_73_none	js	A's products REFUSED: A.scala:3:45: error: No given instance of type Quotes was found for parameter x$1 of method of in object Type
+cut_static_scala_quoted_Type_of_73_none	interp	A's products REFUSED: A.scala:3:45: error: No given instance of type Quotes was found for parameter x$1 of method of in object Type
+cut_static_scala_quoted_Type_of_73_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Quotes
+cut_static_scala_quoted_Type_of_73_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Quotes
+cut_static_scala_quoted_Type_show_74_whole	js	A's products REFUSED: A.scala:3:61: error: Not found: type Type
+cut_static_scala_quoted_Type_show_74_whole	interp	A's products REFUSED: A.scala:3:61: error: Not found: type Type
+cut_static_scala_quoted_Type_show_74_none	js	A's products REFUSED: A.scala:3:47: error: No given instance of type Quotes was found for parameter x$2 of method show in object Type
+cut_static_scala_quoted_Type_show_74_none	interp	A's products REFUSED: A.scala:3:47: error: No given instance of type Quotes was found for parameter x$2 of method show in object Type
+cut_static_scala_quoted_Type_show_74_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Type_show_74_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Type_valueOfConstant_75_whole	js	A's products REFUSED: A.scala:3:72: error: Not found: type Type
+cut_static_scala_quoted_Type_valueOfConstant_75_whole	interp	A's products REFUSED: A.scala:3:72: error: Not found: type Type
+cut_static_scala_quoted_Type_valueOfConstant_75_none	js	A's products REFUSED: A.scala:3:58: error: No given instance of type Quotes was found for parameter x$2 of method valueOfConstant in object Type
+cut_static_scala_quoted_Type_valueOfConstant_75_none	interp	A's products REFUSED: A.scala:3:58: error: No given instance of type Quotes was found for parameter x$2 of method valueOfConstant in object Type
+cut_static_scala_quoted_Type_valueOfConstant_75_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Type_valueOfConstant_75_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Type_valueOfTuple_80_whole	js	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Tuple
+cut_static_scala_quoted_Type_valueOfTuple_80_whole	interp	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Tuple
+cut_static_scala_quoted_Type_valueOfTuple_80_none	js	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Tuple
+cut_static_scala_quoted_Type_valueOfTuple_80_none	interp	A's products REFUSED: A.scala:3:20: error: type argument Int does not conform to upper bound Tuple
+cut_static_scala_quoted_Type_valueOfTuple_80_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_scala_quoted_Type_valueOfTuple_80_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Type
+cut_static_Serializer_serialize_31_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_serialize_31_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_serialize_31_none	js	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_serialize_31_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_serialize_31_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_Serializer_serialize_31_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_Serializer_deserialize_34_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_deserialize_34_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_deserialize_34_none	js	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_deserialize_34_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_deserialize_34_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_Serializer_deserialize_34_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_Serializer_listSerializer_106_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_listSerializer_106_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_listSerializer_106_none	js	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_listSerializer_106_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_listSerializer_106_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_Serializer_listSerializer_106_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_Serializer_optionSerializer_112_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_optionSerializer_112_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_optionSerializer_112_none	js	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_optionSerializer_112_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: Serializer
+cut_static_Serializer_optionSerializer_112_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_Serializer_optionSerializer_112_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_LogElement_logElementSerializer_310_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: LogElement
+cut_static_LogElement_logElementSerializer_310_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: LogElement
+cut_static_LogElement_logElementSerializer_310_none	js	A's products REFUSED: A.scala:3:20: error: Not found: LogElement
+cut_static_LogElement_logElementSerializer_310_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: LogElement
+cut_static_LogElement_logElementSerializer_310_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_LogElement_logElementSerializer_310_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_RunMux_runMuxSerializer_322_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: RunMux
+cut_static_RunMux_runMuxSerializer_322_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: RunMux
+cut_static_RunMux_runMuxSerializer_322_none	js	A's products REFUSED: A.scala:3:20: error: Not found: RunMux
+cut_static_RunMux_runMuxSerializer_322_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: RunMux
+cut_static_RunMux_runMuxSerializer_322_local	js	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_RunMux_runMuxSerializer_322_local	interp	A's products REFUSED: A.scala:4:13: error: Not found: type Serializer
+cut_static_scala_util_Sorting_stableSort_173_whole	js	()
+cut_static_scala_util_Sorting_stableSort_173_whole	interp	()
+cut_static_scala_util_Sorting_stableSort_173_none	js	()
+cut_static_scala_util_Sorting_stableSort_173_none	interp	()
+cut_static_scala_util_Sorting_stableSort_173_named	js	()
+cut_static_scala_util_Sorting_stableSort_173_named	interp	()
+cut_static_scala_util_Sorting_stableSort_173_local	js	()
+cut_static_scala_util_Sorting_stableSort_173_local	interp	()
+cut_static_scala_util_Sorting_quickSort_181_whole	js	()
+cut_static_scala_util_Sorting_quickSort_181_whole	interp	()
+cut_static_scala_util_Sorting_quickSort_181_none	js	()
+cut_static_scala_util_Sorting_quickSort_181_none	interp	()
+cut_static_scala_util_Sorting_quickSort_181_named	js	()
+cut_static_scala_util_Sorting_quickSort_181_named	interp	()
+cut_static_scala_util_Sorting_quickSort_181_local	js	()
+cut_static_scala_util_Sorting_quickSort_181_local	interp	()
+cut_member_scala_Vector_toArray_93_whole	js	Array(1, 2)
+cut_member_scala_Vector_toArray_93_whole	interp	Array(1, 2)
+cut_member_scala_Vector_toArray_93_none	js	Array(1, 2)
+cut_member_scala_Vector_toArray_93_none	interp	Array(1, 2)
+cut_member_scala_Vector_toArray_93_local	js	Array(1, 2)
+cut_member_scala_Vector_toArray_93_local	interp	Array(1, 2)
