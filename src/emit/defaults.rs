@@ -430,8 +430,26 @@ impl<'a> super::Emitter<'a> {
         if items.is_empty() || !items.iter().all(|s| matches!(*s, TStmt::Val(t, _) if self.syms.sym(t).mods & mods::LIFTED != 0)) {
             return None;
         }
-        let lowering = self.defaults().lower(items, res)?;
+        let mut lowering = self.defaults().lower(items, res)?;
+        self.keep_before_companion(res, &mut lowering);
+        if lowering.sunk.is_empty() && lowering.dropped.is_empty() && !lowering.omitted.iter().any(|&o| o) {
+            return None;
+        }
         Some((res, lowering))
+    }
+
+    /// A call that initialises a value class's companion (`extension_companion`) writes the plan's temporaries with
+    /// an effect in front of it: written where they are used, they would run after the companion's initialisation,
+    /// which the plan runs after them (the lift and `evalOnce` both bind them before the call). The companion is
+    /// initialised before the receiver, or with the arguments after a receiver evaluated first that is no temporary
+    /// of the plan, so a temporary with an effect moves into neither.
+    fn keep_before_companion(&self, call: TExprId, lowering: &mut Lowering) {
+        let TExpr::CallMethod(r, s, _) = self.prog.expr(call) else { return };
+        if super::extension_companion(self.prog, self.syms, self.has_body, s, r).is_none() {
+            return;
+        }
+        let defaults = self.defaults();
+        lowering.sunk.retain(|&(_, v)| defaults.effect_free(v));
     }
 
     /// Whether every statement of the plan's block `e` is a temporary its call writes elsewhere
@@ -509,12 +527,26 @@ impl<'a> super::Emitter<'a> {
             }
         }
         self.out.push('(');
+        // A companion initialised with the arguments (`Emitter::arg_touch`) is with the first, or
+        // alone where there is none: an argument the method does not read.
+        let mut touch = self.arg_touch.take();
+        if keep == 0 {
+            if let Some(companion) = touch {
+                let open = self.open_touch(companion);
+                self.out.push_str("void 0");
+                self.close_touch(open);
+            }
+        }
         let mut separator = "";
         for (k, &a) in items[..keep].iter().enumerate() {
             if omitted.get(k) == Some(&true) {
                 self.out.push_str(separator);
                 separator = ", ";
+                let open = touch.take().map(|companion| self.open_touch(companion));
                 self.out.push_str("undefined");
+                if let Some(open) = open {
+                    self.close_touch(open);
+                }
                 continue;
             }
             let inlined = match self.peek(a) {
@@ -524,10 +556,14 @@ impl<'a> super::Emitter<'a> {
             for &item in inlined.unwrap_or(std::slice::from_ref(&a)) {
                 self.out.push_str(separator);
                 separator = ", ";
+                let open = touch.take().map(|companion| self.open_touch(companion));
                 if self.prog.is_dropped_tag(evidence, k, item, self.syms, self.interner) {
                     self.out.push_str("null");
                 } else {
                     self.emit_value(item);
+                }
+                if let Some(open) = open {
+                    self.close_touch(open);
                 }
             }
         }

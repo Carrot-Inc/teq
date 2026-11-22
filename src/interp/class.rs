@@ -1195,6 +1195,22 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(())
     }
 
+    /// The companion a call of the value class's method `s` on the receiver `r` initialises, and
+    /// whether after the receiver (`emit::extension_companion`).
+    pub(super) fn extension_touch(&mut self, s: SymId, r: TExprId) -> Option<(ClassId, bool)> {
+        let (c, companion) = crate::emit::extension_companion_of(self.syms(), s)?;
+        let first = crate::emit::receiver_first(self.prog(), self.syms(), c, r);
+        self.has_body(companion).then_some((companion, first))
+    }
+
+    /// The companion object `c` initialised, where it is not yet.
+    pub(super) fn touch_module(&mut self, c: ClassId) -> R<()> {
+        if self.made.modules.get(c.idx()).map_or(true, |m| m.is_none()) {
+            self.module(c)?;
+        }
+        Ok(())
+    }
+
     /// The companion whose body scalac's synthetic `apply` of a case class runs.
     fn touched_companion(&mut self, c: ClassId) -> Option<ClassId> {
         let info = self.syms().class(c);

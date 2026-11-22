@@ -108,6 +108,22 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// `r.s(args)` of a value class's method, its companion initialised in scalac's order
+    /// (`Interp::extension_touch`); kept out of `eval`, whose frame every evaluation pays for.
+    #[inline(never)]
+    fn call_extension(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        let touched = self.extension_touch(s, r);
+        if let Some((companion, false)) = touched {
+            self.touch_module(companion)?;
+        }
+        let recv = self.eval(r, fr, cx)?;
+        if let Some((companion, true)) = touched {
+            self.touch_module(companion)?;
+        }
+        let args = self.eval_args(Some(s), args, fr, cx)?;
+        self.invoke_at(e, recv, s, args)
+    }
+
     pub(super) fn eval(&mut self, e: TExprId, fr: &Rc<Frame>, cx: &Ctx) -> R {
         self.step()?;
         let v = match self.eval_node(e, fr, cx) {
@@ -169,6 +185,9 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                     let args = self.eval_args(Some(s), args, fr, cx)?;
                     return self.call_super(target, s, args, cx);
+                }
+                if crate::emit::extension_companion_of(self.syms(), s).is_some() {
+                    return self.call_extension(e, r, s, args, fr, cx);
                 }
                 let recv = self.eval(r, fr, cx)?;
                 // Only in a program with a lifted member (`Program::lifted_funs`), on an instance.

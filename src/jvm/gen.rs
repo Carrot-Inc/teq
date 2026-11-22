@@ -5822,10 +5822,7 @@ impl<'a> Gen<'a> {
             let name = format!("{}$extension", self.method_name(s));
             let module: Rc<str> = Rc::from(cx.companion_name(c));
             let module_type = ErasedType::L(module.clone());
-            self.expr(r, &u);
-            let recv = self.store_new(&u);
-            self.getstatic(&module, "MODULE$", &module_type);
-            self.load(recv, &u);
+            self.extension_receiver(r, c, &u, &module, &module_type);
             let rest = own[1..].to_vec();
             self.arguments(Some(s), args, &rest);
             self.invoke_desc(Invoke::Virtual, &module, false, &name, &method_desc(&own, &ret), own.len(), &ret);
@@ -5850,15 +5847,29 @@ impl<'a> Gen<'a> {
         let (params, desc_ret) = parse_method_desc(&m.descriptor);
         let desc = m.descriptor.clone();
         let module = ErasedType::L(Rc::from(companion.name.as_str()));
-        self.expr(r, &u);
-        let recv = self.store_new(&u);
-        self.getstatic(&companion.name, "MODULE$", &module);
-        self.load(recv, &u);
+        self.extension_receiver(r, c, &u, &companion.name, &module);
         self.adapt(&u, &params[0]);
         let rest: Vec<ErasedType> = params[1..].iter().zip(&own[1..]).map(|(d, o)| if d == o { o.clone() } else { d.clone() }).collect();
         self.arguments(Some(s), args, &rest);
         self.invoke_desc(Invoke::Virtual, &companion.name, false, &name, &desc, params.len(), &desc_ret);
         Some(if desc_ret == ret { ret } else { desc_ret })
+    }
+
+    /// The companion `module`'s instance and the receiver `r` of a call of the value class `c`'s
+    /// extension method, as dotty's `VCInlineMethods.rewire` leaves them: the companion first,
+    /// then the receiver in place, so that the companion is initialised before the receiver's
+    /// effects; or, for a generic class's receiver that is not idempotent, the receiver first,
+    /// held in a slot (`evalOnce`), then the companion (`emit::receiver_first`).
+    fn extension_receiver(&mut self, r: TExprId, c: ClassId, u: &ErasedType, module: &str, module_type: &ErasedType) {
+        if !crate::emit::receiver_first(self.cx.input.prog, self.cx.input.syms, c, r) {
+            self.getstatic(module, "MODULE$", module_type);
+            self.expr(r, u);
+            return;
+        }
+        self.expr(r, u);
+        let recv = self.store_new(u);
+        self.getstatic(module, "MODULE$", module_type);
+        self.load(recv, u);
     }
 
     /// `context.s(args)` of scala-library, which has no bytecode: the runtime's definition

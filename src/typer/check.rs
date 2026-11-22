@@ -731,6 +731,7 @@ impl<'a> Worker<'a> {
         self.settle_val_accessors();
         self.name_all_alternatives();
         self.choose_entry_point();
+        self.mark_in_place_receivers();
         self.phase_end(p);
     }
 

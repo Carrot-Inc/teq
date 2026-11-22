@@ -204,6 +204,9 @@ pub struct Emitter<'a> {
     file_inits: &'a [bool],
     /// Per class: whether its constructor runs statements or initialisers of the body.
     has_body: &'a [bool],
+    /// The companion a call's argument list initialises before its first argument: a generic
+    /// value class's, after the receiver (`extension_companion`).
+    arg_touch: Option<ClassId>,
     /// Per class: the number its registration and type tests carry (`layout::Layout`).
     class_numbers: &'a [u32],
     partial_function_number: Option<u32>,
@@ -977,6 +980,41 @@ pub(crate) fn touched_companion(syms: &Symbols, has_body: &[bool], c: ClassId) -
     touched.then_some(companion)
 }
 
+/// The value class when `s` is a method the class declares, which scalac calls as the companion's
+/// extension method (dotty's `VCInlineMethods.rewire`), the JVM through the companion whether the
+/// program writes one or not (`Gen::call_extension`).
+#[inline]
+pub(crate) fn extension_class_of(syms: &Symbols, s: SymId) -> Option<ClassId> {
+    let info = syms.sym(s);
+    let Owner::Class(c) = info.owner else { return None };
+    (syms.class(c).value_class && info.kind == SymKind::Def).then_some(c)
+}
+
+/// The value class and its companion object when `s` is a method of the class
+/// (`extension_class_of`) and the program writes the companion.
+#[inline]
+pub(crate) fn extension_companion_of(syms: &Symbols, s: SymId) -> Option<(ClassId, ClassId)> {
+    let c = extension_class_of(syms, s)?;
+    let companion = syms.class(c).companion.filter(|&k| syms.class(k).kind == ClassKind::Object)?;
+    Some((c, companion))
+}
+
+/// Whether a call of an extension method of the value class `c` on the receiver `r` evaluates the
+/// receiver before it loads the companion, as `VCInlineMethods.rewire` leaves the call: a class
+/// with no type parameters passes the receiver in place (`ref(extensionMeth).appliedTo(qual)`),
+/// so the companion comes first; a generic one binds the receiver to a temporary first
+/// (`evalOnce`) unless the typer found it idempotent (`Program::in_place_receivers`).
+pub(crate) fn receiver_first(prog: &Program, syms: &Symbols, c: ClassId, r: TExprId) -> bool {
+    !syms.class(c).tparams.is_empty() && !prog.receiver_in_place(r)
+}
+
+/// The companion a call of the value class's method `s` on the receiver `r` initialises, where
+/// its body runs something, and whether after the receiver (`receiver_first`).
+pub(crate) fn extension_companion(prog: &Program, syms: &Symbols, has_body: &[bool], s: SymId, r: TExprId) -> Option<(ClassId, bool)> {
+    let (c, companion) = extension_companion_of(syms, s)?;
+    has_body.get(companion.idx()).copied().unwrap_or(false).then(|| (companion, receiver_first(prog, syms, c, r)))
+}
+
 impl<'a> Emitter<'a> {
     fn new(
         prog: &'a Program,
@@ -1025,6 +1063,7 @@ impl<'a> Emitter<'a> {
             const_vals: &layout.const_vals,
             file_inits: &layout.file_inits,
             has_body: &layout.has_body,
+            arg_touch: None,
             class_numbers: &layout.class_numbers,
             partial_function_number: layout.partial_function_number,
             anon_parent_args: &layout.anon_parent_args,

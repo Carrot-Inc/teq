@@ -3430,6 +3430,10 @@ impl Meet for Walker {
     fn call_method(&mut self, cx: Cx, through_super: bool, s: SymId) {
         if through_super {
             self.note_super_call(cx, s);
+        } else if let Some((_, companion)) = super::extension_companion_of(cx.syms, s) {
+            if self.layout.has_body.get(companion.idx()).copied().unwrap_or(false) {
+                self.reach_class(cx, companion);
+            }
         }
         self.call_member(cx, s);
     }

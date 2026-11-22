@@ -68,6 +68,16 @@ impl<'a> Emitter<'a> {
     /// argument stands for behind the last one written: a default of the JS function covers it.
     /// The arguments of the call `e`, a getter's application its callee's JavaScript default
     /// computes left out (`defaults::Lowering`).
+    /// `r.s(args)`, the companion `touch` initialised with the arguments.
+    fn emit_method_call(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef, touch: Option<ClassId>) {
+        self.emit_receiver(r);
+        self.out.push('.');
+        let n = self.sym_name(s);
+        self.out.push_str(&n);
+        self.arg_touch = touch;
+        self.emit_call_args(e, args);
+    }
+
     pub(super) fn emit_call_args(&mut self, e: TExprId, args: ListRef) {
         let omitted = self.omitted_args(e);
         let evidence = self.prog.evidence_args(e, self.syms);
@@ -910,13 +920,17 @@ impl<'a> Emitter<'a> {
                 self.out.push('(');
                 self.emit_proxy_args(args, k, "");
             }
-            TExpr::CallMethod(r, s, args) => {
-                self.emit_receiver(r);
-                self.out.push('.');
-                let n = self.sym_name(s);
-                self.out.push_str(&n);
-                self.emit_call_args(e, args);
-            }
+            // A value class's method initialises the class's companion where its body runs
+            // something, in scalac's order (`extension_companion`): first, or after a receiver that
+            // is evaluated first, with the arguments.
+            TExpr::CallMethod(r, s, args) => match super::extension_companion(self.prog, self.syms, self.has_body, s, r) {
+                Some((companion, false)) => {
+                    let touch = self.open_touch(companion);
+                    self.emit_method_call(e, r, s, args, None);
+                    self.close_touch(touch);
+                }
+                touched => self.emit_method_call(e, r, s, args, touched.map(|(companion, _)| companion)),
+            },
             // The application of a function value, by the calling convention where it may be an object.
             TExpr::CallClosure(f, args) => self.emit_function_call(f, args, None),
             TExpr::New(c, args) if self.closure_anons.contains_key(&c) => {

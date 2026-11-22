@@ -225,6 +225,14 @@ pub(crate) fn no_inits_by_symbols(syms: &Symbols, k: ClassId) -> bool {
     !fields && !getters_companion
 }
 
+/// The receiver of `e` where it is a call of a generic value class's method (`emit::extension_class_of`).
+#[inline(always)]
+fn generic_extension_receiver(syms: &Symbols, e: &TExpr) -> Option<TExprId> {
+    let &TExpr::CallMethod(r, s, _) = e else { return None };
+    let c = crate::emit::extension_class_of(syms, s)?;
+    (!syms.class(c).tparams.is_empty()).then_some(r)
+}
+
 impl<'a> Worker<'a> {
     /// dotty's `TreeInfo.exprPurity` over the typed IR; a reference as it was written where the
     /// IR's node says otherwise (`Worker::note_written_ref`).
@@ -330,6 +338,38 @@ impl<'a> Worker<'a> {
             }
             TExpr::CallMethod(r, s, l) if l.len == 0 && self.stable_member_def(s) => self.expr_purity_under(r, cast).min(Purity::PURE_PATH),
             _ => Purity::IMPURE,
+        }
+    }
+
+    /// dotty's `evalOnce` in `VCInlineMethods.rewire`: the receiver of a call of a generic value
+    /// class's method stays in place where it is idempotent (`isIdempotentExpr`, the reference's
+    /// purity, a written cast impure), and is bound to a temporary first otherwise. The receivers
+    /// that stay are marked once the program's code is complete, for every back end
+    /// (`emit::receiver_first`): by the final passes, and again where a session types changed files
+    /// anew (`Worker::retype`), over the whole program, since a receiver's verdict can rest on
+    /// another file's definitions.
+    pub(super) fn mark_in_place_receivers(&mut self) {
+        self.prog.in_place_receivers.clear();
+        let mut receivers = Vec::new();
+        let exprs = self.prog.exprs.iter().as_slice();
+        if exprs.len() == self.prog.exprs.len() {
+            for e in exprs {
+                if let Some(r) = generic_extension_receiver(&self.syms, e) {
+                    receivers.push(r);
+                }
+            }
+        } else {
+            // An arena some of whose records are other workers': each read by its id.
+            for i in 0..self.prog.exprs.len() as u32 {
+                if let Some(r) = generic_extension_receiver(&self.syms, self.prog.exprs.get(i)) {
+                    receivers.push(r);
+                }
+            }
+        }
+        for r in receivers {
+            if self.expr_purity_under(r, Purity::IMPURE).at_least(Purity::IDEMPOTENT) {
+                self.prog.in_place_receivers.insert(r, ());
+            }
         }
     }
 

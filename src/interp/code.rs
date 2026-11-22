@@ -1499,8 +1499,19 @@ impl<'a, 't> Interp<'a, 't> {
                     self.lower_list(b, args);
                     b.emit(Op::CallSuper { e, sym: s, argc: args.len });
                 }
+                // A value class's method initialises its companion in scalac's order
+                // (`Interp::extension_touch`).
                 _ => {
+                    let touched = self.extension_touch(s, r);
+                    if let Some((companion, false)) = touched {
+                        b.emit(Op::Module { e, class: companion });
+                        b.emit(Op::Pop);
+                    }
                     self.lower(b, r);
+                    if let Some((companion, true)) = touched {
+                        b.emit(Op::Module { e, class: companion });
+                        b.emit(Op::Pop);
+                    }
                     self.lower_list(b, args);
                     b.emit(Op::CallMethod { e, sym: s, argc: args.len });
                 }

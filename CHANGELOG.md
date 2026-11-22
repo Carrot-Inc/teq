@@ -23,6 +23,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   did too). The products' number is 1: a module's products written by an earlier teq (of number 0) are refused on
   the class path, or rebuilt where they are the module's own, as an earlier teq's box of such a value is not this
   one's.
+- A call of a value class's method initialises the class's companion object as under scalac, which calls the
+  companion's extension method: before the receiver is evaluated, but for a generic class's receiver that is not
+  idempotent (a call, a `var`, a def, a written cast), which is evaluated first; an object's val, a lazy val, a
+  path through objects and an export's forwarder of a val are idempotent. On the JVM the companion was initialised after the receiver; in the interpreter and on
+  JavaScript a companion whose body runs something was not initialised by the call at all.
 - A program's Java sources are read for their declarations, as scalac reads the `.java` it is given: a directory
   gives its `.java` files with its `.scala` ones, a `.java` named on the command line is read as Java (it was
   parsed as Scala), and the Scala program sees each Java class and interface with its members, their types and

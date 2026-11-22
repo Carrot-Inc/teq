@@ -1338,6 +1338,10 @@ pub struct Program {
     pub leaf_bits: Bits,
     /// The type tests of an expansion whose type came from a type argument of the call.
     pub leaf_tests: FxMap<TestId, ()>,
+    /// The receivers of a generic value class's method calls that dotty's `evalOnce` leaves in
+    /// place, idempotent by `exprPurity` (`Worker::mark_in_place_receivers`); any other such
+    /// receiver is evaluated before the companion (`emit::receiver_first`).
+    pub in_place_receivers: FxMap<TExprId, ()>,
     /// The type tests and patterns of the inline bodies stored at their definitions
     /// (`InlineDefinition`), which no output holds: what numbers the classes of the output
     /// from every test of the program leaves them out.
@@ -1715,6 +1719,7 @@ impl Program {
             kept_bits: Bits::attach(self.kept_bits.shared_arc(), worker),
             leaf_bits: Bits::attach(self.leaf_bits.shared_arc(), worker),
             leaf_tests: FxMap::default(),
+            in_place_receivers: FxMap::default(),
             stored_tests: FxMap::default(),
             stored_pats: FxMap::default(),
         }
@@ -1838,6 +1843,7 @@ impl Default for Program {
             kept_bits: Bits::default(),
             leaf_bits: Bits::default(),
             leaf_tests: FxMap::default(),
+            in_place_receivers: FxMap::default(),
             stored_tests: FxMap::default(),
             stored_pats: FxMap::default(),
         }
@@ -2147,6 +2153,11 @@ impl Program {
     #[inline(always)]
     pub fn is_spread(&self, e: TExprId) -> bool {
         self.spread_bits.has(e.0)
+    }
+
+    /// Whether `e` is a receiver `Program::in_place_receivers` holds.
+    pub fn receiver_in_place(&self, e: TExprId) -> bool {
+        self.in_place_receivers.contains_key(&e)
     }
 
     /// Marks `e` as `setter_assign_bits` says.
