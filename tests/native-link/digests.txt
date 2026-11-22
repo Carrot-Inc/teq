@@ -3,3 +3,5 @@
 # (detected: by the build; true: linked with them) and what the text is.
 ecb5b2f19c01bd56a3e49622327d61c6df4913719d1dd6e2955f5aedf0c8127b 66415 detected linked
 ac9fa7f097e0751952b22ac629e9474bc981d29d0249209fc5feaaa562bb2ae3 95316 true linked
+24befd3622caeec418f268fbf7db4bebcea4baf09a6a8295c4359d20ae3c0b7d 115337 detected lowered
+f84bcd939b7cb8112ded400ff5839e3e8c75c6da94049370b6c08b3d4d66418d 164441 true lowered

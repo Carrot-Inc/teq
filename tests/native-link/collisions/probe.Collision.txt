@@ -1,0 +1,103 @@
+var @"M10probe.BaseG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 267, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 10, int 2, arrayvalue char {char 112, char 114, char 111, char 98, char 101, char 46, char 66, char 97, char 115, char 101}}, int 0, int 10, int -530498961}}, int 8, int 269, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, null, null}}
+def @"M10probe.BaseRE" : (@"T10probe.Base") => unit {
+%2(%1 <this> : @"T10probe.Base"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T10probe.Base")
+  ret unit
+}
+inlinehint def @"M15probe.CollisionD4mainLAL16java.lang.String_uEo" : (array[@"T16java.lang.String"]) => unit {
+%2(%1 : array[@"T16java.lang.String"]):
+  %3 = call[() => @"T16probe.Collision$"] @"M16probe.Collision$G4load" : ptr()
+  %5 = call[(@"T16probe.Collision$", array[@"T16java.lang.String"]) => unit] @"M16probe.Collision$D4mainLAL16java.lang.String_uEO" : ptr(%3 : !?@"T16probe.Collision$", %1 : array[@"T16java.lang.String"])
+  ret unit
+}
+var @"M15probe.CollisionG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 270, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 15, int 2, arrayvalue char {char 112, char 114, char 111, char 98, char 101, char 46, char 67, char 111, char 108, char 108, char 105, char 115, char 105, char 111, char 110}}, int 0, int 15, int -856316332}}, int 8, int 270, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M16probe.Collision$D4mainLAL16java.lang.String_uEO" : (@"T16probe.Collision$", array[@"T16java.lang.String"]) => unit {
+%3(%2 <this> : @"T16probe.Collision$", %1 <args> : array[@"T16java.lang.String"]):
+  %28 = ine[array[@"T16java.lang.String"]] %1 <args> : array[@"T16java.lang.String"], null
+  if %28 : bool then %26 else %27
+%26:
+  %29 = elem[{ptr, int, int}] %1 <args> : array[@"T16java.lang.String"], int 0, int 1
+  %8 = atomic load[int] %29 : ptr unordered
+  %9 = ieq[int] %8 : int, int 0
+  if %9 : bool then %4 else %5
+%4:
+  %10 = call[(ptr, size) => @"T9probe.One"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M9probe.OneG4type" : ptr, size 8)
+  %30 = call[(@"T9probe.One") => unit] @"M9probe.OneRE" : ptr(%10 : !?@"T9probe.One")
+  jump %6(%10 : !?@"T9probe.One")
+%5:
+  %12 = call[(ptr, size) => @"T9probe.Two"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M9probe.TwoG4type" : ptr, size 8)
+  %31 = call[(@"T9probe.Two") => unit] @"M9probe.TwoRE" : ptr(%12 : !?@"T9probe.Two")
+  jump %6(%12 : !?@"T9probe.Two")
+%6(%7 <b> : @"T10probe.Base"):
+  %14 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %33 = ine[@"T10probe.Base"] %7 <b> : @"T10probe.Base", null
+  if %33 : bool then %32 else %27
+%32:
+  %34 = load[ptr] %7 <b> : @"T10probe.Base" 
+  %35 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]}] %34 : ptr, int 0, int 7, int 3
+  %15 = load[ptr] %35 : ptr 
+  %16 = call[(@"T10probe.Base") => int] %15 : ptr(%7 <b> : @"T10probe.Base")
+  %17 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %16 : int)
+  %18 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %36 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %18 : ptr(%14 : !?@"T13scala.Predef$", %17 : !?@"T17java.lang.Integer")
+  %20 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %37 = load[ptr] %7 <b> : @"T10probe.Base" 
+  %38 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]}] %37 : ptr, int 0, int 7, int 4
+  %21 = load[ptr] %38 : ptr 
+  %22 = call[(@"T10probe.Base") => int] %21 : ptr(%7 <b> : @"T10probe.Base")
+  %23 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %22 : int)
+  %24 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %39 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %24 : ptr(%20 : !?@"T13scala.Predef$", %23 : !?@"T17java.lang.Integer")
+  ret unit
+%27:
+  %40 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+noinline def @"M16probe.Collision$G4load" : () => @"T16probe.Collision$" {
+%1:
+  %4 = elem[ptr] @"M2__C9__modules" : ptr, int 82
+  %5 = load[@"T16probe.Collision$"] %4 : ptr 
+  %6 = ine[@"T16java.lang.Object"] %5 : @"T16probe.Collision$", null
+  if %6 : bool then %2 else %3
+%2:
+  ret %5 : @"T16probe.Collision$"
+%3:
+  %7 = call[(ptr, size) => @"T16probe.Collision$"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M16probe.Collision$G4type" : ptr, size 8)
+  %10 = store[@"T16probe.Collision$"] %4 : ptr, %7 : @"T16probe.Collision$" 
+  %11 = call[(@"T16probe.Collision$") => unit] @"M16probe.Collision$RE" : ptr(%7 : @"T16probe.Collision$")
+  ret %7 : @"T16probe.Collision$"
+}
+var @"M16probe.Collision$G4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 271, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 16, int 2, arrayvalue char {char 112, char 114, char 111, char 98, char 101, char 46, char 67, char 111, char 108, char 108, char 105, char 115, char 105, char 111, char 110, char 36}}, int 0, int 16, int -776002480}}, int 8, int 271, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M16probe.Collision$RE" : (@"T16probe.Collision$") => unit {
+%2(%1 <this> : @"T16probe.Collision$"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T16probe.Collision$")
+  ret unit
+}
+def @"M9probe.OneD2AaiEO" : (@"T9probe.One") => int {
+%2(%1 <this> : @"T9probe.One"):
+  ret int 1
+}
+def @"M9probe.OneD2BBiEO" : (@"T9probe.One") => int {
+%2(%1 <this> : @"T9probe.One"):
+  ret int 2
+}
+var @"M9probe.OneG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 268, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 9, int 2, arrayvalue char {char 112, char 114, char 111, char 98, char 101, char 46, char 79, char 110, char 101}}, int 0, int 9, int -1125478648}}, int 8, int 268, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M10probe.BaseG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, @"M9probe.OneD2BBiEO" : ptr, @"M9probe.OneD2AaiEO" : ptr}}
+def @"M9probe.OneRE" : (@"T9probe.One") => unit {
+%2(%1 <this> : @"T9probe.One"):
+  %4 = call[(@"T10probe.Base") => unit] @"M10probe.BaseRE" : ptr(%1 <this> : @"T9probe.One")
+  ret unit
+}
+def @"M9probe.TwoD2AaiEO" : (@"T9probe.Two") => int {
+%2(%1 <this> : @"T9probe.Two"):
+  ret int 3
+}
+def @"M9probe.TwoD2BBiEO" : (@"T9probe.Two") => int {
+%2(%1 <this> : @"T9probe.Two"):
+  ret int 4
+}
+var @"M9probe.TwoG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 269, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 9, int 2, arrayvalue char {char 112, char 114, char 111, char 98, char 101, char 46, char 84, char 119, char 111}}, int 0, int 9, int -1125473554}}, int 8, int 269, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M10probe.BaseG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, @"M9probe.TwoD2BBiEO" : ptr, @"M9probe.TwoD2AaiEO" : ptr}}
+def @"M9probe.TwoRE" : (@"T9probe.Two") => unit {
+%2(%1 <this> : @"T9probe.Two"):
+  %4 = call[(@"T10probe.Base") => unit] @"M10probe.BaseRE" : ptr(%1 <this> : @"T9probe.Two")
+  ret unit
+}

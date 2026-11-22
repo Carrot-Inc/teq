@@ -1,0 +1,293 @@
+def @"M10fix.CircleD12productArityiEO" : (@"T10fix.Circle") => int {
+%2(%1 <this> : @"T10fix.Circle"):
+  ret int 1
+}
+def @"M10fix.CircleD13productPrefixL16java.lang.StringEO" : (@"T10fix.Circle") => @"T16java.lang.String" {
+%2(%1 <this> : @"T10fix.Circle"):
+  ret const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 6, int 2, arrayvalue char {char 67, char 105, char 114, char 99, char 108, char 101}}, int 0, int 6, int 2018617584}
+}
+def @"M10fix.CircleD14productElementiL16java.lang.ObjectEO" : (@"T10fix.Circle", int) => @"T16java.lang.Object" {
+%3(%2 <this> : @"T10fix.Circle", %1 <n> : int):
+  jump %4
+%4:
+  1: %11 = ieq[int] int 0, %1 <n> : int
+  if %11 : bool then %7 else %8
+%7:
+  1: %24 = ine[@"T10fix.Circle"] %2 <this> : @"T10fix.Circle", null
+  if %24 : bool then %22 else %23
+%22:
+  1: %12 = copy @"M10fix.CircleD2_1dEO" : ptr
+  1: %13 = call[(@"T10fix.Circle") => double] %12 : ptr(%2 <this> : @"T10fix.Circle")
+  jump %5(%13 : double)
+%8:
+  jump %9
+%9:
+  1: %15 = call[(ptr, size) => @"T35java.lang.IndexOutOfBoundsException"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M35java.lang.IndexOutOfBoundsExceptionG4type" : ptr, size 64)
+  1: %16 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %1 <n> : int)
+  1: %17 = copy @"M17java.lang.IntegerD8toStringL16java.lang.StringEO" : ptr
+  1: %18 = call[(@"T16java.lang.Object") => @"T16java.lang.String"] %17 : ptr(%16 : !?@"T17java.lang.Integer")
+  1: %25 = call[(@"T35java.lang.IndexOutOfBoundsException", @"T16java.lang.String") => unit] @"M35java.lang.IndexOutOfBoundsExceptionRL16java.lang.StringE" : ptr(%15 : !?@"T35java.lang.IndexOutOfBoundsException", %18 : @"T16java.lang.String")
+  1: %26 = call[(ptr) => nothing] @"M2__C17scalanative_throw" : ptr(%15 : !?@"T35java.lang.IndexOutOfBoundsException")
+  unreachable
+%5(%6 : double):
+  %21 = call[(@"T27scala.runtime.BoxesRunTime$", double) => @"T16java.lang.Double"] @"M27scala.runtime.BoxesRunTime$D11boxToDoubledL16java.lang.DoubleEO" : ptr(null, %6 : double)
+  ret %21 : !?@"T16java.lang.Double"
+%23:
+  %27 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M10fix.CircleD15productIteratorL25scala.collection.IteratorEO" : (@"T10fix.Circle") => @"T25scala.collection.Iterator" {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = call[(@"T13scala.Product") => @"T25scala.collection.Iterator"] @"M13scala.ProductD15productIteratorL25scala.collection.IteratorEO" : ptr(%1 <this> : @"T10fix.Circle")
+  ret %3 : @"T25scala.collection.Iterator"
+}
+alwaysinline def @"M10fix.CircleD1rdEO" : (@"T10fix.Circle") => double {
+%2(%1 <this> : @"T10fix.Circle"):
+  %6 = ine[@"T10fix.Circle"] %1 <this> : @"T10fix.Circle", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, @"T16java.lang.String", double}] %1 <this> : @"T10fix.Circle", int 0, int 2
+  %3 = atomic load[double] %7 : ptr unordered
+  ret %3 : double
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M10fix.CircleD2_1dEO" : (@"T10fix.Circle") => double {
+%2(%1 <this> : @"T10fix.Circle"):
+  %7 = ine[@"T10fix.Circle"] %1 <this> : @"T10fix.Circle", null
+  if %7 : bool then %5 else %6
+%5:
+  %3 = copy @"M10fix.CircleD1rdEO" : ptr
+  %4 = call[(@"T10fix.Circle") => double] %3 : ptr(%1 <this> : @"T10fix.Circle")
+  ret %4 : double
+%6:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M10fix.CircleD4areadEO" : (@"T10fix.Circle") => double {
+%2(%1 <this> : @"T10fix.Circle"):
+  %11 = ine[@"T10fix.Circle"] %1 <this> : @"T10fix.Circle", null
+  if %11 : bool then %9 else %10
+%9:
+  %3 = copy @"M10fix.CircleD1rdEO" : ptr
+  %4 = call[(@"T10fix.Circle") => double] %3 : ptr(%1 <this> : @"T10fix.Circle")
+  %5 = fmul[double] double 3.141592653589793, %4 : double
+  %6 = copy @"M10fix.CircleD1rdEO" : ptr
+  %7 = call[(@"T10fix.Circle") => double] %6 : ptr(%1 <this> : @"T10fix.Circle")
+  %8 = fmul[double] %5 : double, %7 : double
+  ret %8 : double
+%10:
+  %12 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M10fix.CircleD6equalsL16java.lang.ObjectzEO" : (@"T10fix.Circle", @"T16java.lang.Object") => bool {
+%3(%2 <this> : @"T10fix.Circle", %1 <x$0> : @"T16java.lang.Object"):
+  %8 = ieq[@"T16java.lang.Object"] %2 <this> : @"T10fix.Circle", %1 <x$0> : @"T16java.lang.Object"
+  if %8 : bool then %4 else %5
+%4:
+  jump %6(true)
+%5:
+  jump %9
+%9:
+  1: %26 = ieq[ptr] %1 <x$0> : @"T16java.lang.Object", null
+  if %26 : bool then %23 else %24
+%23:
+  jump %25(false)
+%24:
+  1: %27 = load[ptr] %1 <x$0> : @"T16java.lang.Object" 
+  1: %28 = ieq[ptr] %27 : ptr, @"M10fix.CircleG4type" : ptr
+  jump %25(%28 : bool)
+%25(%16 : bool):
+  if %16 : bool then %12 else %13
+%12:
+  2: %32 = ieq[@"T16java.lang.Object"] %1 <x$0> : @"T16java.lang.Object", null
+  if %32 : bool then %30 else %29
+%29:
+  2: %33 = load[ptr] %1 <x$0> : @"T16java.lang.Object" 
+  2: %34 = ieq[ptr] %33 : ptr, @"M10fix.CircleG4type" : ptr
+  if %34 : bool then %30 else %31(%1 <x$0> : @"T16java.lang.Object", @"M10fix.CircleG4type" : ptr)
+%30:
+  2: %17 <x$0> = copy %1 <x$0> : @"T16java.lang.Object"
+  2: %37 = ine[@"T10fix.Circle"] %2 <this> : @"T10fix.Circle", null
+  if %37 : bool then %35 else %36
+%35:
+  2: %18 = copy @"M10fix.CircleD1rdEO" : ptr
+  2: %19 = call[(@"T10fix.Circle") => double] %18 : ptr(%2 <this> : @"T10fix.Circle")
+  2: %39 = ine[@"T10fix.Circle"] %17 <x$0> : @"T10fix.Circle", null
+  if %39 : bool then %38 else %36
+%38:
+  2: %20 = copy @"M10fix.CircleD1rdEO" : ptr
+  2: %21 = call[(@"T10fix.Circle") => double] %20 : ptr(%17 <x$0> : @"T10fix.Circle")
+  2: %22 = feq[double] %19 : double, %21 : double
+  jump %10(%22 : bool)
+%13:
+  jump %14
+%14:
+  jump %10(false)
+%10(%11 : bool):
+  jump %6(%11 : bool)
+%6(%7 : bool):
+  ret %7 : bool
+%36:
+  2: %40 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+%31(%41 : ptr, %42 : ptr):
+  2: %43 = load[ptr] %41 : ptr 
+  2: %44 = call[(@"T34scala.scalanative.runtime.package$", ptr, ptr) => nothing] @"M34scala.scalanative.runtime.package$D14throwClassCastR_R_nEO" : ptr(null, %43 : ptr, %42 : ptr)
+  unreachable
+}
+def @"M10fix.CircleD8hashCodeiEO" : (@"T10fix.Circle") => int {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 <acc> = stackalloc[int] int 1
+  %4 <acc> = copy int -889275714
+  %17 = store[int] %3 <acc> : ptr, %4 <acc> : int 
+  %6 = load[int] %3 <acc> : ptr 
+  %7 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%6 : int, int 2018617584)
+  %18 = store[int] %3 <acc> : ptr, %7 : int 
+  %9 = load[int] %3 <acc> : ptr 
+  %21 = ine[@"T10fix.Circle"] %1 <this> : @"T10fix.Circle", null
+  if %21 : bool then %19 else %20
+%19:
+  %10 = copy @"M10fix.CircleD1rdEO" : ptr
+  %11 = call[(@"T10fix.Circle") => double] %10 : ptr(%1 <this> : @"T10fix.Circle")
+  %12 = call[(double) => int] @"M21scala.runtime.StaticsD10doubleHashdiEo" : ptr(%11 : double)
+  %13 = call[(int, int) => int] @"M21scala.runtime.StaticsD3mixiiiEo" : ptr(%9 : int, %12 : int)
+  %22 = store[int] %3 <acc> : ptr, %13 : int 
+  %15 = load[int] %3 <acc> : ptr 
+  %16 = call[(int, int) => int] @"M21scala.runtime.StaticsD12finalizeHashiiiEo" : ptr(%15 : int, int 1)
+  ret %16 : int
+%20:
+  %23 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M10fix.CircleD8toStringL16java.lang.StringEO" : (@"T10fix.Circle") => @"T16java.lang.String" {
+%2(%1 <this> : @"T10fix.Circle"):
+  %3 = call[() => @"T27scala.runtime.ScalaRunTime$"] @"M27scala.runtime.ScalaRunTime$G4load" : ptr()
+  %4 = copy @"M27scala.runtime.ScalaRunTime$D9_toStringL13scala.ProductL16java.lang.StringEO" : ptr
+  %5 = call[(@"T27scala.runtime.ScalaRunTime$", @"T13scala.Product") => @"T16java.lang.String"] %4 : ptr(%3 : !?@"T27scala.runtime.ScalaRunTime$", %1 <this> : @"T10fix.Circle")
+  ret %5 : @"T16java.lang.String"
+}
+var @"M10fix.CircleG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 29, int 4, const arrayvalue ptr {@"M9fix.ShapeG4type" : ptr, @"M20java.io.SerializableG4type" : ptr, @"M12scala.EqualsG4type" : ptr, @"M13scala.ProductG4type" : ptr}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 10, int 2, arrayvalue char {char 102, char 105, char 120, char 46, char 67, char 105, char 114, char 99, char 108, char 101}}, int 0, int 10, int -795741975}}, int 24, int 29, const arrayvalue int {int 8, int -1}, int 3, const arrayvalue {int, ptr} {structvalue {int -2147483648, const arrayvalue ptr {@"M9fix.NamedD4nameL16java.lang.StringEO" : ptr, @"M10fix.CircleD4areadEO" : ptr}}, structvalue {int -2147483615, null}, structvalue {int -2147483486, const arrayvalue ptr {@"M10fix.CircleD12productArityiEO" : ptr, @"M10fix.CircleD14productElementiL16java.lang.ObjectEO" : ptr, @"M10fix.CircleD13productPrefixL16java.lang.StringEO" : ptr, @"M10fix.CircleD15productIteratorL25scala.collection.IteratorEO" : ptr}}, structvalue {int -2147483549, null}}, @"M9fix.NamedG4type" : ptr, arrayvalue ptr {@"M10fix.CircleD6equalsL16java.lang.ObjectzEO" : ptr, @"M10fix.CircleD8toStringL16java.lang.StringEO" : ptr, @"M10fix.CircleD8hashCodeiEO" : ptr}}
+def @"M10fix.CircleRdE" : (@"T10fix.Circle", double) => unit {
+%3(%2 <this> : @"T10fix.Circle", %1 <r> : double):
+  %9 = ine[@"T10fix.Circle"] %2 <this> : @"T10fix.Circle", null
+  if %9 : bool then %7 else %8
+%7:
+  %10 = elem[{{ptr}, @"T16java.lang.String", double}] %2 <this> : @"T10fix.Circle", int 0, int 2
+  %6 = atomic store[double] %10 : ptr, %1 <r> : double unordered
+  %11 = call[(@"T9fix.Named", @"T16java.lang.String") => unit] @"M9fix.NamedRL16java.lang.StringE" : ptr(%2 <this> : @"T10fix.Circle", const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 6, int 2, arrayvalue char {char 99, char 105, char 114, char 99, char 108, char 101}}, int 0, int 6, int -1360216880})
+  ret unit
+%8:
+  %12 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M12fix.CountersD4seenjEO" : (@"T12fix.Counters") => long {
+%2(%1 <this> : @"T12fix.Counters"):
+  %6 = ine[@"T12fix.Counters"] %1 <this> : @"T12fix.Counters", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, {long, [byte x 48]}, {int, [byte x 60]}}] %1 <this> : @"T12fix.Counters", int 0, int 1
+  %3 = atomic load[long] %7 : ptr onSeqcst
+  ret %3 : long
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M12fix.CountersD8seen_$eqjuEO" : (@"T12fix.Counters", long) => unit {
+%3(%2 <this> : @"T12fix.Counters", %1 <x$1> : long):
+  %8 = ine[@"T12fix.Counters"] %2 <this> : @"T12fix.Counters", null
+  if %8 : bool then %6 else %7
+%6:
+  %9 = elem[{{ptr}, {long, [byte x 48]}, {int, [byte x 60]}}] %2 <this> : @"T12fix.Counters", int 0, int 1
+  %5 = atomic store[long] %9 : ptr, %1 <x$1> : long onSeqcst
+  ret unit
+%7:
+  %10 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+var @"M12fix.CountersG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 27, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 12, int 2, arrayvalue char {char 102, char 105, char 120, char 46, char 67, char 111, char 117, char 110, char 116, char 101, char 114, char 115}}, int 0, int 12, int 922483664}}, int 128, int 27, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M12fix.CountersRE" : (@"T12fix.Counters") => unit {
+%2(%1 <this> : @"T12fix.Counters"):
+  %6 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T12fix.Counters")
+  %10 = ine[@"T12fix.Counters"] %1 <this> : @"T12fix.Counters", null
+  if %10 : bool then %8 else %9
+%8:
+  %11 = elem[{{ptr}, {long, [byte x 48]}, {int, [byte x 60]}}] %1 <this> : @"T12fix.Counters", int 0, int 1
+  %7 = atomic store[long] %11 : ptr, long 0 onSeqcst
+  %13 = elem[{{ptr}, {long, [byte x 48]}, {int, [byte x 60]}}] %1 <this> : @"T12fix.Counters", int 0, int 2
+  %12 = atomic store[int] %13 : ptr, int 0 unordered
+  ret unit
+%9:
+  %14 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M9fix.NamedD4nameL16java.lang.StringEO" : (@"T9fix.Named") => @"T16java.lang.String" {
+%2(%1 <this> : @"T9fix.Named"):
+  %7 = ine[@"T9fix.Named"] %1 <this> : @"T9fix.Named", null
+  if %7 : bool then %5 else %6
+%5:
+  %3 = copy @"M9fix.NamedD5labelL16java.lang.StringEO" : ptr
+  %4 = call[(@"T9fix.Named") => @"T16java.lang.String"] %3 : ptr(%1 <this> : @"T9fix.Named")
+  ret %4 : @"T16java.lang.String"
+%6:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M9fix.NamedD5labelL16java.lang.StringEO" : (@"T9fix.Named") => @"T16java.lang.String" {
+%2(%1 <this> : @"T9fix.Named"):
+  %6 = ine[@"T9fix.Named"] %1 <this> : @"T9fix.Named", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, @"T16java.lang.String"}] %1 <this> : @"T9fix.Named", int 0, int 1
+  %3 = atomic load[@"T16java.lang.String"] %7 : ptr unordered
+  ret %3 : @"T16java.lang.String"
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+var @"M9fix.NamedG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 28, int 1, const arrayvalue ptr {@"M9fix.ShapeG4type" : ptr}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 9, int 2, arrayvalue char {char 102, char 105, char 120, char 46, char 78, char 97, char 109, char 101, char 100}}, int 0, int 9, int -847037440}}, int 16, int 30, const arrayvalue int {int 8, int -1}, int 0, const arrayvalue {int, ptr} {structvalue {int -2147483648, const arrayvalue ptr {@"M9fix.NamedD4nameL16java.lang.StringEO" : ptr, null}}}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M9fix.NamedRL16java.lang.StringE" : (@"T9fix.Named", @"T16java.lang.String") => unit {
+%3(%2 <this> : @"T9fix.Named", %1 <label> : @"T16java.lang.String"):
+  %9 = ine[@"T9fix.Named"] %2 <this> : @"T9fix.Named", null
+  if %9 : bool then %7 else %8
+%7:
+  %10 = elem[{{ptr}, @"T16java.lang.String"}] %2 <this> : @"T9fix.Named", int 0, int 1
+  %6 = atomic store[@"T16java.lang.String"] %10 : ptr, %1 <label> : @"T16java.lang.String" unordered
+  %11 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%2 <this> : @"T9fix.Named")
+  ret unit
+%8:
+  %12 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M21fix.Shapes$$$Lambda$1D13apply$mcII$spiiEO" : (@"T21fix.Shapes$$$Lambda$1", int) => int {
+%3(%1 : @"T21fix.Shapes$$$Lambda$1", %2 : int):
+  %8 = ine[@"T21fix.Shapes$$$Lambda$1"] %1 : @"T21fix.Shapes$$$Lambda$1", null
+  if %8 : bool then %6 else %7
+%6:
+  %9 = elem[{{ptr}, int}] %1 : @"T21fix.Shapes$$$Lambda$1", int 0, int 1
+  %4 = atomic load[int] %9 : ptr unordered
+  %5 = call[(int, int) => int] @"M11fix.Shapes$D10$anonfun$1iiiEpT11fix.Shapes$" : ptr(%4 : int, %2 : int)
+  ret %5 : int
+%7:
+  %10 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+var @"M21fix.Shapes$$$Lambda$1G4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 34, int 3, const arrayvalue ptr {@"M20java.io.SerializableG4type" : ptr, @"M15scala.Function1G4type" : ptr, @"M38scala.runtime.java8.JFunction1$mcII$spG4type" : ptr}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 21, int 2, arrayvalue char {char 102, char 105, char 120, char 46, char 83, char 104, char 97, char 112, char 101, char 115, char 36, char 36, char 36, char 76, char 97, char 109, char 98, char 100, char 97, char 36, char 49}}, int 0, int 21, int -1137889171}}, int 16, int 34, const arrayvalue int {int -1}, int 7, const arrayvalue {int, ptr} {structvalue {int -2147482432, const arrayvalue ptr {@"M21fix.Shapes$$$Lambda$1D13apply$mcII$spiiEO" : ptr}}, structvalue {int -2147483615, null}, structvalue {int 0, null}, structvalue {int 0, null}, structvalue {int -2147483580, const arrayvalue ptr {@"M21fix.Shapes$$$Lambda$1D13apply$mcII$spiiEO" : ptr, @"M38scala.runtime.java8.JFunction1$mcII$spD5applyL16java.lang.ObjectL16java.lang.ObjectEO" : ptr}}, structvalue {int 0, null}, structvalue {int 0, null}, structvalue {int 0, null}}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M21fix.Shapes$$$Lambda$1RiE" : (@"T21fix.Shapes$$$Lambda$1", int) => unit {
+%3(%1 : @"T21fix.Shapes$$$Lambda$1", %2 : int):
+  %6 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 : @"T21fix.Shapes$$$Lambda$1")
+  %10 = ine[@"T21fix.Shapes$$$Lambda$1"] %1 : @"T21fix.Shapes$$$Lambda$1", null
+  if %10 : bool then %8 else %9
+%8:
+  %11 = elem[{{ptr}, int}] %1 : @"T21fix.Shapes$$$Lambda$1", int 0, int 1
+  %7 = atomic store[int] %11 : ptr, %2 : int unordered
+  ret unit
+%9:
+  %12 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+extern decl @"M9fix.libm$C4cbrt" : (double) => double
+extern decl @"M9fix.libm$C6printf" : (ptr, ...) => int
+var @"M9fix.libm$G4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 38, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 9, int 2, arrayvalue char {char 102, char 105, char 120, char 46, char 108, char 105, char 98, char 109, char 36}}, int 0, int 9, int -819103869}}, int 8, int 38, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+var @"M9fix.libm$G8instance" : {ptr} = structvalue {@"M9fix.libm$G4type" : ptr}

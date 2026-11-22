@@ -1,0 +1,154 @@
+var @"M24collide.overrides11.BaseG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 23, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 24, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 111, char 118, char 101, char 114, char 114, char 105, char 100, char 101, char 115, char 49, char 49, char 46, char 66, char 97, char 115, char 101}}, int 0, int 24, int 744714664}}, int 8, int 25, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, null, null}}
+def @"M24collide.overrides11.BaseRE" : (@"T24collide.overrides11.Base") => unit {
+%2(%1 <this> : @"T24collide.overrides11.Base"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T24collide.overrides11.Base")
+  ret unit
+}
+def @"M25collide.overrides11.FirstD3runL24collide.overrides11.BaseiEO" : (@"T25collide.overrides11.First", @"T24collide.overrides11.Base") => int {
+%3(%2 <this> : @"T25collide.overrides11.First", %1 <b> : @"T24collide.overrides11.Base"):
+  %8 = ine[@"T24collide.overrides11.Base"] %1 <b> : @"T24collide.overrides11.Base", null
+  if %8 : bool then %6 else %7
+%6:
+  %9 = load[ptr] %1 <b> : @"T24collide.overrides11.Base" 
+  %10 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]}] %9 : ptr, int 0, int 7, int 3
+  %4 = load[ptr] %10 : ptr 
+  %5 = call[(@"T24collide.overrides11.Base") => int] %4 : ptr(%1 <b> : @"T24collide.overrides11.Base")
+  ret %5 : int
+%7:
+  %11 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+var @"M25collide.overrides11.FirstG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 4]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 29, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 25, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 111, char 118, char 101, char 114, char 114, char 105, char 100, char 101, char 115, char 49, char 49, char 46, char 70, char 105, char 114, char 115, char 116}}, int 0, int 25, int 1615250105}}, int 8, int 29, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M24collide.overrides11.StepG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, @"M25collide.overrides11.FirstD3runL24collide.overrides11.BaseiEO" : ptr}}
+def @"M25collide.overrides11.FirstRE" : (@"T25collide.overrides11.First") => unit {
+%2(%1 <this> : @"T25collide.overrides11.First"):
+  %4 = call[(@"T24collide.overrides11.Step") => unit] @"M24collide.overrides11.StepRE" : ptr(%1 <this> : @"T25collide.overrides11.First")
+  ret unit
+}
+inlinehint def @"M24collide.overrides11.MainD4mainLAL16java.lang.String_uEo" : (array[@"T16java.lang.String"]) => unit {
+%2(%1 : array[@"T16java.lang.String"]):
+  %3 = call[() => @"T25collide.overrides11.Main$"] @"M25collide.overrides11.Main$G4load" : ptr()
+  %5 = call[(@"T25collide.overrides11.Main$", array[@"T16java.lang.String"]) => unit] @"M25collide.overrides11.Main$D4mainLAL16java.lang.String_uEO" : ptr(%3 : !?@"T25collide.overrides11.Main$", %1 : array[@"T16java.lang.String"])
+  ret unit
+}
+var @"M24collide.overrides11.MainG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 26, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 24, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 111, char 118, char 101, char 114, char 114, char 105, char 100, char 101, char 115, char 49, char 49, char 46, char 77, char 97, char 105, char 110}}, int 0, int 24, int 745042064}}, int 8, int 26, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M25collide.overrides11.Main$D4mainLAL16java.lang.String_uEO" : (@"T25collide.overrides11.Main$", array[@"T16java.lang.String"]) => unit {
+%3(%2 <this> : @"T25collide.overrides11.Main$", %1 <args> : array[@"T16java.lang.String"]):
+  %32 = ine[array[@"T16java.lang.String"]] %1 <args> : array[@"T16java.lang.String"], null
+  if %32 : bool then %30 else %31
+%30:
+  %33 = elem[{ptr, int, int}] %1 <args> : array[@"T16java.lang.String"], int 0, int 1
+  %8 = atomic load[int] %33 : ptr unordered
+  %9 = ieq[int] %8 : int, int 0
+  if %9 : bool then %4 else %5
+%4:
+  %10 = call[(ptr, size) => @"T25collide.overrides11.First"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M25collide.overrides11.FirstG4type" : ptr, size 8)
+  %34 = call[(@"T25collide.overrides11.First") => unit] @"M25collide.overrides11.FirstRE" : ptr(%10 : !?@"T25collide.overrides11.First")
+  jump %6(%10 : !?@"T25collide.overrides11.First")
+%5:
+  %12 = call[(ptr, size) => @"T26collide.overrides11.Second"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M26collide.overrides11.SecondG4type" : ptr, size 8)
+  %35 = call[(@"T26collide.overrides11.Second") => unit] @"M26collide.overrides11.SecondRE" : ptr(%12 : !?@"T26collide.overrides11.Second")
+  jump %6(%12 : !?@"T26collide.overrides11.Second")
+%6(%7 <s> : @"T24collide.overrides11.Step"):
+  %36 = elem[{ptr, int, int}] %1 <args> : array[@"T16java.lang.String"], int 0, int 1
+  %18 = atomic load[int] %36 : ptr unordered
+  %19 = ieq[int] %18 : int, int 1
+  if %19 : bool then %14 else %15
+%14:
+  %20 = call[(ptr, size) => @"T23collide.overrides11.One"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M23collide.overrides11.OneG4type" : ptr, size 8)
+  %37 = call[(@"T23collide.overrides11.One") => unit] @"M23collide.overrides11.OneRE" : ptr(%20 : !?@"T23collide.overrides11.One")
+  jump %16(%20 : !?@"T23collide.overrides11.One")
+%15:
+  %22 = call[(ptr, size) => @"T23collide.overrides11.Two"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M23collide.overrides11.TwoG4type" : ptr, size 8)
+  %38 = call[(@"T23collide.overrides11.Two") => unit] @"M23collide.overrides11.TwoRE" : ptr(%22 : !?@"T23collide.overrides11.Two")
+  jump %16(%22 : !?@"T23collide.overrides11.Two")
+%16(%17 <b> : @"T24collide.overrides11.Base"):
+  %24 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %40 = ine[@"T24collide.overrides11.Step"] %7 <s> : @"T24collide.overrides11.Step", null
+  if %40 : bool then %39 else %31
+%39:
+  %41 = load[ptr] %7 <s> : @"T24collide.overrides11.Step" 
+  %42 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 4]}] %41 : ptr, int 0, int 7, int 3
+  %25 = load[ptr] %42 : ptr 
+  %26 = call[(@"T24collide.overrides11.Step", @"T24collide.overrides11.Base") => int] %25 : ptr(%7 <s> : @"T24collide.overrides11.Step", %17 <b> : @"T24collide.overrides11.Base")
+  %27 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %26 : int)
+  %28 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %43 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %28 : ptr(%24 : !?@"T13scala.Predef$", %27 : !?@"T17java.lang.Integer")
+  ret unit
+%31:
+  %44 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+noinline def @"M25collide.overrides11.Main$G4load" : () => @"T25collide.overrides11.Main$" {
+%1:
+  %4 = elem[ptr] @"M2__C9__modules" : ptr, int 0
+  %5 = load[@"T25collide.overrides11.Main$"] %4 : ptr 
+  %6 = ine[@"T16java.lang.Object"] %5 : @"T25collide.overrides11.Main$", null
+  if %6 : bool then %2 else %3
+%2:
+  ret %5 : @"T25collide.overrides11.Main$"
+%3:
+  %7 = call[(ptr, size) => @"T25collide.overrides11.Main$"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M25collide.overrides11.Main$G4type" : ptr, size 8)
+  %10 = store[@"T25collide.overrides11.Main$"] %4 : ptr, %7 : @"T25collide.overrides11.Main$" 
+  %11 = call[(@"T25collide.overrides11.Main$") => unit] @"M25collide.overrides11.Main$RE" : ptr(%7 : @"T25collide.overrides11.Main$")
+  ret %7 : @"T25collide.overrides11.Main$"
+}
+var @"M25collide.overrides11.Main$G4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 27, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 25, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 111, char 118, char 101, char 114, char 114, char 105, char 100, char 101, char 115, char 49, char 49, char 46, char 77, char 97, char 105, char 110, char 36}}, int 0, int 25, int 1621467540}}, int 8, int 27, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M25collide.overrides11.Main$RE" : (@"T25collide.overrides11.Main$") => unit {
+%2(%1 <this> : @"T25collide.overrides11.Main$"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T25collide.overrides11.Main$")
+  ret unit
+}
+def @"M23collide.overrides11.OneD2fliEO" : (@"T23collide.overrides11.One") => int {
+%2(%1 <this> : @"T23collide.overrides11.One"):
+  ret int 1
+}
+def @"M23collide.overrides11.OneD2gMiEO" : (@"T23collide.overrides11.One") => int {
+%2(%1 <this> : @"T23collide.overrides11.One"):
+  ret int 2
+}
+var @"M23collide.overrides11.OneG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 24, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 23, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 111, char 118, char 101, char 114, char 114, char 105, char 100, char 101, char 115, char 49, char 49, char 46, char 79, char 110, char 101}}, int 0, int 23, int -1499984721}}, int 8, int 24, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M24collide.overrides11.BaseG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, @"M23collide.overrides11.OneD2fliEO" : ptr, @"M23collide.overrides11.OneD2gMiEO" : ptr}}
+def @"M23collide.overrides11.OneRE" : (@"T23collide.overrides11.One") => unit {
+%2(%1 <this> : @"T23collide.overrides11.One"):
+  %4 = call[(@"T24collide.overrides11.Base") => unit] @"M24collide.overrides11.BaseRE" : ptr(%1 <this> : @"T23collide.overrides11.One")
+  ret unit
+}
+def @"M26collide.overrides11.SecondD3runL24collide.overrides11.BaseiEO" : (@"T26collide.overrides11.Second", @"T24collide.overrides11.Base") => int {
+%3(%2 <this> : @"T26collide.overrides11.Second", %1 <b> : @"T24collide.overrides11.Base"):
+  %8 = ine[@"T24collide.overrides11.Base"] %1 <b> : @"T24collide.overrides11.Base", null
+  if %8 : bool then %6 else %7
+%6:
+  %9 = load[ptr] %1 <b> : @"T24collide.overrides11.Base" 
+  %10 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]}] %9 : ptr, int 0, int 7, int 4
+  %4 = load[ptr] %10 : ptr 
+  %5 = call[(@"T24collide.overrides11.Base") => int] %4 : ptr(%1 <b> : @"T24collide.overrides11.Base")
+  ret %5 : int
+%7:
+  %11 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+var @"M26collide.overrides11.SecondG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 4]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 30, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 26, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 111, char 118, char 101, char 114, char 114, char 105, char 100, char 101, char 115, char 49, char 49, char 46, char 83, char 101, char 99, char 111, char 110, char 100}}, int 0, int 26, int -1098820213}}, int 8, int 30, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M24collide.overrides11.StepG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, @"M26collide.overrides11.SecondD3runL24collide.overrides11.BaseiEO" : ptr}}
+def @"M26collide.overrides11.SecondRE" : (@"T26collide.overrides11.Second") => unit {
+%2(%1 <this> : @"T26collide.overrides11.Second"):
+  %4 = call[(@"T24collide.overrides11.Step") => unit] @"M24collide.overrides11.StepRE" : ptr(%1 <this> : @"T26collide.overrides11.Second")
+  ret unit
+}
+var @"M24collide.overrides11.StepG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 4]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 28, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 24, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 111, char 118, char 101, char 114, char 114, char 105, char 100, char 101, char 115, char 49, char 49, char 46, char 83, char 116, char 101, char 112}}, int 0, int 24, int 745238947}}, int 8, int 30, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, null}}
+def @"M24collide.overrides11.StepRE" : (@"T24collide.overrides11.Step") => unit {
+%2(%1 <this> : @"T24collide.overrides11.Step"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T24collide.overrides11.Step")
+  ret unit
+}
+def @"M23collide.overrides11.TwoD2fliEO" : (@"T23collide.overrides11.Two") => int {
+%2(%1 <this> : @"T23collide.overrides11.Two"):
+  ret int 3
+}
+def @"M23collide.overrides11.TwoD2gMiEO" : (@"T23collide.overrides11.Two") => int {
+%2(%1 <this> : @"T23collide.overrides11.Two"):
+  ret int 4
+}
+var @"M23collide.overrides11.TwoG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 5]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 25, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 23, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 111, char 118, char 101, char 114, char 114, char 105, char 100, char 101, char 115, char 49, char 49, char 46, char 84, char 119, char 111}}, int 0, int 23, int -1499979627}}, int 8, int 25, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M24collide.overrides11.BaseG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr, @"M23collide.overrides11.TwoD2fliEO" : ptr, @"M23collide.overrides11.TwoD2gMiEO" : ptr}}
+def @"M23collide.overrides11.TwoRE" : (@"T23collide.overrides11.Two") => unit {
+%2(%1 <this> : @"T23collide.overrides11.Two"):
+  %4 = call[(@"T24collide.overrides11.Base") => unit] @"M24collide.overrides11.BaseRE" : ptr(%1 <this> : @"T23collide.overrides11.Two")
+  ret unit
+}

@@ -1,0 +1,247 @@
+inlinehint def @"M19collide.fields.MainD4mainLAL16java.lang.String_uEo" : (array[@"T16java.lang.String"]) => unit {
+%2(%1 : array[@"T16java.lang.String"]):
+  %3 = call[() => @"T20collide.fields.Main$"] @"M20collide.fields.Main$G4load" : ptr()
+  %5 = call[(@"T20collide.fields.Main$", array[@"T16java.lang.String"]) => unit] @"M20collide.fields.Main$D4mainLAL16java.lang.String_uEO" : ptr(%3 : !?@"T20collide.fields.Main$", %1 : array[@"T16java.lang.String"])
+  ret unit
+}
+var @"M19collide.fields.MainG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 23, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 19, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 102, char 105, char 101, char 108, char 100, char 115, char 46, char 77, char 97, char 105, char 110}}, int 0, int 19, int -827508162}}, int 8, int 23, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M20collide.fields.Main$D4mainLAL16java.lang.String_uEO" : (@"T20collide.fields.Main$", array[@"T16java.lang.String"]) => unit {
+%3(%2 <this> : @"T20collide.fields.Main$", %1 <args> : array[@"T16java.lang.String"]):
+  %33 = ine[array[@"T16java.lang.String"]] %1 <args> : array[@"T16java.lang.String"], null
+  if %33 : bool then %31 else %32
+%31:
+  %34 = elem[{ptr, int, int}] %1 <args> : array[@"T16java.lang.String"], int 0, int 1
+  %8 = atomic load[int] %34 : ptr unordered
+  %9 = ieq[int] %8 : int, int 0
+  if %9 : bool then %4 else %5
+%4:
+  %10 = call[(ptr, size) => @"T21collide.fields.Record"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M21collide.fields.RecordG4type" : ptr, size 32)
+  %35 = call[(@"T21collide.fields.Record", int, int, int, int, int, int) => unit] @"M21collide.fields.RecordRiiiiiiE" : ptr(%10 : !?@"T21collide.fields.Record", int 0, int 1, int 2, int 3, int 4, int 5)
+  jump %6(%10 : !?@"T21collide.fields.Record")
+%5:
+  %12 = call[(ptr, size) => @"T20collide.fields.Wider"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M20collide.fields.WiderG4type" : ptr, size 40)
+  %36 = call[(@"T20collide.fields.Wider", int, int, int, int, int, int) => unit] @"M20collide.fields.WiderRiiiiiiE" : ptr(%12 : !?@"T20collide.fields.Wider", int 40, int 41, int 42, int 43, int 44, int 45)
+  jump %6(%12 : !?@"T20collide.fields.Wider")
+%6(%7 <r> : @"T21collide.fields.Record"):
+  %38 = ine[@"T21collide.fields.Record"] %7 <r> : @"T21collide.fields.Record", null
+  if %38 : bool then %37 else %32
+%37:
+  %14 = copy @"M21collide.fields.RecordD2BBiEO" : ptr
+  %15 = call[(@"T21collide.fields.Record") => int] %14 : ptr(%7 <r> : @"T21collide.fields.Record")
+  %16 = iadd[int] %15 : int, int 0
+  %17 = copy @"M21collide.fields.RecordD6BB_$eqiuEO" : ptr
+  %39 = call[(@"T21collide.fields.Record", int) => unit] %17 : ptr(%7 <r> : @"T21collide.fields.Record", %16 : int)
+  %19 = copy @"M21collide.fields.RecordD4AaAaiEO" : ptr
+  %20 = call[(@"T21collide.fields.Record") => int] %19 : ptr(%7 <r> : @"T21collide.fields.Record")
+  %21 = iadd[int] %20 : int, int 1
+  %22 = copy @"M21collide.fields.RecordD8AaAa_$eqiuEO" : ptr
+  %40 = call[(@"T21collide.fields.Record", int) => unit] %22 : ptr(%7 <r> : @"T21collide.fields.Record", %21 : int)
+  %24 = copy @"M21collide.fields.RecordD4AaBBiEO" : ptr
+  %25 = call[(@"T21collide.fields.Record") => int] %24 : ptr(%7 <r> : @"T21collide.fields.Record")
+  %26 = iadd[int] %25 : int, int 2
+  %27 = copy @"M21collide.fields.RecordD8AaBB_$eqiuEO" : ptr
+  %41 = call[(@"T21collide.fields.Record", int) => unit] %27 : ptr(%7 <r> : @"T21collide.fields.Record", %26 : int)
+  %43 = ine[@"T20collide.fields.Main$"] %2 <this> : @"T20collide.fields.Main$", null
+  if %43 : bool then %42 else %32
+%42:
+  %29 = copy @"M20collide.fields.Main$D5laterL21collide.fields.RecorduEO" : ptr
+  %44 = call[(@"T20collide.fields.Main$", @"T21collide.fields.Record") => unit] %29 : ptr(%2 <this> : @"T20collide.fields.Main$", %7 <r> : @"T21collide.fields.Record")
+  ret unit
+%32:
+  %45 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M20collide.fields.Main$D5laterL21collide.fields.RecorduEO" : (@"T20collide.fields.Main$", @"T21collide.fields.Record") => unit {
+%3(%2 <this> : @"T20collide.fields.Main$", %1 <r> : @"T21collide.fields.Record"):
+  %4 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %24 = ine[@"T21collide.fields.Record"] %1 <r> : @"T21collide.fields.Record", null
+  if %24 : bool then %22 else %23
+%22:
+  %5 = copy @"M21collide.fields.RecordD4BBBBiEO" : ptr
+  %6 = call[(@"T21collide.fields.Record") => int] %5 : ptr(%1 <r> : @"T21collide.fields.Record")
+  %7 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %6 : int)
+  %8 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %25 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %8 : ptr(%4 : !?@"T13scala.Predef$", %7 : !?@"T17java.lang.Integer")
+  %10 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %11 = copy @"M21collide.fields.RecordD4BBAaiEO" : ptr
+  %12 = call[(@"T21collide.fields.Record") => int] %11 : ptr(%1 <r> : @"T21collide.fields.Record")
+  %13 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %12 : int)
+  %14 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %26 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %14 : ptr(%10 : !?@"T13scala.Predef$", %13 : !?@"T17java.lang.Integer")
+  %16 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %17 = copy @"M21collide.fields.RecordD2AaiEO" : ptr
+  %18 = call[(@"T21collide.fields.Record") => int] %17 : ptr(%1 <r> : @"T21collide.fields.Record")
+  %19 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %18 : int)
+  %20 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %27 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %20 : ptr(%16 : !?@"T13scala.Predef$", %19 : !?@"T17java.lang.Integer")
+  ret unit
+%23:
+  %28 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+noinline def @"M20collide.fields.Main$G4load" : () => @"T20collide.fields.Main$" {
+%1:
+  %4 = elem[ptr] @"M2__C9__modules" : ptr, int 0
+  %5 = load[@"T20collide.fields.Main$"] %4 : ptr 
+  %6 = ine[@"T16java.lang.Object"] %5 : @"T20collide.fields.Main$", null
+  if %6 : bool then %2 else %3
+%2:
+  ret %5 : @"T20collide.fields.Main$"
+%3:
+  %7 = call[(ptr, size) => @"T20collide.fields.Main$"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M20collide.fields.Main$G4type" : ptr, size 8)
+  %10 = store[@"T20collide.fields.Main$"] %4 : ptr, %7 : @"T20collide.fields.Main$" 
+  %11 = call[(@"T20collide.fields.Main$") => unit] @"M20collide.fields.Main$RE" : ptr(%7 : @"T20collide.fields.Main$")
+  ret %7 : @"T20collide.fields.Main$"
+}
+var @"M20collide.fields.Main$G4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 24, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 20, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 102, char 105, char 101, char 108, char 100, char 115, char 46, char 77, char 97, char 105, char 110, char 36}}, int 0, int 20, int 117050790}}, int 8, int 24, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M20collide.fields.Main$RE" : (@"T20collide.fields.Main$") => unit {
+%2(%1 <this> : @"T20collide.fields.Main$"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T20collide.fields.Main$")
+  ret unit
+}
+alwaysinline def @"M21collide.fields.RecordD2AaiEO" : (@"T21collide.fields.Record") => int {
+%2(%1 <this> : @"T21collide.fields.Record"):
+  %6 = ine[@"T21collide.fields.Record"] %1 <this> : @"T21collide.fields.Record", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, int, int, int, int, int, int}] %1 <this> : @"T21collide.fields.Record", int 0, int 1
+  %3 = atomic load[int] %7 : ptr unordered
+  ret %3 : int
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M21collide.fields.RecordD2BBiEO" : (@"T21collide.fields.Record") => int {
+%2(%1 <this> : @"T21collide.fields.Record"):
+  %6 = ine[@"T21collide.fields.Record"] %1 <this> : @"T21collide.fields.Record", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, int, int, int, int, int, int}] %1 <this> : @"T21collide.fields.Record", int 0, int 2
+  %3 = atomic load[int] %7 : ptr unordered
+  ret %3 : int
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M21collide.fields.RecordD4AaAaiEO" : (@"T21collide.fields.Record") => int {
+%2(%1 <this> : @"T21collide.fields.Record"):
+  %6 = ine[@"T21collide.fields.Record"] %1 <this> : @"T21collide.fields.Record", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, int, int, int, int, int, int}] %1 <this> : @"T21collide.fields.Record", int 0, int 3
+  %3 = atomic load[int] %7 : ptr unordered
+  ret %3 : int
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M21collide.fields.RecordD4AaBBiEO" : (@"T21collide.fields.Record") => int {
+%2(%1 <this> : @"T21collide.fields.Record"):
+  %6 = ine[@"T21collide.fields.Record"] %1 <this> : @"T21collide.fields.Record", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, int, int, int, int, int, int}] %1 <this> : @"T21collide.fields.Record", int 0, int 4
+  %3 = atomic load[int] %7 : ptr unordered
+  ret %3 : int
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M21collide.fields.RecordD4BBAaiEO" : (@"T21collide.fields.Record") => int {
+%2(%1 <this> : @"T21collide.fields.Record"):
+  %6 = ine[@"T21collide.fields.Record"] %1 <this> : @"T21collide.fields.Record", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, int, int, int, int, int, int}] %1 <this> : @"T21collide.fields.Record", int 0, int 5
+  %3 = atomic load[int] %7 : ptr unordered
+  ret %3 : int
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M21collide.fields.RecordD4BBBBiEO" : (@"T21collide.fields.Record") => int {
+%2(%1 <this> : @"T21collide.fields.Record"):
+  %6 = ine[@"T21collide.fields.Record"] %1 <this> : @"T21collide.fields.Record", null
+  if %6 : bool then %4 else %5
+%4:
+  %7 = elem[{{ptr}, int, int, int, int, int, int}] %1 <this> : @"T21collide.fields.Record", int 0, int 6
+  %3 = atomic load[int] %7 : ptr unordered
+  ret %3 : int
+%5:
+  %8 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M21collide.fields.RecordD6BB_$eqiuEO" : (@"T21collide.fields.Record", int) => unit {
+%3(%2 <this> : @"T21collide.fields.Record", %1 <x$1> : int):
+  %8 = ine[@"T21collide.fields.Record"] %2 <this> : @"T21collide.fields.Record", null
+  if %8 : bool then %6 else %7
+%6:
+  %9 = elem[{{ptr}, int, int, int, int, int, int}] %2 <this> : @"T21collide.fields.Record", int 0, int 2
+  %5 = atomic store[int] %9 : ptr, %1 <x$1> : int unordered
+  ret unit
+%7:
+  %10 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M21collide.fields.RecordD8AaAa_$eqiuEO" : (@"T21collide.fields.Record", int) => unit {
+%3(%2 <this> : @"T21collide.fields.Record", %1 <x$1> : int):
+  %8 = ine[@"T21collide.fields.Record"] %2 <this> : @"T21collide.fields.Record", null
+  if %8 : bool then %6 else %7
+%6:
+  %9 = elem[{{ptr}, int, int, int, int, int, int}] %2 <this> : @"T21collide.fields.Record", int 0, int 3
+  %5 = atomic store[int] %9 : ptr, %1 <x$1> : int unordered
+  ret unit
+%7:
+  %10 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+alwaysinline def @"M21collide.fields.RecordD8AaBB_$eqiuEO" : (@"T21collide.fields.Record", int) => unit {
+%3(%2 <this> : @"T21collide.fields.Record", %1 <x$1> : int):
+  %8 = ine[@"T21collide.fields.Record"] %2 <this> : @"T21collide.fields.Record", null
+  if %8 : bool then %6 else %7
+%6:
+  %9 = elem[{{ptr}, int, int, int, int, int, int}] %2 <this> : @"T21collide.fields.Record", int 0, int 4
+  %5 = atomic store[int] %9 : ptr, %1 <x$1> : int unordered
+  ret unit
+%7:
+  %10 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+var @"M21collide.fields.RecordG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 25, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 21, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 102, char 105, char 101, char 108, char 100, char 115, char 46, char 82, char 101, char 99, char 111, char 114, char 100}}, int 0, int 21, int -519728234}}, int 32, int 26, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M21collide.fields.RecordRiiiiiiE" : (@"T21collide.fields.Record", int, int, int, int, int, int) => unit {
+%8(%7 <this> : @"T21collide.fields.Record", %1 <Aa> : int, %2 <BB> : int, %3 <AaAa> : int, %4 <AaBB> : int, %5 <BBAa> : int, %6 <BBBB> : int):
+  %19 = ine[@"T21collide.fields.Record"] %7 <this> : @"T21collide.fields.Record", null
+  if %19 : bool then %17 else %18
+%17:
+  %20 = elem[{{ptr}, int, int, int, int, int, int}] %7 <this> : @"T21collide.fields.Record", int 0, int 1
+  %16 = atomic store[int] %20 : ptr, %1 <Aa> : int unordered
+  %22 = elem[{{ptr}, int, int, int, int, int, int}] %7 <this> : @"T21collide.fields.Record", int 0, int 2
+  %21 = atomic store[int] %22 : ptr, %2 <BB> : int unordered
+  %24 = elem[{{ptr}, int, int, int, int, int, int}] %7 <this> : @"T21collide.fields.Record", int 0, int 3
+  %23 = atomic store[int] %24 : ptr, %3 <AaAa> : int unordered
+  %26 = elem[{{ptr}, int, int, int, int, int, int}] %7 <this> : @"T21collide.fields.Record", int 0, int 4
+  %25 = atomic store[int] %26 : ptr, %4 <AaBB> : int unordered
+  %28 = elem[{{ptr}, int, int, int, int, int, int}] %7 <this> : @"T21collide.fields.Record", int 0, int 5
+  %27 = atomic store[int] %28 : ptr, %5 <BBAa> : int unordered
+  %30 = elem[{{ptr}, int, int, int, int, int, int}] %7 <this> : @"T21collide.fields.Record", int 0, int 6
+  %29 = atomic store[int] %30 : ptr, %6 <BBBB> : int unordered
+  %31 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%7 <this> : @"T21collide.fields.Record")
+  ret unit
+%18:
+  %32 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+var @"M20collide.fields.WiderG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 26, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 20, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 102, char 105, char 101, char 108, char 100, char 115, char 46, char 87, char 105, char 100, char 101, char 114}}, int 0, int 20, int 126519322}}, int 40, int 26, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M21collide.fields.RecordG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M20collide.fields.WiderRiiiiiiE" : (@"T20collide.fields.Wider", int, int, int, int, int, int) => unit {
+%8(%7 <this> : @"T20collide.fields.Wider", %1 <v0> : int, %2 <v1> : int, %3 <v2> : int, %4 <v3> : int, %5 <v4> : int, %6 <v5> : int):
+  %11 = call[(@"T21collide.fields.Record", int, int, int, int, int, int) => unit] @"M21collide.fields.RecordRiiiiiiE" : ptr(%7 <this> : @"T20collide.fields.Wider", %1 <v0> : int, %2 <v1> : int, %3 <v2> : int, %4 <v3> : int, %5 <v4> : int, %6 <v5> : int)
+  %15 = ine[@"T20collide.fields.Wider"] %7 <this> : @"T20collide.fields.Wider", null
+  if %15 : bool then %13 else %14
+%13:
+  %16 = elem[{{ptr}, int, int, int, int, int, int, int}] %7 <this> : @"T20collide.fields.Wider", int 0, int 7
+  %12 = atomic store[int] %16 : ptr, int 0 unordered
+  ret unit
+%14:
+  %17 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}

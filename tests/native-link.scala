@@ -1,12 +1,14 @@
 //> using file ../tools/script
-// Tests of the native link: the program of tests/nir/fixtures (main class fix.Shapes, written by
-// Scala Native's compiler plugin; tests/nir/README) linked against the jars of Scala Native that
-// tests/nir/digests.txt names. What `teq nir --link` prints has to have the SHA-256 that
-// tests/native-link/digests.txt records of Scala Native's own dump of its link, once as its build
-// decides on threads and once with threads, and of that text the definitions of the classes named
-// below have to be, byte for byte, the ones kept whole in tests/native-link/linked.txt
-// (tests/native-link/README says what wrote the expectations); the program of tests/native-link/diamond
-// is linked at each depth its digests.txt names, within a bound. A link reads every jar: where one
+// Tests of the native link and lowering: the program of tests/nir/fixtures (main class fix.Shapes,
+// written by Scala Native's compiler plugin; tests/nir/README) linked against the jars of Scala
+// Native that tests/nir/digests.txt names. What `teq nir --link` and `teq nir --lower` print has to
+// have the SHA-256 that tests/native-link/digests.txt records of Scala Native's own dumps of its
+// link and its lowering, once as its build decides on threads and once with threads, and of each
+// first text the definitions of the classes named below have to be, byte for byte, the ones kept
+// whole in tests/native-link/linked.txt and lowered.txt (tests/native-link/README says what wrote
+// the expectations). The same of the programs of tests/native-link/collisions, whose names share a
+// hash (its README); the program of tests/native-link/diamond is linked at each depth its
+// digests.txt names, within a bound. A link reads every jar: where one
 // is not in the coursier cache (tests/support/jars.sh names them for the fetch) the suite says so
 // on a skip line and passes nothing. Run from the repository's root:
 // `./teq interp tests/native-link.scala [-- --teq <binary>]`, the compiler `--teq`, else $TEQ,
@@ -163,7 +165,8 @@ def selfTest(): (Int, Int, List[String]) =
   for (path, jar) <- found if jar.isEmpty do println(s"skip ${path.substring(path.lastIndexOf('/') + 1)}: not in the coursier cache")
 
   if found.forall(_._2.nonEmpty) then
-    val classPath = ("tests/nir/fixtures" :: found.map(_._2.get.toString)).mkString(if java.io.File.separatorChar == '\\' then ";" else ":")
+    val sep = if java.io.File.separatorChar == '\\' then ";" else ":"
+    val classPath = ("tests/nir/fixtures" :: found.map(_._2.get.toString)).mkString(sep)
     def sha256(file: Path): String =
       java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)).map(b => f"${b & 0xff}%02x").mkString
     def lineCount(file: Path): Int = Files.readAllBytes(file).count(_ == '\n')
@@ -176,8 +179,9 @@ def selfTest(): (Int, Int, List[String]) =
       val options = if threads == "detected" then Nil else List(s"--threads=$threads")
       val label = s"$what, threads $threads"
       what match
-        case "linked" =>
-          val listing = Sh((List(teq, "nir", "--link", "fix.Shapes", classPath, "--triple=x86_64-unknown-linux-musl") ++ options)*).timeout(300).check(false).run()
+        case "linked" | "lowered" =>
+          val verb = if what == "linked" then "--link" else "--lower"
+          val listing = Sh((List(teq, "nir", verb, "fix.Shapes", classPath, "--triple=x86_64-unknown-linux-musl") ++ options)*).timeout(300).check(false).run()
           if listing.ok && sha256(listing.outFile) == sha then pass += 1
           else
             fail += 1
@@ -188,14 +192,46 @@ def selfTest(): (Int, Int, List[String]) =
             val cut = Files.createTempFile("teq-native-link.", ".txt")
             Script.atExit(Files.deleteIfExists(cut))
             Files.writeString(cut, definitionsOf(listing.outAll(), shown))
-            if listing.ok && java.util.Arrays.equals(Files.readAllBytes(cut), Files.readAllBytes(Paths.get("tests/native-link/linked.txt"))) then pass += 1
+            val kept = s"tests/native-link/$what.txt"
+            if listing.ok && java.util.Arrays.equals(Files.readAllBytes(cut), Files.readAllBytes(Paths.get(kept))) then pass += 1
             else
               fail += 1
-              println(s"FAIL $label: the classes kept whole (tests/native-link/linked.txt)")
-              Sh("diff", cut.toString, "tests/native-link/linked.txt").check(false).run().lines.take(20).foreach(println)
+              println(s"FAIL $label: the classes kept whole ($kept)")
+              Sh("diff", cut.toString, kept).check(false).run().lines.take(20).foreach(println)
         case other =>
           fail += 1
           println(s"FAIL tests/native-link/digests.txt: no check of $other")
+
+    // Programs whose names share a String.hashCode (tests/native-link/collisions/README): each one's link and lowering
+    // byte for byte Scala Native's, a class's virtual methods and a trait's methods in the order of the set of its
+    // called signatures, two of one hash in the order the link met them; of the first lowering, the definitions of
+    // the program's own classes kept whole.
+    val collisions = Paths.get("tests/native-link/collisions")
+    val collisionPath = (collisions.resolve("nir").toString :: found.map(_._2.get.toString)).mkString(sep)
+    for line <- Files.readString(collisions.resolve("digests.txt")).linesIterator if line.nonEmpty && !line.startsWith("#") do
+      val Array(sha, lines, main, threads, what) = line.split(" ")
+      val options = if threads == "detected" then Nil else List(s"--threads=$threads")
+      val label = s"$main $what, threads $threads"
+      val verb = if what == "linked" then "--link" else "--lower"
+      val listing = Sh((List(teq, "nir", verb, main, collisionPath, "--triple=x86_64-unknown-linux-musl") ++ options)*).timeout(300).check(false).run()
+      if listing.ok && sha256(listing.outFile) == sha then pass += 1
+      else
+        fail += 1
+        println(s"FAIL $label: exit code ${listing.status}, ${lineCount(listing.outFile)} lines of sha256 ${sha256(listing.outFile)}, Scala Native's $lines of $sha")
+        listing.err.linesIterator.take(5).foreach(println)
+      if threads == "detected" && what == "lowered" then
+        val pkg = main.substring(0, main.lastIndexOf('.'))
+        val own = Files.list(collisions.resolve("nir").resolve(pkg.replace('.', '/'))).toArray.map(_.toString).toSet
+          .map(f => pkg + "." + Paths.get(f).getFileName.toString.stripSuffix(".nir"))
+        val kept = collisions.resolve(s"$main.txt")
+        val cut = Files.createTempFile("teq-native-link.", ".txt")
+        Script.atExit(Files.deleteIfExists(cut))
+        Files.writeString(cut, definitionsOf(listing.outAll(), own))
+        if listing.ok && java.util.Arrays.equals(Files.readAllBytes(cut), Files.readAllBytes(kept)) then pass += 1
+        else
+          fail += 1
+          println(s"FAIL $label: the program's classes kept whole ($kept)")
+          Sh("diff", cut.toString, kept.toString).check(false).run().lines.take(20).foreach(println)
 
     // What a link refuses: a main class the class path lacks, with the name and who refers to it.
     val missing = Sh(teq, "nir", "--link", "fix.Absent", classPath).mergeErr.timeout(300).check(false).run()
@@ -209,7 +245,6 @@ def selfTest(): (Int, Int, List[String]) =
     // nothing listed. The first is the review's: the class path in an argument file, a jar that is not there last.
     val scratch = Files.createTempDirectory("teq-native-link.")
     Script.atExit(Sh.remove(scratch))
-    val sep = if java.io.File.separatorChar == '\\' then ";" else ":"
     val last = classPath.split(sep).length + 1
     val absent = scratch.resolve("missing.jar").toString
     val listed = scratch.resolve("missing.cp").toString

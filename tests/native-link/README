@@ -9,9 +9,13 @@ digests.txt   the SHA-256 and the lines of what Scala Native's own tools (tools_
               program starts none) and once told to link with them:
                 linked   the definitions its link reaches, as its build dumps them (`dump`,
                          linked.hnir): each as nir.Show prints it, in the order of the names
-              They are Scala Native's bytes, never teq's: `teq nir --link` has to print the same.
+                lowered  the same lowered to the runtime's object model, as its code generator
+                         dumps them (lowered.hnir), in the same order
+              They are Scala Native's bytes, never teq's: `teq nir --link` and `teq nir --lower`
+              have to print the same.
 linked.txt    of the first link's dump, the definitions of the classes tests/native-link.scala
               names, whole and as they stand there: what a failure is read against
+lowered.txt   the same of the first lowered dump
 entries.txt   the names Scala Native's build gives its link to start from (`ScalaNative.entries`)
               for that main class, without threads and with them, in its list's order: the order
               teq's link reaches them in (src/native/reach.rs's tests)
@@ -24,10 +28,23 @@ scala-collections.txt
 diamond/      a diamond of traits linked at many depths, Scala Native's listings up to the depth its
               link ends at and teq's own past it (its README)
 
-The expectations are remade by running Scala Native's tools on the JVM over the same class path
-(`scala.scalanative.build.Build.build` with `withDump(true)`, `withOptimize(false)`, `GC.immix`,
-`Mode.debug`, the target triple and, for the second link, `withMultithreading(true)`), and by
-taking the lines of the named classes out of linked.hnir for linked.txt; entries.txt and
-scala-collections.txt by programs that call Scala Native's classes and the Scala library's on the
-JVM. No file here is written from teq's output, but for the two digests of diamond/digests.txt
-that name teq (diamond/README says why).
+Scala Native's own result stands in the order of the JVM's hash tables, another at each run of its
+build: the class ids, the trait ids and the fields' layout that the lowering writes come from that
+order. teq's is by name (`Global.globalOrdering`) where Scala Native's comes from a hash table, but
+for the fields of java.lang.Class and java.lang.String, whose layout the C runtime reads, and for
+the signatures a class is called with, which stand in the order of Scala 2.13's mutable.HashSet, two
+of one hash in the order the link added them in; teq's link keeps Scala Native's tables where it
+iterates one, so that it adds them in that order too (tests/native-link/collisions holds programs of
+such names).
+
+The expectations are remade by driving Scala Native's tools on the JVM over the same class path
+stage by stage, as `scala.scalanative.build.Build.build` does (`ScalaNative.link` with
+`withDump(true)`, `withOptimize(false)`, `GC.immix`, `Mode.debug` and the target triple; linked
+again without threads where the first link reaches no way to start one, or once with
+`withMultithreading(true)`; then `ScalaNative.codegen`), with the link's result put into teq's order
+before the code generation, and the JVM run with `-XX:+UnlockExperimentalVMOptions -XX:hashCode=2`
+so that no table keyed by an object's identity orders anything by chance: two such runs leave the
+same bytes. linked.txt and lowered.txt are the lines of the named classes taken out of linked.hnir
+and lowered.hnir; entries.txt and scala-collections.txt are written by programs that call Scala
+Native's classes and the Scala library's on the JVM. No file here is written from teq's output, but
+for the two digests of diamond/digests.txt that name teq (diamond/README says why).

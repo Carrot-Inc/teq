@@ -53,10 +53,13 @@ pub type ScopeId = u32;
 pub struct Scope {
     pub name: Global,
     pub attrs: Attrs,
+    pub pos: Pos,
     pub is_trait: bool,
     pub is_module: bool,
     pub parent: Option<ScopeId>,
     pub traits: Vec<ScopeId>,
+    /// The fields and methods reached, sorted by name in the result.
+    pub members: Vec<Global>,
     /// The signatures called on a value of this type, in the order of Scala Native's set.
     pub calls: scala::HashSet<Str>,
     pub responds: scala::HashMap<Str, Global>,
@@ -87,8 +90,8 @@ impl Scope {
 pub enum Info {
     Unavailable,
     Scope(ScopeId),
-    Method,
-    Field,
+    Method { owner: Global, concrete: bool },
+    Field { owner: Global, is_const: bool },
 }
 
 struct Member {
@@ -168,11 +171,16 @@ impl Scalar {
     }
 }
 
-/// What a link leaves (`ReachabilityAnalysis.Result`).
+/// What a link leaves for the code generator (`ReachabilityAnalysis.Result`).
 pub struct Linked {
     /// The definitions reached, sorted by name.
     pub defns: Vec<Defn>,
-    infos: FxMap<Global, Info>,
+    pub infos: FxMap<Global, Info>,
+    pub scopes: Vec<Scope>,
+    pub dynsigs: Vec<Str>,
+    pub dynimpls: Vec<Global>,
+    pub resolved: FxMap<Str, Val>,
+    pub multithreading: bool,
 }
 
 struct Reach<'a> {
@@ -180,6 +188,7 @@ struct Reach<'a> {
     rt: &'a Rt,
     cp: &'a ClassPath,
     config: &'a Config,
+    multithreading: bool,
     loaded: FxMap<Global, Loaded<'a>>,
     missing: FxMap<Global, Vec<Global>>,
     unsupported: FxMap<Global, Vec<Global>>,
@@ -192,6 +201,7 @@ struct Reach<'a> {
     from: FxMap<Global, Global>,
     dyncandidates: scala::HashMap<Str, scala::HashSet<Global>>,
     dynsigs: FxSet<Str>,
+    dynimpls: FxSet<Global>,
     /// The calls met before a class answering them was allocated (`delayedMethods`: a call's
     /// owner, signature and position, hashed whole).
     delayed: scala::HashSet<(Global, Str)>,
@@ -415,6 +425,7 @@ impl<'a> Reach<'a> {
             rt,
             cp,
             config,
+            multithreading,
             loaded: FxMap::default(),
             missing: FxMap::default(),
             unsupported: FxMap::default(),
@@ -427,6 +438,7 @@ impl<'a> Reach<'a> {
             from: FxMap::default(),
             dyncandidates: scala::HashMap::default(),
             dynsigs: FxSet::default(),
+            dynimpls: FxSet::default(),
             delayed: scala::HashSet::default(),
             at: None,
             nir_sources: FxMap::default(),
@@ -453,14 +465,41 @@ impl<'a> Reach<'a> {
         reach.result()
     }
 
-    fn result(self) -> Res<Linked> {
+    fn result(mut self) -> Res<Linked> {
         if !self.missing.is_empty() || !self.unsupported.is_empty() {
             return Err(self.failure());
+        }
+        // A method the link did not reach answers no signature.
+        for scope in &mut self.scopes {
+            scope.responds.retain(|_, name| self.done.contains_key(name));
+            scope.default_responds.retain(|_, name| self.done.contains_key(name));
         }
         let cx = &*self.cx;
         let mut defns: Vec<Defn> = self.done.into_values().flatten().collect();
         defns.sort_by(|a, b| cx.cmp_globals(a.name, b.name));
-        Ok(Linked { defns, infos: self.infos })
+        for scope in &mut self.scopes {
+            if scope.name != self.rt.class && scope.name != self.rt.string {
+                scope.members.sort_by(|&a, &b| cx.cmp_globals(a, b));
+            }
+        }
+        let names: Vec<Global> = self.scopes.iter().map(|s| s.name).collect();
+        for scope in &mut self.scopes {
+            scope.subclasses.sort_by(|&a, &b| cx.cmp_globals(names[a as usize], names[b as usize]));
+            scope.implementors.sort_by(|&a, &b| cx.cmp_globals(names[a as usize], names[b as usize]));
+        }
+        let mut dynsigs: Vec<Str> = self.dynsigs.into_iter().collect();
+        dynsigs.sort_by(|&a, &b| names::cmp_strings(cx.bytes(a), cx.bytes(b)));
+        let mut dynimpls: Vec<Global> = self.dynimpls.into_iter().collect();
+        dynimpls.sort_by(|&a, &b| cx.cmp_globals(a, b));
+        Ok(Linked {
+            defns,
+            infos: self.infos,
+            scopes: self.scopes,
+            dynsigs,
+            dynimpls,
+            resolved: self.resolved.into_iter().map(|(k, v)| (k, v.val())).collect(),
+            multithreading: self.multithreading,
+        })
     }
 
     fn show(&self, g: Global) -> String {
@@ -616,14 +655,15 @@ impl<'a> Reach<'a> {
         let name = defn.name;
         match &defn.kind {
             DefnKind::Var { ty, rhs } | DefnKind::Const { ty, rhs } => {
-                self.reach_global_now(self.cx.owner(name))?;
-                self.infos.insert(name, Info::Field);
+                let is_const = matches!(defn.kind, DefnKind::Const { .. });
+                let owner = self.scope_or_unavailable(self.cx.owner(name))?;
+                self.new_member(name, Info::Field { owner, is_const });
                 self.reach_type(*ty);
                 self.reach_val(rhs)?;
             }
             DefnKind::Declare { ty } => {
-                self.reach_global_now(self.cx.owner(name))?;
-                self.infos.insert(name, Info::Method);
+                let owner = self.scope_or_unavailable(self.cx.owner(name))?;
+                self.new_member(name, Info::Method { owner, concrete: false });
                 self.reach_type(*ty);
             }
             DefnKind::Define { ty, insts, .. } => {
@@ -634,8 +674,8 @@ impl<'a> Reach<'a> {
                         }
                     }
                 }
-                self.reach_global_now(self.cx.owner(name))?;
-                self.infos.insert(name, Info::Method);
+                let owner = self.scope_or_unavailable(self.cx.owner(name))?;
+                self.new_member(name, Info::Method { owner, concrete: !insts.is_empty() });
                 self.reach_type(*ty);
                 let class = self.cx.owner(name);
                 for inst in insts {
@@ -645,7 +685,7 @@ impl<'a> Reach<'a> {
             }
             DefnKind::Trait { traits } => {
                 let traits = self.trait_infos(traits)?;
-                self.new_scope(name, &defn.attrs, true, false, None, traits);
+                self.new_scope(name, &defn.attrs, defn.pos, true, false, None, traits);
                 self.reach_exported(name);
             }
             DefnKind::Class { parent, traits } | DefnKind::Module { parent, traits } => {
@@ -655,7 +695,7 @@ impl<'a> Reach<'a> {
                     None => None,
                 };
                 let traits = self.trait_infos(traits)?;
-                self.new_scope(name, &defn.attrs, false, is_module, parent, traits);
+                self.new_scope(name, &defn.attrs, defn.pos, false, is_module, parent, traits);
                 self.reach_exported(name);
             }
         }
@@ -769,6 +809,17 @@ impl<'a> Reach<'a> {
 
     // ---- infos ----
 
+    fn new_member(&mut self, name: Global, info: Info) {
+        self.infos.insert(name, info);
+        let owner = match info {
+            Info::Method { owner, .. } | Info::Field { owner, .. } => owner,
+            _ => return,
+        };
+        if let Some(&Info::Scope(id)) = self.infos.get(&owner) {
+            self.scopes[id as usize].members.push(name);
+        }
+    }
+
     fn linearized(&mut self, id: ScopeId) -> Vec<ScopeId> {
         if self.scopes[id as usize].linearized_done {
             return self.scopes[id as usize].linearized.clone();
@@ -792,15 +843,18 @@ impl<'a> Reach<'a> {
         out
     }
 
-    fn new_scope(&mut self, name: Global, attrs: &Attrs, is_trait: bool, is_module: bool, parent: Option<ScopeId>, traits: Vec<ScopeId>) {
+    #[allow(clippy::too_many_arguments)]
+    fn new_scope(&mut self, name: Global, attrs: &Attrs, pos: Pos, is_trait: bool, is_module: bool, parent: Option<ScopeId>, traits: Vec<ScopeId>) {
         let id = self.scopes.len() as ScopeId;
         self.scopes.push(Scope {
             name,
             attrs: attrs.clone(),
+            pos,
             is_trait,
             is_module,
             parent,
             traits,
+            members: Vec::new(),
             calls: scala::HashSet::default(),
             responds: scala::HashMap::default(),
             default_responds: scala::HashMap::default(),
@@ -894,6 +948,7 @@ impl<'a> Reach<'a> {
             if names::is_method(self.cx.bytes(sig)) {
                 let Some(dynsig) = self.proxy(sig) else { continue };
                 if self.dynsigs.contains(&dynsig) {
+                    self.dynimpls.insert(target);
                     self.reach_global(target);
                 } else {
                     let (dynsig_hash, target_hash) = (self.sig_hash(dynsig), self.global_hash(target));
@@ -911,6 +966,12 @@ impl<'a> Reach<'a> {
             Some(&Info::Scope(id)) => Some(id),
             _ => None,
         })
+    }
+
+    /// The class of a member: its name, an unavailable one's too.
+    fn scope_or_unavailable(&mut self, name: Global) -> Res<Global> {
+        self.reach_global_now(name)?;
+        Ok(name)
     }
 
     fn class_info(&mut self, name: Global) -> Res<Option<ScopeId>> {
@@ -1111,6 +1172,7 @@ impl<'a> Reach<'a> {
                 if self.dynsigs.insert(*sig) {
                     if let Some(candidates) = self.dyncandidates.remove(sig) {
                         for target in candidates.iter() {
+                            self.dynimpls.insert(target);
                             self.reach_global(target);
                         }
                     }
@@ -1777,10 +1839,12 @@ mod tests {
         let scope = |is_trait: bool, parent: Option<ScopeId>, traits: Vec<ScopeId>, calls: scala::HashSet<Str>, at: usize| Scope {
             name: Global(at as u32),
             attrs: Attrs::default(),
+            pos: Pos::NONE,
             is_trait,
             is_module: false,
             parent,
             traits,
+            members: Vec::new(),
             calls,
             responds: scala::HashMap::default(),
             default_responds: scala::HashMap::default(),

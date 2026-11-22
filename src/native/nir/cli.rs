@@ -1,7 +1,8 @@
 //! `teq nir`: prints what the reader decodes from a jar, a directory or a single NIR file, in the
 //! text of Scala Native's `nir.Show`: the debugging tool, and what the reader is checked with.
 //! `--link` prints in the same text what a program reaches on a class path, which is what the
-//! link is checked with.
+//! link is checked with, and `--lower` the same lowered to the runtime's object model, which is
+//! what the lowering is checked with.
 
 use super::names::Rt;
 use super::read::NirFile;
@@ -9,6 +10,7 @@ use super::show::Show;
 use super::Cx;
 use crate::native::classpath::{self, ClassPath};
 use crate::native::reach::{self, Config, Triple};
+use crate::native::{generate, lower, meta};
 use crate::zip::Zip;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -18,6 +20,7 @@ fn usage() -> ! {
         "usage: teq nir <jar|dir|.nir> [filter]            print every definition as Scala Native prints it\n\
          \x20      teq nir --verify <jar|dir|.nir> [filter]   decode them, and print their count and the listing's SHA-256\n\
          \x20      teq nir --link <main class> <class path>   print the definitions the program reaches, as Scala Native links them\n\
+         \x20      teq nir --lower <main class> <class path>  print them lowered to the runtime's object model, as Scala Native lowers them\n\
          a filter is a substring of the entry's name (java/lang/String.nir)\n\
          a class path is directories and jars joined by '{}', or @<file> for a file that holds them so\n\
          a link takes --triple=<target> ({}) and --threads=<true|false> (true where the program can start a thread)",
@@ -87,8 +90,8 @@ fn items(input: &str, filter: Option<&str>) -> Result<Vec<Item>, String> {
 }
 
 /// The program's definitions after the link, sorted by name, each as `nir.Show` prints it: the
-/// text Scala Native's build dumps as `linked.hnir`.
-fn link(args: &[String]) -> ! {
+/// text Scala Native's build dumps as `linked.hnir`; lowered, the one it dumps as `lowered.hnir`.
+fn link(args: &[String], lowers: bool) -> ! {
     let (mut triple, mut threads, mut plain) = (crate::native::DEFAULT_TRIPLE.to_string(), None, Vec::new());
     for arg in args {
         match arg.split_once('=') {
@@ -107,9 +110,23 @@ fn link(args: &[String]) -> ! {
     // A debug build with the default collector, as Scala Native's build links one.
     let config = Config { main: main.to_string(), multithreading: threads, release: false, gc: "immix", triple: Triple::parse(&triple), link_stubs: false, service_providers: Vec::new() };
     let linked = reach::link(&mut cx, &rt, &cp, &config).unwrap_or_else(|e| fail(e));
+    let lowered = lowers.then(|| {
+        let main = cx.top(main);
+        let proxies = generate::reflective_proxies(&mut cx, &rt, &linked);
+        let meta = meta::Meta::new(&mut cx, &rt, &linked, &proxies).unwrap_or_else(|e| fail(e));
+        let generated = generate::generate(&mut cx, &rt, &linked, &meta, &proxies, main).unwrap_or_else(|e| fail(e));
+        let mut out = Vec::new();
+        let mut lowering = lower::Lowering::new(&mut cx, &rt, &linked, &meta).unwrap_or_else(|e| fail(e));
+        for (defns, this_is_used) in [(&linked.defns, false), (&proxies, true), (&generated, false)] {
+            lowering.defns(defns, this_is_used, &mut out).unwrap_or_else(|e| fail(e));
+        }
+        drop(lowering);
+        out.sort_by(|a, b| cx.cmp_globals(a.name, b.name));
+        out
+    });
     let stdout = std::io::stdout();
     let mut out = std::io::BufWriter::with_capacity(1 << 16, stdout.lock());
-    for defn in &linked.defns {
+    for defn in lowered.as_ref().unwrap_or(&linked.defns) {
         let mut show = Show::new(&cx);
         show.defn(defn);
         show.out.push(b'\n');
@@ -123,8 +140,10 @@ fn link(args: &[String]) -> ! {
 }
 
 pub fn run(args: &[String]) -> ! {
-    if args.first().map(String::as_str) == Some("--link") {
-        link(&args[1..]);
+    match args.first().map(String::as_str) {
+        Some("--link") => link(&args[1..], false),
+        Some("--lower") => link(&args[1..], true),
+        _ => {}
     }
     let (verify, rest) = match args.first().map(String::as_str) {
         Some("--verify") => (true, &args[1..]),

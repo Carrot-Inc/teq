@@ -1,0 +1,29 @@
+Programs whose names share a String.hashCode, for the native link's tests (tests/native-link.scala). Scala
+Native's code generator numbers a class's virtual methods and a trait's methods in the order of the set of the
+signatures each is called with (Scala 2.13's mutable.HashSet), where two signatures of one hash stand in the order
+the link added them in: these programs hold such signatures, called in more than one order.
+
+src/          the programs: Collision.scala, a code review's program as it was reported (probe.Collision: an
+              abstract class's two methods Aa and BB, of one hash), then one program per place a scope's called
+              signatures take (collide.<shape>.Main): an abstract class's methods (virtual), a trait's
+              (interface), a trait's methods with bodies, one class taking them and one overriding some
+              (default), a class's fields (fields). Their names are made of the blocks "Aa" and "BB", whose
+              hashes are equal (Aa, BB; AaAa, AaBB, BBAa, BBBB), called in an order drawn from a fixed seed,
+              some calls in a second method so that the link meets them later. Then the overrides' shape
+              (collide.overrides<i>.Main): two names of one hash, each called on an abstract class answered by
+              two classes, in one of two overrides of an abstract `run` that one call reaches, so that only the
+              order Scala Native's link iterates that call's targets in orders the two calls: the four pairs of
+              a probe of the review's (Aa/BB, AaAa/BBBB, AaBB/BBAa, BBBB/AaAa), then eight drawn from the seed (a
+              string and the same with one letter raised and the next lowered by 31). A script outside the
+              tree wrote them; project.scala holds the build's directives
+nir/          the .nir files of the programs, written by the compiler plugin of Scala Native 0.5.12 for Scala
+              3.8.4 (scala-cli compile of src/, the files taken from the classes directory)
+digests.txt   the SHA-256 and the lines of what Scala Native's own tools leave for each program, linked from nir/
+              and the jars of tests/nir/digests.txt as tests/native-link/README says for its program: its link's
+              dump (linked) and its lowered definitions (lowered), once as the build decides on threads and once
+              linked with them
+<main>.txt    of the first lowered dump, the definitions of the program's own classes, by the rule of
+              tests/native-link.scala's definitionsOf: what a failure is read against
+
+The expectations are Scala Native's bytes, made as tests/native-link/README says (two runs of its tools leave the
+same bytes); no file here is written from teq's output.

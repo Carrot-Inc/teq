@@ -1,6 +1,6 @@
 //! Names in their mangled spelling, after `nir.Mangle` and `nir.Unmangle` of Scala Native 0.5.12,
-//! the order `Global.globalOrdering` gives them, and the runtime's names the link refers to
-//! (`nir.Rt` and the tables of `nir.Type`).
+//! the order `Global.globalOrdering` gives them, and the runtime's names the link and the code
+//! generator refer to (`nir.Rt`).
 
 use super::*;
 use std::cmp::Ordering;
@@ -25,6 +25,9 @@ pub fn is_extern(sig: &[u8]) -> bool {
 }
 pub fn is_generated(sig: &[u8]) -> bool {
     sig.first() == Some(&b'G')
+}
+pub fn is_virtual(sig: &[u8]) -> bool {
+    !(is_ctor(sig) || is_clinit(sig) || is_extern(sig))
 }
 
 /// The place after an identifier at `pos`: its length in UTF-16 code units, a `-` before one that
@@ -94,12 +97,13 @@ fn types_end(s: &[u8], mut pos: usize) -> Option<usize> {
 }
 
 /// A method's signature in its parts: the name, where its types start, where the last of them
-/// (the result) starts, and where the `E` after them stands.
+/// (the result) starts, and the scope after the `E`.
 pub struct MethodSig<'a> {
     pub id: &'a [u8],
     types_start: usize,
     last_type: usize,
     types_stop: usize,
+    pub scope: &'a [u8],
 }
 
 pub fn method_sig(sig: &[u8]) -> Option<MethodSig<'_>> {
@@ -112,7 +116,13 @@ pub fn method_sig(sig: &[u8]) -> Option<MethodSig<'_>> {
         last = pos;
         pos = type_end(sig, pos)?;
     }
-    Some(MethodSig { id: &sig[start..end], types_start: end, last_type: last, types_stop: pos })
+    Some(MethodSig { id: &sig[start..end], types_start: end, last_type: last, types_stop: pos, scope: &sig[pos + 1..] })
+}
+
+impl MethodSig<'_> {
+    pub fn is_static(&self) -> bool {
+        matches!(self.scope.first(), Some(b'o' | b'p'))
+    }
 }
 
 /// The name of a field, an extern or a generated signature.
@@ -177,6 +187,10 @@ impl Cx {
             GlobalData::Member(_, sig) => Some(sig),
             _ => None,
         }
+    }
+
+    pub fn sig_bytes(&self, g: Global) -> &[u8] {
+        self.sig(g).map_or(&[], |s| self.bytes(s))
     }
 
     /// A class's name as written in the source of its library: `java.lang.Object`.
@@ -343,6 +357,7 @@ pub struct Rt {
     pub runtime: Global,
     pub runtime_nothing: Global,
     pub runtime_null: Global,
+    pub boxed_ptr: Global,
     pub boxed_unit: Global,
     pub boxed_unit_module: Global,
     pub generic_array: Global,
@@ -351,10 +366,17 @@ pub struct Rt {
     pub class_ty: Ty,
     pub string_ty: Ty,
     pub throwable_ty: Ty,
+    pub runtime_ty: Ty,
     pub ptr: Ty,
     pub bool: Ty,
+    pub char: Ty,
     pub byte: Ty,
+    pub short: Ty,
     pub int: Ty,
+    pub long: Ty,
+    pub float: Ty,
+    pub double: Ty,
+    pub size: Ty,
     pub unit: Ty,
     pub nothing: Ty,
     pub null: Ty,
@@ -432,6 +454,7 @@ impl Rt {
             runtime,
             runtime_nothing: cx.top("scala.runtime.Nothing$"),
             runtime_null: cx.top("scala.runtime.Null$"),
+            boxed_ptr: cx.top("scala.scalanative.unsafe.Ptr"),
             boxed_unit: cx.top("scala.runtime.BoxedUnit"),
             boxed_unit_module: cx.top("scala.scalanative.runtime.BoxedUnit$"),
             generic_array: rt(cx, "Array"),
@@ -440,10 +463,17 @@ impl Rt {
             class_ty: cx.class_ty(class),
             string_ty: cx.class_ty(string),
             throwable_ty: cx.class_ty(throwable),
+            runtime_ty: cx.class_ty(runtime),
             ptr,
             bool,
+            char,
             byte,
+            short,
             int,
+            long,
+            float,
+            double,
+            size,
             unit: cx.ty(Type::Unit),
             nothing: cx.ty(Type::Nothing),
             null: cx.ty(Type::Null),
@@ -461,6 +491,14 @@ impl Rt {
         self.arrays.iter().find(|&&(ty, _)| ty == of).map_or(self.arrays[8].1, |&(_, cls)| cls)
     }
 
+    /// `Type.fromArrayClass`: the element type of an array class.
+    pub fn array_element(&self, cls: Global) -> Option<Ty> {
+        if cls == self.blob_array {
+            return Some(self.byte);
+        }
+        self.arrays.iter().find(|&&(_, c)| c == cls).map(|&(ty, _)| ty)
+    }
+
     /// `RefKind.className`: the class a reference type names, none for a type of values.
     pub fn class_name(&self, cx: &Cx, ty: Ty) -> Option<Global> {
         match cx.type_of(ty) {
@@ -469,6 +507,89 @@ impl Rt {
             Type::Array { of, .. } => Some(self.array_class(*of)),
             Type::Ref { name, .. } => Some(*name),
             _ => None,
+        }
+    }
+
+    /// `Type.unbox`: the type a box's class holds.
+    pub fn unboxed(&self, cls: Global) -> Option<Ty> {
+        self.boxes.iter().find(|&&(c, _)| c == cls).map(|&(_, ty)| ty)
+    }
+
+    /// `Type.box`: the class that boxes a type, the last of the table's that hold it.
+    pub fn boxed(&self, ty: Ty) -> Option<Global> {
+        self.boxes.iter().rev().find(|&&(_, held)| held == ty).map(|&(cls, _)| cls)
+    }
+
+    /// `Val.ty`.
+    pub fn val_ty(&self, cx: &mut Cx, v: &Val) -> Ty {
+        match v {
+            Val::Null => self.null,
+            Val::Zero(ty) | Val::Local(_, ty) | Val::Global(_, ty) => *ty,
+            Val::True | Val::False => self.bool,
+            Val::Size(_) => self.size,
+            Val::Char(_) => self.char,
+            Val::Byte(_) => self.byte,
+            Val::Short(_) => self.short,
+            Val::Int(_) => self.int,
+            Val::Long(_) => self.long,
+            Val::Int128 { .. } => cx.ty(Type::Int128),
+            Val::Float(_) => self.float,
+            Val::Double(_) => self.double,
+            Val::StructValue(vals) => {
+                let tys: Vec<Ty> = vals.iter().map(|v| self.val_ty(cx, v)).collect();
+                cx.ty(Type::StructValue(tys.into_boxed_slice()))
+            }
+            Val::ArrayValue(of, vals) => cx.ty(Type::ArrayValue(*of, vals.len() as i32)),
+            Val::ByteString(bytes) => cx.ty(Type::ArrayValue(self.byte, bytes.len() as i32 + 1)),
+            Val::Unit => self.unit,
+            Val::Const(_) => self.ptr,
+            Val::String(_) => cx.ty(Type::Ref { name: self.string, exact: true, nullable: false }),
+            Val::Virtual(_) => cx.ty(Type::Virtual),
+            Val::ClassOf(_) => self.class_ty,
+        }
+    }
+
+    /// `Op.resty`: the type of an operation's result.
+    pub fn op_resty(&self, cx: &mut Cx, op: &Op) -> Ty {
+        match op {
+            Op::Call { ty, .. } => match cx.type_of(*ty) {
+                Type::Function(_, ret) => *ret,
+                _ => self.ptr,
+            },
+            Op::Load { ty, .. } | Op::Bin { ty, .. } | Op::Conv { ty, .. } | Op::Fieldload { ty, .. } | Op::As { ty, .. } | Op::Arrayload { ty, .. } => *ty,
+            Op::Store { .. } | Op::Fence(_) | Op::Fieldstore { .. } | Op::Varstore { .. } | Op::Arraystore { .. } => self.unit,
+            Op::Elem { .. } | Op::Stackalloc { .. } | Op::Field { .. } | Op::Method { .. } | Op::Dynmethod { .. } => self.ptr,
+            Op::Extract { aggr, indexes } => {
+                let mut ty = self.val_ty(cx, aggr);
+                for &i in indexes.iter() {
+                    ty = match cx.type_of(ty) {
+                        Type::StructValue(tys) => tys.get(i as usize).copied().unwrap_or(ty),
+                        Type::ArrayValue(of, _) => *of,
+                        _ => ty,
+                    };
+                }
+                ty
+            }
+            Op::Insert { aggr, .. } => self.val_ty(cx, aggr),
+            Op::Comp { .. } | Op::Is { .. } => self.bool,
+            Op::Classalloc { name, .. } | Op::Module(name) => cx.ty(Type::Ref { name: *name, exact: true, nullable: false }),
+            Op::Copy(v) => self.val_ty(cx, v),
+            Op::SizeOf(_) | Op::AlignmentOf(_) => self.size,
+            Op::Box { ty, .. } => match self.class_name(cx, *ty) {
+                Some(name) => cx.ty(Type::Ref { name, exact: true, nullable: self.unboxed(name) == Some(self.ptr) }),
+                None => *ty,
+            },
+            Op::Unbox { ty, .. } => self.class_name(cx, *ty).and_then(|name| self.unboxed(name)).unwrap_or(*ty),
+            Op::Var(ty) => cx.ty(Type::Var(*ty)),
+            Op::Varload(slot) => {
+                let slot = self.val_ty(cx, slot);
+                match cx.type_of(slot) {
+                    Type::Var(of) => *of,
+                    _ => slot,
+                }
+            }
+            Op::Arrayalloc { ty, .. } => cx.ty(Type::Array { of: *ty, nullable: false }),
+            Op::Arraylength(_) => self.int,
         }
     }
 }

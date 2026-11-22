@@ -41,7 +41,9 @@ src/tasty/         the TASTy reader and printer (`teq tasty`); write/ the TASTy 
 src/scala2/        Scala 2 pickles rewritten as TASTy; src/classfile/ Java class files
 src/native/        the native target; nir/ Scala Native's intermediate representation, its reader and its
                    printer (`teq nir`); classpath.rs and reach.rs the link, what a program reaches of a
-                   class path's NIR (`teq nir --link`), scala.rs the Scala collections whose order it keeps
+                   class path's NIR (`teq nir --link`), scala.rs the Scala collections whose order it
+                   keeps; meta.rs, generate.rs and lower.rs its lowering to the runtime's object model
+                   (`teq nir --lower`)
 src/classpath.rs   `--classpath`; zip.rs jars, jarcache.rs the jar cache, products.rs `--products`
 src/write.rs       the output file, or the changed modules of a split build
 src/watch.rs       `teq compiler watch`; held.rs its `stats`, index.rs and complete.rs the resident check's

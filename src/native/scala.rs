@@ -382,6 +382,14 @@ impl<K: Copy + Eq + Hash, V: Clone> HashMap<K, V> {
         Some(value)
     }
 
+    /// The entries `keep` refuses removed (`-=` of each).
+    pub fn retain(&mut self, mut keep: impl FnMut(&K, &V) -> bool) {
+        let gone: Vec<K> = self.entries.iter().filter(|e| !keep(&e.0, &e.1)).map(|e| e.0).collect();
+        for key in gone {
+            self.remove(&key);
+        }
+    }
+
     /// The entries in the order Scala's iteration gives them.
     pub fn iter(&self) -> Vec<(K, V)> {
         self.table.order(self.entries.iter().map(|e| (e.2, e.3))).into_iter().map(|i| (self.entries[i].0, self.entries[i].1.clone())).collect()

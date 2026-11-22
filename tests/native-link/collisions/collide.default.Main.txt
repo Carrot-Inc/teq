@@ -1,0 +1,208 @@
+def @"M23collide.default.AnswersD2AaiEO" : (@"T23collide.default.Answers") => int {
+%2(%1 <this> : @"T23collide.default.Answers"):
+  ret int 0
+}
+def @"M23collide.default.AnswersD2BBiEO" : (@"T23collide.default.Answers") => int {
+%2(%1 <this> : @"T23collide.default.Answers"):
+  ret int 1
+}
+def @"M23collide.default.AnswersD4AaAaiEO" : (@"T23collide.default.Answers") => int {
+%2(%1 <this> : @"T23collide.default.Answers"):
+  ret int 2
+}
+def @"M23collide.default.AnswersD4AaBBiEO" : (@"T23collide.default.Answers") => int {
+%2(%1 <this> : @"T23collide.default.Answers"):
+  ret int 3
+}
+def @"M23collide.default.AnswersD4BBBBiEO" : (@"T23collide.default.Answers") => int {
+%2(%1 <this> : @"T23collide.default.Answers"):
+  ret int 5
+}
+var @"M23collide.default.AnswersG4type" : {ptr, int, int, ptr, ptr} = structvalue {@"M15java.lang.ClassG4type" : ptr, int -2147483648, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 23, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 100, char 101, char 102, char 97, char 117, char 108, char 116, char 46, char 65, char 110, char 115, char 119, char 101, char 114, char 115}}, int 0, int 23, int -612665352}}
+inlinehint def @"M20collide.default.MainD4mainLAL16java.lang.String_uEo" : (array[@"T16java.lang.String"]) => unit {
+%2(%1 : array[@"T16java.lang.String"]):
+  %3 = call[() => @"T21collide.default.Main$"] @"M21collide.default.Main$G4load" : ptr()
+  %5 = call[(@"T21collide.default.Main$", array[@"T16java.lang.String"]) => unit] @"M21collide.default.Main$D4mainLAL16java.lang.String_uEO" : ptr(%3 : !?@"T21collide.default.Main$", %1 : array[@"T16java.lang.String"])
+  ret unit
+}
+var @"M20collide.default.MainG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 23, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 20, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 100, char 101, char 102, char 97, char 117, char 108, char 116, char 46, char 77, char 97, char 105, char 110}}, int 0, int 20, int 582626582}}, int 8, int 23, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M21collide.default.Main$D4mainLAL16java.lang.String_uEO" : (@"T21collide.default.Main$", array[@"T16java.lang.String"]) => unit {
+%3(%2 <this> : @"T21collide.default.Main$", %1 <args> : array[@"T16java.lang.String"]):
+  %38 = ine[array[@"T16java.lang.String"]] %1 <args> : array[@"T16java.lang.String"], null
+  if %38 : bool then %36 else %37
+%36:
+  %39 = elem[{ptr, int, int}] %1 <args> : array[@"T16java.lang.String"], int 0, int 1
+  %8 = atomic load[int] %39 : ptr unordered
+  %9 = ieq[int] %8 : int, int 0
+  if %9 : bool then %4 else %5
+%4:
+  %10 = call[(ptr, size) => @"T21collide.default.Plain"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M21collide.default.PlainG4type" : ptr, size 8)
+  %40 = call[(@"T21collide.default.Plain") => unit] @"M21collide.default.PlainRE" : ptr(%10 : !?@"T21collide.default.Plain")
+  jump %6(%10 : !?@"T21collide.default.Plain")
+%5:
+  %12 = call[(ptr, size) => @"T19collide.default.Own"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M19collide.default.OwnG4type" : ptr, size 8)
+  %41 = call[(@"T19collide.default.Own") => unit] @"M19collide.default.OwnRE" : ptr(%12 : !?@"T19collide.default.Own")
+  jump %6(%12 : !?@"T19collide.default.Own")
+%6(%7 <a> : @"T23collide.default.Answers"):
+  %14 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %43 = ine[@"T23collide.default.Answers"] %7 <a> : @"T23collide.default.Answers", null
+  if %43 : bool then %42 else %37
+%42:
+  %44 = load[ptr] %7 <a> : @"T23collide.default.Answers" 
+  %45 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %44 : ptr, int 0, int 4
+  %46 = load[int] %45 : ptr 
+  %47 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %44 : ptr, int 0, int 5
+  %48 = load[ptr] %47 : ptr 
+  %49 = and[int] int -2147483648, %46 : int
+  %50 = elem[{int, ptr}] %48 : ptr, %49 : int, int 1
+  %51 = load[ptr] %50 : ptr 
+  %52 = elem[ptr] %51 : ptr, int 0
+  %15 = load[ptr] %52 : ptr 
+  %16 = call[(@"T23collide.default.Answers") => int] %15 : ptr(%7 <a> : @"T23collide.default.Answers")
+  %17 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %16 : int)
+  %18 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %53 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %18 : ptr(%14 : !?@"T13scala.Predef$", %17 : !?@"T17java.lang.Integer")
+  %20 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %54 = load[ptr] %7 <a> : @"T23collide.default.Answers" 
+  %55 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %54 : ptr, int 0, int 4
+  %56 = load[int] %55 : ptr 
+  %57 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %54 : ptr, int 0, int 5
+  %58 = load[ptr] %57 : ptr 
+  %59 = and[int] int -2147483648, %56 : int
+  %60 = elem[{int, ptr}] %58 : ptr, %59 : int, int 1
+  %61 = load[ptr] %60 : ptr 
+  %62 = elem[ptr] %61 : ptr, int 1
+  %21 = load[ptr] %62 : ptr 
+  %22 = call[(@"T23collide.default.Answers") => int] %21 : ptr(%7 <a> : @"T23collide.default.Answers")
+  %23 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %22 : int)
+  %24 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %63 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %24 : ptr(%20 : !?@"T13scala.Predef$", %23 : !?@"T17java.lang.Integer")
+  %26 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %64 = load[ptr] %7 <a> : @"T23collide.default.Answers" 
+  %65 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %64 : ptr, int 0, int 4
+  %66 = load[int] %65 : ptr 
+  %67 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %64 : ptr, int 0, int 5
+  %68 = load[ptr] %67 : ptr 
+  %69 = and[int] int -2147483648, %66 : int
+  %70 = elem[{int, ptr}] %68 : ptr, %69 : int, int 1
+  %71 = load[ptr] %70 : ptr 
+  %72 = elem[ptr] %71 : ptr, int 2
+  %27 = load[ptr] %72 : ptr 
+  %28 = call[(@"T23collide.default.Answers") => int] %27 : ptr(%7 <a> : @"T23collide.default.Answers")
+  %29 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %28 : int)
+  %30 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %73 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %30 : ptr(%26 : !?@"T13scala.Predef$", %29 : !?@"T17java.lang.Integer")
+  %32 = call[(ptr, size) => @"T19collide.default.Own"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M19collide.default.OwnG4type" : ptr, size 8)
+  %74 = call[(@"T19collide.default.Own") => unit] @"M19collide.default.OwnRE" : ptr(%32 : !?@"T19collide.default.Own")
+  %76 = ine[@"T21collide.default.Main$"] %2 <this> : @"T21collide.default.Main$", null
+  if %76 : bool then %75 else %37
+%75:
+  %34 = copy @"M21collide.default.Main$D5laterL19collide.default.OwnuEO" : ptr
+  %77 = call[(@"T21collide.default.Main$", @"T19collide.default.Own") => unit] %34 : ptr(%2 <this> : @"T21collide.default.Main$", %32 : !?@"T19collide.default.Own")
+  ret unit
+%37:
+  %78 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M21collide.default.Main$D5laterL19collide.default.OwnuEO" : (@"T21collide.default.Main$", @"T19collide.default.Own") => unit {
+%3(%2 <this> : @"T21collide.default.Main$", %1 <o> : @"T19collide.default.Own"):
+  %4 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %24 = ine[@"T19collide.default.Own"] %1 <o> : @"T19collide.default.Own", null
+  if %24 : bool then %22 else %23
+%22:
+  %5 = copy @"M19collide.default.OwnD2AaiEO" : ptr
+  %6 = call[(@"T23collide.default.Answers") => int] %5 : ptr(%1 <o> : @"T19collide.default.Own")
+  %7 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %6 : int)
+  %8 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %25 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %8 : ptr(%4 : !?@"T13scala.Predef$", %7 : !?@"T17java.lang.Integer")
+  %10 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %11 = copy @"M19collide.default.OwnD2BBiEO" : ptr
+  %12 = call[(@"T23collide.default.Answers") => int] %11 : ptr(%1 <o> : @"T19collide.default.Own")
+  %13 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %12 : int)
+  %14 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %26 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %14 : ptr(%10 : !?@"T13scala.Predef$", %13 : !?@"T17java.lang.Integer")
+  %16 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %17 = copy @"M19collide.default.OwnD4BBAaiEO" : ptr
+  %18 = call[(@"T19collide.default.Own") => int] %17 : ptr(%1 <o> : @"T19collide.default.Own")
+  %19 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %18 : int)
+  %20 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %27 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %20 : ptr(%16 : !?@"T13scala.Predef$", %19 : !?@"T17java.lang.Integer")
+  ret unit
+%23:
+  %28 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+noinline def @"M21collide.default.Main$G4load" : () => @"T21collide.default.Main$" {
+%1:
+  %4 = elem[ptr] @"M2__C9__modules" : ptr, int 0
+  %5 = load[@"T21collide.default.Main$"] %4 : ptr 
+  %6 = ine[@"T16java.lang.Object"] %5 : @"T21collide.default.Main$", null
+  if %6 : bool then %2 else %3
+%2:
+  ret %5 : @"T21collide.default.Main$"
+%3:
+  %7 = call[(ptr, size) => @"T21collide.default.Main$"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M21collide.default.Main$G4type" : ptr, size 8)
+  %10 = store[@"T21collide.default.Main$"] %4 : ptr, %7 : @"T21collide.default.Main$" 
+  %11 = call[(@"T21collide.default.Main$") => unit] @"M21collide.default.Main$RE" : ptr(%7 : @"T21collide.default.Main$")
+  ret %7 : @"T21collide.default.Main$"
+}
+var @"M21collide.default.Main$G4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 24, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 21, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 100, char 101, char 102, char 97, char 117, char 108, char 116, char 46, char 77, char 97, char 105, char 110, char 36}}, int 0, int 21, int 881554894}}, int 8, int 24, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M21collide.default.Main$RE" : (@"T21collide.default.Main$") => unit {
+%2(%1 <this> : @"T21collide.default.Main$"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T21collide.default.Main$")
+  ret unit
+}
+def @"M19collide.default.OwnD2AaiEO" : (@"T19collide.default.Own") => int {
+%2(%1 <this> : @"T19collide.default.Own"):
+  %3 = call[(@"T23collide.default.Answers") => int] @"M23collide.default.AnswersD2AaiEO" : ptr(%1 <this> : @"T19collide.default.Own")
+  ret %3 : int
+}
+def @"M19collide.default.OwnD2BBiEO" : (@"T19collide.default.Own") => int {
+%2(%1 <this> : @"T19collide.default.Own"):
+  %3 = call[(@"T23collide.default.Answers") => int] @"M23collide.default.AnswersD2BBiEO" : ptr(%1 <this> : @"T19collide.default.Own")
+  ret %3 : int
+}
+def @"M19collide.default.OwnD4AaAaiEO" : (@"T19collide.default.Own") => int {
+%2(%1 <this> : @"T19collide.default.Own"):
+  ret int 30
+}
+def @"M19collide.default.OwnD4AaBBiEO" : (@"T19collide.default.Own") => int {
+%2(%1 <this> : @"T19collide.default.Own"):
+  %3 = call[(@"T23collide.default.Answers") => int] @"M23collide.default.AnswersD4AaBBiEO" : ptr(%1 <this> : @"T19collide.default.Own")
+  ret %3 : int
+}
+def @"M19collide.default.OwnD4BBAaiEO" : (@"T19collide.default.Own") => int {
+%2(%1 <this> : @"T19collide.default.Own"):
+  ret int 32
+}
+def @"M19collide.default.OwnD4BBBBiEO" : (@"T19collide.default.Own") => int {
+%2(%1 <this> : @"T19collide.default.Own"):
+  ret int 31
+}
+var @"M19collide.default.OwnG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 25, int 1, const arrayvalue ptr {@"M23collide.default.AnswersG4type" : ptr}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 19, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 100, char 101, char 102, char 97, char 117, char 108, char 116, char 46, char 79, char 119, char 110}}, int 0, int 19, int 1819912329}}, int 8, int 25, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {structvalue {int -2147483648, const arrayvalue ptr {@"M19collide.default.OwnD4AaAaiEO" : ptr, @"M19collide.default.OwnD4BBBBiEO" : ptr, @"M19collide.default.OwnD4AaBBiEO" : ptr}}}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M19collide.default.OwnRE" : (@"T19collide.default.Own") => unit {
+%2(%1 <this> : @"T19collide.default.Own"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T19collide.default.Own")
+  ret unit
+}
+def @"M21collide.default.PlainD4AaAaiEO" : (@"T21collide.default.Plain") => int {
+%2(%1 <this> : @"T21collide.default.Plain"):
+  %3 = call[(@"T23collide.default.Answers") => int] @"M23collide.default.AnswersD4AaAaiEO" : ptr(%1 <this> : @"T21collide.default.Plain")
+  ret %3 : int
+}
+def @"M21collide.default.PlainD4AaBBiEO" : (@"T21collide.default.Plain") => int {
+%2(%1 <this> : @"T21collide.default.Plain"):
+  %3 = call[(@"T23collide.default.Answers") => int] @"M23collide.default.AnswersD4AaBBiEO" : ptr(%1 <this> : @"T21collide.default.Plain")
+  ret %3 : int
+}
+def @"M21collide.default.PlainD4BBBBiEO" : (@"T21collide.default.Plain") => int {
+%2(%1 <this> : @"T21collide.default.Plain"):
+  %3 = call[(@"T23collide.default.Answers") => int] @"M23collide.default.AnswersD4BBBBiEO" : ptr(%1 <this> : @"T21collide.default.Plain")
+  ret %3 : int
+}
+var @"M21collide.default.PlainG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 26, int 1, const arrayvalue ptr {@"M23collide.default.AnswersG4type" : ptr}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 21, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 100, char 101, char 102, char 97, char 117, char 108, char 116, char 46, char 80, char 108, char 97, char 105, char 110}}, int 0, int 21, int 884645389}}, int 8, int 26, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {structvalue {int -2147483648, const arrayvalue ptr {@"M21collide.default.PlainD4AaAaiEO" : ptr, @"M21collide.default.PlainD4BBBBiEO" : ptr, @"M21collide.default.PlainD4AaBBiEO" : ptr}}}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M21collide.default.PlainRE" : (@"T21collide.default.Plain") => unit {
+%2(%1 <this> : @"T21collide.default.Plain"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T21collide.default.Plain")
+  ret unit
+}

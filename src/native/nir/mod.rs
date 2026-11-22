@@ -68,7 +68,7 @@ pub type Local = u64;
 /// A value. A file names one by its place in the values' section, and every reference to one place
 /// is the one value (`BinaryDeserializer`'s cache): an aggregate holds its parts behind an `Arc`, so
 /// that what a file's references share stays shared and a value read is no larger than its file.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Val {
     True,
     False,
@@ -205,7 +205,7 @@ pub enum Op {
 
 /// Where control goes: a block with its arguments, a handler for what a call throws, or a
 /// switch's case.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Next {
     None,
     Unwind { exc: Local, ty: Ty, next: Box<Next> },
@@ -219,6 +219,11 @@ pub struct Pos {
     pub file: Str,
     pub line: u32,
     pub column: u32,
+}
+
+impl Pos {
+    /// `SourcePosition.NoPosition`: what a definition the toolchain makes stands at.
+    pub const NONE: Pos = Pos { file: Str(0), line: 0, column: 0 };
 }
 
 #[derive(Clone, PartialEq, Debug)]

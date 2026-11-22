@@ -1,0 +1,219 @@
+def @"M24collide.interface.CircleD2AaiEO" : (@"T24collide.interface.Circle") => int {
+%2(%1 <this> : @"T24collide.interface.Circle"):
+  ret int 20
+}
+def @"M24collide.interface.CircleD2BBiEO" : (@"T24collide.interface.Circle") => int {
+%2(%1 <this> : @"T24collide.interface.Circle"):
+  ret int 21
+}
+def @"M24collide.interface.CircleD4AaAaiEO" : (@"T24collide.interface.Circle") => int {
+%2(%1 <this> : @"T24collide.interface.Circle"):
+  ret int 22
+}
+def @"M24collide.interface.CircleD4AaBBiEO" : (@"T24collide.interface.Circle") => int {
+%2(%1 <this> : @"T24collide.interface.Circle"):
+  ret int 23
+}
+def @"M24collide.interface.CircleD4BBAaiEO" : (@"T24collide.interface.Circle") => int {
+%2(%1 <this> : @"T24collide.interface.Circle"):
+  ret int 24
+}
+def @"M24collide.interface.CircleD4BBBBiEO" : (@"T24collide.interface.Circle") => int {
+%2(%1 <this> : @"T24collide.interface.Circle"):
+  ret int 25
+}
+var @"M24collide.interface.CircleG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 23, int 1, const arrayvalue ptr {@"M23collide.interface.ShapeG4type" : ptr}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 24, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 105, char 110, char 116, char 101, char 114, char 102, char 97, char 99, char 101, char 46, char 67, char 105, char 114, char 99, char 108, char 101}}, int 0, int 24, int 1147827957}}, int 8, int 23, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {structvalue {int -2147483648, const arrayvalue ptr {@"M24collide.interface.CircleD4AaAaiEO" : ptr, @"M24collide.interface.CircleD4AaBBiEO" : ptr, @"M24collide.interface.CircleD4BBBBiEO" : ptr, @"M24collide.interface.CircleD4BBAaiEO" : ptr, @"M24collide.interface.CircleD2BBiEO" : ptr, @"M24collide.interface.CircleD2AaiEO" : ptr}}}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M24collide.interface.CircleRE" : (@"T24collide.interface.Circle") => unit {
+%2(%1 <this> : @"T24collide.interface.Circle"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T24collide.interface.Circle")
+  ret unit
+}
+inlinehint def @"M22collide.interface.MainD4mainLAL16java.lang.String_uEo" : (array[@"T16java.lang.String"]) => unit {
+%2(%1 : array[@"T16java.lang.String"]):
+  %3 = call[() => @"T23collide.interface.Main$"] @"M23collide.interface.Main$G4load" : ptr()
+  %5 = call[(@"T23collide.interface.Main$", array[@"T16java.lang.String"]) => unit] @"M23collide.interface.Main$D4mainLAL16java.lang.String_uEO" : ptr(%3 : !?@"T23collide.interface.Main$", %1 : array[@"T16java.lang.String"])
+  ret unit
+}
+var @"M22collide.interface.MainG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 24, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 22, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 105, char 110, char 116, char 101, char 114, char 102, char 97, char 99, char 101, char 46, char 77, char 97, char 105, char 110}}, int 0, int 22, int -172817122}}, int 8, int 24, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M23collide.interface.Main$D4mainLAL16java.lang.String_uEO" : (@"T23collide.interface.Main$", array[@"T16java.lang.String"]) => unit {
+%3(%2 <this> : @"T23collide.interface.Main$", %1 <args> : array[@"T16java.lang.String"]):
+  %36 = ine[array[@"T16java.lang.String"]] %1 <args> : array[@"T16java.lang.String"], null
+  if %36 : bool then %34 else %35
+%34:
+  %37 = elem[{ptr, int, int}] %1 <args> : array[@"T16java.lang.String"], int 0, int 1
+  %8 = atomic load[int] %37 : ptr unordered
+  %9 = ieq[int] %8 : int, int 0
+  if %9 : bool then %4 else %5
+%4:
+  %10 = call[(ptr, size) => @"T24collide.interface.Square"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M24collide.interface.SquareG4type" : ptr, size 8)
+  %38 = call[(@"T24collide.interface.Square") => unit] @"M24collide.interface.SquareRE" : ptr(%10 : !?@"T24collide.interface.Square")
+  jump %6(%10 : !?@"T24collide.interface.Square")
+%5:
+  %12 = call[(ptr, size) => @"T24collide.interface.Circle"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M24collide.interface.CircleG4type" : ptr, size 8)
+  %39 = call[(@"T24collide.interface.Circle") => unit] @"M24collide.interface.CircleRE" : ptr(%12 : !?@"T24collide.interface.Circle")
+  jump %6(%12 : !?@"T24collide.interface.Circle")
+%6(%7 <s> : @"T23collide.interface.Shape"):
+  %14 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %41 = ine[@"T23collide.interface.Shape"] %7 <s> : @"T23collide.interface.Shape", null
+  if %41 : bool then %40 else %35
+%40:
+  %42 = load[ptr] %7 <s> : @"T23collide.interface.Shape" 
+  %43 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %42 : ptr, int 0, int 4
+  %44 = load[int] %43 : ptr 
+  %45 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %42 : ptr, int 0, int 5
+  %46 = load[ptr] %45 : ptr 
+  %47 = and[int] int -2147483648, %44 : int
+  %48 = elem[{int, ptr}] %46 : ptr, %47 : int, int 1
+  %49 = load[ptr] %48 : ptr 
+  %50 = elem[ptr] %49 : ptr, int 0
+  %15 = load[ptr] %50 : ptr 
+  %16 = call[(@"T23collide.interface.Shape") => int] %15 : ptr(%7 <s> : @"T23collide.interface.Shape")
+  %17 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %16 : int)
+  %18 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %51 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %18 : ptr(%14 : !?@"T13scala.Predef$", %17 : !?@"T17java.lang.Integer")
+  %20 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %52 = load[ptr] %7 <s> : @"T23collide.interface.Shape" 
+  %53 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %52 : ptr, int 0, int 4
+  %54 = load[int] %53 : ptr 
+  %55 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %52 : ptr, int 0, int 5
+  %56 = load[ptr] %55 : ptr 
+  %57 = and[int] int -2147483648, %54 : int
+  %58 = elem[{int, ptr}] %56 : ptr, %57 : int, int 1
+  %59 = load[ptr] %58 : ptr 
+  %60 = elem[ptr] %59 : ptr, int 1
+  %21 = load[ptr] %60 : ptr 
+  %22 = call[(@"T23collide.interface.Shape") => int] %21 : ptr(%7 <s> : @"T23collide.interface.Shape")
+  %23 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %22 : int)
+  %24 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %61 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %24 : ptr(%20 : !?@"T13scala.Predef$", %23 : !?@"T17java.lang.Integer")
+  %26 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %62 = load[ptr] %7 <s> : @"T23collide.interface.Shape" 
+  %63 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %62 : ptr, int 0, int 4
+  %64 = load[int] %63 : ptr 
+  %65 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %62 : ptr, int 0, int 5
+  %66 = load[ptr] %65 : ptr 
+  %67 = and[int] int -2147483648, %64 : int
+  %68 = elem[{int, ptr}] %66 : ptr, %67 : int, int 1
+  %69 = load[ptr] %68 : ptr 
+  %70 = elem[ptr] %69 : ptr, int 4
+  %27 = load[ptr] %70 : ptr 
+  %28 = call[(@"T23collide.interface.Shape") => int] %27 : ptr(%7 <s> : @"T23collide.interface.Shape")
+  %29 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %28 : int)
+  %30 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %71 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %30 : ptr(%26 : !?@"T13scala.Predef$", %29 : !?@"T17java.lang.Integer")
+  %73 = ine[@"T23collide.interface.Main$"] %2 <this> : @"T23collide.interface.Main$", null
+  if %73 : bool then %72 else %35
+%72:
+  %32 = copy @"M23collide.interface.Main$D5laterL23collide.interface.ShapeuEO" : ptr
+  %74 = call[(@"T23collide.interface.Main$", @"T23collide.interface.Shape") => unit] %32 : ptr(%2 <this> : @"T23collide.interface.Main$", %7 <s> : @"T23collide.interface.Shape")
+  ret unit
+%35:
+  %75 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+def @"M23collide.interface.Main$D5laterL23collide.interface.ShapeuEO" : (@"T23collide.interface.Main$", @"T23collide.interface.Shape") => unit {
+%3(%2 <this> : @"T23collide.interface.Main$", %1 <s> : @"T23collide.interface.Shape"):
+  %4 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %24 = ine[@"T23collide.interface.Shape"] %1 <s> : @"T23collide.interface.Shape", null
+  if %24 : bool then %22 else %23
+%22:
+  %25 = load[ptr] %1 <s> : @"T23collide.interface.Shape" 
+  %26 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %25 : ptr, int 0, int 4
+  %27 = load[int] %26 : ptr 
+  %28 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %25 : ptr, int 0, int 5
+  %29 = load[ptr] %28 : ptr 
+  %30 = and[int] int -2147483648, %27 : int
+  %31 = elem[{int, ptr}] %29 : ptr, %30 : int, int 1
+  %32 = load[ptr] %31 : ptr 
+  %33 = elem[ptr] %32 : ptr, int 2
+  %5 = load[ptr] %33 : ptr 
+  %6 = call[(@"T23collide.interface.Shape") => int] %5 : ptr(%1 <s> : @"T23collide.interface.Shape")
+  %7 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %6 : int)
+  %8 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %34 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %8 : ptr(%4 : !?@"T13scala.Predef$", %7 : !?@"T17java.lang.Integer")
+  %10 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %35 = load[ptr] %1 <s> : @"T23collide.interface.Shape" 
+  %36 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %35 : ptr, int 0, int 4
+  %37 = load[int] %36 : ptr 
+  %38 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %35 : ptr, int 0, int 5
+  %39 = load[ptr] %38 : ptr 
+  %40 = and[int] int -2147483648, %37 : int
+  %41 = elem[{int, ptr}] %39 : ptr, %40 : int, int 1
+  %42 = load[ptr] %41 : ptr 
+  %43 = elem[ptr] %42 : ptr, int 3
+  %11 = load[ptr] %43 : ptr 
+  %12 = call[(@"T23collide.interface.Shape") => int] %11 : ptr(%1 <s> : @"T23collide.interface.Shape")
+  %13 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %12 : int)
+  %14 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %44 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %14 : ptr(%10 : !?@"T13scala.Predef$", %13 : !?@"T17java.lang.Integer")
+  %16 = call[() => @"T13scala.Predef$"] @"M13scala.Predef$G4load" : ptr()
+  %45 = load[ptr] %1 <s> : @"T23collide.interface.Shape" 
+  %46 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %45 : ptr, int 0, int 4
+  %47 = load[int] %46 : ptr 
+  %48 = elem[{{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 0]}] %45 : ptr, int 0, int 5
+  %49 = load[ptr] %48 : ptr 
+  %50 = and[int] int -2147483648, %47 : int
+  %51 = elem[{int, ptr}] %49 : ptr, %50 : int, int 1
+  %52 = load[ptr] %51 : ptr 
+  %53 = elem[ptr] %52 : ptr, int 5
+  %17 = load[ptr] %53 : ptr 
+  %18 = call[(@"T23collide.interface.Shape") => int] %17 : ptr(%1 <s> : @"T23collide.interface.Shape")
+  %19 = call[(@"T27scala.runtime.BoxesRunTime$", int) => @"T17java.lang.Integer"] @"M27scala.runtime.BoxesRunTime$D12boxToIntegeriL17java.lang.IntegerEO" : ptr(null, %18 : int)
+  %20 = copy @"M13scala.Predef$D7printlnL16java.lang.ObjectuEO" : ptr
+  %54 = call[(@"T13scala.Predef$", @"T16java.lang.Object") => unit] %20 : ptr(%16 : !?@"T13scala.Predef$", %19 : !?@"T17java.lang.Integer")
+  ret unit
+%23:
+  %55 = call[(@"T34scala.scalanative.runtime.package$") => nothing] @"M34scala.scalanative.runtime.package$D16throwNullPointernEO" : ptr(null)
+  unreachable
+}
+noinline def @"M23collide.interface.Main$G4load" : () => @"T23collide.interface.Main$" {
+%1:
+  %4 = elem[ptr] @"M2__C9__modules" : ptr, int 0
+  %5 = load[@"T23collide.interface.Main$"] %4 : ptr 
+  %6 = ine[@"T16java.lang.Object"] %5 : @"T23collide.interface.Main$", null
+  if %6 : bool then %2 else %3
+%2:
+  ret %5 : @"T23collide.interface.Main$"
+%3:
+  %7 = call[(ptr, size) => @"T23collide.interface.Main$"] @"M2__C26scalanative_GC_alloc_small" : (ptr, size) => ptr(@"M23collide.interface.Main$G4type" : ptr, size 8)
+  %10 = store[@"T23collide.interface.Main$"] %4 : ptr, %7 : @"T23collide.interface.Main$" 
+  %11 = call[(@"T23collide.interface.Main$") => unit] @"M23collide.interface.Main$RE" : ptr(%7 : @"T23collide.interface.Main$")
+  ret %7 : @"T23collide.interface.Main$"
+}
+var @"M23collide.interface.Main$G4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 25, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 23, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 105, char 110, char 116, char 101, char 114, char 102, char 97, char 99, char 101, char 46, char 77, char 97, char 105, char 110, char 36}}, int 0, int 23, int -1062363450}}, int 8, int 25, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M23collide.interface.Main$RE" : (@"T23collide.interface.Main$") => unit {
+%2(%1 <this> : @"T23collide.interface.Main$"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T23collide.interface.Main$")
+  ret unit
+}
+var @"M23collide.interface.ShapeG4type" : {ptr, int, int, ptr, ptr} = structvalue {@"M15java.lang.ClassG4type" : ptr, int -2147483648, int 0, const arrayvalue ptr {}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 23, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 105, char 110, char 116, char 101, char 114, char 102, char 97, char 99, char 101, char 46, char 83, char 104, char 97, char 112, char 101}}, int 0, int 23, int -1056621348}}
+def @"M24collide.interface.SquareD2AaiEO" : (@"T24collide.interface.Square") => int {
+%2(%1 <this> : @"T24collide.interface.Square"):
+  ret int 0
+}
+def @"M24collide.interface.SquareD2BBiEO" : (@"T24collide.interface.Square") => int {
+%2(%1 <this> : @"T24collide.interface.Square"):
+  ret int 1
+}
+def @"M24collide.interface.SquareD4AaAaiEO" : (@"T24collide.interface.Square") => int {
+%2(%1 <this> : @"T24collide.interface.Square"):
+  ret int 2
+}
+def @"M24collide.interface.SquareD4AaBBiEO" : (@"T24collide.interface.Square") => int {
+%2(%1 <this> : @"T24collide.interface.Square"):
+  ret int 3
+}
+def @"M24collide.interface.SquareD4BBAaiEO" : (@"T24collide.interface.Square") => int {
+%2(%1 <this> : @"T24collide.interface.Square"):
+  ret int 4
+}
+def @"M24collide.interface.SquareD4BBBBiEO" : (@"T24collide.interface.Square") => int {
+%2(%1 <this> : @"T24collide.interface.Square"):
+  ret int 5
+}
+var @"M24collide.interface.SquareG4type" : {{ptr, int, int, ptr, ptr}, int, int, ptr, int, ptr, ptr, [ptr x 3]} = structvalue {structvalue {@"M15java.lang.ClassG4type" : ptr, int 26, int 1, const arrayvalue ptr {@"M23collide.interface.ShapeG4type" : ptr}, const structvalue {@"M16java.lang.StringG4type" : ptr, const structvalue {@"M35scala.scalanative.runtime.CharArrayG4type" : ptr, int 24, int 2, arrayvalue char {char 99, char 111, char 108, char 108, char 105, char 100, char 101, char 46, char 105, char 110, char 116, char 101, char 114, char 102, char 97, char 99, char 101, char 46, char 83, char 113, char 117, char 97, char 114, char 101}}, int 0, int 24, int 1613370178}}, int 8, int 26, const arrayvalue int {int -1}, int 0, const arrayvalue {int, ptr} {structvalue {int -2147483648, const arrayvalue ptr {@"M24collide.interface.SquareD4AaAaiEO" : ptr, @"M24collide.interface.SquareD4AaBBiEO" : ptr, @"M24collide.interface.SquareD4BBBBiEO" : ptr, @"M24collide.interface.SquareD4BBAaiEO" : ptr, @"M24collide.interface.SquareD2BBiEO" : ptr, @"M24collide.interface.SquareD2AaiEO" : ptr}}}, @"M16java.lang.ObjectG4type" : ptr, arrayvalue ptr {@"M16java.lang.ObjectD6equalsL16java.lang.ObjectzEO" : ptr, @"M16java.lang.ObjectD8toStringL16java.lang.StringEO" : ptr, @"M16java.lang.ObjectD8hashCodeiEO" : ptr}}
+def @"M24collide.interface.SquareRE" : (@"T24collide.interface.Square") => unit {
+%2(%1 <this> : @"T24collide.interface.Square"):
+  %4 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T24collide.interface.Square")
+  ret unit
+}
