@@ -13,8 +13,9 @@
 //! a recursion's does), and every later such read of the same symbol with it. A wait under the
 //! lock needs a schedule in which another worker holds the cell at that read; the refusal puts
 //! the lock's holder on the same path at a read a scenario names, so that the path after each
-//! read is walked without the schedule. Off, one load and a branch where a signature is
-//! completed or its reads are hooked.
+//! read is walked without the schedule. How many such reads a build makes is its schedule's
+//! too: with the trace on (`TEQ_SERIAL_TRACE`), a build given to one worker says how many it
+//! counted. Off, one load and a branch where a signature is completed or its reads are hooked.
 //!
 //! And the forced refusal of a start: with `TEQ_REFUSE_START=<phase>:<k>` the k-th start of the
 //! named phase's threads (`body`, a worker of the body phase; `inlining`, a worker of the inlining
@@ -176,6 +177,13 @@ pub fn refuse(sym: u32) -> Refused {
     } else {
         Refused::No
     }
+}
+
+/// The reads `refuse` has counted in this process: those a build of several workers made before
+/// it was given to one worker (`serial_again` traces their number), which a schedule decides, so
+/// that a read named past them says how many there were.
+pub fn reads() -> u64 {
+    READS.load(Ordering::SeqCst)
 }
 
 /// The starts the forced refusal may refuse (`TEQ_REFUSE_START`): a thread of a phase of the typing.

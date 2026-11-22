@@ -1618,36 +1618,107 @@ PY
 }
 session_removal
 
-# A session's forked full builds keep nothing of theirs: the allocator's blocks in use (`stats`) after the
-# ninetieth build and later as after the thirtieth and earlier, each the lowest of twenty builds' readings, a
-# build's the higher of two (tests/support/session_flat.py: an object of about 4 KB is there after one build in
-# ten on master's binary too, and after runs of builds on a loaded machine, so the lowest of three readings
-# landed on it on one side alone in 7% of the sessions under the JVM suite's load; and one `stats` in thirty-one
-# answers some 750 bytes lower than the next after the same build), within 2 KB in
-# all, through the fork at one worker and at eight (without,
-# every forked build lost the peers' table of every shared arena, 48 KB a build, and every worker and merge
-# thread its own handle, some sixteen bytes a thread, 6.7 KB over the sixty builds at eight; the fixed builds
-# measured 0 and 32 to 240 bytes). The reading is shown first on recorded sessions, with no compiler in it: one
-# measured under that load, its two levels and nothing more, is flat, and growing by 112 bytes a build, the
-# 6.7 KB over sixty, is not; one with a lower answer on its early side alone is flat, and with 2,700 bytes more
-# from its sixtieth build on is not (the lowest of twenty single answers read it as 1,980).
+# A session's forked full builds keep nothing of theirs: the allocator's blocks in use (`stats`) after each of 169
+# full builds (and more while the last ones are on the high level), a build's reading the higher of two answers,
+# through the fork at one worker and at eight, read by tests/support/session_flat.py (without the fix, every forked
+# build lost the peers' table of every shared arena, 48 KB a build, and every worker and merge thread its own
+# handle, some sixteen bytes a thread, 6.7 KB over sixty builds at eight; the fixed builds measured 0 and 32 to
+# 240 bytes). A session is read by its key, its program and its workers' count: a key with a row of
+# tests/workers/session_flat_bands.tsv (tests/split/cycle at eight workers, the one measured) by the band's reading,
+# any other by master's reading, unchanged (the lowest reading after the builds 90 to 109 less the lowest after 11 to
+# 30), the line saying which. At eight workers the blocks in use sit on one of two levels some 4.5 KB apart, the high
+# one in runs of builds (up to 23 seen under load), and one answer of two can be some 750 bytes low: the band's
+# reading fails where any side of twenty builds is 2 KB or more above an earlier one, each side the lowest of its
+# builds but those of a run on the level (a run 2 KB above the builds around it, each of its builds 3 to 7 KB above
+# them, the row's band, which ends within fifty builds), where a run up stands outside the band (a growth's spike,
+# red of its own, its line naming the script that measures the band again), and where the high level holds for more
+# than fifty builds. Every session's levels are printed, a build a character. The reading is shown first on five
+# recorded sessions, with no compiler in it: each is flat, and so is each of eight workers with its builds 90 to 109
+# put on the high level (master's reading read that as a growth); each growing is not: by 112 bytes a build, by 2,700
+# bytes from a build between master's sides, by 48 bytes a build with a 4,608-byte allocation freed at build 110, with
+# the high level held over builds 11 to 109, and with 8,192 bytes held over builds 40 to 44 and again over 90 to 109.
 session_flat() {
-  local how grown
+  local how grown levels read seq said which
+  reading() {
+    read=$(timeout 120 python3 tests/support/session_flat.py "$@" 2>&1)
+    said=$?
+    grown=$(sed -n 1p <<< "$read") levels=$(sed -n 2p <<< "$read") which=$(sed -n 3p <<< "$read")
+    [[ $said = 0 && $grown =~ ^-?[0-9]+$ && $levels =~ ^[0-9]+\ -?[0-9]+\ [0-9]+\ [0-9]+:\ [.^]+$ && $which == "reading: "* ]] || { said="no reading (exit $said): $(head -1 <<< "$read" | cut -c1-120)"; grown= levels= which=; }
+  }
+  # red, by the band's reading (a key with a measured row): a growth, a high level held past fifty builds, or a run up
+  # outside the band (`<longest> <low> <levelled> <spikes>: <sequence>`); by master's (any other key): a growth
+  red() {
+    local n=${levels%%:*}
+    [ "$grown" -ge 2048 ] && return 0
+    [[ $which == "reading: master's"* ]] && return 1
+    [ "${levels%% *}" -gt 50 ] || [ "${n##* }" -gt 0 ]
+  }
+  # why a red is one: a run outside the band names the script that measures the band again
+  why_red() {
+    local n=${levels%%:*}
+    if [ "$grown" -ge 2048 ]; then echo "grew by $grown bytes"
+    elif [ "${levels%% *}" -gt 50 ]; then echo "held the high level for ${levels%% *} builds, past fifty"
+    else echo "had ${n##* } runs up outside the band (measured again by: python3 tests/support/session_flat.py band <teq> <workers> <sessions>)"; fi
+  }
+  # flat_reading/grown_reading <session> <terms> <what> [<workers>]: a recorded session of tests/split/cycle at
+  # <workers> (8 unless named), read by its key's reading
   flat_reading() {
-    grown=$(python3 tests/support/session_flat.py series "tests/workers/session_flat_$1.txt" $2)
-    if [ -n "$grown" ] && [ "$grown" -lt 2048 ]; then ok; else bad "session flat's reading: $3 reads as $grown bytes of growth"; fi
+    reading series "tests/workers/session_flat_$1.txt" $2 --key "tests/split/cycle@${4:-8}"
+    if [ -z "$grown" ]; then bad "session flat's reading: $3: $said"; elif ! red; then ok; else bad "session flat's reading: $3 $(why_red) ($which; levels: $levels)"; fi
   }
   grown_reading() {
-    grown=$(python3 tests/support/session_flat.py series "tests/workers/session_flat_$1.txt" $2)
-    if [ -n "$grown" ] && [ "$grown" -ge 2048 ]; then ok; else bad "session flat's reading: $3 reads as $grown bytes of growth"; fi
+    reading series "tests/workers/session_flat_$1.txt" $2 --key "tests/split/cycle@${4:-8}"
+    if [ -z "$grown" ]; then bad "session flat's reading: $3: $said"; elif red; then ok; else bad "session flat's reading: $3 reads as $grown bytes of growth ($which; levels: $levels)"; fi
   }
-  flat_reading levels "" "a session of two levels and no growth"
-  grown_reading levels 112 "a session growing by 112 bytes a build"
-  flat_reading dip "" "a session with a lower answer on its early side alone and no growth"
-  grown_reading dip 2700@60 "a session 2,700 bytes larger from its sixtieth build on"
+  # The reading refuses a record it cannot read: a recorded session cut short, and one with a line of three answers.
+  refused_record() {
+    reading series "$1" --key tests/split/cycle@8
+    if [ -z "$grown" ]; then ok; else bad "session flat's reading: $2 reads as $grown bytes instead of being refused"; fi
+  }
+  # The band table refuses a row it cannot hold to, and no session is read with it: a key given twice (the same row,
+  # and another band that keeps the controls below as they are), a program not in the tree, a row of four fields, a
+  # low above its high. A table with a second key's row beside the committed one is read.
+  table() {
+    { cat tests/workers/session_flat_bands.tsv; printf "$2\n"; } > "$work/bands_$1.tsv"
+    reading series tests/workers/session_flat_levels.txt --key tests/split/cycle@8 --bands "$work/bands_$1.tsv"
+  }
+  refused_table() {
+    table "$@"
+    if [ -n "$grown" ]; then bad "session flat's band table: $3 is read ($grown bytes) instead of being refused"
+    elif [[ $said == *"the band table refused: "* ]]; then ok; else bad "session flat's band table: $3: $said"; fi
+  }
+  refused_table twice "$(grep -v '^#' tests/workers/session_flat_bands.tsv | grep . | head -1)" "a key given twice, the same row"
+  refused_table other 'tests/split/cycle\t8\t3000\t7200\tplanted' "a key given twice, another band"
+  refused_table program 'tests/split/no_such_program\t8\t3072\t7168\tplanted' "a program not in the tree"
+  refused_table four 'tests/split/cycle\t2\t3072\t7168' "a row of four fields"
+  refused_table inverted 'tests/split/cycle\t2\t7168\t3072\tplanted' "a low above its high"
+  table second 'tests/split/cycle\t2\t3072\t7168\tplanted'
+  if [ -n "$grown" ] && ! red; then ok; else bad "session flat's band table: a second key's row beside the committed one: ${said:-read as $grown bytes, $which}"; fi
+  head -40 tests/workers/session_flat_levels.txt > "$work/session_flat_cut.txt"
+  refused_record "$work/session_flat_cut.txt" "a recorded session cut to forty builds"
+  sed '60s/$/ 1/' tests/workers/session_flat_levels.txt > "$work/session_flat_three.txt"
+  refused_record "$work/session_flat_three.txt" "a recorded session with three answers on a line"
+  local f
+  for f in levels dip levels_120 dip_120; do
+    flat_reading $f "" "the recorded session $f"
+    flat_reading $f level@90-109 "the recorded session $f with its builds 90 to 109 on the high level"
+    grown_reading $f 48,4608@1-109 "the recorded session $f leaking 48 bytes a build with 4,608 freed at build 110"
+    grown_reading $f level@11-109 "the recorded session $f on the high level from build 11 to 109"
+    grown_reading $f 8192@40-44,8192@90-109 "the recorded session $f holding 8,192 bytes over builds 40-44 and 90-109"
+  done
+  # a session of one worker, a key with no band measured: master's reading
+  flat_reading one "" "the recorded session of one worker" 1
+  grown_reading one 4608@90-109 "the recorded session of one worker holding 4,608 bytes over builds 90-109" 1
+  grown_reading one 8192@40-44,8192@90-109 "the recorded session of one worker holding 8,192 bytes over builds 40-44 and 90-109" 1
+  grown_reading levels 112 "the recorded session levels growing by 112 bytes a build"
+  grown_reading levels_120 112 "the recorded session levels_120 growing by 112 bytes a build"
+  grown_reading dip 2700@90 "the recorded session dip 2,700 bytes larger from its ninetieth build on"
+  grown_reading dip_120 2700@60 "the recorded session dip_120 2,700 bytes larger from its sixtieth build on"
   for how in "TEQ_FORK=1 --threads 1" "--threads 8"; do
-    grown=$(timeout 120 python3 tests/support/session_flat.py session "$TEQ" $how)
-    if [ -n "$grown" ] && [ "$grown" -lt 2048 ]; then ok; else bad "session flat ($how): the blocks in use grew by $grown bytes over sixty forked full builds"; fi
+    reading session "$TEQ" $how
+    seq=${levels#*: }
+    [ -z "$levels" ] || echo "workers: session flat ($how): ${which#reading: }: the longest run on the high level ${levels%% *} builds of ${#seq}: $seq"
+    if [ -z "$grown" ]; then bad "session flat ($how): $said"; elif ! red; then ok; else bad "session flat ($how): the blocks in use $(why_red) ($which; longest run, lowest reading, builds on a level, runs outside the band: a build a character: $levels)"; fi
   done
 }
 session_flat
@@ -1962,7 +2033,7 @@ COUNTS=$saved_counts
 # wait taken out from under the lock also runs under `TEQ_SERIAL_TRACE=1`, and none may say that one gave way.
 # untraced <file>: the file without the lines `TEQ_SERIAL_TRACE` adds.
 untraced() {
-  grep -v -E "^teq: (typed again by one worker: |a wait under the loader's lock gave way: |a read under the loader's lock refused: )" "$1"
+  grep -v -E "^teq: (typed again by one worker: |a wait under the loader's lock gave way: |a read under the loader's lock refused: |reads under the loader's lock counted: )" "$1"
 }
 # at_the_lock <file>: whether a wait under the loader's lock gave the traced build to one worker.
 at_the_lock() {
@@ -2424,12 +2495,23 @@ part_as_one partial_rebuild_refused_use tests/workers/partial_rebuild_refused_us
 # After a refused wait the lock's holder goes on as after a recursion, to the end of an attempt nothing of which
 # stands. A schedule puts it there at the reads where another worker happens to hold the signature; with
 # `TEQ_REFUSE_READ=<k>` (src/shake.rs) the k-th read of a program's signature under the lock is refused whatever
-# the schedule, so that the path after each read named is walked in every run of the suite.
+# the schedule, so that the path after each read named is walked in every run of the suite. How many such reads a
+# build makes is its schedule's: where its first wait under the lock is on a class's check and not on a signature,
+# one worker takes the build over sooner (read 987 was not reached in 3 of 25 builds at two workers on eight CPUs
+# beside sixteen busy loops; at 610 and below in none of 75), and the build says how many
+# it counted (`teq: reads under the loader's lock counted: <n>`, printed as the build is handed to one worker). So a
+# k a build does not reach (it counted fewer than k reads) is built again, up to five builds, each held to one
+# worker's. A build that counted k or more reached read k and did not refuse it: red at once. A build that prints
+# no count went to its end in parallel and refused none; whether it reached read k is not known, so it is built
+# again as one that counted fewer (a clean build that met no wait under the lock ends so). Five builds none of which
+# refused read k are red whatever they counted: a teq that never refuses says no count in all five.
 # refused_reads_as_one <name> <dir> "<products' sources>" "<sources built again>" <k...>: one worker accepts the
-# part build, and each part build at two workers with its k-th such read refused says that it was (a k past the
-# build's reads fails), is typed again by one worker, and is one worker's by its exit, its text and its directory.
+# part build, and each part build at two workers with its k-th such read refused says that it was (a k none of
+# five builds reaches fails, with the reads each counted), is typed again by one worker, and is one worker's by
+# its exit, its text and its directory.
+REFUSED_READ_BUILDS=5
 refused_reads_as_one() {
-  local name=$1_refused dir=$2 k differ=""
+  local name=$1_refused dir=$2 k n counts counted reached differ=""
   if ! part_products "$name" "$dir" "$3" "$4"; then
     bad "$name: the products' build failed: $(head -1 "$work/$name.products.out" | cut -c1-120)"
     return
@@ -2440,13 +2522,32 @@ refused_reads_as_one() {
   fi
   shift 4
   for k in "$@"; do
-    if ! part_build "$name" 2 TEQ_REFUSE_READ=$k; then
-      differ="$differ read $k ($part_differs);"
-    elif ! grep -q "^teq: a read under the loader's lock refused: read $k, " "$work/$name.traced"; then
-      differ="$differ read $k (not reached);"
-    elif ! grep -q "^teq: typed again by one worker: " "$work/$name.traced"; then
-      differ="$differ read $k (not typed again);"
+    counts="" reached=""
+    for n in $(seq 1 $REFUSED_READ_BUILDS); do
+      if ! part_build "$name" 2 TEQ_REFUSE_READ=$k; then
+        differ="$differ read $k ($part_differs);"
+        reached=failed
+        break
+      elif grep -q "^teq: a read under the loader's lock refused: read $k, " "$work/$name.traced"; then
+        grep -q "^teq: typed again by one worker: " "$work/$name.traced" || differ="$differ read $k (not typed again);"
+        reached=yes
+        break
+      fi
+      counted=$(sed -n "s/^teq: reads under the loader's lock counted: //p" "$work/$name.traced" | head -1)
+      [[ $counted =~ ^[0-9]+$ ]] || counted=none
+      if [ "$counted" != none ] && [ "$counted" -ge "$k" ]; then
+        differ="$differ read $k (a build counted $counted reads and refused none of them);"
+        reached=failed
+        break
+      fi
+      counts="$counts $counted"
+    done
+    if [ -z "$reached" ] && [[ $counts =~ [0-9] ]]; then
+      differ="$differ read $k (not reached in $REFUSED_READ_BUILDS builds, which counted$counts reads);"
+    elif [ -z "$reached" ]; then
+      differ="$differ read $k ($REFUSED_READ_BUILDS builds said no count of their reads: none refused read k);"
     fi
+    [ "$reached" != yes ] || [ -z "$counts" ] || echo "workers: $name: read $k reached after builds that counted$counts reads"
   done
   [ -z "$differ" ] && ok || bad "$name: a part build with a read under the loader's lock refused is not one worker's at$differ"
 }

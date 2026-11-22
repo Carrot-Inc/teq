@@ -1,0 +1,8 @@
+# The level's band of a session of `teq compiler watch` (tests/support/session_flat.py, tests/workers.sh's
+# session_flat), a row a key: the program, the workers' count, the band's low and high (bytes a build of a run up
+# stands above the lowest of the five builds on each side of it), and how it was measured. A row is measured by
+#   python3 tests/support/session_flat.py band <teq> <workers> <sessions>
+# (that many sessions, their runs up's heights, and 900 bytes each side), never written by hand. A session of a key
+# with no row is read by master's reading, unchanged.
+# program	workers	low	high	measured
+tests/split/cycle	8	3072	7168	900 sessions under sixteen busy loops on eight CPUs, three binaries: 31,986 runs up, 3,952 to 6,192

@@ -2561,6 +2561,9 @@ fn serial_again(why: &str, attempt: Duration, timings: bool) -> i32 {
     types::view::gave_way(why);
     if std::env::var_os("TEQ_SERIAL_TRACE").is_some() {
         eprintln!("teq: typed again by one worker: {}", why);
+        if shake::refusing() {
+            eprintln!("teq: reads under the loader's lock counted: {}", shake::reads());
+        }
     }
     // What the attempt measured goes with its process image: its section is printed first.
     measure::write_files(".attempt");
