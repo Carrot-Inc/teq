@@ -176,7 +176,11 @@ The readers of a module's products against products of another number (docs/TOOL
 the tree's build, the tree built again with `TEQ_PRODUCTS_ABI_BUMP=1` into another target directory (the variable
 raises `PRODUCTS_ABI` at compile time; no release build sets it, which every qualification checks), and a teq that
 writes no number (0.1.11, or a build of its commit). A change that raises the number runs it with the previous
-release as the third binary.
+release as the third binary. A reader of the products' own number is judged by the same tree alone, never by a
+released binary's bytes: against its twin (the cell with N and N+1 swapped, byte for byte but the manifest's `abi`
+and `identity`) and, where the cell allows, a fresh build by the same reader of the same sources; 0.1.11 writes the
+number-0 products of the refusal and rebuild cells. `PRODUCTS_ABI_PLANT=1` runs it as its planted control: each twin
+taken with one byte changed, every read cell must turn red.
 
 `tests/semanticdb` is the SemanticDB oracle of `teq fix`'s forms: `harness.py --regen` records scalac 3.8.4's
 `-Xsemanticdb` documents of each group of its corpus as golds, `--check` holds the manifest and the golds to each other,
