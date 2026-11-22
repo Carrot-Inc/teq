@@ -59,7 +59,10 @@
 # class files (left out without javap). And a library's value read through an inline call is a call of its getter
 # where scalac's client calls it, at one worker and at eight: tests/support/library_value_reads/list.sh's listing of
 # library_value_reads.scala against library_value_reads.expected, listed from scalac's class files (left out without
-# javap or the jars).
+# javap or the jars). And a library's inline body that leaves out a default argument records, in the client that
+# expands it, the used names scalac's records, the default getter among them, at one worker and at eight:
+# tests/support/library_value_names/names.py's comparison of the analysis answer for library_value_names.scala
+# with scalac.txt, scalac's own record (left out without the jars).
 cd "$(dirname "$0")/.."
 # The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
 # `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
@@ -314,6 +317,26 @@ library_value_reads() {
     fi
   done
 }
+library_value_names() {
+  local src=tests/support/library_value_names/library_value_names.scala work t
+  . tests/support/jars.sh
+  jars_of "$src"
+  [ -z "$JARS_MISSING" ] || { aux_not_run library_value_names "not in the coursier cache:$JARS_MISSING"; return 0; }
+  python3 tests/support/library_value_names/names.py --self-test > /dev/null || { echo "LIBRARY VALUE NAMES: the comparison's self-test fails"; return 1; }
+  for t in 1 8; do
+    work=$out/library_value_names.$t
+    rm -rf "$work"
+    if ! timeout 120 "$TEQ" compiler build "$src" --target jvm --products "$work" --classpath "$JARS_CP" --threads $t --analysis-version 3 > "$work.json" 2> "$work.log"; then
+      echo "LIBRARY VALUE NAMES: the fixture does not build at $t workers (see $work.log)"
+      return 1
+    fi
+    if ! python3 tests/support/library_value_names/names.py "$work.json" tests/support/library_value_names/scalac.txt > "$work.diff"; then
+      echo "LIBRARY VALUE NAMES: at $t workers, the client's used names are not scalac's"
+      head -10 "$work.diff"
+      return 1
+    fi
+  done
+}
 final_select() {
   command -v javap > /dev/null || { aux_not_run final_select "no javap"; return 0; }
   local work=$out/final_select
@@ -393,6 +416,7 @@ if [ -z "$VERSION" ]; then
   inline_bindings || status=1
   jar_companion_touch || status=1
   library_value_reads || status=1
+  library_value_names || status=1
   final_select || status=1
   byname_ctor || status=1
   synchronized_shape || status=1
