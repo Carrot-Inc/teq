@@ -4097,9 +4097,12 @@ impl<'a> Worker<'a> {
     /// the platform layers. `fractional` notes a Double or Float on the way, whose formatting
     /// differs too.
     fn fold_candidate(&mut self, e: TExprId, bound: &mut Vec<SymId>, fractional: &mut bool) -> bool {
-        // Another module's products are the program's, which the whole build does not run.
-        let std_sym = |t: &mut Self, s: SymId| t.source(t.syms.sym(s).file).is_std && !t.in_products(t.syms.sym(s).file) && t.same_on_both_targets(s);
-        let std_class = |t: &Self, c: ClassId| t.source(t.syms.class(c).file).is_std && !t.in_products(t.syms.class(c).file);
+        // The lean std's own Scala definitions alone, which ship with teq: a library's value (a jar's, a class
+        // directory's, another module's products) is the run's to read, as dotty's inliner binds it (a proxy of the
+        // argument's tree, never its value), and a method of the std's stand-in for a platform class (String's) is the
+        // platform's at run time; `is_std` alone holds for every class-path entry and library body too.
+        let std_sym = |t: &mut Self, s: SymId| t.std_own(t.syms.sym(s).file) && t.same_on_both_targets(s);
+        let std_class = |t: &Self, c: ClassId| t.std_own(t.syms.class(c).file);
         let list = |t: &mut Self, l: ListRef, bound: &mut Vec<SymId>, fractional: &mut bool| -> bool {
             let items = t.prog.expr_list(l).to_vec();
             items.into_iter().all(|a| t.fold_candidate(a, bound, fractional))
@@ -4182,6 +4185,13 @@ impl<'a> Worker<'a> {
             TExpr::StrConcat(l) | TExpr::SeqLit(l) | TExpr::ArrayLit(l) => list(self, l, bound, fractional),
             _ => false,
         }
+    }
+
+    /// Whether `f` is one of the lean std's own Scala definitions: no jar's or class directory's pseudo file, no
+    /// library body, and none of the std's stand-ins for a platform class (`std/javalib/`).
+    fn std_own(&self, f: crate::source::FileId) -> bool {
+        let source = self.source(f);
+        source.is_std && !source.path.starts_with("<std>/javalib/") && !self.in_jar(f) && !self.is_body_file(f)
     }
 
     /// Whether a member's value is the same on JavaScript and the JVM: not a class, its name

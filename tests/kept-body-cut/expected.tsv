@@ -439,14 +439,14 @@ cut_member_scala_SeqOps_sorted_502_named	js	List(1, 2)
 cut_member_scala_SeqOps_sorted_502_named	interp	List(1, 2)
 cut_member_scala_SeqOps_sorted_502_local	js	List(1, 2)
 cut_member_scala_SeqOps_sorted_502_local	interp	List(1, 2)
-cut_static_Arrays_newGenericArray_1855_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
-cut_static_Arrays_newGenericArray_1855_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
-cut_static_Arrays_newGenericArray_1855_none	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
-cut_static_Arrays_newGenericArray_1855_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
-cut_static_Arrays_newGenericArray_1855_named	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
-cut_static_Arrays_newGenericArray_1855_named	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
-cut_static_Arrays_newGenericArray_1855_local	js	A's products REFUSED: A.scala:5:5: error: Not found: Arrays
-cut_static_Arrays_newGenericArray_1855_local	interp	A's products REFUSED: A.scala:5:5: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1867_whole	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1867_whole	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1867_none	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1867_none	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1867_named	js	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1867_named	interp	A's products REFUSED: A.scala:3:20: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1867_local	js	A's products REFUSED: A.scala:5:5: error: Not found: Arrays
+cut_static_Arrays_newGenericArray_1867_local	interp	A's products REFUSED: A.scala:5:5: error: Not found: Arrays
 cut_member_scala_Map_toMap_344_whole	js	A's products REFUSED: A.scala:3:65: error: Not found: type K
 cut_member_scala_Map_toMap_344_whole	interp	A's products REFUSED: A.scala:3:65: error: Not found: type K
 cut_member_scala_Map_toMap_344_none	js	Map(1 -> 1)

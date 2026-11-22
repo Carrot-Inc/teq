@@ -127,6 +127,21 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   (`J.N1. .. .N9` was "not found"). The analysis graph (`--analysis-version 3`) follows: a match on a Java enum of the
   class path takes the enum as a pattern-match target where the build names one of its constants, as scalac's does
   (it took none), and a match on a sealed Java class of the class path takes none (it took the class).
+  (`J.N1. .. .N9` was "not found").
+- A library's given summoned through scala-library's inline `summon` (`summon[Int]` of a jar's `given Int = 11`) is
+  the given's value at every worker count, on the JVM and on JavaScript over scala-library: above one worker it was
+  the type's default (0, `false`, `0.0`) where another worker had typed the given. A library's value read through an
+  inline call (`summon`, a program's `inline def id[A](x: A): A = x` given a library object's `val v`, scala-library's
+  `math.max(3, 7)`) is a call of the library's member, as scalac's client calls it, where it was the value the build
+  read: a client run beside another version of the library prints that version's (`id(lib.Q.v)` printed the build's
+  11 beside a `Q` whose `v` is 12). So is a String method of a literal or of a constant read through one
+  (`id("ab".length)`, `id(Console.RED.length)`): the platform's method at run time, on the JVM and on JavaScript, as
+  scalac's client calls it. A constant (`final val k = 5`) is folded as before.
+- On JavaScript, `java.lang.Long`'s `highestOneBit`, `lowestOneBit`, `reverseBytes` and `toOctalString` run (they were
+  refused: scala-library's `LongMap`, `hashing.byteswap64` and `RichLong.toOctalString` reach them), `Long.hashCode`
+  is the JDK's (`Long.hashCode(-1L)` is 0, it was -1), and a number beside a `BigInt` or `BigDecimal` is equal as
+  scalac's (`(42: Any) == BigInt(42)`, `Option(42).contains(BigInt(42))`, `List(42).contains(BigInt(42))`: true,
+  they were false).
 
 ## 0.1.11 (2026-11-20)
 

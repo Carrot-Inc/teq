@@ -1965,6 +1965,7 @@ fn install_java(it: &mut Table) {
     });
     reg!(it, "java.lang.Long.toHexString", |it, a| Ok(Value::string(unsigned_radix(long(it, a, 1)? as u64, 16))));
     reg!(it, "java.lang.Long.toBinaryString", |it, a| Ok(Value::string(unsigned_radix(long(it, a, 1)? as u64, 2))));
+    reg!(it, "java.lang.Long.toOctalString", |it, a| Ok(Value::string(unsigned_radix(long(it, a, 1)? as u64, 8))));
     reg!(it, "java.lang.Long.hashCode", |it, a| Ok(Value::Int(long_hash_code(long(it, a, 1)?))));
     reg!(it, "java.lang.Long.bitCount", |it, a| Ok(Value::Int(long(it, a, 1)?.count_ones() as i32)));
     reg!(it, "java.lang.Long.numberOfLeadingZeros", |it, a| Ok(Value::Int(long(it, a, 1)?.leading_zeros() as i32)));

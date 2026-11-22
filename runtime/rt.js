@@ -401,6 +401,12 @@ function $eq(a, b) {
   if (typeof a === "bigint" && typeof b === "number") return Number.isInteger(b) && a === BigInt(b);
   return false;
 }
+// `$eq` once the program has scala.math.ScalaNumber, called where its class is registered: a number (or a Long's
+// bigint) beside a ScalaNumber is equal by the ScalaNumber's `equals`, as BoxesRunTime.equals2 answers it.
+function $eqNumbers(ScalaNumber) {
+  const eq = $eq;
+  $eq = (a, b) => (typeof a === "number" || typeof a === "bigint") && b instanceof ScalaNumber ? b.equals(a) : eq(a, b);
+}
 let $nextHash = 1;
 const $identityHashes = new WeakMap();
 function $strHash(s) {

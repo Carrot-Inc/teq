@@ -252,7 +252,7 @@ impl<'a, 't> Interp<'a, 't> {
         let (product, equals) = (self.typer.b.product, self.typer.equals_class());
         match self.member(c, name) {
             Member::Fun(_, k) if Some(k) == product || Some(k) == equals => None,
-            m @ (Member::Fun(..) | Member::Field(_) | Member::Lazy(..)) => Some(m),
+            m @ (Member::Fun(..) | Member::Field(_) | Member::Unheld(_) | Member::Lazy(..)) => Some(m),
             _ => None,
         }
     }

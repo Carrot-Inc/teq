@@ -4011,6 +4011,9 @@ impl<'a> Emitter<'a> {
                 let _ = write!(self.out, " $exc.{} = {};", self.interner.get(info.name), name);
             }
         }
+        if self.is_scala_number(tc.id) {
+            let _ = write!(self.out, " $eqNumbers({});", name);
+        }
         // A class's registrations for `Reflect` and for `Class.forName`, in that order.
         let from = self.reach.reflective.partition_point(|&(c, _)| c < tc.id);
         for i in from..self.reach.reflective.len() {
@@ -4119,6 +4122,16 @@ impl<'a> Emitter<'a> {
             Some(parent) => format!("{}{}.", self.package_path(parent), self.interner.get(info.name)),
             None => String::new(),
         }
+    }
+
+    /// Whether `c` is `scala.math.ScalaNumber`, the class the runtime's cooperative equality tests a number's other
+    /// side against (`$eqNumbers`).
+    fn is_scala_number(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        let Owner::Package(p) = info.owner else { return false };
+        let pkg = self.syms.pkg(p);
+        let in_scala = pkg.parent.map_or(false, |q| self.interner.get(self.syms.pkg(q).name) == "scala" && self.syms.pkg(q).parent == Some(crate::symbols::ROOT_PKG));
+        self.interner.get(info.name) == "ScalaNumber" && self.interner.get(pkg.name) == "math" && in_scala
     }
 
     /// Whether the runtime throws instances of this class of the standard library (`$exc`).

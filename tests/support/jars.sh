@@ -61,7 +61,7 @@
 # tests/support/alias_val_lib.scala compiled the same way; aliastop-lib, tests/support/alias_top_lib.scala compiled
 # the same way; aliasimp-lib, tests/support/alias_imported_lib.scala compiled the same way; aliasgiven-lib,
 # tests/support/alias_given_lib.scala compiled the same way; toplevel-lib, tests/support/toplevel_members_lib.scala
-# compiled the same way; missingdep-lib,
+# compiled the same way; givenfold-lib, tests/support/given_fold_lib.scala compiled the same way; missingdep-lib,
 # tests/support/missing_dep/A.scala compiled against dep/B.scala into a jar without it; missingclass-mixed,
 # tests/support/missing_class_mixed's Scala and Java classes compiled against its Gone2 into a jar without it; lazyorder-lib,
 # tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib, tests/support/ctorinit_lib.scala
@@ -684,6 +684,19 @@ defaults_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/given_fold_lib.scala compiled by scalac into a jar: givens and values a client reads through an inline call.
+given_fold_lib_jar() {
+  local src=tests/support/given_fold_lib.scala
+  local jar=$scratch/givenfold-lib.jar
+  local dir=$scratch/givenfold-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/given_fold_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/quote_nest_lib.scala compiled by scalac into a jar: a macro's nested quote pattern naming an outer one's type.
 quote_nest_lib_jar() {
   local src=tests/support/quote_nest_lib.scala
@@ -1244,6 +1257,7 @@ jar_of() {
     outer-lib) outer_lib_jar ;;
     unicode-lib) unicode_lib_jar ;;
     defaults-lib) defaults_lib_jar ;;
+    givenfold-lib) given_fold_lib_jar ;;
     stddefaults-lib) std_defaults_lib_jar ;;
     erasedoverloads-lib) erased_overloads_lib_jar ;;
     quotenest-lib) quote_nest_lib_jar ;;

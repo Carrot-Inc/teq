@@ -114,6 +114,7 @@ js/kittens_shapes	pass	-
 js/library_forwarder_path_value	pass	-	
 js/library_forwarder_singleton_type	pass	-	
 js/library_object_vals	fail	-	js run, --std=lean: < OwnVal: its val
+js/long_bit_statics	pass	-	
 js/macro_suspended_after_library_demand	pass	-	
 js/macro_suspended_library_demand_no_final_newline	pass	-	
 js/macro_suspended_library_demand_reaches_output	pass	-	
@@ -130,6 +131,7 @@ js/munit_location	pass	-
 js/munit_read_file	pass	-	
 js/murmur	pass	-	
 js/nul_identifier	fail	-	js run, --std=lean: tests/classpath/js/nul_identifier.scala:13:13: error: value getDeclaredMethods is not a member of Class[_]
+js/number_cooperative_equality	pass	-	
 js/opaque_scope_inline_body	pass	-	
 js/overload_value_member	pass	-	
 js/package_scope_std_bindings	pass	-	

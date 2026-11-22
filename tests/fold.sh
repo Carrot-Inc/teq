@@ -1,7 +1,8 @@
 #!/bin/bash
 # Compile-time evaluation of inline arguments: tests/cases/inline_fold_std.scala is built and
 # its JavaScript searched for the constants the interpreter folded and for the calls that
-# have to stay (an effect, a computation over the budget). The std's `println` is overloaded
+# have to stay (an effect, a computation over the budget, a method of the std's stand-in for a
+# platform class, String's, which is the platform's at run time). The std's `println` is overloaded
 # (`println()` beside `println(x: Any)`), which the output names apart: `println$Any`.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
@@ -18,10 +19,10 @@ js=out/fold/inline_fold_std.js
 if ! timeout 20 "$TEQ" compiler build tests/cases/inline_fold_std.scala -o "$js" > out/fold/build.log 2>&1; then
   bad "build: $(tail -1 out/fold/build.log)"
 else
-  for text in 'println$Any(3 + 3 | 0)' 'println$Any(6 + 6 | 0)' '"aaa-4/5" + "!"' 'println$Any("yes")' '"n=" + 3' 'println$Any("four")' '"8" + "!"' 'bump() + bump()' 'counter$()' '.toList().sum(' '0 + 0 | 0'; do
+  for text in '("ab".length + 1 | 0)' 'println$Any(6 + 6 | 0)' '"aaa-4/5" + "!"' '"abc".startsWith("a") ? "yes" : "no"' '"n=" + 3' '"n=" + $split("x,y,z", ",").length' 'println$Any("four")' '"8" + "!"' 'bump() + bump()' 'counter$()' '.toList().sum(' '0 + 0 | 0'; do
     if grep -qF -- "$text" "$js"; then ok; else bad "the output lacks $text"; fi
   done
-  for text in '"ab".length' 'ArraySeq([1, 2, 3])' 'startsWith' '$split("x,y,z"' 'Math.sqrt' 'Vector$().apply(' 'Option$().apply(7)' 'Map$().apply(' 'new Random(3n)'; do
+  for text in 'ArraySeq([1, 2, 3])' 'Math.sqrt' 'Vector$().apply(' 'Option$().apply(7)' 'Map$().apply(' 'new Random(3n)'; do
     if grep -qF -- "$text" "$js"; then bad "the output still holds $text"; else ok; fi
   done
 fi
@@ -56,7 +57,7 @@ if [ ${#outputs[@]} = 4 ]; then
     diff "${outputs[0]}" "${outputs[2]}" | head -5
   fi
   js=out/fold/targets-js-folded.js
-  for text in 'println$Any(4 + 4 | 0)' '"[" + "1,2"' 'println$Any("yes")' '$dstr(1.4142135623730951)'; do
+  for text in '("abc".length + 1 | 0)' '"[" + "1,2"' 'println$Any("yes")' '$dstr(1.4142135623730951)'; do
     if grep -qF -- "$text" "$js"; then ok; else bad "fold_targets lacks $text"; fi
   done
   for text in '"0.3333333333333333"' '"2.5"' '"1.5;2.5"' '"0.30000000000000004"' '"96354"' '"1.5"'; do

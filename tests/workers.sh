@@ -508,6 +508,18 @@ one_jar member_reread_below_standin 36 5
 one_jar jdk_parent_two_kinds 18.0 5
 one_jar jdk_parent_program_class "1 jdkparent.Spot java.awt.Point" 5
 
+# A library's givens (tests/support/given_fold_lib.scala) summoned through scala-library's inline `summon`, a
+# companion's and a nested object's among them, are the givens' own values at every count: the worker that expands
+# the call holds no initialiser of a given another worker typed, and the getter is called as scalac's client calls it.
+# On the JVM against scalac's line; on JavaScript over scala-library against one worker's output.
+one_jar library_given_summon "11 3 true st k 1.5" 5
+jars_of tests/workers/library_given_summon
+if [ -n "$JARS_MISSING" ]; then
+  not_run "library_given_summon_js" "not in the coursier cache:$JARS_MISSING"
+else
+  same_output library_given_summon_js 3 run tests/workers/library_given_summon --std scala-library --classpath "$JARS_CP"
+fi
+
 # A library's block typed again under the loader's lock (an argument typed once more against
 # another expected type) enters its locals afresh, and its statements read the last entry, as one
 # worker's map gives it: reactivemongo's `productReader`, whose partial function reads the last

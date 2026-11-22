@@ -1302,6 +1302,12 @@ impl<'a, 't> Interp<'a, 't> {
         fields[slot] = v;
     }
 
+    /// A compile-time fold's read of a lazy member whose initialiser this worker does not hold: its field was never
+    /// set, and its default is no value of the member's, so the fold gives up.
+    fn unheld_read(&self, name: Name) -> R {
+        Err(Control::Fail(Failure::Unsupported(format!("the lazy member {} has no initialiser in this run", self.name(name)))))
+    }
+
     /// What a field holds before its initialiser runs (read from a constructor its own
     /// initialiser calls): the zero of its erased type, as on the JVM, `null` for a reference.
     fn field_zero(&mut self, s: SymId) -> Value {
@@ -1333,8 +1339,9 @@ impl<'a, 't> Interp<'a, 't> {
                 let name = self.syms().dispatch_name(s);
                 let m = self.member(class, name);
                 match m {
-                    Member::Missing | Member::Field(_) if self.java_statics_object(o) => self.refuse_static(class, name),
-                    Member::Missing | Member::Field(_) => Ok(self.field_zero(s)),
+                    Member::Missing | Member::Field(_) | Member::Unheld(_) if self.java_statics_object(o) => self.refuse_static(class, name),
+                    Member::Unheld(_) if self.pure && self.macro_ctx.is_none() => self.unheld_read(name),
+                    Member::Missing | Member::Field(_) | Member::Unheld(_) => Ok(self.field_zero(s)),
                     m => self.invoke_member(recv, m, name, Vec::new()),
                 }
             }
@@ -2133,7 +2140,7 @@ impl<'a, 't> Interp<'a, 't> {
                     return Member::Missing;
                 }
                 let key = self.field_key(m);
-                Member::Field(key)
+                if lazy { Member::Unheld(key) } else { Member::Field(key) }
             }
             SymKind::Object(nested) => Member::Module(nested),
             _ => Member::Missing,
@@ -2377,6 +2384,14 @@ impl<'a, 't> Interp<'a, 't> {
             Member::Field(key) => {
                 let v = self.read_slot(&recv, key);
                 Ok(if let Value::Absent = v { Value::Null } else { v })
+            }
+            Member::Unheld(key) => {
+                let v = self.read_slot(&recv, key);
+                match v {
+                    Value::Absent if self.pure && self.macro_ctx.is_none() => self.unheld_read(name),
+                    Value::Absent => Ok(Value::Null),
+                    v => Ok(v),
+                }
             }
             Member::SetField(key) => {
                 let v = args.into_iter().next().unwrap_or(Value::Unit);

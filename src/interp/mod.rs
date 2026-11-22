@@ -252,6 +252,9 @@ pub enum Member {
     /// A templated member without a body: the builtin under its qualified name, and the name.
     Builtin(Builtin, Rc<str>),
     Field(FieldKey),
+    /// A lazy member (a library object's val among them) whose initialiser this run does not hold: read as a field,
+    /// but given up by a compile-time fold's run, where the field was never set.
+    Unheld(FieldKey),
     /// The setter `x_=` of a var `x` that implements an abstract setter: it writes the field.
     SetField(FieldKey),
     Lazy(FieldKey, TExprId, ClassId),

@@ -161,7 +161,7 @@ enums-java-compat.scala	fail	lean:fail	enums-java-compat.scala:10:6: object crea
 enums-precise.scala	pass	lean:pass	
 enums-thunk.scala	pass	lean:pass	
 eq-xmethod.scala	pass	lean:pass	
-equality.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: 5 == 5
+equality.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: 5 ==  
 erased-18.scala	fail	lean:fail	erased-18.scala:7:15: expected ',' or ')', found identifier
 erased-19.scala	fail	lean:fail	erased-19.scala:7:15: expected ',' or ')', found identifier
 erased-20.scala	fail	lean:fail	erased-20.scala:6:18: expected ',' or ')', found identifier
@@ -763,7 +763,7 @@ list_map.scala	pass	lean:pass
 lists-run.scala	pass	lean:pass	
 literals.scala	pass	lean:pass	
 llift.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
-longmap.scala	fail	lean:pass	lang.scala:1:1: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platform layer)
+longmap.scala	pass	lean:pass	
 loops-alt.scala	fail	lean:fail	loops-alt.scala:19:12: No given instance of type Label[Unit] was found for parameter label of method break in object boundary
 loops.scala	timeout	lean:fail	the program: over 45 s
 lst	fail	lean:fail	Lst.scala:111:24: new Array takes one type argument
@@ -817,7 +817,7 @@ null-and-intersect.scala	pass	lean:pass
 null-hash.scala	pass	lean:pass	
 nullAsInstanceOf.scala	pass	lean:pass	
 nullInstanceEval.scala	pass	lean:pass	
-numbereq.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: -32768/class java.lang.Integer != -32768/class scala.math.BigDecimal
+numbereq.scala	fail	lean:fail	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: 0/class java.lang.Integer !=  /class java.lang.String
 numeric-range.scala	pass	lean:pass	
 opaque-immutable-array-xm.scala	pass	lean:pass	
 opaque-inline2.scala	pass	lean:pass	
@@ -1051,7 +1051,7 @@ t3516.scala	pass	lean:pass
 t3529.scala	pass	lean:pass	
 t3540.scala	pass	lean:fail	
 t3563.scala	pass	lean:pass	
-t3603.scala	fail	lean:pass	lang.scala:1:1: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platform layer)
+t3603.scala	pass	lean:pass	
 t3616.scala	fail	lean:fail	t3616.scala:2:13: Not found: Value
 t3619.scala	pass	lean:pass	
 t363.scala	pass	lean:pass	

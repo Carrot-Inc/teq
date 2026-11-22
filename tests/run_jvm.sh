@@ -56,7 +56,10 @@
 # class files (left out without javap). And a constructor calls
 # its by-name parameter's thunk where its code reads the parameter, a closure there capturing the thunk:
 # tests/support/byname_ctor/list.sh's listing of byname_ctor.scala against byname_ctor.expected, listed from scalac's
-# class files (left out without javap).
+# class files (left out without javap). And a library's value read through an inline call is a call of its getter
+# where scalac's client calls it, at one worker and at eight: tests/support/library_value_reads/list.sh's listing of
+# library_value_reads.scala against library_value_reads.expected, listed from scalac's class files (left out without
+# javap or the jars).
 cd "$(dirname "$0")/.."
 # The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
 # `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
@@ -290,6 +293,27 @@ jar_companion_touch() {
     return 1
   fi
 }
+library_value_reads() {
+  command -v javap > /dev/null || { aux_not_run library_value_reads "no javap"; return 0; }
+  local src=tests/support/library_value_reads/library_value_reads.scala work t
+  . tests/support/jars.sh
+  jars_of "$src"
+  [ -z "$JARS_MISSING" ] || { aux_not_run library_value_reads "not in the coursier cache:$JARS_MISSING"; return 0; }
+  for t in 1 8; do
+    work=$out/library_value_reads.$t
+    rm -rf "$work"
+    if ! timeout 120 "$TEQ" compiler build "$src" --target jvm --products "$work" --classpath "$JARS_CP" --threads $t > "$work.log" 2>&1; then
+      echo "LIBRARY VALUE READS: the fixture does not build at $t workers (see $work.log)"
+      return 1
+    fi
+    bash tests/support/library_value_reads/list.sh "$work" "$JARS_CP" > "$work.txt"
+    if ! diff tests/support/library_value_reads/library_value_reads.expected "$work.txt" > "$work.diff"; then
+      echo "LIBRARY VALUE READS: at $t workers, a library's value read through an inline call is not called where scalac's client calls it"
+      head -10 "$work.diff"
+      return 1
+    fi
+  done
+}
 final_select() {
   command -v javap > /dev/null || { aux_not_run final_select "no javap"; return 0; }
   local work=$out/final_select
@@ -368,6 +392,7 @@ if [ -z "$VERSION" ]; then
   anon_final || status=1
   inline_bindings || status=1
   jar_companion_touch || status=1
+  library_value_reads || status=1
   final_select || status=1
   byname_ctor || status=1
   synchronized_shape || status=1

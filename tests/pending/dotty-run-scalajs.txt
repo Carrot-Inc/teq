@@ -227,7 +227,6 @@ kmpSliceSearch.scala	run: exit 1: AssertionError [java.lang.AssertionError]: ass
 lambda-null.scala	output: line 7: the .check has 'specialized Function1: 0', the program printed 'specialized Function1: null'
 lazy-exprs.scala	run: exit 1: MatchError [scala.MatchError]
 llift.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
-longmap.scala	lang.scala:1:1: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platform layer)
 loops-alt.scala	loops-alt.scala:19:12: no given instance of type Label[Unit] was found for parameter label
 loops.scala	timeout: the program: over 45 s
 lst	Lst.scala:35:9: expected 'case', found 'var'
@@ -285,7 +284,6 @@ t3346g.scala	t3346g.scala:8:11: value copy is not a member of String
 t3346h.scala	t3346h.scala:8:11: value y is not a member of String
 t3452h.scala	t3452h.scala:1:7: error overriding method f in class Foo of type I: method f in trait Bar of type Bar.this.I has incompatible type
 t3502.scala	t3502.scala:5:18: recursive use of apply needs an explicit result type
-t3603.scala	lang.scala:1:1: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platform layer)
 t3616.scala	t3616.scala:2:13: not found: Value
 t3687.scala	t3687.scala:1:43: not found: Value
 t3887.scala	t3887.scala:9:18: expected a pattern, found 'this'

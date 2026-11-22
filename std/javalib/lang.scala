@@ -303,7 +303,11 @@ package java.lang:
     @js("(BigInt.asUintN(64, $1)).toString(2)")
     @jvm("invokestatic java/lang/Long.toBinaryString(J)Ljava/lang/String;")
     def toBinaryString(l: scala.Long): String
-    @js("$longHash($1)")
+    @js("(BigInt.asUintN(64, $1)).toString(8)")
+    @jvm("invokestatic java/lang/Long.toOctalString(J)Ljava/lang/String;")
+    def toOctalString(l: scala.Long): String
+    // The JDK's `(int)(l ^ (l >>> 32))`, not `##`, which hashes a Long of an Int's range as the Int.
+    @js("$longHashCode($1)")
     @jvm("invokestatic java/lang/Long.hashCode(J)I")
     def hashCode(l: scala.Long): Int
     @js("($1 < $2 ? -1 : $1 > $2 ? 1 : 0)")
@@ -328,6 +332,10 @@ package java.lang:
     @js("$longCtz($1)")
     @jvm("invokestatic java/lang/Long.numberOfTrailingZeros(J)I")
     def numberOfTrailingZeros(l: scala.Long): Int
+    @jvm("invokestatic java/lang/Long.highestOneBit(J)J")
+    def highestOneBit(l: scala.Long): scala.Long = l & (MIN_VALUE >>> numberOfLeadingZeros(l))
+    @jvm("invokestatic java/lang/Long.lowestOneBit(J)J")
+    def lowestOneBit(l: scala.Long): scala.Long = l & -l
     @js("BigInt.asIntN(64, ($1 << BigInt($2 & 63)) | (BigInt.asUintN(64, $1) >> BigInt(-$2 & 63)))")
     @jvm("invokestatic java/lang/Long.rotateLeft(JI)J")
     def rotateLeft(l: scala.Long, distance: Int): scala.Long
@@ -338,6 +346,10 @@ package java.lang:
     @js("BigInt.asIntN(64, (BigInt($reverseBits(Number(BigInt.asUintN(64, $1) & 0xffffffffn)) >>> 0) << 32n) | BigInt($reverseBits(Number(BigInt.asUintN(64, $1) >> 32n)) >>> 0))")
     @jvm("invokestatic java/lang/Long.reverse(J)J")
     def reverse(l: scala.Long): scala.Long
+    @jvm("invokestatic java/lang/Long.reverseBytes(J)J")
+    def reverseBytes(l: scala.Long): scala.Long =
+      val i = (l & 0x00ff00ff00ff00ffL) << 8 | (l >>> 8) & 0x00ff00ff00ff00ffL
+      (i << 48) | ((i & 0xffff0000L) << 16) | ((i >>> 16) & 0xffff0000L) | (i >>> 48)
     @js("($1 > 0n ? 1 : $1 < 0n ? -1 : 0)")
     @jvm("invokestatic java/lang/Long.signum(J)I")
     def signum(l: scala.Long): Int
