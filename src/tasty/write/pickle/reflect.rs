@@ -7,7 +7,7 @@
 //! names scala-library's member for each of the std's.
 
 use super::*;
-use crate::tir::TExprId;
+use crate::tir::{TExpr, TExprId};
 
 /// A member of the std's reflection API as scala-library has it: the accessor of
 /// `reflectModule` its owner stands for (`-` for `reflectModule` itself), the class that
@@ -147,41 +147,85 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
-    /// The `Quotes` parameter the source text from `start` of `file` selects `reflect` on, up to
-    /// the line's end or a `,` or `)` outside brackets (`t: q.reflect.Term`, `import
-    /// q.reflect.*`), among the parameters in scope.
+    /// The `Quotes` parameter the written type of the parameter whose name starts at `start` of `file` selects
+    /// `reflect` on (`t: q.reflect.Term`, a method's or a function literal's parameter), among the parameters in
+    /// scope: the name before the type tree's `reflect` selection (`Parsers.simpleType1`'s path).
     pub(super) fn declared_quotes(&mut self, file: FileId, start: u32) -> Option<QuotesRef> {
-        let rest = self.w.files.as_slice().get(file.0 as usize)?.text.get(start as usize..)?;
-        let mut depth = 0i32;
-        let end = rest
-            .char_indices()
-            .find(|&(_, c)| {
-                match c {
-                    '[' | '(' => depth += 1,
-                    ']' if depth > 0 => depth -= 1,
-                    ')' if depth > 0 => depth -= 1,
-                    _ => {}
+        self.w.files.as_slice().get(file.0 as usize)?;
+        if !self.param_types.contains_key(&file) {
+            let index = self.index;
+            let ast = self.w.ast(file);
+            let m = index.param_types.borrow_mut().entry(file).or_insert_with(|| {
+                let mut m: FxMap<u32, crate::ast::TyExprId> = FxMap::default();
+                for d in &ast.defs {
+                    let clauses: &[crate::ast::ParamClause] = match &d.kind {
+                        crate::ast::DefKind::Fun(f) => &f.clauses,
+                        crate::ast::DefKind::Class(c) => &c.clauses,
+                        crate::ast::DefKind::Given(g) => &g.clauses,
+                        _ => &[],
+                    };
+                    for c in clauses {
+                        for p in &c.params {
+                            m.insert(p.span.start, p.ty);
+                        }
+                    }
                 }
-                c == '\n' || (depth == 0 && (c == ',' || c == ')'))
-            })
-            .map_or(rest.len(), |(i, _)| i);
-        let text = &rest[..end];
-        let at = text.find(".reflect")?;
-        let name: String = text[..at].chars().rev().take_while(|c| c.is_alphanumeric() || *c == '_').collect::<Vec<_>>().into_iter().rev().collect();
+                for p in &ast.lambda_params {
+                    if let Some(t) = p.ty {
+                        m.insert(p.span.start, t);
+                    }
+                }
+                std::rc::Rc::new(m)
+            }).clone();
+            self.param_types.insert(file, m);
+        }
+        let t = *self.param_types[&file].get(&start)?;
+        let name = reflect_prefix(self.w.ast(file), self.w.interner, t)?;
+        let name = self.w.interner.get(name).to_string();
+        self.quotes_named(&name)
+    }
+
+    /// The `Quotes` a call on an object of the reflection API takes from its receiver, its first argument (an
+    /// extension's, `TreeMethods.asExprOf(t)`): the one a parameter's written type names (`declared_quotes`).
+    pub(super) fn receiver_quotes(&mut self, qual: TExprId, args: &[TExprId]) -> Option<QuotesRef> {
+        let TExpr::Module(c) = self.w.prog.expr(qual) else { return None };
+        if !self.is_reflect_class(c) {
+            return None;
+        }
+        let TExpr::Local(p) = self.w.prog.expr(*args.first()?) else { return None };
+        let info = self.w.syms.sym(p);
+        let (file, start) = (info.file, info.span.start);
+        self.declared_quotes(file, start)
+    }
+
+    /// The `Quotes` parameter the import clause starting at `start` of `file` selects `reflect` on (`import
+    /// q.reflect.*`): the name before `reflect` in its qualifier, as the parser read it (`Parsers.importExpr`).
+    pub(super) fn import_quotes(&mut self, file: FileId, start: u32) -> Option<QuotesRef> {
+        self.w.files.as_slice().get(file.0 as usize)?;
+        let ast = self.w.ast(file);
+        let imp = ast.imports.iter().chain(&ast.local_imports).find(|i| i.tree_start == start)?;
+        let name = reflect_qualifier(self.w.interner, &imp.path)?;
+        let name = self.w.interner.get(name).to_string();
         self.quotes_named(&name)
     }
 
     /// The `Quotes` parameter the first import of the reflection API in the definition of `s`
-    /// names (`import r.reflect.*`).
+    /// names (`import r.reflect.*`): the first import clause the parser read in its range whose qualifier selects
+    /// `reflect` (a block's `Import` tree, Parsers.scala 5024).
     pub(super) fn body_reflect_import(&mut self, s: SymId) -> Option<QuotesRef> {
         let info = self.w.syms.sym(s);
         let (file, def) = (info.file, info.def?);
-        let range = self.w.ast(file).def_range(def);
-        let text = self.w.files.as_slice().get(file.0 as usize)?.text.get(range.start as usize..range.end as usize)?;
-        let at = text.find("import ")? + "import ".len();
-        let rest = &text[at..];
-        let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-        rest[name.len()..].starts_with(".reflect").then_some(())?;
+        self.w.files.as_slice().get(file.0 as usize)?;
+        let ast = self.w.ast(file);
+        let range = ast.def_range(def);
+        let name = ast
+            .local_imports
+            .iter()
+            .filter(|i| i.tree_start >= range.start && i.tree_start < range.end)
+            .filter_map(|i| reflect_qualifier(self.w.interner, &i.path).map(|n| (i.tree_start, n)))
+            .min_by_key(|&(at, _)| at)?
+            .1;
+        let name = self.w.interner.get(name).to_string();
         self.quotes_named(&name)
     }
 
@@ -411,4 +455,28 @@ impl<'w, 'a> P<'w, 'a> {
 pub(super) enum QuotesRef {
     Param(SymId),
     Splice(SymId),
+}
+
+/// The name before the first `reflect` a type tree selects, in the order the source writes it (`q.reflect.Term`,
+/// `List[q.reflect.Term]`): the prefix's name, an identifier's or a selection's last one.
+fn reflect_prefix(ast: &crate::ast::Ast, interner: &crate::intern::Interner, t: crate::ast::TyExprId) -> Option<crate::intern::Name> {
+    use crate::ast::TyExpr;
+    let is_reflect = |n: crate::intern::Name| interner.get(n) == "reflect";
+    match ast.ty(t) {
+        TyExpr::Select(q, n) if is_reflect(n) => match ast.ty(q) {
+            TyExpr::Name(x) | TyExpr::Select(_, x) => Some(x),
+            _ => reflect_prefix(ast, interner, q),
+        },
+        TyExpr::Select(q, _) | TyExpr::Singleton(q) | TyExpr::ByName(q) | TyExpr::Repeated(q) | TyExpr::Annotated(q, _) => reflect_prefix(ast, interner, q),
+        TyExpr::Apply(f, args) => reflect_prefix(ast, interner, f).or_else(|| ast.ty_list(args).iter().find_map(|&a| reflect_prefix(ast, interner, a))),
+        TyExpr::Tuple(l) => ast.ty_list(l).iter().find_map(|&a| reflect_prefix(ast, interner, a)),
+        TyExpr::Fun(l, r) | TyExpr::CtxFun(l, r) => ast.ty_list(l).iter().find_map(|&a| reflect_prefix(ast, interner, a)).or_else(|| reflect_prefix(ast, interner, r)),
+        _ => None,
+    }
+}
+
+/// The name before `reflect` in an import's qualifier (`import q.reflect.*`, `import q.reflect.{..}`).
+fn reflect_qualifier(interner: &crate::intern::Interner, path: &[crate::intern::Name]) -> Option<crate::intern::Name> {
+    let i = path.iter().position(|&n| interner.get(n) == "reflect")?;
+    i.checked_sub(1).map(|j| path[j])
 }

@@ -737,7 +737,8 @@ pub struct SyntaxNotes {
     /// The definitions a val or var of several names made (`val a, b: T`): one `PatDef` to the reference,
     /// no `ValDef` (`TreeInfo.defKind` tells them apart).
     pub several_names: crate::intern::FxMap<DefId, ()>,
-    /// Where the parser read the tokens the TASTy writer starts trees at (`WrittenPlaces`), always recorded.
+    /// Where the parser read the tokens the TASTy writer starts trees at (`WrittenPlaces`), kept where the run writes
+    /// TASTy (`parser::Syntax::pickles`).
     pub places: WrittenPlaces,
 }
 
@@ -745,30 +746,243 @@ pub struct SyntaxNotes {
 /// `Parsers` passes to `atSpan`: recorded as the parser consumes the token, so that a comment, a string or an identifier
 /// holding the word is never taken for it. The TASTy writer reads them and nothing of the file's text; a place not
 /// recorded is not written (the writer leaves the tree's position to its read-back).
+///
+/// Kept only by a parse whose run writes TASTy (`parser::Syntax::pickles`): any other run's record is empty, nothing
+/// noted and nothing allocated, and the writer refuses it (`WrittenPlaces::check`), so that a run that pickles a file
+/// parsed without it fails rather than writing worse positions. The places of the parser's reads (`TokenRead`) are one array
+/// of `(read, key, offset)`, appended as the parser reads and sorted once its parse ends (`seal`), each looked up by a
+/// binary search; a key noted twice keeps its last place.
 #[derive(Default, Debug)]
 pub struct WrittenPlaces {
+    /// Whether the parse kept the record (`parser::Syntax::pickles`).
+    kept: bool,
+    /// The places of the reads, `TokenRead` and key in the high and low halves of `key`; sorted by it once sealed.
+    marks: Vec<Mark>,
     /// The file's first statement, past its leading separators (`compilationUnit`'s `in.offset` after its `SEMI`s,
     /// Parsers.scala 5053-5054, a script's header skipped by the lexer as SourceFile.scala 27-37 skips it): where the
     /// empty package's identifier reads back where the file's statements are its own. On every AST of the file.
-    pub first_stat: Option<u32>,
+    first_stat: Option<u32>,
     /// A package object's `package` keyword, on its package block's AST, whose package is the object's
     /// (`objectDef(start, ..)` of `topstats`, Parsers.scala 5054-5059). An offset alone: a name here would be the
     /// parser thread's, which `frontend::remap_names` does not move into the build's interner.
-    pub package_object: Option<u32>,
+    package_object: Option<u32>,
+    /// The unit's first package clause, where the file's first statement is one (`compilationUnit`'s `topstats`
+    /// past its `SEMI`s, Parsers.scala 5053-5066): its `package` keyword, the `PackageDef`'s start, and its last name,
+    /// the point (`makePackaging`'s `atSpan(start, pointOffset(pkg))`, 4842-4843). On every AST of the file.
+    package_clause: Option<(u32, u32)>,
     /// Each extension group's `extension` keyword by the group's number (`FunDef::ext_group`): `Parsers.extension`'s
     /// `start = in.skipToken()`, its `ExtMethods`' span start (Parsers.scala 4632, 4658).
-    pub extension_keywords: crate::intern::FxMap<u32, u32>,
+    extension_keywords: crate::intern::FxMap<u32, u32>,
     /// Each enum case's place by its definition: its statement's start (`defOrDcl(in.offset, ..)`, its annotations'
     /// or its `case` keyword's, Parsers.scala 4946, 4092, 4413), and whether its statement names several (`case A, B`,
     /// a `PatDef`, Parsers.scala 4415-4426).
-    pub enum_cases: crate::intern::FxMap<DefId, CasePlace>,
+    enum_cases: crate::intern::FxMap<DefId, CasePlace>,
     /// A template's written self definition's start by its class's definition: the body's first token past its `{` or
     /// colon and separators (`Parsers.selfType`'s `atSpan(in.offset)` at its name or `this`, Parsers.scala 4902).
-    pub self_starts: crate::intern::FxMap<DefId, u32>,
+    self_starts: crate::intern::FxMap<DefId, u32>,
     /// A function type written from a `(` (`(A) => B`), its arrow by the type: `Parsers.typ`'s parenthesized
     /// parameters make the `Function` at the arrow (`functionRest`'s `atSpan(start, in.offset)`, Parsers.scala
     /// 1724-1726). Not a context function's.
-    pub fun_arrows: crate::intern::FxMap<TyExprId, u32>,
+    fun_arrows: crate::intern::FxMap<TyExprId, u32>,
+}
+
+/// A place of `WrittenPlaces::marks`: its read and key (`TokenRead` in the high half), and the token's offset.
+#[derive(Clone, Copy, Debug)]
+struct Mark {
+    key: u64,
+    at: u32,
+}
+
+/// A read of the parser the TASTy writer places a tree by, each a kind of `WrittenPlaces`' array, by the key it names.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u8)]
+pub enum TokenRead {
+    /// A type parameter's start where it is not its name's, by its name's offset (the `TypeParam`'s span start): its
+    /// first annotation's, else its variance sign's (`typeParam`'s `val start = in.offset` before `annotsAsMods`, its
+    /// `atSpan(start, nameStart)`, Parsers.scala 3677-3685).
+    TparamStart,
+    /// An anonymous class's template written in braces, by the class's `DefId`: its `{` (`newExpr`'s
+    /// `templateBodyOpt` after `possibleTemplateStart`, the class `reposition`ed from `new` through the `}`,
+    /// Parsers.scala 2942-2963).
+    BracedTemplate,
+    /// A type selection's name, by the selection's `TyExprId`: the name token's offset, a backquoted one's at its quote
+    /// (`singletonCompletion`'s `selector(t)`, `atSpan(startOffset(t), in.offset)`, Parsers.scala 1329, 2139-2144).
+    TySelectName,
+    /// A term match's `match` keyword, by the match's `ExprId` (`matchClause`'s `atSpan(startOffset(t),
+    /// in.skipToken())`, Parsers.scala 2703-2704, from `infixOps` 1268 and `selectorOrMatch` 1324-1326); an `inline`
+    /// match keeps its node, and so its place. A match type's keyword is `SyntaxNotes::match_keywords`.
+    TermMatch,
+    /// A term selection's name, by the selection's `ExprId`: the name token's offset, a backquoted one's at its quote
+    /// (`selector`'s `atSpan(startOffset(t), in.offset)`, Parsers.scala 1329; `selectorOrMatch` 1324; a pattern's
+    /// path, `dotSelectors` 1333); a postfix operator's and an infix one's, by the `Select` or the `Infix`, at the
+    /// operator.
+    SelectName,
+    /// An application's argument clause's `(`, by the application's `ExprId` (`simpleExprRest`'s
+    /// `atSpan(startOffset(t), in.offset) { mkApply(t, argumentExprs()) }`, Parsers.scala 2907-2908). A block or a
+    /// colon argument's application is its children's envelope, which keeps no position in a pickle
+    /// (PositionPickler.scala 120): none is recorded for it.
+    CallOpen,
+    /// A function literal's arrow, by the literal's `ExprId`: its `=>`, or its `?=>` at the `?` (`closureRest`'s
+    /// `atSpan(start, in.offset)` before it takes the arrow, Parsers.scala 2779-2786); a polymorphic one's, by the
+    /// `PolyLambda`, the `=>` after its type parameters (`expr`'s `accept(ARROW)`, 2475).
+    LambdaArrow,
+    /// A case clause's `case` keyword, by the clause's index in `Ast::cases` (`caseClause`'s `atSpan(in.offset)`
+    /// before `accept(CASE)`, Parsers.scala 3233-3236).
+    CaseKeyword,
+}
+
+impl WrittenPlaces {
+    /// The record a parse whose run writes TASTy keeps, with room for about `estimate` places of its reads.
+    pub fn kept(estimate: usize) -> WrittenPlaces {
+        WrittenPlaces { kept: true, marks: Vec::with_capacity(estimate), ..Default::default() }
+    }
+
+    /// Whether the parse kept the record (`parser::Syntax::pickles`).
+    #[inline]
+    pub fn is_kept(&self) -> bool {
+        self.kept
+    }
+
+    #[inline]
+    fn key(read: TokenRead, key: u32) -> u64 {
+        (read as u64) << 32 | key as u64
+    }
+
+    /// The place `at` of the read `read` by `key`, where the record is kept.
+    #[inline]
+    pub fn note(&mut self, read: TokenRead, key: u32, at: u32) {
+        if self.kept {
+            self.marks.push(Mark { key: Self::key(read, key), at });
+        }
+    }
+
+    /// The places of `read` by `from` taken by `to`, a node the parser made in its stead (a polymorphic literal's inner
+    /// literal, `Parser::poly_lambda_evidence`): before the record is sealed, while its places are in the order read.
+    pub fn rekey(&mut self, read: TokenRead, from: u32, to: u32) {
+        let (from, to) = (Self::key(read, from), Self::key(read, to));
+        for m in self.marks.iter_mut().rev() {
+            if m.key == from {
+                m.key = to;
+            }
+        }
+    }
+
+    /// The places sorted by their read and key once the parse ends, a key noted twice keeping its last place.
+    pub fn seal(&mut self) {
+        // A stable sort keeps a key's places in the order noted, the last of them kept.
+        self.marks.sort_by_key(|m| m.key);
+        let mut n = 0;
+        for i in 0..self.marks.len() {
+            let m = self.marks[i];
+            if n > 0 && self.marks[n - 1].key == m.key {
+                self.marks[n - 1] = m;
+            } else {
+                self.marks[n] = m;
+                n += 1;
+            }
+        }
+        self.marks.truncate(n);
+    }
+
+    /// The TASTy writer reads a record only where the parse kept it: a run that pickles a file parsed without
+    /// `parser::Syntax::pickles` is an internal error, never a pickle with the places left out.
+    #[inline]
+    fn check(&self) {
+        assert!(self.kept, "internal error: the TASTy writer reads the parser's record of a file this run parsed without it (parser::Syntax::pickles)");
+    }
+
+    /// The place of the read `read` by `key`.
+    #[inline]
+    pub fn get(&self, read: TokenRead, key: u32) -> Option<u32> {
+        self.check();
+        let k = Self::key(read, key);
+        self.marks.binary_search_by_key(&k, |m| m.key).ok().map(|i| self.marks[i].at)
+    }
+
+    /// Every place of the read `read`, as its key and its offset, by ascending key.
+    pub fn of(&self, read: TokenRead) -> impl Iterator<Item = (u32, u32)> + '_ {
+        self.check();
+        let lo = self.marks.partition_point(|m| m.key < Self::key(read, 0));
+        let hi = self.marks.partition_point(|m| m.key <= Self::key(read, u32::MAX));
+        self.marks[lo..hi].iter().map(|m| (m.key as u32, m.at))
+    }
+
+    pub fn note_first_stat(&mut self, at: Option<u32>) {
+        if self.kept {
+            self.first_stat = at;
+        }
+    }
+
+    pub fn note_package_object(&mut self, at: u32) {
+        if self.kept {
+            self.package_object = Some(at);
+        }
+    }
+
+    pub fn note_package_clause(&mut self, clause: Option<(u32, u32)>) {
+        if self.kept {
+            self.package_clause = clause;
+        }
+    }
+
+    pub fn note_extension_keyword(&mut self, group: u32, at: u32) {
+        if self.kept {
+            self.extension_keywords.insert(group, at);
+        }
+    }
+
+    pub fn note_enum_case(&mut self, def: DefId, place: CasePlace) {
+        if self.kept {
+            self.enum_cases.insert(def, place);
+        }
+    }
+
+    pub fn note_self_start(&mut self, def: DefId, at: u32) {
+        if self.kept {
+            self.self_starts.insert(def, at);
+        }
+    }
+
+    pub fn note_fun_arrow(&mut self, ty: TyExprId, at: u32) {
+        if self.kept {
+            self.fun_arrows.insert(ty, at);
+        }
+    }
+
+    pub fn first_stat(&self) -> Option<u32> {
+        self.check();
+        self.first_stat
+    }
+
+    pub fn package_object(&self) -> Option<u32> {
+        self.check();
+        self.package_object
+    }
+
+    pub fn package_clause(&self) -> Option<(u32, u32)> {
+        self.check();
+        self.package_clause
+    }
+
+    pub fn extension_keyword(&self, group: u32) -> Option<u32> {
+        self.check();
+        self.extension_keywords.get(&group).copied()
+    }
+
+    pub fn enum_case(&self, def: DefId) -> Option<CasePlace> {
+        self.check();
+        self.enum_cases.get(&def).copied()
+    }
+
+    pub fn self_start(&self, def: DefId) -> Option<u32> {
+        self.check();
+        self.self_starts.get(&def).copied()
+    }
+
+    pub fn fun_arrow(&self, ty: TyExprId) -> Option<u32> {
+        self.check();
+        self.fun_arrows.get(&ty).copied()
+    }
 }
 
 /// An enum case's place (`WrittenPlaces::enum_cases`).

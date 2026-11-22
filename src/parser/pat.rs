@@ -266,6 +266,7 @@ impl<'a> Parser<'a> {
                     let n = self.bump();
                     path = self.ast.add_expr(Expr::Select(path, n.name), start.to(n.span));
                     self.note_name(path, n.span);
+                    self.ast.notes.places.note(TokenRead::SelectName, path.0, n.span.start);
                 }
                 if self.at(Tok::LParen) {
                     let l = self.parse_pattern_args();

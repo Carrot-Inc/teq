@@ -1302,6 +1302,11 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
         std::process::exit(2);
     }
     o.syntax.index = o.index;
+    // The runs that write TASTy, whose parse keeps the TASTy writer's record (`parser::Syntax::pickles`): a products
+    // build (`compiler check --products`, a JVM build's `--products`: `pickle_products`) and an analysis's API graph,
+    // which pickles the files it states (`jvm::api::render`, a one-shot build's and a watch session's). Any other run,
+    // a check or a language server's session among them, writes none and keeps no record.
+    o.syntax.pickles = o.products.is_some() || o.analysis_version.is_some();
     if o.check && (o.command != "watch" || o.split.is_some() || o.output.is_some()) {
         eprintln!("--check belongs to `teq compiler watch` and takes no --split or -o: the session writes nothing");
         std::process::exit(2);

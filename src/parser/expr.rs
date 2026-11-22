@@ -254,9 +254,11 @@ impl<'a> Parser<'a> {
             }
         };
         let block = match lambda {
-            Some((lambda_start, params)) => {
+            Some((lambda_start, (params, arrow))) => {
                 self.mark_closure_body(body, true);
-                self.ast.add_expr(Expr::Lambda(params, body), lambda_start.to(self.prev_span()))
+                let id = self.ast.add_expr(Expr::Lambda(params, body), lambda_start.to(self.prev_span()));
+                self.note_arrow(id, arrow);
+                id
             }
             None => body,
         };
@@ -387,10 +389,19 @@ impl<'a> Parser<'a> {
             return self.parse_block_lambda();
         }
         let start = self.span();
-        let params = self.parse_lambda_params();
+        let (params, arrow) = self.parse_lambda_params();
         let body = self.parse_block_or_expr();
         self.mark_closure_body(body, false);
-        self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()))
+        let id = self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()));
+        self.note_arrow(id, arrow);
+        id
+    }
+
+    /// A function literal's arrow, by the literal (`WrittenPlaces::lambda_arrows`).
+    fn note_arrow(&mut self, id: ExprId, arrow: Option<u32>) {
+        if let Some(at) = arrow {
+            self.ast.notes.places.note(TokenRead::LambdaArrow, id.0, at);
+        }
     }
 
     /// Marks the closure's body `body` where dotty's parser makes it a `Block` (`Ast::block_bodies`):
@@ -426,7 +437,7 @@ impl<'a> Parser<'a> {
     fn parse_block_lambda(&mut self) -> ExprId {
         let patdefs_mark = self.pattern_vals;
         let start = self.span();
-        let params = self.parse_lambda_params();
+        let (params, arrow) = self.parse_lambda_params();
         let body_start = self.span();
         let mut stmts: Vec<Stmt> = Vec::new();
         self.block_lambda_body(&mut stmts);
@@ -439,7 +450,9 @@ impl<'a> Parser<'a> {
             }
         };
         self.mark_closure_body(body, true);
-        self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()))
+        let id = self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()));
+        self.note_arrow(id, arrow);
+        id
     }
 
     /// The lambda of a colon argument (`xs.exists: x =>`): an indented body is a block that
@@ -447,15 +460,19 @@ impl<'a> Parser<'a> {
     /// scalac's `closureRest` reads a body in `InColonArg`.
     fn parse_colon_lambda(&mut self) -> ExprId {
         let start = self.span();
-        let params = self.parse_lambda_params();
+        let (params, arrow) = self.parse_lambda_params();
         let indented = self.at(Tok::Indent) && self.span().start == self.span().end;
         let body = if indented { self.parse_block() } else { self.parse_block_or_expr() };
         self.mark_closure_body(body, false);
-        self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()))
+        let id = self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()));
+        self.note_arrow(id, arrow);
+        id
     }
 
-    /// The parameters of a lambda up to and including its arrow.
-    fn parse_lambda_params(&mut self) -> ListRef {
+    /// The parameters of a lambda up to and including its arrow, and the arrow's offset where it is written (an
+    /// `?=>` at its `?`): `closureRest`'s `atSpan(start, in.offset)` before it takes the arrow (Parsers.scala
+    /// 2779-2786), which the literal's maker records by the literal.
+    fn parse_lambda_params(&mut self) -> (ListRef, Option<u32>) {
         let mut params: Vec<LambdaParam> = Vec::new();
         // `implicit x => ...`, reported by the version (`Parsers.expr`, `blockStatSeq`).
         let implicit = self.at(Tok::KwImplicit).then(|| self.bump().span);
@@ -476,10 +493,9 @@ impl<'a> Parser<'a> {
             let p = self.parse_lambda_param(0);
             params.push(p);
         }
+        let at = self.span().start;
         let contextual = self.eat(Tok::CtxArrow);
-        if !contextual {
-            self.expect(Tok::Arrow);
-        }
+        let arrow = (contextual || self.expect(Tok::Arrow)).then_some(at);
         for p in &mut params {
             p.implicit = implicit.is_some() || contextual;
             p.contextual = contextual;
@@ -487,7 +503,7 @@ impl<'a> Parser<'a> {
                 self.ast.notes.implicit_lambdas.push((p.span.start, at));
             }
         }
-        push_list(&mut self.ast.lambda_params, &params)
+        (push_list(&mut self.ast.lambda_params, &params), arrow)
     }
 
     /// `_` parameters are named apart from each other and from the placeholders of the body.
@@ -580,9 +596,10 @@ impl<'a> Parser<'a> {
         loop {
             match self.kind() {
                 Tok::KwMatch => {
-                    self.bump();
+                    let keyword = self.bump().span.start;
                     let cases = self.parse_cases();
                     e = self.ast.add_expr(Expr::Match(e, cases), start.to(self.prev_span()));
+                    self.ast.notes.places.note(TokenRead::TermMatch, e.0, keyword);
                 }
                 Tok::Eq => {
                     self.bump();
@@ -823,6 +840,9 @@ impl<'a> Parser<'a> {
     fn parse_cases_from(&mut self, indented: bool) -> ListRef {
         let mut cases: Vec<CaseClause> = Vec::new();
         let mut broken: Vec<u32> = Vec::new();
+        // Each case's `case` keyword, `caseClause`'s `atSpan(in.offset)` (Parsers.scala 3233), where the record is kept.
+        let keep = self.ast.notes.places.is_kept();
+        let mut keywords: Vec<u32> = Vec::new();
         loop {
             if indented {
                 self.skip_separators();
@@ -839,6 +859,9 @@ impl<'a> Parser<'a> {
                 break;
             }
             let case_at = self.bump().span.start;
+            if keep {
+                keywords.push(case_at);
+            }
             let mark = self.error_events;
             let pat = self.within_match_pattern(Self::parse_pattern);
             let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
@@ -867,6 +890,9 @@ impl<'a> Parser<'a> {
         }
         let l = push_list(&mut self.ast.cases, &cases);
         self.ast.broken_cases.extend(broken.into_iter().map(|i| l.start + i));
+        for (i, at) in keywords.into_iter().enumerate() {
+            self.ast.notes.places.note(TokenRead::CaseKeyword, l.start + i as u32, at);
+        }
         l
     }
 
@@ -1301,6 +1327,7 @@ impl<'a> Parser<'a> {
                 self.bump();
                 lhs = self.ast.add_expr(Expr::Select(lhs, t.name), start.to(t.span));
                 self.note_name(lhs, t.span);
+                self.ast.notes.places.note(TokenRead::SelectName, lhs.0, t.span.start);
                 // dotty's `PostfixOp(od, Ident(op))`, whose operator is an identifier (`existsSubTree`).
                 self.ast.notes.postfix_ops.push(lhs);
                 return lhs;
@@ -1330,6 +1357,9 @@ impl<'a> Parser<'a> {
                 self.ast.add_expr(Expr::Infix(lhs, t.name, rhs, t.span.end), start.to(self.prev_span()))
             };
             self.note_name(lhs, t.span);
+            // The operator's selection at the operator (`infixOps`' `InfixOp`, its `Select` at the operator's
+            // offset).
+            self.ast.notes.places.note(TokenRead::SelectName, lhs.0, t.span.start);
         }
     }
 
@@ -1613,7 +1643,8 @@ impl<'a> Parser<'a> {
                 // location: `expr(location)`, `Location.InBlock`).
                 let in_block = self.block_lambda_at == self.pos;
                 let (params, bounds, ctx, annotated) = self.parse_type_params_of_lambda();
-                self.expect(Tok::Arrow);
+                let arrow = self.span().start;
+                let arrow = self.expect(Tok::Arrow).then_some(arrow);
                 if in_block {
                     self.block_lambda_at = self.pos;
                 }
@@ -1625,6 +1656,7 @@ impl<'a> Parser<'a> {
                 }
                 let l = push_list(&mut self.ast.name_lists, &params);
                 let id = self.ast.add_expr(Expr::PolyLambda(l, lambda), start.to(self.prev_span()));
+                self.note_arrow(id, arrow);
                 if let Some(bl) = self.lambda_bounds_list(&bounds) {
                     self.ast.poly_lambda_bounds.push((id, bl));
                 }
@@ -1656,8 +1688,14 @@ impl<'a> Parser<'a> {
                 let ty_end = self.prev_span();
                 let mut args = Vec::new();
                 let mut ends = Vec::new();
+                // Each argument clause's `(`, where the record is kept.
+                let keep = self.ast.notes.places.is_kept();
+                let mut opens = Vec::new();
                 let mut cut = false;
                 while self.at(Tok::LParen) {
+                    if keep {
+                        opens.push(self.span().start);
+                    }
                     args.push(self.parse_args());
                     ends.push(self.prev_span());
                     cut |= self.args_cut;
@@ -1682,9 +1720,12 @@ impl<'a> Parser<'a> {
                     if args.len() > 1 && !first_using && first.is_empty() {
                         self.ast.new_empty_first.push(e);
                     }
-                    for (&(list, using), &end) in args.iter().zip(&ends).skip(skip) {
+                    for (k, (&(list, using), &end)) in args.iter().zip(&ends).enumerate().skip(skip) {
                         let node = if using { Expr::UsingApply(e, list) } else { Expr::Apply(e, list) };
                         e = self.ast.add_expr(node, start.to(end));
+                        if let Some(&open) = opens.get(k) {
+                            self.ast.notes.places.note(TokenRead::CallOpen, e.0, open);
+                        }
                     }
                     e
                 }
@@ -1993,6 +2034,7 @@ impl<'a> Parser<'a> {
             self.parse_expr()
         };
         let cases = push_list(&mut self.ast.cases, &[CaseClause { pat, guard, body }]);
+        self.ast.notes.places.note(TokenRead::CaseKeyword, cases.start, case_at);
         if broken {
             self.ast.broken_cases.push(cases.start);
         }
@@ -2025,9 +2067,10 @@ impl<'a> Parser<'a> {
                 Tok::Dot => {
                     self.bump();
                     if self.at(Tok::KwMatch) {
-                        self.bump();
+                        let keyword = self.bump().span.start;
                         let cases = self.parse_cases();
                         e = self.ast.add_expr(Expr::Match(e, cases), start.to(self.prev_span()));
+                        self.ast.notes.places.note(TokenRead::TermMatch, e.0, keyword);
                         continue;
                     }
                     if self.at(Tok::KwThis) {
@@ -2040,6 +2083,7 @@ impl<'a> Parser<'a> {
                     let (n, name_span) = self.expect_ident();
                     e = self.ast.add_expr(Expr::Select(e, n), start.to(self.prev_span()));
                     self.note_name(e, name_span);
+                    self.ast.notes.places.note(TokenRead::SelectName, e.0, name_span.start);
                 }
                 Tok::LBracket => {
                     // A type argument list after an expression written in braces applies to the value of the
@@ -2053,11 +2097,13 @@ impl<'a> Parser<'a> {
                     e = self.ast.add_expr(Expr::TypeApply(e, targs), start.to(self.prev_span()));
                 }
                 Tok::LParen => {
+                    let open = self.span().start;
                     let (args, using) = self.parse_args();
                     let cut = self.args_cut;
                     let node = if using { Expr::UsingApply(e, args) } else { Expr::Apply(e, args) };
                     e = self.ast.add_expr(node, start.to(self.prev_span()));
                     self.note_cut_args(e, cut);
+                    self.ast.notes.places.note(TokenRead::CallOpen, e.0, open);
                 }
                 Tok::ColonEol if self.kind_at(1) == Tok::Indent && self.colon_takes_argument() => {
                     let opener = self.bump().span;
@@ -2072,6 +2118,10 @@ impl<'a> Parser<'a> {
                             self.ast.push_written(body, written, false);
                         }
                     }
+                    // The application of a block or a colon argument spans its function and its argument, its
+                    // children's envelope, which `PositionPickler` pickles no position for (PositionPickler.scala
+                    // 120): its point, the brace or the indented region's first token, reaches no pickle, and no
+                    // opening is recorded for it.
                     let args = push_list(&mut self.ast.expr_lists, &[body]);
                     e = self.ast.add_expr(Expr::Apply(e, args), start.to(self.prev_span()));
                 }
@@ -2088,6 +2138,8 @@ impl<'a> Parser<'a> {
                         }
                         _ => self.parse_colon_lambda(),
                     };
+                    // As a block argument's: the application is its children's envelope, the colon its point in
+                    // dotty's tree alone (`atSpan(startOffset(t), in.skipToken())`).
                     let args = push_list(&mut self.ast.expr_lists, &[lambda]);
                     e = self.ast.add_expr(Expr::Apply(e, args), start.to(self.prev_span()));
                 }

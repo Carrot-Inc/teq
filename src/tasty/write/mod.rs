@@ -66,8 +66,21 @@ fn write_products_now(w: &mut Worker, owned: Option<&[bool]>, sourceroot: &std::
             continue;
         }
         let rel = relative_path(&src.path, sourceroot, index.cwd.as_deref());
+        // A file with nothing to pickle (a Java source, whose definitions the Scala parser does not read) needs no
+        // record of places.
+        let units = units_of(w, file);
+        if units.is_empty() {
+            continue;
+        }
+        // The parser's record of the places the writer reads, kept by a parse whose run writes TASTy
+        // (`parser::Syntax::pickles`): a file with a unit to pickle parsed without it is an internal error, never a
+        // pickle whose places are left out.
+        if !w.ast(file).notes.places.is_kept() {
+            out.errors.push(format!("internal error: {}: parsed without the record of the places the TASTy writer reads (parser::Syntax::pickles is off on a run that writes TASTy)", rel));
+            continue;
+        }
         let lines = pickle::Lines::of(&src.text);
-        for unit in units_of(w, file) {
+        for unit in units {
             match pickle::pickle_unit(w, &index, &lines, &unit, &rel, &mut out.approximated, &mut out.bodies) {
                 Ok(p) => out.products.push(p),
                 Err(errors) => out.errors.extend(errors.errors),

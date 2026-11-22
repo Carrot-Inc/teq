@@ -5,8 +5,17 @@
 # printed by the base's view as the base's are, then the table. Every step is bounded: scalac 300 s and the base's
 # build 120 s and view 60 s (the corpus runner's), the head's build 120 s and its view 60 s; a cell whose head step
 # fails or passes its bound is NOT JUDGED and named, never counted equal. Writes under out/places and
-# out/init-view-corpus/places; exits 1 when a cell loses a line scalac's on the base. Env: COURSIER, SCALAC_LOCK.
+# out/init-view-corpus/places; prints the table's totals, its lost lines and its line per read of the writer
+# (places.py's READS); exits 1 when a cell loses a line scalac's on the base, when a cell is NOT JUDGED (a record
+# missing, empty, not what its sum says or past its bound: tests/init-view/records.py), when the head's records do not
+# match the cells, or when the judge's self-test (`places.py --self-test`, run first) fails. Beside each of the head's
+# outputs its exit and its sum (`check.exit`, `view.exit`; `check.sum`, `view.sum`, the head's side named in their ids),
+# and beside the table its sum (`table.sum`), which tests/init-view/ranges.py holds the table to. Env: COURSIER,
+# SCALAC_LOCK.
 cd "$(dirname "$0")/../.."
+. tests/init-view/records.sh
+# The judge on planted records first: a judge that passes a bad record judges nothing.
+python3 tests/init-view/places.py --self-test || exit 1
 abs() { echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; }
 base=$(abs "${1:?the base teq}")
 head=$(abs "${2:?the head teq}")
@@ -27,16 +36,23 @@ for f in "$out"/cells/*.scala; do
   src=$(cd "$u/src" && pwd)
   (cd "$src" && TEQ_INIT_VIEW_INVENTORY="$OLDPWD/$h/inventory.txt" timeout 120 "$head" compiler check *.scala --std scala-library --products "$OLDPWD/$h/p") > "$h/check.txt" 2>&1
   rc=$?
+  echo $rc > "$h/check.exit"
+  record_seal "$h" "$h/check.txt" head
   if [ ! -d "$h/p" ]; then
     echo "the head makes no products (exit $rc)" > "$h/not-judged"
     continue
   fi
-  if ! TEQ_INIT_VIEW_INVENTORY="$h/inventory.txt" TEQ_INIT_VIEW_CLASSPATH="$library" TEQ_INIT_VIEW="$src" timeout 60 "$base" tasty "$h/p" > "$h/view.dump" 2> "$h/view.err" || [ ! -s "$h/view.dump" ]; then
-    echo "no view of the head's products in 60 s" > "$h/not-judged"
+  TEQ_INIT_VIEW_INVENTORY="$h/inventory.txt" TEQ_INIT_VIEW_CLASSPATH="$library" TEQ_INIT_VIEW="$src" timeout 60 "$base" tasty "$h/p" > "$h/view.dump" 2> "$h/view.err"
+  rc=$?
+  echo $rc > "$h/view.exit"
+  record_seal "$h" "$h/view.dump" head
+  if [ $rc != 0 ] || [ ! -s "$h/view.dump" ]; then
+    echo "no view of the head's products (exit $rc$([ $rc = 124 ] && echo ', past 60 s'))" > "$h/not-judged"
   fi
   rm -rf "${h:?}/p"
 done
 timeout 600 python3 tests/init-view/places.py judge "$work" "$out/head" > "$out/table.md"
 rc=$?
-grep -E '^places:|LOST' "$out/table.md"
+record_seal "$out" "$out/table.md"
+grep -E '^places:|LOST|^MANIFEST|^read [0-9]+ ' "$out/table.md"
 exit $rc

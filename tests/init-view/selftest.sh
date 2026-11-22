@@ -69,7 +69,7 @@ root="$tmp/root"
 mkdir -p "$root/tests/init-view/programs" "$root/tests/pending" "$root/tests/board/suites" "$root/$work/oracle"
 cp -r tests/support "$root/tests/support"
 cp tests/init-view.sh tests/init-view-full.sh tests/init-view-scalac.sh tests/init-view-corpus.sh "$root/tests/"
-cp tests/init-view/*.py tests/init-view/*.scala tests/init-view/selftest.sh tests/init-view/environment.sh "$root/tests/init-view/"
+cp tests/init-view/*.py tests/init-view/*.scala tests/init-view/selftest.sh tests/init-view/environment.sh tests/init-view/records.sh "$root/tests/init-view/"
 cp -r "tests/init-view/programs/$prog" "$root/tests/init-view/programs/"
 cp -r "${digest_dir%/}" "$root/$work/oracle/"
 # scalac's dump names the program's source by its absolute path: the root's own.

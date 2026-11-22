@@ -173,6 +173,9 @@ struct ClassHead {
     file: FileId,
 }
 
+/// No position before this one at its address (`P::pos_before`).
+const NO_POS: u32 = u32::MAX;
+
 #[derive(Clone, Copy)]
 struct Pos {
     addr: usize,
@@ -212,7 +215,36 @@ pub struct Index {
     /// The context closures of each file, by their starts with their numbers of parameters,
     /// made when a pickle first numbers one (`quoted::contextual_closures`).
     pub contextual: std::cell::OnceCell<crate::typer::ContextualOrder>,
+    /// Each source file's term selections by their span, made once per file for all its units, when a pickle first
+    /// places one (`name_point`).
+    pub select_names: std::cell::RefCell<FxMap<FileId, std::rc::Rc<SelectNames>>>,
+    /// Each source file's type selections by their span, made once per file for all its units (`path_type_point`).
+    pub ty_select_names: std::cell::RefCell<FxMap<FileId, std::rc::Rc<TySelectNames>>>,
+    /// Each source file's expressions written as a name by their span, made once per file for all its units
+    /// (`text_names`).
+    pub head_names: std::cell::RefCell<FxMap<FileId, std::rc::Rc<FxMap<(u32, u32), Name>>>>,
+    /// Each source file's parameters with a written type by their name's offset, made once per file for all its units
+    /// (`declared_quotes`).
+    pub param_types: std::cell::RefCell<FxMap<FileId, std::rc::Rc<FxMap<u32, crate::ast::TyExprId>>>>,
+    /// Each source file's case clauses by their body's span, made once per file for all its units (`case_layout`).
+    pub case_index: std::cell::RefCell<FxMap<FileId, std::rc::Rc<CaseIndex>>>,
+    /// Each source file's written parameters and their type trees' points by the start of their name, made once per
+    /// file for all its units (`param_layout`).
+    pub param_layouts: std::cell::RefCell<FxMap<FileId, (std::rc::Rc<ParamLayouts>, std::rc::Rc<ParamTypePoints>)>>,
 }
+
+/// A source file's case clauses by their body's span: the `CaseDef`'s span (from `case`) and the pattern.
+pub type CaseIndex = FxMap<(u32, u32), (Span, crate::ast::PatId)>;
+/// A source file's written parameters by the start of their name: the whole parameter as written and its type's span.
+pub type ParamLayouts = FxMap<u32, (Span, Span)>;
+/// The points of a source file's written parameters' type trees, by the start of their name.
+pub type ParamTypePoints = FxMap<u32, Option<u32>>;
+
+/// A source file's term selections by their span: the name's offset the parser read and the name
+/// (`WrittenPlaces::select_names`).
+pub type SelectNames = FxMap<(u32, u32), (u32, Name)>;
+/// A source file's type selections by their span: the name's offset the parser read (`WrittenPlaces::ty_select_names`).
+pub type TySelectNames = FxMap<(u32, u32), u32>;
 
 impl Index {
     pub fn new(w: &Worker, sourceroot: &std::path::Path) -> Index {
@@ -283,8 +315,13 @@ struct P<'w, 'a> {
     shared_typerefs: FxMap<u64, (Box<str>, Box<str>, usize)>,
     /// Whether the type being written names something whose form depends on the place.
     placed: bool,
-    /// The trees with a position.
+    /// The trees with a position, in the order written: an address may hold several, the section keeping the first
+    /// (`positions_section`).
     positions: Vec<Pos>,
+    /// The positions by address, each the latest of its address (`push_pos`), and per position the one before it at its
+    /// address (`NO_POS` where none): the entries of an address looked up rather than scanned for.
+    pos_latest: FxMap<usize, u32>,
+    pos_before: Vec<u32>,
     /// The line tables of the other sources a body's trees come from (an expansion of a
     /// transparent method of another file), made when first named.
     other_lines: FxMap<FileId, Lines>,
@@ -375,11 +412,11 @@ struct P<'w, 'a> {
     ctor_span: Option<Span>,
     /// The written parameters of a source file by the start of their name: the whole parameter as written and its
     /// type's span (`param_layout`), made once per file.
-    param_layouts: FxMap<FileId, FxMap<u32, (Span, Span)>>,
+    param_layouts: FxMap<FileId, std::rc::Rc<ParamLayouts>>,
     /// A source file's definitions by their name's start, for a local whose symbol records no definition.
     defs_by_name: FxMap<FileId, FxMap<u32, crate::ast::DefId>>,
     /// A source file's case clauses by their body's span: the `CaseDef`'s span (from `case`) and the pattern.
-    case_index: FxMap<FileId, FxMap<(u32, u32), (Span, crate::ast::PatId)>>,
+    case_index: FxMap<FileId, std::rc::Rc<CaseIndex>>,
     /// The written pattern the pattern about to be written stands for (`term::pattern`).
     pat_next: Option<(FileId, crate::ast::PatId)>,
     /// An operator's selection as written, which `prim` hands `universal`.
@@ -398,15 +435,25 @@ struct P<'w, 'a> {
     /// first tree's, where that tree has none of its own.
     qual_place_next: Option<(Span, Option<u32>)>,
     /// The points of the written parameters' type trees, as `param_layouts` (`param_type_point`).
-    param_type_points: FxMap<FileId, FxMap<u32, Option<u32>>>,
+    param_type_points: FxMap<FileId, std::rc::Rc<ParamTypePoints>>,
     /// The layout of the call being written (`call_layout`), which its application and selection take.
     call_layout_next: Option<term::CallLayout>,
     /// The span of the parent call being written and of its type as the source writes them (`parent_layouts`).
     parent_layout: Option<(Span, Span)>,
     /// The spans of the type parameters about to be written as the source writes them, in order (`type_param_def`).
-    tparam_spans: std::collections::VecDeque<Span>,
+    tparam_spans: std::collections::VecDeque<(Span, u32)>,
     /// A source file's applications, selections, operators and lambdas by their span (`expr_at`).
     expr_index: FxMap<FileId, FxMap<(u32, u32), crate::ast::ExprId>>,
+    /// The unit's hold on its files' term selections, made once per file (`Index::select_names`, `name_point`).
+    select_index: FxMap<FileId, std::rc::Rc<SelectNames>>,
+    /// The unit's hold on its files' type selections, made once per file (`Index::ty_select_names`, `path_type_point`).
+    ty_select_index: FxMap<FileId, std::rc::Rc<TySelectNames>>,
+    /// The unit's hold on its files' expressions written as a name, alone, applied, given type arguments or in
+    /// parentheses, by their span: the name (`Index::head_names`, `text_names`).
+    head_names: FxMap<FileId, std::rc::Rc<FxMap<(u32, u32), Name>>>,
+    /// The unit's hold on its files' parameters with a written type, a method's and a function literal's, by their
+    /// name's offset: the type (`Index::param_types`, `declared_quotes`).
+    param_types: FxMap<FileId, std::rc::Rc<FxMap<u32, crate::ast::TyExprId>>>,
     /// A source file's ascriptions by their expression's span: the ascription's and its type's (`typed_layout`).
     typed_index: FxMap<FileId, FxMap<(u32, u32), (Span, Span)>>,
     /// The points of those ascriptions' type trees (`typed_point`).
@@ -559,6 +606,8 @@ impl<'w, 'a> P<'w, 'a> {
             shared_typerefs: FxMap::default(),
             placed: false,
             positions: Vec::new(),
+            pos_latest: FxMap::default(),
+            pos_before: Vec::new(),
             other_lines: FxMap::default(),
             src_ctx: file,
             span_ctx: None,
@@ -617,6 +666,10 @@ impl<'w, 'a> P<'w, 'a> {
             parent_layout: None,
             tparam_spans: std::collections::VecDeque::new(),
             expr_index: FxMap::default(),
+            select_index: FxMap::default(),
+            ty_select_index: FxMap::default(),
+            head_names: FxMap::default(),
+            param_types: FxMap::default(),
             typed_index: FxMap::default(),
             typed_points: FxMap::default(),
             retained_params: Vec::new(),
@@ -709,7 +762,7 @@ pub fn pickle_unit(w: &mut Worker, index: &Index, lines: &Lines, unit: &Unit, so
     }
     p.buf.end_length(len);
     let (span, point) = p.root_span(unit.file);
-    p.positions.insert(0, Pos { addr: root, file: unit.file, span, point, def: false, switch: true, origin: None });
+    p.insert_pos(0, Pos { addr: root, file: unit.file, span, point, def: false, switch: true, origin: None });
     // The package's identifier where nothing placed it, by its unit:
     // - the empty package's: `Parsers`' `PackageDef(Ident(nme.EMPTY_PACKAGE), stats)` has no span, so the identifier
     //   reads back at the start of its statements' envelope, the file's first statement (Parsers.scala 5053-5054,
@@ -720,12 +773,12 @@ pub fn pickle_unit(w: &mut Worker, index: &Index, lines: &Lines, unit: &Unit, so
     // Each with no extent, each where the parser read it (`WrittenPlaces`).
     let places = &p.w.ast(unit.file).notes.places;
     let place = if pkg == ROOT_PKG {
-        places.first_stat
+        places.first_stat()
     } else {
-        places.package_object
+        places.package_object()
     };
-    if let Some(at) = place.filter(|_| !p.positions.iter().any(|q| q.addr == id_at)) {
-        p.positions.insert(1, Pos { addr: id_at, file: unit.file, span: Span { start: at, end: at }, point: None, def: false, switch: false, origin: None });
+    if let Some(at) = place.filter(|_| p.pos_at(id_at).is_none()) {
+        p.insert_pos(1, Pos { addr: id_at, file: unit.file, span: Span { start: at, end: at }, point: None, def: false, switch: false, origin: None });
     }
     let pending: Vec<String> = p
         .places
@@ -775,7 +828,7 @@ impl<'w, 'a> P<'w, 'a> {
             return (Span { start: 0, end: text.len() as u32 }, None);
         }
         if !ast.package_clauses.is_empty() {
-            if let Some((keyword, name)) = first_package_clause(text) {
+            if let Some((keyword, name)) = ast.notes.places.package_clause() {
                 if keyword <= start {
                     return (Span { start: keyword, end }, Some(name));
                 }
@@ -1110,7 +1163,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.shared_typerefs.retain(|_, (_, _, a)| *a < at);
         self.buf.truncate(m.buf);
         self.names.truncate(m.names);
-        self.positions.truncate(m.positions);
+        self.truncate_pos(m.positions);
         self.tparams.truncate(m.tparams);
         self.params.truncate(m.params);
         self.enclosing.truncate(m.enclosing);
@@ -1142,7 +1195,7 @@ impl<'w, 'a> P<'w, 'a> {
             // A definition of a body takes the source of the tree it stands in (an expansion of
             // another file's method).
             let file = self.src_ctx;
-            self.positions.push(Pos { addr, file, span, point: Some(point), def: true, switch: false, origin: None });
+            self.push_pos(Pos { addr, file, span, point: Some(point), def: true, switch: false, origin: None });
         }
     }
 
@@ -1156,7 +1209,7 @@ impl<'w, 'a> P<'w, 'a> {
         let point = if (span.start..=span.end).contains(&name_at) { name_at } else { span.start };
         let origin = if (old.start..=old.end).contains(&name_at) { name_at } else { old.start };
         let file = self.src_ctx;
-        self.positions.push(Pos { addr, file, span, point: Some(point), def: valid(old), switch: false, origin: Some(origin) });
+        self.push_pos(Pos { addr, file, span, point: Some(point), def: valid(old), switch: false, origin: Some(origin) });
     }
 
     /// A definition's span as `position` gives it, or where it stands for a definition of a
@@ -1174,14 +1227,14 @@ impl<'w, 'a> P<'w, 'a> {
         let file = self.pickled_source(path);
         let switch = file != self.src_ctx;
         let point = pos.point.unwrap_or(pos.start);
-        self.positions.push(Pos { addr, file, span: Span { start: pos.start, end: pos.end }, point: Some(point), def: true, switch , origin: None });
+        self.push_pos(Pos { addr, file, span: Span { start: pos.start, end: pos.end }, point: Some(point), def: true, switch , origin: None });
         Some(Span { start: point, end: pos.end })
     }
 
     /// A synthetic definition's own position: `synth_def_span` where set, else the synthetic span.
     pub(super) fn def_position(&mut self, addr: usize) {
         match self.synth_def_span {
-            Some((span, point)) => self.positions.push(Pos { addr, file: self.file, span, point: Some(point), def: false, switch: false, origin: None }),
+            Some((span, point)) => self.push_pos(Pos { addr, file: self.file, span, point: Some(point), def: false, switch: false, origin: None }),
             None => self.synthetic_position(addr),
         }
     }
@@ -1206,7 +1259,7 @@ impl<'w, 'a> P<'w, 'a> {
             return Some((Span { start: r.end, end: r.end }, r.end));
         }
         let id = ki.span;
-        let place = ki.def.and_then(|d| self.w.ast(ki.file).notes.places.enum_cases.get(&d).copied());
+        let place = ki.def.and_then(|d| self.w.ast(ki.file).notes.places.enum_case(d));
         Some(match place {
             Some(c) if !c.listed => (Span { start: c.start, end: id.end }, id.start),
             _ => (id, id.start),
@@ -1215,7 +1268,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn synthetic_position(&mut self, addr: usize) {
         let s = self.synth_span;
-        self.positions.push(Pos { addr, file: self.file, span: Span { start: s.start, end: s.start }, point: None, def: false, switch: false , origin: None });
+        self.push_pos(Pos { addr, file: self.file, span: Span { start: s.start, end: s.start }, point: None, def: false, switch: false , origin: None });
     }
 
     /// A leaf tree starts here (a type tree, `ELIDED`, a literal): scalac's unpickler gives a
@@ -1224,7 +1277,7 @@ impl<'w, 'a> P<'w, 'a> {
     fn mark_tree(&mut self) {
         let addr = self.buf.addr();
         if let Some((span, point)) = self.next_tree_pos.take() {
-            self.positions.push(Pos { addr, file: self.src_ctx, span, point, def: false, switch: false, origin: None });
+            self.push_pos(Pos { addr, file: self.src_ctx, span, point, def: false, switch: false, origin: None });
             return;
         }
         self.synthetic_position(addr);
@@ -1448,7 +1501,62 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The position written for the definition at `of`, where one is.
     fn written_position(&self, of: usize) -> Option<Pos> {
-        self.positions.iter().rev().find(|p| p.addr == of).cloned()
+        self.pos_at(of)
+    }
+
+    /// A tree's position, the latest of its address.
+    fn push_pos(&mut self, p: Pos) {
+        let i = self.positions.len() as u32;
+        self.pos_before.push(self.pos_latest.insert(p.addr, i).unwrap_or(NO_POS));
+        self.positions.push(p);
+    }
+
+    /// The positions written after the first `n` taken back (a body rolled back, `body_end`): the latest of each
+    /// address is the one before it again.
+    fn truncate_pos(&mut self, n: usize) {
+        while self.positions.len() > n {
+            let p = self.positions.pop().unwrap();
+            match self.pos_before.pop().unwrap() {
+                NO_POS => self.pos_latest.remove(&p.addr),
+                before => self.pos_latest.insert(p.addr, before),
+            };
+        }
+    }
+
+    /// A position put before the others (the unit's root and its package's identifier, once its trees are written),
+    /// the index made again.
+    fn insert_pos(&mut self, at: usize, p: Pos) {
+        self.positions.insert(at, p);
+        self.pos_latest.clear();
+        self.pos_before.clear();
+        for i in 0..self.positions.len() {
+            let addr = self.positions[i].addr;
+            self.pos_before.push(self.pos_latest.insert(addr, i as u32).unwrap_or(NO_POS));
+        }
+    }
+
+    /// The indices of the positions of an address, the latest first.
+    fn pos_indices(&self, addr: usize) -> impl Iterator<Item = usize> + '_ {
+        let before: &[u32] = &self.pos_before;
+        let mut next = self.pos_latest.get(&addr).copied().unwrap_or(NO_POS);
+        std::iter::from_fn(move || {
+            (next != NO_POS).then(|| {
+                let i = next as usize;
+                next = before[i];
+                i
+            })
+        })
+    }
+
+    /// The latest position of an address.
+    fn pos_at(&self, addr: usize) -> Option<Pos> {
+        self.pos_latest.get(&addr).map(|&i| self.positions[i as usize])
+    }
+
+    /// The latest position of an address, to change its span or point.
+    fn pos_at_mut(&mut self, addr: usize) -> Option<&mut Pos> {
+        let i = *self.pos_latest.get(&addr)?;
+        Some(&mut self.positions[i as usize])
     }
 
     /// `@SourceFile("path")`, which scalac puts on every top-level class, at the class's definition: PostTyper's
@@ -1465,7 +1573,7 @@ impl<'w, 'a> P<'w, 'a> {
         let saved = self.synth_span;
         if let Some(p) = at {
             let addr = self.buf.addr();
-            self.positions.push(Pos { addr, def: false, switch: false, origin: None, ..p });
+            self.push_pos(Pos { addr, def: false, switch: false, origin: None, ..p });
             self.synth_span = Span { start: p.span.start, end: p.span.start };
         }
         self.buf.byte(APPLY);
@@ -1680,7 +1788,7 @@ impl<'w, 'a> P<'w, 'a> {
             if let Some(p) = self.written_position(of) {
                 let at = p.point.unwrap_or(p.span.start);
                 let addr = self.buf.addr();
-                self.positions.push(Pos { addr, span: Span { start: at, end: at }, point: None, def: false, switch: false, origin: None, ..p });
+                self.push_pos(Pos { addr, span: Span { start: at, end: at }, point: None, def: false, switch: false, origin: None, ..p });
                 self.synth_span = Span { start: at, end: at };
             }
             self.buf.byte(APPLY);
@@ -1876,7 +1984,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.enclosing.pop();
         self.tparams.truncate(tmark);
         if let Some((t, _)) = layout {
-            self.positions.push(Pos { addr: taddr, file: self.src_ctx, span: t, point: None, def: false, switch: false, origin: None });
+            self.push_pos(Pos { addr: taddr, file: self.src_ctx, span: t, point: None, def: false, switch: false, origin: None });
         }
         self.buf.end_length(len);
     }
@@ -2004,7 +2112,7 @@ impl<'w, 'a> P<'w, 'a> {
             }
             self.param_source_annotations(s, annot::Dest::Setter);
             match span {
-                Some(sp) => self.positions.push(Pos { addr, file: si.file, span: sp, point: Some(si.span.start), def: false, switch: false, origin: None }),
+                Some(sp) => self.push_pos(Pos { addr, file: si.file, span: sp, point: Some(si.span.start), def: false, switch: false, origin: None }),
                 None => self.synthetic_position(addr),
             }
             if let Some(saved) = saved_synth {
@@ -2123,19 +2231,14 @@ impl<'w, 'a> P<'w, 'a> {
         self.span_ctx = saved.1;
     }
 
-    /// The written type parameters of a source class, `n` of them as the writer has them: each one's span.
-    fn class_tparam_spans(&self, c: ClassId, n: usize) -> Vec<Span> {
+    /// The written type parameters of a source class, `n` of them as the writer has them: each one's span and point
+    /// (`written_tparam`).
+    fn class_tparam_spans(&self, c: ClassId, n: usize) -> Vec<(Span, u32)> {
         let info = self.w.syms.class(c);
         let Some(def) = info.def.filter(|_| self.is_unit_source(info.file)) else { return Vec::new() };
         let ast = self.w.ast(info.file);
-        // A variant parameter from its `+` or `-` (`Parsers.typeParam`'s `atSpan(start, nameStart)`).
-        let text = self.w.files.as_slice()[info.file.0 as usize].text.as_bytes();
-        let variance = |s: Span| match s.start.checked_sub(1).and_then(|i| text.get(i as usize)) {
-            Some(b'+') | Some(b'-') => Span { start: s.start - 1, end: s.end },
-            _ => s,
-        };
         match &ast.def(def).kind {
-            crate::ast::DefKind::Class(cd) if cd.tparams.len() == n => cd.tparams.iter().map(|t| variance(t.span)).collect(),
+            crate::ast::DefKind::Class(cd) if cd.tparams.len() == n => cd.tparams.iter().map(|t| written_tparam(ast, t)).collect(),
             _ => Vec::new(),
         }
     }
@@ -2164,10 +2267,11 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The written type parameters of a source method, `n` of them as its signature has them: each one's span
     /// (`Parsers.typeParam`), for `type_param_def`.
-    pub(super) fn def_tparam_spans(&self, file: FileId, def: Option<crate::ast::DefId>, n: usize) -> Vec<Span> {
+    pub(super) fn def_tparam_spans(&self, file: FileId, def: Option<crate::ast::DefId>, n: usize) -> Vec<(Span, u32)> {
         let Some(d) = def.filter(|_| n > 0 && self.is_unit_source(file)) else { return Vec::new() };
-        match &self.w.ast(file).def(d).kind {
-            crate::ast::DefKind::Fun(f) if f.tparams.len() == n => f.tparams.iter().map(|t| t.span).collect(),
+        let ast = self.w.ast(file);
+        match &ast.def(d).kind {
+            crate::ast::DefKind::Fun(f) if f.tparams.len() == n => f.tparams.iter().map(|t| written_tparam(ast, t)).collect(),
             _ => Vec::new(),
         }
     }
@@ -2292,7 +2396,7 @@ impl<'w, 'a> P<'w, 'a> {
         let own: Vec<TParamId> = info.tparams.to_vec();
         let ids = self.bind_tparams(&own);
         let tspans = self.class_tparam_spans(c, own.len());
-        let last_tparam = tspans.last().map(|s| s.end);
+        let last_tparam = tspans.last().map(|(s, _)| s.end);
         self.tparam_spans = tspans.into();
         self.write_bound_tparams(&own, &ids, false);
         self.tparam_spans.clear();
@@ -2348,7 +2452,7 @@ impl<'w, 'a> P<'w, 'a> {
             }
         }
         match ctor_span {
-            Some(k) => self.positions.push(Pos { addr, file: self.src_ctx, span: k, point: None, def: false, switch: false, origin: None }),
+            Some(k) => self.push_pos(Pos { addr, file: self.src_ctx, span: k, point: None, def: false, switch: false, origin: None }),
             None => self.synthetic_position(addr),
         }
         self.buf.end_length(len);
@@ -2416,7 +2520,7 @@ impl<'w, 'a> P<'w, 'a> {
         // name, the body's first token, through its type or its name (`Parsers.selfType`'s `ValDef`), where the parser
         // read it (`WrittenPlaces::self_starts`).
         if cd.self_type.is_some() || cd.self_alias != crate::names::EMPTY {
-            let start = ast.notes.places.self_starts.get(&def).copied()?;
+            let start = ast.notes.places.self_start(def)?;
             let end = match cd.self_type {
                 Some(t) => ast.ty_spans[t.idx()].end,
                 None => (start as usize + self.w.interner.get(cd.self_alias).len()) as u32,
@@ -2429,7 +2533,7 @@ impl<'w, 'a> P<'w, 'a> {
                 // An enum's case from its statement's start (`Parsers.enumCase`'s span; `case A, B` one statement).
                 crate::ast::Stmt::Def(d) if matches!(&ast.def(d).kind, crate::ast::DefKind::Class(k) if k.kind == crate::ast::ClassKind::EnumCase) => {
                     let r = ast.def_range(d);
-                    add(Span { start: ast.notes.places.enum_cases.get(&d).map_or(r.start, |c| c.start), end: r.end });
+                    add(Span { start: ast.notes.places.enum_case(d).map_or(r.start, |c| c.start), end: r.end });
                 }
                 crate::ast::Stmt::Def(d) => add(ast.def_range(d)),
                 crate::ast::Stmt::Import(i) => {
@@ -2467,19 +2571,11 @@ impl<'w, 'a> P<'w, 'a> {
         let def = info.def.filter(|_| self.is_unit_source(info.file))?;
         let ast = self.w.ast(info.file);
         let d = ast.def(def);
-        let crate::ast::DefKind::Class(cd) = &d.kind else { return None };
-        if d.name != crate::names::DOLLAR_ANON {
+        if !matches!(d.kind, crate::ast::DefKind::Class(_)) || d.name != crate::names::DOLLAR_ANON {
             return None;
         }
-        let whole = ast.def_range(def);
-        let text = self.w.files.as_slice()[info.file.0 as usize].text.as_bytes();
-        // After the last parent as written, else after `new`: the template's opening `{`.
-        let after = cd.parents.last().map_or(whole.start + 3, |p| p.ends.last().copied().unwrap_or(ast.ty_spans[p.ty.idx()].end));
-        let mut i = after as usize;
-        while i < whole.end as usize && text.get(i).is_some_and(|b| b.is_ascii_whitespace()) {
-            i += 1;
-        }
-        (text.get(i) == Some(&b'{') && text.get(whole.end as usize - 1) == Some(&b'}')).then_some(whole)
+        // The template's `{` where the parser read one (`WrittenPlaces::braced_templates`); its range ends at the `}`.
+        ast.notes.places.get(crate::ast::TokenRead::BracedTemplate, def.0).is_some().then(|| ast.def_range(def))
     }
 
     /// Puts type parameters in scope as direct references, each to a binding of its own that
@@ -2713,7 +2809,7 @@ impl<'w, 'a> P<'w, 'a> {
             Some((path, pos)) => {
                 let file = self.pickled_source(path);
                 let switch = file != self.src_ctx;
-                self.positions.push(Pos { addr, file, span: Span { start: pos.start, end: pos.end }, point: Some(pos.point.unwrap_or(pos.start)), def: true, switch , origin: None });
+                self.push_pos(Pos { addr, file, span: Span { start: pos.start, end: pos.end }, point: Some(pos.point.unwrap_or(pos.start)), def: true, switch , origin: None });
             }
             None => {
                 let span = sym.map_or(Span::default(), |s| self.w.syms.sym(s).span);
@@ -2735,25 +2831,35 @@ impl<'w, 'a> P<'w, 'a> {
             return None;
         }
         if !self.param_layouts.contains_key(&file) {
-            let ast = self.w.ast(file);
-            let mut m: FxMap<u32, (Span, Span)> = FxMap::default();
-            let mut points: FxMap<u32, Option<u32>> = FxMap::default();
-            for d in &ast.defs {
-                let clauses: &[crate::ast::ParamClause] = match &d.kind {
-                    crate::ast::DefKind::Fun(f) => &f.clauses,
-                    crate::ast::DefKind::Class(c) => &c.clauses,
-                    crate::ast::DefKind::Given(g) => &g.clauses,
-                    _ => &[],
-                };
-                for c in clauses {
-                    for p in &c.params {
-                        if p.full != Span::default() {
-                            m.insert(p.span.start, (p.full, ast.ty_spans[p.ty.idx()]));
-                            points.insert(p.span.start, self.written_ty_pos(file, p.ty).1);
+            // Made once per file: what goes in reads the file's AST and record alone, whichever unit asks.
+            let cached = self.index.param_layouts.borrow().get(&file).cloned();
+            let (m, points) = match cached {
+                Some(made) => made,
+                None => {
+                    let ast = self.w.ast(file);
+                    let mut m: ParamLayouts = FxMap::default();
+                    let mut points: ParamTypePoints = FxMap::default();
+                    for d in &ast.defs {
+                        let clauses: &[crate::ast::ParamClause] = match &d.kind {
+                            crate::ast::DefKind::Fun(f) => &f.clauses,
+                            crate::ast::DefKind::Class(c) => &c.clauses,
+                            crate::ast::DefKind::Given(g) => &g.clauses,
+                            _ => &[],
+                        };
+                        for c in clauses {
+                            for p in &c.params {
+                                if p.full != Span::default() {
+                                    m.insert(p.span.start, (p.full, ast.ty_spans[p.ty.idx()]));
+                                    points.insert(p.span.start, self.written_ty_pos(file, p.ty).1);
+                                }
+                            }
                         }
                     }
+                    let made = (std::rc::Rc::new(m), std::rc::Rc::new(points));
+                    self.index.param_layouts.borrow_mut().insert(file, made.clone());
+                    made
                 }
-            }
+            };
             self.param_layouts.insert(file, m);
             self.param_type_points.insert(file, points);
         }
@@ -2845,22 +2951,18 @@ impl<'w, 'a> P<'w, 'a> {
         let extra: Vec<u8> = extra.iter().copied().filter(|&t| t != VARIANCE_MARK).collect();
         let extra = extra.as_slice();
         // The parameter as written (`Parsers.typeParam`): its span, its bounds' tree at its start.
-        let written = self.tparam_spans.pop_front().filter(|s| *s != Span::default());
+        let written = self.tparam_spans.pop_front().filter(|(s, _)| *s != Span::default());
         let addr = self.buf.addr();
         self.buf.byte(TYPEPARAM);
         let len = self.buf.begin_length();
         let n = self.derived_or_simple(info.name);
         self.buf.nat(n as u64);
-        self.next_tree_pos = written.map(|sp| (Span { start: sp.start, end: sp.start }, None));
+        self.next_tree_pos = written.map(|(sp, _)| (Span { start: sp.start, end: sp.start }, None));
         self.mark_tree();
         self.next_tree_pos = None;
         self.bounds(&info);
-        if let Some(sp) = written {
-            // Its point is its name, after a variance's sign.
-            let text = self.w.files.as_slice().get(self.src_ctx.0 as usize).map(|f| f.text.as_bytes());
-            let signed = text.and_then(|t| t.get(sp.start as usize)).is_some_and(|&b| b == b'+' || b == b'-');
-            let point = if signed { sp.start + 1 } else { sp.start };
-            self.positions.push(Pos { addr, file: self.src_ctx, span: sp, point: Some(point), def: false, switch: false, origin: None });
+        if let Some((sp, point)) = written {
+            self.push_pos(Pos { addr, file: self.src_ctx, span: sp, point: Some(point), def: false, switch: false, origin: None });
         }
         let mut flags: Vec<u8> = extra.to_vec();
         if in_template && info.variance > 0 {
@@ -3873,7 +3975,7 @@ impl<'w, 'a> P<'w, 'a> {
             let j = i + quals[i..].iter().take_while(|q| q.0 == qual).count();
             let addr = self.buf.addr();
             match span {
-                Some(s) => self.positions.push(Pos { addr, file: self.file, span: s, point: Some(s.start), def: false, switch: self.file != self.src_ctx, origin: None }),
+                Some(s) => self.push_pos(Pos { addr, file: self.file, span: s, point: Some(s.start), def: false, switch: self.file != self.src_ctx, origin: None }),
                 None => self.mark_tree(),
             }
             self.buf.byte(IMPORT);
@@ -3885,7 +3987,7 @@ impl<'w, 'a> P<'w, 'a> {
                 // the source names, which the trees after it in its block take too.
                 ImportQual::Object(c) if self.is_reflect_class(c) => {
                     let at = span.map(|s| (if self.is_own_source(self.src_ctx) { self.src_ctx } else { self.file }, s.start)).or(self.import_at);
-                    if let Some(q) = at.and_then(|(file, start)| self.declared_quotes(file, start)) {
+                    if let Some(q) = at.and_then(|(file, start)| self.import_quotes(file, start)) {
                         self.reflect_scopes.push((q, self.splice_params.len()));
                     }
                     self.reflect_import(c)
@@ -4373,7 +4475,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.write_flags(&flags);
         match at {
-            Some(sp) => self.positions.push(Pos { addr, file: self.src_ctx, span: sp, point: Some(sp.start), def: false, switch: false, origin: None }),
+            Some(sp) => self.push_pos(Pos { addr, file: self.src_ctx, span: sp, point: Some(sp.start), def: false, switch: false, origin: None }),
             None => self.synthetic_position(addr),
         }
         self.synth_span = saved_synth;
@@ -4441,7 +4543,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.source_annotations(info.file, &annots, annot::Dest::Setter, &mut |_, _| {});
         }
         match span {
-            Some(sp) => self.positions.push(Pos { addr, file: info.file, span: sp, point: Some(info.span.start), def: false, switch: false, origin: None }),
+            Some(sp) => self.push_pos(Pos { addr, file: info.file, span: sp, point: Some(info.span.start), def: false, switch: false, origin: None }),
             None => self.synthetic_position(addr),
         }
         if let Some(saved) = saved_synth {
@@ -4824,7 +4926,7 @@ impl<'w, 'a> P<'w, 'a> {
         let o = obj.origin_span;
         let recorded = o.end >= o.start && o != Span::default();
         let origin = if (o.start..=o.end).contains(&obj.origin_at) { obj.origin_at } else { o.start };
-        self.positions.push(Pos { addr: vaddr, file: self.src_ctx, span: vspan, point: Some(vpoint), def: recorded, switch: false, origin: Some(origin) });
+        self.push_pos(Pos { addr: vaddr, file: self.src_ctx, span: vspan, point: Some(vpoint), def: recorded, switch: false, origin: Some(origin) });
         self.buf.end_length(vlen);
         self.synth_span = saved_synth;
         // The module class.
@@ -4885,7 +4987,7 @@ impl<'w, 'a> P<'w, 'a> {
         if s.end >= s.start && s != Span::default() {
             let inside = |at: u32| if (s.start..=s.end).contains(&at) { at } else { s.start };
             let (point, origin) = (inside(obj.name_at), inside(obj.origin_at));
-            self.positions.push(Pos { addr: caddr, file: self.src_ctx, span: s, point: Some(point), def: true, switch: false, origin: (origin != point).then_some(origin) });
+            self.push_pos(Pos { addr: caddr, file: self.src_ctx, span: s, point: Some(point), def: true, switch: false, origin: (origin != point).then_some(origin) });
         }
         self.buf.end_length(len);
     }
@@ -5043,7 +5145,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.byte(STABLE);
         }
         match layout {
-            Some((_, k)) => self.positions.push(Pos { addr: ia, file: self.src_ctx, span: k, point: None, def: false, switch: false, origin: None }),
+            Some((_, k)) => self.push_pos(Pos { addr: ia, file: self.src_ctx, span: k, point: None, def: false, switch: false, origin: None }),
             None => self.synthetic_position(ia),
         }
         self.buf.end_length(il);
@@ -5113,7 +5215,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.enclosing.pop();
         }
         if let Some((t, _)) = layout {
-            self.positions.push(Pos { addr: taddr, file: self.src_ctx, span: t, point: None, def: false, switch: false, origin: None });
+            self.push_pos(Pos { addr: taddr, file: self.src_ctx, span: t, point: None, def: false, switch: false, origin: None });
         }
         self.buf.end_length(len);
         appended
@@ -5723,7 +5825,7 @@ impl<'w, 'a> P<'w, 'a> {
             }
             self.write_flags(&[SYNTHETIC]);
             match ty_span {
-                Some(t) => self.positions.push(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
+                Some(t) => self.push_pos(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
                 None => self.synthetic_position(addr),
             }
             self.synth_span = saved_synth;
@@ -5824,7 +5926,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.params.truncate(pmark);
         self.write_copied_access(access);
         match members {
-            Some((t, _)) => self.positions.push(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
+            Some((t, _)) => self.push_pos(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
             None => self.synthetic_position(addr),
         }
         self.synth_span = saved_synth;
@@ -5871,7 +5973,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.params.truncate(pmark);
             self.write_copied_access(access);
             match members {
-                Some((t, _)) => self.positions.push(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
+                Some((t, _)) => self.push_pos(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
                 None => self.synthetic_position(addr),
             }
             self.synth_span = saved_synth;
@@ -5950,7 +6052,7 @@ impl<'w, 'a> P<'w, 'a> {
             if let crate::ast::Stmt::Def(d) = *st {
                 if matches!(&ast.def(d).kind, crate::ast::DefKind::Class(k) if k.kind == crate::ast::ClassKind::EnumCase) {
                     let r = ast.def_range(d);
-                    let s = Span { start: ast.notes.places.enum_cases.get(&d).map_or(r.start, |c| c.start), end: r.end };
+                    let s = Span { start: ast.notes.places.enum_case(d).map_or(r.start, |c| c.start), end: r.end };
                     span = Some(span.map_or(s, |a| Span { start: a.start.min(s.start), end: a.end.max(s.end) }));
                 }
             }
@@ -6266,13 +6368,13 @@ impl<'w, 'a> P<'w, 'a> {
             // (Parsers.scala 4658), which the wrapper takes: the keyword the parser read (`WrittenPlaces`).
             let ast = self.w.ast(self.file);
             let in_group = |d: crate::ast::DefId, r: Span| match &ast.def(d).kind {
-                crate::ast::DefKind::Fun(f) if f.is_extension => ast.notes.places.extension_keywords.get(&f.ext_group).map_or(r, |&k| Span { start: k.min(r.start), end: r.end }),
+                crate::ast::DefKind::Fun(f) if f.is_extension => ast.notes.places.extension_keyword(f.ext_group).map_or(r, |k| Span { start: k.min(r.start), end: r.end }),
                 _ => r,
             };
             let e = defs.iter().map(|&d| (d, self.written_def_range(self.file, d))).filter(|(_, r)| *r != crate::ast::NO_RANGE).map(|(d, r)| in_group(d, r)).reduce(|a, b| Span { start: a.start.min(b.start), end: a.end.max(b.end) });
             // A package object's statements are its `object package`'s, whose `objectDef(start, ..)` starts at its
             // `package` keyword (Parsers.scala 5054-5059): `moduleDef` puts its val there.
-            let written = ast.notes.places.package_object;
+            let written = ast.notes.places.package_object();
             match (e, written) {
                 (Some(e), Some(at)) => Some(Span { start: at.min(e.start), end: e.end }),
                 (e, _) => e,
@@ -6319,7 +6421,7 @@ impl<'w, 'a> P<'w, 'a> {
         // own), its trees without a span at its start.
         if let Some(e) = envelope {
             let addr = self.buf.addr();
-            self.positions.push(Pos { addr, file: self.src_ctx, span: e, point: None, def: false, switch: false, origin: None });
+            self.push_pos(Pos { addr, file: self.src_ctx, span: e, point: None, def: false, switch: false, origin: None });
         }
         self.buf.byte(TEMPLATE);
         let tl = self.buf.begin_length();
@@ -6388,7 +6490,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.write_flags(&flags);
         self.source_file_annotation(class_pos);
         match class_pos {
-            Some(p) => self.positions.push(p),
+            Some(p) => self.push_pos(p),
             None => self.synthetic_position(caddr),
         }
         self.synth_span = saved_synth;
@@ -7575,25 +7677,23 @@ impl<'w, 'a> P<'w, 'a> {
         // A function type whose parameters are in parentheses, `(A) => B` or `() ?=> B`, has its point at its arrow
         // (`Parsers`' `typ`, the parenthesized parameters' `Function` at the arrow); `A => B` keeps its start
         // (`atSpan(startOffset(t))`).
-        let text = self.w.files.as_slice()[file.0 as usize].text.as_bytes();
         // A dependent one, its parameters named (`(x: C) => x.M`), keeps its start: `Typer.typedDependent` makes a
         // `RefinedTypeTree` whose point is its span's start (Typer.scala 1788). So does a context function type
         // (`(A, B) ?=> C`), as scalac's pickles of dotty's pos/i20206 and run/i13691 have it.
         // The arrow where the parser read it (`WrittenPlaces::fun_arrows`).
-        if let (crate::ast::TyExpr::Fun(..), Some(&arrow), None) = (ast.ty(t), ast.notes.places.fun_arrows.get(&t), ast.fun_param_names(t)) {
+        if let (crate::ast::TyExpr::Fun(..), Some(arrow), None) = (ast.ty(t), ast.notes.places.fun_arrow(t), ast.fun_param_names(t)) {
             return (span, Some(arrow));
         }
-        if let crate::ast::TyExpr::Select(_, name) = ast.ty(t) {
-            let n = self.w.interner.get(name).as_bytes();
-            let end = span.end as usize;
-            if end >= n.len() && text.get(end - n.len()..end) == Some(n) && (end - n.len()) as u32 >= span.start {
-                return (span, Some((end - n.len()) as u32));
-            }
+        // A selection `p.T` at its name, where the parser read it (`WrittenPlaces::ty_select_names`).
+        if let Some(at) = ast.notes.places.get(crate::ast::TokenRead::TySelectName, t.0) {
+            return (span, Some(at));
         }
         (span, Some(span.start))
     }
 
     /// The end of a definition's name in the source: a backquoted name's closing quote, else its text's length.
+    /// One of the writer's two reads of the source's text, with `mark_auto_applied`'s test of a call's last byte: the
+    /// name token is the one at `start`, which no comment or string can stand in for.
     fn name_end(&self, file: FileId, start: u32, name: Name) -> u32 {
         let text = &self.w.files.as_slice()[file.0 as usize].text;
         let rest = text.get(start as usize..).unwrap_or("");
@@ -7620,7 +7720,7 @@ impl<'w, 'a> P<'w, 'a> {
         if !matches!(&ast.def(d).kind, crate::ast::DefKind::Class(k) if k.kind == crate::ast::ClassKind::EnumCase) {
             return r;
         }
-        match ast.notes.places.enum_cases.get(&d) {
+        match ast.notes.places.enum_case(d) {
             Some(c) if !c.listed => Span { start: c.start, end: r.end },
             _ => r,
         }
@@ -8168,73 +8268,14 @@ fn js_class_alias(name: &str) -> bool {
     matches!(name, "Any" | "Array" | "JavaScriptException") || name.strip_prefix("Function").map_or(false, |n| n.parse::<u32>().is_ok())
 }
 
+/// A written type parameter's span and point as `Parsers.typeParam` gives them, `atSpan(start, nameStart)`: from its
+/// first annotation or its variance sign where one stands before its name (`WrittenPlaces::tparam_starts`), else from
+/// its name, through the name; its point the name's start.
+fn written_tparam(ast: &crate::ast::Ast, t: &crate::ast::TypeParam) -> (Span, u32) {
+    let start = ast.notes.places.get(crate::ast::TokenRead::TparamStart, t.span.start).unwrap_or(t.span.start);
+    (Span { start, end: t.span.end }, t.span.start)
+}
+
 /// The lean std's traits scala-library declares as abstract classes.
 const STD_TRAITS_LIBRARY_CLASSES: &[&str] = &["scala.Conversion"];
 
-/// The file's first package clause, which only comments and blanks precede (`Parsers.compilationUnit`): its
-/// `package` keyword's offset and its last name's (`makePackaging`'s point, `pointOffset(pkg)`). None where the file
-/// starts otherwise, or with `package object`.
-fn first_package_clause(text: &str) -> Option<(u32, u32)> {
-    let b = text.as_bytes();
-    let mut i = 0usize;
-    loop {
-        while i < b.len() && (b[i] as char).is_whitespace() {
-            i += 1;
-        }
-        if b[i..].starts_with(b"//") {
-            while i < b.len() && b[i] != b'\n' {
-                i += 1;
-            }
-        } else if b[i..].starts_with(b"/*") {
-            // Scala's block comments nest.
-            let mut depth = 0usize;
-            while i < b.len() {
-                if b[i..].starts_with(b"/*") {
-                    depth += 1;
-                    i += 2;
-                } else if b[i..].starts_with(b"*/") {
-                    depth -= 1;
-                    i += 2;
-                    if depth == 0 {
-                        break;
-                    }
-                } else {
-                    i += 1;
-                }
-            }
-        } else {
-            break;
-        }
-    }
-    let keyword = i;
-    if !b[i..].starts_with(b"package") || b.get(i + 7).is_none_or(|c| !(*c as char).is_whitespace()) {
-        return None;
-    }
-    i += 7;
-    while i < b.len() && (b[i] == b' ' || b[i] == b'\t') {
-        i += 1;
-    }
-    if b[i..].starts_with(b"object") && b.get(i + 6).is_some_and(|c| !(*c as char).is_alphanumeric() && *c != b'_') {
-        return None;
-    }
-    // The qualified name: its components, `.`-separated, the last one's start the point.
-    let mut last = i;
-    while i < b.len() {
-        let c = b[i];
-        if c == b'.' {
-            last = i + 1;
-            i += 1;
-        } else if c == b'`' {
-            i += 1;
-            while i < b.len() && b[i] != b'`' {
-                i += 1;
-            }
-            i += 1;
-        } else if (c as char).is_alphanumeric() || c == b'_' || c == b'$' || c >= 0x80 {
-            i += 1;
-        } else {
-            break;
-        }
-    }
-    (last < i).then_some((keyword as u32, last as u32))
-}

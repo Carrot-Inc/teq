@@ -3,7 +3,8 @@
 # tests/java-sources holds Scala and Java sources that scalac 3.8.4 accepts with the .java read as sources (javac then
 # compiling them against its output) and runs as its expected.txt, or refuses with every line of its refused.txt; a
 # program's old/ directory holds Java sources javac compiles onto the class path first, a class of the same name the
-# program's own source stands for. teq is to check each program, then build it for the JVM to a class directory (one
+# program's own source stands for. teq is to check each program, check it to products (the module model's call: the
+# Scala sources' TASTy written, the Java sources read beside them), then build it for the JVM to a class directory (one
 # line saying the Java sources were read and not compiled), javac to compile its Java sources against that directory
 # (vulpix's command), and the run of Main to print expected.txt. Besides: a JVM build to a jar of a program with Java
 # sources is refused and writes nothing; a watch session's rebuild after a Java source's edit tells the mismatch its
@@ -48,6 +49,13 @@ for dir in "${programs[@]}"; do
     continue
   fi
   [ "$status" = 0 ] || { bad "$name" "check: exit $status: $checked"; continue; }
+  # The module model's call, a check to products: the Scala sources' TASTy written, the Java sources read beside them.
+  products=$(timeout 120 "$TEQ" compiler check "$dir" --exclude "$dir/old" --std scala-library --classpath "$cp" --products "$w/products" 2>&1)
+  status=$?
+  if [ "$status" != 0 ] || [ -z "$(find "$w/products" -name '*.tasty' -print -quit 2> /dev/null)" ]; then
+    bad "$name" "check to products: exit $status, TASTy written: $(find "$w/products" -name '*.tasty' 2> /dev/null | wc -l): $products"
+    continue
+  fi
   built=$(timeout 120 "$TEQ" compiler build "$dir" --exclude "$dir/old" --target jvm --all-mains --std scala-library --classpath "$cp" -o "$w/classes" 2>&1)
   status=$?
   [ "$status" = 0 ] || { bad "$name" "build: exit $status: $built"; continue; }

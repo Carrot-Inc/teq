@@ -1,5 +1,5 @@
 bodies/fix/bodies/Base.tasty 0015f1e5d307cdd200307ce860bc5191
-bodies/fix/bodies/Bodies.tasty 001cebd8080589b6006fb416dd19edf5
+bodies/fix/bodies/Bodies.tasty 001cebd8080589b6006fb416dd19eff5
 bodies/fix/bodies/Point.tasty 001a65b4fda50a92003a8e56285c39d0
 bodies/fix/bodies/Pretty.tasty 00b40f7af62cedec00af39dc0a021cca
 calllift/fix/calllift/CallLift.tasty 0089a1d4ccfafab900a00105e2bb81f3
@@ -95,7 +95,7 @@ qualified/fix/shapes/QaFunctor.tasty 004e68cfc727bce900a7d16fbb2b8a85
 qualified/fix/shapes/QaPolicy.tasty 00b366bd821a9ad6008d13188e8b8fab
 qualified/fix/shapes/QaSyntax.tasty 00887a72505bc6c4007ecdd1c05592f6
 qualified/fix/shapes/QaUnorderedOps.tasty 00d01d8168d1ddd50002b5f6616595de
-quotepat38/fix/qp38/Qp38.tasty 00288ce33f11378d0097ec5fd048a082
+quotepat38/fix/qp38/Qp38.tasty 00288ce33f11378d0095ec5dd048ab82
 quotes38/fix/q38/Quotes38.tasty 00c38e5c5f6794a20021b9d8b2c446a7
 rassoc/fix/rassoc/RightAssoc.tasty 001fc3652d8e2dbc0062a6a6028c02ce
 rassoc/fix/rassoc/Vec.tasty 00e9d065086a24ed00dbf2a7d82cae9c
@@ -119,7 +119,7 @@ reader_decl/fix/rdecl/RdTraces.tasty 00d656e29fd44bd600cca844cc9b388a
 reader_decl/fix/rdecl/RdWrap.tasty 00c8d7d1a2af8cdc00a29026839e11f4
 recrefine/fix/recrefine/RrBox.tasty 00f9377ea50f7cef0045c68fc14f138a
 recrefine/fix/recrefine/RrShapes.tasty 000d1e7515ba76c0004dfea93776f88d
-reflect38/fix/r38/Reflect38.tasty 0097c67127ec76bc0093c38a2feb47e3
+reflect38/fix/r38/Reflect38.tasty 0097c67127ec76bc0093c38a2feb45e3
 reflectstats/fix/rstats/StatementKinds.tasty 00b6422b179b5fe50088f6348f2314c7
 removedstat/fix/removedstat/RsQuiet.tasty 00b143a0f71711d60041849a8b48dd83
 removedstat/fix/removedstat/RsUse.tasty 00cabe2bcce60ed800524b25cb0458d3
@@ -129,13 +129,13 @@ retain/fix/retain/Grids.tasty 00a7f69f9af861ea005f438a8b0270b2
 retain/fix/retain/Loud.tasty 00f5c9af8032ecc100d55bb77bd96a9a
 retain/fix/retain/Sized.tasty 00ec24b424b4e4bf0029db87555edeb2
 retain/fix/retain/Sizes.tasty 0078ce9664d92eea0054b19ccc8d1481
-seqpat/fix/seqpat/SeqPats.tasty 00ddf762b595e48200afe87917c52cf7
+seqpat/fix/seqpat/SeqPats.tasty 00ddf762b595e48200afea7915c72cf7
 seqpat/fix/seqpat/SpNode.tasty 00f935766af736d1009db2cf9ac88085
 seqpat/fix/seqpat/SpRep.tasty 0092f8f1a9ec84af005f255c2b379ced
 seqpat/fix/seqpat/SpWords.tasty 003c10f8f9048eb000f22f8c36e411f3
 shadow/fix/shadow/Shadowed.tasty 00a0a87ad47afdea007ce3a7631a57e3
 shadow/fix/shadow/shadow$package.tasty 0003c21c5c8ba4d800c967faf0571ca6
-stdforms/fix/stdforms/StdForms.tasty 00a13cab8c5f2cca008c92569023e7fc
+stdforms/fix/stdforms/StdForms.tasty 00a13cab8c5f2cca008c92569223e7fc
 supergetter/fix/supergetter/SgBase.tasty 006d43c865ad67dd00bd226a64fc74e0
 supergetter/fix/supergetter/SgLayer.tasty 00af18e60f8a7cc800b623b3bf20509e
 supergetter/fix/supergetter/SgMarks.tasty 007b1431b145c4d800d8f370a8b14b94

@@ -171,6 +171,15 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   library's kept body over its products whose local or anonymous class, or an enum's case, has a trait parent the
   products cannot carry (a call that binds its arguments first, or a case's second parent whose call binds an argument or
   whose trait runs a body) is refused there, naming it, where teq built the class without that parent's call.
+- The TASTy a build writes places its trees where the parser read each token, as scalac's pickles place them,
+  not where a search of the source's text finds it. A comment, a blank or a line break beside a token, a script's
+  header, or a backquoted name no longer moves a tree's position. That covers a package clause, a variance sign, an
+  anonymous class's `{`, a type selection's or a path's name, a `match`, a call's `(`, a lambda's arrow (the colon
+  lambda's included), a `case` and a reference's written name (a backquoted package member's call is now an
+  identifier, as scalac writes it). A tool reading the positions, and the language server's hover and definition
+  over another module's products, see scalac's places: `(x: Int) /* => */ => x` puts its arrow at the real one, and
+  `case /* c */ x =>` keeps its `CaseDef` at `case`. The `Quotes` a macro's reflection refers to is the one its
+  parameter's written type, or its body's first import, names, a lambda's parameter included.
 
 ## 0.1.11 (2026-11-20)
 

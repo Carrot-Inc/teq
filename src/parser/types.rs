@@ -91,7 +91,7 @@ impl<'a> Parser<'a> {
             let node = if ctx { TyExpr::CtxFun(params, ret) } else { TyExpr::Fun(params, ret) };
             let id = self.ast.add_ty(node, span);
             if parenthesized && !ctx {
-                self.ast.notes.places.fun_arrows.insert(id, arrow.span.start);
+                self.ast.notes.places.note_fun_arrow(id, arrow.span.start);
             }
             if let (Some(clause), true) = (clause, self.syntax.keep) {
                 self.ast.notes.fun_param_clauses.push((id, clause));
@@ -276,6 +276,7 @@ impl<'a> Parser<'a> {
                 self.error_at(self.prev_span(), "no `+/-` variance annotation allowed here");
             }
             let name = self.span();
+            self.note_tparam_start(binder_start, name.start);
             // `WildcardParamName.fresh().toTypeName`: a derived name, numbered by its place in the clause.
             if self.eat(Tok::Underscore) {
                 let n = self.interner.unique("_$", params.len() as u32);
@@ -413,6 +414,8 @@ impl<'a> Parser<'a> {
             let inner = self.ast.add_expr(Expr::Lambda(vparams, body), span);
             let l = push_list(&mut self.ast.lambda_params, &evidence);
             self.ast.exprs[lambda.idx()] = Expr::Lambda(l, inner);
+            // The written parameters and their arrow are the inner literal's now; the evidences' has no arrow.
+            self.ast.notes.places.rekey(TokenRead::LambdaArrow, lambda.0, inner.0);
         } else if own.first().is_some_and(|p| p.contextual) {
             let joined: Vec<LambdaParam> = evidence.into_iter().chain(own).collect();
             let l = push_list(&mut self.ast.lambda_params, &joined);
@@ -555,6 +558,7 @@ impl<'a> Parser<'a> {
                 0
             });
             let name = self.span();
+            self.note_tparam_start(binder_start, name.start);
             if self.eat(Tok::Underscore) {
                 let n = self.interner.unique("_$", inner.len() as u32);
                 inner.push(n);
@@ -940,6 +944,7 @@ impl<'a> Parser<'a> {
                     let n = self.bump();
                     t = self.ast.add_ty(TyExpr::Select(t, n.name), start.to(self.prev_span()));
                     self.note_ty_name(t, n.span);
+                    self.ast.notes.places.note(TokenRead::TySelectName, t.0, n.span.start);
                 }
                 Tok::Dot if self.kind_at(1) == Tok::KwType => {
                     self.bump();
@@ -1180,6 +1185,14 @@ impl<'a> Parser<'a> {
         self.record_binder_annots(BinderClause::Own(clause), annotated);
     }
 
+    /// A type parameter's start where its annotations or its variance sign stand before its name, by its name's
+    /// offset (`WrittenPlaces::tparam_starts`, `typeParam`'s `atSpan(start, nameStart)`).
+    fn note_tparam_start(&mut self, start: u32, name: u32) {
+        if start < name {
+            self.ast.notes.places.note(TokenRead::TparamStart, name, start);
+        }
+    }
+
     pub(super) fn parse_type_params(&mut self) -> Vec<TypeParam> {
         let mut out = Vec::new();
         if !self.at(Tok::LBracket) {
@@ -1188,6 +1201,8 @@ impl<'a> Parser<'a> {
         let open = self.bump().span;
         let mut cut = false;
         loop {
+            // `typeParam`'s start, before its annotations and its sign (Parsers.scala 3677).
+            let start = self.span().start;
             let annots = self.parse_annots();
             let mut variance = 0i8;
             if self.eat_op(names::PLUS) {
@@ -1204,6 +1219,7 @@ impl<'a> Parser<'a> {
                 self.check_dollar_name(n, s);
                 (n, s)
             };
+            self.note_tparam_start(start, span.start);
             let (inner, inner_bounds, clause_variances, annotated) = if self.at(Tok::LBracket) { self.parse_hk_clause() } else { Default::default() };
             let arity = inner.len().min(u8::MAX as usize) as u8;
             let mut tp = TypeParam {

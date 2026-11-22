@@ -120,6 +120,7 @@ impl<'a> Parser<'a> {
             name = segment.name;
             path = self.ast.add_ty(TyExpr::Select(path, name), span.to(segment.span));
             self.note_ty_name(path, segment.span);
+            self.ast.notes.places.note(TokenRead::TySelectName, path.0, segment.span.start);
         }
         (path, name)
     }
@@ -161,8 +162,10 @@ impl<'a> Parser<'a> {
             }
             let mut instance = self.ast.add_expr(Expr::New(path, values), start.to(self.prev_span()));
             while self.at(Tok::LParen) {
+                let open = self.span().start;
                 let (more, _) = self.parse_args();
                 instance = self.ast.add_expr(Expr::Apply(instance, more), start.to(self.prev_span()));
+                self.ast.notes.places.note(TokenRead::CallOpen, instance.0, open);
             }
             self.ast.has_nowarn |= name == crate::names::NOWARN;
             self.main_annotated |= name == crate::names::MAIN;
@@ -880,7 +883,7 @@ impl<'a> Parser<'a> {
     fn parse_extension_scoped(&mut self, m: Mods, out: &mut Vec<DefId>) {
         let keyword = self.bump().span.start;
         self.ext_groups += 1;
-        self.ast.notes.places.extension_keywords.insert(self.ext_groups, keyword);
+        self.ast.notes.places.note_extension_keyword(self.ext_groups, keyword);
         let mark = self.error_events;
         let tparams = self.parse_type_params();
         let clauses = self.parse_param_clauses(None, 0);
@@ -1103,7 +1106,7 @@ impl<'a> Parser<'a> {
         let class = ClassDef { kind, tparams, clauses, parents, body, exports, self_type, self_alias };
         let d = self.ast.add_def(Def { name, span, mods: m, annots, kind: DefKind::Class(Box::new(class)) });
         if let Some(s) = self_start {
-            self.ast.notes.places.self_starts.insert(d, s);
+            self.ast.notes.places.note_self_start(d, s);
         }
         d
     }
@@ -1131,6 +1134,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_anon_class_with(&mut self, parents: Vec<Parent>, start: Span) -> ExprId {
         let (body, exports, self_type, self_alias) = self.parse_template_body(false);
         let self_start = self.self_start.take();
+        let brace = self.body_brace.take();
         let span = start.to(self.prev_span());
         let class = ClassDef { kind: ClassKind::Class, tparams: Vec::new(), clauses: Vec::new(), parents, body, exports, self_type, self_alias };
         let def = self.ast.add_def(Def {
@@ -1141,7 +1145,10 @@ impl<'a> Parser<'a> {
             kind: DefKind::Class(Box::new(class)),
         });
         if let Some(s) = self_start {
-            self.ast.notes.places.self_starts.insert(def, s);
+            self.ast.notes.places.note_self_start(def, s);
+        }
+        if let Some(b) = brace {
+            self.ast.notes.places.note(TokenRead::BracedTemplate, def.0, b);
         }
         // The class stands where its `new` does, to the end of its template, as scalac's tree
         // places it; not the definition whose body holds it (`close_def_ranges`).
@@ -1362,19 +1369,24 @@ impl<'a> Parser<'a> {
     fn parse_template_body_scoped(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
         let mut body = Vec::new();
         let patdefs_mark = self.pattern_vals;
-        if self.at_bare_body() {
-            self.bump();
+        // The body's `{` where it is written in braces: the lexer hands a brace over as an `Indent` of its own span,
+        // after a `ColonEol` of the same span where a token that can end a statement stands before it; a colon's body
+        // opens with a layout `Indent`, of no extent.
+        let opening = if self.at_bare_body() {
+            self.bump()
         } else if !(self.at(Tok::ColonEol) && self.kind_at(1) == Tok::Indent) {
             if self.at(Tok::ColonEol) {
                 self.error_at(self.span(), "expected an indented body after ':'");
                 self.skip_token(RecoverySite::ColonBody);
             }
             self.self_start = None;
+            self.body_brace = None;
             return (body, ListRef::EMPTY, None, names::EMPTY);
         } else {
             self.bump();
-            self.bump();
-        }
+            self.bump()
+        };
+        let brace = (opening.span.end > opening.span.start).then_some(opening.span.start);
         let exports_mark = self.export_scratch.len();
         let derives_mark = self.pending_derives.len();
         let cases_mark = self.pending_cases.len();
@@ -1430,6 +1442,7 @@ impl<'a> Parser<'a> {
         }
         // Set last, past the bodies nested in this one.
         self.self_start = self_start;
+        self.body_brace = brace;
         (body, self.export_list(exports_mark), self_type, alias)
     }
 
@@ -1773,7 +1786,7 @@ impl<'a> Parser<'a> {
         }
         let listed = cases.len() > 1;
         for d in cases {
-            self.ast.notes.places.enum_cases.insert(d, crate::ast::CasePlace { start, listed });
+            self.ast.notes.places.note_enum_case(d, crate::ast::CasePlace { start, listed });
         }
     }
 

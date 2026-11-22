@@ -32,6 +32,10 @@ pub struct Syntax {
     /// The language server's index is kept: the parser records the name spans of selections,
     /// operators and import paths (`Ast::name_spans`).
     pub index: bool,
+    /// The run writes TASTy of the unit (products, a JVM build's, the API graph of an analysis): the parser keeps the
+    /// places of the tokens the TASTy writer starts trees at (`ast::WrittenPlaces`). A run that writes none keeps no
+    /// record, nothing noted and nothing allocated.
+    pub pickles: bool,
     /// The lean std's own source: its deprecated definitions turn the reference checks on where
     /// a reference resolves one (`Worker::package_term`), not where they are read, so that a
     /// program that names none pays no check (`typer::deprecation::possible`).
@@ -177,6 +181,14 @@ pub struct Parser<'a> {
     /// The written self definition's start of the template body the parser last finished
     /// (`WrittenPlaces::self_starts`), which its class's caller records once the class is a definition.
     self_start: Option<u32>,
+    /// The `{` of the template body the parser last finished, where it is written in braces
+    /// (`WrittenPlaces::braced_templates`), which an anonymous class's caller records once the class is a definition.
+    body_brace: Option<u32>,
+    /// The unit's first package clause's `package` keyword and last name (`WrittenPlaces::package_clause`), which
+    /// every AST of the unit takes.
+    first_package: Option<(u32, u32)>,
+    /// The file's first statement, past its separators (`WrittenPlaces::first_stat`), which every AST of the unit takes.
+    first_stat: Option<u32>,
 }
 
 struct PendingDerives {
@@ -269,7 +281,13 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         script_end: usize::MAX,
         script_body: crate::names::EMPTY,
         self_start: None,
+        body_brace: None,
+        first_package: None,
+        first_stat: None,
     };
+    if syntax.pickles {
+        p.ast.notes.places = crate::ast::WrittenPlaces::kept(p.places_estimate());
+    }
     // A script is read from its wrapper, past its own tokens and the layout that closes them.
     if let Some(at) = syntax.script {
         let end = p.toks.iter().position(|t| t.span.start >= at && !matches!(t.kind, Tok::Newline | Tok::Indent | Tok::Outdent));
@@ -283,15 +301,18 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
     // Typing reads the unit's version, the import's wherever it stands (`Feature.sourceVersion`).
     let unit = p.unit_source.unwrap_or(syntax.source);
     let keywords = p.lex_keywords;
+    let first_package = p.first_package;
     let mut asts = vec![p.ast];
     asts.extend(p.package_blocks);
     // The scanner's record of its backquoted identifiers is the unit's, the file's AST's and each package block's
     // (`untpd.isBackquoted` of a token of the unit).
-    let first_stat = asts[0].notes.places.first_stat;
+    let first_stat = p.first_stat;
     for ast in &mut asts {
         ast.source_version = unit;
         ast.notes.backquoted_idents.clone_from(&backquoted);
-        ast.notes.places.first_stat = first_stat;
+        ast.notes.places.note_first_stat(first_stat);
+        ast.notes.places.note_package_clause(first_package);
+        ast.notes.places.seal();
     }
     if syntax.keep {
         asts[0].notes.source = Some(Box::new(crate::ast::SourceKept { tokens: p.toks.clone(), end_markers: p.end_markers.clone() }));
@@ -301,6 +322,12 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
 }
 
 impl<'a> Parser<'a> {
+    /// Room for the places of the TASTy writer's reads in the tokens left to read: a selection's name, an argument
+    /// clause's `(`, a `match`, an arrow or a `case` is about one token in four.
+    fn places_estimate(&self) -> usize {
+        (self.toks.len() - self.pos.min(self.toks.len())) / 4 + 16
+    }
+
     #[inline]
     fn tok(&self) -> Token {
         self.toks[self.pos]
@@ -1028,12 +1055,14 @@ impl<'a> Parser<'a> {
         self.skip_separators();
         // The file's first statement, past its separators (`compilationUnit`'s `in.offset` after its `SEMI`s).
         if !self.at(Tok::Eof) {
-            self.ast.notes.places.first_stat = Some(self.span().start);
+            self.first_stat = Some(self.span().start);
         }
         while self.at(Tok::KwPackage) && self.kind_at(1) != Tok::KwObject && !self.package_block_follows() {
             let start = self.bump().span;
+            let mut last;
             loop {
                 let (n, s) = self.expect_ident();
+                last = s;
                 self.ast.package.push(n);
                 if self.syntax.keep {
                     self.ast.notes.package_names.push(s);
@@ -1042,6 +1071,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
+            self.note_package_clause(start.start, last.start);
             self.ast.package_clauses.push(self.ast.package.len() as u32);
             if self.syntax.index {
                 self.ast.package_ranges.push(start.to(self.prev_span()));
@@ -1058,6 +1088,14 @@ impl<'a> Parser<'a> {
         }
         self.add_top_level_derived_givens();
         self.add_main_proxies();
+    }
+
+    /// The unit's package clause `package p.q` read at the file's first statement (past its separators): its keyword
+    /// and its last name, the `PackageDef`'s start and point (`makePackaging`'s `atSpan(start, pointOffset(pkg))`).
+    fn note_package_clause(&mut self, keyword: u32, last: u32) {
+        if self.first_package.map_or(true, |(k, _)| k == keyword) && self.first_stat.map_or(true, |f| f == keyword) {
+            self.first_package = Some((keyword, last));
+        }
     }
 
     /// dotty's `MainProxies`: for each `@main` method of the unit or of its objects that takes parameters,
@@ -1220,9 +1258,15 @@ impl<'a> Parser<'a> {
     /// their own whose package clauses are the file's plus `p`.
     fn parse_package_block(&mut self) {
         let start = self.bump().span;
+        // The file's first statement is the clause the unit's `PackageDef` is made of where it opens a block too
+        // (`topstats`' `inDefScopeBraces(makePackaging(start, pkg, topStatSeq()))`, Parsers.scala 5071-5072).
+        let first = self.first_stat == Some(start.start);
         let outer = self.open_package_block();
         loop {
             let (n, s) = self.expect_ident();
+            if first {
+                self.note_package_clause(start.start, s.start);
+            }
             self.ast.package.push(n);
             if self.syntax.keep {
                 self.ast.notes.package_names.push(s);
@@ -1243,6 +1287,9 @@ impl<'a> Parser<'a> {
 
     fn open_package_block(&mut self) -> Ast {
         let outer = std::mem::replace(&mut self.ast, Ast::new(0));
+        if self.syntax.pickles {
+            self.ast.notes.places = crate::ast::WrittenPlaces::kept(self.places_estimate());
+        }
         self.ast.package = outer.package.clone();
         self.ast.package_clauses = outer.package_clauses.clone();
         self.ast.imports = outer.imports.clone();
@@ -1329,7 +1376,7 @@ impl<'a> Parser<'a> {
         if self.syntax.keep {
             self.ast.notes.package_object = Some((start, span));
         }
-        self.ast.notes.places.package_object = Some(start);
+        self.ast.notes.places.note_package_object(start);
         self.ast.package.push(name);
         self.ast.package_clauses.push(self.ast.package.len() as u32);
         let parents = self.parse_parents();

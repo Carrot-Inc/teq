@@ -260,7 +260,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.other_lines.insert(file, lines);
         }
         let switch = file != self.src_ctx;
-        self.positions.push(Pos { addr, file, span, point, def: false, switch, origin: None });
+        self.push_pos(Pos { addr, file, span, point, def: false, switch, origin: None });
         own
     }
 
@@ -324,7 +324,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.other_lines.insert(file, lines);
         }
         let switch = file != self.src_ctx;
-        self.positions.push(Pos { addr, file, span, point: Some(span.start), def: false, switch, origin: None });
+        self.push_pos(Pos { addr, file, span, point: Some(span.start), def: false, switch, origin: None });
         let (src, ctx) = (self.src_ctx, self.span_ctx);
         self.src_ctx = file;
         self.span_ctx = Some((file, span));
@@ -461,7 +461,7 @@ impl<'w, 'a> P<'w, 'a> {
             Some((file, span)) => {
                 let addr = self.buf.addr();
                 let l = self.open(INLINED);
-                self.positions.push(Pos { addr, file, span, point: None, def: false, switch: false, origin: None });
+                self.push_pos(Pos { addr, file, span, point: None, def: false, switch: false, origin: None });
                 self.term_node(e);
                 self.buf.end_length(l);
             }
@@ -947,7 +947,15 @@ impl<'w, 'a> P<'w, 'a> {
                         let t = self.structural_result(s, e).unwrap();
                         return self.dollar_cast(t, |p| p.call(s, Qual::Expr(r), recs.targs, &args));
                     }
-                    self.call(s, Qual::Expr(r), recs.targs, &args)
+                    // An extension of the reflection API (`TreeMethods.asExprOf(t)`) whose receiver is a parameter that
+                    // declares its type on a named `Quotes` (`t: q.reflect.Term`): that one's, the prefix of the
+                    // receiver's type whose implicit scope scalac finds the extension in.
+                    let scopes = self.reflect_scopes.len();
+                    if let Some(q) = self.receiver_quotes(r, &args) {
+                        self.reflect_scopes.push((q, self.splice_params.len()));
+                    }
+                    self.call(s, Qual::Expr(r), recs.targs, &args);
+                    self.reflect_scopes.truncate(scopes);
                 }
                 // The member a refinement of the receiver's type declares: selected by the
                 // refinement's own signature, as the selection's denotation has no class.
@@ -1098,7 +1106,7 @@ impl<'w, 'a> P<'w, 'a> {
                 }
                 if let Some(point) = self.match_point(e) {
                     let here = self.buf.addr();
-                    if let Some(p) = self.positions.iter_mut().rev().find(|p| p.addr == here) {
+                    if let Some(p) = self.pos_at_mut(here) {
                         p.point = Some(point);
                     }
                 }
@@ -1363,7 +1371,7 @@ impl<'w, 'a> P<'w, 'a> {
             let l = self.open(INLINED);
             if let Some((file, span, point)) = at {
                 let switch = file != self.src_ctx;
-                self.positions.push(Pos { addr: self.buf.addr(), file, span, point, def: false, switch, origin: None });
+                self.push_pos(Pos { addr: self.buf.addr(), file, span, point, def: false, switch, origin: None });
             } else {
                 self.term_at(None);
             }
@@ -1525,9 +1533,12 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let Some((file, span)) = self.w.prog.span_of(*arg) else { return };
         let here = self.buf.addr();
-        for i in 0..self.positions.len() {
+        let mut next = self.pos_latest.get(&here).copied().unwrap_or(super::NO_POS);
+        while next != super::NO_POS {
+            let i = next as usize;
+            next = self.pos_before[i];
             let p = self.positions[i];
-            if p.addr == here && p.file == file && p.span.start == span.start && p.span.end == p.span.start && span.end > span.start {
+            if p.file == file && p.span.start == span.start && p.span.end == p.span.start && span.end > span.start {
                 self.positions[i].span = span;
                 self.positions[i].point = Some(span.start);
             }
@@ -1538,7 +1549,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// body keeps its place: the build over that unit's products reads it from the pickle, which gives no point there.
     fn point_at_name_in_unit(&mut self, name: crate::intern::Name) {
         let here = self.buf.addr();
-        if self.positions.iter().any(|p| p.addr == here && p.file == self.file) {
+        if self.pos_indices(here).any(|i| self.positions[i].file == self.file) {
             self.point_at_name(name);
         }
     }
@@ -1547,12 +1558,12 @@ impl<'w, 'a> P<'w, 'a> {
     /// writes the name at the span's end (`Parsers`' `selector`, `atSpan(start, nameStart)`).
     fn point_at_name(&mut self, name: crate::intern::Name) {
         let here = self.buf.addr();
-        // Every entry of the address: the section keeps the first (`positions_section`).
-        for i in (0..self.positions.len()).rev() {
+        // Every entry of the address, the latest first: the section keeps the first (`positions_section`).
+        let mut next = self.pos_latest.get(&here).copied().unwrap_or(super::NO_POS);
+        while next != super::NO_POS {
+            let i = next as usize;
+            next = self.pos_before[i];
             let p = self.positions[i];
-            if p.addr != here {
-                continue;
-            }
             if let Some(point) = self.name_point(p.file, p.span, name) {
                 self.positions[i].point = Some(point);
             }
@@ -1710,21 +1721,47 @@ impl<'w, 'a> P<'w, 'a> {
     /// member of a static object is scalac's identifier too, which the reader would read as the
     /// object's path where the source calls on `this`: it stays the selection, the
     /// "identifiers" equivalence.)
-    fn names_unqualified(&self, e: TExprId, s: SymId) -> bool {
-        self.w.prog.span_of(e).map_or(false, |(file, span)| self.text_names(file, span, s))
+    fn names_unqualified(&mut self, e: TExprId, s: SymId) -> bool {
+        self.w.prog.span_of(e).map_or(false, |(file, span)| self.written_as_name(file, span, s))
     }
 
-    /// Whether the text at `span` starts with the name of `s`, a definition of this pickle.
-    fn text_names(&self, file: FileId, span: Span, s: SymId) -> bool {
+    /// Whether the expression the source writes at `span` is the name of `s` alone, a definition of this pickle: the
+    /// parser's `Ident` (`Parsers.simpleRef`'s `termIdent`), backquoted or not, in parentheses, applied or given type
+    /// arguments, or an interpolation's interpolator (`id"..."`, `Parsers.interpolatedString`'s identifier, which the
+    /// typer applies as the extension of `StringContext` it finds in scope), which scalac's typer keeps as the
+    /// identifier, against a selection of it.
+    fn written_as_name(&mut self, file: FileId, span: Span, s: SymId) -> bool {
         if !self.is_local(Key::Sym(s)) || !matches!(self.w.syms.sym(s).owner, Owner::Package(_)) {
             return false;
         }
-        let Some(src) = self.w.files.as_slice().get(file.0 as usize) else { return false };
-        let name = self.w.interner.get(self.w.syms.sym(s).name);
-        match src.text.get(span.start as usize..) {
-            Some(t) => t.starts_with(name) && !t[name.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_' || c == '$'),
-            None => false,
+        if self.w.files.as_slice().get(file.0 as usize).is_none() {
+            return false;
         }
+        if !self.head_names.contains_key(&file) {
+            let index = self.index;
+            let ast = self.w.ast(file);
+            fn head(ast: &crate::ast::Ast, e: crate::ast::ExprId) -> Option<crate::intern::Name> {
+                use crate::ast::Expr;
+                match ast.expr(e) {
+                    Expr::Ident(n) | Expr::Interp(n, _, _) => Some(n),
+                    Expr::Apply(f, _) | Expr::UsingApply(f, _) | Expr::TypeApply(f, _) | Expr::Parens(f) | Expr::Assign(f, _) => head(ast, f),
+                    _ => None,
+                }
+            }
+            let m = index.head_names.borrow_mut().entry(file).or_insert_with(|| {
+                let mut m: FxMap<(u32, u32), crate::intern::Name> = FxMap::default();
+                for i in 0..ast.exprs.len() {
+                    let id = crate::ast::ExprId(i as u32);
+                    if let Some(n) = head(ast, id) {
+                        let sp = ast.expr_spans[i];
+                        m.entry((sp.start, sp.end)).or_insert(n);
+                    }
+                }
+                std::rc::Rc::new(m)
+            }).clone();
+            self.head_names.insert(file, m);
+        }
+        self.head_names[&file].get(&(span.start, span.end)) == Some(&self.w.syms.sym(s).name)
     }
 
     /// The identifier of a member, placed as the tree it stands in.
@@ -2016,10 +2053,10 @@ impl<'w, 'a> P<'w, 'a> {
         // More lists written than this call's clauses (`f(1)(2)` of a function's `apply`): its last clause is written.
         let written_lists = written_lists.min(k);
         let written_layer = layers.iter().enumerate().position(|(i, l)| matches!(l, Layer::Clause(_)) && ordinal[i] == written_lists);
-        let call_span = self.positions.iter().rev().find(|p| p.addr == apply_at).map(|p| p.span);
+        let call_span = self.pos_at(apply_at).map(|p| p.span);
         if let (Some(point), Some(i)) = (apply_point, written_layer) {
             if i + 1 == layers.len() {
-                if let Some(p) = self.positions.iter_mut().rev().find(|p| p.addr == apply_at) {
+                if let Some(p) = self.pos_at_mut(apply_at) {
                     if (p.span.start..=p.span.end).contains(&point) {
                         p.point = Some(point);
                     }
@@ -3006,7 +3043,7 @@ impl<'w, 'a> P<'w, 'a> {
                             // it (`conversion_at_argument`).
                             if let Some((f, sp)) = p.w.prog.span_of(recv).filter(|&(f, sp)| f == p.src_ctx && f == p.file && sp.end > sp.start) {
                                 let addr = p.buf.addr();
-                                p.positions.push(Pos { addr, file: f, span: sp, point: Some(sp.start), def: false, switch: false, origin: None });
+                                p.push_pos(Pos { addr, file: f, span: sp, point: Some(sp.start), def: false, switch: false, origin: None });
                             }
                             p.term_at(None);
                             let l = p.open(APPLY);
@@ -3717,7 +3754,9 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     /// The selection about to be written in the call at `call_at`, whose one empty clause the
-    /// source did not write: it spans the call, which tells the reader so.
+    /// source did not write: it spans the call, which tells the reader so. Whether the call's last byte is the `)`
+    /// of an argument clause is one of the writer's two reads of the source's text, with `name_end`'s: the span ends
+    /// at the parser's last token of the call, which no comment can stand in for.
     fn mark_auto_applied(&mut self, call_at: usize) {
         let Some(&call) = self.positions.last().filter(|p| p.addr == call_at && p.point.is_some()) else { return };
         let unparenthesised = match self.is_pickled_source(call.file) {
@@ -3729,7 +3768,7 @@ impl<'w, 'a> P<'w, 'a> {
             }
         };
         if unparenthesised {
-            self.positions.push(Pos { addr: self.buf.addr(), point: None, def: false, switch: false, origin: None, ..call });
+            self.push_pos(Pos { addr: self.buf.addr(), point: None, def: false, switch: false, origin: None, ..call });
         }
     }
 
@@ -3783,14 +3822,14 @@ impl<'w, 'a> P<'w, 'a> {
         let layout = self.call_layout_next.take();
         let written_lists = layout.as_ref().map_or(0, |l| l.written as usize).min(clauses.len());
         let apply_point = layout.as_ref().and_then(|l| l.apply_point);
-        let call_span = self.positions.iter().rev().find(|p| p.addr == call_at).map(|p| p.span);
+        let call_span = self.pos_at(call_at).map(|p| p.span);
         let mut opens: Vec<crate::tasty::write::buf::Slot> = Vec::with_capacity(clauses.len());
         for i in 0..clauses.len() {
             // `opens[i]` is the application of clause `clauses.len() - 1 - i`.
             let clause = clauses.len() - 1 - i;
             if let (Some(point), true) = (apply_point, written_lists > 0 && clause + 1 == written_lists) {
                 if i == 0 {
-                    if let Some(p) = self.positions.iter_mut().rev().find(|p| p.addr == call_at) {
+                    if let Some(p) = self.pos_at_mut(call_at) {
                         if (p.span.start..=p.span.end).contains(&point) {
                             p.point = Some(point);
                         }
@@ -4206,7 +4245,7 @@ impl<'w, 'a> P<'w, 'a> {
         let layout = self.call_layout(e).filter(|l| l.fun_name.map_or(true, |n| n == class_name));
         if let Some(point) = layout.as_ref().and_then(|l| l.apply_point) {
             let here = self.buf.addr();
-            if let Some(q) = self.positions.iter_mut().rev().find(|q| q.addr == here) {
+            if let Some(q) = self.pos_at_mut(here) {
                 if (q.span.start..=q.span.end).contains(&point) {
                     q.point = Some(point);
                 }
@@ -4292,8 +4331,12 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
-    /// Where the source writes the `match` of the match at the node's span: the keyword after the scrutinee, the
-    /// match's point (`Parsers`' `matchClause`, `atSpan(startOffset(t), in.skipToken())`).
+    /// The point of the match at the node's span: its `match` keyword where the parser read it (`Parsers`'
+    /// `matchClause`, `atSpan(startOffset(t), in.skipToken())`; `WrittenPlaces::term_matches`), but its start where
+    /// its span is its children's envelope, the scrutinee (its parentheses dropped, as the typer drops them, a block
+    /// in braces as written) and its cases from their `case` through their bodies: `PositionPickler` pickles no
+    /// position for such a tree (PositionPickler.scala 120), which a reader takes back as the envelope with its point
+    /// at its start. Cases in braces, or a scrutinee in parentheses, keep the keyword.
     fn match_point(&mut self, e: TExprId) -> Option<u32> {
         let (file, span) = self.w.prog.span_of(e)?;
         if !self.is_own_source(file) {
@@ -4301,12 +4344,22 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let id = self.expr_at(file, span)?;
         let ast = self.w.ast(file);
-        let crate::ast::Expr::Match(scrut, _) = ast.expr(id) else { return None };
-        let after = ast.expr_spans[scrut.idx()].end;
-        let text = &self.w.files.as_slice()[file.0 as usize].text;
-        let rest = text.get(after as usize..span.end as usize)?;
-        let i = rest.find(|c: char| !c.is_whitespace() && c != ')')?;
-        rest[i..].starts_with("match").then(|| after + i as u32)
+        let keyword = ast.notes.places.get(crate::ast::TokenRead::TermMatch, id.0)?;
+        let (crate::ast::Expr::Match(scrut, cases) | crate::ast::Expr::InlineMatch(scrut, cases)) = ast.expr(id) else { return Some(keyword) };
+        let mut s = scrut;
+        while let crate::ast::Expr::Parens(inner) = ast.expr(s) {
+            s = inner;
+        }
+        // A block in braces that keeps no node of its own is the typer's `Block` there, from its `{`.
+        let written = ast.is_braced(s).then(|| ast.written_arg(s)).flatten().map(|(w, _)| w);
+        let ss = written.unwrap_or(ast.expr_spans[s.idx()]);
+        let ms = ast.expr_spans[id.idx()];
+        let mut end = ss.end;
+        for k in cases.start..cases.start + cases.len {
+            let c = &ast.cases[k as usize];
+            end = end.max(ast.expr_spans[c.body.idx()].end).max(ast.pat_spans[c.pat.idx()].end);
+        }
+        Some(if ss.start == ms.start && end == ms.end { ms.start } else { keyword })
     }
 
     /// The call of a constructor of `c`, `via` a secondary one, on `NEW` of `new_ty`, the
@@ -4525,16 +4578,25 @@ impl<'w, 'a> P<'w, 'a> {
         self.ctor_args(targs, args, &clauses, &formals, ta, opens, block)
     }
 
-    /// The point of a written type at `span` in the current source: a dotted path's (`a.b.C`) at its last name, as
-    /// the parser's `Select` points at its name; any other type's at its start.
-    fn path_type_point(&self, span: Span) -> u32 {
-        let Some(text) = self.w.files.as_slice().get(self.src_ctx.0 as usize).map(|f| f.text.as_bytes()) else { return span.start };
-        let Some(written) = text.get(span.start as usize..span.end as usize) else { return span.start };
-        let path = written.iter().all(|&b| b == b'.' || b == b'_' || b == b'$' || b.is_ascii_alphanumeric());
-        match written.iter().rposition(|&b| b == b'.') {
-            Some(i) if path && i + 1 < written.len() => span.start + i as u32 + 1,
-            _ => span.start,
+    /// The point of a written type at `span` in the current source: a selection's (`a.b.C`) at its last name, where
+    /// the parser read it (`Parsers.selector`, `WrittenPlaces::ty_select_names`); any other type's at its start.
+    fn path_type_point(&mut self, span: Span) -> u32 {
+        let file = self.src_ctx;
+        if self.w.files.as_slice().get(file.0 as usize).is_none() {
+            return span.start;
         }
+        if !self.ty_select_index.contains_key(&file) {
+            let index = self.index;
+            let ast = self.w.ast(file);
+            let m = index.ty_select_names.borrow_mut().entry(file).or_insert_with(|| {
+                std::rc::Rc::new(ast.notes.places.of(crate::ast::TokenRead::TySelectName).map(|(t, at)| {
+                    let sp = ast.ty_spans[t as usize];
+                    ((sp.start, sp.end), at)
+                }).collect())
+            }).clone();
+            self.ty_select_index.insert(file, m);
+        }
+        self.ty_select_index[&file].get(&(span.start, span.end)).copied().unwrap_or(span.start)
     }
 
     /// Whether an expression is a stable path `path_type` writes: a local or parameter, `this`,
@@ -5141,28 +5203,52 @@ impl<'w, 'a> P<'w, 'a> {
             self.term_at(None);
             self.buf.byte(BYNAMETPT);
         }
+        // A type of the reflection API the parameter declares on a named `Quotes` (`t: q.reflect.Term`): that one's,
+        // as a member's parameter's (`method_param`).
+        let scopes = self.reflect_scopes.len();
+        let info = self.w.syms.sym(s);
+        if let Some(q) = self.declared_quotes(info.file, info.span.start) {
+            self.reflect_scopes.push((q, self.splice_params.len()));
+        }
         self.next_tree_pos = layout.map(|(_, ty)| (ty, Some(ty.start)));
         self.tpt(t);
         self.next_tree_pos = None;
+        self.reflect_scopes.truncate(scopes);
         if given {
             self.buf.byte(GIVEN);
         }
         self.buf.end_length(l);
     }
 
-    /// Where a selection `span` ending in the name `name` has its name: the name's start, where the source writes the
-    /// name at the span's end (a backquoted one with its quotes).
-    fn name_point(&self, file: FileId, span: Span, name: crate::intern::Name) -> Option<u32> {
-        let text = &self.w.files.as_slice().get(file.0 as usize)?.text;
-        let n = self.w.interner.get(name);
-        let end = span.end as usize;
-        let quoted = format!("`{}`", n);
-        for written in [n, quoted.as_str()] {
-            if end >= written.len() && text.get(end - written.len()..end) == Some(written) && (end - written.len()) as u32 >= span.start {
-                return Some((end - written.len()) as u32);
-            }
+    /// Where the selection of `name` the source writes at `span` has its name: the name token's start, a backquoted
+    /// one's at its quote, where the parser read it (`Parsers.selector`, `WrittenPlaces::select_names`).
+    fn name_point(&mut self, file: FileId, span: Span, name: crate::intern::Name) -> Option<u32> {
+        self.w.files.as_slice().get(file.0 as usize)?;
+        if !self.select_index.contains_key(&file) {
+            let index = self.index;
+            let ast = self.w.ast(file);
+            let m = index.select_names.borrow_mut().entry(file).or_insert_with(|| {
+                let mut m: super::SelectNames = FxMap::default();
+                for (e, at) in ast.notes.places.of(crate::ast::TokenRead::SelectName) {
+                    let e = crate::ast::ExprId(e);
+                    match ast.expr(e) {
+                        crate::ast::Expr::Select(_, n) => {
+                            let sp = ast.expr_spans[e.idx()];
+                            m.insert((sp.start, sp.end), (at, n));
+                        }
+                        // An infix operation's selection spans its left operand through its operator.
+                        crate::ast::Expr::Infix(l, n, _, op_end) => {
+                            m.insert((ast.expr_spans[l.idx()].start, op_end), (at, n));
+                        }
+                        _ => {}
+                    }
+                }
+                std::rc::Rc::new(m)
+            }).clone();
+            self.select_index.insert(file, m);
         }
-        None
+        let &(at, n) = self.select_index[&file].get(&(span.start, span.end))?;
+        (n == name).then_some(at)
     }
 
     /// The source's expressions of a file by their span: the applications, selections, operators and lambdas, the
@@ -5172,7 +5258,7 @@ impl<'w, 'a> P<'w, 'a> {
             let ast = self.w.ast(file);
             let mut m: FxMap<(u32, u32), crate::ast::ExprId> = FxMap::default();
             for (i, x) in ast.exprs.iter().enumerate() {
-                if matches!(x, crate::ast::Expr::Apply(..) | crate::ast::Expr::UsingApply(..) | crate::ast::Expr::Infix(..) | crate::ast::Expr::Select(..) | crate::ast::Expr::Lambda(..) | crate::ast::Expr::TypeApply(..) | crate::ast::Expr::New(..) | crate::ast::Expr::Match(..)) {
+                if matches!(x, crate::ast::Expr::Apply(..) | crate::ast::Expr::UsingApply(..) | crate::ast::Expr::Infix(..) | crate::ast::Expr::Select(..) | crate::ast::Expr::Lambda(..) | crate::ast::Expr::TypeApply(..) | crate::ast::Expr::New(..) | crate::ast::Expr::Match(..) | crate::ast::Expr::InlineMatch(..)) {
                     let sp = ast.expr_spans[i];
                     m.insert((sp.start, sp.end), crate::ast::ExprId(i as u32));
                 }
@@ -5308,8 +5394,10 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let id = self.expr_at(file, span)?;
         let ast = self.w.ast(file);
-        let text = &self.w.files.as_slice()[file.0 as usize].text;
         let interner = self.w.interner;
+        let places = &ast.notes.places;
+        // The function's selection at its name where the parser read it (`Parsers.selector`), an identifier at its
+        // start.
         let selection = |f: crate::ast::ExprId| -> Option<(Span, u32)> {
             let mut f = f;
             while let crate::ast::Expr::TypeApply(g, _) = ast.expr(f) {
@@ -5317,12 +5405,7 @@ impl<'w, 'a> P<'w, 'a> {
             }
             let fs = ast.expr_spans[f.idx()];
             match ast.expr(f) {
-                crate::ast::Expr::Select(_, n) => {
-                    let w = interner.get(n);
-                    let end = fs.end as usize;
-                    let start = if end >= w.len() && text.get(end - w.len()..end) == Some(w) { (end - w.len()) as u32 } else { fs.start };
-                    Some((fs, start))
-                }
+                crate::ast::Expr::Select(..) => Some((fs, places.get(crate::ast::TokenRead::SelectName, f.0).unwrap_or(fs.start))),
                 crate::ast::Expr::Ident(_) => Some((fs, fs.start)),
                 _ => None,
             }
@@ -5339,9 +5422,8 @@ impl<'w, 'a> P<'w, 'a> {
         };
         match ast.expr(id) {
             crate::ast::Expr::Apply(f, _) | crate::ast::Expr::UsingApply(f, _) => {
-                let fs = ast.expr_spans[f.idx()];
-                let rest = text.get(fs.end as usize..span.end as usize).unwrap_or("");
-                let open = rest.find(|c: char| !c.is_whitespace()).filter(|&i| rest[i..].starts_with('(')).map(|i| fs.end + i as u32);
+                // The argument clause's opening where the parser read it (`simpleExprRest`'s `in.offset`).
+                let open = places.get(crate::ast::TokenRead::CallOpen, id.0);
                 // The argument lists the source writes: the applications down the function.
                 let mut written = 1u16;
                 let mut g = f;
@@ -5353,8 +5435,8 @@ impl<'w, 'a> P<'w, 'a> {
             }
             crate::ast::Expr::Infix(l, op, _, op_end) => {
                 let ls = ast.expr_spans[l.idx()];
-                let w = interner.get(op);
-                let point = op_end.checked_sub(w.len() as u32).filter(|&p| p >= ls.start).unwrap_or(ls.start);
+                // The operator's selection at the operator where the parser read it, a backquoted one's at its quote.
+                let point = places.get(crate::ast::TokenRead::SelectName, id.0).unwrap_or_else(|| op_end.saturating_sub(interner.get(op).len() as u32).max(ls.start));
                 Some(CallLayout { select: Some((Span { start: ls.start, end: op_end }, point)), apply_point: Some(span.start), fun_name: Some(op), written: 1, qual: None })
             }
             crate::ast::Expr::Select(_, n) => Some(CallLayout { select: selection(id), apply_point: None, fun_name: Some(n), written: 0, qual: None }),
@@ -5420,7 +5502,7 @@ impl<'w, 'a> P<'w, 'a> {
     fn place_typed(&mut self, layout: Option<(Span, Span)>) {
         let Some((outer, _)) = layout else { return };
         let here = self.buf.addr();
-        if let Some(p) = self.positions.iter_mut().rev().find(|p| p.addr == here) {
+        if let Some(p) = self.pos_at_mut(here) {
             p.span = outer;
             p.point = Some(outer.start);
         } else {
@@ -5433,7 +5515,7 @@ impl<'w, 'a> P<'w, 'a> {
     fn place_over(&mut self, span: Span, point: Option<u32>) {
         let addr = self.buf.addr();
         let file = self.src_ctx;
-        match self.positions.iter_mut().rev().find(|q| q.addr == addr) {
+        match self.pos_at_mut(addr) {
             Some(q) if q.file == file && !q.switch => {
                 q.span = span;
                 q.point = point;
@@ -5445,7 +5527,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn place_here(&mut self, span: Span, point: Option<u32>) {
         let addr = self.buf.addr();
-        self.positions.push(Pos { addr, file: self.src_ctx, span, point, def: false, switch: false, origin: None });
+        self.push_pos(Pos { addr, file: self.src_ctx, span, point, def: false, switch: false, origin: None });
     }
 
     /// The lambda the node `e` stands for, as the source writes it: its span, its arrow, and per parameter the
@@ -5465,10 +5547,8 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let id = self.expr_at(file, span)?;
         let ast = self.w.ast(file);
-        let crate::ast::Expr::Lambda(ps, body) = ast.expr(id) else { return None };
-        let text = &self.w.files.as_slice()[file.0 as usize].text;
+        let crate::ast::Expr::Lambda(ps, _) = ast.expr(id) else { return None };
         let mut params = Vec::new();
-        let mut last = span.start;
         for k in ps.start..ps.start + ps.len {
             let p = &ast.lambda_params[k as usize];
             let (full, ty) = match p.ty {
@@ -5478,25 +5558,22 @@ impl<'w, 'a> P<'w, 'a> {
                 }
                 None => (p.span, Span { start: p.span.end, end: p.span.end }),
             };
-            last = last.max(full.end);
             params.push((full, ty));
         }
-        let body_start = ast.expr_spans[body.idx()].start;
-        let between = text.get(last as usize..body_start as usize).unwrap_or("");
-        let written_arrow = between.find("=>").or_else(|| between.find('⇒'));
+        // The arrow where the parser read it, an `?=>`'s at its `?` (`closureRest`'s `atSpan(start, in.offset)`,
+        // `WrittenPlaces::lambda_arrows`).
+        let written_arrow = ast.notes.places.get(crate::ast::TokenRead::LambdaArrow, id.0);
         // A placeholder's parameter (`_ + _`, no arrow written): the empty span at its `_` (`Parsers.simpleExpr`'s
-        // USCORE, `ValDef(pname, ..).withSpan(Span(start))`).
+        // USCORE, `ValDef(pname, ..).withSpan(Span(start))`), a parameter the parser named `_$n` there.
         if written_arrow.is_none() {
             for (k, (full, _)) in (ps.start..ps.start + ps.len).zip(params.iter_mut()) {
                 let p = &ast.lambda_params[k as usize];
-                if text.get(p.span.start as usize..p.span.end as usize) == Some("_") {
+                if !p.cases && self.w.interner.get(p.name).starts_with("_$") {
                     *full = Span { start: p.span.start, end: p.span.start };
                 }
             }
         }
-        let arrow = written_arrow.map_or(span.start, |i| last + i as u32);
-        // `?=>`'s point is its `?`.
-        let arrow = if arrow > 0 && text.as_bytes().get(arrow as usize - 1) == Some(&b'?') { arrow - 1 } else { arrow };
+        let arrow = written_arrow.unwrap_or(span.start);
         Some(LambdaLayout { span, arrow, params, points: Vec::new() })
     }
 
@@ -6130,20 +6207,20 @@ impl<'w, 'a> P<'w, 'a> {
             return None;
         }
         if !self.case_index.contains_key(&file) {
+            let index = self.index;
             let ast = self.w.ast(file);
-            let text = self.w.files.as_slice()[file.0 as usize].text.as_bytes();
-            let mut m: FxMap<(u32, u32), (Span, crate::ast::PatId)> = FxMap::default();
-            for c in &ast.cases {
-                let ps = ast.pat_spans[c.pat.idx()];
-                let bs = ast.expr_spans[c.body.idx()];
-                let mut i = (ps.start as usize).min(text.len());
-                while i > 0 && text[i - 1].is_ascii_whitespace() {
-                    i -= 1;
+            let m = index.case_index.borrow_mut().entry(file).or_insert_with(|| {
+                let mut m: super::CaseIndex = FxMap::default();
+                // Each written case from its `case` where the parser read it (`WrittenPlaces::case_keywords`); a case
+                // the parser made (a pattern definition's) has none.
+                for (k, c) in ast.cases.iter().enumerate() {
+                    let Some(at) = ast.notes.places.get(crate::ast::TokenRead::CaseKeyword, k as u32) else { continue };
+                    let ps = ast.pat_spans[c.pat.idx()];
+                    let bs = ast.expr_spans[c.body.idx()];
+                    m.insert((bs.start, bs.end), (Span { start: at, end: bs.end.max(ps.end) }, c.pat));
                 }
-                if i >= 4 && &text[i - 4..i] == b"case" {
-                    m.insert((bs.start, bs.end), (Span { start: (i - 4) as u32, end: bs.end.max(ps.end) }, c.pat));
-                }
-            }
+                std::rc::Rc::new(m)
+            }).clone();
             self.case_index.insert(file, m);
         }
         self.case_index[&file].get(&(span.start, span.end)).map(|&(sp, p)| (sp, file, p))
@@ -6938,7 +7015,7 @@ impl<'w, 'a> P<'w, 'a> {
                 // Where the source writes the call's name and arguments (`call_layout`).
                 p.call_layout_next = outer.site.and_then(|(f, s)| p.call_layout_at(f, s));
                 let targs = (!p.w.types.items(outer.targs).is_empty()).then_some(outer.targs);
-                let unqualified = outer.site.map_or(false, |(f, s)| p.text_names(f, s, outer.callee));
+                let unqualified = outer.site.map_or(false, |(f, s)| p.written_as_name(f, s, outer.callee));
                 match outer.recv {
                     Some(r) if unqualified && matches!(p.w.prog.expr(r), TExpr::This) && p.w.prog.span_of(r).is_none() => {
                         p.applied(outer.callee, targs, &outer.args, |p| p.identifier(outer.callee), Some(Qual::Expr(r)))
@@ -6963,7 +7040,7 @@ impl<'w, 'a> P<'w, 'a> {
             // The `Inlined`'s point is its call's (`Positioned.envelope` of an `Inlined` is `call.span`): the `(`.
             if let Some(point) = outer.site.and_then(|(f, s)| p.call_layout_at(f, s)).and_then(|l| l.apply_point) {
                 let here = p.buf.addr();
-                if let Some(q) = p.positions.iter_mut().rev().find(|q| q.addr == here) {
+                if let Some(q) = p.pos_at_mut(here) {
                     if (q.span.start..=q.span.end).contains(&point) {
                         q.point = Some(point);
                     }
