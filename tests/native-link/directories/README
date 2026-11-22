@@ -1,0 +1,40 @@
+A program whose sources lie in directories of one String.hashCode, for the native link's tests (tests/native-link.scala).
+Scala Native's code generator writes a module for each directory of sources and names its file after the directory's
+hash (generated/<hash>.ll, the hexadecimal String.hashCode): AaAa, AaBB and BBBB have one hash (1f0080, as Aa and BB
+have one), so its own build writes their three modules into one file. teq names the module of a directory as Scala
+Native does where no other directory of the program has its hash; of directories of one hash, in their bytes' order,
+the first keeps it and the next are <hash>-1, <hash>-2, ... (src/native/codegen.rs, `module_names`).
+
+src/          the program: the objects A (AaAa/A.scala), B (AaBB/B.scala) and C (BBBB/C.scala), whose values Main
+              (main/Main.scala) prints; scalac 3.8.4's JVM build of it prints 820959446. project.scala holds the build's
+              directives
+nir/          the .nir files of the program, written by the compiler plugin of Scala Native 0.5.12 for Scala 3.8.4
+              (scala-cli compile of src/, the files taken from the classes directory); each position names its source
+              by its path under src/ (AaAa/A.scala, ...)
+modules.txt   the program's modules: of each, the module's file, the directory its sources lie in and the classes of
+              those sources (the .nir files whose positions name the directory), the file named by the rule above
+digests.txt   the SHA-256 and the lines of what Scala Native's own tools leave for the program, linked from nir/ and the
+              jars of tests/nir/digests.txt as tests/native-link/README says for its program, once as the build decides
+              on threads and once linked with them: its link's dump (linked), its lowered definitions (lowered) and each
+              module of the LLVM IR its code generator writes but __buildInfo.ll (ll), the three of one hash as below
+dirs.Main.txt of the first lowered dump, the definitions of the program's own classes, by the rule of
+              tests/native-link.scala's definitionsOf: what a failure is read against
+
+Scala Native's own build is no oracle of the three modules of one hash. Each of its writers of a module writes
+<hash>-body.ll, <hash>-metadata.ll and <hash>.ll and then appends the first two to the last, deleting them, so the
+writers of one hash run into each other: of five runs of its tools over nir/, four failed in the code generation
+(java.nio.file.NoSuchFileException: generated/1f0080-body.ll) and one ended with 1f0080.ll holding B's module alone,
+A's and C's lost. Their expectations are therefore Scala Native's modules of the same sources compiled under the
+directories AaAa0, AaBB1 and BBBB2 instead (in the same order, each of a hash of its own: 3c10fb0, 3c10fb1 and 3c10fb2),
+each recorded under the name teq gives its directory here (1f0080.ll, 1f0080-1.ll and 1f0080-2.ll). The directory
+enters nothing else with the debug metadata off: the .nir files of the two compilations differ in their positions'
+text alone; Scala Native's link and lowering of the two are the same bytes in every run; and in the one run over nir/
+that ended (threads as the build decides; none with threads ended), main's module and every module of the jars are
+those of the second compilation byte for byte, and the one module it kept, 1f0080.ll, is that of AaBB1 (3c10fb1.ll).
+The linked and lowered digests are those of the runs over nir/ (both are dumped before the modules are written); two
+runs of the tools over the second compilation left the same bytes.
+
+To make it again: scala-cli compile src/ and take the .nir files of its classes directory into nir/dirs; copy src/ with
+AaAa, AaBB and BBBB renamed AaAa0, AaBB1 and BBBB2 (main kept) and compile that the same way; run Scala Native's tools
+over each, as tests/native-link/README says; take linked and lowered from the first, ll from the second with the three
+renamed by modules.txt. No file here is written from teq's output.

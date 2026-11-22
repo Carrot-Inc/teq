@@ -1,6 +1,7 @@
 //! The native target: Scala Native's libraries and runtime, linked by teq.
 
 pub mod classpath;
+pub mod codegen;
 pub mod generate;
 pub mod lower;
 pub mod meta;

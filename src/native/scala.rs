@@ -244,6 +244,13 @@ impl<T: Copy + Eq + Hash> Default for HashSet<T> {
 }
 
 impl<T: Copy + Eq + Hash> HashSet<T> {
+    /// An empty set after `sizeHint(n)`.
+    pub fn with_size_hint(n: usize) -> HashSet<T> {
+        let mut set = HashSet::default();
+        set.table.size_hint(n);
+        set
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }

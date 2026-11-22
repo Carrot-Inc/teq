@@ -1,0 +1,5 @@
+# The program's modules (README): the module's file, the directory its sources lie in and the classes of those sources.
+1f0080.ll AaAa dirs.A dirs.A$ dirs.A$$$Lambda$1
+1f0080-1.ll AaBB dirs.B dirs.B$
+1f0080-2.ll BBBB dirs.C dirs.C$
+3305b9.ll main dirs.Main dirs.Main$

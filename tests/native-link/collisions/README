@@ -20,8 +20,8 @@ nir/          the .nir files of the programs, written by the compiler plugin of 
               3.8.4 (scala-cli compile of src/, the files taken from the classes directory)
 digests.txt   the SHA-256 and the lines of what Scala Native's own tools leave for each program, linked from nir/
               and the jars of tests/nir/digests.txt as tests/native-link/README says for its program: its link's
-              dump (linked) and its lowered definitions (lowered), once as the build decides on threads and once
-              linked with them
+              dump (linked), its lowered definitions (lowered) and each module of the LLVM IR its code generator
+              writes but __buildInfo.ll (ll), once as the build decides on threads and once linked with them
 <main>.txt    of the first lowered dump, the definitions of the program's own classes, by the rule of
               tests/native-link.scala's definitionsOf: what a failure is read against
 

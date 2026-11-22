@@ -2,7 +2,7 @@
 //! text of Scala Native's `nir.Show`: the debugging tool, and what the reader is checked with.
 //! `--link` prints in the same text what a program reaches on a class path, which is what the
 //! link is checked with, and `--lower` the same lowered to the runtime's object model, which is
-//! what the lowering is checked with.
+//! what the lowering is checked with; `--ll` writes the lowered program as LLVM IR instead.
 
 use super::names::Rt;
 use super::read::NirFile;
@@ -10,7 +10,7 @@ use super::show::Show;
 use super::Cx;
 use crate::native::classpath::{self, ClassPath};
 use crate::native::reach::{self, Config, Triple};
-use crate::native::{generate, lower, meta};
+use crate::native::{codegen, generate, lower, meta};
 use crate::zip::Zip;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -23,7 +23,8 @@ fn usage() -> ! {
          \x20      teq nir --lower <main class> <class path>  print them lowered to the runtime's object model, as Scala Native lowers them\n\
          a filter is a substring of the entry's name (java/lang/String.nir)\n\
          a class path is directories and jars joined by '{}', or @<file> for a file that holds them so\n\
-         a link takes --triple=<target> ({}) and --threads=<true|false> (true where the program can start a thread)",
+         a link takes --triple=<target> ({}) and --threads=<true|false> (true where the program can start a thread)\n\
+         --lower takes --ll=<directory>: the program written there as LLVM IR in the listing's place, a module for each directory of sources",
         crate::classpath::SEPARATOR,
         crate::native::DEFAULT_TRIPLE
     );
@@ -90,12 +91,14 @@ fn items(input: &str, filter: Option<&str>) -> Result<Vec<Item>, String> {
 }
 
 /// The program's definitions after the link, sorted by name, each as `nir.Show` prints it: the
-/// text Scala Native's build dumps as `linked.hnir`; lowered, the one it dumps as `lowered.hnir`.
+/// text Scala Native's build dumps as `linked.hnir`; lowered, the one it dumps as `lowered.hnir`,
+/// or its LLVM IR, the modules Scala Native's build writes.
 fn link(args: &[String], lowers: bool) -> ! {
-    let (mut triple, mut threads, mut plain) = (crate::native::DEFAULT_TRIPLE.to_string(), None, Vec::new());
+    let (mut triple, mut threads, mut ll_dir, mut plain) = (crate::native::DEFAULT_TRIPLE.to_string(), None, None, Vec::new());
     for arg in args {
         match arg.split_once('=') {
             Some(("--triple", target)) => triple = target.to_string(),
+            Some(("--ll", dir)) if lowers => ll_dir = Some(dir.to_string()),
             Some(("--threads", "true")) => threads = Some(true),
             Some(("--threads", "false")) => threads = Some(false),
             _ if arg.starts_with("--") => usage(),
@@ -122,6 +125,15 @@ fn link(args: &[String], lowers: bool) -> ! {
         }
         drop(lowering);
         out.sort_by(|a, b| cx.cmp_globals(a.name, b.name));
+        if let Some(dir) = &ll_dir {
+            let modules = codegen::modules(&cx, &rt, &linked, &meta, &out, &triple).unwrap_or_else(|e| fail(e));
+            std::fs::create_dir_all(dir).unwrap_or_else(|e| fail(format!("cannot write {}: {}", dir, e)));
+            for module in modules {
+                let path = Path::new(dir).join(format!("{}.ll", module.name));
+                std::fs::write(&path, module.text).unwrap_or_else(|e| fail(format!("cannot write {}: {}", path.display(), e)));
+            }
+            std::process::exit(0);
+        }
         out
     });
     let stdout = std::io::stdout();
