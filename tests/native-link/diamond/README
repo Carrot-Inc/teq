@@ -1,0 +1,33 @@
+A diamond of traits, for the native link's tests (tests/native-link.scala): trait A0 with a method
+of its own, trait B0 extending A0, then for each n from 1 to 36 the traits A<n> and B<n>, each
+extending A<n-1> with B<n-1>; for each depth the suite links (2 to 20, 28 and 36) a class Leaf<n>
+extending A<n> with B<n> and an object Main<n> whose main prints its value. A walk of a class's
+parents and traits that goes down every path meets the traits below A<n> once for each path to
+them, which doubles with each level: Scala Native 0.5.12's link walks so when it reaches the
+allocation of Leaf<n> (`Reach.reachAllocation`): its two links of a build took 16 s at the depth
+of 17, 23 s at 18, 45 s at 19 and 106 s at 20, so that past the low twenties it does not end.
+teq's link meets each trait once, which gives the same listing (src/native/reach.rs,
+`gathered_calls`).
+
+src/          the program: Diamond.scala, and project.scala with the build's directives
+nir/          its .nir files, written by the compiler plugin of Scala Native 0.5.12 for Scala 3.8.4
+              (scala-cli compile of src/, the files taken from the classes directory)
+digests.txt   for each depth, the SHA-256 and the lines of the listing of the link of diamond.Main<n>
+              over nir/ and the jars of tests/nir/digests.txt in that file's order, for the target
+              x86_64-unknown-linux-musl, threads as the build decides, and whose listing it is:
+                scala-native  Scala Native's own: its link's dump (linked.hnir), remade as
+                              tests/native-link/README says with the main class diamond.Main<n>,
+                              for the depths 2 to 20, where its link ends
+                teq           teq's own listing, for the depths 28 and 36: Scala Native's link does
+                              not end there, so there is NO ORACLE for them. The digest is what teq
+                              printed when the case was added, from the binary whose listings at 2
+                              to 20 are Scala Native's; it holds those bytes, it does not prove them.
+                              Beside it the suite checks that the listing defines each class and
+                              trait of the diamond once and no other of them
+
+The suite links each depth within a bound of 60 seconds. With a release build teq's link takes as
+long at every depth as at the smallest, a few seconds on a loaded machine (as long as the link of
+tests/nir/fixtures there), where a walk that goes down every path took 198 s at the depth of 28 on
+the same machine. src/ is remade by a script outside the tree for those depths; the
+teq digests are remade only from a binary whose listings at 2 to 20 match the scala-native digests,
+with `teq nir --link diamond.Main<n> <the class path> --triple=x86_64-unknown-linux-musl`.

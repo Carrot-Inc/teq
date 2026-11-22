@@ -1,0 +1,5 @@
+# The SHA-256 of what Scala Native 0.5.12's own tools leave for the program of tests/nir/fixtures linked against
+# the jars of tests/nir/digests.txt (tests/native-link/README), with the text's lines, how threads were decided
+# (detected: by the build; true: linked with them) and what the text is.
+ecb5b2f19c01bd56a3e49622327d61c6df4913719d1dd6e2955f5aedf0c8127b 66415 detected linked
+ac9fa7f097e0751952b22ac629e9474bc981d29d0249209fc5feaaa562bb2ae3 95316 true linked

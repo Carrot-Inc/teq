@@ -217,6 +217,7 @@ machine=(
   "analysis-bytes ./tests/analysis-bytes.sh"
   "classfile ./teq interp tests/classfile.scala"
   "nir ./teq interp tests/nir.scala"
+  "native-link ./teq interp tests/native-link.scala"
   "classpath ./tests/classpath.sh"
   "java-sources ./tests/java-sources.sh"
   "java-reader ./tests/java-reader.sh"

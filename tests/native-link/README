@@ -1,0 +1,33 @@
+Expectations of the native link's tests (tests/native-link.scala). The program is the one of
+tests/nir/fixtures (tests/nir/src/Shapes.scala, main class fix.Shapes), linked for the target
+x86_64-unknown-linux-musl against the jars of Scala Native 0.5.12 that tests/nir/digests.txt names,
+the program's directory first on the class path and the jars after it in that file's order.
+
+digests.txt   the SHA-256 and the lines of what Scala Native's own tools (tools_3 0.5.12) leave for
+              that class path and main class in a debug build with the immix collector and its
+              optimizer off, once as the build decides on threads (it links without them: the
+              program starts none) and once told to link with them:
+                linked   the definitions its link reaches, as its build dumps them (`dump`,
+                         linked.hnir): each as nir.Show prints it, in the order of the names
+              They are Scala Native's bytes, never teq's: `teq nir --link` has to print the same.
+linked.txt    of the first link's dump, the definitions of the classes tests/native-link.scala
+              names, whole and as they stand there: what a failure is read against
+entries.txt   the names Scala Native's build gives its link to start from (`ScalaNative.entries`)
+              for that main class, without threads and with them, in its list's order: the order
+              teq's link reaches them in (src/native/reach.rs's tests)
+scala-collections.txt
+              the hashCode of names, paths and positions and the iteration order of the Scala
+              library's mutable.HashSet and mutable.HashMap after generated operations, as Scala
+              Native's classes and scala-library 3.8.4 give them on the JVM: the tables teq's link
+              keeps where Scala Native's iterates one (src/native/scala.rs's tests; its header
+              says more)
+diamond/      a diamond of traits linked at many depths, Scala Native's listings up to the depth its
+              link ends at and teq's own past it (its README)
+
+The expectations are remade by running Scala Native's tools on the JVM over the same class path
+(`scala.scalanative.build.Build.build` with `withDump(true)`, `withOptimize(false)`, `GC.immix`,
+`Mode.debug`, the target triple and, for the second link, `withMultithreading(true)`), and by
+taking the lines of the named classes out of linked.hnir for linked.txt; entries.txt and
+scala-collections.txt by programs that call Scala Native's classes and the Scala library's on the
+JVM. No file here is written from teq's output, but for the two digests of diamond/digests.txt
+that name teq (diamond/README says why).

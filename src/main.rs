@@ -1117,7 +1117,7 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
             "--classpath" => match args.next() {
                 Some(list) => {
                     o.classpath_given = true;
-                    o.classpath.extend(list.split(classpath::SEPARATOR).filter(|p| !p.is_empty()).map(str::to_string))
+                    o.classpath.extend(classpath::entries(&list))
                 }
                 None => usage_for(command),
             },

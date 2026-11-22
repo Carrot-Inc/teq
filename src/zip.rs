@@ -220,6 +220,37 @@ impl Zip {
         }
         Ok(data)
     }
+
+    /// The first `n` bytes of the entry's data, fewer where it is shorter, with no check of its
+    /// CRC-32: what tells a file's kind without inflating the whole of it.
+    pub fn read_start(&self, index: usize, n: usize) -> Result<Vec<u8>, String> {
+        let e = &self.entries[index];
+        let compressed = e.compressed_size as usize;
+        // Enough of a deflate stream for its first block's code tables and `n` bytes after them.
+        let taken = compressed.min(n + 1024);
+        let raw = read_at(&self.file, e.header_offset as u64, LOCAL_HEADER_SIZE + e.name_len as usize + EXTRA_GUESS + taken)?;
+        if raw.len() < LOCAL_HEADER_SIZE || u32_at(&raw, 0) != LOCAL_HEADER {
+            return Err(format!("{}: bad local header", self.name(e)));
+        }
+        let data_start = LOCAL_HEADER_SIZE + u16_at(&raw, 26) as usize + u16_at(&raw, 28) as usize;
+        let held = &raw[data_start.min(raw.len())..(data_start + taken).min(raw.len())];
+        let mut data = match e.method {
+            0 => held.to_vec(),
+            8 => {
+                let mut inflating = Inflating::new(true);
+                inflating.feed(held);
+                inflating.run().map_err(|m| format!("{}: {}", self.name(e), m))?
+            }
+            m => return Err(format!("{}: unsupported compression method {}", self.name(e), m)),
+        };
+        // What was read gave fewer than `n` bytes of an entry that may hold them (an extra field
+        // longer than the guess, code tables longer than the allowance): the whole entry.
+        if data.len() < n && held.len() < compressed {
+            data = self.read(index)?;
+        }
+        data.truncate(n);
+        Ok(data)
+    }
 }
 
 // ---- CRC-32 (slicing by 8) ----

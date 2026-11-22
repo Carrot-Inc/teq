@@ -9,7 +9,9 @@ use super::*;
 pub const MAGIC: u32 = 0x2e4e_4952;
 pub const COMPAT: u32 = 6;
 pub const REVISION: u32 = 11;
-const PRELUDE_LEN: usize = 45;
+/// The tag of a method with a body among a definition's.
+const DEFINE_TAG: u8 = 4;
+pub const PRELUDE_LEN: usize = 45;
 /// How deep types, values, successors and link-time conditions nest, one inside the other, before
 /// a file is refused. The format has no limit and Scala Native's reader (0.5.12) has none of its
 /// own: it overflows its thread's stack, which at 1 MB is between 1,000 and 1,250 nested types or
@@ -30,6 +32,13 @@ struct Sections {
     defns: u32,
     vals: u32,
     insts: u32,
+}
+
+/// Whether a file's prelude says the file holds an entry point (a static initializer or an
+/// exported function); none for what is no prelude of a NIR file this reader takes.
+pub fn entry_points_flag(start: &[u8]) -> Option<bool> {
+    let word = |i: usize| u32::from_be_bytes(start[i * 4..i * 4 + 4].try_into().unwrap());
+    (start.len() >= PRELUDE_LEN && word(0) == MAGIC && word(1) == COMPAT && word(2) <= REVISION).then(|| start[PRELUDE_LEN - 1] != 0)
 }
 
 /// One file's bytes with what has been decoded of its shared sections, by place, as
@@ -107,6 +116,16 @@ impl<'a> NirFile<'a> {
     pub fn defn(&mut self, cx: &mut Cx, offset: u32) -> Res<Defn> {
         let pos = self.sections.defns as usize + offset as usize;
         Reader::new(self, cx, pos).defn()
+    }
+
+    /// Whether a definition is a method with a body, and its attributes: what a link asks of
+    /// every definition of a class it loads, the bodies left undecoded.
+    pub fn defn_head(&mut self, cx: &mut Cx, offset: u32) -> Res<(bool, Attrs)> {
+        let pos = self.sections.defns as usize + offset as usize;
+        let mut r = Reader::new(self, cx, pos);
+        let tag = r.byte()?;
+        r.global()?;
+        Ok((tag == DEFINE_TAG, r.attrs()?))
     }
 
     pub fn defns(&mut self, cx: &mut Cx) -> Res<Vec<Defn>> {

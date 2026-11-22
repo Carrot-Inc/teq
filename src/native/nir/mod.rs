@@ -4,6 +4,7 @@
 //! are interned in a `Cx` shared by every file of a link, so that equality is an integer's.
 
 pub mod cli;
+pub mod names;
 pub mod read;
 pub mod show;
 

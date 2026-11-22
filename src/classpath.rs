@@ -15,6 +15,12 @@ use std::time::{Duration, Instant};
 /// path list separator, `;` on Windows (`File.pathSeparator`, which sbt-teq passes) and `:` elsewhere.
 pub const SEPARATOR: char = if cfg!(windows) { ';' } else { ':' };
 
+/// The entries of a class path given as one string, in their order. An empty one (a leading or
+/// trailing separator, or two together) is dropped, as scalac's reader drops it.
+pub fn entries(list: &str) -> Vec<String> {
+    list.split(SEPARATOR).filter(|p| !p.is_empty()).map(str::to_string).collect()
+}
+
 /// An entry of one source of the classpath.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct CpFile {
