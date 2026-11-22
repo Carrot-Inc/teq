@@ -1,7 +1,9 @@
+//> using platform js
 // The JDK classes a primitive's box extends: a string is a `CharSequence`, and strings, numbers,
 // booleans and characters are `Comparable` and `Serializable`, to a type test, a pattern, a
 // `Class`'s `isInstance` and a tag's extractor alike; `java.lang.Number` takes the numbers alone,
-// and the unit's box is `Serializable`.
+// and the unit's box is `Serializable` on the JVM (`tests/jvm-expected`, scalac's), where it is a
+// `BoxedUnit`; on JavaScript `()`'s class extends `Object` alone, as under Scala.js.
 // A plain object's class is `java.lang.Object`'s; an array is an instance of its array class.
 import scala.reflect.ClassTag
 

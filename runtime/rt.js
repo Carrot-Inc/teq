@@ -330,7 +330,6 @@ function $isInstance(cls, x) {
   if (cls.$trait !== undefined) return $isA(x, cls.$trait);
   return cls.$ctor !== null ? x instanceof cls.$ctor : $getClass(x) === cls;
 }
-function $isRef(x) { return x !== undefined && typeof x !== "number" && typeof x !== "boolean" && typeof x !== "bigint"; }
 function $isA(x, id) { return x != null && x["$i" + id] === true; }
 // `x.asInstanceOf[T]`: `null` and a value that passes the test of `T`'s erasure are the value, any
 // other fails with the JVM's message, the value's class and the target's named. A class is tested

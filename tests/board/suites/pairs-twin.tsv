@@ -3133,7 +3133,9 @@ cases/type_operator_line_end	pass	-
 cases/type_pattern_lower_bounds	pass	-	
 cases/type_projection_refinement_lambda	pass	-	
 cases/type_test_any_null	pass	-	
+cases/type_test_anyref_boxed	pass	-	
 cases/type_test_bound_constituents	pass	-	
+cases/type_test_box_interfaces	pass	-	
 cases/type_test_class_pattern	pass	-	
 cases/type_test_erased_bound	pass	-	
 cases/type_test_erased_shapes	pass	-	

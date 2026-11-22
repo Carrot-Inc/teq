@@ -3018,8 +3018,8 @@ pub(super) fn test_text(t: TypeTest) -> Option<(&'static str, bool)> {
         // (`is_callable_class`) and a JS function's whose `length` is a member's (`$callable`).
         TypeTest::Function(_) => ("((typeof $0 === \"function\" ? $0.$fn ?? $0.length : $0 != null && $0.$fn) === $1)", true),
         TypeTest::Null => ("$0 === null", true),
-        TypeTest::AnyRef => ("$isRef($0)", false),
-        TypeTest::AnyVal => ("($0 !== null)", false),
+        // Scala.js's test of `Object`: a number, a boolean and `undefined` (`()`) are objects too.
+        TypeTest::AnyRef | TypeTest::AnyVal => ("($0 !== null)", false),
         // A proven test reaches JavaScript as its null test (`Program::js_test`).
         TypeTest::Class(_) | TypeTest::Value(_) | TypeTest::Or(..) | TypeTest::And(..) | TypeTest::Outer(..) | TypeTest::Proven(..) => return None,
     })

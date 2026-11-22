@@ -2888,7 +2888,7 @@ impl<'a> Worker<'a> {
     /// boolean, so the test of a class the box extends (`CharSequence`, `Comparable`, `Number`)
     /// takes the primitive by its kind too, as Scala.js tests an ancestor of a hijacked class.
     fn boxed_test(&mut self, c: ClassId, test: TypeTest) -> TypeTest {
-        let kinds = if self.jvm || self.interp { 0 } else { self.boxed_kinds(c) };
+        let kinds = if self.jvm || self.interp { 0 } else { crate::tir::boxed::on_js(self.boxed_kinds(c)) };
         if kinds == 0 {
             return test;
         }
@@ -2898,7 +2898,6 @@ impl<'a> Worker<'a> {
             (crate::tir::boxed::NUMBER, TypeTest::Number),
             (crate::tir::boxed::LONG, TypeTest::Long),
             (crate::tir::boxed::BOOL, TypeTest::Bool),
-            (crate::tir::boxed::UNIT, TypeTest::Unit),
         ] {
             if kinds & bit != 0 {
                 let k = self.prog.add_test(kind);

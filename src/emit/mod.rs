@@ -4079,8 +4079,7 @@ impl<'a> Emitter<'a> {
         }
         let qualified = self.qualified_name(c);
         let (pkg, simple) = qualified.rsplit_once('.').unwrap_or(("", &qualified));
-        // A JS char is a string.
-        let boxed = crate::tir::boxed::ancestor(pkg, simple) & !crate::tir::boxed::CHAR;
+        let boxed = crate::tir::boxed::on_js(crate::tir::boxed::ancestor(pkg, simple));
         if boxed != 0 {
             self.out.push_str("$boxedClass(");
             self.emit_plain_class_of(c);

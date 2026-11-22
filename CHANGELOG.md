@@ -7,6 +7,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A type test of `AnyRef` or `Object` is true for a boxed number, a boolean, a char and `()`, and false for `null`,
+  as under scalac and Scala.js (`(5: Any).isInstanceOf[AnyRef]`, `case _: AnyRef`); in the interpreter it was false
+  for every boxed value, and on JavaScript for numbers, booleans, `Long`s and `()`, where it was true for `null`.
+- On JavaScript `()` is no `java.io.Serializable`, as under Scala.js, where its class extends `Object` alone
+  (`().isInstanceOf[java.io.Serializable]`, a pattern, `classOf[java.io.Serializable].isInstance(())`); it was. On
+  the JVM and in the interpreter it is, as under scalac.
 - A type test of `Any` or `Matchable` is false for `null`, as under scalac: `x.isInstanceOf[Any]`, a member of a
   union (`Any | String`), an inline body's test of a type parameter given `Any`, and `case _: Any` on a scrutinee
   typed `Any`. It was true on the JVM and in the interpreter, and on JavaScript outside a match.

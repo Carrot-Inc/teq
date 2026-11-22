@@ -1752,7 +1752,7 @@ typeclass-derivation3	fail	-	compile-error: value trimStart is not a member of L
 typelevel-numeric	fail	-	compile-error: MathLib is abstract; it cannot be instantiated
 typelevel-overrides	pass	-	
 typelevel-peano	fail	-	compile-error: Int is not a constant type; cannot take constValue
-typetest	fail	-	wrong-output
+typetest	pass	-	
 tyql	fail	-	compile-error: cannot resolve import: NamedTuple is not an object or a package
 unambiref	fail	-	compile-error: Reference to x is ambiguous.
 unapply	fail	-	compile-error: type Product2 not found

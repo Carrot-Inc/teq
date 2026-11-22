@@ -3136,7 +3136,9 @@ type_operator_line_end	pass	-
 type_pattern_lower_bounds	pass	-	
 type_projection_refinement_lambda	pass	-	
 type_test_any_null	pass	-	
+type_test_anyref_boxed	pass	-	
 type_test_bound_constituents	pass	-	
+type_test_box_interfaces	pass	-	
 type_test_class_pattern	pass	-	
 type_test_erased_bound	pass	-	
 type_test_erased_shapes	pass	-	

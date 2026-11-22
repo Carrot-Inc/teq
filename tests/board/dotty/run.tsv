@@ -1632,7 +1632,7 @@ typeclass-derivation3.scala	pass	interp:fail
 typelevel-numeric.scala	fail	interp:fail	typelevel-numeric.scala:27:14: MathLib is abstract; it cannot be instantiated
 typelevel-overrides.scala	pass	interp:pass	
 typelevel-peano.scala	fail	interp:fail	typelevel-peano.scala:9:12: this type cannot be tested at runtime: ?
-typetest.scala	pass	interp:fail	
+typetest.scala	pass	interp:pass	
 tyql.scala	fail	interp:fail	tyql.scala:1:8: cannot resolve import: NamedTuple is not an object or a package
 unambiref.scala	fail	interp:fail	unambiref.scala:3:13: Reference to x is ambiguous.
 unapply-tparam.scala	fail	interp:fail	unapply-tparam.scala:26:13: expected '=>', found '['

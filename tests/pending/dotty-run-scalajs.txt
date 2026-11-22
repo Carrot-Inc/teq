@@ -352,7 +352,6 @@ typeclass-derivation2b.scala	typeclass-derivation2b.scala:117:31: type mismatch:
 typeclass-derivation2d.scala	typeclass-derivation2d.scala:87:7: value asInstanceOf is not a member of Lst
 typelevel-numeric.scala	typelevel-numeric.scala:27:14: MathLib is abstract; it cannot be instantiated
 typelevel-peano.scala	typelevel-peano.scala:9:12: this type cannot be tested at runtime: ?
-typetest.scala	output: line 1: the .check has 'true', the program printed 'false'
 tyql.scala	tyql.scala:1:8: cannot resolve import: NamedTuple is not an object or a package
 unambiref.scala	unambiref.scala:3:13: Reference to x is ambiguous.
 unapply-tparam.scala	unapply-tparam.scala:26:13: expected '=>', found '['

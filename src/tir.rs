@@ -431,6 +431,13 @@ pub mod boxed {
             _ => 0,
         }
     }
+
+    /// The kinds of `ancestor` that pass its test on JavaScript, where a primitive's box is the
+    /// primitive, as Scala.js's hijacked classes declare them: `()`'s class there extends `Object`
+    /// alone (no `Serializable`), and a `Char` is a string, whose kind is `STR`.
+    pub fn on_js(kinds: u8) -> u8 {
+        kinds & !(UNIT | CHAR)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -453,7 +460,7 @@ pub enum TypeTest {
     /// A function of exactly this many parameters.
     Function(u8),
     Null,
-    /// A reference: anything but a number, a boolean, a char or `()`, which are values.
+    /// `AnyRef`'s and `Object`'s test, which a boxed value passes: everything but `null`, as `AnyVal`'s.
     AnyRef,
     /// The test of a type that erases to `Object` under scalac (`AnyVal`, `Any`, `Matchable`, a type parameter
     /// bounded by `Any`): everything but `null`.

@@ -428,14 +428,6 @@ impl Value {
         matches!(self, Value::Int(_) | Value::Long(_) | Value::Byte(_) | Value::Short(_))
     }
 
-    /// A reference, as `AnyRef` tests: anything but a value type.
-    pub fn is_ref(&self) -> bool {
-        !matches!(
-            self,
-            Value::Unit | Value::Bool(_) | Value::Int(_) | Value::Long(_) | Value::Double(_) | Value::Float(_) | Value::Byte(_) | Value::Short(_) | Value::Char(_)
-        )
-    }
-
     pub fn as_f64(&self) -> Option<f64> {
         Some(match self {
             Value::Int(i) => *i as f64,

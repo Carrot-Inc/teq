@@ -209,7 +209,8 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 - `Double` prints as Scala.js prints it (`3.0` as `3`, `1e21` as `1e+21`, `-0.0` as `0`), a `Float` as the
   `Double` it is; `Int` and `Double` share one runtime type and `Char` and `String` are both JS strings,
   which only unions and `Any` see: an `Int` type test takes integral doubles, as a cast to `Int` does (an
-  `Any` holding `7` passes a cast to `Double` or `Byte`, one holding a `String` a cast to `Char`),
+  `Any` holding `7` passes a cast to `Double` or `Byte`, one holding a `String` a cast to `Char`, and a `Char`
+  held as `Any` passes the tests a string does, `CharSequence`'s among them),
   `('a': Any) == (97: Any)` is false, and an `Any`-keyed `Map` compares keys as JavaScript does (`1` and
   `1.0` one key, `1L` another). On JavaScript and in the interpreter strings and numbers are values, so `eq`
   of two equal strings or boxes is true, as under Scala.js.

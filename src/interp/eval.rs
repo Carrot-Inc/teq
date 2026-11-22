@@ -2409,8 +2409,8 @@ impl<'a, 't> Interp<'a, 't> {
             TypeTest::Function(n) if n > 22 => self.function_arity(v).is_some_and(|a| a > 22),
             TypeTest::Function(n) => self.function_arity(v) == Some(n as usize),
             TypeTest::Null => matches!(v, Value::Null),
-            TypeTest::AnyRef => v.is_ref() && !matches!(v, Value::Null),
-            TypeTest::AnyVal => !matches!(v, Value::Null),
+            // `AnyRef` and `AnyVal` erase to `Object`, which a boxed number, a boxed char and `()` are too.
+            TypeTest::AnyRef | TypeTest::AnyVal => !matches!(v, Value::Null),
             TypeTest::Value(e) => {
                 let lit = self.eval(e, fr, cx)?;
                 lit.same(v)

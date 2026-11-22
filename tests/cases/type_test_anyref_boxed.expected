@@ -1,0 +1,19 @@
+null: ref=false obj=false caseRef=2 caseObj=2 bindRef=n generic=false union=false
+int: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+long: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+double: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+float: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+boolean: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+char: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+byte: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+short: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+unit: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+string: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+object: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+array: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+list: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+function: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+case: ref=true obj=true caseRef=1 caseObj=1 bindRef=r generic=true union=true
+static: int=true long=true char=true boolean=true unit=true double=true
+generic: int=true unit=true char=true
+casts: 5 c null 5

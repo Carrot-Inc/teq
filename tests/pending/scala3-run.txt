@@ -724,7 +724,6 @@ typeclass-derivation2d	compile-error: value asInstanceOf is not a member of Lst
 typeclass-derivation3	compile-error: value trimStart is not a member of ListBuffer[Int]
 typelevel-numeric	compile-error: MathLib is abstract; it cannot be instantiated
 typelevel-peano	compile-error: Int is not a constant type; cannot take constValue
-typetest	wrong-output
 tyql	compile-error: cannot resolve import: NamedTuple is not an object or a package
 unambiref	compile-error: Reference to x is ambiguous.
 unapply	compile-error: type Product2 not found
