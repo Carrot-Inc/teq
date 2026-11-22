@@ -656,6 +656,8 @@ impl<'a> Worker<'a> {
             && self.syms.pkg(p).package_object.map_or(true, |obj| self.exports_settled(ExportOwner::Class(obj)));
         if settled {
             self.given_indexes.insert(p, rc.clone());
+        } else {
+            self.conv_level_unsettled = true;
         }
         rc
     }
@@ -740,6 +742,8 @@ impl<'a> Worker<'a> {
         // provisional export table serves the search at hand only.
         if self.syms.class(c).state() == Completion::Done && self.exports_settled(ExportOwner::Class(c)) {
             self.class_given_indexes.insert(c, index.clone());
+        } else {
+            self.conv_level_unsettled = true;
         }
         index
     }

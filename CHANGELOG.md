@@ -92,6 +92,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - A trait's implicit clause applied with a short `using` list by an anonymous class or a class's parent
   (`new Tr(using 10) {}` of `trait Tr(implicit a: Int, b: Int)`) has its omitted trailing parameters searched as givens,
   as scalac does, where teq refused it ("missing argument for parameter b").
+- The implicit conversion search builds the contexts a file's own import statements give once per file, place among
+  its imports and kind of search, and keeps them while the program's scopes stand, instead of again at every search:
+  a scope of many conversions checks 3 to 4% faster (the budget's view, gview and gvar programs, 20,000 conversions
+  each). Which conversion a search takes, and every diagnostic, are unchanged.
 
 ## 0.1.11 (2026-11-20)
 

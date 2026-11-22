@@ -1335,6 +1335,16 @@ pub struct Worker<'a> {
     /// The conversions of a package or class, indexed by member name and result class on the
     /// first conversion lookup in that scope.
     pub conversion_indexes: FxMap<conversions::ScopeKey, std::sync::Arc<conversions::ConversionIndex>>,
+    /// The conversion search's file levels kept for this worker's generation (`conversions::FileLevel`).
+    conv_file_levels: FxMap<conversions::FileLevelKey, conversions::FileLevel>,
+    /// Set where a file level's build reads the site (a protected member imported through an object, which a site
+    /// reaches only from a subclass): that level is not kept.
+    conv_level_site_read: bool,
+    /// Set where a given index is built and not kept (over a provisional export table, or a class still completing:
+    /// it serves the search at hand only): a file level built over it is not kept either.
+    conv_level_unsettled: bool,
+    /// Counts the drops of the kept file levels: a level whose build saw one is not kept.
+    conv_levels_epoch: u32,
     /// Set for the second round of an overload resolution, in which an argument that a
     /// conversion takes to the parameter type is compatible with it.
     pub view_compat: bool,
@@ -3304,6 +3314,10 @@ impl<'a> Worker<'a> {
             roots_told: 0,
             java_members_exhausted: Vec::new(),
             conversion_indexes: FxMap::default(),
+            conv_file_levels: FxMap::default(),
+            conv_level_site_read: false,
+            conv_level_unsettled: false,
+            conv_levels_epoch: 0,
             view_compat: false,
             spread_arg: false,
             lift_arg: apply::Lift::No,
@@ -3799,6 +3813,10 @@ impl<'a> Worker<'a> {
             roots_told: 0,
             java_members_exhausted: Vec::new(),
             conversion_indexes: self.conversion_indexes.clone(),
+            conv_file_levels: FxMap::default(),
+            conv_level_site_read: false,
+            conv_level_unsettled: false,
+            conv_levels_epoch: 0,
             view_compat: Default::default(),
             spread_arg: false,
             lift_arg: apply::Lift::No,
@@ -5494,6 +5512,7 @@ impl<'a> Worker<'a> {
         if n <= self.std_seen {
             return;
         }
+        self.drop_conv_file_levels();
         for i in self.std_seen..n {
             let p = *self.std.late_pkgs.get(i);
             self.given_indexes.remove(&p);

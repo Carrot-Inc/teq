@@ -196,6 +196,9 @@ python3 tests/support/classdiff.py A B       # two trees of class files as parse
 TEQ_CHECK_OPMEMO=1 ./tests/run.sh           # every use of a kept answer of an assignment operator's first
                                              # try (typer/prims.rs `op_memo`) runs the try and aborts where it
                                              # does not fail with nothing met; the unit tests always check
+TEQ_CONV_TWIN=<file> ./tests/run.sh          # every conversion search over a kept file level (typer/
+                                             # conversions.rs `FileLevel`) builds its contexts again, writes
+                                             # same or differs to the file and aborts where they differ
 TEQ_INLINE_COUNTS=<file> ./tests/run.sh      # the inline calls expanded by substitution and by retype,
                                              # those kept for the inlining phase and their bytes, the
                                              # phase's forked units, reflection's queries and its memo's,

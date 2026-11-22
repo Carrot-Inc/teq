@@ -920,8 +920,10 @@ impl<'a> Worker<'a> {
             self.class_exports.remove(&c);
         }
         // The given indexes built over those tables (`build_class_given_index`) list what the
-        // forwarders now give, and are built again as the tables are.
+        // forwarders now give, and are built again as the tables are; the conversion search's file levels over them
+        // too.
         self.class_given_indexes.clear();
+        self.drop_conv_file_levels();
     }
 
     pub(super) fn drop_forwarded_from_built(&mut self, c: ClassId) {
@@ -930,6 +932,8 @@ impl<'a> Worker<'a> {
         self.drop_forwarded(c, &mut scope);
         *self.export_slot(ExportOwner::Class(c)) = ExportSlot::Ready(Arc::new(scope));
         self.class_given_indexes.remove(&c);
+        // The conversion search's file levels read the class's givens through that index.
+        self.drop_conv_file_levels();
     }
 
     /// The names the class has forwarders of (`value_exports`), members of its own, which its

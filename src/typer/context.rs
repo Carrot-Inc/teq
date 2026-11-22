@@ -288,6 +288,7 @@ worker_fields! {
         checked_imports, import_heads, interpolations, val_init, class_done, binder_nowarns, written_purity,
         lone_abstract_defs, path_sigs, unbox_candidates, erased_results, context_function_classes,
         inner_chain_members, plain_name_members, roots_told, java_members_exhausted, conversion_indexes,
+        conv_file_levels, conv_level_site_read, conv_level_unsettled, conv_levels_epoch,
         retry_typed, member_calls, kept_args, made_local, made_counts, made_drops, op_memo, op_memo_ops, member_candidates, op_memo_hits, infix_tuples, retracted_unapplies, inferred_outcomes, inferred_val_outcomes,
         recovered, erased_values, file_opaques, file_modules, retained_bodies, inline_definitions,
         superseded_definitions, check_capture_keys, conversion_nonvariant, opened, simplified_memo,

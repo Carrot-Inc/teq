@@ -3191,6 +3191,7 @@ impl<'a> Worker<'a> {
         self.matches.forget();
         self.class_given_indexes.clear();
         self.conversion_indexes.clear();
+        self.drop_conv_file_levels();
         // Memos keyed or valued by a worker's numbers (a type made after the fork, a symbol or a
         // class of its chunk), which the next asker fills again.
         self.given_indexes.clear();

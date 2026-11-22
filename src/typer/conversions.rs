@@ -13,7 +13,7 @@ use super::{Frame, ImportTarget, ResolvedImport, Worker, ValueImport};
 use crate::ast::mods;
 use crate::intern::{FxMap, Name};
 use crate::names;
-use crate::source::Span;
+use crate::source::{FileId, Span};
 use crate::symbols::*;
 use crate::tir::*;
 use crate::types::*;
@@ -122,9 +122,64 @@ pub(super) struct Shape {
 /// A conversion and what it is called on.
 type ConvRef = (SymId, Via);
 
-/// One context of the search (`ContextualImplicits`): the conversions it makes visible, each with the name it hides
-/// others by, and its binding precedence (`bindingPrec`).
-type Link = (Vec<(ConvRef, Name)>, super::implicits::Prec);
+/// One context of the search (`ContextualImplicits`): the conversions it makes visible and its binding precedence
+/// (`bindingPrec`). A candidate hides others by its symbol's name, read where its level is composed
+/// (`compose_conversion_level`).
+type Link = (Vec<ConvRef>, super::implicits::Prec);
+
+/// A search's contexts (`conversion_contexts`): the file's level (shared with the worker's kept one), the enclosing
+/// frames' levels outermost first, and the candidates that come too late.
+type Contexts = (Arc<Vec<Link>>, Vec<Vec<Link>>, Vec<SymId>);
+
+/// What a search asks, as the key of a kept file level (`FileLevel`): a member's name, a result class or any. A union
+/// of results is asked of the file each time.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) enum PickKey {
+    Member(Name),
+    Result(Option<ClassId>),
+    Any,
+}
+
+impl PickKey {
+    fn of(pick: Pick<'_>) -> Option<PickKey> {
+        match pick {
+            Pick::Member(n) => Some(PickKey::Member(n)),
+            Pick::Result(c) => Some(PickKey::Result(c)),
+            Pick::Results(_) => None,
+            Pick::Any => Some(PickKey::Any),
+        }
+    }
+}
+
+/// A file level's key: the file, the environment's import limit and the pick.
+pub(super) type FileLevelKey = (FileId, Option<(FileId, u32)>, PickKey);
+
+/// The file's own import statements as a search's first contexts (`conversion_contexts`' level 0), kept by the worker
+/// for its generation, as dotty keeps a context's implicits on the context (`Context.implicits`, built once into
+/// `implicitsCache`, Contexts.scala 222-243 at 3.8.4): built once per file, import limit and pick, then shared by each
+/// search, whose composing reads every candidate's name from its symbol. `imports` is the file's import list it was built
+/// over, held so that a list put in its place for a while (a completion's, the unused imports' analysis') is told
+/// apart by identity. Dropped where the scope-keyed caches are: `merge_with`, the export tables' change (the tables
+/// built before the forwarders, a class's table without what it forwards), the std's late files. Not kept where its
+/// build read the site, or a given index the index builders do not keep (`serves the search at hand only`), or saw a
+/// drop.
+pub(super) struct FileLevel {
+    imports: Option<Arc<Vec<ResolvedImport>>>,
+    links: Arc<Vec<Link>>,
+}
+
+/// The proof of the kept form (`TEQ_CONV_TWIN=<file>`): each search over a kept file level builds its contexts again
+/// beside it, appends `same` or `differs` to the file, and stops the run where the two differ; a level not kept as its
+/// build read the site appends a line too.
+fn conv_twin() -> Option<&'static std::sync::Mutex<std::fs::File>> {
+    static TWIN: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    TWIN.get_or_init(|| {
+        let path = std::env::var_os("TEQ_CONV_TWIN")?;
+        let file = std::fs::OpenOptions::new().create(true).append(true).open(path).expect("the twin's file");
+        Some(std::sync::Mutex::new(file))
+    })
+    .as_ref()
+}
 
 /// What `Worker::conversion_site` answers.
 struct ConversionSite {
@@ -461,14 +516,94 @@ impl<'a> Worker<'a> {
     /// a context at the level of the context outside it where both have one owner, and opens a level where not. A
     /// context exists only where it makes an implicit visible (`Contexts.implicits`): a frame's (`frame_has_givens`),
     /// an import's by `imported_implicits`.
-    fn conversion_contexts(&mut self, pick: Pick<'_>) -> (Vec<Vec<Link>>, Vec<SymId>) {
-        use super::implicits::Prec;
-        let mut levels: Vec<Vec<Link>> = vec![Vec::new()];
+    /// Level 0 is kept by the worker per file, import limit and pick for its generation (`FileLevel`).
+    fn conversion_contexts(&mut self, pick: Pick<'_>) -> Contexts {
+        let key = self.file_level_key(pick);
+        if let Some(level) = key.as_ref().and_then(|key| self.kept_file_level(key)) {
+            let contexts = self.contexts_over_kept(level, pick);
+            if let Some(twin) = conv_twin() {
+                self.twin_check(twin, &contexts, pick);
+            }
+            return contexts;
+        }
+        self.build_conversion_contexts(pick, key)
+    }
+
+    /// Drops the kept file levels (`FileLevel`), where a scope-keyed cache is cleared or a class's table replaced; a
+    /// level whose build this falls inside is not kept.
+    pub(super) fn drop_conv_file_levels(&mut self) {
+        self.conv_file_levels.clear();
+        self.conv_levels_epoch = self.conv_levels_epoch.wrapping_add(1);
+    }
+
+    /// The key a search keeps or takes the file level by: none for a union of results, or where the environment holds
+    /// an import of no frame (depth 0), which the file's level would then hold.
+    #[inline]
+    fn file_level_key(&self, pick: Pick<'_>) -> Option<FileLevelKey> {
+        let pick = PickKey::of(pick)?;
+        if self.env.imports.iter().any(|imp| imp.depth == 0) {
+            return None;
+        }
+        Some((self.env.file, self.env.import_limit, pick))
+    }
+
+    /// The file level kept for `key`, where it was built over the import list the worker holds for the file now.
+    fn kept_file_level(&self, key: &FileLevelKey) -> Option<Arc<Vec<Link>>> {
+        let level = self.conv_file_levels.get(key)?;
+        let same = match (&level.imports, &self.file_imports[key.0 .0 as usize]) {
+            (Some(kept), Some(now)) => Arc::ptr_eq(kept, now),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same {
+            return None;
+        }
+        Some(level.links.clone())
+    }
+
+    /// The contexts over a kept file level: its candidates that come too late noted, then the frames' levels over the
+    /// environment's own imports, in `import_at`'s order (the innermost first) before the sort, as the build has them.
+    fn contexts_over_kept(&mut self, file: Arc<Vec<Link>>, pick: Pick<'_>) -> Contexts {
+        let mut late: Vec<SymId> = Vec::new();
+        for link in file.iter() {
+            self.note_too_late(&link.0, None, &mut late);
+        }
+        let mut imports: Vec<ResolvedImport> = self.env.imports.iter().rev().copied().filter(|imp| imp.stmt != u32::MAX).collect();
+        imports.sort_by_key(|imp| (imp.depth, imp.stmt));
+        let mut frames = Vec::new();
+        self.frame_contexts(&imports, 0, pick, &mut frames, &mut late);
+        (file, frames, late)
+    }
+
+    /// The twin's check (`TEQ_CONV_TWIN`): the contexts built whole beside those over the kept file level; the run
+    /// stops where they differ.
+    #[cold]
+    #[inline(never)]
+    fn twin_check(&mut self, twin: &std::sync::Mutex<std::fs::File>, kept: &Contexts, pick: Pick<'_>) {
+        use std::io::Write;
+        let built = self.build_conversion_contexts(pick, None);
+        let same = built.0[..] == kept.0[..] && built.1 == kept.1 && built.2 == kept.2;
+        let line = if same { "same\n".to_string() } else { format!("differs: file {}\n", self.env.file.0) };
+        let _ = twin.lock().unwrap_or_else(|e| e.into_inner()).write_all(line.as_bytes());
+        if !same {
+            panic!("the conversion search's kept file level differs from the one built (file {})", self.env.file.0);
+        }
+    }
+
+    /// The contexts built whole: the file's import statements (level 0), then the frames'. With `keep`, the file's
+    /// level is kept for the worker's generation where its build read nothing of the site.
+    fn build_conversion_contexts(&mut self, pick: Pick<'_>, keep: Option<FileLevelKey>) -> Contexts {
+        let mut file: Vec<Link> = Vec::new();
         // The candidates that come too late (`comesTooLate`), left out after the hiding.
         let mut late: Vec<SymId> = Vec::new();
         let mut imports: Vec<ResolvedImport> = (0..self.import_count()).map(|k| self.import_at(k)).filter(|imp| imp.stmt != u32::MAX).collect();
         imports.sort_by_key(|imp| (imp.depth, imp.stmt));
         let mut k = 0;
+        // What the level's build reads that bars keeping it; a build nested in this one (a class's completion)
+        // passes its own on to this one's.
+        let outer = (self.conv_level_site_read, self.conv_level_unsettled);
+        (self.conv_level_site_read, self.conv_level_unsettled) = (false, false);
+        let epoch = self.conv_levels_epoch;
         while k < imports.len() && imports[k].depth == 0 {
             let start = k;
             while k < imports.len() && imports[k].depth == 0 && imports[k].stmt == imports[start].stmt {
@@ -476,9 +611,45 @@ impl<'a> Worker<'a> {
             }
             if let Some(link) = self.import_link(&imports[start..k], pick) {
                 self.note_too_late(&link.0, None, &mut late);
-                levels[0].push(link);
+                file.push(link);
             }
         }
+        let file = Arc::new(file);
+        let (site, unsettled) = (self.conv_level_site_read, self.conv_level_unsettled);
+        self.conv_level_site_read |= outer.0;
+        self.conv_level_unsettled |= outer.1;
+        if let Some(key) = keep {
+            let why: Option<&[u8]> = if site {
+                Some(b"not kept: its build read the site\n")
+            } else if unsettled {
+                Some(b"not kept: its build read an unsettled index\n")
+            } else if epoch != self.conv_levels_epoch {
+                Some(b"not kept: a drop came during its build\n")
+            } else {
+                None
+            };
+            match why {
+                None => {
+                    let level = FileLevel { imports: self.file_imports[key.0 .0 as usize].clone(), links: file.clone() };
+                    self.conv_file_levels.insert(key, level);
+                }
+                Some(why) => {
+                    if let Some(twin) = conv_twin() {
+                        use std::io::Write;
+                        let _ = twin.lock().unwrap_or_else(|e| e.into_inner()).write_all(why);
+                    }
+                }
+            }
+        }
+        let mut frames = Vec::new();
+        self.frame_contexts(&imports, k, pick, &mut frames, &mut late);
+        (file, frames, late)
+    }
+
+    /// The enclosing frames' levels, from the import `k` on (each frame's own context, then its import statements and
+    /// aliases in the order written), outermost first.
+    fn frame_contexts(&mut self, imports: &[ResolvedImport], mut k: usize, pick: Pick<'_>, levels: &mut Vec<Vec<Link>>, late: &mut Vec<SymId>) {
+        use super::implicits::Prec;
         // The owner of the last context: a class's own, or the owner depth of a frame's scope.
         let mut last: Option<(bool, u32)> = None;
         for f in 0..self.env.frames.len() {
@@ -499,13 +670,13 @@ impl<'a> Worker<'a> {
             };
             if own {
                 let mut refs = self.frame_conversions(f, pick);
-                refs.retain(|((g, _), _)| !aliases.contains(g));
+                refs.retain(|(g, _)| !aliases.contains(g));
                 // A scope's local is owned by the definition its frame's owner depth names; a class's member by its class.
                 let elem = match &self.env.frames[f] {
                     Frame::Locals { owner, .. } => (*owner as usize).checked_sub(1),
                     _ => None,
                 };
-                self.note_too_late(&refs, elem, &mut late);
+                self.note_too_late(&refs, elem, late);
                 levels.push(vec![(refs, Prec::Def)]);
                 last = Some(owner);
             }
@@ -526,13 +697,13 @@ impl<'a> Worker<'a> {
             for (_, start, end, alias) in stmts {
                 let link = match alias {
                     Some(a) => {
-                        let refs = if self.is_conversion_def(a) || self.is_conversion_given(a) { vec![((a, Via::Scope), self.syms.sym(a).name)] } else { Vec::new() };
+                        let refs = if self.is_conversion_def(a) || self.is_conversion_given(a) { vec![(a, Via::Scope)] } else { Vec::new() };
                         Some((refs, Prec::Named))
                     }
                     None => self.import_link(&imports[start..end], pick),
                 };
                 let Some(link) = link else { continue };
-                self.note_too_late(&link.0, None, &mut late);
+                self.note_too_late(&link.0, None, late);
                 if last != Some(owner) {
                     levels.push(Vec::new());
                 }
@@ -540,14 +711,13 @@ impl<'a> Worker<'a> {
                 last = Some(owner);
             }
         }
-        (levels, late)
     }
 
-    fn note_too_late(&self, refs: &[(ConvRef, Name)], elem: Option<usize>, late: &mut Vec<SymId>) {
+    fn note_too_late(&self, refs: &[ConvRef], elem: Option<usize>, late: &mut Vec<SymId>) {
         if !self.site_in_given() {
             return;
         }
-        for &((g, _), _) in refs {
+        for &(g, _) in refs {
             if !late.contains(&g) && self.comes_too_late(g, elem) {
                 late.push(g);
             }
@@ -620,7 +790,7 @@ impl<'a> Worker<'a> {
 
     /// The conversions frame `f` defines itself: its scope's (a using parameter's among them, as dotty's view
     /// candidates are the context's implicit references) or its class's.
-    fn frame_conversions(&mut self, f: usize, pick: Pick<'_>) -> Vec<(ConvRef, Name)> {
+    fn frame_conversions(&mut self, f: usize, pick: Pick<'_>) -> Vec<ConvRef> {
         let mut level: Vec<SymId> = Vec::new();
         match &self.env.frames[f] {
             Frame::Locals { givens, .. } => {
@@ -638,7 +808,7 @@ impl<'a> Worker<'a> {
                 self.class_conversions(c, pick, &mut level);
             }
         }
-        level.into_iter().map(|g| ((g, Via::Scope), self.syms.sym(g).name)).collect()
+        level.into_iter().map(|g| (g, Via::Scope)).collect()
     }
 
     /// One import statement as a context (`Contexts.implicits`): what its selectors bring and its binding precedence
@@ -669,7 +839,7 @@ impl<'a> Worker<'a> {
     /// What one selector of an import brings (`ImportInfo.importedImplicits`, ImportInfo.scala 131-158), and whether it
     /// brings any implicit reference at all: a given of another type, an old-style implicit def or an implicit class
     /// among them.
-    fn imported_implicits(&mut self, imp: ResolvedImport, pick: Pick<'_>) -> (bool, Vec<(ConvRef, Name)>) {
+    fn imported_implicits(&mut self, imp: ResolvedImport, pick: Pick<'_>) -> (bool, Vec<ConvRef>) {
         let refs = self.imported_conversions(imp, pick);
         if !refs.is_empty() {
             return (true, refs);
@@ -708,7 +878,7 @@ impl<'a> Worker<'a> {
     /// path is), through the clause's hidden names and its by-type bound (`matchesImportBound`). A wildcard `*` pulls
     /// in Scala 2 implicits and no given, a `given` selector both (ImportInfo.scala 140-144); a named selector the
     /// member it names.
-    fn imported_conversions(&mut self, imp: ResolvedImport, pick: Pick<'_>) -> Vec<(ConvRef, Name)> {
+    fn imported_conversions(&mut self, imp: ResolvedImport, pick: Pick<'_>) -> Vec<ConvRef> {
         let mut syms = Vec::new();
         self.import_conversions(imp, pick, &mut syms);
         if matches!(imp.target, ImportTarget::ClassAll(_) | ImportTarget::PkgAll(_)) {
@@ -718,6 +888,8 @@ impl<'a> Worker<'a> {
         // (`isAccessible`: `isAccessibleFrom` with the object as the prefix), from a subclass of its owner.
         if let ImportTarget::ClassAll(c) | ImportTarget::ClassGivens(c) | ImportTarget::ClassMember(c, _) = imp.target {
             if syms.iter().any(|&g| self.syms.sym(g).mods & mods::PROTECTED != 0) {
+                // The site decides it: a file level whose build reads it is not kept (`FileLevel`).
+                self.conv_level_site_read = true;
                 let ty = self.types.class(c, &[]);
                 syms.retain(|&g| self.syms.sym(g).mods & mods::PROTECTED == 0 || self.accessible_through_value(g, ty));
             }
@@ -733,9 +905,7 @@ impl<'a> Worker<'a> {
                 self.matches_import_bound(given, bound)
             });
         }
-        // A candidate hides by its symbol's name, a renamed one too: `combineEligibles` reads `cand.ref.implicitName`,
-        // and a candidate's `ref` is the underlying reference (`Candidate.ref`, Implicits.scala 61), not the alias.
-        refs.into_iter().map(|r| (r, self.syms.sym(r.0).name)).collect()
+        refs
     }
 
     /// One level of the search composed (`computeEligible`): every candidate tested first (`filterMatching`,
@@ -743,15 +913,19 @@ impl<'a> Worker<'a> {
     /// 339-354): an outer context whose precedence beats the inner's keeps its candidates and drops the inner's of the
     /// same name, otherwise the inner's hide the outer's of the same name. Then the names `hidden` by a nearer level's
     /// eligible candidates go (the else branch, 355-357), and this level's eligible names join them.
-    fn compose_conversion_level(&mut self, links: Vec<Link>, scope_tys: &[TypeId], pick: Pick<'_>, hidden: &mut Vec<Name>) -> Vec<ConvRef> {
+    fn compose_conversion_level(&mut self, links: &[Link], scope_tys: &[TypeId], pick: Pick<'_>, hidden: &mut Vec<Name>) -> Vec<ConvRef> {
         use super::implicits::Prec;
         let mut acc: Vec<(ConvRef, Name)> = Vec::new();
         let mut outer: Option<Prec> = None;
         let mut names: Vec<Name> = Vec::new();
-        for (refs, prec) in links {
+        for &(ref refs, prec) in links {
             let mut own: Vec<(ConvRef, Name)> = Vec::new();
-            for (r, n) in refs {
+            for &r in refs {
                 if !own.iter().any(|&(o, _)| o == r) && self.conversion_eligible(r, scope_tys, pick) {
+                    // A candidate hides by its symbol's name, a renamed one too: `combineEligibles` reads
+                    // `cand.ref.implicitName`, and a candidate's `ref` is the underlying reference (`Candidate.ref`,
+                    // Implicits.scala 61), not the alias.
+                    let n = self.syms.sym(r.0).name;
                     own.push((r, n));
                     if !names.contains(&n) {
                         names.push(n);
@@ -960,25 +1134,33 @@ impl<'a> Worker<'a> {
         let scoped = |level: &mut Vec<SymId>| -> Vec<ConvRef> { level.drain(..).map(|g| (g, Via::Scope)).collect() };
         // The contexts inside the package clause, composed level by level from the innermost (`computeEligible`): a
         // level's candidates hide the same-named ones of every level outside it (`combineEligibles`' else branch).
-        let (mut contexts, late) = self.conversion_contexts(pick);
-        // The retry's contexts: the innermost ones left out, the file's level kept in its place.
+        let (file, mut contexts, late) = self.conversion_contexts(pick);
+        // The retry's contexts: the innermost ones left out, the frames' first, then the file's from its last.
+        let mut file_used = file.len();
         let mut left = skip;
         while left > 0 {
-            let Some(level) = contexts.last_mut() else { break };
-            if level.pop().is_some() {
-                left -= 1;
-            }
-            if level.is_empty() {
-                if contexts.len() == 1 {
-                    break;
+            match contexts.last_mut() {
+                Some(level) => {
+                    if level.pop().is_some() {
+                        left -= 1;
+                    }
+                    if level.is_empty() {
+                        contexts.pop();
+                    }
                 }
-                contexts.pop();
+                None if file_used > 0 => {
+                    file_used -= 1;
+                    left -= 1;
+                }
+                None => break,
             }
         }
         let mut hidden: Vec<Name> = Vec::new();
-        let mut file_level: Vec<ConvRef> = Vec::new();
         let mut dropped = false;
-        for (i, links) in contexts.into_iter().enumerate().rev() {
+        let mut file_level: Vec<ConvRef> = Vec::new();
+        let n_frames = contexts.len();
+        for i in (0..=n_frames).rev() {
+            let links: &[Link] = if i == 0 { &file[..file_used] } else { &contexts[i - 1] };
             let mut refs = self.compose_conversion_level(links, scope_tys, pick, &mut hidden);
             // The candidates that come too late, which hid their namesakes, are left out now.
             if !late.is_empty() {
