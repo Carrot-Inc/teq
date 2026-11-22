@@ -91,7 +91,8 @@
 #            line each, not run; an empty selection of tests/scala3/run.py and of tests/board/dotty.py failing; an
 #            empty results file taking no entry out of a fails-only list (a line naming the check passing does);
 #            tests/run_stdlib.sh --update without its jar writing every case cannot run; tests/support/identity.sh
-#            counting no program identical whose runs were killed on both sides; tests/workers.sh's checks whose
+#            counting no program identical whose runs were killed on both sides, its self-test's line, a program not
+#            run for want of its jars failing the run unless IDENTITY_SKIPS lists it, a FAIL line under TEQ_GATE; tests/workers.sh's checks whose
 #            command was killed failing with that reason.
 #   words    the first words' readers: master's code on the head's output rendered back whole, deciding as on master's
 #            (run.py, the typing harness, tests/parser/run.py, bench/app/diagnostics.py; a term named `type X` the
@@ -2130,7 +2131,27 @@ printf 'object Main { def main(args: Array[String]): Unit = println("hello") }\n
 timeout 200 bash "$id/tests/support/identity.sh" "$oc/killed-teq/teq" "$oc/killed-teq/teq" "$oc/id-out" js > "$oc/identity.log" 2>&1
 code=$?
 check "outcomes: identity counts no program identical whose runs did not run on both sides" "$oc/identity.log" eval '[ $code = 1 ] &&
-  grep -q "^differs: js hello (did not run: ref:137 new:137)$" "$oc/identity.log" && grep -q "^identity js: 0 of 1 programs identical$" "$oc/identity.log"'
+  grep -q "^differs: js hello (did not run: ref:137 new:137)$" "$oc/identity.log" &&
+  grep -q "^identity js: 0 of 1 programs identical, 1 differing, 0 not run$" "$oc/identity.log" &&
+  grep -q "^identity self-test: [0-9]* of [0-9]* planted bad records failed$" "$oc/identity.log"'
+# identity: a program not run for want of its jars fails the run, unless IDENTITY_SKIPS lists it; a FAIL under TEQ_GATE
+mkdir -p "$oc/builds-teq" && printf '#!/bin/bash\n[ "$1" = --help ] && exit 0\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && echo built > "$2"; shift; done\n' > "$oc/builds-teq/teq" && chmod +x "$oc/builds-teq/teq"
+printf '// jars: nosuch\nobject Lonely\n' > "$id/tests/cases/lonely.scala"
+timeout 200 bash "$id/tests/support/identity.sh" "$oc/builds-teq/teq" "$oc/builds-teq/teq" "$oc/id-out" js > "$oc/identity-jars.log" 2>&1
+code=$?
+check "outcomes: identity fails on a program not run for want of its jars, naming it" "$oc/identity-jars.log" eval '[ $code = 1 ] &&
+  grep -q "^not run js lonely: jars missing: nosuch$" "$oc/identity-jars.log" &&
+  grep -q "^identity js: 1 of 2 programs identical, 0 differing, 1 not run (jars missing)$" "$oc/identity-jars.log" &&
+  ! grep -q "^FAIL" "$oc/identity-jars.log"'
+printf 'js lonely\n' > "$oc/identity-skips"
+IDENTITY_SKIPS=$oc/identity-skips timeout 200 bash "$id/tests/support/identity.sh" "$oc/builds-teq/teq" "$oc/builds-teq/teq" "$oc/id-out" js > "$oc/identity-skips.log" 2>&1
+code=$?
+check "outcomes: identity passes a program not run that IDENTITY_SKIPS lists" "$oc/identity-skips.log" eval '[ $code = 0 ] &&
+  grep -q "^not run js lonely: jars missing: nosuch (listed in IDENTITY_SKIPS)$" "$oc/identity-skips.log"'
+TEQ_GATE=1 timeout 200 bash "$id/tests/support/identity.sh" "$oc/builds-teq/teq" "$oc/builds-teq/teq" "$oc/id-out" js > "$oc/identity-gate.log" 2>&1
+code=$?
+check "outcomes: identity under TEQ_GATE fails a program not run with a FAIL line" "$oc/identity-gate.log" eval '[ $code = 1 ] &&
+  grep -q "^FAIL identity js: 1 programs not run for want of their jars, a gate.s want of what it needs$" "$oc/identity-gate.log"'
 # workers: a check whose command did not run fails it, never an absent pattern's pass
 (
   pass=0; fail=0
