@@ -9,7 +9,6 @@
 21400.scala	option: -Xkind-projector:underscores (teq has no flag for it)
 21400b.scala	option: -Xkind-projector:underscores (teq has no flag for it)
 3190.scala	3190.scala:8:3: None of the overloaded alternatives of method overload in object Test with types
-3403	java source: teq reads none
 6687.scala	6687.scala:9:26: type mismatch: found "", required T[X]
 6709.scala	6709.scala:36:12: this type cannot be tested at runtime: ?
 8778.scala	8778.scala:17:48: value asInstanceOf is not a member of =:=[Int, Int]
@@ -31,10 +30,6 @@ adhoc-extension	option: -Wsafe-init with -Werror (teq has no flag for it)
 aliasNew.scala	aliasNew.scala:6:6: type mismatch: found "abc", required Nothing
 and-inf.scala	and-inf.scala:12:43: type mismatch: found B, required A
 annot-constant	java source: teq reads none
-annotations	java source: teq reads none
-annotations-in-java	java source: teq reads none
-annotationsJava	java source: teq reads none
-annotationsJavaRepeatable	java source: teq reads none
 anykind.scala	anykind.scala:25:18: type AnyKind not found
 applied_constructor_types.scala	applied_constructor_types.scala:3:19: expected ':', found 'val'
 approximateUnion.scala	approximateUnion.scala:48:45: type mismatch: found (X.this.x : D), required C[? >: A & B <: (A | B)] & D
@@ -53,13 +48,11 @@ cbproxy-expansion.scala	cbproxy-expansion.scala:5:11: a context bound needs a ty
 cc-backwards-compat	Iter.scala:5:13: expected '=>', found identifier
 cc-self-fluid	Test_2.scala:8:20: expected '=>', found identifier
 cc-use-alternatives.scala	cc-use-alternatives.scala:7:16: expected a declaration, found identifier
-chang	java source: teq reads none
 class-gadt	inheritance.scala:12:24: type mismatch: found T, required Int
 clear-retains-for-inferred-types	S1.scala:4:58: expected a declaration, found 'this'
 closure-args.scala	closure-args.scala:10:3: expected a definition, found '('
 conversion-function-prototype.scala	conversion-function-prototype.scala:19:66: missing parameter type
 convert.scala	convert.scala:8:25: ambiguous extension methods: both given_Conversion_Int_String and given_Conversion_Int_Date provide convert on Int
-cycle	java source: teq reads none
 deferred-givens-singletons.scala	deferred-givens-singletons.scala:5:12: expected end of statement, found ':'
 deferred-givens.scala	deferred-givens.scala:7:13: expected end of statement, found ':'
 deferredSummon.scala	deferredSummon.scala:14:12: expected end of statement, found ':'
@@ -130,7 +123,6 @@ i10437.scala	i10437.scala:14:5: None of the overloaded alternatives of method ap
 i1044.scala	i1044.scala:3:5: value getParameterTypes is not a member of Method
 i1047.scala	i1047.scala:30:33: type mismatch: found AnyRef, required AnyRef{val age: Int} & AnyRef{val meow: Int}
 i10511.scala	i10511.scala:16:26: type mismatch: found (t : (Bool.True : Bool)), required Not[(Bool.False : Bool)]
-i10567	java source: teq reads none
 i1059.scala	i1059.scala:5:26: expected ')', found '@'
 i10667.scala	i10667.scala:10:29: type mismatch: found Nums, required Nums & A
 i10715-scala	test.scala:17:3: value + is not a member of Int
@@ -139,7 +131,6 @@ i10848b.scala	i10848b.scala:4:3: 'erased' is not part of the supported Scala sub
 i10871.scala	i10871.scala:4:15: expected an identifier, found 'super'
 i10929-new-syntax.scala	i10929-new-syntax.scala:9:9: a parent has to be a class or a trait
 i10929.scala	i10929.scala:12:40: expected ':', found 'val'
-i10945	java source: teq reads none
 i10980.scala	i10980.scala:2:19: not found: Object
 i10994.scala	i10994.scala:2:20: expected '=>', found ':'
 i11022.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -153,7 +144,6 @@ i11318c.scala	i11318c.scala:5:32: not found: b
 i11358.scala	i11358.scala:9:15: Ambiguous overload. The overloaded alternatives of method +++ in object Test with types
 i11393	jvm.products:1:1: illegal cyclic type reference: alias ToFormat of type ToFormat refers back to the type itself
 i11464.scala	i11464.scala:10:21: type mismatch: found Type[Any, AnyRef{type R <: [~ <: Txn[~]] =>> Expr[~, Any]}#R], required Type[A, E]
-i11490	java source: teq reads none
 i11605.scala	i11605.scala:13:7: this is not a case class or enum case
 i11729.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i11781.scala	i11781.scala:12:27: a parent has to be a class or a trait
@@ -176,7 +166,6 @@ i12723.scala	i12723.scala:8:12: expected a pattern, found identifier
 i12945	A_1.scala:10:32: Cannot prove that Int =:= 7.
 i12950	test_2.scala:4:19: no given instance of type Mul[Two, 2] was found for parameter m
 i13001	Main_1.scala:28:48: value asInstanceOf is not a member of Product{type Kind = K0; type MirroredType = T; type MirroredElemTypes <: Tuple}
-i13106.java	java source: teq reads none
 i13197.scala	i13197.scala:4:3: value asInstanceOf is not a member of T | String
 i13282.scala	i13282.scala:8:3: this expression cannot be assigned to
 i13411.scala	i13411.scala:12:12: cannot reduce inline match with
@@ -288,9 +277,7 @@ i18160	repro_1.scala:10:40: type argument EventCompatBundle.this.State does not 
 i18175.scala	i18175.scala:45:18: expected '=>', found identifier
 i18211.scala	i18211.scala:24:43: expected ':', found '['
 i18450.scala	i18450.scala:14:14: expected an identifier, found 'this'
-i18530	java source: teq reads none
 i18531	java source: teq reads none
-i18533b	java source: teq reads none
 i18601.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i18601b.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i18623.scala	i18623.scala:10:18: a parent has to be a class or a trait
@@ -308,14 +295,12 @@ i19220.orig.scala	i19220.orig.scala:20:7: this is not a case class or enum case
 i19221.orig.scala	i19221.orig.scala:17:7: this is not a case class or enum case
 i19221.scala	i19221.scala:41:44: Both is not a case class, so it cannot be used as a pattern
 i19301.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-i19386	java source: teq reads none
 i19434.scala	i19434.scala:8:42: type argument DropNames[xs] does not conform to upper bound Tuple
 i19445.scala	i19445.scala:10:41: type argument UnwrapTypes[xs] does not conform to upper bound Tuple
 i19479.scala	i19479.scala:4:29: no given instance of type PdxEncoder[Person] was found for parameter x
 i19493.scala	i19493.scala:34:14: expected an identifier, found 'this'
 i19623.scala	i19623.scala:22:11: expected '=', found '{'
 i19637.scala	i19637.scala:7:3: missing parameter type
-i19642	java source: teq reads none
 i19706.scala	i19706.scala:5:62: Cannot prove that Decoded["Tuple(0, EmptyTuple)"] =:= (0).
 i19806	java source: teq reads none
 i19809.scala	i19809.scala:3:29: type mismatch: found AnyRef, required Any{val i: Int}
@@ -324,8 +309,6 @@ i19892.scala	i19892.scala:3:17: contravariant type _R occurs in invariant positi
 i1990.scala	teq: jvm backend: B: the local $thisefnquj_6 is not in scope of the generated method
 i1990a.scala	teq: jvm backend: Test$.main: the local $this1lqplm6_6 is not in scope of the generated method
 i19950.scala	i19950.scala:10:58: missing parameter type
-i20026	java source: teq reads none
-i20063	java source: teq reads none
 i20080.scala	i20080.scala:8:5: type mismatch: found (<error>, <error>) => <error>, required Zippable[A, B]{type Out = Append[A, B]}
 i20166.scala	i20166.scala:17:15: type mismatch: found "4", required M[1]
 i20176.scala	i20176.scala:6:5: None of the overloaded alternatives of method use in object Accumulator with types
@@ -334,17 +317,12 @@ i20297.scala	i20297.scala:16:9: type mismatch: found Any, required V
 i20335.scala	i20335.scala:12:17: type mismatch: found FiniteDuration, required TemporalAmount
 i20377.scala	i20377.scala:1:8: cannot resolve import: NamedTuple is not an object or a package
 i20512.scala	i20512.scala:8:67: type Names not found
-i20554-a	java source: teq reads none
-i20554-b	java source: teq reads none
 i20572.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i20588	Baz_2.scala:1:7: class Baz needs to be abstract, since def test(): Unit in class Foo is not defined
 i20901	option: -Ytest-pickler-check (teq has no flag for it)
 i21036.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i21154	option: -Ytest-pickler-check (teq has no flag for it)
 i21282.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-i21303	java source: teq reads none
-i21303a	java source: teq reads none
-i21319	java source: teq reads none
 i21352b.scala	i21352b.scala:33:35: ambiguous given instances for Reader[<error>]: UnitReader, StringReader
 i21405.scala	i21405.scala:6:19: reference to IO is ambiguous: it is both imported by import o.* and imported subsequently by import p.*
 i21415.scala	option: -rewrite (teq has no flag for it)
@@ -394,22 +372,18 @@ i23611a.scala	i23611a.scala:11:7: type mismatch: found Path => ZStream[Any, Thro
 i23627.scala	i23627.scala:18:33: type mismatch: found 1, required Repro.dc2.TestPath[?]#AbsMember
 i23885	S_1.scala:4:13: expected ',' or ')', found identifier
 i24038a.scala	i24038a.scala:27:7: type mismatch: found *:[BufferOf[h], Tuple], required *:[BufferOf[h], M2[t]]
-i24074	java source: teq reads none
 i24134	java source: teq reads none
 i24134-nested	java source: teq reads none
 i24206.scala	i24206.scala:7:26: missing parameter type
 i2426.scala	i2426.scala:1:11: expected 'extends' or a template body, found '@'
 i24507-jframe.scala	i24507-jframe.scala:1:59: None of the overloaded alternatives of constructor AccessibleJFrame in class AccessibleJFrame with types
 i24543.scala	i24543.scala:7:16: expected ',' or ']', found identifier
-i24631	java source: teq reads none
 i24631b.scala	i24631b.scala:4:3: indented definitions expected, def found
 i24686.scala	i24686.scala:1:75: no given instance of type InPlaceImpl2[DenseMatrix[Double], DenseMatrix[Double]] was found for parameter x$2
 i24717.scala	i24717.scala:10:22: type mismatch: found 123, required 123 & O
 i24750.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i24813.scala	i24813.scala:4:21: type t not found
 i24869	Utils_1.scala:7:30: expected 'extends' or a template body, found '@'
-i24894a	java source: teq reads none
-i24894c	java source: teq reads none
 i25164.scala	i25164.scala:7:27: expected ':', found 'val'
 i25164b.scala	i25164b.scala:3:30: expected ':', found 'val'
 i25164c.scala	i25164c.scala:3:19: expected ':', found 'val'
@@ -473,7 +447,6 @@ i6009b.scala	i6009b.scala:4:22: expected ',' or ')', found identifier
 i6009c.scala	i6009c.scala:4:22: expected ',' or ')', found identifier
 i6014-gadt.scala	i6014-gadt.scala:20:17: type argument f does not have the same kind as its bound [_]
 i6083.scala	i6083.scala:1:13: type AnyKind not found
-i6151	java source: teq reads none
 i6190a.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i6190c.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i6290.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -504,7 +477,6 @@ i7819.scala	teq: jvm backend: Foo$.equals$extension: the underlying value of a v
 i7851.scala	i7851.scala:35:108: (Wrapped[Float], Wrapped[Float], Wrapped[Float]) => Wrapped[Float] cannot be tupled as Tuple => Wrapped[Float]
 i7877.scala	i7877.scala:20:49: Cannot prove that Int =:= Nothing.
 i7920.scala	i7920.scala:6:14: value glass is not a member of Foo
-i7959.java	java source: teq reads none
 i7964.scala	i7964.scala:9:10: cannot reduce inline match with
 i8069.scala	i8069.scala:12:19: type mismatch: found (d : a.B), required c.a.B
 i8083.scala	i8083.scala:6:68: type mismatch: found (A, that.a.B), required ((that.a : A), that.a.B)
@@ -540,7 +512,6 @@ i9804.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i9833.scala	i9833.scala:6:28: type mismatch: found A, required B
 i9999.scala	i9999.scala:10:16: type mismatch: found A, required M2[(x : A | B)]
 i9999a.scala	i9999a.scala:9:8: type mismatch: found Any, required T[(x : Any)]
-ilya2	java source: teq reads none
 implicit-lower-bound.scala	implicit-lower-bound.scala:13:7: No implicit view available from Int => Any.
 implicit-match-and-inline-match.scala	implicit-match-and-inline-match.scala:9:44: type t not found
 implicit-match-nested.scala	implicit-match-nested.scala:15:21: type t not found
@@ -578,7 +549,6 @@ into-class.scala	option: -preview (teq has no flag for it)
 into-expr.scala	option: -preview (teq has no flag for it)
 into-sam.scala	option: -preview (teq has no flag for it)
 into-separate	option: -preview (teq has no flag for it)
-java-annot	java source: teq reads none
 java-inherited-type	java source: teq reads none
 java-inherited-type1	java source: teq reads none
 java-records	java source: teq reads none
@@ -676,10 +646,7 @@ t0599.scala	t0599.scala:11:23: expected an identifier, found 'super'
 t0851.scala	t0851.scala:10:13: missing argument for parameter
 t0872.scala	t0872.scala:5:13: missing argument for parameter
 t1131.scala	t1131.scala:6:3: expected an identifier, found 'def'
-t11788b	java source: teq reads none
-t11788c	java source: teq reads none
 t122.scala	t122.scala:2:12: recursive value v needs type
-t12396	dotty: unknown test option: -jvm 21+ -jvm 21+
 t151.scala	t151.scala:5:10: (foo : <error>) is not a valid type prefix, since it is not an immutable path
 t1513a.scala	t1513a.scala:36:10: expected ']', found '='
 t1513b.scala	t1513b.scala:10:8: expected ']', found '='
@@ -694,37 +661,29 @@ t2712-6.scala	t2712-6.scala:11:7: type mismatch: found Tagged[Int, Disjunction],
 t284-pos.scala	t284-pos.scala:2:24: expected end of statement, found '{'
 t2910.scala	t2910.scala:8:13: not found: s
 t2913.scala	t2913.scala:42:13: missing argument for parameter
-t3120	java source: teq reads none
 t3236	java source: teq reads none
 t3249	java source: teq reads none
-t3429	java source: teq reads none
 t3486	java source: teq reads none
-t3521	java source: teq reads none
 t3567	java source: teq reads none
 t374.scala	t374.scala:3:17: not found: Value
 t3866.scala	t3866.scala:13:3: Ambiguous overload. The overloaded alternatives of method f in class ImplicitRepeated with types
 t3946	java source: teq reads none
 t3999	a_1.scala:7:41: type Val not found
 t4070.scala	t4070.scala:4:61: type argument tv does not have the same kind as its bound [X]
-t4402	java source: teq reads none
 t4579.scala	t4579.scala:45:8: object creation impossible, since it has 2 unimplemented members: evaluate, lisp2string
 t4737	java source: teq reads none
 t5178.scala	t5178.scala:8:16: method withLock overrides nothing
 t522.scala	t522.scala:14:5: foo is abstract; it cannot be instantiated
 t5330c.scala	t5330c.scala:3:28: type mismatch: found _, required String | Char
 t5886.scala	t5886.scala:8:6: type mismatch: found Class[_], required () => Any
-t5957	java source: teq reads none
 t6205.scala	t6205.scala:6:19: type kt not found
 t628.scala	t628.scala:15:40: operator * cannot be applied to Double and Unit
 t6595.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 t661.scala	t661.scala:12:22: expected an identifier, found 'super'
 t6780.scala	t6780.scala:15:16: recursive value v1 needs type
-t6942	java source: teq reads none
 t6963c.scala	option: -Xmigration:2.9 (teq has no flag for it)
-t7014	java source: teq reads none
 t7033.scala	t7033.scala:3:18: only classes can be instantiated with new
 t7200b.scala	t7200b.scala:11:7: recursive use of coflatMap needs an explicit result type
-t7232c	java source: teq reads none
 t7233b.scala	t7233b.scala:3:49: not found: toS
 t7532	java source: teq reads none
 t762.scala	t762.scala:2:66: type mismatch: found Bar1.this, required Foo{type T <: Bar1.this.T}

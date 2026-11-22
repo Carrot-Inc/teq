@@ -990,8 +990,8 @@ function_xxl_inherited_member	pass	-
 function_xxl_jvm	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 function_xxl_overloaded_alias_apply	pass	-	
 function_xxl_overloaded_apply	pass	-	
-future_prepare	fail	-	error: Not found: type IllegalThreadStateException
-futures	fail	-	error: Not found: type IllegalThreadStateException
+future_prepare	fail	-	error: not supported on JavaScript: class AbstractExecutorService java.util.concurrent.AbstractExecutorService (a Java definition without an
+futures	fail	-	error: not supported on JavaScript: class AbstractExecutorService java.util.concurrent.AbstractExecutorService (a Java definition without an
 gadt_alternatives	pass	-	
 gadt_fresh_abstract	pass	-	
 gadt_fresh_abstract_bounds	pass	-	

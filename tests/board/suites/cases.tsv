@@ -1621,7 +1621,7 @@ java_interface_abstract	pass	-
 java_io_streams	pass	-	
 java_map_compute	pass	-	
 java_math	pass	-	
-java_member_class_depth	fail	-	< true
+java_member_class_depth	pass	-	
 java_nested_and_defaults	pass	-	
 java_net_uri	pass	-	
 java_parens	pass	-	

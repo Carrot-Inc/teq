@@ -1100,9 +1100,14 @@ impl<'a> Worker<'a> {
                 }
                 self.type_ref_to_type(r, crate::source::Span::default(), false)
             }
-            None => match self.placeholder_class(pkg, name, cx.applied_to.unwrap_or(0)) {
+            // A static member class of a Java class, which the pickle reaches through the class's companion (entered
+            // here as a package, `placeholder_static_nested`): the member class its class entered, where it is.
+            None => match self.entered_java_static_member(pkg, name) {
                 Some(c) => self.class_ref(c),
-                None => self.blocked(cx, Shape::Unknown, t),
+                None => match self.placeholder_class(pkg, name, cx.applied_to.unwrap_or(0)) {
+                    Some(c) => self.class_ref(c),
+                    None => self.blocked(cx, Shape::Unknown, t),
+                },
             },
         }
     }

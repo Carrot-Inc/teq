@@ -141,6 +141,9 @@ pub struct ClassFile {
     pub inner_classes: Vec<InnerClass>,
     pub record: Option<Vec<RecordComponent>>,
     pub permitted: Vec<String>,
+    /// A Java source's record alone: the class is declared `sealed` (the reference's `Flags.Sealed`; its `permits` is
+    /// not read, its children are the run's Java sources that extend it).
+    pub sealed: bool,
     pub deprecated: bool,
     pub annotations: Vec<String>,
     pub source_file: Option<String>,

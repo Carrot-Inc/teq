@@ -1,5 +1,5 @@
 # test	verdict	the other ways	the first line of the difference
-# passed	1014
+# passed	1022
 positions cp/fix/javatemplate/JavaBox.tasty	fail	-	scalac's unpickler gave no answer for it
 positions cp/fix/javatemplate/JavaTemplate.tasty	fail	-	scalac's unpickler gave no answer for it
 twin After37	fail	-	

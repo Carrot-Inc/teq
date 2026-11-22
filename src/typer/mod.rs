@@ -4806,6 +4806,18 @@ impl<'a> Worker<'a> {
         self.loaded.as_ref().map_or(false, |l| l.is_jar(f))
     }
 
+    /// Whether `f` is one of the program's Java sources (read for their declarations, never compiled).
+    pub fn in_java_source(&self, f: FileId) -> bool {
+        (f.0 as usize) < self.files.len() && self.files[f.0 as usize].path.ends_with(".java")
+    }
+
+    /// Whether `f` is a jar's or one of the program's Java sources: a member of either is read into a signature by
+    /// the loader, which may hold a type of a shape it does not map.
+    pub fn from_java_or_jar(&self, f: FileId) -> bool {
+        // every call asks: a build without Java sources reads no file's path
+        self.in_jar(f) || (self.has_java_sources() && self.in_java_source(f))
+    }
+
     /// Whether `f` is the pseudo file of a directory of teq's products: another module's program.
     pub fn in_products(&self, f: FileId) -> bool {
         self.loaded.as_ref().is_some_and(|l| l.jar_files.iter().position(|&j| j == f).is_some_and(|i| l.cp.is_products_entry(i)))

@@ -755,11 +755,23 @@ impl<'t, 'a> Spaces<'t, 'a> {
                         self.sc.classes.push(c);
                         Some(Plain::Covers)
                     }
-                    _ => Some(Plain::Literal),
+                    _ => match self.t.java_enum_case(s) {
+                        Some(c) => {
+                            self.sc.classes.push(c);
+                            Some(Plain::Covers)
+                        }
+                        None => Some(Plain::Literal),
+                    },
                 },
                 // A value of an enum whose companion is an instance, read on it.
                 TExpr::Field(_, s) if matches!(self.t.syms.sym(s).kind, SymKind::EnumValue(_)) => {
                     let SymKind::EnumValue(c) = self.t.syms.sym(s).kind else { unreachable!() };
+                    self.sc.classes.push(c);
+                    Some(Plain::Covers)
+                }
+                // A Java enum's constant, read on its statics object: its case (`java_enum_case`).
+                TExpr::Field(_, s) if self.t.java_enum_case(s).is_some() => {
+                    let c = self.t.java_enum_case(s).unwrap();
                     self.sc.classes.push(c);
                     Some(Plain::Covers)
                 }
@@ -1494,12 +1506,21 @@ impl<'t, 'a> Spaces<'t, 'a> {
             }
             TExpr::Static(s) => match self.t.syms.sym(s).kind {
                 SymKind::EnumValue(c) => Space::Typ(self.t.types.class(c, &[])),
-                _ => Space::Opaque,
+                // A Java enum's constant, its case (`java_enum_case`).
+                _ => match self.t.java_enum_case(s) {
+                    Some(c) => Space::Typ(self.t.types.class(c, &[])),
+                    None => Space::Opaque,
+                },
             },
             // A value of an enum whose companion is an instance, read on it: its case, whatever the
             // path, as dotty's `SpaceEngine` decomposes an enum by its children (`Symbol.children`).
             TExpr::Field(_, s) if matches!(self.t.syms.sym(s).kind, SymKind::EnumValue(_)) => {
                 let SymKind::EnumValue(c) = self.t.syms.sym(s).kind else { unreachable!() };
+                Space::Typ(self.t.types.class(c, &[]))
+            }
+            // A Java enum's constant, read on its statics object: its case (`java_enum_case`).
+            TExpr::Field(_, s) if self.t.java_enum_case(s).is_some() => {
+                let c = self.t.java_enum_case(s).unwrap();
                 Space::Typ(self.t.types.class(c, &[]))
             }
             TExpr::Int(i) => Space::Lit(Lit::Int(i)),

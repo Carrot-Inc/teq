@@ -5592,7 +5592,9 @@ impl<'a> Worker<'a> {
                 },
             },
         };
-        if !trial && ctor.is_none() && self.in_jar(self.syms.sym(call.sym).file) && self.report_blocked_sig(call.sym, span) {
+        // A member read from a class file or a Java source's record: a type of a shape the loader does not map is
+        // refused at the call, the class's origin alike.
+        if !trial && ctor.is_none() && self.from_java_or_jar(self.syms.sym(call.sym).file) && self.report_blocked_sig(call.sym, span) {
             self.type_args_for_errors(&lists);
             return Some((self.prog.add(TExpr::Unit), ERROR));
         }

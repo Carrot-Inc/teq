@@ -385,6 +385,11 @@ same_output class_ir 8 interp tests/workers/class_ir
 # workers in every run).
 same_output class_recheck 3 compiler check tests/workers/class_recheck
 
+# A Java source's chain of sixteen member types, eight units each reading one at its own depth (nine to sixteen):
+# a member type's own member types are entered as it is completed, under the loader's lock, so the workers' units
+# meet each type entered once, as one worker's do.
+same_output java_member_types_deep_units 6 compiler check tests/workers/java_member_types_deep_units
+
 # Two classes whose initialisers' macros construct each other, the macros of the run: their files suspend at
 # typing (dotty's `Inliner.expandMacro`) and are typed again after the macros' file, as one worker types them.
 # The macros construct the program's classes, so they cannot be an upstream module's: the workers' demand of

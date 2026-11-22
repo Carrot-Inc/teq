@@ -10,28 +10,7 @@ pub mod parser;
 pub mod record;
 pub mod scanner;
 
-use parser::{Kind, Member, TypeDecl};
-
-/// The forms of a declaration this reader does not read, each with where it stands: an enum, a record, an
-/// annotation declaration, a sealed type, a member type.
-pub fn refused_forms(decl: &TypeDecl) -> Vec<(u32, &'static str)> {
-    let mut out = Vec::new();
-    match decl.kind {
-        Kind::Enum => out.push((decl.offset, "a Java enum")),
-        Kind::Record => out.push((decl.offset, "a Java record")),
-        Kind::Annotation => out.push((decl.offset, "a Java annotation declaration")),
-        Kind::Class | Kind::Interface => {}
-    }
-    if decl.mods.flags & (parser::SEALED | parser::NON_SEALED) != 0 || !decl.permits.is_empty() {
-        out.push((decl.offset, "a sealed Java type"));
-    }
-    for m in &decl.members {
-        if let Member::Type(t) = m {
-            out.push((t.offset, "a Java member type"));
-        }
-    }
-    out
-}
+use parser::{Member, TypeDecl};
 
 /// Namer's conflicts among the names one declaration enters in one scope (`checkNoConflict`, E161), each at the later
 /// name: the class's type parameters, and a method's or a constructor's type parameters and value parameters.

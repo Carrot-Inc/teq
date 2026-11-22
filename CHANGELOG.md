@@ -102,6 +102,21 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   its imports and kind of search, and keeps them while the program's scopes stand, instead of again at every search:
   a scope of many conversions checks 3 to 4% faster (the budget's view, gview and gvar programs, 20,000 conversions
   each). Which conversion a search takes, and every diagnostic, are unchanged.
+- The Java reader reads enums, records, annotation declarations, sealed types and member types, where it refused them:
+  an enum's constants, `values()` and `valueOf`, a record's canonical constructor and accessors, an annotation
+  declaration applied to a Scala definition as one read from a class file, member types at any depth (static ones
+  through their class's companion, `J.N`), and a simple type name a parent's member type gives, as javac binds it. A
+  source with members outside any type (a compact source file) is dropped without a word, as scalac drops it. A match
+  on a Java enum is checked for its constants, from a source or a class file (under `--std scala-library`, a match on
+  `java.time.DayOfWeek` naming MONDAY and FRIDAY alone now warns "It would fail on pattern case: TUESDAY, WEDNESDAY,
+  THURSDAY, SATURDAY, SUNDAY", where it said nothing), and a match on a sealed Java type of the build's sources for
+  its subclasses among them; a sealed Java class of the class path is open to a Scala subclass and its matches are not
+  checked by its `permits`, as scalac reads it (a Scala class extending one was refused, "Cannot extend sealed trait S
+  in a different source file"). A static member class of a Java class that a library's TASTy names (`J.N`) has its
+  members (it had none). A class file's member types are read at any depth too, where they stopped at eight levels
+  (`J.N1. .. .N9` was "not found"). The analysis graph (`--analysis-version 3`) follows: a match on a Java enum of the
+  class path takes the enum as a pattern-match target where the build names one of its constants, as scalac's does
+  (it took none), and a match on a sealed Java class of the class path takes none (it took the class).
 
 ## 0.1.11 (2026-11-20)
 

@@ -1,0 +1,1 @@
+Main.scala:4:53: error: Not found: type Helper

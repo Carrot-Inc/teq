@@ -11,7 +11,6 @@ andtype.scala	check: line 1: the .check has '9: Pattern Match Exhaustivity: _: B
 anonym.scala	check: line 1: the .check has '10: Pattern Match Exhaustivity: _: Base (anonymous)', teq gives nothing
 boxing.scala	check: line 1: the .check has nothing, teq gives '4: Match case Unreachable'
 byte.scala	check: line 1: the .check has '5: Match case Unreachable', teq gives '3: Match case Unreachable'
-enum	java source: teq reads none
 enum-HList.scala	check: line 1: the .check has nothing, teq gives '9: (error) type mismatch: found Any, required HLst'
 enum-approx.scala	check: line 1: the .check has '24: Pattern Match Exhaustivity: Fun.ConstNullClass(_)', teq gives '24: Pattern Match Exhaustivity: ConstNullClass(_)'
 exhausting.scala	check: line 3: the .check has '32: Pattern Match Exhaustivity: List(_, _*)', teq gives '32: Pattern Match Exhaustivity: ::(_, _)'
@@ -75,7 +74,6 @@ i8757.scala	check: line 1: the .check has '8: Pattern Match Exhaustivity: C()', 
 i8922.scala	check: line 1: the .check has nothing, teq gives '28: Match case Unreachable'
 i8922c.scala	check: line 1: the .check has '26: Pattern Match Exhaustivity: (_: Int, _: String, _), (_: Int, _: Int, BANG), (_: Int, _: Int, BANG_EQUAL), (_: Int, _: Int, EQUAL), (_: Int, _: Int, EQUAL_EQUAL), (_: Int, true, _)', teq gives '26: Pattern
 irrefutable.scala	check: line 1: the .check has '22: Pattern Match Exhaustivity: _: A, _: B, C(_, _)', teq gives '12: Pattern Match Exhaustivity: _: A, _: B, C(_, _)'
-java-enum1	java source: teq reads none
 nontrivial-andtype.scala	check: line 1: the .check has '16: Pattern Match Exhaustivity: _: A, B(), _: C, D', teq gives "17: (error) expected an expression, found ';'"
 null.scala	check: line 1: the .check has '6: Match case Unreachable', teq gives '5: Match case Unreachable'
 outer-ref-checks.scala	check: line 1: the .check has nothing, teq gives '24: Pattern Match Exhaustivity: O.Inner'
@@ -94,7 +92,6 @@ t11457b.scala	check: line 1: the .check has nothing, teq gives '20: (error) type
 t11620.scala	check: line 1: the .check has '36: Pattern Match Exhaustivity: B(A2(_, _))', teq gives '16: (error) type mismatch: found B[T], required Aux[_A, T]'
 t12237.scala	check: line 1: the .check has '21: Pattern Match Exhaustivity: Root, PathAndQuery./(_, _), PathAndQuery.===(_, _), PathAndQuery.:&(_, PathAndQuery.===(_, _)), PathAndQuery.+?(_, PathAndQuery.===(_, _))', teq gives '21: Pattern Match Exhaust
 t2425.scala	check: line 1: the .check has nothing, teq gives '6: Pattern Match'
-t2442	java source: teq reads none
 t3163.scala	check: line 1: the .check has '3: Pattern Match Exhaustivity: _: AnyVal', teq gives nothing
 t4020.scala	check: line 1: the .check has nothing, teq gives '15: Pattern Match Exhaustivity: Foo1(_)'
 t4526.scala	check: line 1: the .check has '3: Pattern Match Exhaustivity: _: Int', teq gives '8: Pattern Match Exhaustivity: (_, _)'
@@ -108,7 +105,6 @@ t7020.scala	check: line 1: the .check has '3: Pattern Match Exhaustivity: List(_
 t8068.scala	check: line 1: the .check has nothing, teq gives '9: Pattern Match Exhaustivity: O()'
 t8178.scala	check: line 1: the .check has '6: Pattern Match Exhaustivity: FailsChild2(_)', teq gives '14: Pattern Match Exhaustivity: VarArgs1(_)'
 t8606.scala	check: line 1: the .check has nothing, teq gives '4: Pattern Match Exhaustivity: AObj(), BObj()'
-t8700a	java source: teq reads none
 t9232.scala	check: line 3: the .check has '21: Pattern Match Exhaustivity: Node1(Foo()), Node2()', teq gives '21: Pattern Match Exhaustivity: Node1(_), Node2()'
 t9289.scala	check: line 1: the .check has '9: Pattern Match Exhaustivity: module.LetR()', teq gives '9: Pattern Match Exhaustivity: LetR()'
 t9351.scala	check: line 1: the .check has '9: Pattern Match Exhaustivity: _: A', teq gives '18: Pattern Match Exhaustivity: (_, _)'

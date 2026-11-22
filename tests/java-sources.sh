@@ -8,7 +8,8 @@
 # (vulpix's command), and the run of Main to print expected.txt. Besides: a JVM build to a jar of a program with Java
 # sources is refused and writes nothing; a watch session's rebuild after a Java source's edit tells the mismatch its
 # Scala reader meets, and one after a constant's edit its literal type; the interpreter refuses a Java source's
-# method by its class and source. Without javac or scala-library's jar in the coursier cache nothing runs (counted not run). TEQ
+# method by its class and source; a match on a Java enum or sealed type is checked for its cases at one worker and at
+# eight, from a source, from a class file and from the JDK. Without javac or scala-library's jar in the coursier cache nothing runs (counted not run). TEQ
 # names the binary (default: the repository's release build).
 cd "$(dirname "$0")/.." || exit 1
 root=$PWD
@@ -19,7 +20,7 @@ SL=$(jar_of scala-library)
 programs=("$root"/tests/java-sources/*/)
 if ! command -v javac > /dev/null 2>&1 || [ ! -f "$SL" ]; then
   echo "skip: javac or scala-library 3.8.4 is missing"
-  echo "java-sources: 0 passed, 0 failed, $((${#programs[@]} + 4)) not run"
+  echo "java-sources: 0 passed, 0 failed, $((${#programs[@]} + 6)) not run"
   exit 0
 fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/teq-java-sources.XXXXXX") || exit 2
@@ -116,6 +117,37 @@ case $first$second in
   '{"ok":true'*'{"ok":false'*'Found:    8'*'Required: 7'*) ok watch-java-constant-edit ;;
   *) bad watch-java-constant-edit "first: ${first:0:200} second: ${second:0:300}" ;;
 esac
+
+# A match on a Java enum or sealed type is checked for its cases, as scalac checks it, at one worker and at eight: an
+# enum's constants, whether read from its source or from javac's class file (and the JDK's), and a sealed type's
+# subclasses among the build's Java sources; a sealed type of the class path is not checked by its permits.
+ex=$out/exhaustive
+mkdir -p "$ex/src" "$ex/cp" "$ex/cpsrc" "$ex/jdk"
+printf 'public enum E { A, B, C }\n' > "$ex/src/E.java"
+printf 'public sealed interface S permits SA, SB {}\n' > "$ex/src/S.java"
+printf 'public final class SA implements S {}\n' > "$ex/src/SA.java"
+printf 'public final class SB implements S {}\n' > "$ex/src/SB.java"
+printf 'object Use {\n  def f(e: E): Int = e match { case E.A => 1 }\n  def g(s: S): Int = s match { case _: SA => 1 }\n}\n' > "$ex/src/Use.scala"
+printf 'public enum F { A, B { public int w() { return 2; } }, C; public int w() { return 0; } }\n' > "$ex/cpsrc/F.java"
+printf 'public sealed interface T permits TA, TB {}\n' > "$ex/cpsrc/T.java"
+printf 'public final class TA implements T {}\n' > "$ex/cpsrc/TA.java"
+printf 'public final class TB implements T {}\n' > "$ex/cpsrc/TB.java"
+printf 'object Use {\n  def f(e: F): Int = e match { case F.A => 1; case F.C => 3 }\n  def g(t: T): Int = t match { case _: TA => 1 }\n}\nclass X extends T\n' > "$ex/cp/Use.scala"
+printf 'import java.time.DayOfWeek\nobject Use {\n  def f(d: DayOfWeek): Int = d match { case DayOfWeek.MONDAY => 1; case DayOfWeek.FRIDAY => 2 }\n}\n' > "$ex/jdk/Use.scala"
+if javac -d "$ex/cpc" "$ex"/cpsrc/*.java > /dev/null 2>&1; then
+  for w in 1 8; do
+    src=$(timeout 120 "$TEQ" compiler check "$ex/src" --std scala-library --classpath "$SL" --threads "$w" 2>&1)
+    cp=$(timeout 120 "$TEQ" compiler check "$ex/cp" --std scala-library --classpath "$SL:$ex/cpc" --threads "$w" 2>&1)
+    jdk=$(timeout 120 "$TEQ" compiler check "$ex/jdk" --std scala-library --classpath "$SL" --threads "$w" 2>&1)
+    want=("Use.scala:2:22: warning: match may not be exhaustive." "It would fail on pattern case: B, C" "Use.scala:3:22: warning: match may not be exhaustive." "It would fail on pattern case: _: SB")
+    missing=$(for l in "${want[@]}"; do grep -qF -- "$l" <<< "$src" || echo "source: missing $l"; done)
+    grep -qF 'It would fail on pattern case: B' <<< "$cp" && [ "$(grep -c 'match may not be exhaustive' <<< "$cp")" = 1 ] || missing="$missing class path: $cp"
+    grep -qF 'It would fail on pattern case: TUESDAY, WEDNESDAY, THURSDAY, SATURDAY, SUNDAY' <<< "$jdk" || missing="$missing jdk: $jdk"
+    if [ -z "$missing" ]; then ok "exhaustive-java-$w-workers"; else bad "exhaustive-java-$w-workers" "$missing"; fi
+  done
+else
+  bad exhaustive-java "javac of the class path's sources failed"
+fi
 
 echo "java-sources: $pass passed, $fail failed"
 [ "$fail" = 0 ]

@@ -278,6 +278,7 @@ evidence	pass	-
 evidence_no_bound	pass	-	
 exc_syntax	pass	-	
 exc_types	pass	-	
+execution_context_member_class_settled	pass	-	
 exhaustivity	pass	-	
 exhaustivity_counterexamples	pass	-	
 exhaustivity_counterexamples.check	pass	-	
@@ -612,15 +613,12 @@ jar_private_ctors	pass	-
 java_ambiguous_on_demand_imports	pass	-	
 java_body_on_javascript	pass	-	
 java_char_two_units	pass	-	
-java_compact_source	pass	-	
 java_constants_as_written	pass	-	
 java_declaration_naming_program_scala	pass	-	
-java_forms_past_the_reader	pass	-	
 java_import_claims	pass	-	
 java_import_jdk_unexported	pass	-	
 java_import_name_not_found	pass	-	
 java_import_qualifier_not_found	pass	-	
-java_inherited_member_type_not_read	pass	-	
 java_members_twice	pass	-	
 java_module_not_a_value	fail	-	missing 'error: Java defined class Future is not a value'
 java_names_entered_twice	pass	-	
@@ -645,6 +643,7 @@ java_static_member_instance_path	pass	-
 java_static_member_term_not_inherited	pass	-	
 java_static_member_through_subclass	pass	-	
 java_static_member_two_bases	pass	-	
+javascript_nested_java_class_refused	pass	-	
 jdk_abstract_unimplemented_jvm	pass	-	
 jsinterop	pass	-	
 kind_error_argument_in_bound	pass	-	

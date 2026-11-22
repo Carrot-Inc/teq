@@ -145,7 +145,6 @@ i1432.scala	i1432.scala:5:11: expected '=', found '@'
 i14340.scala	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodException: i14340$package$$anon$1cclbze_601.foo()
 i14623.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i1490.scala	run: exit 1: Exception in thread "main" scala.NotImplementedError: an implementation is missing
-i15199	java source: teq reads none
 i15234.scala	i15234.scala:18:10: value fromProduct is not a member of Mirror{type MirroredType = (Nil : Nil); type MirroredMonoType = (Nil : Nil); type MirroredElemTypes <: Tuple}
 i15287.scala	i15287.scala:6:3: not found: f
 i15302a.scala	i15302a.scala:6:28: type mismatch: found *:[Int, *:[bh, bt] & (Int, Int)], required (Int, Int, Int)
@@ -191,7 +190,6 @@ i22991	java source: teq reads none
 i23131.scala	i23131.scala:5:10: name is not a field of Some[(name : String)]
 i23179.scala	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Receiver class Test$$anon$13ynqzq_735 does not define or inherit an implementation of the resolved method 'abstract java.lang.Object f(java.lang.Object[])' of interface
 i23440.scala	i23440.scala:9:28: type mismatch: found (<error>, <error>) => Unit, required (a : Int, b : String) => Any
-i23479	java source: teq reads none
 i23479b.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i23882.scala	i23882.scala:17:13: value getParameterTypes is not a member of Method
 i23897.scala	i23897.scala:19:15: no given instance of type Semigroup[(Int)] was found for parameter s
@@ -281,11 +279,7 @@ interleaving.scala	interleaving.scala:5:26: expected '=', found '['
 interpolation-opt.scala	output: line 9: the .check has 'Side effect!', the program printed 'Foo Bar'
 iterables.scala	output: line 1: the .check has 'false', the program printed '5,6,7,8,9'
 iterator-from.scala	iterator-from.scala:53:45: not found: Value
-java-ann-super-class	java source: teq reads none
-java-ann-super-class-separate	java source: teq reads none
-java-annot-params	java source: teq reads none
 java-intersection	java source: teq reads none
-java-longnames	java source: teq reads none
 java-package-private-bridge	java source: teq reads none
 java-varargs-3	java source: teq reads none
 junitForwarders	java source: teq reads none
@@ -391,7 +385,6 @@ t6090.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: as
 t6138	java source: teq reads none
 t6138-2	java source: teq reads none
 t6168	java source: teq reads none
-t6168b	java source: teq reads none
 t6246.scala	t6246.scala:7:13: value <:< is not a member of ClassTag[_]
 t6260-delambdafy.scala	t6260-delambdafy.scala:11:63: value getModifiers is not a member of Method
 t6260.scala	output: line 1: the .check has 'Box(abcabc)', the program printed 'abcabc'

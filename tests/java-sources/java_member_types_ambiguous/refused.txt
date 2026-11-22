@@ -1,0 +1,1 @@
+C.java:2:52: error: Reference to In is ambiguous. It is both inherited in trait p.I and inherited subsequently in trait q.K

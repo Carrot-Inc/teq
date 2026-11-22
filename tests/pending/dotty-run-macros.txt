@@ -68,7 +68,6 @@ i19676	Test_2.scala:9:5: pattern definitions are only supported inside blocks
 i19732	output: line 1: the .check has 'Map(b -> 23)', the program printed 'Map()'
 i19905	Test_2.scala:5:11: exception in macro: scala.MatchError: scala.Unit (of class scala.quoted.Type) (called by noPrefixStructure in object Macro_1$package) (in the body of Macro_1$package.noPrefixStructure)
 i19951-java-annotations-tasty-compat	java source: teq reads none
-i19951-java-annotations-tasty-compat-2	java source: teq reads none
 i20052	java source: teq reads none
 i20449	output: line 2: the .check has 'Original: Main_2$package.UserName.T', the program printed 'Original: UserName.T'
 i21225	Macro_1.scala:12:35: not found: GivenSelector

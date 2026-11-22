@@ -201,7 +201,33 @@ fi
 # bodies (the classes of fix.*) each reader program of tests/classpath/js reaches, the
 # expansions' traces and the std adaptations, sorted, has to be
 # tests/tasty/expected/reader/<program>[.<std mode>].txt, and the same at four workers with the
-# merge's check on.
+# merge's check on. The listing is taken where the program runs: a JavaScript build, or, for a
+# program whose `// targets:` line leaves out js (reader_java's: the JavaScript target has no Java
+# classes, and refuses one a body reaches), a run in the interpreter.
+# reader_listing <teq> <program> <std mode> <classpath> <workers or empty> <dump> <log> <out.js>: the build or the
+# run, its exit the function's; a mode other than the lean std for an interpreter-only program fails.
+reader_listing() {
+  local targets
+  targets=$(grep -h -o '^// targets: .*' "$2" | head -1)
+  rm -f "$6"
+  if [ -z "$targets" ] || [[ "$targets " == *" js "* ]]; then
+    TEQ_READER_DUMP="$6" timeout 60 "$1" compiler build "$2" --std="$3" --classpath "$4" ${5:+--threads "$5"} -o "$8" > "$7" 2>&1
+  elif [ "$3" = lean ]; then
+    # the interpreter runs on the lean std alone, so it takes no --std
+    TEQ_READER_DUMP="$6" timeout 60 "$1" interp "$2" --classpath "$4" ${5:+--threads "$5"} > "$7" 2>&1
+  else
+    echo "the interpreter runs on the lean std alone, not --std=$3: no run on the program's target" > "$7"
+    return 2
+  fi
+}
+# reader_ran <exit> <dump>: the listing, sorted, on stdout, when the build or run exited 0 and wrote one; else nothing
+# and a failing exit. A listing counts only from a build or run that succeeded and wrote one.
+reader_ran() {
+  local actual
+  actual=$(grep -E $'^[a-z]+\tfix\\.' "$2" 2> /dev/null | LC_ALL=C sort -u)
+  [ "$1" -eq 0 ] && [ -n "$actual" ] || return 1
+  printf '%s\n' "$actual"
+}
 . tests/support/jars.sh
 mkdir -p tests/tasty/expected/reader
 reader_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tasty-reader.XXXXXX") || { echo "tasty: no temporary directory for the reader's listing"; exit 1; }
@@ -218,12 +244,9 @@ for src in tests/classpath/js/reader_*.scala; do
     expected="tests/tasty/expected/reader/$name.txt"
     [ "$mode" = lean ] || expected="tests/tasty/expected/reader/$name.$mode.txt"
     for threads in 1 4; do
-      rm -f "$reader_tmp/dump"
-      TEQ_READER_DUMP="$reader_tmp/dump" timeout 60 "$teq" compiler build "$src" --std="$mode" --classpath "$JARS_CP" --threads "$threads" -o "$reader_tmp/out.js" > "$reader_tmp/log" 2>&1
+      reader_listing "$teq" "$src" "$mode" "$JARS_CP" "$threads" "$reader_tmp/dump" "$reader_tmp/log" "$reader_tmp/out.js"
       status=$?
-      actual=$(grep -E $'^[a-z]+\tfix\\.' "$reader_tmp/dump" 2> /dev/null | LC_ALL=C sort -u)
-      # A listing counts only from a build that succeeded and wrote one.
-      if [ "$status" -ne 0 ] || [ -z "$actual" ]; then
+      if ! actual=$(reader_ran "$status" "$reader_tmp/dump"); then
         fail=$((fail + 1))
         said_fail "reader $name ($mode, $threads workers): exit $status, $(cat "$reader_tmp/dump" 2> /dev/null | grep -c .) listing lines: $(grep -m1 . "$reader_tmp/log")"
         continue
@@ -242,6 +265,53 @@ for src in tests/classpath/js/reader_*.scala; do
     done
   done
 done
+# The reader listing's self-test of planted bad records, each of which has to fail: an interpreter-only
+# program's listing apart from its pinned one, its run failing after it wrote the listing, and its run writing no
+# listing or an empty one. The control, reader_java's run against its pinned listing, has to pass; a program
+# whose targets include js has to be built for JavaScript, one without a targets line too, and an
+# interpreter-only one run in the interpreter.
+if [ "$1" != "--update" ]; then
+  st=$reader_tmp/selftest
+  mkdir -p "$st"
+  src=tests/classpath/js/reader_java.scala
+  pinned=tests/tasty/expected/reader/reader_java.txt
+  jars_of "$src"
+  refused() { pass=$((pass + 1)); }
+  planted() { fail=$((fail + 1)); said_fail "reader self-test: $1 passed"; }
+  reader_listing "$teq" "$src" lean "$JARS_CP" 1 "$st/dump" "$st/log" "$st/out.js"
+  status=$?
+  if actual=$(reader_ran "$status" "$st/dump") && [ "$actual" == "$(cat "$pinned")" ]; then
+    pass=$((pass + 1))
+  else
+    fail=$((fail + 1))
+    said_fail "reader self-test: the control, reader_java's run against its pinned listing, exit $status: $(grep -m1 . "$st/log")"
+  fi
+  sed 1d "$pinned" > "$st/apart.txt"
+  if [ -n "$actual" ] && [ "$actual" == "$(cat "$st/apart.txt")" ]; then planted "a listing apart from the pinned one"; else refused; fi
+  cp "$st/dump" "$st/real.dump" 2> /dev/null || : > "$st/real.dump"
+  printf '#!/bin/sh\ncp "%s" "$TEQ_READER_DUMP"; exit 1\n' "$st/real.dump" > "$st/fails"
+  printf '#!/bin/sh\nexit 0\n' > "$st/silent"
+  printf '#!/bin/sh\n: > "$TEQ_READER_DUMP"; exit 0\n' > "$st/empty"
+  printf '#!/bin/sh\necho "$1 $2" > "%s"\n' "$st/args" > "$st/records"
+  chmod +x "$st/fails" "$st/silent" "$st/empty" "$st/records"
+  for fake in fails silent empty; do
+    reader_listing "$st/$fake" "$src" lean "$JARS_CP" 1 "$st/d.$fake" "$st/l.$fake" "$st/o.$fake.js"
+    status=$?
+    case $fake in fails) what="a run that failed after writing the listing" ;; silent) what="a run that wrote no listing" ;; empty) what="a run that wrote an empty listing" ;; esac
+    if reader_ran "$status" "$st/d.$fake" > /dev/null; then planted "$what"; else refused; fi
+  done
+  for check in "tests/classpath/js/reader_overloads.scala:compiler build:a program whose targets include js" "tests/classpath/js/reader_std.scala:compiler build:a program without a targets line" "$src:interp $src:an interpreter-only program"; do
+    prog=${check%%:*}; rest=${check#*:}; want=${rest%%:*}; what=${rest#*:}
+    rm -f "$st/args"
+    reader_listing "$st/records" "$prog" lean "$JARS_CP" 1 "$st/d.rec" "$st/l.rec" "$st/o.rec.js"
+    if [ "$(cat "$st/args" 2> /dev/null)" = "$want" ]; then
+      pass=$((pass + 1))
+    else
+      fail=$((fail + 1))
+      said_fail "reader self-test: $what is run as '$(cat "$st/args" 2> /dev/null)', not '$want'"
+    fi
+  done
+fi
 rm -rf "$reader_tmp"
 # The reader over teq's products: the same programs with the
 # declarations fix.reader's bodies reach (reader_decl.scala and reader_java.scala, fix.rdecl and
@@ -275,11 +345,9 @@ with zipfile.ZipFile('../decl.jar', 'w') as z:
       listing="tests/tasty/expected/reader/$name.txt"
       expected="tests/tasty/expected/reader/$name.products.diff"
       [ "$mode" = lean ] || { listing="tests/tasty/expected/reader/$name.$mode.txt"; expected="tests/tasty/expected/reader/$name.$mode.products.diff"; }
-      rm -f "$products_tmp/dump"
-      TEQ_READER_DUMP="$products_tmp/dump" timeout 60 "$teq" compiler build "$src" --std="$mode" --classpath "$cp" -o "$products_tmp/out.js" > "$products_tmp/log" 2>&1
+      reader_listing "$teq" "$src" "$mode" "$cp" "" "$products_tmp/dump" "$products_tmp/log" "$products_tmp/out.js"
       status=$?
-      actual=$(grep -E $'^[a-z]+\tfix\\.' "$products_tmp/dump" 2> /dev/null | LC_ALL=C sort -u)
-      if [ "$status" -ne 0 ] || [ -z "$actual" ]; then
+      if ! actual=$(reader_ran "$status" "$products_tmp/dump"); then
         fail=$((fail + 1))
         said_fail "reader products $name ($mode): exit $status: $(grep -m1 . "$products_tmp/log")"
         continue

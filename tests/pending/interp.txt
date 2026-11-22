@@ -114,7 +114,6 @@ jar_case_class_selectors	unsupported
 jar_signed_extension_macro	compile
 java_byte_short_constants	compile
 java_enum_parent	unsupported
-java_member_class_depth	compile
 java_varargs_spread_unimported	compile
 jdk_abstract_members_jvm	compile
 jdk_enum_stable_values	compile

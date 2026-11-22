@@ -572,6 +572,9 @@ struct ClassDeps {
     names: BTreeMap<String, NameUse>,
     classes: BTreeSet<(String, Context)>,
     binaries: BTreeSet<(String, String, Context)>,
+    /// A Java enum of the class path a match's selector reaches, by its type name: a pattern-match target only
+    /// where the build names one of its constants (`Collector::settle_enum_targets`).
+    enum_targets: Vec<(String, ClassId)>,
 }
 
 /// How a class uses a name: as a term's, as a type's, as a sealed class's a match's selector
@@ -685,6 +688,7 @@ pub fn render(w: &mut Worker, files: &[FileId], unit_file: &[FileId]) -> Result<
     let mut c = Collector::new(w, unit_file);
     let wanted: FxMap<FileId, ()> = files.iter().map(|&f| (f, ())).collect();
     c.collect(&wanted);
+    c.settle_enum_targets();
     // What the collection looks up is resolved already: it reports nothing of its own.
     debug_assert_eq!(c.w.diags.items.len(), reported, "the dependencies' collection reported a diagnostic");
     let mut out: FxMap<FileId, String> = FxMap::default();
@@ -781,6 +785,8 @@ struct Collector<'c, 'a> {
     tree_seen: Seen,
     info_seen: Seen,
     targets: FxMap<ClassId, Target>,
+    /// The Java enums of the class path one of whose constants a tree of the build names.
+    enums_named: FxMap<ClassId, ()>,
     /// The class each type parameter of a class belongs to, and none for a method's.
     tparam_class: FxMap<TParamId, Option<ClassId>>,
     /// Each class's kept bodies, by class.
@@ -863,6 +869,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             tree_seen: Seen::default(),
             info_seen: Seen::default(),
             targets: FxMap::default(),
+            enums_named: FxMap::default(),
             tparam_class,
             tclass_of,
             bound: Vec::new(),
@@ -3749,6 +3756,9 @@ impl<'c, 'a> Collector<'c, 'a> {
         if self.walked.insert(e, ()).is_some() {
             return;
         }
+        if let TExpr::Static(s) | TExpr::Field(_, s) = self.w.prog.expr(e) {
+            self.note_enum_constant(s);
+        }
         let capture = self.w.prog.capture.as_deref();
         let wraps: Vec<Wrap> = capture.and_then(|c| c.wraps.get(&e)).cloned().unwrap_or_default();
         let form = capture.and_then(|c| c.forms.get(&e)).copied();
@@ -4500,6 +4510,44 @@ impl<'c, 'a> Collector<'c, 'a> {
         }
     }
 
+    /// Whether `c` is a Java enum read from the class path. scalac's class-file reader seals one only as a
+    /// constant's info is completed (ClassfileParser, `seal java enums`), which a tree naming the constant does,
+    /// so a match on it is a pattern-match target in a run that names one of its constants anywhere and in no
+    /// other; a Java source's enum is sealed as its constants are entered (`Namer.addEnumConstants`).
+    fn class_path_java_enum(&mut self, c: ClassId) -> bool {
+        if !self.w.is_java_class(c) || !self.w.syms.class(c).children.iter().any(|&k| self.w.syms.class(k).kind == ClassKind::EnumCase) {
+            return false;
+        }
+        let top = self.top_level(c);
+        let Some(loaded) = self.w.loaded.as_ref() else { return false };
+        let source = loaded.java.classes.get(&c).or_else(|| loaded.java.classes.get(&top)).map(|j| j.source);
+        !matches!(source, None | Some(super::loader::javaclass::JSource::Source(_)))
+    }
+
+    /// A Java enum constant of the class path that a tree names: its enum is sealed for the build's matches.
+    fn note_enum_constant(&mut self, s: SymId) {
+        if self.w.java_enum_case(s).is_none() {
+            return;
+        }
+        let Owner::Class(statics) = self.w.syms.sym(s).owner else { return };
+        if let Some(c) = self.w.syms.class(statics).companion {
+            self.enums_named.insert(c, ());
+        }
+    }
+
+    /// The held pattern-match targets, once every owner is collected: each Java enum of the class path whose
+    /// constant the build names takes its type name's `PatMatTarget` scope.
+    fn settle_enum_targets(&mut self) {
+        let named = std::mem::take(&mut self.enums_named);
+        for d in self.deps.values_mut() {
+            for (name, c) in std::mem::take(&mut d.enum_targets) {
+                if named.contains_key(&c) {
+                    d.names.entry(name).or_default().patmat = true;
+                }
+            }
+        }
+    }
+
     /// A match's selector: each sealed class its type names, used with the `PatMatTarget` scope.
     fn patmat(&mut self, t: TypeId) {
         let mut seen: FxMap<TypeId, ()> = FxMap::default();
@@ -4516,7 +4564,11 @@ impl<'c, 'a> Collector<'c, 'a> {
                 let info = self.w.syms.class(c);
                 if info.mods & crate::ast::mods::SEALED != 0 || info.kind == ClassKind::Enum {
                     let name = self.w.name_str(info.name);
-                    self.use_sealed(name);
+                    if self.class_path_java_enum(c) {
+                        self.here().enum_targets.push((name, c));
+                    } else {
+                        self.use_sealed(name);
+                    }
                 }
                 for &a in self.w.types.items(args).to_vec().iter() {
                     self.sealed_in(a, seen);

@@ -1,12 +1,12 @@
 # dotty 3.8.4 (7d4833b6) pos-java-interop, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:102; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
-1576	fail	check:fail	TagAnnotation.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+1576	pass	check:pass	
 i10301	pass	check:pass	
 i10599	pass	check:pass	
 i10868	fail	check:fail	javac: tests/pos-java-interop/i10868/J.java:1: error: cannot find symbol
 i13575	pass	check:pass	
-i2109	fail	check:fail	Annot.java:4:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-i4357	fail	check:fail	B_1.java:2:23: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i2109	pass	check:pass	
+i4357	pass	check:pass	
 i6546	pass	check:pass	
 i8593	fail	check:fail	javac: tests/pos-java-interop/i8593/B.java:3: error: onReceive(Object) in B cannot override onReceive(Object) in A
 i879.java	pass	check:pass	
@@ -15,42 +15,42 @@ i9109	pass	check:pass
 i9109b	pass	check:pass	
 i9912	pass	check:pass	
 innerClass	fail	check:fail	javac: tests/pos-java-interop/innerClass/Test.java:4: error: cannot find symbol
-java-object-any-unification-2	fail	check:fail	J.java:4:25: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+java-object-any-unification-2	fail	check:fail	Test.scala:3:5: Ambiguous overload. The overloaded alternatives of method putAll in class B with types
 java-overload-field-method	fail	check:fail	Test.scala:4:20: Found:    Int
-selectOnRaw	fail	check:fail	Test.java:8:9: not supported yet: a Java member type (the Java reader reads classes and interfaces)
-t0288	fail	check:fail	Foo.scala:7:19: Not found: type Inner
-t0695	fail	check:fail	JavaClass.java:2:9: not supported yet: a Java member type (the Java reader reads classes and interfaces)
-t1101	fail	check:fail	J.java:1:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
-t1102	fail	check:fail	J.java:2:7: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+selectOnRaw	pass	check:pass	
+t0288	fail	check:fail	Foo.scala:7:15: not supported yet: inner class test.Outer.Inner needs an outer instance (Outer.Inner)
+t0695	pass	check:pass	
+t1101	pass	check:pass	
+t1102	pass	check:pass	
 t11469	pass	check:pass	
 t1150	pass	check:pass	
 t1152	pass	check:pass	
 t1176	pass	check:pass	
 t1186	pass	check:pass	
 t1196	pass	check:pass	
-t1197	fail	check:fail	J.java:1:21: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+t1197	pass	check:pass	
 t1203b	pass	check:pass	
 t1230	pass	check:pass	
-t1231	fail	check:fail	J.java:1:6: not supported yet: a Java enum (the Java reader reads classes and interfaces)
-t1232	fail	check:fail	J.java:2:30: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+t1231	pass	check:pass	
+t1232	pass	check:fail	
 t1235	pass	check:pass	
 t1254	pass	check:pass	
-t1409	fail	check:fail	AbstractImpl.java:2:19: Not found: type InnerInterface
+t1409	pass	check:pass	
 t1642	pass	check:pass	
 t1711	pass	check:fail	
 t1745	fail	check:fail	javac: tests/pos-java-interop/t1745/J.java:5: error: incompatible types: Object cannot be converted to String
-t1751	fail	check:fail	SuiteClasses.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-t1782	fail	check:fail	Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+t1751	pass	check:pass	
+t1782	pass	check:pass	
 t1836	pass	check:pass	
 t1840	pass	check:pass	
 t1937	pass	check:pass	
-t2377	fail	check:fail	Q.java:2:29: not supported yet: a Java member type (the Java reader reads classes and interfaces)
-t2409	fail	check:fail	J.java:2:15: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+t2377	pass	check:pass	
+t2409	pass	check:pass	
 t2413	pass	check:pass	
-t2433	fail	check:fail	A.java:1:25: type Inner is not a member of object B223
-t2464	fail	check:fail	JavaOne.java:2:22: not supported yet: a Java member type (the Java reader reads classes and interfaces)
-t2764	fail	check:fail	Ann.java:3:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-t294	fail	check:fail	Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+t2433	pass	check:pass	
+t2464	pass	check:pass	
+t2764	pass	check:pass	
+t294	pass	check:pass	
 t2940	pass	check:pass	
 varargs	pass	check:pass	
 varargsOverride	fail	check:fail	Sub.scala:2:16: method foo overrides nothing

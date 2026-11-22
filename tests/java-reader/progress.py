@@ -13,7 +13,8 @@ master refuses it and scalac accepts it, it is a turned row, counted; where scal
 the row is listed, each class counted apart. "annotation names" (the reader resolves no annotation's name, reached or
 not): the reached twin is to build. "unreached class's names" (the reader resolves the names of a class a Scala source
 reaches): the reached twin is to be refused at scalac's place, its name not found or not a member. "scalac crashes":
-javac judges, and the head is to build where javac accepts. The twin is the input beside a Scala file in its package
+javac judges, and the head is to build where javac accepts. "javac accepts" (scalac refuses a Java source javac
+compiles, its validity javac's: docs/COMPATIBILITY.md): the head is to build. The twin is the input beside a Scala file in its package
 that reaches the class. A listed row the head does not build fails the run (the list is stale), and an input the
 file does not hold fails it too (judge.py writes it again).
 --sample N checks every N-th input (the gate's line); --extra DIR adds the .java files of DIR, each an input as it is
@@ -48,7 +49,7 @@ LOCATED = re.compile(r'^\S+\.(java|scala):\d+:\d+: error', re.M)
 NOT_UTF8 = 'not UTF-8, refused naming the file'
 TURNED = 'turned: master refuses, scalac accepts'
 LISTED = {'annotation names': 'listed: annotation names', "unreached class's names": "listed: unreached class's names",
-          'scalac crashes; javac accepts': 'listed: scalac crashes, javac accepts'}
+          'scalac crashes; javac accepts': 'listed: scalac crashes, javac accepts', 'javac accepts': 'listed: javac accepts, scalac refuses'}
 
 def twin_answer(key, name, text, twin, listed):
     """The reached twin of a listed row: '' where the head answers it as the class says, else a failure's words."""
@@ -140,5 +141,5 @@ print(f'java-reader progress: {len(inputs)} inputs from {len(files)} files and {
       f'{counts["builds"]} builds, {counts["refused at a place"]} refused at a place, '
       f'{counts[NOT_UTF8]} not UTF-8 refused naming the file; judged: {counts[TURNED]} turned (master refuses, scalac accepts), '
       f'listed {counts[LISTED["annotation names"]]} annotation names, {counts[LISTED[chr(39).join(["unreached class", "s names"])]]} unreached class\'s names, '
-      f'{counts[LISTED["scalac crashes; javac accepts"]]} scalac crashes (javac accepts), {by_scalac} built where scalac refuses; {opposite} refused where scalac accepts; {counts["FAIL"]} failing')
+      f'{counts[LISTED["scalac crashes; javac accepts"]]} scalac crashes (javac accepts), {counts[LISTED["javac accepts"]]} javac accepts (scalac refuses), {by_scalac} built where scalac refuses; {opposite} refused where scalac accepts; {counts["FAIL"]} failing')
 sys.exit(1 if fails else 0)

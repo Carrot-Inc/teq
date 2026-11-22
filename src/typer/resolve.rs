@@ -8664,7 +8664,9 @@ impl<'a> Worker<'a> {
             let representation = sealed && pfile != file && self.source(file).is_std && self.source(pfile).is_std;
             if sealed && !representation {
                 // The classes of one TASTy file are converted one at a time (`compile.rs`).
-                if pfile != file && !self.is_body_file(file) && refused_ahead != Some(span) {
+                // A sealed Java class is extended from another file (`checkedParentType`: `!pclazz.is(JavaDefined)`),
+                // the subclass its child all the same.
+                if pfile != file && !self.is_body_file(file) && refused_ahead != Some(span) && !self.is_java_class(pc) {
                     let msg = self.sealed_elsewhere_msg(pc);
                     self.error(span, msg);
                 }

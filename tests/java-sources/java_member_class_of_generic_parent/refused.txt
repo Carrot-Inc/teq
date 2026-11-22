@@ -1,0 +1,1 @@
+Main.scala:7:5: error: not supported yet: inner class of a parameterized outer (Outer<A>.Inner): Outer$Inner

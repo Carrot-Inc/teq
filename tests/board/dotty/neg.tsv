@@ -63,7 +63,7 @@ NoneMatch.scala	fail	-	check: diagnostic 2 of 2: scalac's is error NoneMatch.sca
 OpaqueEscape.scala	fail	-	marks: 3 errors where 2 are marked: OpaqueEscape.scala:9:7: class Escaper needs to be abstract, since def unwrap(i: Wrapped): Int in class EscaperBase is not defined
 OrType.scala	pass	-	
 SummonFrom.scala	pass	-	
-WrongBounds.java	fail	-	marks: 3 errors where 1 are marked: WrongBounds.java:4:9: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+WrongBounds.java	fail	-	marks: no error where 1 are marked
 abstract-givens-new.scala	fail	-	marks: 4 errors where 1 are marked: abstract-givens-new.scala:7:23: This defines an abstract given, which is no longer supported. Use a `deferred` given instead.
 abstract-givens.scala	fail	-	check: diagnostic 1 of 3: scalac's is error abstract-givens.scala:11:9 instance cannot be created, since def iterator: Iterator[A] in trait IterableOnce in package scala.collection is not defined; teq's is error abstract-givens.scala:8:9 gi
 abstract-inline-val.scala	fail	-	marks: 1 errors where 2 are marked
@@ -731,7 +731,7 @@ i18453.min.scala	pass	-
 i18453.scala	pass	-	
 i18458.scala	fail	-	marks: no error where 1 are marked
 i1846.scala	fail	-	marks: 21 errors where 12 are marked: i1846.scala:6:20: expected a pattern, found indented block
-i18533	fail	-	marks: 3 errors where 2 are marked: Non_SCALA_ONLY.java:4:8: Identifier 'non' is not allowed here
+i18533	pass	-	
 i18545.scala	fail	-	marks: 2 errors where 5 are marked
 i18552.scala	fail	-	marks: no error where 1 are marked
 i18584	cannot run	-	jdk: the test is for JDK 25+, this is 24
@@ -777,7 +777,7 @@ i19414.scala	fail	-	marks: 2 errors where 1 are marked: i19414.scala:12:42: Foun
 i19445.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19445.scala:17:16 Found:    Test.UnwrapTypes[FooBar.Bar[Int]]; teq's is error i19445.scala:17:16 Found:    UnwrapTypes[FooBar.Bar[Int]]
 i19506.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i19506.scala:7:19 No given instance of type Reader[Object] was found for a context parameter of method read; teq's is error i19506.scala:7:19 No given instance of type Reader[AnyRef] was found for
 i19594.scala	fail	-	check: diagnostic 5 of 6: scalac's is error i19594.scala:26:3 No given instance of type String was found; teq's is error i19594.scala:26:13 No given instance of type String was found for parameter s of method h in object updated
-i19619	fail	-	marks: 18 errors where 2 are marked: InnerClass.java:7:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i19619	fail	-	marks: 1 errors where 2 are marked
 i19731.scala	fail	-	check: diagnostic 2 of 3: scalac's is error i19731.scala:7:7 class F2 needs to be abstract, since:; teq's is error i19731.scala:7:7 class F2 needs to be abstract, since def foo(): Unit in class F2 is not defined
 i19746.scala	fail	-	marks: error on an unmarked line i19746.scala:10: Found:    Any
 i19762.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i19762.scala:8:32 Missing return type; teq's is error i19762.scala:8:32 unmatched closing bracket
@@ -814,8 +814,8 @@ i20511.scala	fail	-	marks: 4 errors where 3 are marked: i20511.scala:7:20: expec
 i20517.scala	fail	-	marks: 2 errors where 1 are marked: i20517.scala:9:44: Found:    (elem : String)
 i20533.scala	fail	-	marks: 3 errors where 1 are marked: i20533.scala:5:5: Found:    [X] => (x: <error>, y: <error>) => Map[Nothing, Nothing]
 i20546.scala	fail	-	marks: error on an unmarked line i20546.scala:1: cannot resolve import: NamedTuple is not an object or a package
-i20554-a	fail	-	marks: 1 errors where 2 are marked
-i20554-b	fail	-	marks: error on an unmarked line SimpleAnnotation.java:2: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+i20554-a	fail	-	check: diagnostic 1 of 2: error Test.scala:3:13, line 3 of the message: scalac's is ---------------------------------------------------------------------------------------------------------------------; teq's is nothing
+i20554-b	fail	-	check: diagnostic 1 of 1: error Test.scala:3:19, line 3 of the message: scalac's is ---------------------------------------------------------------------------------------------------------------------; teq's is nothing
 i2066.scala	fail	-	marks: no error where 2 are marked
 i2086a.scala	fail	-	marks: no error where 1 are marked
 i2086b.scala	fail	-	marks: no error where 1 are marked
@@ -829,7 +829,7 @@ i21207.scala	fail	-	marks: 6 errors where 5 are marked: i21207.scala:20:11: meth
 i21212.scala	fail	-	marks: no error where 1 are marked
 i21239.orig.scala	pass	-	
 i21239.scala	pass	-	
-i21303	fail	-	marks: 2 errors where 1 are marked: JavaEnum.java:1:13: not supported yet: a Java enum (the Java reader reads classes and interfaces)
+i21303	fail	-	check: diagnostic 1 of 2: scalac's is error Test.scala:33:42 Ambiguous given instances: both given instance javaEnumTSType in trait JavaTSTypes and given instance given_TSType_T in trait TSTypeMacros match type TSType[JavaEnum] of parameter
 i21321.scala	fail	-	marks: 1 errors where 4 are marked
 i21335.scala	pass	-	
 i21351.scala	fail	-	marks: 1 errors where 2 are marked
@@ -1427,12 +1427,12 @@ invariant-gadt.scala	fail	-	check: diagnostic 1 of 4: scalac's is error invarian
 irrefutable-genfrom.scala	pass	-	
 irrefutable.scala	fail	-	check: diagnostic 1 of 2: scalac's is error irrefutable.scala:27:30 value withFilter is not a member of Lst[Foo[Any]]; teq's is error irrefutable.scala:27:5 value withFilter is not a member of Lst[Foo[Any]]
 isRef.scala	fail	-	check: diagnostic 1 of 2: scalac's is error isRef.scala:6:22 Found:    Foo.this.B; teq's is error isRef.scala:6:22 Found:    Any{type S = String}
-java-ann-extends	fail	-	marks: 2 errors where 1 are marked: Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-java-ann-extends-separate	fail	-	marks: 2 errors where 1 are marked: Ann_1.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-java-ann-super-class	fail	-	marks: 5 errors where 3 are marked: Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-java-ann-super-class2	fail	-	marks: 2 errors where 1 are marked: Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-java-ann-super-class3	fail	-	marks: 2 errors where 1 are marked: Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-java-annot	fail	-	marks: error on an unmarked line J.java:4: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-ann-extends	fail	-	check: diagnostic 1 of 1: scalac's is error Test.scala:2:40 Found:    (x : Ann); teq's is error Test.scala:2:40 Found:    Ann
+java-ann-extends-separate	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:2:40 Found:    (x : Ann_1); teq's is error Test_2.scala:2:40 Found:    Ann_1
+java-ann-super-class	fail	-	marks: 4 errors where 3 are marked: Test.scala:1:19: too many arguments for constructor Ann in trait Ann: (): Ann
+java-ann-super-class2	fail	-	check: diagnostic 1 of 1: scalac's is error Test.scala:3:7 Ann is a trait; it cannot be instantiated; teq's is error Test.scala:3:3 Ann is a trait; it cannot be instantiated
+java-ann-super-class3	fail	-	check: diagnostic 1 of 1: scalac's is error Test.scala:3:3 object creation impossible, since:; teq's is error Test.scala:3:3 object creation impossible, since it has 2 unimplemented members: annotationType, value
+java-annot	fail	-	marks: no error where 1 are marked
 java-fake-ann	fail	-	marks: no error where 2 are marked
 java-fake-ann-separate	fail	-	marks: no error where 2 are marked
 java-trait-access	fail	-	marks: no error where 2 are marked
@@ -1624,7 +1624,7 @@ refinedSubtyping.scala	fail	-	check: diagnostic 1 of 2: scalac's is error refine
 refutable-pattern-binding-messages-old.scala	fail	-	check: diagnostic 1 of 6: scalac's is error refutable-pattern-binding-messages-old.scala:6:7 pattern binding uses refutable extractor `Test.Positive`; teq's is warning refutable-pattern-binding-messages-old.scala:5:7 pattern binding uses re
 refutable-pattern-binding-messages.scala	fail	-	check: diagnostic 1 of 6: scalac's is error refutable-pattern-binding-messages.scala:6:7 pattern binding uses refutable extractor `Test.Positive`; teq's is warning refutable-pattern-binding-messages.scala:5:7 pattern binding uses refutable 
 renaming-imports.scala	fail	-	marks: 3 errors where 2 are marked: renaming-imports.scala:8:10: foo is not a member of the package
-repeatable	fail	-	marks: error on an unmarked line FirstLevel_0.java:7: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+repeatable	fail	-	marks: no error where 3 are marked
 repeatedArgs213.scala	fail	-	check: diagnostic 1 of 4: scalac's is error repeatedArgs213.scala:10:9 Found:    (ys : scala.collection.Seq[String]); teq's is error repeatedArgs213.scala:10:9 Found:    scala.collection.Seq[String]
 rightassoc-extmethod.scala	fail	-	check: diagnostic 1 of 1: scalac's is error rightassoc-extmethod.scala:2:20 right-associative extension method must start with a single parameter, consider a tupled parameter instead; teq's is error rightassoc-extmethod.scala:2:24 right-ass
 rootImplicits.scala	fail	-	check: diagnostic 1 of 2: scalac's is error rootImplicits.scala:7:11 value + is not a member of Object; teq's is error rootImplicits.scala:7:11 value + is not a member of AnyRef

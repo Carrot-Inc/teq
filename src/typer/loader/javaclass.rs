@@ -24,8 +24,6 @@ use std::time::{Duration, Instant};
 /// The packages `ct.sym` holds classes under: the lookups worth opening it for.
 const JDK_ROOTS: &[&str] = &["java", "javax", "jdk", "sun", "com.sun", "org.w3c", "org.xml", "org.ietf", "netscape.javascript"];
 
-const MAX_NESTING: u32 = 8;
-
 /// The root of a package's slash path, as the JDK's packages give theirs: its first segment, its first two where the
 /// first is `com` or `org` (`java`, `jdk`, `com.sun`, `org.w3c`), dotted.
 pub(crate) fn jdk_root(path: &str) -> String {
@@ -89,6 +87,9 @@ pub struct SourceClass {
     pub file: FileId,
     pub unit: Arc<crate::java::parser::Unit>,
     pub decl: usize,
+    /// For a member type, its place among the members of the declarations around it, from the top-level one
+    /// (`unit.types[decl]`) in; empty for a top-level class.
+    pub path: Vec<usize>,
     pub record: Option<Arc<ClassFile>>,
     /// The record's refusals owed once a Scala reader asks for the class (`Problem::when_read`).
     pub when_read: Vec<crate::java::record::Problem>,
@@ -97,6 +98,27 @@ pub struct SourceClass {
     /// The written paths of the names its record did not resolve (`crate::java::record::build`), which bind nothing: a
     /// check of parents skips them.
     pub unresolved: Vec<String>,
+}
+
+/// The declaration at `path` among the members of the top-level declaration `k` of `unit`, and those around it, the
+/// top-level one first.
+pub fn decl_at<'u>(unit: &'u crate::java::parser::Unit, k: usize, path: &[usize]) -> (&'u crate::java::parser::TypeDecl, Vec<&'u crate::java::parser::TypeDecl>) {
+    let mut d = &unit.types[k];
+    let mut outers = Vec::new();
+    for &i in path {
+        if let Some(crate::java::parser::Member::Type(t)) = d.members.get(i) {
+            outers.push(d);
+            d = t;
+        }
+    }
+    (d, outers)
+}
+
+impl SourceClass {
+    /// Its declaration.
+    pub fn decl(&self) -> &crate::java::parser::TypeDecl {
+        decl_at(&self.unit, self.decl, &self.path).0
+    }
 }
 
 /// Java's name resolution for a source's record (`crate::java::record::Resolve`), answered from what the loader
@@ -127,7 +149,7 @@ impl crate::java::record::Resolve for JavaNames<'_, '_> {
         self.w.java_parents(binary)
     }
 
-    fn member_types(&mut self, binary: &str) -> Vec<(String, String)> {
+    fn member_types(&mut self, binary: &str) -> Vec<(String, String, u16)> {
         self.w.java_member_types(binary)
     }
 
@@ -139,12 +161,13 @@ impl crate::java::record::Resolve for JavaNames<'_, '_> {
         self.w.java().jdk_roots.iter().any(|r| *r == root)
     }
 
-    fn member_unseen(&mut self, outer: &str, simple: &str) -> bool {
+    fn member_unseen(&mut self, outer: &str, _simple: &str) -> bool {
         let (pkg, stem) = outer.rsplit_once('/').unwrap_or(("", outer));
         let Some(p) = self.w.java_source_pkg(pkg) else { return false };
         let name = self.w.interner.intern(stem);
-        if let Some(s) = self.w.java().sources.get(&(p, name)) {
-            return s.unit.types[s.decl].members.iter().any(|m| matches!(m, crate::java::parser::Member::Type(t) if t.name == simple));
+        // a program's source: its member types are read
+        if self.w.java().sources.contains_key(&(p, name)) {
+            return false;
         }
         // a JDK class: its index holds the API alone
         self.w.java().jdk_pkgs.contains_key(&p)
@@ -158,7 +181,7 @@ impl crate::java::record::Resolve for JavaNames<'_, '_> {
         if let Some(p) = p {
             let name = self.w.interner.intern(stem);
             if let Some(s) = self.w.java().sources.get(&(p, name)) {
-                return matches!(s.unit.types[s.decl].kind, crate::java::parser::Kind::Interface | crate::java::parser::Kind::Annotation);
+                return matches!(s.decl().kind, crate::java::parser::Kind::Interface | crate::java::parser::Kind::Annotation);
             }
         }
         if let Some(cf) = self.w.java_class_of_binary(binary) {
@@ -402,6 +425,11 @@ impl<'a> Worker<'a> {
 
     /// The class of the program's Java source a class (or the object of its statics) was read from, and the
     /// source's path.
+    /// Whether the build reads any Java source.
+    pub fn has_java_sources(&self) -> bool {
+        self.loaded.as_ref().is_some_and(|l| !l.java.sources.is_empty())
+    }
+
     pub fn java_source_of(&self, c: ClassId) -> Option<(ClassId, &str)> {
         let java = &self.loaded.as_ref()?.java;
         let class = java.classes.get(&c)?;
@@ -415,6 +443,17 @@ impl<'a> Worker<'a> {
 
     pub fn is_java_class(&self, c: ClassId) -> bool {
         self.loaded.as_ref().map_or(false, |l| l.java.classes.contains_key(&c))
+    }
+
+    /// The case of the Java enum constant `s` (a static field of a Java enum's statics object), which its enum's
+    /// children hold (`complete_java_class`): what a match on the enum projects the constant to.
+    pub fn java_enum_case(&self, s: SymId) -> Option<ClassId> {
+        let Owner::Class(obj) = self.syms.sym(s).owner else { return None };
+        let c = self.syms.class(obj).companion?;
+        if !self.is_java_class(c) {
+            return None;
+        }
+        self.syms.class(c).children.iter().copied().find(|&k| self.syms.class(k).singleton == Some(s))
     }
 
     /// Whether `c` is a JDK class nothing has read yet and `target` no Java class: a class of
@@ -779,10 +818,9 @@ impl<'a> Worker<'a> {
             for (at, msg) in &unit.errors {
                 self.diags.error_by(crate::source::Group::Parser, file, Span { start: *at, end: *at + 1 }, msg.clone());
             }
-            // A member outside any type, a compact source file: the reference drops the whole unit (`compilationUnit`),
-            // whose classes no Scala source then finds; refused here as a form the reader does not read, at the first one.
-            if let Some(at) = unit.compact {
-                self.diags.error_by(crate::source::Group::Own, file, Span { start: at, end: at + 1 }, "not supported yet: a compact source file (the Java reader reads classes and interfaces)".to_string());
+            // A member outside any type, a compact source file: the reference drops the whole unit (`compilationUnit`'s
+            // EmptyTree), without a word; its classes no Scala source then finds (E006 where one names them).
+            if unit.compact.is_some() {
                 continue;
             }
             let unit = Arc::new(unit);
@@ -792,9 +830,6 @@ impl<'a> Worker<'a> {
                 p = self.syms.sub_pkg(self.interner, p, name);
             }
             for (k, decl) in unit.types.iter().enumerate() {
-                for (at, form) in crate::java::refused_forms(decl) {
-                    self.diags.error_by(crate::source::Group::Own, file, Span { start: at, end: at + 1 }, format!("not supported yet: {} (the Java reader reads classes and interfaces)", form));
-                }
                 for (at, msg) in crate::java::conflicts(decl) {
                     self.diags.error_by(crate::source::Group::Typer, file, Span { start: at, end: at + 1 }, msg);
                 }
@@ -808,8 +843,26 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 let java = &mut self.loaded_mut().java;
-                java.sources.insert((p, key), SourceClass { file, unit: unit.clone(), decl: k, record: None, when_read: Vec::new(), building: false, unresolved: Vec::new() });
+                java.sources.insert((p, key), SourceClass { file, unit: unit.clone(), decl: k, path: Vec::new(), record: None, when_read: Vec::new(), building: false, unresolved: Vec::new() });
                 java.has_sources = true;
+                // Its member types, at any depth, each a class of its own by its binary name's stem (`Outer$Inner`),
+                // which the loader locates as it locates a class file's member class.
+                let mut stack: Vec<(String, Vec<usize>)> = vec![(decl.name.clone(), Vec::new())];
+                while let Some((stem, path)) = stack.pop() {
+                    let (d, _) = decl_at(&unit, k, &path);
+                    for (i, m) in d.members.iter().enumerate() {
+                        let crate::java::parser::Member::Type(t) = m else { continue };
+                        for (at, msg) in crate::java::conflicts(t) {
+                            self.diags.error_by(crate::source::Group::Typer, file, Span { start: at, end: at + 1 }, msg);
+                        }
+                        let member = format!("{}${}", stem, t.name);
+                        let mut mpath = path.clone();
+                        mpath.push(i);
+                        let mkey = self.interner.intern(&member);
+                        self.loaded_mut().java.sources.insert((p, mkey), SourceClass { file, unit: unit.clone(), decl: k, path: mpath.clone(), record: None, when_read: Vec::new(), building: false, unresolved: Vec::new() });
+                        stack.push((member, mpath));
+                    }
+                }
             }
         }
     }
@@ -822,11 +875,28 @@ impl<'a> Worker<'a> {
         if loaded.java.sources.is_empty() {
             return;
         }
-        let mut keys: Vec<(FileId, u32, PkgId, Name)> = loaded.java.sources.iter().filter(|(_, s)| s.record.is_none()).map(|(&(p, n), s)| (s.file, s.unit.types[s.decl].start, p, n)).collect();
+        let mut keys: Vec<(FileId, u32, PkgId, Name)> = loaded.java.sources.iter().filter(|(_, s)| s.record.is_none()).map(|(&(p, n), s)| (s.file, s.decl().start, p, n)).collect();
         keys.sort_by_key(|&(f, at, _, _)| (f.0, at));
         for (_, _, p, n) in keys {
             self.java_source_record(p, n, false);
         }
+    }
+
+    /// The run's Java sources whose class extends or implements the class `binary` (a sealed Java source's children,
+    /// `Namer.registerIfChildInCreationContext` as each is entered), by binary name, in the sources' order (file, then
+    /// place), whatever was read before: every source's record is built for it.
+    fn java_source_children(&mut self, binary: &str) -> Vec<String> {
+        let Some(loaded) = self.loaded.as_ref() else { return Vec::new() };
+        let mut keys: Vec<(FileId, u32, PkgId, Name)> = loaded.java.sources.iter().map(|(&(p, n), s)| (s.file, s.decl().start, p, n)).collect();
+        keys.sort_by_key(|&(f, at, _, _)| (f.0, at));
+        let mut out = Vec::new();
+        for (_, _, p, n) in keys {
+            let (_, r) = self.java_source_record(p, n, false);
+            if r.name != binary && (r.superclass.as_deref() == Some(binary) || r.interfaces.iter().any(|i| i == binary)) {
+                out.push(r.name.clone());
+            }
+        }
+        out
     }
 
     /// A Java source's parents as the reference checks them (`Checking.checkParents`, `checkNonCyclic`), once every
@@ -840,11 +910,11 @@ impl<'a> Worker<'a> {
             return;
         }
         #[allow(clippy::type_complexity)]
-        let mut entries: Vec<(FileId, u32, Arc<crate::java::parser::Unit>, usize, Arc<ClassFile>, Vec<String>)> = loaded
+        let mut entries: Vec<(FileId, u32, Arc<crate::java::parser::Unit>, (usize, Vec<usize>), Arc<ClassFile>, Vec<String>)> = loaded
             .java
             .sources
             .values()
-            .filter_map(|s| s.record.clone().map(|r| (s.file, s.unit.types[s.decl].start, s.unit.clone(), s.decl, r, s.unresolved.clone())))
+            .filter_map(|s| s.record.clone().map(|r| (s.file, s.decl().start, s.unit.clone(), (s.decl, s.path.clone()), r, s.unresolved.clone())))
             .collect();
         entries.sort_by_key(|e| (e.0 .0, e.1));
         let at_of = |t: Option<&crate::java::parser::Ty>| match t {
@@ -853,8 +923,8 @@ impl<'a> Worker<'a> {
         };
         let simple = |b: &str| b.rsplit(['/', '$']).next().unwrap_or(b).to_string();
         let mut cyclic: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for (file, _, unit, k, cf, unresolved) in entries {
-            let decl = &unit.types[k];
+        for (file, _, unit, (k, path), cf, unresolved) in entries {
+            let decl = decl_at(&unit, k, &path).0;
             let mut errors: Vec<(u32, String)> = Vec::new();
             // a parent its record did not resolve names no class: nothing to check
             let resolved = |b: &String| !unresolved.contains(b);
@@ -938,22 +1008,23 @@ impl<'a> Worker<'a> {
     /// The member types the Java class `binary` declares, whatever their access, each by its simple and its binary
     /// name: a program's Java source's member declarations, a class file's `InnerClasses` entries of which it is the
     /// outer class.
-    fn java_member_types(&mut self, binary: &str) -> Vec<(String, String)> {
+    fn java_member_types(&mut self, binary: &str) -> Vec<(String, String, u16)> {
         let (pkg, stem) = binary.rsplit_once('/').unwrap_or(("", binary));
         let Some(p) = self.java_source_pkg(pkg) else { return Vec::new() };
         let key = self.interner.intern(stem);
         if let Some(s) = self.java().sources.get(&(p, key)) {
-            return s.unit.types[s.decl]
+            let decl = s.decl();
+            return decl
                 .members
                 .iter()
                 .filter_map(|m| match m {
-                    crate::java::parser::Member::Type(t) => Some((t.name.clone(), format!("{}${}", binary, t.name))),
+                    crate::java::parser::Member::Type(t) => Some((t.name.clone(), format!("{}${}", binary, t.name), crate::java::record::member_access(t, decl))),
                     _ => None,
                 })
                 .collect();
         }
         let Some((_, cf)) = self.locate_java_class(p, stem, true) else { return Vec::new() };
-        cf.inner_classes.iter().filter(|i| i.outer.as_deref() == Some(binary)).filter_map(|i| i.name.clone().map(|n| (n, i.inner.clone()))).collect()
+        cf.inner_classes.iter().filter(|i| i.outer.as_deref() == Some(binary)).filter_map(|i| i.name.clone().map(|n| (n, i.inner.clone(), i.access))).collect()
     }
 
     /// The package of a Java name's path (`java/util`), `None` where none is: the JDK opened for a JDK-rooted path
@@ -1046,9 +1117,9 @@ impl<'a> Worker<'a> {
     /// reported at their places in the source; a refusal owed only to a Scala reader (`Problem::when_read`) is held
     /// until one asks (`asked`).
     fn java_source_record(&mut self, p: PkgId, name: Name, asked: bool) -> (JSource, Arc<ClassFile>) {
-        let (file, unit, decl, record) = {
+        let (file, unit, decl, path, record) = {
             let s = &self.java().sources[&(p, name)];
-            (s.file, s.unit.clone(), s.decl, s.record.clone())
+            (s.file, s.unit.clone(), s.decl, s.path.clone(), s.record.clone())
         };
         if let Some(r) = record {
             if asked {
@@ -1063,7 +1134,8 @@ impl<'a> Worker<'a> {
         if let Some(s) = self.loaded_mut().java.sources.get_mut(&(p, name)) {
             s.building = true;
         }
-        let (cf, problems, unresolved) = crate::java::record::build(&unit, &unit.types[decl], &text, &mut JavaNames { w: self });
+        let (d, outers) = decl_at(&unit, decl, &path);
+        let (cf, problems, unresolved) = crate::java::record::build(&unit, &outers, d, &text, &mut JavaNames { w: self });
         let mut owed = Vec::new();
         for pr in problems {
             if pr.when_read && !asked {
@@ -1188,7 +1260,7 @@ impl<'a> Worker<'a> {
             }
         }
         let Some((source, cf)) = self.locate_java_class(p, &text, false) else { return false };
-        self.enter_java_class(Owner::Package(p), Owner::Package(p), name, source, cf, None, 0);
+        self.enter_java_class(Owner::Package(p), Owner::Package(p), name, source, cf, None);
         true
     }
 
@@ -1232,17 +1304,46 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The Java class that the package `p` stands for, a pickle having reached its statics through its companion
+    /// (`placeholder_static_nested`): the class of `p`'s name in `p`'s parent, entered.
+    fn java_class_of_pkg(&self, p: PkgId) -> Option<ClassId> {
+        let info = self.syms.pkg(p);
+        let parent = info.parent?;
+        let c = self.syms.entry_at(parent, info.name).and_then(|e| e.class)?;
+        (self.is_java_class(c) && !self.is_java_placeholder(c)).then_some(c)
+    }
+
+    /// The static member class `name` of the Java class the package `pkg` stands for, where that class is entered:
+    /// what a pickle's `Outer.Nested` through the companion names.
+    pub(super) fn entered_java_static_member(&self, pkg: PkgId, name: Name) -> Option<ClassId> {
+        let outer = self.java_class_of_pkg(pkg)?;
+        let obj = self.syms.class(outer).companion?;
+        self.syms.class(obj).nested.get(&name).copied()
+    }
+
     /// Reads the class a placeholder stands for and completes it; a class no source holds
-    /// stays the empty trait it was.
+    /// stays the empty trait it was. A placeholder of a static member class a pickle reached through its outer
+    /// class's companion is filled where that outer class is entered (`enter_java_nested`), the outer entered here.
     pub(super) fn complete_java_placeholder(&mut self, c: ClassId) {
         let Some((p, name)) = self.java().placeholder(c) else { return };
         let text = self.interner.get(name).to_string();
         match self.locate_java_class(p, &text, true) {
             Some((source, cf)) => {
-                self.enter_java_class(Owner::Package(p), Owner::Package(p), name, source, cf, Some(c), 0);
+                self.enter_java_class(Owner::Package(p), Owner::Package(p), name, source, cf, Some(c));
                 self.complete_java_class(c);
             }
             None => {
+                if self.placeholder_static_nested(p, name) == Some(true) {
+                    let info = self.syms.pkg(p);
+                    if let Some(parent) = info.parent {
+                        let outer = info.name;
+                        self.load_java_pkg_member(parent, outer);
+                        if !self.is_java_placeholder(c) {
+                            self.complete_java_class(c);
+                            return;
+                        }
+                    }
+                }
                 self.syms.class_mut(c).state().set(Completion::Done);
             }
         }
@@ -1256,7 +1357,6 @@ impl<'a> Worker<'a> {
         source: JSource,
         cf: Arc<ClassFile>,
         placeholder: Option<ClassId>,
-        depth: u32,
     ) -> ClassId {
         let file = self.java_file(source);
         let is_interface = cf.access & ACC_INTERFACE != 0;
@@ -1270,7 +1370,10 @@ impl<'a> Worker<'a> {
         if cf.access & ACC_ABSTRACT != 0 && !is_interface {
             m |= mods::ABSTRACT;
         }
-        if !cf.permitted.is_empty() {
+        // A class file's `PermittedSubclasses` is not read (dotty's ClassfileParser: a sealed Java class of the class
+        // path is open to a Scala subclass, and its match is not checked by its children); a Java source's `sealed` is
+        // (`JavaParsers.modifiers`), its children the run's sources that extend it.
+        if cf.sealed {
             m |= mods::SEALED;
         }
         if cf.access & crate::classfile::ACC_ANNOTATION != 0 {
@@ -1293,6 +1396,9 @@ impl<'a> Worker<'a> {
             (Owner::Class(written_in), Owner::Class(obj)) if m & mods::JAVA_STATIC != 0 => (Owner::Class(obj), (written_in != obj).then_some(written_in)),
             _ => (owner, None),
         };
+        // A placeholder settled as an empty trait before its class file was entered (`complete_java_placeholder`, its
+        // outer a std class then, whose JDK member classes are entered later): read from the class file as it is filled.
+        let settled = placeholder.filter(|&k| self.syms.class(k).state() == Completion::Done);
         let c = match placeholder {
             Some(c) => {
                 let mut info = self.syms.class_mut(c);
@@ -1300,6 +1406,10 @@ impl<'a> Worker<'a> {
                 info.mods = m;
                 info.file = file;
                 info.base_types.clear();
+                // a member class's placeholder (`enter_java_nested`) is the member of its outer class
+                if let Owner::Class(_) = owner {
+                    info.owner = owner;
+                }
                 c
             }
             None => self.syms.new_class(name, kind, m, owner, file, None, Span::default()),
@@ -1327,7 +1437,8 @@ impl<'a> Worker<'a> {
         self.syms.class_mut(c).tparams = tparams;
         if placeholder.is_some() {
             self.java_mut().placeholder_read(c);
-        } else {
+        }
+        if placeholder.is_none() || matches!(owner, Owner::Class(_)) {
             match owner {
                 Owner::Package(p) => self.syms.enter_scoped(self.interner, p, name).class = Some(c),
                 Owner::Class(o) => {
@@ -1366,14 +1477,19 @@ impl<'a> Worker<'a> {
         }
         self.java_mut().classes.replace(obj, JClass { source, cf: cf.clone(), companion_of: Some(c), inner: false, outer: None });
         self.java_mut().stats.classes_entered += 1;
-        if depth < MAX_NESTING {
-            self.enter_java_nested(c, obj, &cf, depth + 1);
+        // A top-level class enters its member types with itself, for reads that complete no class; a member type
+        // enters its own as it is completed (`complete_java_class`), so that every depth is reached on request.
+        if matches!(owner, Owner::Package(_)) {
+            self.enter_java_nested(c, obj, &cf);
+        }
+        if settled.is_some() {
+            self.complete_java_class(c);
         }
         c
     }
 
     /// The nested classes of `c`, each its own class file next to the outer's.
-    fn enter_java_nested(&mut self, c: ClassId, obj: ClassId, cf: &ClassFile, depth: u32) {
+    fn enter_java_nested(&mut self, c: ClassId, obj: ClassId, cf: &ClassFile) {
         let mut p = self.syms.class(c).owner;
         while let Owner::Class(o) = p {
             p = self.syms.class(o).owner;
@@ -1383,6 +1499,13 @@ impl<'a> Worker<'a> {
             .member_classes()
             .filter_map(|i| i.name.as_ref().map(|n| (i.inner.clone(), n.clone())))
             .collect();
+        // A pickle that reached a static member class through the outer class's companion (entered as a package of the
+        // class's name) left a placeholder there: the member class fills it, one class whichever came first.
+        let class_name = self.syms.class(c).name;
+        let as_pkg = match self.syms.class(c).owner {
+            Owner::Package(op) => self.syms.entry_at(op, class_name).and_then(|e| e.pkg),
+            _ => None,
+        };
         for (binary, simple) in nested {
             let (_, stem) = split_binary(&binary);
             let name = self.interner.intern(&simple);
@@ -1390,7 +1513,8 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let Some((source, ncf)) = self.locate_java_class(pkg, stem, false) else { continue };
-            self.enter_java_class(Owner::Class(c), Owner::Class(obj), name, source, ncf, None, depth);
+            let placeholder = as_pkg.and_then(|ap| self.syms.entry_at(ap, name).and_then(|e| e.class)).filter(|&k| self.is_java_placeholder(k));
+            self.enter_java_class(Owner::Class(c), Owner::Class(obj), name, source, ncf, placeholder);
         }
     }
 
@@ -1420,6 +1544,11 @@ impl<'a> Worker<'a> {
         }
         let file = self.syms.class(c).file;
         let obj = self.syms.class(c).companion.unwrap_or(c);
+        // Its member types, entered as it is completed, as dotty's `ClassfileParser.enterOwnInnerClasses` enters a class
+        // file's own inner classes as it reads it: one level, each of them entering the next as it is completed.
+        if obj != c {
+            self.enter_java_nested(c, obj, &cf);
+        }
         let csig = sig::class_sig(&cf);
         let mut cx = self.java_cx(c);
         let was_mapping = self.mapping_signature;
@@ -1445,10 +1574,12 @@ impl<'a> Worker<'a> {
         }
         self.mapping_signature = was_mapping;
         self.set_loaded_parents(c, parents);
-        for permitted in cf.permitted.clone() {
-            if let Some(child) = self.java_class_by_binary(&permitted, false, 0) {
-                if child != c && self.syms.class(child).kind != ClassKind::Builtin && !self.syms.class(c).children.contains(&child) {
-                    self.syms.class_mut(c).children.push(child);
+        if cf.sealed {
+            for binary in self.java_source_children(&cf.name) {
+                if let Some(child) = self.java_class_by_binary(&binary, false, 0) {
+                    if child != c && self.syms.class(child).kind != ClassKind::Builtin && !self.syms.class(c).children.contains(&child) {
+                        self.syms.class_mut(c).children.push(child);
+                    }
                 }
             }
         }
@@ -1484,6 +1615,7 @@ impl<'a> Worker<'a> {
             self.java_mut().syms.insert(sym, JSym { class: c, member: JMember::Method(i as u32) });
             self.register_term(Owner::Class(owner), sym);
         }
+        let mut enum_constants = Vec::new();
         for (i, f) in cf.fields.iter().enumerate() {
             if !visible(f.access) {
                 continue;
@@ -1506,6 +1638,9 @@ impl<'a> Worker<'a> {
             self.syms.sym_mut(sym).java_defined = true;
             self.java_mut().syms.insert(sym, JSym { class: c, member: JMember::Field(i as u32) });
             self.register_term(Owner::Class(owner), sym);
+            if is_static && f.access & ACC_ENUM != 0 && f.descriptor.strip_prefix('L').and_then(|d| d.strip_suffix(';')) == Some(cf.name.as_str()) {
+                enum_constants.push(sym);
+            }
         }
         // Java overloads a name across the classes that declare it: `DecimalFormat.format(x,
         // buffer, position)` beside `NumberFormat.format(double)` and `Format.format(Object)`.
@@ -1518,6 +1653,26 @@ impl<'a> Worker<'a> {
             self.loaded_mut().note_blocked(&msg);
         }
         self.syms.class_mut(c).state().set(Completion::Done);
+        // Once the enum is complete (a parent under way gives its case no base types): a Java enum is sealed, abstract,
+        // its constants its children (ClassfileParser's `ACC_ENUM` fields, JavaParsers'
+        // `JavaEnumValue`s through `Namer.addEnumConstants`): each a singleton case whose value is the constant's
+        // field, which a match projects (`space::java_enum_case`); the field stays the static field it is.
+        if !enum_constants.is_empty() {
+            if self.syms.class(c).mods & mods::SEALED == 0 {
+                self.syms.class_mut(c).mods |= mods::SEALED | mods::ABSTRACT;
+            }
+            let enum_ty = self.types.class(c, &[]);
+            for f in enum_constants {
+                let name = self.syms.sym(f).name;
+                let case = self.syms.new_class(name, ClassKind::EnumCase, mods::FINAL, Owner::Class(obj), file, None, Span::default());
+                self.syms.class_mut(case).singleton = Some(f);
+                self.set_loaded_parents(case, vec![enum_ty]);
+                self.syms.class_mut(case).state().set(Completion::Done);
+                if !self.syms.class(c).children.contains(&case) {
+                    self.syms.class_mut(c).children.push(case);
+                }
+            }
+        }
         if obj != c {
             let self_ty = self.types.class(obj, &[]);
             let mut info = self.syms.class_mut(obj);
@@ -1797,7 +1952,7 @@ impl<'a> Worker<'a> {
         // The class's own nested classes the std leaves out (`AbstractMap.SimpleEntry`), entered
         // as a class file's are (dotty's `ClassfileParser.enterOwnInnerClasses`).
         if let Some(o) = obj {
-            self.enter_java_nested(class, o, &cf, 1);
+            self.enter_java_nested(class, o, &cf);
         }
         true
     }
@@ -2245,7 +2400,7 @@ impl<'a> Worker<'a> {
         }
         if read {
             if let Some((source, cf)) = self.locate_java_class(p, text, true) {
-                return Some(self.enter_java_class(Owner::Package(p), Owner::Package(p), name, source, cf, None, 0));
+                return Some(self.enter_java_class(Owner::Package(p), Owner::Package(p), name, source, cf, None));
             }
         }
         if !text.contains('$') {

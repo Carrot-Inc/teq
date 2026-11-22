@@ -12,7 +12,7 @@ annot-add-local-object	fail	interp:fail	Macro_1.scala:17:99: missing parameter t
 annot-add-nested-class	fail	interp:fail	output: line 2: the .check has 'executed in: Foo$Bar$macro$1', the program printed 'executed in: Foo'
 annot-add-nested-object	fail	interp:fail	Macro_1.scala:17:117: missing parameter type
 annot-annot-order	pass	interp:fail	
-annot-arg-value-in-java	fail	interp:fail	Annot.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+annot-arg-value-in-java	fail	interp:fail	output: line 2: the .check has 'new java.lang.SuppressWarnings(value = "a")', the program printed 'JOtherTypes:'
 annot-bind	pass	interp:fail	
 annot-changeVal	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 annot-concrete-class	fail	interp:fail	Test_2.scala:7:7: class Foo needs to be abstract, since def foo: String in trait AFoo is not defined
@@ -93,8 +93,8 @@ i18806	fail	interp:fail	run: exit 1: Exception in thread "main" scala.NotImpleme
 i19676	fail	interp:fail	Test_2.scala:9:5: pattern definitions are only supported inside blocks
 i19732	fail	interp:fail	output: line 1: the .check has 'Map(b -> 23)', the program printed 'Map()'
 i19905	fail	interp:fail	Test_2.scala:5:11: exception in macro: scala.MatchError: scala.Unit (of class scala.quoted.Type) (called by noPrefixStructure in object Macro_1$package) (in the body of Macro_1$package.noPrefixStructure)
-i19951-java-annotations-tasty-compat	fail	interp:fail	JavaAnnot_1.java:6:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-i19951-java-annotations-tasty-compat-2	fail	interp:fail	JavaAnnot_1.java:6:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+i19951-java-annotations-tasty-compat	fail	interp:fail	output: line 2: the .check has 'new JavaAnnot(c = _, a = 5, d = _, b = _)', the program printed nothing
+i19951-java-annotations-tasty-compat-2	pass	interp:fail	
 i20052	fail	interp:fail	output: line 1: the .check has 'method <init> (Flags.JavaDefined | Flags.Method) List(List((x$0,scala.Int)))', the program printed '<init> (method synthetic) List()'
 i20449	fail	interp:fail	output: line 2: the .check has 'Original: Main_2$package.UserName.T', the program printed 'Original: UserName.T'
 i21225	fail	interp:fail	Macro_1.scala:12:35: Not found: GivenSelector
@@ -181,7 +181,7 @@ lib-StringContext	fail	interp:fail	StringContext.scala:92:38: expected end of st
 macro-erased	fail	interp:fail	Macro_1.scala:15:13: 'erased' is not part of the supported Scala subset
 macros-in-same-project1	pass	interp:pass	
 newClass	fail	interp:fail	Test_2.scala:2:13: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
-newClassAnnotation	fail	interp:fail	JavaAnnot.java:3:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+newClassAnnotation	fail	interp:fail	Macro_1.scala:20:13: there is no parameter named clsFlags
 newClassExtends	fail	interp:fail	Test_2.scala:2:18: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
 newClassExtendsClassParams	fail	interp:fail	Test_2.scala:2:18: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
 newClassExtendsJavaClass	fail	interp:fail	Macro_1.scala:11:13: too many arguments: expected 5

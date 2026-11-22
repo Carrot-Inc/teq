@@ -1,6 +1,6 @@
 # dotty 3.8.4 (7d4833b6) run, run; compiler/test/dotty/tools/dotc/CompilationTests.scala:179; JDK 24, node 25
 # test	verdict	the other ways	the first line of the difference
-10838	fail	interp:fail	A.java:2:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+10838	fail	interp:fail	Test.scala:6:5: not supported yet: inner class A.B needs an outer instance (Outer.Inner)
 16405.scala	fail	interp:fail	16405.scala:14:15: Not found: type a
 1938-2.scala	fail	interp:fail	1938-2.scala:23:12: this is not a case class or enum case
 1938.scala	pass	interp:pass	
@@ -74,7 +74,7 @@ assert-stack.scala	fail	interp:fail	output: line 5: the .check has 'Test$.main(a
 automatic-tupling-of-function-parameters-implicit-conversion.scala	pass	interp:pass	
 automatic-tupling-of-function-parameters-spec.scala	pass	interp:pass	
 backwardsCompat-implicitParens	cannot run	-	an older compiler: a group is compiled by scalac 3.0.2
-beans	fail	interp:fail	LibraryAnnotation_1.java:7:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+beans	fail	interp:fail	javac: tests/run/beans/Test_3.java:6: error: cannot find symbol
 better-fors-map-elim.scala	pass	interp:pass	
 better-fors-map-inlined.scala	pass	interp:pass	
 better-fors.scala	pass	interp:pass	
@@ -331,7 +331,7 @@ i11966.scala	pass	interp:pass
 i11996.scala	fail	interp:fail	i11996.scala:10:38: 'erased' is not part of the supported Scala subset
 i12032.scala	fail	interp:fail	i12032.scala:11:22: method append overrides nothing
 i12052	pass	interp:pass	
-i12086	fail	interp:fail	Test_2.java:2:9: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i12086	fail	interp:fail	Test_3.scala:6:37: not supported yet: inner class C.D needs an outer instance (Outer.Inner)
 i12160.scala	pass	interp:pass	
 i12170.scala	pass	interp:pass	
 i12204	pass	interp:fail	
@@ -437,7 +437,7 @@ i14983.scala	pass	interp:pass
 i1503.scala	pass	interp:pass	
 i15101.scala	pass	interp:pass	
 i15190.scala	pass	interp:pass	
-i15199	fail	interp:fail	Child_1.java:2:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i15199	pass	interp:fail	
 i15234.scala	fail	interp:fail	i15234.scala:18:10: value fromProduct is not a member of Mirror{type MirroredType = (Nil : Nil); type MirroredMonoType = (Nil : Nil); type MirroredElemTypes <: Tuple}
 i15287.scala	fail	interp:fail	i15287.scala:6:3: Not found: f
 i15302a.scala	fail	interp:fail	i15302a.scala:6:28: Found:    *:[Int, *:[bh, bt] & (Int, Int)]
@@ -524,7 +524,7 @@ i19394.scala	fail	interp:fail	i19394.scala:11:7: bar is already defined as metho
 i19396.scala	pass	interp:pass	
 i19587.scala	pass	interp:pass	
 i1960.scala	pass	interp:pass	
-i19619	fail	interp:fail	InnerClass.java:7:16: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i19619	fail	interp:fail	Test.scala:16:45: not supported yet: inner class lib.InnerClass.Outer needs an outer instance (Outer.Inner)
 i19629	pass	interp:pass	
 i19641.scala	pass	interp:pass	
 i19711.scala	pass	interp:pass	
@@ -561,7 +561,7 @@ i22888.scala	pass	interp:pass
 i22900.scala	fail	interp:fail	i22900.scala:10:28: a named pattern is only allowed in a tuple or constructor pattern
 i22900a.scala	pass	interp:pass	
 i22968.scala	fail	interp:fail	i22968.scala:5:13: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
-i22991	fail	interp:fail	Foo.java:4:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+i22991	fail	interp:fail	Test.scala:9:18: value getParameterAnnotations is not a member of Method
 i23131.scala	fail	interp:fail	i23131.scala:5:10: name is not a field of Some[(name : String)]
 i2314.scala	pass	interp:pass	
 i23179.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Receiver class Test$$anon$13ynqzq_735 does not define or inherit an implementation of the resolved method 'abstract java.lang.Object f(java.lang.Object[])' of interface 
@@ -576,7 +576,7 @@ i23409b.scala	pass	interp:pass
 i23440.scala	fail	interp:fail	i23440.scala:9:28: Found:    (<error>, <error>) => Unit
 i23444.scala	pass	interp:fail	
 i23477.scala	pass	interp:pass	
-i23479	fail	interp:fail	NonSeal.java:2:29: not supported yet: a sealed Java type (the Java reader reads classes and interfaces)
+i23479	pass	interp:fail	
 i23479b.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i2360.scala	pass	interp:pass	
 i23693.scala	pass	interp:pass	
@@ -593,7 +593,7 @@ i24201b.scala	pass	interp:pass
 i24204.scala	pass	interp:fail	
 i24272.scala	fail	interp:fail	i24272.scala:8:13: value toGenericString is not a member of Method
 i24357.scala	pass	interp:pass	
-i24507	fail	interp:fail	A.java:4:19: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+i24507	fail	interp:fail	test.scala:5:21: None of the overloaded alternatives of constructor B in class B with types
 i24553.scala	fail	interp:fail	i24553.scala:8:32: value toGenericString is not a member of Method
 i2456.scala	pass	interp:pass	
 i24573.scala	pass	interp:pass	
@@ -610,7 +610,7 @@ i25089.scala	pass	interp:pass
 i25291	pass	interp:pass	
 i2567.scala	pass	interp:pass	
 i2738.scala	fail	interp:fail	output: line 1: the .check has 'Test$qux$2$', the program printed 'bar$2'
-i2760	fail	interp:fail	Fork.java:4:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+i2760	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.NullPointerException: Cannot invoke "Fork.value()" because "<local2>" is null
 i2780	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.IllegalAccessError: class Foo$Inner tried to access protected method 'java.lang.String bla.Base.foo()' (Foo$Inner and bla.Base are in unnamed module of loader 'app')
 i2795.scala	pass	interp:pass	
 i2808.scala	pass	interp:pass	
@@ -780,7 +780,7 @@ i8398.scala	pass	interp:pass
 i8425.scala	pass	interp:pass	
 i8530-b.scala	pass	interp:fail	
 i8530.scala	pass	interp:pass	
-i8531	fail	interp:fail	Named.java:5:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+i8531	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: 0
 i8577a.scala	fail	interp:fail	i8577a.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577b.scala	fail	interp:fail	i8577b.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
 i8577c.scala	fail	interp:fail	i8577c.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
@@ -872,11 +872,11 @@ iterator-from.scala	fail	interp:fail	iterator-from.scala:53:45: Not found: Value
 iterator-iterate-lazy.scala	pass	interp:pass	
 iterator3444.scala	pass	interp:pass	
 iterators.scala	pass	interp:pass	
-java-ann-super-class	fail	interp:fail	Ann.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-java-ann-super-class-separate	fail	interp:fail	Ann_1.java:1:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
-java-annot-params	fail	interp:fail	Annots_0.java:6:12: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+java-ann-super-class	pass	interp:fail	
+java-ann-super-class-separate	pass	interp:fail	
+java-annot-params	pass	interp:fail	
 java-intersection	fail	interp:fail	Test_2.scala:17:36: Found:    Serializable
-java-longnames	fail	interp:fail	Long_1.java:4:25: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+java-longnames	pass	interp:fail	
 java-no-scala-import	pass	interp:fail	
 java-package-private-bridge	fail	interp:fail	Test.scala:7:7: value getReturnType is not a member of Method
 java-package-protected	pass	interp:fail	
@@ -884,7 +884,7 @@ java-varargs	pass	interp:fail
 java-varargs-2	pass	interp:fail	
 java-varargs-3	fail	interp:fail	Test.scala:13:13: type argument String does not conform to upper bound Serializable
 java-vc-overload	pass	interp:fail	
-junitForwarders	fail	interp:fail	Test.java:12:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+junitForwarders	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: found:
 kmpSliceSearch.scala	pass	interp:fail	
 lambda-null.scala	pass	interp:fail	
 lambda-sam-bridge.scala	pass	interp:pass	
@@ -1030,7 +1030,7 @@ recursive-with-option.scala	pass	interp:pass
 reducable.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: 4
 reduce-projections.scala	pass	interp:pass	
 redundantParents.scala	pass	interp:fail	
-repeatable	fail	interp:fail	FirstLevel_0.java:7:19: not supported yet: a Java annotation declaration (the Java reader reads classes and interfaces)
+repeatable	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.NullPointerException: Cannot invoke "repeatable.FirstLevel_0.value()" because the return value of "java.lang.Class.getAnnotation(java.lang.Class)" is null
 rescue-boundary.scala	pass	interp:fail	
 rescue.scala	pass	interp:fail	
 retclosure.scala	pass	interp:fail	
@@ -1396,8 +1396,8 @@ t6126.scala	pass	interp:pass
 t6138	fail	interp:fail	JavaClass.java:3:29: type Bar is not a member of object Foo
 t6138-2	fail	interp:fail	JavaClass.java:3:29: type Bar is not a member of object Foo
 t6154.scala	pass	interp:pass	
-t6168	fail	interp:fail	Context.java:28:27: not supported yet: a Java member type (the Java reader reads classes and interfaces)
-t6168b	fail	interp:fail	Context.java:28:34: not supported yet: a Java member type (the Java reader reads classes and interfaces)
+t6168	fail	interp:fail	main.scala:13:25: not supported yet: inner class of a parameterized outer (Outer<A>.Inner): Context$Field
+t6168b	pass	interp:fail	
 t6188.scala	pass	interp:pass	
 t6206.scala	pass	interp:fail	
 t6246.scala	fail	interp:fail	t6246.scala:7:13: value <:< is not a member of ClassTag[_]

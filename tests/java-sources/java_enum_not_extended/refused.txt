@@ -1,0 +1,2 @@
+Main.scala:4:53: error: the constructor of E is private to E
+Main.scala:6:17: error: the constructor of E is private to E

@@ -261,6 +261,17 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   demands the `Int` (`s"${m.get(k)}"` is `0`, scalac's `null`);
   `(new W(Double.NaN): Any) == (new W(Double.NaN): Any)` is false for a value class `W`, where scalac's elision
   says true. Interpreter: `TimeZone.getDefault` is `UTC`; `UUID.randomUUID` is `math.random`.
+- A Java source is valid or not as javac says, where scalac reading it from source says otherwise (sbt compiles the
+  same file with javac): a top-level record whose modifiers begin with an annotation (`@Deprecated public record
+  R(int x) {}`) is read, where scalac refuses it ("illegal start of type declaration"); a simple type name a parent's
+  member type of no access to the class (private, or of a package's access in another package) does not take is
+  the import's or the package's type, where scalac takes the parent's and refuses it as inaccessible; and a name two
+  supertypes each give a member type of is refused as ambiguous where it is used ("Reference to In is ambiguous"),
+  where scalac takes the later parent's; and a type argument within its bound by javac's rules is accepted where
+  scalac checks it stricter (`class Wrong<T extends LL<?>> extends Wrap<T>`, for a `Wrap<T extends List<List<?>>>`
+  and an `LL<T> extends ArrayList<List<T>>`: "Type argument T does not conform to upper bound"); and `permits` or
+  `sealed` written as a name (`static int permits`, a method `sealed(..)`), javac's contextual keywords, is read as
+  the name, where scalac refuses it ("identifier expected but permits found").
 
 ## Left out on purpose
 

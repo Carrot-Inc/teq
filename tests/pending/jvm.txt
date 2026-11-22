@@ -109,7 +109,6 @@ jar_signed_extension_macro	compile
 java_atomics	compile
 java_byte_short_constants	compile
 java_io_streams	exception
-java_member_class_depth	compile
 java_stand_ins	compile
 java_tree_map	output
 java_tree_map_views	output

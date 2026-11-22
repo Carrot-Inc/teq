@@ -68,17 +68,21 @@ teq tasty --body lib.jar a.b.C.m  # a definition with its body in Scala-like syn
 ```
 
 **Java sources.** A directory gives its `.java` files with its `.scala` ones, and a `.java` named on the command line
-is read as Java. teq reads them for their declarations, as scalac does (dotty's `JavaParsers`): every class and
-interface of a file by its own name, their members with their types and parameter names, a `static final` field's
-constant where its initializer is one literal. It compiles none of their bodies: a JVM build with Java sources writes
+is read as Java. teq reads them for their declarations, as scalac does (dotty's `JavaParsers`): every class,
+interface, enum, record and annotation declaration of a file, its member types at any depth, their members with their
+types and parameter names, a `static final` field's constant where its initializer is one literal. An enum's constants
+and its `values`/`valueOf` are its companion's, and a match on an enum, or on a sealed Java type, is checked for its
+cases (the enum's constants; the sealed type's subclasses among the build's Java sources, whatever it `permits`); a
+record has its canonical constructor and an accessor for each component; an annotation declaration is applied to a
+Scala definition as one read from a class file; a source with a member outside any type (a compact source file) is
+dropped, as scalac drops it. It compiles none of their bodies: a JVM build with Java sources writes
 the Scala program's classes to a directory (`-o out`, or `--products`) and prints one line saying so, and javac
 compiles the Java sources against it (`javac -cp out:scala-library.jar -d out-java *.java`; the program then runs with
 both on its class path); a build to a jar is refused, as the jar would lack the Java classes. On JavaScript and in the
 interpreter a call that reaches a Java source's method is refused, and in the interpreter the creation of a class with
-a Java source's class among its superclasses too (the interpreter runs no Java body: docs/TARGETS.md). Not read yet,
-each refused where it is declared (`not supported yet`): an enum, a record, an annotation declaration, a sealed type,
-a member type, and a Java declaration naming a class of the same build's Scala sources (a Java method's body may name
-one). A Java source stands for its class over a class file of the same name on the class path.
+a Java source's class among its superclasses too (the interpreter runs no Java body: docs/TARGETS.md). Refused where
+it is declared (`not supported yet`): a Java declaration naming a class of the same build's Scala sources (a Java
+method's body may name one). A Java source stands for its class over a class file of the same name on the class path.
 
 `teq interp` runs a program in the compiler's interpreter: the files and directories named, one main among them
 (`@main def` or an object's `main`), the arguments after `--` its own. A file it runs can be a script:

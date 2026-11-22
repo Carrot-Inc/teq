@@ -638,7 +638,6 @@ i18408c.scala	check: diagnostic 1 of 3: scalac's is error i18408c.scala:2:1 Ille
 i1845.scala	check: diagnostic 1 of 1: scalac's is error i1845.scala:2:12 identifier expected; teq's is error i1845.scala:2:12 type this not found
 i18458.scala	marks: no error where 1 are marked
 i1846.scala	marks: 21 errors where 12 are marked: i1846.scala:6:20: expected a pattern, found indented block
-i18533	java source: teq reads none
 i18545.scala	marks: 2 errors where 5 are marked
 i18552.scala	marks: no error where 1 are marked
 i18588.scala	check: diagnostic 1 of 2: scalac's is error i18588.scala:7:3 covariant type A occurs in invariant position in type A of variable cached; teq's is error i18588.scala:7:15 covariant type A occurs in invariant position in type A of variable ca

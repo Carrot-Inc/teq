@@ -10,7 +10,9 @@ A row the head builds and scalac refuses is listed where scalac's own errors say
     the reader resolves no annotation's name, reached or not), or in a parent, a member's signature or an import
     ("unreached class's names": the reader resolves the names of a class a Scala source reaches, scalac every
     declaration's);
-  - "scalac crashes": scalac ends by an exception before any error; javac judges then, and the tag says what it says.
+  - "scalac crashes": scalac ends by an exception before any error; javac judges then, and the tag says what it says;
+  - "javac accepts": none of those, every error scalac gives stands in the Java source, and javac compiles it alone: a
+    Java source's validity is javac's, where scalac reading it from source refuses what javac compiles.
 The reached twin of a listed row: the same Java file and a Scala file in its package that reaches the class the place
 stands in (the first class, for an import; where the file declares nothing, its imports alone, the file with a `class
 TeqReached {}` after them):
@@ -70,7 +72,8 @@ def places(text):
             package = ''.join(name)
         if not stack and t == 'import':
             in_import = True
-        if t in TYPE_WORDS and prev not in ('.', '@') and re.match(r'[A-Za-z_$]', nxt) and (t != 'record' or (i + 2 < len(words) and words[i + 2] in ('(', '<'))):
+        # `@interface` declares a type as `interface` does (an annotation declaration): its elements are signatures
+        if t in TYPE_WORDS and (prev not in ('.', '@') or (t == 'interface' and prev == '@')) and re.match(r'[A-Za-z_$]', nxt) and (t != 'record' or (i + 2 < len(words) and words[i + 2] in ('(', '<'))):
             arity, j = 0, i + 2
             if j < len(words) and words[j] == '<':
                 level, arity = 0, 1
@@ -230,6 +233,10 @@ def main():
                 tag = f'scalac crashes; {javac(key)}'
             elif builds[key] and verdict.startswith('refuses:'):
                 tag, twin, matched = listed(text, name, errors)
+                # none of those: the Java source's validity is javac's (docs/COMPATIBILITY.md), a row javac compiles
+                # alone listed, scalac reading the source being wrong on it
+                if not tag and errors and all(os.path.basename(x.partition('@')[2].rsplit(':', 2)[0]) == name for x in errors.split(',')) and javac(key) == 'javac accepts':
+                    tag = 'javac accepts'
             rows.append((key, masters[key], verdict, errors, tag, twin, matched))
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -242,7 +249,7 @@ def main():
     print(f'judge: {len(rows)} inputs; master refuses {count(lambda r: r[1] == "refuses")}, scalac accepts '
           f'{count(lambda r: r[2] == "accepts")}, crashes {count(lambda r: r[2].startswith("crashes"))}; listed: annotation names '
           f'{count(lambda r: r[4] == "annotation names")}, unreached class\'s names {count(lambda r: r[4].startswith("unreached"))}, '
-          f'scalac crashes {count(lambda r: r[4].startswith("scalac crashes"))}')
+          f'scalac crashes {count(lambda r: r[4].startswith("scalac crashes"))}, javac accepts {count(lambda r: r[4] == "javac accepts")}')
 
 
 if __name__ == '__main__':

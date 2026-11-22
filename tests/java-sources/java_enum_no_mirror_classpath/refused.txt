@@ -1,0 +1,1 @@
+Main.scala:6:51: error: No given instance of type Mirror.SumOf[E] was found.

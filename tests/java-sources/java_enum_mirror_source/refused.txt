@@ -1,0 +1,1 @@
+Main.scala:5:48: error: Java defined class E is not a value

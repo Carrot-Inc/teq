@@ -262,6 +262,12 @@ impl P {
             let n = self.s.name().to_string();
             self.next();
             n
+        } else if matches!(self.tok(), T::Permits | T::Sealed) {
+            // `permits` and `sealed` are contextual keywords (JLS 3.9): an identifier wherever one is read, as javac reads
+            // them (a Java source's validity is javac's: the reference's scanner takes them as keywords everywhere)
+            let n = if self.tok() == T::Permits { "permits" } else { "sealed" }.to_string();
+            self.next();
+            n
         } else {
             self.accept(T::Ident);
             "<error>".to_string()
@@ -929,10 +935,12 @@ impl P {
             self.accept(T::Semi);
         } else if !leading.is_empty() {
             // `compilationUnit`: annotations before anything but a package are a type declaration's, whatever follows
-            // them (`typeDecl`, with no record's adaptation: "illegal start of type declaration" where none starts),
-            // and no import is read after it.
+            // them ("illegal start of type declaration" where none starts), and no import is read after it. A record
+            // is one, as javac reads it, where the reference does not adapt the identifier there (a Java source's
+            // validity is javac's: docs/COMPATIBILITY.md).
             let start = self.s.offset();
             let mods = self.modifiers(leading);
+            self.adapt_record();
             if let Some(t) = self.type_decl(start, mods) {
                 u.types.push(t);
             }
@@ -1041,6 +1049,11 @@ mod tests {
         }
         let u = parse("@Deprecated public class J {}");
         assert!(u.errors.is_empty() && u.types.iter().any(|t| t.name == "J"), "{:?}", u.errors);
+        // a record so annotated is read, as javac reads it
+        for text in ["@Deprecated public record R(int x) {}", "@Deprecated record R(int x) {}", "@SuppressWarnings(\"x\")\npublic record R(int x) {}"] {
+            let u = parse(text);
+            assert!(u.errors.is_empty() && u.types.iter().any(|t| t.name == "R" && t.kind == Kind::Record), "{text}: {:?}", u.errors);
+        }
     }
 
     #[test]

@@ -101,7 +101,6 @@ intrinsic_call_records	< s.isEmpty()
 intrinsic_call_reflection	< Apply:isEmpty:0/Apply:isEmpty:0
 jar_signed_extension_macro	< 7
 java_byte_short_constants	< List(127, -32768, -128, 32767)
-java_member_class_depth	< true
 java_varargs_spread_unimported	< Hello/a/b
 jdk_enum_stable_values	< s ms other
 jdk_static_values_stable	< us france other

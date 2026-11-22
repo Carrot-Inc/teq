@@ -726,6 +726,12 @@ impl<'a> Worker<'a> {
                 return None;
             }
         }
+        // A Java source's sum is the search's mirror, and its companion, the mirror scalac names, is no value
+        // (`SymbolIsNotAValue`): the use is refused, the candidate stands (an ambiguity with another given is told).
+        if matches!(shape, Shape::Sum(_)) && self.java_source_of(c).is_some() {
+            let name = self.interner.get(self.syms.class(c).name).to_string();
+            self.error(site, format!("Java defined class {} is not a value", name));
+        }
         let ty = self.scala_mirror_type(c, &shape, mirrored, subject, &params, names, sm);
         // `Synthesizer`'s mirror: the companion, the singleton, a `TupleMirror` (`mirror_ref`), or
         // an anonymous mirror made at the site, cast to the mirror's type.
@@ -1468,6 +1474,9 @@ Failed to synthesize an instance of type {}:", shown, shown);
     }
 
     fn why_not_generic_sum(&mut self, c: ClassId) -> String {
+        if self.is_java_class(c) && self.java_source_of(c).is_none() {
+            return "it is not a sealed class".to_string();
+        }
         let info = self.syms.class(c);
         let sealed = info.kind == ClassKind::Enum || info.mods & mods::SEALED != 0;
         let is_abstract = matches!(info.kind, ClassKind::Trait | ClassKind::Enum) || info.mods & mods::ABSTRACT != 0;
@@ -1559,6 +1568,11 @@ Failed to synthesize an instance of type {}:", shown, shown);
                 let constructible = info.ctor.len() <= 1 && info.ctor.iter().all(|clause| !clause.is_using);
                 constructible.then_some(Shape::Product)
             }
+            // A Java class of the class path is no sum: a Java enum, sealed by its constants for a match's
+            // exhaustivity, has no sum mirror, as scalac's class-file reader finds it unsealed where no constant was
+            // read ("not a sealed class"). One of the program's Java sources is read as the reference reads it: an
+            // enum is a sum, whose mirror's use is refused (`scala_mirror_given`). (No Java class is a case class.)
+            _ if is_sum && self.is_java_class(c) && self.java_source_of(c).is_none() => None,
             _ if is_sum => {
                 // Children are recorded as they get completed; `ordinal` follows the source, and
                 // an enum's cases are numbered so, a product's by their places in its source.

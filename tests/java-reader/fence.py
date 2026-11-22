@@ -17,7 +17,7 @@ abstract; a field's access, static and final; a method's access, static, final, 
 field's constant (ConstantValue) where the source's initialiser is a lone literal, the reference's reading
 (`tryConstant`, `varDecl`); THE INVENTORY from the oracle's own class files (javac's output, a JDK package's class files
 of the unit's sources by their SourceFile): each top-level or member class has its record, or a refusal told at its
-own declaration (a member class at its owner's), a compact source's classes at its first member; and module-info and
+own declaration (a member class's record its own, or a refusal at its owner's), a compact source's classes at its first member; and module-info and
 package-info, each run beside scalac's outcome.
 LEFT OUT, by the source view: the oracle's bridges, synthetic members and <clinit>; anonymous and local classes.
 The JDK is $JAVA_HOME's (else the `java` on the PATH): its src.zip, and its runtime image's class files extracted into
@@ -65,8 +65,9 @@ def run(cmd, timeout=300, env=None):
 
 
 # a literal as the reference's scanner reads one (no `_`: dotty's getNumber stops there, and then no constant is read)
-# (and no hex or binary float: the scanner reads a hex literal's digits alone, `0x1` of `0x1.0p3`, and no `;` follows)
-LIT = r"""(?:-|!)?\s*(?:'(?:[^'\\]|\\.)+'|"(?:[^"\\]|\\.)*"|true|false|0[xX][0-9a-fA-F]+[lL]?|0[bB][01]+[lL]?|\.?[0-9][0-9.eE+-]*[lLfFdD]?)"""
+# (and no hex or binary float: the scanner reads a hex literal's digits alone, `0x1` of `0x1.0p3`, and no `;` follows;
+# a sign only in an exponent: `6+5` is an expression, no constant)
+LIT = r"""(?:-|!)?\s*(?:'(?:[^'\\]|\\.)+'|"(?:[^"\\]|\\.)*"|true|false|0[xX][0-9a-fA-F]+[lL]?|0[bB][01]+[lL]?|(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?[lLfFdD]?)"""
 
 
 def records(err, root):
@@ -131,6 +132,11 @@ def planted(rec):
     return rec
 
 
+def code_of(text):
+    """The source's text without its comments (a comment's `x = 1.0;` is no initializer)."""
+    return re.sub(r'/\*.*?\*/|//[^\n]*', ' ', text, flags=re.S)
+
+
 def compare(rec, ora, text):
     """The differences of a record and its oracle by column: parents, members, signatures, flags, constants."""
     cols = collections.defaultdict(list)
@@ -140,12 +146,21 @@ def compare(rec, ora, text):
         cols['parents'].append(f"interfaces {','.join(rec['interfaces'])} / {','.join(ora['interfaces'])}")
     if eff_sig('class', rec['signature'], rec=rec) != eff_sig('class', ora['signature'], rec=ora):
         cols['signatures'].append(f"class {rec['signature']} / {ora['signature']}")
-    if (rec['access'] & FLAGS['class']) != (ora['access'] & FLAGS['class']):
-        cols['flags'].append(f"class {rec['access'] & FLAGS['class']:#x}/{ora['access'] & FLAGS['class']:#x}")
+    # An enum's class flags (final, abstract) and its constructors follow the reference's reading of the source, not
+    # javac's (`enumDecl`: `mods | Flags.JavaEnum`, the constructors as written, no name and ordinal parameters): the
+    # generated exception list's row (scalac's two answers differ on a Scala class extending it).
+    enum = ora['access'] & 0x4000 != 0  # ACC_ENUM
+    class_flags = FLAGS['class'] & ~(0x0410 if enum else 0)
+    if (rec['access'] & class_flags) != (ora['access'] & class_flags):
+        cols['flags'].append(f"class {rec['access'] & class_flags:#x}/{ora['access'] & class_flags:#x}")
     of = {f[1]: f for f in ora['fields'] if not f[0] & classfile.ACC_SYNTHETIC}
     rf = {f[1]: f for f in rec['fields']}
     for n in sorted(set(of) | set(rf)):
         if n not in rf:
+            # the reference's `fieldDecls` skips a declarator with brackets after its name past a comma (`a = 1, T[] =
+            # {..}`): scalac reading the source has no such field, and the record follows it
+            if re.search(r',\s*' + re.escape(n) + r'\s*\[', code_of(text)):
+                continue
             cols['members'].append(f'field {n} missing'); continue
         if n not in of:
             cols['members'].append(f'field {n} extra'); continue
@@ -156,15 +171,16 @@ def compare(rec, ora, text):
         if (rf[n][0] & FLAGS['field']) != (of[n][0] & FLAGS['field']):
             cols['flags'].append(f"field {n} {rf[n][0] & FLAGS['field']:#x}/{of[n][0] & FLAGS['field']:#x}")
         # a static final field's constant: the record's against the class file's; where the class file has one the
-        # record has not, failing only where the source writes a lone literal (what the reference reads)
+        # record has not, failing only where the source writes a lone literal (what the reference reads), once in its
+        # code (a file's member classes may each declare the name)
         if of[n][0] & 0x0018 == 0x0018:
             rc, oc = rec['constants'].get(n), ora['constants'].get(n)
             if rc is not None and rc != oc:
                 cols['constants'].append(f'field {n} {rc} / {oc}')
-            elif rc is None and oc is not None and re.search(r'\b' + re.escape(n) + r'\s*=\s*' + LIT + r'\s*;', text):
+            elif rc is None and oc is not None and len(re.findall(r'\b' + re.escape(n) + r'\s*=\s*' + LIT + r'\s*;', code_of(text))) == 1:
                 cols['constants'].append(f'field {n} none / {oc}')
-    om = {(m[1], m[2]): m for m in ora['methods'] if not m[0] & (classfile.ACC_SYNTHETIC | classfile.ACC_BRIDGE) and m[1] != '<clinit>'}
-    rm = {(m[1], m[2]): m for m in rec['methods']}
+    om = {(m[1], m[2]): m for m in ora['methods'] if not m[0] & (classfile.ACC_SYNTHETIC | classfile.ACC_BRIDGE) and m[1] != '<clinit>' and not (enum and m[1] == '<init>')}
+    rm = {(m[1], m[2]): m for m in rec['methods'] if not (enum and m[1] == '<init>')}
     for k in sorted(set(om) | set(rm)):
         if k not in rm:
             cols['members'].append(f'method {k[0]}{k[1]} missing')
@@ -213,9 +229,11 @@ def verdicts(corpus, unit, root, srcs, recs, diags, decls, compact, classes):
             told = loose.get(srcfile, [])
             rows.append([corpus, unit, b, 'refused' if told else 'NOT RECORDED', (told[0] if told else 'a compact source: no refusal told')[:220]])
             continue
-        if b != top:
+        # a member class has a record of its own (`Outer$Inner`), compared as a top-level one is; one without it is
+        # refused where its owner is
+        if b != top and b not in recs:
             told = owned.get(top, []) + ([f'held: {m}' for _, m in recs[top]['held']] if top in recs else [])
-            rows.append([corpus, unit, b, 'refused' if told else 'NOT RECORDED', (told[0] if told else 'a member class without its refusal')[:220]])
+            rows.append([corpus, unit, b, 'refused' if told else 'NOT RECORDED', (told[0] if told else 'a member class without its record or a refusal')[:220]])
             continue
         rec = recs.get(b)
         told = owned.get(b, []) + ([f'{srcfile}@{o}: {m}' for o, m in rec['held']] if rec else [])
