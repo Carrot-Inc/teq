@@ -82,14 +82,17 @@ judge() {
   if [ -n "$r$n" ]; then echo "differs $kind $name (no whole output:${r:+ ref: $r}${n:+ new: $n})"; return; fi
   if diff -rq "$ref" "$new" > /dev/null 2>&1; then echo "same $name"; else echo "differs $kind $name"; fi
 }
+# result_names <results>: the program of each result line, where its form has it: `same <name>`,
+# `notrun <name> <why>`, `differs <kind> <name> [<why>]`.
+result_names() { awk '{ print ($1 == "differs" ? $3 : $2) }' "$1"; }
 # coverage <inventory> <results> <out dir of the kind>: what is wrong with a kind's results, a line each: a name of two
 # programs, a program with no result or several, a result of no program, outputs of a program the inventory lacks.
 coverage() {
   local inventory=$1 results=$2 dir=$3
   sort "$inventory" | uniq -d | sed 's/^/a name of two programs: /'
-  awk '{ print $2 }' "$results" | sort | uniq -d | sed 's/^/several results of /'
+  result_names "$results" | sort | uniq -d | sed 's/^/several results of /'
   sort -u "$inventory" > "$results.inv"
-  awk '{ print $2 }' "$results" | sort -u > "$results.got"
+  result_names "$results" | sort -u > "$results.got"
   comm -23 "$results.inv" "$results.got" | sed 's/^/no result of /'
   comm -13 "$results.inv" "$results.got" | sed 's/^/a result of no program: /'
   ls "$dir/ref" "$dir/new" 2> /dev/null | grep -v -e '^$' -e ':$' | sort -u | comm -13 "$results.inv" - | sed 's/^/outputs of no program: /'
@@ -127,19 +130,31 @@ self_test() {
   good "$d/w/ref"; good "$d/w/new"; printf 'y\n' > "$d/w/new/out.js"
   plant "a wrong byte" "$(failed "$(judge js p "$d/w/ref" "$d/w/new" "")")"
   mkdir -p "$d/k/ref/p" "$d/k/new/p"
+  # exact <what> <the lines the coverage must give, and no other> <inventory> <results>
+  exact() {
+    total=$((total + 1))
+    if [ "$(coverage "$3" "$4" "$d/k")" = "$2" ]; then caught=$((caught + 1)); else missed="$missed; $1"; fi
+  }
   printf 'p\nq\n' > "$d/inv"; printf 'same p\nsame q\n' > "$d/res"
   [ -z "$(coverage "$d/inv" "$d/res" "$d/k")" ] || missed="$missed; the control's coverage"
+  # a program that differs, one that did not run and one not run each have their one result: no line of the coverage
+  printf 'same p\ndiffers js q\n' > "$d/res5"
+  [ -z "$(coverage "$d/inv" "$d/res5" "$d/k")" ] || missed="$missed; the coverage of a program that differs"
+  printf 'differs jvm p (did not run: ref:124)\nnotrun q jars missing: x.jar\n' > "$d/res6"
+  [ -z "$(coverage "$d/inv" "$d/res6" "$d/k")" ] || missed="$missed; the coverage of a program that did not run beside one not run"
   printf 'p\nq\np\n' > "$d/inv2"
-  plant "a program named twice" "$(coverage "$d/inv2" "$d/res" "$d/k")"
+  exact "a program named twice" "a name of two programs: p" "$d/inv2" "$d/res"
   mkdir -p "$d/k/new/stray"
-  plant "a stray program in the out directory" "$(coverage "$d/inv" "$d/res" "$d/k")"
+  exact "a stray program in the out directory" "outputs of no program: stray" "$d/inv" "$d/res"
   rm -r "$d/k/new/stray"
   printf 'same p\n' > "$d/res2"
-  plant "a program of the inventory with no result" "$(coverage "$d/inv" "$d/res2" "$d/k")"
+  exact "a program of the inventory with no result" "no result of q" "$d/inv" "$d/res2"
   printf 'same p\nsame q\nsame r\n' > "$d/res3"
-  plant "a result of no program" "$(coverage "$d/inv" "$d/res3" "$d/k")"
+  exact "a result of no program" "a result of no program: r" "$d/inv" "$d/res3"
   printf 'same p\nsame q\ndiffers js q\n' > "$d/res4"
-  plant "two results of one program" "$(coverage "$d/inv" "$d/res4" "$d/k")"
+  exact "two results of one program" "several results of q" "$d/inv" "$d/res4"
+  printf 'same p\ndiffers js r\n' > "$d/res7"
+  exact "a differing result of no program beside a program with none" $'no result of q\na result of no program: r' "$d/inv" "$d/res7"
   rm -rf "${d:?}"
   [ -z "$missed" ] || echo "FAIL identity self-test:${missed#;} passed"
   echo "identity self-test: $caught of $total planted bad records failed"

@@ -2123,7 +2123,7 @@ code=$?
 check "outcomes: the stdlib suite without its jar writes every case cannot run, no earlier pass kept" "$oc/stdlib.log" eval '[ $code = 0 ] &&
   grep -q "^stdlib: skipped, no scala-library 3.x jar in the coursier cache$" "$oc/stdlib.log" &&
   grep -q -x "$(printf "one\tcannot run\t-\tno scala-library 3.x jar in the coursier cache")" "$st/tests/board/suites/stdlib.tsv"'
-# identity: a launch that did not run on both sides is no identical program
+# identity: a launch that did not run on both sides is no identical program; its differs line is its one result
 mkdir -p "$oc/killed-teq" && printf '#!/bin/bash\n[ "$1" = --help ] && exit 0\nkill -9 $$\n' > "$oc/killed-teq/teq" && chmod +x "$oc/killed-teq/teq"
 id=$oc/id; mkdir -p "$id/tests/support" "$id/tests/cases"
 cp tests/support/identity.sh tests/support/identity-across.sh tests/support/jars.sh tests/support/compiler-words.sh "$id/tests/support/" 2> /dev/null
@@ -2133,7 +2133,8 @@ code=$?
 check "outcomes: identity counts no program identical whose runs did not run on both sides" "$oc/identity.log" eval '[ $code = 1 ] &&
   grep -q "^differs: js hello (did not run: ref:137 new:137)$" "$oc/identity.log" &&
   grep -q "^identity js: 0 of 1 programs identical, 1 differing, 0 not run$" "$oc/identity.log" &&
-  grep -q "^identity self-test: [0-9]* of [0-9]* planted bad records failed$" "$oc/identity.log"'
+  grep -q "^identity self-test: [0-9]* of [0-9]* planted bad records failed$" "$oc/identity.log" &&
+  ! grep -q "^FAIL" "$oc/identity.log"'
 # identity: a program not run for want of its jars fails the run, unless IDENTITY_SKIPS lists it; a FAIL under TEQ_GATE
 mkdir -p "$oc/builds-teq" && printf '#!/bin/bash\n[ "$1" = --help ] && exit 0\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && echo built > "$2"; shift; done\n' > "$oc/builds-teq/teq" && chmod +x "$oc/builds-teq/teq"
 printf '// jars: nosuch\nobject Lonely\n' > "$id/tests/cases/lonely.scala"
