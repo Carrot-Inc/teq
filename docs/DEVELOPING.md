@@ -716,11 +716,17 @@ version and date; `bench/changelog.sh` takes it there alone and reads no version
 **The GitHub release** is the publication of the binaries, `bench/github-release.sh` in three verbs, whose
 header has the interface (the assets' names, the URLs, the binaries' manifest, the exit codes):
 `<version>`, once the five binaries are built, staged and qualified, pushes the hub's master to GitHub by a
-fast-forward and makes the draft `v<version>` with every asset, read back; `<version> publish`, after the
-Central step, publishes the whole draft and reads every asset back from its URL; `<version> abandon`
+fast-forward and makes the draft `v<version>` with every asset, the assets uploaded at once, read back;
+`<version> publish`, after the Central step, publishes the whole draft and reads every asset back from its URL, the
+assets at once, each held to its file. Each verb's bound is one asset's whatever their number; an asset not uploaded
+or not served fails the run naming it, and the run again resumes it; `<version> abandon`
 deletes the draft when the ship gives the release up. Run again from the ship's checkout, a verb resumes
 what it began; `<version> check` refuses what the draft would refuse, before a build; `--dry-run` takes the
-draft through on the scratch version 0.0.0-dry and abandons it. The script reads the maintainer's token from
+draft through on the scratch version 0.0.0-dry and abandons it. Each verb runs under its bound,
+`bench/ship-release.sh`'s `release_<verb>_bound` (`release_<verb>_bound_actions` in a GitHub Actions run), and at
+the bound it is stopped with every process it started, whatever their process group or session
+(`bench/release-bound.py`, Linux alone): it exits 124 with a line naming the bound, and run again it resumes. The
+script reads the maintainer's token from
 `~/.config/teq/github-token` (mode 600), and nothing prints it; in a GitHub Actions run of the repository's
 workflow it takes `GH_TOKEN` when the file is absent and pushes no master, the run being on it. `tests/release-scripts.sh` checks the
 scripts' decisions without the network, against a stand-in for gh and local repositories.

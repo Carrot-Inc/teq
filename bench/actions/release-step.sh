@@ -265,7 +265,7 @@ conclude() {
   local next promoted=no word= central msg github
   if [ "$dry" = true ]; then
     # The scratch draft, which the dry run deletes itself unless its runner was lost.
-    timeout 600 bench/github-release.sh 0.0.0-dry abandon || fail "the dry run's scratch draft could not be deleted: bench/github-release.sh 0.0.0-dry abandon"
+    bench/github-release.sh 0.0.0-dry abandon || fail "the dry run's scratch draft could not be deleted: bench/github-release.sh 0.0.0-dry abandon"
     msg="A dry run: nothing is published, and no scratch draft is left."
   elif [ ! -f "$record" ]; then
     msg="Nothing was published: the run failed before its publication began."
@@ -302,7 +302,7 @@ conclude() {
           case $(rget github.state) in
             drafting | draft | deleting | publishing)
               rput github.state deleting
-              timeout 600 bench/github-release.sh "$version" abandon || fail "the draft could not be abandoned (above): bench/github-release.sh $version abandon"
+              bench/github-release.sh "$version" abandon || fail "the draft could not be abandoned (above): bench/github-release.sh $version abandon"
               rput github.state deleted ;;
           esac
           drop_unpromoted
@@ -320,7 +320,7 @@ case $step in
   publish) [ $# -eq 2 ] || fail "usage: $0 publish <step>[,<step>...]"; publish "$2" ;;
   draft)
     [ "${TEQ_MODE:-fresh}" != fresh ] || qualified_set
-    if [ "$dry" = true ]; then timeout 7200 bench/github-release.sh --dry-run; else publish draft && assets out/actions/assets --against-draft; fi ;;
+    if [ "$dry" = true ]; then bench/github-release.sh --dry-run; else publish draft && assets out/actions/assets --against-draft; fi ;;
   smoke)
     if [ "$dry" = true ]; then dry_smoke; else publish smoke; fi ;;
   assets) [ $# -ge 2 ] || fail "usage: $0 assets <dir> [--against-draft]"; assets "$2" "${3:-}"; say "the assets of $tag in $2" ;;

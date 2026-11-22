@@ -3,9 +3,9 @@
 # section as bench/changelog.sh reads it, bench/release.sh's refusal of a version without one and its two commits
 # (the compiler's bump, the plugin's), and
 # bench/github-release.sh's verbs (the draft, publish, abandon, check, the dry run): the push, the draft, its
-# resumption, the publication and the read-back, the refusals and the exit codes. They run in a scratch repository
-# of the scripts, the qualification file, the two files that name the compiler's version and the plugin's version
-# line, NOTICE and LICENSE, its hub and its GitHub bare
+# resumption, the publication and the read-back, each verb stopped at its bound, the refusals and the exit codes.
+# They run in a scratch repository of the scripts, the qualification file, the two files that name the compiler's
+# version and the plugin's version line, NOTICE and LICENSE, its hub and its GitHub bare
 # repositories (GitHub's URL rewritten to its path by git's insteadOf), gh a stand-in that keeps the releases in
 # a state file, the release's and Central's roots a local HTTP server. The token is a made-up one, and neither an output, a
 # trace nor an argument of gh may carry it. Every command is bounded; the script exits 1 on a failure. KEEP=1
@@ -27,18 +27,36 @@ has() {
 # The stand-in for gh: the calls bench/github-release.sh makes, over $STUB_DIR/state.json, with GitHub's rules
 # as far as the script meets them (a published release by tag before a draft, drafts of one tag allowed, the
 # tag made at the target when a draft is published, a public download only of a published release's asset).
-# STUB_FAIL_UPLOAD=<name> leaves that asset broken and fails, as an upload cut off; STUB_RACE=1 makes another
+# STUB_FAIL_UPLOAD=<name> leaves that asset broken and fails, as an upload cut off; STUB_UNSERVED=<name> leaves that
+# asset of a published release unserved at its public URL, as a CDN not serving it yet; STUB_RACE=1 makes another
 # draft of the tag beside the one asked for, as another run would; STUB_PUBLISH_ON_READ=1 publishes a release
 # read by its id before answering, and STUB_AFTER_DOWNLOAD (`drop <asset>`, `retarget <commit>`) changes a
 # release after its assets are downloaded, as another clone's run would meanwhile; STUB_MOVE_HUB=<commit> moves
 # the hub's master (STUB_HUB) there at the first listing of the releases, as a landing would;
-# STUB_FAIL_LISTS_AFTER=<n> fails every listing of the releases after the first n with HTTP 503.
+# STUB_FAIL_LISTS_AFTER=<n> fails every listing of the releases after the first n with HTTP 503; STUB_SLOW=<text> makes
+# a call whose arguments hold the text outlive any bound, before it takes its turn: it records its pid, a sleeper's in a
+# session of its own and an orphan's (a double fork) in $STUB_DIR/slow.pids, its TMPDIR in $STUB_DIR/slow.tmpdir, the
+# time it began in $STUB_DIR/slow.at, and sleeps an hour.
 mkdir -p "$work/bin"
 cat > "$work/bin/gh" << 'EOF'
 #!/usr/bin/env python3
-import hashlib, json, os, shutil, subprocess, sys
+import fcntl, hashlib, json, os, shutil, subprocess, sys, time
 d = os.environ["STUB_DIR"]
 os.makedirs(d, exist_ok=True)
+if os.environ.get("STUB_SLOW") and os.environ["STUB_SLOW"] in " ".join(sys.argv[1:]):
+    sleeper = subprocess.Popen(["sleep", "3600"], start_new_session=True)
+    orphan = subprocess.run(["sh", "-c", "sleep 3600 < /dev/null > /dev/null 2>&1 & echo $!"], capture_output=True, text=True).stdout.strip()
+    with open(d + "/slow.pids", "a") as f:
+        f.write("%d\n%d\n%s\n" % (os.getpid(), sleeper.pid, orphan))
+    with open(d + "/slow.tmpdir", "a") as f:
+        f.write(os.environ.get("TMPDIR", "") + "\n")
+    with open(d + "/slow.at", "a") as f:
+        f.write("%.3f\n" % time.time())
+    time.sleep(3600)
+# One call at a time over the state, as GitHub serialises a release's writes: the script uploads a draft's files at
+# once.
+lock = open(d + "/lock", "a")
+fcntl.flock(lock, fcntl.LOCK_EX)
 with open(d + "/calls", "a") as log:
     log.write(" ".join(sys.argv[1:]) + "\n")
 if os.environ.get("GH_TOKEN") != os.environ["STUB_TOKEN"]:
@@ -76,6 +94,8 @@ def public(r):
     if not r["draft"]:
         os.makedirs("%s/downloads/%s" % (d, r["tag_name"]), exist_ok=True)
         for a in r["assets"]:
+            if a["name"] == os.environ.get("STUB_UNSERVED"):
+                continue
             shutil.copy("%s/files/%d/%s" % (d, r["id"], a["name"]), "%s/downloads/%s/%s" % (d, r["tag_name"], a["name"]))
 def new(fields):
     r = {"id": state["next"], "tag_name": fields["tag_name"], "draft": True, "prerelease": fields["prerelease"],
@@ -203,7 +223,7 @@ for _ in $(seq 50); do curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$port
 # version line at 1.0.0, a changelog without 0.1.7, NOTICE and LICENSE.
 src=$work/src
 mkdir -p "$src/bench" "$src/src" "$src/integrations/sbt"
-cp bench/release.sh bench/ship-release.sh bench/ship-manifest.sh bench/changelog.sh bench/github-release.sh bench/ship-profiles.sh bench/ship-qualified.txt "$src/bench/"
+cp bench/release.sh bench/ship-release.sh bench/ship-manifest.sh bench/changelog.sh bench/github-release.sh bench/release-bound.py bench/ship-profiles.sh bench/ship-qualified.txt "$src/bench/"
 cp NOTICE LICENSE "$src/"
 printf '[package]\nname = "teq"\nversion = "0.1.6"\nedition = "2021"\n' > "$src/Cargo.toml"
 printf 'fn main() {}\n' > "$src/src/main.rs"
@@ -413,14 +433,15 @@ printf '%s\n' "$token" > "$work/home/.config/teq/github-token"
 chmod 600 "$work/home/.config/teq/github-token"
 : > "$work/outputs"
 # github <label> [args]: bench/github-release.sh in the checkout (under bash -x with XTRACE=1; in a GitHub Actions
-# run with ACTIONS=1; GH_TOKEN set to ENVTOKEN; HOME=GHOME), its exit status echoed, its output in
-# $work/out.<label> and among every output.
+# run with ACTIONS=1; GH_TOKEN set to ENVTOKEN; HOME=GHOME; FIRST_PATH before the stand-ins on the PATH; under a
+# timeout of OUTER seconds, 300 by default), its exit status echoed, its output in $work/out.<label> and among every
+# output.
 github() {
   local label=$1
   shift
-  (cd "$repo" && env -u GH_TOKEN -u GITHUB_TOKEN -u GITHUB_ACTIONS HOME="${GHOME:-$work/home}" PATH="$work/bin:$PATH" STUB_DIR="$work/stub" \
+  (cd "$repo" && env -u GH_TOKEN -u GITHUB_TOKEN -u GITHUB_ACTIONS HOME="${GHOME:-$work/home}" PATH="${FIRST_PATH:+$FIRST_PATH:}$work/bin:$PATH" STUB_DIR="$work/stub" \
     STUB_TOKEN="$token" STUB_GITHUB="$work/github.git" TEQ_GITHUB_DOWNLOADS="file://$work/stub/downloads" ${ACTIONS:+GITHUB_ACTIONS=true} \
-    ${ENVTOKEN:+GH_TOKEN=$ENVTOKEN} timeout 300 ${XTRACE:+bash -x} bench/github-release.sh "$@" > "$work/out.$label" 2>&1)
+    ${ENVTOKEN:+GH_TOKEN=$ENVTOKEN} timeout "${OUTER:-300}" ${XTRACE:+bash -x} bench/github-release.sh "$@" > "$work/out.$label" 2>&1)
   local status=$?
   cat "$work/out.$label" >> "$work/outputs"
   echo $status
@@ -473,7 +494,8 @@ print(" ".join(a["name"] for a in r["assets"]))
 print(r["body"], end="")
 EOF
 check "the release's title, flags and target" "$(sed -n 1p "$work/release.json")" "{\"make_latest\": true, \"name\": \"teq 0.1.7\", \"prerelease\": false, \"target_commitish\": \"$release\"}"
-check "the assets, in their order" "$(sed -n 2p "$work/release.json")" "$names"
+# Uploaded at once, the assets are in the order GitHub took them: every file once.
+check "the assets, every file once" "$(sed -n 2p "$work/release.json" | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ')" "$(printf '%s\n' $names | LC_ALL=C sort | tr '\n' ' ')"
 check "the notes: the section, a bullet's lines joined" "$(sed -n '3,$p' "$work/release.json")" "$(printf -- '- A change for users, over two lines.\n- Another.')"
 downloads=$work/stub/downloads/v0.1.7
 for c in $classifiers; do
@@ -498,11 +520,13 @@ check "abandon of a published release" "$(github abandon-published 0.1.7 abandon
 has "abandon of a published release: why" "$work/out.abandon-published" "a published release is never deleted"
 check "abandon of a published release: kept" "$(releases_now)" "v0.1.7:published"
 
-# A failed upload: exit 3, then the draft resumed, uploading what is missing alone; publish refuses the draft
-# while it is not whole.
+# A failed upload: the files uploaded at once, the cut one named, exit 3; then the draft resumed, uploading what is
+# missing alone; publish refuses the draft while it is not whole.
 fresh "$initial"
 check "an upload cut off fails once something is written" "$(STUB_FAIL_UPLOAD=teq-0.1.7-linux-x86_64 github cut 0.1.7)" 3
+has "an upload cut off: which" "$work/out.cut" "the upload of teq-0.1.7-linux-x86_64 failed"
 has "an upload cut off: the remedy" "$work/out.cut" "the same command, run again, resumes"
+check "an upload cut off: every file uploaded at once" "$(calls 'release upload')" 10
 check "an upload cut off: the draft stays" "$(releases_now)" "v0.1.7:draft"
 check "publish of a draft not whole" "$(github publish-cut 0.1.7 publish)" 1
 has "publish of a draft not whole: why" "$work/out.publish-cut" "the draft v0.1.7 is not whole (teq-0.1.7-linux-x86_64 is not the file): bench/github-release.sh 0.1.7 resumes it"
@@ -510,9 +534,21 @@ check "publish of a draft not whole: still a draft, no tag" "$(releases_now) $(g
 check "resumed" "$(github resumed 0.1.7)" 0
 check "resumed: one draft" "$(releases_now)" "v0.1.7:draft"
 check "resumed: made once" "$(calls 'api -X POST')" 1
-check "resumed: the cut asset and the ones after it uploaded" "$(calls 'release upload')" 11
+check "resumed: the cut asset alone uploaded again" "$(calls 'release upload')" 11
 check "resumed, then published" "$(github resumed-publish 0.1.7 publish)" 0
 check "resumed, then published: the tag" "$(github_ref 'refs/tags/v0.1.7^{commit}')" "$release"
+
+# A publication whose read-back fails: one file not served at its public URL yet. The release is published, the run
+# exits 3 naming the file and the remedy; the same command, once GitHub serves the file, reads the set back.
+fresh "$initial"
+check "a draft for a read-back that fails" "$(github unserved-draft 0.1.7)" 0
+check "published, its read-back failing" "$(STUB_UNSERVED=NOTICE github unserved 0.1.7 publish)" 3
+has "published, its read-back failing: which" "$work/out.unserved" "v0.1.7/NOTICE does not serve the file"
+has "published, its read-back failing: the remedy" "$work/out.unserved" "this run wrote to GitHub already: the same command, run again, resumes"
+check "published, its read-back failing: published" "$(releases_now)" "v0.1.7:published"
+cp "$work/stub/files/"*/NOTICE "$work/stub/downloads/v0.1.7/NOTICE"
+check "the read-back again once the file is served" "$(github unserved-again 0.1.7 publish)" 0
+has "the read-back again once the file is served: the set" "$work/out.unserved-again" "read back from file://$work/stub/downloads/v0.1.7/: $names, each the file"
 
 # The ship gives the release up: its draft deleted; with none, nothing to do.
 fresh "$initial"
@@ -821,6 +857,132 @@ done
 kill "$originserver" 2> /dev/null
 (cd "$repo" && git remote set-url origin "$work/hub.git")
 git --git-dir="$work/hub.git" update-ref refs/heads/master "$release"
+
+# Each verb held to its bound over every process it starts (bench/release-bound.py), the bound bench/ship-release.sh's
+# written here at a 50th of its own: a call of gh's made to outlive it (STUB_SLOW), the verb stopped at the bound with
+# its line and exit 124, none of the slow calls alive after it, the clone's lock free and no process left working in
+# the clone; then the same command, its own bound back, finishing. The draft is stopped with its uploads in flight,
+# the publication reading the draft back, the check listing the releases, the dry run uploading its first file, the
+# abandonment deleting the dry run's draft. The draft resumed copies each binary and the profiles beside its name
+# and renames it (a cp stand-in on the PATH records where each copy goes). Each verb is stopped not before its bound
+# and within 5 s past it counted from its first slow call's start, which comes after the supervisor's clock began (the
+# slack, for a loaded machine), and its TMPDIR is gone after it. The observation's own controls come first,
+# three planted supervisors it must refuse (one that stops its body alone: the slow call alive and the lock held; one
+# without the child subreaper: the orphan alive; one that keeps its scratch: the TMPDIR kept), and the workflow step's
+# own timeout, whose TERM the supervisor takes as the end of everything it holds.
+own_bounds=$work/ship-release.own
+own_supervisor=$work/release-bound.own
+cp "$repo/bench/ship-release.sh" "$own_bounds" && cp "$repo/bench/release-bound.py" "$own_supervisor" || exit 1
+# scaled <verb>: the verb's bound written at a 50th of its own, which it prints.
+scaled() {
+  local value
+  value=$(bash -c ". '$own_bounds' && awk -v b=\"\$release_$1_bound\" 'BEGIN { printf \"%.2f\", b / 50 }'")
+  { cat "$own_bounds"; echo "release_$1_bound=$value"; } > "$repo/bench/ship-release.sh"
+  echo "$value"
+}
+# observe <label> <slow call> <args>...: bench/github-release.sh run with the call slow, TMPDIR a directory of the
+# check's; its exit in $work/exit.<label>, its seconds in $work/took.<label> and since its first slow call began in
+# $work/since.<label>, its slow calls' pids in
+# $work/slow.<label>, those alive after it and the processes working in the clone in $work/after.<label>, the clone's
+# lock in $work/lock.<label>, whether the slow calls' TMPDIR is gone in $work/tmpdir.<label>; then the scripts as they
+# were, and what it left killed.
+observe() {
+  local label=$1 slow=$2 p state after= start dir
+  shift 2
+  rm -f "$work/stub/slow.pids" "$work/stub/slow.tmpdir" "$work/stub/slow.at"
+  mkdir -p "$work/tmp"
+  start=$(date +%s.%N)
+  TMPDIR=$work/tmp STUB_SLOW=$slow github "$label" "$@" > "$work/exit.$label"
+  end=$(date +%s.%N)
+  awk -v s="$start" -v e="$end" 'BEGIN { printf "%.2f\n", e - s }' > "$work/took.$label"
+  sort -n "$work/stub/slow.at" 2> /dev/null | awk -v e="$end" 'NR == 1 { printf "%.2f\n", e - $1 } END { if (NR == 0) print "none" }' > "$work/since.$label"
+  cp "$own_bounds" "$repo/bench/ship-release.sh" && cp "$own_supervisor" "$repo/bench/release-bound.py"
+  echo gone > "$work/tmpdir.$label"
+  [ -s "$work/stub/slow.tmpdir" ] || echo none > "$work/tmpdir.$label"
+  for dir in $(sort -u "$work/stub/slow.tmpdir" 2> /dev/null); do [ ! -e "$dir" ] || echo kept > "$work/tmpdir.$label"; done
+  cp "$work/stub/slow.pids" "$work/slow.$label" 2> /dev/null || : > "$work/slow.$label"
+  for p in $(cat "$work/slow.$label"); do
+    state=$(sed 's/.*) //' "/proc/$p/stat" 2> /dev/null | cut -d' ' -f1)
+    [ -z "$state" ] || [ "$state" = Z ] || after="$after alive $p"
+  done
+  for p in /proc/[0-9]*; do [ "$(readlink "$p/cwd" 2> /dev/null)" != "$repo" ] || after="$after working ${p#/proc/}"; done
+  echo "${after# }" > "$work/after.$label"
+  if flock -n "$repo/.git/github-release.lock" true; then echo free; else echo held; fi > "$work/lock.$label"
+  for p in $(cat "$work/after.$label"); do [[ $p =~ ^[0-9]+$ ]] && kill -9 "$p" 2> /dev/null; done
+}
+# stopped <label> <verb> <slow call> <args>...: the verb observed at a 50th of its bound, the call slow.
+stopped() {
+  local label=$1 verb=$2 value
+  shift 2
+  value=$(scaled "$verb")
+  observe "$label" "$@"
+  check "$label: stopped at its bound" "$(cat "$work/exit.$label")" 124
+  has "$label: its line names its bound" "$work/out.$label" "ran out of its bound, $value s (bench/ship-release.sh's release_${verb}_bound): stopped with every command it ran; "
+  check "$label: the slow call reached" "$([ -s "$work/slow.$label" ] && echo reached)" reached
+  check "$label: nothing of it left" "$(cat "$work/after.$label")" ""
+  check "$label: the clone's lock free" "$(cat "$work/lock.$label")" free
+  check "$label: its TMPDIR gone" "$(cat "$work/tmpdir.$label")" gone
+  check "$label: stopped at its bound, within 5 s past it" "$(awk -v t="$(cat "$work/took.$label")" -v s="$(cat "$work/since.$label")" -v b="$value" 'BEGIN { print (t >= b && s != "none" && s <= b + 5) ? "within" : t " s, " s " s since its slow call" }')" within
+}
+# planted <change>: the supervisor in the clone planted (body-alone, no-subreaper, no-removal).
+planted() {
+  local old new
+  case $1 in
+    body-alone) old='        live = descendants()' new='        live = [p for p in descendants() if p == body]' ;;
+    no-subreaper) old='libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0' new='False' ;;
+    no-removal) old=$'    shutil.rmtree(scratch, ignore_errors=True)\n    if live:' new='    if live:' ;;
+  esac
+  timeout 30 python3 - "$repo/bench/release-bound.py" "$old" "$new" << 'EOF'
+import sys
+path, old, new = sys.argv[1:4]
+text = open(path).read()
+if text.count(old) != 1:
+    sys.exit(f"{path}: {old!r} is there {text.count(old)} times, not once")
+open(path, "w").write(text.replace(old, new))
+EOF
+}
+fresh "$initial"
+stage
+for control in body-alone no-subreaper no-removal; do
+  scaled check > /dev/null
+  planted "$control" || echo "FAIL the observation's control: no supervisor $control planted"
+  observe "ev-$control" "api --paginate" 0.1.7 check
+done
+check "the observation's control, a supervisor that stops its body alone: its slow call seen alive" "$(grep -q 'alive [0-9]' "$work/after.ev-body-alone" && echo alive)" alive
+check "the observation's control, a supervisor that stops its body alone: the lock seen held" "$(cat "$work/lock.ev-body-alone")" held
+check "the observation's control, a supervisor without the child subreaper: the orphan seen alive" "$(grep -q "alive $(sed -n 3p "$work/slow.ev-no-subreaper")\( \|\$\)" "$work/after.ev-no-subreaper" && echo alive)" alive
+check "the observation's control, a supervisor that keeps its scratch: the TMPDIR seen kept" "$(cat "$work/tmpdir.ev-no-removal")" kept
+check "the observation's control: the scripts as they were" "$(cmp -s "$own_supervisor" "$repo/bench/release-bound.py" && cmp -s "$own_bounds" "$repo/bench/ship-release.sh" && echo same)" same
+OUTER=15 observe ev-term "api --paginate" 0.1.7 check
+check "ev-term: the step's timeout, its exit" "$(cat "$work/exit.ev-term")" 124
+has "ev-term: the supervisor's line" "$work/out.ev-term" "github: the check of v0.1.7 received SIGTERM: stopped with every command it ran; it writes nothing: run again"
+check "ev-term: the slow call reached" "$([ -s "$work/slow.ev-term" ] && echo reached)" reached
+check "ev-term: nothing of it left" "$(cat "$work/after.ev-term")" ""
+check "ev-term: the clone's lock free" "$(cat "$work/lock.ev-term")" free
+check "ev-term: its TMPDIR gone" "$(cat "$work/tmpdir.ev-term")" gone
+stopped ev-check check "api --paginate" 0.1.7 check
+check "ev-check: run again" "$(github ev-check-again 0.1.7 check)" 0
+stopped ev-draft draft "release upload" 0.1.7
+check "ev-draft: stopped with every upload in flight" "$(grep -c . "$work/slow.ev-draft")" 30
+check "ev-draft: the draft made, nothing uploaded" "$(releases_now) $(calls 'release upload')" "v0.1.7:draft 0"
+mkdir -p "$work/cpbin"
+printf '#!/bin/bash\nprintf "%%s\\n" "${@: -1}" >> "$STUB_DIR/cp.log"\nexec %s "$@"\n' "$(command -v cp)" > "$work/cpbin/cp"
+chmod +x "$work/cpbin/cp"
+check "ev-draft: run again, resumed whole" "$(FIRST_PATH=$work/cpbin github ev-draft-again 0.1.7)" 0
+has "ev-draft: run again, every asset" "$work/out.ev-draft-again" "holds every asset: bench/github-release.sh 0.1.7 publish publishes it"
+check "ev-draft: run again, the six copies each beside its name" "$(grep -c . "$work/stub/cp.log") $(grep -c '/assets/.*\.part$' "$work/stub/cp.log")" "6 6"
+stopped ev-publish publish "release download" 0.1.7 publish
+check "ev-publish: still a draft" "$(releases_now)" "v0.1.7:draft"
+check "ev-publish: run again, published and read back" "$(github ev-publish-again 0.1.7 publish)" 0
+check "ev-publish: run again, published" "$(releases_now)" "v0.1.7:published"
+fresh "$initial"
+stopped ev-dry dry "release upload" --dry-run
+has "ev-dry: what it leaves" "$work/out.ev-dry" "a scratch draft it left is deleted by bench/github-release.sh 0.0.0-dry abandon, or by the next dry run first"
+check "ev-dry: its scratch draft left" "$(releases_now)" "v0.0.0-dry:draft"
+stopped ev-abandon abandon "api -X DELETE" 0.0.0-dry abandon
+check "ev-abandon: the draft still there" "$(releases_now)" "v0.0.0-dry:draft"
+check "ev-abandon: run again, deleted" "$(github ev-abandon-again 0.0.0-dry abandon) $(releases_now)" "0 "
+check "ev-dry: run again, passed" "$(github ev-dry-again --dry-run)" 0
 
 # The token: in no output, trace or argument of gh, never stored by git; the script's helper hands it.
 fresh "$initial"

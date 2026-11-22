@@ -2,7 +2,9 @@
 # Checks of the release workflow's scripts without GitHub, the Portal or a build (docs/DEVELOPING.md, "Releases"):
 # the workflows' shape (actions pinned by digest, the gate's among them, no pull_request_target, permissions none by
 # default and written per job, the gate's jobs reading the contents alone, the secrets in the `release`
-# environment's steps alone, every job on the admitted commit), actionlint where installed; bench/ship.sh's steps
+# environment's steps alone, every job on the admitted commit), actionlint where installed; the GitHub release's
+# verbs' bounds (numbers, each step above its verbs', each verb run and stopped at its bound with all it started,
+# and a lint of their longest ways); bench/ship.sh's steps
 # run alone from the products they carry (stand-ins for the builds); tests/support/identity.sh's produce and compare modes (a stand-in compiler) and their refusals; the admission
 # (bench/actions/admit.sh) against local repositories, a stand-in gh and a local Central; the publication's steps,
 # bench/ship-publish.sh --step through bench/actions/release-step.sh with stand-ins of the GitHub release, the
@@ -127,8 +129,13 @@ PY
   # Every job's limit holds the bounds of its commands (each `timeout N`; bench/ship.sh's steps by their own bounds,
   # the corpus counted as the ship counts it, both trainings native as the workflow's runners make them, with the
   # warm-up of the built jars where a suite runs) and twenty minutes for a cold setup and the transfers (the image
-  # pulled, the checkout, the artifacts; the caches' misses are inside the bounds of their fetches).
-  bounds=$(timeout 120 python3 - << 'PY'
+  # pulled, the checkout, the artifacts; the caches' misses are inside the bounds of their fetches), and is at most
+  # GitHub's 360 minutes. jobs_proof <tree> <seconds> prints what fails, else the one line of what holds, which names
+  # how many jobs and legs it read.
+  jobs_proof() {
+    (
+      cd "$1" || exit 1
+      timeout "$2" python3 - << 'PY'
 import re, subprocess, yaml
 w = yaml.safe_load(open(".github/workflows/release.yml"))
 ship = open("bench/ship.sh").read()
@@ -143,8 +150,10 @@ bounds["stage"] = sum(int(x) for x in re.findall(r"^step stage-\S+ (\d+) ", ship
     int(re.search(r'timeout (\d+) "\$root/integrations/sbt/binary/check.sh"', ship).group(1))
 warm = int(re.search(r"timeout (\d+) bash -c '. tests/support/jars.sh && jars_warm'", ship).group(1))
 out = []
+legs = 0
 for name, job in w["jobs"].items():
     for leg in job.get("strategy", {}).get("matrix", {}).get("include", [None]):
+        legs += 1
         # The steps of a training and those of profiles taken up are alternatives: the larger counts.
         totals = {"": 0, "train": 0, "take": 0}
         for step in job.get("steps", []):
@@ -161,54 +170,845 @@ for name, job in w["jobs"].items():
         minutes = leg["minutes"] if isinstance(minutes, str) else minutes
         if minutes > 360 or minutes * 60 < total + 1200:
             out.append("%s%s: %d minutes for bounds of %d and the 20 of the setup" % (name, " " + str(leg) if leg else "", minutes, -(-total // 60)))
+if not out:
+    out.append(f"every job's limit holds its commands' bounds and is at most 360 minutes: {legs} jobs and legs")
 print("\n".join(out))
 PY
-)
-  check "release.yml: every job's limit holds its commands' bounds" "$bounds" ""
-  # Inside them, the GitHub release's verbs: bench/ship-release.sh's bounds hold github-release.sh's own over every
-  # file release_assets names (an upload each in the draft, a read-back each in the publication), bench/ship-publish.sh
-  # bounds the verbs by them, and the workflow's steps that run them hold them and the rest of their commands.
-  verbs=$(timeout 120 python3 - << 'PY'
+      [ $? -ne 124 ] || echo "the jobs' limits proof ran out of its $2 s"
+    ) 2>&1
+  }
+  legs=$(timeout 60 python3 -c 'import yaml; w = yaml.safe_load(open(".github/workflows/release.yml")); print(sum(len(j.get("strategy", {}).get("matrix", {}).get("include", [None])) for j in w["jobs"].values()))')
+  jobs_holds="every job's limit holds its commands' bounds and is at most 360 minutes: $legs jobs and legs"
+  # plant <name> <file> [<old> <new>]...: a copy of the files the proofs read, each <old> (there once) made <new> in
+  # <file>; fails when an <old> is not there once.
+  plant() {
+    local tree=$work/plants/$1 file=$2 f
+    mkdir -p "$tree/bench/actions" "$tree/.github/workflows" || return 1
+    for f in bench/github-release.sh bench/ship-publish.sh bench/ship-release.sh bench/actions/release-step.sh .github/workflows/release.yml \
+      bench/ship.sh bench/features.py bench/programs.sh; do
+      cp "$f" "$tree/$f" || return 1
+    done
+    shift 2
+    timeout 30 python3 - "$tree/$file" "$@" << 'PY'
+import sys
+path, pairs = sys.argv[1], sys.argv[2:]
+text = open(path).read()
+for old, new in zip(pairs[::2], pairs[1::2]):
+    if text.count(old) != 1:
+        sys.exit(f"{path}: {old!r} is there {text.count(old)} times, not once")
+    text = text.replace(old, new)
+open(path, "w").write(text)
+PY
+  }
+  # refused <what> <proof> <plant> <expected> [<seconds>]: the proof, run over the planted copy, says the expected.
+  refused() {
+    local said
+    said=$("$2" "$work/plants/$3" "${5:-120}")
+    case $said in
+      *"$4"*) pass=$((pass + 1)) ;;
+      *) echo "FAIL the $2 self-test, $1: '$said', where a line with '$4' is expected"; fail=$((fail + 1)) ;;
+    esac
+  }
+  # The jobs' proof's self-test first: a job over 360 minutes, a job short of its steps, a workflow it cannot read, and
+  # one of its inputs that does not end. Its check takes its one line whole, which an empty or cut output is not.
+  planted=0
+  plant job-361 .github/workflows/release.yml "    timeout-minutes: 192" "    timeout-minutes: 361" &&
+    plant job-short .github/workflows/release.yml "    timeout-minutes: 221" "    timeout-minutes: 100" &&
+    plant job-unread .github/workflows/release.yml "jobs:" "jobs: [" &&
+    plant job-endless bench/features.py "import sys" "import sys, time; time.sleep(15)" &&
+    planted=1
+  check "the jobs proof's self-test: every defect planted" "$planted" 1
+  refused "a job over 360 minutes" jobs_proof job-361 "draft: 361 minutes for bounds of"
+  refused "a job short of its steps" jobs_proof job-short "central-promote: 100 minutes for bounds of"
+  refused "a workflow it cannot read" jobs_proof job-unread "yaml"
+  refused "an input that does not end" jobs_proof job-endless "the jobs' limits proof ran out of its 5 s" 5
+  check "release.yml: every job's limit holds its commands' bounds" "$(jobs_proof . 120)" "$jobs_holds"
+  # Inside them, the GitHub release's verbs (bench/github-release.sh), each of which runs under its bound, held over
+  # every process it starts by bench/release-bound.py. The bounds hold by the numbers below (each verb's bound in and
+  # outside GitHub Actions a whole number of seconds; each step of the workflow that runs release-step.sh above the
+  # bounds of the verbs it can run, by the table of them, which every such step must be in, once; the jobs above) and
+  # by the runs after them (each verb stopped at its bound with everything it started).
+  # numbers_proof <tree> <seconds> prints what fails, else the one line of what holds.
+  numbers_proof() {
+    (
+      cd "$1" || exit 1
+      timeout "$2" python3 - << 'PY'
 import re, subprocess, yaml
+verbs = ("check", "abandon", "draft", "publish", "dry")
+out = []
+said = subprocess.run(["bash", "-c", '. bench/ship-release.sh > /dev/null && for v in check abandon draft publish dry; do for e in "" _actions; do '
+                       'n=release_${v}_bound$e; printf "%s %s\\n" "$n" "${!n-(unset)}"; done; done'], capture_output=True, text=True).stdout
+values = dict(line.partition(" ")[::2] for line in said.splitlines())
+bound = {}
+for v in verbs:
+    for e in ("", "_actions"):
+        name = f"release_{v}_bound{e}"
+        value = values.get(name, "(unset)")
+        if value == "(unset)":
+            out.append(f"bench/ship-release.sh: no {name}")
+        elif not re.fullmatch(r"[1-9][0-9]*", value):
+            out.append(f"bench/ship-release.sh: {name} is '{value}', not a whole number of seconds")
+        else:
+            bound[v, e] = int(value)
+# What each step of release-step.sh can run of the verbs in one run, at most (bench/ship-publish.sh): a run begins by
+# ending an abandonment its record holds begun, after which it fails, but for a new publication's draft, which goes
+# on; a failure before the plugin's promotion abandons the draft. The draft's step of a dry run runs the dry run.
+reach = {
+    "assets out/actions/assets": [()],
+    "draft": [("abandon", "check", "draft", "abandon"), ("dry",)],
+    "smoke": [("abandon",)],
+    "publish stage,smoke": [("abandon",)],
+    "publish upload-begin": [("abandon",)],
+    "publish upload": [("abandon",)],
+    "publish promote": [("draft", "abandon")],
+    "publish read-back": [("abandon",)],
+    "publish publish": [("abandon",), ("publish",)],
+    "publish smoke-public": [("abandon",)],
+    "pin": [()],
+    "site": [()],
+    "conclude": [("abandon",)],
+}
+# A step's limit is the least of what applies to it, in seconds: its run line's own `timeout N`; its `timeout-minutes`
+# (GitHub's workflow syntax: "The maximum number of minutes to run the step before killing the process. Maximum: 360
+# for both GitHub-hosted and self-hosted runners." and "timeout-minutes must be a positive integer"); its job's
+# `timeout-minutes` ("The maximum number of minutes to let a job run before GitHub automatically cancels it. Default:
+# 360"), which bounds every step of the job, and 360 minutes where the job writes none. A step has no default of its
+# own. Each is read as a number alone: an expression or a word is refused.
+# The step keys the proof knows, and what each means for the limit: name and id nothing; run the command, whose
+# `timeout N` it reads; timeout-minutes read as above; env, working-directory and shell nothing (taken as the run line
+# run by bash in the checkout, the tree's own release-step.sh and its scripts); if whether the step runs at all, taken
+# as run; continue-on-error whether the step's failure fails the job, not how long it may run, so the limit stands
+# either way; uses and with an action's step, which runs no release-step.sh. Any other key on a step that runs
+# release-step.sh (GitHub's background, wait, wait-all, cancel, parallel, or one to come) is refused, naming the step
+# and the key: what it does to the limit is not the proof's to guess.
+known = {"name", "id", "if", "run", "shell", "env", "working-directory", "timeout-minutes", "continue-on-error", "uses", "with"}
+def seconds_of(what, value):
+    if type(value) is int and value > 0:
+        return value * 60
+    out.append(f"release.yml: {what} timeout-minutes is '{value}', not a whole number of minutes")
+    return None
+steps = {}
+for job, body in yaml.safe_load(open(".github/workflows/release.yml"))["jobs"].items():
+    job_limit = seconds_of(f"{job}'s", body["timeout-minutes"]) if "timeout-minutes" in body else 360 * 60
+    for st in body.get("steps", []):
+        lines = str(st.get("run", "")).splitlines()
+        timed = [line.strip() for line in lines if "release-step.sh" in line]
+        step_limit = None
+        if timed:
+            for key in st:
+                if key not in known:
+                    out.append(f"release.yml: {job}'s step `{timed[0]}` has {key}, a key the proof does not know")
+            if "timeout-minutes" in st:
+                step_limit = seconds_of(f"{job}'s step `{timed[0]}`", st["timeout-minutes"])
+        for line in lines:
+            # The scripts that reach a verb besides release-step.sh (bench/actions/step.sh runs ship.sh without
+            # --publish, which reaches none).
+            for script in re.findall(r"(?<![\w-])(?:github-release|ship-publish|ship)\.sh(?![\w.-])", line):
+                out.append(f"release.yml: {job} runs {script} itself, a verb the table does not place: {line.strip()}")
+            if "release-step.sh" not in line:
+                continue
+            m = re.fullmatch(r"\s*timeout (\d+) bench/actions/release-step\.sh (\S.*?)\s*", line)
+            if not m:
+                out.append(f"release.yml: {job} runs release-step.sh with no limit of its own: {line.strip()}")
+                continue
+            limits = [int(m.group(1)), job_limit] + ([step_limit] if "timeout-minutes" in st else [])
+            steps.setdefault(m.group(2), []).append((job, None if None in limits else min(limits)))
+for step in steps:
+    if step not in reach:
+        out.append(f"release.yml: a step the table does not know, release-step.sh {step}")
+checked = 0
+for step, ways in reach.items():
+    found = steps.get(step, [])
+    if len(found) != 1:
+        out.append(f"release.yml: {len(found)} steps run release-step.sh {step}, not one")
+        continue
+    job, limit = found[0]
+    if limit is None or not all((v, "_actions") in bound for way in ways for v in way):
+        continue
+    need, way = max((sum(bound[v, "_actions"] for v in way), way) for way in ways)
+    if limit <= need:
+        out.append(f"release-step.sh {step} ({job}): {limit} s, not above the bounds of {' + '.join(way)} in GitHub Actions, {need} s")
+    checked += 1
+if not out and checked == len(reach) and len(bound) == 2 * len(verbs):
+    out.append(f"the bounds are numbers, {len(bound)} of them, and each of the {checked} steps of release-step.sh above its verbs'")
+print("\n".join(out))
+PY
+      [ $? -ne 124 ] || echo "the numbers proof ran out of its $2 s"
+    ) 2>&1
+  }
+  numbers_holds="the bounds are numbers, 10 of them, and each of the 13 steps of release-step.sh above its verbs'"
+  # Its self-test first: a bound missing, one not a number, one empty, one above its step, and an input that does not
+  # end on the scripts' side; on the workflow's, a step below its verbs, one with no limit, one doubled (and so one
+  # gone), one the table does not know, a verb run outside release-step.sh by each of the three scripts that reach one
+  # (github-release.sh, ship-publish.sh, ship.sh --publish), each by a path from the root, one from ./, one from
+  # $GITHUB_WORKSPACE or from bench/ itself, a workflow it cannot read; a step's own timeout-minutes below its verbs'
+  # bounds, one equal to them, one above its job's (the job's the less, below them), an expression and a word as its
+  # value, a job's timeout-minutes below its step's verbs, a key the proof does not know on a step that runs a verb.
+  # Its check takes its one line whole, which an empty or cut output is not.
+  planted=0
+  plant bound-gone bench/ship-release.sh 'release_publish_bound_actions=$((' ': $((' &&
+    plant bound-word bench/ship-release.sh 'release_check_bound=$(( 60 + 60 + 300 + 60 + 60 + 120 + 300 ))' 'release_check_bound=soon' &&
+    plant bound-empty bench/ship-release.sh 'release_dry_bound=$(( release_dry_bound_actions + 300 ))' 'release_dry_bound=' &&
+    plant bound-above bench/ship-release.sh 'release_abandon_bound_actions=$release_abandon_bound' 'release_abandon_bound_actions=5000' &&
+    plant bound-endless bench/ship-release.sh '# Where a release goes' 'sleep 15
+# Where a release goes' &&
+    plant step-short .github/workflows/release.yml 'timeout 5990 bench/actions/release-step.sh publish publish' 'timeout 5170 bench/actions/release-step.sh publish publish' &&
+    plant step-unlimited .github/workflows/release.yml 'timeout 11470 bench/actions/release-step.sh publish promote' 'bench/actions/release-step.sh publish promote' &&
+    plant step-doubled .github/workflows/release.yml 'timeout 11470 bench/actions/release-step.sh publish promote' 'timeout 5990 bench/actions/release-step.sh publish publish' &&
+    plant step-stray .github/workflows/release.yml 'bench/actions/release-step.sh publish upload-begin' 'bench/actions/release-step.sh publish upload-begin,upload' &&
+    plant step-direct .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'timeout 2800 bench/github-release.sh 0.1.7 check' &&
+    plant step-publish .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'timeout 100 bench/ship-publish.sh --resume --step draft 0.1.7' &&
+    plant step-ship .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'timeout 100 bench/ship.sh --publish 0.1.7' &&
+    plant step-dot-direct .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'timeout 100 ./bench/github-release.sh 0.1.7 check' &&
+    plant step-cd-direct .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'cd bench && timeout 100 ./github-release.sh 0.1.7 check' &&
+    plant step-dot-publish .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'timeout 100 ./bench/ship-publish.sh --resume --step draft 0.1.7' &&
+    plant step-workspace-publish .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'timeout 100 "$GITHUB_WORKSPACE/bench/ship-publish.sh" --resume --step draft 0.1.7' &&
+    plant step-cd-publish .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'cd bench && timeout 100 ./ship-publish.sh --resume --step draft 0.1.7' &&
+    plant step-dot-ship .github/workflows/release.yml 'timeout 2800 bench/actions/release-step.sh site' 'timeout 100 ./bench/ship.sh --publish 0.1.7' &&
+    plant step-minutes-short .github/workflows/release.yml $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n' $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n        timeout-minutes: 1\n' &&
+    plant step-minutes-equal .github/workflows/release.yml $'      - run: timeout 1620 bench/actions/release-step.sh conclude\n' $'      - run: timeout 1620 bench/actions/release-step.sh conclude\n        timeout-minutes: 11\n' &&
+    plant step-minutes-above-job .github/workflows/release.yml $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n' $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n        timeout-minutes: 200\n' '    timeout-minutes: 125' '    timeout-minutes: 80' &&
+    plant step-minutes-expression .github/workflows/release.yml $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n' $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n        timeout-minutes: ${{ inputs.minutes }}\n' &&
+    plant step-minutes-word .github/workflows/release.yml $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n' $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n        timeout-minutes: soon\n' &&
+    plant job-minutes-short .github/workflows/release.yml '    timeout-minutes: 125' '    timeout-minutes: 60' &&
+    plant step-unknown-key .github/workflows/release.yml $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n' $'      - run: timeout 5990 bench/actions/release-step.sh publish publish\n        background: true\n' &&
+    plant step-unread .github/workflows/release.yml "jobs:" "jobs: [" &&
+    planted=1
+  check "the numbers proof's self-test: every defect planted" "$planted" 1
+  refused "a bound missing" numbers_proof bound-gone "bench/ship-release.sh: no release_publish_bound_actions"
+  refused "a bound not a number" numbers_proof bound-word "bench/ship-release.sh: release_check_bound is 'soon', not a whole number of seconds"
+  refused "a bound empty" numbers_proof bound-empty "bench/ship-release.sh: release_dry_bound is '', not a whole number of seconds"
+  refused "a bound above its step" numbers_proof bound-above "release-step.sh conclude (conclude): 1620 s, not above the bounds of abandon in GitHub Actions, 5000 s"
+  refused "an input that does not end" numbers_proof bound-endless "the numbers proof ran out of its 5 s" 5
+  refused "a step below its verbs" numbers_proof step-short "release-step.sh publish publish (publish): 5170 s, not above the bounds of publish in GitHub Actions, 5170 s"
+  refused "a step with no limit" numbers_proof step-unlimited "release.yml: central-promote runs release-step.sh with no limit of its own: bench/actions/release-step.sh publish promote"
+  refused "a step doubled" numbers_proof step-doubled "release.yml: 2 steps run release-step.sh publish publish, not one"
+  refused "a step gone" numbers_proof step-doubled "release.yml: 0 steps run release-step.sh publish promote, not one"
+  refused "a step the table does not know" numbers_proof step-stray "release.yml: a step the table does not know, release-step.sh publish upload-begin,upload"
+  refused "a verb run outside release-step.sh" numbers_proof step-direct "release.yml: site runs github-release.sh itself"
+  refused "a verb run by ship-publish.sh outside release-step.sh" numbers_proof step-publish "release.yml: site runs ship-publish.sh itself"
+  refused "a verb run by ship.sh --publish outside release-step.sh" numbers_proof step-ship "release.yml: site runs ship.sh itself"
+  refused "a verb run by ./bench/github-release.sh" numbers_proof step-dot-direct "release.yml: site runs github-release.sh itself"
+  refused "a verb run by ./github-release.sh from bench" numbers_proof step-cd-direct "release.yml: site runs github-release.sh itself"
+  refused "a verb run by ./bench/ship-publish.sh" numbers_proof step-dot-publish "release.yml: site runs ship-publish.sh itself"
+  refused "a verb run by \$GITHUB_WORKSPACE/bench/ship-publish.sh" numbers_proof step-workspace-publish "release.yml: site runs ship-publish.sh itself"
+  refused "a verb run by ./ship-publish.sh from bench" numbers_proof step-cd-publish "release.yml: site runs ship-publish.sh itself"
+  refused "a verb run by ./bench/ship.sh --publish" numbers_proof step-dot-ship "release.yml: site runs ship.sh itself"
+  refused "a step's own timeout-minutes below its verb" numbers_proof step-minutes-short "release-step.sh publish publish (publish): 60 s, not above the bounds of publish in GitHub Actions, 5170 s"
+  refused "a step's own timeout-minutes equal to its verb's bound" numbers_proof step-minutes-equal "release-step.sh conclude (conclude): 660 s, not above the bounds of abandon in GitHub Actions, 660 s"
+  refused "a step's own timeout-minutes above its job's, the job's the less" numbers_proof step-minutes-above-job "release-step.sh publish publish (publish): 4800 s, not above the bounds of publish in GitHub Actions, 5170 s"
+  refused "a step's timeout-minutes an expression" numbers_proof step-minutes-expression "release.yml: publish's step \`timeout 5990 bench/actions/release-step.sh publish publish\` timeout-minutes is '\${{ inputs.minutes }}', not a whole number of minutes"
+  refused "a step's timeout-minutes a word" numbers_proof step-minutes-word "timeout-minutes is 'soon', not a whole number of minutes"
+  refused "a job's timeout-minutes below its step's verb" numbers_proof job-minutes-short "release-step.sh publish publish (publish): 3600 s, not above the bounds of publish in GitHub Actions, 5170 s"
+  refused "a key the proof does not know on a step that runs a verb" numbers_proof step-unknown-key "release.yml: publish's step \`timeout 5990 bench/actions/release-step.sh publish publish\` has background, a key the proof does not know"
+  refused "a workflow it cannot read" numbers_proof step-unread "yaml"
+  check "the verbs' bounds are numbers, and each step that runs a verb above its bounds" "$(numbers_proof . 120)" "$numbers_holds"
+
+  # Every verb holds itself to its bound, in and outside GitHub Actions, and ends at once when it ends, whatever its
+  # parent left of SIGCHLD. Each run is made once in a clone of its scripts whose bounds are written over (appended to
+  # bench/ship-release.sh) as seconds of their own, about twenty and distinct, so that a verb that read another's would
+  # be seen, under a timeout of 60 s of the test's own, TMPDIR a directory of the runs'. The ten bound runs: gh a
+  # planted command that outlives every bound, recording itself, its TMPDIR and three sleepers of its own, one in a
+  # session of its own and one orphaned by a double fork; each must stop not before its bound and at most 5 s past it
+  # counted from the planted command's own start, which comes after the supervisor's clock began (the slack, for a
+  # loaded machine), nothing of it alive, its TMPDIR gone. The ten ended runs: each verb outside GitHub Actions under a
+  # parent that ignores SIGCHLD and under one that blocks it, gh refusing the token at once: each must end with the
+  # verb's own exit and line before its bound. The five masked runs: each verb outside GitHub Actions under a parent
+  # that blocks TERM, INT and HUP, gh outliving every bound, under a caller's `timeout -s TERM 8`: each must end at that
+  # limit with the line of its caller's TERM, nothing left. bound_runs <dir> <kinds> [<planted>] makes the runs of the
+  # kinds (`bound`, `ended`, `masked`) and records each in <dir>/records, a line `<run> <key> <value>` each: its exit, its last line,
+  # its seconds, its seconds since the planted command began, how many pids that recorded, those alive after it,
+  # whether the clone's lock is free, the processes whose working directory is the clone, and whether its TMPDIR is
+  # gone. The real runs come first and alone, the planted after them together. The planted: `skip`
+  # (a script that never runs under its supervisor), `body-alone` (a supervisor that stops its body alone),
+  # `no-subreaper`, `no-removal` (its scratch kept), `late` (its deadline 1.7 times its bound), `sigchld` (SIGCHLD
+  # left as its caller had it) and `mask` (the signal mask left as its caller had it).
+  bound_verbs="check abandon draft publish dry"
+  bound_args() { case $1 in check | abandon | publish) echo "0.1.7 $1" ;; draft) echo 0.1.7 ;; dry) echo --dry-run ;; esac; }
+  # bound_value <verb> [_actions]: the run's own seconds.
+  bound_value() {
+    local i=0 v
+    for v in $bound_verbs; do [ "$v" = "$1" ] && break; i=$((i + 1)); done
+    awk -v i="$i" -v a="${2:+1}" 'BEGIN { printf "%.1f\n", 20.1 + 0.2 * i + 0.1 * a }'
+  }
+  # bound_plant <file> <old> <new>: the text, there once, replaced.
+  bound_plant() {
+    timeout 30 python3 - "$@" << 'PY'
+import sys
+path, old, new = sys.argv[1:4]
+text = open(path).read()
+if text.count(old) != 1:
+    sys.exit(f"{path}: {old!r} is there {text.count(old)} times, not once")
+open(path, "w").write(text.replace(old, new))
+PY
+  }
+  bound_runs() {
+    local dir=$1 kinds=$2 planted=${3:-} v e run p state alive left lock tmp kind parent
+    rm -rf "$dir" && mkdir -p "$dir/base/bench" "$dir/bin-bound" "$dir/bin-ended" "$dir/tmp" "$dir/home/.config/teq" "$dir/home-actions" || return 1
+    cp bench/github-release.sh bench/release-bound.py bench/ship-release.sh bench/ship-manifest.sh bench/changelog.sh "$dir/base/bench/" || return 1
+    for v in $bound_verbs; do for e in "" _actions; do echo "release_${v}_bound$e=$(bound_value "$v" $e)"; done; done >> "$dir/base/bench/ship-release.sh"
+    local sup=$dir/base/bench/release-bound.py
+    case $planted in
+      "") ;;
+      skip) bound_plant "$dir/base/bench/github-release.sh" 'if [ "${TEQ_RELEASE_BOUND:-}" != "$PPID:$bound" ]; then' 'if false; then' || return 1 ;;
+      body-alone) bound_plant "$sup" '        live = descendants()' '        live = [p for p in descendants() if p == body]' || return 1 ;;
+      no-subreaper) bound_plant "$sup" 'libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0' 'False' || return 1 ;;
+      no-removal) bound_plant "$sup" $'    shutil.rmtree(scratch, ignore_errors=True)\n    if live:' '    if live:' || return 1 ;;
+      late) bound_plant "$sup" '    deadline = time.monotonic() + bound' '    deadline = time.monotonic() + bound * 1.7' || return 1 ;;
+      sigchld) bound_plant "$sup" $'    signal.signal(signal.SIGCHLD, signal.SIG_DFL)\n' '' || return 1 ;;
+      mask) bound_plant "$sup" $'    signal.pthread_sigmask(signal.SIG_SETMASK, set())\n' '' || return 1 ;;
+      *) return 1 ;;
+    esac
+    printf 'ghp_madeUpForTheBoundRuns0123456789\n' > "$dir/home/.config/teq/github-token" && chmod 600 "$dir/home/.config/teq/github-token"
+    cat > "$dir/bin-bound/gh" << 'EOF'
+#!/bin/bash
+date +%s.%N > "$BOUND_PIDS.at"
+echo "$$" >> "$BOUND_PIDS"
+echo "$TMPDIR" > "$BOUND_PIDS.tmpdir"
+python3 -c 'import os, time; os.setsid(); time.sleep(600)' &
+echo "$!" >> "$BOUND_PIDS"
+sleep 600 &
+echo "$!" >> "$BOUND_PIDS"
+( sleep 600 < /dev/null > /dev/null 2>&1 & echo "$!" >> "$BOUND_PIDS" )
+wait
+EOF
+    cat > "$dir/bin-ended/gh" << 'EOF'
+#!/bin/bash
+echo "$$" >> "$BOUND_PIDS"
+echo "$TMPDIR" > "$BOUND_PIDS.tmpdir"
+echo "HTTP 401: Bad credentials (https://api.github.com/)" >&2
+exit 1
+EOF
+    chmod +x "$dir/bin-bound/gh" "$dir/bin-ended/gh"
+    (cd "$dir/base" && git_ init -q && git_ add -A && git_ commit -qm scripts) || return 1
+    local runs= all=
+    for kind in $kinds; do
+      for v in $bound_verbs; do
+        for e in $(case $kind in bound) echo "- -actions" ;; ended) echo "-ignored -blocked" ;; masked) echo -masked ;; esac); do
+          run=$v$e
+          [ "$e" != - ] || run=$v
+          all="$all $run"
+          git_ clone -q "$dir/base" "$dir/$run" || return 1
+          (
+            cd "$dir/$run" || exit 1
+            case $e in
+              -actions) set -- env GITHUB_ACTIONS=true GH_TOKEN=ghp_madeUpForTheBoundRuns0123456789 HOME="$dir/home-actions" ;;
+              *) set -- env -u GITHUB_ACTIONS -u GH_TOKEN HOME="$dir/home" ;;
+            esac
+            case $e in
+              -ignored) parent='import os, signal, sys; signal.signal(signal.SIGCHLD, signal.SIG_IGN); os.execvp(sys.argv[1], sys.argv[1:])' ;;
+              -blocked) parent='import os, signal, sys; signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGCHLD}); os.execvp(sys.argv[1], sys.argv[1:])' ;;
+              -masked) parent='import os, signal, sys; signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT, signal.SIGHUP}); os.execvp(sys.argv[1], sys.argv[1:])' ;;
+              *) parent='import os, sys; os.execvp(sys.argv[1], sys.argv[1:])' ;;
+            esac
+            start=$(date +%s.%N)
+            # shellcheck disable=SC2046
+            "$@" PATH="$dir/bin-$([ "$kind" = ended ] && echo ended || echo bound):$PATH" TMPDIR="$dir/tmp" BOUND_PIDS="$dir/$run.pids" \
+              timeout -s TERM "$([ "$kind" = masked ] && echo 8 || echo 60)" python3 -c "$parent" \
+              bench/github-release.sh $(bound_args "$v") > "$dir/$run.out" 2>&1
+            echo $? > "$dir/$run.exit"
+            end=$(date +%s.%N)
+            awk -v s="$start" -v e="$end" 'BEGIN { printf "%.2f\n", e - s }' > "$dir/$run.took"
+            [ ! -s "$dir/$run.pids.at" ] || awk -v s="$(cat "$dir/$run.pids.at")" -v e="$end" 'BEGIN { printf "%.2f\n", e - s }' > "$dir/$run.since"
+          ) &
+          runs="$runs $!"
+        done
+      done
+    done
+    # shellcheck disable=SC2086
+    wait $runs
+    for run in $all; do
+      alive= left= lock=held tmp=none
+      for p in $(cat "$dir/$run.pids" 2> /dev/null); do
+        state=$(sed 's/.*) //' "/proc/$p/stat" 2> /dev/null | cut -d' ' -f1)
+        [ -z "$state" ] || [ "$state" = Z ] || alive="$alive $p"
+      done
+      for p in /proc/[0-9]*; do [ "$(readlink "$p/cwd" 2> /dev/null)" != "$dir/$run" ] || left="$left ${p#/proc/}"; done
+      flock -n "$dir/$run/.git/github-release.lock" true && lock=free
+      if [ -s "$dir/$run.pids.tmpdir" ]; then
+        if [ -e "$(cat "$dir/$run.pids.tmpdir")" ]; then tmp=kept; else tmp=gone; fi
+      fi
+      {
+        echo "$run exit $(cat "$dir/$run.exit" 2> /dev/null)"
+        echo "$run said $(tail -1 "$dir/$run.out" 2> /dev/null)"
+        echo "$run took $(cat "$dir/$run.took" 2> /dev/null)"
+        echo "$run since $(cat "$dir/$run.since" 2> /dev/null || echo none)"
+        echo "$run reached $(grep -c . "$dir/$run.pids" 2> /dev/null)"
+        echo "$run alive ${alive:- none}"
+        echo "$run lock $lock"
+        echo "$run left ${left:- none}"
+        echo "$run tmpdir $tmp"
+      } >> "$dir/records"
+    done
+  }
+  # bound_reap <dir>: what a planted run left alive killed, by its pid.
+  bound_reap() {
+    local p
+    for p in $(awk '$2 == "alive" || $2 == "left" { for (i = 3; i <= NF; i++) if ($i != "none") print $i }' "$1/records"); do
+      kill -9 "$p" 2> /dev/null
+    done
+  }
+  # bound_judge <records> <manifest>: what fails of the runs, a line each, else the one line of what holds; the
+  # manifest names each run with its seconds, its bound's name and its kind.
+  bound_judge() {
+    timeout 60 python3 - "$1" "$2" 2>&1 << 'PY'
+import sys
+records, manifest = sys.argv[1:3]
+slack = 5.0
+cells = {}
+for line in open(manifest):
+    run, value, name, kind = line.split()
+    cells[run] = (value, name, kind)
+got, out = {}, []
+for line in open(records):
+    parts = line.rstrip("\n").split(" ", 2)
+    if len(parts) < 2:
+        out.append(f"a record without its key: '{line.strip()}'")
+        continue
+    run, key, value = parts[0], parts[1], parts[2].strip() if len(parts) > 2 else ""
+    if run not in cells:
+        out.append(f"{run}: a record of no run")
+        continue
+    if key in got.setdefault(run, {}):
+        out.append(f"{run}: {key} recorded twice")
+        continue
+    got[run][key] = value
+keys = ("exit", "said", "took", "since", "reached", "alive", "lock", "left", "tmpdir")
+held = 0
+for run, (value, name, kind) in cells.items():
+    r = got.get(run)
+    if not r:
+        out.append(f"{run}: no record")
+        continue
+    missing = [k for k in keys if k not in r]
+    if missing:
+        out.append(f"{run}: no {', '.join(missing)}")
+        continue
+    bad = []
+    def seconds(key):
+        try:
+            return float(r[key])
+        except ValueError:
+            return -1.0
+    took, since = seconds("took"), seconds("since")
+    bound = float(value)
+    if kind == "bound":
+        if r["exit"] != "124":
+            bad.append(f"exit {r['exit'] or 'none'}, not 124")
+        if not (r["said"].startswith("github: ") and f" ran out of its bound, {value} s (bench/ship-release.sh's {name}): stopped with every command it ran; " in r["said"]):
+            bad.append(f"its line '{r['said']}', not of its bound ({value} s, {name})")
+        if took < bound:
+            bad.append(f"stopped after {r['took'] or 'no'} s, before its bound")
+        elif not 0 <= since <= bound + slack:
+            bad.append(f"stopped {since - bound:.2f} s after its bound from its planted command's start, past the slack of {slack:g} s")
+        if r["reached"] != "4":
+            bad.append(f"{r['reached'] or 'none'} of the planted command's 4 pids recorded: it was not reached")
+    elif kind == "masked":
+        if r["exit"] != "124":
+            bad.append(f"exit {r['exit'] or 'none'}, not its caller's timeout's 124")
+        if not (r["said"].startswith("github: ") and " received SIGTERM: stopped with every command it ran; " in r["said"]):
+            bad.append(f"its line '{r['said']}', not of its caller's TERM")
+        if not 0 <= took < bound:
+            bad.append(f"ended after {r['took'] or 'no'} s, at or past its bound ({value} s), not at its caller's limit")
+        if r["reached"] != "4":
+            bad.append(f"{r['reached'] or 'none'} of the planted command's 4 pids recorded: it was not reached")
+    else:
+        if r["exit"] != "1":
+            bad.append(f"exit {r['exit'] or 'none'}, not the verb's own 1")
+        if not (r["said"].startswith("github: GitHub does not take the token of ") and r["said"].endswith(" (above)")):
+            bad.append(f"its line '{r['said']}', not the verb's own")
+        if not 0 <= took < bound:
+            bad.append(f"ended after {r['took'] or 'no'} s, at or past its bound ({value} s)")
+        if r["reached"] != "1":
+            bad.append(f"{r['reached'] or 'none'} pids of the planted command recorded, not its 1: it was not reached")
+    if r["alive"] != "none":
+        bad.append(f"alive after it: {r['alive']}")
+    if r["lock"] != "free":
+        bad.append(f"the clone's lock {r['lock']}")
+    if r["left"] != "none":
+        bad.append(f"working in the clone after it: {r['left']}")
+    if r["tmpdir"] != "gone":
+        bad.append(f"its TMPDIR {r['tmpdir']}")
+    if bad:
+        out.append(f"{run}: " + "; ".join(bad))
+    else:
+        held += 1
+if not out and held == len(cells):
+    out.append(f"every verb held to its bound, ended at once with its own exit and at its caller's TERM, nothing of it left: {held} runs")
+print("\n".join(out))
+PY
+  }
+  manifest_bound=$work/bound-manifest
+  manifest_ended=$work/ended-manifest
+  manifest_masked=$work/masked-manifest
+  manifest=$work/runs-manifest
+  for v in $bound_verbs; do for e in "" _actions; do echo "$v${e:+-actions} $(bound_value "$v" $e) release_${v}_bound$e bound"; done; done > "$manifest_bound"
+  for v in $bound_verbs; do for e in ignored blocked; do echo "$v-$e $(bound_value "$v") release_${v}_bound ended"; done; done > "$manifest_ended"
+  for v in $bound_verbs; do echo "$v-masked $(bound_value "$v") release_${v}_bound masked"; done > "$manifest_masked"
+  cat "$manifest_bound" "$manifest_ended" "$manifest_masked" > "$manifest"
+  runs_holds="every verb held to its bound, ended at once with its own exit and at its caller's TERM, nothing of it left: 25 runs"
+  # The judge's self-test first, over records planted from a good set: a run missing, none at all, one cut short, a
+  # run the test's own timeout stopped, a line of another value and of another verb's bound, a survivor, the lock
+  # held, a process left, a stray run, a key twice, the planted command not reached, a run stopped before its bound and
+  # one long after it, its TMPDIR kept, another exit, an ended run and a masked one that waited out their bounds, a key
+  # missing; then the seven planted supervisors and scripts, for real, each refused by what it does.
+  good=$work/bound-good
+  awk '$4 == "bound" { printf "%s exit 124\n%s said github: the verb ran out of its bound, %s s (bench/ship-release.sh'"'"'s %s): stopped with every command it ran; then\n%s took %s\n%s since %s\n%s reached 4\n", $1, $1, $2, $3, $1, $2 + 0.3, $1, $2 + 0.2, $1 }
+       $4 == "ended" { printf "%s exit 1\n%s said github: GitHub does not take the token of GH_TOKEN (above)\n%s took 0.40\n%s since 0.30\n%s reached 1\n", $1, $1, $1, $1, $1 }
+       $4 == "masked" { printf "%s exit 124\n%s said github: the verb received SIGTERM: stopped with every command it ran; then\n%s took 8.30\n%s since 8.00\n%s reached 4\n", $1, $1, $1, $1, $1 }
+       { printf "%s alive none\n%s lock free\n%s left none\n%s tmpdir gone\n", $1, $1, $1, $1 }' "$manifest" > "$good"
+  check "the runs' judge: a good set holds" "$(bound_judge "$good" "$manifest")" "$runs_holds"
+  # judged <what> <expected> <awk program over the good set>: the judge refuses the planted set by the expected line.
+  judged() {
+    local said
+    awk "$3" "$good" > "$work/bound-planted"
+    said=$(bound_judge "$work/bound-planted" "$manifest")
+    case $said in
+      *"$2"*) pass=$((pass + 1)) ;;
+      *) echo "FAIL the runs' judge's self-test, $1: '$said', where a line with '$2' is expected"; fail=$((fail + 1)) ;;
+    esac
+  }
+  judged "a run missing" "check: no record" '$1 != "check"'
+  judged "no record at all" "check: no record" '0'
+  judged "a run cut short" "draft: no left" '!($1 == "draft" && $2 == "left")'
+  judged "the test's own timeout" "publish: its line '', not of its bound (20.7 s, release_publish_bound)" '$1 == "publish" && $2 == "said" { print "publish said"; next } 1'
+  judged "another value" "check: its line" '$1 == "check" && $2 == "said" { sub(/20\.1 s/, "20.2 s") } 1'
+  judged "another verb's bound" "abandon: its line" '$1 == "abandon" && $2 == "said" { sub(/release_abandon_bound/, "release_check_bound") } 1'
+  judged "a survivor" "dry-actions: alive after it: 4242" '$1 == "dry-actions" && $2 == "alive" { print "dry-actions alive 4242"; next } 1'
+  judged "the lock held" "draft-actions: the clone's lock held" '$1 == "draft-actions" && $2 == "lock" { print "draft-actions lock held"; next } 1'
+  judged "a process in the clone" "check-actions: working in the clone after it: 4343" '$1 == "check-actions" && $2 == "left" { print "check-actions left 4343"; next } 1'
+  judged "a stray run" "deploy: a record of no run" '1; END { print "deploy exit 124" }'
+  judged "a key twice" "dry: exit recorded twice" '1; $1 == "dry" && $2 == "exit" { print }'
+  judged "the planted command not reached" "publish-actions: 0 of the planted command's 4 pids recorded" '$1 == "publish-actions" && $2 == "reached" { print "publish-actions reached 0"; next } 1'
+  judged "a run stopped before its bound" "abandon-actions: stopped after 1.0 s, before its bound" '$1 == "abandon-actions" && $2 == "took" { print "abandon-actions took 1.0"; next } 1'
+  judged "a run stopped long after its bound" "draft: stopped 5.10 s after its bound from its planted command's start, past the slack of 5 s" '$1 == "draft" && $2 == "since" { print "draft since 25.60"; next } 1'
+  judged "its TMPDIR kept" "publish: its TMPDIR kept" '$1 == "publish" && $2 == "tmpdir" { print "publish tmpdir kept"; next } 1'
+  judged "another exit" "draft: exit 1, not 124" '$1 == "draft" && $2 == "exit" { print "draft exit 1"; next } 1'
+  judged "an ended run that waited out its bound" "check-ignored: exit 124, not the verb's own 1; its line" '$1 == "check-ignored" && $2 == "exit" { print "check-ignored exit 124"; next } $1 == "check-ignored" && $2 == "said" { print "check-ignored said github: the check of v0.1.7 ran out of its bound, 20.1 s (bench/ship-release.sh'"'"'s release_check_bound): stopped with every command it ran; it writes nothing: run again"; next } $1 == "check-ignored" && $2 == "took" { print "check-ignored took 20.15"; next } 1'
+  judged "a record without its key" "a record without its key" '1; END { print "check" }'
+  judged "a masked run that waited out its bound" "draft-masked: its line" '$1 == "draft-masked" && $2 == "said" { print "draft-masked said github: the draft of v0.1.7 ran out of its bound, 20.5 s (bench/ship-release.sh'"'"'s release_draft_bound): stopped with every command it ran; bench/github-release.sh 0.1.7, run again, resumes it"; next } $1 == "draft-masked" && $2 == "took" { print "draft-masked took 20.70"; next } 1'
+  bound_runs "$work/runs" "bound ended masked"
+  setup="$?"
+  # The deadline itself, start-up cancelled: the supervisor over a sleeping body at bounds of 3 and 23 s, at once, the
+  # difference of their seconds 20 within 2; a supervisor whose deadline is 1.2 times its bound (24) planted.
+  # deadline_gap <supervisor> <dir>: the two runs' exits and the difference of their seconds.
+  deadline_gap() {
+    local sup=$1 dir=$2 b ran=
+    mkdir -p "$dir/tmp" || return 1
+    for b in 3 23; do
+      (
+        start=$(date +%s.%N)
+        TMPDIR=$dir/tmp timeout 60 python3 -B "$sup" "$b" "deadline: " "a sleep" "its bound" "none" sleep 600 > "$dir/out.$b" 2>&1
+        echo $? > "$dir/exit.$b"
+        awk -v s="$start" -v e="$(date +%s.%N)" 'BEGIN { printf "%.2f\n", e - s }' > "$dir/took.$b"
+      ) &
+      ran="$ran $!"
+    done
+    # shellcheck disable=SC2086
+    wait $ran
+    echo "$(cat "$dir/exit.3") $(cat "$dir/exit.23") $(awk -v a="$(cat "$dir/took.3")" -v b="$(cat "$dir/took.23")" 'BEGIN { printf "%.2f", b - a }')"
+  }
+  mkdir -p "$work/deadline-late" && cp bench/release-bound.py "$work/deadline-late/release-bound.py" &&
+    bound_plant "$work/deadline-late/release-bound.py" '    deadline = time.monotonic() + bound' '    deadline = time.monotonic() + bound * 1.2'
+  check "the deadline's late supervisor planted" "$?" 0
+  deadline_gap bench/release-bound.py "$work/deadline" > "$work/deadline.gap" &
+  g1=$!
+  deadline_gap "$work/deadline-late/release-bound.py" "$work/deadline-late" > "$work/deadline-late.gap" &
+  wait $g1 $!
+  within() { awk -v g="$3" 'BEGIN { print (g >= 18 && g <= 22) ? "within" : "off" }'; }
+  read -r d3 d23 gap < "$work/deadline.gap"
+  check "the supervisor's deadline is its bound: 23 s and 3 s apart by 20 s within 2 ($gap)" "$d3 $d23 $(within "$d3" "$d23" "$gap")" "124 124 within"
+  read -r d3 d23 gap < "$work/deadline-late.gap"
+  check "the deadline's self-test: a supervisor 1.2 times late refused ($gap)" "$d3 $d23 $(within "$d3" "$d23" "$gap")" "124 124 off"
+  bound_planted="skip body-alone no-subreaper no-removal late sigchld mask"
+  declare -A rp
+  for planted in $bound_planted; do
+    bound_runs "$work/runs-$planted" "$(case $planted in sigchld) echo ended ;; mask) echo masked ;; *) echo bound ;; esac)" "$planted" &
+    rp[$planted]=$!
+  done
+  for planted in $bound_planted; do wait "${rp[$planted]}"; setup="$setup $?"; done
+  check "the runs set up, the seven planted among them" "$setup" "0 0 0 0 0 0 0 0"
+  # refused_run <planted> <manifest> <expected>: the judge refuses the planted runs by the expected line.
+  refused_run() {
+    local said
+    said=$(bound_judge "$work/runs-$1/records" "$2")
+    case $said in
+      *"$3"*) pass=$((pass + 1)) ;;
+      *) echo "FAIL the runs' judge refuses the planted $1: '$said', where a line with '$3' is expected"; fail=$((fail + 1)) ;;
+    esac
+  }
+  refused_run skip "$manifest_bound" "not of its bound (20.1 s, release_check_bound)"
+  refused_run body-alone "$manifest_bound" "alive after it"
+  refused_run no-subreaper "$manifest_bound" "alive after it"
+  refused_run no-removal "$manifest_bound" "its TMPDIR kept"
+  refused_run late "$manifest_bound" "past the slack of 5 s"
+  refused_run sigchld "$manifest_ended" "check-ignored: exit 124, not the verb's own 1"
+  refused_run mask "$manifest_masked" "not of its caller's TERM"
+  check "each verb stopped at its bound with every process it started, at once under a parent's SIGCHLD, at its caller's TERM under a parent's mask" "$(bound_judge "$work/runs/records" "$manifest")" "$runs_holds"
+  for planted in "" $bound_planted; do bound_reap "$work/runs${planted:+-$planted}"; done
+  # A TMPDIR that is no directory: one line, exit 1, nothing run.
+  out=$(cd "$work/runs/check" && env -u GITHUB_ACTIONS HOME="$work/runs/home" PATH="$work/runs/bin-ended:$PATH" TMPDIR="$work/no-such-directory" \
+    BOUND_PIDS="$work/no-tmpdir.pids" timeout 60 bench/github-release.sh 0.1.7 check 2>&1)
+  check "a TMPDIR that is no directory: refused, nothing run" "$?:$out:$([ -e "$work/no-tmpdir.pids" ] && echo ran)" \
+    "1:github: the check of v0.1.7 has no directory of its own under $work/no-such-directory (No such file or directory): nothing is run:"
+
+  # The lint, which the bounds do not rest on (a verb past its bound is stopped all the same): each bound the sum of
+  # its verb's calls along its longest way, in GitHub Actions and outside, each call at its own timeout, read where it
+  # is by an anchor that matches it alone, a helper's calls counted by the shell's words (outside comments, quotes and
+  # here-documents); and each step's limit its verbs' bounds with the commands around them. verbs_lint <tree> <seconds>
+  # prints what fails, else the one line of what holds.
+  verbs_lint() {
+    (
+      cd "$1" || exit 1
+      timeout "$2" python3 - << 'PY'
+import re, subprocess, sys, yaml
 gr = open("bench/github-release.sh").read()
 sp = open("bench/ship-publish.sh").read()
 rs = open("bench/actions/release-step.sh").read()
 sh = lambda c: subprocess.check_output(["bash", "-c", ". bench/ship-release.sh && " + c], text=True).strip()
-files = len(sh("release_assets 0.1.7").split())
-upload = int(re.search(r"gh_ (\d+) release upload", gr).group(1))
-back = int(re.search(r"gh_ (\d+) release download", gr).group(1))
-tag = int(re.search(r"git_ (\d+) ls-remote", gr).group(1))
-polls = re.search(r"for try in ([\d ]+); do\n\s*tag_at=\$\(github_tag\)", gr).group(1).split()
-pause = int(re.search(r"tag_at=\$\(github_tag\).*?sleep (\d+)", gr, re.S).group(1))
-tries = re.search(r"for try in ([\d ]+); do\n\s*\[ \"\$try\" -eq 1 \] \|\| sleep (\d+)", gr)
-maxtime = int(re.search(r"curl -sSfL --max-time (\d+) -o \"\$work/public", gr).group(1))
-reads, wait = len(tries.group(1).split()), int(tries.group(2))
-draft, publish = int(sh("release_draft_bound 0.1.7")), int(sh("release_publish_bound 0.1.7"))
+def one(what, pattern, text, file="github-release.sh"):
+    found = list(re.finditer(pattern, text, re.S))
+    if len(found) != 1:
+        print(f"lint: {file}: {len(found)} {what}, not one")
+        sys.exit(0)
+    return found[0]
+def words(text):
+    """The script's shell words outside comments, quotes and here-documents, with what $( ) holds inside double
+    quotes: a helper's calls are among them however the commands around them are spelled."""
+    out, i, n, stack, heres = [], 0, len(text), ["code"], []
+    while i < n:
+        c, top = text[i], stack[-1]
+        if top == "dq":
+            if c == "\\":
+                i += 2
+            elif c == '"':
+                stack.pop()
+                i += 1
+            elif text.startswith("$(", i):
+                stack.append("sub")
+                i += 2
+            else:
+                i += 1
+            out.append(" ")
+            continue
+        if c == "\n" and heres:
+            end = heres.pop(0)
+            while i < n:
+                j = text.find("\n", i + 1)
+                j = n if j < 0 else j
+                if text[i + 1:j].strip() == end:
+                    i = j
+                    break
+                i = j
+            continue
+        if c == "#" and (i == 0 or text[i - 1] in " \t\n;|&("):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if c == "'":
+            i = text.index("'", i + 1) + 1
+            out.append(" ")
+            continue
+        if c == '"':
+            stack.append("dq")
+            i += 1
+            out.append(" ")
+            continue
+        if c == "\\":
+            i += 2
+            out.append(" ")
+            continue
+        m = re.match(r"<<-?\s*'?\"?(\w+)'?\"?", text[i:]) if text.startswith("<<", i) and not text.startswith("<<<", i) else None
+        if m:
+            heres.append(m.group(1))
+            i += m.end()
+            out.append(" ")
+            continue
+        if top in ("sub", "paren") and c == "(":
+            stack.append("paren")
+        elif top in ("sub", "paren") and c == ")":
+            stack.pop()
+            i += 1
+            out.append(" ")
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+code = words(gr)
+# Every bounded call of github-release.sh, each found by the text that matches it alone, its timeout read there; the
+# calls of the helpers that make them counted; then every bounded call's place must be one of these.
+spans = []
+def bound(what, pattern):
+    m = one(what, pattern, gr)
+    spans.append(m.span())
+    return int(m.group(1))
+token = bound("checks of the token", r'\ngh_ (\d+) api "repos/\$github_repo" > /dev/null ')
+hub_read = bound("reads of the hub's master", r'hub=\$\(gitnet (\d+) ls-remote origin refs/heads/master')
+hub_fetch = bound("fetches of the hub's master", r'gitnet (\d+) fetch --quiet --no-tags origin master')
+copy = bound("copies of a binary in the loop over the classifiers", r'for c in \$release_classifiers; do\n\s*b=\$binaries/\$c/teq [^\n]*\n(?:(?!\n\s*done\n).)*?timeout (\d+) cp "\$b" "\$a\.part" && mv "\$a\.part" "\$a"')
+profiles_copy = bound("copies of the profiles", r'timeout (\d+) cp "\$profiles" ')
+master = bound("reads of GitHub's master", r'github_master=\$\(git_ (\d+) ls-remote "\$github_url" refs/heads/master\)')
+tag = bound("lookups of the tag", r"github_tag\(\) \{\n\s*local refs\n\s*refs=\$\(git_ (\d+) ls-remote ")
+listing = bound("reads of the releases", r"releases\(\) \{\n\s*gh_ (\d+) api --paginate ")
+push_read = bound("reads of the hub's master before the push", r'now=\$\(gitnet (\d+) ls-remote origin refs/heads/master')
+push = bound("pushes", r'git_ (\d+) push --no-follow-tags --porcelain ')
+push_after = bound("reads of GitHub's master after the push", r'now=\$\(git_ (\d+) ls-remote "\$github_url" refs/heads/master')
+made = bound("drafts made", r'made=\$\(gh_ (\d+) api -X POST ')
+deletion = bound("deletions of a draft beside another run's", r'gh_ (\d+) api -X DELETE "repos/\$github_repo/releases/\$made"')
+edit = bound("edits of a draft", r'gh_ (\d+) release edit "\$tag" --repo "\$github_repo" --title ')
+upload = bound("uploads", r"gh_ (\d+) release upload ")
+back = bound("downloads back", r"gh_ (\d+) release download ")
+publication = bound("publications", r'gh_ (\d+) release edit "\$tag" --repo "\$github_repo" --draft=false ')
+reread = bound("reads of a release before its deletion", r'draft=\$\(gh_ (\d+) api "repos/\$github_repo/releases/\$rid" --jq \.draft\)')
+delete = bound("deletions of a draft", r'gh_ (\d+) api -X DELETE "repos/\$github_repo/releases/\$rid"')
+tried = bound("pushes tried", r'git_ (\d+) push --dry-run ')
+looks = one("loops looking for the tag", r"\n\s*for try in ([\d ]+); do\n\s*tag_at=\$\(github_tag\) \|\| tag_at=\n\s*\[ -z \"\$tag_at\" \] \|\| break\n\s*sleep (\d+)\n\s*done\n", gr)
+polls, pause = len(looks.group(1).split()), int(looks.group(2))
+reading = one("read-back loops (a curl into $work/public)", r"\n\s*for try in ([\d ]+); do\n\s*\[ \"\$try\" -eq 1 \] \|\| sleep (\d+)\n\s*rm -f \"\$work/public/\$name\"\n\s*curl -sSfL --max-time (\d+) -o \"\$work/public/\$name\" ", gr)
+reads, wait, maxtime = len(reading.group(1).split()), int(reading.group(2)), int(reading.group(3))
+spans.append(reading.span())
+asking = one("loops asking for the release again", r"\n\s*for try in ([\d ]+); do\n\s*\[ \"\$try\" -eq 1 \] \|\| sleep (\d+)\n\s*found=\$\(releases\) ", gr)
+asks, ask_pause = len(asking.group(1).split()), int(asking.group(2))
+loops = len(re.findall(r"\bfor\s+try\s+in\b", code))
+if loops != 3:
+    print(f"lint: github-release.sh: {loops} retry loops (for try in), not the 3 the lint reads")
+    sys.exit(0)
+for m in re.finditer(r"\b(?:gh_|git_|gitnet|timeout) \d+ |--max-time \d+ ", gr):
+    line = gr[gr.rfind("\n", 0, m.start()) + 1:gr.find("\n", m.start())]
+    if not line.lstrip().startswith("#") and not any(a <= m.start() < b for a, b in spans):
+        print(f"lint: github-release.sh: a bounded call the lint does not place: {line.strip()}")
+        sys.exit(0)
+# The helpers' calls the ways below take, each counted among the shell's words where the script makes it, its
+# definition apart.
+for helper, placed in (("one_release", 8), ("releases", 5), ("github_tag", 4), ("back", 3), ("push_master", 4), ("abandon_drafts", 4)):
+    said = len(re.findall(r"(?<![\w$/.{-])" + helper + r"(?![\w/.-])", code)) - len(re.findall(r"(?<![\w-])" + helper + r"\s*\(\)\s*\{", code))
+    if said != placed:
+        print(f"lint: github-release.sh: {said} calls of {helper}, the lint places {placed}")
+        sys.exit(0)
+classifiers = len(sh("echo $release_classifiers").split())
+# The verbs' longest ways, as they run in GitHub Actions; outside it, the push as well (the push tried, for check and
+# the dry run). The draft's: a new one, asked for again until it shows; one edited; one deleted beside another run's;
+# a published release's download back. The publication's the draft's. The dry run's: its checks, an earlier dry
+# run's draft deleted, the first pass, the second, the abandonment and a failure's on the way out.
+pushing = push_read + push + push_after
+checks = token + hub_read + hub_fetch + master + tag + listing
+asked = asks * listing + (asks - 1) * ask_pause
+abandoning = listing + 2 * (reread + delete) + listing
+need = {
+    "check": checks,
+    "abandon": token + abandoning,
+    "draft": checks + classifiers * copy + profiles_copy + max(made + listing + asked + upload + listing + back,
+                                                               edit + listing + upload + listing + back, made + listing + deletion, back),
+    "publish": checks + classifiers * copy + profiles_copy + back + tag + listing + publication + listing + polls * (tag + pause) + reads * maxtime + (reads - 1) * wait,
+    "dry": checks + abandoning + listing + made + listing + asked + upload + listing + edit + listing + upload + listing + back + listing + 2 * abandoning,
+}
+outside = {"check": tried, "abandon": 0, "draft": pushing, "publish": pushing, "dry": tried}
 out = []
+for v in need:
+    for e, more in (("_actions", 0), ("", outside[v])):
+        b = int(sh(f"echo $release_{v}_bound{e}"))
+        if b < need[v] + more:
+            out.append(f"lint: release_{v}_bound{e} {b} < {need[v] + more}, its calls' longest way")
+files = len(sh("release_assets 0.1.7").split())
 if 'names=$(release_assets "$version"' not in gr or files != 10:
-    out.append(f"github-release.sh's files are not release_assets' {files}")
-if draft < 900 + files * upload + back:
-    out.append(f"release_draft_bound {draft} < 900 + {files} uploads of {upload} + {back}")
-if publish < 900 + back + len(polls) * (tag + pause) + files * (reads * maxtime + (reads - 1) * wait):
-    out.append(f"release_publish_bound {publish} < the publication's own bounds over {files} files")
-if "draft_bound=$(release_draft_bound" not in sp or "publish_bound=$(release_publish_bound" not in sp or \
-        len(re.findall(r"gh_release \$draft_bound", sp)) != 2 or "gh_release $publish_bound publish" not in sp:
-    out.append("bench/ship-publish.sh does not bound the verbs by release_draft_bound and release_publish_bound")
-steps = {}
+    out.append(f"lint: github-release.sh's files are not release_assets' {files}")
+if not re.search(r'for name in "\$\{missing\[@\]\}"; do\n\s*gh_ \d+ release upload [^\n]* &\n\s*uploads\+=\("\$!"\)', gr) or \
+        'wait "${uploads[$i]}"' not in gr:
+    out.append("lint: github-release.sh does not upload the files each in a process of its own, waited for together")
+if not re.search(r'for name in \$names; do\n\s*\(\n\s*for try in [\d ]+; do\n.*?\n\s*\) &\n\s*readers\+=\("\$!"\)', gr, re.S) or \
+        'wait "${readers[$i]}"' not in gr:
+    out.append("lint: github-release.sh does not read the files back each in a reader of its own, waited for together")
+# The steps, in GitHub Actions: their verbs' bounds and the commands around them, each read where it is (the
+# preflights and the plugin's staging as bench/ship.sh counts them, unbounded calls).
+a = {v: int(sh(f"echo $release_{v}_bound_actions")) for v in need}
+against = int(one("downloads against the draft", r'timeout (\d+) gh release download "\$tag"', rs, "release-step.sh").group(1))
+portal = [int(x) for x in re.findall(r"timeout (\d+) python3 -B integrations/sbt/central\.py (?:wait|promote)", sp)]
+smoke = int(one("smokes against the staged set", r'timeout (\d+) "\$release_smoke" --mirror', sp, "ship-publish.sh").group(1))
+portal_upload = int(one("uploads to the Portal", r"timeout (\d+) python3 -B integrations/sbt/central\.py upload", sp, "ship-publish.sh").group(1))
+word = int(one("questions to GitHub of the tag", r'timeout (\d+) gh api "repos/\$repo/releases/tags/\$tag"', rs, "release-step.sh").group(1))
+state = int(one("questions to the Portal", r"timeout (\d+) python3 -B integrations/sbt/central\.py state", rs, "release-step.sh").group(1))
+drop = int(one("drops of a deployment", r"timeout (\d+) python3 -B integrations/sbt/central\.py drop", rs, "release-step.sh").group(1))
+if len(portal) != 3:
+    out.append(f"lint: ship-publish.sh: {len(portal)} calls of central.py wait and promote, not 3")
+honest = {
+    "draft": max(a["abandon"] + 1000 + a["check"] + a["draft"] + max(a["abandon"], against), a["dry"]),
+    "smoke": smoke + a["abandon"],
+    "publish stage,smoke": 1300 + smoke + a["abandon"],
+    "publish upload": portal_upload + a["abandon"],
+    "publish promote": a["draft"] + sum(portal) + a["abandon"],
+    "publish publish": a["publish"],
+    "conclude": word + state + a["abandon"] + state + drop,
+}
+limits = {}
 for job in yaml.safe_load(open(".github/workflows/release.yml"))["jobs"].values():
     for st in job.get("steps", []):
-        m = re.search(r"timeout (\d+) bench/actions/release-step\.sh (draft|publish \S+)$", st.get("run", "").strip())
+        m = re.fullmatch(r"timeout (\d+) bench/actions/release-step\.sh (.+)", st.get("run", "").strip())
         if m:
-            steps[m.group(2)] = int(m.group(1))
-against = int(re.search(r'timeout (\d+) gh release download "\$tag"', rs).group(1))
-portal = sum(int(x) for x in re.findall(r"timeout (\d+) python3 -B integrations/sbt/central\.py (?:wait|promote)", sp))
-for step, need in (("draft", 1000 + draft + against), ("publish promote", draft + portal), ("publish publish", publish)):
-    if steps.get(step, 0) < need:
-        out.append(f"release-step.sh {step}: {steps.get(step)} s for bounds of {need}")
+            limits[m.group(2)] = int(m.group(1))
+for step, n in honest.items():
+    if limits.get(step, 0) < n:
+        out.append(f"lint: release-step.sh {step}: {limits.get(step)} s for its verbs and commands' {n}")
+if not out:
+    out.append("lint: each bound holds its verb's longest way and each step its verbs and commands")
 print("\n".join(out))
 PY
-)
-  check "the GitHub release's verbs bounded over every file of the release, and their steps by them" "$verbs" ""
+      [ $? -ne 124 ] || echo "lint: ran out of its $2 s"
+    ) 2>&1
+  }
+  lint_holds="lint: each bound holds its verb's longest way and each step its verbs and commands"
+  reads='        for try in 1 2 3 4 5; do
+          [ "$try" -eq 1 ] || sleep 10
+          rm -f "$work/public/$name"
+          curl -sSfL --max-time 300 -o "$work/public/$name" "$github_downloads/$tag/$name" 2> "$work/curl.$name" &&
+            cmp -s "$work/public/$name" "$assets/$name" && exit 0
+        done
+'
+  planted=0
+  plant seven-reads bench/github-release.sh "$reads" "${reads/1 2 3 4 5;/1 2 3 4 5 6 7;}" &&
+    plant read-pause bench/github-release.sh "|| sleep 10" "|| sleep 11" &&
+    plant seven-looks bench/github-release.sh "for try in 1 2 3 4 5 6; do" "for try in 1 2 3 4 5 6 7; do" &&
+    plant back-time bench/github-release.sh "gh_ 1800 release download" "gh_ 1801 release download" &&
+    plant upload-time bench/github-release.sh "gh_ 900 release upload" "gh_ 901 release upload" &&
+    plant copy-time bench/github-release.sh 'timeout 60 cp "$b" "$a.part"' 'timeout 61 cp "$b" "$a.part"' &&
+    plant seven-asks bench/github-release.sh "for try in 1 2 3; do" "for try in 1 2 3 4 5 6 7; do" &&
+    plant two-read-loops bench/github-release.sh "$reads" "$reads$reads" &&
+    plant stray-loop bench/github-release.sh "# github_tag: the commit" "for try in 1 2; do :; done
+# github_tag: the commit" &&
+    plant stray-call bench/github-release.sh "# github_tag: the commit" 'gh_ 60 api "repos/$github_repo/stray" > /dev/null
+# github_tag: the commit' &&
+    plant one-more-ask bench/github-release.sh '  [ "$state" = draft ] || fail "$tag is $state, not a draft"' '  one_release
+  [ "$state" = draft ] || fail "$tag is $state, not a draft"' &&
+    plant back-semicolon bench/github-release.sh '      back
+      push_master' '      back; back
+      push_master' &&
+    plant back-quoted bench/github-release.sh '      back
+      push_master' '      x=$(back)
+      back
+      push_master' &&
+    plant check-time bench/github-release.sh 'git_ 300 push --dry-run' 'git_ 301 push --dry-run' &&
+    plant abandon-time bench/github-release.sh 'gh_ 120 api -X DELETE "repos/$github_repo/releases/$rid"' 'gh_ 121 api -X DELETE "repos/$github_repo/releases/$rid"' &&
+    plant short-bound bench/ship-release.sh 'release_publish_bound_actions=$(( release_begin + 1800 ' 'release_publish_bound_actions=$(( release_begin + 180 ' &&
+    plant short-step .github/workflows/release.yml 'timeout 4260 bench/actions/release-step.sh smoke' 'timeout 4200 bench/actions/release-step.sh smoke' &&
+    planted=1
+  check "the lint's self-test: every defect planted" "$planted" 1
+  refused "the read-back in seven tries" verbs_lint seven-reads "lint: release_publish_bound_actions 5170 < 5790"
+  refused "the read-back's pause 11 s" verbs_lint read-pause "lint: release_publish_bound_actions 5170 < 5174"
+  refused "the tag looked for seven times" verbs_lint seven-looks "lint: release_publish_bound_actions 5170 < 5235"
+  refused "a download back of 1801 s" verbs_lint back-time "lint: release_draft_bound_actions 4450 < 4451"
+  refused "an upload of 901 s" verbs_lint upload-time "lint: release_draft_bound_actions 4450 < 4451"
+  refused "a binary copied in 61 s" verbs_lint copy-time "lint: release_draft_bound_actions 4450 < 4455"
+  refused "the release asked for seven times" verbs_lint seven-asks "lint: release_draft_bound_actions 4450 < 4950"
+  refused "two read-back loops" verbs_lint two-read-loops "lint: github-release.sh: 2 read-back loops (a curl into \$work/public), not one"
+  refused "a retry loop the lint does not read" verbs_lint stray-loop "lint: github-release.sh: 4 retry loops (for try in), not the 3 the lint reads"
+  refused "a bounded call the lint does not place" verbs_lint stray-call "lint: github-release.sh: a bounded call the lint does not place: gh_ 60 api \"repos/\$github_repo/stray\" > /dev/null"
+  refused "a helper's call the lint does not place" verbs_lint one-more-ask "lint: github-release.sh: 9 calls of one_release, the lint places 8"
+  refused "the download back again after a semicolon" verbs_lint back-semicolon "lint: github-release.sh: 4 calls of back, the lint places 3"
+  refused "the download back again inside a substitution" verbs_lint back-quoted "lint: github-release.sh: 4 calls of back, the lint places 3"
+  refused "the push tried in 301 s" verbs_lint check-time "lint: release_check_bound 960 < 961"
+  refused "a draft deleted in 121 s" verbs_lint abandon-time "lint: release_abandon_bound_actions 660 < 662"
+  refused "a bound cut short" verbs_lint short-bound "lint: release_publish_bound_actions 3550 < 5170"
+  refused "a step short of its commands" verbs_lint short-step "lint: release-step.sh smoke: 4200 s for its verbs and commands' 4260"
+  check "lint: the verbs' bounds by their calls, the steps by their verbs and commands" "$(verbs_lint . 120)" "$lint_holds"
   # The Central jobs persist the record and the Central record, in steps that always run, before each step that
   # writes to the Portal: the staging before the upload, the intent before it, the deployment before the promotion.
   checkpoints=$(timeout 60 python3 - << 'PY'

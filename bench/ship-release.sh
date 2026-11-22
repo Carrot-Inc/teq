@@ -239,12 +239,44 @@ release_assets() {
   echo LICENSE
 }
 
-# The GitHub release's verbs' bounds, the sums of bench/github-release.sh's own over every file the release holds
-# (release_assets): release_draft_bound <version>, its checks and calls (900 s), an upload of each file (900), the
-# download back (1800); release_publish_bound <version>, its checks and calls (900), the download back (1800), the
-# tag looked for six times (60 and a pause of 5), each file read back from its URL (five tries of 300, 10 apart).
-release_draft_bound() { echo $(( 900 + $(release_assets "$1" | wc -l) * 900 + 1800 )); }
-release_publish_bound() { echo $(( 900 + 1800 + 6 * (60 + 5) + $(release_assets "$1" | wc -l) * (5 * 300 + 4 * 10) )); }
+# The GitHub release's verbs' bounds, in seconds: each verb of bench/github-release.sh runs under its own, held over
+# every process it starts (bench/release-bound.py); release_<verb>_bound where GitHub's master is pushed, outside GitHub
+# Actions, release_<verb>_bound_actions in a GitHub Actions run, which pushes nothing (release_bound <verb>, this
+# environment's). Each is the sum of the verb's own calls along its longest way, each at its own timeout (which
+# tests/release-actions.sh's lint sums from the script), the files the release holds (release_assets) taken at once, so
+# that a bound is one file's whatever their number.
+# check: the token (60), the hub's master read and fetched (60, 300), GitHub's master and tag (60 each), the release
+# looked up (120), the push tried (300, outside GitHub Actions).
+release_check_bound=$(( 60 + 60 + 300 + 60 + 60 + 120 + 300 ))
+release_check_bound_actions=$(( release_check_bound - 300 ))
+# abandon: the token (60), the releases read (120), two drafts each read again and deleted (60 and 120; two the most
+# another run's draft leaves beside one's own), the releases read again (120).
+release_abandon_bound=$(( 60 + 120 + 2 * (60 + 120) + 120 ))
+release_abandon_bound_actions=$release_abandon_bound
+# The draft and the publication begin with the check's calls but the push tried, the five binaries and the profiles
+# copied (60 each: a local copy of 256 MB took 0.5 s on the gate's machines); outside GitHub Actions, the push (the
+# hub read again, the push, GitHub's master read: 60, 300, 60).
+release_begin=$(( release_check_bound_actions + 6 * 60 ))
+release_push=$(( 60 + 300 + 60 ))
+# draft: a new draft made (120), the releases read (120) and asked for again until it shows (three tries of 120, 5
+# apart), the files uploaded together (900), the release looked up (120), the download back (1800).
+release_draft_bound_actions=$(( release_begin + 120 + 120 + 3 * 120 + 2 * 5 + 900 + 120 + 1800 ))
+release_draft_bound=$(( release_draft_bound_actions + release_push ))
+# publish: the download back (1800), the tag (60), the release looked up (120), the publication (120), the release
+# looked up (120), the tag looked for six times (60 and a pause of 5), the files read back from their URLs together
+# (five tries of 300, 10 apart).
+release_publish_bound_actions=$(( release_begin + 1800 + 60 + 120 + 120 + 120 + 6 * (60 + 5) + 5 * 300 + 4 * 10 ))
+release_publish_bound=$(( release_publish_bound_actions + release_push ))
+# dry (--dry-run): the check's calls (the push tried outside GitHub Actions), a draft an earlier dry run left deleted
+# as abandon deletes it but the token (600) and the release looked up (120), the first pass (a new draft made, read and
+# asked for again as the draft's, one file uploaded: 120, 120, three tries of 120 5 apart, 900), the release looked up
+# (120), the second pass (the draft edited and looked up, 120 each; the files uploaded together, the release looked up,
+# the download back: 900, 120, 1800), the releases read (120), the abandonment, and a failure's on the way out (600
+# each).
+release_dry_bound_actions=$(( release_check_bound_actions + (release_abandon_bound - 60) + 120 + 120 + 120 + 3 * 120 + 2 * 5 + 900 + 120 +
+  120 + 120 + 900 + 120 + 1800 + 120 + 2 * (release_abandon_bound - 60) ))
+release_dry_bound=$(( release_dry_bound_actions + 300 ))
+release_bound() { local name=release_$1_bound${GITHUB_ACTIONS:+_actions}; echo "${!name}"; }
 
 # release_unserved <version>: whether nothing of the version is served: its GitHub release's files each answer 404.
 release_unserved() {

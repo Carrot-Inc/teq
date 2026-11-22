@@ -368,11 +368,11 @@ done
   { summary; fail "a release carries all five binaries, and$held_classifiers are held back (above); nothing is published"; }
 if [ -n "$publish" ]; then
   # The set checked as the release's draft checks it, then the publication: the preflights (1000 s), the draft
-  # (bench/ship-release.sh's release_draft_bound: an upload of each of the release's files), the plugin's staging
+  # (bench/ship-release.sh's release_bound draft: the release's files uploaded together), the plugin's staging
   # (1300), the smoke against the staged set (3600), the plugin's publication (20000), the draft published and read
-  # back (release_publish_bound: each file read back), the public smoke (3600).
+  # back (release_bound publish: the files read back together), the public smoke (3600).
   step publish-check 600 "$root/integrations/sbt/binary/check.sh" $publish_classifiers
-  step publish $(( 1000 + $(release_draft_bound "$version") + 1300 + 3600 + 20000 + $(release_publish_bound "$version") + 3600 )) "$root/bench/ship-publish.sh" "$version" ${plugin_release:+--plugin "$plugin_release"}
+  step publish $(( 1000 + $(release_bound draft) + 1300 + 3600 + 20000 + $(release_bound publish) + 3600 )) "$root/bench/ship-publish.sh" "$version" ${plugin_release:+--plugin "$plugin_release"}
 else
   # Without --publish the set is checked as the publish would check it; a refusal fails the run
   # after the summary, the binaries staged, since nothing publishes them as they stand.

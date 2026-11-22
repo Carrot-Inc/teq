@@ -920,7 +920,7 @@ jobs:
       needs.qualify-windows.result == 'success') ||
       needs.admit.outputs.mode == 'resume')
     runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
-    timeout-minutes: 290
+    timeout-minutes: 192
     environment: release
     concurrency:
       group: release-publication
@@ -1018,7 +1018,7 @@ jobs:
           CENTRAL_USER: ${{ secrets.CENTRAL_USER }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      - run: timeout 15600 bench/actions/release-step.sh draft
+      - run: timeout 9730 bench/actions/release-step.sh draft
       # The record, whatever the draft ended in (and on a resume, what it took up).
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1045,7 +1045,7 @@ jobs:
     needs: [admit, draft]
     if: "!cancelled() && needs.draft.result == 'success' && needs.admit.outputs.plugin_publish != 'true'"
     runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
-    timeout-minutes: 95
+    timeout-minutes: 96
     permissions:
       contents: read
       packages: read
@@ -1091,7 +1091,7 @@ jobs:
           name: ship-record
           path: out/ship
       - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
-      - run: timeout 4200 bench/actions/release-step.sh smoke
+      - run: timeout 4260 bench/actions/release-step.sh smoke
       - if: always() && needs.admit.outputs.dry != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1109,7 +1109,7 @@ jobs:
     needs: [admit, draft]
     if: "!cancelled() && needs.draft.result == 'success' && needs.admit.outputs.plugin_publish == 'true'"
     runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
-    timeout-minutes: 175
+    timeout-minutes: 182
     environment: release
     concurrency:
       group: release-publication
@@ -1205,7 +1205,7 @@ jobs:
           if-no-files-found: ignore
           overwrite: true
           retention-days: 90
-      - run: timeout 300 bench/actions/release-step.sh publish upload-begin
+      - run: timeout 700 bench/actions/release-step.sh publish upload-begin
       # The upload's intent, before the upload.
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1223,7 +1223,7 @@ jobs:
           if-no-files-found: ignore
           overwrite: true
           retention-days: 90
-      - run: timeout 2100 bench/actions/release-step.sh publish upload
+      - run: timeout 2160 bench/actions/release-step.sh publish upload
       # The deployment, before its promotion (the next job).
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1250,7 +1250,7 @@ jobs:
     needs: [admit, central]
     if: "!cancelled() && needs.central.result == 'success'"
     runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
-    timeout-minutes: 335
+    timeout-minutes: 221
     environment: release
     concurrency:
       group: release-publication
@@ -1329,7 +1329,7 @@ jobs:
           CENTRAL_USER: ${{ secrets.CENTRAL_USER }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      - run: timeout 18300 bench/actions/release-step.sh publish promote
+      - run: timeout 11470 bench/actions/release-step.sh publish promote
       # What the promotion recorded, whatever it ended in.
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1462,7 +1462,7 @@ jobs:
       ((needs.smoke-local.result == 'success' && needs.central-readback.result == 'skipped') ||
       (needs.smoke-local.result == 'skipped' && needs.central-readback.result == 'success'))
     runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
-    timeout-minutes: 341
+    timeout-minutes: 125
     environment: release
     concurrency:
       group: release-publication
@@ -1521,7 +1521,7 @@ jobs:
           run-id: ${{ needs.admit.outputs.source_run }}
           github-token: ${{ github.token }}
       - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
-      - run: timeout 18890 bench/actions/release-step.sh publish publish
+      - run: timeout 5990 bench/actions/release-step.sh publish publish
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1726,7 +1726,7 @@ jobs:
       suite-linux-arm64, stage, qualify-linux-x64, qualify-linux-arm64, qualify-macos-arm64, qualify-macos-x64, qualify-windows, draft, smoke-local, central, central-promote, central-readback, publish, smoke-public, pin, site]
     if: "failure() && needs.admit.outputs.go == 'true'"
     runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
-    timeout-minutes: 50
+    timeout-minutes: 51
     environment: release
     concurrency:
       group: release-publication
@@ -1788,7 +1788,7 @@ jobs:
           CENTRAL_USER: ${{ secrets.CENTRAL_USER }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      - run: timeout 1500 bench/actions/release-step.sh conclude
+      - run: timeout 1620 bench/actions/release-step.sh conclude
       - if: always()
         run: timeout 120 bench/actions/credentials.sh remove "$RUNNER_TEMP/teq-credentials"
       - if: always()

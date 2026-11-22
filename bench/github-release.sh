@@ -33,7 +33,14 @@
 #              --dry-run: it passed); 1 refused, nothing written to GitHub by this run; 2 the usage; 3 failed once
 #              this run wrote something (the push, the draft, an upload, the publication, a deletion): the same
 #              command, run again, resumes; for --dry-run, 3 once it made its scratch draft, which it deletes on
-#              its way out (a dry run that passed but for a push the release would refuse among them).
+#              its way out (a dry run that passed but for a push the release would refuse among them); 124 the
+#              verb ran out of its bound (below) and was stopped with every command it ran: as 3, the same command
+#              run again resumes, and a dry run's scratch draft is left to `0.0.0-dry abandon` or the next dry
+#              run; 128 and a signal's number, the same on TERM, INT or HUP.
+#   bound      each verb's, bench/ship-release.sh's release_<verb>_bound (release_<verb>_bound_actions in a GitHub
+#              Actions run, which pushes nothing; the dry run's verb `dry`), held over every process the verb
+#              starts, whatever its process group or session, by bench/release-bound.py (Linux alone): the script
+#              runs again under it as the verb's body, which its TEQ_RELEASE_BOUND marks.
 #
 # The release's commit is the head, the commit that bumped the version to <version> (bench/release.sh), on the
 # hub's master (the remote origin). The binaries are the five or none: a classifier held back or not staged
@@ -83,7 +90,7 @@
 # push is decided and
 # tried as git push --dry-run; one the release would refuse fails the dry run once the draft is gone.
 #
-# Needs git, gh, curl, flock and python3; every command is bounded.
+# Needs git, gh, curl, flock and python3; every command is bounded, and the verb by its bound.
 set -uo pipefail
 set +x
 cd "$(dirname "$0")/.." || exit 1
@@ -102,6 +109,22 @@ elif [ $# -ge 1 ] && [ $# -le 2 ] && [[ $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-
 else
   usage
 fi
+# The verb's body runs under its bound (the header's `bound`), held by bench/release-bound.py, which runs this script
+# again with TEQ_RELEASE_BOUND `<its pid>:<bound>`.
+bound_name=release_${verb}_bound${GITHUB_ACTIONS:+_actions}
+bound=${!bound_name:-}
+if [ "${TEQ_RELEASE_BOUND:-}" != "$PPID:$bound" ]; then
+  case $verb in
+    draft) what="the draft of v$version" then="bench/github-release.sh $version, run again, resumes it" ;;
+    publish) what="the publication of v$version" then="bench/github-release.sh $version publish, run again, publishes the draft or reads it back" ;;
+    check) what="the check of v$version" then="it writes nothing: run again" ;;
+    abandon) what="the abandonment of v$version" then="bench/github-release.sh $version abandon, run again, deletes what is left" ;;
+    dry) what="the dry run" then="a scratch draft it left is deleted by bench/github-release.sh $version abandon, or by the next dry run first" ;;
+  esac
+  exec python3 -B "$PWD/bench/release-bound.py" "$bound" "github: " "$what" "bench/ship-release.sh's $bound_name" "$then" \
+    "$BASH" "$PWD/bench/github-release.sh" "$@"
+fi
+unset TEQ_RELEASE_BOUND
 github_repo=Carrot-Inc/teq
 github_url=https://github.com/$github_repo.git
 github_downloads=${TEQ_GITHUB_DOWNLOADS:-https://github.com/$github_repo/releases/download}
@@ -297,8 +320,7 @@ say "the notes of $tag: CHANGELOG.md's section, $(grep -c '^- ' "$work/notes.md"
 manifest=teq-$version-binaries.txt
 # asset_name <classifier>: the binary's asset, .exe for the Windows one alone.
 asset_name() { case $1 in windows-*) echo "teq-$version-$1.exe" ;; *) echo "teq-$version-$1" ;; esac; }
-# Every file of the release, as bench/ship-release.sh's release_assets names them (whose count bounds this script's
-# verbs, release_draft_bound and release_publish_bound).
+# Every file of the release, as bench/ship-release.sh's release_assets names them.
 names=$(release_assets "$version" | tr '\n' ' ')
 names=${names% }
 # sums <dir> <out>: SHA256SUMS and the manifest of the five assets in <dir>, written into <out>.
@@ -337,7 +359,8 @@ if [ "$verb" = draft ] || [ "$verb" = publish ]; then
     b=$binaries/$c/teq m=$binaries/$c/teq.manifest a=$assets/$(asset_name $c)
     [ "$(find "$binaries/$c" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | tr '\n' ' ')" = "teq teq.manifest " ] ||
       fail "$binaries/$c holds $(find "$binaries/$c" -mindepth 1 -maxdepth 1 -printf '%f ' ), not its binary and manifest alone"
-    timeout 300 cp "$b" "$a" || fail "$b could not be copied"
+    # Copied beside its name and renamed, so that a copy cut off leaves no part of the file under it.
+    timeout 60 cp "$b" "$a.part" && mv "$a.part" "$a" || fail "$b could not be copied"
     [ "$(manifest_get "$m" binary)" = "$(manifest_sha256 "$a")" ] || fail "$b is not the binary its manifest records"
     [ "$(manifest_get "$m" commit)" = "$commit" ] || fail "$b is built from $(manifest_get "$m" commit | cut -c1-12), not the release's commit ${commit:0:12}"
     [[ $(manifest_get "$m" version) == "teq $version "* ]] || fail "$b is '$(manifest_get "$m" version)', not the release $version's binary"
@@ -361,7 +384,8 @@ if [ "$verb" = draft ] || [ "$verb" = publish ]; then
       [ "$(manifest_get "$m" "training metadata")" = "$(sed -n "s/^metadata $arch //p" <<< "$header")" ] ||
       fail "$profiles does not hold the $arch profile that guided $c ($(manifest_get "$m" "training profile" | cut -c1-12), the asset's $(sed -n "s/^profile $arch \([0-9a-f]\{12\}\).*/\1/p" <<< "$header"))"
   done
-  timeout 300 cp "$profiles" "$assets/teq-$version-profiles.tar" || fail "$profiles could not be copied"
+  timeout 60 cp "$profiles" "$assets/teq-$version-profiles.tar.part" && mv "$assets/teq-$version-profiles.tar.part" "$assets/teq-$version-profiles.tar" ||
+    fail "$profiles could not be copied"
 elif [ "$verb" = dry ]; then
   for c in $release_classifiers; do printf 'teq %s, %s: a dry run of the release step\n' "$version" "$c" > "$assets/$(asset_name $c)"; done
   printf 'teq %s: the profiles of a dry run of the release step\n' "$version" > "$assets/teq-$version-profiles.tar"
@@ -495,17 +519,36 @@ draft() {
   fi
   [ "$state" = draft ] || fail "$tag is $state, not a draft"
   strays
+  # The files GitHub does not hold as the file uploaded at once, each in an upload of its own, the set waited for
+  # once, so that the draft's bound is one upload's whatever the files; a dry run's stop uploads that many and stops.
+  local missing=() uploads=() failed= stopping=
   for name in $names; do
     if [ "$(awk -F'\t' -v n="$name" '$1 == n { print $2 " " $3 " " $4 }' "$work/assets.$id")" = "$(wc -c < "$assets/$name" | tr -d ' ') uploaded sha256:$(manifest_sha256 "$assets/$name")" ]; then
       say "$name is on GitHub already"
       continue
     fi
-    [ -z "$stop" ] || [ "$uploaded" -lt "$stop" ] || { say "stopped after $uploaded upload(s), as a failed upload stops"; return 4; }
-    written=1
-    gh_ 900 release upload "$tag" --repo "$github_repo" --clobber "$assets/$name" > /dev/null || fail "the upload of $name failed (above)"
-    uploaded=$((uploaded + 1))
-    say "uploaded $name"
+    missing+=("$name")
   done
+  if [ -n "$stop" ] && [ "${#missing[@]}" -gt "$stop" ]; then
+    missing=("${missing[@]:0:$stop}")
+    stopping=1
+  fi
+  [ "${#missing[@]}" -eq 0 ] || written=1
+  for name in "${missing[@]}"; do
+    gh_ 900 release upload "$tag" --repo "$github_repo" --clobber "$assets/$name" > /dev/null 2> "$work/upload.$name" &
+    uploads+=("$!")
+  done
+  for i in "${!missing[@]}"; do
+    if wait "${uploads[$i]}"; then
+      uploaded=$((uploaded + 1))
+      say "uploaded ${missing[$i]}"
+    else
+      cat "$work/upload.${missing[$i]}" >&2
+      [ -n "$failed" ] || failed=${missing[$i]}
+    fi
+  done
+  [ -z "$failed" ] || fail "the upload of $failed failed (above)"
+  [ -z "$stopping" ] || { say "stopped after $uploaded upload(s), as a failed upload stops"; return 4; }
   one_release
   strays
   name=$(whole) || fail "GitHub does not hold $name as the file after the upload"
@@ -557,16 +600,29 @@ case $verb in
     done
     [ "$tag_at" = "$commit" ] ||
       fail "GitHub's tag $tag is on ${tag_at:-nothing}, not ${commit:0:12}: the release is on the wrong commit; gh release edit $tag --repo $github_repo --draft takes it back"
+    # Every file read back from its public URL at once, each in five tries and held to the file, the set waited for
+    # once, so that the publication's bound is one file's tries whatever the files, the first that is not served named.
     mkdir -p "$work/public" || exit 1
+    readers=()
     for name in $names; do
-      ok=
-      for try in 1 2 3 4 5; do
-        [ "$try" -eq 1 ] || sleep 10
-        rm -f "$work/public/$name"
-        curl -sSfL --max-time 300 -o "$work/public/$name" "$github_downloads/$tag/$name" 2> "$work/curl" && cmp -s "$work/public/$name" "$assets/$name" && { ok=1; break; }
-      done
-      [ -n "$ok" ] || fail "$github_downloads/$tag/$name does not serve the file: $(tail -1 "$work/curl")"
+      (
+        for try in 1 2 3 4 5; do
+          [ "$try" -eq 1 ] || sleep 10
+          rm -f "$work/public/$name"
+          curl -sSfL --max-time 300 -o "$work/public/$name" "$github_downloads/$tag/$name" 2> "$work/curl.$name" &&
+            cmp -s "$work/public/$name" "$assets/$name" && exit 0
+        done
+        exit 1
+      ) &
+      readers+=("$!")
     done
+    unserved=
+    i=0
+    for name in $names; do
+      wait "${readers[$i]}" || [ -n "$unserved" ] || unserved=$name
+      i=$((i + 1))
+    done
+    [ -z "$unserved" ] || fail "$github_downloads/$tag/$unserved does not serve the file: $(tail -1 "$work/curl.$unserved")"
     sums_agree "$work/public" || fail "the assets read back from $github_downloads/$tag disagree with their sums (above)"
     say "read back from $github_downloads/$tag/: $names, each the file, SHA256SUMS and $manifest theirs"
     say "released $tag on ${commit:0:12}"

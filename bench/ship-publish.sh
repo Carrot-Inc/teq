@@ -73,10 +73,8 @@ record=$PWD/out/ship/$version/record.json
 rec() { python3 -B bench/ship-record.py "$record" "$@"; }
 # put <key> <value>...: the record written, synced, or the run stopped: no step goes on unrecorded.
 put() { rec set "$@" || { echo "ship-publish: the record cannot be written at $record: nothing more is done"; exit 1; }; }
-gh_release() { local bound=$1; shift; timeout "$bound" "$release_github_script" "$version" "$@"; }
-# The draft and publish verbs' bounds, over every file of the release (bench/ship-release.sh).
-draft_bound=$(release_draft_bound "$version")
-publish_bound=$(release_publish_bound "$version")
+# gh_release [<verb>]: the GitHub release's verb, which holds itself to its bound (bench/ship-release.sh's release_bound).
+gh_release() { "$release_github_script" "$version" "$@"; }
 head=$(git rev-parse HEAD)
 [ "$(release_version .)" = "$version" ] || fail "the checkout's release is $(release_version . 2> /dev/null), not $version"
 plugin=$(release_plugin_version .) || fail "the checkout names no plugin version"
@@ -92,7 +90,7 @@ promoted() {
   [ -n "$plugin_release" ] && [ -f "$central_record/deployment.log" ] && grep -q '"event": "promote-requested"' "$central_record/deployment.log"
 }
 # abandon: the draft abandoned, the record saying so before and after.
-abandon() { put github.state deleting && gh_release 600 abandon && put github.state deleted; }
+abandon() { put github.state deleting && gh_release abandon && put github.state deleted; }
 # stop <why>: the failure's state said, the draft abandoned while nothing went out.
 stop() {
   echo "ship-publish: $1"
@@ -178,7 +176,7 @@ else
     [[ $(manifest_get "$binaries/$c/teq.manifest" version) == "teq $version "* ]] || fail "$binaries/$c is '$(manifest_get "$binaries/$c/teq.manifest" version)', not $version's"
     digests+=("compiler.$c.sha256" "$(sha256sum < "$binaries/$c/teq" | cut -c1-64)")
   done
-  gh_release 300 check || fail "the GitHub release cannot be published (above)"
+  gh_release check || fail "the GitHub release cannot be published (above)"
   # The plugin's default compiler: this release's when it publishes the plugin, else the one the served plugin was
   # released with, which its jar's manifest names (Teq-Compiler).
   default=$version
@@ -196,7 +194,7 @@ drafted=
 wanted draft && case $(rec get github.state) in
   none | drafting)
     put github.state drafting
-    gh_release $draft_bound || stop "the draft v$version could not be made whole (above)"
+    gh_release || stop "the draft v$version could not be made whole (above)"
     put github.state draft
     drafted=1 ;;
 esac
@@ -247,7 +245,7 @@ if wanted promote && [ -n "$plugin_release" ] && case $(rec get central.state) i
     *) fail "the promotion comes after the upload, which the record does not hold ($(rec get central.state)): the upload step first" ;;
   esac
   if ! promoted && [ -z "$drafted" ]; then
-    recorded_binaries && gh_release $draft_bound ||
+    recorded_binaries && gh_release ||
       fail "the draft v$version is not found whole on GitHub, nor made whole (above), and nothing promotes sbt-teq $plugin, whose default compiler is $version, without it: bench/ship-publish.sh --resume $version --plugin $plugin_release with the record's binaries staged tries again"
   fi
   put central.state publishing
@@ -271,7 +269,7 @@ wanted publish && { [ "$(rec get smoke.mirror)" = passed ] && { [ -z "$plugin_re
 wanted publish && case $(rec get github.state) in
   draft | publishing | published)
     put github.state publishing
-    gh_release $publish_bound publish || stop "the draft v$version could not be published and read back whole (above); --resume publishes or reads it back"
+    gh_release publish || stop "the draft v$version could not be published and read back whole (above); --resume publishes or reads it back"
     put github.state read-back ;;
 esac
 # 6. The public cold smoke.
