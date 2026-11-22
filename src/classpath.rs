@@ -186,6 +186,35 @@ fn walk_dir(root: &Path, dir: &Path, depth: u32, out: &mut Vec<String>) -> Resul
     Ok(())
 }
 
+/// A file's length, modification time and (on unix) inode: a products directory's manifest's, taken before the
+/// manifest is read, so that a replacement landing while it is read shows as a move and never hides one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct FileStamp {
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+    ino: u64,
+}
+
+fn stamp_of(m: &std::fs::Metadata) -> FileStamp {
+    #[cfg(unix)]
+    let ino = std::os::unix::fs::MetadataExt::ino(m);
+    #[cfg(not(unix))]
+    let ino = 0;
+    FileStamp { len: m.len(), modified: m.modified().ok(), ino }
+}
+
+fn file_stamp(path: &Path) -> Option<FileStamp> {
+    std::fs::metadata(path).ok().map(|m| stamp_of(&m))
+}
+
+/// What a session compares at a request to see a directory of products change (`Classpath::products_changed`).
+#[derive(Clone)]
+enum Check {
+    None,
+    /// A directory's manifest's file as it stood when last read whole.
+    Dir(Option<FileStamp>),
+}
+
 pub struct Classpath {
     sources: Vec<Source>,
     /// Each source's path as the class path names it, which a binary dependency names
@@ -231,6 +260,9 @@ pub struct Classpath {
     /// Per source, a directory of products' identity as its manifest stated it when the
     /// directory was read (`products_changed`).
     identities: Vec<Option<String>>,
+    /// Per source, what a session compares at a request to see products change, advanced where the products are
+    /// read again and found the same (`products_changed`).
+    checks: std::sync::Mutex<Vec<Check>>,
     /// The TASTy files of a directory's package read together on the first read of one of
     /// them, over threads, each until it is parsed.
     prefetched: FxMap<CpFile, Vec<u8>>,
@@ -254,6 +286,14 @@ impl Classpath {
     /// Opens the jars and directories of `paths`, each jar with its cache when `cache` names
     /// the cache directory, and the module's own directory of products through its manifest.
     pub fn open(paths: &[String], cache: Option<&Path>, own: Option<&OwnProducts>) -> Result<Classpath, String> {
+        Self::open_for(paths, cache, own, None)
+    }
+
+    /// `open`, for a session (`compiler watch`, every kind) where `session` names what the user ran to start it: a
+    /// jar that carries products' manifest is refused at once, before its manifest is read
+    /// (`products::SESSION_REFUSAL`): a session reads products only from their directory, which it watches
+    /// (`products_changed`); nothing watches a jar.
+    pub fn open_for(paths: &[String], cache: Option<&Path>, own: Option<&OwnProducts>, session: Option<&str>) -> Result<Classpath, String> {
         let start = Instant::now();
         let mut cp = Classpath {
             sources: Vec::with_capacity(paths.len()),
@@ -276,6 +316,7 @@ impl Classpath {
             product_inits: FxMap::default(),
             own: None,
             identities: vec![None; paths.len()],
+            checks: std::sync::Mutex::new(vec![Check::None; paths.len()]),
             prefetched: FxMap::default(),
             prefetched_packages: FxMap::default(),
             class_stems: Vec::new(),
@@ -296,8 +337,10 @@ impl Classpath {
                     walk_dir(&root, &root, 0, &mut files)?;
                 }
                 files.sort();
+                let stamp = file_stamp(&root.join(crate::products::MANIFEST));
                 let manifest = crate::products::Manifest::read(&root).transpose()?;
                 cp.identities[j] = crate::products::Manifest::identity_in(&root);
+                cp.checks.get_mut().unwrap_or_else(|e| e.into_inner())[j] = Check::Dir(stamp);
                 match own.filter(|o| cp.own.is_none() && canonical_lenient(&root) == o.dir) {
                     // The own directory: its retained entries' files alone, nothing without a
                     // manifest.
@@ -329,7 +372,24 @@ impl Classpath {
                 }
                 Source::Dir { root, files }
             } else {
-                Source::Jar(Zip::open(path)?)
+                let zip = Zip::open(path)?;
+                // A directory of products packaged as it is, `teq-products.json` in it, is read by a one-shot build
+                // by its number as the directory is: products of another number are refused, and so is a manifest
+                // that is there and cannot be read (its entry failing, not UTF-8) or does not parse
+                // (`Manifest::read`); a session refuses the jar before reading it. A jar without one (what `-o`
+                // writes, what the plugins package) is a library, never refused for its writer.
+                if let Some(i) = zip.find(crate::products::MANIFEST) {
+                    if let Some(ran) = session {
+                        return Err(crate::products::session_refusal(path, ran));
+                    }
+                    let text = zip.read(i).map_err(|e| format!("{}!{}: {}", path, crate::products::MANIFEST, e))?;
+                    let text = String::from_utf8(text).map_err(|_| format!("{}!{}: not UTF-8", path, crate::products::MANIFEST))?;
+                    let manifest = crate::products::Manifest::parse(&text).map_err(|e| format!("{}!{}: {}", path, crate::products::MANIFEST, e))?;
+                    if !manifest.of_this_abi() {
+                        return Err(manifest.refusal_of_jar(path));
+                    }
+                }
+                Source::Jar(zip)
             };
             let jar_cache = match (&source, cache) {
                 (Source::Jar(_), Some(dir)) => JarCache::open(path, dir),
@@ -426,15 +486,30 @@ impl Classpath {
     /// path was opened, or beside which a staging directory stands: another build published, or
     /// publishes, into it since (docs/TARGETS.md, "Watch mode"). A read of the manifest's first
     /// bytes per directory, no walk; a directory without a manifest then is checked by the next
-    /// full build's walk alone.
+    /// full build's walk alone. Where the manifest's file no longer stands as it did when read (`FileStamp`) and
+    /// its identity is the same, it is read whole: one that cannot be read or does not parse (written over, cut
+    /// short past its identity) is a change, which the class path's opening then refuses, and one that reads is
+    /// none, its file's stamp kept so that it is not read again (a manifest published again with the same bytes).
+    /// No jar is watched: a session refuses one that carries products' manifest at its start (`open_for`), and a
+    /// jar without one is a library, its replacement unseen until the next full build, as before.
     pub fn products_changed(&self) -> Option<&str> {
+        let mut checks = self.checks.lock().unwrap_or_else(|e| e.into_inner());
         self.identities.iter().enumerate().find_map(|(j, read)| {
             let read = read.as_deref()?;
             let Source::Dir { root, .. } = &self.sources[j] else { return None };
             // A staging directory is a publication under way or one a killed build left, whose
             // files the manifest's identity does not tell from the old.
-            let publishing = crate::products::staging_dir(&canonical_lenient(root)).exists();
-            (publishing || crate::products::Manifest::identity_in(root).as_deref() != Some(read)).then(|| self.paths[j].as_str())
+            if crate::products::staging_dir(&canonical_lenient(root)).exists() || crate::products::Manifest::identity_in(root).as_deref() != Some(read) {
+                return Some(self.paths[j].as_str());
+            }
+            let stamp = file_stamp(&root.join(crate::products::MANIFEST));
+            if !matches!(&checks[j], Check::Dir(kept) if *kept == stamp) {
+                if !matches!(crate::products::Manifest::read(root), Some(Ok(_))) {
+                    return Some(self.paths[j].as_str());
+                }
+                checks[j] = Check::Dir(stamp);
+            }
+            None
         })
     }
 

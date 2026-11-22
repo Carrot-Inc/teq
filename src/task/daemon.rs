@@ -735,7 +735,7 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
             .iter()
             .map(|key| {
                 crate::alloc::spawn_in(scope, move || {
-                    let built = build(state, export, key, &request.env, progress);
+                    let built = build(state, export, key, &request.env, &request.verb, progress);
                     sink.record(obj([("progress", obj([("answered", key.to_string().as_str().into())]))]));
                     built
                 })
@@ -1714,7 +1714,7 @@ fn idle(request: &Request, key: &Key, why: &str, reply: &mut Reply) {
 fn built(state: &State, export: &Export, request: &Request, owner: &Key, name: &str, resident: &mut Option<Resident>, reply: &mut Reply, summary: Summary) -> bool {
     let named = [name.to_string()];
     let sink = reply.sink();
-    let (answer, notes) = build_in(state, export, owner, &request.env, resident, &|line| sink.line(line));
+    let (answer, notes) = build_in(state, export, owner, &request.env, &request.verb, resident, &|line| sink.line(line));
     for note in notes {
         noted(request, owner, &note, reply);
     }
@@ -1991,10 +1991,10 @@ fn run_paths(export: &Export, key: &Key, owner: &Key) -> Result<Vec<PathBuf>, St
 }
 
 /// One resident's build: started when it is not running, its closure's generators run first.
-fn build(state: &Arc<State>, export: &Arc<Export>, key: &Key, env: &BTreeMap<String, String>, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, Failure>, Vec<String>) {
+fn build(state: &Arc<State>, export: &Arc<Export>, key: &Key, env: &BTreeMap<String, String>, verb: &str, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, Failure>, Vec<String>) {
     let slot = slot(state, key);
     let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
-    build_in(state, export, key, env, &mut resident, progress)
+    build_in(state, export, key, env, verb, &mut resident, progress)
 }
 
 /// The residents started: those whose slot holds one, and those whose slot a build or a run holds,
@@ -2016,7 +2016,7 @@ fn slot(state: &State, key: &Key) -> Slot {
 /// A build of the resident in its slot, held by the caller; what it wrote is recorded for the
 /// test configurations it serves. A resident started fetches the artifacts its classpath lacks,
 /// telling `progress` of each.
-fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, String>, resident: &mut Option<Resident>, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, Failure>, Vec<String>) {
+fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, String>, verb: &str, resident: &mut Option<Resident>, progress: &(dyn Fn(&str) + Sync)) -> (Result<Answer, Failure>, Vec<String>) {
     if resident.is_none() {
         if let Err(e) = settle_classes_abi(export, key) {
             return (Err(e.into()), Vec::new());
@@ -2045,7 +2045,7 @@ fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, St
         let started = export.resident_args_with(key, progress).and_then(|args| {
             let file = export.resident_args_file(key);
             log(&format!("starting {}: {} @{}, which holds {}", key, state.exe.display(), file.display(), args.join(" ")));
-            Resident::start(&state.exe, &export.root, key.clone(), args, &file, inputs)
+            Resident::start(&state.exe, &export.root, key.clone(), args, &file, inputs, verb)
         });
         match started {
             Ok(r) => *resident = Some(r),

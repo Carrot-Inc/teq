@@ -162,9 +162,10 @@ impl Zip {
         Ok(sha1.hex())
     }
 
-    /// The index of the entry of that name, if any.
+    /// The index of the entry of that name, if any: the names' lengths compared first, so that a jar's thousands
+    /// of entries cost a comparison of numbers each.
     pub fn find(&self, name: &str) -> Option<usize> {
-        self.entries.iter().position(|e| self.name(e) == name)
+        self.entries.iter().position(|e| e.name_len as usize == name.len() && self.name(e) == name)
     }
 
     /// The entry's extra field in the central directory, and its comment.

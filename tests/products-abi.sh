@@ -26,17 +26,42 @@
 #   check      `compiler check --classpath <up>` of `down`
 #   own        `compiler build --products <up> --classpath <up>` of one of up's sources (the module's own directory)
 #   removed    `compiler build --products <up> --removed <source>`, no sources
-#   watch      `compiler watch --check --classpath <up>` over `down`, its first build over the reader's own
-#              products, then up published again by the writer (a build answered), then by the reader again
+#   watch      `compiler watch --classpath <up>` over `down`, a session of each kind (`--check`, JavaScript `-o` and
+#              `--split`, the JVM's `-o` directory), its first build over the reader's own products, then up published
+#              again by the writer (a build answered), then by the reader again
+#   session-jar  a session of each kind at 1 and 8 workers over up's products packed as a jar (N's, N+1's, 0.1.11's,
+#              one whose manifest is not UTF-8): refused at its start with SESSION_REFUSAL's line whole, naming
+#              `teq compiler watch` (a session reads products only from their directory), nothing written; and two
+#              jars that must not be refused, read: the jar the sbt plugin's packageBin writes (up's products, the
+#              manifest left out) and a jar of the stage verb's kind (an `-o` jar: class files, a resource, the
+#              Teq-Products-ABI attribute in META-INF/MANIFEST.MF)
 #   jar        a jar `-o` wrote (`Teq-Products-ABI` in its manifest; 0.1.11's has none) on the class path of `down`'s
 #              build: a library whoever wrote it, never refused for its writer
-#   products-jar  up's directory of products packaged as a jar (`teq-products.json` in it) on the class path: a
-#              library too
+#   products-jar  up's directory of products packaged as a jar (`teq-products.json` in it) on the class path: read
+#              by its number as the directory is, another number refused by the line naming `<jar>!teq-products.json`
 #   whole      `compiler build --products <up>` with <up> off `--classpath`, over a directory the writer wrote with a
 #              user's files beside its products, of one source less: whatever the numbers, the old entries' files
 #              it does not write again gone, the user's kept, and a downstream build that names the dropped source's
 #              definition refused as scalac's separate compilation refuses it; its twin on `--classpath` where the
 #              numbers differ
+#   review     the review's program: a module whose body names a lean std member (`summon[Numeric[BigInt]]` behind
+#              a method) written as products by N and by N+1, as its directory and packed as a jar, read by each of
+#              them through the interpreter (`interp`), JavaScript (`compiler build -o`, then node) and the JVM
+#              (`compiler build --target jvm`, then java): over its own number it prints 3, over the other the line
+#   damaged    a manifest that is there and cannot be read or does not parse (not UTF-8, cut short past its
+#              identity, empty; a jar's entry failing its CRC), in N's products as a directory and packed as a jar:
+#              refused with the manifest's line by every reader N runs (build, check, the interpreter, JavaScript `-o`
+#              and `--split`, the JVM's `-o`; the directory's own build and `--removed`, its manifest left as it was),
+#              nothing written; in a session of each kind where the directory's manifest is damaged under it, refused,
+#              then read once put back; the whole-module build over the damaged directory writes it anew (the remedy)
+#   in place   a session of each kind at 1 and 8 workers over N's products directory, its files written over in
+#              place with their times kept (`touch -r`, `cp -p`): N+1's (refused with the line), N's (read), N's with a
+#              member renamed (down refused for want of it, the message whole), N's (read); then the same bytes
+#              published again (read), after which N+1's in place are refused still
+#   vc-jar     a library of value classes and their intersections (`Meters & Feet`, `Meters & Feet & Grams`) written
+#              by N as products (TASTy) and as an `-o` jar (class files alone): a program built by N against the
+#              products, run against the jar, prints scalac 3.8.4's `3 Feet 9` (scalac's own jar of the source and
+#              client print it too): N's `-o` jar boxes and declares those methods as scalac's does
 # Prints a line per cell (`products-abi: <cell> <writer> -> <reader>: <what it did>`, FAIL first where it is not
 # the rule's) and the counts; exits 1 on a failure. Each command is bounded (120 s; a session's answer 30 s).
 set -uo pipefail
@@ -47,6 +72,8 @@ SL=$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar
 [ -f "$SL" ] || { echo "FAIL products-abi: scala-library 3.8.4 is not in the coursier cache (incomplete validation)"; exit 1; }
 template=$(sed -n 's/^pub const REFUSAL: &str = "\(.*\)";$/\1/p' src/products.rs)
 [ -n "$template" ] || { echo "FAIL products-abi: src/products.rs holds no REFUSAL"; exit 1; }
+session_template=$(sed -n 's/^pub const SESSION_REFUSAL: &str = "\(.*\)";$/\1/p' src/products.rs)
+[ -n "$session_template" ] || { echo "FAIL products-abi: src/products.rs holds no SESSION_REFUSAL"; exit 1; }
 absolute() { (cd "$(dirname "$1")" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$1")"); }
 mkdir -p "$4" || exit 1
 out=$(cd "$4" && pwd -P)
@@ -295,49 +322,61 @@ for reader in N N1; do
     read_as_twin "jar $pair (Teq-Products-ABI: $attribute)" "$c/jar.log" $code "$c/jar" "$c/jar-twin" "" ""
     [ "$attribute" = "$([ "$writer" = O ] && echo none || echo "${ABI[$writer]}")" ] || bad "jar $pair: the jar ${NAME[$writer]} wrote names Teq-Products-ABI $attribute"
 
-    # A directory of products packaged as a jar: a library, its manifest unread.
+    # A directory of products packaged as a jar: read by its number as the directory is.
     write_up "$writer" "$c/up-packed"
     pack "$c/up-packed" "$c/up-products.jar"
     run "$reader" "$c/products-jar.log" compiler build --target jvm --products "$c/products-jar" --classpath "$c/up-products.jar:$SL" down/D.scala
     code=$?
-    tw=$(twin "$writer"); tr=$(twin "$reader")
-    write_up "$tw" "$c/up-packed-twin"
-    pack "$c/up-packed-twin" "$c/up-products-twin.jar"
-    run "$tr" "$c/products-jar-twin.log" compiler build --target jvm --products "$c/products-jar-twin" --classpath "$c/up-products-twin.jar:$SL" down/D.scala
-    read_as_twin "products-jar $pair" "$c/products-jar.log" $code "$c/products-jar" "$c/products-jar-twin" "$f/$reader-build" down
+    if [ "$same" = 1 ]; then
+      tw=$(twin "$writer"); tr=$(twin "$reader")
+      write_up "$tw" "$c/up-packed-twin"
+      pack "$c/up-packed-twin" "$c/up-products-twin.jar"
+      run "$tr" "$c/products-jar-twin.log" compiler build --target jvm --products "$c/products-jar-twin" --classpath "$c/up-products-twin.jar:$SL" down/D.scala
+      read_as_twin "products-jar $pair" "$c/products-jar.log" $code "$c/products-jar" "$c/products-jar-twin" "$f/$reader-build" down
+    else refused "products-jar $pair" "$c/products-jar.log" $code "$(refusal "$c/up-products.jar!teq-products.json" "${ABI[$writer]}" "$writer_name" "$reader" "$c/up-products.jar")" "$c/products-jar"; fi
 
-    # A session meeting a publication of the writer's: its first build over the reader's own products, then the
-    # writer's (a build answered), then the reader's again.
-    w=$c/watch
-    rm -rf "$w" && mkdir -p "$w"
-    write_up "$reader" "$w/up"
-    mkfifo "$w/cmd" "$w/ans"
-    (cd "$src" && exec timeout 120 "${BIN[$reader]}" compiler watch --check --classpath "$w/up:$SL" down/D.scala < "$w/cmd" > "$w/ans" 2> "$w/err") &
-    session=$!
-    exec 3> "$w/cmd" 4< "$w/ans"
-    answers=()
-    for step in first writer reader; do
-      case $step in
-        writer) write_up "$writer" "$w/up"; echo build >&3 ;;
-        reader) write_up "$reader" "$w/up"; echo build >&3 ;;
+    # The sessions, one of each kind (`--check`, JavaScript `-o` and `--split`, the JVM's `-o` directory), over the
+    # directory, meeting a publication of the writer's (its first build over the reader's own products, then the
+    # writer's, a build answered, then the reader's again).
+    for kind in check js split jvm; do
+      case $kind in
+        check) how=(--check) ;;
+        js) how=(-o out.js) ;;
+        split) how=(--split out-split) ;;
+        jvm) how=(--target jvm -o out-jvm) ;;
       esac
-      answer=
-      read -r -t 30 answer <&4 || answer="(no answer in 30 s)"
-      answers+=("$answer")
+      w=$c/watch-$kind
+      rm -rf "$w" && mkdir -p "$w"
+      write_up "$reader" "$w/up"
+      mkfifo "$w/cmd" "$w/ans"
+      (cd "$src" && exec timeout 120 "${BIN[$reader]}" compiler watch "${how[@]/#out/$w/out}" --classpath "$w/up:$SL" down/D.scala < "$w/cmd" > "$w/ans" 2> "$w/err") &
+      session=$!
+      exec 3> "$w/cmd" 4< "$w/ans"
+      answers=()
+      for step in first writer reader; do
+        case $step in
+          writer) write_up "$writer" "$w/up"; echo build >&3 ;;
+          reader) write_up "$reader" "$w/up"; echo build >&3 ;;
+        esac
+        answer=
+        read -r -t 30 answer <&4 || answer="(no answer in 30 s)"
+        answers+=("$answer")
+      done
+      echo quit >&3
+      exec 3>&- 4<&-
+      wait "$session" 2> /dev/null
+      rm -f "$w/cmd" "$w/ans"
+      line=$(refusal "$w/up/teq-products.json" "${ABI[$writer]}" "$writer_name" "$reader" "$w/up")
+      first_ok=$([[ "${answers[0]}" == '{"ok":true'* ]] && [[ "${answers[2]}" == '{"ok":true'* ]] && echo 1 || echo 0)
+      if [ "$same" = 1 ] && [ "$first_ok" = 1 ] && [[ "${answers[1]}" == '{"ok":true'* ]]; then
+        ok "watch $pair, $kind: the writer's publication read, each build answered ok"
+      elif [ "$same" = 0 ] && [ "$first_ok" = 1 ] && [[ "${answers[1]}" == '{"ok":false'* ]] && [[ "${answers[1]}" == *"\"message\":\"$line\""* ]]; then
+        ok "watch $pair, $kind: the writer's publication refused with the line whole, the reader's next one read"
+      else
+        bad "watch $pair, $kind: answers ${answers[*]} (stderr: $(head -c 300 "$w/err"); wanted the line '$line')"
+      fi
+
     done
-    echo quit >&3
-    exec 3>&- 4<&-
-    wait "$session" 2> /dev/null
-    rm -f "$w/cmd" "$w/ans"
-    line=$(refusal "$w/up/teq-products.json" "${ABI[$writer]}" "$writer_name" "$reader" "$w/up")
-    first_ok=$([[ "${answers[0]}" == '{"ok":true'* ]] && [[ "${answers[2]}" == '{"ok":true'* ]] && echo 1 || echo 0)
-    if [ "$same" = 1 ] && [ "$first_ok" = 1 ] && [[ "${answers[1]}" == '{"ok":true'* ]]; then
-      ok "watch $pair: the writer's publication read, each build answered ok"
-    elif [ "$same" = 0 ] && [ "$first_ok" = 1 ] && [[ "${answers[1]}" == '{"ok":false'* ]] && [[ "${answers[1]}" == *"\"message\":\"$line\""* ]]; then
-      ok "watch $pair: the writer's publication refused with the line whole, the reader's next one read"
-    else
-      bad "watch $pair: answers ${answers[*]} (stderr: $(head -c 300 "$w/err"); wanted the line '$line')"
-    fi
   done
 done
 
@@ -391,5 +430,317 @@ for pair in "N N" "O N" "N N1" "O N1"; do
     fi
   done
 done
+# The review's program: written by N and by N+1 as lean products (the interpreter's and JavaScript's) and as JVM
+# products, each as its directory and as a jar, read by N and by N+1 on the three targets.
+v=$out/review
+rm -rf "$v" && mkdir -p "$v/src/probe"
+printf '%s\n' 'package probe' '' 'object Api:' '  def numeric: Numeric[BigInt] = summon[Numeric[BigInt]]' > "$v/src/probe/Api.scala"
+printf '%s\n' '@main def run(): Unit = println(probe.Api.numeric.plus(BigInt(1), BigInt(2)))' > "$v/src/Main.scala"
+# vrun <binary> <log> <args...>: as run, from the review's sources.
+vrun() { local b=$1 log=$2; shift 2; (cd "$v/src" && timeout 120 "${BIN[$b]}" "$@" > "$log.out" 2> "$log"); }
+for writer in N N1; do
+  vrun "$writer" "$v/$writer-lean.log" compiler check --products "$v/$writer-lean" probe/Api.scala || bad "review: ${NAME[$writer]}'s lean products not written ($(head -c 300 "$v/$writer-lean.log"))"
+  vrun "$writer" "$v/$writer-jvm.log" compiler build --target jvm --products "$v/$writer-jvm" --classpath "$SL" probe/Api.scala || bad "review: ${NAME[$writer]}'s JVM products not written ($(head -c 300 "$v/$writer-jvm.log"))"
+  pack "$v/$writer-lean" "$v/$writer-lean.jar"
+  pack "$v/$writer-jvm" "$v/$writer-jvm.jar"
+done
+for writer in N N1; do
+  for reader in N N1; do
+    for form in dir jar; do
+      lean=$v/$writer-lean; jvm=$v/$writer-jvm
+      [ $form = jar ] && lean=$lean.jar && jvm=$jvm.jar
+      c=$v/$writer-$reader-$form
+      mkdir -p "$c"
+      what="review ${NAME[$writer]} -> ${NAME[$reader]} ($form)"
+      if [ $form = jar ]; then line_lean=$(refusal "$lean!teq-products.json" "${ABI[$writer]}" "teq ${VERSION[$writer]}" "$reader" "$lean"); line_jvm=$(refusal "$jvm!teq-products.json" "${ABI[$writer]}" "teq ${VERSION[$writer]}" "$reader" "$jvm")
+      else line_lean=$(refusal "$lean/teq-products.json" "${ABI[$writer]}" "teq ${VERSION[$writer]}" "$reader" "$lean"); line_jvm=$(refusal "$jvm/teq-products.json" "${ABI[$writer]}" "teq ${VERSION[$writer]}" "$reader" "$jvm"); fi
+      vrun "$reader" "$c/interp.log" interp --classpath "$lean" Main.scala; ci=$?
+      vrun "$reader" "$c/js.log" compiler build --classpath "$lean" Main.scala -o "$c/main.js"; cj=$?
+      [ $cj = 0 ] && { timeout 30 node "$c/main.js" > "$c/js.out" 2>> "$c/js.log"; cj=$?; }
+      vrun "$reader" "$c/jvm.log" compiler build --target jvm --classpath "$jvm:$SL" Main.scala -o "$c/main.jar"; cv=$?
+      [ $cv = 0 ] && { timeout 30 java -cp "$c/main.jar:$jvm:$SL" TeqMain > "$c/jvm.out" 2>> "$c/jvm.log"; cv=$?; }
+      for t in interp:$ci:"$line_lean" js:$cj:"$line_lean" jvm:$cv:"$line_jvm"; do
+        target=${t%%:*}; rest=${t#*:}; code=${rest%%:*}; line=${rest#*:}
+        out_file=$c/$target.out; [ $target = interp ] && out_file=$c/interp.log.out
+        if [ "${ABI[$writer]}" = "${ABI[$reader]}" ]; then
+          if [ "$code" = 0 ] && [ "$(cat "$out_file")" = 3 ]; then ok "$what, $target: prints 3"
+          else bad "$what, $target: exit $code, printed '$(head -c 200 "$out_file")' (stderr: $(head -c 300 "$c/$target.log"))"; fi
+        else
+          if [ "$code" != 0 ] && grep -qxF -- "$line" "$c/$target.log"; then ok "$what, $target: refused (exit $code), the line whole"
+          else bad "$what, $target: not refused with the line (exit $code; wanted '$line'; stderr: $(head -c 300 "$c/$target.log"))"; fi
+        fi
+      done
+    done
+  done
+done
+# A manifest that is there and cannot be read or does not parse, in a directory and in a jar alike: not UTF-8, cut
+# short past its identity, empty, and for a jar its entry failing its CRC. Every reader N runs refuses it with the
+# manifest's line (`<manifest>: <what is wrong>`, the whole line where the reason is known: not UTF-8, empty) and
+# writes nothing; a session of each kind over N's products refuses it where the manifest is damaged under it, and
+# reads the products again once they are put back; the whole-module build over the damaged directory, the remedy,
+# writes the directory anew.
+dm=$out/damaged
+rm -rf "$dm" && mkdir -p "$dm"
+write_up N "$dm/good"
+pack "$dm/good" "$dm/good.jar"
+# damage <products dir> <kind>: the manifest made unreadable as <kind> says, in place.
+damage() {
+  python3 - "$1/teq-products.json" "$2" <<'PY'
+import sys
+path, kind = sys.argv[1:]
+text = open(path, "rb").read()
+if kind == "utf8":
+    open(path, "wb").write(b"\xff\xfe" + text[2:])
+elif kind == "cut":
+    open(path, "wb").write(text[:60])
+elif kind == "empty":
+    open(path, "wb").write(b"")
+PY
+}
+# damaged_jar <kind> <jar>: N's products packed with the manifest damaged; `crc` packs the manifest stored and flips
+# a byte of its data, so that its entry fails its CRC.
+damaged_jar() {
+  local kind=$1 jar=$2
+  rm -rf "$jar.d" && cp -R "$dm/good" "$jar.d"
+  if [ "$kind" = crc ]; then
+    python3 - "$jar.d" "$jar" <<'PY'
+import os, sys, zipfile
+d, jar = sys.argv[1:]
+with zipfile.ZipFile(jar, "w") as z:
+    for base, _, names in sorted(os.walk(d)):
+        for n in sorted(names):
+            p = os.path.join(base, n)
+            z.write(p, os.path.relpath(p, d), compress_type=zipfile.ZIP_STORED)
+with zipfile.ZipFile(jar) as z:
+    i = z.getinfo("teq-products.json")
+    start = i.header_offset + 30 + len(i.filename.encode()) + len(i.extra)
+b = bytearray(open(jar, "rb").read())
+b[start + 40] ^= 1
+open(jar, "wb").write(bytes(b))
+PY
+  else
+    damage "$jar.d" "$kind"
+    pack "$jar.d" "$jar"
+  fi
+  rm -rf "$jar.d"
+}
+# The manifest's line a damage gives: known whole for utf8 and empty, its head alone otherwise.
+damaged_line() {
+  case $2 in
+    utf8) echo "$1: not UTF-8" ;;
+    empty) echo "$1: unexpected end of input at byte 0" ;;
+    *) echo "$1: " ;;
+  esac
+}
+damaged_refused() {
+  local what=$1 log=$2 code=$3 want=$4 written=$5 kind=$6
+  local got
+  got=$(grep -m1 -F -- "${want%%: *}: " "$log")
+  if [ "$code" != 0 ] && { [ "$kind" = cut ] || [ "$kind" = crc ]; } && [[ "$got" == "$want"* ]] && [ ! -e "$written" ]; then
+    ok "$what: refused (exit $code) with the manifest's line ('${got#*: }'), nothing written"
+  elif [ "$code" != 0 ] && [ "$got" = "$want" ] && [ ! -e "$written" ]; then
+    ok "$what: refused (exit $code) with the manifest's line whole, nothing written"
+  else
+    bad "$what: exit $code, wanted the line '$want' (got '$got'; stderr: $(head -c 300 "$log")); written: $([ -e "$written" ] && echo "$written" || echo nothing)"
+  fi
+}
+for container in dir jar; do
+  for kind in utf8 cut empty crc; do
+    [ "$container" = dir ] && [ "$kind" = crc ] && continue
+    c=$dm/$container-$kind
+    rm -rf "$c" && mkdir -p "$c"
+    if [ "$container" = dir ]; then
+      cp -R "$dm/good" "$c/up"; damage "$c/up" "$kind"; place=$c/up; manifest=$c/up/teq-products.json
+    else
+      damaged_jar "$kind" "$c/up.jar"; place=$c/up.jar; manifest=$c/up.jar!teq-products.json
+    fi
+    want=$(damaged_line "$manifest" "$kind")
+    readers="build check interp js split jvm"
+    [ "$container" = dir ] && readers="$readers own removed"
+    for r in $readers; do
+      case $r in
+        build) run N "$c/$r.log" compiler build --target jvm --products "$c/out-$r" --classpath "$place:$SL" down/D.scala ;;
+        check) run N "$c/$r.log" compiler check --products "$c/out-$r" --classpath "$place" down/D.scala ;;
+        interp) run N "$c/$r.log" interp --classpath "$place" down/D.scala ;;
+        js) run N "$c/$r.log" compiler build -o "$c/out-$r.js" --classpath "$place" down/D.scala ;;
+        split) run N "$c/$r.log" compiler build --split "$c/out-$r" --classpath "$place" down/D.scala ;;
+        jvm) run N "$c/$r.log" compiler build --target jvm -o "$c/out-$r.jar" --classpath "$place:$SL" down/D.scala ;;
+        own) cp "$manifest" "$c/kept-manifest" && run N "$c/$r.log" compiler build --target jvm --products "$place" --classpath "$place:$SL" up/U.scala ;;
+        removed) cp "$manifest" "$c/kept-manifest" && run N "$c/$r.log" compiler build --target jvm --products "$place" --removed up/V.scala ;;
+      esac
+      code=$?
+      case $r in
+        js) written=$c/out-$r.js ;; jvm) written=$c/out-$r.jar ;; interp) written=$c/out-$r ;;
+        own|removed) written=$c/none ;; *) written=$c/out-$r ;;
+      esac
+      damaged_refused "damaged $container ($kind), $r" "$c/$r.log" "$code" "$want" "$written" "$kind"
+      if [ "$r" = own ] || [ "$r" = removed ]; then
+        cmp -s "$manifest" "$c/kept-manifest" || bad "damaged $container ($kind), $r: the damaged manifest was written over"
+      fi
+    done
+    # The remedy: the whole-module build, the directory off the class path, writes it anew.
+    if [ "$container" = dir ]; then
+      run N "$c/whole.log" compiler build --target jvm --products "$place" --classpath "$SL" "${ups[@]}"
+      code=$?
+      if [ "$code" = 0 ] && [ -z "$(same_products "$place" "$f/N-own")" ]; then ok "damaged dir ($kind), whole: the whole-module build writes the directory anew, a fresh build's byte for byte"
+      else bad "damaged dir ($kind), whole: exit $code, differs from a fresh build in: $(same_products "$place" "$f/N-own") (stderr: $(head -c 300 "$c/whole.log"))"; fi
+    fi
+  done
+done
+# Sessions of each kind over N's products directory: each damage made under the session (its manifest written over
+# in place), a build asked; then the products put back, a build asked. A session over a products jar is refused at
+# its start (the session-jar cells).
+for container in dir; do
+  for kind_s in check js split jvm; do
+    case $kind_s in
+      check) how=(--check) ;; js) how=(-o out.js) ;; split) how=(--split out-split) ;; jvm) how=(--target jvm -o out-jvm) ;;
+    esac
+    w=$dm/session-$container-$kind_s
+    rm -rf "$w" && mkdir -p "$w"
+    cp -R "$dm/good" "$w/up"; place=$w/up; manifest=$w/up/teq-products.json; damages="utf8 cut empty"
+    mkfifo "$w/cmd" "$w/ans"
+    (cd "$src" && exec timeout 120 "${BIN[N]}" compiler watch "${how[@]/#out/$w/out}" --classpath "$place:$SL" down/D.scala < "$w/cmd" > "$w/ans" 2> "$w/err") &
+    session=$!
+    exec 3> "$w/cmd" 4< "$w/ans"
+    answer=; read -r -t 30 answer <&4 || answer="(no answer in 30 s)"
+    verdicts=$([[ "$answer" == '{"ok":true'* ]] && echo "first ok" || echo "first: ${answer:0:200}")
+    for k in $damages; do
+      damage "$place" "$k"
+      echo build >&3
+      answer=; read -r -t 30 answer <&4 || answer="(no answer in 30 s)"
+      want=$(damaged_line "$manifest" "$k")
+      if [[ "$answer" == '{"ok":false'* ]] && [[ "$answer" == *"\"message\":\"$want"* ]]; then verdicts="$verdicts; $k refused"
+      else verdicts="$verdicts; $k NOT REFUSED: ${answer:0:200}"; fi
+      rm -rf "$place" && cp -R "$dm/good" "$place"
+      echo build >&3
+      answer=; read -r -t 30 answer <&4 || answer="(no answer in 30 s)"
+      if [[ "$answer" == '{"ok":true'* ]]; then verdicts="$verdicts, put back read"; else verdicts="$verdicts, put back NOT READ: ${answer:0:200}"; fi
+    done
+    echo quit >&3
+    exec 3>&- 4<&-
+    wait "$session" 2> /dev/null
+    rm -f "$w/cmd" "$w/ans"
+    if [[ "$verdicts" == "first ok"* ]] && [[ "$verdicts" != *"NOT"* ]]; then ok "damaged $container under a session, $kind_s: $verdicts"
+    else bad "damaged $container under a session, $kind_s: $verdicts (stderr: $(head -c 200 "$w/err"))"; fi
+  done
+done
+# A session of each kind at 1 and at 8 workers over up's products packed as a jar (N's, N+1's, 0.1.11's, and N's with
+# a manifest that is not UTF-8): refused at its start with SESSION_REFUSAL's line whole (`{ran}` the session's own,
+# `teq compiler watch`), its first build answered so and nothing written; the same session over the two jars that
+# must not be refused: N's products packed with their manifest left out (what the sbt plugin's packageBin writes),
+# and N's `-o` jar with a resource added (a stage verb's: class files and resources, the Teq-Products-ABI
+# attribute in META-INF/MANIFEST.MF): read.
+sj=$out/session-jar
+rm -rf "$sj" && mkdir -p "$sj"
+write_up N1 "$sj/n1"; write_up O "$sj/o"
+pack "$dm/good" "$sj/n.jar"; pack "$sj/n1" "$sj/n1.jar"; pack "$sj/o" "$sj/o.jar"; damaged_jar utf8 "$sj/utf8.jar"
+cp -R "$dm/good" "$sj/packagebin" && rm -f "$sj/packagebin/teq-products.json" && pack "$sj/packagebin" "$sj/packagebin.jar"
+run N "$sj/stage.log" compiler build --target jvm -o "$sj/stage.jar" --classpath "$SL" "${ups[@]}"
+python3 -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1], "a"); z.writestr("up/app.conf", "answer = 42\n"); z.close()' "$sj/stage.jar"
+python3 -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); n = z.namelist(); m = z.read("META-INF/MANIFEST.MF").decode(); sys.exit(0 if "teq-products.json" not in n and "up/app.conf" in n and "Teq-Products-ABI: " in m else 1)' "$sj/stage.jar" \
+  || bad "session-jar: the stage verb's kind of jar is not one (stderr: $(head -c 200 "$sj/stage.log"))"
+for kind_s in check js split jvm; do
+  case $kind_s in
+    check) how=(--check) ;; js) how=(-o out.js) ;; split) how=(--split out-split) ;; jvm) how=(--target jvm -o out-jvm) ;;
+  esac
+  for workers in 1 8; do
+    verdicts=
+    for v in n n1 o utf8 packagebin stage; do
+      w=$sj/session-$kind_s-$workers-$v
+      rm -rf "$w" && mkdir -p "$w"
+      cp "$sj/$v.jar" "$w/up.jar"
+      line=$(python3 -c 'import sys; print(sys.argv[1].replace("{manifest}", sys.argv[2] + "!teq-products.json").replace("{jar}", sys.argv[2]).replace("{ran}", "teq compiler watch"))' "$session_template" "$w/up.jar")
+      mkfifo "$w/cmd" "$w/ans"
+      (cd "$src" && exec timeout 120 "${BIN[N]}" compiler watch "${how[@]/#out/$w/out}" --threads $workers --classpath "$w/up.jar:$SL" down/D.scala < "$w/cmd" > "$w/ans" 2> "$w/err") &
+      session=$!
+      exec 3> "$w/cmd" 4< "$w/ans"
+      answer=; read -r -t 30 answer <&4 || answer="(no answer in 30 s)"
+      echo quit >&3
+      exec 3>&- 4<&-
+      wait "$session" 2> /dev/null
+      rm -f "$w/cmd" "$w/ans"
+      written=$(find "$w" -maxdepth 1 -name 'out*' | head -1)
+      if [ $v = packagebin ] || [ $v = stage ]; then
+        if [[ "$answer" == '{"ok":true'* ]]; then verdicts="$verdicts; $v read"; else verdicts="$verdicts; $v NOT READ: ${answer:0:200}"; fi
+      elif [[ "$answer" == '{"ok":false'* ]] && [[ "$answer" == *"\"message\":\"$line\""* ]] && [ -z "$written" ]; then verdicts="$verdicts; $v refused, nothing written"
+      else verdicts="$verdicts; $v NOT REFUSED with the line (${written:+wrote $written; }${answer:0:200})"; fi
+    done
+    if [[ "$verdicts" != *"NOT"* ]]; then ok "session-jar, $kind_s, $workers workers:${verdicts#;}"
+    else bad "session-jar, $kind_s, $workers workers:${verdicts#;}"; fi
+  done
+done
+# Written over IN PLACE with the modification time kept (`touch -r` and `cp -p`), under a session of each kind at 1
+# and at 8 workers, over N's products directory: N+1's products (another number: refused with the line), N's again
+# (read), N's products of up with U's member renamed (`answex`: down refused for want of `up.U.answer`, the message
+# whole), N's again (read); then the manifest published again with the same bytes (renamed over by a copy: read,
+# and the check's record kept), after which N+1's written in place are refused still, and N's read.
+ip=$out/inplace
+sr2=$out/sr2
+rm -rf "$ip" "$sr2" && mkdir -p "$ip" "$sr2/up"
+write_up N "$ip/n"; write_up N1 "$ip/n1"
+sed 's/answer/answex/' "$src/up/U.scala" > "$sr2/up/U.scala"
+cp "$src/up/V.scala" "$sr2/up/V.scala"
+sed 's/U.answer/U.answex/' "$src/up/M.scala" > "$sr2/up/M.scala"
+(cd "$sr2" && timeout 120 "${BIN[N]}" compiler build --target jvm --products "$ip/renamed" --classpath "$SL" "${ups[@]}" > "$ip/renamed.log" 2>&1)
+# in_place <from> <to>: <from>'s bytes written over <to> in place, <to>'s modification time kept.
+in_place() { touch -r "$2" "$1" && cp -p "$1" "$2"; }
+for container in dir; do
+  for kind_s in check js split jvm; do
+    case $kind_s in
+      check) how=(--check) ;; js) how=(-o out.js) ;; split) how=(--split out-split) ;; jvm) how=(--target jvm -o out-jvm) ;;
+    esac
+    for workers in 1 8; do
+      w=$ip/session-$container-$kind_s-$workers
+      rm -rf "$w" && mkdir -p "$w"
+      for v in n n1 renamed; do cp -R "$ip/$v" "$w/$v"; done
+      cp -R "$w/n" "$w/up"; place=$w/up
+      line=$(refusal "$w/up/teq-products.json" "${ABI[N1]}" "teq ${VERSION[N1]}" N "$w/up")
+      mkfifo "$w/cmd" "$w/ans"
+      (cd "$src" && exec timeout 120 "${BIN[N]}" compiler watch "${how[@]/#out/$w/out}" --threads $workers --classpath "$place:$SL" down/D.scala < "$w/cmd" > "$w/ans" 2> "$w/err") &
+      session=$!
+      exec 3> "$w/cmd" 4< "$w/ans"
+      verdicts=
+      for step in first n1 n renamed back identical n1 back; do
+        case $step in
+          identical) cp "$place/teq-products.json" "$w/next.json" && mv "$w/next.json" "$place/teq-products.json" ;;
+          n1|n|renamed|back)
+            v=$([ $step = back ] && echo n || echo $step)
+            (cd "$w/$v" && find . -type f) | while read -r f; do in_place "$w/$v/$f" "$place/$f"; done ;;
+        esac
+        [ $step = first ] || echo build >&3
+        answer=; read -r -t 30 answer <&4 || answer="(no answer in 30 s)"
+        case $step in
+          first|identical|n|back) want='{"ok":true' ;;
+          n1|renamed) want='{"ok":false' ;;
+        esac
+        if [[ "$answer" == "$want"* ]] && { [ $step != n1 ] || [[ "$answer" == *"\"message\":\"$line\""* ]]; } && { [ $step != renamed ] || [[ "$answer" == *'"message":"value answer is not a member of U"'* ]]; }; then verdicts="$verdicts; $step as it must"
+        else verdicts="$verdicts; $step WRONG: ${answer:0:200}"; fi
+      done
+      echo quit >&3
+      exec 3>&- 4<&-
+      wait "$session" 2> /dev/null
+      rm -f "$w/cmd" "$w/ans"
+      if [[ "$verdicts" != *"WRONG"* ]]; then ok "in place, $container, $kind_s, $workers workers:${verdicts#;}"
+      else bad "in place, $container, $kind_s, $workers workers:${verdicts#;} (stderr: $(head -c 200 "$w/err"))"; fi
+    done
+  done
+done
+# The value classes' -o jar: N's products to build against, N's jar to run against.
+x=$out/vc-jar
+rm -rf "$x" && mkdir -p "$x/src/vlib" "$x/main"
+printf '%s\n' 'package vlib' '' 'final class Meters(val v: Double) extends AnyVal' 'final class Feet(val w: Int) extends AnyVal' \
+  'final class Grams(val g: Long) extends AnyVal' '' 'object V:' \
+  '  def make(i: Int): Meters & Feet = new Feet(i).asInstanceOf[Meters & Feet]' '  def pass(x: Meters & Feet): Meters & Feet = x' \
+  '  def boxed(x: Meters & Feet): Any = x' '  def three(x: Meters & Feet & Grams): Meters & Feet & Grams = x' '' \
+  '@main def libMain(): Unit = println(V.make(1).w)' > "$x/src/vlib/V.scala"
+printf '%s\n' 'import vlib.*' '' '@main def run(): Unit =' '  val x = V.make(3)' '  println(V.pass(x).w)' \
+  '  println(V.boxed(x).getClass.getSimpleName)' '  println(V.three(new Feet(9).asInstanceOf[Meters & Feet & Grams]).w)' > "$x/main/Main.scala"
+(cd "$x/src" && timeout 120 "${BIN[N]}" compiler build --target jvm --products "$x/products" --classpath "$SL" vlib/V.scala > "$x/products.log" 2>&1) \
+  && (cd "$x/src" && timeout 120 "${BIN[N]}" compiler build --target jvm -o "$x/vlib.jar" --classpath "$SL" vlib/V.scala > "$x/jar.log" 2>&1) \
+  && (cd "$x/main" && timeout 120 "${BIN[N]}" compiler build --target jvm --classpath "$x/products:$SL" Main.scala -o "$x/main.jar" > "$x/main.log" 2>&1)
+code=$?
+got=$([ $code = 0 ] && timeout 60 java -cp "$x/main.jar:$x/vlib.jar:$SL" TeqMain 2> "$x/run.err" | tr '\n' ' ')
+if [ "$got" = "3 Feet 9 " ]; then ok "vc-jar N: a program built against N's products runs against N's -o jar as scalac's: 3 Feet 9"
+else bad "vc-jar N: exit $code, printed '$got' (wanted scalac's '3 Feet 9'; $(cat "$x"/*.log "$x/run.err" 2> /dev/null | grep -m2 -i error))"; fi
 echo "products-abi: $pass passed, $fail failed"
 [ $fail = 0 ]

@@ -1847,6 +1847,12 @@ pub(crate) fn open_jars(opts: &Options) -> Option<classpath::Classpath> {
 
 /// The jars of the class path, or why one cannot be opened.
 pub(crate) fn try_open_jars(opts: &Options) -> Result<Option<classpath::Classpath>, String> {
+    try_open_jars_for(opts, None)
+}
+
+/// `try_open_jars`, for a session where `session` names what the user ran to start it: a jar that
+/// carries products' manifest refused (`Classpath::open_for`).
+pub(crate) fn try_open_jars_for(opts: &Options, session: Option<&str>) -> Result<Option<classpath::Classpath>, String> {
     if opts.classpath.is_empty() && !opts.jvm && !JAVA_SELECTED.load(std::sync::atomic::Ordering::Relaxed) {
         return Ok(None);
     }
@@ -1855,7 +1861,7 @@ pub(crate) fn try_open_jars(opts: &Options) -> Result<Option<classpath::Classpat
         dir: classpath::canonical_lenient(std::path::Path::new(&opts.classpath[i])),
         dropped: collect_program_paths(opts).iter().chain(&opts.removed).map(|p| classpath::canonical_lenient(std::path::Path::new(p))).collect(),
     });
-    classpath::Classpath::open(&opts.classpath, cache.as_deref(), own.as_ref()).map(Some)
+    classpath::Classpath::open_for(&opts.classpath, cache.as_deref(), own.as_ref(), session).map(Some)
 }
 
 /// The class path's entry that is the `--products` directory: a build of part of the module's

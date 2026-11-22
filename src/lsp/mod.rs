@@ -2189,6 +2189,8 @@ impl Server {
             None => command.args(&args),
         };
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        // What the user ran, which a refusal of the session's class path names (`products::STARTED_BY`).
+        command.env(crate::products::STARTED_BY, "teq lsp");
         // Windows starts no process in a directory past 258 characters (os error 267), where the
         // session, whose paths are all absolute, runs in the server's.
         if !cfg!(windows) || description.root.to_string_lossy().encode_utf16().count() <= 258 {

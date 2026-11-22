@@ -66,11 +66,13 @@ pub enum NoAnswer {
 
 impl Resident {
     /// Starts the resident from `root` as `teq @<file>`, its arguments written to the file, which
-    /// stays for its life.
-    pub fn start(exe: &Path, root: &Path, key: Key, args: Vec<String>, file: &Path, inputs: Vec<std::path::PathBuf>) -> Result<Resident, String> {
+    /// stays for its life; `verb` the project verb that starts it, which a refusal of its class
+    /// path names (`products::STARTED_BY`).
+    pub fn start(exe: &Path, root: &Path, key: Key, args: Vec<String>, file: &Path, inputs: Vec<std::path::PathBuf>, verb: &str) -> Result<Resident, String> {
         crate::argfile::write(file, &args)?;
         let mut child = Command::new(exe)
             .arg(crate::argfile::at(file))
+            .env(crate::products::STARTED_BY, format!("teq {}", verb))
             .current_dir(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

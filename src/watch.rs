@@ -525,10 +525,11 @@ pub fn run(opts: &Options) -> ! {
         report.ms.read = t_read.elapsed();
         let t_open = Instant::now();
         // A jar that cannot be opened fails the build as an unreadable input does: the session
-        // answers and waits for the next build, which opens the jars again.
+        // answers and waits for the next build, which opens the jars again. A jar that carries
+        // products' manifest is refused so, at every build (`Classpath::open_for`).
         let (cp, unreadable) = match unreadable {
             Some(msg) => (None, Some(msg)),
-            None => match crate::try_open_jars(opts) {
+            None => match crate::try_open_jars_for(opts, Some(&crate::products::started_by())) {
                 Ok(cp) => (cp, None),
                 Err(msg) => (None, Some(msg)),
             },

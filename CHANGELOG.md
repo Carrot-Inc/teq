@@ -13,6 +13,22 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - On JavaScript `()` is no `java.io.Serializable`, as under Scala.js, where its class extends `Object` alone
   (`().isInstanceOf[java.io.Serializable]`, a pattern, `classOf[java.io.Serializable].isInstance(())`); it was. On
   the JVM and in the interpreter it is, as under scalac.
+- A jar that carries `teq-products.json` (a directory of products packaged as it is) is read by its number as the
+  directory is: products of another number are refused with the products' line, their manifest named
+  `<jar>!teq-products.json` (they were read as a library's classes, and a body that names a definition the reader's
+  standard library no longer has failed with "not supported yet"). A session (`compiler watch`, and so the language
+  server's and the project verbs' residents) reads products only from their directory, which it watches: one whose
+  class path holds such a jar is refused at its start, naming it and what was run ("these products are packed as a jar,
+  which `teq lsp` does not read: put their directory on the class path in place of <jar>"). A jar without that file, as `-o` writes
+  it and the sbt plugin packages it, stays a library, never refused for its writer.
+- A jar or products written by teq 0.1.11 or earlier whose methods take or return an intersection of value classes is
+  to be rebuilt with this teq (their boxing and method descriptors were not scalac's); a products directory or a
+  products jar of an older number is refused with the line that says so.
+- A products directory or a products jar whose `teq-products.json` is there and cannot be read (not UTF-8, a read
+  that fails, for a jar an entry failing its check) is refused with that file's line, as one that does not parse is,
+  and so is a directory's damaged under a running session; a directory's such manifest was read as none, its products as
+  plain classes with no number checked. The whole-module build (`--products <dir>` with the directory off
+  `--classpath`) writes such a directory anew.
 - A type test of `Any` or `Matchable` is false for `null`, as under scalac: `x.isInstanceOf[Any]`, a member of a
   union (`Any | String`), an inline body's test of a type parameter given `Any`, and `case _: Any` on a scrutinee
   typed `Any`. It was true on the JVM and in the interpreter, and on JavaScript outside a match.

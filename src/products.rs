@@ -18,9 +18,10 @@ use std::path::{Path, PathBuf};
 pub const MANIFEST: &str = "teq-products.json";
 
 /// The number of what products mean, which a manifest carries as its `abi` field and a jar `-o`
-/// writes as `Teq-Products-ABI` in its manifest: a reader of a directory of products takes only
-/// products of its own number (docs/TOOLING.md, "The products' number"); a jar is a library
-/// whatever it names, never refused for its writer. A manifest without the field is of number 0,
+/// writes as `Teq-Products-ABI` in its manifest: a reader of a directory of products, or of a jar
+/// that carries their manifest, takes only products of its own number (docs/TOOLING.md, "The
+/// products' number"); a jar without one is a library whatever its attribute names, never refused
+/// for its writer. A manifest without the field is of number 0,
 /// which every teq up to 0.1.11 wrote. A change of what a product means raises it: 1, a value of an
 /// intersection of value classes boxed as the class the intersection erases to (`Gen::value_class_type_in`).
 pub const PRODUCTS_ABI: u32 = 1;
@@ -51,6 +52,26 @@ const fn bump(value: Option<&str>) -> u32 {
 /// manifest (`{manifest}`), the products' number and the teq that wrote them (`{abi}`, `{writer}`),
 /// this teq's version and number (`{version}`, `{ours}`), and what to build again (`{dir}`).
 pub const REFUSAL: &str = "error: {manifest}: these products are of ABI {abi} (written by {writer}); this teq ({version}) reads ABI {ours}: rebuild {dir} with this teq";
+
+/// The line a session (`compiler watch`, every kind) refuses a class path with that holds a jar carrying products'
+/// manifest, at its start and before the manifest is read: a session reads products only from their directory, whose
+/// manifest it reads again at every request (`Classpath::products_changed`); no mechanism watches a jar. `{ran}` is
+/// what the user ran (`STARTED_BY`).
+pub const SESSION_REFUSAL: &str = "error: {manifest}: these products are packed as a jar, which `{ran}` does not read: put their directory on the class path in place of {jar}";
+
+/// The variable a session's starter sets to what the user ran, `teq lsp` or the project verb that started a
+/// resident (`teq compile`); a session started by hand (`teq compiler watch`) has none.
+pub const STARTED_BY: &str = "TEQ_STARTED_BY";
+
+/// `SESSION_REFUSAL` filled for the jar at `jar` in a session `ran` started.
+pub fn session_refusal(jar: &str, ran: &str) -> String {
+    SESSION_REFUSAL.replace("{manifest}", &format!("{}!{}", jar, MANIFEST)).replace("{jar}", jar).replace("{ran}", ran)
+}
+
+/// What the user ran to start this session: `STARTED_BY`'s value, else `teq compiler watch`.
+pub fn started_by() -> String {
+    std::env::var(STARTED_BY).ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "teq compiler watch".to_string())
+}
 
 /// `REFUSAL` filled: `writer` is what the manifest names its writer (`teq 0.1.11`, or `teq` where it
 /// names no version).
@@ -191,13 +212,27 @@ impl Manifest {
         use std::io::Read as _;
         let mut head = [0u8; 32];
         let n = std::fs::File::open(dir.join(MANIFEST)).and_then(|mut f| f.read(&mut head)).ok()?;
-        let rest = std::str::from_utf8(&head[..n]).ok()?.strip_prefix("{\"identity\":\"")?;
+        Self::identity_of(&head[..n])
+    }
+
+    /// The identity a manifest's text states first (`{"identity":"<16 hex>"`), as `identity_in` reads it.
+    pub fn identity_of(head: &[u8]) -> Option<String> {
+        let head = &head[..head.len().min(32)];
+        let rest = std::str::from_utf8(head).ok()?.strip_prefix("{\"identity\":\"")?;
         rest.get(..16).map(str::to_string)
     }
 
+    /// The manifest of the directory `dir`: none where it has none; one that is there and cannot be read (an
+    /// error of the file's, not UTF-8) fails as one that does not parse does, naming the file: products whose
+    /// number nobody can tell are never read as plain classes.
     pub fn read(dir: &Path) -> Option<Result<Manifest, String>> {
         let path = dir.join(MANIFEST);
-        let text = std::fs::read_to_string(&path).ok()?;
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+            Err(e) => return Some(Err(format!("{}: {}", path.display(), e))),
+        };
+        let Ok(text) = String::from_utf8(bytes) else { return Some(Err(format!("{}: not UTF-8", path.display()))) };
         Some(Manifest::parse(&text).map_err(|e| format!("{}: {}", path.display(), e)))
     }
 
@@ -242,6 +277,12 @@ impl Manifest {
     /// The refusal of the manifest of `dir`, products of another number.
     pub fn refusal(&self, dir: &Path) -> String {
         refusal(&dir.join(MANIFEST).display().to_string(), self.abi, &self.writer_name(), &dir.display().to_string())
+    }
+
+    /// The refusal of the manifest a jar carries (a directory of products packaged as it is), products of another
+    /// number: the manifest named as the jar's entries are (`<jar>!teq-products.json`), the jar as what to rebuild.
+    pub fn refusal_of_jar(&self, jar: &str) -> String {
+        refusal(&format!("{}!{}", jar, MANIFEST), self.abi, &self.writer_name(), jar)
     }
 }
 
@@ -753,6 +794,14 @@ mod tests {
             });
         assert_eq!(line, filled);
         assert!(!line.contains('\n') && !line.contains("{"), "{}", line);
+        // A jar's: the manifest named as the jar's entries are, the jar what to rebuild.
+        let jar = old.refusal_of_jar("/w/core.jar");
+        assert_eq!(jar, refusal("/w/core.jar!teq-products.json", 0, "teq 0.1.11", "/w/core.jar"));
+        assert!(jar.contains("/w/core.jar!teq-products.json: ") && jar.ends_with("rebuild /w/core.jar with this teq"), "{}", jar);
+        // A session's: one line, the manifest named as the jar's entries are, the jar what to put a directory in place of.
+        let session = session_refusal("/w/core.jar", "teq lsp");
+        assert_eq!(session, "error: /w/core.jar!teq-products.json: these products are packed as a jar, which `teq lsp` does not read: put their directory on the class path in place of /w/core.jar");
+        assert!(!session.contains('\n') && !session.contains("{"), "{}", session);
     }
 
     /// FNV-1a's 64-bit test vectors: a fingerprint is persisted in the manifest.
