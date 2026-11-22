@@ -3330,6 +3330,8 @@ val_refinement_subst	pass	-
 value_class_array_store	pass	-	
 value_class_can_equal	pass	-	
 value_class_inherited_equality	pass	-	
+value_class_intersection_box	pass	-	
+value_class_intersection_upcast	fail	-	output
 value_class_library_equality	pass	-	
 value_class_library_equality_called	pass	-	
 value_class_renamed_equality	pass	-	

@@ -53,11 +53,12 @@ pass=0
 fail=0
 ok() { pass=$((pass + 1)); echo "products-abi: $1"; }
 bad() { fail=$((fail + 1)); echo "FAIL products-abi: $1"; }
-# The numbers: N's the source's, N+1's one more, 0.1.11's 0, which N reads.
-if [ "${ABI[N1]}" = $((ABI[N] + 1)) ] && [ "${ABI[O]}" = 0 ] && [ "${ABI[N]}" = 0 ]; then
+# The numbers: N's the source's (src/products.rs, PRODUCTS_ABI), N+1's one more, 0.1.11's 0.
+source=$(sed -n 's/^pub const PRODUCTS_ABI: u32 = \([0-9][0-9]*\);$/\1/p' src/products.rs)
+if [ "${ABI[N]}" = "$source" ] && [ "${ABI[N1]}" = $((ABI[N] + 1)) ] && [ "${ABI[O]}" = 0 ]; then
   ok "the binaries read ABI ${ABI[N]} (N, teq ${VERSION[N]}), ${ABI[N1]} (N+1, teq ${VERSION[N1]}) and ${ABI[O]} (teq ${VERSION[O]}, which prints none)"
 else
-  bad "the binaries' numbers: N ${ABI[N]}, N+1 ${ABI[N1]}, 0.1.11 ${ABI[O]}: N+1 must be N's plus one, 0.1.11 and N 0"
+  bad "the binaries' numbers: N ${ABI[N]}, N+1 ${ABI[N1]}, 0.1.11 ${ABI[O]}: N must be the source's ($source), N+1 N's plus one, 0.1.11 0"
 fi
 
 src=$out/src

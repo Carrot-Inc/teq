@@ -1883,14 +1883,21 @@ impl<'a> Gen<'a> {
                     seen.push(p);
                     t = self.param_upper(p);
                 }
-                // A pattern's binder: the scrutinee's type and the tested one (`AnyVal & Meters`).
+                // A pattern's binder: the scrutinee's type and the tested one (`AnyVal & Meters`). Of
+                // two value classes, the one the intersection erases to (`Gen::erase`).
                 Type::Inter(a, b) => {
                     let at = seen.len();
-                    if let Some(found) = self.value_class_type_in(a, seen) {
-                        return Some(found);
-                    }
+                    let in_a = self.value_class_type_in(a, seen);
                     seen.truncate(at);
-                    return self.value_class_type_in(b, seen);
+                    let in_b = self.value_class_type_in(b, seen);
+                    seen.truncate(at);
+                    return match (in_a, in_b) {
+                        (Some((ca, aa)), Some((cb, ab))) => {
+                            let named = |c: ClassId| ErasedType::L(Rc::from(cx.class_names[c.idx()].as_str()));
+                            Some(if self.erased_glb_first(&named(ca), &named(cb)) { (ca, aa) } else { (cb, ab) })
+                        }
+                        (in_a, in_b) => in_a.or(in_b),
+                    };
                 }
                 _ => return None,
             }

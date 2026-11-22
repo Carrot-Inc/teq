@@ -13,6 +13,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - A macro sees `x.isInstanceOf[T]` and `x.asInstanceOf[T]` with the type the source wrote, once
   (`x.isInstanceOf[scala.Some[scala.Predef.String]]`; it saw `x.isInstanceOf[scala.Some[scala.Any]][scala.Some[scala.Any]]`), and a
   quote pattern over a type test matches the tested type as scalac's does (a test of `Int` is one of `AnyVal`).
+- On the JVM a value of an intersection of value classes (`Meters & Feet`) is boxed as the class the intersection
+  erases to, as under scalac (`Feet`, the first by scalac's order), where it becomes an `Any`, an element, an
+  option's value, a receiver of `toString` and a `MatchError`'s value; it was boxed as the class written first, made
+  of the other's underlying value. A method's parameter or result of three such classes whose first two sort the
+  other way takes scalac's type (`def three(x: Meters & Feet & Grams)` takes an `int`; it took a `long`), so a
+  library's method signature moves. Upcast to the class it does not erase to (`val s: VS = x` for `x: VS & VI`), such
+  a value throws a `ClassCastException`, as the explicit cast does (scalac's class fails the verifier there; teq's
+  did too). The products' number is 1: a module's products written by an earlier teq (of number 0) are refused on
+  the class path, or rebuilt where they are the module's own, as an earlier teq's box of such a value is not this
+  one's.
 - A program's Java sources are read for their declarations, as scalac reads the `.java` it is given: a directory
   gives its `.java` files with its `.scala` ones, a `.java` named on the command line is read as Java (it was
   parsed as Scala), and the Scala program sees each Java class and interface with its members, their types and

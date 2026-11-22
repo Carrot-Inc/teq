@@ -183,6 +183,7 @@ trait_empty_parameters	< empty
 tuple_apply_known_prefix	< 2
 type_checks_nested_package_clauses	< mine 1
 unused_params_constant_bodies	> tests/cases/unused_params_constant_bodies.scala:18:10: warning: unused explicit parameter
+value_class_intersection_upcast	< a local: java.lang.ClassCastException
 value_companion_strings	< object scala.Boolean
 view_import_renamed_prefixes	< 2
 wildcard_capture_param_bounds	< true

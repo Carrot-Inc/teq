@@ -3261,6 +3261,8 @@ cases/val_refinement_subst	pass	-
 cases/value_class_array_store	pass	-	
 cases/value_class_can_equal	pass	-	
 cases/value_class_inherited_equality	pass	-	
+cases/value_class_intersection_box	pass	-	
+cases/value_class_intersection_upcast	pass	-	
 cases/value_class_renamed_equality	pass	-	
 cases/value_class_scala2_library_equality	pass	-	
 cases/value_class_scala2_source_equality	pass	-	

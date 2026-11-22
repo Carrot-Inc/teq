@@ -1,0 +1,4 @@
+a local: java.lang.ClassCastException
+an argument: java.lang.ClassCastException
+a local, VI written first: java.lang.ClassCastException
+a cast: java.lang.ClassCastException
