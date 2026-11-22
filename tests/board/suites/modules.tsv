@@ -225,12 +225,16 @@ javapackagenullary	pass	-
 javasuperstable	fail	-	javasuperstable bundle
 javavarargs	pass	-	
 joinedfunction	fail	-	known classes: the JVM class files of the library trait and of the class that adds a third `apply` differ between the whole build and the build in part (jfa/Measure.class, jfb/Wider.class): a class be
+keptanonparent	pass	-	
 keptbodyextractor	pass	-	
 keptbodyinherit	pass	-	
 keptbodynamed	pass	-	
 keptbodyoverload	pass	-	
 keptbodyprivateclash	pass	-	
 keptbodytrait	pass	-	
+keptclassparentblock	fail	-	known bundle: master's: the products' build leaves a class parent's unread constructor block out where the whole build calls it (utest's PPrinter.BlackWhite); the row of its own: a constructor call's
+keptenumcaseparent	pass	-	
+keptlocalparent	pass	-	
 leanaliasowner	fail	-	leanaliasowner scalac-lean-b
 ledgerlocalclass	fail	-	known classes: the class an expansion of the product's inline body makes carries the pseudo file's SourceFile and line numbers (`a!lla.Lib$package`, line 6), the whole build's Lib.scala's: the JVM pro
 ledgeroverride	pass	-	
@@ -430,7 +434,7 @@ traitfieldkinds	pass	-
 traitfields	pass	-	
 traitgivendef	pass	-	
 traitinit	pass	-	
-traitparams	fail	-	known classes: the pickle of a class whose parent is a product's trait of a using clause alone (`Sorted[Int]`) writes the parent as its type where the whole build writes the constructor call with the
+traitparams	pass	-	
 traitparentinfer	pass	-	
 traitsuper	pass	-	
 traitsuperinlinedefault	fail	-	traitsuperinlinedefault build

@@ -1,0 +1,3 @@
+jsl-a!kep.Lib:2:1: error: the parent's call of kep.Lib.E is withheld from the products of $OUT/keptenumcaseparent/jsl-a (elided: unstated an enum value's case of another parent whose call binds an argument or runs a body): the TASTy writer's queue of the shapes it withholds writes it (in the body of kep.Lib.E)
+  enum E
+  ^^^^^^

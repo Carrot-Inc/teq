@@ -1,0 +1,16 @@
+$OUT/keptlocalparent/jsl-a!a/Lib.scala:10:7: error: not supported yet: a parent of that shape (in the body of klp.Lib.make)
+  body: {
+      class S() extends Object(), {
+        <synthetic> val b$2: B = {
+          Predef.println("b")
+          new B("wb")
+        }
+        <synthetic> val a$1: A = Lib$package.given_A
+        new T(a$1, b = b$2)()
+      } {
+      }
+      new S()
+      Predef.println("done")
+    }
+    def make: Unit =
+        ^

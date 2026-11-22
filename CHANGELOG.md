@@ -153,6 +153,24 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   is the JDK's (`Long.hashCode(-1L)` is 0, it was -1), and a number beside a `BigInt` or `BigDecimal` is equal as
   scalac's (`(42: Any) == BigInt(42)`, `Option(42).contains(BigInt(42))`, `List(42).contains(BigInt(42))`: true,
   they were false).
+- A trait parent's or an anonymous class's `using` list that names its arguments and leaves a parameter out before a
+  written one (`extends T(using b = ..)` of `trait T(implicit a: A, b: B)`) has that parameter searched as scalac
+  searches it, where teq refused it ("missing argument for parameter a"). The arguments are evaluated once, in
+  scalac's order (the written ones first, then the searched ones), a default reading an earlier argument included,
+  where a trait of `using` or `implicit` clauses alone failed at run time. Every argument of such a trait is evaluated
+  in the trait's turn of the class's initialization, after the superclass and the traits before it, as scalac evaluates
+  it, where teq evaluated them all before any trait's body. A plain list given to such a trait's implicit clause
+  (`Ti()(A(1), B(2))`, `T()()`) supplies its arguments and takes the defaults of the parameters it leaves out, never a
+  given (with scalac's warning where a given is in scope), where teq dropped the list and took the givens. A trait whose
+  `using` clause is followed by an implicit one has its omitted parameters searched, where teq refused it. Its lists are
+  refused where scalac refuses them, in scalac's words: a list its constructor has no clause for ("does not take more
+  parameters"), a plain list given to its implicit clause that leaves a parameter without a default ("missing argument
+  for parameter b"), a plain list meeting the constructor's empty clause ("too many arguments"), and, for a trait of
+  `using` clauses alone applied without its `()`, a named list that leaves a parameter out before a written one or whose
+  arguments, out of their order, are bound first ("must be called with () argument"). teq accepted most of these. A
+  library's kept body over its products whose local or anonymous class, or an enum's case, has a trait parent the
+  products cannot carry (a call that binds its arguments first, or a case's second parent whose call binds an argument or
+  whose trait runs a body) is refused there, naming it, where teq built the class without that parent's call.
 
 ## 0.1.11 (2026-11-20)
 

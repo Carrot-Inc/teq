@@ -79,6 +79,13 @@ pub(super) struct Conv {
     /// parameters go by (`[t] => (F[t], t) => R` as a refinement of `PolyFunction`).
     poly_binders: Vec<(Addr, Vec<Name>)>,
     unsupported: Option<String>,
+    /// The nodes of a template's parents the converter has no reading for (`conv_template_parents`), which the local or
+    /// anonymous class they belong to keeps in its body, so that typing it reports them: a parent left out silently
+    /// would construct the class without its parent's call.
+    refused_parents: Vec<ExprId>,
+    /// An anonymous class's refused parents, by its definition: its creation (`Expr::NewAnon`) carries them, typed in
+    /// the enclosing body, where the class's own template statements are not.
+    anon_refused: FxMap<DefId, Vec<ExprId>>,
     /// The span every node of the member under conversion gets: its line in the pseudo file's
     /// text, so that a diagnostic names the member.
     span: Span,
@@ -112,6 +119,9 @@ pub(super) struct Conv {
     cast_locals: FxMap<Addr, TyExprId>,
     /// The local classes being converted, by address: `$anon.this.T` names their type member `T`.
     local_classes: Vec<Addr>,
+    /// Every class and trait the converted class defines, at any depth (its members, a local object's, a local class's,
+    /// an inner block's): whether it is a trait, from its definition's flags (`prescan_kinds`).
+    defined_kinds: DefinedKinds,
     /// Per class of `local_classes`, its source name and how many blocks enclose it
     /// (`block_depth`): a member class of a class of a block reaches its enclosing ones by name.
     local_class_places: Vec<(Name, u32)>,
@@ -190,6 +200,8 @@ impl Conv {
             quotes_params: FxMap::default(),
             poly_binders: Vec::new(),
             unsupported: None,
+            refused_parents: Vec::new(),
+            anon_refused: FxMap::default(),
             span: Span::default(),
             at: 0,
             expr_at: Vec::new(),
@@ -207,6 +219,7 @@ impl Conv {
             local_val_types: FxMap::default(),
             cast_locals: FxMap::default(),
             local_classes: Vec::new(),
+            defined_kinds: DefinedKinds::default(),
             local_class_places: Vec::new(),
             block_depth: 0,
             local_modules: FxMap::default(),
@@ -314,6 +327,7 @@ impl<'a> Worker<'a> {
             cv.dump_class = Some(self.class_path(c));
         }
         cv.at = cd.addr;
+        prescan_kinds(&cv.tasty.clone(), &cd, &mut cv.defined_kinds);
         self.prepare_replay(&mut cv);
         let def = self.conv_class_def(&mut cv, &cd, c);
         debug_assert!(cv.expr_at.len() == cv.ast.exprs.len() && cv.ty_at.len() == cv.ast.tys.len() && cv.pat_at.len() == cv.ast.pats.len());
@@ -471,6 +485,7 @@ impl<'a> Worker<'a> {
             }
         }
         let parents = self.conv_parents(cv, &cd.template.parents);
+        let refused = std::mem::take(&mut cv.refused_parents);
         cv.scope.truncate(scope_mark);
         for a in scoped {
             cv.locals.remove(&a);
@@ -528,6 +543,8 @@ impl<'a> Worker<'a> {
             })
             .collect();
         let mut body = Vec::with_capacity(cd.template.stats.len());
+        // A parent the converter could not read is the class's construction's: its body reports it when typed.
+        body.extend(refused.into_iter().map(Stmt::Expr));
         for s in &cd.template.stats {
             let at = match s {
                 Stat::Val(sig, _) | Stat::Def(sig, _) => sig.addr,
@@ -540,6 +557,8 @@ impl<'a> Worker<'a> {
         }
         if kind == ClassKind::Enum {
             self.conv_enum_values(cv, c);
+            // Its cases' parents the converter could not read and their withheld creations: the enum's construction's.
+            body.extend(std::mem::take(&mut cv.refused_parents).into_iter().map(Stmt::Expr));
         }
         // A template statement the producer left out, recorded at the class's definition: the
         // class's construction needs it.
@@ -693,6 +712,16 @@ impl<'a> Worker<'a> {
     }
 
     fn conv_enum_value(&mut self, cv: &mut Conv, sig: &DefSig, rhs: Option<&Term>) {
+        // A value whose creation the writer withheld (`ELIDED`: a case whose trait's call or body its value class would
+        // leave out) is no plain case, whether or not its symbol is at hand here (the typer makes the plain one again):
+        // the enum's body reports the withheld body, as it reports a parent the converter could not read (both left on
+        // `refused_parents` for it).
+        if let Some(r) = rhs.filter(|r| matches!(r.kind, TermKind::Elided(_))) {
+            let msg = self.withheld(cv, r.at).unwrap_or_else(|| "a withheld enum value".to_string());
+            let s = cv.ast.add_str(msg);
+            let e = cv.expr(Expr::Withheld(s));
+            cv.refused_parents.push(e);
+        }
         let Some(sym) = self.term_sym(cv, sig.addr) else { return };
         let SymKind::EnumValue(case) = self.syms.sym(sym).kind else { return };
         let name = self.syms.sym(sym).name;
@@ -725,6 +754,44 @@ impl<'a> Worker<'a> {
     /// (`Object()`), which teq's classes leave implicit as their sources do. An anonymous class's
     /// source names its first parent whatever it is (`new AnyRef { .. }`), so `anonymous` keeps
     /// a builtin one that is all its template has.
+    /// The kind of the parent `p` the converter does not read, whose block creates it (`{ val x$1 = ..; new T(..) }`):
+    /// `Some(true)` a trait, `Some(false)` a class, `None` a kind not read. A type the converted class defines, at any
+    /// depth, by its definition's flags (`defined_kinds`: by its address, or by its name in a class it defines, a local
+    /// object's `LO.C` included); another body-local type is not read; any other type as a parent's type is resolved
+    /// below (`map_type`, an alias followed to its class). A parent of another shape than such a block is of a kind not
+    /// read.
+    fn block_parent_kind(&mut self, cv: &mut Conv, p: &Term) -> Option<bool> {
+        let TermKind::Block(_, call) = &p.kind else { return None };
+        let mut head: &Term = call;
+        while let TermKind::Apply(f, _) | TermKind::TypeApply(f, ..) = &head.kind {
+            head = f;
+        }
+        let tpt = match &head.kind {
+            TermKind::Select(q, n) | TermKind::SelectIn(q, n, ..) if cv.tasty.simple(cv.tasty.source_name(*n)) == Some("<init>") => match &q.kind {
+                TermKind::New(t) => t.clone(),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        let mut head_type = &tpt;
+        while let TType::Applied(f, _) = head_type {
+            head_type = f;
+        }
+        if let Some(is_trait) = cv.defined_kinds.kind_of(&cv.tasty, head_type) {
+            return Some(is_trait);
+        }
+        if self.mentions_local_type(cv, &tpt) {
+            return None;
+        }
+        let mut cx = super::MapCx::new(cv.file);
+        let resolved = self.map_type(&mut cx, &tpt);
+        let resolved = self.deref_alias(resolved);
+        match self.types.get(resolved) {
+            Type::Class(k, _) | Type::Ctor(k) => Some(self.syms.class(k).kind == ClassKind::Trait),
+            _ => None,
+        }
+    }
+
     fn conv_template_parents(&mut self, cv: &mut Conv, parents: &[Term], anonymous: bool) -> Vec<Parent> {
         let mut out = Vec::with_capacity(parents.len());
         let mut builtin = None;
@@ -765,7 +832,13 @@ impl<'a> Worker<'a> {
                 _ => None,
             };
             let Some(tpt) = tpt else {
-                cv.refuse("a parent of that shape");
+                let e = cv.refuse("a parent of that shape");
+                // By the parent's kind (`block_parent_kind`): a class's constructor block of any place (utest's
+                // `PPrinter.BlackWhite`) keeps the earlier behaviour, the call left out (no such block is read back yet);
+                // a trait's, and a parent of a kind not read, is refused where typing reaches it.
+                if self.block_parent_kind(cv, p) != Some(false) {
+                    cv.refused_parents.push(e);
+                }
                 continue;
             };
             // `new C(args)` with the type arguments left to inference is pickled with the
@@ -2881,7 +2954,7 @@ impl<'a> Worker<'a> {
             TermKind::New(tpt) => {
                 if let TType::LocalType(addr, _) = tpt {
                     if let Some(&d) = cv.anon_defs.get(addr) {
-                        return cv.expr(Expr::NewAnon(d));
+                        return self.new_anon(cv, d);
                     }
                 }
                 let ty = self.conv_new_type(cv, tpt, &[], false);
@@ -4317,7 +4390,7 @@ impl<'a> Worker<'a> {
                 (TermKind::New(tpt), Some("<init>")) => {
                     if let TType::LocalType(addr, _) = tpt {
                         if let Some(&d) = cv.anon_defs.get(addr) {
-                            return cv.expr(Expr::NewAnon(d));
+                            return self.new_anon(cv, d);
                         }
                     }
                     let ty = self.conv_new_type(cv, tpt, targs, inferred);
@@ -5169,7 +5242,15 @@ impl<'a> Worker<'a> {
                     let name = self.lname(&tasty, tasty.source_name(sig.name));
                     cv.locals.insert(sig.addr, name);
                     let parents = rhs.as_ref().map_or(Vec::new(), |r| self.enum_value_parents(cv, r));
-                    cases.push((name, Vec::new(), Vec::new(), parents, sig.addr));
+                    let mut refused = std::mem::take(&mut cv.refused_parents);
+                    // A value case whose creation the writer withheld (`ELIDED`: a case of another parent than the enum,
+                    // which its value class would leave out) is no plain case: its class reports the withheld body.
+                    if let Some(r) = rhs.as_ref().filter(|r| matches!(r.kind, TermKind::Elided(_))) {
+                        let msg = self.withheld(cv, r.at).unwrap_or_else(|| "a withheld enum value case".to_string());
+                        let s = cv.ast.add_str(msg);
+                        refused.push(cv.expr(Expr::Withheld(s)));
+                    }
+                    cases.push((name, Vec::new(), Vec::new(), parents, sig.addr, refused));
                 }
                 Stat::Class(k) if k.mods.flags.has(tags::CASE) && k.mods.flags.has(tags::ENUM) && !k.mods.flags.has(tags::OBJECT) => {
                     let name = self.lname(&tasty, tasty.source_name(k.name));
@@ -5225,7 +5306,7 @@ impl<'a> Worker<'a> {
                     }
                     let parents = self.conv_template_parents(cv, &k.template.parents, false);
                     let parents = self.enum_case_parents(cv, parents);
-                    cases.push((name, tparams, clauses, parents, k.addr));
+                    cases.push((name, tparams, clauses, parents, k.addr, std::mem::take(&mut cv.refused_parents)));
                 }
                 // A class case's companion, the lookups, `$new`, the mirror's members: what the
                 // typer makes again; an object the source writes in the companion stays.
@@ -5237,7 +5318,9 @@ impl<'a> Worker<'a> {
         }
         let Some(d) = self.conv_local_class(cv, cd) else { return (None, None) };
         let mut defs = Vec::with_capacity(cases.len());
-        for (name, tparams, clauses, parents, addr) in cases {
+        let mut enum_refused: Vec<ExprId> = Vec::new();
+        for (name, tparams, clauses, parents, addr, refused) in cases {
+            enum_refused.extend(refused);
             let class = ast::ClassDef { kind: ast::ClassKind::EnumCase, tparams, clauses, parents, body: Vec::new(), exports: ListRef::EMPTY, self_type: None, self_alias: crate::names::EMPTY };
             let case = cv.ast.add_def(Def { name, span: cv.span, mods: mods::CASE | mods::FINAL, annots: Vec::new(), kind: DefKind::Class(Box::new(class)) });
             cv.def_at.push((case, addr));
@@ -5251,6 +5334,8 @@ impl<'a> Worker<'a> {
             cls.kind = ast::ClassKind::Enum;
             cls.parents = parents;
             cls.body.extend(defs.into_iter().map(Stmt::Def));
+            // Its cases' parents the converter could not read and their withheld creations: the enum's construction's.
+            cls.body.extend(enum_refused.into_iter().map(Stmt::Expr));
         }
         if own.is_empty() {
             return (Some(d), None);
@@ -5452,11 +5537,15 @@ impl<'a> Worker<'a> {
             cv.parent_params = Some((cd.addr, names));
         }
         let parents = self.conv_template_parents(cv, &cd.template.parents, !named);
+        let refused = std::mem::take(&mut cv.refused_parents);
         cv.parent_params = outer_params;
         cv.scope.truncate(scope_mark);
         // Inside the local class `C.this` of an enclosing class is an outer `this`.
         cv.this_chain.push(LOCAL_CLASS);
         let mut body = Vec::with_capacity(cd.template.stats.len());
+        // A parent the converter could not read is the class's construction's: a named class's body reports it when
+        // typed, an anonymous class's creation (`new_anon`).
+        let anon_refused = if named { body.extend(refused.into_iter().map(Stmt::Expr)); Vec::new() } else { refused };
         // A var's generated setter of a product's local class, which teq's typer makes for the var
         // as the whole build's does (`Loaded::product_synthetics` for a product's own classes); a
         // written overload of the setter's name is the source's.
@@ -5540,7 +5629,21 @@ impl<'a> Worker<'a> {
             return Some(d);
         }
         cv.anon_defs.insert(cd.addr, d);
+        if !anon_refused.is_empty() {
+            cv.anon_refused.insert(d, anon_refused);
+        }
         None
+    }
+
+    /// The creation of the anonymous class `d`, behind the parents the converter could not read for it, which typing
+    /// the enclosing body reports.
+    fn new_anon(&mut self, cv: &mut Conv, d: DefId) -> ExprId {
+        let e = cv.expr(Expr::NewAnon(d));
+        let Some(refused) = cv.anon_refused.get(&d).cloned() else { return e };
+        let mut stmts: Vec<Stmt> = refused.into_iter().map(Stmt::Expr).collect();
+        stmts.push(Stmt::Expr(e));
+        let l = push_list(&mut cv.ast.stmts, &stmts);
+        cv.expr(Expr::Block(l))
     }
 
     /// `type TypeClassType = Show[A]`: the alias refines the instance's type; a parameterised
@@ -6917,5 +7020,106 @@ fn and_parts<'t>(t: &'t TType, out: &mut Vec<&'t TType>) {
         }
         TType::Annotated(inner, _) => and_parts(inner, out),
         _ => out.push(t),
+    }
+}
+
+/// The classes and traits a converted class defines at any depth: whether each is a trait (its `TRAIT` flag), by its
+/// address; each class's member classes by name; each local val's declared class (an object's val, its module class),
+/// so that a type selected by name through a local path (`LO.C`, `this.C`) finds its definition.
+#[derive(Default)]
+struct DefinedKinds {
+    by_addr: FxMap<Addr, bool>,
+    members: FxMap<(Addr, String), Addr>,
+    val_class: FxMap<Addr, Addr>,
+}
+
+impl DefinedKinds {
+    /// The kind of the class `t` names, where the converted class defines it: by its address (`TYPEREFdirect`,
+    /// `TYPEREFsymbol`), or by its name in a class named by a local prefix (a local val's class, `C.this`, a local class).
+    fn kind_of(&self, tasty: &TastyFile, t: &TType) -> Option<bool> {
+        match t {
+            TType::LocalType(addr, _) => self.by_addr.get(addr).copied(),
+            TType::TypeRef(prefix, n) => {
+                let owner = match &**prefix {
+                    TType::LocalTerm(v, _) => *self.val_class.get(v)?,
+                    TType::This(inner) | TType::Alias(inner) => match &**inner {
+                        TType::LocalType(c, _) => *c,
+                        _ => return None,
+                    },
+                    TType::LocalType(c, _) => *c,
+                    _ => return None,
+                };
+                let member = self.members.get(&(owner, tasty.name(tasty.source_name(*n))))?;
+                self.by_addr.get(member).copied()
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Every class and trait `cd` defines at any depth into `out` (`DefinedKinds`): its members, the members of a class
+/// or an object it defines, and the classes of every block of every body, inner blocks and the bodies of local classes
+/// included, with the local vals that name a class of them.
+fn prescan_kinds(tasty: &TastyFile, cd: &TClassDef, out: &mut DefinedKinds) {
+    if out.by_addr.insert(cd.addr, cd.mods.flags.has(tags::TRAIT)).is_some() {
+        return;
+    }
+    let mut found: Vec<TClassDef> = Vec::new();
+    let mut vals: Vec<(Addr, Addr)> = Vec::new();
+    let local_class = |t: &TType| match t {
+        TType::LocalType(c, _) => Some(*c),
+        _ => None,
+    };
+    {
+        let mut walk = crate::tasty::terms::Walk {
+            f: &mut |t: &Term, _: &crate::tasty::terms::Scope| {
+                if let TermKind::Block(stats, _) = &t.kind {
+                    for st in stats {
+                        match st {
+                            Stat::Class(inner) => found.push((**inner).clone()),
+                            Stat::Val(sig, _) => {
+                                if let Some(c) = local_class(&sig.ret) {
+                                    vals.push((sig.addr, c));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            },
+        };
+        for p in &cd.template.parents {
+            walk.term(p, crate::tasty::terms::Scope::default());
+        }
+        if let Some((_, Some(rhs))) = &cd.template.ctor {
+            walk.term(rhs, crate::tasty::terms::Scope::default());
+        }
+        for st in &cd.template.stats {
+            if !matches!(st, Stat::Class(_)) {
+                walk.stat(st, crate::tasty::terms::Scope::default());
+            }
+        }
+    }
+    for st in &cd.template.stats {
+        match st {
+            Stat::Class(inner) => {
+                // A module class shares its source name with the class or trait it accompanies (`trait T` and its
+                // companion `T$`): it is no constructor call's type, so the name names the class or the trait.
+                if !inner.mods.flags.has(tags::OBJECT) {
+                    out.members.insert((cd.addr, tasty.name(tasty.source_name(inner.name))), inner.addr);
+                }
+                found.push((**inner).clone());
+            }
+            Stat::Val(sig, _) => {
+                if let Some(c) = local_class(&sig.ret) {
+                    vals.push((sig.addr, c));
+                }
+            }
+            _ => {}
+        }
+    }
+    out.val_class.extend(vals);
+    for inner in &found {
+        prescan_kinds(tasty, inner, out);
     }
 }

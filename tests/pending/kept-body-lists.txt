@@ -30,54 +30,6 @@ kb_ctxvalue_using_pos_val_none/interp	refused: the run needs a body withheld fro
 kb_ctxvalue_using_pos_val_none/js	refused: ap!A.scala:7:7: error: the body of g_kb_ctxvalue_using_pos_val_none.Lib.value is withheld from the p where scalac prints 1 1 2 3
 kb_ctxvalue_using_pos_val_none_prim/interp	refused: the run needs a body withheld from its products and stops (the error below) where scalac prints 1 1 w 3
 kb_ctxvalue_using_pos_val_none_prim/js	refused: ap!A.scala:7:7: error: the body of g_kb_ctxvalue_using_pos_val_none_prim.Lib.value is withheld from where scalac prints 1 1 w 3
-kb_traitanon_implicit_shortnamed_def_comp/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_implicit_shortnamed_def_comp/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_implicit_shortnamed_def_comp_prim/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_implicit_shortnamed_def_comp_prim/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_implicit_shortnamed_val_comp/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_implicit_shortnamed_val_comp/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_implicit_shortnamed_val_comp_prim/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_implicit_shortnamed_val_comp_prim/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_implicitfirst_shortnamed_def_comp/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitanon_implicitfirst_shortnamed_def_comp/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitanon_implicitfirst_shortnamed_def_comp_prim/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitanon_implicitfirst_shortnamed_def_comp_prim/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitanon_implicitfirst_shortnamed_val_comp/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitanon_implicitfirst_shortnamed_val_comp/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitanon_implicitfirst_shortnamed_val_comp_prim/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitanon_implicitfirst_shortnamed_val_comp_prim/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitanon_using_shortnamed_def_comp/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_using_shortnamed_def_comp/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_using_shortnamed_def_comp_prim/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_using_shortnamed_def_comp_prim/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_using_shortnamed_val_comp/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_using_shortnamed_val_comp/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_using_shortnamed_val_comp_prim/interp	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_using_shortnamed_val_comp_prim/js	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_implicit_shortnamed_def_comp/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_implicit_shortnamed_def_comp/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_implicit_shortnamed_def_comp_prim/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_implicit_shortnamed_def_comp_prim/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_implicit_shortnamed_val_comp/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_implicit_shortnamed_val_comp/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_implicit_shortnamed_val_comp_prim/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_implicit_shortnamed_val_comp_prim/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_implicitfirst_shortnamed_def_comp/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitparent_implicitfirst_shortnamed_def_comp/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitparent_implicitfirst_shortnamed_def_comp_prim/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitparent_implicitfirst_shortnamed_def_comp_prim/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitparent_implicitfirst_shortnamed_val_comp/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitparent_implicitfirst_shortnamed_val_comp/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitparent_implicitfirst_shortnamed_val_comp_prim/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitparent_implicitfirst_shortnamed_val_comp_prim/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitparent_using_shortnamed_def_comp/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_using_shortnamed_def_comp/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_using_shortnamed_def_comp_prim/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_using_shortnamed_def_comp_prim/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_using_shortnamed_val_comp/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_using_shortnamed_val_comp/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_using_shortnamed_val_comp_prim/interp	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_using_shortnamed_val_comp_prim/js	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
 kc_emptyafter_parent_def/interp	prints () where scalac prints 1
 kc_emptyafter_parent_def/js	prints undefined where scalac prints 1
 kc_emptyafter_parent_val/interp	prints () where scalac prints 1

@@ -1,0 +1,27 @@
+b1
+given a
+T1 ga b1
+b2
+given c
+T2 b2 gc
+-
+b2
+given c
+T2 b2 gc
+b1
+given a
+T1 ga b1
+-
+b1
+given a
+D1 ga b1
+b2
+given c
+D2 gc b2
+-
+b2
+given c
+D2 gc b2
+b1
+given a
+D1 ga b1

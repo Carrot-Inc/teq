@@ -1,0 +1,93 @@
+given a
+b1
+T1 ga b1
+b2
+given c
+T2 b2 gc
+-
+b2
+c2
+T2 b2 c2
+a1
+b1
+T1 a1 b1
+-
+a1
+default b1
+D1 a1 db1
+c2
+default b2
+D2 c2 db2
+-
+c2
+default b2
+D2 c2 db2
+given a
+default b1
+D1 ga db1
+-
+x
+Base 1
+a1
+b1
+T1 a1 b1
+b2
+given c
+T2 b2 gc
+-
+given a
+given b
+T1 ga gb
+U
+b2
+c2
+T2 b2 c2
+-
+a1
+b1
+T1 a1 b1
+b2
+given c
+T2 b2 gc
+-
+x
+a1
+b1
+T1 a1 b1
+b2
+given c
+T2 b2 gc
+-
+a1
+G
+b2
+c2
+T2 b2 c2
+-
+b2
+c2
+T2 b2 c2
+-
+a1
+b1
+T1 a1 b1
+b2
+given c
+T2 b2 gc
+-
+tag
+b1
+T1 t b1
+given c
+T2 t gc
+-
+tag
+a1
+b1
+L t a1 b1
+b2
+given a
+L t ga b2
+a3
+b3
+M t a3 b3

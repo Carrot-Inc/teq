@@ -1185,6 +1185,35 @@ impl<'w, 'a> P<'w, 'a> {
         if case.is_none() && !self.w.syms.class(e).tparams.is_empty() {
             return self.fail("the values of an enum of type parameters".to_string());
         }
+        // The value class extends the enum alone: a case of another parent too (`case K extends E with T(..)`), a class
+        // of its linearization beyond the rule's traits and the enum's own, would be read back without that parent's call.
+        // Where the call binds an argument (written or searched, a default aside) or the trait's initialization runs a
+        // statement, that loses a value, so the case is withheld instead; a marker (`Marker`, `Marker()`) or a trait
+        // taking its defaults alone loses none and stays as written.
+        if let Some(c) = case {
+            let extra: Vec<ClassId> = {
+                let info = self.w.syms.class(c);
+                let own = &self.w.syms.class(e).base_types;
+                info.base_types.iter().skip(1 + info.rule_prefix as usize).map(|&(b, _)| b).filter(|&b| !own.iter().any(|&(x, _)| x == b)).collect()
+            };
+            let mut loses = extra.iter().any(|&b| self.w.syms.class(b).has_statements);
+            for p in self.w.syms.class(c).parents.clone() {
+                if loses {
+                    break;
+                }
+                let p = self.w.zonk(p);
+                let Type::Class(k, _) = self.w.types.get(self.w.types.strip_nested(p)) else { continue };
+                if !extra.contains(&k) {
+                    continue;
+                }
+                if let Some((args, _, prelude)) = self.trait_args(c, p) {
+                    loses = prelude.is_some_and(|l| l.len > 0) || args.iter().any(|&a| !matches!(self.w.prog.expr(a), crate::tir::TExpr::Default(..)));
+                }
+            }
+            if loses {
+                return self.fail("an enum value's case of another parent whose call binds an argument or runs a body".to_string());
+            }
+        }
         let Some(&k) = self.enclosing.last() else { return self.fail("an enum's companion".to_string()) };
         let local = format!("{}._$$anon", self.w.library_class_name(k, ""));
         self.term_at(None);

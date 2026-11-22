@@ -2759,18 +2759,18 @@ kb_traitanon_implicit_short_val_none/interp	pass	-
 kb_traitanon_implicit_short_val_none/js	pass	-	
 kb_traitanon_implicit_short_val_none_prim/interp	pass	-	
 kb_traitanon_implicit_short_val_none_prim/js	pass	-	
-kb_traitanon_implicit_shortnamed_def_comp/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_implicit_shortnamed_def_comp/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_implicit_shortnamed_def_comp_prim/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_implicit_shortnamed_def_comp_prim/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
+kb_traitanon_implicit_shortnamed_def_comp/interp	pass	-	
+kb_traitanon_implicit_shortnamed_def_comp/js	pass	-	
+kb_traitanon_implicit_shortnamed_def_comp_prim/interp	pass	-	
+kb_traitanon_implicit_shortnamed_def_comp_prim/js	pass	-	
 kb_traitanon_implicit_shortnamed_def_none/interp	pass	-	
 kb_traitanon_implicit_shortnamed_def_none/js	pass	-	
 kb_traitanon_implicit_shortnamed_def_none_prim/interp	pass	-	
 kb_traitanon_implicit_shortnamed_def_none_prim/js	pass	-	
-kb_traitanon_implicit_shortnamed_val_comp/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_implicit_shortnamed_val_comp/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_implicit_shortnamed_val_comp_prim/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_implicit_shortnamed_val_comp_prim/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
+kb_traitanon_implicit_shortnamed_val_comp/interp	pass	-	
+kb_traitanon_implicit_shortnamed_val_comp/js	pass	-	
+kb_traitanon_implicit_shortnamed_val_comp_prim/interp	pass	-	
+kb_traitanon_implicit_shortnamed_val_comp_prim/js	pass	-	
 kb_traitanon_implicit_shortnamed_val_none/interp	pass	-	
 kb_traitanon_implicit_shortnamed_val_none/js	pass	-	
 kb_traitanon_implicit_shortnamed_val_none_prim/interp	pass	-	
@@ -2847,18 +2847,18 @@ kb_traitanon_implicitfirst_short_val_none/interp	pass	-
 kb_traitanon_implicitfirst_short_val_none/js	pass	-	
 kb_traitanon_implicitfirst_short_val_none_prim/interp	pass	-	
 kb_traitanon_implicitfirst_short_val_none_prim/js	pass	-	
-kb_traitanon_implicitfirst_shortnamed_def_comp/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitanon_implicitfirst_shortnamed_def_comp/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitanon_implicitfirst_shortnamed_def_comp_prim/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitanon_implicitfirst_shortnamed_def_comp_prim/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 g 3
+kb_traitanon_implicitfirst_shortnamed_def_comp/interp	pass	-	
+kb_traitanon_implicitfirst_shortnamed_def_comp/js	pass	-	
+kb_traitanon_implicitfirst_shortnamed_def_comp_prim/interp	pass	-	
+kb_traitanon_implicitfirst_shortnamed_def_comp_prim/js	pass	-	
 kb_traitanon_implicitfirst_shortnamed_def_none/interp	pass	-	
 kb_traitanon_implicitfirst_shortnamed_def_none/js	pass	-	
 kb_traitanon_implicitfirst_shortnamed_def_none_prim/interp	pass	-	
 kb_traitanon_implicitfirst_shortnamed_def_none_prim/js	pass	-	
-kb_traitanon_implicitfirst_shortnamed_val_comp/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitanon_implicitfirst_shortnamed_val_comp/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitanon_implicitfirst_shortnamed_val_comp_prim/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitanon_implicitfirst_shortnamed_val_comp_prim/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 0 1 g 3
+kb_traitanon_implicitfirst_shortnamed_val_comp/interp	pass	-	
+kb_traitanon_implicitfirst_shortnamed_val_comp/js	pass	-	
+kb_traitanon_implicitfirst_shortnamed_val_comp_prim/interp	pass	-	
+kb_traitanon_implicitfirst_shortnamed_val_comp_prim/js	pass	-	
 kb_traitanon_implicitfirst_shortnamed_val_none/interp	pass	-	
 kb_traitanon_implicitfirst_shortnamed_val_none/js	pass	-	
 kb_traitanon_implicitfirst_shortnamed_val_none_prim/interp	pass	-	
@@ -2935,18 +2935,18 @@ kb_traitanon_using_short_val_none/interp	pass	-
 kb_traitanon_using_short_val_none/js	pass	-	
 kb_traitanon_using_short_val_none_prim/interp	pass	-	
 kb_traitanon_using_short_val_none_prim/js	pass	-	
-kb_traitanon_using_shortnamed_def_comp/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_using_shortnamed_def_comp/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_using_shortnamed_def_comp_prim/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_using_shortnamed_def_comp_prim/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
+kb_traitanon_using_shortnamed_def_comp/interp	pass	-	
+kb_traitanon_using_shortnamed_def_comp/js	pass	-	
+kb_traitanon_using_shortnamed_def_comp_prim/interp	pass	-	
+kb_traitanon_using_shortnamed_def_comp_prim/js	pass	-	
 kb_traitanon_using_shortnamed_def_none/interp	pass	-	
 kb_traitanon_using_shortnamed_def_none/js	pass	-	
 kb_traitanon_using_shortnamed_def_none_prim/interp	pass	-	
 kb_traitanon_using_shortnamed_def_none_prim/js	pass	-	
-kb_traitanon_using_shortnamed_val_comp/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_using_shortnamed_val_comp/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitanon_using_shortnamed_val_comp_prim/interp	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitanon_using_shortnamed_val_comp_prim/js	fail	-	refused: A's products: A.scala:11:28: error: missing argument for parameter b where scalac prints 1 1 g 3
+kb_traitanon_using_shortnamed_val_comp/interp	pass	-	
+kb_traitanon_using_shortnamed_val_comp/js	pass	-	
+kb_traitanon_using_shortnamed_val_comp_prim/interp	pass	-	
+kb_traitanon_using_shortnamed_val_comp_prim/js	pass	-	
 kb_traitanon_using_shortnamed_val_none/interp	pass	-	
 kb_traitanon_using_shortnamed_val_none/js	pass	-	
 kb_traitanon_using_shortnamed_val_none_prim/interp	pass	-	
@@ -3111,18 +3111,18 @@ kb_traitparent_implicit_short_val_none/interp	pass	-
 kb_traitparent_implicit_short_val_none/js	pass	-	
 kb_traitparent_implicit_short_val_none_prim/interp	pass	-	
 kb_traitparent_implicit_short_val_none_prim/js	pass	-	
-kb_traitparent_implicit_shortnamed_def_comp/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_implicit_shortnamed_def_comp/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_implicit_shortnamed_def_comp_prim/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_implicit_shortnamed_def_comp_prim/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
+kb_traitparent_implicit_shortnamed_def_comp/interp	pass	-	
+kb_traitparent_implicit_shortnamed_def_comp/js	pass	-	
+kb_traitparent_implicit_shortnamed_def_comp_prim/interp	pass	-	
+kb_traitparent_implicit_shortnamed_def_comp_prim/js	pass	-	
 kb_traitparent_implicit_shortnamed_def_none/interp	pass	-	
 kb_traitparent_implicit_shortnamed_def_none/js	pass	-	
 kb_traitparent_implicit_shortnamed_def_none_prim/interp	pass	-	
 kb_traitparent_implicit_shortnamed_def_none_prim/js	pass	-	
-kb_traitparent_implicit_shortnamed_val_comp/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_implicit_shortnamed_val_comp/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_implicit_shortnamed_val_comp_prim/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_implicit_shortnamed_val_comp_prim/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
+kb_traitparent_implicit_shortnamed_val_comp/interp	pass	-	
+kb_traitparent_implicit_shortnamed_val_comp/js	pass	-	
+kb_traitparent_implicit_shortnamed_val_comp_prim/interp	pass	-	
+kb_traitparent_implicit_shortnamed_val_comp_prim/js	pass	-	
 kb_traitparent_implicit_shortnamed_val_none/interp	pass	-	
 kb_traitparent_implicit_shortnamed_val_none/js	pass	-	
 kb_traitparent_implicit_shortnamed_val_none_prim/interp	pass	-	
@@ -3199,18 +3199,18 @@ kb_traitparent_implicitfirst_short_val_none/interp	pass	-
 kb_traitparent_implicitfirst_short_val_none/js	pass	-	
 kb_traitparent_implicitfirst_short_val_none_prim/interp	pass	-	
 kb_traitparent_implicitfirst_short_val_none_prim/js	pass	-	
-kb_traitparent_implicitfirst_shortnamed_def_comp/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitparent_implicitfirst_shortnamed_def_comp/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitparent_implicitfirst_shortnamed_def_comp_prim/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitparent_implicitfirst_shortnamed_def_comp_prim/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 g 3
+kb_traitparent_implicitfirst_shortnamed_def_comp/interp	pass	-	
+kb_traitparent_implicitfirst_shortnamed_def_comp/js	pass	-	
+kb_traitparent_implicitfirst_shortnamed_def_comp_prim/interp	pass	-	
+kb_traitparent_implicitfirst_shortnamed_def_comp_prim/js	pass	-	
 kb_traitparent_implicitfirst_shortnamed_def_none/interp	pass	-	
 kb_traitparent_implicitfirst_shortnamed_def_none/js	pass	-	
 kb_traitparent_implicitfirst_shortnamed_def_none_prim/interp	pass	-	
 kb_traitparent_implicitfirst_shortnamed_def_none_prim/js	pass	-	
-kb_traitparent_implicitfirst_shortnamed_val_comp/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitparent_implicitfirst_shortnamed_val_comp/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 200 3
-kb_traitparent_implicitfirst_shortnamed_val_comp_prim/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 g 3
-kb_traitparent_implicitfirst_shortnamed_val_comp_prim/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 0 1 g 3
+kb_traitparent_implicitfirst_shortnamed_val_comp/interp	pass	-	
+kb_traitparent_implicitfirst_shortnamed_val_comp/js	pass	-	
+kb_traitparent_implicitfirst_shortnamed_val_comp_prim/interp	pass	-	
+kb_traitparent_implicitfirst_shortnamed_val_comp_prim/js	pass	-	
 kb_traitparent_implicitfirst_shortnamed_val_none/interp	pass	-	
 kb_traitparent_implicitfirst_shortnamed_val_none/js	pass	-	
 kb_traitparent_implicitfirst_shortnamed_val_none_prim/interp	pass	-	
@@ -3287,18 +3287,18 @@ kb_traitparent_using_short_val_none/interp	pass	-
 kb_traitparent_using_short_val_none/js	pass	-	
 kb_traitparent_using_short_val_none_prim/interp	pass	-	
 kb_traitparent_using_short_val_none_prim/js	pass	-	
-kb_traitparent_using_shortnamed_def_comp/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_using_shortnamed_def_comp/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_using_shortnamed_def_comp_prim/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_using_shortnamed_def_comp_prim/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
+kb_traitparent_using_shortnamed_def_comp/interp	pass	-	
+kb_traitparent_using_shortnamed_def_comp/js	pass	-	
+kb_traitparent_using_shortnamed_def_comp_prim/interp	pass	-	
+kb_traitparent_using_shortnamed_def_comp_prim/js	pass	-	
 kb_traitparent_using_shortnamed_def_none/interp	pass	-	
 kb_traitparent_using_shortnamed_def_none/js	pass	-	
 kb_traitparent_using_shortnamed_def_none_prim/interp	pass	-	
 kb_traitparent_using_shortnamed_def_none_prim/js	pass	-	
-kb_traitparent_using_shortnamed_val_comp/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_using_shortnamed_val_comp/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 200 3
-kb_traitparent_using_shortnamed_val_comp_prim/interp	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
-kb_traitparent_using_shortnamed_val_comp_prim/js	fail	-	refused: A's products: A.scala:11:19: error: missing argument for parameter b where scalac prints 1 1 g 3
+kb_traitparent_using_shortnamed_val_comp/interp	pass	-	
+kb_traitparent_using_shortnamed_val_comp/js	pass	-	
+kb_traitparent_using_shortnamed_val_comp_prim/interp	pass	-	
+kb_traitparent_using_shortnamed_val_comp_prim/js	pass	-	
 kb_traitparent_using_shortnamed_val_none/interp	pass	-	
 kb_traitparent_using_shortnamed_val_none/js	pass	-	
 kb_traitparent_using_shortnamed_val_none_prim/interp	pass	-	

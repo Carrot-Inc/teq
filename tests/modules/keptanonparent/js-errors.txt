@@ -1,0 +1,37 @@
+$OUT/keptanonparent/jsl-a!a/Lib.scala:10:7: error: not supported yet: a parent of that shape (in the body of kap.Lib.make)
+  body: {
+      {
+        <synthetic> final class $anon() extends Object(), {
+          <synthetic> val b$2: B = {
+            Predef.println("b")
+            new B("wb")
+          }
+          <synthetic> val a$1: A = Lib$package.given_A
+          new T(a$1, b = b$2)()
+        } {
+        }
+        (new $anon(): T)
+      }
+      Predef.println("done")
+    }
+    def make: Unit =
+        ^
+$OUT/keptanonparent/jsl-a!a/Lib.scala:10:7: error: Found:    AnyRef
+Required: T (in the body of kap.Lib.make)
+  body: {
+      {
+        <synthetic> final class $anon() extends Object(), {
+          <synthetic> val b$2: B = {
+            Predef.println("b")
+            new B("wb")
+          }
+          <synthetic> val a$1: A = Lib$package.given_A
+          new T(a$1, b = b$2)()
+        } {
+        }
+        (new $anon(): T)
+      }
+      Predef.println("done")
+    }
+    def make: Unit =
+        ^

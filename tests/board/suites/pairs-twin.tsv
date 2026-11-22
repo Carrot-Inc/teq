@@ -3092,6 +3092,16 @@ cases/trait_linearisation	pass	-
 cases/trait_object_methods	pass	-	
 cases/trait_param_shadow	pass	-	
 cases/trait_params	pass	-	
+cases/trait_parent_empty_implicit_defaults	pass	-	
+cases/trait_parent_order_byname	pass	-	
+cases/trait_parent_order_dependent_default	pass	-	
+cases/trait_parent_order_evidence	pass	-	
+cases/trait_parent_order_linearization	pass	-	
+cases/trait_parent_order_plain	pass	-	
+cases/trait_parent_order_two_traits	pass	-	
+cases/trait_parent_plain_list_implicit	pass	-	
+cases/trait_parent_using_only_accepted	pass	-	
+cases/trait_parent_using_then_implicit	pass	-	
 cases/trait_private_class_member	pass	-	
 cases/trait_private_public_dispatch	pass	-	
 cases/trait_private_same_name	pass	-	
@@ -3252,6 +3262,7 @@ cases/using_lambda_argument	pass	-
 cases/using_list_overloads_narrowed	pass	-	
 cases/using_list_short_searched	pass	-	
 cases/using_list_trait_implicit_clause	pass	-	
+cases/using_list_trait_implicit_named	pass	-	
 cases/using_search	pass	-	
 cases/util_sorting	pass	-	
 cases/uuid	pass	-	

@@ -3345,11 +3345,37 @@ impl<'a> Emitter<'a> {
                         self.enter_scope(root);
                         self.emit_block_stmts(call.prelude);
                     }
-                    self.line();
-                    let _ = write!(self.out, "{}.prototype.$traitInit.call({}", trait_name, this);
                     let proxies = self.local_captures.get(b).copied().unwrap_or(0) as usize;
-                    self.emit_proxy_args(call.args, proxies, ", ");
-                    self.out.push(';');
+                    let info = self.syms.class(*b);
+                    if !info.ctor.iter().any(|cl| !cl.is_using) && proxies == 0 && !call.args.is_empty() {
+                        // A trait of evidence alone takes nothing in its `$traitInit`: the class sets its fields, here
+                        // from the call's arguments or the bindings of its block, then runs its body where it has one.
+                        // A local trait that captures takes its captures and then its evidence there (the parameters it
+                        // holds in no field), which the call below passes whole.
+                        let params: Vec<SymId> = info.ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
+                        let runs_body = info.has_statements && info.js == JsKind::Scala;
+                        let args = self.prog.expr_list(call.args).to_vec();
+                        for (p, arg) in params.into_iter().zip(args) {
+                            let field = self.field_access(p);
+                            if self.is_simple(arg) {
+                                self.line();
+                                let _ = write!(self.out, "{}{} = ", this, field);
+                                self.emit_value(arg);
+                                self.out.push(';');
+                            } else {
+                                self.emit_stmt(arg, &Ctx::Assign(format!("{}{}", this, field)));
+                            }
+                        }
+                        if runs_body {
+                            self.line();
+                            let _ = write!(self.out, "{}.prototype.$traitInit.call({});", trait_name, this);
+                        }
+                    } else {
+                        self.line();
+                        let _ = write!(self.out, "{}.prototype.$traitInit.call({}", trait_name, this);
+                        self.emit_proxy_args(call.args, proxies, ", ");
+                        self.out.push(';');
+                    }
                     if scoped {
                         self.leave_scope();
                         self.close("}");

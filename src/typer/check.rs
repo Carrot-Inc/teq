@@ -6046,7 +6046,7 @@ impl<'a> Worker<'a> {
             if kind != ClassKind::Trait {
                 let mut params = Vec::new();
                 if t.has_evidence_traits(c) {
-                    params = t.fill_trait_params(c, parents, &mut tclass);
+                    params = t.fill_trait_params(c, parents);
                 }
                 let inits = t.parent_inits(c, &mut params);
                 tclass.init.extend(inits);
@@ -6994,16 +6994,11 @@ impl<'a> Worker<'a> {
     /// with the constructor parameters visible, not in the class body, whose members would be read
     /// before they exist; the code stands in the class's constructor (`Frame::Ctor`), so a member
     /// of a class around is read from there. The fields of a trait are
-    /// set before its body runs: evidence ahead of every trait body, which goes into `tclass`,
-    /// while a trait with ordinary parameters takes all of them as the arguments of its body,
-    /// evaluated right before it runs as under scalac; those are returned by trait. An enum does
-    /// all that for its cases.
-    fn fill_trait_params(
-        &mut self,
-        c: ClassId,
-        parents: &'a [ast::Parent],
-        tclass: &mut TClass,
-    ) -> Vec<(ClassId, ParentCall)> {
+    /// set before its body runs, its arguments evaluated in its turn of the linearization's
+    /// initialization as under scalac, evidence as ordinary parameters (a trait of evidence alone
+    /// has its fields set by the class, the others take theirs as their body's arguments); they
+    /// are returned by trait. An enum does all that for its cases.
+    fn fill_trait_params(&mut self, c: ClassId, parents: &'a [ast::Parent]) -> Vec<(ClassId, ParentCall)> {
         self.dump_door("trait parents' arguments", super::context::Entered::Class(c));
         let (file, class_span, kind, owner) = {
             let i = self.syms.class(c);
@@ -7078,21 +7073,6 @@ impl<'a> Worker<'a> {
                 self.syms.class(b).tparams.iter().copied().zip(self.types.items(targs).iter().copied()).collect();
             let sig = Arc::new(MethodSig { tparams: Vec::new(), clauses: self.syms.class(b).ctor.clone(), ret: base_ty, declared: crate::tir::NO_TYPE });
             let span = clause.map_or(class_span, |p| ast.ty_spans[p.ty.idx()]);
-            let mut lists: Vec<ArgList> = clause
-                .map(|p| {
-                    p.args
-                        .iter()
-                        .enumerate()
-                        .filter(|&(_, &(_, using))| using || !evidence_only)
-                        .map(|(k, &(l, using))| ArgList {
-                            args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(),
-                            using,
-                            span,
-                            fun: super::apply::FunEnd::at(p.fun_end(ast, k)),
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
             // A trait of using clauses alone takes no written `()` (`evidence_only` leaves it out of `lists`); the
             // reference's constructor has its empty clause after the using clauses, or before an implicit first one
             // (Desugar.scala's `creatorExpr`), so a `()` elsewhere has taken a clause whole or follows the clauses.
@@ -7104,10 +7084,147 @@ impl<'a> Worker<'a> {
                 let aside = if implicit_first { first_using.is_some_and(|f| k > f) } else { last_using.is_some_and(|l| k < l) };
                 !using && empty && aside
             });
+            // NamerOps.normalizeIfConstructor's empty clause after the constructor's clauses: only after using clauses
+            // alone (an implicit clause anywhere takes none there).
+            let trailing_empty = !implicit_first && sig.clauses.iter().all(|cl| cl.is_using && !cl.is_implicit && !cl.params.is_empty());
+            // The written lists of a trait of evidence alone, applied to its constructor's clauses as the reference
+            // normalizes them (NamerOps.normalizeIfConstructor: an empty clause before a leading implicit one, after
+            // using clauses alone): a using list meeting that empty clause applies it first (a constructor is applied to
+            // `()` on its own, Typer's `adaptNoArgsUnappliedMethod`), a plain list meeting a using clause leaves that
+            // clause to its search. A list left over is E050. A plain list given to an implicit clause is matched as
+            // Applications' `matchArgs` matches it: a parameter takes its written argument, by place or by name, else
+            // its default; the first that has neither is E171 (`failEmptyArgs` for an empty list), else the list is
+            // applied as written (`kept_empty` the empty ones, which no search may fill).
+            let mut kept_empty: Vec<usize> = Vec::new();
+            if evidence_only && clause.is_some() {
+                // The clauses: Some(clause) a written one of the trait's, None the normalization's empty one.
+                let mut normalized: Vec<Option<&crate::symbols::ClauseSig>> = sig.clauses.iter().map(Some).collect();
+                if implicit_first {
+                    normalized.insert(0, None);
+                } else if trailing_empty {
+                    normalized.push(None);
+                }
+                let written_lists: Vec<ast::ListRef> = clause.map(|p| p.args.iter().map(|&(l, _)| l).collect()).unwrap_or_default();
+                let name = self.name_str(self.syms.class(b).name).to_string();
+                let mut at = 0;
+                let mut refusal: Option<(Span, String)> = None;
+                'lists: for (k, &(using, empty)) in written.iter().enumerate() {
+                    loop {
+                        let Some(&cl) = normalized.get(at) else {
+                            refusal = Some((span, format!("constructor {} in {} does not take more parameters", name, self.class_description(b))));
+                            break 'lists;
+                        };
+                        at += 1;
+                        match (using, cl) {
+                            (true, None) => continue,
+                            // A non-empty plain list meeting the normalization's empty clause: too many arguments, at the
+                            // first of them, the constructor shown as it remains from that clause on.
+                            (false, None) if !empty => {
+                                let from = normalized[..at].iter().filter(|c| c.is_some()).count();
+                                let shown = if from == sig.clauses.len() {
+                                    format!("(): {}", name)
+                                } else {
+                                    format!("(){}", self.ctor_clauses_text(&sig, from))
+                                };
+                                let at_arg = written_lists.get(k).and_then(|&l| ast.expr_list(l).first().copied()).map_or(span, |e| ast.expr_span(e));
+                                refusal = Some((at_arg, format!("too many arguments for constructor {} in {}: {}", name, self.class_description(b), shown)));
+                                break 'lists;
+                            }
+                            (false, Some(cl)) if cl.is_implicit => {
+                                let list = written_lists.get(k).map_or(&[][..], |&l| ast.expr_list(l));
+                                let positional = list.iter().filter(|&&a| !matches!(ast.expr(a), ast::Expr::NamedArg(..))).count();
+                                let named: Vec<_> = list
+                                    .iter()
+                                    .filter_map(|&a| match ast.expr(a) {
+                                        ast::Expr::NamedArg(n, _) => Some(n),
+                                        _ => None,
+                                    })
+                                    .collect();
+                                let unfilled = cl.params.iter().enumerate().find(|&(i, p)| i >= positional && !named.contains(&p.name) && !p.has_default);
+                                if let Some((_, p)) = unfilled {
+                                    let param = self.name_str(p.name).to_string();
+                                    // The reference shows the method type being applied: this clause and those after.
+                                    let from = normalized[..at - 1].iter().filter(|c| c.is_some()).count();
+                                    let shown = self.ctor_clauses_text(&sig, from);
+                                    let notice = if empty { crate::source_version::rewrite_notice("This code", "3.7-migration") } else { String::new() };
+                                    refusal = Some((span, format!("missing argument for parameter {} of constructor {} in {}: {}{}", param, name, self.class_description(b), shown, notice)));
+                                    break 'lists;
+                                }
+                                if empty {
+                                    kept_empty.push(k);
+                                }
+                                break;
+                            }
+                            (false, Some(cl)) if cl.is_using && !cl.is_implicit => continue,
+                            _ => break,
+                        }
+                    }
+                }
+                if let Some((at_span, msg)) = refusal {
+                    self.diags.error_by(crate::source::Group::Typer, file, at_span, msg);
+                    continue;
+                }
+            }
+            let mut lists: Vec<ArgList> = clause
+                .map(|p| {
+                    p.args
+                        .iter()
+                        .enumerate()
+                        // A trait of evidence alone takes no empty list of its own but one its implicit clause takes
+                        // as written (`kept_empty`): a non-empty plain one goes to its implicit clause as written.
+                        .filter(|&(k, &(l, using))| using || !evidence_only || !ast.expr_list(l).is_empty() || kept_empty.contains(&k))
+                        .map(|(k, &(l, using))| ArgList {
+                            args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(),
+                            using,
+                            span,
+                            fun: super::apply::FunEnd::at(p.fun_end(ast, k)),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             if !evidence_only && !lists.iter().any(|l| !l.using) {
                 lists.insert(0, ArgList { args: Vec::new(), using: false, span, fun: ArgList::NO_FUN });
             }
-            super::apply::limit_using_search(&mut lists, evidence_only && empty_aside);
+            // A parameter left out before a written argument is searched as the reference searches it (`matchArgs`'s
+            // missing argument, after the written ones the application lifts): the search is limited only where a `()`
+            // stands where the reference's empty clause is not.
+            if evidence_only && empty_aside {
+                super::apply::limit_using_search(&mut lists, true);
+            }
+            // A trait of using clauses alone has the reference's empty clause after them (`T(using a: A)` is `T(using a:
+            // A)()`), which the constructor's application to `()` gives on its own only where its call binds nothing
+            // first: where that `()` is not written, a parameter left out before a written argument, or named arguments
+            // written out of their parameters' order that the call binds ahead, are E100 (`MissingEmptyArgumentList`)
+            // once the call types; a failed search is the search's own error. (`(omitted, reordered)` of the lists.)
+            let empty_unwritten = evidence_only && trailing_empty && written.last() != Some(&(false, true));
+            let (omitted, reordered) = if !empty_unwritten { (false, false) } else { clause.map_or((false, false), |p| {
+                let mut k = 0;
+                let mut reordered = false;
+                let omitted = p.args.iter().filter(|&&(_, using)| using).fold(false, |omitted, &(l, _)| {
+                    let Some(cl) = sig.clauses.get(k) else { return omitted };
+                    k += 1;
+                    let mut filled = vec![false; cl.params.len()];
+                    let mut at = 0;
+                    let mut last_index: Option<usize> = None;
+                    for &a in ast.expr_list(l) {
+                        let index = match ast.expr(a) {
+                            ast::Expr::NamedArg(name, _) => cl.params.iter().position(|q| q.name == name),
+                            _ => {
+                                at += 1;
+                                Some(at - 1)
+                            }
+                        };
+                        if let Some(i) = index.filter(|&i| i < filled.len()) {
+                            filled[i] = true;
+                            reordered |= last_index.is_some_and(|j| i < j);
+                            last_index = Some(i);
+                        }
+                    }
+                    omitted || filled.iter().rposition(|&f| f).is_some_and(|last| (0..last).any(|i| !filled[i] && !cl.params[i].has_default))
+                });
+                (omitted, reordered)
+            }) };
+            let errors_before = self.diags.items.iter().filter(|d| !d.is_warning).count();
             let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             let applied = self.with_env(outside.clone(), |t| {
                 let outer = t.parent_args_of.replace(c);
@@ -7120,14 +7237,19 @@ impl<'a> Worker<'a> {
                 TExpr::Block(stmts, new) => (stmts, new),
                 _ => (ast::ListRef::EMPTY, te),
             };
-            let TExpr::New(_, args) = self.prog.expr(new) else { continue };
-            if evidence_only {
-                let args = self.prog.expr_list(args).to_vec();
-                let fields = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym));
-                tclass.init.extend(fields.zip(args).map(|(field, arg)| TInit::Field(field, arg)));
-            } else {
-                by_trait.push((b, ParentCall { prelude, args, via: None }));
+            if (omitted || (reordered && !prelude.is_empty())) && self.diags.items.iter().filter(|d| !d.is_warning).count() == errors_before {
+                let name = self.name_str(self.syms.class(b).name).to_string();
+                let msg = format!("constructor {} in {} must be called with () argument", name, self.class_description(b));
+                self.diags.error_by(crate::source::Group::Typer, file, span, msg);
+                continue;
             }
+            let TExpr::New(_, args) = self.prog.expr(new) else { continue };
+            // A trait's call runs in the trait's turn of the linearization's initialization, its arguments evaluated
+            // there (Mixin's trait initializers, each behind its arguments): an evidence trait's as a plain-clause
+            // trait's, the bindings its call makes first (an argument lifted ahead of a searched one, a default reading
+            // an earlier argument) kept in their scope as dotty's lifted application keeps them (`liftArgs`,
+            // `spliceMeth`), the trait's fields set from them.
+            by_trait.push((b, ParentCall { prelude, args, via: None }));
         }
         by_trait
     }
@@ -9598,6 +9720,20 @@ impl<'a> Worker<'a> {
 
     pub(super) fn sig_text(&mut self, sig: &MethodSig) -> String {
         self.sig_text_in(sig, &Vec::new())
+    }
+
+    /// A constructor's clauses from the `from`th on, then its result, as the reference prints them: an implicit
+    /// clause `(implicit ..)`, a using one `(using ..)` (`sig_text` names every clause of givens `using`).
+    fn ctor_clauses_text(&mut self, sig: &MethodSig, from: usize) -> String {
+        let result = format!(": {}", self.show(sig.ret));
+        let mut out = String::new();
+        for cl in &sig.clauses[from.min(sig.clauses.len())..] {
+            let one = MethodSig { tparams: Vec::new(), clauses: vec![cl.clone()], ret: sig.ret, declared: crate::tir::NO_TYPE };
+            let text = self.sig_text(&one);
+            let clause = text.strip_suffix(result.as_str()).unwrap_or(text.as_str());
+            out.push_str(&if cl.is_implicit { clause.replacen("(using ", "(implicit ", 1) } else { clause.to_string() });
+        }
+        out + &result
     }
 
     pub(super) fn sig_text_in(&mut self, sig: &MethodSig, subst: &Subst) -> String {

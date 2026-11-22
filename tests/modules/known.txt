@@ -29,9 +29,6 @@ inlinesam subset  the same as classes
 pkgobjgiven classes  the split build's signature of the package object's given class names it through the file's object (`listTC([1], pga.TC): pga.inner.Lib$package$.listTC`), the whole build's through the package (`pga.inner.listTC`): the reader's owner of a product's package-object given class (the summon's proxy, the earlier difference, is gone)
 pkgobjgiven subset  the same as classes
 pkgobjgiven check-lean-whole  the same as classes, in `b`'s lean pickle
-traitparams classes  the pickle of a class whose parent is a product's trait of a using clause alone (`Sorted[Int]`) writes the parent as its type where the whole build writes the constructor call with the evidence (`APPLY(SELECTin <init>, Ordering.Int)`); the class files are the same but for the TASTy's UUID: the frontend's, found by the trait leftovers part (master refused the case on the JVM)
-traitparams subset  the same as classes
-traitparams check-lean-whole  the same as classes, in `b`'s lean pickle
 givenbridge js-run  JavaScript reads a superclass's val, var or given that a generic trait declares as a def through a property where the call is to a method (`c.g is not a function` whole, `c.x is not a function` over the products): the JVM's bridges are the part's, JavaScript's are master's; found by the trait leftovers part, master the same
 givenbridge bundle  the same as js-run: the products' superclass holds the val and var behind accessors (`this.$v`, `v()`) where the whole build's sets fields
 companionderived bundle  the anonymous class an inline expansion makes in an upstream body (`Codec.derived`'s `new Codec[A]:` in `derived$Codec`) is named by the source's places in the whole build (`Codec$$anon$sxpzkr_447$sxpzkr_563`) and by the pickle's in the products' (`Codec$$anon$i6uorhjf4f4z_13$…`), as on master for a plain inline `new Codec:` in an upstream val with no mirror: its own line
@@ -89,3 +86,4 @@ exportedinnerobject check-lean-whole  the same as classes, in the lean check bui
 expansionsingletonmember classes  the same as inlinesam: the class b's expansion of a's inline body makes is named at the product's pseudo file's place (`Gauge$$anon$300osidpep0lc_13$1rc96ct_90`), the whole build's at Gauge.scala's (`Gauge$$anon$1wh9xg8_328$1rc96ct_90`); its member is the members leg's
 expansionsingletonmember subset  the same as classes
 expansionsingletonmember bundle  the same as inlinesam bundle
+keptclassparentblock bundle  master's: the products' build leaves a class parent's unread constructor block out where the whole build calls it (utest's PPrinter.BlackWhite); the row of its own: a constructor call's hoisted arguments read back from a kept body (G2), which takes this line out

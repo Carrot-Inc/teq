@@ -1055,6 +1055,13 @@ trait_evidence_scope	pass	-
 trait_indirect_parameters	fail	-	missing '2 errors found'
 trait_param_rules	pass	-	
 trait_params	pass	-	
+trait_parent_default_shadows_given	pass	-	
+trait_parent_empty_implicit_missing	pass	-	
+trait_parent_empty_list_implicit	pass	-	
+trait_parent_list_left_over	pass	-	
+trait_parent_plain_list_left_over	pass	-	
+trait_parent_using_only_omitted	pass	-	
+trait_parent_using_only_reordered	pass	-	
 transparent_widened_ascription	pass	-	
 tuple1_as_binary_constructor	pass	-	
 tuple_index_bounds	pass	-	
@@ -1173,7 +1180,6 @@ using_list_splice_call	pass	-
 using_list_splice_forms	pass	-	
 using_list_splice_overloads	pass	-	
 using_list_splice_quote_arg	pass	-	
-using_list_trait_implicit_named	pass	-	
 value_class_rules	pass	-	
 value_import_given_conversion	pass	-	
 value_import_wildcard_givens	pass	-	

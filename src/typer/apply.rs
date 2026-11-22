@@ -248,11 +248,10 @@ impl ArgList {
 /// is `K(using a: A)()`), which teq's has not, so a parameter omitted before a written argument is E100 there without
 /// that `()` ("must be called with () argument"), a `()` written before the list has taken the using clause whole, and
 /// beside a secondary constructor a short list fits no alternative by its size (E134): kept where a `()` was dropped or
-/// the constructor is overloaded. A trait parent's lists (check.rs): a parameter omitted before a written argument
-/// would be placed after it, which teq's lifting of a trait parent's arguments out of their order does not do (a
-/// written `T(using b = y, a = x)` fails the same way on master); kept for a trait of using clauses alone where a `()`
-/// is written where the reference's empty clause is not: before its last using list, or after the first where its first
-/// clause is implicit.
+/// the constructor is overloaded. A trait parent's lists (check.rs), where `kept` alone: a trait of using clauses alone
+/// with a `()` written where the reference's empty clause is not, before its last using list or after the first where
+/// its first clause is implicit; any other trait parent's omitted parameter is searched as the reference searches it,
+/// its call's bindings kept in their scope (an evidence trait's on the trait's `TInit::Parent`).
 pub(super) fn limit_using_search(lists: &mut [ArgList], kept: bool) {
     for l in lists.iter_mut().filter(|l| l.using) {
         l.fun = l.fun.search_limited(kept);

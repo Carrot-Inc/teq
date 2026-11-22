@@ -3095,6 +3095,16 @@ trait_linearisation	pass	-
 trait_object_methods	pass	-	
 trait_param_shadow	pass	-	
 trait_params	pass	-	
+trait_parent_empty_implicit_defaults	pass	-	
+trait_parent_order_byname	pass	-	
+trait_parent_order_dependent_default	pass	-	
+trait_parent_order_evidence	pass	-	
+trait_parent_order_linearization	pass	-	
+trait_parent_order_plain	pass	-	
+trait_parent_order_two_traits	pass	-	
+trait_parent_plain_list_implicit	pass	-	
+trait_parent_using_only_accepted	pass	-	
+trait_parent_using_then_implicit	pass	-	
 trait_private_class_member	pass	-	
 trait_private_public_dispatch	pass	-	
 trait_private_same_name	pass	-	
@@ -3254,6 +3264,7 @@ using_lambda_argument	pass	-
 using_list_overloads_narrowed	pass	-	
 using_list_short_searched	pass	-	
 using_list_trait_implicit_clause	pass	-	
+using_list_trait_implicit_named	pass	-	
 using_search	pass	-	
 util_sorting	pass	-	
 uuid	pass	-	
