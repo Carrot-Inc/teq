@@ -1,0 +1,13 @@
+x.isInstanceOf[scala.Any]
+x.isInstanceOf[scala.AnyVal]
+x.isInstanceOf[scala.AnyRef]
+x.isInstanceOf[scala.Predef.String]
+x.isInstanceOf[scala.Int]
+xs.isInstanceOf[scala.collection.immutable.ArraySeq[scala.Int]]
+o.isInstanceOf[scala.Some[scala.Predef.String]]
+x.asInstanceOf[scala.Predef.String]
+xs.asInstanceOf[scala.collection.immutable.ArraySeq[scala.Int]]
+a test of Any
+a test of AnyVal
+a test of AnyVal
+a test of Any

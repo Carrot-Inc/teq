@@ -1,0 +1,15 @@
+0: isAny=false isMatchable=false isUnion=false isUnion2=false isInter=false isA[Any]=false isA[Matchable]=false
+0: ifAny=2 ifBlockAny=2 ifNotAny=1 ifAndAny=2
+0: caseMatchable=2 caseAny=MatchError caseAnyOrNull=3 caseA[Any]=2 caseA[Matchable]=2
+1: isAny=true isMatchable=true isUnion=true isUnion2=true isInter=true isA[Any]=true isA[Matchable]=true
+1: ifAny=1 ifBlockAny=1 ifNotAny=2 ifAndAny=1
+1: caseMatchable=1 caseAny=1 caseAnyOrNull=1 caseA[Any]=1 caseA[Matchable]=1
+2: isAny=true isMatchable=true isUnion=true isUnion2=true isInter=false isA[Any]=true isA[Matchable]=true
+2: ifAny=1 ifBlockAny=1 ifNotAny=2 ifAndAny=1
+2: caseMatchable=1 caseAny=1 caseAnyOrNull=1 caseA[Any]=1 caseA[Matchable]=1
+3: isAny=true isMatchable=true isUnion=true isUnion2=true isInter=false isA[Any]=true isA[Matchable]=true
+3: ifAny=1 ifBlockAny=1 ifNotAny=2 ifAndAny=1
+3: caseMatchable=1 caseAny=1 caseAnyOrNull=1 caseA[Any]=1 caseA[Matchable]=1
+0: stringIsAny=false stringCaseAny=2 anyRefCaseAny=2 stringCaseMatchable=2 stringCaseA[Any]=2 stringCaseA[Matchable]=2
+1: stringIsAny=true stringCaseAny=1 anyRefCaseAny=1 stringCaseMatchable=1 stringCaseA[Any]=1 stringCaseA[Matchable]=1
+intCaseAny=1 intCaseA[Any]=1

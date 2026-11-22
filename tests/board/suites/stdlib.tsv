@@ -3135,6 +3135,7 @@ type_op_open_variable	pass	-
 type_operator_line_end	pass	-	
 type_pattern_lower_bounds	pass	-	
 type_projection_refinement_lambda	pass	-	
+type_test_any_null	pass	-	
 type_test_bound_constituents	pass	-	
 type_test_class_pattern	pass	-	
 type_test_erased_bound	pass	-	
@@ -3143,6 +3144,7 @@ type_test_literal_tag	pass	-
 type_test_null_guard	pass	-	
 type_test_null_scrutinee	pass	-	
 type_test_null_shapes	pass	-	
+type_test_quoted_view	pass	-	
 type_test_selected_singleton	pass	-	
 type_test_synthesis	pass	-	
 type_test_tagged_inline	pass	-	

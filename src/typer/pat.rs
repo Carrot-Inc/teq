@@ -2934,7 +2934,11 @@ impl<'a> Worker<'a> {
             return test;
         }
         let test = match self.types.get(t) {
-            Type::Any | Type::Error => TypeTest::Always,
+            // `Any` and `Matchable` erase to `Object` (`TypeErasure.normalizeClass`), whose test takes everything but
+            // `null`: dotty folds it only for a match's scrutinee that conforms to `Object` (TypeTestsCasts.scala
+            // 255-258, `conforming_test` here) and writes `isInstanceOf[Object]` otherwise (283, 358-359).
+            Type::Any => TypeTest::AnyVal,
+            Type::Error => TypeTest::Always,
             Type::Param(_) | Type::AppParam(..) => {
                 if !unchecked {
                     let msg = format!(

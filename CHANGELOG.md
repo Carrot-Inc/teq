@@ -7,6 +7,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A type test of `Any` or `Matchable` is false for `null`, as under scalac: `x.isInstanceOf[Any]`, a member of a
+  union (`Any | String`), an inline body's test of a type parameter given `Any`, and `case _: Any` on a scrutinee
+  typed `Any`. It was true on the JVM and in the interpreter, and on JavaScript outside a match.
+- A macro sees `x.isInstanceOf[T]` and `x.asInstanceOf[T]` with the type the source wrote, once
+  (`x.isInstanceOf[scala.Some[scala.Predef.String]]`; it saw `x.isInstanceOf[scala.Some[scala.Any]][scala.Some[scala.Any]]`), and a
+  quote pattern over a type test matches the tested type as scalac's does (a test of `Int` is one of `AnyVal`).
 - A program's Java sources are read for their declarations, as scalac reads the `.java` it is given: a directory
   gives its `.java` files with its `.scala` ones, a `.java` named on the command line is read as Java (it was
   parsed as Scala), and the Scala program sees each Java class and interface with its members, their types and

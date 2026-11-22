@@ -978,7 +978,9 @@ impl<'m> Matcher<'m> {
             (TExpr::StrConcat(l1), TExpr::StrConcat(l2)) | (TExpr::SeqLit(l1), TExpr::SeqLit(l2)) | (TExpr::ArrayLit(l1), TExpr::ArrayLit(l2)) => self.list(it, l1, l2),
             (TExpr::ToStr(a1, _), TExpr::ToStr(a2, _)) | (TExpr::Spread(a1), TExpr::Spread(a2)) | (TExpr::Return(a1), TExpr::Return(a2)) | (TExpr::Throw(a1, _), TExpr::Throw(a2, _)) => self.expr(it, a1, a2),
             (TExpr::Js(s1, a1), TExpr::Js(s2, a2)) => it.prog().strings[s1.idx()] == it.prog().strings[s2.idx()] && self.list(it, a1, a2),
-            (TExpr::TypeTest(a1, t1, _), TExpr::TypeTest(a2, t2, _)) => self.expr(it, a1, a2) && it.prog().tests[t1.idx()] == it.prog().tests[t2.idx()],
+            // The tested types as a typed pattern's are matched (dotty's `QuoteMatcher`: the scrutinee's type tree
+            // conforms to the pattern's).
+            (TExpr::TypeTest(a1, _, t1), TExpr::TypeTest(a2, _, t2)) => self.unify(it, t1, t2) && self.expr(it, a1, a2),
             (TExpr::Cast(a1, _, t1), TExpr::Cast(a2, _, t2)) => it.typer.types.same(t1, t2) && self.expr(it, a1, a2),
             (TExpr::Index(a1, i1), TExpr::Index(a2, i2)) => i1 == i2 && self.expr(it, a1, a2),
             (TExpr::Block(st1, r1), TExpr::Block(st2, r2)) => {
@@ -1802,15 +1804,15 @@ impl<'a, 't> Interp<'a, 't> {
                         }
                     }
                 }
-                TExpr::TypeTest(x, test, _) => {
-                    let ty = self.test_type(test);
+                // `TypeApply(Select(x, isInstanceOf), List(T))`, `T` the type the source wrote.
+                TExpr::TypeTest(x, _, ty) => {
                     let name = self.typer.interner.intern("isInstanceOf");
-                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: vec![ty] });
+                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: Vec::new() });
                     View::TypeApply(fun, vec![ty])
                 }
                 TExpr::Cast(x, _, ty) => {
                     let name = self.typer.interner.intern("asInstanceOf");
-                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: vec![ty] });
+                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: Vec::new() });
                     View::TypeApply(fun, vec![ty])
                 }
                 // A vararg: its sequence literal ascribed the repeated type.
@@ -2148,33 +2150,6 @@ impl<'a, 't> Interp<'a, 't> {
             }
         }
         None
-    }
-
-    fn test_type(&mut self, test: TestId) -> TypeId {
-        match self.prog().tests[test.idx()] {
-            TypeTest::Class(c) | TypeTest::Trait(c) => {
-                let n = self.syms().class(c).tparams.len();
-                let args = vec![ANY; n];
-                self.typer.types.class(c, &args)
-            }
-            TypeTest::Int => self.typer.b.t_int,
-            TypeTest::Number => self.typer.b.t_double,
-            TypeTest::Long => self.typer.b.t_long,
-            TypeTest::Str => self.typer.b.t_string,
-            TypeTest::Bool => self.typer.b.t_boolean,
-            TypeTest::Char => self.typer.b.t_char,
-            TypeTest::Unit => self.typer.b.t_unit,
-            TypeTest::Byte => self.typer.b.t_byte,
-            TypeTest::Short => self.typer.b.t_short,
-            TypeTest::Float => self.typer.b.t_float,
-            TypeTest::AnyRef => self.typer.b.t_any_ref,
-            TypeTest::AnyVal => self.typer.b.t_any_val,
-            TypeTest::Null => self.typer.b.t_null,
-            // A class test with its outer test is the class's.
-            TypeTest::And(a, b) if matches!(self.prog().tests[b.idx()], TypeTest::Outer(..)) => self.test_type(a),
-            TypeTest::Proven(inner, _) => self.test_type(inner),
-            _ => ANY,
-        }
     }
 
     fn seq_elem_type(&mut self, e: TExprId) -> TypeId {

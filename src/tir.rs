@@ -455,7 +455,8 @@ pub enum TypeTest {
     Null,
     /// A reference: anything but a number, a boolean, a char or `()`, which are values.
     AnyRef,
-    /// `AnyVal` erases to `Object` under scalac, so its test takes everything but `null`.
+    /// The test of a type that erases to `Object` under scalac (`AnyVal`, `Any`, `Matchable`, a type parameter
+    /// bounded by `Any`): everything but `null`.
     AnyVal,
     /// Equality with a literal, for a literal type.
     Value(TExprId),

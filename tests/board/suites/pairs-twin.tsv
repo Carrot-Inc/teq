@@ -3132,6 +3132,7 @@ cases/type_op_open_variable	pass	-
 cases/type_operator_line_end	pass	-	
 cases/type_pattern_lower_bounds	pass	-	
 cases/type_projection_refinement_lambda	pass	-	
+cases/type_test_any_null	pass	-	
 cases/type_test_bound_constituents	pass	-	
 cases/type_test_class_pattern	pass	-	
 cases/type_test_erased_bound	pass	-	
@@ -3141,6 +3142,7 @@ cases/type_test_null_guard	pass	-
 cases/type_test_null_scrutinee	pass	-	
 cases/type_test_null_shapes	pass	-	
 cases/type_test_null_shapes_js	pass	-	
+cases/type_test_quoted_view	pass	-	
 cases/type_test_selected_singleton	pass	-	
 cases/type_test_synthesis	pass	-	
 cases/type_test_tagged_inline	pass	-	
