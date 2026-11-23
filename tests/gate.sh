@@ -1345,7 +1345,8 @@ if [ $n -gt 0 ]; then
   ready='. tests/support/jars.sh; missing=; for name in $(sed -n "s/^ *\([A-Za-z0-9._-]*\)) echo \"\$M2\/.*/\1/p" tests/support/jars.sh); do [ -e "$(jar_of $name)" ] || missing="$missing $name"; done
     [ -z "$missing" ] || { echo "not in the coursier cache:$missing"; exit 1; }
     [ -d "$SCALA3/tests" ] || { echo "no scala3 checkout at $SCALA3"; exit 1; }
-    for c in cargo java javap node scala-cli python3; do command -v $c > /dev/null || { echo "no $c"; exit 1; }; done'
+    for c in cargo java javap node scala-cli python3; do command -v $c > /dev/null || { echo "no $c"; exit 1; }; done
+    echo "cpus ${GATE_CPUS:-$(nproc)}"'
   pids=()
   for i in "${!handles[@]}"; do
     ("$ra/sync.sh" "${handles[$i]}" "$wt" > "$tmp/sync.$i" 2>&1 && "$ra/run.sh" "${handles[$i]}" teq -t 60 "$ready" >> "$tmp/sync.$i" 2>&1
@@ -1363,14 +1364,26 @@ if [ $n -gt 0 ]; then
   done
   echo "$(clock) synced to ${#good[@]} of $n machines"
   n=${#good[@]}
+  # each shard's machine's CPUs, as its look said them (8 where it said none), in the shards' order; and each host's,
+  # for --record
+  : > "$tmp/cpus"
+  for i in "${good[@]}"; do
+    c=$(sed -n 's/^cpus \([0-9][0-9]*\)$/\1/p' "$tmp/sync.$i" | tail -1)
+    echo "${c:-8}" >> "$tmp/cpus"
+    echo "${hosts[$i]} ${c:-8}" >> "$tmp/host-cpus"
+  done
   if [ $n = 0 ]; then
     for entry in "${want[@]}"; do result "${entry%% *}" - 0 1 "not run: no machine took the tree"; done
   fi
 fi
 [ $n -gt 0 ] || touch "$tmp/shards.none" "$tmp/shards.asked"
 if [ $n -gt 0 ]; then
-  # The suites dealt out by their recorded times, longest first, each to the shard with the least so far.
-  python3 - "$tmp/want" "$tmp/times" "$n" > "$tmp/deal" <<'PY'
+  # The suites dealt out by their recorded times, longest first, each to the shard where it would end soonest, at its
+  # seconds on that shard's kind of machine (tests/gate-times.txt: a row `<line>` its seconds on eight CPUs, `<line>@<n>`
+  # on n, the row of eight where a kind has none); the shards past the first, whose machine builds the head (the
+  # builder), start from the file's head-wait, the seconds they wait for its binary beyond its own build, so that the
+  # shards end together.
+  python3 - "$tmp/want" "$tmp/times" "$n" "$tmp/cpus" > "$tmp/deal" <<'PY'
 import sys
 want = [l.rstrip("\n") for l in open(sys.argv[1]) if l.strip()]
 times = {}
@@ -1379,10 +1392,15 @@ for l in open(sys.argv[2]):
         name, secs = l.split()
         times[name] = int(secs)
 n = int(sys.argv[3])
-load = [0] * n
+cpus = [int(l) for l in open(sys.argv[4]) if l.strip()]
+cpus += [8] * (n - len(cpus))
+def secs(name, s):
+    return times.get(f"{name}@{cpus[s]}", times.get(name, 120)) if cpus[s] != 8 else times.get(name, 120)
+load = [0] + [times.get("head-wait", 0)] * (n - 1)
 for entry in sorted(want, key=lambda e: -times.get(e.split()[0], 120)):
-    shard = min(range(n), key=lambda s: load[s])
-    load[shard] += times.get(entry.split()[0], 120)
+    name = entry.split()[0]
+    shard = min(range(n), key=lambda s: load[s] + secs(name, s))
+    load[shard] += secs(name, shard)
     print(shard, entry)
 PY
   ref=
@@ -1558,17 +1576,19 @@ done
 # over), whose durations do not depend on their verdicts; from no other run. A piece's row under another number of
 # pieces of its suite goes.
 if [ $record = 1 ] && [ $recordable = 1 ]; then
-  python3 - "$results" tests/gate-times.txt "$(cut -d' ' -f1 "$tmp/want") $compare $(for p in $projects; do project_lines_of "$p"; done)" "$compare" <<'PY'
-import re, sys
+  python3 - "$results" tests/gate-times.txt "$(cut -d' ' -f1 "$tmp/want") $compare $(for p in $projects; do project_lines_of "$p"; done)" "$compare" "$tmp/host-cpus" <<'PY'
+import os, re, sys
 recorded, timing = set(sys.argv[3].split()), set(sys.argv[4].split())
+# a line measured on a machine of other than eight CPUs is that kind's row, `<line>@<n>`
+kinds = dict(l.split() for l in open(sys.argv[5]) if l.strip()) if os.path.exists(sys.argv[5]) else {}
 measured = {}
 for l in open(sys.argv[1]):
     name, where, secs, code, _ = l.rstrip("\n").split("\t", 4)
     if name in recorded and where not in ("-", "local") and (code == "0" or (code == "3" and name in timing)):
-        measured[name] = secs
-pieces = {m.group(1): m.group(2) for m in (re.fullmatch(r"(.+)\.\d+/(\d+)", name) for name in measured) if m}
+        measured[name if kinds.get(where, "8") == "8" else f"{name}@{kinds[where]}"] = secs
+pieces = {m.group(1): m.group(2) for m in (re.fullmatch(r"(.+)\.\d+/(\d+)(?:@\d+)?", name) for name in measured) if m}
 def stale(name):
-    m = re.fullmatch(r"(.+)\.\d+/(\d+)", name)
+    m = re.fullmatch(r"(.+)\.\d+/(\d+)(?:@\d+)?", name)
     return m is not None and m.group(1) in pieces and m.group(2) != pieces[m.group(1)]
 lines = [l for l in open(sys.argv[2]).read().splitlines() if l.startswith("#") or not l.strip() or not stale(l.split()[0])]
 out = [l if l.startswith("#") or not l.strip() or l.split()[0] not in measured else f"{l.split()[0]} {measured.pop(l.split()[0])}" for l in lines]

@@ -6,86 +6,208 @@
 # a piece without a row of its own counts; a piece's row under another n of its suite goes at the next --record.
 # A project line's row is its time on the machine holding its checkout, which the gate's dealer reads for the projects'
 # chains (their first rows the longest of three runs of each chain on one holder, at host loads of 8 to 77).
-cases 288
-errors 81
-parser 36
+# A row `<line>` is its seconds on a machine of eight CPUs, `<line>@<n>` on one of n (the dealer charges a line at its
+# shard's kind, the row of eight where its kind has none; --record writes each kind's own row). A row a kind never
+# measured is estimated from the other kind's by its family's ratio and said so in a comment line above it.
+# `head-wait` is no line: the seconds the shards past the builder's start their suites after the builder's shard
+# does (the builder builds the head, the others wait for its binary), by which the dealer starts their loads. It is
+# written from gates' lines (each shard's seconds less its suites'), --record keeping it as it is.
+cases 250
+cases@16 240
+errors 115
+# estimated: errors on sixteen CPUs, from its 115 s on eight by every measured line's ratio 0.89 (17 lines)
+errors@16 102
+parser 39
+parser@16 20
 interop 2
-dce 1
+# estimated: interop on sixteen CPUs, from its 2 s on eight by every measured line's ratio 0.89 (17 lines)
+interop@16 2
+dce 0
+# estimated: dce on sixteen CPUs, from its 0 s on eight by every measured line's ratio 0.89 (17 lines)
+dce@16 0
 split 288
-split.1/2 96
-split.2/2 106
-split-watch 289
-check-watch 18
+split.1/2 131
+# estimated: split.1/2 on sixteen CPUs, from its 131 s on eight by every measured line's ratio 0.89 (17 lines)
+split.1/2@16 116
+split.2/2 166
+# estimated: split.2/2 on sixteen CPUs, from its 166 s on eight by every measured line's ratio 0.89 (17 lines)
+split.2/2@16 148
+split-watch 402
+# estimated: split-watch on sixteen CPUs, from its 402 s on eight by every measured line's ratio 0.89 (17 lines)
+split-watch@16 357
+check-watch 17
+check-watch@16 28
 jvm-watch 329
-jvm-watch.1/2 163
-jvm-watch.2/2 173
+jvm-watch.1/2 195
+jvm-watch.1/2@16 199
+jvm-watch.2/2 234
+# estimated: jvm-watch.2/2 on sixteen CPUs, from its 234 s on eight by its family jvm's ratio 1.02 (1 lines)
+jvm-watch.2/2@16 239
 lsp 912
-lsp.1/4 263
-lsp.2/4 295
-lsp.3/4 237
-lsp.4/4 240
-tasty 100
-init-view 31
+lsp.1/4 261
+# estimated: lsp.1/4 on sixteen CPUs, from its 261 s on eight by every measured line's ratio 0.89 (17 lines)
+lsp.1/4@16 232
+lsp.2/4 302
+# estimated: lsp.2/4 on sixteen CPUs, from its 302 s on eight by every measured line's ratio 0.89 (17 lines)
+lsp.2/4@16 268
+lsp.3/4 241
+# estimated: lsp.3/4 on sixteen CPUs, from its 241 s on eight by every measured line's ratio 0.89 (17 lines)
+lsp.3/4@16 214
+lsp.4/4 238
+# estimated: lsp.4/4 on sixteen CPUs, from its 238 s on eight by every measured line's ratio 0.89 (17 lines)
+lsp.4/4@16 212
+tasty 101
+# estimated: tasty on sixteen CPUs, from its 101 s on eight by every measured line's ratio 0.89 (17 lines)
+tasty@16 90
+init-view 30
+# estimated: init-view on sixteen CPUs, from its 30 s on eight by every measured line's ratio 0.89 (17 lines)
+init-view@16 27
 modules 392
-modules.1/2 450
-modules.2/2 500
-tasty-exec 47
-analysis-bytes 214
-classfile 27
-classpath 96
-stdlib 427
-app 17
-jvm 99
-jvm-21 85
-java-sources 7
-java-reader 17
-interp 45
-fold 0
-workers 320
-split-determinism 55
-scala3-run 12
-planted 0
-scala3-interp 49
+modules.1/2 534
+# estimated: modules.1/2 on sixteen CPUs, from its 534 s on eight by its family modules's ratio 0.59 (1 lines)
+modules.1/2@16 316
+modules.2/2 561
+modules.2/2@16 332
+tasty-exec 57
+# estimated: tasty-exec on sixteen CPUs, from its 57 s on eight by every measured line's ratio 0.89 (17 lines)
+tasty-exec@16 51
+analysis-bytes 236
+# estimated: analysis-bytes on sixteen CPUs, from its 236 s on eight by every measured line's ratio 0.89 (17 lines)
+analysis-bytes@16 210
+classfile 34
+# estimated: classfile on sixteen CPUs, from its 34 s on eight by every measured line's ratio 0.89 (17 lines)
+classfile@16 30
+classpath 149
+classpath@16 106
+stdlib 535
+# estimated: stdlib on sixteen CPUs, from its 535 s on eight by every measured line's ratio 0.89 (17 lines)
+stdlib@16 476
+app 24
+# estimated: app on sixteen CPUs, from its 24 s on eight by every measured line's ratio 0.89 (17 lines)
+app@16 21
+jvm 122
+# estimated: jvm on sixteen CPUs, from its 122 s on eight by its family jvm's ratio 1.02 (1 lines)
+jvm@16 125
+jvm-21 86
+# estimated: jvm-21 on sixteen CPUs, from its 86 s on eight by its family jvm's ratio 1.02 (1 lines)
+jvm-21@16 88
+java-sources 8
+# estimated: java-sources on sixteen CPUs, from its 8 s on eight by its family java's ratio 0.62 (1 lines)
+java-sources@16 5
+java-reader 26
+java-reader@16 16
+interp 51
+interp@16 32
+fold 1
+# estimated: fold on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
+fold@16 1
+workers 384
+# estimated: workers on sixteen CPUs, from its 384 s on eight by every measured line's ratio 0.89 (17 lines)
+workers@16 341
+split-determinism 57
+# estimated: split-determinism on sixteen CPUs, from its 57 s on eight by every measured line's ratio 0.89 (17 lines)
+split-determinism@16 51
+scala3-run 18
+# estimated: scala3-run on sixteen CPUs, from its 18 s on eight by every measured line's ratio 0.89 (17 lines)
+scala3-run@16 16
+planted 1
+# estimated: planted on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
+planted@16 1
+scala3-interp 50
+# estimated: scala3-interp on sixteen CPUs, from its 50 s on eight by every measured line's ratio 0.89 (17 lines)
+scala3-interp@16 44
 scala3-macros 1
+# estimated: scala3-macros on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
+scala3-macros@16 1
 scala3-macros-interp 2
-scala3-typing 8
+# estimated: scala3-macros-interp on sixteen CPUs, from its 2 s on eight by every measured line's ratio 0.89 (17 lines)
+scala3-macros-interp@16 2
+scala3-typing 19
+# estimated: scala3-typing on sixteen CPUs, from its 19 s on eight by every measured line's ratio 0.89 (17 lines)
+scala3-typing@16 17
 cargo-test 9
-budget 172
-runtime 78
-sentinel 108
-rust-warnings 51
+cargo-test@16 8
+budget 179
+runtime 98
+sentinel 110
+rust-warnings 55
+# estimated: rust-warnings on sixteen CPUs, from its 55 s on eight by every measured line's ratio 0.89 (17 lines)
+rust-warnings@16 49
 no-caps 2
-task 185
+task 191
+# estimated: task on sixteen CPUs, from its 191 s on eight by every measured line's ratio 0.89 (17 lines)
+task@16 170
 runner-classes 1
-lila-test-verb 37
-reference-test-verb 15
-mill-test-verb 23
+# estimated: runner-classes on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
+runner-classes@16 1
+lila-test-verb 38
+lila-test-verb@16 38
+reference-test-verb 16
+reference-test-verb@16 16
+mill-test-verb 30
+# estimated: mill-test-verb on sixteen CPUs, from its 30 s on eight by every measured line's ratio 0.89 (17 lines)
+mill-test-verb@16 27
 std-entered 0
+# estimated: std-entered on sixteen CPUs, from its 0 s on eight by its family std's ratio 1.14 (1 lines)
+std-entered@16 0
 gate-coverage 0
-gate-scripts 698
-lila-export 21
-lila-compile 10
-lila-test 132
-lila-run 10
-airstream-export 6
-airstream-compile 1
+# estimated: gate-coverage on sixteen CPUs, from its 0 s on eight by its family gate's ratio 0.63 (1 lines)
+gate-coverage@16 0
+gate-scripts 854
+gate-scripts@16 537
+lila-export 24
+lila-compile 11
+lila-test 130
+lila-run 11
+airstream-export 7
+airstream-compile 2
 airstream-test 1
-laminar-export 6
-laminar-compile 2
+laminar-export 8
+laminar-compile 1
 laminar-test 0
-tyrian-export 13
+tyrian-export 16
 tyrian-compile 3
-tyrian-test 7
-tyrian-run 3
-indigo-export 45
+tyrian-test 8
+tyrian-run 2
+indigo-export 40
 indigo-compile 8
-indigo-test 2
+indigo-test 1
 indigo-run 1
-fix 186
-interp-script 8
-std-kinds 3
-java-lang-names 35
-board-pos 44
-board-run 80
-board-rest 39
-board-run-scalajs 58
+fix 179
+fix@16 179
+interp-script 10
+# estimated: interp-script on sixteen CPUs, from its 10 s on eight by its family interp's ratio 0.64 (1 lines)
+interp-script@16 6
+std-kinds 4
+std-kinds@16 4
+java-lang-names 53
+# estimated: java-lang-names on sixteen CPUs, from its 53 s on eight by its family java's ratio 0.62 (1 lines)
+java-lang-names@16 33
+board-pos 67
+# estimated: board-pos on sixteen CPUs, from its 67 s on eight by its family board's ratio 0.89 (2 lines)
+board-pos@16 60
+board-run 90
+board-run@16 77
+board-rest 45
+# estimated: board-rest on sixteen CPUs, from its 45 s on eight by its family board's ratio 0.89 (2 lines)
+board-rest@16 40
+board-run-scalajs 62
+board-run-scalajs@16 58
+conversion-matrix 5
+# estimated: conversion-matrix on sixteen CPUs, from its 5 s on eight by every measured line's ratio 0.89 (17 lines)
+conversion-matrix@16 4
+kept-body-cut 7
+kept-body-cut@16 6
+kept-body-lists 34
+# estimated: kept-body-lists on sixteen CPUs, from its 34 s on eight by its family kept's ratio 0.86 (1 lines)
+kept-body-lists@16 29
+native-link 68
+# estimated: native-link on sixteen CPUs, from its 68 s on eight by every measured line's ratio 0.89 (17 lines)
+native-link@16 60
+nir 1
+# estimated: nir on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
+nir@16 1
+pairs-twin 70
+# estimated: pairs-twin on sixteen CPUs, from its 70 s on eight by every measured line's ratio 0.89 (17 lines)
+pairs-twin@16 62
+head-wait 40

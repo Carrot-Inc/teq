@@ -945,7 +945,9 @@ gate() {
   shift 2
   rm -rf "$agent/machines" "$agent/claims"
   printf '%s\n' "$pool" > "$agent/pool"
-  for m in $(awk '{print $1}' "$agent/pool"); do mkdir -p "$agent/machines/$m"; echo "export SCALA3=$agent/scala3" > "$agent/machines/$m/env"; done
+  # a stand-in is a machine of eight CPUs, whatever this one's (its look's `cpus`, which the deal and --record read),
+  # but where a cell plants another (GATE_ENV_<machine>)
+  for m in $(awk '{print $1}' "$agent/pool"); do mkdir -p "$agent/machines/$m"; printf 'export SCALA3=%s\nexport GATE_CPUS=8\n' "$agent/scala3" > "$agent/machines/$m/env"; done
   # a machine's own login assignments (a project's checkout), GATE_ENV_<machine>
   for m in $(awk '{print $1}' "$agent/pool"); do v=GATE_ENV_$m; [ -z "${!v}" ] || echo "${!v}" >> "$agent/machines/$m/env"; done
   # the gate's own settings and the machine contract's variables of this machine's shell are not the stand-ins'
@@ -981,6 +983,34 @@ check "driver: a passing run records its suites' times" "$log" eval '[ $code = 0
   grep -q -x "fold $(row fold "m[12]" "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
   [ "$(echo "$times_before" | grep -v -E "^(parser|fold) ")" = "$(grep -v -E "^(parser|fold) " "$landing/tests/gate-times.txt")" ]'
 git -C "$landing" checkout -q tests/gate-times.txt
+# The deal: the suites longest first, each to the shard with the least so far, the shards past the builder's starting
+# from tests/gate-times.txt's head-wait. With parser 100, fold 60 and planted 50 over two machines and a head-wait of
+# 60, the builder (m1) takes parser and then planted (100 against fold's 60 and the wait), m2 fold; from 0 for both,
+# planted would go to m2.
+base=$(git -C "$landing" rev-parse HEAD)
+printf '%s\n' "parser 100" "fold 60" "planted 50" "head-wait 60" >> "$landing/tests/gate-times.txt"
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "a head-wait"
+gate "$work/driver-wait.log" "$(printf 'm1 free\nm2 free')" --only parser,fold,planted
+code=$?
+log=$work/driver-wait.log
+git -C "$landing" reset -q --hard "$base"
+check "driver: the shards past the builder's start the deal from head-wait, the builder taking the longest and the next" "$log" eval '[ $code = 0 ] &&
+  row parser m1 "$log" | grep -q " ok " && row planted m1 "$log" | grep -q " ok " && row fold m2 "$log" | grep -q " ok "'
+# A line's seconds by its shard's kind of machine (its look's `cpus`, GATE_CPUS on a stand-in): parser 100 on eight
+# CPUs and 20 on sixteen, fold and planted 60 and 50 on either, no head-wait, m1 of sixteen and m2 of eight. m1 takes
+# parser (20 against m2's 100) and then planted (70 against 110), m2 fold; by the eights alone, planted would go to
+# m2. --record writes m1's parser as the row of sixteen, m2's fold as the row of eight.
+base=$(git -C "$landing" rev-parse HEAD)
+printf '%s\n' "parser 100" "parser@16 20" "fold 60" "fold@16 60" "planted 50" "planted@16 50" "head-wait 0" >> "$landing/tests/gate-times.txt"
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "rows of two kinds"
+GATE_ENV_m1="export GATE_CPUS=16" GATE_ENV_m2="export GATE_CPUS=8" gate "$work/driver-kinds.log" "$(printf 'm1 free\nm2 free')" --only parser,fold,planted --record
+code=$?
+log=$work/driver-kinds.log
+check "driver: a line dealt by its seconds on its shard's kind of machine, and recorded as that kind's row" "$log" eval '[ $code = 0 ] &&
+  row parser m1 "$log" | grep -q " ok " && row planted m1 "$log" | grep -q " ok " && row fold m2 "$log" | grep -q " ok " &&
+  grep -q -x "parser@16 $(row parser m1 "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
+  grep -q -x "fold $(row fold m2 "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" && grep -q -x "parser 100" "$landing/tests/gate-times.txt"'
+git -C "$landing" reset -q --hard "$base"
 # The projects' chains dealt over the machines holding them: two holding complementary projects each run their own,
 # neither taken by the shards; a project whose holder is busy and one no machine holds each fail as not run, saying
 # which; a holder busy at the first ask and free at a later one is left to its project; the eighteen project lines run
