@@ -2316,5 +2316,10 @@ check "words: a placed expectation is held by a diagnostic's header, never by it
 check "workflow-jobs: the gate's matrix read in any key order, a form the reader does not handle refused" "$work/workflow-jobs.log" \
   eval 'python3 tests/support/workflow-jobs.py --self-test > "$work/workflow-jobs.log" 2>&1'
 
+# The table of inline methods called through an export from a third module (tests/support/export_inline.py, run
+# by tests/support/export-inline.sh): its templates and its judge over planted tables.
+check "export-inline: the table's templates and its judge's planted tables judged as they must be" "$work/export-inline.log" \
+  eval 'python3 tests/support/export_inline.py --self-test > "$work/export-inline.log" 2>&1'
+
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]

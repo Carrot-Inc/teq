@@ -2186,6 +2186,28 @@ impl<'a> Worker<'a> {
         super::apply::MethodCall { recv: path.map(|(r, _)| r), sym: target, owner_subst, ext_recv: None, prefix: None, refined: None }
     }
 
+    /// Whether the method `m` has an inline parameter with a default: by its parameters, or for an export
+    /// forwarder, whose parameters carry no `inline` of their own, by the member it forwards to.
+    fn has_inline_param_default(&mut self, m: SymId) -> bool {
+        let mut seen = vec![m];
+        let mut at = m;
+        loop {
+            let sig = self.sig_arc(at);
+            for (k, p) in sig.clauses.iter().flat_map(|cl| cl.params.iter()).enumerate() {
+                if p.has_default && self.is_inline_param(p, Some((at, k))) {
+                    return true;
+                }
+            }
+            match self.syms.forward_of(at) {
+                Some(fwd) if !seen.contains(&fwd.target) => {
+                    at = fwd.target;
+                    seen.push(at);
+                }
+                _ => return false,
+            }
+        }
+    }
+
     /// An inline member's forwarder, which has no runtime body: a call expands its body, the
     /// member's call on the path (dotty's `PrepareInlineable.registerInlineInfo` of the forwarder).
     #[inline]
@@ -2228,11 +2250,22 @@ impl<'a> Worker<'a> {
             let call = self.forwarder_call(path, target);
             let te = self.build_call(&call, list);
             self.prog.set_type(te, sig.ret);
-            // The member's type parameters are the forwarder's own (fresh ones of the same order).
+            // The member's type parameters are the forwarder's own (fresh ones of the same order): the call's type
+            // arguments, kept for its pickle as an ordinary call's are (`capture_targs`), so that the forwarder's
+            // body is scalac's `path.m[A](a)` (`Namer.addForwarder`: the member applied to every parameter list of
+            // the forwarder, its type parameters first) and not withheld from the products.
             let target_sig = self.sig_arc(target);
             let subst: Subst = target_sig.tparams.iter().copied().zip(sig.tparams.iter().map(|&t| self.types.param(t))).collect();
+            // Where the member has an inline parameter with a default, the body stays withheld: the forwarder's
+            // getter of that parameter applies the member's, which no one writes (an inline parameter's getter is
+            // inline, `Desugar.defaultGetters`), so a call over the products that omits the argument would reach it.
+            let inline_default = self.has_inline_param_default(target);
             if !subst.is_empty() {
                 self.note_type_args(te, &subst);
+                if self.capturing() && !inline_default {
+                    let targs: Vec<TypeId> = subst.iter().map(|&(_, t)| t).collect();
+                    self.capture_targs(te, &targs);
+                }
             }
             if self.is_inline_callee(target) && self.keeps_inline_calls() {
                 self.defer_inline(&call, &target_sig, &subst, te, sig.ret, span, None);

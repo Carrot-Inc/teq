@@ -132,6 +132,95 @@ hkbounds_a ha.Api$package lift hk-parameter-name
 hkbounds_a ha.Functor ha;Functor;init; hk-parameter-name
 hkbounds_a ha.Functor$.given_Functor_List ha;Functor;init; hk-parameter-name
 hkbounds_a ha.Functor$.given_Functor_List given_Functor_List alias-expanded
+exportinlinecls_a lib.Codecs mbnd inline-fingerprint
+exportinlinecls_a lib.Codecs mbnm inline-fingerprint
+exportinlinecls_a lib.Codecs mcba inline-fingerprint
+exportinlinecls_a lib.Codecs mcbo inline-fingerprint
+exportinlinecls_a lib.Codecs mplain inline-fingerprint
+exportinlinecls_a lib.Codecs mt1 inline-fingerprint
+exportinlinecls_a lib.Codecs mt2 inline-fingerprint
+exportinlinecls_a lib.Codecs musg inline-fingerprint
+exportinlineexex_a lib.Codecs mbnd inline-fingerprint
+exportinlineexex_a lib.Codecs mbnm inline-fingerprint
+exportinlineexex_a lib.Codecs mcba inline-fingerprint
+exportinlineexex_a lib.Codecs mcbo inline-fingerprint
+exportinlineexex_a lib.Codecs mplain inline-fingerprint
+exportinlineexex_a lib.Codecs mt1 inline-fingerprint
+exportinlineexex_a lib.Codecs mt2 inline-fingerprint
+exportinlineexex_a lib.Codecs musg inline-fingerprint
+exportinlineren_a lib.Codecs mbnd inline-fingerprint
+exportinlineren_a lib.Codecs mbnm inline-fingerprint
+exportinlineren_a lib.Codecs mcba inline-fingerprint
+exportinlineren_a lib.Codecs mcbo inline-fingerprint
+exportinlineren_a lib.Codecs mplain inline-fingerprint
+exportinlineren_a lib.Codecs mt1 inline-fingerprint
+exportinlineren_a lib.Codecs mt2 inline-fingerprint
+exportinlineren_a lib.Codecs musg inline-fingerprint
+exportinlinesel_a lib.Codecs mbnd inline-fingerprint
+exportinlinesel_a lib.Codecs mbnm inline-fingerprint
+exportinlinesel_a lib.Codecs mcba inline-fingerprint
+exportinlinesel_a lib.Codecs mcbo inline-fingerprint
+exportinlinesel_a lib.Codecs mplain inline-fingerprint
+exportinlinesel_a lib.Codecs mt1 inline-fingerprint
+exportinlinesel_a lib.Codecs mt2 inline-fingerprint
+exportinlinesel_a lib.Codecs musg inline-fingerprint
+exportinlinestar_a lib.Codecs mbnd inline-fingerprint
+exportinlinestar_a lib.Codecs mbnm inline-fingerprint
+exportinlinestar_a lib.Codecs mcba inline-fingerprint
+exportinlinestar_a lib.Codecs mcbo inline-fingerprint
+exportinlinestar_a lib.Codecs mplain inline-fingerprint
+exportinlinestar_a lib.Codecs mt1 inline-fingerprint
+exportinlinestar_a lib.Codecs mt2 inline-fingerprint
+exportinlinestar_a lib.Codecs musg inline-fingerprint
+exportinlinecls_a util.Holder mbnd inline-fingerprint
+exportinlinecls_a util.Holder mbnm inline-fingerprint
+exportinlinecls_a util.Holder mcba inline-fingerprint
+exportinlinecls_a util.Holder mcbo inline-fingerprint
+exportinlinecls_a util.Holder mplain inline-fingerprint
+exportinlinecls_a util.Holder mt1 inline-fingerprint
+exportinlinecls_a util.Holder mt2 inline-fingerprint
+exportinlinecls_a util.Holder musg inline-fingerprint
+exportinlineexex_a util.Inner mbnd inline-fingerprint
+exportinlineexex_a util.Inner mbnm inline-fingerprint
+exportinlineexex_a util.Inner mcba inline-fingerprint
+exportinlineexex_a util.Inner mcbo inline-fingerprint
+exportinlineexex_a util.Inner mplain inline-fingerprint
+exportinlineexex_a util.Inner mt1 inline-fingerprint
+exportinlineexex_a util.Inner mt2 inline-fingerprint
+exportinlineexex_a util.Inner musg inline-fingerprint
+exportinlineexex_a util.Utils mbnd inline-fingerprint
+exportinlineexex_a util.Utils mbnm inline-fingerprint
+exportinlineexex_a util.Utils mcba inline-fingerprint
+exportinlineexex_a util.Utils mcbo inline-fingerprint
+exportinlineexex_a util.Utils mplain inline-fingerprint
+exportinlineexex_a util.Utils mt1 inline-fingerprint
+exportinlineexex_a util.Utils mt2 inline-fingerprint
+exportinlineexex_a util.Utils musg inline-fingerprint
+exportinlineren_a util.Utils mbnd2 inline-fingerprint
+exportinlineren_a util.Utils mbnm2 inline-fingerprint
+exportinlineren_a util.Utils mcba2 inline-fingerprint
+exportinlineren_a util.Utils mcbo2 inline-fingerprint
+exportinlineren_a util.Utils mplain2 inline-fingerprint
+exportinlineren_a util.Utils mt12 inline-fingerprint
+exportinlineren_a util.Utils mt22 inline-fingerprint
+exportinlineren_a util.Utils musg2 inline-fingerprint
+exportinlinesel_a util.Utils mbnd inline-fingerprint
+exportinlinesel_a util.Utils mbnm inline-fingerprint
+exportinlinesel_a util.Utils mcba inline-fingerprint
+exportinlinesel_a util.Utils mcbo inline-fingerprint
+exportinlinesel_a util.Utils mplain inline-fingerprint
+exportinlinesel_a util.Utils mt1 inline-fingerprint
+exportinlinesel_a util.Utils mt2 inline-fingerprint
+exportinlinesel_a util.Utils musg inline-fingerprint
+exportinlinestar_a util.Utils mbnd inline-fingerprint
+exportinlinestar_a util.Utils mbnm inline-fingerprint
+exportinlinestar_a util.Utils mcba inline-fingerprint
+exportinlinestar_a util.Utils mcbo inline-fingerprint
+exportinlinestar_a util.Utils mplain inline-fingerprint
+exportinlinestar_a util.Utils mt1 inline-fingerprint
+exportinlinestar_a util.Utils mt2 inline-fingerprint
+exportinlinestar_a util.Utils musg inline-fingerprint
+exportinlinecls_a util.Holder c object-singleton-type
 inline_a ila.Macros pick inline-fingerprint
 inline_a ila.Macros twice inline-fingerprint
 inline_a ila.Tuner adjust inline-fingerprint
@@ -177,6 +266,11 @@ exportgivenonly_b egb.Use$package run annotation-tree
 exportgivenrename_b grb.Use$package run annotation-tree
 exportinherit_b eib.B$package run annotation-tree
 exportinline_b eib.Use$package run annotation-tree
+exportinlinecls_b app.B$package run annotation-tree
+exportinlineexex_b app.B$package run annotation-tree
+exportinlineren_b app.B$package run annotation-tree
+exportinlinesel_b app.B$package run annotation-tree
+exportinlinestar_b app.B$package run annotation-tree
 exportoverdefault_b eob.Use$package run annotation-tree
 exportprelude_b epb.Use$package run annotation-tree
 exportrelay_c erc.C$package run annotation-tree
@@ -310,6 +404,199 @@ diamond2_b binaryDependency d2b.Palette scala.Product inferred-type teq jar:scal
 diamond2_b binaryDependency d2b.Palette java.io.Serializable inferred-type teq jrt:/modules/java.base/java/io/Serializable.class,Painter.scala,DependencyByMemberRef
 enum_b usedName nb.Use AnyRef alias-expanded scalac Default
 enum_b usedName nb.Use ImpureFunction1 impure-function scalac Default
+exportinlinecls_a binaryDependency util.Holder java.lang.String export-forwarder-deps scalac jrt:/modules/java.base/java/lang/String.class,U.scala,DependencyByMemberRef
+exportinlinecls_a binaryDependency util.Holder scala.AnyVal export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinecls_a binaryDependency util.Holder scala.Int export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinecls_a binaryDependency util.Holder scala.Predef$ export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinecls_a classDependency util.Holder lib.Codecs export-forwarder-deps scalac DependencyByInheritance
+exportinlinecls_a classDependency util.Holder lib.Show export-forwarder-deps scalac DependencyByMemberRef
+exportinlinecls_a classDependency util.Holder lib.Size export-forwarder-deps scalac DependencyByMemberRef
+exportinlineexex_a binaryDependency util.Inner java.lang.String export-forwarder-deps scalac jrt:/modules/java.base/java/lang/String.class,U.scala,DependencyByMemberRef
+exportinlineexex_a binaryDependency util.Inner scala.AnyVal export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineexex_a binaryDependency util.Inner scala.Int export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineexex_a binaryDependency util.Inner scala.Predef$ export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineexex_a binaryDependency util.Utils java.lang.String export-forwarder-deps scalac jrt:/modules/java.base/java/lang/String.class,U.scala,DependencyByMemberRef
+exportinlineexex_a binaryDependency util.Utils scala.AnyVal export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineexex_a binaryDependency util.Utils scala.Int export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineexex_a binaryDependency util.Utils scala.Predef$ export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineexex_a classDependency util.Inner lib.Show export-forwarder-deps scalac DependencyByMemberRef
+exportinlineexex_a classDependency util.Inner lib.Size export-forwarder-deps scalac DependencyByMemberRef
+exportinlineexex_a classDependency util.Utils lib.Show export-forwarder-deps scalac DependencyByMemberRef
+exportinlineexex_a classDependency util.Utils lib.Size export-forwarder-deps scalac DependencyByMemberRef
+exportinlineexex_a usedName util.Inner A export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner Any export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner AnyVal export-forwarder-deps scalac Default
+exportinlineren_a binaryDependency util.Utils java.lang.String export-forwarder-deps scalac jrt:/modules/java.base/java/lang/String.class,U.scala,DependencyByMemberRef
+exportinlineren_a binaryDependency util.Utils scala.AnyVal export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineren_a binaryDependency util.Utils scala.Int export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineren_a binaryDependency util.Utils scala.Predef$ export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlineren_a classDependency util.Utils lib.Show export-forwarder-deps scalac DependencyByMemberRef
+exportinlineren_a classDependency util.Utils lib.Size export-forwarder-deps scalac DependencyByMemberRef
+exportinlineren_a usedName util.Utils A export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils Any export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils AnyVal export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils B export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils Int export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils Nothing export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils Predef export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils Show export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils Size export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils String export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils a export-forwarder-deps scalac Default
+exportinlinesel_a binaryDependency util.Utils java.lang.String export-forwarder-deps scalac jrt:/modules/java.base/java/lang/String.class,U.scala,DependencyByMemberRef
+exportinlinesel_a binaryDependency util.Utils scala.AnyVal export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinesel_a binaryDependency util.Utils scala.Int export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinesel_a binaryDependency util.Utils scala.Predef$ export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinesel_a classDependency util.Utils lib.Codecs export-forwarder-deps scalac DependencyByInheritance
+exportinlinesel_a classDependency util.Utils lib.Show export-forwarder-deps scalac DependencyByMemberRef
+exportinlinesel_a classDependency util.Utils lib.Size export-forwarder-deps scalac DependencyByMemberRef
+exportinlinesel_a usedName util.Utils A export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils Any export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils AnyVal export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils B export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils Int export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils Nothing export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils Predef export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils Show export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils Size export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils String export-forwarder-deps scalac Default
+exportinlinestar_a binaryDependency util.Utils java.lang.String export-forwarder-deps scalac jrt:/modules/java.base/java/lang/String.class,U.scala,DependencyByMemberRef
+exportinlinestar_a binaryDependency util.Utils scala.AnyVal export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinestar_a binaryDependency util.Utils scala.Int export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinestar_a binaryDependency util.Utils scala.Predef$ export-forwarder-deps scalac jar:scala-library,U.scala,DependencyByMemberRef
+exportinlinestar_a classDependency util.Utils lib.Show export-forwarder-deps scalac DependencyByMemberRef
+exportinlinestar_a classDependency util.Utils lib.Size export-forwarder-deps scalac DependencyByMemberRef
+exportinlinestar_a usedName util.Utils A export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils Any export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils AnyVal export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils B export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils Int export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils Nothing export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils Predef export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils Show export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils Size export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils String export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils a export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder A export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder Any export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder AnyVal export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder B export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder Holder export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder Int export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder Nothing export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder Predef export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder Show export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder Size export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder String export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder a export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder b export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder c export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder evidence$1 export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder evidence$2 export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder mbnd export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder mbnm export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder mcba export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner B export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner Int export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner Nothing export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner Predef export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner Show export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner Size export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner String export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner a export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner b export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner evidence$1 export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner evidence$2 export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner lib export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner mbnd export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner mbnm export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner mcba export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner mcbo export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner mnoinl export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner mplain export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner mt1 export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils b export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils evidence$1 export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils evidence$2 export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils lib export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils mbnd export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils mbnm export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils mcba export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils mcbo export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils mnoinl export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils mplain export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils mt1 export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils mt2 export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils musg export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils s export-forwarder-deps scalac Default
+exportinlineren_a usedName util.Utils x export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils a export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils b export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils evidence$1 export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils evidence$2 export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils lib export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils mbnd export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils mbnm export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils mcba export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils mcbo export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils mnoinl export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils mplain export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils mt1 export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils mt2 export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils musg export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils s export-forwarder-deps scalac Default
+exportinlinesel_a usedName util.Utils x export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils b export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils evidence$1 export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils evidence$2 export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils lib export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils mbnd export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils mbnm export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils mcba export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils mcbo export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils mnoinl export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils mplain export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils mt1 export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils mt2 export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils musg export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils s export-forwarder-deps scalac Default
+exportinlinestar_a usedName util.Utils x export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder mcbo export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder mplain export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder mt1 export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder mt2 export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder musg export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder s export-forwarder-deps scalac Default
+exportinlinecls_a usedName util.Holder x export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner mt2 export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner musg export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner s export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Inner x export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils A export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils Any export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils AnyVal export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils B export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils Int export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils Nothing export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils Predef export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils Show export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils Size export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils String export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils a export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils b export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils evidence$1 export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils evidence$2 export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils mbnd export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils mbnm export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils mcba export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils mcbo export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils mnoinl export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils mplain export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils mt1 export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils mt2 export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils musg export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils s export-forwarder-deps scalac Default
+exportinlineexex_a usedName util.Utils x export-forwarder-deps scalac Default
 exportpkg_b usedName xpb.Use Base export-forwarder teq Default
 exportpkg_b usedName xpb.Use Inner$package export-forwarder teq Default
 exporttypes_a usedName eta.Api Box export-alias teq Default

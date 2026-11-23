@@ -7,6 +7,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A generic inline method reached through an `export` of another module's object (`export lib.Codecs.*`, a
+  selection, a renaming, an export of an export, an export inside a class) can be called by a third module built
+  over the products: the forwarder's body keeps its type arguments, as scalac's (`Codecs.id[A](a)`), where it was
+  withheld ("a call of id with 0 of its 1 type arguments") and the call refused. A method with an inline parameter
+  that has a default stays withheld there, refused as before.
 - A type test of `AnyRef` or `Object` is true for a boxed number, a boolean, a char and `()`, and false for `null`,
   as under scalac and Scala.js (`(5: Any).isInstanceOf[AnyRef]`, `case _: AnyRef`); in the interpreter it was false
   for every boxed value, and on JavaScript for numbers, booleans, `Long`s and `()`, where it was true for `null`.
