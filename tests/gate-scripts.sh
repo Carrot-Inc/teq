@@ -2345,6 +2345,10 @@ check "words: a placed expectation is held by a diagnostic's header, never by it
 # row's keys reversed reads the same suites by job, and a matrix of an axis and an `exclude` is refused.
 check "workflow-jobs: the gate's matrix read in any key order, a form the reader does not handle refused" "$work/workflow-jobs.log" \
   eval 'python3 tests/support/workflow-jobs.py --self-test > "$work/workflow-jobs.log" 2>&1'
+# Every line the gate deals to the shards has its row in tests/gate-times.txt (tests/support/gate_rows.py): a line
+# without one is dealt as 120 s, whatever it takes. Its check on planted lists first, then the tree's own.
+check "gate's rows: every line dealt to the shards has its row in tests/gate-times.txt" "$work/gate-rows.log" \
+  eval 'python3 tests/support/gate_rows.py --self-test > "$work/gate-rows.log" 2>&1 && python3 tests/support/gate_rows.py tests/gate.sh tests/gate-times.txt >> "$work/gate-rows.log" 2>&1'
 
 # The table of inline methods called through an export from a third module (tests/support/export_inline.py, run
 # by tests/support/export-inline.sh): its templates and its judge over planted tables.

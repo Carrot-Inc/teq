@@ -211,3 +211,9 @@ pairs-twin 70
 # estimated: pairs-twin on sixteen CPUs, from its 70 s on eight by every measured line's ratio 0.89 (17 lines)
 pairs-twin@16 62
 head-wait 40
+native-build 523
+# estimated: native-build on sixteen CPUs, from its 523 s on eight by every measured line's ratio 0.89
+native-build@16 465
+# estimated: idna on eight CPUs, from its 8 s on sixteen by every measured line's ratio 0.89
+idna 9
+idna@16 8
