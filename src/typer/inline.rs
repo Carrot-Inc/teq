@@ -693,6 +693,12 @@ pub struct InlineArg {
     /// Whether the parameter is by-name: the reference binds such an argument to a method, which its
     /// reductions do not look through as they look through an `inline` parameter's argument.
     pub by_name: bool,
+    /// Whether each use reads the argument ascribed the parameter's type: an `inline` parameter's
+    /// argument of a bottom type, which dotty's inliner binds as `Typed(arg, formal)`
+    /// (`Inliner.paramBindingDef` 292-293 at 3.8.4, i8612), and a by-name parameter's, which it
+    /// binds as a proxy method whose call stands at each use (`InlineByNameProxy`): no literal
+    /// at either. Set on the JVM alone, the target that reads the mark (`Program::is_ascribed`).
+    pub ascribed: bool,
 }
 
 /// The worker's state where a definition is made, beyond its environment: what the definition's check runs under
@@ -2028,6 +2034,11 @@ impl<'a> Worker<'a> {
             // An argument that is a by-name parameter's copy stands for that parameter here too.
             let by_name = by_name || self.by_name_copy(self.creation_under(expr));
             self.bind_inline_arg_as(proxy, expr, ty, by_name);
+            if self.jvm && (inline || by_name) && self.prog.type_of(expr).is_some_and(|t| self.is_bottom_after_erasure(t)) {
+                if let Some(arg) = self.inline.args.get_mut(&proxy) {
+                    arg.ascribed = true;
+                }
+            }
             if kept {
                 self.inline.bare_trees.insert(expr, ());
                 bound.bare.push(expr);
@@ -2871,7 +2882,7 @@ impl<'a> Worker<'a> {
     /// `bind_inline_arg` for a parameter that may be by-name (`InlineArg::by_name`).
     pub(super) fn bind_inline_arg_as(&mut self, s: SymId, expr: TExprId, ty: TypeId, by_name: bool) {
         let this_class = self.frame_class();
-        self.inline.args.insert(s, InlineArg { expr, ty, source: None, this_class, by_name });
+        self.inline.args.insert(s, InlineArg { expr, ty, source: None, this_class, by_name, ascribed: false });
     }
 
     /// Makes each `this` of the tree `e`, a fresh copy, the instance of `k` as a class nested in
@@ -2910,6 +2921,10 @@ impl<'a> Worker<'a> {
         let in_default = self.inline.sites.last().is_some_and(|s| s.in_ctor_default);
         if let Some(k) = arg.this_class.filter(|&k| !in_default && Some(k) != self.frame_class()) {
             self.this_of_class_in(copied, k);
+        }
+        if arg.ascribed {
+            self.note_ascribed_tree_constant(copied, copied, arg.ty);
+            self.prog.mark_ascribed(copied);
         }
         self.part_end(part);
         self.inline.copies.push((copied, s));
@@ -3509,6 +3524,9 @@ impl<'a> Worker<'a> {
         }
         if self.prog.is_ascribed(e) {
             self.prog.mark_ascribed(id);
+        }
+        if self.prog.is_inlined_null(e) {
+            self.prog.mark_inlined_null(id);
         }
         // What `PureStats` removes of a block is removed of the block's copy where the copy is pure by itself
         // (`Program::removed_bits`).

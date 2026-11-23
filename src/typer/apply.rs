@@ -8334,6 +8334,7 @@ impl<'a> Worker<'a> {
                 if self.denotation_marks.is_some() {
                     self.mark_arg_denotation(e, te);
                 }
+                self.mark_braced_null_argument(e, te);
                 let arg_span = self.cur_ast().expr_span(e);
                 if self.interp_call.is_some() {
                     self.lint_interpolation_arg(ty, arg_span, spread);
@@ -11306,7 +11307,13 @@ impl<'a> Worker<'a> {
         if args.is_empty() || args.len() > 1 && self.feature_named_enabled(self.env.file, span.start, "noAutoTupling") {
             return None;
         }
-        let (tr, rty) = if let [one] = args[..] { self.type_expr(one, None) } else { self.type_tuple(&args, Some(ANY)) };
+        let (tr, rty) = if let [one] = args[..] {
+            let (tr, rty) = self.type_expr(one, None);
+            self.mark_braced_null_argument(one, tr);
+            (tr, rty)
+        } else {
+            self.type_tuple(&args, Some(ANY))
+        };
         let (te, ty) = self.typed_equality(recv, recv_ty, tr, rty, name == names::NEQ, span);
         Some((te, self.const_folded_binary(te, ty, name, (recv, recv_ty), (tr, rty))))
     }

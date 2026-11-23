@@ -1925,9 +1925,21 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// On the JVM, the null literal written alone in braces as an argument, `x eq { null }`: dotty's tree there is
+    /// `Block(Nil, null)`, no literal, which its back end loads beside the other side (`Gen::null_literal`); its
+    /// `ConstantTree` is the block's type's, no constant. The parser keeps no node of the block (`Ast::is_braced`),
+    /// so the null is marked as an ascription is (`Program::is_ascribed`), no constant noted. A receiver's block is
+    /// lifted by dotty and left unmarked.
+    pub(super) fn mark_braced_null_argument(&mut self, written: ExprId, te: TExprId) {
+        if self.jvm && matches!(self.prog.expr(te), TExpr::Null) && self.cur_ast().is_braced(written) {
+            self.prog.mark_ascribed(te);
+        }
+    }
+
     fn type_equality(&mut self, l: ExprId, r: ExprId, negate: bool, span: Span) -> (TExprId, TypeId) {
         let (tl, lty) = self.type_expr(l, None);
         let (tr, rty) = self.type_expr(r, None);
+        self.mark_braced_null_argument(r, tr);
         let (te, ty) = self.typed_equality(tl, lty, tr, rty, negate, span);
         let op = if negate { names::NEQ } else { names::EQEQ };
         (te, self.const_folded_binary(te, ty, op, (tl, lty), (tr, rty)))
@@ -3747,6 +3759,7 @@ impl<'a> Worker<'a> {
             }
             names::EQ | names::NE if one_arg => {
                 let (tr, _) = self.type_expr(arg(0)?, None);
+                self.mark_braced_null_argument(arg(0)?, tr);
                 let prim = match name {
                     names::EQ => PrimOp::Same,
                     _ => PrimOp::NotSame,

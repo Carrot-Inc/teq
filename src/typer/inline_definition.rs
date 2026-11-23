@@ -1845,6 +1845,9 @@ impl<'a> Worker<'a> {
             if matches!(self.prog.expr(e), TExpr::Field(..) | TExpr::New(..) | TExpr::Block(..)) && self.expr_marks.get(&e).is_some_and(|&m| m & super::MARK_PARAM_IDENT != 0) {
                 self.mark_param_ident(copy);
             }
+            if self.jvm && matches!(self.prog.expr(e), TExpr::Null) {
+                self.prog.mark_inlined_null(copy);
+            }
         }
         this_copies.sort();
         inst.this_copies.extend(this_copies);

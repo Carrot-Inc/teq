@@ -7235,9 +7235,12 @@ impl<'a> Gen<'a> {
         if let PrimOp::Same | PrimOp::NotSame = op_ {
             // `eq` and `ne` are reference identity, a string's and a box's too (scalac's `ID`).
             let object = ErasedType::object();
+            let same = (op_ == PrimOp::Same) == jump_if;
+            if self.null_compared_alone(a, b, same, target) {
+                return;
+            }
             self.expr(a, &object);
             self.expr(b, &object);
-            let same = (op_ == PrimOp::Same) == jump_if;
             return self.jump_if(if same { op::IF_ACMPEQ } else { op::IF_ACMPNE }, 2, target);
         }
         let (ta, tb) = (self.static_type(a), self.static_type(b));
@@ -7332,6 +7335,10 @@ impl<'a> Gen<'a> {
         }
         let object = ErasedType::object();
         let by_value = ta.is_string() || tb.is_string() || !ta.is_ref() || !tb.is_ref();
+        let array_left = matches!(&ta, ErasedType::L(n) if n.starts_with('['));
+        if !by_value && !array_left && self.null_compared_alone(a, b, op_ == PrimOp::RefEq, target) {
+            return;
+        }
         self.expr(a, &object);
         self.expr(b, &object);
         if by_value {
@@ -7341,6 +7348,40 @@ impl<'a> Gen<'a> {
         } else {
             self.jump_if(if op_ == PrimOp::RefEq { op::IF_ACMPEQ } else { op::IF_ACMPNE }, 2, target);
         }
+    }
+
+    /// A reference compared with the null literal, the other side tested alone (`ifnull`,
+    /// `ifnonnull` to `target` where they are `equal`), as scalac's back end tests it for `eq` and
+    /// `ne` (`genComparisonOp`'s reference ops) and for `==` of a class (`genEqEqPrimitive`); an
+    /// array's `==`, its left side no class, loads both sides (`BCodeBodyBuilder.genCond`
+    /// 1578-1650 at 3.8.4). Whether it was written so.
+    fn null_compared_alone(&mut self, a: TExprId, b: TExprId, equal: bool, target: Label) -> bool {
+        let other = if self.null_literal(a) {
+            b
+        } else if self.null_literal(b) {
+            a
+        } else {
+            return false;
+        };
+        let object = ErasedType::object();
+        self.expr(other, &object);
+        self.jump_if(if equal { op::IFNULL } else { op::IFNONNULL }, 1, target);
+        true
+    }
+
+    /// Whether `e` stands where dotty's tree at its back end holds the null literal, which the
+    /// tests of `null_compared_alone` take (`isNull`'s `Literal(Constant(null))`,
+    /// `BCodeBodyBuilder.scala` 1582-1586 and 1696-1700 at 3.8.4): a `null` that no ascription
+    /// holds. `(null: T)`, a cast that keeps no node, a plain inline method's expansion and an
+    /// inline parameter's bottom-typed argument are dotty's `Typed`, and `{ null }` as an argument
+    /// its `Block`, each marked so by the typer (`Program::is_ascribed`); `{ null }` as the
+    /// receiver is lifted by dotty and stays the literal. A null an inline expansion wrote from its
+    /// body is loaded whatever the body's source held (`Program::is_inlined_null`): teq's pickle
+    /// keeps no ascription or brace of it, so only thus does a body read from products compare as
+    /// the same module's.
+    fn null_literal(&self, e: TExprId) -> bool {
+        let prog = self.cx.input.prog;
+        matches!(prog.expr(e), TExpr::Null) && !prog.is_ascribed(e) && !prog.is_inlined_null(e)
     }
 
     // ---- primitive operations ----

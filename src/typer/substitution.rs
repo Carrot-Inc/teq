@@ -1261,6 +1261,7 @@ impl<'a> Worker<'a> {
     fn walk_node(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
         w.visited += 1;
         match self.prog.expr(e) {
+            TExpr::Null if self.jvm && !w.failed && !self.prog.is_inlined_null(e) => self.inlined_null(w, e),
             TExpr::Int(_)
             | TExpr::Long(_)
             | TExpr::Double(_)
@@ -2484,6 +2485,18 @@ impl<'a> Worker<'a> {
     /// by `expand_inline` (an intrinsic of `scala.compiletime` evaluated, an inline method
     /// expanded by this walk or by the retype path, one frame deeper), the node that replaces it
     /// taking what the call's node said of the chain of `+` around it. Any other node as it is.
+    /// A null of the stored body the walk reached uncopied, copied for this expansion and marked
+    /// (`Program::inlined_null_bits`), as a demanded part's copies are (`publish_demanded`); the record's node
+    /// stays as it is.
+    fn inlined_null(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
+        let copy = self.prog.add(TExpr::Null);
+        self.prog.copy_span(e, copy);
+        let t = self.walked_type(w, e);
+        self.set_walked_type(w, copy, t);
+        self.prog.mark_inlined_null(copy);
+        copy
+    }
+
     fn resolved(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
         if w.failed {
             return e;

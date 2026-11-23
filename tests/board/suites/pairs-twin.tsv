@@ -86,6 +86,7 @@ cases/array_negative_dimensions	pass	-
 cases/array_overloads_erasure	pass	-	
 cases/array_overloads_override_chain	pass	-	
 cases/array_overloads_same_simple_name	pass	-	
+cases/array_pattern_method_limit	pass	-	
 cases/array_same_elements_wider	pass	-	
 cases/array_sliding_grouped	pass	-	
 cases/array_spread_alias	pass	-	
@@ -2193,6 +2194,7 @@ cases/nowarn_demanded_body	pass	-
 cases/null_basics	pass	-	
 cases/null_cast_unboxing	pass	-	
 cases/null_compare_hk_param	pass	-	
+cases/null_comparison_shapes	pass	-	
 cases/null_equality_tparam	pass	-	
 cases/nullable_annotated_null	pass	-	
 cases/nullable_path_constant	pass	-	

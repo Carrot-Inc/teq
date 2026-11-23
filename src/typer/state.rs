@@ -1540,6 +1540,9 @@ impl<'a> Worker<'a> {
         if self.prog.is_ascribed(from) {
             self.prog.mark_ascribed(to);
         }
+        if self.prog.is_inlined_null(from) {
+            self.prog.mark_inlined_null(to);
+        }
         if self.prog.is_opaque(from) {
             self.prog.mark_opaque(to);
         }

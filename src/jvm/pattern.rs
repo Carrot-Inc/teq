@@ -83,7 +83,14 @@ impl<'a> Gen<'a> {
             TPat::Equals(e, strict) => {
                 let et = self.static_type(e);
                 if strict && ty.is_ref() && et.is_ref() && !et.is_string() && !ty.is_string() {
-                    // `case _: x.type`: the identity of a reference.
+                    // `case _: x.type`: the identity of a reference; `null` tested alone, as
+                    // `Gen::write_compare` tests it.
+                    if let TExpr::Null = prog.expr(e) {
+                        // The test at the pattern's line, which the null's load marked.
+                        self.mark_line(e);
+                        self.load(slot, ty);
+                        return self.jump_if(op::IFNONNULL, 1, fail);
+                    }
                     self.expr(e, &et);
                     self.load(slot, ty);
                     return self.jump_if(op::IF_ACMPNE, 2, fail);

@@ -53,6 +53,9 @@ pub struct QuoteState {
     pattern: Option<PatternHoles>,
     /// How many macro expansions are under way.
     pub macro_depth: u32,
+    /// Set while a run copies its quote's body (`Worker::run_quote`): on the JVM the nulls the quote writes, the
+    /// trees filling its holes aside, are marked as an inline body's are (`Program::inlined_null_bits`).
+    marking_nulls: bool,
     classes: Option<QuotedClasses>,
     /// How many copies each class got from the runs of quotes under each outermost expansion
     /// site, which tell the copies of one site apart: a count that depends on the site's
@@ -2356,7 +2359,10 @@ impl<'a> Worker<'a> {
                 self.prog.block_classes.entry(*b).or_insert_with(|| cs.clone());
             }
         }
-        self.instantiate_tree(body, holes, params, subst, renames, &[], &blocks)
+        let outer = std::mem::replace(&mut self.quote.marking_nulls, self.jvm);
+        let copied = self.instantiate_tree(body, holes, params, subst, renames, &[], &blocks);
+        self.quote.marking_nulls = outer;
+        copied
     }
 
     /// The reads of the expansion's by-name parameters in the copy `root` of a stored body's
@@ -4184,10 +4190,16 @@ impl<'c> Copier<'c> {
         if t.prog.is_setter_assign(e) {
             t.prog.mark_setter_assign(id);
         }
+        if t.quote.marking_nulls && self.hole_depth.is_none() && matches!(copied, TExpr::Null) {
+            t.prog.mark_inlined_null(id);
+        }
         // An ascription stays one in every copy, a quote's too: erasure retains its type
         // (`Program::ascribed_bits`), whatever the folding marks a quote's copy leaves.
         if t.prog.is_ascribed(e) {
             t.prog.mark_ascribed(id);
+        }
+        if t.prog.is_inlined_null(e) {
+            t.prog.mark_inlined_null(id);
         }
         if t.capturing() {
             self.captured(t, e, id);

@@ -218,8 +218,13 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// A null literal; one an inline expansion's body writes is marked so (`Program::inlined_null_bits`).
     pub fn type_null(&mut self) -> (TExprId, TypeId) {
-        (self.prog.add(TExpr::Null), self.b.t_null)
+        let te = self.prog.add(TExpr::Null);
+        if self.jvm && self.inline.depth > 0 {
+            self.prog.mark_inlined_null(te);
+        }
+        (te, self.b.t_null)
     }
 
     /// `Null <: t`: every reference type takes `null`, a value type, `Nothing`, a literal type

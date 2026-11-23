@@ -85,6 +85,7 @@ array_negative_dimensions	pass	-
 array_overloads_erasure	pass	-	
 array_overloads_override_chain	pass	-	
 array_overloads_same_simple_name	pass	-	
+array_pattern_method_limit	pass	-	
 array_same_elements_wider	pass	-	
 array_sliding_grouped	pass	-	
 array_spread_alias	fail	-	output differs
@@ -2203,6 +2204,7 @@ nowarn_demanded_body	pass	-
 null_basics	pass	-	
 null_cast_unboxing	pass	-	
 null_compare_hk_param	pass	-	
+null_comparison_shapes	pass	-	
 null_equality_tparam	pass	-	
 nullable_annotated_null	pass	-	
 nullable_path_constant	pass	-	

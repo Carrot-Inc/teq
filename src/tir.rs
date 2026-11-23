@@ -1316,6 +1316,14 @@ pub struct Program {
     /// would be another (a generic result's `Object`): the JVM's qualifier of a member is of the
     /// ascribed class (`Gen::qualifier_site`).
     pub ascribed_bits: Bits,
+    /// On the JVM, the nulls an inline expansion wrote from the body it inlined, as bits by expression: those
+    /// `Worker::type_null` types while an expansion's body is typed, the copies of a stored body's
+    /// (`publish_demanded`, `Worker::inlined_null`) and those a macro's quote writes (`Worker::run_quote`), kept by
+    /// every copy that keeps an ascription (an inline argument's, a quote's, a beta-reduced closure's). None is
+    /// tested alone (`Gen::null_literal`): the ascriptions and braces of a body's source are in no pickle of teq's,
+    /// so a body read from products holds bare nulls where the same module's holds marked ones, and only thus do
+    /// the two builds write the same comparison.
+    pub inlined_null_bits: Bits,
     /// The nodes a cast's tree stands for (`typer::MARK_CAST`: a primitive's conversion made as a
     /// cast, a mirror's value), as bits by expression: what a macro's view of a body another worker
     /// typed reads (`tree_type`), every worker's marks in one set while forked.
@@ -1620,6 +1628,7 @@ impl Program {
         self.opaque_bits.fork();
         self.spread_bits.fork();
         self.ascribed_bits.fork();
+        self.inlined_null_bits.fork();
         self.cast_bits.fork();
         self.setter_assign_bits.fork();
         self.removed_bits.fork();
@@ -1640,7 +1649,7 @@ impl Program {
             let own_base = self.exprs.own_base();
             self.expr_types.follow_escapes(marks.clone(), own_base);
             self.expr_spans.follow_escapes(marks.clone(), own_base);
-            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.cast_bits, &mut self.setter_assign_bits, &mut self.removed_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
+            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.inlined_null_bits, &mut self.cast_bits, &mut self.setter_assign_bits, &mut self.removed_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
                 bits.follow_escapes(marks.clone(), own_base);
             }
         }
@@ -1719,6 +1728,7 @@ impl Program {
             opaque_bits: Bits::attach(self.opaque_bits.shared_arc(), worker),
             spread_bits: Bits::attach(self.spread_bits.shared_arc(), worker),
             ascribed_bits: Bits::attach(self.ascribed_bits.shared_arc(), worker),
+            inlined_null_bits: Bits::attach(self.inlined_null_bits.shared_arc(), worker),
             cast_bits: Bits::attach(self.cast_bits.shared_arc(), worker),
             setter_assign_bits: Bits::attach(self.setter_assign_bits.shared_arc(), worker),
             removed_bits: Bits::attach(self.removed_bits.shared_arc(), worker),
@@ -1843,6 +1853,7 @@ impl Default for Program {
             opaque_bits: Bits::default(),
             spread_bits: Bits::default(),
             ascribed_bits: Bits::default(),
+            inlined_null_bits: Bits::default(),
             cast_bits: Bits::default(),
             setter_assign_bits: Bits::default(),
             removed_bits: Bits::lazy(),
@@ -2145,6 +2156,16 @@ impl Program {
     #[inline(always)]
     pub fn is_ascribed(&self, e: TExprId) -> bool {
         self.ascribed_bits.has(e.0)
+    }
+
+    /// Marks `e` as `inlined_null_bits` says.
+    pub fn mark_inlined_null(&mut self, e: TExprId) {
+        self.inlined_null_bits.set(e.0);
+    }
+
+    #[inline]
+    pub fn is_inlined_null(&self, e: TExprId) -> bool {
+        self.inlined_null_bits.has(e.0)
     }
 
     /// Marks `e` as a cast's tree (`cast_bits`).
