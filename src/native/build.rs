@@ -19,6 +19,8 @@ type Res<T> = Result<T, String>;
 
 pub struct Options {
     pub zig: PathBuf,
+    /// zig's global cache, which keeps what zig builds of its own (the C library, compiler-rt, the C++ runtime), the
+    /// same for every program of a zig version and target, so that builds share it.
     pub zig_cache: PathBuf,
     /// zig's name of the target: `x86_64-linux-musl`.
     pub target: String,
@@ -367,10 +369,17 @@ fn lib_options(program: &Program, descriptor: &Descriptor) -> Vec<String> {
     out
 }
 
-/// The environment zig runs in: its caches, and the variables of `PASSED_ENVIRONMENT` the caller's has.
+/// Where zig keeps what it compiles of the program, the LLVM IR modules' objects: its local cache, in the work
+/// directory, so that what grows with the program's changes is gone with that directory and shared with no other
+/// build (zig 0.16.0 keeps a `zig cc -c` output in the local cache: src/main.zig 3190, src/Compilation.zig 5946).
+pub const LOCAL_CACHE: &str = "zig-cache";
+
+/// The environment zig runs in: its two caches (`Options::zig_cache`, `LOCAL_CACHE`), and the variables of
+/// `PASSED_ENVIRONMENT` the caller's has.
 fn environment(options: &Options) -> Vec<(String, std::ffi::OsString)> {
     let mut vars: Vec<(String, std::ffi::OsString)> = PASSED_ENVIRONMENT.iter().filter_map(|name| Some((name.to_string(), std::env::var_os(name)?))).collect();
-    vars.extend(["ZIG_GLOBAL_CACHE_DIR", "ZIG_LOCAL_CACHE_DIR"].map(|name| (name.to_string(), options.zig_cache.clone().into_os_string())));
+    vars.push(("ZIG_GLOBAL_CACHE_DIR".to_string(), options.zig_cache.clone().into_os_string()));
+    vars.push(("ZIG_LOCAL_CACHE_DIR".to_string(), options.work.join(LOCAL_CACHE).into_os_string()));
     vars
 }
 

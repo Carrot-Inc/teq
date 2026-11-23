@@ -27,8 +27,9 @@ fn usage() -> ! {
          a link takes --triple=<target> ({}) and --threads=<true|false> (true where the program can start a thread)\n\
          --lower takes --ll=<directory>: the program written there as LLVM IR in the listing's place, a module for each directory of sources\n\
          --link takes --build=<executable> and --work=<directory>: the program built there by zig, a static x86_64-linux-musl executable,\n\
-         \x20 with --zig=<path> (else TEQ_ZIG) naming zig {}, --zig-cache=<directory> (<work>/zig-cache) and --lib-dir=<directory>,\n\
-         \x20 each a directory of lib<name>.a archives with their headers under include/",
+         \x20 with --zig=<path> (else TEQ_ZIG) naming zig {}, --zig-cache=<directory> for what zig builds of its own (teq's cache's zig/;\n\
+         \x20 the program's objects stay in <work>/zig-cache) and --lib-dir=<directory>, each a directory of lib<name>.a archives with\n\
+         \x20 their headers under include/",
         crate::classpath::SEPARATOR,
         crate::native::DEFAULT_TRIPLE,
         tools::ZIG_VERSION
@@ -126,7 +127,7 @@ fn link(args: &[String], lowers: bool) -> ! {
         let work = absolute(&work.unwrap_or_else(|| fail("--build needs --work=<directory>".to_string())));
         build::Options {
             zig: tools::zig(zig.as_deref()).unwrap_or_else(|e| fail(e)),
-            zig_cache: zig_cache.map_or_else(|| work.join("zig-cache"), |dir| absolute(&dir)),
+            zig_cache: zig_cache.or_else(|| crate::task::fetch::cache_root().map(|root| root.join("zig"))).map_or_else(|| work.join(build::LOCAL_CACHE), |dir| absolute(&dir)),
             target: build::target(&Triple::parse(&triple)).unwrap_or_else(|e| fail(e)),
             output: absolute(&output),
             lib_dirs: lib_dirs.iter().map(|dir| absolute(dir)).collect(),

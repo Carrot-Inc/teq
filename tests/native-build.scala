@@ -8,10 +8,13 @@
 // compiles every C, C++ and assembly source again and takes the program's LLVM IR modules from zig's cache: a second
 // build has to compile every source again and no module, and a zig of another build that prints the same version is
 // served the modules of the first; a module renamed by a new directory of its hash has to be the fresh build's, and the
-// files of a module the build no longer makes are left unlinked. A build into a work directory that held another has
-// to print what a fresh one prints after each change: a header changed, added to an earlier include directory (which
-// zig's own cache does not see) or removed, a dangling link there gaining its target (nor this), a define, the
-// library's descriptor, another program built in between, a header changed while its library compiles (the cut
+// files of a module the build no longer makes are left unlinked. What zig builds of its own is in its global cache,
+// which every build shares (--zig-cache), and the program's module objects in its local cache in the work directory:
+// fifty edits, a work directory removed, two programs built at once and builds over what an older teq left each leave
+// the shared cache as a build of hello world leaves it, and the whole run leaves it as its first build did. A build
+// into a work directory that held another has to print what a fresh one prints after each change: a header changed,
+// added to an earlier include directory (which zig's own cache does not see) or removed, a dangling link there
+// gaining its target (nor this), a define, the library's descriptor, another program built in between, a header changed while its library compiles (the cut
 // check's two reproductions), headers reached by two names, through a link, a linked directory, a linked include
 // directory or into zig's own files, a header named as a build's list, one found above an include directory, and an
 // include directory that cannot be listed. The dependency output options of a library's (the forms
@@ -69,6 +72,13 @@ def files(dir: Path): Vector[Path] =
     try s.toArray.toVector.map(_.asInstanceOf[Path]).filter(Files.isRegularFile(_)).sortBy(_.toString)
     finally s.close()
 
+/// zig's local cache in a build's work directory, where it keeps the program's module objects (src/native/build.rs,
+/// `LOCAL_CACHE`).
+val localCache = "zig-cache"
+
+/// The files of a work directory that the build writes of itself: all but zig's local cache there.
+def builtFiles(work: Path): Vector[Path] = files(work).filterNot(f => work.relativize(f).startsWith(localCache))
+
 @main def nativeBuild(argv: String*): Unit = Script.run {
   val args = new Args(argv, "tests/native-build.scala [--teq <binary>] [--strand <name>]")
   val teq = args.teq("./target/release/teq")
@@ -113,6 +123,22 @@ def files(dir: Path): Vector[Path] =
     Sh((List(teq, "nir", "--link", main, classPath, s"--build=${out.resolve(name)}", s"--work=${out.resolve("work").resolve(name)}",
       s"--zig=$by", s"--zig-cache=$cache") ++ extra)*).mergeErr.timeout(900).check(false).run()
   def build(name: String, main: String, extra: String*): Sh.Result = buildBy(zig.get, name, main, extra*)
+  /// A cache's files with their sizes, by their names in it.
+  def cacheListing(dir: Path): Map[String, Long] = files(dir).map(f => dir.relativize(f).toString -> Files.size(f)).toMap
+  /// How a cache's listing moved from `was` to `now`.
+  def moved(was: Map[String, Long], now: Map[String, Long]): String =
+    val (added, gone) = (now.keySet -- was.keySet, was.keySet -- now.keySet)
+    val resized = now.keySet.intersect(was.keySet).filter(k => now(k) != was(k))
+    s"${added.size} files added (${added.toVector.sorted.take(3).mkString(", ")}), ${gone.size} gone, ${resized.size} of another size"
+  /// The listing of the shared cache the suite's first build left, written before the strands start.
+  val firstListing = out.resolve("first-cache.txt")
+  /// hello world built from `fixture` into `work` with a zig and a shared cache of the caller's.
+  val helloFixture = Paths.get("tests/native-build/fixtures/hello").toAbsolutePath
+  def helloAt(fixture: Path, work: Path, exe: Path, zigCache: Path, by: Path): Sh.Result =
+    Sh(teq, "nir", "--link", "hello", (fixture.toString :: jars).mkString(separator), s"--build=$exe", s"--work=$work", s"--zig=$by",
+      s"--zig-cache=$zigCache").mergeErr.timeout(900).check(false).run()
+  def localObjects(work: Path): Int = files(work.resolve(localCache).resolve("o")).count(_.toString.endsWith(".o"))
+  def prints(exe: Path, line: String): Boolean = printedExactly(Sh(exe.toString).timeout(300).check(false).run(), line.getBytes("UTF-8"))
   def runs(name: String, expected: String): Boolean = runsAt(out.resolve(name), expected)
   def runsAt(executable: Path, expected: String): Boolean =
     val ran = Sh(executable.toString).timeout(300).check(false).run()
@@ -257,7 +283,7 @@ def files(dir: Path): Vector[Path] =
   /// What a build into `work` left that it writes of itself: every file but the libraries' descriptors and stamps, with
   /// its SHA-256.
   def leftIn(work: Path): Map[String, String] =
-    files(work).filter(f => f.getFileName.toString != "scala-native.properties" && f.getFileName.toString != "stamp")
+    builtFiles(work).filter(f => f.getFileName.toString != "scala-native.properties" && f.getFileName.toString != "stamp")
       .map(f => work.relativize(f).toString -> java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(f)))).toMap
   val helloLine = Files.readString(Paths.get("tests/native-build/hello.expected"))
 
@@ -293,11 +319,11 @@ def files(dir: Path): Vector[Path] =
       s"--zig-cache=$cache", s"--lib-dir=${race.resolve(s"L$which")}").mergeErr.timeout(1800).check(false)
 
   // The cells run as strands side by side, each the suite's own child (`--strand <name>`) running its cells below one
-  // after another, at most as many at once as the machine has CPUs. A strand's cells write directories of their own;
-  // every build shares zig's cache. A strand counts by its last line, `native-build strand <name>: <p> passed, <f>
+  // after another, at most as many at once as the machine has CPUs, the longest first. A strand's cells write
+  // directories of their own; every build shares zig's cache. A strand counts by its last line, `native-build strand <name>: <p> passed, <f>
   // failed`, its exit 0 exactly when it failed nothing; one that ends otherwise, past its bound or without that line
   // fails the suite.
-  val strands = Vector("pairs", "rounds", "programs", "probe", "jars", "cases", "table", "misc")
+  val strands = Vector("edits", "pairs", "cases", "caches", "rounds", "table", "jars", "programs", "misc", "probe")
   if strand.exists(!strands.contains(_)) then args.fail(s"no strand ${strand.get}: the strands are ${strands.mkString(", ")}")
   def strandHas(name: String): Boolean = strand.contains(name)
   def strandCounts(name: String, ran: Sh.Result): Either[String, (Int, Int)] =
@@ -329,6 +355,13 @@ def files(dir: Path): Vector[Path] =
       fail += 1
       println("FAIL the strands' self-test: the good strand was refused")
     if strandTaken.isEmpty && strandGood then println(s"native-build strands self-test: ${strandPlants.length} planted bad strands refused, the good one taken")
+    // The suite's first build, into the shared cache every build of the suite is given, before any strand starts: what
+    // it leaves there is what the whole run is to leave (the last cell, once every strand has ended).
+    val firstBuilt = Sh(teq, "nir", "--link", "hello", (Paths.get("tests/native-build/fixtures/hello").toAbsolutePath.toString :: jars).mkString(separator),
+      s"--build=${out.resolve("first")}", s"--work=${out.resolve("work").resolve("first")}", s"--zig=${zig.get}", s"--zig-cache=$cache")
+      .mergeErr.timeout(900).check(false).run()
+    val afterFirst = cacheListing(cache)
+    Files.writeString(firstListing, afterFirst.toVector.sorted.map((name, size) => s"$size $name\n").mkString)
     val cpus = Runtime.getRuntime.availableProcessors
     val slots = cpus.min(strands.length).max(1)
     println(s"native-build strands: ${strands.length}, $slots at once on $cpus CPUs")
@@ -348,6 +381,13 @@ def files(dir: Path): Vector[Path] =
         case Left(why) =>
           fail += 1
           println(s"FAIL $why")
+    val atEnd = cacheListing(cache)
+    if firstBuilt.ok && afterFirst.nonEmpty && atEnd == afterFirst then pass += 1
+    else
+      fail += 1
+      println(s"FAIL the suite's shared cache after the whole run, against what its first build left (exit code ${firstBuilt.status}): ${moved(afterFirst, atEnd)}")
+    println(s"native-build zig's caches: the shared cache ${afterFirst.values.sum} bytes in ${afterFirst.size} files after the first build and " +
+      s"${atEnd.values.sum} in ${atEnd.size} after the run")
     done()
 
   if strandHas("programs") then
@@ -377,9 +417,9 @@ def files(dir: Path): Vector[Path] =
       commands.diff(gave).take(5).foreach(line => println(s"  Scala Native: $line"))
 
     // A second build into the same directory compiles every C, C++ and assembly source again and no LLVM IR module, zig's
-    // cache standing for those (src/native/build.rs, `through_zig_cache`): in a zig cache of this cell's own, zig's object
-    // of each of hello world's modules (`o/<digest>/<module>.o`) is not written again and no other is made, while every
-    // other object of the work directory is written again; the executable still runs. Then a zig of another build that
+    // cache standing for those (src/native/build.rs, `through_zig_cache`): in zig's local cache in the work directory, its
+    // object of each of hello world's modules (`o/<digest>/<module>.o`) is not written again and no other is made, while
+    // every other object of the work directory is written again; the executable still runs. Then a zig of another build that
     // prints the same version (a script that answers `version` and hands the rest to the suite's zig, writing down each
     // command): every C source goes through it, and zig's cache, which keys an object by zig's version and not by its
     // binary (zig's src/Compilation.zig 2122), serves it the modules the suite's zig compiled.
@@ -392,9 +432,9 @@ def files(dir: Path): Vector[Path] =
     def stamped(of: Vector[Path]): Map[Path, java.nio.file.attribute.FileTime] = of.map(f => f -> Files.getLastModifiedTime(f)).toMap
     def moduleObjects(): Map[Path, java.nio.file.attribute.FileTime] =
       val modules = files(irWork.resolve("generated")).map(_.getFileName.toString).filter(_.endsWith(".ll")).map(_.stripSuffix(".ll") + ".o").toSet
-      stamped(files(irCache.resolve("o")).filter(f => modules.contains(f.getFileName.toString)))
+      stamped(files(irWork.resolve(localCache).resolve("o")).filter(f => modules.contains(f.getFileName.toString)))
     def sourceObjects(): Map[Path, java.nio.file.attribute.FileTime] =
-      stamped(files(irWork).filter(f => f.toString.endsWith(".o") && !f.toString.endsWith(".ll.o")))
+      stamped(builtFiles(irWork).filter(f => f.toString.endsWith(".o") && !f.toString.endsWith(".ll.o")))
     val irFirst = irBuild(zig.get)
     val (firstModules, firstSources) = (moduleObjects(), sourceObjects())
     val irAgain = irBuild(zig.get)
@@ -706,7 +746,7 @@ def files(dir: Path): Vector[Path] =
         .withEnv(vars*).mergeErr.timeout(900).check(false).run()
     def envKept(keptInto: Path): Kept = Kept(readIf(envObject), keptArgs(keptInto, envObject))
     def digests(): Map[String, String] =
-      (files(envWork).filter(_.toString.endsWith(".o")) :+ envRoot.resolve("hello")).filter(Files.isRegularFile(_))
+      (builtFiles(envWork).filter(_.toString.endsWith(".o")) :+ envRoot.resolve("hello")).filter(Files.isRegularFile(_))
         .map(f => envRoot.relativize(f).toString -> java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(f)))).toMap
     val callerEpoch = Option(System.getenv("SOURCE_DATE_EPOCH")).filter(_.nonEmpty)
     val zigEnvironment = Set("ZIG_GLOBAL_CACHE_DIR", "ZIG_LOCAL_CACHE_DIR") ++ callerEpoch.map(_ => "SOURCE_DATE_EPOCH")
@@ -1527,13 +1567,15 @@ def files(dir: Path): Vector[Path] =
 
   if strandHas("misc") then
     // The trust roots' wraps over the stand-in for libcrypto, compiled and linked as a build compiles and links
-    // static_musl.c.
+    // static_musl.c, zig run in the cell's directory as a build runs it in its work directory: run from the tree, which
+    // holds the pinned zig under target/cross, the same link builds a second C library of zig's into the shared cache.
     val trust = out.resolve("trust")
     Files.createDirectories(trust.resolve("empty-dir"))
     Files.writeString(trust.resolve("empty.pem"), "")
     Files.writeString(trust.resolve("one.pem"), "-----BEGIN CERTIFICATE-----\n")
     def cc(cmd: String*): Sh.Result =
-      Sh((zig.get.toString +: "cc" +: "-target" +: "x86_64-linux-musl" +: cmd)*).withEnv("ZIG_GLOBAL_CACHE_DIR" -> cache.toString, "ZIG_LOCAL_CACHE_DIR" -> cache.toString)
+      Sh((zig.get.toString +: "cc" +: "-target" +: "x86_64-linux-musl" +: cmd)*).in(trust)
+        .withEnv("ZIG_GLOBAL_CACHE_DIR" -> cache.toString, "ZIG_LOCAL_CACHE_DIR" -> trust.resolve(localCache).toString)
         .mergeErr.timeout(300).check(false).run()
     val sources = Vector(
       ("src/native/static_musl.c", Vector("-O2", "-funwind-tables", "-fno-sanitize=undefined")),
@@ -1541,7 +1583,7 @@ def files(dir: Path): Vector[Path] =
       ("tests/native-build/trust_roots.c", Vector("-std=c11", "-Wall", "-Wextra", "-Werror")))
     val compiled = sources.map { (source, flags) =>
       val obj = trust.resolve(Paths.get(source).getFileName.toString + ".o").toString
-      (cc((flags ++ Vector("-c", source, "-o", obj))*), obj)
+      (cc((flags ++ Vector("-c", Paths.get(source).toAbsolutePath.toString, "-o", obj))*), obj)
     }
     val exe = trust.resolve("trust-roots").toString
     val linked =
@@ -1574,6 +1616,101 @@ def files(dir: Path): Vector[Path] =
       // whatever the machine holds, since the stand-in loads nothing.
       check("no place named", Seq("SSL_CERT_FILE", "SSL_CERT_DIR"), defaults, "verify", true,
         err => err.count(_ == '\n') == 1 && err.startsWith(s"trust-roots: no CA certificates found in $empty, $emptyDir, /etc/") && err.endsWith(advice))
+
+  if strandHas("edits") then
+    // zig's two caches (src/native/build.rs, `environment`): what zig builds of its own in its global cache, which every
+    // build shares (--zig-cache), and the program's module objects in its local cache in the work directory
+    // (`LOCAL_CACHE`). Fifty builds of hello world, each after a one-line change (its literal "hello " made "he000 ",
+    // "he001 ", ...) and each printing the changed line, leave the shared cache as they found it, file for file and size
+    // for size, and put fifty objects more in the work directory's; that work directory removed, the program built again
+    // runs and the shared cache stays; two programs built at once over an empty shared cache both run, and it then holds
+    // as many files as the suite's first build left in the shared cache, one libc.a and one libcompiler_rt.a among them
+    // (zig's objects there carry the cache's own path, so their bytes are that directory's); a build over a shared cache
+    // an older teq made (both of zig's caches in that one directory, through a zig script that sets ZIG_LOCAL_CACHE_DIR to
+    // it) runs and leaves it as it was, and a build into a work directory such a teq built into (both caches in its
+    // zig-cache) runs. The shared cache after the whole run against what the first build left is the parent's, once
+    // every strand has ended. Fifty edits and the removed work directory are this strand; the two over caches of their
+    // own the next. The cells here compare the shared cache's listing around their own builds beside the other strands'
+    // builds over the same cache: a file another build adds meanwhile fails them, and no build removes one.
+
+    val edits = Files.createDirectories(out.resolve("edits"))
+    val editFixture = Files.createDirectories(edits.resolve("hello"))
+    for f <- files(helloFixture) do Files.write(editFixture.resolve(f.getFileName.toString), Files.readAllBytes(f))
+    val nir = editFixture.resolve("hello$package$.nir")
+    val original = Files.readAllBytes(nir)
+    val literal = Array[Byte](6) ++ "hello ".getBytes("UTF-8")
+    val at = (0 to original.length - literal.length).find(i => literal.indices.forall(j => original(i + j) == literal(j))).getOrElse(-1)
+    val (editWork, editExe) = (edits.resolve("work"), edits.resolve("hello-edited"))
+    val editFirst = helloAt(editFixture, editWork, editExe, cache, zig.get)
+    val beforeEdits = cacheListing(cache)
+    val objectsBefore = localObjects(editWork)
+    val editsRan = if at < 0 || !editFirst.ok then Vector.empty else (0 until 50).toVector.map { k =>
+      val text = "he" + ("00" + k).takeRight(3) + " "
+      val edited = original.clone()
+      for j <- 0 until text.length do edited(at + 1 + j) = text(j).toByte
+      Files.write(nir, edited)
+      helloAt(editFixture, editWork, editExe, cache, zig.get).ok && prints(editExe, helloLine.replaceFirst("^hello ", text))
+    }
+    val afterEdits = cacheListing(cache)
+    val objectsAdded = localObjects(editWork) - objectsBefore
+    if editsRan.length == 50 && editsRan.forall(identity) && afterEdits == beforeEdits && objectsAdded == 50 then pass += 1
+    else
+      fail += 1
+      println(s"FAIL fifty edits: the literal at $at, the first build exited ${editFirst.status}, ${editsRan.count(!_)} of ${editsRan.length} edited builds " +
+        s"failed or printed otherwise; the shared cache: ${moved(beforeEdits, afterEdits)}; $objectsAdded objects more in the work directory's (50 wanted)")
+
+    val removedWork = out.resolve("work").resolve("removed")
+    val removedExe = out.resolve("removed-hello")
+    val removedFirst = helloAt(helloFixture, removedWork, removedExe, cache, zig.get)
+    val beforeRemoval = cacheListing(cache)
+    Sh.remove(removedWork)
+    val removedAgain = helloAt(helloFixture, removedWork, removedExe, cache, zig.get)
+    val afterRemoval = cacheListing(cache)
+    if removedFirst.ok && removedAgain.ok && prints(removedExe, helloLine) && afterRemoval == beforeRemoval && localObjects(removedWork) > 0 then pass += 1
+    else
+      fail += 1
+      println(s"FAIL a work directory removed and built again: exit codes ${removedFirst.status} and ${removedAgain.status}; the shared cache: " +
+        s"${moved(beforeRemoval, afterRemoval)}; ${localObjects(removedWork)} objects in the work directory's")
+    println(s"native-build zig's caches: fifty edits added $objectsAdded objects to their work directory's and ${afterEdits.size - beforeEdits.size} files to the shared cache")
+
+  if strandHas("caches") then
+    val firstFiles = Files.readAllLines(firstListing).size()
+    val atOnce = Files.createDirectories(out.resolve("at-once"))
+    val atOnceShared = atOnce.resolve("shared")
+    def startedAt(name: String, main: String): Sh.Running =
+      Sh(teq, "nir", "--link", main, (Paths.get(s"tests/native-build/fixtures/$name").toAbsolutePath.toString :: jars).mkString(separator),
+        s"--build=${atOnce.resolve(name)}", s"--work=${atOnce.resolve("work").resolve(name)}", s"--zig=${zig.get}", s"--zig-cache=$atOnceShared")
+        .mergeErr.timeout(900).check(false).spawn()
+    val startedTogether = Vector(startedAt("hello", "hello"), startedAt("collections", "CollectionsBench"))
+    val together = startedTogether.map(_.await())
+    val sharedTogether = cacheListing(atOnceShared)
+    def named(name: String): Int = sharedTogether.keySet.count(k => Paths.get(k).getFileName.toString == name)
+    if together.forall(_.ok) && runsAt(atOnce.resolve("hello"), "tests/native-build/hello.expected") &&
+        runsAt(atOnce.resolve("collections"), "tests/cases/bench_collections.expected") && named("libc.a") == 1 && named("libcompiler_rt.a") == 1 &&
+        sharedTogether.size == firstFiles then pass += 1
+    else
+      fail += 1
+      println(s"FAIL two programs built at once over an empty shared cache: exit codes ${together.map(_.status).mkString(" and ")}; ${named("libc.a")} libc.a, " +
+        s"${named("libcompiler_rt.a")} libcompiler_rt.a; ${sharedTogether.size} files against the first build's $firstFiles")
+      together.flatMap(_.out.linesIterator.filter(_.nonEmpty).take(3)).foreach(println)
+
+    val older = Files.createDirectories(out.resolve("older"))
+    val olderShared = older.resolve("shared")
+    val olderZig = older.resolve("zig")
+    Files.writeString(olderZig, s"#!/bin/sh\nZIG_LOCAL_CACHE_DIR=\"$$ZIG_GLOBAL_CACHE_DIR\" exec ${shellQuoted(zig.get.toString)} \"$$@\"\n")
+    Sh("chmod", "755", olderZig.toString).run()
+    val byOlder = helloAt(helloFixture, older.resolve("work-older"), older.resolve("hello-older"), olderShared, olderZig)
+    val olderLeft = cacheListing(olderShared)
+    val overOlder = helloAt(helloFixture, older.resolve("work-newer"), older.resolve("hello-newer"), olderShared, zig.get)
+    val olderWork = older.resolve("work-older-default")
+    val intoOlder = helloAt(helloFixture, olderWork, older.resolve("hello-older-default"), olderWork.resolve(localCache), olderZig)
+    val intoOlderAgain = helloAt(helloFixture, olderWork, older.resolve("hello-older-default"), cache, zig.get)
+    if byOlder.ok && overOlder.ok && prints(older.resolve("hello-newer"), helloLine) && cacheListing(olderShared) == olderLeft &&
+        localObjects(older.resolve("work-newer")) > 0 && intoOlder.ok && intoOlderAgain.ok && prints(older.resolve("hello-older-default"), helloLine) then pass += 1
+    else
+      fail += 1
+      println(s"FAIL a build over what an older teq left: exit codes ${byOlder.status} and ${overOlder.status} over its shared cache (${moved(olderLeft, cacheListing(olderShared))}), " +
+        s"${intoOlder.status} and ${intoOlderAgain.status} into its work directory")
 
   println(s"native-build strand ${strand.get}: $pass passed, $fail failed")
   Script.exit(if fail == 0 then 0 else 1)
