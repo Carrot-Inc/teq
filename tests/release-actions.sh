@@ -1615,7 +1615,8 @@ check "the stage's job gives its step the admission's dry" \
   "$(grep -A3 -F 'bench/actions/step.sh stage out/actions/carry' .github/workflows/release.yml | grep -c -F 'TEQ_DRY: ${{ needs.admit.outputs.dry }}')" 1
 
 # --- tests/support/identity.sh across machines, with a stand-in compiler: its outputs a digest of the source,
-# STANDIN_DIFF=<program> another for that one, STANDIN_KILL=<program> a run that dies of a signal.
+# STANDIN_DIFF=<program> another for that one, STANDIN_KILL=<program> a run that dies of a signal, STANDIN_FAIL=<programs,
+# or all> a build that fails, alike on every run.
 cat > "$work/teq-standin" << 'EOF'
 #!/bin/bash
 [ "$1" = --version ] && { echo "${STANDIN_VERSION:-teq 9.9.9 $(git rev-parse --short HEAD) pgo}"; exit 0; }
@@ -1627,6 +1628,7 @@ shift 2
 while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done
 name=$(basename "$src" .scala)
 [ "$name" != "${STANDIN_KILL:-}" ] || kill -KILL $$
+case " ${STANDIN_FAIL:-} " in *" $name "* | *" all "*) echo "error: cannot open scala-library.jar"; exit 1 ;; esac
 # The worker running the program (timeout's parent), killed: the program left without a result.
 [ "$name" != "${STANDIN_KILL_WORKER:-}" ] || kill -KILL "$(ps -o ppid= -p $PPID | tr -d ' ')"
 sum=$(cat "$src" "$src"/*.scala 2> /dev/null | sha256sum | cut -c1-16)
@@ -1686,8 +1688,42 @@ rm -rf -- "$work/bundle-bad" && cp -a "$work/bundle" "$work/bundle-bad"
 sed -i '1d' "$work/bundle-bad/inventory.txt"
 identity --compare "$work/bundle-bad" "$work/teq-standin" "$work/cmp8"
 check "identity --compare of another inventory" "$?" 1
-STANDIN_KILL=$(cut -d'|' -f1 <<< "$plain") identity --produce "$work/teq-standin" "$work/bundle-killed"
+STANDIN_KILL=$(cut -d'|' -f2 <<< "$plain") identity --produce "$work/teq-standin" "$work/bundle-killed"
 check "identity --produce with a run that died" "$?" 1
+# The canaries and the lists across machines: the canary, the first plain program the JavaScript suite's passing list
+# passes, built into the bundle; a reference failing every build, or the canary alone, makes no bundle; one failing a
+# program the list passes makes none, naming it.
+canary=$(awk -F'\t' '$2 == "pass" { print $1 }' tests/board/suites/cases.tsv | LC_ALL=C sort | while read -r n; do [ -f "tests/cases/$n.scala" ] && ! grep -q -E '^// (jars|os):' "tests/cases/$n.scala" && { echo "$n"; break; }; done)
+passing=$(tr '|' '\n' <<< "$plain" | while read -r n; do [ "$n" != "$canary" ] && grep -q -x "$(printf '%s\tpass\t.*' "$n")" tests/board/suites/cases.tsv && { echo "$n"; break; }; done)
+check "identity: a plain program the list passes beside the canary" "$([ -n "$canary" ] && [ -n "$passing" ] && echo yes)" yes
+check "identity --produce: the canary's record in the bundle" "$(tail -1 "$work/bundle/canary/js/$canary/log.cmp" 2> /dev/null)" "exit 0"
+STANDIN_FAIL=all identity --produce "$work/teq-standin" "$work/bundle-void"
+check "identity --produce of every build failing" "$?/$([ -e "$work/bundle-void" ] && echo written)" "1/"
+has "identity --produce of every build failing: void" "$work/identity.out" "VOID identity js: the canary $canary does not build with the reference binary: error: cannot open scala-library.jar"
+STANDIN_FAIL=$canary identity --produce "$work/teq-standin" "$work/bundle-void"
+check "identity --produce with a canary that does not build" "$?/$([ -e "$work/bundle-void" ] && echo written)" "1/"
+has "identity --produce with a canary that does not build: void" "$work/identity.out" "VOID identity diags: the canary $canary does not build"
+STANDIN_FAIL=$passing identity --produce "$work/teq-standin" "$work/bundle-void"
+check "identity --produce failing a program the list passes" "$?/$([ -e "$work/bundle-void" ] && echo written)" "1/"
+has "identity --produce failing a program the list passes: named" "$work/identity.out" "identity: js: 1 programs failed by the reference that the lists say build: $passing"
+# --compare of a bundle whose canary did not build, of one whose every build failed (and fails here alike), and of one
+# where a program the list passes failed and fails here alike
+failed_record() { printf 'error: cannot open scala-library.jar\nexit 1\n' > "$1/log.cmp" && rm -f "$1/out.js" "$1/entries.txt"; }
+rm -rf -- "$work/bundle-bad" && cp -a "$work/bundle" "$work/bundle-bad"
+failed_record "$work/bundle-bad/canary/js/$canary"
+identity --compare "$work/bundle-bad" "$work/teq-standin" "$work/cmp13"
+check "identity --compare of a bundle whose canary did not build" "$?" 1
+has "identity --compare of a bundle whose canary did not build: void" "$work/identity.out" "VOID identity js: the canary $canary does not build with the reference binary (the bundle's record): error: cannot open scala-library.jar"
+for r in "$work"/bundle-bad/*/*/ "$work"/bundle-bad/canary/*/*/; do [ ! -f "$r/log.cmp" ] || failed_record "$r"; done
+STANDIN_FAIL=all identity --compare "$work/bundle-bad" "$work/teq-standin" "$work/cmp14"
+check "identity --compare of every build failing alike" "$?" 1
+has "identity --compare of every build failing alike: void" "$work/identity.out" "VOID identity jvm: the canary $canary does not build with the reference binary (the bundle's record)"
+lacks "identity --compare of every build failing alike: no program counted" "$work/identity.out" "programs identical to the reference's"
+rm -rf -- "$work/bundle-bad" && cp -a "$work/bundle" "$work/bundle-bad"
+failed_record "$work/bundle-bad/js/$passing"
+STANDIN_FAIL=$passing identity --compare "$work/bundle-bad" "$work/teq-standin" "$work/cmp15"
+check "identity --compare of a program the list passes failed alike" "$?" 1
+has "identity --compare of a program the list passes failed alike: named" "$work/identity.out" "identity: js: 1 programs failed alike that the lists say build: $passing"
 STANDIN_VERSION="teq 9.9.9 0000000 pgo" identity --produce "$work/teq-standin" "$work/bundle-other"
 check "identity --produce with a binary of another commit" "$?" 1
 has "identity --produce: says so" "$work/identity.out" "not built from this checkout's commit"
@@ -1703,7 +1739,9 @@ IDENTITY_PROGRAMS=$withjars IDENTITY_SKIPS=$work/skips identity --produce "$work
 check "identity --produce with an allowed skip" "$?" 0
 IDENTITY_PROGRAMS=$withjars identity --compare "$work/bundle-skips" "$work/teq-standin" "$work/cmp9"
 check "identity --compare of a bundle with a skip" "$?" 0
-has "identity --compare: the skip counted" "$work/identity.out" "0 of 0 programs identical to the reference's, 1 skipped"
+allowed=1
+! grep -q -x "$(printf '%s\tpass\t.*' "$withjars")" tests/board/suites/cases.tsv || allowed=0
+has "identity --compare: the skip counted" "$work/identity.out" "0 of 0 programs identical to the reference's (0 built on both sides, 0 failed alike of $allowed the lists allow), 1 skipped"
 # One identity run at a time in the checkout: one while another holds out/identity.lock refused, the lock of a run
 # gone taken over (a lock the suite made, never another run's).
 if mkdir out/identity.lock 2> /dev/null; then

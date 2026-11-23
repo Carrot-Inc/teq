@@ -19,6 +19,12 @@
 # here directly). Every program of a kind has exactly one result, no name is two programs and the out directory
 # holds no other program, or the run fails. The judges run first on planted bad records (`--self-test` alone runs
 # them): `identity self-test: N of N planted bad records failed`.
+# A kind's identical programs are counted apart, those built on both sides and those failed alike (the reference's
+# record ending in an exit other than 0), and judged against the corpus's lists (allowed_of): a program failed alike
+# that the lists say builds fails the run, the first ten named. Before a kind's programs its canary (canary_of: a
+# program its passing list names) is built by the reference; a canary that does not build, or lists that name none,
+# make the kind VOID: its line, its programs not run, the run failed. So a reference older than the lists' first
+# passing case reads VOID.
 #
 # tests/support/identity.sh --produce <teq> <bundle dir> [kinds] | --compare <bundle dir> <teq> <out dir>: the same
 # comparison across machines, one binary on each, for a release's binaries on their platforms (docs/DEVELOPING.md,
@@ -33,8 +39,11 @@
 # bundle's; refused before a run when the bundle is not whole, its commit is not the checkout's, its inventory is not
 # the checkout's programs or <teq> prints another version than the reference; a program the bundle lists without
 # outputs, a program left without a result, or a run that timed out or died where the reference's did not, never
-# compares as identical. Either mode refuses a binary whose version names neither the checkout's commit nor one with
-# the checkout's compiler sources (the outputs would be another compiler's). Both run
+# compares as identical. Both hold the canaries and the lists as above: --produce builds each kind's canary into the
+# bundle (canary/<kind>/) and refuses the bundle when it does not build or when the reference failed a program the
+# lists say builds; --compare is void when the bundle's canary is not a build. Either mode refuses a binary whose
+# version names neither the checkout's commit nor one with the checkout's compiler sources (the outputs would be
+# another compiler's). Both run
 # from the root of the checkout on the same relative paths (out/identity/: the sources, the jars, the outputs), with
 # COURSIER_CACHE an empty directory, so that nothing of a machine's paths or caches reaches an output; every time is
 # left out (the phase lines of `check` and `build`, the figures of the jar report a failed build prints, an analysis
@@ -98,6 +107,66 @@ coverage() {
   ls "$dir/ref" "$dir/new" 2> /dev/null | grep -v -e '^$' -e ':$' | sort -u | comm -13 "$results.inv" - | sed 's/^/outputs of no program: /'
   rm -f "$results.inv" "$results.got"
 }
+# The corpus's lists the canaries and the counts are read from: the checkout's (the self-test plants its own).
+lists_root=.
+# board_of <kind>: the passing list of the suite that builds the kind's programs: tests/run_jvm.sh's for jvm,
+# tests/run.sh's for js and for diags and flagged (a program the JavaScript suite builds types clean).
+board_of() { case $1 in jvm) echo tests/board/suites/jvm.tsv ;; *) echo tests/board/suites/cases.tsv ;; esac; }
+# canary_of <kind>: the first program in the C locale's order that the kind's passing list passes, of one file and no
+# `// jars:` line (a want of a jar is counted apart) or `// os:` line (its pass is the board's system's); nothing
+# when there is none.
+canary_of() {
+  local name f
+  for name in $(awk -F'\t' '$2 == "pass" { print $1 }' "$lists_root/$(board_of "$1")" 2> /dev/null | LC_ALL=C sort); do
+    f=$lists_root/tests/cases/$name.scala
+    [ -f "$f" ] && ! grep -q -E '^// (jars|os):' "$f" && { echo "$name"; return; }
+  done
+}
+# allowed_of <kind> <inventory>: the inventory's programs whose build the lists allow to fail: all but those the
+# passing list passes and, for jvm, those tests/pending/jvm.txt classes past the build (verify, exception, output,
+# timeout: tests/run_jvm.sh's classes); a program of tests/errors is never on a passing list.
+allowed_of() {
+  local kind=$1 inventory=$2
+  {
+    awk -F'\t' '$2 == "pass" { print $1 }' "$lists_root/$(board_of "$kind")" 2> /dev/null
+    [ "$kind" != jvm ] || awk -F'\t' '{ split($2, w, /[ ;]/) } w[1] ~ /^(verify|exception|output|timeout)$/ { print $1 }' "$lists_root/tests/pending/jvm.txt" 2> /dev/null
+  } | LC_ALL=C sort -u > "$inventory.vouched"
+  LC_ALL=C sort -u "$inventory" | LC_ALL=C comm -23 - "$inventory.vouched"
+  rm -f "$inventory.vouched"
+}
+# void_line <kind> <canary> <record> <whose>: the line of a void kind when the canary's record is not a whole build (an
+# exit 0 with its JavaScript or its jar's entries) or the lists name no canary; nothing otherwise.
+void_line() {
+  local kind=$1 canary=$2 record=$3 whose=$4 why
+  [ -n "$canary" ] || { echo "VOID identity $kind: the lists name no canary: no program of tests/cases without jars that $(board_of "$kind") passes"; return; }
+  why=$(whole_output "$kind" "$record")
+  [ -n "$why" ] || [ "$(tail -n 1 "$record/log.cmp")" = "exit 0" ] || why=$(head -n 1 "$record/log.cmp")
+  [ -z "$why" ] || echo "VOID identity $kind: the canary $canary does not build with $whose: $why"
+}
+# judge_kind <kind> <results> <records> <inventory> <canary records> <whose>: every mode's verdict on a kind: its void
+# line (returns 2), or `counts <built> <failed> <allowed>` and a line `beyond <name>` for each program failed that the
+# lists say builds (returns 1). The identical programs are the results' `same <name>` (direct), `same <kind> <name>`
+# (--compare) and `built <kind> <name>` (--produce, one side); failed, the reference's record in <records> ending in
+# an exit other than 0; the canary's record is <canary records>/<canary>.
+judge_kind() {
+  local kind=$1 results=$2 records=$3 inventory=$4 canaries=$5 whose=$6 canary void name built=0 failed=0 over
+  canary=$(canary_of "$kind")
+  void=$(void_line "$kind" "$canary" "$canaries/$canary" "$whose")
+  [ -z "$void" ] || { echo "$void"; return 2; }
+  : > "$results.failed"
+  while read -r name; do
+    if [ "$(tail -n 1 "$records/$name/log.cmp" 2> /dev/null)" = "exit 0" ]; then built=$((built + 1)); else failed=$((failed + 1)); echo "$name" >> "$results.failed"; fi
+  done < <(awk '$1 == "same" && NF == 2 { print $2 } $1 == "same" && NF == 3 || $1 == "built" { print $3 }' "$results")
+  allowed_of "$kind" "$inventory" > "$results.allowed"
+  echo "counts $built $failed $(grep -c . "$results.allowed")"
+  LC_ALL=C sort "$results.failed" | LC_ALL=C comm -23 - "$results.allowed" | sed 's/^/beyond /' > "$results.beyond"
+  cat "$results.beyond"
+  over=$(grep -c . "$results.beyond")
+  rm -f "$results.failed" "$results.allowed" "$results.beyond"
+  [ "$over" = 0 ]
+}
+# first_ten <lines>: the names of `beyond` lines, the first ten.
+first_ten() { sed -n 's/^beyond //p' <<< "$1" | head -10 | tr '\n' ' ' | sed 's/ $//'; }
 export -f whole_output judge
 # self_test <dir>: the judges on planted bad records, each of which must fail, and the controls, which must pass.
 self_test() {
@@ -155,6 +224,40 @@ self_test() {
   exact "two results of one program" "several results of q" "$d/inv" "$d/res4"
   printf 'same p\ndiffers js r\n' > "$d/res7"
   exact "a differing result of no program beside a program with none" $'no result of q\na result of no program: r' "$d/inv" "$d/res7"
+  # The canaries and the lists in each mode's form of results: planted lists passing p (the canary) and q, failing r.
+  local saved_root=$lists_root mode n
+  lists_root=$d/lists
+  mkdir -p "$d/lists/tests/board/suites" "$d/lists/tests/cases"
+  printf '# test\tverdict\tthe other ways\tthe first line of the difference\np\tpass\t-\t\nq\tpass\t-\t\nr\tfail\t-\t\n' > "$d/lists/tests/board/suites/cases.tsv"
+  for n in p q r; do printf 'object %s\n' "$n" > "$d/lists/tests/cases/$n.scala"; done
+  printf 'p\nq\nr\n' > "$d/inv3"
+  # lists_case <mode> <programs failed alike> <canary built: yes or no>: judge_kind's return on js records so planted,
+  # its lines in $d/case/out.
+  lists_case() {
+    local r=$d/case
+    rm -rf "$r"
+    mkdir -p "$r/rec" "$r/can"
+    for n in p q r; do
+      case " $2 " in *" $n "*) mkdir -p "$r/rec/$n" && printf 'error: no such class\nexit 1\n' > "$r/rec/$n/log.cmp" ;; *) good "$r/rec/$n" ;; esac
+      case $1 in direct) echo "same $n" ;; compare) echo "same js $n" ;; produce) echo "built js $n" ;; esac
+    done > "$r/res"
+    if [ "$3" = yes ]; then good "$r/can/p"; else mkdir -p "$r/can/p" && printf 'error: cannot open scala-library.jar\nexit 1\n' > "$r/can/p/log.cmp"; fi
+    judge_kind js "$r/res" "$r/rec" "$d/inv3" "$r/can" "the reference binary" > "$r/out"
+    echo $?
+  }
+  for mode in direct produce compare; do
+    [ "$(lists_case $mode r yes)" = 0 ] && [ "$(cat "$d/case/out")" = "counts 2 1 1" ] || missed="$missed; the $mode control of the lists"
+    [ "$(lists_case $mode "p q r" no)" = 2 ] && grep -q '^VOID identity js: the canary p does not build with the reference binary: error: cannot open' "$d/case/out" &&
+      plant "a $mode run of every build failing alike" 1 || plant "a $mode run of every build failing alike" ""
+    [ "$(lists_case $mode r no)" = 2 ] && grep -q '^VOID identity js: the canary p ' "$d/case/out" &&
+      plant "a $mode canary that does not build" 1 || plant "a $mode canary that does not build" ""
+    [ "$(lists_case $mode "q r" yes)" = 1 ] && [ "$(cat "$d/case/out")" = $'counts 1 2 1\nbeyond q' ] &&
+      plant "a $mode failure alike one above the lists'" 1 || plant "a $mode failure alike one above the lists'" ""
+  done
+  : > "$d/lists/tests/board/suites/cases.tsv"
+  [ "$(lists_case direct r yes)" = 2 ] && grep -q '^VOID identity js: the lists name no canary' "$d/case/out" &&
+    plant "lists that name no canary" 1 || plant "lists that name no canary" ""
+  lists_root=$saved_root
   rm -rf "${d:?}"
   [ -z "$missed" ] || echo "FAIL identity self-test:${missed#;} passed"
   echo "identity self-test: $caught of $total planted bad records failed"
@@ -187,6 +290,40 @@ mkdir -p "$out"
 REF_FLAGS=${REF_FLAGS-} NEW_FLAGS=${NEW_FLAGS-}
 FLAGGED_REF=${FLAGGED_REF-} FLAGGED_NEW=${FLAGGED_NEW-}
 export ref new out sl REF_FLAGS NEW_FLAGS FLAGGED_REF FLAGGED_NEW
+# run_side <kind> <src> <side> <dir>: the program by one side's binary with the flags the suites give it (jars_of
+# called first), its record in <dir>: log.cmp ending in the binary's `exit <code>`, and the JavaScript or the jar's
+# entries; returns the code.
+run_side() {
+  local kind=$1 src=$2 side=$3 dir=$4 bin own flags cp=$JARS_CP code
+  bin=${!side}
+  flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2> /dev/null | head -1 | sed 's|^// teq: ||')
+  case $kind in
+    jvm) cp=$sl${cp:+:$cp}; flags="$flags --std=scala-library" ;;
+  esac
+  [ -n "$cp" ] && flags="$flags --classpath $cp"
+  mkdir -p "$dir"
+  case $side in
+    ref) own=$REF_FLAGS ;;
+    new) own=$NEW_FLAGS ;;
+  esac
+  if [ "$kind" = flagged ]; then
+    case $side in
+      ref) own="$own $FLAGGED_REF" ;;
+      new) own="$own $FLAGGED_NEW" ;;
+    esac
+  fi
+  case $kind in
+    js) timeout 60 "$bin" $(compiler_words "$bin") build "$src" $flags $own -o "$dir/out.js" > "$dir/log" 2>&1 ;;
+    jvm) timeout 60 "$bin" $(compiler_words "$bin") build "$src" $flags $own --target jvm -o "$dir/out.jar" > "$dir/log" 2>&1 ;;
+    diags | flagged) timeout 60 "$bin" $(compiler_words "$bin") check "$src" $flags $own > "$dir/log" 2>&1 ;;
+  esac
+  code=$?
+  [ ! -f "$dir/out.jar" ] || jar_entries "$dir/out.jar" "$dir/entries.txt"
+  echo "exit $code" >> "$dir/log"
+  compare_form "$dir/log" "$dir/log.cmp"
+  rm "$dir/log"
+  return $code
+}
 one() {
   local kind=$1 src=$2
   local name
@@ -196,45 +333,16 @@ one() {
   jars_of "$src"
   # not run: no program of identical outputs, counted apart
   [ -z "$JARS_MISSING" ] || { echo "notrun $name jars missing:$JARS_MISSING"; return 0; }
-  local flags
-  flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2> /dev/null | head -1 | sed 's|^// teq: ||')
-  local cp=$JARS_CP
-  case $kind in
-    jvm) cp=$sl${cp:+:$cp}; flags="$flags --std=scala-library" ;;
-  esac
-  [ -n "$cp" ] && flags="$flags --classpath $cp"
-  local side bin dir own code launch=
+  local side code launch=
   for side in ref new; do
-    bin=${!side}
-    dir=$out/$kind/$side/$name
-    mkdir -p "$dir"
-    case $side in
-      ref) own=$REF_FLAGS ;;
-      new) own=$NEW_FLAGS ;;
-    esac
-    if [ "$kind" = flagged ]; then
-      case $side in
-        ref) own="$own $FLAGGED_REF" ;;
-        new) own="$own $FLAGGED_NEW" ;;
-      esac
-    fi
-    case $kind in
-      js) timeout 60 "$bin" $(compiler_words "$bin") build "$src" $flags $own -o "$dir/out.js" > "$dir/log" 2>&1 ;;
-      jvm)
-        timeout 60 "$bin" $(compiler_words "$bin") build "$src" $flags $own --target jvm -o "$dir/out.jar" > "$dir/log" 2>&1
-        [ -f "$dir/out.jar" ] && jar_entries "$dir/out.jar" "$dir/entries.txt" ;;
-      diags | flagged) timeout 60 "$bin" $(compiler_words "$bin") check "$src" $flags $own > "$dir/log" 2>&1 ;;
-    esac
+    run_side "$kind" "$src" "$side" "$out/$kind/$side/$name"
     code=$?
-    echo "exit $code" >> "$dir/log"
     # a launch that failed (126, 127), a limit (124, 125) or a signal (128 and up) ran no build: never identical
     case $code in 124 | 125 | 126 | 127 | 1[3-9][0-9] | 2[0-9][0-9]) launch="$launch $side:$code" ;; esac
-    compare_form "$dir/log" "$dir/log.cmp"
-    rm "$dir/log"
   done
   judge "$kind" "$name" "$out/$kind/ref/$name" "$out/$kind/new/$name" "$launch"
 }
-export -f one compiler_words _new_spelling
+export -f run_side one compiler_words _new_spelling
 self_test "$out/self-test" || exit 1
 skips=
 [ -z "${IDENTITY_SKIPS:-}" ] || skips=$(absolute "$IDENTITY_SKIPS")
@@ -246,10 +354,17 @@ for kind in ${kinds//,/ }; do
     *) echo "identity: no kind $kind" >&2; exit 2 ;;
   esac
   n=$(echo "$srcs" | wc -l | tr -d ' ')
-  echo "$srcs" | xargs -P "$JOBS" -I{} bash -c "one $kind {}" > "$out/$kind.results"
   for src in $srcs; do
     case $src in tests/errors/*) echo "errors-$(basename "$src" .scala)" ;; *) basename "$src" .scala ;; esac
   done > "$out/$kind.inventory"
+  canary=$(canary_of "$kind")
+  if [ -n "$canary" ]; then
+    jars_of "tests/cases/$canary.scala"
+    run_side "$kind" "tests/cases/$canary.scala" ref "$out/canary/$kind/$canary"
+  fi
+  void=$(void_line "$kind" "$canary" "$out/canary/$kind/$canary" "the reference binary")
+  [ -z "$void" ] || { echo "$void"; status=1; continue; }
+  echo "$srcs" | xargs -P "$JOBS" -I{} bash -c "one $kind {}" > "$out/$kind.results"
   sed -n 's/^differs //p' "$out/$kind.results" | sort > "$out/$kind.differ"
   sed -n 's/^notrun //p' "$out/$kind.results" | sort > "$out/$kind.notrun"
   s=$(grep -c '^same ' "$out/$kind.results") d=$(wc -l < "$out/$kind.differ" | tr -d ' ') nr=$(wc -l < "$out/$kind.notrun" | tr -d ' ')
@@ -266,7 +381,12 @@ for kind in ${kinds//,/ }; do
   [ "$nr" = 0 ] || echo "skip $nr programs of $kind: their jars are not in the coursier cache"
   faults=$(coverage "$out/$kind.inventory" "$out/$kind.results" "$out/$kind")
   [ -z "$faults" ] || { sed "s/^/FAIL identity $kind: /" <<< "$faults"; status=1; }
-  echo "identity $kind: $s of $n programs identical, $d differing, $nr not run$([ "$nr" = 0 ] || echo " (jars missing)")"
+  verdict=$(judge_kind "$kind" "$out/$kind.results" "$out/$kind/ref" "$out/$kind.inventory" "$out/canary/$kind" "the reference binary") || status=1
+  case $verdict in VOID*) echo "$verdict"; continue ;; esac
+  read -r _ built failed allowed <<< "$verdict"
+  echo "identity $kind: $s of $n programs identical ($built built on both sides, $failed failed alike of $allowed the lists allow), $d differing, $nr not run$([ "$nr" = 0 ] || echo " (jars missing)")"
+  over=$(grep -c '^beyond ' <<< "$verdict")
+  [ "$over" = 0 ] || echo "FAIL identity $kind: $over programs failed alike that the lists say build: $(first_ten "$verdict")"
   [ "$d" = 0 ] || status=1
   if [ "$unlisted" != 0 ]; then
     status=1

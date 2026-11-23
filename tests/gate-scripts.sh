@@ -91,7 +91,9 @@
 #            line each, not run; an empty selection of tests/scala3/run.py and of tests/board/dotty.py failing; an
 #            empty results file taking no entry out of a fails-only list (a line naming the check passing does);
 #            tests/run_stdlib.sh --update without its jar writing every case cannot run; tests/support/identity.sh
-#            counting no program identical whose runs were killed on both sides, its self-test's line, a program not
+#            counting no program identical whose runs were killed on both sides (a jar's build too), its self-test's
+#            line, a run of every build failing alike void by its canary, a program failed alike that the lists pass
+#            failing the run and one they fail counted, a program not
 #            run for want of its jars failing the run unless IDENTITY_SKIPS lists it, a FAIL line under TEQ_GATE; tests/workers.sh's checks whose
 #            command was killed failing with that reason.
 #   words    the first words' readers: master's code on the head's output rendered back whole, deciding as on master's
@@ -2195,37 +2197,81 @@ code=$?
 check "outcomes: the stdlib suite without its jar writes every case cannot run, no earlier pass kept" "$oc/stdlib.log" eval '[ $code = 0 ] &&
   grep -q "^stdlib: skipped, no scala-library 3.x jar in the coursier cache$" "$oc/stdlib.log" &&
   grep -q -x "$(printf "one\tcannot run\t-\tno scala-library 3.x jar in the coursier cache")" "$st/tests/board/suites/stdlib.tsv"'
-# identity: a launch that did not run on both sides is no identical program; its differs line is its one result
-mkdir -p "$oc/killed-teq" && printf '#!/bin/bash\n[ "$1" = --help ] && exit 0\nkill -9 $$\n' > "$oc/killed-teq/teq" && chmod +x "$oc/killed-teq/teq"
-id=$oc/id; mkdir -p "$id/tests/support" "$id/tests/cases"
+# identity: a stand-in compiler writing what it is asked (a jar a zip), STANDIN_KILL=<program> a run that dies of a
+# signal, STANDIN_FAIL=<programs, or all> a build that fails alike on both sides; the fixture's lists pass base (the
+# canary) and hello
+mkdir -p "$oc/standin-teq" && cat > "$oc/standin-teq/teq" << 'EOF'
+#!/bin/bash
+[ "$1" = compiler ] && shift
+[ "$1" = --help ] && exit 0
+verb=$1 src=$2 out=
+shift 2
+while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done
+name=$(basename "$src" .scala)
+[ "$name" != "${STANDIN_KILL:-}" ] || kill -9 $$
+case " ${STANDIN_FAIL:-} " in *" $name "* | *" all "*) echo "error: cannot open scala-library.jar"; exit 1 ;; esac
+case $out in
+  *.jar) python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1], "w").writestr("A.class", sys.argv[2])' "$out" "$name" ;;
+  ?*) echo "// $name" > "$out" ;;
+esac
+echo "$verb $src"
+EOF
+chmod +x "$oc/standin-teq/teq"
+standin=$oc/standin-teq/teq
+id=$oc/id; mkdir -p "$id/tests/support" "$id/tests/cases" "$id/tests/board/suites"
 cp tests/support/identity.sh tests/support/identity-across.sh tests/support/jars.sh tests/support/compiler-words.sh "$id/tests/support/" 2> /dev/null
-printf 'object Main { def main(args: Array[String]): Unit = println("hello") }\n' > "$id/tests/cases/hello.scala"
-timeout 200 bash "$id/tests/support/identity.sh" "$oc/killed-teq/teq" "$oc/killed-teq/teq" "$oc/id-out" js > "$oc/identity.log" 2>&1
+for p in base hello; do printf 'object Main { def main(args: Array[String]): Unit = println("%s") }\n' "$p" > "$id/tests/cases/$p.scala"; done
+lists() { printf '# test\tverdict\tthe other ways\tthe first line of the difference\nbase\tpass\t-\t\nhello\t%s\t-\t\n' "$1" | tee "$id/tests/board/suites/cases.tsv" > "$id/tests/board/suites/jvm.tsv"; }
+lists pass
+# a launch that did not run on both sides is no identical program, its differs line its one result, a jar's build too
+STANDIN_KILL=hello timeout 200 bash "$id/tests/support/identity.sh" "$standin" "$standin" "$oc/id-out" js,jvm > "$oc/identity.log" 2>&1
 code=$?
-check "outcomes: identity counts no program identical whose runs did not run on both sides" "$oc/identity.log" eval '[ $code = 1 ] &&
+check "outcomes: identity counts no program identical whose runs did not run on both sides, a jar's build too" "$oc/identity.log" eval '[ $code = 1 ] &&
   grep -q "^differs: js hello (did not run: ref:137 new:137)$" "$oc/identity.log" &&
-  grep -q "^identity js: 0 of 1 programs identical, 1 differing, 0 not run$" "$oc/identity.log" &&
+  grep -q "^differs: jvm hello (did not run: ref:137 new:137)$" "$oc/identity.log" &&
+  grep -q "^identity js: 1 of 2 programs identical (1 built on both sides, 0 failed alike of 0 the lists allow), 1 differing, 0 not run$" "$oc/identity.log" &&
+  grep -q "^identity jvm: 1 of 2 programs identical (1 built on both sides, 0 failed alike of 0 the lists allow), 1 differing, 0 not run$" "$oc/identity.log" &&
   grep -q "^identity self-test: [0-9]* of [0-9]* planted bad records failed$" "$oc/identity.log" &&
   ! grep -q "^FAIL" "$oc/identity.log"'
+# a run whose every build fails alike is void: its canary does not build with the reference
+STANDIN_FAIL=all timeout 200 bash "$id/tests/support/identity.sh" "$standin" "$standin" "$oc/id-out" js,jvm > "$oc/identity-void.log" 2>&1
+code=$?
+check "outcomes: identity of every build failing alike is void, its kinds' programs not run" "$oc/identity-void.log" eval '[ $code = 1 ] &&
+  grep -q -x "VOID identity js: the canary base does not build with the reference binary: error: cannot open scala-library.jar" "$oc/identity-void.log" &&
+  grep -q -x "VOID identity jvm: the canary base does not build with the reference binary: error: cannot open scala-library.jar" "$oc/identity-void.log" &&
+  ! grep -q -E "^(identity (js|jvm):|differs)" "$oc/identity-void.log" && [ ! -e "$oc/id-out/js.results" ]'
+# a program the lists pass failed alike fails the run, named; one they fail is counted
+STANDIN_FAIL=hello timeout 200 bash "$id/tests/support/identity.sh" "$standin" "$standin" "$oc/id-out" js > "$oc/identity-beyond.log" 2>&1
+code=$?
+check "outcomes: identity fails on a program failed alike that the lists say builds, naming it" "$oc/identity-beyond.log" eval '[ $code = 1 ] &&
+  grep -q -x "identity js: 2 of 2 programs identical (1 built on both sides, 1 failed alike of 0 the lists allow), 0 differing, 0 not run" "$oc/identity-beyond.log" &&
+  grep -q -x "FAIL identity js: 1 programs failed alike that the lists say build: hello" "$oc/identity-beyond.log"'
+lists fail
+STANDIN_FAIL=hello timeout 200 bash "$id/tests/support/identity.sh" "$standin" "$standin" "$oc/id-out" js > "$oc/identity-allowed.log" 2>&1
+code=$?
+check "outcomes: identity passes a program failed alike that the lists fail, counting it" "$oc/identity-allowed.log" eval '[ $code = 0 ] &&
+  grep -q -x "identity js: 2 of 2 programs identical (1 built on both sides, 1 failed alike of 1 the lists allow), 0 differing, 0 not run" "$oc/identity-allowed.log" &&
+  ! grep -q "^FAIL" "$oc/identity-allowed.log"'
+lists pass
 # identity: a program not run for want of its jars fails the run, unless IDENTITY_SKIPS lists it; a FAIL under TEQ_GATE
-mkdir -p "$oc/builds-teq" && printf '#!/bin/bash\n[ "$1" = --help ] && exit 0\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && echo built > "$2"; shift; done\n' > "$oc/builds-teq/teq" && chmod +x "$oc/builds-teq/teq"
 printf '// jars: nosuch\nobject Lonely\n' > "$id/tests/cases/lonely.scala"
-timeout 200 bash "$id/tests/support/identity.sh" "$oc/builds-teq/teq" "$oc/builds-teq/teq" "$oc/id-out" js > "$oc/identity-jars.log" 2>&1
+timeout 200 bash "$id/tests/support/identity.sh" "$standin" "$standin" "$oc/id-out" js > "$oc/identity-jars.log" 2>&1
 code=$?
 check "outcomes: identity fails on a program not run for want of its jars, naming it" "$oc/identity-jars.log" eval '[ $code = 1 ] &&
   grep -q "^not run js lonely: jars missing: nosuch$" "$oc/identity-jars.log" &&
-  grep -q "^identity js: 1 of 2 programs identical, 0 differing, 1 not run (jars missing)$" "$oc/identity-jars.log" &&
+  grep -q "^identity js: 2 of 3 programs identical (2 built on both sides, 0 failed alike of 1 the lists allow), 0 differing, 1 not run (jars missing)$" "$oc/identity-jars.log" &&
   ! grep -q "^FAIL" "$oc/identity-jars.log"'
 printf 'js lonely\n' > "$oc/identity-skips"
-IDENTITY_SKIPS=$oc/identity-skips timeout 200 bash "$id/tests/support/identity.sh" "$oc/builds-teq/teq" "$oc/builds-teq/teq" "$oc/id-out" js > "$oc/identity-skips.log" 2>&1
+IDENTITY_SKIPS=$oc/identity-skips timeout 200 bash "$id/tests/support/identity.sh" "$standin" "$standin" "$oc/id-out" js > "$oc/identity-skips.log" 2>&1
 code=$?
 check "outcomes: identity passes a program not run that IDENTITY_SKIPS lists" "$oc/identity-skips.log" eval '[ $code = 0 ] &&
   grep -q "^not run js lonely: jars missing: nosuch (listed in IDENTITY_SKIPS)$" "$oc/identity-skips.log"'
-TEQ_GATE=1 timeout 200 bash "$id/tests/support/identity.sh" "$oc/builds-teq/teq" "$oc/builds-teq/teq" "$oc/id-out" js > "$oc/identity-gate.log" 2>&1
+TEQ_GATE=1 timeout 200 bash "$id/tests/support/identity.sh" "$standin" "$standin" "$oc/id-out" js > "$oc/identity-gate.log" 2>&1
 code=$?
 check "outcomes: identity under TEQ_GATE fails a program not run with a FAIL line" "$oc/identity-gate.log" eval '[ $code = 1 ] &&
   grep -q "^FAIL identity js: 1 programs not run for want of their jars, a gate.s want of what it needs$" "$oc/identity-gate.log"'
 # workers: a check whose command did not run fails it, never an absent pattern's pass
+mkdir -p "$oc/killed-teq" && printf '#!/bin/bash\n[ "$1" = --help ] && exit 0\nkill -9 $$\n' > "$oc/killed-teq/teq" && chmod +x "$oc/killed-teq/teq"
 (
   pass=0; fail=0
   said_fail() { echo "FAIL $1"; }

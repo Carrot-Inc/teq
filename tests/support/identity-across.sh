@@ -56,11 +56,11 @@ run_case() {
 }
 # invalid <exit code>: a run that is no evidence: a timeout, a command not run, a signal.
 invalid() { case $1 in 124 | 125 | 126 | 127 | 1[3-9][0-9] | 2[0-9][0-9]) return 0 ;; esac; return 1; }
-# produce_one <kind> <name> <source>: one program by the reference, its arguments into args/; prints `missing`,
-# `skip` or `invalid` for one that is no evidence.
+# produce_one <kind> <name> <source> [<at>]: one program by the reference, its outputs into <at>/ (the kind's by
+# default) and its arguments into args/<at>/; prints `missing`, `skip` or `invalid` for one that is no evidence.
 produce_one() {
-  [ $# -eq 3 ] || return 0
-  local kind=$1 name=$2 src=$3 flags cp entry sum file canon= dir words status
+  [ $# -ge 3 ] || return 0
+  local kind=$1 name=$2 src=$3 at=${4:-$1} flags cp entry sum file canon= dir words status
   local -a args entries
   . tests/support/jars.sh
   jars_of "$src"
@@ -90,14 +90,15 @@ produce_one() {
     done
     flags="$flags --classpath ${canon#:}"
   fi
-  dir=$work/$kind/$name
+  dir=$work/$at/$name
   words=$(compiler_words "$bin")
   case $kind in
     js) args=($words build "$src" $flags -o "$dir/out.js") ;;
     jvm) args=($words build "$src" $flags --target jvm -o "$dir/out.jar") ;;
     diags) args=($words check "$src" $flags) ;;
   esac
-  printf '%s\n' "${args[@]}" > "$work/args/$kind/$name"
+  mkdir -p "$work/args/$at"
+  printf '%s\n' "${args[@]}" > "$work/args/$at/$name"
   run_case "$dir" "${args[@]}"
   status=$(tail -1 "$dir/log.cmp")
   if invalid "${status#exit }"; then echo "invalid $kind $name: $status"; else echo "built $kind $name"; fi
@@ -164,11 +165,20 @@ if [ "$across" = produce ]; then
     mkdir -p "$work/args/$kind"
     programs "$kind" > "$work/$kind.programs"
     cat "$work/$kind.programs" >> "$work/inventory.txt"
+    canary=$(canary_of "$kind")
+    [ -z "$canary" ] || produce_one "$kind" "$canary" "tests/cases/$canary.scala" "canary/$kind" > /dev/null
+    void=$(void_line "$kind" "$canary" "$work/canary/$kind/$canary" "the reference binary")
+    [ -z "$void" ] || { echo "$void"; status=1; continue; }
     xargs -P "$JOBS" -n 3 bash -c 'produce_one "$@"' _ < "$work/$kind.programs" > "$work/$kind.results"
     launched=$?
     grep -v '^built ' "$work/$kind.results" > "$work/$kind.refused"
     LC_ALL=C sort "$work/$kind.refused" | sed 's/^/identity: /'
-    echo "identity $kind: $(grep -c . "$work/$kind.programs") programs built by the reference, $(grep -c '^skip ' "$work/$kind.refused") skipped as allowed"
+    awk '{ print $2 }' "$work/$kind.programs" > "$work/$kind.names"
+    verdict=$(judge_kind "$kind" "$work/$kind.results" "$work/$kind" "$work/$kind.names" "$work/canary/$kind" "the reference binary") || status=1
+    read -r _ built failed allowed <<< "$verdict"
+    echo "identity $kind: $(grep -c . "$work/$kind.programs") programs built by the reference ($built built, $failed failed of $allowed the lists allow), $(grep -c '^skip ' "$work/$kind.refused") skipped as allowed"
+    over=$(grep -c '^beyond ' <<< "$verdict")
+    [ "$over" = 0 ] || echo "identity: $kind: $over programs failed by the reference that the lists say build: $(first_ten "$verdict")"
     ! grep -q -v '^skip ' "$work/$kind.refused" || status=1
     # Every program a result, and every worker launched.
     [ "$launched" -eq 0 ] && [ "$(grep -c . "$work/$kind.results")" -eq "$(grep -c . "$work/$kind.programs")" ] ||
@@ -183,7 +193,7 @@ if [ "$across" = produce ]; then
     (cd "$work" && find jars -type f | LC_ALL=C sort | while read -r f; do echo "jar $f $(digest "$f")"; done)
     cat "$work"/*.refused | grep '^skip ' | LC_ALL=C sort
   } > "$work/identity.txt"
-  (cd "$work" && rm -f -- ./*.programs ./*.refused ./*.results)
+  (cd "$work" && rm -f -- ./*.programs ./*.refused ./*.results ./*.names)
   [ $status -eq 0 ] || refuse "the reference is not whole (above): no bundle"
   echo complete >> "$work/identity.txt"
   if [ "$bundle" != "$PWD/$work" ]; then
@@ -213,6 +223,9 @@ done < "$bundle/identity.txt"
 status=0
 : > "$work/summary"
 for kind in ${kinds//,/ }; do
+  canary=$(canary_of "$kind")
+  void=$(void_line "$kind" "$canary" "$bundle/canary/$kind/$canary" "the reference binary (the bundle's record)")
+  [ -z "$void" ] || { echo "$void" | tee -a "$work/summary"; status=1; continue; }
   # The programs the reference skipped as allowed are skipped here too, and counted.
   awk -v k="$kind" '$1 == k { print $1, $2 }' "$bundle/inventory.txt" | while read -r k n; do
     grep -q "^skip $k $n " "$bundle/identity.txt" || echo "$k $n"
@@ -228,7 +241,12 @@ for kind in ${kinds//,/ }; do
   [ "$launched" -eq 0 ] || echo "differs $kind: xargs exited $launched" >> "$work/$kind.differ"
   d=$(grep -c . "$work/$kind.differ")
   LC_ALL=C sort "$work/$kind.differ" | sed 's/^/identity: /'
-  echo "identity $kind: $(grep -c '^same ' "$work/$kind.results") of $((n - skipped)) programs identical to the reference's, $skipped skipped as the reference skipped them" | tee -a "$work/summary"
+  awk -v k="$kind" '$1 == k { print $2 }' "$bundle/inventory.txt" > "$work/$kind.names"
+  verdict=$(judge_kind "$kind" "$work/$kind.results" "$bundle/$kind" "$work/$kind.names" "$bundle/canary/$kind" "the reference binary (the bundle's record)") || status=1
+  read -r _ built failed allowed <<< "$verdict"
+  echo "identity $kind: $(grep -c '^same ' "$work/$kind.results") of $((n - skipped)) programs identical to the reference's ($built built on both sides, $failed failed alike of $allowed the lists allow), $skipped skipped as the reference skipped them" | tee -a "$work/summary"
+  over=$(grep -c '^beyond ' <<< "$verdict")
+  [ "$over" = 0 ] || echo "identity: $kind: $over programs failed alike that the lists say build: $(first_ten "$verdict")" | tee -a "$work/summary"
   [ "$d" = 0 ] || status=1
 done
 {
