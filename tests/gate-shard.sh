@@ -16,7 +16,8 @@
 # announces in its ready file ("<builder> <digest>") within GATE_HEAD_WAIT seconds (default 1800): used as it is
 # once it has that digest, the manifest's revision and source, and runs here as a plain build of the head
 # (`received`); built here instead when the gate writes build-here there (the builder's build failed) or the
-# shipped binary fails a check, which the build step says.
+# shipped binary fails a check, which the build step says. Where the list holds a native suite (native-build, idna,
+# native-fetch), the pinned zig is then fetched into target/cross unless the tree holds it (the step `zig`).
 cd "$(dirname "$0")/../.."
 list=$1
 gate=out/gate
@@ -74,6 +75,14 @@ step build $code $started $gate/build.log
 if [ $code != 0 ]; then
   echo done >> $status
   exit 1
+fi
+# The native suites' zig: the pinned one, fetched into target/cross by bench/zig.sh's fetch, by its digest, when the
+# tree lacks it (nothing fetched when it holds it), where those suites find it; so that no machine's state decides
+# their lines. A failed fetch is a step of its own, failed, and the suites then fail on their skip lines.
+if grep -qE '^(native-build|idna|native-fetch)([. ]|$)' "$list"; then
+  started=$(now)
+  bash -c '. bench/zig.sh && zig_fetch && echo "zig $("$zig" version) at $zig"' > $gate/zig.log 2>&1
+  step zig $? $started $gate/zig.log
 fi
 while read -r name cmd; do
   [ -n "$name" ] || continue
