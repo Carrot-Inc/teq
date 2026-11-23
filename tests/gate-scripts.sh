@@ -2360,5 +2360,10 @@ check "export-inline: the table's templates and its judge's planted tables judge
 check "export-default: the table's templates, its part and its judge's planted tables judged as they must be" "$work/export-default.log" \
   eval 'python3 tests/support/export_default.py --self-test > "$work/export-default.log" 2>&1'
 
+# The table of an inline definition's ordinary default (tests/support/inline_getters.py, run by
+# tests/support/inline-getters.sh): its templates and its judge over planted tables.
+check "inline-getters: the table's templates and its judge's planted tables judged as they must be" "$work/inline-getters.log" \
+  eval 'python3 tests/support/inline_getters.py --self-test > "$work/inline-getters.log" 2>&1'
+
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]

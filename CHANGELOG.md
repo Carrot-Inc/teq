@@ -7,6 +7,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An inline given whose using clause has a default (`inline given bark(using msg: String = "Woof!"): String`) has
+  that default's getter as a method of its class (`Dog.bark$default$1`), as scalac's has: a call that leaves the
+  argument out through an export of an instance or an import of its givens applies it, where it was missing (the
+  interpreter's "has no default getters", a `NoSuchMethodError` on the JVM, a `TypeError` in JavaScript).
 - An inline method exported by a class through a path of the instance (`class Holder: val c = Codecs; export c.*`,
   a trait's, an enum case's, a constructor parameter's, a nested path, a path through another export) and called
   with a default argument left out (`holder.m(3)`) evaluates the default on the holder, as scalac's call of the

@@ -4955,13 +4955,13 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The ordinary default getters of the inline method `sym`, which `Desugar.addDefaultGetters`
-    /// makes methods of their own that a call applies (an inline parameter's getter is inline):
-    /// a function of no body holding those defaults, typed as a method's are. What they report
-    /// the definition check reported already.
+    /// The ordinary default getters of the inline method `sym`, or of an inline given's using
+    /// clause, which `Desugar.addDefaultGetters` makes methods of their own that a call applies
+    /// (an inline parameter's getter is inline): a function of no body holding those defaults,
+    /// typed as a method's are. What they report the definition check reported already.
     fn type_inline_getters(&mut self, sym: SymId) {
         let info = self.syms.sym(sym);
-        if info.kind != SymKind::Def || info.def.is_none() || info.owner == Owner::Local || self.fun_of_sym.contains_key(&sym) {
+        if !matches!(info.kind, SymKind::Def | SymKind::Given) || info.def.is_none() || info.owner == Owner::Local || self.fun_of_sym.contains_key(&sym) {
             return;
         }
         let sig = self.sig_arc(sym);
@@ -5568,6 +5568,11 @@ impl<'a> Worker<'a> {
             DefKind::Fun(f) => (
                 if self.inline.retained > 0 { self.retained_bodies.get(&sym).copied().or(f.body) } else { f.body },
                 f.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.default)).collect(),
+            ),
+            // An inline given's ordinary getters alone, as an inline method's.
+            DefKind::Given(g) if self.inline_getters_only => (
+                None,
+                g.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.default.filter(|_| p.mods & mods::INLINE == 0))).collect(),
             ),
             // A deferred given is abstract: its marker is never typed (dotty's
             // `excludeDeferredGiven`).
