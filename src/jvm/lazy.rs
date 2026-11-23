@@ -2,7 +2,7 @@
 //! 3.8.4), over scala-library's runtime: a local's holder of the `LazyRef` family, read through an accessor and
 //! computed by an initialiser under the holder's monitor (`transformLocalDef`, `transformStats`).
 
-use crate::lir::{ErasedType, Invoke};
+use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Visibility};
 use super::classfile::*;
 use super::gen::*;
 use super::names::*;
@@ -43,29 +43,21 @@ impl<'a> Gen<'a> {
         ErasedType::L(self.lazy_holder_class(s).0)
     }
 
-    /// `val x$lzyN = new LazyX()`, the local `s` standing for its holder.
+    /// `val x$lzyN = new LazyX()`, the local `s` standing for its holder (`Gen::lower_lazy_holder`).
     pub fn new_lazy_holder(&mut self, s: SymId) {
-        let (class, _) = self.lazy_holder_class(s);
-        self.new_object(&class);
-        self.invoke(Invoke::Special, &class, false, "<init>", &[], &ErasedType::V);
-        let holder = ErasedType::L(class);
-        let slot = self.store_new(&holder);
-        self.m.locals.insert(s, Local { slot, ty: holder, cell: false });
+        let holder = self.lowering(|g| g.lower_lazy_holder(s));
+        self.write(holder);
     }
 
-    /// `transformStats` (LazyVals.scala 199-209): the holders of the lazy vals a statement list
-    /// declares come first, so that a local def or a lazy val above a definition reads its holder.
-    /// Every emitted copy of the list makes its own, as each of `emitFinalizer`'s copies of a
-    /// `finally` does: a binding left by an earlier copy names that copy's slot.
+    /// The holders of the lazy vals a statement list declares (`Gen::lower_lazy_holders`).
     pub fn hoist_lazy_holders(&mut self, stmts: ListRef) {
-        let prog = self.cx.input.prog;
-        for s in &prog.stmts[stmts.range()] {
-            if let TStmt::Val(sym, init) = *s {
-                if self.is_lazy_local(sym) {
-                    self.an.lazy_inits.insert(sym, init);
-                    self.new_lazy_holder(sym);
-                }
-            }
+        let holders = self.lowering(|g| {
+            let mut nodes = Vec::new();
+            g.lower_lazy_holders(stmts, &mut nodes);
+            nodes
+        });
+        for holder in holders {
+            self.write(holder);
         }
     }
 
@@ -73,7 +65,7 @@ impl<'a> Gen<'a> {
     /// interface: the class whose code declares the val (`Cx::local_home`), wherever that code is written (a value
     /// class's methods in its companion, a constructor's defaults), or for a file's top-level code that file's module
     /// (`Cx::local_file`: the code's file, an inline body's expansion in it included). dotty's LambdaLift lifts both into that class, where a reader in another class calls them.
-    fn lazy_owner(&mut self, s: SymId) -> (Rc<str>, bool) {
+    pub(super) fn lazy_owner(&mut self, s: SymId) -> (Rc<str>, bool) {
         let cx = self.cx;
         match (cx.local_home(s), cx.local_file(s)) {
             (Some(Some(h)), _) => (self.class_name(h), cx.is_interface(h)),
@@ -83,21 +75,17 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The accessor of the local lazy val `s` (`init` false), `def x(): T = if x$lzy.initialized() then
-    /// x$lzy.value() else x$lzyINIT()` (LazyVals.scala 192-194), or its initialiser, `def x$lzyINITN(): T =
-    /// x$lzy.synchronized { if x$lzy.initialized() then x$lzy.value() else x$lzy.initialize(rhs) }` (181-190), as
-    /// its owner declares them (`lazy_owner`) and every reader calls them: static, taking the declaring class's
-    /// instance where the initialiser reads `this`, the key of its method's returns where it returns, what it
-    /// captures, then the holder; named `x$lzyN$1` and `x$lzyINITM$1` by the file's numbers (§8), dotty's
-    /// LazyLocalInitName freshened once by LambdaLift.
-    fn lazy_method(&mut self, s: SymId, init: bool) -> Rc<Lifted> {
-        let cached = if init { self.lifted_lazy_inits.get(&s) } else { self.lifted.get(&s) };
-        if let Some(l) = cached {
-            return l.clone();
+    /// What the accessor and the initialiser of the local lazy val `s` take and leave, one shape for
+    /// both (`LazyVals.transformLocalDef`, LazyVals.scala 181-194): the declaring class's instance where
+    /// the initialiser reads `this`, the key of its method's returns where it returns, what it captures
+    /// (a local lazy val as its holder, the key of its initialiser's returns beside it), then the holder;
+    /// the val's value.
+    pub(super) fn lazy_shape(&mut self, s: SymId) -> (Rc<LiftedShape>, Rc<LiftedBody>) {
+        if let Some(found) = self.lifted_shapes.get(&s) {
+            return found.clone();
         }
         let cx = self.cx;
         let free = self.an.of_lazy(cx, s);
-        let placed = cx.local_home(s).is_some();
         let home = match cx.local_home(s) {
             Some(Some(h)) if free.this => Some(h),
             None if free.this => self.this_class,
@@ -122,24 +110,34 @@ impl<'a> Gen<'a> {
             let ty = if info.by_name { self.function_type(0) } else { self.sym_type(f) };
             captures.push(Capture { sym: f, cell, ty, key: false });
         }
-        let mut all: Vec<ErasedType> = Vec::new();
-        if let Some(h) = home {
-            all.push(self.class_type(h));
-        }
-        if free.nonlocal {
-            all.push(ErasedType::object());
-        }
-        for c in &captures {
-            all.push(if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
-        }
+        let instance = home.map(|h| self.class_type(h));
+        let captured = captures.iter().map(|c| if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() }).collect();
         let holder = self.lazy_holder_type(s);
-        all.push(holder.clone());
         let ret = self.sym_type(s);
-        let desc = method_desc(&all, &ret);
+        let shape = LiftedShape { instance, key: free.nonlocal, captured, params: vec![holder], ret };
+        let made = (Rc::new(shape), Rc::new(LiftedBody { code: None, captures, home, module: None }));
+        self.lifted_shapes.insert(s, made.clone());
+        made
+    }
+
+    /// The accessor of the local lazy val `s` (`init` false), `def x(): T = if x$lzy.initialized() then
+    /// x$lzy.value() else x$lzyINIT()` (LazyVals.scala 192-194), or its initialiser, `def x$lzyINITN(): T =
+    /// x$lzy.synchronized { if x$lzy.initialized() then x$lzy.value() else x$lzy.initialize(rhs) }` (181-190), as
+    /// its owner declares them (`lazy_owner`) and every reader calls them: static, of the shape `lazy_shape`
+    /// gives; named `x$lzyN$1` and `x$lzyINITM$1` by the file's numbers (§8), dotty's LazyLocalInitName freshened
+    /// once by LambdaLift.
+    pub(super) fn lazy_method(&mut self, s: SymId, init: bool) -> Rc<Lifted> {
+        let cached = if init { self.lifted_lazy_inits.get(&s) } else { self.lifted.get(&s) };
+        if let Some(l) = cached {
+            return l.clone();
+        }
+        let cx = self.cx;
+        let (shape, body) = self.lazy_shape(s);
+        let placed = cx.local_home(s).is_some();
         let (n, m) = self.lazy_local_numbers(s);
         let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
         let name = if init { format!("{}$lzyINIT{}$1", base, m) } else { format!("{}$lzy{}$1", base, n) };
-        let lifted = Rc::new(Lifted { name, desc, this: home.is_some(), key: free.nonlocal, captures, params: vec![holder], ret, home, module: None });
+        let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, None));
         if init {
             self.lifted_lazy_inits.insert(s, lifted.clone());
         } else {
@@ -172,85 +170,68 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A read of the local lazy val `s`: its accessor over its holder.
+    /// A read of the local lazy val `s` the lowering left to the writer (`Gen::lower_lazy_read`):
+    /// written from its node where it stands.
     pub fn lazy_read(&mut self, s: SymId) -> ErasedType {
-        let lifted = self.lazy_method(s, false);
-        self.call_lazy_lifted(s, &lifted);
-        lifted.ret.clone()
+        let call = self.lowering(|g| g.lower_lazy_call(s, false));
+        self.write(call);
+        self.lir.ty(call).clone()
     }
 
-    /// A call of the accessor or the initialiser of `s` in its owner (`lazy_owner`): the declaring class's
-    /// instance, the key that travels with the holder of `s` (`load_lazy_key`), the captures, then the holder.
-    fn call_lazy_lifted(&mut self, s: SymId, lifted: &Lifted) {
-        self.load_captures_keyed(lifted, Some(s));
-        self.load_capture(s);
-        let (owner, interface) = self.lazy_owner(s);
-        self.invoke_desc(Invoke::Static, &owner, interface, &lifted.name, &lifted.desc, lifted.arity(), &lifted.ret);
-    }
-
-    /// `x$lzy.initialized()`, `x$lzy.value()` and `x$lzy.initialize(v)` of the holder in `slot`.
-    fn holder_call(&mut self, class: &str, slot: u16, method: &str, value: &ErasedType) {
-        let holder = ErasedType::L(Rc::from(class));
-        match method {
-            "initialized" => {
-                self.load(slot, &holder);
-                self.invoke(Invoke::Virtual, class, false, "initialized", &[], &ErasedType::Z);
-            }
-            "value" => {
-                self.load(slot, &holder);
-                self.invoke(Invoke::Virtual, class, false, "value", &[], value);
-            }
-            _ => self.invoke(Invoke::Virtual, class, false, "initialize", &[value.clone()], value),
-        }
-    }
-
-    /// The body of the accessor of `s`, its holder in `slot` (`PendingBody::LazyAccessor`).
+    /// The body of the accessor of `s`, its holder in `slot` (`PendingBody::LazyAccessor`): `if
+    /// x$lzy.initialized() then x$lzy.value() else x$lzyINIT()`, each returned.
     pub fn lazy_accessor_body(&mut self, s: SymId, slot: u16) {
         let (class, value) = self.lazy_holder_class(s);
         let holder = ErasedType::L(class.clone());
-        self.m.locals.insert(s, Local { slot, ty: holder, cell: false });
+        self.m.locals.insert(s, Local { slot, ty: holder.clone(), cell: false });
         let ret = self.m.ret.clone();
-        let compute = self.code.new_label();
-        self.holder_call(&class, slot, "initialized", &value);
-        self.jump_if(op::IFEQ, 1, compute);
-        self.holder_call(&class, slot, "value", &value);
-        self.adapt(&value, &ret);
-        self.return_value(&ret);
-        self.code.bind(compute);
-        let init = self.lazy_method(s, true);
-        self.call_lazy_lifted(s, &init);
-        self.return_value(&ret);
+        let method = |name: &str, ret: ErasedType| {
+            let desc = method_desc(&[], &ret);
+            Rc::new(MethodRef { owner: class.clone(), owner_is_interface: false, name: name.to_string(), params: Vec::new(), ret, desc, kind: Invoke::Virtual })
+        };
+        let (initialized, read) = (method("initialized", ErasedType::Z), method("value", value.clone()));
+        self.body(|g| {
+            let tested = g.lir.push(Kind::Local(s), holder.clone());
+            let cond = g.lir.call(&initialized, tested, &[]);
+            let held = g.lir.push(Kind::Local(s), holder.clone());
+            let held = g.lir.call(&read, held, &[]);
+            let held = g.lower_adapt(held, &value, &ret);
+            let then = g.lir.ret(held);
+            let computed = g.lower_lazy_call(s, true);
+            let otherwise = Some(g.lir.ret(computed));
+            g.lir.push(Kind::If { cond, then, otherwise }, ErasedType::V)
+        });
     }
 
     /// The body of the initialiser of `s`, its holder in `slot`, the right-hand side `init`
-    /// (`PendingBody::LazyInit`): the holder's monitor held as `synchronized` holds it.
+    /// (`PendingBody::LazyInit`): `x$lzy.synchronized { if x$lzy.initialized() then x$lzy.value()
+    /// else x$lzy.initialize(rhs) }`, returned.
     pub fn lazy_init_body(&mut self, s: SymId, init: TExprId, slot: u16) {
         let (class, value) = self.lazy_holder_class(s);
         let holder = ErasedType::L(class.clone());
         self.m.locals.insert(s, Local { slot, ty: holder.clone(), cell: false });
         let ret = self.m.ret.clone();
-        let t = self.monitor_block(
-            |g| g.load(slot, &holder),
-            ret.clone(),
-            |g, t| {
-                let compute = g.code.new_label();
-                let done = g.code.new_label();
-                g.holder_call(&class, slot, "initialized", &value);
-                g.jump_if(op::IFEQ, 1, compute);
-                g.holder_call(&class, slot, "value", &value);
-                g.adapt(&value, t);
-                g.goto(done);
-                g.code.bind(compute);
-                g.load(slot, &holder);
-                g.expr(init, t);
-                g.adapt(t, &value);
-                g.holder_call(&class, slot, "initialize", &value);
-                g.adapt(&value, t);
-                g.code.bind(done);
-            },
-        );
-        self.adapt(&t, &ret);
-        self.return_value(&ret);
+        let method = |name: &str, params: Vec<ErasedType>, ret: ErasedType| {
+            let desc = method_desc(&params, &ret);
+            Rc::new(MethodRef { owner: class.clone(), owner_is_interface: false, name: name.to_string(), params, ret, desc, kind: Invoke::Virtual })
+        };
+        let (initialized, read, initialize) = (method("initialized", Vec::new(), ErasedType::Z), method("value", Vec::new(), value.clone()), method("initialize", vec![value.clone()], value.clone()));
+        self.body(|g| {
+            let lock = g.lir.push(Kind::Local(s), holder.clone());
+            let tested = g.lir.push(Kind::Local(s), holder.clone());
+            let cond = g.lir.call(&initialized, tested, &[]);
+            let held = g.lir.push(Kind::Local(s), holder.clone());
+            let held = g.lir.call(&read, held, &[]);
+            let then = g.lower_adapt(held, &value, &ret);
+            let initialized_by = g.lir.push(Kind::Local(s), holder.clone());
+            let computed = g.lower_expr(init, &ret);
+            let computed = g.lower_adapt(computed, &ret, &value);
+            let stored = g.lir.call(&initialize, initialized_by, &[computed]);
+            let otherwise = Some(g.lower_adapt(stored, &value, &ret));
+            let body = g.lir.push(Kind::If { cond, then, otherwise }, ret.clone());
+            let synchronized = g.lir.push(Kind::Synchronized { lock, body }, ret.clone());
+            g.lir.ret(synchronized)
+        });
     }
 }
 
@@ -275,9 +256,7 @@ impl<'a> Gen<'a> {
         }
         let (container, init) = self.lazy_member_names(getter);
         let handle = format!("{}$lzyHandle", container);
-        let mut d = String::new();
-        ErasedType::L(Rc::from(VAR_HANDLE)).desc(&mut d);
-        self.cw.field_first(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, &handle, &d);
+        self.field_first(FieldFlags { is_static: true, is_final: true, ..FieldFlags::PRIVATE }, &handle, &ErasedType::L(Rc::from(VAR_HANDLE)));
         let h = LazyHolder { getter: getter.to_string(), ty: ty.clone(), container, handle, init };
         self.lazy_holders.push(h.clone());
         h
@@ -286,14 +265,13 @@ impl<'a> Gen<'a> {
     /// A lazy member the class holds beside its fields' (a made companion, a Scala 2 trait's private
     /// lazy val or object): its container, its getter `getter` of the given access, its
     /// initialiser computing `init`.
-    pub fn thread_safe_member(&mut self, getter: &str, ty: &ErasedType, init: super::classes::HolderInit, access: u16) {
+    pub fn thread_safe_member(&mut self, getter: &str, ty: &ErasedType, init: super::classes::HolderInit, flags: MethodFlags) {
         let h = self.lazy_holder(getter, ty);
-        self.cw.field(ACC_PRIVATE | ACC_VOLATILE, &h.container, "Ljava/lang/Object;");
+        self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object());
         let desc = method_desc(&[], ty);
-        self.begin_method(false, false, &[], ty.clone(), &[]);
+        self.begin_method(flags, getter, &desc, false, &[], ty.clone(), &[]);
         self.thread_safe_getter(&h);
-        self.return_value(ty);
-        self.end_method(access, getter, &desc);
+        self.end_method();
         self.thread_safe_init(&h, &init);
     }
 
@@ -301,32 +279,39 @@ impl<'a> Gen<'a> {
     /// (`MoveStatics.rebuild` of the handles `addInFront` put first): `MethodHandles.lookup()
     /// .findVarHandle(classOf[C], "x$lzyN", classOf[Object])`, in the handles' order.
     pub fn var_handle_lookups(&mut self) {
-        let owner = self.this_name.clone();
-        let lookup = ErasedType::L(Rc::from("java/lang/invoke/MethodHandles$Lookup"));
-        let class = ErasedType::L(Rc::from("java/lang/Class"));
-        let handle_type = ErasedType::L(Rc::from(VAR_HANDLE));
-        for h in self.lazy_holders.clone().iter().rev() {
-            self.invoke(Invoke::Static, "java/lang/invoke/MethodHandles", false, "lookup", &[], &lookup);
-            let class_index = self.cw.cp.class(&owner);
-            self.ldc(class_index);
-            self.code.push(VT::Object(self.cw.cp.class("java/lang/Class")));
-            self.sconst(&h.container);
-            let object_index = self.cw.cp.class(OBJECT);
-            self.ldc(object_index);
-            self.code.push(VT::Object(self.cw.cp.class("java/lang/Class")));
-            self.invoke(Invoke::Virtual, "java/lang/invoke/MethodHandles$Lookup", false, "findVarHandle", &[class.clone(), ErasedType::L(Rc::from(STRING)), class.clone()], &handle_type);
-            self.putstatic(&owner, &h.handle, &handle_type);
+        let lookups = self.lowering(|g| g.lower_var_handle_lookups());
+        for lookup in lookups {
+            self.write(lookup);
         }
     }
 
-    /// The access of a `<clinit>`: `private static` where the class has lazy members' handles,
-    /// as `MoveStatics` makes the static constructor of the `@static` handles.
-    pub fn clinit_access(&self) -> u16 {
-        if self.lazy_holders.is_empty() {
-            ACC_STATIC
-        } else {
-            ACC_PRIVATE | ACC_STATIC
+    /// `var_handle_lookups` as statements.
+    pub(super) fn lower_var_handle_lookups(&mut self) -> Vec<LirId> {
+        let owner = self.this_name.clone();
+        let lookup_class: Rc<str> = Rc::from("java/lang/invoke/MethodHandles$Lookup");
+        let class = ErasedType::L(Rc::from("java/lang/Class"));
+        let string = ErasedType::L(Rc::from(STRING));
+        let handle_type = ErasedType::L(Rc::from(VAR_HANDLE));
+        let lookup = method_ref(Invoke::Static, &Rc::from("java/lang/invoke/MethodHandles"), false, "lookup", &[], &ErasedType::L(lookup_class.clone()));
+        let find = method_ref(Invoke::Virtual, &lookup_class, false, "findVarHandle", &[class.clone(), string.clone(), class], &handle_type);
+        let mut stores = Vec::new();
+        for h in self.lazy_holders.clone().iter().rev() {
+            let lookups = self.lir.static_call(&lookup, &[]);
+            let of = self.lir.class_of(ErasedType::L(owner.clone()));
+            let container = self.lir.text(&Rc::from(h.container.as_str()), string.clone());
+            let object = self.lir.class_of(ErasedType::object());
+            let handle = self.lir.call(&find, lookups, &[of, container, object]);
+            stores.push(self.lir.store_static(&owner, &h.handle, handle));
         }
+        stores
+    }
+
+    /// What a `<clinit>` is: static, and private where the class has lazy members' handles, as
+    /// `MoveStatics` makes the static constructor of the `@static` handles. No handle is
+    /// registered while a `<clinit>` is written (`lazy_holder`): what it is holds from its start.
+    pub fn clinit_flags(&self) -> MethodFlags {
+        let visibility = if self.lazy_holders.is_empty() { Visibility::Package } else { Visibility::Private };
+        MethodFlags { visibility, is_static: true, ..MethodFlags::PUBLIC }
     }
 
     /// Whether the erased type `tp` is a class `LazyValControlState` derives from (2.5).
@@ -334,10 +319,15 @@ impl<'a> Gen<'a> {
         matches!(tp, ErasedType::L(n) if self.cx.control_state_bases.iter().any(|b| **b == **n))
     }
 
-    /// The getter's body over the holder (`mkThreadSafeDef` 374-389), its value left on the stack
-    /// at the member's type: the container read, returned where it holds a value
-    /// (`immediateValueCondition`), null where it holds `NullValue`, else the initialiser's.
+    /// The getter's body over the holder (`mkThreadSafeDef` 374-389), returned: the container read,
+    /// returned where it holds a value (`immediateValueCondition`), null where it holds `NullValue`,
+    /// else the initialiser's. A type a control state's class derives from tests the value as
+    /// neither null nor a control state, whose null test no node writes yet (`ifnull`): its
+    /// getter is written here; any other's is a tree (`Gen::lower_thread_safe_getter`).
     pub fn thread_safe_getter(&mut self, h: &LazyHolder) {
+        if !self.control_state_super(&h.ty) {
+            return self.body(|g| g.lower_thread_safe_getter(h));
+        }
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
         let object = ErasedType::object();
@@ -348,21 +338,11 @@ impl<'a> Gen<'a> {
         let slow = self.code.new_label();
         let call = self.code.new_label();
         let done = self.code.new_label();
-        if self.control_state_super(&tp) {
-            self.load(r, &object);
-            self.jump_if(op::IFNULL, 1, slow);
-            self.load(r, &object);
-            self.instance_of(LAZY_CONTROL);
-            self.jump_if(op::IFNE, 1, slow);
-        } else {
-            self.load(r, &object);
-            let tested: String = match &tp {
-                ErasedType::L(n) => n.to_string(),
-                prim => prim.box_class().to_string(),
-            };
-            self.instance_of(&tested);
-            self.jump_if(op::IFEQ, 1, slow);
-        }
+        self.load(r, &object);
+        self.jump_if(op::IFNULL, 1, slow);
+        self.load(r, &object);
+        self.instance_of(LAZY_CONTROL);
+        self.jump_if(op::IFNE, 1, slow);
         self.load(r, &object);
         self.adapt(&object, &tp);
         self.goto(done);
@@ -380,6 +360,43 @@ impl<'a> Gen<'a> {
         self.invoke(Invoke::Special, &owner, false, &h.init, &[], &object);
         self.adapt(&object, &tp);
         self.code.bind(done);
+        self.return_value(&tp);
+    }
+
+    /// The getter of a lazy member whose type no control state's class derives from: `val r =
+    /// container; if r.isInstanceOf[T] then r.asInstanceOf[T] else if r eq NullValue then null
+    /// else x$lzyINITN()`, returned.
+    fn lower_thread_safe_getter(&mut self, h: &LazyHolder) -> LirId {
+        let owner = self.this_name.clone();
+        let this = ErasedType::L(owner.clone());
+        let object = ErasedType::object();
+        let tp = h.ty.clone();
+        let tested: Rc<str> = match &tp {
+            ErasedType::L(n) => n.clone(),
+            prim => Rc::from(prim.box_class()),
+        };
+        let r = self.lir.temp();
+        let receiver = self.lir.this(this.clone());
+        let container = self.lir.field(receiver, &owner, &h.container, object.clone());
+        let held = self.lir.push(Kind::Let { temp: r, init: container }, ErasedType::V);
+        let value = self.lir.push(Kind::Temp(r), object.clone());
+        let cond = self.lir.push(Kind::Is { value, class: tested }, ErasedType::Z);
+        let value = self.lir.push(Kind::Temp(r), object.clone());
+        let then = self.lower_adapt(value, &object, &tp);
+        let value = self.lir.push(Kind::Temp(r), object.clone());
+        let marker = self.lir.module(&Rc::from(NULL_VALUE));
+        let is_null_value = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Identity, left: value, right: marker }, ErasedType::Z);
+        let null = self.lir.push(Kind::Null, object.clone());
+        let null = self.lower_adapt(null, &object, &tp);
+        let desc = method_desc(&[], &object);
+        let init = Rc::new(MethodRef { owner: owner.clone(), owner_is_interface: false, name: h.init.clone(), params: Vec::new(), ret: object.clone(), desc, kind: Invoke::Special });
+        let receiver = self.lir.this(this);
+        let computed = self.lir.call(&init, receiver, &[]);
+        let computed = self.lower_adapt(computed, &object, &tp);
+        let otherwise = Some(self.lir.push(Kind::If { cond: is_null_value, then: null, otherwise: Some(computed) }, tp.clone()));
+        let answer = self.lir.push(Kind::If { cond, then, otherwise }, tp);
+        let answer = self.lir.ret(answer);
+        self.lir.seq(&[held], answer)
     }
 
     /// `x$lzyINITN`, the initialiser's state machine over the container (`mkThreadSafeDef`
@@ -402,11 +419,11 @@ impl<'a> Gen<'a> {
         };
         // Two lazy members of one name in one class would be a fault of the names (§8): never one dropped in silence.
         let init_desc = method_desc(&[], &object);
-        if self.cw.has_method(&h.init, &init_desc) {
+        if self.plan.has_method(&h.init, &init_desc) {
             self.unsupported(&format!("internal error: a second lazy initialiser {} in the class", h.init));
             return;
         }
-        self.begin_method(false, false, &[], object.clone(), &roots);
+        self.begin_method(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, &h.init, "()Ljava/lang/Object;", false, &[], object.clone(), &roots);
         let lp = self.code.new_label();
         self.code.bind(lp);
         self.load(0, &this);
@@ -517,7 +534,7 @@ impl<'a> Gen<'a> {
         self.code.bind(answer);
         self.load(cur, &object);
         self.return_value(&object);
-        self.end_method(ACC_PRIVATE, &h.init, "()Ljava/lang/Object;");
+        self.end_method();
     }
 
     /// The initialiser's `finally` (424-436): `if !CAS(this, Evaluating, result) then { val lock =

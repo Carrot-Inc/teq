@@ -13,9 +13,11 @@ mod gen;
 mod intrinsic;
 mod lazy;
 mod lower;
+mod template;
 pub mod kept;
 pub mod names;
 mod pattern;
+mod plan;
 pub mod analysis;
 pub mod api;
 mod runtime;
@@ -1068,7 +1070,9 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         None => (None, vec![false; units.len()], Vec::new()),
     };
     let shared = SyncCx(&cx);
-    let workers = if prog.exprs.len() < 100_000 { 1 } else { crate::workers() };
+    // Under a bound that counts a thread's stack this thread alone emits (`alloc::stacks_bounded`).
+    let workers = if prog.exprs.len() < 100_000 || crate::alloc::stacks_bounded() { 1 } else { crate::workers() };
+    let emitters = std::cell::Cell::new(1);
     // Each unit's class files, errors, refusals and function arities, by its index in `units`.
     let emit_units = |which: &[usize]| -> Vec<(usize, Vec<Emitted>, Vec<String>, Vec<Refusal>, u64)> {
         let next = AtomicUsize::new(0);
@@ -1098,9 +1102,14 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         // store takes the emitters' inserts serialised while they run, as the typer's workers'.
         let exclusive = cx.input.types.is_exclusive();
         cx.input.types.set_exclusive(false);
+        // Where the system refuses a deep thread, the threads started so far and this one share the queue.
         let out = std::thread::scope(|scope| {
-            let handles: Vec<_> = (0..workers.min(which.len())).map(|_| crate::alloc::spawn_in(scope, &work)).collect();
-            handles.into_iter().flat_map(|h| h.join().expect("emitter thread panicked")).collect()
+            let wanted = workers.min(which.len());
+            let handles: Vec<_> = (0..wanted).map_while(|_| crate::alloc::spawn_deep_in(scope, &work)).collect();
+            let mut out = if handles.len() < wanted { work() } else { Vec::new() };
+            emitters.set(handles.len() + usize::from(handles.len() < wanted));
+            out.extend(handles.into_iter().flat_map(|h| h.join().expect("emitter thread panicked")));
+            out
         });
         cx.input.types.set_exclusive(exclusive);
         out
@@ -1115,7 +1124,7 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         per_unit[i] = Some((done, used));
     }
     lap.done("units, in parallel", fresh.len());
-    lap.count("emitter threads", if workers == 1 { 1 } else { workers.min(fresh.len().max(1)) });
+    lap.count("emitter threads", emitters.get());
     if let Some(k) = kept.as_deref() {
         if let Some(why) = usage.why {
             lap.count(why, 1);

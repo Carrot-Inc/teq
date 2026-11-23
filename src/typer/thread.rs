@@ -45,7 +45,7 @@ thread_local! {
 fn start() -> Mutex<TypingThread> {
     let (jobs, inbox) = channel::<Job>();
     let (finished, done) = channel::<()>();
-    let thread = std::thread::Builder::new().name("teq-typer".to_string()).stack_size(1 << 30);
+    let thread = std::thread::Builder::new().name("teq-typer".to_string()).stack_size(crate::alloc::DEEP_STACK);
     thread
         .spawn(move || {
             crate::alloc::enter();

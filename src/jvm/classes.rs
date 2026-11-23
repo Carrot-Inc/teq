@@ -1,10 +1,11 @@
 //! Classes, traits, objects, enums and the module class of a file's top-level definitions.
 
-use crate::lir::{ErasedType, Invoke, MethodRef};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodFlags, MethodRef, Relation, Visibility};
 use super::classfile::*;
 use super::free;
 use super::gen::*;
 use super::names::*;
+use super::plan::{begun_method_def, method_access, MODULE_FIELD};
 use super::runtime::LAUNCHER;
 use crate::ast::mods;
 use crate::intern::{FxMap, Name};
@@ -62,6 +63,113 @@ struct FieldDef {
     constant: Option<ConstVal>,
 }
 
+/// Where the parts of a constructor's body go as they are lowered: into the one tree of the
+/// body, or written each in its turn, where a part has no nodes yet and `Gen`'s own code
+/// writes it.
+pub(super) enum Parts {
+    /// The statements, and the fields the class declares where the class file meets them.
+    Tree(Vec<LirId>, Vec<Declared>),
+    Written,
+}
+
+/// A field a class declares before the statement at `at` of an object's constructor tree, where
+/// the class file meets it: a field enters the constant pool as it is declared, so its place among
+/// the statements is the class file's order (`Gen::write_module_part`).
+pub(super) struct Declared {
+    pub(super) at: usize,
+    pub(super) flags: FieldFlags,
+    pub(super) name: String,
+    pub(super) ty: ErasedType,
+}
+
+/// How a primary constructor passes the arguments of its superclass's constructor, after the
+/// name and ordinal a value of a Java enum passes up: one decision (`Gen::super_call_route`).
+enum SuperCall {
+    /// The parameters an anonymous class takes for them, of these types.
+    Own(Vec<ErasedType>),
+    /// The written arguments at the declared parameters' types (none where the superclass
+    /// takes none).
+    Declared(Vec<ErasedType>, crate::ast::ListRef),
+    /// As the class file of a superclass this build does not write takes them. Not lowered yet.
+    Unwritten(ClassId, crate::ast::ListRef),
+    /// Through a secondary constructor of the superclass. Not lowered yet.
+    Via(ClassId, SymId, crate::ast::ListRef),
+    /// What the superclass, a class nested in a class or local, captures first. Not lowered
+    /// yet.
+    Captured(ClassId, crate::ast::ListRef),
+    /// Every parameter's default, none written. Not lowered yet.
+    Defaults(ClassId, Vec<ErasedType>),
+    /// An enum case without the arguments of its enum.
+    Refused,
+}
+
+/// How a secondary constructor's call of another constructor of its class passes the
+/// arguments: one decision (`Gen::self_call_route`).
+#[derive(Clone, Copy)]
+enum SelfCall {
+    /// To the primary constructor, at its declared parameters' types (`CtorArguments::Declared`).
+    Declared(ClassId, crate::ast::ListRef),
+    /// To the primary constructor otherwise. Not lowered yet.
+    Primary(ClassId, crate::ast::ListRef),
+    /// To another secondary constructor. Not lowered yet.
+    Via(ClassId, SymId, crate::ast::ListRef),
+    /// To no constructor of a class: the method is left out.
+    Unowned,
+}
+
+/// Where a value class's synthesized member finds the underlying value (`Gen::vc_member_tree`):
+/// a temporary the body declares first, or a parameter of the method at a position.
+#[derive(Clone, Copy)]
+pub(super) enum Underlying {
+    Kept(crate::lir::TempId),
+    Param(usize),
+}
+
+impl Underlying {
+    fn node(self, g: &mut Gen<'_>, u: &ErasedType) -> LirId {
+        match self {
+            Underlying::Kept(held) => g.lir.kept(held, u.clone()),
+            Underlying::Param(i) => g.param(i),
+        }
+    }
+}
+
+/// Whether a value class's synthesized member is a tree (`Gen::vc_member_tree`). Not
+/// `productElement` and `productElementName`, whose index is tested by `ifne` (an `Int` against
+/// zero), nor `equals` over a reference, which holds the other's value in a slot while this one's
+/// is adapted under it.
+pub(super) fn vc_member_lowers(member: &str, u: &ErasedType) -> bool {
+    !matches!(member, "productElement" | "productElementName") && !(member == "equals" && u.is_ref())
+}
+
+/// An object's constructor tree, kept from the first of the class file's two methods written
+/// from it to the second (`Gen::write_module`), with the locals its lowering declared.
+pub(super) struct ModuleTree {
+    lir: crate::lir::Body,
+    declared: FxMap<SymId, (ErasedType, bool)>,
+    root: LirId,
+    fields: Vec<Declared>,
+}
+
+/// A primary constructor as it is decided before its body is lowered.
+struct PrimaryCtor<'t> {
+    tc: &'t TClass,
+    fields: &'t [FieldDef],
+    super_name: &'t str,
+    fields_first: bool,
+    is_value_case: bool,
+    is_object: bool,
+    is_anon: bool,
+    /// It passes its name and ordinal up to `java.lang.Enum`.
+    java_enum: bool,
+    n_captures: usize,
+    /// The position among the parameters of a value of an enum's name, its ordinal after it.
+    name_param: usize,
+    /// The position of the first parameter an anonymous class passes its superclass.
+    first_super_arg: usize,
+    route: SuperCall,
+}
+
 impl<'a> Gen<'a> {
     fn is_lazy_member(&self, s: SymId) -> bool {
         self.cx.is_lazy_member(s)
@@ -69,13 +177,28 @@ impl<'a> Gen<'a> {
 
     // ---- methods ----
 
-    /// Starts a method: `this` in slot 0 unless static, then the parameters.
-    pub fn begin_method(&mut self, is_static: bool, this_uninit: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) {
+    /// Starts a method of the class being written, by its flags, its name and its signature as
+    /// a class file spells it: `this` in slot 0 unless static, then the parameters. The types
+    /// the code holds its parameters at are not always the signature's: a method that implements
+    /// a class file's holds a value class's underlying value as the erasure marks it
+    /// (`Gen::linked_mref`).
+    ///
+    /// The method joins the class's plan here, unless the class holds one of its name and
+    /// signature already: the first one begun is the class's. A later one's code is written all
+    /// the same and left out at its end (`end_method`).
+    pub fn begin_method(&mut self, flags: MethodFlags, name: &str, desc: &str, this_uninit: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) {
+        let method = begun_method_def(flags, name, desc, params, &ret);
+        self.repeated = if self.plan.has_method(name, desc) {
+            Some(method)
+        } else {
+            self.plan.methods.push(method);
+            None
+        };
         let mut locals: Vec<VT> = Vec::new();
         let mut m = MethodCx::default();
-        if !is_static {
-            let name = self.this_name.clone();
-            locals.push(if this_uninit { VT::UninitThis } else { VT::Object(self.cw.cp.class(&name)) });
+        if !flags.is_static {
+            let this = self.this_name.clone();
+            locals.push(if this_uninit { VT::UninitThis } else { VT::Object(self.cw.cp.class(&this)) });
             m.this_slot = Some(0);
         }
         for (sym, ty) in params {
@@ -88,6 +211,7 @@ impl<'a> Gen<'a> {
             if let Some(s) = sym {
                 m.locals.insert(*s, Local { slot, ty: ty.clone(), cell: false });
             }
+            m.params.push((slot, ty.clone()));
         }
         m.ret = ret;
         let syms: Vec<SymId> = params.iter().filter_map(|p| p.0).collect();
@@ -95,21 +219,41 @@ impl<'a> Gen<'a> {
         self.code = Code::new(locals);
         self.code.wide = self.wide;
         self.lir.clear();
+        self.lower_declared.clear();
         self.m = m;
     }
 
-    pub fn end_method(&mut self, access: u16, name: &str, desc: &str) {
+    /// Ends the method begun: its code goes to the class file under the plan's header. A
+    /// method whose code could not be written is none of the class's, and leaves the plan. The
+    /// code of a method the class held already (`begin_method`) is dropped, after it was written
+    /// for all that writing it leaves in the class: the constants and the bootstrap methods its
+    /// instructions name, the names it takes and the lifted bodies it asks for (`fresh_name`,
+    /// `defer`, the memos of what is lifted), the interfaces its `super` calls go to
+    /// (`super_targets`), the function arities it names and what it reports. It asks for no
+    /// second writing of the class with wide jumps (`overflow`).
+    pub fn end_method(&mut self) {
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
+        let repeated = self.repeated.take();
         if code.underflow {
+            let m = repeated.or_else(|| self.plan.methods.pop()).expect("a method was begun");
             let line = code.last_line().map_or(String::new(), |l| format!(" at line {}", l));
-            self.unsupported(&format!("the operand stack model underflowed while writing {}{}{}", name, desc, line));
+            self.unsupported(&format!("the operand stack model underflowed while writing {}{}{}", m.name, m.desc, line));
             return;
         }
-        if self.cw.has_method(name, desc) {
+        if repeated.is_some() {
             return;
         }
-        self.cw.method(access, name, desc, Some(code));
+        let m = self.plan.methods.last().expect("a method was begun");
+        self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
         self.overflow |= self.cw.overflow;
+    }
+
+    /// Leaves the method begun without an end, where its code cannot be finished: it is none of
+    /// the class's.
+    fn abandon_method(&mut self) {
+        if self.repeated.take().is_none() {
+            self.plan.methods.pop();
+        }
     }
 
     /// The lifted methods that the methods emitted so far asked for, and the ones those ask for.
@@ -142,7 +286,7 @@ impl<'a> Gen<'a> {
             return;
         }
         // A local lazy val's accessor or initialiser named as another's: never one dropped in silence.
-        if matches!(p.body, PendingBody::LazyAccessor(_) | PendingBody::LazyInit(..)) && self.cw.has_method(&l.name, &l.desc) {
+        if matches!(p.body, PendingBody::LazyAccessor(_) | PendingBody::LazyInit(..)) && self.plan.has_method(&l.name, &l.desc) {
             self.unsupported(&format!("internal error: a second local lazy val's method {}{} in the class", l.name, l.desc));
             return;
         }
@@ -191,7 +335,7 @@ impl<'a> Gen<'a> {
             let sym = if is_lambda { None } else { param_syms.get(i).copied() };
             params.push((sym, t.clone()));
         }
-        self.begin_method(true, false, &params, l.ret.clone(), &roots);
+        self.begin_method(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, false, &params, l.ret.clone(), &roots);
         self.m.lambda = is_lambda;
         self.m.closure = is_lambda || matches!(p.body, PendingBody::LazyInit(..));
         if l.key {
@@ -255,8 +399,10 @@ impl<'a> Gen<'a> {
             // A by-name parameter's getter returns the value (`Desugar.addDefaultGetters`).
             (PendingBody::Default(f, i), Some(body)) if self.local_param_by_name(cx.input.prog.funs[f.idx()].sym, *i) => {
                 let ret = l.ret.clone();
-                self.default_value(body, true, &ret);
-                self.return_value(&ret);
+                self.body(|g| {
+                    let value = g.lower_default_value(body, true, &ret);
+                    g.lir.ret(value)
+                });
             }
             (_, Some(body)) => self.tail(body),
             (_, None) => {
@@ -266,13 +412,13 @@ impl<'a> Gen<'a> {
                 self.return_value(&ret);
             }
         }
-        self.end_method(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, &l.name, &l.desc);
+        self.end_method();
     }
 
     fn jar_getter_thunk(&mut self, l: &Lifted, g: &JarGetter) {
         let (captured, _) = parse_method_desc(&l.desc);
         let params: Vec<(Option<SymId>, ErasedType)> = captured.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(true, false, &params, l.ret.clone(), &[]);
+        self.begin_method(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, false, &params, l.ret.clone(), &[]);
         let mut slot = 0;
         for t in &captured {
             self.load(slot, t);
@@ -282,7 +428,7 @@ impl<'a> Gen<'a> {
         self.invoke_desc(g.kind, &g.owner, g.owner_is_interface, &g.name, &g.desc, n_params, &g.ret);
         self.adapt(&g.ret, &l.ret);
         self.return_value(&l.ret);
-        self.end_method(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, &l.name, &l.desc);
+        self.end_method();
     }
 
     /// The body in return position, as a loop when the def calls itself in tail position and
@@ -383,15 +529,15 @@ impl<'a> Gen<'a> {
                 self.emit_bridges(fun.sym, &m);
             }
             Some(body) => {
-                self.begin_method(false, false, &params, m.ret.clone(), &[body]);
-                self.code.line(cx.line_of(info.file, info.span.start));
-                self.method_body(fun.sym, &fun.params, body);
                 // An outer accessor is scalac's, final and synthetic (`Worker::outer_accessor`).
                 let outer_accessor = info.def.is_none() && info.mods & mods::FINAL != 0 && name.ends_with("$$$outer");
                 // A final method outside a trait is final in its class file (dotty's `javaFlags`).
                 let fin = info.mods & mods::FINAL != 0 && !self.is_interface;
-                let access = if outer_accessor { ACC_PUBLIC | ACC_FINAL | ACC_SYNTHETIC } else if fin { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
-                self.end_method(access, &m.name, &m.desc);
+                let flags = MethodFlags { is_final: outer_accessor || fin, synthetic: outer_accessor, ..MethodFlags::PUBLIC };
+                self.begin_method(flags, &m.name, &m.desc, false, &params, m.ret.clone(), &[body]);
+                self.code.line(cx.line_of(info.file, info.span.start));
+                self.method_body(fun.sym, &fun.params, body);
+                self.end_method();
                 self.emit_bridges(fun.sym, &m);
                 if self.is_interface && (info.mods & mods::PRIVATE == 0 || info.scoped_private) {
                     self.trait_static_forwarder(&m.name, &m.params, &m.ret);
@@ -401,8 +547,8 @@ impl<'a> Gen<'a> {
             None if info.mods & mods::INLINE != 0 => {}
             None => {
                 if self.is_interface || self.abstract_class {
-                    if !self.cw.has_method(&m.name, &m.desc) {
-                        self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &m.name, &m.desc, None);
+                    if !self.plan.has_method(&m.name, &m.desc) {
+                        self.abstract_method(MethodFlags::ABSTRACT, &m.name, &m.desc);
                     }
                 }
             }
@@ -418,15 +564,17 @@ impl<'a> Gen<'a> {
                 self.box_forwarder(c, &getter, &format!("{}$extension", getter), &params[..before], &ret);
                 continue;
             }
-            self.begin_method(false, false, &params[..before], ret.clone(), &[d]);
-            self.default_value(d, shape.by_name, &ret);
-            self.return_value(&ret);
             let desc = method_desc(&m.params[..before], &ret);
             // A forwarder's getters are forwarders of the member's, final as it is
             // (`Namer.foreachDefaultGetterOf`); a method's own take its access alone
             // (`Desugar.defaultGetters`).
             let fin = !self.is_interface && cx.input.syms.is_forwarder(fun.sym);
-            self.end_method(if fin { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC }, &getter, &desc);
+            self.begin_method(MethodFlags { is_final: fin, ..MethodFlags::PUBLIC }, &getter, &desc, false, &params[..before], ret.clone(), &[d]);
+            self.body(|g| {
+                let value = g.lower_default_value(d, shape.by_name, &ret);
+                g.lir.ret(value)
+            });
+            self.end_method();
             if self.is_interface {
                 self.trait_static_forwarder(&getter, &m.params[..before], &ret);
             }
@@ -451,8 +599,8 @@ impl<'a> Gen<'a> {
             return;
         }
         // A local trait's lifted member has its lifted method alone, as dotty's trait has it.
-        if !fun.lifted && !self.cw.has_method(&m.name, &m.desc) {
-            self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &m.name, &m.desc, None);
+        if !fun.lifted && !self.plan.has_method(&m.name, &m.desc) {
+            self.abstract_method(MethodFlags::ABSTRACT, &m.name, &m.desc);
         }
         // A default's getter reads the block's values too: the forwarders' implement it.
         for (i, d) in fun.defaults[k..].iter().enumerate() {
@@ -462,8 +610,8 @@ impl<'a> Gen<'a> {
             let shape = self.default_getter_shape(fun.sym, i);
             let getter = format!("{}$default${}", self.source_method_name(fun.sym), shape.index);
             let desc = method_desc(&m.params[..shape.before], &shape.ret);
-            if !self.cw.has_method(&getter, &desc) {
-                self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &getter, &desc, None);
+            if !self.plan.has_method(&getter, &desc) {
+                self.abstract_method(MethodFlags::ABSTRACT, &getter, &desc);
             }
         }
         let Some(body) = fun.body else { return };
@@ -474,12 +622,12 @@ impl<'a> Gen<'a> {
         let extras_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
         params.extend(pm.params[proxies.len()..pm.params.len() - m.params.len()].iter().map(|t| (None, t.clone())));
         params.extend(declared.iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
-        self.begin_method(false, false, &params, pm.ret.clone(), &[body]);
+        self.begin_method(MethodFlags::PUBLIC, &pm.name, &pm.desc, false, &params, pm.ret.clone(), &[body]);
         self.bind_proxies(&proxies);
         self.bind_extras(&extras, extras_slot);
         self.code.line(cx.line_of(info.file, info.span.start));
         self.method_body(fun.sym, &fun.params, body);
-        self.end_method(ACC_PUBLIC, &pm.name, &pm.desc);
+        self.end_method();
         self.trait_static_forwarder(&pm.name, &pm.params, &pm.ret);
     }
 
@@ -491,19 +639,18 @@ impl<'a> Gen<'a> {
     pub fn trait_static_forwarder(&mut self, name: &str, params: &[ErasedType], ret: &ErasedType) {
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
-        let mut types = vec![this.clone()];
+        let mut types = vec![this];
         types.extend(params.iter().cloned());
-        let desc = method_desc(params, ret);
         let typed: Vec<(Option<SymId>, ErasedType)> = types.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(true, false, &typed, ret.clone(), &[]);
-        let mut slot = 0u16;
-        for t in &types {
-            self.load(slot, t);
-            slot += if t.wide() { 2 } else { 1 };
-        }
-        self.invoke_desc(Invoke::Special, &owner, true, name, &desc, params.len(), ret);
-        self.return_value(ret);
-        self.end_method(ACC_PUBLIC | ACC_STATIC, &format!("{}$", name), &method_desc(&types, ret));
+        self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &format!("{}$", name), &method_desc(&types, ret), false, &typed, ret.clone(), &[]);
+        let default = method_ref(Invoke::Special, &owner, true, name, params, ret);
+        self.body(|g| {
+            let receiver = g.param(0);
+            let args: Vec<LirId> = (1..types.len()).map(|i| g.param(i)).collect();
+            let result = g.lir.call(&default, receiver, &args);
+            g.lir.ret(result)
+        });
+        self.end_method();
     }
 
     /// dotty's `isConstExprFinalVal` of the val `s` initialised with `init` (`tir::constant_val`):
@@ -547,74 +694,54 @@ impl<'a> Gen<'a> {
 
     /// The constant a constant val's getter answers: its literal initialiser, or the constant of
     /// the type it has (`Memoize` leaves the getter, the backend writes its `ConstantType`).
-    fn constant_value(&mut self, constant: Option<ConstVal>, init: TExprId, ty: &ErasedType) {
-        let Some(ConstVal::Declared(l)) = constant else {
-            self.expr(init, ty);
-            return;
-        };
-        let pushed = self.literal_value(l);
-        self.adapt(&pushed, ty);
+    fn lower_constant_value(&mut self, constant: Option<ConstVal>, init: TExprId, ty: &ErasedType) -> LirId {
+        let Some(ConstVal::Declared(l)) = constant else { return self.lower_expr(init, ty) };
+        let value = self.lower_literal(l);
+        let pushed = self.lir.ty(value).clone();
+        self.lower_adapt(value, &pushed, ty)
     }
 
-    /// `BCodeBodyBuilder.genConstant` (570-617) of the constant type `l`: its value pushed, of its
-    /// JVM type, every tag the types hold (a `null` and `()` are no constant types here).
+    /// The value of the constant type `l` written (`lower_literal`), and its type.
     pub(super) fn literal_value(&mut self, l: LitId) -> ErasedType {
-        match self.cx.input.types.lit_val(l) {
-            LitVal::Class(t) => self.class_constant(t),
-            LitVal::Int(v) => {
-                self.iconst(v);
-                ErasedType::I
-            }
-            LitVal::Byte(v) => {
-                self.iconst(v as i32);
-                ErasedType::B
-            }
-            LitVal::Short(v) => {
-                self.iconst(v as i32);
-                ErasedType::S
-            }
-            LitVal::Long(v) => {
-                self.lconst(v);
-                ErasedType::J
-            }
-            LitVal::Double(bits) => {
-                self.dconst(f64::from_bits(bits));
-                ErasedType::D
-            }
-            LitVal::Float(bits) => {
-                self.fconst(f32::from_bits(bits));
-                ErasedType::F
-            }
-            LitVal::Char(c) => {
-                self.iconst(c as i32);
-                ErasedType::C
-            }
-            LitVal::Bool(b) => {
-                self.iconst(b as i32);
-                ErasedType::Z
-            }
-            LitVal::Str(n) => {
-                self.sconst(self.cx.input.interner.get(n));
-                ErasedType::L(Rc::from(STRING))
-            }
-        }
+        let value = self.lowering(|g| g.lower_literal(l));
+        self.write(value);
+        self.lir.ty(value).clone()
+    }
+
+    /// `BCodeBodyBuilder.genConstant` (570-617) of the constant type `l`: its value, of its JVM
+    /// type, every tag the types hold (a `null` and `()` are no constant types here).
+    pub(super) fn lower_literal(&mut self, l: LitId) -> LirId {
+        let (kind, ty) = match self.cx.input.types.lit_val(l) {
+            LitVal::Class(t) => (Kind::ClassOf(self.class_constant(t)), ErasedType::L(Rc::from("java/lang/Class"))),
+            LitVal::Int(v) => (Kind::Int(v), ErasedType::I),
+            LitVal::Byte(v) => (Kind::Int(v as i32), ErasedType::B),
+            LitVal::Short(v) => (Kind::Int(v as i32), ErasedType::S),
+            LitVal::Long(v) => (Kind::Long(v), ErasedType::J),
+            LitVal::Double(bits) => (Kind::Double(f64::from_bits(bits)), ErasedType::D),
+            LitVal::Float(bits) => (Kind::Float(f32::from_bits(bits)), ErasedType::F),
+            LitVal::Char(c) => (Kind::Char(c), ErasedType::C),
+            LitVal::Bool(b) => (Kind::Bool(b), ErasedType::Z),
+            LitVal::Str(n) => (Kind::Text(Rc::from(self.cx.input.interner.get(n))), ErasedType::L(Rc::from(STRING))),
+        };
+        self.lir.push(kind, ty)
     }
 
     /// The value of default `d` as its getter returns it: a by-name parameter's default is typed
     /// as the argument passed for it, a lambda without parameters, whose body is the value.
-    pub fn default_value(&mut self, d: TExprId, by_name: bool, ret: &ErasedType) {
+    pub(super) fn lower_default_value(&mut self, d: TExprId, by_name: bool, ret: &ErasedType) -> LirId {
         let prog = self.cx.input.prog;
         match prog.expr(d) {
-            TExpr::Lambda(ps, body) if by_name && ps.len == 0 => self.expr(body, ret),
+            TExpr::Lambda(ps, body) if by_name && ps.len == 0 => self.lower_expr(body, ret),
             _ if by_name => {
                 let thunk = self.function_type(0);
-                self.expr(d, &thunk);
+                let function = self.lower_expr(d, &thunk);
                 let ErasedType::L(owner) = &thunk else { unreachable!() };
                 let object = ErasedType::object();
-                self.invoke(Invoke::Interface, owner, true, "apply", &[], &object);
-                self.adapt(&object, ret);
+                let apply = method_ref(Invoke::Interface, owner, true, "apply", &[], &object);
+                let value = self.lir.call(&apply, function, &[]);
+                self.lower_adapt(value, &object, ret)
             }
-            _ => self.expr(d, ret),
+            _ => self.lower_expr(d, ret),
         }
     }
 
@@ -643,13 +770,13 @@ impl<'a> Gen<'a> {
         let ext_types: Vec<ErasedType> = ext_params.iter().map(|p| p.1.clone()).collect();
         let ext_desc = method_desc(&ext_types, &m.ret);
         let ext_name = format!("{}$extension", m.name);
-        self.begin_method(true, false, &ext_params, m.ret.clone(), &[body]);
+        self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &ext_name, &ext_desc, false, &ext_params, m.ret.clone(), &[body]);
         self.m.this_slot = Some(0);
         self.m.this_underlying = Some(u.clone());
         self.code.line(cx.line_of(info.file, info.span.start));
         self.method_body(fun.sym, &fun.params, body);
-        self.end_method(ACC_PUBLIC | ACC_STATIC, &ext_name, &ext_desc);
-        self.begin_method(false, false, params, m.ret.clone(), &[]);
+        self.end_method();
+        self.begin_method(MethodFlags::PUBLIC, &m.name, &m.desc, false, params, m.ret.clone(), &[]);
         let this = self.class_type(c);
         self.load(0, &this);
         self.vc_unbox(c, &u);
@@ -661,7 +788,7 @@ impl<'a> Gen<'a> {
         let owner = self.this_name.clone();
         self.invoke_desc(Invoke::Static, &owner, false, &ext_name, &ext_desc, ext_types.len(), &m.ret);
         self.return_value(&m.ret);
-        self.end_method(ACC_PUBLIC, &m.name, &m.desc);
+        self.end_method();
     }
 
     /// A method of the box of value class `c`, `name(params)`, calling the companion's
@@ -670,22 +797,23 @@ impl<'a> Gen<'a> {
         let u = self.vc_underlying(c);
         let module: Rc<str> = Rc::from(self.cx.companion_name(c));
         let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|(_, t)| (None, t.clone())).collect();
-        self.begin_method(false, false, &typed, ret.clone(), &[]);
-        self.getstatic(&module, "MODULE$", &ErasedType::L(module.clone()));
-        let this = self.class_type(c);
-        self.load(0, &this);
-        self.vc_unbox(c, &u);
-        let mut types = vec![u.clone()];
-        let mut slot = 1;
-        for (_, t) in params {
-            self.load(slot, t);
-            types.push(t.clone());
-            slot += if t.wide() { 2 } else { 1 };
-        }
-        self.invoke_desc(Invoke::Virtual, &module, false, target, &method_desc(&types, ret), types.len(), ret);
-        self.return_value(ret);
         let own: Vec<ErasedType> = params.iter().map(|(_, t)| t.clone()).collect();
-        self.end_method(ACC_PUBLIC, name, &method_desc(&own, ret));
+        self.begin_method(MethodFlags::PUBLIC, name, &method_desc(&own, ret), false, &typed, ret.clone(), &[]);
+        let mut types = vec![u.clone()];
+        types.extend(own.iter().cloned());
+        let extension = method_ref(Invoke::Virtual, &module, false, target, &types, ret);
+        let this = self.class_type(c);
+        self.body(|g| {
+            let receiver = g.lir.module(&module);
+            let instance = g.lir.this(this.clone());
+            let mut args = vec![g.lir.value_class(instance, &this, c, EMPTY_LIST, false, &u)];
+            for i in 0..own.len() {
+                args.push(g.param(i));
+            }
+            let result = g.lir.call(&extension, receiver, &args);
+            g.lir.ret(result)
+        });
+        self.end_method();
     }
 
     /// A member overrides the members of the ancestors that share its name; where the erased
@@ -744,7 +872,7 @@ impl<'a> Gen<'a> {
                 }
             }
             let bm = self.mref(inherited);
-            if bm.name != m.name || bm.desc == m.desc || bm.params.len() != m.params.len() || self.cw.has_method(&bm.name, &bm.desc) {
+            if bm.name != m.name || bm.desc == m.desc || bm.params.len() != m.params.len() || self.plan.has_method(&bm.name, &bm.desc) {
                 let decision = if bm.name != m.name { "other-name" } else if bm.desc == m.desc { "same" } else if bm.params.len() != m.params.len() { "arity" } else { "declared" };
                 dump(self, decision);
                 continue;
@@ -768,26 +896,28 @@ impl<'a> Gen<'a> {
             None => (Vec::new(), NO_TYPE),
         };
         let params: Vec<(Option<SymId>, ErasedType)> = bm.params.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(false, false, &params, bm.ret.clone(), &[]);
-        self.load_this();
-        let mut slot = 1u16;
-        for (i, (from, to)) in bm.params.iter().zip(&m.params).enumerate() {
-            self.load(slot, from);
-            match declared.get(i).and_then(|&t| self.value_class_type(t)) {
-                Some((c, args)) => self.adapt_vc(c, args, from.clone(), to),
-                None => self.adapt(from, to),
-            }
-            slot += if from.wide() { 2 } else { 1 };
-        }
-        let owner = self.this_name.clone();
+        self.begin_method(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, &bm.name, &bm.desc, false, &params, bm.ret.clone(), &[]);
         let kind = if self.is_interface { Invoke::Interface } else { Invoke::Virtual };
-        self.invoke_desc(kind, &owner, self.is_interface, &m.name, &m.desc, m.params.len(), &m.ret);
-        match self.value_class_type(declared_ret) {
-            Some((c, args)) if m.ret != ErasedType::V => self.adapt_vc(c, args, m.ret.clone(), &bm.ret),
-            _ => self.adapt(&m.ret, &bm.ret),
-        }
-        self.return_value(&bm.ret);
-        self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, &bm.name, &bm.desc);
+        let target = Rc::new(MethodRef { owner: self.this_name.clone(), owner_is_interface: self.is_interface, kind, ..m.clone() });
+        self.body(|g| {
+            let Some(ThisValue::Slot(this_type)) = g.this_value() else { unreachable!("a bridge runs on an instance") };
+            let receiver = g.lir.this(this_type);
+            let mut args = Vec::with_capacity(m.params.len());
+            for (i, (from, to)) in bm.params.iter().zip(&m.params).enumerate() {
+                let given = g.param(i);
+                args.push(match declared.get(i).and_then(|&t| g.value_class_type(t)) {
+                    Some((c, vargs)) => g.lir.value_class(given, from, c, vargs, true, to),
+                    None => g.lower_adapt(given, from, to),
+                });
+            }
+            let result = g.lir.call(&target, receiver, &args);
+            let result = match g.value_class_type(declared_ret) {
+                Some((c, vargs)) if m.ret != ErasedType::V => g.lir.value_class(result, &m.ret, c, vargs, true, &bm.ret),
+                _ => g.lower_adapt(result, &m.ret, &bm.ret),
+            };
+            g.lir.ret(result)
+        });
+        self.end_method();
     }
 
     /// Whether a member with the parameters `own` can override `inherited`, whose erased
@@ -809,28 +939,27 @@ impl<'a> Gen<'a> {
 
     // ---- classes ----
 
-    /// A class's access flags, dotty's `BCodeUtils.javaFlags` of its symbol: public; a trait an
-    /// abstract interface, any other class `ACC_SUPER`, abstract where declared so (an enum is);
+    /// What kind of class a class is, as dotty's `BCodeUtils.javaFlags` of its symbol has it: a
+    /// trait an abstract interface; abstract where declared so (an enum is);
     /// final where the symbol is `Final` and not abstract: written so, a module class
     /// (`ModuleClassCreationFlags`), a given object's among them, an anonymous class
     /// (`Typer.typedNew`), an enum's case (`DesugarEnums`, a value's class being anonymous) or a
-    /// value class (`Namer`); and `ACC_ENUM` for an enum and its class cases (`Enum`).
-    fn class_access(&self, c: ClassId) -> u16 {
+    /// value class (`Namer`); and an enum's class and its class cases are enums (`Enum`).
+    fn class_flags(&self, c: ClassId) -> ClassFlags {
         let cx = self.cx;
         let info = cx.input.syms.class(c);
         if info.kind == ClassKind::Trait {
-            return ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT;
+            return ClassFlags { interface: true, is_abstract: true, ..ClassFlags::default() };
         }
         let class_case = info.kind == ClassKind::EnumCase && info.singleton.is_none();
         if info.kind == ClassKind::Enum || info.kind == ClassKind::Class && info.mods & mods::ABSTRACT != 0 {
-            let enum_flag = if info.kind == ClassKind::Enum { ACC_ENUM } else { 0 };
-            return ACC_PUBLIC | ACC_SUPER | ACC_ABSTRACT | enum_flag;
+            return ClassFlags { is_abstract: true, is_enum: info.kind == ClassKind::Enum, ..ClassFlags::default() };
         }
         let module = matches!(info.kind, ClassKind::Object) || info.inner_object.is_some() || info.kind == ClassKind::GivenImpl && !cx.given_class_classes.contains_key(&c);
         // A given class is not (`Desugar.classDef`: the def answering it is).
         let given_class = cx.given_class_classes.contains_key(&c);
         let fin = !given_class && (info.mods & mods::FINAL != 0 || module || matches!(info.kind, ClassKind::Anon | ClassKind::EnumCase) || info.value_class);
-        ACC_PUBLIC | ACC_SUPER | if fin { ACC_FINAL } else { 0 } | if class_case { ACC_ENUM } else { 0 }
+        ClassFlags { is_final: fin, is_enum: class_case, ..ClassFlags::default() }
     }
 
     pub fn emit_class(&mut self, idx: usize) -> (String, Vec<u8>) {
@@ -913,10 +1042,12 @@ impl<'a> Gen<'a> {
         // the targets of its super calls (`initJClass` appends it last).
         let declared = interfaces.len();
         if is_object || info.inner_object.is_some() || cx.given_object_classes.contains_key(&c) || cx.inner_given_object_classes.contains_key(&c) {
-            interfaces = super::callable::module_interfaces(interfaces, info.owner == Owner::Local);
+            let listed = super::callable::module_interfaces(&interfaces, info.owner == Owner::Local);
+            interfaces.extend(listed);
         }
-        let access = self.class_access(c);
-        self.cw = ClassWriter::new(access, &name, &super_name, &interfaces);
+        let flags = self.class_flags(c);
+        let path = &cx.input.sources[info.file.0 as usize].path;
+        self.begin_class(&name, flags, &super_name, &interfaces[..declared], &interfaces[declared..], Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)));
         self.super_targets.clear();
         self.lifted_body = None;
         self.ctor_code = false;
@@ -925,8 +1056,6 @@ impl<'a> Gen<'a> {
         self.this_class = Some(c);
         self.is_interface = is_trait;
         self.abstract_class = is_enum || is_abstract;
-        let path = &cx.input.sources[info.file.0 as usize].path;
-        self.cw.source_file(path.rsplit(std::path::is_separator).next().unwrap_or(path));
         self.line_file = info.file;
 
         let n_captures = if is_anon { tc.ctor_params.len() } else { tc.captures };
@@ -968,41 +1097,34 @@ impl<'a> Gen<'a> {
             if f.lazy && self.is_thread_unsafe(f.sym) {
                 // `@threadUnsafe`: the unsynchronised holder alone, no handle (`lazy_holder_body`).
                 let container = self.lazy_member_names(&f.name).0;
-                self.cw.field(ACC_PRIVATE, &container, "Ljava/lang/Object;");
+                self.field(FieldFlags::PRIVATE, &container, &ErasedType::object());
                 continue;
             }
             if f.lazy {
                 // `private @volatile var x$lzyN: AnyRef` (`transformMemberDefThreadSafeNew`).
                 let h = self.lazy_holder(&f.name, &f.ty);
-                self.cw.field(ACC_PRIVATE | ACC_VOLATILE, &h.container, "Ljava/lang/Object;");
+                self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object());
                 continue;
             }
-            let mut d = String::new();
-            f.ty.desc(&mut d);
-            let access = if self.is_volatile(f.sym) {
-                ACC_PRIVATE | ACC_VOLATILE
-            } else if cx.private_params.contains_key(&f.sym) {
-                ACC_PRIVATE | ACC_FINAL
-            } else {
-                ACC_PRIVATE
-            };
-            self.cw.field(access, &f.name, &d);
+            let volatile = self.is_volatile(f.sym);
+            let is_final = !volatile && cx.private_params.contains_key(&f.sym);
+            self.field(FieldFlags { is_final, volatile, ..FieldFlags::PRIVATE }, &f.name, &f.ty);
         }
         for (s, field, _, _) in self.class_captures.clone() {
-            let mut d = String::new();
-            self.anon_capture_type(s).desc(&mut d);
-            let access = if field == "$outer" { ACC_PRIVATE | ACC_FINAL | ACC_SYNTHETIC } else { ACC_PRIVATE };
-            self.cw.field(access, &field, &d);
+            let ty = self.anon_capture_type(s);
+            let outer = field == "$outer";
+            self.field(FieldFlags { is_final: outer, synthetic: outer, ..FieldFlags::PRIVATE }, &field, &ty);
         }
         // An instance of another class is read by the copies of the classes made here too.
         for (h, field) in self.class_homes.clone() {
-            let mut d = String::new();
-            self.class_type(h).desc(&mut d);
-            self.cw.field(ACC_FINAL | ACC_SYNTHETIC, &field, &d);
+            let ty = self.class_type(h);
+            self.field(FieldFlags { visibility: Visibility::Package, is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, &field, &ty);
         }
         for (_, field) in self.class_keys.clone() {
-            self.cw.field(ACC_PRIVATE, &field, "Ljava/lang/Object;");
+            self.field(FieldFlags::PRIVATE, &field, &ErasedType::object());
         }
+        // Decided before an object's `<clinit>` is written, which writes its constructor's body.
+        let primary = (!is_trait).then(|| self.primary_ctor(tc, &fields, &super_name, enum_class.or(superclass), superclass.is_some(), is_value_case, is_object || given_module, is_anon));
         if is_object {
             // An object nested in this one is a module val of it, a term member that is no method,
             // so a static final field of its module class (dotty's `addClassFields`), which nothing
@@ -1017,29 +1139,30 @@ impl<'a> Gen<'a> {
                     }
                 }
             }
-            let mut module_fields: Vec<(u16, String, String)> = Vec::new();
+            let mut module_fields: Vec<(FieldFlags, String, ErasedType)> = Vec::new();
             for (m, k) in nested {
                 // The companion the typer made for a case class is among those below.
                 if cx.input.reach.classes[k.idx()] && !cx.made_case_companion(k) {
-                    module_fields.push((module_field_flags(syms, m), encode(cx.input.interner.get(syms.class(k).name)), format!("L{};", self.class_name(k))));
+                    module_fields.push((module_field_flags(syms, m), encode(cx.input.interner.get(syms.class(k).name)), ErasedType::L(self.class_name(k))));
                 }
             }
             // And a companion the backend makes where the program has none (`emit_class_unit`),
             // public as a synthesized companion is.
-            let mut made: Vec<(u16, String, String)> = Vec::new();
+            let mut made: Vec<(String, Rc<str>)> = Vec::new();
             for &k in syms.class(c).nested.values() {
                 if syms.class(k).companion.map_or(true, |m| cx.made_case_companion(m)) && (cx.has_case_companion(k) || cx.has_value_companion(k) || cx.has_default_companion(k)) {
-                    made.push((MODULE_FIELD, encode(cx.input.interner.get(syms.class(k).name)), format!("L{}$;", self.class_name(k))));
+                    made.push((encode(cx.input.interner.get(syms.class(k).name)), Rc::from(format!("{}$", self.class_name(k)))));
                 }
             }
-            made.sort();
-            module_fields.extend(made);
-            for (flags, field, desc) in module_fields {
-                self.cw.field(flags, &field, &desc);
+            // By their names, then by their types as descriptors spell them.
+            made.sort_by(|a, b| (&a.0, format!("L{};", a.1)).cmp(&(&b.0, format!("L{};", b.1))));
+            module_fields.extend(made.into_iter().map(|(field, class)| (MODULE_FIELD, field, ErasedType::L(class))));
+            for (flags, field, ty) in module_fields {
+                self.field(flags, &field, &ty);
             }
-            self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
+            self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()));
             if clinit_first {
-                self.module_clinit(tc, &fields);
+                self.module_clinit(&primary.as_ref().expect("an object's constructor").1);
                 early_lookups = Some(self.lazy_holders.len());
             } else {
                 module_clinit_wanted = true;
@@ -1050,9 +1173,9 @@ impl<'a> Gen<'a> {
         // runs the superclass's alone, stores it in `MODULE$`, then runs the body, which may read
         // the given through `MODULE$`.
         if given_module {
-            self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
+            self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()));
             if clinit_first {
-                self.module_clinit(tc, &fields);
+                self.module_clinit(&primary.as_ref().expect("an object's constructor").1);
                 early_lookups = Some(self.lazy_holders.len());
             } else {
                 module_clinit_wanted = true;
@@ -1061,25 +1184,28 @@ impl<'a> Gen<'a> {
         self.given_object_fields(&tc.init);
         let instance_enum = cx.enum_of_case(c).or(is_enum.then_some(c)).is_some_and(|e| cx.instance_enum(e));
         if is_value_case {
-            self.cw.field(ACC_PRIVATE, "$name", "Ljava/lang/String;");
-            self.cw.field(ACC_PRIVATE, "$ordinal", "I");
+            self.field(FieldFlags::PRIVATE, "$name", &ErasedType::L(Rc::from(STRING)));
+            self.field(FieldFlags::PRIVATE, "$ordinal", &ErasedType::I);
             if !instance_enum {
-                self.cw.field(ACC_PUBLIC | ACC_STATIC, "$instance", &format!("L{};", name));
+                self.field(FieldFlags { visibility: Visibility::Public, is_static: true, ..FieldFlags::PRIVATE }, "$instance", &ErasedType::L(name.clone()));
             }
         }
         if is_enum && !instance_enum {
             // The values are made together, in declaration order, when the enum is first
             // touched: a read of one initialises its class, and with it this superclass. Those of
-            // an enum read through its companion's fields the companion makes (`store_enum_fields`).
+            // an enum read through its companion's fields the companion makes (`enum_value_parts`).
             // Its `<clinit>` is written last where it has lazy members (`enum_clinit`).
             if clinit_first {
                 self.enum_clinit(c);
                 early_lookups = Some(self.lazy_holders.len());
             }
             // What the companion calls so that the values exist before its own body runs.
-            self.begin_method(true, false, &[], ErasedType::V, &[]);
-            self.return_value(&ErasedType::V);
-            self.end_method(ACC_PUBLIC | ACC_STATIC, "$touch", "()V");
+            self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, "$touch", "()V", false, &[], ErasedType::V, &[]);
+            self.body(|g| {
+                let unit = g.lir.unit();
+                g.lir.ret(unit)
+            });
+            self.end_method();
         }
 
         if is_trait {
@@ -1091,7 +1217,8 @@ impl<'a> Gen<'a> {
             }
         } else {
             self.ctor_code = true;
-            self.constructor(tc, &fields, &super_name, enum_class.or(superclass), superclass.is_some(), is_value_case, is_object || given_module, is_anon);
+            let (params, k) = primary.as_ref().expect("a class's constructor");
+            self.constructor(params, k);
             self.ctor_code = false;
             for &f in &tc.ctors {
                 if cx.input.reach.funs[f.idx()] {
@@ -1185,15 +1312,18 @@ impl<'a> Gen<'a> {
         }
         // The `<clinit>`, its lazy members' `VarHandle` lookups first (`addInFront`, `MoveStatics`).
         if module_clinit_wanted {
-            self.module_clinit(tc, &fields);
+            self.module_clinit(&primary.as_ref().expect("an object's constructor").1);
         } else if is_enum && !instance_enum && !clinit_first {
             self.enum_clinit(c);
-        } else if !self.lazy_holders.is_empty() && !self.cw.has_method("<clinit>", "()V") {
-            self.begin_method(true, false, &[], ErasedType::V, &[]);
-            self.var_handle_lookups();
-            self.return_value(&ErasedType::V);
-            let access = self.clinit_access();
-            self.end_method(access, "<clinit>", "()V");
+        } else if !self.lazy_holders.is_empty() && !self.plan.has_method("<clinit>", "()V") {
+            self.begin_method(self.clinit_flags(), "<clinit>", "()V", false, &[], ErasedType::V, &[]);
+            self.body(|g| {
+                let lookups = g.lower_var_handle_lookups();
+                let unit = g.lir.unit();
+                let done = g.lir.seq(&lookups, unit);
+                g.lir.ret(done)
+            });
+            self.end_method();
         }
         if early_lookups.is_some_and(|n| self.lazy_holders.len() > n) {
             self.unsupported("a lazy member the names walk did not number (its handle has no lookup)");
@@ -1247,29 +1377,32 @@ impl<'a> Gen<'a> {
     /// The `<clinit>` of an enum's class: its lazy members' handles, then the values, made
     /// together in declaration order when the enum is first touched (a read of one initialises its
     /// class, and with it this superclass); those of an enum read through its companion's fields
-    /// the companion makes (`store_enum_fields`).
+    /// the companion makes (`enum_value_parts`).
     fn enum_clinit(&mut self, c: ClassId) {
         let cx = self.cx;
         let syms = cx.input.syms;
         let companion_makes = cx.has_enum_fields(c);
-        self.begin_method(true, false, &[], ErasedType::V, &[]);
-        self.var_handle_lookups();
-        for &case in &syms.class(c).children {
-            let cinfo = syms.class(case);
-            if companion_makes || cinfo.singleton.is_none() || !cx.input.reach.classes[case.idx()] {
-                continue;
+        self.begin_method(self.clinit_flags(), "<clinit>", "()V", false, &[], ErasedType::V, &[]);
+        self.body(|g| {
+            let mut stmts = g.lower_var_handle_lookups();
+            for &case in &syms.class(c).children {
+                let cinfo = syms.class(case);
+                if companion_makes || cinfo.singleton.is_none() || !cx.input.reach.classes[case.idx()] {
+                    continue;
+                }
+                let case_name = g.class_name(case);
+                let string = ErasedType::L(Rc::from(STRING));
+                let init = method_ref(Invoke::Special, &case_name, false, "<init>", &[string.clone(), ErasedType::I], &ErasedType::V);
+                let name = g.lir.text(&Rc::from(cx.input.interner.get(cinfo.name)), string);
+                let ordinal = g.lir.int(cinfo.ordinal as i32);
+                let made = g.lir.make(&init, &[name, ordinal]);
+                stmts.push(g.lir.store_static(&case_name, "$instance", made));
             }
-            let case_name = self.class_name(case);
-            self.new_object(&case_name);
-            self.sconst(cx.input.interner.get(cinfo.name));
-            self.iconst(cinfo.ordinal as i32);
-            let string = ErasedType::L(Rc::from(STRING));
-            self.invoke(Invoke::Special, &case_name, false, "<init>", &[string, ErasedType::I], &ErasedType::V);
-            self.putstatic(&case_name, "$instance", &ErasedType::L(case_name.clone()));
-        }
-        self.return_value(&ErasedType::V);
-        let access = self.clinit_access();
-        self.end_method(access, "<clinit>", "()V");
+            let unit = g.lir.unit();
+            let done = g.lir.seq(&stmts, unit);
+            g.lir.ret(done)
+        });
+        self.end_method();
     }
 
     /// The static fields scalac declares in the owner of given objects, `Show$.given_Show_Int`
@@ -1282,7 +1415,7 @@ impl<'a> Gen<'a> {
             let Some(&k) = cx.given_objects.get(&s) else { continue };
             let name = self.field_name(s);
             let class = self.class_name(k);
-            self.cw.field(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, &name, &format!("L{};", class));
+            self.field(MODULE_FIELD, &name, &ErasedType::L(class));
         }
     }
 
@@ -1290,8 +1423,8 @@ impl<'a> Gen<'a> {
     /// `MODULE$` before anything of the body runs, so the body may name the object, and the
     /// constructor has run the superclass's alone. The instance stays in a local that stands
     /// for `this` in the body, which the caller writes next.
-    pub fn begin_module_clinit(&mut self, name: &Rc<str>, roots: &[TExprId]) {
-        self.begin_method(true, false, &[], ErasedType::V, roots);
+    pub fn begin_module_clinit(&mut self, flags: MethodFlags, name: &Rc<str>, roots: &[TExprId]) {
+        self.begin_method(flags, "<clinit>", "()V", false, &[], ErasedType::V, roots);
         // The handles of the module class's lazy members come first (`MoveStatics.rebuild`'s
         // static constructor, which `genPlainClass` puts before the instance's making).
         self.var_handle_lookups();
@@ -1304,35 +1437,41 @@ impl<'a> Gen<'a> {
         self.m.this_slot = Some(slot);
     }
 
-    /// `<clinit>` of an object: the instance, then the body the object's constructor would
-    /// run were it a class (the traits it adds, its fields and its statements, in order).
-    fn module_clinit(&mut self, tc: &TClass, fields: &[FieldDef]) {
-        let cx = self.cx;
+    /// `<clinit>` of an object: the instance, the values of the enum it is the companion of,
+    /// then the body of its constructor's tree (the traits it adds, its fields and its
+    /// statements, in order), where the class file runs it (`Gen::write_module_part`).
+    fn module_clinit(&mut self, k: &PrimaryCtor) {
+        let tc = k.tc;
         let name = self.this_name.clone();
         let this = ErasedType::L(name.clone());
+        let roots = self.primary_roots(k);
+        self.begin_module_clinit(self.clinit_flags(), &name, &roots);
+        if self.constructor_lowers(k) {
+            self.write_module(false, |g| g.primary_tree(k));
+        } else {
+            let mut parts = Parts::Written;
+            self.object_enum_parts(&mut parts, tc);
+            self.class_body(&mut parts, tc, k.fields, &this);
+            self.return_value(&ErasedType::V);
+        }
+        self.end_method();
+    }
+
+    /// What an object that is an enum's companion runs before its body (`Gen::enum_companion_parts`):
+    /// the enum's `$touch` where the enum makes its values, the values it holds.
+    fn object_enum_parts(&mut self, parts: &mut Parts, tc: &TClass) {
+        let cx = self.cx;
+        let name = self.this_name.clone();
         let companion = cx.input.syms.class(tc.id).companion;
-        let enum_values = companion.map_or(Vec::new(), |e| self.enum_value_fields(e));
-        let mut roots: Vec<TExprId> = Vec::new();
-        for init in &tc.init {
-            init_roots(cx.input.prog, init, &mut roots);
-        }
-        self.begin_module_clinit(&name, &roots);
-        if let Some(e) = companion.filter(|&e| cx.input.syms.class(e).kind == ClassKind::Enum && cx.input.reach.classes[e.idx()] && !cx.has_enum_fields(e)) {
-            let enum_name = self.class_name(e);
-            self.invoke(Invoke::Static, &enum_name, false, "$touch", &[], &ErasedType::V);
-        }
-        self.store_enum_fields(&name, &enum_values);
-        self.class_body(tc, fields, &this);
-        self.return_value(&ErasedType::V);
-        let access = self.clinit_access();
-        self.end_method(access, "<clinit>", "()V");
+        let values = companion.map_or(Vec::new(), |e| self.enum_value_fields(e));
+        let touch = companion.filter(|&e| cx.input.syms.class(e).kind == ClassKind::Enum && cx.input.reach.classes[e.idx()] && !cx.has_enum_fields(e)).map(|e| self.class_name(e));
+        self.enum_companion_parts(parts, &name, touch, &values);
     }
 
     /// The body of a class as its constructor runs it after the superclass's: the initialisers
     /// of the traits it adds, its fields and its statements, in the order they are written.
-    fn class_body(&mut self, tc: &TClass, fields: &[FieldDef], this: &ErasedType) {
+    fn class_body(&mut self, parts: &mut Parts, tc: &TClass, fields: &[FieldDef], this: &ErasedType) {
         let owner = self.this_name.clone();
-        let slot = self.m.this_slot.unwrap_or(0);
         // The `$init$` of the traits the typer schedules no initialiser of run in their place
         // among the traits', before the class's own body.
         let order: Vec<ClassId> = self.cx.input.syms.class(tc.id).base_types.iter().skip(1).rev().map(|&(b, _)| b).collect();
@@ -1345,7 +1484,7 @@ impl<'a> Gen<'a> {
                 _ => usize::MAX,
             };
             while let Some(b) = scala2.next_if(|&b| place(b) < before) {
-                self.call_trait_init(b, slot, this);
+                self.part(parts, |g| g.lower_trait_init(b, this));
             }
             match *init {
                 TInit::Field(s, e) => {
@@ -1357,15 +1496,17 @@ impl<'a> Gen<'a> {
                     // effects alone.
                     if let Some(constant) = f.constant {
                         if let ConstVal::Declared(_) = constant {
-                            self.statement(e);
+                            self.part(parts, |g| g.lower_expr(e, &ErasedType::V));
                         }
                         continue;
                     }
-                    self.load(slot, this);
-                    self.expr(e, &f.ty);
-                    self.putfield(&owner, &f.name, &f.ty);
+                    self.part(parts, |g| {
+                        let instance = g.lir.this(this.clone());
+                        let value = g.lower_expr(e, &f.ty);
+                        g.lir.store(instance, &owner, &f.name, value)
+                    });
                 }
-                TInit::Stmt(e) => self.statement(e),
+                TInit::Stmt(e) => self.part(parts, |g| g.lower_expr(e, &ErasedType::V)),
                 TInit::Parent(b, call) => {
                     // The values of the block a local trait's body reads lead its arguments, and
                     // go to its `$init$` (`TClass::captures`).
@@ -1373,27 +1514,179 @@ impl<'a> Gen<'a> {
                     let k = proxies.as_ref().map_or(0, |p| p.0);
                     let given: Vec<TExprId> = self.cx.input.prog.expr_list(call.args).iter().take(k).copied().collect();
                     let call = ParentCall { args: crate::ast::ListRef { start: call.args.start + k as u32, len: call.args.len - k as u32 }, ..call };
-                    if !call.args.is_empty() && !self.trait_arguments(b, call, fields, slot, this) {
+                    if !call.args.is_empty() && !self.trait_arguments(parts, b, call, fields, this) {
                         return;
                     }
                     if let Some((_, proxies, declared)) = proxies {
+                        // The values as the code holds them: written in place (`Gen::class_body_lowers`).
+                        assert!(matches!(parts, Parts::Written), "a local trait's proxies in a tree");
                         let base = self.class_name(b);
                         let mut types = vec![ErasedType::L(base.clone())];
                         types.extend(proxies.iter().map(|&p| self.anon_capture_type(p)));
                         let extras = self.extras_of(&declared, None);
                         types.extend(self.extras_types(&extras));
+                        let slot = self.m.this_slot.unwrap_or(0);
                         self.load(slot, this);
                         self.load_proxies(&proxies, &declared, &given);
                         self.invoke(Invoke::Static, &base, true, "$init$", &types, &ErasedType::V);
                     } else if self.trait_has_init(b) {
-                        self.call_trait_init(b, slot, this);
+                        self.part(parts, |g| g.lower_trait_init(b, this));
                     }
                 }
             }
         }
         for b in scala2 {
-            self.call_trait_init(b, slot, this);
+            self.part(parts, |g| g.lower_trait_init(b, this));
         }
+    }
+
+    /// Whether every part of a class's body has nodes (`Gen::class_body`): no local trait's
+    /// initialiser takes the values of the block (`Gen::load_proxies` reads the `Extras`), and
+    /// every trait's arguments match its parameters with no lazy val before them.
+    fn class_body_lowers(&mut self, tc: &TClass) -> bool {
+        let prog = self.cx.input.prog;
+        tc.init.iter().all(|init| match *init {
+            TInit::Parent(b, call) => {
+                self.trait_init_proxies(b).is_none() && (call.args.is_empty() || self.trait_params(b).len() == call.args.len as usize && self.prelude_lowers(&prog.stmts[call.prelude.range()]))
+            }
+            TInit::Field(..) | TInit::Stmt(_) => true,
+        })
+    }
+
+    /// The node `lower` makes, put in the parts of the body.
+    fn part(&mut self, parts: &mut Parts, lower: impl FnOnce(&mut Self) -> LirId) {
+        let node = self.lowering(lower);
+        self.add(parts, &[node]);
+    }
+
+    fn add(&mut self, parts: &mut Parts, nodes: &[LirId]) {
+        match parts {
+            Parts::Tree(all, _) => all.extend_from_slice(nodes),
+            Parts::Written => {
+                for &node in nodes {
+                    self.write(node);
+                }
+            }
+        }
+    }
+
+    /// The tree of a body of no value whose statements are the parts.
+    pub(super) fn returning(&mut self, parts: Parts) -> (LirId, Vec<Declared>) {
+        let Parts::Tree(nodes, fields) = parts else { unreachable!("the parts of a tree") };
+        let unit = self.lir.unit();
+        let done = self.lir.seq(&nodes, unit);
+        (self.lir.ret(done), fields)
+    }
+
+    /// The field declared before the next part: now where the parts are written in turn.
+    fn declare(&mut self, parts: &mut Parts, flags: FieldFlags, name: &str, ty: &ErasedType) {
+        match parts {
+            Parts::Tree(nodes, fields) => fields.push(Declared { at: nodes.len(), flags, name: name.to_string(), ty: ty.clone() }),
+            Parts::Written => self.field(flags, name, ty),
+        }
+    }
+
+    /// What the companion object of an enum runs before its own body: the enum's `$touch` where
+    /// another holds the values (`touch`), then the values it holds (`Gen::enum_value_parts`).
+    pub(super) fn enum_companion_parts(&mut self, parts: &mut Parts, module: &Rc<str>, touch: Option<Rc<str>>, values: &[(String, SymId)]) {
+        if let Some(enum_name) = touch {
+            let touched = method_ref(Invoke::Static, &enum_name, false, "$touch", &[], &ErasedType::V);
+            self.part(parts, |g| g.lir.static_call(&touched, &[]));
+        }
+        self.enum_value_parts(parts, module, values);
+    }
+
+    /// The values of an enum its companion `module` holds in its static fields, each declared as
+    /// it is stored, in their order: those of an enum read through
+    /// these fields (`has_enum_fields`) made here, each stored in its field as soon as it is made,
+    /// as scalac's companion makes them (a value's constructor may read an earlier value through its
+    /// field, `case B extends E(E.A)`), each its case's instance too (`$instance`); another enum's
+    /// read from their cases' instances, once the enum made them all (the caller's `$touch`). An
+    /// enum whose every case is a value has scalac's `$values` too, the array `values` copies.
+    fn enum_value_parts(&mut self, parts: &mut Parts, module: &Rc<str>, values: &[(String, SymId)]) {
+        let Some(&(_, first)) = values.first() else { return };
+        let Owner::Class(o) = self.cx.input.syms.sym(first).owner else { return };
+        let Some(e) = self.cx.input.syms.class(o).companion else { return };
+        let enum_type = self.class_type(e);
+        let desc = self.desc_of(&enum_type);
+        let makes = self.cx.has_enum_fields(e);
+        let string = ErasedType::L(Rc::from(STRING));
+        for (name, v) in values {
+            self.declare(parts, FieldFlags { enum_value: true, ..MODULE_FIELD }, name, &enum_type);
+            let SymKind::EnumValue(case) = self.cx.input.syms.sym(*v).kind else { continue };
+            let case_name = self.class_name(case);
+            let t = ErasedType::L(case_name.clone());
+            if makes {
+                let cinfo = self.cx.input.syms.class(case);
+                let label: Rc<str> = Rc::from(self.cx.input.interner.get(cinfo.name));
+                let ordinal = cinfo.ordinal as i32;
+                let ctor = method_ref(Invoke::Special, &case_name, false, "<init>", &[string.clone(), ErasedType::I], &ErasedType::V);
+                self.part(parts, |g| {
+                    let text = g.lir.text(&label, string.clone());
+                    let at = g.lir.int(ordinal);
+                    let made = g.lir.make(&ctor, &[text, at]);
+                    let held = g.lir.temp();
+                    let kept = g.lir.keep(held, made);
+                    let instance = g.lir.kept(held, t.clone());
+                    let own = g.lir.store_static(&case_name, "$instance", instance);
+                    let value = g.lir.kept(held, t.clone());
+                    let value = g.lower_adapt(value, &t, &enum_type);
+                    let stored = g.lir.store_static(module, name, value);
+                    g.lir.seq(&[kept, own], stored)
+                });
+            } else {
+                self.part(parts, |g| {
+                    let instance = g.lir.static_field(&case_name, "$instance", t.clone());
+                    let value = g.lower_adapt(instance, &t, &enum_type);
+                    g.lir.store_static(module, name, value)
+                });
+            }
+        }
+        if values.len() == self.cx.input.syms.class(e).children.len() {
+            let array = ErasedType::L(Rc::from(format!("[{}", desc)));
+            self.declare(parts, FieldFlags { is_static: true, is_final: true, ..FieldFlags::PRIVATE }, "$values", &array);
+            self.part(parts, |g| {
+                let mut items = Vec::with_capacity(values.len());
+                for (name, _) in values {
+                    items.push(g.lir.static_field(module, name, enum_type.clone()));
+                }
+                let items = g.lir.list(&items);
+                let made = g.lir.push(Kind::ArrayOf { elem: enum_type.clone(), items }, array.clone());
+                g.lir.store_static(module, "$values", made)
+            });
+        }
+    }
+
+    /// The statements a constructor's or a trait's arguments hold before them (the values of
+    /// named and default arguments): an expression's and a val's, nothing else.
+    fn prelude(&mut self, parts: &mut Parts, stmts: &[TStmt]) {
+        for &s in stmts {
+            match s {
+                // A lazy local's holder: written in place (`Gen::prelude_lowers`).
+                TStmt::Val(sym, init) if self.lazy_val(sym) => {
+                    assert!(matches!(parts, Parts::Written), "a lazy val in a tree");
+                    self.local_val(sym, init);
+                }
+                TStmt::Expr(_) | TStmt::Val(..) => {
+                    let nodes = self.lowering(|g| {
+                        let mut nodes = Vec::new();
+                        g.lower_statement(s, &mut nodes);
+                        nodes
+                    });
+                    self.add(parts, &nodes);
+                }
+                TStmt::Fun(_) | TStmt::Pat(..) => {}
+            }
+        }
+    }
+
+    fn prelude_lowers(&self, stmts: &[TStmt]) -> bool {
+        !stmts.iter().any(|s| matches!(*s, TStmt::Val(sym, _) if self.lazy_val(sym)))
+    }
+
+    /// Whether a val is lazy, which `Gen::local_val` gives a holder.
+    pub(super) fn lazy_val(&self, s: SymId) -> bool {
+        self.cx.input.syms.sym(s).mods & mods::LAZY != 0
     }
 
     /// How many of the arguments a class passes to the local trait `b` are the values of the
@@ -1414,10 +1707,12 @@ impl<'a> Gen<'a> {
         Some((k, proxies, declared))
     }
 
-    fn call_trait_init(&mut self, b: ClassId, slot: u16, this: &ErasedType) {
+    /// The trait `b`'s initialiser run on the instance, `this` its type.
+    fn lower_trait_init(&mut self, b: ClassId, this: &ErasedType) -> LirId {
         let base = self.class_name(b);
-        self.load(slot, this);
-        self.invoke(Invoke::Static, &base, true, "$init$", &[ErasedType::L(base.clone())], &ErasedType::V);
+        let init = method_ref(Invoke::Static, &base, true, "$init$", &[ErasedType::L(base.clone())], &ErasedType::V);
+        let instance = self.lir.this(this.clone());
+        self.lir.static_call(&init, &[instance])
     }
 
     /// The traits a class mixes in anew that have an `$init$` the typer schedules no call of,
@@ -1548,7 +1843,7 @@ impl<'a> Gen<'a> {
     /// field of its parameter, or evaluated and dropped where the class or a trait further down
     /// overrides the parameter's accessor (`Mixin` 301-303, so `class C extends T(side()) {
     /// override val x = 9 }` runs `side()` and T's body reads `x` as 0).
-    fn trait_arguments(&mut self, b: ClassId, call: ParentCall, fields: &[FieldDef], slot: u16, this: &ErasedType) -> bool {
+    fn trait_arguments(&mut self, parts: &mut Parts, b: ClassId, call: ParentCall, fields: &[FieldDef], this: &ErasedType) -> bool {
         let cx = self.cx;
         let prog = cx.input.prog;
         let owner = self.this_name.clone();
@@ -1558,22 +1853,15 @@ impl<'a> Gen<'a> {
             self.unsupported("the arguments of a trait that its parameters do not match");
             return false;
         }
-        for s in prog.stmts[call.prelude.range()].to_vec() {
-            match s {
-                TStmt::Expr(x) if prog.is_removed(x) => {}
-                TStmt::Expr(x) => self.statement(x),
-                TStmt::Val(sym, init) => self.local_val(sym, init),
-                _ => {}
-            }
-        }
+        self.prelude(parts, &prog.stmts[call.prelude.range()]);
         for (p, arg) in params.into_iter().zip(args) {
             match fields.iter().find(|f| f.sym == p) {
-                Some(f) => {
-                    self.load(slot, this);
-                    self.expr(arg, &f.ty);
-                    self.putfield(&owner, &f.name, &f.ty);
-                }
-                None => self.statement(arg),
+                Some(f) => self.part(parts, |g| {
+                    let instance = g.lir.this(this.clone());
+                    let value = g.lower_expr(arg, &f.ty);
+                    g.lir.store(instance, &owner, &f.name, value)
+                }),
+                None => self.part(parts, |g| g.lower_expr(arg, &ErasedType::V)),
             }
         }
         true
@@ -1704,17 +1992,19 @@ impl<'a> Gen<'a> {
         out
     }
 
-    fn constructor(
+    /// A class's primary constructor: its parameters, and what is decided of its body before
+    /// any of it is lowered. `enum_class` is the superclass or the enum the class is a value of.
+    fn primary_ctor<'t>(
         &mut self,
-        tc: &TClass,
-        fields: &[FieldDef],
-        super_name: &str,
+        tc: &'t TClass,
+        fields: &'t [FieldDef],
+        super_name: &'t str,
         enum_class: Option<ClassId>,
         fields_first: bool,
         is_value_case: bool,
         is_object: bool,
         is_anon: bool,
-    ) {
+    ) -> (Vec<(Option<SymId>, ErasedType)>, PrimaryCtor<'t>) {
         let cx = self.cx;
         let mut params: Vec<(Option<SymId>, ErasedType)> = Vec::new();
         // An enum over `java.lang.Enum` passes the name and ordinal of its values up to it.
@@ -1725,7 +2015,7 @@ impl<'a> Gen<'a> {
         }
         // The name and ordinal follow what the class captures: a value of an enum of a block or a
         // class takes its companion's instance first (`enum_value_new`).
-        let name_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+        let name_param = params.len();
         if is_value_case || java_enum {
             params.push((None, ErasedType::L(Rc::from(STRING))));
             params.push((None, ErasedType::I));
@@ -1742,14 +2032,19 @@ impl<'a> Gen<'a> {
             let t = self.sym_type(p);
             params.push((Some(p), t));
         }
-        let mut roots: Vec<TExprId> = Vec::new();
-        for init in tc.init.iter().filter(|_| !is_object) {
-            init_roots(cx.input.prog, init, &mut roots);
-        }
-        if let Some(args) = tc.parent_args.filter(|_| !is_anon) {
-            roots.extend_from_slice(cx.input.prog.expr_list(args));
-        }
-        self.begin_method(false, true, &params, ErasedType::V, &roots);
+        let route = self.super_call_route(tc, enum_class, anon_super.map(|(_, _, types)| types), is_anon);
+        (params, PrimaryCtor { tc, fields, super_name, fields_first, is_value_case, is_object, is_anon, java_enum, n_captures, name_param, first_super_arg, route })
+    }
+
+    fn constructor(&mut self, params: &[(Option<SymId>, ErasedType)], k: &PrimaryCtor) {
+        let cx = self.cx;
+        let tc = k.tc;
+        let roots = self.primary_roots(k);
+        let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
+        // A static module is made by its own `<clinit>` only, as scalac's.
+        let private = k.is_object && cx.statically_placed(tc.id) && cx.input.syms.class(tc.id).local_module.is_none();
+        let visibility = if private { Visibility::Private } else { Visibility::Public };
+        self.begin_method(MethodFlags { visibility, ..MethodFlags::PUBLIC }, "<init>", &method_desc(&types, &ErasedType::V), true, params, ErasedType::V, &roots);
         // The constructor reads what the class captures from its parameters, which the
         // arguments of the superclass's constructor need before the fields are set.
         let mut slot = 1u16;
@@ -1768,153 +2063,235 @@ impl<'a> Gen<'a> {
         }
         let extras = Extras { homes: self.class_homes.iter().map(|h| h.0).collect(), keys: self.class_keys.iter().map(|k| k.0).collect() };
         self.bind_extras(&extras, slot);
-        let this = ErasedType::L(self.this_name.clone());
-        let owner = self.this_name.clone();
-        if is_value_case {
-            // Before the enum's constructor runs, whose body may print the value.
-            let string = ErasedType::L(Rc::from(STRING));
-            self.load(0, &this);
-            self.load(name_slot, &string);
-            self.putfield(&owner, "$name", &string);
-            self.load(0, &this);
-            self.load(name_slot + 1, &ErasedType::I);
-            self.putfield(&owner, "$ordinal", &ErasedType::I);
+        if !self.constructor_lowers(k) {
+            if !self.constructor_parts(&mut Parts::Written, k) {
+                return;
+            }
+            self.return_value(&ErasedType::V);
+        } else if k.is_object {
+            self.write_module(true, |g| g.primary_tree(k));
+        } else {
+            self.body(|g| {
+                let (root, fields) = g.primary_tree(k);
+                assert!(fields.is_empty(), "a class declares no field in its constructor's tree");
+                root
+            });
         }
-        // Scala sets the fields a class takes as parameters before the constructor of its
-        // superclass runs, whose body may read them through an overridden member.
-        if fields_first && !is_anon {
-            for &p in &tc.ctor_params {
-                let Some(f) = fields.iter().find(|f| f.sym == p) else { continue };
-                let local = self.m.locals[&p].clone();
-                self.load(0, &this);
-                self.load(local.slot, &local.ty);
-                self.putfield(&owner, &f.name, &f.ty);
-            }
-        }
-        for s in cx.input.prog.stmts[tc.parent_prelude.range()].to_vec() {
-            match s {
-                TStmt::Expr(x) if cx.input.prog.is_removed(x) => {}
-                TStmt::Expr(x) => self.statement(x),
-                TStmt::Val(sym, init) => self.local_val(sym, init),
-                _ => {}
-            }
-        }
-        self.load(0, &this);
-        let name_ordinal = if java_enum { vec![ErasedType::L(Rc::from(STRING)), ErasedType::I] } else { Vec::new() };
-        if java_enum {
-            self.load(name_slot, &name_ordinal[0]);
-            self.load(name_slot + 1, &ErasedType::I);
-        }
-        let super_params = match enum_class {
-            Some(_) if anon_super.is_some() => {
-                let (_, _, types) = anon_super.unwrap();
-                let mut slot: u16 = params[..first_super_arg].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>() + 1;
-                for t in &types {
-                    self.load(slot, t);
-                    slot += if t.wide() { 2 } else { 1 };
-                }
-                types
-            }
-            // A superclass this build does not write is called as its class file declares the
-            // selected constructor, the enclosing instance first where it takes one, as a creation
-            // of it is (`ExplicitOuter.OuterOps.args` for `New` and `Super` alike).
-            Some(e) if !is_anon && tc.parent_args.is_some_and(|args| self.unwritten_ctor_layout(e, tc.parent_via).is_some_and(|(_, declared)| args.len as usize == declared.len() + 1)) => {
-                self.m.before_super = true;
-                let types = self.unwritten_ctor_arguments(e, tc.parent_via, tc.parent_args.unwrap()).unwrap();
-                self.m.before_super = false;
-                types
-            }
-            // A parent call that goes to a secondary constructor of the superclass, the
-            // enclosing instance of an inner superclass first as a secondary `new` passes it
-            // (`ExplicitOuter.OuterOps.args` for `New`, `Super` and `This` alike).
-            Some(e) if tc.parent_via.is_some() && !is_anon => {
-                let via = tc.parent_via.unwrap();
-                let args = tc.parent_args.unwrap_or(crate::ast::ListRef::EMPTY);
-                self.m.before_super = true;
-                let types = self.via_arguments(e, via, args);
-                self.m.before_super = false;
-                types
-            }
-            // A superclass nested in a class or local takes what it captures first.
-            Some(e) if tc.parent_args.is_some() && self.capture_count(e) > 0 && !is_anon => {
-                self.m.before_super = true;
-                let types = self.new_arguments(e, tc.parent_args.unwrap());
-                self.m.before_super = false;
-                types
-            }
-            Some(e) => {
-                let types = self.ctor_param_types(e);
-                match tc.parent_args {
-                    Some(args) => {
-                        self.m.before_super = true;
-                        self.super_arguments(e, args, &types);
-                        self.m.before_super = false;
-                    }
-                    None if types.is_empty() => {}
-                    // Every parameter of the superclass has a default: each its getter's.
-                    None if cx.input.syms.class(e).ctor.iter().all(|cl| cl.params.iter().all(|p| p.has_default)) => {
-                        self.m.before_super = true;
-                        self.all_ctor_defaults(e, &types);
-                        self.m.before_super = false;
-                    }
-                    None => {
-                        self.unsupported("an enum case without the arguments of its enum");
-                        return;
-                    }
-                }
-                types
-            }
-            None => Vec::new(),
-        };
-        let super_params = [name_ordinal, super_params].concat();
-        self.invoke(Invoke::Special, super_name, false, "<init>", &super_params, &ErasedType::V);
-        if n_captures > 0 {
-            let mut slot = 1u16;
-            for (s, field, _, _) in self.class_captures.clone() {
-                let t = self.anon_capture_type(s);
-                self.load(0, &this);
-                self.load(slot, &t);
-                self.putfield(&owner, &field, &t);
-                slot += if t.wide() { 2 } else { 1 };
-            }
-            for (h, field) in self.class_homes.clone() {
-                let t = self.class_type(h);
-                self.load(0, &this);
-                self.load(slot, &t);
-                self.putfield(&owner, &field, &t);
-                slot += 1;
-            }
-            for (_, field) in self.class_keys.clone() {
-                let t = ErasedType::object();
-                self.load(0, &this);
-                self.load(slot, &t);
-                self.putfield(&owner, &field, &t);
-                slot += 1;
-            }
-        }
-        if !is_anon && !fields_first {
-            for &p in &tc.ctor_params {
-                let Some(f) = fields.iter().find(|f| f.sym == p) else { continue };
-                let local = self.m.locals[&p].clone();
-                self.load(0, &this);
-                self.load(local.slot, &local.ty);
-                self.putfield(&owner, &f.name, &f.ty);
-            }
-        }
-        // An object's body runs in its `<clinit>`, once `MODULE$` holds the instance.
-        if !is_object {
-            self.class_body(tc, fields, &this);
-        }
-        self.return_value(&ErasedType::V);
-        let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
-        // A static module is made by its own `<clinit>` only, as scalac's.
-        let ctor_access = if is_object && cx.statically_placed(tc.id) && cx.input.syms.class(tc.id).local_module.is_none() { ACC_PRIVATE } else { ACC_PUBLIC };
-        self.end_method(ctor_access, "<init>", &method_desc(&types, &ErasedType::V));
+        self.end_method();
 
         if !cx.ctor_defaults_on_companion(tc.id) && !cx.ctor_defaults_on_inner_companion(tc.id) && !cx.ctor_defaults_on_local_companion(tc.id) {
             let clauses = cx.input.syms.class(tc.id).ctor.clone();
             self.ctor_default_getters(Some(tc.id), Some(crate::tir::DefaultOf::Ctor(tc.id)), &tc.ctor_params, &tc.ctor_defaults, &clauses);
         }
+    }
+
+    /// What a primary constructor's locals are found shared in (`free::cells`): its body's
+    /// initialisers and statements, an object's too, and the superclass's arguments.
+    fn primary_roots(&self, k: &PrimaryCtor) -> Vec<TExprId> {
+        let prog = self.cx.input.prog;
+        let mut roots: Vec<TExprId> = Vec::new();
+        for init in &k.tc.init {
+            init_roots(prog, init, &mut roots);
+        }
+        if let Some(args) = k.tc.parent_args.filter(|_| !k.is_anon) {
+            roots.extend_from_slice(prog.expr_list(args));
+        }
+        roots
+    }
+
+    /// Whether every part of a primary constructor has nodes, an object's body among them, so
+    /// that the constructor is one tree.
+    fn constructor_lowers(&mut self, k: &PrimaryCtor) -> bool {
+        let prelude = &self.cx.input.prog.stmts[k.tc.parent_prelude.range()];
+        matches!(k.route, SuperCall::Own(_) | SuperCall::Declared(..)) && self.prelude_lowers(prelude) && self.class_body_lowers(k.tc)
+    }
+
+    /// A primary constructor's one tree (`Gen::constructor_lowers`).
+    fn primary_tree(&mut self, k: &PrimaryCtor) -> (LirId, Vec<Declared>) {
+        let mut parts = Parts::Tree(Vec::new(), Vec::new());
+        self.constructor_parts(&mut parts, k);
+        self.returning(parts)
+    }
+
+    /// One of the two methods of the class file an object's constructor tree is written in
+    /// (`Gen::write_module_part`), its `<init>` or its `<clinit>`. The first of them written makes
+    /// the tree with `make` and keeps it, with the locals its lowering declared, for the other.
+    pub(super) fn write_module(&mut self, init: bool, make: impl FnOnce(&mut Self) -> (LirId, Vec<Declared>)) {
+        let (root, fields, made) = match self.module_tree.take() {
+            Some(kept) => {
+                self.lir = kept.lir;
+                self.lower_declared = kept.declared;
+                (kept.root, kept.fields, false)
+            }
+            None => {
+                let (root, fields) = self.lowering(make);
+                (root, fields, true)
+            }
+        };
+        self.write_module_part(root, init, &fields);
+        if made {
+            let lir = std::mem::take(&mut self.lir);
+            let declared = std::mem::take(&mut self.lower_declared);
+            self.module_tree = Some(ModuleTree { lir, declared, root, fields });
+        }
+    }
+
+    /// How a primary constructor passes the arguments of its superclass's constructor
+    /// (`SuperCall`), `superclass` the superclass or the enum it is a value of.
+    fn super_call_route(&mut self, tc: &TClass, superclass: Option<ClassId>, anon_super: Option<Vec<ErasedType>>, is_anon: bool) -> SuperCall {
+        let cx = self.cx;
+        let Some(e) = superclass else { return SuperCall::Declared(Vec::new(), crate::ast::ListRef::EMPTY) };
+        if let Some(types) = anon_super {
+            return SuperCall::Own(types);
+        }
+        if !is_anon {
+            // A superclass this build does not write is called as its class file declares the
+            // selected constructor, the enclosing instance first where it takes one, as a creation
+            // of it is (`ExplicitOuter.OuterOps.args` for `New` and `Super` alike).
+            if let Some(args) = tc.parent_args.filter(|args| self.unwritten_ctor_layout(e, tc.parent_via).is_some_and(|(_, declared)| args.len as usize == declared.len() + 1)) {
+                return SuperCall::Unwritten(e, args);
+            }
+            // A parent call that goes to a secondary constructor of the superclass, the
+            // enclosing instance of an inner superclass first as a secondary `new` passes it
+            // (`ExplicitOuter.OuterOps.args` for `New`, `Super` and `This` alike).
+            if let Some(via) = tc.parent_via {
+                return SuperCall::Via(e, via, tc.parent_args.unwrap_or(crate::ast::ListRef::EMPTY));
+            }
+            // A superclass nested in a class or local takes what it captures first.
+            if let Some(args) = tc.parent_args.filter(|_| self.capture_count(e) > 0) {
+                return SuperCall::Captured(e, args);
+            }
+        }
+        let types = self.ctor_param_types(e);
+        match tc.parent_args {
+            Some(args) => SuperCall::Declared(types, args),
+            None if types.is_empty() => SuperCall::Declared(types, crate::ast::ListRef::EMPTY),
+            // Every parameter of the superclass has a default: each its getter's.
+            None if cx.input.syms.class(e).ctor.iter().all(|cl| cl.params.iter().all(|p| p.has_default)) => SuperCall::Defaults(e, types),
+            None => SuperCall::Refused,
+        }
+    }
+
+    /// The parts of a primary constructor's body in order: false where it is refused, the method
+    /// abandoned.
+    fn constructor_parts(&mut self, parts: &mut Parts, k: &PrimaryCtor) -> bool {
+        let prog = self.cx.input.prog;
+        let tc = k.tc;
+        let this = ErasedType::L(self.this_name.clone());
+        let owner = self.this_name.clone();
+        if k.is_value_case {
+            // Before the enum's constructor runs, whose body may print the value.
+            for (i, field) in [(k.name_param, "$name"), (k.name_param + 1, "$ordinal")] {
+                self.part(parts, |g| {
+                    let instance = g.lir.this(this.clone());
+                    let value = g.param(i);
+                    g.lir.store(instance, &owner, field, value)
+                });
+            }
+        }
+        // Scala sets the fields a class takes as parameters before the constructor of its
+        // superclass runs, whose body may read them through an overridden member.
+        if k.fields_first && !k.is_anon {
+            self.param_fields(parts, tc, k.fields);
+        }
+        self.prelude(parts, &prog.stmts[tc.parent_prelude.range()]);
+        if !self.super_call(parts, k) {
+            return false;
+        }
+        if k.n_captures > 0 {
+            // What the class captures, then the instances and the keys its copies of local defs
+            // and lazy vals read, from the parameters that lead.
+            let mut held: Vec<String> = self.class_captures.iter().map(|c| c.1.clone()).collect();
+            held.extend(self.class_homes.iter().map(|h| h.1.clone()));
+            held.extend(self.class_keys.iter().map(|x| x.1.clone()));
+            for (i, field) in held.iter().enumerate() {
+                self.part(parts, |g| {
+                    let instance = g.lir.this(this.clone());
+                    let value = g.param(i);
+                    g.lir.store(instance, &owner, field, value)
+                });
+            }
+        }
+        if !k.is_anon && !k.fields_first {
+            self.param_fields(parts, tc, k.fields);
+        }
+        // An object's body is its constructor's, which the class file runs in the `<clinit>`
+        // (`Gen::write_module_part`); a constructor written in place leaves it to the `<clinit>`
+        // written in place (`Gen::module_clinit`).
+        if !(k.is_object && matches!(parts, Parts::Written)) {
+            if k.is_object {
+                self.object_enum_parts(parts, tc);
+            }
+            self.class_body(parts, tc, k.fields, &this);
+        }
+        true
+    }
+
+    /// The fields of the class's own constructor parameters set from them.
+    fn param_fields(&mut self, parts: &mut Parts, tc: &TClass, fields: &[FieldDef]) {
+        let this = ErasedType::L(self.this_name.clone());
+        let owner = self.this_name.clone();
+        for &p in &tc.ctor_params {
+            let Some(f) = fields.iter().find(|f| f.sym == p) else { continue };
+            self.part(parts, |g| {
+                let instance = g.lir.this(this.clone());
+                let value = g.lower_held(p).expect("a constructor's parameter in its scope");
+                g.lir.store(instance, &owner, &f.name, value)
+            });
+        }
+    }
+
+    /// The superclass's constructor run on the instance: the name and ordinal of a value of a
+    /// Java enum first, then the arguments by the route. False where the route refuses.
+    fn super_call(&mut self, parts: &mut Parts, k: &PrimaryCtor) -> bool {
+        let leading: Vec<usize> = if k.java_enum { vec![k.name_param, k.name_param + 1] } else { Vec::new() };
+        let mut params: Vec<ErasedType> = leading.iter().map(|&i| self.m.params[i].1.clone()).collect();
+        if let SuperCall::Own(types) | SuperCall::Declared(types, _) = &k.route {
+            params.extend(types.iter().cloned());
+            let ctor = method_ref(Invoke::Special, &Rc::from(k.super_name), false, "<init>", &params, &ErasedType::V);
+            self.part(parts, |g| {
+                let mut args: Vec<LirId> = leading.iter().map(|&i| g.param(i)).collect();
+                match &k.route {
+                    SuperCall::Own(types) => args.extend((0..types.len()).map(|i| g.param(k.first_super_arg + i))),
+                    SuperCall::Declared(types, written) => {
+                        g.m.before_super = true;
+                        let (list, _) = g.lower_arguments(None, *written, types);
+                        g.m.before_super = false;
+                        args.extend_from_slice(&g.lir.lists[list.start as usize..(list.start + list.len) as usize]);
+                    }
+                    _ => unreachable!("a lowered route"),
+                }
+                g.lir.init(&ctor, &args)
+            });
+            return true;
+        }
+        // The routes not lowered yet, written in place (`Gen::constructor`).
+        assert!(matches!(parts, Parts::Written), "a route not lowered in a tree");
+        if let SuperCall::Refused = k.route {
+            self.unsupported("an enum case without the arguments of its enum");
+            self.abandon_method();
+            return false;
+        }
+        let this = ErasedType::L(self.this_name.clone());
+        self.load(0, &this);
+        for &i in &leading {
+            self.part(parts, |g| g.param(i));
+        }
+        self.m.before_super = true;
+        let types = match &k.route {
+            SuperCall::Unwritten(e, args) => self.unwritten_ctor_arguments(*e, k.tc.parent_via, *args).expect("its class file's layout, by the route"),
+            SuperCall::Via(e, via, args) => self.via_arguments(*e, *via, *args),
+            SuperCall::Captured(e, args) => self.new_arguments(*e, *args),
+            SuperCall::Defaults(e, types) => {
+                self.all_ctor_defaults(*e, types);
+                types.clone()
+            }
+            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Refused => unreachable!("a route taken above"),
+        };
+        self.m.before_super = false;
+        params.extend(types);
+        self.invoke(Invoke::Special, k.super_name, false, "<init>", &params, &ErasedType::V);
+        true
     }
 
     /// `def this(params) = { this(args); stmts }`: an `<init>` overload, as scalac's, that calls
@@ -1951,7 +2328,8 @@ impl<'a> Gen<'a> {
         }
         params.extend(fun.params[declared_from..].iter().map(|&s| (Some(s), self.sym_type(s))));
         self.context = format!("{}.<init>", self.this_name);
-        self.begin_method(false, true, &params, ErasedType::V, &[body]);
+        let taken: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
+        self.begin_method(MethodFlags::PUBLIC, "<init>", &method_desc(&taken, &ErasedType::V), true, &params, ErasedType::V, &[body]);
         if let Some((slots, extras, extras_slot)) = held {
             self.bind_extras(&extras, extras_slot);
             for &(p, cap) in &slots {
@@ -1964,38 +2342,78 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        let owner = self.this_name.clone();
-        let this = ErasedType::L(owner.clone());
-        for s in prelude {
-            match *s {
-                TStmt::Expr(x) if prog.is_removed(x) => {}
-                TStmt::Expr(x) => self.statement(x),
-                TStmt::Val(sym, init) => self.local_val(sym, init),
-                _ => {}
-            }
+        let route = self.self_call_route(call);
+        if matches!(route, SelfCall::Declared(..)) && self.prelude_lowers(prelude) {
+            self.body(|g| {
+                let mut parts = Parts::Tree(Vec::new(), Vec::new());
+                g.secondary_parts(&mut parts, prelude, route, after);
+                g.returning(parts).0
+            });
+        } else if self.secondary_parts(&mut Parts::Written, prelude, route, after) {
+            self.return_value(&ErasedType::V);
+        } else {
+            return;
         }
-        self.load(0, &this);
-        self.m.before_super = true;
-        let types = match prog.expr(call) {
-            // The primary constructor, its captures (the enclosing instance of a class nested
-            // in a class, the secondary's own outer parameter) first.
-            TExpr::New(c, args) => self.new_arguments(c, args),
-            TExpr::NewVia(s, args) => {
-                let Owner::Class(c) = cx.input.syms.sym(s).owner else { return };
-                self.via_arguments(c, s, args)
-            }
-            _ => return,
-        };
-        self.m.before_super = false;
-        self.invoke(Invoke::Special, &owner, false, "<init>", &types, &ErasedType::V);
-        self.statement(after);
-        self.return_value(&ErasedType::V);
-        let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
-        self.end_method(ACC_PUBLIC, "<init>", &method_desc(&types, &ErasedType::V));
+        self.end_method();
         if !self.this_class.map_or(false, |c| cx.ctor_defaults_on_companion(c) || cx.ctor_defaults_on_inner_companion(c) || cx.ctor_defaults_on_local_companion(c)) {
             let clauses: Vec<ClauseSig> = cx.input.syms.sym(fun.sym).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone());
             self.ctor_default_getters(None, Some(crate::tir::DefaultOf::Method(fun.sym)), &fun.params, &fun.defaults, &clauses);
         }
+    }
+
+    /// How a secondary constructor's call of another constructor of its class passes the
+    /// arguments (`SelfCall`).
+    fn self_call_route(&mut self, call: TExprId) -> SelfCall {
+        let cx = self.cx;
+        match cx.input.prog.expr(call) {
+            // The primary constructor, its captures (the enclosing instance of a class nested
+            // in a class, the secondary's own outer parameter) first.
+            TExpr::New(c, args) => match self.ctor_arguments_route(c, args) {
+                CtorArguments::Declared => SelfCall::Declared(c, args),
+                _ => SelfCall::Primary(c, args),
+            },
+            TExpr::NewVia(s, args) => match cx.input.syms.sym(s).owner {
+                Owner::Class(c) => SelfCall::Via(c, s, args),
+                _ => SelfCall::Unowned,
+            },
+            _ => SelfCall::Unowned,
+        }
+    }
+
+    /// The parts of a secondary constructor's body in order: the statements before its call,
+    /// the call, then what follows it. False where the method is left out.
+    fn secondary_parts(&mut self, parts: &mut Parts, prelude: &[TStmt], route: SelfCall, after: TExprId) -> bool {
+        let owner = self.this_name.clone();
+        self.prelude(parts, prelude);
+        if let SelfCall::Declared(c, args) = route {
+            self.part(parts, |g| {
+                let types = g.ctor_param_types(c);
+                let ctor = method_ref(Invoke::Special, &owner, false, "<init>", &types, &ErasedType::V);
+                g.m.before_super = true;
+                let (list, _) = g.lower_arguments(None, args, &types);
+                g.m.before_super = false;
+                let args = g.lir.lists[list.start as usize..(list.start + list.len) as usize].to_vec();
+                g.lir.init(&ctor, &args)
+            });
+        } else {
+            // The routes not lowered yet, written in place (`Gen::secondary_ctor`).
+            assert!(matches!(parts, Parts::Written), "a route not lowered in a tree");
+            self.load(0, &ErasedType::L(owner.clone()));
+            self.m.before_super = true;
+            let types = match route {
+                SelfCall::Primary(c, args) => self.new_arguments(c, args),
+                SelfCall::Via(c, s, args) => self.via_arguments(c, s, args),
+                SelfCall::Unowned => {
+                    self.abandon_method();
+                    return false;
+                }
+                SelfCall::Declared(..) => unreachable!("a route taken above"),
+            };
+            self.m.before_super = false;
+            self.invoke(Invoke::Special, &owner, false, "<init>", &types, &ErasedType::V);
+        }
+        self.part(parts, |g| g.lower_expr(after, &ErasedType::V));
+        true
     }
 
     /// The defaults of a constructor of a class whose companion is not static (an inner or a
@@ -2030,7 +2448,8 @@ impl<'a> Gen<'a> {
                 None => self.sym_type(params[i]),
             };
             let by_name = super::gen::clause_shape(clauses, i - captures).1.is_some();
-            self.begin_method(true, false, &before, ret.clone(), &[d]);
+            let types: Vec<ErasedType> = before.iter().map(|p| p.1.clone()).collect();
+            self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&types, &ret), false, &before, ret.clone(), &[d]);
             self.bind_extras(&extras, extras_slot);
             for &s in &captured {
                 if self.held(s) == Held::Cell {
@@ -2041,10 +2460,11 @@ impl<'a> Gen<'a> {
                     }
                 }
             }
-            self.default_value(d, by_name, &ret);
-            self.return_value(&ret);
-            let types: Vec<ErasedType> = before.iter().map(|p| p.1.clone()).collect();
-            self.end_method(ACC_PUBLIC | ACC_STATIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&types, &ret));
+            self.body(|g| {
+                let value = g.lower_default_value(d, by_name, &ret);
+                g.lir.ret(value)
+            });
+            self.end_method();
         }
     }
 
@@ -2083,42 +2503,9 @@ impl<'a> Gen<'a> {
 
     fn accessors(&mut self, f: &FieldDef) {
         let owner = self.this_name.clone();
-        let this = ErasedType::L(owner.clone());
         let getter_desc = method_desc(&[], &f.ty);
         // A `@threadUnsafe` member's getter computes its right-hand side itself (`lazy_holder_body`).
         let thread_unsafe = f.lazy && self.is_thread_unsafe(f.sym);
-        self.begin_method(false, false, &[], f.ty.clone(), &f.init.filter(|_| thread_unsafe && f.lazy_owner.is_none()).into_iter().collect::<Vec<_>>());
-        let mut holder = None;
-        if thread_unsafe {
-            let container = self.lazy_member_names(&f.name).0;
-            match (f.lazy_owner, f.init) {
-                (Some(t), _) => {
-                    let base = self.class_name(t);
-                    self.lazy_holder_body(&f.name, &container, &f.ty, HolderInit::TraitStatic(base));
-                }
-                (None, Some(init)) => self.lazy_holder_body(&f.name, &container, &f.ty, HolderInit::Expr(init)),
-                (None, None) => self.unsupported("a lazy member without an initialiser"),
-            }
-        } else if f.lazy {
-            // `transformMemberDefThreadSafe`: the getter over the holder, the initialiser after it.
-            let init = match (f.lazy_owner, f.init) {
-                (Some(t), _) => Some(HolderInit::TraitStatic(self.class_name(t))),
-                (None, Some(init)) => Some(HolderInit::Expr(init)),
-                (None, None) => None,
-            };
-            let h = self.lazy_holder(&f.name, &f.ty);
-            self.thread_safe_getter(&h);
-            match init {
-                Some(init) => holder = Some((h, init)),
-                None => self.unsupported("a lazy member without an initialiser"),
-            }
-        } else if let (Some(constant), Some(init)) = (f.constant, f.init) {
-            self.constant_value(Some(constant), init, &f.ty);
-        } else {
-            self.load(0, &this);
-            self.getfield(&owner, &f.name, &f.ty);
-        }
-        self.return_value(&f.ty);
         // A trait's final val, object and given are final in the class that holds them, as
         // scalac's `Mixin` copies the member's flags (`mkForwarderSym`); a using parameter's is
         // not, as the parameter is no given definition.
@@ -2132,8 +2519,42 @@ impl<'a> Gen<'a> {
         let module = self.cx.inner_given_objects.contains_key(&f.sym) || matches!(info.kind, SymKind::Object(_));
         let lazy_final = f.lazy && fin && !from_trait;
         // A constant's getter is final, as the val is (`Memoize`).
-        let access = if (from_trait && fin) || module || lazy_final || self.implements_deferred(f.sym) || f.constant.is_some() { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
-        self.end_method(access, &f.name, &getter_desc);
+        let is_final = (from_trait && fin) || module || lazy_final || self.implements_deferred(f.sym) || f.constant.is_some();
+        self.begin_method(MethodFlags { is_final, ..MethodFlags::PUBLIC }, &f.name, &getter_desc, false, &[], f.ty.clone(), &f.init.filter(|_| thread_unsafe && f.lazy_owner.is_none()).into_iter().collect::<Vec<_>>());
+        let mut holder = None;
+        if thread_unsafe {
+            let container = self.lazy_member_names(&f.name).0;
+            match (f.lazy_owner, f.init) {
+                (Some(t), _) => {
+                    let base = self.class_name(t);
+                    self.lazy_holder_body(&f.name, &container, &f.ty, HolderInit::TraitStatic(base));
+                }
+                (None, Some(init)) => self.lazy_holder_body(&f.name, &container, &f.ty, HolderInit::Expr(init)),
+                (None, None) => self.unsupported("a lazy member without an initialiser"),
+            }
+            self.return_value(&f.ty);
+        } else if f.lazy {
+            // `transformMemberDefThreadSafe`: the getter over the holder, the initialiser after it.
+            let init = match (f.lazy_owner, f.init) {
+                (Some(t), _) => Some(HolderInit::TraitStatic(self.class_name(t))),
+                (None, Some(init)) => Some(HolderInit::Expr(init)),
+                (None, None) => None,
+            };
+            let h = self.lazy_holder(&f.name, &f.ty);
+            if init.is_none() {
+                self.unsupported("a lazy member without an initialiser");
+            }
+            self.thread_safe_getter(&h);
+            holder = init.map(|init| (h, init));
+        } else if let (Some(constant), Some(init)) = (f.constant, f.init) {
+            self.body(|g| {
+                let value = g.lower_constant_value(Some(constant), init, &f.ty);
+                g.lir.ret(value)
+            });
+        } else {
+            self.body(|g| g.getter_body(&f.name, &f.ty));
+        }
+        self.end_method();
         let getter = MethodRef {
             owner: owner.clone(),
             owner_is_interface: false,
@@ -2154,11 +2575,6 @@ impl<'a> Gen<'a> {
             self.thread_safe_init(&h, &init);
         }
         if f.mutable {
-            self.begin_method(false, false, &[(None, f.ty.clone())], ErasedType::V, &[]);
-            self.load(0, &this);
-            self.load(1, &f.ty);
-            self.putfield(&owner, &f.name, &f.ty);
-            self.return_value(&ErasedType::V);
             let setter = MethodRef {
                 owner: owner.clone(),
                 owner_is_interface: false,
@@ -2168,7 +2584,12 @@ impl<'a> Gen<'a> {
                 desc: method_desc(&[f.ty.clone()], &ErasedType::V),
                 kind: Invoke::Virtual,
             };
-            self.end_method(ACC_PUBLIC, &setter.name, &setter.desc);
+            self.begin_method(MethodFlags::PUBLIC, &setter.name, &setter.desc, false, &[(None, f.ty.clone())], ErasedType::V, &[]);
+            self.body(|g| {
+                let given = g.param(0);
+                g.setter_body(&f.name, given)
+            });
+            self.end_method();
             let setter_name = setter_member_name(self.cx.input.interner, self.cx.input.syms.sym(f.sym).name);
             if let Some(name) = setter_name.filter(|_| typed) {
                 self.emit_bridges_as(f.sym, name, &setter);
@@ -2206,9 +2627,9 @@ impl<'a> Gen<'a> {
         for &p in &tc.ctor_params[tc.captures..] {
             let ty = self.sym_type(p);
             let name = self.field_name(p);
-            self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &name, &method_desc(&[], &ty), None);
+            self.abstract_method(MethodFlags::ABSTRACT, &name, &method_desc(&[], &ty));
             if cx.input.syms.sym(p).kind == SymKind::Var {
-                self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &format!("{}_$eq", name), &method_desc(&[ty], &ErasedType::V), None);
+                self.abstract_method(MethodFlags::ABSTRACT, &format!("{}_$eq", name), &method_desc(&[ty], &ErasedType::V));
             }
         }
         // The field an initialiser stores into, if any, and the expression, in body order.
@@ -2222,24 +2643,31 @@ impl<'a> Gen<'a> {
                     let ty = self.sym_type(s);
                     let name = self.field_name(s);
                     let desc = method_desc(&[], &ty);
-                    self.begin_method(false, false, &[], ty.clone(), &[e]);
-                    self.expr(e, &ty);
-                    self.return_value(&ty);
-                    self.end_method(ACC_PUBLIC, &name, &desc);
-                    self.begin_method(true, false, &[(None, this.clone())], ty.clone(), &[]);
-                    self.load(0, &this);
-                    self.invoke(Invoke::Special, &owner, true, &name, &[], &ty);
-                    self.return_value(&ty);
-                    self.end_method(ACC_PUBLIC | ACC_STATIC, &format!("{}$", name), &method_desc(&[this.clone()], &ty));
+                    self.begin_method(MethodFlags::PUBLIC, &name, &desc, false, &[], ty.clone(), &[e]);
+                    self.body(|g| {
+                        let value = g.lower_expr(e, &ty);
+                        g.lir.ret(value)
+                    });
+                    self.end_method();
+                    self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &format!("{}$", name), &method_desc(&[this.clone()], &ty), false, &[(None, this.clone())], ty.clone(), &[]);
+                    let computed = method_ref(Invoke::Special, &owner, true, &name, &[], &ty);
+                    self.body(|g| {
+                        let instance = g.param(0);
+                        let value = g.lir.call(&computed, instance, &[]);
+                        g.lir.ret(value)
+                    });
+                    self.end_method();
                 }
                 TInit::Field(s, e) if self.constant(s, e).is_some() => {
                     let constant = self.constant(s, e);
                     let ty = self.sym_type(s);
                     let name = self.field_name(s);
-                    self.begin_method(false, false, &[], ty.clone(), &[e]);
-                    self.constant_value(constant, e, &ty);
-                    self.return_value(&ty);
-                    self.end_method(ACC_PUBLIC, &name, &method_desc(&[], &ty));
+                    self.begin_method(MethodFlags::PUBLIC, &name, &method_desc(&[], &ty), false, &[], ty.clone(), &[e]);
+                    self.body(|g| {
+                        let value = g.lower_constant_value(constant, e, &ty);
+                        g.lir.ret(value)
+                    });
+                    self.end_method();
                     self.trait_static_forwarder(&name, &[], &ty);
                     // `Constructors`: an initialiser that is no literal runs in `$init$`.
                     if let Some(ConstVal::Declared(_)) = constant {
@@ -2250,13 +2678,13 @@ impl<'a> Gen<'a> {
                     let ty = self.sym_type(s);
                     let name = self.field_name(s);
                     let desc = method_desc(&[], &ty);
-                    if !self.cw.has_method(&name, &desc) {
-                        self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &name, &desc, None);
+                    if !self.plan.has_method(&name, &desc) {
+                        self.abstract_method(MethodFlags::ABSTRACT, &name, &desc);
                     }
                     let setter = self.trait_setter_name(s);
                     let setter_desc = method_desc(&[ty], &ErasedType::V);
-                    if !self.cw.has_method(&setter, &setter_desc) {
-                        self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &setter, &setter_desc, None);
+                    if !self.plan.has_method(&setter, &setter_desc) {
+                        self.abstract_method(MethodFlags::ABSTRACT, &setter, &setter_desc);
                     }
                     runs.push((Some(s), e));
                 }
@@ -2278,24 +2706,30 @@ impl<'a> Gen<'a> {
                 params.push((None, t));
             }
             let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
-            self.begin_method(true, false, &params, ErasedType::V, &roots);
+            self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, "$init$", &method_desc(&types, &ErasedType::V), false, &params, ErasedType::V, &roots);
             self.bind_proxies(&proxies);
             self.bind_extras(&extras, extras_slot);
             self.m.this_slot = Some(0);
-            for (field, e) in runs {
-                match field {
-                    Some(s) => {
-                        let ty = self.sym_type(s);
-                        let setter = self.trait_setter_name(s);
-                        self.load(0, &this);
-                        self.expr(e, &ty);
-                        self.invoke(Invoke::Interface, &owner, true, &setter, &[ty], &ErasedType::V);
-                    }
-                    None => self.statement(e),
+            self.body(|g| {
+                let mut stmts = Vec::with_capacity(runs.len());
+                for (field, e) in runs {
+                    stmts.push(match field {
+                        Some(s) => {
+                            let ty = g.sym_type(s);
+                            let setter = g.trait_setter_name(s);
+                            let store = method_ref(Invoke::Interface, &owner, true, &setter, std::slice::from_ref(&ty), &ErasedType::V);
+                            let instance = g.param(0);
+                            let value = g.lower_expr(e, &ty);
+                            g.lir.call(&store, instance, &[value])
+                        }
+                        None => g.lower_expr(e, &ErasedType::V),
+                    });
                 }
-            }
-            self.return_value(&ErasedType::V);
-            self.end_method(ACC_PUBLIC | ACC_STATIC, "$init$", &method_desc(&types, &ErasedType::V));
+                let unit = g.lir.unit();
+                let done = g.lir.seq(&stmts, unit);
+                g.lir.ret(done)
+            });
+            self.end_method();
         }
     }
 
@@ -2332,8 +2766,6 @@ impl<'a> Gen<'a> {
     fn trait_setters(&mut self, c: ClassId, fields: &[FieldDef]) {
         let cx = self.cx;
         let syms = cx.input.syms;
-        let owner = self.this_name.clone();
-        let this = ErasedType::L(owner.clone());
         let inherited = self.traits_implemented_above(c);
         let params: Vec<SymId> = syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
         let bases: Vec<ClassId> = syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
@@ -2363,7 +2795,7 @@ impl<'a> Gen<'a> {
                 let ty = declared.unwrap_or_else(|| self.sym_type(s));
                 let setter = self.trait_setter_name(s);
                 let desc = method_desc(&[ty.clone()], &ErasedType::V);
-                if self.cw.has_method(&setter, &desc) {
+                if self.plan.has_method(&setter, &desc) {
                     continue;
                 }
                 // scalac's `Memoize` (156-181) stores into the class's field of the member's name
@@ -2378,15 +2810,19 @@ impl<'a> Gen<'a> {
                     Owner::Class(t) => position(t) >= position(b),
                     _ => false,
                 });
-                self.begin_method(false, false, &[(None, ty.clone())], ErasedType::V, &[]);
-                if let Some(f) = held {
-                    self.load(0, &this);
-                    self.load(1, &ty);
-                    self.adapt(&ty, &f.ty);
-                    self.putfield(&owner, &f.name, &f.ty);
-                }
-                self.return_value(&ErasedType::V);
-                self.end_method(ACC_PUBLIC, &setter, &desc);
+                self.begin_method(MethodFlags::PUBLIC, &setter, &desc, false, &[(None, ty.clone())], ErasedType::V, &[]);
+                self.body(|g| match held {
+                    Some(f) => {
+                        let given = g.param(0);
+                        let value = g.lower_adapt(given, &ty, &f.ty);
+                        g.setter_body(&f.name, value)
+                    }
+                    None => {
+                        let unit = g.lir.unit();
+                        g.lir.ret(unit)
+                    }
+                });
+                self.end_method();
             }
         }
     }
@@ -2554,8 +2990,6 @@ impl<'a> Gen<'a> {
     fn class_file_storage(&mut self, c: ClassId) {
         let cx = self.cx;
         let syms = cx.input.syms;
-        let owner = self.this_name.clone();
-        let this = ErasedType::L(owner.clone());
         let inherited = self.traits_implemented_above(c);
         let bases: Vec<ClassId> = syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
         for b in bases {
@@ -2567,58 +3001,74 @@ impl<'a> Gen<'a> {
             for (setter, desc) in &read.unmatched {
                 let Some(field) = setter.strip_prefix(&setter_prefix).and_then(|x| x.strip_suffix("_$eq")) else { continue };
                 let (params, ret) = parse_method_desc(desc);
-                if params.len() != 1 || ret != ErasedType::V || self.cw.has_method(setter, desc) {
+                if params.len() != 1 || ret != ErasedType::V || self.plan.has_method(setter, desc) {
                     continue;
                 }
                 let ty = params[0].clone();
-                let overridden = self.cw.has_method(field, &method_desc(&[], &ty));
+                let overridden = self.plan.has_method(field, &method_desc(&[], &ty));
                 if !overridden {
                     self.plain_field(field, &ty);
                 }
-                self.begin_method(false, false, &[(None, ty.clone())], ErasedType::V, &[]);
-                if !overridden {
-                    self.load(0, &this);
-                    self.load(1, &ty);
-                    self.putfield(&owner, field, &ty);
-                }
-                self.return_value(&ErasedType::V);
-                self.end_method(ACC_PUBLIC, setter, desc);
+                self.begin_method(MethodFlags::PUBLIC, setter, desc, false, &[(None, ty.clone())], ErasedType::V, &[]);
+                self.body(|g| {
+                    if overridden {
+                        let unit = g.lir.unit();
+                        g.lir.ret(unit)
+                    } else {
+                        let given = g.param(0);
+                        g.setter_body(field, given)
+                    }
+                });
+                self.end_method();
             }
             for (field, ty) in &read.vars {
                 let setter_desc = method_desc(&[ty.clone()], &ErasedType::V);
-                if self.cw.has_method(field, &method_desc(&[], ty)) || self.cw.has_method(&format!("{}_$eq", field), &setter_desc) {
+                if self.plan.has_method(field, &method_desc(&[], ty)) || self.plan.has_method(&format!("{}_$eq", field), &setter_desc) {
                     continue;
                 }
                 self.plain_field(field, ty);
-                self.begin_method(false, false, &[(None, ty.clone())], ErasedType::V, &[]);
-                self.load(0, &this);
-                self.load(1, ty);
-                self.putfield(&owner, field, ty);
-                self.return_value(&ErasedType::V);
-                self.end_method(ACC_PUBLIC, &format!("{}_$eq", field), &setter_desc);
+                self.begin_method(MethodFlags::PUBLIC, &format!("{}_$eq", field), &setter_desc, false, &[(None, ty.clone())], ErasedType::V, &[]);
+                self.body(|g| {
+                    let given = g.param(0);
+                    g.setter_body(field, given)
+                });
+                self.end_method();
             }
             // Each a thread-safe lazy val of the class, as `Mixin`'s forwarder of the member is one.
             for (name, ty, init) in &read.holders {
                 let getter_desc = method_desc(&[], ty);
-                if self.cw.has_method(name, &getter_desc) {
+                if self.plan.has_method(name, &getter_desc) {
                     continue;
                 }
-                self.thread_safe_member(name, ty, init.clone(), ACC_PUBLIC);
+                self.thread_safe_member(name, ty, init.clone(), MethodFlags::PUBLIC);
             }
         }
     }
 
     /// A private field of the class being written and its public getter.
     fn plain_field(&mut self, field: &str, ty: &ErasedType) {
+        self.field(FieldFlags::PRIVATE, field, ty);
+        self.begin_method(MethodFlags::PUBLIC, field, &method_desc(&[], ty), false, &[], ty.clone(), &[]);
+        self.body(|g| g.getter_body(field, ty));
+        self.end_method();
+    }
+
+    /// A getter's body: the class's field returned.
+    fn getter_body(&mut self, field: &str, ty: &ErasedType) -> LirId {
         let owner = self.this_name.clone();
-        let mut d = String::new();
-        ty.desc(&mut d);
-        self.cw.field(ACC_PRIVATE, field, &d);
-        self.begin_method(false, false, &[], ty.clone(), &[]);
-        self.load(0, &ErasedType::L(owner.clone()));
-        self.getfield(&owner, field, ty);
-        self.return_value(ty);
-        self.end_method(ACC_PUBLIC, field, &method_desc(&[], ty));
+        let instance = self.lir.this(ErasedType::L(owner.clone()));
+        let value = self.lir.field(instance, &owner, field, ty.clone());
+        self.lir.ret(value)
+    }
+
+    /// A setter's body: the class's field set to `value`, nothing returned.
+    fn setter_body(&mut self, field: &str, value: LirId) -> LirId {
+        let owner = self.this_name.clone();
+        let instance = self.lir.this(ErasedType::L(owner.clone()));
+        let stored = self.lir.store(instance, &owner, field, value);
+        let unit = self.lir.unit();
+        let done = self.lir.seq(&[stored], unit);
+        self.lir.ret(done)
     }
 
     /// The members a trait, an abstract class or an enum declares without defining them, those
@@ -2644,8 +3094,8 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let m = self.mref(s);
-            if !self.cw.has_method(&m.name, &m.desc) {
-                self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &m.name, &m.desc, None);
+            if !self.plan.has_method(&m.name, &m.desc) {
+                self.abstract_method(MethodFlags::ABSTRACT, &m.name, &m.desc);
             }
         }
     }
@@ -2692,7 +3142,7 @@ impl<'a> Gen<'a> {
         for &(declared, implementation) in &tc.bridges {
             let bm = self.mref(declared);
             let m = self.mref(implementation);
-            if bm.desc == m.desc || bm.params.len() != m.params.len() || self.cw.has_method(&bm.name, &bm.desc) {
+            if bm.desc == m.desc || bm.params.len() != m.params.len() || self.plan.has_method(&bm.name, &bm.desc) {
                 continue;
             }
             // A bridge an inherited pair made (`pair_bridges`' rule): not over a method with a body of that
@@ -2745,7 +3195,7 @@ impl<'a> Gen<'a> {
             }
             let bm = self.mref(d);
             let m = self.mref(o);
-            if bm.name != m.name || bm.desc == m.desc || bm.params.len() != m.params.len() || self.cw.has_method(&bm.name, &bm.desc) {
+            if bm.name != m.name || bm.desc == m.desc || bm.params.len() != m.params.len() || self.plan.has_method(&bm.name, &bm.desc) {
                 continue;
             }
             // Not over a method with a body of that descriptor the class inherits (a trait's own `f(Object)`
@@ -2826,7 +3276,7 @@ impl<'a> Gen<'a> {
             }
         }
         for (name, desc) in abstract_ones {
-            if self.cw.has_method(&name, &desc) {
+            if self.plan.has_method(&name, &desc) {
                 continue;
             }
             let (params, _) = parse_method_desc(&desc);
@@ -2850,11 +3300,14 @@ impl<'a> Gen<'a> {
     fn implemented_nested_objects(&mut self, tc: &TClass) {
         for (declared, nested) in crate::emit::implemented_nested_objects(self.cx.input.syms, tc.id) {
             let m = self.mref(declared);
-            self.begin_method(false, false, &[], m.ret.clone(), &[]);
-            let t = self.load_module(nested);
-            self.adapt(&t, &m.ret);
-            self.return_value(&m.ret);
-            self.end_method(ACC_PUBLIC, &m.name, &m.desc);
+            self.begin_method(MethodFlags::PUBLIC, &m.name, &m.desc, false, &[], m.ret.clone(), &[]);
+            self.body(|g| {
+                let module = g.lower_module(nested);
+                let t = g.lir.ty(module).clone();
+                let value = g.lower_adapt(module, &t, &m.ret);
+                g.lir.ret(value)
+            });
+            self.end_method();
         }
     }
 
@@ -2931,31 +3384,37 @@ impl<'a> Gen<'a> {
     /// `m` in the class, calling the trait's default `im`.
     fn mixin_forwarder(&mut self, m: &MethodRef, im: &MethodRef) {
         // Of another erased signature than the default's, the method is erasure's bridge.
-        let bridge = if m.desc != im.desc { ACC_BRIDGE } else { 0 };
-        self.default_forwarder(m, im, ACC_PUBLIC | ACC_SYNTHETIC | bridge);
+        self.default_forwarder(m, im, MethodFlags { synthetic: true, bridge: m.desc != im.desc, ..MethodFlags::PUBLIC });
     }
 
     /// The class's method `m` of the access `access`, calling the trait's default `im` by
     /// `invokespecial`, every forwarder of a trait's member the class writes: each parameter
     /// loaded from its slot, the slots following the types' widths (dotty's `locals.makeLocal`),
     /// and adapted to `im`'s, the result to `m`'s. Nothing where the class has `m` already.
-    fn default_forwarder(&mut self, m: &MethodRef, im: &MethodRef, access: u16) {
-        if self.cw.has_method(&m.name, &m.desc) {
+    fn default_forwarder(&mut self, m: &MethodRef, im: &MethodRef, flags: MethodFlags) {
+        if self.plan.has_method(&m.name, &m.desc) {
             return;
         }
         let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(false, false, &params, m.ret.clone(), &[]);
-        self.load_this();
-        let mut slot = 1u16;
-        for (from, to) in m.params.iter().zip(&im.params) {
-            self.load(slot, from);
-            self.adapt(from, to);
-            slot += if from.wide() { 2 } else { 1 };
+        self.begin_method(flags, &m.name, &m.desc, false, &params, m.ret.clone(), &[]);
+        let default = Rc::new(MethodRef { kind: Invoke::Special, owner_is_interface: true, ..im.clone() });
+        self.body(|g| g.forwarder_body(&default, &m.ret));
+        self.end_method();
+    }
+
+    /// A forwarder's body: `target` called on the instance over the method's parameters, each
+    /// adapted to the type the target takes at its place, the result adapted to `ret`.
+    fn forwarder_body(&mut self, target: &Rc<MethodRef>, ret: &ErasedType) -> LirId {
+        let instance = self.lower_this().expect("a forwarder runs on an instance");
+        let declared: Vec<ErasedType> = self.m.params.iter().map(|p| p.1.clone()).collect();
+        let mut args = Vec::with_capacity(target.params.len());
+        for (i, (from, to)) in declared.iter().zip(&target.params).enumerate() {
+            let given = self.param(i);
+            args.push(self.lower_adapt(given, from, to));
         }
-        self.invoke_desc(Invoke::Special, &im.owner, true, &im.name, &im.desc, im.params.len(), &im.ret);
-        self.adapt(&im.ret, &m.ret);
-        self.return_value(&m.ret);
-        self.end_method(access, &m.name, &m.desc);
+        let value = self.lir.call(target, instance, &args);
+        let value = self.lower_adapt(value, &target.ret, ret);
+        self.lir.ret(value)
     }
 
     /// The class's bridge `name` `desc` to its own method of the descriptor `target`, called
@@ -2965,19 +3424,10 @@ impl<'a> Gen<'a> {
         let (params, ret) = parse_method_desc(desc);
         let (target_params, target_ret) = parse_method_desc(target);
         let locals: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(false, false, &locals, ret.clone(), &[]);
-        self.load_this();
-        let mut slot = 1u16;
-        for (from, to) in params.iter().zip(&target_params) {
-            self.load(slot, from);
-            self.adapt(from, to);
-            slot += if from.wide() { 2 } else { 1 };
-        }
-        let owner = self.this_name.clone();
-        self.invoke_desc(Invoke::Virtual, &owner, false, name, target, target_params.len(), &target_ret);
-        self.adapt(&target_ret, &ret);
-        self.return_value(&ret);
-        self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, name, desc);
+        self.begin_method(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, name, desc, false, &locals, ret.clone(), &[]);
+        let own = method_ref(Invoke::Virtual, &self.this_name, false, name, &target_params, &target_ret);
+        self.body(|g| g.forwarder_body(&own, &ret));
+        self.end_method();
     }
 
     /// A method of a superclass wins over the default method of an interface, where Scala takes
@@ -3008,18 +3458,12 @@ impl<'a> Gen<'a> {
                 }
                 done.push(sinfo.name);
                 let m = self.mref(s);
-                if !self.cw.has_method(&m.name, &m.desc) {
+                if !self.plan.has_method(&m.name, &m.desc) {
                     let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
-                    self.begin_method(false, false, &params, m.ret.clone(), &[]);
-                    self.load_this();
-                    let mut slot = 1u16;
-                    for t in &m.params {
-                        self.load(slot, t);
-                        slot += if t.wide() { 2 } else { 1 };
-                    }
-                    self.invoke_desc(Invoke::Special, &m.owner, true, &m.name, &m.desc, m.params.len(), &m.ret);
-                    self.return_value(&m.ret);
-                    self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &m.name, &m.desc);
+                    self.begin_method(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, false, &params, m.ret.clone(), &[]);
+                    let default = Rc::new(MethodRef { kind: Invoke::Special, owner_is_interface: true, ..(*m).clone() });
+                    self.body(|g| g.forwarder_body(&default, &m.ret));
+                    self.end_method();
                 }
                 self.getter_forwarders(s, &inherited);
             }
@@ -3053,21 +3497,15 @@ impl<'a> Gen<'a> {
             let m = self.mref(s);
             let shape = self.default_getter_shape(s, i);
             let (getter, desc) = self.default_getter_ref(s, i, &m.params[..shape.before]);
-            if self.cw.has_method(&getter, &desc) {
+            if self.plan.has_method(&getter, &desc) {
                 continue;
             }
             let (params, ret) = parse_method_desc(&desc);
             let taken: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(false, false, &taken, ret.clone(), &[]);
-            self.load_this();
-            let mut slot = 1u16;
-            for t in &params {
-                self.load(slot, t);
-                slot += if t.wide() { 2 } else { 1 };
-            }
-            self.invoke_desc(Invoke::Special, &m.owner, true, &getter, &desc, params.len(), &ret);
-            self.return_value(&ret);
-            self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &getter, &desc);
+            self.begin_method(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &getter, &desc, false, &taken, ret.clone(), &[]);
+            let default = method_ref(Invoke::Special, &m.owner, true, &getter, &params, &ret);
+            self.body(|g| g.forwarder_body(&default, &ret));
+            self.end_method();
         }
     }
 
@@ -3129,7 +3567,7 @@ impl<'a> Gen<'a> {
                     continue;
                 }
                 let declared = self.mref(s);
-                if self.cw.has_method(&declared.name, &declared.desc) || implemented.iter().any(|m| m.name == declared.name && m.desc == declared.desc) {
+                if self.plan.has_method(&declared.name, &declared.desc) || implemented.iter().any(|m| m.name == declared.name && m.desc == declared.desc) {
                     continue;
                 }
                 let Some(target) = implemented.iter().find(|m| m.name == declared.name && m.params.len() == declared.params.len()).cloned() else { continue };
@@ -3217,11 +3655,11 @@ impl<'a> Gen<'a> {
                 Rc::new(MethodRef { owner: self.class_name(mixin), owner_is_interface: true, name: text.to_string(), params, ret, desc: meth.desc.clone(), kind: Invoke::Interface })
             }
         };
-        if self.cw.has_method(text, &im.desc) {
+        if self.plan.has_method(text, &im.desc) {
             return;
         }
         let fin = meth.sym.is_some_and(|s| syms.sym(s).mods & mods::FINAL != 0);
-        self.default_forwarder(&im, &im, if fin { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC });
+        self.default_forwarder(&im, &im, MethodFlags { is_final: fin, ..MethodFlags::PUBLIC });
         // And the selected method's metadata as its class file holds it, the exceptions it
         // declares and its parameters' annotations among them (`MixinOps.mkForwarderSym` copies
         // the member's and its parameters' annotations); a member teq compiles declares none
@@ -3234,7 +3672,7 @@ impl<'a> Gen<'a> {
         let mut bridged: Vec<&str> = Vec::new();
         for overridden in &overridden {
             let overridden = overridden.as_str();
-            if overridden == im.desc || bridged.contains(&overridden) || self.cw.has_method(text, overridden) {
+            if overridden == im.desc || bridged.contains(&overridden) || self.plan.has_method(text, overridden) {
                 continue;
             }
             bridged.push(overridden);
@@ -3308,13 +3746,25 @@ impl<'a> Gen<'a> {
                 self.box_forwarder(c, member, &format!("{}$extension", member), &typed, &ret);
                 continue;
             }
-            self.begin_method(false, false, &typed, ret.clone(), &[]);
-            self.load(0, &this);
-            self.getfield(&owner, &name, &ty);
-            self.adapt(&ty, &u);
-            let us = self.store_new(&u);
-            self.vc_synthesized_body(c, member, &ret, &u, us, 1);
-            self.end_method(ACC_PUBLIC, member, &method_desc(&params, &ret));
+            self.begin_method(MethodFlags::PUBLIC, member, &method_desc(&params, &ret), false, &typed, ret.clone(), &[]);
+            if vc_member_lowers(member, &u) {
+                self.body(|g| {
+                    let instance = g.lir.this(this.clone());
+                    let read = g.lir.field(instance, &owner, &name, ty.clone());
+                    let underlying = g.lower_adapt(read, &ty, &u);
+                    let held = g.lir.temp();
+                    let kept = g.lir.keep(held, underlying);
+                    let answer = g.vc_member_tree(c, member, &u, Underlying::Kept(held), 0);
+                    g.lir.seq(&[kept], answer)
+                });
+            } else {
+                self.load(0, &this);
+                self.getfield(&owner, &name, &ty);
+                self.adapt(&ty, &u);
+                let us = self.store_new(&u);
+                self.vc_synthesized_body(c, member, &ret, &u, us, 1);
+            }
+            self.end_method();
         }
     }
 
@@ -3341,22 +3791,22 @@ impl<'a> Gen<'a> {
         all.into_iter().filter(|&(bit, ..)| synthesized & bit != 0).map(|(_, name, params, ret)| (name, params, ret)).collect()
     }
 
-    /// The code of synthesized member `member` of value class `c`, returning `ret`, over the
-    /// underlying value in local `us` of type `u` and the member's parameter in local `ps`: a
-    /// primitive underlying value hashes as its own `hashCode`, a reference one through the
-    /// null-safe `Objects.hashCode` (`SyntheticMembers.scala` 338-346); `equals` is a test of
+    /// The tree of synthesized member `member` of value class `c` (`Gen::vc_synthesized_body`),
+    /// over its underlying value `us` of type `u` and the member's parameter at the position
+    /// `ps`: a primitive underlying value hashes as its own `hashCode`, a reference one through
+    /// the null-safe `Objects.hashCode` (`SyntheticMembers.scala` 338-346); `equals` is a test of
     /// the class and `==` of the underlying values, primitive comparison for a primitive (`NaN`
     /// unequal, `-0.0` equal to `0.0`), then a `canEqual` the class defines, without the `eq` test
     /// of a case class (297-332).
-    pub(super) fn vc_synthesized_body(&mut self, c: ClassId, member: &str, ret: &ErasedType, u: &ErasedType, us: u16, ps: u16) {
+    pub(super) fn vc_member_tree(&mut self, c: ClassId, member: &str, u: &ErasedType, us: Underlying, ps: usize) -> LirId {
         let cx = self.cx;
         let syms = cx.input.syms;
         let string = ErasedType::L(Rc::from(STRING));
         let object = ErasedType::object();
         let class = self.class_name(c);
-        match member {
+        let boxed = ErasedType::L(class.clone());
+        let answer = match member {
             "hashCode" => {
-                self.load(us, u);
                 let primitive = match u {
                     ErasedType::I => Some("java/lang/Integer"),
                     ErasedType::J => Some("java/lang/Long"),
@@ -3368,17 +3818,82 @@ impl<'a> Gen<'a> {
                     ErasedType::B => Some("java/lang/Byte"),
                     _ => None,
                 };
-                match primitive {
-                    Some(b) => {
-                        self.invoke(Invoke::Static, b, false, "hashCode", std::slice::from_ref(u), &ErasedType::I);
-                    }
-                    None => {
-                        self.adapt(u, &object);
-                        self.invoke(Invoke::Static, "java/util/Objects", false, "hashCode", &[object], &ErasedType::I);
-                    }
-                }
-                self.return_value(ret);
+                let value = us.node(self, u);
+                let (hash, value) = match primitive {
+                    Some(b) => (method_ref(Invoke::Static, &Rc::from(b), false, "hashCode", std::slice::from_ref(u), &ErasedType::I), value),
+                    None => (method_ref(Invoke::Static, &Rc::from("java/util/Objects"), false, "hashCode", &[object.clone()], &ErasedType::I), self.lower_adapt(value, u, &object)),
+                };
+                self.lir.static_call(&hash, &[value])
             }
+            "equals" => {
+                let no = self.lir.label();
+                let mut tests = Vec::new();
+                let given = self.param(ps);
+                let same_class = self.lir.is(given, &class);
+                let other_class = self.lir.not(same_class);
+                let unequal = self.lir.leave(no);
+                tests.push(self.lir.when(other_class, unequal));
+                let mine = us.node(self, u);
+                let given = self.param(ps);
+                let cast = self.lir.checked(given, boxed.clone());
+                let theirs = self.lower_vc_unbox(c, cast, u);
+                let differs = self.lir.compare(Relation::Ne, Comparing::Numbers, mine, theirs);
+                let unequal = self.lir.leave(no);
+                tests.push(self.lir.when(differs, unequal));
+                // A `canEqual` of the class's own is asked last, `that.canEqual(this)` (297-332).
+                if cx.synthesized(c) & synthetic::EQUALS_CALLS_CAN_EQUAL != 0 {
+                    let given = self.param(ps);
+                    let other = self.lir.checked(given, boxed.clone());
+                    let value = us.node(self, u);
+                    let mine = self.lower_vc_box(c, value, u);
+                    let mine = self.lower_adapt(mine, &boxed, &object);
+                    let can_equal = method_ref(Invoke::Virtual, &class, false, "canEqual", &[object.clone()], &ErasedType::Z);
+                    let can = self.lir.call(&can_equal, other, &[mine]);
+                    let cannot = self.lir.not(can);
+                    let unequal = self.lir.leave(no);
+                    tests.push(self.lir.when(cannot, unequal));
+                }
+                let truth = self.lir.bool(true);
+                let answer = self.lir.ret(truth);
+                let refused = self.lir.seq(&tests, answer);
+                let refused = self.lir.labeled(no, refused);
+                let falsity = self.lir.bool(false);
+                let answer = self.lir.ret(falsity);
+                return self.lir.seq(&[refused], answer);
+            }
+            // `ScalaRunTime._toString` of the box, which reads its `productPrefix` and elements
+            // through it.
+            "toString" => {
+                let to_string = method_ref(Invoke::Static, &Rc::from(SCALA_RUNTIME), false, "_toString", &[ErasedType::L(Rc::from(PRODUCT))], &string);
+                let value = us.node(self, u);
+                let made = self.lower_vc_box(c, value, u);
+                self.lir.static_call(&to_string, &[made])
+            }
+            "canEqual" => {
+                let given = self.param(ps);
+                self.lir.is(given, &class)
+            }
+            "productArity" => self.lir.int(1),
+            "productPrefix" => {
+                let info = syms.class(c);
+                let display: Rc<str> = Rc::from(info.product_name(cx.input.interner.get(info.name)));
+                self.lir.text(&display, string)
+            }
+            _ => unreachable!("a member with a tree (`vc_member_lowers`)"),
+        };
+        self.lir.ret(answer)
+    }
+
+    /// The code of synthesized member `member` of value class `c` whose body is no tree
+    /// (`vc_member_lowers`), returning `ret`, over the underlying value in local `us` of type `u`
+    /// and the member's parameter in local `ps`: `equals` over a reference, and the elements.
+    pub(super) fn vc_synthesized_body(&mut self, c: ClassId, member: &str, ret: &ErasedType, u: &ErasedType, us: u16, ps: u16) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let string = ErasedType::L(Rc::from(STRING));
+        let object = ErasedType::object();
+        let class = self.class_name(c);
+        match member {
             "equals" => {
                 let no = self.code.new_label();
                 self.load(ps, &object);
@@ -3388,27 +3903,13 @@ impl<'a> Gen<'a> {
                 self.load(ps, &object);
                 self.checkcast(&class);
                 self.vc_unbox(c, u);
-                match u {
-                    ErasedType::J | ErasedType::F | ErasedType::D => {
-                        self.code.op(match u {
-                            ErasedType::J => op::LCMP,
-                            ErasedType::F => op::FCMPL,
-                            _ => op::DCMPL,
-                        });
-                        self.code.popn(2);
-                        self.code.push(VT::Int);
-                        self.jump_if(op::IFNE, 1, no);
-                    }
-                    ErasedType::L(_) => {
-                        self.adapt(u, &object);
-                        let that = self.store_new(&object);
-                        self.adapt(u, &object);
-                        self.load(that, &object);
-                        self.helper_call("equal", 2);
-                        self.jump_if(op::IFEQ, 1, no);
-                    }
-                    _ => self.jump_if(op::IF_ICMPNE, 2, no),
-                }
+                // The other's underlying value held while this one is adapted under it.
+                self.adapt(u, &object);
+                let that = self.store_new(&object);
+                self.adapt(u, &object);
+                self.load(that, &object);
+                self.helper_call("equal", 2);
+                self.jump_if(op::IFEQ, 1, no);
                 // A `canEqual` of the class's own is asked last, `that.canEqual(this)` (297-332).
                 if self.cx.synthesized(c) & synthetic::EQUALS_CALLS_CAN_EQUAL != 0 {
                     self.load(ps, &object);
@@ -3426,30 +3927,7 @@ impl<'a> Gen<'a> {
                 self.iconst(0);
                 self.return_value(ret);
             }
-            "toString" => {
-                // `ScalaRunTime._toString` of the box, which reads its `productPrefix` and
-                // elements through it.
-                self.load(us, u);
-                self.vc_box(c, u);
-                self.invoke(Invoke::Static, SCALA_RUNTIME, false, "_toString", &[ErasedType::L(Rc::from(PRODUCT))], &string);
-                self.return_value(ret);
-            }
-            "canEqual" => {
-                self.load(ps, &object);
-                self.instance_of(&class);
-                self.return_value(ret);
-            }
-            "productArity" => {
-                self.iconst(1);
-                self.return_value(ret);
-            }
-            "productPrefix" => {
-                let info = syms.class(c);
-                let display = info.product_name(cx.input.interner.get(info.name)).to_string();
-                self.sconst(&display);
-                self.return_value(ret);
-            }
-            _ => {
+            "productElement" | "productElementName" => {
                 // `productElement` and `productElementName`: the one element, else
                 // `IndexOutOfBoundsException`.
                 let fail = self.code.new_label();
@@ -3473,30 +3951,33 @@ impl<'a> Gen<'a> {
                 self.code.pop();
                 self.code.end_path();
             }
+            _ => unreachable!("lowered (`Gen::vc_member_tree`)"),
         }
     }
 
     /// A method `(I)ret` answering the `n`th of `count` elements, as `productElement` does:
     /// `IndexOutOfBoundsException` for any other index.
-    fn element_switch(&mut self, ret: &ErasedType, count: usize, mut element: impl FnMut(&mut Self, usize)) {
+    fn element_switch(&mut self, name: &str, ret: &ErasedType, count: usize, mut element: impl FnMut(&mut Self, usize) -> LirId) {
         let string = ErasedType::L(Rc::from(STRING));
-        self.begin_method(false, false, &[(None, ErasedType::I)], ret.clone(), &[]);
-        for i in 0..count {
-            let next = self.code.new_label();
-            self.load(1, &ErasedType::I);
-            self.iconst(i as i32);
-            self.jump_if(op::IF_ICMPNE, 2, next);
-            element(self, i);
-            self.return_value(ret);
-            self.code.bind(next);
-        }
-        self.new_object("java/lang/IndexOutOfBoundsException");
-        self.load(1, &ErasedType::I);
-        self.invoke(Invoke::Static, STRING, false, "valueOf", &[ErasedType::I], &string);
-        self.invoke(Invoke::Special, "java/lang/IndexOutOfBoundsException", false, "<init>", &[string], &ErasedType::V);
-        self.code.op(op::ATHROW);
-        self.code.pop();
-        self.code.end_path();
+        let value_of = method_ref(Invoke::Static, &Rc::from(STRING), false, "valueOf", &[ErasedType::I], &string);
+        let out_of_bounds = method_ref(Invoke::Special, &Rc::from("java/lang/IndexOutOfBoundsException"), false, "<init>", &[string.clone()], &ErasedType::V);
+        self.begin_method(MethodFlags::PUBLIC, name, &method_desc(&[ErasedType::I], ret), false, &[(None, ErasedType::I)], ret.clone(), &[]);
+        self.body(|g| {
+            let mut answers = Vec::with_capacity(count);
+            for i in 0..count {
+                let index = g.param(0);
+                let at = g.lir.int(i as i32);
+                let matched = g.lir.compare(Relation::Eq, Comparing::Numbers, index, at);
+                let value = element(g, i);
+                let answer = g.lir.ret(value);
+                answers.push(g.lir.when(matched, answer));
+            }
+            let index = g.param(0);
+            let shown = g.lir.static_call(&value_of, &[index]);
+            let error = g.lir.make(&out_of_bounds, &[shown]);
+            let thrown = g.lir.throw(error, ErasedType::V);
+            g.lir.seq(&answers, thrown)
+        });
     }
 
     fn product_members(&mut self, c: ClassId, is_case: bool, is_value_case: bool, is_object: bool) {
@@ -3517,7 +3998,7 @@ impl<'a> Gen<'a> {
         let this = ErasedType::L(owner.clone());
         let string = ErasedType::L(Rc::from(STRING));
         let object = ErasedType::object();
-        let display = info.product_name(cx.input.interner.get(info.name)).to_string();
+        let display: Rc<str> = Rc::from(info.product_name(cx.input.interner.get(info.name)));
         let fields: Vec<SymId> = if is_value_case || is_object {
             Vec::new()
         } else {
@@ -3527,215 +4008,251 @@ impl<'a> Gen<'a> {
 
         // productPrefix, productArity, productElement
         if takes(synthetic::PRODUCT_PREFIX) {
-            self.begin_method(false, false, &[], string.clone(), &[]);
-            if is_value_case {
-                self.load(0, &this);
-                self.getfield(&owner, "$name", &string);
-            } else {
-                self.sconst(&display);
-            }
-            self.return_value(&string);
-            self.end_method(ACC_PUBLIC, "productPrefix", "()Ljava/lang/String;");
+            self.begin_method(MethodFlags::PUBLIC, "productPrefix", "()Ljava/lang/String;", false, &[], string.clone(), &[]);
+            self.body(|g| {
+                let prefix = if is_value_case {
+                    let instance = g.lir.this(this.clone());
+                    g.lir.field(instance, &owner, "$name", string.clone())
+                } else {
+                    g.lir.text(&display, string.clone())
+                };
+                g.lir.ret(prefix)
+            });
+            self.end_method();
         }
 
         if takes(synthetic::PRODUCT_ARITY) || enum_value(synthetic::PRODUCT_ARITY) {
-            self.begin_method(false, false, &[], ErasedType::I, &[]);
-            self.iconst(field_refs.len() as i32);
-            self.return_value(&ErasedType::I);
-            self.end_method(ACC_PUBLIC, "productArity", "()I");
+            self.begin_method(MethodFlags::PUBLIC, "productArity", "()I", false, &[], ErasedType::I, &[]);
+            self.body(|g| {
+                let arity = g.lir.int(field_refs.len() as i32);
+                g.lir.ret(arity)
+            });
+            self.end_method();
         }
 
         // A field of a value class is its box, as scalac's `productElement` gives it, and hashed
         // as the box (`Statics.anyHash(new V(..))`); `equals` compares the underlying values.
         if takes(synthetic::PRODUCT_ELEMENT) || enum_value(synthetic::PRODUCT_ELEMENT) {
-            self.element_switch(&object, field_refs.len(), |g, i| {
+            self.element_switch("productElement", &object, field_refs.len(), |g, i| {
                 let (name, ty) = &field_refs[i];
-                g.load(0, &this);
-                g.getfield(&owner, name, ty);
-                g.adapt_from_sym(fields[i], ty, &object);
+                let instance = g.lir.this(this.clone());
+                let read = g.lir.field(instance, &owner, name, ty.clone());
+                g.lower_adapt_from_sym(read, fields[i], ty, &object)
             });
-            self.end_method(ACC_PUBLIC, "productElement", "(I)Ljava/lang/Object;");
+            self.end_method();
         }
 
         // `java.lang.Enum` answers `ordinal`, `hashCode` and `equals` with final methods.
         if takes(synthetic::ORDINAL) {
-            self.begin_method(false, false, &[], ErasedType::I, &[]);
-            if is_value_case {
-                self.load(0, &this);
-                self.getfield(&owner, "$ordinal", &ErasedType::I);
-            } else {
-                self.iconst(info.ordinal as i32);
-            }
-            self.return_value(&ErasedType::I);
-            self.end_method(ACC_PUBLIC, "ordinal", "()I");
+            self.begin_method(MethodFlags::PUBLIC, "ordinal", "()I", false, &[], ErasedType::I, &[]);
+            self.body(|g| {
+                let ordinal = if is_value_case {
+                    let instance = g.lir.this(this.clone());
+                    g.lir.field(instance, &owner, "$ordinal", ErasedType::I)
+                } else {
+                    g.lir.int(info.ordinal as i32)
+                };
+                g.lir.ret(ordinal)
+            });
+            self.end_method();
         }
 
         if takes(synthetic::CAN_EQUAL) || enum_value(synthetic::CAN_EQUAL) {
-            self.begin_method(false, false, &[(None, object.clone())], ErasedType::Z, &[]);
-            self.load(1, &object);
-            self.instance_of(&owner);
-            self.return_value(&ErasedType::Z);
-            self.end_method(ACC_PUBLIC, "canEqual", "(Ljava/lang/Object;)Z");
+            self.begin_method(MethodFlags::PUBLIC, "canEqual", "(Ljava/lang/Object;)Z", false, &[(None, object.clone())], ErasedType::Z, &[]);
+            self.body(|g| {
+                let that = g.param(0);
+                let same_class = g.lir.is(that, &owner);
+                g.lir.ret(same_class)
+            });
+            self.end_method();
         }
         if takes(synthetic::PRODUCT_ELEMENT_NAME) || enum_value(synthetic::PRODUCT_ELEMENT_NAME) {
-            let names: Vec<String> = fields.iter().map(|&f| cx.input.interner.get(syms.sym(f).name).to_string()).collect();
-            self.element_switch(&string, names.len(), |g, i| g.sconst(&names[i]));
-            self.end_method(ACC_PUBLIC, "productElementName", "(I)Ljava/lang/String;");
+            let names: Vec<Rc<str>> = fields.iter().map(|&f| Rc::from(cx.input.interner.get(syms.sym(f).name))).collect();
+            self.element_switch("productElementName", &string, names.len(), |g, i| g.lir.text(&names[i], string.clone()));
+            self.end_method();
         }
 
         // `toString`: an enum value's name, a case object's own name, a case class's
         // `ScalaRunTime._toString(this)`, which reads the members it calls through the instance.
         if takes(synthetic::TO_STRING) {
-            self.begin_method(false, false, &[], string.clone(), &[]);
-            if is_value_case {
-                self.load(0, &this);
-                self.getfield(&owner, "$name", &string);
-            } else if is_object {
-                self.sconst(&display);
-            } else {
-                self.load(0, &this);
-                self.invoke(Invoke::Static, SCALA_RUNTIME, false, "_toString", &[ErasedType::L(Rc::from(PRODUCT))], &string);
-            }
-            self.return_value(&string);
-            self.end_method(ACC_PUBLIC, "toString", "()Ljava/lang/String;");
+            self.begin_method(MethodFlags::PUBLIC, "toString", "()Ljava/lang/String;", false, &[], string.clone(), &[]);
+            self.body(|g| {
+                let shown = if is_value_case {
+                    let instance = g.lir.this(this.clone());
+                    g.lir.field(instance, &owner, "$name", string.clone())
+                } else if is_object {
+                    g.lir.text(&display, string.clone())
+                } else {
+                    let to_string = method_ref(Invoke::Static, &Rc::from(SCALA_RUNTIME), false, "_toString", &[ErasedType::L(Rc::from(PRODUCT))], &string);
+                    let instance = g.lir.this(this.clone());
+                    g.lir.static_call(&to_string, &[instance])
+                };
+                g.lir.ret(shown)
+            });
+            self.end_method();
         }
 
         if takes(synthetic::HASH_CODE) {
-            self.begin_method(false, false, &[], ErasedType::I, &[]);
-            if is_value_case {
-                self.load(0, &this);
-                self.getfield(&owner, "$name", &string);
-                self.invoke(Invoke::Virtual, STRING, false, "hashCode", &[], &ErasedType::I);
-            } else if field_refs.is_empty() {
-                self.sconst(&display);
-                self.invoke(Invoke::Virtual, STRING, false, "hashCode", &[], &ErasedType::I);
+            self.begin_method(MethodFlags::PUBLIC, "hashCode", "()I", false, &[], ErasedType::I, &[]);
+            let hash_code = method_ref(Invoke::Virtual, &Rc::from(STRING), false, "hashCode", &[], &ErasedType::I);
+            if is_value_case || field_refs.is_empty() {
+                self.body(|g| {
+                    let name = if is_value_case {
+                        let instance = g.lir.this(this.clone());
+                        g.lir.field(instance, &owner, "$name", string.clone())
+                    } else {
+                        g.lir.text(&display, string.clone())
+                    };
+                    let hash = g.lir.call(&hash_code, name, &[]);
+                    g.lir.ret(hash)
+                });
             } else if hashes_through_elements(syms, cx.input.types, c) {
                 // dotty's `SyntheticMembers.chooseHashcode` for reference fields: `MurmurHash3.productHash`
                 // from the seed of the name, through `productArity` and `productElement`.
-                let murmur = "scala/util/hashing/MurmurHash3$";
+                let murmur: Rc<str> = Rc::from("scala/util/hashing/MurmurHash3$");
                 let product = ErasedType::L(Rc::from(PRODUCT));
-                self.getstatic(murmur, "MODULE$", &ErasedType::L(Rc::from(murmur)));
-                self.load(0, &this);
+                let product_hash = method_ref(Invoke::Virtual, &murmur, false, "productHash", &[product, ErasedType::I, ErasedType::Z], &ErasedType::I);
                 let seed = crate::interp::value::mix(0xcafebabeu32 as i32, crate::interp::value::str_hash(&display));
-                self.iconst(seed);
-                self.iconst(1);
-                self.invoke(Invoke::Virtual, murmur, false, "productHash", &[product, ErasedType::I, ErasedType::Z], &ErasedType::I);
+                self.body(|g| {
+                    let hashing = g.lir.module(&murmur);
+                    let instance = g.lir.this(this.clone());
+                    let seed = g.lir.int(seed);
+                    let ignore_prefix = g.lir.bool(true);
+                    let hash = g.lir.call(&product_hash, hashing, &[instance, seed, ignore_prefix]);
+                    g.lir.ret(hash)
+                });
             } else {
-                // MurmurHash3.productHash, as scalac's case classes hash.
-                self.iconst(0xcafebabeu32 as i32);
-                self.sconst(&display);
-                self.invoke(Invoke::Virtual, STRING, false, "hashCode", &[], &ErasedType::I);
-                self.helper_call("mix", 2);
-                for (i, (name, ty)) in field_refs.iter().enumerate() {
-                    self.load(0, &this);
-                    self.getfield(&owner, name, ty);
-                    self.adapt_from_sym(fields[i], ty, &object);
-                    self.helper_call("anyHash", 1);
-                    self.helper_call("mix", 2);
-                }
-                self.iconst(field_refs.len() as i32);
-                self.helper_call("finalizeHash", 2);
+                // MurmurHash3.productHash, as scalac's case classes hash: the name's hash mixed into
+                // the seed, then each field's `anyHash`, then the arity.
+                self.body(|g| {
+                    let seed = g.lir.int(0xcafebabeu32 as i32);
+                    let name = g.lir.text(&display, string.clone());
+                    let name_hash = g.lir.call(&hash_code, name, &[]);
+                    let mut hash = g.lower_helper("mix", &[seed, name_hash], ErasedType::I);
+                    for (i, (name, ty)) in field_refs.iter().enumerate() {
+                        let instance = g.lir.this(this.clone());
+                        let read = g.lir.field(instance, &owner, name, ty.clone());
+                        let value = g.lower_adapt_from_sym(read, fields[i], ty, &object);
+                        let element = g.lower_helper("anyHash", &[value], ErasedType::I);
+                        hash = g.lower_helper("mix", &[hash, element], ErasedType::I);
+                    }
+                    let arity = g.lir.int(field_refs.len() as i32);
+                    let finished = g.lower_helper("finalizeHash", &[hash, arity], ErasedType::I);
+                    g.lir.ret(finished)
+                });
             }
-            self.return_value(&ErasedType::I);
-            self.end_method(ACC_PUBLIC, "hashCode", "()I");
+            self.end_method();
         }
 
         // `SyntheticMembers.equalsBody`: the same class, the primitive fields compared first, then
         // the others, then `that.canEqual(this)` unless the class is final with the rule's.
         if takes(synthetic::EQUALS) {
-            self.begin_method(false, false, &[(None, object.clone())], ErasedType::Z, &[]);
-            let no = self.code.new_label();
-            let yes = self.code.new_label();
-            self.load(0, &this);
-            self.load(1, &object);
-            self.jump_if(op::IF_ACMPEQ, 2, yes);
-            self.load(1, &object);
-            self.instance_of(&owner);
-            self.jump_if(op::IFEQ, 1, no);
-            self.load(1, &object);
-            self.checkcast(&owner);
-            let that = self.store_new(&this);
+            self.begin_method(MethodFlags::PUBLIC, "equals", "(Ljava/lang/Object;)Z", false, &[(None, object.clone())], ErasedType::Z, &[]);
             // The enclosing instances, by identity (`PatternMatcher.addOuterTest` of the rule's
-            // `x$0 @ (_: C)`, `TClass::eq_outer`).
-            if let Some(accessor) = cx.eq_outer(c) {
+            // `x$0 @ (_: C)`, `TClass::eq_outer`), read through the accessor on this class.
+            let outer = cx.eq_outer(c).map(|accessor| {
                 let m = self.mref(accessor);
-                for slot in [0, that] {
-                    self.load(slot, &this);
-                    self.invoke_desc(Invoke::Virtual, &owner, false, &m.name, &m.desc, 0, &m.ret);
-                }
-                self.jump_if(op::IF_ACMPNE, 2, no);
-            }
+                Rc::new(MethodRef { owner: owner.clone(), owner_is_interface: false, kind: Invoke::Virtual, ..(*m).clone() })
+            });
             let order = cx.equals_order(c, field_refs.len());
-            for (name, ty) in order.iter().filter_map(|&i| field_refs.get(i)) {
-                self.load(0, &this);
-                self.getfield(&owner, name, ty);
-                self.load(that, &this);
-                self.getfield(&owner, name, ty);
-                match ty {
-                    ErasedType::J => {
-                        self.code.op(op::LCMP);
-                        self.code.popn(2);
-                        self.code.push(VT::Int);
-                        self.jump_if(op::IFNE, 1, no);
-                    }
-                    ErasedType::D => {
-                        self.code.op(op::DCMPL);
-                        self.code.popn(2);
-                        self.code.push(VT::Int);
-                        self.jump_if(op::IFNE, 1, no);
-                    }
-                    ErasedType::F => {
-                        self.code.op(op::FCMPL);
-                        self.code.popn(2);
-                        self.code.push(VT::Int);
-                        self.jump_if(op::IFNE, 1, no);
-                    }
-                    ErasedType::L(_) => {
-                        self.helper_call("equal", 2);
-                        self.jump_if(op::IFEQ, 1, no);
-                    }
-                    _ => self.jump_if(op::IF_ICMPNE, 2, no),
+            let can_equal = method_ref(Invoke::Virtual, &owner, false, "canEqual", &[object.clone()], &ErasedType::Z);
+            self.body(|g| {
+                let (no, yes) = (g.lir.label(), g.lir.label());
+                let mut tests = Vec::new();
+                let instance = g.lir.this(this.clone());
+                let given = g.param(0);
+                let same = g.lir.compare(Relation::Eq, Comparing::Identity, instance, given);
+                let equal = g.lir.leave(yes);
+                tests.push(g.lir.when(same, equal));
+                let given = g.param(0);
+                let same_class = g.lir.is(given, &owner);
+                let other_class = g.lir.not(same_class);
+                let unequal = g.lir.leave(no);
+                tests.push(g.lir.when(other_class, unequal));
+                let given = g.param(0);
+                let cast = g.lir.checked(given, this.clone());
+                let that = g.lir.temp();
+                tests.push(g.lir.keep(that, cast));
+                if let Some(outer) = &outer {
+                    let instance = g.lir.this(this.clone());
+                    let mine = g.lir.call(outer, instance, &[]);
+                    let other = g.lir.kept(that, this.clone());
+                    let theirs = g.lir.call(outer, other, &[]);
+                    let differs = g.lir.compare(Relation::Ne, Comparing::Identity, mine, theirs);
+                    let unequal = g.lir.leave(no);
+                    tests.push(g.lir.when(differs, unequal));
                 }
-            }
-            if takes(synthetic::EQUALS_CALLS_CAN_EQUAL) {
-                self.load(that, &this);
-                self.load(0, &this);
-                self.invoke(Invoke::Virtual, &owner, false, "canEqual", &[object.clone()], &ErasedType::Z);
-                self.jump_if(op::IFEQ, 1, no);
-            }
-            self.code.bind(yes);
-            self.iconst(1);
-            self.return_value(&ErasedType::Z);
-            self.code.bind(no);
-            self.iconst(0);
-            self.return_value(&ErasedType::Z);
-            self.end_method(ACC_PUBLIC, "equals", "(Ljava/lang/Object;)Z");
+                for (name, ty) in order.iter().filter_map(|&i| field_refs.get(i)) {
+                    let instance = g.lir.this(this.clone());
+                    let mine = g.lir.field(instance, &owner, name, ty.clone());
+                    let other = g.lir.kept(that, this.clone());
+                    let theirs = g.lir.field(other, &owner, name, ty.clone());
+                    let differs = match ty {
+                        ErasedType::L(_) => {
+                            let equal = g.lower_helper("equal", &[mine, theirs], ErasedType::Z);
+                            g.lir.not(equal)
+                        }
+                        _ => g.lir.compare(Relation::Ne, Comparing::Numbers, mine, theirs),
+                    };
+                    let unequal = g.lir.leave(no);
+                    tests.push(g.lir.when(differs, unequal));
+                }
+                if takes(synthetic::EQUALS_CALLS_CAN_EQUAL) {
+                    let other = g.lir.kept(that, this.clone());
+                    let instance = g.lir.this(this.clone());
+                    let can = g.lir.call(&can_equal, other, &[instance]);
+                    let cannot = g.lir.not(can);
+                    let unequal = g.lir.leave(no);
+                    tests.push(g.lir.when(cannot, unequal));
+                }
+                let unit = g.lir.unit();
+                let checks = g.lir.seq(&tests, unit);
+                let checked = g.lir.labeled(yes, checks);
+                let truth = g.lir.bool(true);
+                let answer = g.lir.ret(truth);
+                let refused = g.lir.seq(&[checked], answer);
+                let refused = g.lir.labeled(no, refused);
+                let falsity = g.lir.bool(false);
+                let answer = g.lir.ret(falsity);
+                g.lir.seq(&[refused], answer)
+            });
+            self.end_method();
         }
     }
 
     // ---- the top-level definitions of a file ----
 
-    /// The file module's `<clinit>`: its lazy members' handles looked up first, the instance, then the eager vals
-    /// in order, a constant's initialiser that is no literal run for its effects alone (`Constructors`).
+    /// The file module's `<clinit>`: its lazy members' handles looked up first, the instance, then
+    /// the eager vals of its constructor's tree (`Gen::file_module_tree`), where the class file
+    /// runs them (`Gen::write_module_part`).
     fn file_module_clinit(&mut self, name: &Rc<str>, fields: &[FieldDef]) {
-        let this = ErasedType::L(name.clone());
-        let roots: Vec<TExprId> = fields.iter().filter(|f| !f.lazy).filter_map(|f| f.init).collect();
-        self.begin_module_clinit(name, &roots);
-        let slot = self.m.this_slot.unwrap_or(0);
+        let roots = file_module_roots(fields);
+        self.begin_module_clinit(self.clinit_flags(), name, &roots);
+        self.write_module(false, |g| g.file_module_tree(fields));
+        self.end_method();
+    }
+
+    /// The file module's constructor as one tree, an object's (`Gen::constructor_parts`):
+    /// `Object`'s constructor, then each eager val stored in its field, in order, a constant's
+    /// initialiser that is no literal run for its effects alone (`Constructors`).
+    fn file_module_tree(&mut self, fields: &[FieldDef]) -> (LirId, Vec<Declared>) {
+        let owner = self.this_name.clone();
+        let this = ErasedType::L(owner.clone());
+        let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
+        let mut parts = vec![self.lir.init(&object_init, &[])];
         for f in fields.iter().filter(|f| !f.lazy) {
-            if let Some(constant) = f.constant {
-                if let ConstVal::Declared(_) = constant {
-                    self.statement(f.init.unwrap());
+            let init = f.init.expect("an eager val's initialiser");
+            match f.constant {
+                Some(ConstVal::Declared(_)) => parts.push(self.lower_expr(init, &ErasedType::V)),
+                Some(_) => {}
+                None => {
+                    let instance = self.lir.this(this.clone());
+                    let value = self.lower_expr(init, &f.ty);
+                    parts.push(self.lir.store(instance, &owner, &f.name, value));
                 }
-                continue;
             }
-            self.load(slot, &this);
-            self.expr(f.init.unwrap(), &f.ty);
-            self.putfield(name, &f.name, &f.ty);
         }
-        self.return_value(&ErasedType::V);
-        let access = self.clinit_access();
-        self.end_method(access, "<clinit>", "()V");
+        self.returning(Parts::Tree(parts, Vec::new()))
     }
 
     pub fn emit_file_module(&mut self, file: FileId) -> (String, Vec<u8>) {
@@ -3745,24 +4262,23 @@ impl<'a> Gen<'a> {
         let reach = cx.input.reach;
         let name: Rc<str> = Rc::from(cx.file_modules[file.0 as usize].as_str());
         self.context = name.to_string();
-        let interfaces = super::callable::module_interfaces(Vec::new(), false);
-        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, &interfaces);
+        let listed = super::callable::module_interfaces(&[], false);
+        let path = &cx.input.sources[file.0 as usize].path;
+        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &[], &listed, Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)));
         self.this_name = name.clone();
         self.this_class = None;
         self.is_interface = false;
         self.abstract_class = false;
-        let path = &cx.input.sources[file.0 as usize].path;
-        self.cw.source_file(path.rsplit(std::path::is_separator).next().unwrap_or(path));
         self.line_file = file;
         // The companions of the file's top-level opaque types are its nested objects, static
         // final fields nothing assigns, as an object's are (`emit_class`).
         for &k in cx.opaque_companions.get(&file.0).map_or(&[][..], |v| &v[..]) {
             let field = encode(cx.input.interner.get(syms.class(k).name));
-            let desc = format!("L{};", self.class_name(k));
+            let ty = ErasedType::L(self.class_name(k));
             let flags = syms.class(k).module_sym.map_or(MODULE_FIELD, |m| module_field_flags(syms, m));
-            self.cw.field(flags, &field, &desc);
+            self.field(flags, &field, &ty);
         }
-        self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
+        self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()));
 
         let group = cx.file_group[file.0 as usize];
         let vals: &[(SymId, TExprId)] = if group == u32::MAX { &[] } else { &cx.layout.file_groups[group as usize].1 };
@@ -3794,37 +4310,31 @@ impl<'a> Gen<'a> {
             if f.lazy && self.is_thread_unsafe(f.sym) {
                 // `@threadUnsafe`: the unsynchronised holder alone (`emit_class`).
                 let container = self.lazy_member_names(&f.name).0;
-                self.cw.field(ACC_PRIVATE, &container, "Ljava/lang/Object;");
+                self.field(FieldFlags::PRIVATE, &container, &ErasedType::object());
                 continue;
             }
             if f.lazy {
                 // `private @volatile var x$lzyN: AnyRef` (`emit_class`).
                 let h = self.lazy_holder(&f.name, &f.ty);
-                self.cw.field(ACC_PRIVATE | ACC_VOLATILE, &h.container, "Ljava/lang/Object;");
+                self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object());
                 continue;
             }
             if f.constant.is_some() {
                 continue;
             }
-            let mut d = String::new();
-            f.ty.desc(&mut d);
-            let access = if self.is_volatile(f.sym) { ACC_PRIVATE | ACC_VOLATILE } else { ACC_PRIVATE };
-            self.cw.field(access, &f.name, &d);
+            self.field(FieldFlags { volatile: self.is_volatile(f.sym), ..FieldFlags::PRIVATE }, &f.name, &f.ty);
         }
         let given_inits: Vec<TInit> = vals.iter().map(|&(s, e)| TInit::Field(s, e)).collect();
         self.given_object_fields(&given_inits);
-        let this = ErasedType::L(name.clone());
         // The `<clinit>` first where the file has no lazy member, as it always was; else after the accessors,
         // whose lazy members' handles it looks up first.
         let clinit_first = !self.holds_lazy_members(None, file);
         if clinit_first {
             self.file_module_clinit(&name, &fields);
         }
-        self.begin_method(false, true, &[], ErasedType::V, &[]);
-        self.load(0, &this);
-        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &ErasedType::V);
-        self.return_value(&ErasedType::V);
-        self.end_method(ACC_PRIVATE, "<init>", "()V");
+        self.begin_method(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", true, &[], ErasedType::V, &file_module_roots(&fields));
+        self.write_module(true, |g| g.file_module_tree(&fields));
+        self.end_method();
         for f in &fields {
             self.accessors(f);
         }
@@ -3853,14 +4363,13 @@ impl<'a> Gen<'a> {
     /// `TeqMain.main(String[])` calls the entry point: the command line reaches a
     /// `main(args: Array[String])` as an array and a `@main def f(args: String*)` as a sequence.
     pub fn emit_launcher(&mut self, main: SymId, object: Option<ClassId>) -> (String, Vec<u8>) {
-        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, LAUNCHER, OBJECT, &[]);
+        self.begin_class(LAUNCHER, ClassFlags::FINAL, OBJECT, &[], &[], None);
         self.this_name = Rc::from(LAUNCHER);
         self.this_class = None;
         self.is_interface = false;
         self.context = LAUNCHER.to_string();
         self.entry_main(main, object);
-        let cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
-        (LAUNCHER.to_string(), cw.finish(self.cx.input.output_version))
+        (LAUNCHER.to_string(), self.finish_writer())
     }
 
     /// `static main(String[])` calling the entry point `main` of the program.
@@ -3870,44 +4379,53 @@ impl<'a> Gen<'a> {
         let main = cx.input.syms.main_adapter(cx.input.interner, main).unwrap_or(main);
         let info = cx.input.syms.sym(main);
         let args_type = ErasedType::L(Rc::from("[Ljava/lang/String;"));
-        self.begin_method(true, false, &[(None, args_type.clone())], ErasedType::V, &[]);
+        self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, "main", "([Ljava/lang/String;)V", false, &[(None, args_type.clone())], ErasedType::V, &[]);
         let m = self.mref(main);
-        match (object, info.owner) {
-            (Some(c), _) | (None, Owner::Class(c)) => {
-                self.load_module(c);
-            }
-            _ => {
-                let module = cx.file_modules[info.file.0 as usize].clone();
-                self.getstatic(&module, "MODULE$", &ErasedType::L(Rc::from(module.as_str())));
-            }
+        let module = match (object, info.owner) {
+            (Some(c), _) | (None, Owner::Class(c)) => self.module_name(c),
+            _ => Some(self.file_module_name(info.file)),
+        };
+        let repeated = info.sig.as_ref().and_then(|s| s.clauses.iter().flat_map(|c| c.params.iter()).next()).map_or(false, |p| p.repeated);
+        // The arguments' array itself in an `ArraySeq`: scala-library's `ofRef` takes it as an
+        // array of references, the std's as an array of any kind.
+        let wrap = cx.input.array_seq.filter(|_| repeated).map(|seq| {
+            let taken = if cx.linked_class(seq) { ErasedType::L(Rc::from(OBJECT_ARRAY)) } else { ErasedType::object() };
+            method_ref(Invoke::Special, &self.class_name(seq), false, "<init>", &[taken], &ErasedType::V)
+        });
+        let mut param = m.params.first().cloned();
+        if param.is_some() && repeated && wrap.is_none() {
+            self.unsupported("a repeated parameter of the entry point without ArraySeq");
+            param = None;
         }
-        if let Some(param) = m.params.first().cloned() {
-            let repeated = info.sig.as_ref().and_then(|s| s.clauses.iter().flat_map(|c| c.params.iter()).next()).map_or(false, |p| p.repeated);
-            match cx.input.array_seq.filter(|_| repeated) {
-                // The arguments' array itself in an `ArraySeq`: scala-library's `ofRef` takes
-                // it as an array of references, the std's as an array of any kind.
-                Some(seq) => {
-                    let seq_name = self.class_name(seq);
-                    self.new_object(&seq_name);
-                    self.load(0, &args_type);
-                    let taken = if cx.linked_class(seq) { ErasedType::L(Rc::from(OBJECT_ARRAY)) } else { ErasedType::object() };
-                    self.adapt(&args_type, &taken);
-                    self.invoke(Invoke::Special, &seq_name, false, "<init>", &[taken], &ErasedType::V);
-                    let t = ErasedType::L(seq_name);
-                    self.adapt(&t, &param);
-                }
-                None if repeated => self.unsupported("a repeated parameter of the entry point without ArraySeq"),
-                None => {
-                    self.load(0, &args_type);
-                    self.adapt(&args_type, &param);
-                }
+        self.body(|g| {
+            let receiver = match &module {
+                Some(module) => g.lir.module(module),
+                None => g.lir.unit(),
+            };
+            let mut args = Vec::new();
+            if let Some(param) = &param {
+                let given = g.param(0);
+                args.push(match &wrap {
+                    Some(seq) => {
+                        let taken = g.lower_adapt(given, &args_type, &seq.params[0]);
+                        let made = g.lir.make(seq, &[taken]);
+                        g.lower_adapt(made, &ErasedType::L(seq.owner.clone()), param)
+                    }
+                    None => g.lower_adapt(given, &args_type, param),
+                });
             }
-        }
-        self.invoke_mref(&m);
-        self.pop_value(&m.ret.clone());
-        self.return_value(&ErasedType::V);
-        self.end_method(ACC_PUBLIC | ACC_STATIC, "main", "([Ljava/lang/String;)V");
+            let called = g.lir.call(&m, receiver, &args);
+            let dropped = g.lower_adapt(called, &m.ret, &ErasedType::V);
+            g.lir.ret(dropped)
+        });
+        self.end_method();
     }
+}
+
+/// What the file module's constructor's locals are found shared in (`free::cells`): its eager
+/// vals' initialisers.
+fn file_module_roots(fields: &[FieldDef]) -> Vec<TExprId> {
+    fields.iter().filter(|f| !f.lazy).filter_map(|f| f.init).collect()
 }
 
 /// The expressions an initialiser of a class's body evaluates: a field's, a statement, and what
@@ -4010,10 +4528,10 @@ fn setter_member_name(interner: &crate::intern::Interner, var: Name) -> Option<N
 /// The flags of the static final field that holds a nested object in its owner's module class,
 /// as dotty's `javaFieldFlags` derives them from the module term (`BCodeUtils.javaFlags`): private
 /// for a private object, public for a qualified private one (`private[p]`) as for any other.
-fn module_field_flags(syms: &Symbols, m: SymId) -> u16 {
+fn module_field_flags(syms: &Symbols, m: SymId) -> FieldFlags {
     let info = syms.sym(m);
     if info.mods & mods::PRIVATE != 0 && !info.scoped_private {
-        ACC_PRIVATE | ACC_STATIC | ACC_FINAL
+        FieldFlags { visibility: Visibility::Private, ..MODULE_FIELD }
     } else {
         MODULE_FIELD
     }

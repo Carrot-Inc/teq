@@ -19,12 +19,11 @@
 
 use crate::lir::{ErasedType, Invoke};
 use super::classfile::*;
-use super::gen::{Gen, Referenced};
+use super::gen::Gen;
 use super::names::*;
+use super::template::{declared_type, TemplateRoute};
 use crate::ast::ListRef;
-use crate::symbols::Owner;
 use crate::tir::*;
-use crate::types::Type;
 use crate::typer::prims::UNBOX;
 use std::rc::Rc;
 
@@ -59,21 +58,12 @@ impl<'a> Gen<'a> {
     pub fn intrinsic(&mut self, e: TExprId, template: StrRef, args: ListRef) -> ErasedType {
         let cx = self.cx;
         let text: &str = &cx.input.prog.strings[template.idx()];
-        let list = args;
         let args: &[TExprId] = cx.input.prog.expr_list(args);
+        if !matches!(self.template_route(e, template, args), TemplateRoute::Text) {
+            unreachable!("lowered (`Gen::lower_template`)");
+        }
         if let Some(name) = text.strip_prefix('!') {
-            let owner = cx.input.prog.template_syms.get(&template).and_then(|&s| match cx.input.syms.sym(s).owner {
-                Owner::Class(c) => Some(self.class_name(c)),
-                _ => None,
-            });
-            // `scala.reflect.Enum.ordinal`, the std's trait standing for the jar's interface, is
-            // that interface's method (a macro's `e.ordinal` on an `E <: Enum`).
-            if name == "ordinal" && list.len == 1 && owner.as_deref() == Some("scala/reflect/Enum") {
-                let iface = ErasedType::L(Rc::from("scala/reflect/Enum"));
-                self.expr(args[0], &iface);
-                self.invoke(Invoke::Interface, "scala/reflect/Enum", true, "ordinal", &[], &ErasedType::I);
-                return ErasedType::I;
-            }
+            let owner = self.template_owner(template);
             // The std's quoted reflection is the compiler's: a member of it the output keeps
             // (`TreeMethods.asExpr` beside a macro's expansion) never runs.
             if owner.as_deref().map_or(false, |o| o.starts_with("scala/quoted/")) {
@@ -97,87 +87,19 @@ impl<'a> Gen<'a> {
                 self.unbox_or(&prim, args[1]);
                 return prim;
             }
-            // `Object`'s members are called on the class the receiver points at, as every
-            // inherited member is (`Gen::object_member_call`).
-            "$hashCode($0)" => {
-                self.object_member_call(args[0], "hashCode", &[], &ErasedType::I, |_| {});
-                return ErasedType::I;
-            }
-            // `x.synchronized(body)`, which the typer keeps for the JVM: the body under x's monitor
-            // (dotty's `genSynchronized`).
-            "$synchronized($0, $1)" => return self.synchronized_(args[0], args[1]),
-            "$identityHash($0)" => {
-                self.expr(args[0], &object);
-                self.invoke(Invoke::Static, "java/lang/System", false, "identityHashCode", &[object], &ErasedType::I);
-                return ErasedType::I;
-            }
+            // A receiver whose static type is a primitive (`Gen::primitive_receiver`) runs for its
+            // effects alone.
             "$getClass($0)" => {
                 let class = ErasedType::L(Rc::from("java/lang/Class"));
-                // A receiver whose static type is a primitive has the primitive's class, as scalac
-                // rewrites it (`1.getClass` prints `int`, `().getClass` `void`); it runs for its
-                // effects alone. A value class's is its box's, which the receiver is boxed into.
-                if let Some(t) = self.recorded_type(args[0]).filter(|_| self.expr_value_class(args[0]).is_none()) {
-                    let erased = self.erase(t);
-                    if !matches!(erased, ErasedType::L(_)) {
-                        self.statement(args[0]);
-                        let boxed = if erased == ErasedType::V { "java/lang/Void" } else { erased.box_class() };
-                        self.getstatic(boxed, "TYPE", &class);
-                        return class;
-                    }
-                }
-                self.object_member_call(args[0], "getClass", &[], &class, |_| {});
+                let erased = self.primitive_receiver(args[0]).expect("a primitive, by `Gen::template_route`");
+                self.statement(args[0]);
+                let boxed = if erased == ErasedType::V { "java/lang/Void" } else { erased.box_class() };
+                self.getstatic(boxed, "TYPE", &class);
                 return class;
             }
-            "$equals($0, $1)" => {
-                let other = args[1];
-                let param = object.clone();
-                self.object_member_call(args[0], "equals", &[param], &ErasedType::Z, |g| g.expr(other, &object));
-                return ErasedType::Z;
-            }
-            // The lookups of an enum's companion (`prims.rs`): its own `values`, `valueOf` and
-            // `fromOrdinal`, scalac's (`enum_companion_members`).
             "$enumValues($0)" | "$enumValueOf($0, $1, $2, $3, $4)" | "$enumFromOrdinal($0, $1, $2)" | "$enumCaseOfOrdinal($0, $1, $2, $3, $4)" => {
-                let cx = self.cx;
-                let module = match cx.input.prog.expr(args[0]) {
-                    TExpr::Module(c) => Some(c),
-                    TExpr::Block(_, res) if matches!(cx.input.prog.expr(res), TExpr::Module(_)) => match cx.input.prog.expr(res) {
-                        TExpr::Module(c) => Some(c),
-                        _ => None,
-                    },
-                    _ => self.recorded_type(args[0]).and_then(|t| match cx.input.types.get(t) {
-                        Type::Class(c, _) => Some(c),
-                        _ => None,
-                    }),
-                };
-                let Some(module) = module else {
-                    self.unsupported("an enum lookup whose companion is not known");
-                    return ErasedType::object();
-                };
-                let Some(e) = cx.input.syms.class(module).companion else {
-                    self.unsupported("an enum lookup whose companion is not known");
-                    return ErasedType::object();
-                };
-                let owner = self.class_name(module);
-                let enum_type = self.class_type(e);
-                self.expr(args[0], &ErasedType::L(owner.clone()));
-                let string = ErasedType::L(Rc::from(STRING));
-                return match text {
-                    "$enumValues($0)" => {
-                        let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
-                        self.invoke(Invoke::Virtual, &owner, false, "values", &[], &array);
-                        array
-                    }
-                    "$enumValueOf($0, $1, $2, $3, $4)" => {
-                        self.expr(args[1], &string);
-                        self.invoke(Invoke::Virtual, &owner, false, "valueOf", &[string], &enum_type);
-                        enum_type
-                    }
-                    _ => {
-                        self.expr(args[1], &ErasedType::I);
-                        self.invoke(Invoke::Virtual, &owner, false, "fromOrdinal", &[ErasedType::I], &enum_type);
-                        enum_type
-                    }
-                };
+                self.unsupported("an enum lookup whose companion is not known");
+                return ErasedType::object();
             }
             "$productPrefix($0)" => {
                 let product = ErasedType::L(Rc::from(PRODUCT));
@@ -186,29 +108,13 @@ impl<'a> Gen<'a> {
                 self.invoke(Invoke::Interface, PRODUCT, true, "productPrefix", &[], &string);
                 return string;
             }
-            "$0.$ordinal" => {
-                let t = ErasedType::L(Rc::from(ENUM));
-                self.expr(args[0], &t);
-                self.invoke(Invoke::Interface, ENUM, true, "ordinal", &[], &ErasedType::I);
-                return ErasedType::I;
-            }
             "$pf($0, $1)" => {
-                let Some(&c) = cx.helpers.classes.get("PartialFunctionImpl") else {
-                    self.unsupported("the runtime class PartialFunctionImpl is missing");
-                    return ErasedType::V;
-                };
-                let name = self.class_name(c);
-                self.new_object(&name);
-                let params = self.ctor_param_types(c);
-                for (a, p) in args.iter().zip(&params) {
-                    self.expr(*a, p);
-                }
-                self.invoke(Invoke::Special, &name, false, "<init>", &params, &ErasedType::V);
-                return ErasedType::L(name);
+                self.unsupported("the runtime class PartialFunctionImpl is missing");
+                return ErasedType::V;
             }
             _ => {}
         }
-        if text.starts_with('$') && !text[1..].starts_with(|c: char| c.is_ascii_digit()) || text.starts_with('(') {
+        if typer_text(text) {
             self.unsupported(&format!("the JavaScript template {}", text));
             return ErasedType::V;
         }
@@ -218,7 +124,7 @@ impl<'a> Gen<'a> {
     fn assemble(&mut self, e: TExprId, text: &str, args: &[TExprId]) -> ErasedType {
         let tokens = tokenize(text);
         let mut stack: Vec<ErasedType> = Vec::new();
-        let single = !text.contains('$') && tokens.len() == 2 && tokens[0].starts_with("invoke");
+        let single = single_form(text, &tokens);
         let mut i = 0;
         while i < tokens.len() {
             let t = tokens[i].as_str();
@@ -233,17 +139,8 @@ impl<'a> Gen<'a> {
                     return ErasedType::V;
                 };
                 let want = match ty {
-                    Some("L") => ErasedType::object(),
-                    Some(d) => parse_type(d).0,
-                    // A value class's instance is its box, the parameter being generic (the
-                    // element `update` stores in a `V[]`): no std intrinsic declares one.
-                    None => match self.expr_value_class(arg) {
-                        Some((c, _)) => self.class_type(c),
-                        None => {
-                            let s = self.static_type(arg);
-                            self.materialised_type(s)
-                        }
-                    },
+                    Some(d) => declared_type(d),
+                    None => self.placeholder_type(arg),
                 };
                 self.expr(arg, &want);
                 stack.push(want);
@@ -270,20 +167,8 @@ impl<'a> Gen<'a> {
                     };
                     let mut site = None;
                     if single {
-                        let mut wanted: Vec<ErasedType> = Vec::new();
-                        if kind != Invoke::Static {
-                            wanted.push(ErasedType::L(Rc::from(owner)));
-                        }
-                        wanted.extend(params.iter().cloned());
-                        let skip = args.len().saturating_sub(wanted.len());
-                        // The JDK's member called on the receiver is named on the class the
-                        // receiver points at, as the program's members are (`Gen::method_site`).
-                        if matches!(kind, Invoke::Virtual | Invoke::Interface) && skip < args.len() {
-                            site = self.method_site(args[skip], &Rc::from(owner), kind == Invoke::Interface, name, desc, Referenced::Method(name));
-                            if let Some(site) = &site {
-                                wanted[0] = site.qualifier.clone();
-                            }
-                        }
+                        let (skip, wanted, at) = self.single_operands(args, kind, &Rc::from(owner), name, desc, &params);
+                        site = at;
                         for (a, w) in args[skip..].iter().zip(&wanted) {
                             self.expr(*a, w);
                         }
@@ -465,18 +350,21 @@ impl<'a> Gen<'a> {
         }
         stack.pop().unwrap_or(ErasedType::V)
     }
+}
 
-    fn materialised_type(&mut self, t: ErasedType) -> ErasedType {
-        if t == ErasedType::V {
-            ErasedType::L(Rc::from(BOXED_UNIT))
-        } else {
-            t
-        }
-    }
+/// Whether a text is the typer's own and no stack code: it opens with `$` and no digit, or
+/// with `(`, or it is an enum value's ordinal (`$0.$ordinal`).
+pub(super) fn typer_text(text: &str) -> bool {
+    text.starts_with('$') && !text[1..].starts_with(|c: char| c.is_ascii_digit()) || text.starts_with('(') || text == "$0.$ordinal"
+}
+
+/// Whether a template is one member reference and nothing else, its operands implicit.
+pub(super) fn single_form(text: &str, tokens: &[String]) -> bool {
+    !text.contains('$') && tokens.len() == 2 && tokens[0].starts_with("invoke")
 }
 
 /// Blank-separated tokens; a double-quoted token may hold blanks and the escapes `\n`, `\"`, `\\`.
-fn tokenize(text: &str) -> Vec<String> {
+pub(super) fn tokenize(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut chars = text.chars().peekable();
     while let Some(&c) = chars.peek() {
@@ -514,14 +402,14 @@ fn tokenize(text: &str) -> Vec<String> {
 }
 
 /// `owner.name(desc)ret` into its parts.
-fn split_method(member: &str) -> Option<(&str, &str, &str)> {
+pub(super) fn split_method(member: &str) -> Option<(&str, &str, &str)> {
     let paren = member.find('(')?;
     let dot = member[..paren].rfind('.')?;
     Some((&member[..dot], &member[dot + 1..paren], &member[paren..]))
 }
 
 /// The instructions without operands: opcode, how many values they pop, what they push.
-fn plain_op(name: &str) -> Option<(u8, usize, Option<ErasedType>)> {
+pub(super) fn plain_op(name: &str) -> Option<(u8, usize, Option<ErasedType>)> {
     use ErasedType::*;
     Some(match name {
         "aconst_null" => (op::ACONST_NULL, 0, Some(ErasedType::object())),

@@ -1314,6 +1314,22 @@ mod os {
 
     /// Whether the process has a bound on its address space (`ulimit -v`).
     pub fn bounded() -> bool {
+        #[cfg(target_os = "linux")]
+        const RLIMIT_AS: i32 = 9; // libc's resource number on Linux
+        #[cfg(target_os = "macos")]
+        const RLIMIT_AS: i32 = 5; // libc's resource number on Darwin
+        limited(RLIMIT_AS)
+    }
+
+    /// Whether a thread's stack counts against a bound of the process's: its address space or, on Linux, its data
+    /// (`ulimit -d`), which counts every private writable mapping there.
+    pub fn stacks_bounded() -> bool {
+        const RLIMIT_DATA: i32 = 2; // libc's resource number on Linux and Darwin
+        bounded() || (cfg!(target_os = "linux") && limited(RLIMIT_DATA))
+    }
+
+    /// Whether the process has a bound on a resource (`getrlimit`).
+    fn limited(resource: i32) -> bool {
         #[repr(C)]
         struct Rlimit {
             cur: u64,
@@ -1323,16 +1339,12 @@ mod os {
             fn getrlimit(resource: i32, limit: *mut Rlimit) -> i32;
         }
         #[cfg(target_os = "linux")]
-        const RLIMIT_AS: i32 = 9; // libc's resource number on Linux
-        #[cfg(target_os = "macos")]
-        const RLIMIT_AS: i32 = 5; // libc's resource number on Darwin
-        #[cfg(target_os = "linux")]
         const RLIM_INFINITY: u64 = u64::MAX; // libc's RLIM_INFINITY on Linux
         #[cfg(target_os = "macos")]
         const RLIM_INFINITY: u64 = i64::MAX as u64; // libc's RLIM_INFINITY on Darwin
         let mut limit = Rlimit { cur: 0, max: 0 };
         // SAFETY: the system fills a struct of its layout.
-        unsafe { getrlimit(RLIMIT_AS, &mut limit) == 0 && limit.cur < RLIM_INFINITY }
+        unsafe { getrlimit(resource, &mut limit) == 0 && limit.cur < RLIM_INFINITY }
     }
 
     /// Whether the system gives a mapping a new length, its pages moved where it moves (`resize`).
@@ -1432,6 +1444,10 @@ mod os {
     }
 
     pub fn bounded() -> bool {
+        false
+    }
+
+    pub fn stacks_bounded() -> bool {
         false
     }
 
@@ -1607,6 +1623,33 @@ where
         enter();
         f()
     })
+}
+
+/// The stack of a thread that recurses as deep as a program's expressions nest: the compiler's, the typer's and the
+/// JVM back end's emitters'. A spawned thread's default 2 MiB is the wrong bound for that depth.
+pub const DEEP_STACK: usize = 1 << 30;
+
+/// Whether a thread's stack counts against a bound of the process's (`ulimit -v`; on Linux `ulimit -d` too). A deep
+/// thread's stack is then taken from what the bound leaves every other request, and a running thread's stack
+/// cannot give way to one the bound refuses (`asked`): a caller starts no deep thread there.
+pub fn stacks_bounded() -> bool {
+    os::stacks_bounded()
+}
+
+/// `spawn_in` for a thread that recurses as deep as a program's expressions nest (`DEEP_STACK`); `None` where the
+/// system refuses a thread of that stack, so that the caller gives way.
+pub fn spawn_deep_in<'scope, F, T>(scope: &'scope std::thread::Scope<'scope, '_>, f: F) -> Option<std::thread::ScopedJoinHandle<'scope, T>>
+where
+    F: FnOnce() -> T + Send + 'scope,
+    T: Send + 'scope,
+{
+    std::thread::Builder::new()
+        .stack_size(DEEP_STACK)
+        .spawn_scoped(scope, move || {
+            enter();
+            f()
+        })
+        .ok()
 }
 
 /// For a thread of a resident process that lives across builds, where it goes idle: what its
@@ -3886,7 +3929,7 @@ mod tests {
     /// `spawn` or a name that begins with `spawn_` stands in its code, and the entry its
     /// threads go through.
     const STARTS: &[(&str, usize, &str)] = &[
-        ("src/alloc.rs", 6, "spawn, spawn_or_drop and spawn_in themselves, which enter first"),
+        ("src/alloc.rs", 8, "spawn, spawn_or_drop, spawn_in and spawn_deep_in themselves, which enter first"),
         ("src/classpath.rs", 1, "alloc::spawn_in"),
         ("src/crew.rs", 2, "a builder for the merge threads, alloc::enter the first statement of the closure; the retired data's free through spawn"),
         ("src/emit/layout.rs", 2, "alloc::spawn_in for the scan of the anonymous classes' creations and for their shapes"),
@@ -3899,7 +3942,7 @@ mod tests {
         ("src/interp/process.rs", 2, "a builder for the reaper's small stack, alloc::enter the first statement of its closure; the other starts a program's child under teq interp"),
         ("src/jvm/classfile.rs", 1, "alloc::spawn_in"),
         ("src/jvm/kept.rs", 1, "alloc::spawn_in for the slices of the kept class files' facts"),
-        ("src/jvm/mod.rs", 2, "alloc::spawn_in for the class generation and for the class files' writing"),
+        ("src/jvm/mod.rs", 2, "alloc::spawn_deep_in for the class generation, alloc::spawn_in for the class files' writing"),
         ("src/lsp/export.rs", 2, "alloc::spawn for the thread that waits on sbt; the other starts the sbt process"),
         ("src/lsp/mod.rs", 7, "alloc::spawn six times, the generators' worker among them; the seventh starts a child process"),
         ("src/lsp/sources.rs", 1, "alloc::spawn for the workers that fetch the libraries' sources"),

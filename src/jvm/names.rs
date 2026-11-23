@@ -1,7 +1,7 @@
 //! JVM names: scalac's `$`-encoding of operator characters, the binary names of classes, and
 //! the erased types the backend computes with.
 
-use crate::lir::ErasedType;
+use crate::lir::{ErasedType, Invoke, MethodRef};
 use std::rc::Rc;
 
 /// scalac's NameTransformer: operator characters become `$plus`, `$colon` and so on.
@@ -671,6 +671,23 @@ impl ErasedType {
         }
     }
 
+    /// The rest of `s` after this type's descriptor, where `s` starts with it.
+    pub fn strip_desc<'s>(&self, s: &'s str) -> Option<&'s str> {
+        match self {
+            ErasedType::V => s.strip_prefix('V'),
+            ErasedType::Z => s.strip_prefix('Z'),
+            ErasedType::B => s.strip_prefix('B'),
+            ErasedType::S => s.strip_prefix('S'),
+            ErasedType::C => s.strip_prefix('C'),
+            ErasedType::I => s.strip_prefix('I'),
+            ErasedType::J => s.strip_prefix('J'),
+            ErasedType::F => s.strip_prefix('F'),
+            ErasedType::D => s.strip_prefix('D'),
+            ErasedType::L(n) if n.starts_with('[') => s.strip_prefix(&**n),
+            ErasedType::L(n) => s.strip_prefix('L')?.strip_prefix(&**n)?.strip_prefix(';'),
+        }
+    }
+
     /// The class that boxes a primitive.
     pub fn box_class(&self) -> &'static str {
         match self {
@@ -687,6 +704,19 @@ impl ErasedType {
     }
 }
 
+/// A reference to a method the typed IR has no symbol of, by its erased signature.
+pub fn method_ref(kind: Invoke, owner: &Rc<str>, owner_is_interface: bool, name: &str, params: &[ErasedType], ret: &ErasedType) -> Rc<MethodRef> {
+    Rc::new(MethodRef {
+        owner: owner.clone(),
+        owner_is_interface,
+        name: name.to_string(),
+        params: params.to_vec(),
+        ret: ret.clone(),
+        desc: method_desc(params, ret),
+        kind,
+    })
+}
+
 pub fn method_desc(params: &[ErasedType], ret: &ErasedType) -> String {
     let mut s = String::with_capacity(16 + params.len() * 18);
     s.push('(');
@@ -696,6 +726,18 @@ pub fn method_desc(params: &[ErasedType], ret: &ErasedType) -> String {
     s.push(')');
     ret.desc(&mut s);
     s
+}
+
+/// Whether `desc` is the descriptor of a method of these parameter and result types.
+pub fn spells_method_desc<'t>(desc: &str, params: impl IntoIterator<Item = &'t ErasedType>, ret: &ErasedType) -> bool {
+    let Some(mut rest) = desc.strip_prefix('(') else { return false };
+    for p in params {
+        match p.strip_desc(rest) {
+            Some(r) => rest = r,
+            None => return false,
+        }
+    }
+    rest.strip_prefix(')').and_then(|r| ret.strip_desc(r)) == Some("")
 }
 
 /// Parses a field descriptor; arrays come back as `Object`-like references under their

@@ -2,7 +2,7 @@
 //! stack, brought to the static type the typer recorded for it (a cast or an unboxing where a
 //! generic result is used at a concrete type), and then to the type its consumer wants.
 
-use crate::lir::{ErasedType, Invoke, LirId, MethodRef};
+use crate::lir::{Adaptation, Capture, ErasedType, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodRef};
 use super::classfile::*;
 use super::free::{Analysis, Free};
 use super::names::*;
@@ -17,46 +17,6 @@ use crate::typer::loader::javaclass::JMember;
 use crate::types::*;
 use std::rc::Rc;
 
-/// scalac's `MaxIndySlots`: a concatenation's call is written before the operand that would
-/// bring it to this many operand slots.
-const CONCAT_SLOTS: usize = 200;
-/// What a constant of the class file holds, in bytes of modified UTF-8.
-const RECIPE_BYTES: usize = 65535;
-
-/// One call of `makeConcatWithConstants`: `\u{1}` in the recipe stands for an argument,
-/// `\u{2}` for a constant that holds one of the two itself.
-#[derive(Default)]
-struct ConcatCall {
-    recipe: String,
-    bytes: usize,
-    arguments: Vec<ErasedType>,
-    constants: Vec<String>,
-    slots: usize,
-}
-
-impl ConcatCall {
-    fn text(&mut self, text: &str) {
-        self.recipe.push_str(text);
-        self.bytes += recipe_bytes(text);
-    }
-
-    fn constant(&mut self, text: String) {
-        self.text("\u{2}");
-        self.constants.push(text);
-        self.slots += 1;
-    }
-
-    fn argument(&mut self, t: ErasedType, slots: usize) {
-        self.text("\u{1}");
-        self.arguments.push(t);
-        self.slots += slots;
-    }
-}
-
-fn recipe_bytes(text: &str) -> usize {
-    text.chars().map(|c| if c == '\0' { 2 } else if c as u32 >= 0x10000 { 6 } else { c.len_utf8() }).sum()
-}
-
 /// Where a virtual call or a field access on a qualifier points (`Gen::qualifier_site`): the
 /// class the qualifier is evaluated at and the owner the instruction names, chosen per site
 /// where `MethodRef` holds the declaration's.
@@ -67,10 +27,10 @@ pub struct Site {
 }
 
 /// The instance a method runs on (`Gen::this_value`): an object's own, by its class's name, or
-/// the slot that holds it with the type it is held at.
+/// the one the method holds in its slot, with the type it is held at.
 pub enum ThisValue {
     Module(Rc<str>),
-    Slot(u16, ErasedType),
+    Slot(ErasedType),
 }
 
 /// How the value a node left is brought to the type wanted: one decision (`Gen::fit`), read
@@ -93,8 +53,9 @@ pub enum FieldRoute {
     Java,
     /// An object selected through its owner: its instance.
     Object(ClassId),
-    /// A given object through its owner.
-    GivenObject,
+    /// A given object through its owner, which is not initialised for it, as under scalac: a
+    /// receiver that is no object's instance nor `this` is evaluated for its effect alone.
+    GivenObject { receiver_evaluated: bool },
     /// A value class's parameter on a value of it: the value itself.
     Underlying(ClassId),
     /// A constructor's parameter read before the superclass's constructor ran: its local.
@@ -107,6 +68,191 @@ pub enum FieldRoute {
     Accessor,
 }
 
+/// The way a read of `s`, a member with no receiver written, is generated: one decision
+/// (`Gen::static_route`), read by the lowering and by `Gen::load_static`.
+pub enum StaticRoute {
+    /// A given object: its instance at the given's declared type.
+    GivenObject,
+    /// A Java class's static field.
+    JavaField,
+    /// An enum's value held in a static field of its companion: the companion, and the enum.
+    EnumField(ClassId, ClassId),
+    /// An enum's value held by its own class, its enum initialised first.
+    EnumValue(ClassId),
+    /// A top-level inline val: its constant.
+    InlineVal,
+    /// A static field of a class of the program.
+    Field,
+    /// The accessor on the member's object, or on its file's.
+    Accessor,
+}
+
+/// The way a call `s(args)` with no receiver written is generated: one decision
+/// (`Gen::static_call_route`), read by the lowering and by `Gen::call_static`.
+pub enum StaticCallRoute {
+    /// The typer's conversion of a spread array to a sequence: the array, wrapped.
+    Spread(TExprId),
+    /// A static method of a Java class.
+    JavaStatic,
+    /// A member of a std object standing for a JDK class's statics.
+    JdkStatic,
+    /// A local function value applied through its name.
+    LocalValue,
+    /// A local definition: its lifted method, what it captures first.
+    Lifted,
+    /// A member of a file's object.
+    FileModule,
+}
+
+/// How the arguments of a constructor are passed: one decision (`Gen::ctor_arguments_route`),
+/// read by `Gen::new_arguments` and through `Gen::new_route` by the lowering.
+pub enum CtorArguments {
+    /// What the class captures first, an anonymous class's superclass's after.
+    Captured,
+    /// The same, where the lowering has no node yet for something passed
+    /// (`Gen::captured_arguments_lower`).
+    CapturedUnlowered,
+    /// As the class file's constructor of a class this build does not write takes them: the
+    /// type of the enclosing instance where it takes one, and its parameters' types
+    /// (`Gen::unwritten_ctor_layout`).
+    Unwritten(Option<ErasedType>, Vec<ErasedType>),
+    /// The enclosing instance, at this type, before the declared ones, where the class file of
+    /// a class this build does not write gives no one answer. Not lowered yet.
+    UnwrittenOuter(ErasedType),
+    /// At the declared parameters' types.
+    Declared,
+}
+
+/// The way `new C(args)` is generated: one decision (`Gen::new_route`), read by the lowering
+/// and by `Gen::new_`.
+pub enum NewRoute {
+    /// A value class's value: its argument, at this type.
+    Underlying(ErasedType, TExprId),
+    /// A class of JavaScript, which the JVM has none of.
+    Js,
+    /// A new instance and its constructor's call.
+    Instance(CtorArguments),
+}
+
+/// The way a concatenation is generated: one decision (`Gen::concat_route`), read by the
+/// lowering and by `Gen::str_concat`. Each holds the statements of the blocks the head of the
+/// chain brings (`Program::chain_head`), which run before the first operand, and the operands:
+/// a chain's own, those behind a block's result, or the head as one operand.
+pub enum ConcatRoute {
+    /// The statements lower whole (`Gen::block_lowers`), or there are none.
+    Lowered(Vec<ListRef>, Vec<TExprId>),
+    /// A statement is not lowered yet: a pattern definition, a lazy val.
+    Statements(Vec<ListRef>, Vec<TExprId>),
+}
+
+/// How the arguments of a secondary constructor are passed: one decision
+/// (`Gen::via_arguments_route`), read by `Gen::via_arguments` and by the lowering.
+pub enum ViaArguments {
+    /// As `CtorArguments::Unwritten`.
+    Unwritten(Option<ErasedType>, Vec<ErasedType>),
+    /// What a local class captures, the leading arguments of this count, before the declared
+    /// ones.
+    Captured(usize),
+    /// The same, where the lowering has no node yet for something passed (`Gen::captures_lower`).
+    CapturedUnlowered(usize),
+    /// The enclosing instance of a class nested in a class, at this type, before the declared
+    /// ones.
+    Outer(ErasedType),
+    /// At the declared parameters' types.
+    Declared,
+}
+
+/// The way `new C(args)` through a secondary constructor is generated: one decision
+/// (`Gen::via_route`), read by the lowering and by `Gen::new_via`.
+pub enum ViaRoute {
+    /// A constructor of no class.
+    Unowned,
+    /// A class of JavaScript, which the JVM has none of.
+    Js(ClassId),
+    /// A new instance of the class and the constructor's call.
+    Instance(ClassId, ViaArguments),
+}
+
+/// How the creation of an anonymous class passes its superclass's arguments, after what the
+/// class captures: one decision (`Gen::anon_super_route`), read by `Gen::new_arguments` and by
+/// the lowering.
+pub(super) enum SuperArguments {
+    /// As a creation of the superclass, a class that captures, passes its primary constructor's.
+    Captured,
+    /// As a creation through this secondary constructor of the superclass, a local class,
+    /// passes them.
+    Via(SymId),
+    /// As `CtorArguments::Unwritten`.
+    Unwritten(Option<ErasedType>, Vec<ErasedType>),
+    /// At the parameters' types of the constructor selected.
+    Declared,
+}
+
+/// One of the values a creation passes a lifted class for what it captures
+/// (`Gen::passed_captures`).
+pub(super) enum PassedCapture {
+    /// The creation's argument for this parameter of the class's constructor.
+    Argument(TExprId, SymId),
+    /// What the scope holds for a local that a local def the class copies captures.
+    Held(SymId),
+}
+
+/// How the argument that hands a lifted class a local is passed: one decision
+/// (`Gen::capture_argument_route`), read by `Gen::load_capture_arg` and by the lowering.
+pub(super) enum CaptureArgument {
+    /// The argument's value at this type, where the class takes a value and the creation reads
+    /// another local.
+    Value(ErasedType),
+    /// What the scope holds for the local: its value, its cell, a lazy val's holder.
+    Held(SymId),
+    /// A holder made for the value this expression gives (a local object's own val, passed as
+    /// `() => this`). Not lowered yet: the holder is made, filled and then passed.
+    Holder(TExprId),
+    /// The argument at its own type, the unit value for none.
+    Own,
+}
+
+/// Where the default of a constructor's parameter comes from: one decision
+/// (`Gen::ctor_default_route`), read by `Gen::ctor_default` and by the lowering.
+pub(super) enum CtorDefault {
+    /// A class of the JDK, which has no getters: the default's expression where the creation
+    /// stands, nothing for a parameter that has none.
+    InPlace(Option<TExprId>),
+    /// The getter of a local class's local companion, on the receiver the typer selected it
+    /// on, or on the companion's val, this local.
+    LocalCompanion(SymId, MethodRef),
+    /// The getter of the companion of a class nested in a class, an object of each enclosing
+    /// instance: the companion read by this accessor on the creation's enclosing instance.
+    InnerCompanion(MethodRef, MethodRef),
+    /// A named local class's static getter, which takes what the class captures, parameters of
+    /// this count, before the arguments.
+    Captured(usize, MethodRef),
+    /// The getter of the class's companion, on the companion.
+    Companion(MethodRef),
+    /// A jar class's getter as its class files declare it: its companion's, or the static
+    /// forwarder of the class.
+    Jar(MethodRef),
+    /// The class's static getter.
+    Static(MethodRef),
+}
+
+/// The way a default argument is generated: one decision (`Gen::default_route`), read by the
+/// lowering and by `Gen::default_arg`.
+pub(super) enum DefaultRoute {
+    /// A constructor's default with no argument before it, the receiver the typer selected the
+    /// getter on where it selected one: where it comes from, and the parameter's type.
+    Ctor(ClassId, Option<TExprId>, CtorDefault, ErasedType),
+    /// The getter of a file's member with no argument before it, on the file's object, and the
+    /// type the default is left as.
+    FileMember(FileId, MethodRef, ErasedType),
+    /// Not lowered yet: the getter called on its receiver with the arguments before the default
+    /// (`Gen::default_priors`, `Gen::method_default`); a local def's getter is lifted (`Gen::local_default`); a by-name
+    /// parameter's getter is passed as a function made where it is called
+    /// (`Gen::jar_default_thunk`); a getter takes what the method being written alone holds
+    /// (`Gen::ctor_default_lowers`).
+    Unlowered,
+}
+
 /// The way a call `r.s(args)` is generated: one decision (`Gen::call_route`), read by the
 /// lowering and by `Gen::call_method`, which holds the routes not lowered yet.
 pub enum CallRoute {
@@ -115,23 +261,36 @@ pub enum CallRoute {
     /// A member of a JavaScript type, which the JVM has none of.
     Js,
     /// A value class's method, called as scalac calls it (`Gen::call_extension`).
-    Extension,
-    /// An interpolator of scala-library that has no bytecode: the runtime's helper.
-    Interpolator(SymId),
+    Extension(ClassId, ExtensionRoute),
+    /// An interpolator of scala-library that has no bytecode: the runtime's helper, and the
+    /// runtime's definition of its name where the build holds one.
+    Interpolator(SymId, Option<SymId>),
     /// An object selected through its owner: its instance, not a call.
     Object(ClassId),
     /// A static method of a Java class.
     JavaStatic,
     /// A member of a std object standing for a JDK class's statics.
     JdkStatic,
-    /// `super[T].s(..)` of a member of a local trait, the proxies first.
-    Proxied(ClassId, Vec<SymId>),
-    /// A local trait's lifted member, the proxies first.
-    Lifted(Vec<SymId>),
+    /// `super[T].s(..)` of a member of a local trait, the proxies first (`Gen::member_proxies`).
+    Proxied(ClassId),
+    /// A local trait's lifted member, the proxies first (`Gen::member_proxies`).
+    Lifted,
     /// `super.s(..)`.
     Super,
     /// The method on its receiver.
     Plain,
+}
+
+/// How a method of the value class it names is called: one decision (`Gen::extension_route`),
+/// read by `Gen::call_route` and `Gen::call_extension`.
+#[derive(Clone, Copy)]
+pub enum ExtensionRoute {
+    /// The companion's `m$extension`, where this build writes the companion.
+    Companion,
+    /// The class's own static `m$extension`, for a class of the program with no companion written.
+    Static,
+    /// The method of a jar's companion that stands for it (`Gen::jar_extension`).
+    Jar,
 }
 
 /// The member a reference names, as dotty's refusal of an unwritable reference shows it
@@ -160,6 +319,14 @@ pub struct Local {
     pub cell: bool,
 }
 
+/// Where a scope keeps what it holds for a local (`Gen::held_in`), with the type it is held at.
+pub(super) enum HeldIn {
+    /// A local of the method.
+    Local(ErasedType),
+    /// A field of the instance: a local class's capture.
+    Field(String, ErasedType),
+}
+
 /// How an anonymous class holds a local of the scope it stands in.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Held {
@@ -167,16 +334,6 @@ pub enum Held {
     Value,
     /// A `var`, shared with its scope through its cell.
     Cell,
-}
-
-#[derive(Clone)]
-pub struct Capture {
-    pub sym: SymId,
-    pub cell: bool,
-    pub ty: ErasedType,
-    /// The capture is the non-local-return key that travels with the holder of the local lazy val
-    /// `sym` (`Extras::keys`), not the val.
-    pub key: bool,
 }
 
 /// What lifted code takes beyond the locals it names, as `LambdaLift` makes them its free variables:
@@ -191,18 +348,19 @@ pub struct Extras {
     pub keys: Vec<SymId>,
 }
 
-/// A static method made from a lambda, a local def or the initialiser of a local lazy val: the
-/// captures come first, `$this` leading them when the body needs it.
+/// A static method made from a lambda, a local def or the initialiser of a local lazy val, as the
+/// class file has it: what it takes and leaves (`shape`: `$this` where the body needs it, the key
+/// of the def its non-local returns leave, the captures, the parameters), and the name the writer
+/// gave it.
 pub struct Lifted {
     pub name: String,
+    pub shape: Rc<LiftedShape>,
+    /// The shape's signature as a class file spells it.
     pub desc: String,
+    /// Whether it takes `this`: the shape's `instance` is some.
     pub this: bool,
-    /// The key of the def its non-local returns leave is its first capture, after `this`
-    /// (`Free::nonlocal`).
-    pub key: bool,
+    /// The writer's, as `LiftedBody` has them: the local each capture is in the body.
     pub captures: Vec<Capture>,
-    pub params: Vec<ErasedType>,
-    pub ret: ErasedType,
     /// Where `this` is the instance of a class other than the one being written: a class's copy of a
     /// local def or lazy val declared in that class's code (`Gen::copy_home`), and what it lifts.
     pub home: Option<ClassId>,
@@ -211,7 +369,20 @@ pub struct Lifted {
     pub module: Option<Rc<str>>,
 }
 
+impl std::ops::Deref for Lifted {
+    type Target = LiftedShape;
+
+    fn deref(&self) -> &LiftedShape {
+        &self.shape
+    }
+}
+
 impl Lifted {
+    pub(super) fn new(name: String, shape: Rc<LiftedShape>, captures: Vec<Capture>, home: Option<ClassId>, module: Option<Rc<str>>) -> Lifted {
+        let desc = method_desc(&shape.takes(), &shape.ret);
+        Lifted { name, desc, this: shape.instance.is_some(), shape, captures, home, module }
+    }
+
     /// How many arguments a call passes.
     pub fn arity(&self) -> usize {
         self.this as usize + self.key as usize + self.captures.len() + self.params.len()
@@ -286,6 +457,8 @@ pub struct TailLoop {
 
 pub struct MethodCx {
     pub locals: FxMap<SymId, Local>,
+    /// The declared parameters in order, each with its slot.
+    pub params: Vec<(u16, ErasedType)>,
     pub this_slot: Option<u16>,
     pub ret: ErasedType,
     pub tail: Option<TailLoop>,
@@ -317,7 +490,7 @@ pub struct MethodCx {
     pub home_slots: Vec<(ClassId, u16)>,
     /// The `try` blocks with a finalizer and the `synchronized` blocks the code being generated
     /// stands in, innermost last: a `return` leaves through each one's finalizer or monitor exit
-    /// (`Gen::try_`, `Gen::synchronized_`).
+    /// (`Gen::write_try`, `Gen::monitor_block`).
     pub finalizers: Vec<FinallyFrame>,
     /// The exits of those frames a `return` has jumped to, as dotty's `shouldEmitCleanup` records
     /// that a cleanup block is wanted (BCodeBodyBuilder `genReturn`).
@@ -325,6 +498,16 @@ pub struct MethodCx {
     /// The locals of the matches being emitted that hold a value class's primitive underlying
     /// value, with the class: a type pattern tests, and a `MatchError` holds, its box.
     pub vc_slots: Vec<(u16, ClassId)>,
+    /// The slots that hold the lowering's temporaries.
+    pub temps: FxMap<crate::lir::TempId, u16>,
+    /// A temporary whose value is on the operand stack for its next read, which writes nothing
+    /// (`Gen::kept_on_stack`).
+    pub stacked: Option<crate::lir::TempId>,
+    /// The ends of the lowering's labelled blocks being written (`Kind::Labeled`).
+    pub labels: FxMap<crate::lir::LabelId, Label>,
+    /// The `try`s whose cases are being written, by the label their cases leave by: the slot of
+    /// the try's result, none where it leaves nothing, and its normal exit.
+    pub try_exits: FxMap<crate::lir::LabelId, (Option<u16>, Label)>,
 }
 
 /// A `try` with a finalizer around the code being generated: `pending` is the slot a `return`
@@ -341,6 +524,7 @@ impl Default for MethodCx {
     fn default() -> Self {
         MethodCx {
             locals: FxMap::default(),
+            params: Vec::new(),
             this_slot: None,
             ret: ErasedType::V,
             tail: None,
@@ -357,6 +541,10 @@ impl Default for MethodCx {
             finalizers: Vec::new(),
             exits_taken: Vec::new(),
             vc_slots: Vec::new(),
+            temps: FxMap::default(),
+            stacked: None,
+            labels: FxMap::default(),
+            try_exits: FxMap::default(),
         }
     }
 }
@@ -404,6 +592,11 @@ pub struct Gen<'a> {
     /// The fields of the traits read from class files, by trait (`class_file_trait_fields`).
     pub(super) trait_fields: FxMap<ClassId, Rc<super::classes::ClassFileTrait>>,
     pub cw: ClassWriter,
+    /// The class being written as its definitions (`plan.rs`).
+    pub plan: crate::lir::ClassDef,
+    /// The method being written where it is not the plan's last: one of a name and signature
+    /// the class holds already, whose code is dropped (`begin_method`, `end_method`).
+    pub repeated: Option<crate::lir::MethodDef>,
     /// The interfaces the class being written names in an `invokespecial`, each with the place
     /// of its first call (`super_call_place`): the JVM wants each among the class's direct
     /// superinterfaces, so the class's list takes them (dotty's `superCallTargets`). It is the
@@ -429,6 +622,9 @@ pub struct Gen<'a> {
     pub line_hold: bool,
     pub pending: Vec<Pending>,
     pub lifted: FxMap<SymId, Rc<Lifted>>,
+    /// What the lifted method of each local def met takes and binds (`Gen::local_fun_shape`),
+    /// decided where the def is first met; `lifted` holds it once the writer has named it.
+    pub(super) lifted_shapes: FxMap<SymId, (Rc<LiftedShape>, Rc<LiftedBody>)>,
     /// The initialiser of each local lazy val the class's code reads (`x$lzyINITN`), beside its
     /// accessor in `lifted` (`LazyVals.transformLocalDef`).
     pub lifted_lazy_inits: FxMap<SymId, Rc<Lifted>>,
@@ -447,6 +643,19 @@ pub struct Gen<'a> {
     pub code: Code,
     /// The lowered nodes of the method being generated (`crate::lir`).
     pub lir: crate::lir::Body,
+    /// The locals a lowering declared and the writer has not met yet, each with its type and
+    /// whether it is kept in a cell: a later statement of the block is lowered before the
+    /// declaration is written.
+    pub(super) lower_declared: FxMap<SymId, (ErasedType, bool)>,
+    /// The templates read, by their text (`Gen::template`).
+    pub(super) templates: FxMap<Box<str>, Rc<super::template::Template>>,
+    /// The constructor tree of the object being written, between its two methods
+    /// (`Gen::write_module`).
+    pub(super) module_tree: Option<super::classes::ModuleTree>,
+    /// The temporaries of the matches being lowered that hold a value class's primitive
+    /// underlying value, with the class and its arguments: a type pattern tests, and a
+    /// `MatchError` holds, its box.
+    pub(super) vc_temps: FxMap<crate::lir::TempId, (ClassId, TList)>,
     pub m: MethodCx,
     pub context: String,
     /// The arities of the function interfaces the emitted code names, as a bit set.
@@ -456,13 +665,13 @@ pub struct Gen<'a> {
     pub extra_classes: Vec<(String, Vec<u8>)>,
     /// In link mode, the method table of the module class written last, and the module class
     /// whose static forwarders the class being written takes.
-    pub module_table: Vec<(u16, String, String)>,
+    pub module_table: Vec<crate::lir::MethodDef>,
     pub keep_table: bool,
     /// The bridges of the class being written that its inherited pairs made (`pair_bridges`), by name and
     /// descriptor: a module class's are left out of the table its static forwarders are made from, where
     /// an inherited method of that descriptor with a body takes a forwarder as scalac's has one.
     pub pair_bridged: Vec<(String, String)>,
-    pub forward_from: Option<(Rc<str>, Vec<(u16, String, String)>)>,
+    pub forward_from: Option<(Rc<str>, Vec<crate::lir::MethodDef>)>,
     pub wide: bool,
     pub overflow: bool,
     /// The `Object` a value class over a type parameter erases to in link mode, told apart by
@@ -509,6 +718,8 @@ impl<'a> Gen<'a> {
             mref_arities: FxMap::default(),
             trait_fields: FxMap::default(),
             cw: ClassWriter::new(0, "x", OBJECT, &[]),
+            plan: Default::default(),
+            repeated: None,
             super_targets: Vec::new(),
             super_call_at: None,
             lifted_body: None,
@@ -522,6 +733,7 @@ impl<'a> Gen<'a> {
             line_hold: false,
             pending: Vec::new(),
             lifted: FxMap::default(),
+            lifted_shapes: FxMap::default(),
             lifted_lazy_inits: FxMap::default(),
             lazy_holders: Vec::new(),
             lifted_defaults: FxMap::default(),
@@ -532,6 +744,10 @@ impl<'a> Gen<'a> {
             class_keys: Vec::new(),
             code: Code::new(Vec::new()),
             lir: crate::lir::Body::default(),
+            lower_declared: FxMap::default(),
+            templates: FxMap::default(),
+            module_tree: None,
+            vc_temps: FxMap::default(),
             m: MethodCx::default(),
             context: String::new(),
             function_arities: 0b11,
@@ -597,6 +813,7 @@ impl<'a> Gen<'a> {
         self.pending.clear();
         self.pair_bridged.clear();
         self.lifted.clear();
+        self.lifted_shapes.clear();
         self.lifted_lazy_inits.clear();
         self.lazy_holders.clear();
         self.lifted_defaults.clear();
@@ -605,6 +822,7 @@ impl<'a> Gen<'a> {
         self.class_captures.clear();
         self.class_homes.clear();
         self.class_keys.clear();
+        self.module_tree = None;
     }
 
     // ---- types ----
@@ -1349,7 +1567,7 @@ impl<'a> Gen<'a> {
     /// a `String`), a primitive boxed where the declared underlying type is a type parameter
     /// (`W[Int]` is an `Integer`), and an array's erasure as the class declares it.
     /// The result is marked as `vc_marked` says.
-    fn vc_erasure(&mut self, c: ClassId, args: TList) -> ErasedType {
+    pub(super) fn vc_erasure(&mut self, c: ClassId, args: TList) -> ErasedType {
         let j = self.vc_erasure_plain(c, args);
         self.vc_marked(c, j)
     }
@@ -1591,11 +1809,12 @@ impl<'a> Gen<'a> {
         ErasedType::L(Rc::from(super::runtime::ARRAY_MARKERS[which]))
     }
 
-    /// An operation on an array whose kind only the value knows, its operands on the stack:
-    /// `ScalaRunTime`'s method of the name.
-    pub fn erased_array_call(&mut self, name: &str, params: &[ErasedType], ret: ErasedType) -> ErasedType {
-        self.invoke(Invoke::Static, SCALA_RUNTIME, false, name, params, &ret);
-        ret
+    /// The operation `name` on an array whose kind only the value knows (`erased_array_method`),
+    /// its operands on the stack.
+    fn erased_array_op(&mut self, name: &str) -> ErasedType {
+        let m = erased_array_method(name);
+        self.invoke_mref(&m);
+        m.ret
     }
 
     /// `t` as a type test reads it (`Worker::test_for`): a variable's instance, an alias expanded, the parent of a
@@ -1734,7 +1953,7 @@ impl<'a> Gen<'a> {
     /// array's kind, `ScalaRunTime.array_apply` on an erased one.
     pub fn array_load(&mut self, array: &ErasedType) -> ErasedType {
         let Some(elem) = Self::array_element(array) else {
-            return self.erased_array_call("array_apply", &[ErasedType::object(), ErasedType::I], ErasedType::object());
+            return self.erased_array_op("array_apply");
         };
         let opcode = match elem {
             ErasedType::I => op::IALOAD,
@@ -1756,9 +1975,8 @@ impl<'a> Gen<'a> {
     /// `array(i) = v` with the array, the index and the value (of type `value`) on the stack.
     pub fn array_store(&mut self, array: &ErasedType, value: &ErasedType) {
         let Some(elem) = Self::array_element(array) else {
-            let object = ErasedType::object();
-            self.adapt(value, &object);
-            self.erased_array_call("array_update", &[object.clone(), ErasedType::I, object], ErasedType::V);
+            self.adapt(value, &ErasedType::object());
+            self.erased_array_op("array_update");
             return;
         };
         self.adapt(value, &elem);
@@ -1778,7 +1996,7 @@ impl<'a> Gen<'a> {
 
     pub fn array_length(&mut self, array: &ErasedType) {
         if Self::array_element(array).is_none() {
-            self.erased_array_call("array_length", &[ErasedType::object()], ErasedType::I);
+            self.erased_array_op("array_length");
             return;
         }
         self.code.op(op::ARRAYLENGTH);
@@ -1788,7 +2006,7 @@ impl<'a> Gen<'a> {
 
     pub fn array_clone(&mut self, array: &ErasedType) -> ErasedType {
         if Self::array_element(array).is_none() {
-            return self.erased_array_call("array_clone", &[ErasedType::object()], ErasedType::object());
+            return self.erased_array_op("array_clone");
         }
         let ErasedType::L(name) = array else { return array.clone() };
         let object = ErasedType::object();
@@ -1854,7 +2072,7 @@ impl<'a> Gen<'a> {
 
     /// `u` without the mark of a value class's underlying value (`vc_marked`): the ordinary type of
     /// that descriptor, which a parameter declared with the type takes.
-    fn vc_unmarked(&self, u: &ErasedType) -> ErasedType {
+    pub(super) fn vc_unmarked(&self, u: &ErasedType) -> ErasedType {
         match u {
             ErasedType::L(n) if self.is_vc_mark(u) => ErasedType::L(Rc::from(&**n)),
             _ => u.clone(),
@@ -1965,9 +2183,18 @@ impl<'a> Gen<'a> {
     /// Boxes the underlying value on the stack in its value class.
     pub fn vc_box(&mut self, c: ClassId, u: &ErasedType) {
         let slot = self.store_new(u);
-        let name = self.class_name(c);
-        self.new_object(&name);
+        let ctor = self.vc_box_ctor(c);
+        self.new_object(&ctor.owner);
         self.load(slot, u);
+        let param = ctor.params[0].clone();
+        self.adapt(u, &param);
+        self.invoke_mref(&ctor);
+    }
+
+    /// The constructor a value class `c`'s box is made by: its class file's of one parameter, or
+    /// the one over the declared underlying value.
+    pub(super) fn vc_box_ctor(&mut self, c: ClassId) -> Rc<MethodRef> {
+        let name = self.class_name(c);
         let desc = self
             .cx
             .class_files
@@ -1978,14 +2205,49 @@ impl<'a> Gen<'a> {
                 let declared = self.vc_underlying(c);
                 method_desc(std::slice::from_ref(&declared), &ErasedType::V)
             });
-        let param = parse_method_desc(&desc).0.remove(0);
-        self.adapt(u, &param);
-        self.invoke_desc(Invoke::Special, &name, false, "<init>", &desc, 1, &ErasedType::V);
+        let params = parse_method_desc(&desc).0;
+        Rc::new(MethodRef { owner: name, owner_is_interface: false, name: "<init>".to_string(), params, ret: ErasedType::V, desc, kind: Invoke::Special })
+    }
+
+    /// The box of a value class `c` made over `value`, its underlying value of the type `u`
+    /// (`Gen::vc_box`): the value held in a temporary while the instance is made.
+    pub(super) fn lower_vc_box(&mut self, c: ClassId, value: LirId, u: &ErasedType) -> LirId {
+        let ctor = self.vc_box_ctor(c);
+        let held = self.lir.temp();
+        let kept = self.lir.keep(held, value);
+        let underlying = self.lir.kept(held, u.clone());
+        let param = ctor.params[0].clone();
+        let passed = self.lower_adapt(underlying, u, &param);
+        let made = self.lir.make(&ctor, &[passed]);
+        self.lir.seq(&[kept], made)
     }
 
     /// The underlying value of the value class box on the stack, through the accessor of its
     /// field (`self()`, or the expanded `scala$collection$StringOps$$s()` of a private one).
     pub fn vc_unbox(&mut self, c: ClassId, u: &ErasedType) {
+        let Some(accessor) = self.vc_accessor(c, u) else {
+            self.unsupported("the underlying value of a value class without an accessor");
+            return;
+        };
+        self.invoke_mref(&accessor);
+        self.adapt(&accessor.ret, u);
+    }
+
+    /// The underlying value, of the type `u`, of `value`, a box of the value class `c`
+    /// (`Gen::vc_unbox`); its zero, reported, where the class has no accessor.
+    pub(super) fn lower_vc_unbox(&mut self, c: ClassId, value: LirId, u: &ErasedType) -> LirId {
+        let Some(accessor) = self.vc_accessor(c, u) else {
+            self.unsupported("the underlying value of a value class without an accessor");
+            let none = self.lir.unit();
+            return self.lower_adapt(none, &ErasedType::V, u);
+        };
+        let read = self.lir.call(&accessor, value, &[]);
+        self.lower_adapt(read, &accessor.ret, u)
+    }
+
+    /// The accessor of a value class `c`'s underlying value: its class file's, else the one of
+    /// its parameter's field, which answers `u`.
+    fn vc_accessor(&mut self, c: ClassId, u: &ErasedType) -> Option<Rc<MethodRef>> {
         let name = self.class_name(c);
         let accessor = match self.cx.class_files.get(&c) {
             Some(cf) => {
@@ -2002,13 +2264,9 @@ impl<'a> Gen<'a> {
                 field.map(|f| (self.field_name(f), method_desc(&[], u)))
             }
         };
-        let Some((accessor, desc)) = accessor else {
-            self.unsupported("the underlying value of a value class without an accessor");
-            return;
-        };
-        let (_, ret) = parse_method_desc(&desc);
-        self.invoke_desc(Invoke::Virtual, &name, false, &accessor, &desc, 0, &ret);
-        self.adapt(&ret, u);
+        let (accessor, desc) = accessor?;
+        let (params, ret) = parse_method_desc(&desc);
+        Some(Rc::new(MethodRef { owner: name, owner_is_interface: false, name: accessor, params, ret, desc, kind: Invoke::Virtual }))
     }
 
     /// Brings a value to the type a symbol is declared with; where that is a value class, a
@@ -2023,14 +2281,22 @@ impl<'a> Gen<'a> {
         declared
     }
 
-    /// Brings the value of `s`, stored as `from`, to `want`: a value class's underlying value
+    /// The value of `s`, stored as `from`, brought to `want`: a value class's underlying value
     /// is boxed where a reference is wanted (a case class's `productElement` of a field of one).
-    pub fn adapt_from_sym(&mut self, s: SymId, from: &ErasedType, want: &ErasedType) {
-        let info = self.cx.input.syms.sym(s);
-        match info.sig.as_ref().and_then(|sig| self.value_class_type(sig.ret)) {
-            Some((c, args)) if !info.by_name => self.adapt_vc(c, args, from.clone(), want),
-            _ => self.adapt(from, want),
+    pub(super) fn lower_adapt_from_sym(&mut self, value: LirId, s: SymId, from: &ErasedType, want: &ErasedType) -> LirId {
+        match self.sym_value_class(s) {
+            Some((class, args)) => self.lir.push(Kind::ValueClass { value, from: from.clone(), class, args, null_safe: true }, want.clone()),
+            None => self.lower_adapt(value, from, want),
         }
+    }
+
+    /// The value class `s` holds the underlying value of, where it is one and not by name.
+    fn sym_value_class(&self, s: SymId) -> Option<(ClassId, TList)> {
+        let info = self.cx.input.syms.sym(s);
+        if info.by_name {
+            return None;
+        }
+        info.sig.as_ref().and_then(|sig| self.value_class_type(sig.ret))
     }
 
     /// Brings a value of the value class `c` applied to `args`, left by a node as `t`, to
@@ -2832,7 +3098,7 @@ impl<'a> Gen<'a> {
 
     /// Whether the verifier takes a `from` for a `to` without a cast: an interface is not
     /// assignable to a class, whatever superclass its trait has.
-    fn is_subclass(&self, from: &str, to: &str) -> bool {
+    pub(super) fn is_subclass(&self, from: &str, to: &str) -> bool {
         let cx = self.cx;
         let by_name = if cx.input.open_world { &cx.all_by_name } else { &cx.class_by_name };
         let (Some(&f), Some(&t)) = (by_name.get(from), by_name.get(to)) else { return false };
@@ -2858,89 +3124,67 @@ impl<'a> Gen<'a> {
         syms.class(f).base_types.iter().any(|&(b, _)| b == t)
     }
 
+    /// What makes a value of `from` one of `to`, two types that differ.
+    pub(super) fn adaptation(&self, from: &ErasedType, to: &ErasedType) -> Adaptation {
+        match (from, to) {
+            (_, ErasedType::V) => Adaptation::Drop,
+            (ErasedType::V, ErasedType::L(_)) => Adaptation::Unit,
+            (ErasedType::V, _) => Adaptation::Zero,
+            (ErasedType::L(f), ErasedType::L(t)) if &**t == OBJECT || self.is_subclass(f, t) => Adaptation::Widen,
+            (ErasedType::L(_), ErasedType::L(_)) => Adaptation::Narrow,
+            // A Char is a String of one character where the typer takes one for the other.
+            (ErasedType::L(f), ErasedType::C) if &**f == STRING => Adaptation::CharOfString,
+            (ErasedType::C, ErasedType::L(t)) if &**t == STRING => Adaptation::StringOfChar,
+            (ErasedType::L(_), _) => Adaptation::Unbox,
+            (_, ErasedType::L(_)) => Adaptation::Box,
+            _ => Adaptation::Convert,
+        }
+    }
+
     pub fn adapt(&mut self, from: &ErasedType, to: &ErasedType) {
         if from == to {
             return;
         }
-        match (from, to) {
-            (_, ErasedType::V) => self.pop_value(from),
-            (ErasedType::V, ErasedType::L(_)) => {
+        let how = self.adaptation(from, to);
+        self.write_adaptation(how, from, to);
+    }
+
+    /// Writes the adaptation `how` (`Gen::adaptation`) of the value of `from` on the stack to `to`.
+    pub(super) fn write_adaptation(&mut self, how: Adaptation, from: &ErasedType, to: &ErasedType) {
+        match how {
+            Adaptation::Drop => self.pop_value(from),
+            Adaptation::Unit => {
                 self.unit_value();
                 let vt = self.vt(to);
                 self.code.retype_top(vt);
             }
-            (ErasedType::V, ErasedType::J) => self.lconst(0),
-            (ErasedType::V, ErasedType::F) => self.fconst(0.0),
-            (ErasedType::V, ErasedType::D) => self.dconst(0.0),
-            (ErasedType::V, _) => self.iconst(0),
-            (ErasedType::L(f), ErasedType::L(t)) => {
-                if &**t == OBJECT || self.is_subclass(f, t) {
-                    let vt = self.vt(to);
-                    self.code.retype_top(vt);
-                } else {
-                    self.checkcast(t);
-                }
+            Adaptation::Zero => match to {
+                ErasedType::J => self.lconst(0),
+                ErasedType::F => self.fconst(0.0),
+                ErasedType::D => self.dconst(0.0),
+                _ => self.iconst(0),
+            },
+            Adaptation::Widen => {
+                let vt = self.vt(to);
+                self.code.retype_top(vt);
             }
-            // A Char is a String of one character where the typer takes one for the other.
-            (ErasedType::L(f), ErasedType::C) if &**f == STRING => {
+            Adaptation::Narrow => {
+                let ErasedType::L(t) = to else { unreachable!("a cast is to a class") };
+                self.checkcast(t);
+            }
+            Adaptation::CharOfString => {
                 self.iconst(0);
                 self.invoke_desc(Invoke::Virtual, STRING, false, "charAt", "(I)C", 1, &ErasedType::C);
             }
-            (ErasedType::C, ErasedType::L(t)) if &**t == STRING => {
+            Adaptation::StringOfChar => {
                 self.invoke_desc(Invoke::Static, STRING, false, "valueOf", "(C)Ljava/lang/String;", 1, to);
             }
-            (ErasedType::L(_), prim) => {
-                let (class, method, desc) = match prim {
-                    ErasedType::Z => ("java/lang/Boolean", "booleanValue", "()Z"),
-                    ErasedType::C => ("java/lang/Character", "charValue", "()C"),
-                    ErasedType::B => ("java/lang/Number", "byteValue", "()B"),
-                    ErasedType::S => ("java/lang/Number", "shortValue", "()S"),
-                    ErasedType::I => ("java/lang/Number", "intValue", "()I"),
-                    ErasedType::J => ("java/lang/Number", "longValue", "()J"),
-                    ErasedType::F => ("java/lang/Number", "floatValue", "()F"),
-                    _ => ("java/lang/Number", "doubleValue", "()D"),
-                };
-                // scalac's erasure unboxes through `BoxesRunTime.unboxToX(Object)` (Erasure.scala:
-                // 319-324), one static call that gives the primitive's zero for `null` (a
-                // `java.util.Map[K, Int]`'s missing key is 0) and refuses another kind's box; where
-                // the class path lacks scala-library the same is spelled out: the value or a boxed
-                // zero by `Objects.requireNonNullElse`, then `Number.xValue()`. No branch: a frame in
-                // the middle of an expression would fix the operands under the value to the model's
-                // wider types.
-                if self.cx.boxes_runtime {
-                    let (m, d) = match prim {
-                        ErasedType::Z => ("unboxToBoolean", "(Ljava/lang/Object;)Z"),
-                        ErasedType::C => ("unboxToChar", "(Ljava/lang/Object;)C"),
-                        ErasedType::B => ("unboxToByte", "(Ljava/lang/Object;)B"),
-                        ErasedType::S => ("unboxToShort", "(Ljava/lang/Object;)S"),
-                        ErasedType::I => ("unboxToInt", "(Ljava/lang/Object;)I"),
-                        ErasedType::J => ("unboxToLong", "(Ljava/lang/Object;)J"),
-                        ErasedType::F => ("unboxToFloat", "(Ljava/lang/Object;)F"),
-                        _ => ("unboxToDouble", "(Ljava/lang/Object;)D"),
-                    };
-                    self.invoke_desc(Invoke::Static, "scala/runtime/BoxesRunTime", false, m, d, 1, prim);
-                    return;
-                }
-                let object = ErasedType::object();
-                match prim {
-                    ErasedType::Z => self.getstatic("java/lang/Boolean", "FALSE", &ErasedType::L(Rc::from("java/lang/Boolean"))),
-                    ErasedType::C => {
-                        self.iconst(0);
-                        self.invoke_desc(Invoke::Static, "java/lang/Character", false, "valueOf", "(C)Ljava/lang/Character;", 1, &ErasedType::L(Rc::from("java/lang/Character")));
-                    }
-                    _ => {
-                        self.iconst(0);
-                        self.invoke_desc(Invoke::Static, "java/lang/Integer", false, "valueOf", "(I)Ljava/lang/Integer;", 1, &ErasedType::L(Rc::from("java/lang/Integer")));
-                    }
-                }
-                self.invoke_desc(Invoke::Static, "java/util/Objects", false, "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", 2, &object);
-                self.checkcast(class);
-                self.invoke_desc(Invoke::Virtual, class, false, method, desc, 0, prim);
-            }
-            (prim, ErasedType::L(t)) => {
-                let class = prim.box_class();
+            Adaptation::Unbox => self.unbox(to),
+            Adaptation::Box => {
+                let ErasedType::L(t) = to else { unreachable!("a box is a reference") };
+                let class = from.box_class();
                 let mut desc = String::from("(");
-                prim.desc(&mut desc);
+                from.desc(&mut desc);
                 desc.push_str(")L");
                 desc.push_str(class);
                 desc.push(';');
@@ -2951,34 +3195,9 @@ impl<'a> Gen<'a> {
                     self.code.retype_top(vt);
                 }
             }
-            (a, b) => {
-                // Between the stack classes first (an int, a long, a float, a double), then
-                // narrowed to the small integer type wanted.
-                let mut insns: Vec<u8> = Vec::with_capacity(2);
-                match (a.stack_type(), b.stack_type()) {
-                    (ErasedType::I, ErasedType::J) => insns.push(op::I2L),
-                    (ErasedType::I, ErasedType::F) => insns.push(op::I2F),
-                    (ErasedType::I, ErasedType::D) => insns.push(op::I2D),
-                    (ErasedType::J, ErasedType::I) => insns.push(op::L2I),
-                    (ErasedType::J, ErasedType::F) => insns.push(op::L2F),
-                    (ErasedType::J, ErasedType::D) => insns.push(op::L2D),
-                    (ErasedType::F, ErasedType::I) => insns.push(op::F2I),
-                    (ErasedType::F, ErasedType::J) => insns.push(op::F2L),
-                    (ErasedType::F, ErasedType::D) => insns.push(op::F2D),
-                    (ErasedType::D, ErasedType::I) => insns.push(op::D2I),
-                    (ErasedType::D, ErasedType::J) => insns.push(op::D2L),
-                    (ErasedType::D, ErasedType::F) => insns.push(op::D2F),
-                    _ => {}
-                }
-                let narrowed_already = matches!((a, b), (ErasedType::B, ErasedType::S) | (ErasedType::B | ErasedType::S | ErasedType::Z, ErasedType::I));
-                if !narrowed_already {
-                    match b {
-                        ErasedType::B => insns.push(op::I2B),
-                        ErasedType::S => insns.push(op::I2S),
-                        ErasedType::C => insns.push(op::I2C),
-                        _ => {}
-                    }
-                }
+            Adaptation::Convert => {
+                let (a, b) = (from, to);
+                let insns = primitive_conversion(a, b);
                 if !insns.is_empty() {
                     for i in insns {
                         self.code.op(i);
@@ -2989,6 +3208,56 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+    }
+
+    /// The primitive `prim` out of the reference on the stack.
+    pub(super) fn unbox(&mut self, prim: &ErasedType) {
+        let (class, method, desc) = match prim {
+            ErasedType::Z => ("java/lang/Boolean", "booleanValue", "()Z"),
+            ErasedType::C => ("java/lang/Character", "charValue", "()C"),
+            ErasedType::B => ("java/lang/Number", "byteValue", "()B"),
+            ErasedType::S => ("java/lang/Number", "shortValue", "()S"),
+            ErasedType::I => ("java/lang/Number", "intValue", "()I"),
+            ErasedType::J => ("java/lang/Number", "longValue", "()J"),
+            ErasedType::F => ("java/lang/Number", "floatValue", "()F"),
+            _ => ("java/lang/Number", "doubleValue", "()D"),
+        };
+        // scalac's erasure unboxes through `BoxesRunTime.unboxToX(Object)` (Erasure.scala:
+        // 319-324), one static call that gives the primitive's zero for `null` (a
+        // `java.util.Map[K, Int]`'s missing key is 0) and refuses another kind's box; where
+        // the class path lacks scala-library the same is spelled out: the value or a boxed
+        // zero by `Objects.requireNonNullElse`, then `Number.xValue()`. No branch: a frame in
+        // the middle of an expression would fix the operands under the value to the model's
+        // wider types.
+        if self.cx.boxes_runtime {
+            let (m, d) = match prim {
+                ErasedType::Z => ("unboxToBoolean", "(Ljava/lang/Object;)Z"),
+                ErasedType::C => ("unboxToChar", "(Ljava/lang/Object;)C"),
+                ErasedType::B => ("unboxToByte", "(Ljava/lang/Object;)B"),
+                ErasedType::S => ("unboxToShort", "(Ljava/lang/Object;)S"),
+                ErasedType::I => ("unboxToInt", "(Ljava/lang/Object;)I"),
+                ErasedType::J => ("unboxToLong", "(Ljava/lang/Object;)J"),
+                ErasedType::F => ("unboxToFloat", "(Ljava/lang/Object;)F"),
+                _ => ("unboxToDouble", "(Ljava/lang/Object;)D"),
+            };
+            self.invoke_desc(Invoke::Static, "scala/runtime/BoxesRunTime", false, m, d, 1, prim);
+            return;
+        }
+        let object = ErasedType::object();
+        match prim {
+            ErasedType::Z => self.getstatic("java/lang/Boolean", "FALSE", &ErasedType::L(Rc::from("java/lang/Boolean"))),
+            ErasedType::C => {
+                self.iconst(0);
+                self.invoke_desc(Invoke::Static, "java/lang/Character", false, "valueOf", "(C)Ljava/lang/Character;", 1, &ErasedType::L(Rc::from("java/lang/Character")));
+            }
+            _ => {
+                self.iconst(0);
+                self.invoke_desc(Invoke::Static, "java/lang/Integer", false, "valueOf", "(I)Ljava/lang/Integer;", 1, &ErasedType::L(Rc::from("java/lang/Integer")));
+            }
+        }
+        self.invoke_desc(Invoke::Static, "java/util/Objects", false, "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", 2, &object);
+        self.checkcast(class);
+        self.invoke_desc(Invoke::Virtual, class, false, method, desc, 0, prim);
     }
 
     // ---- static types ----
@@ -3166,33 +3435,16 @@ impl<'a> Gen<'a> {
 
     /// Emits `e` and brings its value to the type `want`: lowered, then written.
     pub fn expr(&mut self, e: TExprId, want: &ErasedType) {
-        if let Some((recv, args)) = self.jump_call(e) {
-            return self.tail_jump_wanted(recv, args, want);
-        }
         let lowered = self.lowering(|g| g.lower_expr(e, want));
         self.write(lowered);
     }
 
     /// The receiver (where another instance is called) and the arguments of the call `e` where it
-    /// is a jump of the def that loops (`TailLoop::jumps`).
-    fn jump_call(&self, e: TExprId) -> Option<(Option<TExprId>, ListRef)> {
+    /// is a jump of the def that loops (`TailLoop::jumps`): one decision, read by the lowering and
+    /// by the writing of a `return`.
+    pub(super) fn jump_call(&self, e: TExprId) -> Option<(Option<TExprId>, ListRef)> {
         let tail = self.m.tail.as_ref().filter(|t| t.jumps.contains(&e))?;
         self.cx.input.prog.self_call(tail.sym, tail.params.len(), e)
-    }
-
-    /// The loop's jump where a value of the type `want` is wanted: the operands under it dropped,
-    /// dead as the jump leaves them, and the dead code that follows verified against them and a
-    /// value of that type.
-    fn tail_jump_wanted(&mut self, recv: Option<TExprId>, args: ListRef, want: &ErasedType) {
-        let dropped = self.drop_stack();
-        self.tail_jump(recv, args);
-        for vt in dropped {
-            self.code.push(vt);
-        }
-        if *want != ErasedType::V {
-            let vt = self.vt(want);
-            self.code.push(vt);
-        }
     }
 
     /// `expr` for a node the lowering does not make yet.
@@ -3208,12 +3460,13 @@ impl<'a> Gen<'a> {
     fn expr_marked(&mut self, e: TExprId, want: &ErasedType) {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
-            TExpr::If(c, t, els) => self.if_(c, t, els, Mode::Value(want)),
+            TExpr::If(..) => unreachable!("lowered (`Gen::lower_if`)"),
+            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases) => unreachable!("lowered (`Gen::lower_match`)"),
             TExpr::Match(scrut, cases) => self.match_(scrut, cases, Mode::Value(want)),
+            TExpr::Block(stmts, _) if self.block_lowers(stmts) => unreachable!("lowered (`Gen::lower_block`)"),
             TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Value(want)),
-            TExpr::Throw(inner, _) => self.throw_(inner, want),
+            TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered (`Gen::lower_expr`)"),
             TExpr::Return(v) => self.return_(v, want),
-            TExpr::Try(_) => unreachable!("a try is lowered (`Gen::lower_expr`)"),
             _ => {
                 let t = self.node(e);
                 match self.fit(e, &t, want) {
@@ -3234,8 +3487,12 @@ impl<'a> Gen<'a> {
     /// throw dotty's `NonLocalReturns.nonLocalReturnThrow` writes, which the def's handler takes by
     /// its key; a call of the def by itself that goes round its loop is the jump alone.
     fn return_(&mut self, v: TExprId, want: &ErasedType) {
-        if let Some((recv, args)) = self.jump_call(v) {
-            return self.tail_jump_wanted(recv, args, want);
+        if let Some((receiver, args)) = self.jump_call(v) {
+            let jump = self.lowering(|g| {
+                let kind = g.lower_self_tail_call(receiver, args);
+                g.lir.push(kind, want.clone())
+            });
+            return self.write(jump);
         }
         if self.m.closure {
             match self.m.return_key {
@@ -3288,7 +3545,7 @@ impl<'a> Gen<'a> {
     /// method, or a call of the def by itself that goes round its loop (`Gen::return_`), alone, as a
     /// block's result or in both branches of a conditional, as dotty's `genBlockTo` and
     /// `genLoadIfTo` send them to the destination (BCodeBodyBuilder.scala 1129-1138, 245-257).
-    fn leaves(&self, e: TExprId) -> bool {
+    pub(super) fn leaves(&self, e: TExprId) -> bool {
         match self.cx.input.prog.expr(e) {
             TExpr::Return(_) => !self.m.closure,
             TExpr::Block(_, res) => self.leaves(res),
@@ -3300,13 +3557,13 @@ impl<'a> Gen<'a> {
     pub(super) fn fit(&mut self, e: TExprId, t: &ErasedType, want: &ErasedType) -> Fit {
         if let Some((c, args)) = self.expr_value_class(e) {
             if *t != ErasedType::V {
-                // A selection of the class's parameter (`Gen::vc_field_read`) opens the box with no
-                // null test.
+                // A selection of the class's parameter (`Gen::lower_field_read`) opens the box with
+                // no null test.
                 return Fit::ValueClass(c, args, self.vc_select != Some(e));
             }
         }
         // The typer knows more than the erased signature: `xs.head` of a `List[Int]`. A
-        // given object's read is of the given's declared type (`given_object_read`), whatever
+        // given object's read is of the given's declared type (`Gen::lower_given_object`), whatever
         // class the typer records for the module it is, so that no build casts it more than
         // another, whichever of a search and its name gave the read.
         let known = match self.cx.input.prog.expr(e) {
@@ -3380,188 +3637,58 @@ impl<'a> Gen<'a> {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             // What the lowering takes whole is written from its node (`Gen::write`), never here.
-            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Module(_) | TExpr::CallClosure(..) => {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::Cast(..) | TExpr::ToStr(..) | TExpr::CallClosure(..) => {
                 unreachable!("lowered (`Gen::lower_node`)")
             }
-            TExpr::Local(s) if self.plain_local(s).is_some() => unreachable!("a local held as its value is lowered (`Gen::lower_node`)"),
+            TExpr::Local(s) if !self.is_lazy_local(s) => unreachable!("lowered (`Gen::lower_local`)"),
             TExpr::Local(s) => self.load_local(s),
             TExpr::This | TExpr::Super(_) if self.this_value().is_some() => unreachable!("`this` is lowered (`Gen::lower_node`)"),
             TExpr::This | TExpr::Super(_) => self.load_this(),
             TExpr::Static(s) => self.load_static(s),
-            TExpr::ClassOf(c, dims) => self.class_of(e, c, dims),
             TExpr::Field(r, s) => self.field_read(r, s),
             TExpr::CallStatic(s, args) => self.call_static(s, args),
-            TExpr::CallMethod(r, s, args) => self.call_method(e, r, s, args),
+            TExpr::CallMethod(r, s, args) => self.call_method(r, s, args),
             TExpr::New(c, args) => self.new_(e, c, args),
             TExpr::NewVia(s, args) => self.new_via(s, args),
             TExpr::Default(of, at, args) => self.default_arg(of, at, args),
-            TExpr::Lambda(params, body) => self.lambda(params, body),
-            TExpr::While(c, body) => {
-                let head = self.code.new_label();
-                let exit = self.code.new_label();
-                self.code.bind(head);
-                self.cond(c, exit, false);
-                let mark = self.code.locals_mark();
-                self.statement(body);
-                self.code.locals_release(mark);
-                self.goto(head);
-                self.code.bind(exit);
-                ErasedType::V
+            // One met after typed IR was left to the writer is lowered here, where it is written
+            // (`Gen::analysis_in_order`).
+            TExpr::Lambda(params, body) => {
+                let closure = self.lowering(|g| g.lower_lambda(params, body));
+                self.write(closure);
+                self.lir.ty(closure).clone()
             }
             TExpr::Assign(target, value) => {
                 self.assign(target, value);
                 ErasedType::V
             }
-            TExpr::Prim(op, a, b) => self.prim(op, a, b),
-            TExpr::Unary(op, a) => self.unary(op, a),
+            TExpr::Prim(op @ (PrimOp::Eq | PrimOp::Ne), a, b) if !self.cx.helpers.defs.contains_key("equal") => self.equal_without_helper(op, a, b),
+            TExpr::Prim(..) | TExpr::Unary(..) | TExpr::While(..) | TExpr::TypeTest(..) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::StrConcat(items) => self.str_concat(items),
-            TExpr::ToStr(inner, conv) => {
-                // A value class's `toString` is its box's (`V@1`, a case class's `CV(1)`), as
-                // dotty's `typedSelect` boxes an erased value class qualifier (`Erasure.scala`
-                // 733): the program's `v.toString` is the box's method, which a null reference
-                // the box stayed throws on, where a rendering writes `null`.
-                let string = ErasedType::L(Rc::from(STRING));
-                if self.expr_value_class(inner).is_some() && conv.is_rendering() {
-                    let object = ErasedType::object();
-                    self.expr(inner, &object);
-                    self.string_value_of(&object);
-                    return string;
-                }
-                // The program's `x.toString` on a reference is the call, which `null` throws
-                // on, as dotty's `genApply` invokes it, on the class the qualifier points at
-                // (`object_member_call`, a value class's box); a rendering writes `null`.
-                if !conv.is_rendering() && (self.expr_value_class(inner).is_some() || self.static_type(inner).is_ref()) {
-                    self.object_member_call(inner, "toString", &[], &string, |_| {});
-                    return string;
-                }
-                let t = self.expr_static(inner);
-                self.string_value_of(&t);
-                string
-            }
             TExpr::Js(template, args) => self.intrinsic(e, template, args),
-            TExpr::Cast(inner, op, _) => self.cast(inner, op),
-            TExpr::TypeTest(..) | TExpr::If(..) | TExpr::Match(..) | TExpr::Block(..) => {
+            TExpr::If(..) => unreachable!("lowered (`Gen::lower_if`)"),
+            TExpr::Match(..) | TExpr::Block(..) => {
                 let t = self.static_type(e);
-                match prog.expr(e) {
-                    TExpr::TypeTest(..) => self.cond_value(e),
-                    _ => self.expr(e, &t),
-                }
+                self.expr(e, &t);
                 t
             }
-            TExpr::SeqLit(items) => {
-                let Some(seq) = self.cx.input.array_seq else {
+            TExpr::SeqLit(_) => match self.cx.input.array_seq {
+                Some(_) => unreachable!("lowered (`Gen::lower_seq_literal`)"),
+                None => {
                     self.unsupported("varargs without ArraySeq");
-                    return ErasedType::V;
-                };
-                let name = self.class_name(seq);
-                self.new_object(&name);
-                // A JVM array of the boxed elements, which scala-library's `ArraySeq.ofRef`
-                // wraps and the std's `ArraySeq` holds as the array of any kind it takes.
-                let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
-                let elem = self.seq_literal_element(e);
-                self.boxed_array(items, &elem);
-                let param = if self.cx.linked_class(seq) { array.clone() } else { ErasedType::object() };
-                self.adapt(&array, &param);
-                self.invoke(Invoke::Special, &name, false, "<init>", &[param], &ErasedType::V);
-                ErasedType::L(name)
-            }
-            // A JVM array of the kind its type names (an enum's `values` is a `Color[]`).
-            TExpr::ArrayLit(items) => {
-                let array = match self.recorded(e) {
-                    Some(ErasedType::L(n)) if n.starts_with('[') => n,
-                    _ => Rc::from(OBJECT_ARRAY),
-                };
-                self.java_array(items, &array);
-                ErasedType::L(array)
-            }
-            TExpr::Index(r, i) => {
-                let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
-                self.expr(r, &array);
-                self.iconst(i as i32);
-                self.array_load(&array)
-            }
+                    ErasedType::V
+                }
+            },
+            TExpr::ArrayLit(_) | TExpr::Index(..) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Spread(inner) => self.expr_static(inner),
             TExpr::Return(_) => unreachable!("written where the type wanted is known (`Gen::return_`)"),
             TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => {
                 self.unsupported("JavaScript interop");
                 ErasedType::V
             }
-            TExpr::Null => {
-                self.code.op(op::ACONST_NULL);
-                self.code.push(VT::Null);
-                ErasedType::object()
-            }
+            TExpr::Null => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Throw(..) | TExpr::Try(_) => unreachable!("emitted by expr"),
             TExpr::Splice(_) => unreachable!("a stored inline body is emitted nowhere"),
-        }
-    }
-
-    /// `throw e`, followed in the model by a value of the wanted type, as the code after an
-    /// `athrow` is not reached but still verified against a frame.
-    /// `x.asInstanceOf[T]` as dotty's erasure leaves it, in the code `BCodeBodyBuilder.genTypeApply`
-    /// gives it: the operand as an `Object`, then the `checkcast` of `T`'s erasure, before what
-    /// consumes the value adapts or drops it, so that a cast discarded, widened or cast again is
-    /// checked; `checkcast scala/runtime/Null$` for `Null`, which teq's erasure of a type makes an
-    /// `Object`; the unboxing through `BoxesRunTime` (`Erasure.Boxing.unbox`); the failure of a
-    /// cast to `Nothing`. A value class's cast leaves its value boxed, the adaptation of what
-    /// consumes it as the class testing it there (`Erasure.Boxing.adaptToType`), as under dotty.
-    /// A cast as the typer decided it (`CastOp`): the unboxing to the primitive, or the
-    /// `checkcast` of the erasure the typer decided, the type's own (`TypeErasure.erasure`), not
-    /// the backend's erasure of the type written.
-    fn cast(&mut self, inner: TExprId, op: CastOp) -> ErasedType {
-        let object = ErasedType::object();
-        let (test, erased) = match op {
-            CastOp::Written | CastOp::Erased => return self.expr_static(inner),
-            CastOp::Nothing => {
-                self.statement(inner);
-                let exception = "java/lang/ClassCastException";
-                self.new_object(exception);
-                self.sconst("Cannot cast to scala.Nothing");
-                self.invoke(Invoke::Special, exception, false, "<init>", &[ErasedType::L(Rc::from(STRING))], &ErasedType::V);
-                self.code.op(op::ATHROW);
-                self.code.pop();
-                self.code.end_path();
-                self.code.push(VT::Null);
-                return object;
-            }
-            CastOp::Unbox(_, erased) | CastOp::Adapt(_, erased) => {
-                let prim = self.erase(erased);
-                self.expr(inner, &object);
-                self.adapt(&object, &prim);
-                return prim;
-            }
-            CastOp::Check(test, erased) => (test, erased),
-        };
-        self.expr(inner, &object);
-        match self.cx.input.prog.tests[test.idx()] {
-            TypeTest::Null => {
-                let null = "scala/runtime/Null$";
-                self.checkcast(null);
-                return ErasedType::L(Rc::from(null));
-            }
-            // `FunctionXXL`, which teq's output has no class of: a function past 22 parameters is
-            // an interface of its own arity here (docs/TARGETS.md), which no one class takes all of.
-            TypeTest::Function(n) if n > 22 => return object,
-            _ => {}
-        }
-        match self.erase(erased) {
-            ErasedType::L(c) if &*c != OBJECT && self.value_class_type(erased).is_none() => {
-                self.checkcast(&c);
-                ErasedType::L(c)
-            }
-            _ => object,
-        }
-    }
-
-    fn throw_(&mut self, inner: TExprId, want: &ErasedType) {
-        let throwable = ErasedType::L(Rc::from(THROWABLE));
-        self.expr(inner, &throwable);
-        self.code.op(op::ATHROW);
-        self.code.pop();
-        self.code.end_path();
-        if *want != ErasedType::V {
-            let vt = self.vt(want);
-            self.code.push(vt);
         }
     }
 
@@ -3570,10 +3697,7 @@ impl<'a> Gen<'a> {
     /// takes every exception of the body and the cases and throws it again, as javac lays it
     /// out. A `try` with operands on the stack spills them to locals first, since a handler
     /// starts with an empty stack.
-    pub(super) fn write_try(&mut self, i: u32, want: &ErasedType, body: LirId, finalizer: Option<LirId>) {
-        let cx = self.cx;
-        let prog = cx.input.prog;
-        let t = &prog.tries[i as usize];
+    pub(super) fn write_try(&mut self, want: &ErasedType, body: LirId, cases: Option<crate::lir::Cases>, finalizer: Option<LirId>) {
         let outer = self.code.locals_mark();
         let spilled = self.spill_stack();
         let result = if *want == ErasedType::V {
@@ -3631,32 +3755,42 @@ impl<'a> Gen<'a> {
         self.code.bind(end);
         self.goto(normal_exit);
         let mut any_ranges = vec![(start, end)];
-        if !t.cases.is_empty() {
+        if let Some(cases) = cases {
             let (handler, catch_end) = (self.code.new_label(), self.code.new_label());
             self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
             self.code.locals_release(protected);
             self.code.bind_handler(handler, throwable_vt);
             let mark = self.code.locals_mark();
             let e = self.store_new(&throwable);
-            for case in &prog.cases[t.cases.range()] {
-                let next = self.code.new_label();
-                let case_mark = self.code.locals_mark();
-                self.pattern(case.pat, e, &throwable, next);
-                if let Some(g) = case.guard {
-                    self.cond(g, next, false);
+            match cases {
+                crate::lir::Cases::Lowered { caught, done, cases } => {
+                    self.m.temps.insert(caught, e);
+                    self.m.try_exits.insert(done, (result, normal_exit));
+                    self.write(cases);
                 }
-                self.expr(case.body, want);
-                if let Some(slot) = result {
-                    self.store(slot, want);
+                crate::lir::Cases::Legacy(i) => {
+                    let prog = self.cx.input.prog;
+                    for case in &prog.cases[prog.tries[i as usize].cases.range()] {
+                        let next = self.code.new_label();
+                        let case_mark = self.code.locals_mark();
+                        self.pattern(case.pat, e, &throwable, next);
+                        if let Some(g) = case.guard {
+                            self.cond(g, next, false);
+                        }
+                        self.expr(case.body, want);
+                        if let Some(slot) = result {
+                            self.store(slot, want);
+                        }
+                        self.code.locals_release(case_mark);
+                        self.goto(normal_exit);
+                        self.code.bind(next);
+                    }
+                    self.load(e, &throwable);
+                    self.code.op(op::ATHROW);
+                    self.code.pop();
+                    self.code.end_path();
                 }
-                self.code.locals_release(case_mark);
-                self.goto(normal_exit);
-                self.code.bind(next);
             }
-            self.load(e, &throwable);
-            self.code.op(op::ATHROW);
-            self.code.pop();
-            self.code.end_path();
             self.code.bind(catch_end);
             self.code.locals_release(mark);
             any_ranges.push((handler, catch_end));
@@ -3715,22 +3849,14 @@ impl<'a> Gen<'a> {
         self.code.locals_release(outer);
     }
 
-    /// Moves the operands on the stack into fresh locals, deepest first.
-    /// `recv.synchronized(body)` as dotty's `genSynchronized` writes it (BCodeSyncAndTry.scala 27-103): the receiver
-    /// loaded once (`genLoadQualifier`) and kept in a local, `monitorenter`, the body protected by a catch-any handler
-    /// that exits the monitor and rethrows (`protect`), its value kept in a local across the normal `monitorexit`. A
-    /// `return` inside leaves through this block's frame (`registerCleanup`): its cleanup, written only where a
-    /// return took it (`shouldEmitCleanup`), exits the monitor and goes on to the next enclosing frame's exit or
-    /// returns (`pendingCleanups`). The value's type is the body's; the operands under the block stay where they
-    /// are, a `return` inside dropping them as it leaves (`drop_stack`).
-    pub fn synchronized_(&mut self, recv: TExprId, body: TExprId) -> ErasedType {
-        let object = ErasedType::object();
-        let t = self.static_type(body);
-        self.monitor_block(|g| g.expr(recv, &object), t, |g, t| g.expr(body, t))
-    }
-
-    /// `genSynchronized`'s layout around the code `body` writes at the type `t`, the monitor the
-    /// object `recv` loads (`synchronized_`, a local lazy val's initialiser over its holder).
+    /// The code `body` writes at the type `t` under the monitor of the object `recv` loads (a `Synchronized` node), as
+    /// dotty's `genSynchronized` writes `recv.synchronized(body)` (BCodeSyncAndTry.scala 27-103): the receiver loaded
+    /// once (`genLoadQualifier`) and kept in a local, `monitorenter`, the body protected by a catch-any handler that
+    /// exits the monitor and rethrows (`protect`), its value kept in a local across the normal `monitorexit`. A
+    /// `return` inside leaves through this block's frame (`registerCleanup`): its cleanup, written only where a return
+    /// took it (`shouldEmitCleanup`), exits the monitor and goes on to the next enclosing frame's exit or returns
+    /// (`pendingCleanups`). The value's type is the body's; the operands under the block stay where they are, a
+    /// `return` inside dropping them as it leaves (`drop_stack`).
     pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: ErasedType, body: impl FnOnce(&mut Self, &ErasedType)) -> ErasedType {
         let object = ErasedType::object();
         recv(self);
@@ -3831,7 +3957,7 @@ impl<'a> Gen<'a> {
 
     /// Drops every operand on the stack (an uninitialised object's too): what a `return` leaving
     /// through a frame leaves dead under its value. The operands dropped, the bottom one first.
-    fn drop_stack(&mut self) -> Vec<VT> {
+    pub(super) fn drop_stack(&mut self) -> Vec<VT> {
         let mut dropped = Vec::new();
         while let Some(&top) = self.code.stack.last() {
             match top {
@@ -3845,6 +3971,7 @@ impl<'a> Gen<'a> {
         dropped
     }
 
+    /// Moves the operands on the stack into fresh locals, deepest first.
     fn spill_stack(&mut self) -> Vec<(u16, ErasedType)> {
         let mut spilled = Vec::new();
         while let Some(&top) = self.code.stack.last() {
@@ -3900,132 +4027,50 @@ impl<'a> Gen<'a> {
         self.invoke(Invoke::Static, STRING, false, "valueOf", &[param], &string);
     }
 
-    /// `a + b + c` on strings: one `invokedynamic` call of `makeConcatWithConstants`, as scalac
-    /// writes it. Every operand of the chain is evaluated, left to right, before the call
-    /// renders the first; the string literals are the text of the recipe.
+    /// A concatenation whose head brings a statement not lowered yet (`ConcatRoute::Statements`):
+    /// the statements are written here, before the first operand, and the operands are lowered
+    /// once their locals are declared.
     fn str_concat(&mut self, items: ListRef) -> ErasedType {
-        let prog = self.cx.input.prog;
+        let ConcatRoute::Statements(statements, operands) = self.concat_route(items) else { unreachable!("lowered (`Gen::lower_str_concat`)") };
         let mark = self.code.locals_mark();
-        let mut operands = Vec::new();
-        if let Some((&head, rest)) = prog.expr_list(items).split_first() {
-            self.chain_head(head, &mut operands);
-            operands.extend_from_slice(rest);
+        for stmts in statements {
+            self.block_statements(stmts);
         }
-        // scalac's typer folds the constants a chain starts with into one literal.
-        let value_of = |e: TExprId| prog.expr(e).rendering().map_or(e, |(inner, _)| inner);
-        let constant = |e: TExprId| matches!(prog.expr(value_of(e)), TExpr::Str(_) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Bool(_) | TExpr::Char(_));
-        let folded = match operands.iter().take_while(|&&e| constant(e)).count() {
-            1 => 0,
-            n => n,
-        };
-        let mut call = ConcatCall::default();
-        let mut flushed = 0;
-        for (i, &operand) in operands.iter().enumerate() {
-            let value = value_of(operand);
-            let text = match prog.expr(value) {
-                TExpr::Str(text) => Some(prog.strings[text.0 as usize].clone()),
-                TExpr::Int(v) if i < folded && self.static_type(value) == ErasedType::I => Some(v.to_string()),
-                TExpr::Long(v) if i < folded => Some(v.to_string()),
-                TExpr::Bool(v) if i < folded => Some(v.to_string()),
-                TExpr::Char(v) if i < folded => char::from_u32(v as u32).map(|c| c.to_string()),
-                _ => None,
-            };
-            // scalac drops the empty literals before it counts.
-            if text.as_deref() == Some("") {
-                continue;
-            }
-            let string = ErasedType::L(Rc::from(STRING));
-            let t = match text {
-                Some(_) => string.clone(),
-                None => self.static_type(value),
-            };
-            // A value class's instance reaches the call as its box, whatever it holds.
-            let boxed = text.is_none() && self.recorded_type(value).and_then(|rt| self.value_class_of(rt)).is_some();
-            let param = match t {
-                ErasedType::L(ref n) if &**n == STRING && !boxed => t.clone(),
-                ErasedType::L(_) | ErasedType::V => ErasedType::object(),
-                _ if boxed => ErasedType::object(),
-                ref p => p.clone(),
-            };
-            let slots = if matches!(param, ErasedType::J | ErasedType::D) { 2 } else { 1 };
-            if call.slots + slots >= CONCAT_SLOTS {
-                self.concat_call(std::mem::take(&mut call));
-                flushed += 1;
-            }
-            match text {
-                Some(text) if text.contains(['\u{1}', '\u{2}']) => call.constant(text),
-                Some(text) if call.bytes + recipe_bytes(&text) > RECIPE_BYTES => {
-                    self.sconst(&text);
-                    call.argument(string, 1);
-                }
-                Some(text) => call.text(&text),
-                None => {
-                    if t == ErasedType::V {
-                        self.statement(value);
-                        self.unit_value();
-                    } else if boxed {
-                        self.expr(value, &param);
-                    } else {
-                        self.expr(value, &t);
-                    }
-                    call.argument(param, slots);
-                }
-            }
-        }
-        let string = ErasedType::L(Rc::from(STRING));
-        self.concat_call(call);
-        if flushed > 0 {
-            let mut joined = ConcatCall::default();
-            for _ in 0..=flushed {
-                joined.argument(string.clone(), 1);
-            }
-            self.concat_call(joined);
-        }
+        let node = self.lowering(|g| g.lower_concat(&operands));
+        self.write(node);
         self.code.locals_release(mark);
-        string
+        self.lir.ty(node).clone()
     }
 
-    /// The operands the head of a concatenation brings to its chain, as the IR says what the
-    /// head is to it: a chain's own operands, those behind a block's result, whose statements
-    /// run here, before the first operand, or the head as one operand.
-    fn chain_head(&mut self, head: TExprId, operands: &mut Vec<TExprId>) {
+    pub(super) fn concat_route(&self, items: ListRef) -> ConcatRoute {
+        let prog = self.cx.input.prog;
+        let (mut statements, mut operands) = (Vec::new(), Vec::new());
+        if let Some((&head, rest)) = prog.expr_list(items).split_first() {
+            self.chain_head(head, &mut statements, &mut operands);
+            operands.extend_from_slice(rest);
+        }
+        if statements.iter().all(|&stmts| self.block_lowers(stmts)) {
+            ConcatRoute::Lowered(statements, operands)
+        } else {
+            ConcatRoute::Statements(statements, operands)
+        }
+    }
+
+    fn chain_head(&self, head: TExprId, statements: &mut Vec<ListRef>, operands: &mut Vec<TExprId>) {
         let prog = self.cx.input.prog;
         match prog.chain_head(head) {
             ChainHead::Operand => operands.push(head),
             ChainHead::Chain(items) => {
                 if let Some((&inner, rest)) = prog.expr_list(items).split_first() {
-                    self.chain_head(inner, operands);
+                    self.chain_head(inner, statements, operands);
                     operands.extend_from_slice(rest);
                 }
             }
             ChainHead::Block(stmts, res) => {
-                self.block_statements(stmts);
-                self.chain_head(res, operands);
+                statements.push(stmts);
+                self.chain_head(res, statements, operands);
             }
         }
-    }
-
-    fn concat_call(&mut self, call: ConcatCall) {
-        if call.arguments.is_empty() && call.constants.is_empty() {
-            return self.sconst(&call.recipe);
-        }
-        let string = ErasedType::L(Rc::from(STRING));
-        let cp = &mut self.cw.cp;
-        let factory = cp.method(
-            "java/lang/invoke/StringConcatFactory",
-            "makeConcatWithConstants",
-            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;",
-        );
-        let handle = cp.method_handle(6, factory);
-        let mut constants = vec![cp.string(&call.recipe)];
-        constants.extend(call.constants.iter().map(|c| cp.string(c)));
-        let bootstrap = self.cw.bootstrap_method(handle, &constants);
-        let site = self.cw.cp.invoke_dynamic(bootstrap, "makeConcatWithConstants", &method_desc(&call.arguments, &string));
-        self.code.op_u16(op::INVOKEDYNAMIC, site);
-        self.code.bytes.extend_from_slice(&[0, 0]);
-        self.code.popn(call.arguments.len());
-        let vt = self.vt(&string);
-        self.code.push(vt);
     }
 
     // ---- locals, fields, statics ----
@@ -4035,49 +4080,68 @@ impl<'a> Gen<'a> {
         if let Some(module) = self.m.this_module.clone() {
             return Some(ThisValue::Module(module));
         }
-        let slot = self.m.this_slot?;
+        self.m.this_slot?;
         let t = match (self.m.this_home, self.m.this_underlying.clone(), self.this_class) {
             (Some(home), _, _) => self.class_type(home),
             (None, Some(underlying), _) => underlying,
             (None, None, Some(c)) => self.class_type(c),
             (None, None, None) => ErasedType::object(),
         };
-        Some(ThisValue::Slot(slot, t))
+        Some(ThisValue::Slot(t))
     }
 
     pub fn load_this(&mut self) -> ErasedType {
-        match self.this_value() {
-            Some(ThisValue::Module(module)) => self.get_module(&module),
-            Some(ThisValue::Slot(slot, t)) => {
-                self.load(slot, &t);
-                t
-            }
-            None => {
-                self.unsupported("`this` outside of an instance");
-                self.code.op(op::ACONST_NULL);
-                self.code.push(VT::Null);
-                match self.this_class {
-                    Some(c) => self.class_type(c),
-                    None => ErasedType::object(),
-                }
-            }
-        }
+        let instance = self.lowering(|g| g.lower_instance());
+        self.write(instance);
+        self.lir.ty(instance).clone()
     }
 
-    /// A local or a parameter held as its value in a slot of the method: neither lazy nor a cell.
-    pub(super) fn plain_local(&self, s: SymId) -> Option<&Local> {
+    /// The type of a local or a parameter held as its value in a slot of the method: neither
+    /// lazy nor a cell.
+    pub(super) fn plain_local(&self, s: SymId) -> Option<ErasedType> {
         if self.is_lazy_local(s) {
             return None;
         }
-        self.m.locals.get(&s).filter(|l| !l.cell)
+        if let Some((t, cell)) = self.declared_by_lowering(s) {
+            return (!cell).then(|| t.clone());
+        }
+        self.m.locals.get(&s).filter(|l| !l.cell).map(|l| l.ty.clone())
     }
 
-    fn captured_field(&self, s: SymId) -> Option<(String, ErasedType, Held)> {
+    /// Where the scope keeps what it holds for a local: its value, its cell where a closure
+    /// shares it, a lazy val's holder. None for a local out of scope, and for a local class's
+    /// capture in code with no instance.
+    pub(super) fn held_in(&mut self, s: SymId) -> Option<HeldIn> {
+        let cell_type = || ErasedType::L(Rc::from(OBJECT_REF));
+        if let Some((t, cell)) = self.declared_by_lowering(s) {
+            return Some(HeldIn::Local(if *cell { cell_type() } else { t.clone() }));
+        }
+        if let Some(l) = self.m.locals.get(&s) {
+            return Some(HeldIn::Local(if l.cell { cell_type() } else { l.ty.clone() }));
+        }
+        let (field, ty, held) = self.captured_field(s)?;
+        self.this_value()?;
+        Some(HeldIn::Field(field, match held {
+            Held::Value => ty,
+            Held::Cell => cell_type(),
+        }))
+    }
+
+    /// The type and the cell of the local `s` as the running lowering declared it, before the writer
+    /// stores it: none outside a lowering, where the scope is what the writer has stored.
+    fn declared_by_lowering(&self, s: SymId) -> Option<&(ErasedType, bool)> {
+        self.code.frozen.then(|| self.lower_declared.get(&s)).flatten()
+    }
+
+    pub(super) fn captured_field(&self, s: SymId) -> Option<(String, ErasedType, Held)> {
         self.class_captures.iter().find(|c| c.0 == s).map(|c| (c.1.clone(), c.2.clone(), c.3))
     }
 
     /// Whether the local lives in a cell where the current code sees it.
     pub fn is_cell(&self, s: SymId) -> bool {
+        if let Some((_, cell)) = self.declared_by_lowering(s) {
+            return *cell;
+        }
         match self.m.locals.get(&s) {
             Some(l) => l.cell,
             None => self.captured_field(s).map_or(false, |c| c.2 == Held::Cell),
@@ -4086,61 +4150,40 @@ impl<'a> Gen<'a> {
 
     /// Pushes the cell of a local, or its value when it has none: what a closure captures.
     pub fn load_capture(&mut self, s: SymId) -> ErasedType {
-        let cell_type = ErasedType::L(Rc::from(OBJECT_REF));
-        if let Some(l) = self.m.locals.get(&s).cloned() {
-            let t = if l.cell { cell_type } else { l.ty };
-            self.load(l.slot, &t);
-            return t;
-        }
-        if let Some((field, ty, held)) = self.captured_field(s) {
-            self.load_this();
-            let t = match held {
-                Held::Value => ty,
-                Held::Cell => cell_type,
-            };
-            let owner = self.this_name.clone();
-            self.getfield(&owner, &field, &t);
-            return t;
-        }
-        let name = self.cx.input.interner.get(self.cx.input.syms.sym(s).name).to_string();
-        self.unsupported(&format!("the local {} is not in scope of the generated method", name));
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        ErasedType::object()
+        let held = self.lowering(|g| g.lower_capture(s));
+        self.write(held);
+        self.lir.ty(held).clone()
     }
 
     fn load_local(&mut self, s: SymId) -> ErasedType {
-        let info = self.cx.input.syms.sym(s);
         if self.is_lazy_local(s) {
             return self.lazy_read(s);
         }
-        let declared = if info.by_name { self.function_type(0) } else { self.sym_type(s) };
-        let t = self.load_capture(s);
-        if self.is_cell(s) {
-            let object = ErasedType::object();
-            self.getfield(OBJECT_REF, "elem", &object);
-            self.adapt(&object, &declared);
-            return declared;
+        let read = self.lowering(|g| g.lower_local(s));
+        match read {
+            Some(read) => {
+                self.write(read);
+                self.lir.ty(read).clone()
+            }
+            // Out of scope: the report.
+            None => self.load_capture(s),
         }
-        t
     }
 
     fn store_local(&mut self, s: SymId, value: TExprId) {
-        let declared = self.sym_type(s);
-        if self.is_cell(s) {
-            self.load_capture(s);
-            let object = ErasedType::object();
-            self.expr(value, &declared);
-            self.adapt(&declared, &object);
-            self.putfield(OBJECT_REF, "elem", &object);
-            return;
-        }
-        match self.m.locals.get(&s).cloned() {
-            Some(l) => {
-                self.expr(value, &l.ty);
-                self.store(l.slot, &l.ty);
+        match self.held_in(s) {
+            Some(HeldIn::Local(_)) => unreachable!("lowered (`Gen::lower_assign`)"),
+            Some(HeldIn::Field(..)) if self.is_cell(s) => unreachable!("lowered (`Gen::lower_assign`)"),
+            _ if self.is_cell(s) => {
+                // A capture in code with no instance: the report of its load.
+                let declared = self.sym_type(s);
+                self.load_capture(s);
+                let object = ErasedType::object();
+                self.expr(value, &declared);
+                self.adapt(&declared, &object);
+                self.putfield(OBJECT_REF, "elem", &object);
             }
-            None => self.unsupported("assignment to a local that is not in scope"),
+            _ => self.unsupported("assignment to a local that is not in scope"),
         }
     }
 
@@ -4162,42 +4205,17 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// `classOf[C]`: the class constant, or a primitive's `TYPE` (`push_class`).
-    fn class_of(&mut self, e: TExprId, c: ClassId, dims: u8) -> ErasedType {
-        // An array of a known element says its dimensions (`TExpr::ClassOf`).
-        let kind = if dims > 0 {
-            let element = match crate::emit::class_of_name(self.cx.input.syms, self.cx.input.interner, c) {
-                Some(n) => n,
-                None => self.class_name(c).to_string(),
-            };
-            ErasedType::L(Rc::from(crate::emit::array_class_name(&element, dims).replace('.', "/")))
-        } else {
-            // `classOf[Array[T]]` is the array class of `T`'s erasure, which the node's type says.
-            let types = self.cx.input.types;
-            let element = self.recorded_type(e).and_then(|t| match types.get(t) {
-                Type::Class(_, args) => types.items(args).first().copied(),
-                _ => None,
-            }).and_then(|array| match types.get(array) {
-                Type::Class(_, args) => types.items(args).first().copied(),
-                _ => None,
-            });
-            self.class_kind(c, element)
-        };
-        self.push_class(&kind)
-    }
-
-    /// The constant `classOf[t]` of the constant type `class_type`, `Class[t]` (`LitVal::Class`), through the
-    /// class literal `class_of` writes for the tree (`class_kind`).
+    /// The class the constant `classOf[t]` of the constant type `class_type`, `Class[t]` (`LitVal::Class`), is the
+    /// value of, as `lower_class_of` names a class literal's (`class_kind`).
     pub(super) fn class_constant(&mut self, class_type: TypeId) -> ErasedType {
         let types = self.cx.input.types;
-        let kind = match types.get(class_type) {
+        match types.get(class_type) {
             Type::Class(_, args) if !types.items(args).is_empty() => self.class_literal_kind(types.items(args)[0]),
             _ => {
                 self.unsupported("internal error: a class constant whose type is no `Class[T]`");
                 ErasedType::object()
             }
-        };
-        self.push_class(&kind)
+        }
     }
 
     /// `CoreBTypes.toTypeKind` of a class constant's type `t` (`typeToTypeKind` 159-198): a class's by `class_kind`
@@ -4226,7 +4244,7 @@ impl<'a> Gen<'a> {
     /// `Array`'s the array class of `element`'s erasure, `Nothing`'s and `Null`'s scala-library's `Nothing$` and
     /// `Null$` (`srNothingRef`, `srNullRef`), an opaque type's its underlying type's erasure (scalac's `ClassTag` of
     /// one over `Int` is `Int`'s), a primitive's or `Unit`'s its own, any other class's the class.
-    fn class_kind(&mut self, c: ClassId, element: Option<TypeId>) -> ErasedType {
+    pub(super) fn class_kind(&mut self, c: ClassId, element: Option<TypeId>) -> ErasedType {
         let info = self.cx.input.syms.class(c);
         if info.kind == ClassKind::Builtin {
             match self.cx.input.interner.get(info.name) {
@@ -4268,7 +4286,7 @@ impl<'a> Gen<'a> {
 
     /// `genConstant`'s `ClazzTag` (BCodeBodyBuilder.scala 597-614) for the class of `kind`: a primitive's or `Unit`'s
     /// boxed class's `TYPE` (`boxedClassOfPrimitive`, `Unit`'s `java.lang.Void`), a reference or array class by `ldc`.
-    fn push_class(&mut self, kind: &ErasedType) -> ErasedType {
+    pub(super) fn push_class(&mut self, kind: &ErasedType) -> ErasedType {
         let class = ErasedType::L(Rc::from("java/lang/Class"));
         match kind {
             ErasedType::L(name) => {
@@ -4284,13 +4302,25 @@ impl<'a> Gen<'a> {
     }
 
     pub fn load_module(&mut self, c: ClassId) -> ErasedType {
-        // An object without a body that only its exports are reached through is not emitted,
-        // and a Java class's statics have no object.
-        if !self.cx.input.reach.classes[c.idx()] || self.cx.input.java_class(c).is_some() {
-            return ErasedType::V;
+        match self.module_name(c) {
+            Some(name) => self.get_module(&name),
+            None => ErasedType::V,
         }
-        let name = self.class_name(c);
-        self.get_module(&name)
+    }
+
+    /// The class of the object `c`'s instance; None for an object without a body that only its
+    /// exports are reached through, which is not emitted, and for a Java class's statics, which
+    /// have no object.
+    pub(super) fn module_name(&mut self, c: ClassId) -> Option<Rc<str>> {
+        if !self.cx.input.reach.classes[c.idx()] || self.cx.input.java_class(c).is_some() {
+            return None;
+        }
+        Some(self.class_name(c))
+    }
+
+    /// The class of the object that holds a file's top-level definitions.
+    pub(super) fn file_module_name(&self, file: crate::source::FileId) -> Rc<str> {
+        Rc::from(self.cx.file_modules[file.0 as usize].as_str())
     }
 
     /// The instance of the object whose class is `name`.
@@ -4301,9 +4331,8 @@ impl<'a> Gen<'a> {
     }
 
     pub fn load_file_module(&mut self, file: crate::source::FileId) -> Rc<str> {
-        let name: Rc<str> = Rc::from(self.cx.file_modules[file.0 as usize].as_str());
-        let t = ErasedType::L(name.clone());
-        self.getstatic(&name, "MODULE$", &t);
+        let name = self.file_module_name(file);
+        self.get_module(&name);
         name
     }
 
@@ -4311,88 +4340,75 @@ impl<'a> Gen<'a> {
         self.load_static(s)
     }
 
-    /// A given object of a package or of objects, read as scalac reads it: its module, as a
-    /// value of the given's declared type, which its class implements, so that a build over the
-    /// object's products, which may not see its class's parents, casts no more than this one.
-    fn given_object_read(&mut self, s: SymId) -> Option<ErasedType> {
-        let &k = self.cx.given_objects.get(&s)?;
-        let name = self.class_name(k);
-        self.getstatic(&name, "MODULE$", &ErasedType::L(name.clone()));
-        let declared = self.sym_type(s);
-        let vt = self.vt(&declared);
-        self.code.retype_top(vt);
-        Some(declared)
-    }
-
-    fn load_static(&mut self, s: SymId) -> ErasedType {
+    pub(super) fn static_route(&mut self, s: SymId) -> StaticRoute {
         let cx = self.cx;
-        if let Some(t) = self.given_object_read(s) {
-            return t;
-        }
         let info = cx.input.syms.sym(s);
-        if let Some((cf, JMember::Field(i))) = cx.input.java_member(s) {
-            let f = &cf.fields[i as usize];
-            let t = parse_type(&f.descriptor).0;
-            self.getstatic(&cf.name, &f.name, &t);
-            return self.java_value(t);
+        if cx.given_objects.contains_key(&s) {
+            return StaticRoute::GivenObject;
+        }
+        if let Some((_, JMember::Field(_))) = cx.input.java_member(s) {
+            return StaticRoute::JavaField;
         }
         if let SymKind::EnumValue(case) = info.kind {
             // A jar enum's value is a static field of its companion, as scalac writes it, and so
             // is a program enum's whose companion this build writes with the fields.
             if let Owner::Class(companion) = info.owner {
                 if let Some(e) = cx.input.syms.class(companion).companion.filter(|&e| cx.linked_class(companion) || cx.has_enum_fields(e)) {
-                    let owner = self.class_name(companion);
-                    let t = self.class_type(e);
-                    let name = encode(cx.input.interner.get(info.name));
-                    self.getstatic(&owner, &name, &t);
-                    return t;
+                    return StaticRoute::EnumField(companion, e);
                 }
             }
-            if let Owner::Class(companion) = info.owner {
-                if cx.layout.has_body(companion) && cx.input.reach.classes[companion.idx()] {
-                    let t = self.load_module(companion);
-                    self.pop_value(&t);
-                } else if let Some(e) = cx.enum_of_case(case) {
-                    // The enum makes its values when it is initialised, so a read starts there:
-                    // one that initialised the value's class first would wait for the enum, as
-                    // its superclass, while another thread making the values waited for it.
-                    let enum_name = self.class_name(e);
-                    self.invoke(Invoke::Static, &enum_name, false, "$touch", &[], &ErasedType::V);
-                }
-            }
-            let name = self.class_name(case);
-            let t = ErasedType::L(name.clone());
-            self.getstatic(&name, "$instance", &t);
-            return t;
+            return StaticRoute::EnumValue(case);
         }
-        // A top-level inline val is erased with its getter (`isEffectivelyErased`, `Erasure.typedValDef`): a read is
-        // the constant of its type, which `Namer` keeps for an inline val and `InlineVals` requires, as dotty's typer
-        // inlines it.
         if info.kind == SymKind::Val && info.mods & mods::INLINE != 0 && matches!(info.owner, Owner::Package(_)) {
-            match info.sig.as_ref().map(|sig| cx.input.types.get(sig.ret)) {
-                Some(Type::Lit(l)) => return self.literal_value(l),
-                _ => {
-                    let name = cx.input.interner.get(info.name);
-                    self.unsupported(&format!("internal error: the inline val {} has no constant type (InlineVals refuses it)", name));
-                    return self.sym_type(s);
-                }
-            }
+            return StaticRoute::InlineVal;
         }
         let m = self.mref(s);
         if m.kind == Invoke::Static && m.params.is_empty() && !matches!(info.kind, SymKind::Def) {
-            self.getstatic(&m.owner, &m.name, &m.ret);
-            return m.ret.clone();
+            return StaticRoute::Field;
         }
-        match info.owner {
-            Owner::Class(c) => {
-                self.load_module(c);
+        StaticRoute::Accessor
+    }
+
+    fn load_static(&mut self, s: SymId) -> ErasedType {
+        let cx = self.cx;
+        let info = cx.input.syms.sym(s);
+        match self.static_route(s) {
+            StaticRoute::EnumValue(case) => {
+                if let Owner::Class(companion) = info.owner {
+                    if cx.layout.has_body(companion) && cx.input.reach.classes[companion.idx()] {
+                        let t = self.load_module(companion);
+                        self.pop_value(&t);
+                    } else if let Some(e) = cx.enum_of_case(case) {
+                        // The enum makes its values when it is initialised, so a read starts there:
+                        // one that initialised the value's class first would wait for the enum, as
+                        // its superclass, while another thread making the values waited for it.
+                        let enum_name = self.class_name(e);
+                        self.invoke(Invoke::Static, &enum_name, false, "$touch", &[], &ErasedType::V);
+                    }
+                }
+                let name = self.class_name(case);
+                let t = ErasedType::L(name.clone());
+                self.getstatic(&name, "$instance", &t);
+                t
             }
-            _ => {
-                self.load_file_module(info.file);
+            // A top-level inline val is erased with its getter (`isEffectivelyErased`, `Erasure.typedValDef`): a read is
+            // the constant of its type, which `Namer` keeps for an inline val and `InlineVals` requires, as dotty's typer
+            // inlines it.
+            StaticRoute::InlineVal => match info.sig.as_ref().map(|sig| cx.input.types.get(sig.ret)) {
+                Some(Type::Lit(l)) => self.literal_value(l),
+                _ => {
+                    let name = cx.input.interner.get(info.name);
+                    self.unsupported(&format!("internal error: the inline val {} has no constant type (InlineVals refuses it)", name));
+                    self.sym_type(s)
+                }
+            },
+            // Written from its node, for the callers that hold no expression of the read too.
+            StaticRoute::GivenObject | StaticRoute::JavaField | StaticRoute::EnumField(..) | StaticRoute::Field | StaticRoute::Accessor => {
+                let node = self.lowering(|g| g.lower_static(s)).expect("lowered, by the route");
+                self.write(node);
+                self.lir.ty(node).clone()
             }
         }
-        self.invoke_mref(&m);
-        m.ret.clone()
     }
 
     fn receiver(&mut self, r: TExprId, s: SymId) {
@@ -4430,7 +4446,7 @@ impl<'a> Gen<'a> {
     /// erased type itself, the reference cannot be written: refused as dotty refuses it
     /// (Erasure.scala 746-758), `member` naming what is referenced. An array, a primitive or a
     /// bottom (`defn.isBottomClass`) is `None` too, its member `Object`'s.
-    fn qualifier_site(&mut self, r: TExprId, owner: &str, member: Referenced) -> Option<Site> {
+    pub(super) fn qualifier_site(&mut self, r: TExprId, owner: &str, member: Referenced) -> Option<Site> {
         let cx = self.cx;
         // An ascription's value is of the ascribed type, the outermost one deciding: erasure
         // retains it (`Erasure.typedTyped`, `Program::ascribed_bits`), a generic result's `Object`
@@ -4594,17 +4610,12 @@ impl<'a> Gen<'a> {
         matches!(m.kind, Invoke::Virtual | Invoke::Interface) && matches!(info.owner, Owner::Class(_)) && info.mods & mods::PRIVATE == 0
     }
 
-    /// `Object`'s member `name` called on the qualifier `r` emitted at `site`'s class
-    /// (`qualifier_site`, its `None` `Object` itself), the call's arguments emitted by `args`.
-    pub(super) fn object_member_call(&mut self, r: TExprId, name: &str, params: &[ErasedType], ret: &ErasedType, args: impl FnOnce(&mut Self)) {
+    /// Where a call of `Object`'s member `name` on the qualifier `r` points (`qualifier_site`,
+    /// its `None` `Object` itself) and the class the qualifier is evaluated at.
+    pub(super) fn object_member_site(&mut self, r: TExprId, name: &str) -> (Option<Site>, ErasedType) {
         let site = self.qualifier_site(r, OBJECT, Referenced::Method(name));
-        let object = ErasedType::object();
-        self.expr(r, site.as_ref().map_or(&object, |s| &s.qualifier));
-        args(self);
-        match site {
-            Some(site) => self.invoke(site.kind(), &site.owner, site.interface, name, params, ret),
-            None => self.invoke(Invoke::Virtual, OBJECT, false, name, params, ret),
-        }
+        let qualifier = site.as_ref().map_or_else(ErasedType::object, |s| s.qualifier.clone());
+        (site, qualifier)
     }
 
     /// Whether `r.s` reads the field of this class's own instance: a val that a subclass may override is read
@@ -4635,7 +4646,8 @@ impl<'a> Gen<'a> {
             return FieldRoute::Object(c);
         }
         if cx.given_objects.contains_key(&s) {
-            return FieldRoute::GivenObject;
+            let receiver_evaluated = !matches!(cx.input.prog.expr(r), TExpr::Module(_) | TExpr::This);
+            return FieldRoute::GivenObject { receiver_evaluated };
         }
         if let Some(c) = self.vc_field(r, s) {
             return FieldRoute::Underlying(c);
@@ -4653,49 +4665,27 @@ impl<'a> Gen<'a> {
     }
 
     fn field_read(&mut self, r: TExprId, s: SymId) -> ErasedType {
-        let cx = self.cx;
         match self.field_route(r, s) {
             FieldRoute::Js => {
                 self.unsupported("a member of a JavaScript type");
                 ErasedType::V
             }
-            FieldRoute::Java => {
-                let Some((cf, JMember::Field(i))) = cx.input.java_member(s) else { unreachable!("a Java field, by the route") };
-                let f = &cf.fields[i as usize];
-                let t = parse_type(&f.descriptor).0;
-                if f.access & ACC_STATIC != 0 {
-                    self.getstatic(&cf.name, &f.name, &t);
-                } else {
-                    // Named on the qualifier's class, as dotty's `fieldOp` names the receiver it is
-                    // given (`BCodeBodyBuilder.scala` 549-560).
-                    match self.qualifier_site(r, &cf.name, Referenced::Sym(s)) {
-                        Some(site) => {
-                            self.expr(r, &site.qualifier);
-                            self.getfield(&site.owner, &f.name, &t);
-                        }
-                        None => {
-                            let owner = ErasedType::L(Rc::from(cf.name.as_str()));
-                            self.expr(r, &owner);
-                            self.getfield(&cf.name, &f.name, &t);
-                        }
-                    }
-                }
-                self.java_value(t)
-            }
             FieldRoute::Object(c) => {
                 self.statement(r);
                 self.load_module(c)
             }
-            // The owner is not initialised for it, as under scalac.
-            FieldRoute::GivenObject => {
-                if !matches!(cx.input.prog.expr(r), TExpr::Module(_) | TExpr::This) {
-                    self.statement(r);
-                }
-                self.given_object_read(s).unwrap_or(ErasedType::V)
+            // The slots the receiver leaves held stay so to the end of the enclosing scope, where a
+            // `Block` of the two would free them.
+            FieldRoute::GivenObject { receiver_evaluated: true } => {
+                self.statement(r);
+                let node = self.lowering(|g| g.lower_given_object(s));
+                self.write(node);
+                self.lir.ty(node).clone()
             }
-            FieldRoute::Underlying(c) => self.vc_field_read(r, c),
             FieldRoute::Early => self.load_local(s),
-            FieldRoute::Own | FieldRoute::PrivateParam(_) | FieldRoute::Accessor => unreachable!("lowered (`Gen::lower_field_read`)"),
+            FieldRoute::Java | FieldRoute::GivenObject { receiver_evaluated: false } | FieldRoute::Underlying(_) | FieldRoute::Own | FieldRoute::PrivateParam(_) | FieldRoute::Accessor => {
+                unreachable!("lowered (`Gen::lower_field_read`)")
+            }
         }
     }
 
@@ -4745,23 +4735,6 @@ impl<'a> Gen<'a> {
         Some(c)
     }
 
-    fn vc_field_read(&mut self, r: TExprId, c: ClassId) -> ErasedType {
-        let cx = self.cx;
-        let u = self.vc_underlying(c);
-        // `missing[V].u` is the box's accessor on the reference, as scalac casts the qualifier to
-        // the class and selects (`Erasure.scala` 733-737): a null throws. A block's result is
-        // the qualifier, where a conditional's, a match's or a `try`'s branches are each adapted
-        // to the value class, a null to its zero.
-        let mut target = r;
-        while let TExpr::Block(_, res) = cx.input.prog.expr(target) {
-            target = res;
-        }
-        let outer = self.vc_select.replace(target);
-        self.expr(r, &u);
-        self.vc_select = outer;
-        u
-    }
-
     fn assign(&mut self, target: TExprId, value: TExprId) {
         let cx = self.cx;
         if let TExpr::Field(_, s) | TExpr::Static(s) = cx.input.prog.expr(target) {
@@ -4772,25 +4745,23 @@ impl<'a> Gen<'a> {
         match cx.input.prog.expr(target) {
             TExpr::Local(s) => self.store_local(s, value),
             TExpr::Static(s) => {
-                let info = cx.input.syms.sym(s);
-                match info.owner {
-                    Owner::Class(c) => {
-                        self.load_module(c);
-                    }
-                    _ => {
-                        self.load_file_module(info.file);
-                    }
-                }
-                self.setter_call(s, value, None);
-            }
-            TExpr::Field(r, s) => {
+                let Owner::Class(c) = cx.input.syms.sym(s).owner else { unreachable!("lowered (`Gen::lower_assign`)") };
+                self.load_module(c);
                 let m = self.mref(s);
-                let site = self.invoke_site(r, s, &m);
-                self.site_receiver(r, s, &site);
-                self.setter_call(s, value, site);
+                self.expr(value, &m.ret);
+                let setter = self.setter_ref(&m);
+                self.invoke_mref(&setter);
             }
+            TExpr::Field(..) => unreachable!("lowered (`Gen::lower_assign`)"),
             _ => self.unsupported("assignment to this kind of target"),
         }
+    }
+
+    /// The setter of the member `m` refers to: `m_$eq`, which takes a value of the member's type.
+    pub(super) fn setter_ref(&self, m: &MethodRef) -> MethodRef {
+        let params = vec![m.ret.clone()];
+        let desc = method_desc(&params, &ErasedType::V);
+        MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name: format!("{}_$eq", m.name), params, ret: ErasedType::V, desc, kind: m.kind }
     }
 
     fn java_field_write(&mut self, target: TExprId, owner: &str, f: &crate::classfile::Field, value: TExprId) {
@@ -4803,31 +4774,11 @@ impl<'a> Gen<'a> {
             self.expr(value, &t);
             self.putstatic(owner, &f.name, &t);
         } else {
-            // Named on the qualifier's class, as `field_read` names it.
-            let mut named: Rc<str> = Rc::from(owner);
-            if let TExpr::Field(r, s) = self.cx.input.prog.expr(target) {
-                match self.qualifier_site(r, owner, Referenced::Sym(s)) {
-                    Some(site) => {
-                        self.expr(r, &site.qualifier);
-                        named = site.owner;
-                    }
-                    None => self.expr(r, &ErasedType::L(named.clone())),
-                }
+            if let TExpr::Field(..) = self.cx.input.prog.expr(target) {
+                unreachable!("lowered (`Gen::lower_assign`)")
             }
             self.expr(value, &t);
-            self.putfield(&named, &f.name, &t);
-        }
-    }
-
-    /// The setter of `s` called with `value` on the receiver on the stack, where `site` points
-    /// (`invoke_site`) or on the declaring class.
-    fn setter_call(&mut self, s: SymId, value: TExprId, site: Option<Site>) {
-        let m = self.mref(s);
-        self.expr(value, &m.ret);
-        let name = format!("{}_$eq", m.name);
-        match site {
-            Some(site) => self.invoke(site.kind(), &site.owner, site.interface, &name, &[m.ret.clone()], &ErasedType::V),
-            None => self.invoke(m.kind, &m.owner, m.owner_is_interface, &name, &[m.ret.clone()], &ErasedType::V),
+            self.putfield(owner, &f.name, &t);
         }
     }
 
@@ -4849,11 +4800,6 @@ impl<'a> Gen<'a> {
         written
     }
 
-    /// The arguments an enum case passes to the constructor of its enum.
-    pub fn super_arguments(&mut self, enum_class: ClassId, args: ListRef, params: &[ErasedType]) {
-        self.ctor_arguments(enum_class, args, params);
-    }
-
     /// The arguments of the constructor of `c`, a left-out one through its default getter; a
     /// class of the JDK has no getters, so its default is evaluated where it stands.
     pub fn ctor_arguments(&mut self, c: ClassId, args: ListRef, params: &[ErasedType]) {
@@ -4872,45 +4818,109 @@ impl<'a> Gen<'a> {
     /// companion holds them (scalac's layout), each taking the parameters of the clauses before
     /// the default's; a jar class's as its class files declare it; else the class's static one.
     fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[Prior], types: &[ErasedType]) {
+        let route = self.ctor_default_route(c, via, recv.is_some(), i, temps.len(), types);
+        if temps.is_empty() && self.ctor_default_lowers(c, &route, recv) {
+            let node = self.lowering(|g| g.lower_ctor_default(c, route, recv, &types[i]));
+            self.write(node);
+            return;
+        }
+        match route {
+            CtorDefault::InPlace(Some(d)) => self.expr(d, &types[i]),
+            CtorDefault::InPlace(None) => self.adapt(&ErasedType::V, &types[i]),
+            CtorDefault::LocalCompanion(v, getter) => {
+                let mt = ErasedType::L(getter.owner.clone());
+                match recv {
+                    Some(r) => self.expr(r, &mt),
+                    None => {
+                        let t = self.load_local(v);
+                        self.adapt(&t, &mt);
+                    }
+                }
+                self.companion_getter_call(&getter, temps, &types[i]);
+            }
+            CtorDefault::InnerCompanion(accessor, getter) => {
+                let outer = ErasedType::L(accessor.owner.clone());
+                match recv {
+                    Some(r) => self.expr(r, &outer),
+                    None => {
+                        let first = self.class_captured(c).first().copied();
+                        match first {
+                            Some(s) => {
+                                let t = self.load_capture(s);
+                                self.adapt(&t, &outer);
+                            }
+                            None => self.load_class_captures(c),
+                        }
+                    }
+                }
+                self.invoke_mref(&accessor);
+                self.companion_getter_call(&getter, temps, &types[i]);
+            }
+            CtorDefault::Captured(captures, getter) => {
+                match recv {
+                    // The enclosing instance the creation passes, the getter's receiver, for the
+                    // capture that stands for it (`Worker::retarget_defaults`).
+                    Some(r) => {
+                        let t = if captures > 0 { getter.params[0].clone() } else { ErasedType::object() };
+                        self.expr(r, &t);
+                        self.load_class_captures_after(c, 1);
+                    }
+                    None => self.load_class_captures(c),
+                }
+                for prior in temps {
+                    self.write_prior(prior);
+                }
+                self.invoke_mref(&getter);
+            }
+            CtorDefault::Companion(getter) => {
+                self.get_module(&getter.owner);
+                self.companion_getter_call(&getter, temps, &types[i]);
+            }
+            CtorDefault::Jar(getter) => {
+                if getter.kind == Invoke::Virtual {
+                    self.get_module(&getter.owner);
+                }
+                for (prior, p) in temps.iter().zip(&getter.params) {
+                    self.write_prior(prior);
+                    self.adapt(prior.ty(), p);
+                }
+                self.invoke_mref(&getter);
+                self.adapt(&getter.ret, &types[i]);
+            }
+            CtorDefault::Static(getter) => {
+                for prior in temps {
+                    self.write_prior(prior);
+                }
+                self.invoke_mref(&getter);
+            }
+        }
+    }
+
+    /// The companion's getter called on the companion on the stack, leaving the parameter's
+    /// type `want`.
+    fn companion_getter_call(&mut self, getter: &MethodRef, temps: &[Prior], want: &ErasedType) {
+        self.getter_call(Invoke::Virtual, &getter.owner, false, getter.name.clone(), &getter.desc, temps, &getter.ret, false);
+        self.adapt(&getter.ret, want);
+    }
+
+    /// `ctor_default`'s decision, for a getter that takes the first `taken` of the parameters;
+    /// `received` where the typer selected the getter on a receiver.
+    pub(super) fn ctor_default_route(&mut self, c: ClassId, via: Option<SymId>, received: bool, i: usize, taken: usize, types: &[ErasedType]) -> CtorDefault {
         let cx = self.cx;
         if cx.jvm_class(c).is_some() {
-            let defaults: Vec<Option<TExprId>> = match (via, cx.tclass_of.get(c.idx()).copied().filter(|&i| i != u32::MAX)) {
-                (Some(s), _) => cx.input.prog.funs.iter().find(|f| f.sym == s).map_or(Vec::new(), |f| f.defaults.clone()),
-                (None, Some(k)) => cx.input.prog.classes[k as usize].ctor_defaults[self.capture_count(c)..].to_vec(),
-                (None, None) => Vec::new(),
+            let default = match (via, cx.tclass_of.get(c.idx()).copied().filter(|&i| i != u32::MAX)) {
+                (Some(s), _) => cx.input.prog.funs.iter().find(|f| f.sym == s).and_then(|f| f.defaults.get(i).copied().flatten()),
+                (None, Some(k)) => cx.input.prog.classes[k as usize].ctor_defaults[self.capture_count(c)..].get(i).copied().flatten(),
+                (None, None) => None,
             };
-            match defaults.get(i).copied().flatten() {
-                Some(d) => self.expr(d, &types[i]),
-                None => self.adapt(&ErasedType::V, &types[i]),
-            }
-            return;
+            return CtorDefault::InPlace(default);
         }
         // A local class's getters are its local companion's, the receiver the typer selects them on.
         if cx.ctor_defaults_on_local_companion(c) {
             let m = cx.input.syms.class(c).companion.expect("a local companion");
             let module = self.class_name(m);
-            let mt = ErasedType::L(module.clone());
-            match recv {
-                Some(r) => self.expr(r, &mt),
-                None => {
-                    let v = cx.input.syms.class(m).local_module.expect("a local module");
-                    let t = self.load_local(v);
-                    self.adapt(&t, &mt);
-                }
-            }
-            let clauses = match via {
-                Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone()),
-                None => cx.input.syms.class(c).ctor.clone(),
-            };
-            let (before, by_name) = clause_shape(&clauses, i);
-            let ret = match by_name {
-                Some(t) => self.erase(t),
-                None => types[i].clone(),
-            };
-            let desc = method_desc(&types[..before], &ret);
-            self.getter_call(Invoke::Virtual, &module, false, format!("$lessinit$greater$default${}", i + 1), &desc, temps, &ret, false);
-            self.adapt(&ret, &types[i]);
-            return;
+            let v = cx.input.syms.class(m).local_module.expect("a local module");
+            return CtorDefault::LocalCompanion(v, self.companion_getter(module, c, via, i, types));
         }
         // A class nested in a class whose companion, an object of each enclosing instance reached
         // by its getter, holds the getters (scalac's layout): another module's or a jar's, and the
@@ -4918,104 +4928,72 @@ impl<'a> Gen<'a> {
         // the class's (`inner_written_companion_members`), on the creation's enclosing instance or,
         // where a parent's call passes none, on the one the class captures.
         let on_companion = cx.ctor_defaults_on_inner_companion(c);
-        if recv.is_some() && (!cx.emits(c) || via.is_none() && cx.has_inner_written_case_companion(c)) || on_companion {
+        if received && (!cx.emits(c) || via.is_none() && cx.has_inner_written_case_companion(c)) || on_companion {
             if let Owner::Class(o) = cx.input.syms.class(c).owner {
                 let trait_owner = cx.input.syms.class(o).kind == ClassKind::Trait;
                 if cx.input.syms.class(o).kind == ClassKind::Class || trait_owner {
-                    let clauses = match via {
-                        Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone()),
-                        None => cx.input.syms.class(c).ctor.clone(),
-                    };
-                    let (before, by_name) = clause_shape(&clauses, i);
-                    let outer_name = self.class_name(o);
-                    let outer = ErasedType::L(outer_name.clone());
-                    match recv {
-                        Some(r) => self.expr(r, &outer),
-                        None => {
-                            let first = self.class_captured(c).first().copied();
-                            match first {
-                                Some(s) => {
-                                    let t = self.load_capture(s);
-                                    self.adapt(&t, &outer);
-                                }
-                                None => self.load_class_captures(c),
-                            }
-                        }
-                    }
                     let module: Rc<str> = Rc::from(cx.companion_name(c));
-                    let getter = cx.input.interner.get(cx.input.syms.class(c).name).to_string();
+                    let ret = ErasedType::L(module.clone());
+                    let desc = method_desc(&[], &ret);
                     // A trait's companion is reached through the interface's accessor, which the
                     // classes mixing it in implement.
                     let kind = if trait_owner { Invoke::Interface } else { Invoke::Virtual };
-                    self.invoke(kind, &outer_name, trait_owner, &getter, &[], &ErasedType::L(module.clone()));
-                    let ret = match by_name {
-                        Some(t) => self.erase(t),
-                        None => types[i].clone(),
-                    };
-                    let desc = method_desc(&types[..before], &ret);
-                    self.getter_call(Invoke::Virtual, &module, false, format!("$lessinit$greater$default${}", i + 1), &desc, temps, &ret, false);
-                    self.adapt(&ret, &types[i]);
-                    return;
+                    let name = cx.input.interner.get(cx.input.syms.class(c).name).to_string();
+                    let accessor = MethodRef { owner: self.class_name(o), owner_is_interface: trait_owner, name, params: Vec::new(), ret, desc, kind };
+                    return CtorDefault::InnerCompanion(accessor, self.companion_getter(module, c, via, i, types));
                 }
             }
         }
         let owner = self.class_name(c);
+        let before = (0..taken).map(|k| types.get(k).cloned().unwrap_or_else(ErasedType::object));
         let n = self.capture_count(c);
         if via.is_none() && n > 0 && cx.input.syms.class(c).kind != ClassKind::Anon {
-            let mut before = self.anon_ctor_params(c);
-            match recv {
-                // The enclosing instance the creation passes, the getter's receiver, for the
-                // capture that stands for it (`Worker::retarget_defaults`).
-                Some(r) => {
-                    let t = before.first().cloned().unwrap_or_else(ErasedType::object);
-                    self.expr(r, &t);
-                    self.load_class_captures_after(c, 1);
-                }
-                None => self.load_class_captures(c),
-            }
-            for prior in temps {
-                self.write_prior(prior);
-                before.push(prior.ty().clone());
-            }
-            self.invoke(Invoke::Static, &owner, false, &format!("$lessinit$greater$default${}", n + i + 1), &before, &types[i]);
-            return;
+            let mut params = self.anon_ctor_params(c);
+            let captures = params.len();
+            params.extend(before);
+            let desc = method_desc(&params, &types[i]);
+            let getter = MethodRef { owner, owner_is_interface: false, name: format!("$lessinit$greater$default${}", n + i + 1), params, ret: types[i].clone(), desc, kind: Invoke::Static };
+            return CtorDefault::Captured(captures, getter);
         }
         let name = format!("$lessinit$greater$default${}", i + 1);
         // A class whose companion holds the getters (scalac's layout): each takes the parameters
         // of the clauses before the default's, a by-name parameter's returning the value.
         if cx.ctor_defaults_on_companion(c) {
-            let clauses: Vec<ClauseSig> = match via {
-                Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone()),
-                None => cx.input.syms.class(c).ctor.clone(),
-            };
-            let (before, by_name) = clause_shape(&clauses, i);
             let module: Rc<str> = Rc::from(cx.companion_name(c));
-            self.getstatic(&module, "MODULE$", &ErasedType::L(module.clone()));
-            let ret = match by_name {
-                Some(t) => self.erase(t),
-                None => types[i].clone(),
-            };
-            let desc = method_desc(&types[..before], &ret);
-            self.getter_call(Invoke::Virtual, &module, false, name, &desc, temps, &ret, false);
-            self.adapt(&ret, &types[i]);
-            return;
+            return CtorDefault::Companion(self.companion_getter(module, c, via, i, types));
         }
-        if self.jar_ctor_default(c, &name, temps, &types[i]) {
-            return;
+        if let Some(getter) = self.jar_ctor_getter(c, &name) {
+            return CtorDefault::Jar(getter);
         }
-        for prior in temps {
-            self.write_prior(prior);
-        }
-        let before: Vec<ErasedType> = temps.iter().map(|p| p.ty().clone()).collect();
-        let interface = self.cx.is_interface(c);
-        self.invoke(Invoke::Static, &owner, interface, &name, &before, &types[i]);
+        let params: Vec<ErasedType> = before.collect();
+        let desc = method_desc(&params, &types[i]);
+        CtorDefault::Static(MethodRef { owner, owner_is_interface: self.cx.is_interface(c), name, params, ret: types[i].clone(), desc, kind: Invoke::Static })
+    }
+
+    /// The getter of default `i` on the companion `module` of `c`, as scalac's companion has
+    /// it: it takes the parameters of the clauses before the default's and returns the
+    /// parameter's type, a by-name parameter's value.
+    fn companion_getter(&mut self, module: Rc<str>, c: ClassId, via: Option<SymId>, i: usize, types: &[ErasedType]) -> MethodRef {
+        let cx = self.cx;
+        let clauses: Vec<ClauseSig> = match via {
+            Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone()),
+            None => cx.input.syms.class(c).ctor.clone(),
+        };
+        let (before, by_name) = clause_shape(&clauses, i);
+        let ret = match by_name {
+            Some(t) => self.erase(t),
+            None => types[i].clone(),
+        };
+        let params = types[..before].to_vec();
+        let desc = method_desc(&params, &ret);
+        MethodRef { owner: module, owner_is_interface: false, name: format!("$lessinit$greater$default${}", i + 1), params, ret, desc, kind: Invoke::Virtual }
     }
 
     /// A jar class's constructor default as scalac's class files have it: the companion's getter,
     /// taking the arguments of the clauses before the default's only, called on the companion as
-    /// scalac calls it, or through the static forwarder of the class where the companion's class
-    /// file is not read.
-    fn jar_ctor_default(&mut self, c: ClassId, name: &str, temps: &[Prior], want: &ErasedType) -> bool {
+    /// scalac calls it, or the static forwarder of the class where the companion's class file is
+    /// not read.
+    fn jar_ctor_getter(&mut self, c: ClassId, name: &str) -> Option<MethodRef> {
         let cx = self.cx;
         let companion = cx.input.syms.class(c).companion;
         let forwarder = cx.class_files.get(&c).and_then(|cf| cf.methods.iter().find(|m| m.name == name && m.access & ACC_STATIC != 0)).map(|m| m.descriptor.clone());
@@ -5025,21 +5003,27 @@ impl<'a> Gen<'a> {
             cf.methods.iter().find(|m| m.name == name && m.access & ACC_STATIC == 0).map(|m| (Rc::from(cf.name.as_str()), m.descriptor.clone()))
         };
         let (kind, owner, desc) = match (on_companion(), forwarder) {
-            (Some((module, desc)), _) => {
-                self.getstatic(&module, "MODULE$", &ErasedType::L(Rc::clone(&module)));
-                (Invoke::Virtual, module, desc)
-            }
+            (Some((module, desc)), _) => (Invoke::Virtual, module, desc),
             (None, Some(desc)) => (Invoke::Static, self.class_name(c), desc),
-            (None, None) => return false,
+            (None, None) => return None,
         };
         let (params, ret) = parse_method_desc(&desc);
-        for (prior, p) in temps.iter().zip(&params) {
-            self.write_prior(prior);
-            self.adapt(prior.ty(), p);
+        Some(MethodRef { owner, owner_is_interface: false, name: name.to_string(), params, ret, desc, kind })
+    }
+
+    /// Whether the lowering has a node for everything the getter of a constructor's default is
+    /// called on and takes, where no argument precedes the default: not for a lazy local or
+    /// one the scope does not hold, nor for a local class's `Extras` (`captures_lower`).
+    pub(super) fn ctor_default_lowers(&mut self, c: ClassId, route: &CtorDefault, recv: Option<TExprId>) -> bool {
+        match *route {
+            CtorDefault::InPlace(_) | CtorDefault::Companion(_) | CtorDefault::Jar(_) | CtorDefault::Static(_) => true,
+            CtorDefault::LocalCompanion(v, _) => recv.is_some() || !self.is_lazy_local(v) && self.held_in(v).is_some(),
+            CtorDefault::InnerCompanion(..) => recv.is_some() || self.class_captured(c).first().is_some_and(|&s| self.held_in(s).is_some()),
+            CtorDefault::Captured(..) => {
+                let extras = self.class_extras(c);
+                extras.homes.is_empty() && extras.keys.is_empty() && self.class_captures_after(c, recv.is_some() as usize).into_iter().all(|s| self.is_capturable(s) && self.held_in(s).is_some())
+            }
         }
-        self.invoke_desc(kind, &owner, false, name, &desc, params.len(), &ret);
-        self.adapt(&ret, want);
-        true
     }
 
     /// The arguments as written, each against its parameter's type.
@@ -5047,21 +5031,31 @@ impl<'a> Gen<'a> {
         self.arguments(None, args, params);
     }
 
+    pub(super) fn static_call_route(&mut self, s: SymId, args: ListRef) -> StaticCallRoute {
+        let cx = self.cx;
+        let info = cx.input.syms.sym(s);
+        if let Some(array) = self.spread_conversion(s, args) {
+            return StaticCallRoute::Spread(array);
+        }
+        if let Some((_, JMember::Method(_))) = cx.input.java_member(s) {
+            return StaticCallRoute::JavaStatic;
+        }
+        if matches!(info.owner, Owner::Class(c) if cx.jdk_statics(c)) && self.mref(s).kind == Invoke::Static {
+            return StaticCallRoute::JdkStatic;
+        }
+        match (info.owner == Owner::Local, info.kind != SymKind::Def) {
+            (true, true) => StaticCallRoute::LocalValue,
+            (true, false) => StaticCallRoute::Lifted,
+            (false, _) => StaticCallRoute::FileModule,
+        }
+    }
+
     fn call_static(&mut self, s: SymId, args: ListRef) -> ErasedType {
         let cx = self.cx;
-        if let Some(array) = self.spread_conversion(s, args) {
-            return self.wrapped_spread(array);
-        }
-        let info = cx.input.syms.sym(s);
-        if let Some((_, JMember::Method(_))) = cx.input.java_member(s) {
-            return self.call_java_static(s, args);
-        }
-        if let Some(t) = self.call_jdk_static(s, args) {
-            return t;
-        }
-        if info.owner == Owner::Local {
-            if info.kind != SymKind::Def {
-                // A local function value applied through its name.
+        match self.static_call_route(s, args) {
+            // Held as its value the function is lowered (`Gen::lower_call_static`); a lazy one, a
+            // captured one and a cell are read here.
+            StaticCallRoute::LocalValue if self.plain_local(s).is_none() => {
                 let t = self.load_local(s);
                 let n = cx.input.prog.expr_list(args).len();
                 let ft = self.function_type(n);
@@ -5072,22 +5066,19 @@ impl<'a> Gen<'a> {
                 }
                 let ErasedType::L(owner) = &ft else { unreachable!() };
                 self.invoke(Invoke::Interface, owner, true, "apply", &vec![ErasedType::object(); n], &object);
-                return object;
+                object
             }
-            let lifted = self.lifted_fun(s);
-            self.load_captures(&lifted);
-            let params = lifted.params.clone();
-            self.arguments(Some(s), args, &params);
-            let owner = self.this_name.clone();
-            self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, lifted.arity(), &lifted.ret);
-            return lifted.ret.clone();
+            // One met after typed IR was left to the writer is lowered here, where it is written
+            // (`Gen::analysis_in_order`).
+            StaticCallRoute::Lifted => {
+                let call = self.lowering(|g| g.lower_lifted_call(s, args));
+                self.write(call);
+                self.lir.ty(call).clone()
+            }
+            StaticCallRoute::Spread(_) | StaticCallRoute::JavaStatic | StaticCallRoute::JdkStatic | StaticCallRoute::LocalValue | StaticCallRoute::FileModule => {
+                unreachable!("lowered (`Gen::lower_call_static`)")
+            }
         }
-        let m = self.mref(s);
-        self.load_file_module(info.file);
-        let params = m.params.clone();
-        self.arguments(Some(s), args, &params);
-        self.invoke_mref(&m);
-        m.ret.clone()
     }
 
     /// A default getter's application (`TExpr::Default`), as scalac's caller makes it: the
@@ -5101,6 +5092,10 @@ impl<'a> Gen<'a> {
         let items = cx.input.prog.expr_list(args).to_vec();
         let index = (at & !DEFAULT_RECEIVER) as usize;
         let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (Some(items[0]), items[1..].to_vec()) } else { (None, items) };
+        if !matches!(self.default_route(of, at, args), DefaultRoute::Unlowered) {
+            assert!(self.default_ctor_class(of).is_some_and(|c| self.asks_captures(c)), "lowered (`Gen::lower_default`)");
+            return self.lowered_where_written(|g| g.lower_default(of, at, args));
+        }
         match of {
             DefaultOf::Ctor(c) => {
                 let types = self.ctor_param_types(c);
@@ -5120,6 +5115,59 @@ impl<'a> Gen<'a> {
             }
             DefaultOf::Method(s) => self.method_default(s, index, recv, &priors),
         }
+    }
+
+    pub(super) fn default_route(&mut self, of: DefaultOf, at: u32, args: ListRef) -> DefaultRoute {
+        let cx = self.cx;
+        let items = cx.input.prog.expr_list(args);
+        let index = (at & !DEFAULT_RECEIVER) as usize;
+        let recv = (at & DEFAULT_RECEIVER != 0).then(|| items[0]);
+        if items.len() > recv.is_some() as usize {
+            return DefaultRoute::Unlowered;
+        }
+        let (c, via, types) = match of {
+            DefaultOf::Ctor(c) => (c, None, self.ctor_param_types(c)),
+            DefaultOf::Method(s) if cx.input.syms.sym(s).name == crate::names::INIT => {
+                // A constructor of no class is refused.
+                let Some(c) = self.ctor_class(s) else { return DefaultRoute::Unlowered };
+                (c, Some(s), self.param_types(s))
+            }
+            DefaultOf::Method(s) => return self.method_default_route(s, index, recv),
+        };
+        let route = self.ctor_default_route(c, via, recv.is_some(), index, 0, &types);
+        if !self.ctor_default_lowers(c, &route, recv) {
+            return DefaultRoute::Unlowered;
+        }
+        DefaultRoute::Ctor(c, recv, route, types[index].clone())
+    }
+
+    /// The class whose constructor the default `of` is of; None for a method's default and for a
+    /// constructor of no class.
+    pub(super) fn default_ctor_class(&self, of: DefaultOf) -> Option<ClassId> {
+        match of {
+            DefaultOf::Ctor(c) => Some(c),
+            DefaultOf::Method(s) if self.cx.input.syms.sym(s).name == crate::names::INIT => self.ctor_class(s),
+            DefaultOf::Method(_) => None,
+        }
+    }
+
+    /// `default_route` for the default `i` of the method `s` with no argument before it.
+    fn method_default_route(&mut self, s: SymId, i: usize, recv: Option<TExprId>) -> DefaultRoute {
+        let cx = self.cx;
+        let info = cx.input.syms.sym(s);
+        if recv.is_some() || info.owner == Owner::Local {
+            return DefaultRoute::Unlowered;
+        }
+        let m = self.mref(s);
+        let shape = self.default_getter_shape(s, i);
+        let want = self.default_getter_want(s, i, &shape);
+        let (name, desc) = self.default_getter_ref(s, i, &[]);
+        let (params, ret) = parse_method_desc(&desc);
+        let thunk = self.function_type(0);
+        if want == thunk && ret != thunk {
+            return DefaultRoute::Unlowered;
+        }
+        DefaultRoute::FileMember(info.file, MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name, params, ret, desc, kind: m.kind }, want)
     }
 
     /// How many of `s`'s parameters, flattened, come before the clause of parameter `i`: those
@@ -5319,14 +5367,7 @@ impl<'a> Gen<'a> {
     fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[Prior], site: Option<(Invoke, Rc<str>, bool)>) -> ErasedType {
         let m = self.mref(s);
         let shape = self.default_getter_shape(s, i);
-        let want = if shape.by_name {
-            shape.ret.clone()
-        } else {
-            match self.jvm_param_order(s) {
-                Some(order) => order.iter().position(|&k| k == i).map_or_else(|| m.params[i].clone(), |j| m.params[j].clone()),
-                None => m.params[i].clone(),
-            }
-        };
+        let want = self.default_getter_want(s, i, &shape);
         let args = self.getter_args(s, shape.before, temps);
         let before: Vec<ErasedType> = args.iter().map(|p| p.ty().clone()).collect();
         let (name, desc) = self.default_getter_ref(s, i, &before);
@@ -5335,6 +5376,18 @@ impl<'a> Gen<'a> {
             None => self.getter_call(m.kind, &m.owner, m.owner_is_interface, name, &desc, &args, &want, false),
         }
         want
+    }
+
+    /// The type the default `i` of method `s` is left as: the parameter's, a by-name one's value.
+    fn default_getter_want(&mut self, s: SymId, i: usize, shape: &GetterShape) -> ErasedType {
+        if shape.by_name {
+            return shape.ret.clone();
+        }
+        let m = self.mref(s);
+        match self.jvm_param_order(s) {
+            Some(order) => order.iter().position(|&k| k == i).map_or_else(|| m.params[i].clone(), |j| m.params[j].clone()),
+            None => m.params[i].clone(),
+        }
     }
 
     /// The default of a method a value class declares, as `call_extension` calls the method: its
@@ -5507,83 +5560,15 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A static method of a Java class: no receiver, `invokestatic`.
-    /// A member of a std object standing for a JDK class's statics: the static, no receiver.
-    fn call_jdk_static(&mut self, s: SymId, args: ListRef) -> Option<ErasedType> {
-        let cx = self.cx;
-        if !matches!(cx.input.syms.sym(s).owner, Owner::Class(c) if cx.jdk_statics(c)) {
-            return None;
-        }
-        let m = self.mref(s);
-        if m.kind != Invoke::Static {
-            return None;
-        }
-        let params = m.params.clone();
-        self.arguments(Some(s), args, &params);
-        self.invoke_mref(&m);
-        Some(m.ret.clone())
-    }
-
-    fn call_java_static(&mut self, s: SymId, args: ListRef) -> ErasedType {
-        let m = self.mref(s);
-        let params = m.params.clone();
-        self.arguments(Some(s), args, &params);
-        self.invoke_mref(&m);
-        self.java_value(m.ret.clone())
-    }
-
-    /// The value of a Java member as the program sees it: what the member leaves, a JVM array
-    /// included.
-    fn java_value(&mut self, t: ErasedType) -> ErasedType {
-        t
-    }
-
-    /// The type `java_value` leaves for a Java member's declared type.
+    /// The type of a Java member's value as the program sees it, of its declared type `t`: what
+    /// the member leaves, a JVM array included.
     fn java_value_type(&self, t: ErasedType) -> ErasedType {
         t
     }
 
-    /// A Java array parameter takes the elements of a varargs literal as a JVM array.
-    fn java_array(&mut self, items: ListRef, array: &str) {
-        let elem = &array[1..];
-        let elem_type = parse_type(elem).0;
-        let items = self.cx.input.prog.expr_list(items).to_vec();
-        self.iconst(items.len() as i32);
-        let (store, atype): (u8, Option<u8>) = match elem_type {
-            ErasedType::Z => (op::BASTORE, Some(4)),
-            ErasedType::C => (op::CASTORE, Some(5)),
-            ErasedType::F => (op::FASTORE, Some(6)),
-            ErasedType::D => (op::DASTORE, Some(7)),
-            ErasedType::B => (op::BASTORE, Some(8)),
-            ErasedType::S => (op::SASTORE, Some(9)),
-            ErasedType::I => (op::IASTORE, Some(10)),
-            ErasedType::J => (op::LASTORE, Some(11)),
-            _ => (op::AASTORE, None),
-        };
-        match atype {
-            Some(code) => self.code.op_u8(op::NEWARRAY, code),
-            None => {
-                let class = elem.strip_prefix('L').and_then(|e| e.strip_suffix(';')).unwrap_or(elem);
-                let index = self.cw.cp.class(class);
-                self.code.op_u16(op::ANEWARRAY, index);
-            }
-        }
-        self.code.pop();
-        let array_type = ErasedType::L(Rc::from(array));
-        let vt = self.vt(&array_type);
-        self.code.push(vt);
-        for (i, item) in items.into_iter().enumerate() {
-            self.dup();
-            self.iconst(i as i32);
-            self.expr(item, &elem_type);
-            self.code.op(store);
-            self.code.popn(3);
-        }
-    }
-
     /// The erasure of the elements of a varargs literal's sequence type; a value class's
     /// instances are its boxes there, whatever the class holds.
-    fn seq_literal_element(&mut self, e: TExprId) -> ErasedType {
+    pub(super) fn seq_literal_element(&mut self, e: TExprId) -> ErasedType {
         let types = self.cx.input.types;
         match self.recorded_type(e).map(|t| types.get(t)) {
             Some(Type::Class(_, args)) => match types.items(args).first() {
@@ -5595,67 +5580,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// An `Object[]` of the items boxed, each brought to `elem` first: an `Int` where the
-    /// sequence's elements are `Double`s is a `Double`, which the typer leaves implicit.
-    fn boxed_array(&mut self, items: ListRef, elem: &ErasedType) {
-        if elem.is_ref() {
-            return self.java_array(items, OBJECT_ARRAY);
-        }
-        let items = self.cx.input.prog.expr_list(items).to_vec();
-        let object = ErasedType::object();
-        self.iconst(items.len() as i32);
-        let index = self.cw.cp.class(OBJECT);
-        self.code.op_u16(op::ANEWARRAY, index);
-        self.code.pop();
-        let array_type = ErasedType::L(Rc::from(OBJECT_ARRAY));
-        let vt = self.vt(&array_type);
-        self.code.push(vt);
-        for (i, item) in items.into_iter().enumerate() {
-            self.dup();
-            self.iconst(i as i32);
-            self.expr(item, elem);
-            self.adapt(elem, &object);
-            self.code.op(op::AASTORE);
-            self.code.popn(3);
-        }
-    }
-
-    /// An argument for a parameter that wants a JVM array (a Java varargs or array parameter).
-    /// An array spliced in (`Stream.of(arr*)`) is passed itself, as scalac passes it, where its
-    /// class is the parameter's; another sequence (`Stream.of(xs*)`) is copied into an array of
-    /// the parameter's element class, as scalac's `scala.runtime.Arrays.seqToArray` does.
-    pub(super) fn java_array_argument(&mut self, a: TExprId, want: &str) {
-        if let Some(array) = self.spliced_array(a, want) {
-            let t = self.expr_static(array);
-            self.adapt(&t, &ErasedType::L(Rc::from(want)));
-            return;
-        }
-        match self.cx.input.prog.expr(a) {
-            TExpr::SeqLit(items) => self.java_array(items, want),
-            _ => {
-                let t = self.expr_static(a);
-                if matches!(&t, ErasedType::L(name) if !name.starts_with('[') && &**name != OBJECT) {
-                    self.adapt(&t, &ErasedType::L(Rc::from(SEQ)));
-                    let class = ErasedType::L(Rc::from("java/lang/Class"));
-                    match parse_type(&want[1..]).0 {
-                        ErasedType::L(name) => {
-                            let i = self.cw.cp.class(&name);
-                            self.ldc(i);
-                            let vt = self.vt(&class);
-                            self.code.push(vt);
-                        }
-                        elem => self.getstatic(elem.box_class(), "TYPE", &class),
-                    }
-                    let desc = format!("(L{};Ljava/lang/Class;)Ljava/lang/Object;", SEQ);
-                    self.invoke_desc(Invoke::Static, "scala/runtime/Arrays", false, "seqToArray", &desc, 2, &ErasedType::object());
-                    self.adapt(&ErasedType::object(), &ErasedType::L(Rc::from(want)));
-                } else {
-                    self.adapt(&t, &ErasedType::L(Rc::from(want)));
-                }
-            }
-        }
-    }
-
     /// The array an argument `arr*` spliced into a Java array parameter stands for: the typer
     /// passes it through scala-library's conversion to a sequence (`copyArrayToImmutableIndexedSeq`,
     /// `wrapRefArray`, ..), whose argument it marks (`Program::spread_bits`); such a conversion
@@ -5663,7 +5587,7 @@ impl<'a> Gen<'a> {
     /// JVM takes it for the parameter: any array of references for an array of references, the
     /// typer having found its elements the parameter's (a `checkcast` where the class is not
     /// known to be), and a primitive array for the same.
-    fn spliced_array(&mut self, a: TExprId, want: &str) -> Option<TExprId> {
+    pub(super) fn spliced_array(&mut self, a: TExprId, want: &str) -> Option<TExprId> {
         let cx = self.cx;
         let (s, args) = match cx.input.prog.expr(a) {
             TExpr::CallStatic(s, args) | TExpr::CallMethod(_, s, args) => (s, args),
@@ -5692,42 +5616,6 @@ impl<'a> Gen<'a> {
         cx.input.prog.is_spread(array).then_some(array)
     }
 
-    /// An array spread into a Scala varargs parameter, wrapped as it is, not copied: dotty's
-    /// `ElimRepeated.arrayToSeq` (`tpd.wrapArray`), `ScalaRunTime.wrapRefArray` for an array of
-    /// references, `wrapIntArray` and its siblings for a primitive one, `genericWrapArray` for one
-    /// of a type parameter, so a later write to the array shows in the sequence.
-    fn wrapped_spread(&mut self, array: TExprId) -> ErasedType {
-        let t = self.static_type(array);
-        let wrap = match &t {
-            ErasedType::L(d) if &**d == "[Lscala/runtime/BoxedUnit;" => "wrapUnitArray",
-            ErasedType::L(d) if d.starts_with("[L") || d.starts_with("[[") => "wrapRefArray",
-            ErasedType::L(d) => match &d[..] {
-                "[Z" => "wrapBooleanArray",
-                "[B" => "wrapByteArray",
-                "[C" => "wrapCharArray",
-                "[D" => "wrapDoubleArray",
-                "[F" => "wrapFloatArray",
-                "[I" => "wrapIntArray",
-                "[J" => "wrapLongArray",
-                "[S" => "wrapShortArray",
-                _ => "genericWrapArray",
-            },
-            _ => "genericWrapArray",
-        };
-        let param = match wrap {
-            "wrapRefArray" => ErasedType::L(Rc::from("[Ljava/lang/Object;")),
-            "genericWrapArray" => ErasedType::object(),
-            _ => t.clone(),
-        };
-        let module = "scala/runtime/ScalaRunTime$";
-        let module_type = ErasedType::L(Rc::from(module));
-        self.getstatic(module, "MODULE$", &module_type);
-        self.expr(array, &param);
-        let seq = ErasedType::L(Rc::from("scala/collection/immutable/ArraySeq"));
-        self.invoke(Invoke::Virtual, module, false, wrap, &[param], &seq);
-        seq
-    }
-
     pub(super) fn call_route(&mut self, r: TExprId, s: SymId, args: ListRef) -> CallRoute {
         let cx = self.cx;
         if let Some(array) = self.spread_conversion(s, args) {
@@ -5736,11 +5624,12 @@ impl<'a> Gen<'a> {
         if cx.input.syms.js_member(s) {
             return CallRoute::Js;
         }
-        if self.extension_callable(s) {
-            return CallRoute::Extension;
+        if let Some((c, route)) = self.extension_route(s) {
+            return CallRoute::Extension(c, route);
         }
         if let Some(&(_, helper)) = cx.input.reach.interpolators.iter().find(|&&(m, _)| m == s) {
-            return CallRoute::Interpolator(helper);
+            let held = cx.helpers.defs.get(cx.input.interner.get(cx.input.syms.sym(helper).name)).copied();
+            return CallRoute::Interpolator(helper, held);
         }
         if let SymKind::Object(c) = cx.input.syms.sym(s).kind {
             return CallRoute::Object(c);
@@ -5755,13 +5644,13 @@ impl<'a> Gen<'a> {
         }
         let receiver = cx.input.prog.expr(r);
         if let TExpr::Super(SuperTarget::Class(t)) = receiver {
-            if let Some(proxies) = self.member_proxies(s) {
-                return CallRoute::Proxied(t, proxies);
+            if self.takes_proxies(s) {
+                return CallRoute::Proxied(t);
             }
         }
-        if let Some(proxies) = self.lifted_proxies(s, args) {
+        if self.lifted_call(s, args) {
             if !matches!(receiver, TExpr::Super(SuperTarget::Mixin(_))) {
-                return CallRoute::Lifted(proxies);
+                return CallRoute::Lifted;
             }
         }
         match receiver {
@@ -5770,99 +5659,50 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn call_method(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> ErasedType {
-        let cx = self.cx;
-        let target = match self.call_route(r, s, args) {
-            CallRoute::Spread(array) => {
-                self.statement(r);
-                return self.wrapped_spread(array);
-            }
+    fn call_method(&mut self, r: TExprId, s: SymId, args: ListRef) -> ErasedType {
+        match self.call_route(r, s, args) {
             CallRoute::Js => {
                 self.unsupported("a member of a JavaScript type");
-                return ErasedType::V;
+                ErasedType::V
             }
-            CallRoute::Extension => return self.call_extension(r, s, args).expect("a value class's method, by the route"),
-            CallRoute::Interpolator(helper) => return self.call_interpolator(r, s, helper, args),
+            CallRoute::Extension(c, route) => self.call_extension(r, s, args, c, route),
+            CallRoute::Interpolator(helper, None) => self.call_interpolator(r, s, helper, args),
             CallRoute::Object(c) => {
                 self.statement(r);
-                return self.load_module(c);
+                self.load_module(c)
             }
-            CallRoute::JavaStatic => return self.call_java_static(s, args),
-            CallRoute::JdkStatic => return self.call_jdk_static(s, args).expect("a JDK class's static, by the route"),
-            CallRoute::Proxied(t, proxies) => {
-                let m = self.mref(s);
-                return self.call_proxied(t, s, &m, &proxies, args);
-            }
-            CallRoute::Lifted(proxies) => {
-                let m = self.mref(s);
-                return self.call_lifted(r, s, &m, &proxies, args);
-            }
-            CallRoute::Super => {
-                let TExpr::Super(target) = cx.input.prog.expr(r) else { unreachable!("a super call, by the route") };
-                target
-            }
-            CallRoute::Plain => unreachable!("lowered (`Gen::lower_call_method`)"),
-        };
-        let mut m = self.mref(s);
-        let java = cx.input.java_member(s).is_some();
-        {
-            // `invokespecial` on the superclass, or on the interface of a trait of this class. A
-            // Java interface's method is called on the interface itself, whatever brings it: the
-            // receiver of a super call is the method's owner (`BCodeBodyBuilder.genCallMethod`),
-            // which the class then lists (`superCallTargets`).
-            let superclass = self.this_class.and_then(|c| cx.input.syms.class(c).superclass);
-            let java = match cx.input.syms.sym(s).owner {
-                Owner::Class(o) if self.java_interface(o) => Some(o),
-                _ => None,
-            };
-            let owner = match target {
-                SuperTarget::Mixin(_) => None,
-                _ if java.is_some() => java,
-                SuperTarget::Chain => superclass,
-                SuperTarget::Class(c) => Some(c),
-            };
-            match owner {
-                // `super` inside a trait goes through the accessor its class implements.
-                _ if matches!(target, SuperTarget::Mixin(_)) => {
-                    let SuperTarget::Mixin(t) = target else { unreachable!() };
-                    m = Rc::new(self.super_accessor_ref(t, s));
+            // Lowered where it is written, the capture analysis asked in order, where the lowering
+            // takes the call (`Gen::lower_proxied_call`, `Gen::lower_lifted_member_call`).
+            CallRoute::Proxied(t) => {
+                if let Some(call) = self.lowering(|g| g.lower_proxied_call(t, s, args)) {
+                    self.write(call);
+                    return self.lir.ty(call).clone();
                 }
-                Some(c) if !matches!(target, SuperTarget::Class(_)) || cx.input.syms.class(c).kind == ClassKind::Trait => {
-                    let mut special = (*m).clone();
-                    special.owner = self.class_name(c);
-                    special.owner_is_interface = cx.input.syms.class(c).kind == ClassKind::Trait;
-                    special.kind = Invoke::Special;
-                    m = Rc::new(special);
+                let proxies = self.member_proxies(s).expect("a member that takes proxies, by the route");
+                let m = self.mref(s);
+                self.call_proxied(t, s, &m, &proxies, args)
+            }
+            CallRoute::Lifted => {
+                if let Some(call) = self.lowering(|g| g.lower_lifted_member_call(r, s, args)) {
+                    self.write(call);
+                    return self.lir.ty(call).clone();
                 }
-                _ => self.unsupported("not supported on the JVM yet: this super call"),
+                let proxies = self.member_proxies(s).expect("a member that takes proxies, by the route");
+                let m = self.mref(s);
+                self.call_lifted(r, s, &m, &proxies, args)
+            }
+            CallRoute::Spread(_) | CallRoute::Interpolator(_, Some(_)) | CallRoute::JavaStatic | CallRoute::JdkStatic | CallRoute::Super | CallRoute::Plain => {
+                unreachable!("lowered (`Gen::lower_call_method`)")
             }
         }
-        self.receiver(r, s);
-        let params = m.params.clone();
-        self.arguments(Some(s), args, &params);
-        self.super_call_at = cx.input.prog.span_of(e).filter(|&(f, _)| f == self.line_file).map(|(_, span)| span.end);
-        self.invoke_mref(&m);
-        self.super_call_at = None;
-        if java {
-            return self.java_value(m.ret.clone());
-        }
-        m.ret.clone()
     }
 
-    /// The proxies a call of `s` with `args` passes first, when `s` is a local trait's member
-    /// that takes them (a lifted member, `TFun::lifted`, or a lazy val's initialiser read by the
-    /// block) called with them.
-    pub(super) fn lifted_proxies(&mut self, s: SymId, args: ListRef) -> Option<Vec<SymId>> {
-        let cx = self.cx;
-        let f = *cx.fun_of_sym.get(s.idx())?;
-        if f == u32::MAX {
-            return None;
-        }
-        let fun = &cx.input.prog.funs[f as usize];
-        if fun.captures == 0 || fun.params.len() != args.len as usize {
-            return None;
-        }
-        self.member_proxies(s)
+    /// Whether a call of `s` with `args` passes proxies first: `s` a local trait's member that
+    /// takes them (a lifted member, `TFun::lifted`, or a lazy val's initialiser read by the
+    /// block) called with them. A pure test: which proxies they are is the capture analysis's,
+    /// asked where the call is written (`Gen::analysis_in_order`).
+    fn lifted_call(&self, s: SymId, args: ListRef) -> bool {
+        self.proxied_fun(s).is_some_and(|fun| fun.params.len() == args.len as usize)
     }
 
     /// `r.s(proxies, args)` of a local trait's lifted member, as dotty's `LambdaLift.addFreeArgs`
@@ -5940,14 +5780,23 @@ impl<'a> Gen<'a> {
         pm.ret.clone()
     }
 
-    /// Whether `s` is a value class's method that `call_extension` calls.
-    fn extension_callable(&mut self, s: SymId) -> bool {
+    /// How `s`, a method of a value class, is called, with the class; None for any other member
+    /// and for a jar's value class whose companion has no method standing for it.
+    fn extension_route(&mut self, s: SymId) -> Option<(ClassId, ExtensionRoute)> {
         let cx = self.cx;
-        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return false };
+        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return None };
         if !cx.input.syms.class(c).value_class || cx.input.syms.sym(s).kind != SymKind::Def {
-            return false;
+            return None;
         }
-        cx.vc_on_companion(c) || cx.tclass_of[c.idx()] != u32::MAX && !cx.input.link.jar_classes.contains_key(&c) || self.jar_extension(c, s).is_some()
+        // A value class whose companion this build writes is called through it, as scalac and a
+        // build over the class's products call it.
+        if cx.vc_on_companion(c) {
+            return Some((c, ExtensionRoute::Companion));
+        }
+        if cx.tclass_of[c.idx()] != u32::MAX && !cx.input.link.jar_classes.contains_key(&c) {
+            return Some((c, ExtensionRoute::Static));
+        }
+        self.jar_extension(c, s).map(|_| (c, ExtensionRoute::Jar))
     }
 
     /// The method of a jar's companion that stands for the method `s` of the value class `c`,
@@ -5966,54 +5815,53 @@ impl<'a> Gen<'a> {
     }
 
     /// In link mode, a method a value class declares is called as scalac calls it: the
-    /// companion's `m$extension` on the underlying value, `C$.MODULE$.m$extension(u, args)`.
-    fn call_extension(&mut self, r: TExprId, s: SymId, args: ListRef) -> Option<ErasedType> {
+    /// companion's `m$extension` on the underlying value, `C$.MODULE$.m$extension(u, args)`,
+    /// by the route `Gen::extension_route` gives for it.
+    fn call_extension(&mut self, r: TExprId, s: SymId, args: ListRef, c: ClassId, route: ExtensionRoute) -> ErasedType {
         let cx = self.cx;
-        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return None };
-        if !cx.input.syms.class(c).value_class || cx.input.syms.sym(s).kind != SymKind::Def {
-            return None;
-        }
         let u = self.vc_underlying(c);
-        // A value class whose companion this build writes is called through it, as scalac and a
-        // build over the class's products call it.
-        if cx.vc_on_companion(c) {
-            let mut own = vec![u.clone()];
-            own.extend(self.erased_param_types(s));
-            let ret = self.erased_return_type(s);
-            let name = format!("{}$extension", self.method_name(s));
-            let module: Rc<str> = Rc::from(cx.companion_name(c));
-            let module_type = ErasedType::L(module.clone());
-            self.extension_receiver(r, c, &u, &module, &module_type);
-            let rest = own[1..].to_vec();
-            self.arguments(Some(s), args, &rest);
-            self.invoke_desc(Invoke::Virtual, &module, false, &name, &method_desc(&own, &ret), own.len(), &ret);
-            return Some(ret);
+        match route {
+            ExtensionRoute::Companion => {
+                let mut own = vec![u.clone()];
+                own.extend(self.erased_param_types(s));
+                let ret = self.erased_return_type(s);
+                let name = format!("{}$extension", self.method_name(s));
+                let module: Rc<str> = Rc::from(cx.companion_name(c));
+                let module_type = ErasedType::L(module.clone());
+                self.extension_receiver(r, c, &u, &module, &module_type);
+                let rest = own[1..].to_vec();
+                self.arguments(Some(s), args, &rest);
+                self.invoke_desc(Invoke::Virtual, &module, false, &name, &method_desc(&own, &ret), own.len(), &ret);
+                ret
+            }
+            ExtensionRoute::Static => {
+                let mut own = vec![u.clone()];
+                own.extend(self.erased_param_types(s));
+                let ret = self.erased_return_type(s);
+                let base = self.method_name(s);
+                let name = format!("{}$extension", base);
+                let owner = self.class_name(c);
+                self.expr(r, &u);
+                let recv = self.store_new(&u);
+                self.load(recv, &u);
+                let rest = own[1..].to_vec();
+                self.arguments(Some(s), args, &rest);
+                self.invoke(Invoke::Static, &owner, false, &name, &own, &ret);
+                ret
+            }
+            ExtensionRoute::Jar => {
+                let (companion, m, own, ret, name) = self.jar_extension(c, s).expect("a jar companion's method, by the route");
+                let (params, desc_ret) = parse_method_desc(&m.descriptor);
+                let desc = m.descriptor.clone();
+                let module = ErasedType::L(Rc::from(companion.name.as_str()));
+                self.extension_receiver(r, c, &u, &companion.name, &module);
+                self.adapt(&u, &params[0]);
+                let rest: Vec<ErasedType> = params[1..].iter().zip(&own[1..]).map(|(d, o)| if d == o { o.clone() } else { d.clone() }).collect();
+                self.arguments(Some(s), args, &rest);
+                self.invoke_desc(Invoke::Virtual, &companion.name, false, &name, &desc, params.len(), &desc_ret);
+                if desc_ret == ret { ret } else { desc_ret }
+            }
         }
-        if cx.tclass_of[c.idx()] != u32::MAX && !cx.input.link.jar_classes.contains_key(&c) {
-            let mut own = vec![u.clone()];
-            own.extend(self.erased_param_types(s));
-            let ret = self.erased_return_type(s);
-            let base = self.method_name(s);
-            let name = format!("{}$extension", base);
-            let owner = self.class_name(c);
-            self.expr(r, &u);
-            let recv = self.store_new(&u);
-            self.load(recv, &u);
-            let rest = own[1..].to_vec();
-            self.arguments(Some(s), args, &rest);
-            self.invoke(Invoke::Static, &owner, false, &name, &own, &ret);
-            return Some(ret);
-        }
-        let (companion, m, own, ret, name) = self.jar_extension(c, s)?;
-        let (params, desc_ret) = parse_method_desc(&m.descriptor);
-        let desc = m.descriptor.clone();
-        let module = ErasedType::L(Rc::from(companion.name.as_str()));
-        self.extension_receiver(r, c, &u, &companion.name, &module);
-        self.adapt(&u, &params[0]);
-        let rest: Vec<ErasedType> = params[1..].iter().zip(&own[1..]).map(|(d, o)| if d == o { o.clone() } else { d.clone() }).collect();
-        self.arguments(Some(s), args, &rest);
-        self.invoke_desc(Invoke::Virtual, &companion.name, false, &name, &desc, params.len(), &desc_ret);
-        Some(if desc_ret == ret { ret } else { desc_ret })
     }
 
     /// The companion `module`'s instance and the receiver `r` of a call of the value class `c`'s
@@ -6033,8 +5881,8 @@ impl<'a> Gen<'a> {
         self.load(recv, u);
     }
 
-    /// `context.s(args)` of scala-library, which has no bytecode: the runtime's definition
-    /// that lowers it as scalac does.
+    /// `context.s(args)` of scala-library, which has no bytecode, where the build holds no
+    /// runtime definition of its helper's name: refused (`Gen::helper_call`).
     fn call_interpolator(&mut self, r: TExprId, s: SymId, helper: SymId, args: ListRef) -> ErasedType {
         let m = self.mref(helper);
         let params = m.params.clone();
@@ -6046,12 +5894,71 @@ impl<'a> Gen<'a> {
 
     /// `new C(args)` through the secondary constructor `s`: scalac's own `<init>` overload.
     fn new_via(&mut self, s: SymId, args: ListRef) -> ErasedType {
+        match self.via_route(s, args) {
+            ViaRoute::Unowned => ErasedType::V,
+            ViaRoute::Js(c) => {
+                self.new_object_of(c);
+                ErasedType::V
+            }
+            ViaRoute::Instance(c, ViaArguments::CapturedUnlowered(_)) => {
+                let Some(name) = self.new_object_of(c) else { return ErasedType::V };
+                let params = self.via_arguments(c, s, args);
+                self.invoke(Invoke::Special, &name, false, "<init>", &params, &ErasedType::V);
+                ErasedType::L(name)
+            }
+            ViaRoute::Instance(_, ViaArguments::Captured(_)) => self.lowered_where_written(|g| g.lower_new_via(s, args)),
+            ViaRoute::Instance(..) => unreachable!("lowered (`Gen::lower_new_via`)"),
+        }
+    }
+
+    /// A node the lowering left to this generator, which asks the analysis of captures, because
+    /// typed IR was left before it (`Gen::analysis_in_order`): lowered where it is written, so
+    /// that the analysis is asked in the order of the writing, and written.
+    fn lowered_where_written(&mut self, lower: impl FnOnce(&mut Self) -> Option<LirId>) -> ErasedType {
+        let node = self.lowering(lower).expect("lowered where it is written");
+        self.write(node);
+        self.lir.ty(node).clone()
+    }
+
+    /// The class the constructor `s` is of; None for a constructor of no class.
+    pub(super) fn ctor_class(&self, s: SymId) -> Option<ClassId> {
+        match self.cx.input.syms.sym(s).owner {
+            Owner::Class(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    pub(super) fn via_route(&mut self, s: SymId, args: ListRef) -> ViaRoute {
         let cx = self.cx;
-        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return ErasedType::V };
-        let Some(name) = self.new_object_of(c) else { return ErasedType::V };
-        let params = self.via_arguments(c, s, args);
-        self.invoke(Invoke::Special, &name, false, "<init>", &params, &ErasedType::V);
-        ErasedType::L(name)
+        let Some(c) = self.ctor_class(s) else { return ViaRoute::Unowned };
+        if cx.input.syms.class(c).js != JsKind::Scala {
+            return ViaRoute::Js(c);
+        }
+        ViaRoute::Instance(c, self.via_arguments_route(c, s, args))
+    }
+
+    pub(super) fn via_arguments_route(&mut self, c: ClassId, s: SymId, args: ListRef) -> ViaArguments {
+        // A class this build does not write: the secondary as its class file declares it.
+        if let Some((outer, declared)) = self.unwritten_ctor_layout(c, Some(s)).filter(|(_, declared)| args.len as usize == declared.len() + 1) {
+            return ViaArguments::Unwritten(outer, declared);
+        }
+        // What a local class captures leads every constructor's parameters (dotty's `LambdaLift.addFreeParams`),
+        // passed as a creation through the primary passes them (`new_arguments`).
+        if self.via_asks_captures(c, s) {
+            let n = self.via_own_captures(c, s).len().min(args.len as usize);
+            return if self.captures_lower(c, args, n) { ViaArguments::Captured(n) } else { ViaArguments::CapturedUnlowered(n) };
+        }
+        let declared = self.param_types(s).len();
+        match self.via_outer(c, args.len as usize, declared) {
+            Some(outer) => ViaArguments::Outer(outer),
+            None => ViaArguments::Declared,
+        }
+    }
+
+    /// Whether the secondary constructor `s` of `c` takes what the class captures, which the
+    /// analysis of captures decides.
+    pub(super) fn via_asks_captures(&mut self, c: ClassId, s: SymId) -> bool {
+        self.via_own_captures(c, s).contains(&true)
     }
 
     /// For each capture of `c` its second constructor `s` has a parameter for, whether the parameter is
@@ -6071,33 +5978,21 @@ impl<'a> Gen<'a> {
     /// types: a class nested in a class takes the enclosing instance first, as every one of its
     /// constructors does (dotty's `ExplicitOuter`, the typer's `new_outer_arg`).
     pub fn via_arguments(&mut self, c: ClassId, s: SymId, args: ListRef) -> Vec<ErasedType> {
-        // A class this build does not write: the secondary as its class file declares it.
-        if let Some(types) = self.unwritten_ctor_arguments(c, Some(s), args) {
-            return types;
-        }
-        let params = self.param_types(s);
-        let outer = self.via_outer(c, args.len as usize, params.len());
-        // What a local class captures leads every constructor's parameters (dotty's `LambdaLift.addFreeParams`),
-        // loaded here as a creation through the primary loads them (`new_arguments`).
-        let own = self.via_own_captures(c, s);
-        if own.contains(&true) {
-            let n = own.len().min(args.len as usize);
-            self.load_new_captures(c, args, n);
-            let mut types = self.anon_ctor_params(c);
-            let rest = ListRef { start: args.start + n as u32, len: args.len - n as u32 };
-            self.ctor_arguments_of(c, Some(s), rest, &params);
-            types.extend(params);
-            return types;
-        }
-        let Some(outer_ty) = outer else {
-            self.ctor_arguments_of(c, Some(s), args, &params);
-            return params;
+        let n = match self.via_arguments_route(c, s, args) {
+            ViaArguments::CapturedUnlowered(n) => n,
+            route => {
+                let (nodes, types) = self.lowering(|g| g.lower_via_arguments(c, s, args, route));
+                self.write_each(&nodes);
+                return types;
+            }
         };
-        let first = self.cx.input.prog.expr_list(args)[0];
-        self.expr(first, &outer_ty);
-        let rest = ListRef { start: args.start + 1, len: args.len - 1 };
+        let params = self.param_types(s);
+        self.load_new_captures(c, args, n);
+        let mut types = self.anon_ctor_params(c);
+        let rest = ListRef { start: args.start + n as u32, len: args.len - n as u32 };
         self.ctor_arguments_of(c, Some(s), rest, &params);
-        std::iter::once(outer_ty).chain(params).collect()
+        types.extend(params);
+        types
     }
 
     /// The type of the enclosing instance a secondary constructor of `c` takes first: a class
@@ -6119,38 +6014,130 @@ impl<'a> Gen<'a> {
             self.unsupported("a JavaScript class");
             return None;
         }
-        if let Some(companion) = crate::emit::touched_companion(cx.input.syms, &cx.layout.has_body, c) {
-            if cx.input.reach.classes[companion.idx()] {
-                let t = self.load_module(companion);
-                self.pop_value(&t);
-            }
+        if let Some(module) = self.touched_module(c) {
+            let t = self.get_module(&module);
+            self.pop_value(&t);
         }
         let name = self.class_name(c);
         self.new_object(&name);
         Some(name)
     }
 
-    fn new_(&mut self, e: TExprId, c: ClassId, args: ListRef) -> ErasedType {
+    /// The companion object an instance creation of `c` initialises first, where it has one
+    /// with an instance.
+    pub(super) fn touched_module(&mut self, c: ClassId) -> Option<Rc<str>> {
+        let cx = self.cx;
+        let companion = crate::emit::touched_companion(cx.input.syms, &cx.layout.has_body, c)?;
+        self.module_name(companion)
+    }
+
+    pub(super) fn new_route(&mut self, e: TExprId, c: ClassId, args: ListRef) -> NewRoute {
+        let cx = self.cx;
         // A value class erases to its underlying value in link mode.
-        if self.cx.input.syms.class(c).value_class {
-            let u = match self.recorded_type(e).and_then(|rt| self.value_class_type(rt)) {
-                Some((k, targs)) if k == c => self.vc_erasure(c, targs),
-                _ => self.vc_underlying(c),
-            };
-            if let Some(&a) = self.cx.input.prog.expr_list(args).first() {
-                // The argument takes the constructor parameter's own representation (dotty types it
-                // against the erased parameter, `Erasure.scala` 827, boxing a value class there,
-                // 394-398): a value class over a universal trait passed as `U` is its box, which is
-                // then this class's underlying value.
-                let param = self.vc_unmarked(&u);
-                self.expr(a, &param);
-                return u;
+        if cx.input.syms.class(c).value_class {
+            if let Some(&a) = cx.input.prog.expr_list(args).first() {
+                let u = match self.recorded_type(e).and_then(|rt| self.value_class_type(rt)) {
+                    Some((k, targs)) if k == c => self.vc_erasure(c, targs),
+                    _ => self.vc_underlying(c),
+                };
+                return NewRoute::Underlying(u, a);
             }
         }
-        let Some(name) = self.new_object_of(c) else { return ErasedType::V };
-        let params = self.new_arguments(c, args);
-        self.invoke(Invoke::Special, &name, false, "<init>", &params, &ErasedType::V);
-        ErasedType::L(name)
+        if cx.input.syms.class(c).js != JsKind::Scala {
+            return NewRoute::Js;
+        }
+        NewRoute::Instance(self.ctor_arguments_route(c, args))
+    }
+
+    /// Whether a creation of `c` passes what the class captures, which the analysis of captures
+    /// decides: a class that captures, or an anonymous one.
+    pub(super) fn asks_captures(&self, c: ClassId) -> bool {
+        self.capture_count(c) > 0 || self.cx.input.syms.class(c).kind == ClassKind::Anon
+    }
+
+    pub(super) fn ctor_arguments_route(&mut self, c: ClassId, args: ListRef) -> CtorArguments {
+        if self.asks_captures(c) {
+            return if self.captured_arguments_lower(c, args) { CtorArguments::Captured } else { CtorArguments::CapturedUnlowered };
+        }
+        if let Some((outer, declared)) = self.unwritten_ctor_layout(c, None).filter(|(_, declared)| args.len as usize == declared.len() + 1) {
+            return CtorArguments::Unwritten(outer, declared);
+        }
+        match self.outer_of_unwritten(c, args) {
+            Some(outer) => CtorArguments::UnwrittenOuter(outer),
+            None => CtorArguments::Declared,
+        }
+    }
+
+    /// Whether everything a creation of `c`, a class that captures or an anonymous one, passes
+    /// is a value the lowering has a node for. It has none for a value only the method being
+    /// written holds (`captures_lower`).
+    fn captured_arguments_lower(&mut self, c: ClassId, args: ListRef) -> bool {
+        let n = self.capture_count(c);
+        if n > 0 && !self.captures_lower(c, args, n) {
+            return false;
+        }
+        let Some((sup, via, _)) = self.anon_super_params(c) else { return true };
+        let rest = ListRef { start: args.start + n as u32, len: args.len - n as u32 };
+        match self.anon_super_route(sup, via, rest) {
+            SuperArguments::Captured => self.captured_arguments_lower(sup, rest),
+            SuperArguments::Via(v) => !matches!(self.via_arguments_route(sup, v, rest), ViaArguments::CapturedUnlowered(_)),
+            SuperArguments::Unwritten(..) | SuperArguments::Declared => true,
+        }
+    }
+
+    /// Whether the lowering has a node for each of the leading `n` arguments of a creation of
+    /// the lifted class `c` and for what follows them. It has none for the class's `Extras`,
+    /// which a method holds in slots the writer alone knows (`load_instance_of`,
+    /// `load_lazy_key`), for a holder made where it is passed, and for a local the scope does
+    /// not hold, which is refused.
+    pub(super) fn captures_lower(&mut self, c: ClassId, args: ListRef, n: usize) -> bool {
+        let extras = self.class_extras(c);
+        if !extras.homes.is_empty() || !extras.keys.is_empty() {
+            return false;
+        }
+        self.passed_captures(c, args, n).into_iter().all(|passed| {
+            let held = match passed {
+                PassedCapture::Argument(a, p) => match self.capture_argument_route(a, p) {
+                    CaptureArgument::Value(_) | CaptureArgument::Own => return true,
+                    CaptureArgument::Holder(_) => return false,
+                    CaptureArgument::Held(s) => s,
+                },
+                PassedCapture::Held(s) => s,
+            };
+            self.held_in(held).is_some()
+        })
+    }
+
+    pub(super) fn anon_super_route(&mut self, sup: ClassId, via: Option<SymId>, args: ListRef) -> SuperArguments {
+        match via {
+            None if self.capture_count(sup) > 0 => return SuperArguments::Captured,
+            Some(v) if self.via_own_captures(sup, v).contains(&true) => return SuperArguments::Via(v),
+            _ => {}
+        }
+        // A superclass this build does not write: as its class file's constructor takes them,
+        // an instance it does not take left out (`anon_super_params`).
+        match self.unwritten_ctor_layout(sup, via).filter(|(_, declared)| args.len as usize == declared.len() + 1) {
+            Some((outer, declared)) => SuperArguments::Unwritten(outer, declared),
+            None => SuperArguments::Declared,
+        }
+    }
+
+    fn new_(&mut self, e: TExprId, c: ClassId, args: ListRef) -> ErasedType {
+        match self.new_route(e, c, args) {
+            NewRoute::Js => {
+                self.new_object_of(c);
+                ErasedType::V
+            }
+            NewRoute::Instance(CtorArguments::CapturedUnlowered | CtorArguments::UnwrittenOuter(_)) => {
+                let Some(name) = self.new_object_of(c) else { return ErasedType::V };
+                let params = self.new_arguments(c, args);
+                self.invoke(Invoke::Special, &name, false, "<init>", &params, &ErasedType::V);
+                ErasedType::L(name)
+            }
+            NewRoute::Instance(CtorArguments::Captured) => self.lowered_where_written(|g| g.lower_new(e, c, args)),
+            NewRoute::Underlying(..) if self.asks_captures(c) => self.lowered_where_written(|g| g.lower_new(e, c, args)),
+            NewRoute::Underlying(..) | NewRoute::Instance(_) => unreachable!("lowered (`Gen::lower_new`)"),
+        }
     }
 
     /// The superclass of an anonymous class, the secondary constructor its arguments go to,
@@ -6198,20 +6185,19 @@ impl<'a> Gen<'a> {
     pub fn new_arguments(&mut self, c: ClassId, args: ListRef) -> Vec<ErasedType> {
         let info = self.cx.input.syms.class(c);
         let n_captures = self.capture_count(c);
-        if n_captures > 0 || info.kind == ClassKind::Anon {
+        let route = self.ctor_arguments_route(c, args);
+        if let CtorArguments::CapturedUnlowered = route {
             if n_captures > 0 {
                 self.load_new_captures(c, args, n_captures);
             }
             let mut params: Vec<ErasedType> = self.anon_ctor_params(c);
             if let Some((sup, via, types)) = self.anon_super_params(c) {
                 let rest = ListRef { start: args.start + n_captures as u32, len: args.len - n_captures as u32 };
-                match via {
-                    None if self.capture_count(sup) > 0 => _ = self.new_arguments(sup, rest),
-                    Some(v) if self.via_own_captures(sup, v).contains(&true) => _ = self.via_arguments(sup, v, rest),
-                    // A superclass this build does not write: as its class file's constructor
-                    // takes them, an instance it does not take left out (`anon_super_params`).
-                    _ if self.unwritten_ctor_arguments(sup, via, rest).is_some() => {}
-                    _ => self.ctor_arguments_of(sup, via, rest, &types),
+                match self.anon_super_route(sup, via, rest) {
+                    SuperArguments::Captured => _ = self.new_arguments(sup, rest),
+                    SuperArguments::Via(v) => _ = self.via_arguments(sup, v, rest),
+                    SuperArguments::Unwritten(..) => _ = self.unwritten_ctor_arguments(sup, via, rest),
+                    SuperArguments::Declared => self.ctor_arguments_of(sup, via, rest, &types),
                 }
                 params.extend(types);
             }
@@ -6222,21 +6208,14 @@ impl<'a> Gen<'a> {
                 self.ctor_arguments_after_captures(c, args, &captured, rest, &declared);
                 params.extend(declared);
             }
-            // A value of an enum of a block or a class: its name and ordinal after its captures.
-            if info.kind == ClassKind::EnumCase && info.singleton.is_some() {
-                let (name, ordinal) = (info.name, info.ordinal);
-                self.sconst(self.cx.input.interner.get(name));
-                self.iconst(ordinal as i32);
-                params.push(ErasedType::L(Rc::from(STRING)));
-                params.push(ErasedType::I);
-            }
+            let (nodes, types) = self.lowering(|g| g.lower_enum_value_arguments(c));
+            self.write_each(&nodes);
+            params.extend(types);
             params
-        } else if let Some(params) = self.unwritten_ctor_arguments(c, None, args) {
-            params
-        } else if let Some(outer) = self.outer_of_unwritten(c, args) {
+        } else if let CtorArguments::UnwrittenOuter(outer) = route {
             // Its class file gives no one answer (two of its constructors fit the primary's
             // parameters, or it is not read): the enclosing instance the typer passes first is
-            // taken by the owner's kind and the count, loaded as above.
+            // taken by the owner's kind and the count, loaded as `unwritten_ctor_arguments` loads it.
             let first = self.cx.input.prog.expr_list(args)[0];
             if matches!(self.cx.input.prog.expr(first), TExpr::Local(_)) {
                 self.expr(first, &outer);
@@ -6248,8 +6227,8 @@ impl<'a> Gen<'a> {
             self.ctor_arguments(c, rest, &declared);
             std::iter::once(outer).chain(declared).collect()
         } else {
-            let params = self.ctor_param_types(c);
-            self.ctor_arguments(c, args, &params);
+            let (nodes, params) = self.lowering(|g| g.lower_new_arguments(c, args, route));
+            self.write_each(&nodes);
             params
         }
     }
@@ -6326,49 +6305,18 @@ impl<'a> Gen<'a> {
         if args.len as usize != declared.len() + 1 {
             return None;
         }
-        let rest = ListRef { start: args.start + 1, len: args.len - 1 };
-        let Some(outer) = outer else {
-            self.ctor_arguments_of(c, via, rest, &declared);
-            return Some(declared);
-        };
-        // Loaded as the whole build loads it, so that the two builds' class files agree: through
-        // a secondary constructor at the enclosing class (`via_arguments`); through the primary
-        // as a captured outer is (`load_capture_arg`): a local at the enclosing class, the
-        // capture's type, whatever subclass the instance is of, and any other value at its own
-        // type, cast where the verifier does not take that type for the parameter's (a member of
-        // a generic value, which is an `Object`).
-        let first = self.cx.input.prog.expr_list(args)[0];
-        if via.is_some() || matches!(self.cx.input.prog.expr(first), TExpr::Local(_)) {
-            self.expr(first, &outer);
-        } else {
-            let own = self.expr_static(first);
-            if let (ErasedType::L(from), ErasedType::L(to)) = (&own, &outer) {
-                if from != to && !self.is_subclass(from, to) {
-                    self.checkcast(to);
-                }
-            }
-        }
-        self.ctor_arguments_of(c, via, rest, &declared);
-        Some(std::iter::once(outer).chain(declared).collect())
+        let (nodes, types) = self.lowering(|g| g.lower_unwritten_ctor_arguments(via, args, outer, declared));
+        self.write_each(&nodes);
+        Some(types)
     }
 
     /// Loads the argument `a` that hands a lifted class or a local trait's lifted member the
     /// local `p` it takes, as `p` is held there (`anon_capture_type`).
     fn load_capture_arg(&mut self, a: TExprId, p: SymId) -> ErasedType {
-        let cx = self.cx;
-        match cx.input.prog.expr(a) {
-            // A value the class takes where the creation reads another local (the outer
-            // instance a local object's lazy val holds) is that local's value.
-            TExpr::Local(s) if s != p && self.held(p) == Held::Value && !self.is_local_def(p) && !self.cx.input.syms.sym(p).by_name => {
-                let t = self.anon_capture_type(p);
-                self.expr(a, &t);
-                t
-            }
-            // A local lazy val is passed as its holder (`LazyVals.transformLocalDef`).
-            TExpr::Local(s) if self.is_capturable(s) => self.load_capture(s),
+        match self.capture_argument_route(a, p) {
             // Where the class is made inside a local object, the typer passes the object's own val as
             // `() => this` (`enclosing_object_selfs`): the class takes a holder of that value.
-            TExpr::Lambda(params, body) if params.len == 0 && self.is_lazy_local(p) => {
+            CaptureArgument::Holder(body) => {
                 let (class, value) = self.lazy_holder_class(p);
                 self.new_object(&class);
                 self.invoke(Invoke::Special, &class, false, "<init>", &[], &ErasedType::V);
@@ -6378,36 +6326,61 @@ impl<'a> Gen<'a> {
                 self.pop_value(&value);
                 ErasedType::L(class)
             }
-            _ => {
-                let t = self.expr_static(a);
-                if t == ErasedType::V {
-                    self.unit_value();
-                    return ErasedType::object();
-                }
-                t
+            // Out of scope: the report.
+            CaptureArgument::Held(s) if self.held_in(s).is_none() => self.load_capture(s),
+            route => {
+                // The unit value stands for an argument of no value, which is passed as an `Object`.
+                let unit = matches!(route, CaptureArgument::Own) && self.static_type(a) == ErasedType::V;
+                let node = self.lowering(|g| g.lower_capture_argument(a, route));
+                self.write(node);
+                if unit { ErasedType::object() } else { self.lir.ty(node).clone() }
             }
+        }
+    }
+
+    pub(super) fn capture_argument_route(&mut self, a: TExprId, p: SymId) -> CaptureArgument {
+        let cx = self.cx;
+        match cx.input.prog.expr(a) {
+            // A value the class takes where the creation reads another local (the outer
+            // instance a local object's lazy val holds) is that local's value.
+            TExpr::Local(s) if s != p && self.held(p) == Held::Value && !self.is_local_def(p) && !self.cx.input.syms.sym(p).by_name => CaptureArgument::Value(self.anon_capture_type(p)),
+            // A local lazy val is passed as its holder (`LazyVals.transformLocalDef`).
+            TExpr::Local(s) if self.is_capturable(s) => CaptureArgument::Held(s),
+            TExpr::Lambda(params, body) if params.len == 0 && self.is_lazy_local(p) => CaptureArgument::Holder(body),
+            _ => CaptureArgument::Own,
         }
     }
 
     /// Loads what a lifted class captures: the leading `n` of the arguments of its `new`.
     fn load_new_captures(&mut self, c: ClassId, args: ListRef, n: usize) {
+        for passed in self.passed_captures(c, args, n) {
+            match passed {
+                PassedCapture::Argument(a, p) => _ = self.load_capture_arg(a, p),
+                PassedCapture::Held(s) => _ = self.load_capture(s),
+            }
+        }
+        let extras = self.class_extras(c);
+        self.load_extras(&extras);
+    }
+
+    /// What a creation of the lifted class `c` passes for its captures, in order: the leading
+    /// `n` of its arguments, then what the local defs the class copies capture.
+    pub(super) fn passed_captures(&mut self, c: ClassId, args: ListRef, n: usize) -> Vec<PassedCapture> {
         let cx = self.cx;
         let items = cx.input.prog.expr_list(args)[..n].to_vec();
         let passed = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].ctor_params[..n].iter().filter(|&&s| !self.is_local_def(s)).count();
         let through_defs = self.class_captured(c).split_off(passed);
         let params: Vec<SymId> = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].ctor_params[..n].to_vec();
+        let mut out = Vec::with_capacity(n + through_defs.len());
         for (a, p) in items.into_iter().zip(params) {
             // A local def is not passed: the class gets a copy of the lifted method.
             if matches!(cx.input.prog.expr(a), TExpr::Local(s) if self.is_local_def(s)) {
                 continue;
             }
-            self.load_capture_arg(a, p);
+            out.push(PassedCapture::Argument(a, p));
         }
-        for s in through_defs {
-            self.load_capture(s);
-        }
-        let extras = self.class_extras(c);
-        self.load_extras(&extras);
+        out.extend(through_defs.into_iter().map(PassedCapture::Held));
+        out
     }
 
     /// The declared arguments of a named local class's constructor, after its captures.
@@ -6423,10 +6396,7 @@ impl<'a> Gen<'a> {
 
     /// `load_class_captures` from the capture at `from` on.
     fn load_class_captures_after(&mut self, c: ClassId, from: usize) {
-        for s in self.class_captured(c).into_iter().skip(from) {
-            if self.is_local_def(s) {
-                continue;
-            }
+        for s in self.class_captures_after(c, from) {
             if self.is_capturable(s) {
                 self.load_capture(s);
             } else {
@@ -6437,7 +6407,13 @@ impl<'a> Gen<'a> {
         self.load_extras(&extras);
     }
 
-    fn is_capturable(&self, s: SymId) -> bool {
+    /// What a named local class captures from the capture at `from` on, a local def left out:
+    /// the class has a copy of it.
+    pub(super) fn class_captures_after(&mut self, c: ClassId, from: usize) -> Vec<SymId> {
+        self.class_captured(c).into_iter().skip(from).filter(|&s| !self.is_local_def(s)).collect()
+    }
+
+    pub(super) fn is_capturable(&self, s: SymId) -> bool {
         self.cx.input.syms.sym(s).owner == Owner::Local
     }
 
@@ -6534,7 +6510,7 @@ impl<'a> Gen<'a> {
     }
 
     /// Whether the instance of `h` is its `MODULE$`, read where it is wanted.
-    fn static_home(&self, h: ClassId) -> bool {
+    pub(super) fn static_home(&self, h: ClassId) -> bool {
         self.cx.input.syms.class(h).kind == ClassKind::Object && self.cx.statically_placed(h)
     }
 
@@ -6656,46 +6632,12 @@ impl<'a> Gen<'a> {
         format!("{}$lzyKey{}", encode(self.cx.input.interner.get(self.cx.input.syms.sym(x).name)), i)
     }
 
-    /// Pushes the instance of the class `h` where the code being written reads it: its `MODULE$`, the
-    /// code's own `this`, a parameter holding it, or the field of the class of `this` holding it.
+    /// Pushes the instance of the class `h` where the code being written reads it
+    /// (`Gen::lower_instance_of`).
     pub fn load_instance_of(&mut self, h: ClassId) -> ErasedType {
-        let t = self.class_type(h);
-        if self.static_home(h) {
-            let module = self.class_name(h);
-            self.getstatic(&module, "MODULE$", &t);
-            return t;
-        }
-        let current = self.m.this_home.or(self.this_class);
-        if current == Some(h) && self.m.this_module.is_none() {
-            let held = self.load_this();
-            // In a value class's method its companion holds, `this` is the underlying value: its box.
-            if let (Some(u), None) = (self.m.this_underlying.clone(), self.m.this_home) {
-                self.adapt(&held, &u);
-                self.vc_box(h, &u);
-                return t;
-            }
-            self.adapt(&held, &t);
-            return t;
-        }
-        if let Some(&(_, slot)) = self.m.home_slots.iter().find(|(k, _)| *k == h) {
-            self.load(slot, &t);
-            return t;
-        }
-        if let Some(k) = current.filter(|_| self.m.this_module.is_none()) {
-            let held = if self.m.this_home.is_none() { self.class_homes.iter().position(|(c, _)| *c == h) } else { self.class_extras(k).homes.iter().position(|&c| c == h) };
-            if let Some(i) = held {
-                let owner = self.class_name(k);
-                let field = self.home_field(h, i);
-                self.load_this();
-                self.getfield(&owner, &field, &t);
-                return t;
-            }
-        }
-        let name = self.cx.input.interner.get(self.cx.input.syms.class(h).name).to_string();
-        self.unsupported(&format!("the instance of {} where the generated method has none", name));
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        t
+        let instance = self.lowering(|g| g.lower_instance_of(h));
+        self.write(instance);
+        self.lir.ty(instance).clone()
     }
 
     /// Pushes the key travelling with the holder of the local lazy val `x`: a parameter or a field of the
@@ -6772,19 +6714,27 @@ impl<'a> Gen<'a> {
         out
     }
 
-    /// The proxies the member `s` of a local trait takes first, when it takes some.
-    pub fn member_proxies(&mut self, s: SymId) -> Option<Vec<SymId>> {
+    /// The definition of `s` where it is a local trait's member that takes proxies first.
+    pub(super) fn proxied_fun(&self, s: SymId) -> Option<&'a crate::tir::TFun> {
         let cx = self.cx;
         let f = *cx.fun_of_sym.get(s.idx())?;
         if f == u32::MAX {
             return None;
         }
         let fun = &cx.input.prog.funs[f as usize];
-        let k = fun.captures as usize;
-        if k == 0 {
-            return None;
-        }
-        Some(self.proxy_syms(&fun.params[..k]))
+        (fun.captures > 0).then_some(fun)
+    }
+
+    /// Whether the member `s` of a local trait takes proxies first (`member_proxies`).
+    fn takes_proxies(&self, s: SymId) -> bool {
+        self.proxied_fun(s).is_some()
+    }
+
+    /// The proxies the member `s` of a local trait takes first, when it takes some.
+    pub fn member_proxies(&mut self, s: SymId) -> Option<Vec<SymId>> {
+        let k = self.proxied_fun(s)?.captures as usize;
+        let declared = self.proxied_fun(s)?.params[..k].to_vec();
+        Some(self.proxy_syms(&declared))
     }
 
     /// The `Extras` the member `s` of a local trait takes after its proxies (`extras_of` its declared ones).
@@ -6875,10 +6825,10 @@ impl<'a> Gen<'a> {
         format!("{}${}", base, self.counter)
     }
 
-    /// The lifted method `name` of the code whose captures are `free`: of a lambda, or the copy of the local def
-    /// or lazy val `copy_of`, its `this` the instance of the class whose code declares it where that is another
-    /// class's (`Lifted::home`), else the code's own.
-    pub(super) fn make_lifted(&mut self, name: String, free: &Free, params: Vec<ErasedType>, ret: ErasedType, copy_of: Option<SymId>) -> Rc<Lifted> {
+    /// What the lifted method of the code whose captures are `free` takes and binds: of a lambda (`code`, its
+    /// parameters and body), or the copy of the local def or lazy val `copy_of`, its `this` the instance of the
+    /// class whose code declares it where that is another class's (`Lifted::home`), else the code's own.
+    pub(super) fn lifted_shape(&mut self, free: &Free, params: Vec<ErasedType>, ret: ErasedType, copy_of: Option<SymId>, code: Option<(Vec<SymId>, TExprId)>) -> (Rc<LiftedShape>, Rc<LiftedBody>) {
         let home = copy_of.and_then(|s| self.copy_home(s));
         let mut captures = Vec::new();
         for &s in &free.syms {
@@ -6903,23 +6853,13 @@ impl<'a> Gen<'a> {
         let home = if free.this { home.or(self.m.this_home) } else { None };
         // In code whose `this` is a module read statically, so is the lifted code's.
         let module = if free.this && home.is_none() { self.m.this_module.clone() } else { None };
-        let this = free.this && module.is_none();
-        let mut all: Vec<ErasedType> = Vec::new();
-        if this {
-            all.push(match home.or(self.this_class) {
-                Some(c) => self.class_type(c),
-                None => ErasedType::object(),
-            });
-        }
-        if free.nonlocal {
-            all.push(ErasedType::object());
-        }
-        for c in &captures {
-            all.push(if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
-        }
-        all.extend(params.iter().cloned());
-        let desc = method_desc(&all, &ret);
-        Rc::new(Lifted { name, desc, this, key: free.nonlocal, captures, params, ret, home, module })
+        let instance = (free.this && module.is_none()).then(|| match home.or(self.this_class) {
+            Some(c) => self.class_type(c),
+            None => ErasedType::object(),
+        });
+        let captured = captures.iter().map(|c| if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() }).collect();
+        let shape = LiftedShape { instance, key: free.nonlocal, captured, params, ret };
+        (Rc::new(shape), Rc::new(LiftedBody { code, captures, home, module }))
     }
 
     pub(super) fn load_captures(&mut self, lifted: &Lifted) {
@@ -6927,56 +6867,24 @@ impl<'a> Gen<'a> {
     }
 
     /// The captures of `lifted`, its key the one travelling with the holder of the lazy val `key_of`
-    /// where it is that val's accessor or initialiser, else the code's own.
+    /// where it is that val's accessor or initialiser, else the code's own (`Gen::lower_captures`).
     pub(super) fn load_captures_keyed(&mut self, lifted: &Lifted, key_of: Option<SymId>) {
-        if lifted.this {
-            // Another class's instance (a local lazy val's methods in their declaring class, a copy of a local
-            // def), else the code's own `this`, a value class's box.
-            match lifted.home {
-                Some(h) if Some(h) != self.m.this_home.or(self.this_class) => {
-                    self.load_instance_of(h);
-                }
-                _ => {
-                    let t = self.load_this();
-                    if let (Some(u), Some(c)) = (self.m.this_underlying.clone(), self.this_class) {
-                        self.adapt(&t, &u);
-                        self.vc_box(c, &u);
-                    }
-                }
-            }
-        }
-        if lifted.key {
-            match (key_of, self.m.return_key) {
-                (Some(x), _) => self.load_lazy_key(x),
-                (None, Some(slot)) => self.load(slot, &ErasedType::object()),
-                (None, None) => {
-                    self.unsupported("a non-local return of a def that makes no key");
-                    self.code.op(op::ACONST_NULL);
-                    self.code.push(VT::Null);
-                }
-            }
-        }
-        for c in &lifted.captures {
-            if c.key {
-                self.load_lazy_key(c.sym);
-            } else {
-                self.load_capture(c.sym);
-            }
+        let captures = self.lowering(|g| g.lower_captures(lifted.this, lifted.home, lifted.key, key_of, &lifted.captures));
+        for capture in captures {
+            self.write(capture);
         }
     }
 
-    fn lambda(&mut self, params: ListRef, body: TExprId) -> ErasedType {
-        let cx = self.cx;
-        let params: Vec<SymId> = cx.input.prog.sym_list(params).to_vec();
-        let free = self.an.of_lambda(cx, &params, body);
-        let name = self.fresh_name("$anonfun");
-        let object = ErasedType::object();
-        let lifted = self.make_lifted(name, &free, vec![object.clone(); params.len()], object, None);
-        self.load_captures(&lifted);
-        let ft = self.function_type(params.len());
-        self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params.clone(), body) });
-        self.lambda_call_site(&lifted, &ft, "apply");
-        ft
+    /// The key of the non-local returns of the def being written, or the one its closure was given.
+    pub(super) fn load_return_key(&mut self) {
+        match self.m.return_key {
+            Some(slot) => self.load(slot, &ErasedType::object()),
+            None => {
+                self.unsupported("a non-local return of a def that makes no key");
+                self.code.op(op::ACONST_NULL);
+                self.code.push(VT::Null);
+            }
+        }
     }
 
     /// The receiver (unless the getter is static) and its arguments are on the stack: they
@@ -6989,11 +6897,11 @@ impl<'a> Gen<'a> {
         captured.extend(params.iter().cloned());
         let name = self.fresh_name("$default$thunk");
         let object = ErasedType::object();
-        let desc = method_desc(&captured, &object);
-        let lifted = Rc::new(Lifted { name, desc, this: false, key: false, captures: Vec::new(), params: Vec::new(), ret: object, home: None, module: None });
+        let shape = LiftedShape { instance: None, key: false, captured: captured.clone(), params: Vec::new(), ret: object.clone() };
+        let lifted = Rc::new(Lifted::new(name, Rc::new(shape), Vec::new(), None, None));
         self.defer(Pending { lifted: lifted.clone(), body: PendingBody::JarGetter(getter) });
         let ft = self.function_type(0);
-        self.call_site(&lifted, &ft, "apply", &captured);
+        self.call_site(&lifted, &ft, "apply", &method_desc(&[], &object), &captured);
     }
 
     /// `invokedynamic` through `LambdaMetafactory`: the captures on the stack become an instance
@@ -7007,7 +6915,8 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn lambda_call_site(&mut self, lifted: &Lifted, interface: &ErasedType, method: &str) {
+    /// The closure whose `method` is the lifted method `lifted`, over the captures on the stack.
+    pub(super) fn lambda_call_site(&mut self, lifted: &Lifted, interface: &ErasedType, method: &MethodRef) {
         let mut captured: Vec<ErasedType> = Vec::new();
         if lifted.this {
             let this = match lifted.home {
@@ -7022,12 +6931,11 @@ impl<'a> Gen<'a> {
         for c in &lifted.captures {
             captured.push(if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
         }
-        self.call_site(lifted, interface, method, &captured);
+        self.call_site(lifted, interface, &method.name, &method.desc, &captured);
     }
 
-    fn call_site(&mut self, lifted: &Lifted, interface: &ErasedType, method: &str, captured: &[ErasedType]) {
-        let n = lifted.params.len();
-        let sam = method_desc(&vec![ErasedType::object(); n], &ErasedType::object());
+    /// The call site of the interface's `method`, whose erased signature is `sam`.
+    fn call_site(&mut self, lifted: &Lifted, interface: &ErasedType, method: &str, sam: &str, captured: &[ErasedType]) {
         let owner = self.this_name.clone();
         let cp = &mut self.cw.cp;
         let impl_ref = if self.is_interface {
@@ -7036,7 +6944,7 @@ impl<'a> Gen<'a> {
             cp.method(&owner, &lifted.name, &lifted.desc)
         };
         let impl_handle = cp.method_handle(6, impl_ref);
-        let sam_type = cp.method_type(&sam);
+        let sam_type = cp.method_type(sam);
         let factory = cp.method(
             "java/lang/invoke/LambdaMetafactory",
             "metafactory",
@@ -7053,18 +6961,31 @@ impl<'a> Gen<'a> {
         self.code.push(vt);
     }
 
+    /// What the lifted method of the local def `s` takes and binds, decided where the def is first met.
+    pub(super) fn local_fun_shape(&mut self, s: SymId) -> (Rc<LiftedShape>, Rc<LiftedBody>) {
+        if let Some(found) = self.lifted_shapes.get(&s) {
+            return found.clone();
+        }
+        let cx = self.cx;
+        let free = self.an.of_fun(cx, s);
+        let free = self.copy_free(s, free);
+        let params = self.param_types(s);
+        let ret = self.return_type(s);
+        let made = self.lifted_shape(&free, params, ret, Some(s), None);
+        self.lifted_shapes.insert(s, made.clone());
+        made
+    }
+
+    /// The lifted method of the local def `s`, named and its body queued where the writer first meets the def.
     pub fn lifted_fun(&mut self, s: SymId) -> Rc<Lifted> {
         if let Some(l) = self.lifted.get(&s) {
             return l.clone();
         }
         let cx = self.cx;
-        let free = self.an.of_fun(cx, s);
-        let free = self.copy_free(s, free);
+        let (shape, body) = self.local_fun_shape(s);
         let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
         let name = self.fresh_name(&base);
-        let params = self.param_types(s);
-        let ret = self.return_type(s);
-        let lifted = self.make_lifted(name, &free, params, ret, Some(s));
+        let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone()));
         self.lifted.insert(s, lifted.clone());
         // A local inline method has its getters alone (`Desugar.addDefaultGetters`), which
         // take their names from it.
@@ -7104,7 +7025,8 @@ impl<'a> Gen<'a> {
                     Some(t) => self.erase(t),
                     None => fun.params[i].clone(),
                 };
-                let l = self.make_lifted(name, &free, params, ret, Some(s));
+                let (shape, body) = self.lifted_shape(&free, params, ret, Some(s), None);
+                let l = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone()));
                 self.lifted_defaults.insert((s, i), l.clone());
                 pending = Some(Pending { lifted: l.clone(), body: PendingBody::Default(FunId(f), i) });
                 l
@@ -7133,82 +7055,18 @@ impl<'a> Gen<'a> {
 
     /// Emits `e` in return position.
     pub fn tail(&mut self, e: TExprId) {
-        let lines = (self.line_floor, self.line_hold);
-        self.mark_line(e);
-        self.tail_marked(e);
-        (self.line_floor, self.line_hold) = lines;
+        let root = self.lowering(|g| g.lower_tail(e));
+        self.write_body(root);
     }
 
-    fn tail_marked(&mut self, e: TExprId) {
-        let cx = self.cx;
-        let prog = cx.input.prog;
-        // A widened value returned as a reference is boxed as one, not branch by branch.
-        let boxed_whole = self.m.ret.is_ref() && self.widened_branches(e).is_some();
-        match prog.expr(e) {
-            TExpr::If(c, t, els @ Some(_)) if !boxed_whole => self.if_(c, t, els, Mode::Tail),
-            TExpr::Match(scrut, cases) if !boxed_whole => self.match_(scrut, cases, Mode::Tail),
-            TExpr::Block(stmts, res) if !boxed_whole => self.block(stmts, res, Mode::Tail),
-            // A return out of the method here is that return, its value the method's result (dotty's
-            // `genReturn` sends the value to the method's return).
-            TExpr::Return(v) if !self.m.closure => match self.jump_call(v) {
-                Some((recv, args)) => self.tail_jump(recv, args),
-                None => {
-                    let ret = self.m.ret.clone();
-                    self.expr(v, &ret);
-                    self.return_value(&ret);
-                }
-            },
-            _ => {
-                if let Some(tail) = &self.m.tail {
-                    if let Some((recv, args)) = prog.self_call(tail.sym, tail.params.len(), e) {
-                        return self.tail_jump(recv, args);
-                    }
-                }
-                let ret = self.m.ret.clone();
-                self.expr(e, &ret);
-                self.return_value(&ret);
-            }
+    /// A match, and a block the lowering does not take, in return position.
+    pub(super) fn tail_legacy(&mut self, e: TExprId) {
+        match self.cx.input.prog.expr(e) {
+            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases) => unreachable!("lowered (`Gen::lower_match`)"),
+            TExpr::Match(scrut, cases) => self.match_(scrut, cases, Mode::Tail),
+            TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Tail),
+            _ => unreachable!("lowered (`Gen::lower_tail`)"),
         }
-    }
-
-    fn tail_jump(&mut self, recv: Option<TExprId>, args: ListRef) {
-        let cx = self.cx;
-        let tail = self.m.tail.as_ref().unwrap();
-        let (params, head) = (tail.params.clone(), tail.head);
-        let types: Vec<ErasedType> = params.iter().map(|p| self.m.locals[p].ty.clone()).collect();
-        let items = cx.input.prog.expr_list(args).to_vec();
-        let mark = self.code.locals_mark();
-        // The receiver, then the arguments, each into a temporary in the source's order, as dotty's
-        // TailRec assigns them (TailRec.scala 350-372); then `this` and the parameters. A value
-        // class's extension method holds its instance unboxed (`$this`): the receiver is written at the
-        // underlying type, as the call's lowering writes it (`Gen::call_extension`).
-        let this_type = match (self.m.this_home, self.m.this_underlying.clone(), self.this_class) {
-            (None, Some(u), Some(_)) => u,
-            (_, _, Some(c)) => self.class_type(c),
-            (_, _, None) => ErasedType::object(),
-        };
-        let receiver = recv.map(|r| {
-            self.expr(r, &this_type);
-            self.store_new(&this_type)
-        });
-        let mut temps: Vec<(u16, ErasedType)> = Vec::new();
-        for (i, &a) in items.iter().enumerate() {
-            self.expr(a, &types[i]);
-            let slot = self.store_new(&types[i]);
-            temps.push((slot, types[i].clone()));
-        }
-        if let Some(temp) = receiver {
-            self.load(temp, &this_type);
-            let slot = self.m.this_slot.unwrap_or(0);
-            self.store(slot, &this_type);
-        }
-        for ((slot, t), p) in temps.iter().zip(&params) {
-            self.load(*slot, t);
-            let target = self.m.locals[p].slot;
-            self.store(target, t);
-        }
-        self.code.locals_release(mark);
-        self.goto(head);
     }
 
     pub fn block(&mut self, stmts: ListRef, res: TExprId, mode: Mode) {
@@ -7223,22 +7081,26 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// Whether a block's statements are lowered whole: a pattern definition, and a lazy val that
+    /// `Gen::is_lazy_local` does not take, declare their locals as they are written.
+    pub(super) fn block_lowers(&self, stmts: ListRef) -> bool {
+        let cx = self.cx;
+        cx.input.prog.stmts[stmts.range()].iter().all(|s| match *s {
+            TStmt::Pat(..) => false,
+            TStmt::Val(sym, _) => self.is_lazy_local(sym) || cx.input.syms.sym(sym).mods & mods::LAZY == 0,
+            TStmt::Expr(_) | TStmt::Fun(_) => true,
+        })
+    }
+
     fn block_statements(&mut self, stmts: ListRef) {
         let cx = self.cx;
         let prog = cx.input.prog;
         self.hoist_lazy_holders(stmts);
         for s in &prog.stmts[stmts.range()] {
             match *s {
-                TStmt::Expr(x) if prog.is_removed(x) => {}
-                TStmt::Expr(x) => self.statement(x),
                 // Its holder stands at the head of the list.
                 TStmt::Val(sym, _) if self.is_lazy_local(sym) => {}
                 TStmt::Val(sym, init) => self.local_val(sym, init),
-                TStmt::Fun(f) => {
-                    if cx.input.reach.funs[f.idx()] {
-                        self.lifted_fun(prog.funs[f.idx()].sym);
-                    }
-                }
                 TStmt::Pat(pat, init) => {
                     let t = self.expr_static(init);
                     let t = self.materialise_unit(t);
@@ -7251,9 +7113,21 @@ impl<'a> Gen<'a> {
                     self.code.bind(fail);
                     self.match_error(slot, &t);
                     self.code.bind(start);
-                    self.pattern(pat, slot, &t, fail);
+                    self.definition_pattern(pat, slot, &t, fail);
                 }
+                s @ (TStmt::Expr(_) | TStmt::Fun(_)) => self.write_statement(s),
             }
+        }
+    }
+
+    fn write_statement(&mut self, s: TStmt) {
+        let nodes = self.lowering(|g| {
+            let mut nodes = Vec::new();
+            g.lower_statement(s, &mut nodes);
+            nodes
+        });
+        for node in nodes {
+            self.write(node);
         }
     }
 
@@ -7267,483 +7141,37 @@ impl<'a> Gen<'a> {
     }
 
     pub fn local_val(&mut self, sym: SymId, init: TExprId) {
-        let cx = self.cx;
-        let info = cx.input.syms.sym(sym);
-        let cell_type = ErasedType::L(Rc::from(OBJECT_REF));
         // A block's lazy vals have their holders at its head (`hoist_lazy_holders`); a prelude's here.
-        if info.mods & mods::LAZY != 0 {
+        if self.lazy_val(sym) {
             self.an.lazy_inits.insert(sym, init);
             self.new_lazy_holder(sym);
             return;
         }
-        let ty = self.sym_type(sym);
-        if self.m.cells.contains(&sym) {
-            // The cell exists before the initialiser runs, which may refer to the val itself.
-            self.new_object(OBJECT_REF);
-            self.code.op(op::ACONST_NULL);
-            self.code.push(VT::Null);
-            self.invoke(Invoke::Special, OBJECT_REF, false, "<init>", &[ErasedType::object()], &ErasedType::V);
-            let slot = self.store_new(&cell_type);
-            self.m.locals.insert(sym, Local { slot, ty: ty.clone(), cell: true });
-            self.load(slot, &cell_type);
-            let object = ErasedType::object();
-            self.expr(init, &ty);
-            self.adapt(&ty, &object);
-            self.putfield(OBJECT_REF, "elem", &object);
-            return;
-        }
-        self.expr(init, &ty);
-        let slot = self.store_new(&ty);
-        self.m.locals.insert(sym, Local { slot, ty, cell: false });
+        self.write_statement(TStmt::Val(sym, init));
     }
 
     // ---- conditions ----
 
-    fn if_(&mut self, c: TExprId, t: TExprId, els: Option<TExprId>, mode: Mode) {
-        let otherwise = self.code.new_label();
-        self.cond(c, otherwise, false);
-        let mark = self.code.locals_mark();
-        match (els, mode) {
-            (None, Mode::Value(want)) => {
-                self.statement(t);
-                self.code.locals_release(mark);
-                if *want == ErasedType::V {
-                    self.code.bind(otherwise);
-                } else {
-                    let done = self.code.new_label();
-                    self.adapt(&ErasedType::V, want);
-                    self.goto(done);
-                    self.code.pop();
-                    self.code.bind(otherwise);
-                    self.adapt(&ErasedType::V, want);
-                    self.code.bind(done);
-                }
-            }
-            (None, Mode::Tail) => {
-                self.statement(t);
-                self.code.locals_release(mark);
-                self.code.bind(otherwise);
-                let ret = self.m.ret.clone();
-                self.adapt(&ErasedType::V, &ret);
-                self.return_value(&ret);
-            }
-            (Some(els), Mode::Tail) => {
-                self.tail(t);
-                self.code.locals_release(mark);
-                self.code.bind(otherwise);
-                self.tail(els);
-                self.code.locals_release(mark);
-            }
-            (Some(els), Mode::Value(want)) => {
-                let done = self.code.new_label();
-                self.expr(t, want);
-                self.code.locals_release(mark);
-                // Nothing follows a branch that leaves the method or goes round its loop.
-                if !self.leaves(t) {
-                    self.goto(done);
-                }
-                if *want != ErasedType::V {
-                    self.code.pop();
-                }
-                self.code.bind(otherwise);
-                self.expr(els, want);
-                self.code.locals_release(mark);
-                self.code.bind(done);
-            }
-        }
-    }
-
-    /// A boolean expression as a value.
-    fn cond_value(&mut self, e: TExprId) {
-        let no = self.code.new_label();
-        let done = self.code.new_label();
-        self.cond(e, no, false);
-        self.iconst(1);
-        self.goto(done);
-        self.code.pop();
-        self.code.bind(no);
-        self.iconst(0);
-        self.code.bind(done);
-    }
-
-    /// Jumps to `target` when `e` is `jump_if`, falls through otherwise.
+    /// A jump to `target` where `e` is `jump_if`, falling through otherwise.
     pub fn cond(&mut self, e: TExprId, target: Label, jump_if: bool) {
-        let prog = self.cx.input.prog;
-        match prog.expr(e) {
-            TExpr::Bool(v) => {
-                if v == jump_if {
-                    self.goto(target);
-                }
-            }
-            TExpr::Unary(UnOp::BoolNot, a) => self.cond(a, target, !jump_if),
-            TExpr::Prim(PrimOp::BoolAnd, a, b) => {
-                if jump_if {
-                    let skip = self.code.new_label();
-                    self.cond(a, skip, false);
-                    self.cond(b, target, true);
-                    self.code.bind(skip);
-                } else {
-                    self.cond(a, target, false);
-                    self.cond(b, target, false);
-                }
-            }
-            TExpr::Prim(PrimOp::BoolOr, a, b) => {
-                if jump_if {
-                    self.cond(a, target, true);
-                    self.cond(b, target, true);
-                } else {
-                    let skip = self.code.new_label();
-                    self.cond(a, skip, true);
-                    self.cond(b, target, false);
-                    self.code.bind(skip);
-                }
-            }
-            TExpr::Prim(op @ (PrimOp::Lt | PrimOp::Le | PrimOp::Gt | PrimOp::Ge | PrimOp::RefEq | PrimOp::RefNe | PrimOp::Same | PrimOp::NotSame), a, b) => {
-                self.compare(op, a, b, target, jump_if)
-            }
-            TExpr::TypeTest(inner, test, tested) => {
-                // No cast to the static type: `box.fruit.isInstanceOf[Apple]` asks because the
-                // static type may be wrong. The tested type goes with the test, as a pattern's does:
-                // an array's test reads its element there.
-                let boxed = ErasedType::object();
-                self.expr(inner, &boxed);
-                let mark = self.code.locals_mark();
-                let slot = self.store_new(&boxed);
-                self.test(test, slot, &boxed, Some(tested), target, jump_if);
-                self.code.locals_release(mark);
-            }
-            _ => {
-                // The loop's jump (`&&`'s or `||`'s right operand under a `return`) leaves: no branch
-                // follows it, and the dead code after it is verified against the operands under it.
-                if let Some((recv, args)) = self.jump_call(e) {
-                    let dropped = self.drop_stack();
-                    self.tail_jump(recv, args);
-                    for vt in dropped {
-                        self.code.push(vt);
-                    }
-                    return;
-                }
-                self.expr(e, &ErasedType::Z);
-                self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
-            }
-        }
-    }
-
-    fn compare(&mut self, op_: PrimOp, a: TExprId, b: TExprId, target: Label, jump_if: bool) {
-        if let PrimOp::Same | PrimOp::NotSame = op_ {
-            // `eq` and `ne` are reference identity, a string's and a box's too (scalac's `ID`).
-            let object = ErasedType::object();
-            let same = (op_ == PrimOp::Same) == jump_if;
-            if self.null_compared_alone(a, b, same, target) {
-                return;
-            }
-            self.expr(a, &object);
-            self.expr(b, &object);
-            return self.jump_if(if same { op::IF_ACMPEQ } else { op::IF_ACMPNE }, 2, target);
-        }
-        let (ta, tb) = (self.static_type(a), self.static_type(b));
-        let is_eq = matches!(op_, PrimOp::RefEq | PrimOp::RefNe);
-        // A NaN operand makes the comparison false: the jump that tests it is not taken, the
-        // one that tests its negation is, so NaN's side of `dcmpg` and `dcmpl` follows the
-        // comparison as written.
-        let nan_high = matches!(op_, PrimOp::Lt | PrimOp::Le);
-        // The condition under which the jump is taken.
-        let op_ = match (op_, jump_if) {
-            (o, true) => o,
-            (PrimOp::Lt, false) => PrimOp::Ge,
-            (PrimOp::Le, false) => PrimOp::Gt,
-            (PrimOp::Gt, false) => PrimOp::Le,
-            (PrimOp::Ge, false) => PrimOp::Lt,
-            (PrimOp::RefEq, false) => PrimOp::RefNe,
-            (_, false) => PrimOp::RefEq,
-        };
-        let kind = match (ta.numeric_rank(), tb.numeric_rank()) {
-            (Some(x), Some(y)) => Some(rank_type(x.max(y))),
-            (Some(x), None) if tb.is_ref() && !is_eq => Some(rank_type(x)),
-            (None, Some(y)) if ta.is_ref() && !is_eq => Some(rank_type(y)),
-            _ => None,
-        };
-        if let Some(k) = kind {
-            self.expr(a, &k);
-            self.expr(b, &k);
-            match k {
-                ErasedType::I => {
-                    let insn = match op_ {
-                        PrimOp::Lt => op::IF_ICMPLT,
-                        PrimOp::Le => op::IF_ICMPLE,
-                        PrimOp::Gt => op::IF_ICMPGT,
-                        PrimOp::Ge => op::IF_ICMPGE,
-                        PrimOp::RefEq => op::IF_ICMPEQ,
-                        _ => op::IF_ICMPNE,
-                    };
-                    self.jump_if(insn, 2, target);
-                }
-                _ => {
-                    let cmp = match (&k, nan_high) {
-                        (ErasedType::J, _) => op::LCMP,
-                        (ErasedType::F, true) => op::FCMPG,
-                        (ErasedType::F, false) => op::FCMPL,
-                        (_, true) => op::DCMPG,
-                        (_, false) => op::DCMPL,
-                    };
-                    self.code.op(cmp);
-                    self.code.popn(2);
-                    self.code.push(VT::Int);
-                    let insn = match op_ {
-                        PrimOp::Lt => op::IFLT,
-                        PrimOp::Le => op::IFLE,
-                        PrimOp::Gt => op::IFGT,
-                        PrimOp::Ge => op::IFGE,
-                        PrimOp::RefEq => op::IFEQ,
-                        _ => op::IFNE,
-                    };
-                    self.jump_if(insn, 1, target);
-                }
-            }
-            return;
-        }
-        if !is_eq {
-            // Strings and other comparables: `compareTo`.
-            let comparable = ErasedType::L(Rc::from("java/lang/Comparable"));
-            self.expr(a, &comparable);
-            let object = ErasedType::object();
-            self.expr(b, &object);
-            self.invoke(Invoke::Interface, "java/lang/Comparable", true, "compareTo", &[object], &ErasedType::I);
-            let insn = match op_ {
-                PrimOp::Lt => op::IFLT,
-                PrimOp::Le => op::IFLE,
-                PrimOp::Gt => op::IFGT,
-                _ => op::IFGE,
-            };
-            return self.jump_if(insn, 1, target);
-        }
-        if ta == ErasedType::Z && tb == ErasedType::Z {
-            self.expr(a, &ErasedType::Z);
-            self.expr(b, &ErasedType::Z);
-            return self.jump_if(if op_ == PrimOp::RefEq { op::IF_ICMPEQ } else { op::IF_ICMPNE }, 2, target);
-        }
-        if ta == ErasedType::V && tb == ErasedType::V {
-            self.statement(a);
-            self.statement(b);
-            if op_ == PrimOp::RefEq {
-                self.iconst(1);
-                self.jump_if(op::IFNE, 1, target);
-            }
-            return;
-        }
-        let object = ErasedType::object();
-        let by_value = ta.is_string() || tb.is_string() || !ta.is_ref() || !tb.is_ref();
-        let array_left = matches!(&ta, ErasedType::L(n) if n.starts_with('['));
-        if !by_value && !array_left && self.null_compared_alone(a, b, op_ == PrimOp::RefEq, target) {
-            return;
-        }
-        self.expr(a, &object);
-        self.expr(b, &object);
-        if by_value {
-            // Strings and boxed primitives compare by value, as `===` does on the JS side.
-            self.invoke(Invoke::Static, "java/util/Objects", false, "equals", &[object.clone(), object], &ErasedType::Z);
-            self.jump_if(if op_ == PrimOp::RefEq { op::IFNE } else { op::IFEQ }, 1, target);
-        } else {
-            self.jump_if(if op_ == PrimOp::RefEq { op::IF_ACMPEQ } else { op::IF_ACMPNE }, 2, target);
-        }
-    }
-
-    /// A reference compared with the null literal, the other side tested alone (`ifnull`,
-    /// `ifnonnull` to `target` where they are `equal`), as scalac's back end tests it for `eq` and
-    /// `ne` (`genComparisonOp`'s reference ops) and for `==` of a class (`genEqEqPrimitive`); an
-    /// array's `==`, its left side no class, loads both sides (`BCodeBodyBuilder.genCond`
-    /// 1578-1650 at 3.8.4). Whether it was written so.
-    fn null_compared_alone(&mut self, a: TExprId, b: TExprId, equal: bool, target: Label) -> bool {
-        let other = if self.null_literal(a) {
-            b
-        } else if self.null_literal(b) {
-            a
-        } else {
-            return false;
-        };
-        let object = ErasedType::object();
-        self.expr(other, &object);
-        self.jump_if(if equal { op::IFNULL } else { op::IFNONNULL }, 1, target);
-        true
-    }
-
-    /// Whether `e` stands where dotty's tree at its back end holds the null literal, which the
-    /// tests of `null_compared_alone` take (`isNull`'s `Literal(Constant(null))`,
-    /// `BCodeBodyBuilder.scala` 1582-1586 and 1696-1700 at 3.8.4): a `null` that no ascription
-    /// holds. `(null: T)`, a cast that keeps no node, a plain inline method's expansion and an
-    /// inline parameter's bottom-typed argument are dotty's `Typed`, and `{ null }` as an argument
-    /// its `Block`, each marked so by the typer (`Program::is_ascribed`); `{ null }` as the
-    /// receiver is lifted by dotty and stays the literal. A null an inline expansion wrote from its
-    /// body is loaded whatever the body's source held (`Program::is_inlined_null`): teq's pickle
-    /// keeps no ascription or brace of it, so only thus does a body read from products compare as
-    /// the same module's.
-    fn null_literal(&self, e: TExprId) -> bool {
-        let prog = self.cx.input.prog;
-        matches!(prog.expr(e), TExpr::Null) && !prog.is_ascribed(e) && !prog.is_inlined_null(e)
+        let cond = self.lowering(|g| g.lower_cond(e));
+        self.write_cond(cond, target, jump_if);
     }
 
     // ---- primitive operations ----
 
-    fn prim(&mut self, op_: PrimOp, a: TExprId, b: TExprId) -> ErasedType {
-        use PrimOp::*;
-        let (t, insn) = match op_ {
-            IntAdd => (ErasedType::I, op::IADD),
-            IntSub => (ErasedType::I, op::ISUB),
-            IntMul => (ErasedType::I, op::IMUL),
-            IntDiv => (ErasedType::I, op::IDIV),
-            IntRem => (ErasedType::I, op::IREM),
-            IntAnd => (ErasedType::I, op::IAND),
-            IntOr => (ErasedType::I, op::IOR),
-            IntXor => (ErasedType::I, op::IXOR),
-            IntShl => (ErasedType::I, op::ISHL),
-            IntShr => (ErasedType::I, op::ISHR),
-            IntUshr => (ErasedType::I, op::IUSHR),
-            LongAdd => (ErasedType::J, op::LADD),
-            LongSub => (ErasedType::J, op::LSUB),
-            LongMul => (ErasedType::J, op::LMUL),
-            LongDiv => (ErasedType::J, op::LDIV),
-            LongRem => (ErasedType::J, op::LREM),
-            LongAnd => (ErasedType::J, op::LAND),
-            LongOr => (ErasedType::J, op::LOR),
-            LongXor => (ErasedType::J, op::LXOR),
-            LongShl => (ErasedType::J, op::LSHL),
-            LongShr => (ErasedType::J, op::LSHR),
-            LongUshr => (ErasedType::J, op::LUSHR),
-            DoubleAdd => (ErasedType::D, op::DADD),
-            DoubleSub => (ErasedType::D, op::DSUB),
-            DoubleMul => (ErasedType::D, op::DMUL),
-            DoubleDiv => (ErasedType::D, op::DDIV),
-            DoubleRem => (ErasedType::D, op::DREM),
-            FloatAdd => (ErasedType::F, op::FADD),
-            FloatSub => (ErasedType::F, op::FSUB),
-            FloatMul => (ErasedType::F, op::FMUL),
-            FloatDiv => (ErasedType::F, op::FDIV),
-            FloatRem => (ErasedType::F, op::FREM),
-            BoolStrictAnd => (ErasedType::Z, op::IAND),
-            BoolStrictOr => (ErasedType::Z, op::IOR),
-            BoolXor => {
-                self.expr(a, &ErasedType::Z);
-                self.expr(b, &ErasedType::Z);
-                self.code.op(op::IXOR);
-                self.code.pop();
-                return ErasedType::Z;
-            }
-            Eq | Ne => {
-                let object = ErasedType::object();
-                self.expr(a, &object);
-                self.expr(b, &object);
-                self.helper_call("equal", 2);
-                if op_ == Ne {
-                    self.iconst(1);
-                    self.code.op(op::IXOR);
-                    self.code.pop();
-                }
-                return ErasedType::Z;
-            }
-            Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame | BoolAnd | BoolOr => return self.cond_of_prim(op_, a, b),
-        };
-        self.expr(a, &t);
-        // The shift distance of a long is an int.
-        let shift = matches!(op_, LongShl | LongShr | LongUshr);
-        if shift {
-            let tb = self.static_type(b);
-            self.expr(b, &tb);
-            self.adapt(&tb, &ErasedType::I);
-        } else {
-            self.expr(b, &t);
+    /// `a == b` and `a != b` of a build whose runtime lacks the helper: the refusal.
+    fn equal_without_helper(&mut self, op_: PrimOp, a: TExprId, b: TExprId) -> ErasedType {
+        let object = ErasedType::object();
+        self.expr(a, &object);
+        self.expr(b, &object);
+        self.helper_call("equal", 2);
+        if op_ == PrimOp::Ne {
+            self.iconst(1);
+            self.code.op(op::IXOR);
+            self.code.pop();
         }
-        self.code.op(insn);
-        self.code.pop();
-        t
-    }
-
-    fn cond_of_prim(&mut self, op_: PrimOp, a: TExprId, b: TExprId) -> ErasedType {
-        let no = self.code.new_label();
-        let done = self.code.new_label();
-        match op_ {
-            PrimOp::BoolAnd => {
-                self.cond(a, no, false);
-                self.cond(b, no, false);
-            }
-            PrimOp::BoolOr => {
-                let yes = self.code.new_label();
-                self.cond(a, yes, true);
-                self.cond(b, no, false);
-                self.code.bind(yes);
-            }
-            _ => self.compare(op_, a, b, no, false),
-        }
-        self.iconst(1);
-        self.goto(done);
-        self.code.pop();
-        self.code.bind(no);
-        self.iconst(0);
-        self.code.bind(done);
         ErasedType::Z
-    }
-
-    fn unary(&mut self, op_: UnOp, a: TExprId) -> ErasedType {
-        use UnOp::*;
-        // A literal widened to a double is the double constant, as scalac types the literal.
-        if let (IntToDouble, TExpr::Int(v)) = (op_, self.cx.input.prog.expr(a)) {
-            self.dconst(v as f64);
-            return ErasedType::D;
-        }
-        let (from, to, insns): (ErasedType, ErasedType, &[u8]) = match op_ {
-            IntNeg => (ErasedType::I, ErasedType::I, &[op::INEG]),
-            LongNeg => (ErasedType::J, ErasedType::J, &[op::LNEG]),
-            DoubleNeg => (ErasedType::D, ErasedType::D, &[op::DNEG]),
-            FloatNeg => (ErasedType::F, ErasedType::F, &[op::FNEG]),
-            IntToLong => (ErasedType::I, ErasedType::J, &[op::I2L]),
-            LongToDouble => (ErasedType::J, ErasedType::D, &[op::L2D]),
-            LongToInt => (ErasedType::J, ErasedType::I, &[op::L2I]),
-            DoubleToInt => (ErasedType::D, ErasedType::I, &[op::D2I]),
-            DoubleToLong => (ErasedType::D, ErasedType::J, &[op::D2L]),
-            CharToInt => (ErasedType::C, ErasedType::I, &[]),
-            CharToLong => (ErasedType::C, ErasedType::J, &[op::I2L]),
-            IntToChar => (ErasedType::I, ErasedType::C, &[op::I2C]),
-            IntToByte => (ErasedType::I, ErasedType::B, &[op::I2B]),
-            IntToShort => (ErasedType::I, ErasedType::S, &[op::I2S]),
-            IntToFloat => (ErasedType::I, ErasedType::F, &[op::I2F]),
-            IntToDouble => (ErasedType::I, ErasedType::D, &[op::I2D]),
-            ByteToShort => (ErasedType::B, ErasedType::S, &[]),
-            ByteToInt => (ErasedType::B, ErasedType::I, &[]),
-            ShortToInt => (ErasedType::S, ErasedType::I, &[]),
-            LongToFloat => (ErasedType::J, ErasedType::F, &[op::L2F]),
-            FloatToInt => (ErasedType::F, ErasedType::I, &[op::F2I]),
-            FloatToLong => (ErasedType::F, ErasedType::J, &[op::F2L]),
-            FloatToDouble => (ErasedType::F, ErasedType::D, &[op::F2D]),
-            DoubleToFloat => (ErasedType::D, ErasedType::F, &[op::D2F]),
-            BoolNot => {
-                self.expr(a, &ErasedType::Z);
-                self.iconst(1);
-                self.code.op(op::IXOR);
-                self.code.pop();
-                return ErasedType::Z;
-            }
-            IntNot => {
-                self.expr(a, &ErasedType::I);
-                self.iconst(-1);
-                self.code.op(op::IXOR);
-                self.code.pop();
-                return ErasedType::I;
-            }
-            LongNot => {
-                self.expr(a, &ErasedType::J);
-                self.lconst(-1);
-                self.code.op(op::LXOR);
-                self.code.pop();
-                return ErasedType::J;
-            }
-        };
-        self.expr(a, &from);
-        for &i in insns {
-            self.code.op(i);
-        }
-        self.code.pop();
-        let vt = self.vt(&to);
-        self.code.push(vt);
-        to
     }
 
     /// Calls a definition of `std/jvm.scala`; the arguments are on the stack.
@@ -7754,7 +7182,13 @@ impl<'a> Gen<'a> {
             return ErasedType::V;
         };
         let m = self.mref(s);
-        // The module goes under the arguments, which are already evaluated.
+        self.invoke_helper(&m);
+        m.ret.clone()
+    }
+
+    /// The runtime's helper `m` applied to its arguments, which are evaluated: its object goes
+    /// under them.
+    pub(super) fn invoke_helper(&mut self, m: &MethodRef) {
         let mark = self.code.locals_mark();
         let mut temps = Vec::new();
         for t in m.params.iter().rev() {
@@ -7766,8 +7200,7 @@ impl<'a> Gen<'a> {
             self.load(*slot, t);
         }
         self.code.locals_release(mark);
-        self.invoke_mref(&m);
-        m.ret.clone()
+        self.invoke_mref(m);
     }
 
     pub fn match_error(&mut self, slot: u16, t: &ErasedType) {
@@ -7781,8 +7214,55 @@ impl<'a> Gen<'a> {
     }
 }
 
+/// `ScalaRunTime`'s method that does the operation `name` (`array_apply`, `array_update`,
+/// `array_length`, `array_clone`) on an array whose kind only the value knows, as dotty's erasure
+/// calls it on a generic array.
+pub(super) fn erased_array_method(name: &str) -> MethodRef {
+    let object = ErasedType::object();
+    let (params, ret) = match name {
+        "array_apply" => (vec![object.clone(), ErasedType::I], object),
+        "array_update" => (vec![object.clone(), ErasedType::I, object], ErasedType::V),
+        "array_length" => (vec![object], ErasedType::I),
+        "array_clone" => (vec![object.clone()], object),
+        _ => unreachable!("no array operation {}", name),
+    };
+    let desc = method_desc(&params, &ret);
+    MethodRef { owner: Rc::from(SCALA_RUNTIME), owner_is_interface: false, name: name.to_string(), params, ret, desc, kind: Invoke::Static }
+}
+
+/// The instructions that make a primitive `b` of a primitive `a`: between the stack classes
+/// first (an int, a long, a float, a double), then narrowed to the small integer type wanted.
+pub(super) fn primitive_conversion(a: &ErasedType, b: &ErasedType) -> Vec<u8> {
+    let mut insns: Vec<u8> = Vec::with_capacity(2);
+    match (a.stack_type(), b.stack_type()) {
+        (ErasedType::I, ErasedType::J) => insns.push(op::I2L),
+        (ErasedType::I, ErasedType::F) => insns.push(op::I2F),
+        (ErasedType::I, ErasedType::D) => insns.push(op::I2D),
+        (ErasedType::J, ErasedType::I) => insns.push(op::L2I),
+        (ErasedType::J, ErasedType::F) => insns.push(op::L2F),
+        (ErasedType::J, ErasedType::D) => insns.push(op::L2D),
+        (ErasedType::F, ErasedType::I) => insns.push(op::F2I),
+        (ErasedType::F, ErasedType::J) => insns.push(op::F2L),
+        (ErasedType::F, ErasedType::D) => insns.push(op::F2D),
+        (ErasedType::D, ErasedType::I) => insns.push(op::D2I),
+        (ErasedType::D, ErasedType::J) => insns.push(op::D2L),
+        (ErasedType::D, ErasedType::F) => insns.push(op::D2F),
+        _ => {}
+    }
+    let narrowed_already = matches!((a, b), (ErasedType::B, ErasedType::S) | (ErasedType::B | ErasedType::S | ErasedType::Z, ErasedType::I));
+    if !narrowed_already {
+        match b {
+            ErasedType::B => insns.push(op::I2B),
+            ErasedType::S => insns.push(op::I2S),
+            ErasedType::C => insns.push(op::I2C),
+            _ => {}
+        }
+    }
+    insns
+}
+
 /// The stack type of a comparison or operation between operands of the given ranks.
-fn rank_type(rank: u8) -> ErasedType {
+pub(super) fn rank_type(rank: u8) -> ErasedType {
     use crate::typer::prims::*;
     match rank {
         R_LONG => ErasedType::J,

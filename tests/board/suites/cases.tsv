@@ -2659,6 +2659,7 @@ return_tail_call_try_unguarded	fail	-	< 8
 return_tail_call_untagged	pass	-	
 return_tail_call_value_class	fail	-	< 100001
 return_tail_call_while_label	pass	-	
+return_value_if_match_jump	pass	-	
 return_value_position_branch	pass	-	
 return_value_position_verify	pass	-	
 right_assoc_ext	pass	-	

@@ -19,8 +19,6 @@ pub fn major_version(output_version: u32) -> u16 {
     (44 + output_version) as u16
 }
 
-/// `MODULE$` of a module class, which its `<clinit>` alone stores.
-pub const MODULE_FIELD: u16 = ACC_PUBLIC | ACC_STATIC | ACC_FINAL;
 pub const ACC_SUPER: u16 = 0x0020;
 pub const ACC_BRIDGE: u16 = 0x0040;
 /// The bit of `ACC_BRIDGE` on a field.
@@ -828,23 +826,36 @@ impl ClassWriter {
         self.interfaces = list;
     }
 
-    pub fn has_method(&self, name: &str, desc: &str) -> bool {
-        let (Some(&n), Some(&d)) = (self.cp.utf8.get(name), self.cp.utf8.get(desc)) else { return false };
-        self.methods.iter().any(|m| m.name == n && m.desc == d)
+    /// Whether the class is `name` of these access flags, extending `super_name`.
+    pub fn is_class(&self, access: u16, name: &str, super_name: &str) -> bool {
+        self.access == access && self.class_index(name) == Some(self.this_class) && self.class_index(super_name) == Some(self.super_class)
     }
 
-    pub fn has_method_named(&self, name: &str) -> bool {
-        let Some(&n) = self.cp.utf8.get(name) else { return false };
-        self.methods.iter().any(|m| m.name == n)
+    /// Whether the class's interfaces hold `interfaces` in their order.
+    pub fn holds_interfaces<'a>(&self, mut interfaces: impl Iterator<Item = &'a str>) -> bool {
+        let mut own = self.interfaces.iter();
+        interfaces.all(|n| self.class_index(n).is_some_and(|c| own.any(|&i| i == c)))
     }
 
-    /// The access flags, names and descriptors of the methods written so far.
-    pub fn method_table(&self) -> Vec<(u16, String, String)> {
-        let mut text: FxMap<u16, &str> = FxMap::default();
-        for (s, &i) in &self.cp.utf8 {
-            text.insert(i, s);
-        }
-        self.methods.iter().map(|m| (m.access, text[&m.name].to_string(), text[&m.desc].to_string())).collect()
+    fn class_index(&self, name: &str) -> Option<u16> {
+        self.cp.utf8.get(name).and_then(|&n| self.cp.consts.get(&Const::Class(n))).copied()
+    }
+
+    /// The first place where the class's methods are not `expected` in order, each by its
+    /// access flags, name and descriptor; none where they are exactly those.
+    pub fn methods_differ(&self, expected: &[(u16, &str, String)]) -> Option<usize> {
+        self.differ(&self.methods, expected)
+    }
+
+    /// The same of its fields.
+    pub fn fields_differ(&self, expected: &[(u16, &str, String)]) -> Option<usize> {
+        self.differ(&self.fields, expected)
+    }
+
+    fn differ(&self, members: &[Member], expected: &[(u16, &str, String)]) -> Option<usize> {
+        let same = |m: &Member, e: &(u16, &str, String)| m.access == e.0 && self.cp.utf8.get(e.1) == Some(&m.name) && self.cp.utf8.get(e.2.as_str()) == Some(&m.desc);
+        let common = members.iter().zip(expected).position(|(m, e)| !same(m, e));
+        common.or((members.len() != expected.len()).then_some(members.len().min(expected.len())))
     }
 
     pub fn method(&mut self, access: u16, name: &str, desc: &str, code: Option<Code>) {

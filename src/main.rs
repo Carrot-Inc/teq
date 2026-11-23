@@ -1947,7 +1947,7 @@ fn main() {
     }
     // The typer recurses over expressions and through the definitions they name; a library's
     // bodies nest deeper than the default stack allows for.
-    let compiler = std::thread::Builder::new().stack_size(1 << 30).spawn(compile).expect("cannot start the compiler thread");
+    let compiler = std::thread::Builder::new().stack_size(alloc::DEEP_STACK).spawn(compile).expect("cannot start the compiler thread");
     let code = compiler.join().unwrap_or(2);
     interp::code_stats_report();
     std::process::exit(code);

@@ -3,12 +3,14 @@
 //! compiled with the program, or scala-library's own classes; `Helpers` finds the definitions
 //! of `std/jvm.scala`.
 
-use super::classfile::*;
 use super::names::*;
+use super::plan::{method_def, write_declarations};
 use super::Cx;
 use crate::intern::FxMap;
+use crate::lir::{ClassDef, ClassFlags, MethodFlags};
 use crate::symbols::*;
 use crate::types::*;
+use std::rc::Rc;
 
 pub const LAUNCHER: &str = "TeqMain";
 
@@ -48,9 +50,14 @@ pub const ARRAY_MARKERS: [&str; 2] = ["scala/runtime/Nothing$", "scala/runtime/N
 /// that many parameters need one all the same.
 pub fn function_interface(arity: usize, output_version: u32) -> (String, Vec<u8>) {
     let name = format!("scala/Function{}", arity);
-    let mut cw = ClassWriter::new(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT, &name, OBJECT, &[]);
     let desc = format!("({})Ljava/lang/Object;", "Ljava/lang/Object;".repeat(arity));
-    cw.method(ACC_PUBLIC | ACC_ABSTRACT, "apply", &desc, None);
-    (name, cw.finish(output_version))
+    let class = ClassDef {
+        name: Rc::from(name.as_str()),
+        flags: ClassFlags { interface: true, is_abstract: true, ..ClassFlags::default() },
+        superclass: Rc::from(OBJECT),
+        methods: vec![method_def(MethodFlags::ABSTRACT, "apply", &desc)],
+        ..ClassDef::default()
+    };
+    (name, write_declarations(&class, output_version))
 }
 
