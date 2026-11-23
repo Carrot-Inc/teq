@@ -1603,7 +1603,7 @@ impl<'a> Gen<'a> {
     /// (`StaticRoute::EnumValue`).
     fn lower_enum_value_read(&mut self, v: SymId, instance: bool) -> Option<LirId> {
         if !instance {
-            return self.lower_static(v);
+            return self.lower_static(v).ok();
         }
         let t = self.sym_type(v);
         let name = self.field_name(v);

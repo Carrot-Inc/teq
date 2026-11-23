@@ -2,7 +2,7 @@
 //! per case against a scrutinee held in a local, with jumps to the next case in the place of
 //! nested `if`s.
 
-use crate::lir::{Cases, Comparing, ErasedType, Invoke, Kind, LabelId, LirId, MethodRef, Relation, TempId};
+use crate::lir::{Cases, Comparing, ErasedType, Invoke, Kind, LabelId, LirId, MethodRef, Relation, TempId, Unlowered};
 use super::classfile::*;
 use super::gen::{Gen, Mode};
 use super::names::*;
@@ -291,7 +291,7 @@ impl<'a> Gen<'a> {
     /// the failure stands before the tests (`Gen::block_statements`), which no labelled block
     /// says; it ends when the failure follows the tests, a change of the class files of its own.
     pub(super) fn definition_pattern(&mut self, pat: TPatId, slot: u16, ty: &ErasedType, fail: Label) {
-        if !self.pattern_lowers(pat) {
+        if self.pattern_lowers(pat).is_err() {
             return self.pattern(pat, slot, ty, fail);
         }
         let temp = self.lir.temp();
@@ -313,19 +313,23 @@ impl<'a> Gen<'a> {
     /// another form (`ifnull`) than a comparison of the program (`Gen::write_compare`), nor an
     /// outer test, whose temporary stays held to the end of a pattern's case; nor a connective
     /// over one. Each waits for a change of the class files of its own.
-    pub(super) fn test_lowers(&self, test: TestId) -> bool {
+    pub(super) fn test_lowers(&self, test: TestId) -> Result<(), Unlowered> {
         match self.cx.input.prog.tests[test.idx()] {
-            TypeTest::Null | TypeTest::AnyRef | TypeTest::AnyVal | TypeTest::Outer(..) => false,
-            TypeTest::Or(a, b) | TypeTest::And(a, b) => self.test_lowers(a) && self.test_lowers(b),
+            TypeTest::Null => Err(Unlowered::TestNull),
+            TypeTest::AnyRef | TypeTest::AnyVal => Err(Unlowered::TestAnyRefOrAnyVal),
+            TypeTest::Outer(..) => Err(Unlowered::TestOuter),
+            TypeTest::Or(a, b) | TypeTest::And(a, b) => self.test_lowers(a).and_then(|()| self.test_lowers(b)),
             TypeTest::Proven(inner, _) => self.test_lowers(inner),
-            _ => true,
+            TypeTest::Always | TypeTest::Class(_) | TypeTest::Trait(_) | TypeTest::Number | TypeTest::Int | TypeTest::Array | TypeTest::Long
+            | TypeTest::Byte | TypeTest::Short | TypeTest::Float | TypeTest::Str | TypeTest::Char | TypeTest::Bool | TypeTest::Unit
+            | TypeTest::Function(_) | TypeTest::Value(_) => Ok(()),
         }
     }
 
     /// Jumps to `target` when the test of the reference in `slot` comes out as `jump_if`: a test
     /// that is lowered as the lowering makes it, the slot read as a temporary of the lowering.
     pub fn test(&mut self, test: TestId, slot: u16, ty: &ErasedType, tested: Option<crate::types::TypeId>, target: Label, jump_if: bool) {
-        if self.test_lowers(test) {
+        if self.test_lowers(test).is_ok() {
             let temp = self.lir.temp();
             self.m.temps.insert(temp, slot);
             let passes = self.lowering(|g| g.lower_test_on(temp, ty, test, tested));
@@ -500,35 +504,34 @@ impl<'a> Gen<'a> {
     /// generator of the typed IR: each of its patterns is (`Gen::pattern_lowers`), and its
     /// scrutinee is not a value class's underlying value of another erasure than the class's (an
     /// intersection of two value classes), which `Gen::match_` boxes as the class all the same.
-    pub(super) fn match_lowers(&mut self, scrut: TExprId, cases: ListRef) -> bool {
+    pub(super) fn match_lowers(&mut self, scrut: TExprId, cases: ListRef) -> Result<(), Unlowered> {
         let prog = self.cx.input.prog;
-        if !prog.cases[cases.range()].iter().all(|case| self.pattern_lowers(case.pat)) {
-            return false;
-        }
+        prog.cases[cases.range()].iter().try_for_each(|case| self.pattern_lowers(case.pat))?;
         let t = self.static_type(scrut);
         if t.is_ref() || t == ErasedType::V {
-            return true;
+            return Ok(());
         }
         match self.expr_value_class(scrut) {
-            Some((c, args)) => self.vc_erasure(c, args) == t,
-            None => true,
+            Some((c, args)) if self.vc_erasure(c, args) != t => Err(Unlowered::MatchValueClassIntersection),
+            Some(_) | None => Ok(()),
         }
     }
 
     /// Whether a pattern is lowered (`Gen::lower_pattern`): not `null`, a sequence's pattern or
     /// a type test that is not (`Gen::test_lowers`), whose comparisons with `null` and zero and
     /// whose outer test's temporary wait for a change of the class files.
-    pub(super) fn pattern_lowers(&self, pat: TPatId) -> bool {
+    pub(super) fn pattern_lowers(&self, pat: TPatId) -> Result<(), Unlowered> {
         let prog = self.cx.input.prog;
         match prog.pats[pat.idx()] {
-            TPat::Wildcard => true,
-            TPat::Bind(_, inner) => inner.is_none_or(|i| self.pattern_lowers(i)),
-            TPat::Test(test, _, inner) => self.test_lowers(test) && self.pattern_lowers(inner),
-            TPat::Equals(e, _) => !matches!(prog.expr(e), TExpr::Null),
-            TPat::Class(_, _, _, subs) => prog.pat_lists[subs.range()].iter().all(|&s| self.pattern_lowers(s)),
+            TPat::Wildcard => Ok(()),
+            TPat::Bind(_, inner) => inner.map_or(Ok(()), |i| self.pattern_lowers(i)),
+            TPat::Test(test, _, inner) => self.test_lowers(test).and_then(|()| self.pattern_lowers(inner)),
+            TPat::Equals(e, _) if matches!(prog.expr(e), TExpr::Null) => Err(Unlowered::PatternNull),
+            TPat::Equals(..) => Ok(()),
+            TPat::Class(_, _, _, subs) => prog.pat_lists[subs.range()].iter().try_for_each(|&s| self.pattern_lowers(s)),
             TPat::Unapply(_, _, inner) => self.pattern_lowers(inner),
-            TPat::Alt(alts) => prog.pat_lists[alts.range()].iter().all(|&a| self.pattern_lowers(a)),
-            TPat::Seq(..) => false,
+            TPat::Alt(alts) => prog.pat_lists[alts.range()].iter().try_for_each(|&a| self.pattern_lowers(a)),
+            TPat::Seq(..) => Err(Unlowered::PatternSequence),
         }
     }
 

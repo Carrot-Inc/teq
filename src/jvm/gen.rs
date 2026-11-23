@@ -2,7 +2,7 @@
 //! stack, brought to the static type the typer recorded for it (a cast or an unboxing where a
 //! generic result is used at a concrete type), and then to the type its consumer wants.
 
-use crate::lir::{Adaptation, Capture, ErasedType, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodRef};
+use crate::lir::{Adaptation, Capture, ErasedType, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodRef, Unlowered};
 use super::classfile::*;
 use super::free::{Analysis, Free};
 use super::names::*;
@@ -141,8 +141,8 @@ pub enum NewRoute {
 pub enum ConcatRoute {
     /// The statements lower whole (`Gen::block_lowers`), or there are none.
     Lowered(Vec<ListRef>, Vec<TExprId>),
-    /// A statement is not lowered yet: a pattern definition, a lazy val.
-    Statements(Vec<ListRef>, Vec<TExprId>),
+    /// A statement is not lowered yet, and why: a pattern definition, a lazy val.
+    Statements(Unlowered, Vec<ListRef>, Vec<TExprId>),
 }
 
 /// How the arguments of a secondary constructor are passed: one decision
@@ -245,12 +245,12 @@ pub(super) enum DefaultRoute {
     /// The getter of a file's member with no argument before it, on the file's object, and the
     /// type the default is left as.
     FileMember(FileId, MethodRef, ErasedType),
-    /// Not lowered yet: the getter called on its receiver with the arguments before the default
-    /// (`Gen::default_priors`, `Gen::method_default`); a local def's getter is lifted (`Gen::local_default`); a by-name
-    /// parameter's getter is passed as a function made where it is called
-    /// (`Gen::jar_default_thunk`); a getter takes what the method being written alone holds
-    /// (`Gen::ctor_default_lowers`).
-    Unlowered,
+    /// Not lowered yet, and why: the getter called on its receiver with the arguments before the
+    /// default (`Gen::default_priors`, `Gen::method_default`); a local def's getter is lifted
+    /// (`Gen::local_default`); a by-name parameter's getter is passed as a function made where
+    /// it is called (`Gen::jar_default_thunk`); a getter takes what the method being written
+    /// alone holds (`Gen::ctor_default_lowers`).
+    Unlowered(Unlowered),
 }
 
 /// The way a call `r.s(args)` is generated: one decision (`Gen::call_route`), read by the
@@ -508,6 +508,9 @@ pub struct MethodCx {
     /// The `try`s whose cases are being written, by the label their cases leave by: the slot of
     /// the try's result, none where it leaves nothing, and its normal exit.
     pub try_exits: FxMap<crate::lir::LabelId, (Option<u16>, Label)>,
+    /// Why the escape nodes written in the method were not lowered, in the order they were
+    /// written: what the statistics name the method by (`Gen::end_method`).
+    pub unlowered: Vec<Unlowered>,
 }
 
 /// A `try` with a finalizer around the code being generated: `pending` is the slot a `return`
@@ -545,7 +548,15 @@ impl Default for MethodCx {
             stacked: None,
             labels: FxMap::default(),
             try_exits: FxMap::default(),
+            unlowered: Vec::new(),
         }
+    }
+}
+
+/// The statistics lines of what a Gen wrote outside `Gen::emit_unit` are printed when it ends.
+impl Drop for Gen<'_> {
+    fn drop(&mut self) {
+        self.print_gaps();
     }
 }
 
@@ -674,6 +685,9 @@ pub struct Gen<'a> {
     pub forward_from: Option<(Rc<str>, Vec<crate::lir::MethodDef>)>,
     pub wide: bool,
     pub overflow: bool,
+    /// The statistics lines of the methods written (`TEQ_LIR_STATS`, `Gen::end_method`), printed
+    /// once a unit is kept: a unit written again with wide jumps prints its methods once.
+    pub gaps_lines: Vec<String>,
     /// The `Object` a value class over a type parameter erases to in link mode, told apart by
     /// identity from the `Object` of a generic slot, where the value is boxed.
     vc_object: Rc<str>,
@@ -758,6 +772,7 @@ impl<'a> Gen<'a> {
             forward_from: None,
             wide: false,
             overflow: false,
+            gaps_lines: Vec::new(),
             vc_object: Rc::from(OBJECT),
             vc_marks: FxMap::default(),
             vc_select: None,
@@ -782,13 +797,15 @@ impl<'a> Gen<'a> {
     /// A class with a method too long for 16-bit jump offsets is emitted again with wide jumps.
     pub fn emit_unit(&mut self, unit: Unit) -> (String, Vec<u8>) {
         self.wide = false;
-        let (errors, refused) = (self.errors.len(), self.refused.len());
+        let (errors, refused, gaps) = (self.errors.len(), self.refused.len(), self.gaps_lines.len());
         let out = self.emit_unit_once(unit);
         if !self.overflow {
+            self.print_gaps();
             return out;
         }
         self.errors.truncate(errors);
         self.refused.truncate(refused);
+        self.gaps_lines.truncate(gaps);
         self.wide = true;
         self.overflow = false;
         let out = self.emit_unit_once(unit);
@@ -797,7 +814,14 @@ impl<'a> Gen<'a> {
         }
         self.wide = false;
         self.overflow = false;
+        self.print_gaps();
         out
+    }
+
+    fn print_gaps(&mut self) {
+        for line in self.gaps_lines.drain(..) {
+            eprintln!("{}", line);
+        }
     }
 
     fn emit_unit_once(&mut self, unit: Unit) -> (String, Vec<u8>) {
@@ -3461,9 +3485,9 @@ impl<'a> Gen<'a> {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             TExpr::If(..) => unreachable!("lowered (`Gen::lower_if`)"),
-            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases) => unreachable!("lowered (`Gen::lower_match`)"),
+            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases).is_ok() => unreachable!("lowered (`Gen::lower_match`)"),
             TExpr::Match(scrut, cases) => self.match_(scrut, cases, Mode::Value(want)),
-            TExpr::Block(stmts, _) if self.block_lowers(stmts) => unreachable!("lowered (`Gen::lower_block`)"),
+            TExpr::Block(stmts, _) if self.block_lowers(stmts).is_ok() => unreachable!("lowered (`Gen::lower_block`)"),
             TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Value(want)),
             TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered (`Gen::lower_expr`)"),
             TExpr::Return(v) => self.return_(v, want),
@@ -3768,7 +3792,8 @@ impl<'a> Gen<'a> {
                     self.m.try_exits.insert(done, (result, normal_exit));
                     self.write(cases);
                 }
-                crate::lir::Cases::Legacy(i) => {
+                crate::lir::Cases::Legacy(i, why) => {
+                    self.m.unlowered.push(why);
                     let prog = self.cx.input.prog;
                     for case in &prog.cases[prog.tries[i as usize].cases.range()] {
                         let next = self.code.new_label();
@@ -4031,7 +4056,7 @@ impl<'a> Gen<'a> {
     /// the statements are written here, before the first operand, and the operands are lowered
     /// once their locals are declared.
     fn str_concat(&mut self, items: ListRef) -> ErasedType {
-        let ConcatRoute::Statements(statements, operands) = self.concat_route(items) else { unreachable!("lowered (`Gen::lower_str_concat`)") };
+        let ConcatRoute::Statements(_, statements, operands) = self.concat_route(items) else { unreachable!("lowered (`Gen::lower_str_concat`)") };
         let mark = self.code.locals_mark();
         for stmts in statements {
             self.block_statements(stmts);
@@ -4049,10 +4074,9 @@ impl<'a> Gen<'a> {
             self.chain_head(head, &mut statements, &mut operands);
             operands.extend_from_slice(rest);
         }
-        if statements.iter().all(|&stmts| self.block_lowers(stmts)) {
-            ConcatRoute::Lowered(statements, operands)
-        } else {
-            ConcatRoute::Statements(statements, operands)
+        match statements.iter().try_for_each(|&stmts| self.block_lowers(stmts)) {
+            Ok(()) => ConcatRoute::Lowered(statements, operands),
+            Err(why) => ConcatRoute::Statements(why, statements, operands),
         }
     }
 
@@ -4819,7 +4843,7 @@ impl<'a> Gen<'a> {
     /// the default's; a jar class's as its class files declare it; else the class's static one.
     fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[Prior], types: &[ErasedType]) {
         let route = self.ctor_default_route(c, via, recv.is_some(), i, temps.len(), types);
-        if temps.is_empty() && self.ctor_default_lowers(c, &route, recv) {
+        if temps.is_empty() && self.ctor_default_lowers(c, &route, recv).is_ok() {
             let node = self.lowering(|g| g.lower_ctor_default(c, route, recv, &types[i]));
             self.write(node);
             return;
@@ -5014,8 +5038,8 @@ impl<'a> Gen<'a> {
     /// Whether the lowering has a node for everything the getter of a constructor's default is
     /// called on and takes, where no argument precedes the default: not for a lazy local or
     /// one the scope does not hold, nor for a local class's `Extras` (`captures_lower`).
-    pub(super) fn ctor_default_lowers(&mut self, c: ClassId, route: &CtorDefault, recv: Option<TExprId>) -> bool {
-        match *route {
+    pub(super) fn ctor_default_lowers(&mut self, c: ClassId, route: &CtorDefault, recv: Option<TExprId>) -> Result<(), Unlowered> {
+        let lowers = match *route {
             CtorDefault::InPlace(_) | CtorDefault::Companion(_) | CtorDefault::Jar(_) | CtorDefault::Static(_) => true,
             CtorDefault::LocalCompanion(v, _) => recv.is_some() || !self.is_lazy_local(v) && self.held_in(v).is_some(),
             CtorDefault::InnerCompanion(..) => recv.is_some() || self.class_captured(c).first().is_some_and(|&s| self.held_in(s).is_some()),
@@ -5023,7 +5047,8 @@ impl<'a> Gen<'a> {
                 let extras = self.class_extras(c);
                 extras.homes.is_empty() && extras.keys.is_empty() && self.class_captures_after(c, recv.is_some() as usize).into_iter().all(|s| self.is_capturable(s) && self.held_in(s).is_some())
             }
-        }
+        };
+        if lowers { Ok(()) } else { Err(Unlowered::DefaultCtorHeldHere) }
     }
 
     /// The arguments as written, each against its parameter's type.
@@ -5092,7 +5117,7 @@ impl<'a> Gen<'a> {
         let items = cx.input.prog.expr_list(args).to_vec();
         let index = (at & !DEFAULT_RECEIVER) as usize;
         let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (Some(items[0]), items[1..].to_vec()) } else { (None, items) };
-        if !matches!(self.default_route(of, at, args), DefaultRoute::Unlowered) {
+        if !matches!(self.default_route(of, at, args), DefaultRoute::Unlowered(_)) {
             assert!(self.default_ctor_class(of).is_some_and(|c| self.asks_captures(c)), "lowered (`Gen::lower_default`)");
             return self.lowered_where_written(|g| g.lower_default(of, at, args));
         }
@@ -5123,20 +5148,20 @@ impl<'a> Gen<'a> {
         let index = (at & !DEFAULT_RECEIVER) as usize;
         let recv = (at & DEFAULT_RECEIVER != 0).then(|| items[0]);
         if items.len() > recv.is_some() as usize {
-            return DefaultRoute::Unlowered;
+            return DefaultRoute::Unlowered(Unlowered::DefaultAfterArguments);
         }
         let (c, via, types) = match of {
             DefaultOf::Ctor(c) => (c, None, self.ctor_param_types(c)),
             DefaultOf::Method(s) if cx.input.syms.sym(s).name == crate::names::INIT => {
                 // A constructor of no class is refused.
-                let Some(c) = self.ctor_class(s) else { return DefaultRoute::Unlowered };
+                let Some(c) = self.ctor_class(s) else { return DefaultRoute::Unlowered(Unlowered::DefaultCtorUnowned) };
                 (c, Some(s), self.param_types(s))
             }
             DefaultOf::Method(s) => return self.method_default_route(s, index, recv),
         };
         let route = self.ctor_default_route(c, via, recv.is_some(), index, 0, &types);
-        if !self.ctor_default_lowers(c, &route, recv) {
-            return DefaultRoute::Unlowered;
+        if let Err(why) = self.ctor_default_lowers(c, &route, recv) {
+            return DefaultRoute::Unlowered(why);
         }
         DefaultRoute::Ctor(c, recv, route, types[index].clone())
     }
@@ -5155,8 +5180,11 @@ impl<'a> Gen<'a> {
     fn method_default_route(&mut self, s: SymId, i: usize, recv: Option<TExprId>) -> DefaultRoute {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
-        if recv.is_some() || info.owner == Owner::Local {
-            return DefaultRoute::Unlowered;
+        if recv.is_some() {
+            return DefaultRoute::Unlowered(Unlowered::DefaultOnReceiver);
+        }
+        if info.owner == Owner::Local {
+            return DefaultRoute::Unlowered(Unlowered::DefaultOfLocalDef);
         }
         let m = self.mref(s);
         let shape = self.default_getter_shape(s, i);
@@ -5165,7 +5193,7 @@ impl<'a> Gen<'a> {
         let (params, ret) = parse_method_desc(&desc);
         let thunk = self.function_type(0);
         if want == thunk && ret != thunk {
-            return DefaultRoute::Unlowered;
+            return DefaultRoute::Unlowered(Unlowered::DefaultByName);
         }
         DefaultRoute::FileMember(info.file, MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name, params, ret, desc, kind: m.kind }, want)
     }
@@ -5674,7 +5702,7 @@ impl<'a> Gen<'a> {
             // Lowered where it is written, the capture analysis asked in order, where the lowering
             // takes the call (`Gen::lower_proxied_call`, `Gen::lower_lifted_member_call`).
             CallRoute::Proxied(t) => {
-                if let Some(call) = self.lowering(|g| g.lower_proxied_call(t, s, args)) {
+                if let Ok(call) = self.lowering(|g| g.lower_proxied_call(t, s, args)) {
                     self.write(call);
                     return self.lir.ty(call).clone();
                 }
@@ -5683,7 +5711,7 @@ impl<'a> Gen<'a> {
                 self.call_proxied(t, s, &m, &proxies, args)
             }
             CallRoute::Lifted => {
-                if let Some(call) = self.lowering(|g| g.lower_lifted_member_call(r, s, args)) {
+                if let Ok(call) = self.lowering(|g| g.lower_lifted_member_call(r, s, args)) {
                     self.write(call);
                     return self.lir.ty(call).clone();
                 }
@@ -5914,7 +5942,7 @@ impl<'a> Gen<'a> {
     /// A node the lowering left to this generator, which asks the analysis of captures, because
     /// typed IR was left before it (`Gen::analysis_in_order`): lowered where it is written, so
     /// that the analysis is asked in the order of the writing, and written.
-    fn lowered_where_written(&mut self, lower: impl FnOnce(&mut Self) -> Option<LirId>) -> ErasedType {
+    fn lowered_where_written(&mut self, lower: impl FnOnce(&mut Self) -> Result<LirId, Unlowered>) -> ErasedType {
         let node = self.lowering(lower).expect("lowered where it is written");
         self.write(node);
         self.lir.ty(node).clone()
@@ -7062,7 +7090,7 @@ impl<'a> Gen<'a> {
     /// A match, and a block the lowering does not take, in return position.
     pub(super) fn tail_legacy(&mut self, e: TExprId) {
         match self.cx.input.prog.expr(e) {
-            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases) => unreachable!("lowered (`Gen::lower_match`)"),
+            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases).is_ok() => unreachable!("lowered (`Gen::lower_match`)"),
             TExpr::Match(scrut, cases) => self.match_(scrut, cases, Mode::Tail),
             TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Tail),
             _ => unreachable!("lowered (`Gen::lower_tail`)"),
@@ -7081,14 +7109,14 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Whether a block's statements are lowered whole: a pattern definition, and a lazy val that
-    /// `Gen::is_lazy_local` does not take, declare their locals as they are written.
-    pub(super) fn block_lowers(&self, stmts: ListRef) -> bool {
+    /// Whether a block's statements are lowered whole, or why not: a pattern definition, and a
+    /// lazy val that `Gen::is_lazy_local` does not take, declare their locals as they are written.
+    pub(super) fn block_lowers(&self, stmts: ListRef) -> Result<(), Unlowered> {
         let cx = self.cx;
-        cx.input.prog.stmts[stmts.range()].iter().all(|s| match *s {
-            TStmt::Pat(..) => false,
-            TStmt::Val(sym, _) => self.is_lazy_local(sym) || cx.input.syms.sym(sym).mods & mods::LAZY == 0,
-            TStmt::Expr(_) | TStmt::Fun(_) => true,
+        cx.input.prog.stmts[stmts.range()].iter().try_for_each(|s| match *s {
+            TStmt::Pat(..) => Err(Unlowered::PatternDefinition),
+            TStmt::Val(sym, _) if !self.is_lazy_local(sym) && cx.input.syms.sym(sym).mods & mods::LAZY != 0 => Err(Unlowered::LazyValNotLocal),
+            TStmt::Val(..) | TStmt::Expr(_) | TStmt::Fun(_) => Ok(()),
         })
     }
 

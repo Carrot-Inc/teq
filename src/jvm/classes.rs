@@ -134,6 +134,14 @@ impl Underlying {
     }
 }
 
+/// Whether a build prints, for each method it writes, why parts of it were left to the
+/// generator of the typed IR (`TEQ_LIR_STATS` set): one line `LIRGAPS<TAB><class>.<name><desc>
+/// <TAB><reasons>`, the reasons the names of `lir::Unlowered`, `-` for none.
+fn lir_stats() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("TEQ_LIR_STATS").is_some())
+}
+
 /// Whether a value class's synthesized member is a tree (`Gen::vc_member_tree`). Not
 /// `productElement` and `productElementName`, whose index is tested by `ifne` (an `Int` against
 /// zero), nor `equals` over a reference, which holds the other's value in a slot while this one's
@@ -244,6 +252,13 @@ impl<'a> Gen<'a> {
             return;
         }
         let m = self.plan.methods.last().expect("a method was begun");
+        if lir_stats() {
+            self.m.unlowered.sort_unstable();
+            self.m.unlowered.dedup();
+            let why: Vec<String> = self.m.unlowered.iter().map(|why| format!("{:?}", why)).collect();
+            let why = if why.is_empty() { "-".to_string() } else { why.join(",") };
+            self.gaps_lines.push(format!("LIRGAPS\t{}.{}{}\t{}", self.this_name, m.name, m.desc, why));
+        }
         self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
         self.overflow |= self.cw.overflow;
     }

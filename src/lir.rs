@@ -242,10 +242,107 @@ pub struct Node {
     pub of: Option<TExprId>,
 }
 
+/// Why a form of the typed IR is not lowered yet: what an escape node (`Kind::Legacy`,
+/// `Kind::LegacyTail`, `Cases::Legacy`) carries, so that the forms the old generator still writes
+/// are this list (docs/LIR.md, "How the extraction goes").
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum Unlowered {
+    /// `case null =>`, in a match or a catch.
+    PatternNull,
+    /// A sequence pattern: `case Seq(a, _*)`, `case List(x, y)`.
+    PatternSequence,
+    /// A type test of `Null` in a pattern: `case _: Null`.
+    TestNull,
+    /// `case _: AnyRef` or `case _: AnyVal`.
+    TestAnyRefOrAnyVal,
+    /// A type test that also checks the enclosing instance: `case _: this.Inner`.
+    TestOuter,
+    /// A match on a value whose static type is an intersection of two value classes.
+    MatchValueClassIntersection,
+    /// `val (a, b) = p`, a definition by a pattern, among a block's statements.
+    PatternDefinition,
+    /// A `lazy val` among a block's statements that is not a local lazy val.
+    LazyValNotLocal,
+    /// `return x` where it is not the def's result: a statement, an operand, inside a `try`.
+    ReturnInValuePosition,
+    /// `return x` inside a lambda, which leaves the def around it by a throw.
+    NonLocalReturn,
+    /// A lambda, a local def's call, a local lazy val's read, `new` or a default of a class that
+    /// captures, or a local trait's member call, after an earlier part of the method was left to
+    /// the old generator: what it captures is asked in the order the code is written.
+    AfterEscape,
+    /// `JavaClass.field = v`: a Java static field assigned.
+    AssignJavaStatic,
+    /// `field = v` of a Java instance field with no receiver written.
+    AssignJavaFieldNoReceiver,
+    /// `x = v` of a `var` of an object, with no receiver written.
+    AssignObjectMemberNoReceiver,
+    /// An assignment to any other target (reported).
+    AssignOtherTarget,
+    /// `a == b` in a build whose runtime has no universal equality helper.
+    EqualityWithoutHelper,
+    /// `this` or `super` where the method has no instance (reported).
+    NoInstance,
+    /// An enum's value held by its own class, the enum initialised first.
+    EnumValueOwnClass,
+    /// A top-level `inline val` of a `Boolean` or `String` constant read as a value.
+    InlineValBooleanOrString,
+    /// An `inline val` with no constant type (reported).
+    InlineValNoConstant,
+    /// `a.O`: an object selected on a value of its owner, the value evaluated first.
+    ObjectThroughOwner,
+    /// A constructor's parameter read before the superclass's constructor ran.
+    EarlyParameter,
+    /// A given object selected on a receiver that is evaluated for its effect.
+    GivenObjectThroughReceiver,
+    /// JavaScript interop: `js.Dynamic`, a JavaScript import, a native JavaScript class or
+    /// member, an object literal (reported on the JVM).
+    JavaScriptOnly,
+    /// `f(x)` of a local function value held in a lazy val, a captured `var`'s cell or a field.
+    LocalFunctionValueNotPlain,
+    /// `v.m(..)` of a value class's method, called as its `m$extension`.
+    ValueClassMethodCall,
+    /// A string interpolator of the library (`s"..."`, `f"..."`) where the build's runtime has
+    /// no definition of it.
+    InterpolatorWithoutRuntime,
+    /// A right-associative member of a local trait that takes what the trait captures.
+    LocalTraitMemberRightAssociative,
+    /// A member of a local trait that takes what the trait captures, called on `super`, or with
+    /// a value for a capture that is no read of a local.
+    LocalTraitMemberUnplain,
+    /// `new C(..)` of a local or anonymous class that is passed something with no node yet: an
+    /// enclosing instance of another class, a lazy val's key, a holder made for a captured
+    /// value, a captured local held nowhere.
+    NewCapturedUnlowered,
+    /// `new o.Inner(..)` of an inner class this build does not write, whose class file gives
+    /// no single answer for the enclosing instance.
+    NewUnwrittenOuter,
+    /// `new C(..)` through a constructor of no class (reported).
+    NewViaUnowned,
+    /// A default argument after written arguments, which its getter takes.
+    DefaultAfterArguments,
+    /// A method's default whose getter is called on a receiver: `obj.f()`, `super.f()`.
+    DefaultOnReceiver,
+    /// A local def's default argument.
+    DefaultOfLocalDef,
+    /// A by-name parameter's default whose getter is passed as a function.
+    DefaultByName,
+    /// A constructor's default whose getter takes what only the method being written holds.
+    DefaultCtorHeldHere,
+    /// A default of a constructor of no class (reported).
+    DefaultCtorUnowned,
+    /// Varargs in a build whose library has no `ArraySeq` (reported).
+    VarargsWithoutArraySeq,
+    /// A `@jvm` template written from its text, or the typer's own text that is no one call.
+    TemplateText,
+    /// `xs*` where no array parameter takes it.
+    SpreadArgument,
+}
+
 #[derive(Clone)]
 pub enum Kind {
-    /// An expression of the typed IR brought to the node's type, not lowered yet.
-    Legacy(TExprId),
+    /// An expression of the typed IR brought to the node's type, not lowered yet, and why.
+    Legacy(TExprId, Unlowered),
     Int(i32),
     Long(i64),
     Float(f32),
@@ -322,9 +419,9 @@ pub enum Kind {
     /// it: the node's type is the one its place wants, the operands under it dropped; as a
     /// condition (`&&`'s or `||`'s right operand) nothing tests it.
     SelfTailCall { receiver: Option<LirId>, args: List },
-    /// A match, or a block not lowered, in return position: the generator of the typed IR
-    /// writes it, each of its results returned. Transitional.
-    LegacyTail(TExprId),
+    /// A match, or a block not lowered, in return position, and why: the generator of the typed
+    /// IR writes it, each of its results returned. Transitional.
+    LegacyTail(TExprId, Unlowered),
     /// A field of an instance assigned.
     FieldStore { receiver: LirId, owner: Rc<str>, name: Rc<str>, value: LirId },
     /// A class's static field read.
@@ -455,8 +552,8 @@ impl Kind {
     /// (`Body::typed_ir_left`). Every kind is listed, so that a new one is classified.
     fn leaves_typed_ir(&self) -> bool {
         match self {
-            Kind::Legacy(_) | Kind::LegacyTail(_) | Kind::Test { .. } => true,
-            Kind::Try { cases, .. } => matches!(cases, Some(Cases::Legacy(_))),
+            Kind::Legacy(..) | Kind::LegacyTail(..) | Kind::Test { .. } => true,
+            Kind::Try { cases, .. } => matches!(cases, Some(Cases::Legacy(..))),
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => false,
             Kind::Local(_) | Kind::Param(_) | Kind::Block { .. } | Kind::Val { .. } | Kind::Assign { .. } | Kind::LocalFun(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This => false,
             Kind::Field { .. } | Kind::Binary { .. } | Kind::Neg(_) | Kind::Not(_) | Kind::And(..) | Kind::Or(..) | Kind::Compare { .. } => false,
@@ -483,9 +580,9 @@ pub enum Cases {
     /// or throws.
     Lowered { caught: TempId, done: LabelId, cases: LirId },
     /// The cases of the typed IR's `tries[index]`, where one of their patterns is not lowered
-    /// (`Gen::pattern_lowers`), generated by `Gen::write_try`. Transitional until those
-    /// patterns are.
-    Legacy(u32),
+    /// (`Gen::pattern_lowers`, which says why), generated by `Gen::write_try`. Transitional until
+    /// those patterns are.
+    Legacy(u32, Unlowered),
 }
 
 /// The nodes of one method.

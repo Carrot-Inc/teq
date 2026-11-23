@@ -3,7 +3,7 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cases, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Relation};
+use crate::lir::{Arith, Capture, Cases, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Relation, Unlowered};
 use super::gen::{rank_type, CallRoute, CaptureArgument, ConcatRoute, CtorArguments, CtorDefault, DefaultRoute, Extras, FieldRoute, Fit, Gen, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::names::*;
 use crate::ast::ListRef;
@@ -56,14 +56,14 @@ impl<'a> Gen<'a> {
         let node = &mut self.lir.nodes[id.0 as usize];
         // A node not lowered takes its position as it is generated, and a jump where a value is
         // wanted its arguments': the operands it drops under it are its place's.
-        if !matches!(node.kind, Kind::Legacy(_) | Kind::SelfTailCall { .. }) {
+        if !matches!(node.kind, Kind::Legacy(..) | Kind::SelfTailCall { .. }) {
             node.of = Some(e);
         }
         id
     }
 
-    fn lower_legacy(&mut self, e: TExprId, want: &ErasedType) -> LirId {
-        self.lir.push(Kind::Legacy(e), want.clone())
+    fn lower_legacy(&mut self, e: TExprId, want: &ErasedType, why: Unlowered) -> LirId {
+        self.lir.push(Kind::Legacy(e, why), want.clone())
     }
 
     /// Whether what the lowering asks the analysis of captures now is asked in the order the
@@ -86,10 +86,15 @@ impl<'a> Gen<'a> {
             }
         }
         match prog.expr(e) {
-            TExpr::Block(stmts, res) if self.block_lowers(stmts) => self.lower_block(stmts, res, want),
+            TExpr::Block(stmts, res) => match self.block_lowers(stmts) {
+                Ok(()) => self.lower_block(stmts, res, want),
+                Err(why) => self.lower_legacy(e, want, why),
+            },
             TExpr::If(c, t, els) => self.lower_if(c, t, els, want),
-            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases) => self.lower_match(scrut, cases, Some(want)),
-            TExpr::Match(..) | TExpr::Block(..) => self.lower_legacy(e, want),
+            TExpr::Match(scrut, cases) => match self.match_lowers(scrut, cases) {
+                Ok(()) => self.lower_match(scrut, cases, Some(want)),
+                Err(why) => self.lower_legacy(e, want, why),
+            },
             TExpr::Throw(inner, _) => {
                 let value = self.lower_expr(inner, &ErasedType::L(Rc::from(THROWABLE)));
                 self.lir.push(Kind::Throw(value), want.clone())
@@ -97,12 +102,12 @@ impl<'a> Gen<'a> {
             TExpr::Try(index) => {
                 let t = &prog.tries[index as usize];
                 let body = self.lower_expr(t.body, want);
-                let cases = (!t.cases.is_empty()).then(|| match prog.cases[t.cases.range()].iter().all(|case| self.pattern_lowers(case.pat)) {
-                    true => self.lower_catch(t.cases, want),
-                    false => Cases::Legacy(index),
+                let cases = (!t.cases.is_empty()).then(|| match prog.cases[t.cases.range()].iter().try_for_each(|case| self.pattern_lowers(case.pat)) {
+                    Ok(()) => self.lower_catch(t.cases, want),
+                    Err(why) => Cases::Legacy(index, why),
                 });
                 // Cases the lowering does not take are written between the body and the finalizer.
-                self.lir.typed_ir_left |= matches!(cases, Some(Cases::Legacy(_)));
+                self.lir.typed_ir_left |= matches!(cases, Some(Cases::Legacy(..)));
                 let finalizer = t.finalizer.map(|f| self.lower_expr(f, &ErasedType::V));
                 self.lir.push(Kind::Try { body, cases, finalizer }, want.clone())
             }
@@ -117,8 +122,17 @@ impl<'a> Gen<'a> {
             TExpr::Int(v) if matches!(want, ErasedType::J) => self.lir.push(Kind::Long(v as i64), ErasedType::J),
             TExpr::Int(v) if matches!(want, ErasedType::F) => self.lir.push(Kind::Float(v as f32), ErasedType::F),
             TExpr::Double(v) if matches!(want, ErasedType::F) => self.lir.push(Kind::Float(v as f32), ErasedType::F),
-            _ => {
-                let Some(node) = self.lower_node(e) else { return self.lower_legacy(e, want) };
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null
+            | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::Field(..)
+            | TExpr::CallStatic(..) | TExpr::CallMethod(..) | TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Default(..)
+            | TExpr::Lambda(..) | TExpr::While(..) | TExpr::Assign(..) | TExpr::Prim(..) | TExpr::Unary(..) | TExpr::StrConcat(_)
+            | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::TypeTest(..) | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_)
+            | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_)
+            | TExpr::Spread(_) | TExpr::Return(_) | TExpr::Splice(_) => {
+                let node = match self.lower_node(e) {
+                    Ok(node) => node,
+                    Err(why) => return self.lower_legacy(e, want, why),
+                };
                 let t = self.lir.ty(node).clone();
                 match self.fit(e, &t, want) {
                     Fit::ValueClass(class, args, null_safe) => self.lir.push(Kind::ValueClass { value: node, from: t, class, args, null_safe }, want.clone()),
@@ -132,10 +146,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// One node of the typed IR at the type it leaves; None for a node not lowered yet.
-    fn lower_node(&mut self, e: TExprId) -> Option<LirId> {
+    /// One node of the typed IR at the type it leaves, or why it is not lowered yet.
+    fn lower_node(&mut self, e: TExprId) -> Result<LirId, Unlowered> {
         let prog = self.cx.input.prog;
-        Some(match prog.expr(e) {
+        Ok(match prog.expr(e) {
             TExpr::Int(v) => {
                 // A literal the typer narrowed to the `Byte`, `Short` or `Char` expected keeps that
                 // type, so that boxing it gives the narrow class (`(1: Byte): Any` is a `java.lang.Byte`).
@@ -181,7 +195,7 @@ impl<'a> Gen<'a> {
             TExpr::Cast(inner, op, _) => self.lower_cast(inner, op),
             TExpr::ToStr(inner, conv) => self.lower_to_str(inner, conv),
             TExpr::StrConcat(items) => return self.lower_str_concat(items),
-            TExpr::This | TExpr::Super(_) => return self.lower_this(),
+            TExpr::This | TExpr::Super(_) => return self.lower_this().ok_or(Unlowered::NoInstance),
             TExpr::Static(s) => return self.lower_static(s),
             TExpr::Field(r, s) => return self.lower_field_read(r, s),
             TExpr::CallClosure(f, args) => {
@@ -210,14 +224,20 @@ impl<'a> Gen<'a> {
                 self.lir.push(Kind::ArrayLoad { array, index }, ErasedType::object())
             }
             TExpr::Lambda(params, body) if self.analysis_in_order() => self.lower_lambda(params, body),
+            TExpr::Lambda(..) => return Err(Unlowered::AfterEscape),
             TExpr::Js(template, args) => return self.lower_template(e, template, args),
-            _ => return None,
+            TExpr::Return(_) if self.m.closure => return Err(Unlowered::NonLocalReturn),
+            TExpr::Return(_) => return Err(Unlowered::ReturnInValuePosition),
+            TExpr::Spread(_) => return Err(Unlowered::SpreadArgument),
+            TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => return Err(Unlowered::JavaScriptOnly),
+            TExpr::If(..) | TExpr::Match(..) | TExpr::Block(..) | TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered by `Gen::lower_marked`"),
+            TExpr::Splice(_) => unreachable!("a stored inline body is lowered nowhere"),
         })
     }
 
-    /// An operation on two operands; None for an equality of a build whose runtime lacks the
-    /// helper (`Gen::equal_without_helper`).
-    fn lower_prim(&mut self, op: PrimOp, a: TExprId, b: TExprId) -> Option<LirId> {
+    /// An operation on two operands; not an equality of a build whose runtime lacks the helper
+    /// (`Gen::equal_without_helper`).
+    fn lower_prim(&mut self, op: PrimOp, a: TExprId, b: TExprId) -> Result<LirId, Unlowered> {
         use PrimOp::*;
         let (t, arith) = match op {
             IntAdd => (ErasedType::I, Arith::Add),
@@ -257,7 +277,7 @@ impl<'a> Gen<'a> {
             BoolXor => (ErasedType::Z, Arith::Xor),
             // Universal equality is the runtime's; `!=` is its negation as a value.
             Eq | Ne => {
-                let &helper = self.cx.helpers.defs.get("equal")?;
+                let &helper = self.cx.helpers.defs.get("equal").ok_or(Unlowered::EqualityWithoutHelper)?;
                 let method = self.mref(helper);
                 let object = ErasedType::object();
                 let left = self.lower_expr(a, &object);
@@ -265,19 +285,19 @@ impl<'a> Gen<'a> {
                 let args = self.lir.list(&[left, right]);
                 let equal = self.lir.push(Kind::Helper { method, args }, ErasedType::Z);
                 if op == Eq {
-                    return Some(equal);
+                    return Ok(equal);
                 }
                 let yes = self.lir.push(Kind::Bool(true), ErasedType::Z);
-                return Some(self.lir.push(Kind::Binary { op: Arith::Xor, left: equal, right: yes }, ErasedType::Z));
+                return Ok(self.lir.push(Kind::Binary { op: Arith::Xor, left: equal, right: yes }, ErasedType::Z));
             }
-            Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame => return Some(self.lower_compare(op, a, b)),
+            Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame => return Ok(self.lower_compare(op, a, b)),
             BoolAnd => {
                 let (left, right) = (self.lower_cond(a), self.lower_cond(b));
-                return Some(self.lir.push(Kind::And(left, right), ErasedType::Z));
+                return Ok(self.lir.push(Kind::And(left, right), ErasedType::Z));
             }
             BoolOr => {
                 let (left, right) = (self.lower_cond(a), self.lower_cond(b));
-                return Some(self.lir.push(Kind::Or(left, right), ErasedType::Z));
+                return Ok(self.lir.push(Kind::Or(left, right), ErasedType::Z));
             }
         };
         let left = self.lower_expr(a, &t);
@@ -289,7 +309,7 @@ impl<'a> Gen<'a> {
         } else {
             self.lower_expr(b, &t)
         };
-        Some(self.lir.push(Kind::Binary { op: arith, left, right }, t))
+        Ok(self.lir.push(Kind::Binary { op: arith, left, right }, t))
     }
 
     fn lower_unary(&mut self, op: UnOp, a: TExprId) -> LirId {
@@ -367,7 +387,13 @@ impl<'a> Gen<'a> {
             }
             TExpr::Prim(op @ (PrimOp::Lt | PrimOp::Le | PrimOp::Gt | PrimOp::Ge | PrimOp::RefEq | PrimOp::RefNe | PrimOp::Same | PrimOp::NotSame), a, b) => self.lower_compare(op, a, b),
             TExpr::TypeTest(inner, test, tested) => self.lower_test(inner, test, tested),
-            _ => self.lower_expr(e, &ErasedType::Z),
+            TExpr::Prim(..) | TExpr::Unary(..) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
+            | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::Field(..)
+            | TExpr::CallStatic(..) | TExpr::CallMethod(..) | TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Default(..)
+            | TExpr::Lambda(..) | TExpr::If(..) | TExpr::While(..) | TExpr::Block(..) | TExpr::Assign(..) | TExpr::Match(..)
+            | TExpr::StrConcat(_) | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_)
+            | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_)
+            | TExpr::Spread(_) | TExpr::Return(_) | TExpr::Throw(..) | TExpr::Try(_) | TExpr::Splice(_) => self.lower_expr(e, &ErasedType::Z),
         }
     }
 
@@ -465,22 +491,27 @@ impl<'a> Gen<'a> {
                 let otherwise = Some(self.lower_tail(els));
                 Kind::If { cond, then, otherwise }
             }
-            TExpr::Block(stmts, res) if !boxed_whole && self.block_lowers(stmts) => {
-                let mut nodes = Vec::new();
-                self.lower_lazy_holders(stmts, &mut nodes);
-                for &s in &prog.stmts[stmts.range()] {
-                    self.lower_statement(s, &mut nodes);
+            TExpr::Block(stmts, res) if !boxed_whole => match self.block_lowers(stmts) {
+                Ok(()) => {
+                    let mut nodes = Vec::new();
+                    self.lower_lazy_holders(stmts, &mut nodes);
+                    for &s in &prog.stmts[stmts.range()] {
+                        self.lower_statement(s, &mut nodes);
+                    }
+                    let result = self.lower_tail(res);
+                    let stmts = self.lir.list(&nodes);
+                    Kind::Block { stmts, result }
                 }
-                let result = self.lower_tail(res);
-                let stmts = self.lir.list(&nodes);
-                Kind::Block { stmts, result }
-            }
-            TExpr::Match(scrut, cases) if !boxed_whole && self.match_lowers(scrut, cases) => {
-                let id = self.lower_match(scrut, cases, None);
-                self.lir.nodes[id.0 as usize].of = Some(e);
-                return id;
-            }
-            TExpr::Match(..) | TExpr::Block(..) if !boxed_whole => Kind::LegacyTail(e),
+                Err(why) => Kind::LegacyTail(e, why),
+            },
+            TExpr::Match(scrut, cases) if !boxed_whole => match self.match_lowers(scrut, cases) {
+                Ok(()) => {
+                    let id = self.lower_match(scrut, cases, None);
+                    self.lir.nodes[id.0 as usize].of = Some(e);
+                    return id;
+                }
+                Err(why) => Kind::LegacyTail(e, why),
+            },
             // A return out of the method here is that return, its value the method's result (dotty's
             // `genReturn` sends the value to the method's return); out of a closure it is a throw,
             // after which the return of what it leaves is dead.
@@ -491,7 +522,14 @@ impl<'a> Gen<'a> {
                     Kind::Return(self.lower_expr(v, &ret))
                 }
             },
-            _ => match self.m.tail.as_ref().and_then(|tail| prog.self_call(tail.sym, tail.params.len(), e)) {
+            TExpr::If(..) | TExpr::Block(..) | TExpr::Match(..) | TExpr::Return(_) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_)
+            | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Super(_)
+            | TExpr::Static(_) | TExpr::Module(_) | TExpr::Field(..) | TExpr::CallStatic(..) | TExpr::CallMethod(..) | TExpr::CallClosure(..)
+            | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Default(..) | TExpr::Lambda(..) | TExpr::While(..) | TExpr::Assign(..)
+            | TExpr::Prim(..) | TExpr::Unary(..) | TExpr::StrConcat(_) | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::TypeTest(..)
+            | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_) | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_)
+            | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) | TExpr::Spread(_) | TExpr::Throw(..) | TExpr::Try(_)
+            | TExpr::Splice(_) => match self.m.tail.as_ref().and_then(|tail| prog.self_call(tail.sym, tail.params.len(), e)) {
                 Some((receiver, args)) => self.lower_self_tail_call(receiver, args),
                 None => {
                     let ret = self.m.ret.clone();
@@ -615,24 +653,29 @@ impl<'a> Gen<'a> {
         nodes.push(self.lir.push(Kind::FieldStore { receiver: holder, owner: cell, name: Rc::from("elem"), value }, ErasedType::V));
     }
 
-    /// An assignment to a local or to a member; None for the targets not lowered yet
-    /// (`Gen::assign`).
-    fn lower_assign(&mut self, target: TExprId, value: TExprId) -> Option<LirId> {
+    /// An assignment to a local or to a member, or why it is not lowered yet (`Gen::assign`).
+    fn lower_assign(&mut self, target: TExprId, value: TExprId) -> Result<LirId, Unlowered> {
         let sym = match self.cx.input.prog.expr(target) {
             TExpr::Local(sym) => sym,
             TExpr::Field(r, s) => return self.lower_member_assign(Some(r), s, value),
             TExpr::Static(s) => return self.lower_member_assign(None, s, value),
-            _ => return None,
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null
+            | TExpr::This | TExpr::Super(_) | TExpr::Module(_) | TExpr::CallStatic(..) | TExpr::CallMethod(..) | TExpr::CallClosure(..)
+            | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Default(..) | TExpr::Lambda(..) | TExpr::If(..) | TExpr::While(..)
+            | TExpr::Block(..) | TExpr::Assign(..) | TExpr::Match(..) | TExpr::Prim(..) | TExpr::Unary(..) | TExpr::StrConcat(_)
+            | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::TypeTest(..) | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_)
+            | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_)
+            | TExpr::Spread(_) | TExpr::Return(_) | TExpr::Throw(..) | TExpr::Try(_) | TExpr::Splice(_) => return Err(Unlowered::AssignOtherTarget),
         };
         if !self.is_cell(sym) {
             // One the method does not hold as a local is reported where it is lowered, as
             // `Gen::store_local` did: held nowhere, or a capture held by value in a field.
             let Some(HeldIn::Local(ty)) = self.held_in(sym) else {
                 self.unsupported("assignment to a local that is not in scope");
-                return Some(self.lir.push(Kind::Unit, ErasedType::V));
+                return Ok(self.lir.push(Kind::Unit, ErasedType::V));
             };
             let value = self.lower_expr(value, &ty);
-            return Some(self.lir.push(Kind::Assign { sym, value }, ErasedType::V));
+            return Ok(self.lir.push(Kind::Assign { sym, value }, ErasedType::V));
         }
         let declared = self.sym_type(sym);
         // A cell the scope does not hold is reported where it is lowered (`Gen::lower_capture`).
@@ -640,22 +683,26 @@ impl<'a> Gen<'a> {
         let object = ErasedType::object();
         let value = self.lower_expr(value, &declared);
         let value = self.lower_adapt(value, &declared, &object);
-        Some(self.lir.push(Kind::FieldStore { receiver: cell, owner: Rc::from(OBJECT_REF), name: Rc::from("elem"), value }, ErasedType::V))
+        Ok(self.lir.push(Kind::FieldStore { receiver: cell, owner: Rc::from(OBJECT_REF), name: Rc::from("elem"), value }, ErasedType::V))
     }
 
     /// An assignment to the member `s`, on the receiver `r` where one is written: a Java
     /// instance's field assigned, else the member's setter called, on the receiver or on the
-    /// object of the file that declares the member. None for a Java class's static field, a Java
-    /// field with no receiver and a setter on the member's own object, not lowered yet.
-    fn lower_member_assign(&mut self, r: Option<TExprId>, s: SymId, value: TExprId) -> Option<LirId> {
+    /// object of the file that declares the member. Not a Java class's static field, a Java
+    /// field with no receiver nor a setter on the member's own object, not lowered yet.
+    fn lower_member_assign(&mut self, r: Option<TExprId>, s: SymId, value: TExprId) -> Result<LirId, Unlowered> {
         let cx = self.cx;
         if let Some((cf, JMember::Field(i))) = cx.input.java_member(s) {
             let f = &cf.fields[i as usize];
-            let (false, Some(r)) = (f.access & ACC_STATIC != 0, r) else { return None };
+            let r = match (f.access & ACC_STATIC != 0, r) {
+                (true, _) => return Err(Unlowered::AssignJavaStatic),
+                (false, None) => return Err(Unlowered::AssignJavaFieldNoReceiver),
+                (false, Some(r)) => r,
+            };
             let t = parse_type(&f.descriptor).0;
             let (receiver, owner) = self.lower_java_qualifier(r, s, &cf.name);
             let value = self.lower_expr(value, &t);
-            return Some(self.lir.push(Kind::FieldStore { receiver, owner, name: Rc::from(f.name.as_str()), value }, ErasedType::V));
+            return Ok(self.lir.push(Kind::FieldStore { receiver, owner, name: Rc::from(f.name.as_str()), value }, ErasedType::V));
         }
         let (receiver, at, m) = match r {
             Some(r) => {
@@ -666,7 +713,7 @@ impl<'a> Gen<'a> {
             None => {
                 let info = cx.input.syms.sym(s);
                 if let Owner::Class(_) = info.owner {
-                    return None;
+                    return Err(Unlowered::AssignObjectMemberNoReceiver);
                 }
                 (self.lower_file_module(info.file), None, self.mref(s))
             }
@@ -674,7 +721,7 @@ impl<'a> Gen<'a> {
         let value = self.lower_expr(value, &m.ret);
         let args = self.lir.list(&[value]);
         let setter = Rc::new(self.setter_ref(&m));
-        Some(self.lir.push(Kind::Call { method: setter, at, receiver, args, order: None }, ErasedType::V))
+        Ok(self.lir.push(Kind::Call { method: setter, at, receiver, args, order: None }, ErasedType::V))
     }
 
     /// The receiver of a Java instance's field, and the class the reference names: the
@@ -717,9 +764,9 @@ impl<'a> Gen<'a> {
     /// Varargs packed into a sequence: a new instance of the class the build's standard library
     /// wraps an array in, over an array of the items as references. scala-library's
     /// `ArraySeq.ofRef` takes an array of references, the std's `ArraySeq` an array of any kind.
-    /// None where the library has no such class.
-    fn lower_seq_literal(&mut self, e: TExprId, items: ListRef) -> Option<LirId> {
-        let seq = self.cx.input.array_seq?;
+    /// Not where the library has no such class.
+    fn lower_seq_literal(&mut self, e: TExprId, items: ListRef) -> Result<LirId, Unlowered> {
+        let seq = self.cx.input.array_seq.ok_or(Unlowered::VarargsWithoutArraySeq)?;
         let name = self.class_name(seq);
         let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
         let elem = self.seq_literal_element(e);
@@ -729,7 +776,7 @@ impl<'a> Gen<'a> {
         let args = self.lir.list(&[wrapped]);
         let desc = method_desc(std::slice::from_ref(&param), &ErasedType::V);
         let ctor = Rc::new(MethodRef { owner: name.clone(), owner_is_interface: false, name: "<init>".to_string(), params: vec![param], ret: ErasedType::V, desc, kind: Invoke::Special });
-        Some(self.lir.push(Kind::New { touch: None, ctor, args }, ErasedType::L(name)))
+        Ok(self.lir.push(Kind::New { touch: None, ctor, args }, ErasedType::L(name)))
     }
 
     /// An array of references holding the items boxed, each brought to `elem` first: an `Int`
@@ -862,12 +909,15 @@ impl<'a> Gen<'a> {
     }
 
     /// A concatenation, in a block where the head of its chain brings statements: they run
-    /// before the first operand, and their locals end with the concatenation. None where one of
+    /// before the first operand, and their locals end with the concatenation. Not where one of
     /// them is not lowered yet (`Gen::str_concat`).
-    fn lower_str_concat(&mut self, items: ListRef) -> Option<LirId> {
-        let ConcatRoute::Lowered(statements, operands) = self.concat_route(items) else { return None };
+    fn lower_str_concat(&mut self, items: ListRef) -> Result<LirId, Unlowered> {
+        let (statements, operands) = match self.concat_route(items) {
+            ConcatRoute::Lowered(statements, operands) => (statements, operands),
+            ConcatRoute::Statements(why, ..) => return Err(why),
+        };
         if statements.is_empty() {
-            return Some(self.lower_concat(&operands));
+            return Ok(self.lower_concat(&operands));
         }
         let prog = self.cx.input.prog;
         let mut nodes = Vec::new();
@@ -880,7 +930,7 @@ impl<'a> Gen<'a> {
         let result = self.lower_concat(&operands);
         let ty = self.lir.ty(result).clone();
         let stmts = self.lir.list(&nodes);
-        Some(self.lir.push(Kind::Block { stmts, result }, ty))
+        Ok(self.lir.push(Kind::Block { stmts, result }, ty))
     }
 
     /// `a + b + c` on strings over the chain's operands (`Gen::concat_route`): a string
@@ -962,36 +1012,37 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::Call { method, at: None, receiver: function, args, order: None }, object)
     }
 
-    /// A member read with no receiver written; None for the routes not lowered yet.
-    pub(super) fn lower_static(&mut self, s: SymId) -> Option<LirId> {
+    /// A member read with no receiver written, or why its route is not lowered yet.
+    pub(super) fn lower_static(&mut self, s: SymId) -> Result<LirId, Unlowered> {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
         match self.static_route(s) {
-            StaticRoute::GivenObject => Some(self.lower_given_object(s)),
+            StaticRoute::GivenObject => Ok(self.lower_given_object(s)),
             StaticRoute::EnumField(companion, e) => {
                 let owner = self.class_name(companion);
                 let t = self.class_type(e);
                 let name = encode(cx.input.interner.get(info.name));
-                Some(self.lir.push(Kind::StaticField { owner, name: Rc::from(&*name) }, t))
+                Ok(self.lir.push(Kind::StaticField { owner, name: Rc::from(&*name) }, t))
             }
-            StaticRoute::EnumValue(_) => None,
+            StaticRoute::EnumValue(_) => Err(Unlowered::EnumValueOwnClass),
             // One with no constant type is refused (`Gen::load_static`). A boolean's is the value a
             // condition tests where `Gen::write_cond` would take a `Bool` node for a constant
             // condition and write no test; a string's is a value of a concatenation where a `Text`
             // node would be text of its recipe.
             StaticRoute::InlineVal => match info.sig.as_ref().map(|sig| cx.input.types.get(sig.ret)) {
-                Some(Type::Lit(l)) if !matches!(cx.input.types.lit_val(l), LitVal::Bool(_) | LitVal::Str(_)) => Some(self.lower_literal(l)),
-                _ => None,
+                Some(Type::Lit(l)) if !matches!(cx.input.types.lit_val(l), LitVal::Bool(_) | LitVal::Str(_)) => Ok(self.lower_literal(l)),
+                Some(Type::Lit(_)) => Err(Unlowered::InlineValBooleanOrString),
+                _ => Err(Unlowered::InlineValNoConstant),
             },
             StaticRoute::JavaField => {
                 let Some((cf, JMember::Field(i))) = cx.input.java_member(s) else { unreachable!("a Java field, by the route") };
                 let f = &cf.fields[i as usize];
                 let t = parse_type(&f.descriptor).0;
-                Some(self.lir.push(Kind::StaticField { owner: Rc::from(cf.name.as_str()), name: Rc::from(f.name.as_str()) }, t))
+                Ok(self.lir.push(Kind::StaticField { owner: Rc::from(cf.name.as_str()), name: Rc::from(f.name.as_str()) }, t))
             }
             StaticRoute::Field => {
                 let m = self.mref(s);
-                Some(self.lir.push(Kind::StaticField { owner: m.owner.clone(), name: Rc::from(m.name.as_str()) }, m.ret.clone()))
+                Ok(self.lir.push(Kind::StaticField { owner: m.owner.clone(), name: Rc::from(m.name.as_str()) }, m.ret.clone()))
             }
             StaticRoute::Accessor => {
                 let m = self.mref(s);
@@ -1001,7 +1052,7 @@ impl<'a> Gen<'a> {
                 };
                 let args = self.lir.list(&[]);
                 let ret = m.ret.clone();
-                Some(self.lir.push(Kind::Call { method: m, at: None, receiver, args, order: None }, ret))
+                Ok(self.lir.push(Kind::Call { method: m, at: None, receiver, args, order: None }, ret))
             }
         }
     }
@@ -1016,28 +1067,28 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::Module(name), declared)
     }
 
-    /// A call with no receiver written; None for the routes not lowered yet.
-    fn lower_call_static(&mut self, s: SymId, args: ListRef) -> Option<LirId> {
+    /// A call with no receiver written, or why its route is not lowered yet.
+    fn lower_call_static(&mut self, s: SymId, args: ListRef) -> Result<LirId, Unlowered> {
         let cx = self.cx;
         match self.static_call_route(s, args) {
-            StaticCallRoute::Lifted => self.analysis_in_order().then(|| self.lower_lifted_call(s, args)),
-            StaticCallRoute::Spread(array) => Some(self.lower_wrapped_spread(array, None)),
-            StaticCallRoute::JavaStatic | StaticCallRoute::JdkStatic => Some(self.lower_static_call(s, args)),
+            StaticCallRoute::Lifted => self.analysis_in_order().then(|| self.lower_lifted_call(s, args)).ok_or(Unlowered::AfterEscape),
+            StaticCallRoute::Spread(array) => Ok(self.lower_wrapped_spread(array, None)),
+            StaticCallRoute::JavaStatic | StaticCallRoute::JdkStatic => Ok(self.lower_static_call(s, args)),
             // A lazy local, a captured one and a cell are not lowered yet.
             StaticCallRoute::LocalValue => {
-                let t = self.plain_local(s)?;
+                let t = self.plain_local(s).ok_or(Unlowered::LocalFunctionValueNotPlain)?;
                 let items: Vec<TExprId> = cx.input.prog.expr_list(args).to_vec();
                 let ft = self.function_type(items.len());
                 let local = self.lir.push(Kind::Local(s), t.clone());
                 let function = self.lower_adapt(local, &t, &ft);
-                Some(self.lower_application(function, &ft, items))
+                Ok(self.lower_application(function, &ft, items))
             }
             StaticCallRoute::FileModule => {
                 let m = self.mref(s);
                 let receiver = self.lower_file_module(cx.input.syms.sym(s).file);
                 let (args, order) = self.lower_arguments(Some(s), args, &m.params);
                 let ret = m.ret.clone();
-                Some(self.lir.push(Kind::Call { method: m, at: None, receiver, args, order }, ret))
+                Ok(self.lir.push(Kind::Call { method: m, at: None, receiver, args, order }, ret))
             }
         }
     }
@@ -1088,14 +1139,15 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::Call { method, at: None, receiver, args, order: None }, seq)
     }
 
-    /// A new instance and its constructor's call; None for the routes not lowered yet.
-    pub(super) fn lower_new(&mut self, e: TExprId, c: ClassId, args: ListRef) -> Option<LirId> {
+    /// A new instance and its constructor's call, or why its route is not lowered yet.
+    pub(super) fn lower_new(&mut self, e: TExprId, c: ClassId, args: ListRef) -> Result<LirId, Unlowered> {
         // What a class that captures takes is decided by the analysis of captures.
         if !self.analysis_in_order() && self.asks_captures(c) {
-            return None;
+            return Err(Unlowered::AfterEscape);
         }
         let route = match self.new_route(e, c, args) {
-            NewRoute::Instance(CtorArguments::CapturedUnlowered | CtorArguments::UnwrittenOuter(_)) => return None,
+            NewRoute::Instance(CtorArguments::CapturedUnlowered) => return Err(Unlowered::NewCapturedUnlowered),
+            NewRoute::Instance(CtorArguments::UnwrittenOuter(_)) => return Err(Unlowered::NewUnwrittenOuter),
             NewRoute::Instance(route) => route,
             NewRoute::Underlying(u, a) => {
                 // The argument takes the constructor parameter's own representation (dotty types it
@@ -1104,29 +1156,31 @@ impl<'a> Gen<'a> {
                 // then this class's underlying value.
                 let param = self.vc_unmarked(&u);
                 let value = self.lower_expr(a, &param);
-                return Some(self.lir.push(Kind::Typed(value), u));
+                return Ok(self.lir.push(Kind::Typed(value), u));
             }
-            NewRoute::Js => return None,
+            NewRoute::Js => return Err(Unlowered::JavaScriptOnly),
         };
         let touch = self.touched_module(c);
         let name = self.class_name(c);
         let (nodes, params) = self.lower_new_arguments(c, args, route);
-        Some(self.lower_new_instance(touch, name, &nodes, params))
+        Ok(self.lower_new_instance(touch, name, &nodes, params))
     }
 
-    /// A new instance through the secondary constructor `s`; None for the routes not lowered yet.
-    pub(super) fn lower_new_via(&mut self, s: SymId, args: ListRef) -> Option<LirId> {
+    /// A new instance through the secondary constructor `s`, or why its route is not lowered yet.
+    pub(super) fn lower_new_via(&mut self, s: SymId, args: ListRef) -> Result<LirId, Unlowered> {
         if !self.analysis_in_order() && self.ctor_class(s).is_some_and(|c| self.via_asks_captures(c, s)) {
-            return None;
+            return Err(Unlowered::AfterEscape);
         }
         let (c, route) = match self.via_route(s, args) {
-            ViaRoute::Unowned | ViaRoute::Js(_) | ViaRoute::Instance(_, ViaArguments::CapturedUnlowered(_)) => return None,
+            ViaRoute::Unowned => return Err(Unlowered::NewViaUnowned),
+            ViaRoute::Js(_) => return Err(Unlowered::JavaScriptOnly),
+            ViaRoute::Instance(_, ViaArguments::CapturedUnlowered(_)) => return Err(Unlowered::NewCapturedUnlowered),
             ViaRoute::Instance(c, route) => (c, route),
         };
         let touch = self.touched_module(c);
         let name = self.class_name(c);
         let (nodes, params) = self.lower_via_arguments(c, s, args, route);
-        Some(self.lower_new_instance(touch, name, &nodes, params))
+        Ok(self.lower_new_instance(touch, name, &nodes, params))
     }
 
     /// A new instance of the class `name`, its constructor of the parameters `params` run over
@@ -1295,14 +1349,14 @@ impl<'a> Gen<'a> {
     }
 
     /// A default argument: its getter's call, or its expression where the class has no
-    /// getters; None for the routes not lowered yet.
-    pub(super) fn lower_default(&mut self, of: DefaultOf, at: u32, args: ListRef) -> Option<LirId> {
+    /// getters, or why its route is not lowered yet.
+    pub(super) fn lower_default(&mut self, of: DefaultOf, at: u32, args: ListRef) -> Result<LirId, Unlowered> {
         // Where the class captures, the getter's route asks the analysis of captures.
         if !self.analysis_in_order() && self.default_ctor_class(of).is_some_and(|c| self.asks_captures(c)) {
-            return None;
+            return Err(Unlowered::AfterEscape);
         }
-        Some(match self.default_route(of, at, args) {
-            DefaultRoute::Unlowered => return None,
+        Ok(match self.default_route(of, at, args) {
+            DefaultRoute::Unlowered(why) => return Err(why),
             DefaultRoute::Ctor(c, recv, route, want) => self.lower_ctor_default(c, route, recv, &want),
             DefaultRoute::FileMember(file, getter, want) => {
                 let receiver = self.lower_file_module(file);
@@ -1551,10 +1605,10 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::LiftedCall { def: s, from: LiftedFrom::Def, lifted, captures, args, order }, ret)
     }
 
-    /// A read of the local lazy val `s`; None while typed IR has been left to the writer
+    /// A read of the local lazy val `s`; not while typed IR has been left to the writer
     /// (`Gen::analysis_in_order`), its accessor's shape asking the capture analysis.
-    fn lower_lazy_read(&mut self, s: SymId) -> Option<LirId> {
-        self.analysis_in_order().then(|| self.lower_lazy_call(s, false))
+    fn lower_lazy_read(&mut self, s: SymId) -> Result<LirId, Unlowered> {
+        self.analysis_in_order().then(|| self.lower_lazy_call(s, false)).ok_or(Unlowered::AfterEscape)
     }
 
     /// A call of the accessor (`init` false) or the initialiser of the local lazy val `s`: the
@@ -1572,11 +1626,14 @@ impl<'a> Gen<'a> {
     }
 
     /// A member read on a receiver: its field where this class's own code may name it, else its
-    /// accessor's call; None for the routes not lowered yet.
-    fn lower_field_read(&mut self, r: TExprId, s: SymId) -> Option<LirId> {
+    /// accessor's call; or why its route is not lowered yet.
+    fn lower_field_read(&mut self, r: TExprId, s: SymId) -> Result<LirId, Unlowered> {
         match self.field_route(r, s) {
-            FieldRoute::Js | FieldRoute::Object(_) | FieldRoute::Early | FieldRoute::GivenObject { receiver_evaluated: true } => None,
-            FieldRoute::GivenObject { receiver_evaluated: false } => Some(self.lower_given_object(s)),
+            FieldRoute::Js => Err(Unlowered::JavaScriptOnly),
+            FieldRoute::Object(_) => Err(Unlowered::ObjectThroughOwner),
+            FieldRoute::Early => Err(Unlowered::EarlyParameter),
+            FieldRoute::GivenObject { receiver_evaluated: true } => Err(Unlowered::GivenObjectThroughReceiver),
+            FieldRoute::GivenObject { receiver_evaluated: false } => Ok(self.lower_given_object(s)),
             FieldRoute::Java => {
                 let Some((cf, JMember::Field(i))) = self.cx.input.java_member(s) else { unreachable!("a Java field, by the route") };
                 let f = &cf.fields[i as usize];
@@ -1584,10 +1641,10 @@ impl<'a> Gen<'a> {
                 let name: Rc<str> = Rc::from(f.name.as_str());
                 // A static's receiver is not evaluated.
                 if f.access & ACC_STATIC != 0 {
-                    return Some(self.lir.push(Kind::StaticField { owner: Rc::from(cf.name.as_str()), name }, t));
+                    return Ok(self.lir.push(Kind::StaticField { owner: Rc::from(cf.name.as_str()), name }, t));
                 }
                 let (receiver, owner) = self.lower_java_qualifier(r, s, &cf.name);
-                Some(self.lir.push(Kind::Field { receiver, owner, name }, t))
+                Ok(self.lir.push(Kind::Field { receiver, owner, name }, t))
             }
             // `missing[V].u` is the box's accessor on the reference, as scalac casts the qualifier
             // to the class and selects (`Erasure.scala` 733-737): a null throws. A block's result
@@ -1602,21 +1659,21 @@ impl<'a> Gen<'a> {
                 let outer = self.vc_select.replace(operand);
                 let value = self.lower_expr(r, &u);
                 self.vc_select = outer;
-                Some(self.lir.push(Kind::Underlying { value, operand }, u))
+                Ok(self.lir.push(Kind::Underlying { value, operand }, u))
             }
             FieldRoute::Own => {
                 let ty = self.sym_type(s);
                 let name: Rc<str> = Rc::from(self.field_name(s));
                 let receiver = self.lower_this().expect("an instance, by `Gen::own_field`");
                 let owner = self.this_name.clone();
-                Some(self.lir.push(Kind::Field { receiver, owner, name }, ty))
+                Ok(self.lir.push(Kind::Field { receiver, owner, name }, ty))
             }
             FieldRoute::PrivateParam(c) => {
                 let ty = self.sym_type(s);
                 let name: Rc<str> = Rc::from(self.field_name(s));
                 let owner = self.class_name(c);
                 let receiver = self.lower_expr(r, &ErasedType::L(owner.clone()));
-                Some(self.lir.push(Kind::Field { receiver, owner, name }, ty))
+                Ok(self.lir.push(Kind::Field { receiver, owner, name }, ty))
             }
             FieldRoute::Accessor => {
                 let s = self.deferred_implementation(r, s).unwrap_or(s);
@@ -1625,7 +1682,7 @@ impl<'a> Gen<'a> {
                 let receiver = self.lower_receiver(r, s, &site);
                 let args = self.lir.list(&[]);
                 let ret = m.ret.clone();
-                Some(self.lir.push(Kind::Call { method: m, at: site.map(|site| (site.owner, site.interface)), receiver, args, order: None }, ret))
+                Ok(self.lir.push(Kind::Call { method: m, at: site.map(|site| (site.owner, site.interface)), receiver, args, order: None }, ret))
             }
         }
     }
@@ -1687,26 +1744,29 @@ impl<'a> Gen<'a> {
         self.lower_adapt(copied, &object, &want)
     }
 
-    /// A call `e` of a member on a receiver; None for the routes not lowered yet.
-    fn lower_call_method(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> Option<LirId> {
+    /// A call `e` of a member on a receiver, or why its route is not lowered yet.
+    fn lower_call_method(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> Result<LirId, Unlowered> {
         match self.call_route(r, s, args) {
             CallRoute::Plain => {}
             // The receiver of a static is not evaluated.
-            CallRoute::JavaStatic | CallRoute::JdkStatic => return Some(self.lower_static_call(s, args)),
-            CallRoute::Spread(array) => return Some(self.lower_wrapped_spread(array, Some(r))),
-            CallRoute::Super => return Some(self.lower_super_call(e, r, s, args)),
-            CallRoute::Interpolator(helper, Some(held)) => return Some(self.lower_interpolator(r, s, helper, held, args)),
+            CallRoute::JavaStatic | CallRoute::JdkStatic => return Ok(self.lower_static_call(s, args)),
+            CallRoute::Spread(array) => return Ok(self.lower_wrapped_spread(array, Some(r))),
+            CallRoute::Super => return Ok(self.lower_super_call(e, r, s, args)),
+            CallRoute::Interpolator(helper, Some(held)) => return Ok(self.lower_interpolator(r, s, helper, held, args)),
             // The proxies are the capture analysis's, asked in order only (`Gen::analysis_in_order`).
-            CallRoute::Proxied(t) => return self.analysis_in_order().then(|| self.lower_proxied_call(t, s, args)).flatten(),
-            CallRoute::Lifted => return self.analysis_in_order().then(|| self.lower_lifted_member_call(r, s, args)).flatten(),
-            CallRoute::Js | CallRoute::Extension(..) | CallRoute::Interpolator(_, None) | CallRoute::Object(_) => return None,
+            CallRoute::Proxied(t) => return self.analysis_in_order().then(|| self.lower_proxied_call(t, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
+            CallRoute::Lifted => return self.analysis_in_order().then(|| self.lower_lifted_member_call(r, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
+            CallRoute::Js => return Err(Unlowered::JavaScriptOnly),
+            CallRoute::Extension(..) => return Err(Unlowered::ValueClassMethodCall),
+            CallRoute::Interpolator(_, None) => return Err(Unlowered::InterpolatorWithoutRuntime),
+            CallRoute::Object(_) => return Err(Unlowered::ObjectThroughOwner),
         }
         let m = self.mref(s);
         let site = self.invoke_site(r, s, &m);
         let receiver = self.lower_receiver(r, s, &site);
         let (args, order) = self.lower_arguments(Some(s), args, &m.params);
         let ret = m.ret.clone();
-        Some(self.lir.push(Kind::Call { method: m, at: site.map(|site| (site.owner, site.interface)), receiver, args, order }, ret))
+        Ok(self.lir.push(Kind::Call { method: m, at: site.map(|site| (site.owner, site.interface)), receiver, args, order }, ret))
     }
 
     /// `super.s(args)`, the call `e`: through the accessor a class that mixes the trait in
@@ -1756,11 +1816,11 @@ impl<'a> Gen<'a> {
 
     /// `super[T].s(args)` of a member of the local trait `t` that takes proxies, as scalac's
     /// forwarder calls it: the trait's static `s$` over the instance, the proxies as this code
-    /// holds them, their extras, then the arguments. None for a right-associative member, whose
-    /// class file takes the arguments in another order.
-    pub(super) fn lower_proxied_call(&mut self, t: ClassId, s: SymId, args: ListRef) -> Option<LirId> {
+    /// holds them, their extras, then the arguments. Not a right-associative member, whose class
+    /// file takes the arguments in another order.
+    pub(super) fn lower_proxied_call(&mut self, t: ClassId, s: SymId, args: ListRef) -> Result<LirId, Unlowered> {
         if self.jvm_param_order(s).is_some() {
-            return None;
+            return Err(Unlowered::LocalTraitMemberRightAssociative);
         }
         let proxies = self.member_proxies(s).expect("a member that takes proxies, by the route");
         let declared = self.proxied_declared(s);
@@ -1788,18 +1848,21 @@ impl<'a> Gen<'a> {
         let ret = pm.ret.clone();
         let method = Rc::new(MethodRef { owner, owner_is_interface: true, name: format!("{}$", pm.name), params, ret: ret.clone(), desc, kind: Invoke::Static });
         let args = self.lir.list(&nodes);
-        Some(self.lir.push(Kind::StaticCall { method, args, order: None }, ret))
+        Ok(self.lir.push(Kind::StaticCall { method, args, order: None }, ret))
     }
 
     /// `r.s(proxies, args)` of a local trait's lifted member, as dotty's `LambdaLift.addFreeArgs`
     /// leaves it, on a receiver that is no `super`: the interface's method over the proxies, their
-    /// extras and the parameters, at the receiver's site (`Gen::call_lifted`). None for a
-    /// right-associative member and where an argument for a proxy is no read of a local (a lazy
+    /// extras and the parameters, at the receiver's site (`Gen::call_lifted`). Not on `super`, a
+    /// right-associative member, nor where an argument for a proxy is no read of a local (a lazy
     /// val's new holder: `Gen::load_capture_arg`).
-    pub(super) fn lower_lifted_member_call(&mut self, r: TExprId, s: SymId, args: ListRef) -> Option<LirId> {
+    pub(super) fn lower_lifted_member_call(&mut self, r: TExprId, s: SymId, args: ListRef) -> Result<LirId, Unlowered> {
         let cx = self.cx;
-        if matches!(cx.input.prog.expr(r), TExpr::Super(_)) || self.jvm_param_order(s).is_some() {
-            return None;
+        if matches!(cx.input.prog.expr(r), TExpr::Super(_)) {
+            return Err(Unlowered::LocalTraitMemberUnplain);
+        }
+        if self.jvm_param_order(s).is_some() {
+            return Err(Unlowered::LocalTraitMemberRightAssociative);
         }
         let declared = self.proxied_declared(s);
         let items: Vec<TExprId> = cx.input.prog.expr_list(args).to_vec();
@@ -1811,7 +1874,7 @@ impl<'a> Gen<'a> {
             _ => false,
         });
         if !plain {
-            return None;
+            return Err(Unlowered::LocalTraitMemberUnplain);
         }
         let proxies = self.member_proxies(s).expect("a member that takes proxies, by the route");
         let m = self.mref(s);
@@ -1833,7 +1896,7 @@ impl<'a> Gen<'a> {
         self.lower_rest(s, args, k, &m.params, &mut nodes);
         let ret = pm.ret.clone();
         let args = self.lir.list(&nodes);
-        Some(self.lir.push(Kind::Call { method: Rc::new(pm), at: site.map(|site| (site.owner, site.interface)), receiver, args, order: None }, ret))
+        Ok(self.lir.push(Kind::Call { method: Rc::new(pm), at: site.map(|site| (site.owner, site.interface)), receiver, args, order: None }, ret))
     }
 
     /// The captures a local trait's member that takes proxies declares first.

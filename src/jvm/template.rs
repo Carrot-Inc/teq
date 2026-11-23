@@ -3,7 +3,7 @@
 //! assembled from the text (`Gen::assemble`). Of the texts the typer makes itself, one that
 //! is a call becomes that call; `Gen::intrinsic` writes the others.
 
-use crate::lir::{Arith, Cast, ErasedType, Invoke, Kind, LirId, MethodRef};
+use crate::lir::{Arith, Cast, ErasedType, Invoke, Kind, LirId, MethodRef, Unlowered};
 use super::classfile::op;
 use super::gen::{erased_array_method, primitive_conversion, Gen, Referenced, Site};
 use super::intrinsic::{plain_op, single_form, split_method, tokenize, typer_text};
@@ -137,25 +137,25 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A use of a template; None for the routes not lowered yet.
-    pub(super) fn lower_template(&mut self, e: TExprId, template: StrRef, args: ListRef) -> Option<LirId> {
+    /// A use of a template, or why its route is not lowered yet.
+    pub(super) fn lower_template(&mut self, e: TExprId, template: StrRef, args: ListRef) -> Result<LirId, Unlowered> {
         let cx = self.cx;
         let args: &[TExprId] = cx.input.prog.expr_list(args);
         match self.template_route(e, template, args) {
-            TemplateRoute::Single(m) => Some(self.lower_single(args, &m)),
-            TemplateRoute::Tree(tree) => Some(self.lower_tree(e, args, &tree)),
-            TemplateRoute::ObjectMember(m) => Some(self.lower_object_member(args, &m)),
-            TemplateRoute::Member(m) => Some(self.lower_member(args, &m)),
+            TemplateRoute::Single(m) => Ok(self.lower_single(args, &m)),
+            TemplateRoute::Tree(tree) => Ok(self.lower_tree(e, args, &tree)),
+            TemplateRoute::ObjectMember(m) => Ok(self.lower_object_member(args, &m)),
+            TemplateRoute::Member(m) => Ok(self.lower_member(args, &m)),
             TemplateRoute::Made(ctor) => {
                 let mut operands: Vec<LirId> = Vec::with_capacity(ctor.params.len());
                 for (a, p) in args.iter().zip(&ctor.params) {
                     operands.push(self.lower_expr(*a, p));
                 }
                 let operands = self.lir.list(&operands);
-                Some(self.lir.push(Kind::New { touch: None, ctor: ctor.clone(), args: operands }, ErasedType::L(ctor.owner.clone())))
+                Ok(self.lir.push(Kind::New { touch: None, ctor: ctor.clone(), args: operands }, ErasedType::L(ctor.owner.clone())))
             }
-            TemplateRoute::Synchronized => Some(self.lower_synchronized(args[0], args[1])),
-            TemplateRoute::Text => None,
+            TemplateRoute::Synchronized => Ok(self.lower_synchronized(args[0], args[1])),
+            TemplateRoute::Text => Err(Unlowered::TemplateText),
         }
     }
 

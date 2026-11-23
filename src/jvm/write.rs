@@ -72,7 +72,10 @@ impl<'a> Gen<'a> {
             self.mark_line(e);
         }
         match kind {
-            Kind::Legacy(e) => self.expr_legacy(e, &ty),
+            Kind::Legacy(e, why) => {
+                self.m.unlowered.push(why);
+                self.expr_legacy(e, &ty)
+            }
             Kind::Int(v) => self.iconst(v),
             Kind::Long(v) => self.lconst(v),
             Kind::Float(v) => self.fconst(v),
@@ -264,7 +267,10 @@ impl<'a> Gen<'a> {
                     self.code.push(vt);
                 }
             }
-            Kind::LegacyTail(e) => self.tail_legacy(e),
+            Kind::LegacyTail(e, why) => {
+                self.m.unlowered.push(why);
+                self.tail_legacy(e)
+            }
             Kind::FieldStore { receiver, owner, name, value } => {
                 self.write(receiver);
                 self.write(value);
@@ -509,7 +515,7 @@ impl<'a> Gen<'a> {
     fn branch_leaves(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
             Kind::SelfTailCall { .. } => true,
-            Kind::Legacy(e) => self.leaves(*e),
+            Kind::Legacy(e, _) => self.leaves(*e),
             Kind::Block { result, .. } => self.branch_leaves(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.branch_leaves(*then) && self.branch_leaves(*otherwise),
             _ => false,
@@ -525,7 +531,7 @@ impl<'a> Gen<'a> {
     /// the def's jump back (a match's case at `Unit`) leaves it dead.
     fn completes(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
-            Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::LegacyTail(_) => false,
+            Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::LegacyTail(..) => false,
             Kind::If { then, otherwise: Some(otherwise), .. } => self.completes(*then) || self.completes(*otherwise),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| {
                 let stmt = self.lir.lists[(stmts.start + i) as usize];
