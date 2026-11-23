@@ -233,6 +233,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   first), a value class's included. On JavaScript such a call stays a call: a deep recursion there ends in a
   RangeError where Scala.js loops, and `@tailrec` refuses a def whose call of itself stands under a `return`, as
   before.
+- On the JVM, nothing is written after a `return`, as scalac: a `return` where a reference is wanted (`val y: String
+  = if x > 0 then return "p" else "n"`) no longer gives a class the verifier rejects (`VerifyError: Inconsistent
+  stackmap frames`).
 
 ## 0.1.11 (2026-11-20)
 

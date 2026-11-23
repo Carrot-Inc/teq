@@ -519,6 +519,13 @@ impl Code {
 
     /// Code after an unconditional transfer that no label leads to is unreachable, and the
     /// verifier still wants a frame in front of it.
+    /// Records the frame an instruction written now stands on where no path reaches it, while the
+    /// model still holds the operands the instruction takes: a branch after a `return` or a jump
+    /// (`Gen::jump_if`) pops its operands from the model before it is written.
+    pub fn reach(&mut self) {
+        self.before_insn();
+    }
+
     fn before_insn(&mut self) {
         self.writing();
         if !self.reachable {

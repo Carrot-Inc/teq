@@ -2647,8 +2647,8 @@ return_tail_call_lazy_init	pass	-
 return_tail_call_local_beside_nonlocal	pass	-	
 return_tail_call_local_defs	pass	-	
 return_tail_call_monitor	pass	-	
-return_tail_call_nested_receiver	fail	-	verify
-return_tail_call_operand	fail	-	verify
+return_tail_call_nested_receiver	pass	-	
+return_tail_call_operand	pass	-	
 return_tail_call_receiver_loop	pass	-	
 return_tail_call_receiver_operand	pass	-	
 return_tail_call_receiver_order	pass	-	
@@ -2659,6 +2659,8 @@ return_tail_call_try_unguarded	pass	-
 return_tail_call_untagged	pass	-	
 return_tail_call_value_class	pass	-	
 return_tail_call_while_label	pass	-	
+return_value_position_branch	pass	-	
+return_value_position_verify	pass	-	
 right_assoc_ext	pass	-	
 right_assoc_extension_calls	pass	-	
 right_assoc_extension_selected	pass	-	

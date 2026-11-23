@@ -345,7 +345,6 @@ string-extractor.scala	output: line 1: the .check has 'by', the program printed 
 string-switch.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 structural-compat.scala	structural-compat.scala:85:21: missing parameter type
 structural.scala	structural.scala:83:21: missing parameter type
-t0042.scala	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad return type
 t10232.scala	run: exit 1: Exception in thread "main" java.io.NotSerializableException: Test$$$Lambda/0x…
 t10290.scala	t10290.scala:14:16: expected an identifier, found 'super'
 t10889	java source: teq reads none

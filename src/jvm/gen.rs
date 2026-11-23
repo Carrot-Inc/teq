@@ -2798,6 +2798,7 @@ impl<'a> Gen<'a> {
 
     /// A conditional jump that pops `pops` operands.
     pub fn jump_if(&mut self, opcode: u8, pops: usize, target: Label) {
+        self.code.reach();
         self.code.popn(pops);
         self.code.jump(opcode, target);
     }
@@ -3211,6 +3212,7 @@ impl<'a> Gen<'a> {
             TExpr::Match(scrut, cases) => self.match_(scrut, cases, Mode::Value(want)),
             TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Value(want)),
             TExpr::Throw(inner, _) => self.throw_(inner, want),
+            TExpr::Return(v) => self.return_(v, want),
             TExpr::Try(_) => unreachable!("a try is lowered (`Gen::lower_expr`)"),
             _ => {
                 let t = self.node(e);
@@ -3223,6 +3225,75 @@ impl<'a> Gen<'a> {
                     Fit::Direct => self.adapt(&t, want),
                 }
             }
+        }
+    }
+
+    /// `return v` where a value of the type `want` is wanted: nothing is written after it, the dead
+    /// code that follows verified against a value of that type, as after a throw (dotty's `genLoadTo`
+    /// sends a `Return` to its destination and adapts nothing after it). Out of a closure it is the
+    /// throw dotty's `NonLocalReturns.nonLocalReturnThrow` writes, which the def's handler takes by
+    /// its key; a call of the def by itself that goes round its loop is the jump alone.
+    fn return_(&mut self, v: TExprId, want: &ErasedType) {
+        if let Some((recv, args)) = self.jump_call(v) {
+            return self.tail_jump_wanted(recv, args, want);
+        }
+        if self.m.closure {
+            match self.m.return_key {
+                Some(key) => {
+                    let object = ErasedType::object();
+                    self.new_object(NON_LOCAL_RETURN);
+                    self.load(key, &object);
+                    self.expr(v, &object);
+                    self.invoke(Invoke::Special, NON_LOCAL_RETURN, false, "<init>", &[object.clone(), object], &ErasedType::V);
+                    self.code.op(op::ATHROW);
+                    self.code.pop();
+                    self.code.end_path();
+                }
+                None => self.unsupported("a non-local return of a def that makes no key"),
+            }
+        } else {
+            let ret = self.m.ret.clone();
+            match self.m.finalizers.last().copied() {
+                // Through the enclosing finalizer or monitor exit: the value kept in the frame's slot, the
+                // operands under it dropped, dead as the method leaves (dotty's `genReturn` jumps to the
+                // cleanup over them), the flag set, the frame's exit taken; the operands dropped stand under
+                // the dead code again.
+                Some(frame) => {
+                    self.expr(v, &ret);
+                    if let Some(slot) = frame.value {
+                        self.store(slot, &ret);
+                    }
+                    let dropped = self.drop_stack();
+                    self.iconst(1);
+                    self.store(frame.pending, &ErasedType::I);
+                    self.m.exits_taken.push(frame.exit);
+                    self.goto(frame.exit);
+                    for vt in dropped {
+                        self.code.push(vt);
+                    }
+                }
+                None => {
+                    self.expr(v, &ret);
+                    self.return_value(&ret);
+                }
+            }
+        }
+        if *want != ErasedType::V {
+            let vt = self.vt(want);
+            self.code.push(vt);
+        }
+    }
+
+    /// Whether code written after `e` is not reached from it: a `return` out of the def's own
+    /// method, or a call of the def by itself that goes round its loop (`Gen::return_`), alone, as a
+    /// block's result or in both branches of a conditional, as dotty's `genBlockTo` and
+    /// `genLoadIfTo` send them to the destination (BCodeBodyBuilder.scala 1129-1138, 245-257).
+    fn leaves(&self, e: TExprId) -> bool {
+        match self.cx.input.prog.expr(e) {
+            TExpr::Return(_) => !self.m.closure,
+            TExpr::Block(_, res) => self.leaves(res),
+            TExpr::If(_, t, Some(els)) => self.leaves(t) && self.leaves(els),
+            _ => self.jump_call(e).is_some(),
         }
     }
 
@@ -3410,55 +3481,7 @@ impl<'a> Gen<'a> {
                 self.array_load(&array)
             }
             TExpr::Spread(inner) => self.expr_static(inner),
-            TExpr::Return(v) => {
-                // Out of a closure, the throw dotty's `NonLocalReturns.nonLocalReturnThrow` writes,
-                // which the def's handler takes by its key.
-                if self.m.closure {
-                    let Some(key) = self.m.return_key else {
-                        self.unsupported("a non-local return of a def that makes no key");
-                        return ErasedType::V;
-                    };
-                    let object = ErasedType::object();
-                    self.new_object(NON_LOCAL_RETURN);
-                    self.load(key, &object);
-                    self.expr(v, &object);
-                    self.invoke(Invoke::Special, NON_LOCAL_RETURN, false, "<init>", &[object.clone(), object], &ErasedType::V);
-                    self.code.op(op::ATHROW);
-                    self.code.pop();
-                    self.code.end_path();
-                    self.code.op(op::ACONST_NULL);
-                    self.code.push(VT::Null);
-                    return ErasedType::object();
-                }
-                let ret = self.m.ret.clone();
-                if let Some(frame) = self.m.finalizers.last().copied() {
-                    // Through the enclosing finalizer or monitor exit: the value kept in the frame's
-                    // slot, the operands under it dropped, dead as the method leaves (dotty's
-                    // `genReturn` jumps to the cleanup over them), the flag set, the frame's exit taken.
-                    self.expr(v, &ret);
-                    if let Some(slot) = frame.value {
-                        self.store(slot, &ret);
-                    }
-                    let dropped = self.drop_stack();
-                    self.iconst(1);
-                    self.store(frame.pending, &ErasedType::I);
-                    self.m.exits_taken.push(frame.exit);
-                    self.goto(frame.exit);
-                    // The code after the jump is dead but verified, as after a `throw`: the operands
-                    // dropped stand under it again, and it is given a `null` that the caller adapts
-                    // to what it wants (a cast, an unboxing or a pop), so that the try's result slot
-                    // keeps the type the live frame recorded, not a boxed unit.
-                    for vt in dropped {
-                        self.code.push(vt);
-                    }
-                    self.code.op(op::ACONST_NULL);
-                    self.code.push(VT::Null);
-                    return ErasedType::object();
-                }
-                self.expr(v, &ret);
-                self.return_value(&ret);
-                ErasedType::V
-            }
+            TExpr::Return(_) => unreachable!("written where the type wanted is known (`Gen::return_`)"),
             TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => {
                 self.unsupported("JavaScript interop");
                 ErasedType::V
@@ -7125,6 +7148,16 @@ impl<'a> Gen<'a> {
             TExpr::If(c, t, els @ Some(_)) if !boxed_whole => self.if_(c, t, els, Mode::Tail),
             TExpr::Match(scrut, cases) if !boxed_whole => self.match_(scrut, cases, Mode::Tail),
             TExpr::Block(stmts, res) if !boxed_whole => self.block(stmts, res, Mode::Tail),
+            // A return out of the method here is that return, its value the method's result (dotty's
+            // `genReturn` sends the value to the method's return).
+            TExpr::Return(v) if !self.m.closure => match self.jump_call(v) {
+                Some((recv, args)) => self.tail_jump(recv, args),
+                None => {
+                    let ret = self.m.ret.clone();
+                    self.expr(v, &ret);
+                    self.return_value(&ret);
+                }
+            },
             _ => {
                 if let Some(tail) = &self.m.tail {
                     if let Some((recv, args)) = prog.self_call(tail.sym, tail.params.len(), e) {
@@ -7305,7 +7338,10 @@ impl<'a> Gen<'a> {
                 let done = self.code.new_label();
                 self.expr(t, want);
                 self.code.locals_release(mark);
-                self.goto(done);
+                // Nothing follows a branch that leaves the method or goes round its loop.
+                if !self.leaves(t) {
+                    self.goto(done);
+                }
                 if *want != ErasedType::V {
                     self.code.pop();
                 }

@@ -1096,7 +1096,7 @@ switches.scala	pass	interp:pass
 sysprops.scala	pass	interp:fail	
 t0005.scala	pass	interp:pass	
 t0017.scala	pass	interp:pass	
-t0042.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad return type
+t0042.scala	pass	interp:fail	
 t0048.scala	pass	interp:pass	
 t0325.scala	pass	interp:pass	
 t0607.scala	pass	interp:pass	
