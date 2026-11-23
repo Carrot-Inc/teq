@@ -810,7 +810,7 @@ export_in_extension_rename	pass	-
 export_infix_type_flags	fail	-	> tests/cases/export_infix_type_flags.scala:9:17: warning: Alphanumeric type Link is not declared infix; it should not be used as infix operator.
 export_inherited_class_module	pass	-	
 export_inherited_class_toplevel	pass	-	
-export_inline_class_path_defaults	fail	-	< 10
+export_inline_class_path_defaults	pass	-	
 export_inline_inferred_result	pass	-	
 export_inline_member	pass	-	
 export_inline_member_defaults	pass	-	

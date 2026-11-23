@@ -172,7 +172,6 @@ i13703	compile-error: value i is not a member of Foo{def i_=(x$1: Int): Unit}
 i1387	compile-error: classOf[<error>] needs a class type
 i13950	compile-error: value apply is not a member of S
 i13961a	compile-error: throws takes 1 type argument(s), 2 given
-i14020	run-error: Unit has no member a
 i14083	compile-error: value getConstructors is not a member of Class[Outer#Inner]
 i14150	compile-error: type mismatch: found *:[HRes, Tuple], required *:[HRes, TRes]
 i14198	compile-error: value gc is not a member of System

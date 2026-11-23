@@ -65,7 +65,6 @@ export_extension_member_has_defaults	< 125
 export_extension_shifted_defaults	< 1139
 export_forwarder_byname_default	< 115
 export_infix_type_flags	> tests/cases/export_infix_type_flags.scala:9:17: warning: Alphanumeric type Link is not declared infix; it should not be used as infix operator.
-export_inline_class_path_defaults	< 10
 extension_conversion_contextual	< 2
 extension_result_application	< 12
 extractor_pattern_bound_types	< 42

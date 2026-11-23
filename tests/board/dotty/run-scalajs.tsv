@@ -344,7 +344,7 @@ i13961a.scala	fail	lean:fail	option: -language:experimental.saferExceptions (a c
 i13968.scala	fail	lean:pass	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: ((),())
 i13986.scala	pass	lean:pass	
 i13987.scala	pass	lean:pass	
-i14020.scala	fail	lean:fail	run: exit 1: TypeError: Cannot read properties of undefined (reading 'a')
+i14020.scala	pass	lean:pass	
 i14127.scala	pass	lean:pass	
 i14150.scala	fail	lean:fail	i14150.scala:67:83: No given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev of given instance mirDeriver in object MirrorNamesDeriver
 i14164.scala	pass	lean:pass	

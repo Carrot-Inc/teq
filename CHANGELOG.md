@@ -7,6 +7,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An inline method exported by a class through a path of the instance (`class Holder: val c = Codecs; export c.*`,
+  a trait's, an enum case's, a constructor parameter's, a nested path, a path through another export) and called
+  with a default argument left out (`holder.m(3)`) evaluates the default on the holder, as scalac's call of the
+  forwarder's own getter `holder.m$default$2`, where a build of the sources together read the path on the caller's
+  own object (the interpreter's "Unit has no member c", a `ClassCastException` on the JVM, a `TypeError` in
+  JavaScript).
 - A generic inline method reached through an `export` of another module's object (`export lib.Codecs.*`, a
   selection, a renaming, an export of an export, an export inside a class) can be called by a third module built
   over the products: the forwarder's body keeps its type arguments, as scalac's (`Codecs.id[A](a)`), where it was

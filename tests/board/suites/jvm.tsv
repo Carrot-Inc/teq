@@ -810,7 +810,7 @@ export_in_extension_rename	pass	-
 export_infix_type_flags	pass	-	
 export_inherited_class_module	pass	-	
 export_inherited_class_toplevel	pass	-	
-export_inline_class_path_defaults	fail	-	exception
+export_inline_class_path_defaults	pass	-	
 export_inline_inferred_result	pass	-	
 export_inline_member	pass	-	
 export_inline_member_defaults	pass	-	

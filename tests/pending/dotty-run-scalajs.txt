@@ -110,7 +110,6 @@ i13703.scala	i13703.scala:5:3: value i is not a member of Foo{def i_=(x$1: Int):
 i13950.scala	i13950.scala:6:3: value apply is not a member of S
 i13961a.scala	i13961a.scala:6:15: throws takes 1 type argument(s), 2 given
 i13968.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: ((),())
-i14020.scala	run: exit 1: TypeError: Cannot read properties of undefined (reading 'a')
 i14150.scala	i14150.scala:67:83: no given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev
 i1432.scala	i1432.scala:5:11: expected '=', found '@'
 i14340.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript

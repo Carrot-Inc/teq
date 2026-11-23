@@ -19,7 +19,8 @@ to the forwarder's parameter lists, its type parameters first (`Namer.addForward
   export_inline.py --self-test
 
 The judge: `=` where teq's output is scalac's, `ERR` where teq refused or threw and scalac ran, `DIFF` where both ran
-and differ, `both-err` where neither ran; on a leg KEPT_REFUSALS names, `kept` where teq refused with the products'
+and differ, `both-err` where neither ran; on a reading leg (READ_LEGS) `=` where scalac read teq's pickles and `ERR`
+where it did not; on a leg KEPT_REFUSALS names, `kept` where teq refused with the products'
 withholding line and `NOT-KEPT` otherwise. The manifest first: every cell has every leg in every file, none twice,
 none a cell the list lacks; a hole fails, named, and the judging still reads every row. A self-test of planted
 tables, and of the templates, runs first.
@@ -65,7 +66,9 @@ FORMS = {
             "import util.Utils.h", "h.NAME"),
 }
 
-LEGS = ["whole", "whole-jvm", "lean", "js", "jvm"]
+LEGS = ["whole", "whole-jvm", "whole-js", "lean", "js", "jvm", "m23-lean", "m23-js", "m23-jvm", "readtasty"]
+# The legs that read rather than run: scalac's reader over teq's pickles, `ok:read` where it read them.
+READ_LEGS = {"readtasty"}
 
 # The shapes the modules cases leave out, each for a difference of its own that a forwarder of a member that is not
 # generic shows as well, and that the table's runs do not show: an inline parameter's (`inp`: the forwarder's
@@ -146,7 +149,9 @@ def read(path):
     return rows, seen
 
 
-def mark(teq, scalac):
+def mark(teq, scalac, leg=None):
+    if leg in READ_LEGS:
+        return "=" if teq == "ok:read" else "ERR"
     if scalac.startswith("ok:"):
         if teq.startswith("ok:"):
             return "=" if teq == scalac else "DIFF"
@@ -177,7 +182,7 @@ def judge(cells, scalac, scalac_seen, tags, out=sys.stdout):
         for tag, (rows, _) in tags.items():
             for leg in LEGS:
                 v = rows.get((c, leg), "err:missing")
-                m = mark(v, sep)
+                m = mark(v, sep, leg)
                 if leg in KEPT_REFUSALS.get(c.split("-")[0], ()):
                     m = "kept" if not v.startswith("ok:") and KEPT_LINE in v else "NOT-KEPT"
                 counts[(tag, leg, m)] += 1
@@ -217,7 +222,7 @@ def self_test():
     # The judge, over planted tables.
     cells = ["a", "b"]
     sc = {("a", "sep"): "ok:3", ("a", "whole"): "ok:3", ("b", "sep"): "ok:4", ("b", "whole"): "ok:4"}
-    good = {(c, leg): sc[(c, "sep")] for c in cells for leg in LEGS}
+    good = {(c, leg): ("ok:read" if leg in READ_LEGS else sc[(c, "sep")]) for c in cells for leg in LEGS}
 
     def run(rows, scalac=sc):
         buf = io.StringIO()
@@ -242,10 +247,13 @@ def self_test():
     r = dict(good); r[("c", "whole")] = "ok:1"
     if run(r)[0] != 1:
         bad.append("a stray cell not failed")
+    r = dict(good); r[("b", "readtasty")] = "err:-Ycheck: a tree of the wrong type"
+    if "OFF b t/readtasty ERR" not in run(r)[1]:
+        bad.append("a pickle scalac's reader refuses not named ERR")
     # A leg that keeps the refusal: the withholding line is `kept`; a run, or another refusal, is `NOT-KEPT`.
     kc = ["ipd-star"]
     ksc = {("ipd-star", "sep"): "ok:33", ("ipd-star", "whole"): "ok:33"}
-    kgood = {("ipd-star", leg): "ok:33" for leg in ("whole", "whole-jvm")}
+    kgood = {("ipd-star", leg): ("ok:read" if leg in READ_LEGS else "ok:33") for leg in LEGS if leg not in KEPT_REFUSALS["ipd"]}
     kgood.update({("ipd-star", leg): "err:m3/B.scala:5:11: error: the body of util.Utils.mipd " + KEPT_LINE + " /x"
                   for leg in KEPT_REFUSALS["ipd"]})
 
@@ -263,7 +271,7 @@ def self_test():
         bad.append("another failure where the refusal is kept not named NOT-KEPT")
     if bad:
         sys.exit("export_inline self-test FAILED: " + "; ".join(bad))
-    print("export_inline self-test: the templates of 13 shapes and 5 forms, 9 planted tables judged as they must be")
+    print("export_inline self-test: the templates of 13 shapes and 5 forms, 10 planted tables judged as they must be")
 
 
 self_test()

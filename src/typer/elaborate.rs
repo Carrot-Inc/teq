@@ -1020,9 +1020,19 @@ impl<'a> Worker<'a> {
         let mut at = index as u32;
         // An inline forwarder's getter is the forwarded member's on the forwarder's path, through
         // the inline forwarders it relays where each path stands anywhere (`Chain.f` of
-        // `export Facade.f` of `export Lib.f`), as their getters forward one another.
+        // `export Facade.f` of `export Lib.f`), as their getters forward one another. A path that
+        // means another thing at the call, the first one too (a class's `this.c`), leaves the
+        // forwarder's own getter on the call's receiver, scalac's call (`Namer.addForwarder`'s
+        // `m$default$N = this.c.m$default$N`); but for an inline parameter, whose getter the
+        // forwarder does not hold (`inline_forwarder_getters`), the member's tree is expanded.
         let mut forwarded = match of {
-            DefaultOf::Method(m) => self.forwarded_default(m),
+            DefaultOf::Method(m) => {
+                let first = self.forwarded_default(m);
+                match first {
+                    Some((DefaultOf::Method(t), Some(p))) if !self.context_free_path(p) && !self.inline_param_at(t, index) => None,
+                    _ => first,
+                }
+            }
             DefaultOf::Ctor(_) => None,
         };
         while let Some((DefaultOf::Method(t), path)) = forwarded {
@@ -1094,6 +1104,29 @@ impl<'a> Worker<'a> {
         let ty = self.types.class(m, &[]);
         self.prog.set_type(r, ty);
         Some(r)
+    }
+
+    /// Whether parameter `index` of `m`, counted across its clauses, is an `inline` one: by its own parameters, or
+    /// for an export forwarder, whose parameters a member loaded from products leaves unmarked, by the member it
+    /// forwards to (a visited list ends a cycle).
+    fn inline_param_at(&mut self, m: SymId, index: usize) -> bool {
+        let mut seen = vec![m];
+        let mut at = m;
+        loop {
+            let sig = self.sig_arc(at);
+            if let Some(p) = sig.clauses.iter().flat_map(|cl| cl.params.iter()).nth(index) {
+                if self.is_inline_param(p, Some((at, index))) {
+                    return true;
+                }
+            }
+            match self.syms.forward_of(at) {
+                Some(fwd) if fwd.path_method.is_none() && !seen.contains(&fwd.target) => {
+                    at = fwd.target;
+                    seen.push(at);
+                }
+                _ => return false,
+            }
+        }
     }
 
     /// A path that means the same wherever it stands: an object, a top-level definition, a val

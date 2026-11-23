@@ -412,7 +412,7 @@ i13961a	fail	-	compile-error: throws takes 1 type argument(s), 2 given
 i13968	pass	-	
 i13986	pass	-	
 i13987	pass	-	
-i14020	fail	-	run-error: Unit has no member a
+i14020	pass	-	
 i14083	fail	-	compile-error: value getConstructors is not a member of Class[Outer#Inner]
 i14127	pass	-	
 i14150	fail	-	compile-error: type mismatch: found *:[HRes, Tuple], required *:[HRes, TRes]

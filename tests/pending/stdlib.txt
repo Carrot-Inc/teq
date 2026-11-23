@@ -101,7 +101,6 @@ export_extension_member_has_defaults	error: missing argument for parameter a
 export_extension_shifted_defaults	error: the default argument of g has no tree to expand
 export_forwarder_byname_default	TypeError: O$(...).ops.f$default$1(...) is not a function
 export_infix_type_flags	output differs
-export_inline_class_path_defaults	TypeError: Cannot read properties of undefined (reading 's')
 exports_order_jar	error: value some is not a member of Int
 extension_conversion_contextual	output differs
 extension_result_application	error: type mismatch: found Int, required String

@@ -137,7 +137,6 @@ i13691b.scala	i13691b.scala:7:15: throws takes 1 type argument(s), 2 given
 i13703.scala	i13703.scala:5:3: value i is not a member of Foo{def i_=(x$1: Int): Unit}
 i13950.scala	i13950.scala:6:3: value apply is not a member of S
 i13961a.scala	i13961a.scala:6:15: throws takes 1 type argument(s), 2 given
-i14020.scala	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class i14020$package$ cannot be cast to class C (i14020$package$ and C are in unnamed module of loader 'app')
 i14083.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i14150.scala	i14150.scala:67:83: no given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev
 i14198.scala	atomic.scala:262:37: String cannot be instantiated

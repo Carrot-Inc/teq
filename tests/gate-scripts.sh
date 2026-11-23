@@ -2355,5 +2355,10 @@ check "gate's rows: every line dealt to the shards has its row in tests/gate-tim
 check "export-inline: the table's templates and its judge's planted tables judged as they must be" "$work/export-inline.log" \
   eval 'python3 tests/support/export_inline.py --self-test > "$work/export-inline.log" 2>&1'
 
+# The table of an omitted default argument called through an export (tests/support/export_default.py, run by
+# tests/support/export-inline.sh): its templates, the cells its change turns, and its judge over planted tables.
+check "export-default: the table's templates, its part and its judge's planted tables judged as they must be" "$work/export-default.log" \
+  eval 'python3 tests/support/export_default.py --self-test > "$work/export-default.log" 2>&1'
+
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]

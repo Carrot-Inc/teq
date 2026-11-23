@@ -402,7 +402,7 @@ i13961a.scala	fail	interp:fail	option: -language:experimental.saferExceptions (a
 i13968.scala	pass	interp:pass	
 i13986.scala	pass	interp:pass	
 i13987.scala	pass	interp:pass	
-i14020.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.ClassCastException: class i14020$package$ cannot be cast to class C (i14020$package$ and C are in unnamed module of loader 'app')
+i14020.scala	pass	interp:pass	
 i14083.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i14127.scala	pass	interp:pass	
 i14150.scala	fail	interp:fail	i14150.scala:67:83: No given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev of given instance mirDeriver in object MirrorNamesDeriver
