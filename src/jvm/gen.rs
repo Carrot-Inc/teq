@@ -245,6 +245,22 @@ pub struct GetterShape {
     pub by_name: bool,
 }
 
+/// An argument of a default's getter at its type: a value a local holds, or an expression
+/// written where the getter takes it.
+#[derive(Clone)]
+pub enum Prior {
+    Held(u16, ErasedType),
+    Written(TExprId, ErasedType),
+}
+
+impl Prior {
+    pub fn ty(&self) -> &ErasedType {
+        match self {
+            Prior::Held(_, t) | Prior::Written(_, t) => t,
+        }
+    }
+}
+
 pub struct JarGetter {
     pub kind: Invoke,
     pub owner: Rc<str>,
@@ -4832,7 +4848,7 @@ impl<'a> Gen<'a> {
     /// from its static getter, which takes the captures first; the companion's getter where the
     /// companion holds them (scalac's layout), each taking the parameters of the clauses before
     /// the default's; a jar class's as its class files declare it; else the class's static one.
-    fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[(u16, ErasedType)], types: &[ErasedType]) {
+    fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[Prior], types: &[ErasedType]) {
         let cx = self.cx;
         if cx.jvm_class(c).is_some() {
             let defaults: Vec<Option<TExprId>> = match (via, cx.tclass_of.get(c.idx()).copied().filter(|&i| i != u32::MAX)) {
@@ -4934,9 +4950,9 @@ impl<'a> Gen<'a> {
                 }
                 None => self.load_class_captures(c),
             }
-            for (slot, t) in temps {
-                self.load(*slot, t);
-                before.push(t.clone());
+            for prior in temps {
+                self.write_prior(prior);
+                before.push(prior.ty().clone());
             }
             self.invoke(Invoke::Static, &owner, false, &format!("$lessinit$greater$default${}", n + i + 1), &before, &types[i]);
             return;
@@ -4964,10 +4980,10 @@ impl<'a> Gen<'a> {
         if self.jar_ctor_default(c, &name, temps, &types[i]) {
             return;
         }
-        for (slot, t) in temps {
-            self.load(*slot, t);
+        for prior in temps {
+            self.write_prior(prior);
         }
-        let before: Vec<ErasedType> = temps.iter().map(|(_, t)| t.clone()).collect();
+        let before: Vec<ErasedType> = temps.iter().map(|p| p.ty().clone()).collect();
         let interface = self.cx.is_interface(c);
         self.invoke(Invoke::Static, &owner, interface, &name, &before, &types[i]);
     }
@@ -4976,7 +4992,7 @@ impl<'a> Gen<'a> {
     /// taking the arguments of the clauses before the default's only, called on the companion as
     /// scalac calls it, or through the static forwarder of the class where the companion's class
     /// file is not read.
-    fn jar_ctor_default(&mut self, c: ClassId, name: &str, temps: &[(u16, ErasedType)], want: &ErasedType) -> bool {
+    fn jar_ctor_default(&mut self, c: ClassId, name: &str, temps: &[Prior], want: &ErasedType) -> bool {
         let cx = self.cx;
         let companion = cx.input.syms.class(c).companion;
         let forwarder = cx.class_files.get(&c).and_then(|cf| cf.methods.iter().find(|m| m.name == name && m.access & ACC_STATIC != 0)).map(|m| m.descriptor.clone());
@@ -4994,9 +5010,9 @@ impl<'a> Gen<'a> {
             (None, None) => return false,
         };
         let (params, ret) = parse_method_desc(&desc);
-        for ((slot, t), p) in temps.iter().zip(&params) {
-            self.load(*slot, t);
-            self.adapt(t, p);
+        for (prior, p) in temps.iter().zip(&params) {
+            self.write_prior(prior);
+            self.adapt(prior.ty(), p);
         }
         self.invoke_desc(kind, &owner, false, name, &desc, params.len(), &ret);
         self.adapt(&ret, want);
@@ -5099,7 +5115,7 @@ impl<'a> Gen<'a> {
         let mut temps: Vec<(u16, ErasedType)> = Vec::with_capacity(types.len());
         for (i, t) in types.iter().enumerate() {
             let before = clause_shape(&clauses, i).0.min(temps.len());
-            let prior = temps[..before].to_vec();
+            let prior: Vec<Prior> = temps[..before].iter().map(|(slot, t)| Prior::Held(*slot, t.clone())).collect();
             self.ctor_default(c, None, None, i, &prior, types);
             let slot = self.store_new(t);
             temps.push((slot, t.clone()));
@@ -5109,17 +5125,75 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The arguments of a getter's application in locals, each of its parameter's type in the
-    /// signature's order.
-    fn default_priors(&mut self, priors: &[TExprId], types: &[ErasedType]) -> Vec<(u16, ErasedType)> {
-        let mut temps = Vec::with_capacity(priors.len());
-        for (k, &a) in priors.iter().enumerate() {
-            let t = types.get(k).cloned().unwrap_or_else(ErasedType::object);
-            self.expr(a, &t);
-            let slot = self.store_new(&t);
-            temps.push((slot, t));
+    /// The arguments of a getter's application, each at its parameter's type in the signature's
+    /// order. Where they are paths (`default_operands_are_paths`) they are written where the getter
+    /// takes them, after its receiver, as scalac's caller passes them (`Applications.defaultArgument`
+    /// over `LiftComplex.liftApp`); else each is evaluated here into a local of its own, in order,
+    /// and loaded where the getter takes it, as before, so that one evaluated for its effect is
+    /// evaluated once and in its place.
+    fn default_priors(&mut self, priors: &[TExprId], types: &[ErasedType]) -> Vec<Prior> {
+        if !self.default_operands_are_paths(None, priors) {
+            return self.default_priors_held(priors, types);
         }
-        temps
+        priors.iter().enumerate().map(|(k, &a)| Prior::Written(a, types.get(k).cloned().unwrap_or_else(ErasedType::object))).collect()
+    }
+
+    /// Whether a getter's receiver (where it has one) and its arguments are paths, whose writing
+    /// where the getter takes them tells nothing apart: the typer's plan passes only those
+    /// (`Worker::default_application`, its lifter leaving a path in place, `Worker::no_lift`, and
+    /// lifting anything else to a val), but an inline parameter's default is expanded into a
+    /// later default's arguments where it stands (`Worker::own_getter_expansion`), so the back end
+    /// tests them itself, by the typer's rule of a path (`Worker::expr_purity` at `PURE_PATH`): a
+    /// literal, `this`, `super`, an object, a reference to a val or a parameter that is no `var`,
+    /// lazy, by-name or inline one, a stable member's selection on a path, and a by-name
+    /// argument's thunk, which its making does not run.
+    fn default_operands_are_paths(&self, recv: Option<TExprId>, priors: &[TExprId]) -> bool {
+        recv.is_none_or(|r| self.default_operand_is_path(r)) && priors.iter().all(|&a| self.default_operand_is_path(a))
+    }
+
+    fn default_operand_is_path(&self, e: TExprId) -> bool {
+        let cx = self.cx;
+        let stable = |s: SymId| {
+            let info = cx.input.syms.sym(s);
+            let fixed = info.mods & (crate::ast::mods::MUTABLE | crate::ast::mods::LAZY | crate::ast::mods::INLINE) == 0 && !info.by_name;
+            fixed && matches!(info.kind, SymKind::Val | SymKind::Param | SymKind::Object(_) | SymKind::EnumValue(_))
+        };
+        let stable_def = |s: SymId| {
+            let info = cx.input.syms.sym(s);
+            info.kind == SymKind::Def && info.stable
+        };
+        match cx.input.prog.expr(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null => true,
+            TExpr::This | TExpr::Super(_) | TExpr::Module(_) | TExpr::Lambda(..) => true,
+            TExpr::Local(s) | TExpr::Static(s) => stable(s),
+            TExpr::Field(q, s) => stable(s) && self.default_operand_is_path(q),
+            TExpr::CallStatic(s, l) => l.len == 0 && stable_def(s),
+            TExpr::CallMethod(q, s, l) => l.len == 0 && stable_def(s) && self.default_operand_is_path(q),
+            _ => false,
+        }
+    }
+
+    /// `default_priors` where they are not all paths: each evaluated into a local of its own.
+    fn default_priors_held(&mut self, priors: &[TExprId], types: &[ErasedType]) -> Vec<Prior> {
+        priors
+            .iter()
+            .enumerate()
+            .map(|(k, &a)| {
+                let t = types.get(k).cloned().unwrap_or_else(ErasedType::object);
+                self.expr(a, &t);
+                Prior::Held(self.store_new(&t), t)
+            })
+            .collect()
+    }
+
+    /// One argument of a getter's application, at its type.
+    fn write_prior(&mut self, prior: &Prior) {
+        match prior {
+            Prior::Held(slot, t) => self.load(*slot, t),
+            Prior::Written(e, t) => {
+                self.expr(*e, t);
+            }
+        }
     }
 
     /// The default `i` of method `s`'s parameters, `recv` its receiver where the call has one.
@@ -5149,10 +5223,15 @@ impl<'a> Gen<'a> {
                 let TExpr::Super(SuperTarget::Mixin(t)) = cx.input.prog.expr(r) else { unreachable!() };
                 let accessor = self.super_getter_accessor_ref(t, s, i);
                 self.receiver(r, s);
-                let owner_type = ErasedType::L(accessor.owner.clone());
-                let slot = self.store_new(&owner_type);
-                let temps = self.default_priors(priors, &types);
-                self.load(slot, &owner_type);
+                let temps = if self.default_operands_are_paths(Some(r), priors) {
+                    self.default_priors(priors, &types)
+                } else {
+                    let owner_type = ErasedType::L(accessor.owner.clone());
+                    let slot = self.store_new(&owner_type);
+                    let temps = self.default_priors_held(priors, &types);
+                    self.load(slot, &owner_type);
+                    temps
+                };
                 let shape = self.default_getter_shape(s, i);
                 let want = if shape.by_name { shape.ret.clone() } else { m.params[i].clone() };
                 let args = self.getter_args(s, shape.before, &temps);
@@ -5186,14 +5265,26 @@ impl<'a> Gen<'a> {
                         t
                     }
                 };
-                let slot = self.store_new(&owner_type);
-                let temps = self.default_priors(priors, &types);
-                self.load(slot, &owner_type);
+                let temps = if self.default_operands_are_paths(Some(r), priors) {
+                    self.default_priors(priors, &types)
+                } else {
+                    let slot = self.store_new(&owner_type);
+                    let temps = self.default_priors_held(priors, &types);
+                    self.load(slot, &owner_type);
+                    temps
+                };
                 self.default_getter_value(s, i, &temps, special)
             }
             None => {
-                let temps = self.default_priors(priors, &types);
-                self.load_file_module(info.file);
+                // Arguments that are not all paths are evaluated before the file's object is loaded, as before.
+                let temps = if self.default_operands_are_paths(None, priors) {
+                    self.load_file_module(info.file);
+                    self.default_priors(priors, &types)
+                } else {
+                    let temps = self.default_priors_held(priors, &types);
+                    self.load_file_module(info.file);
+                    temps
+                };
                 self.default_getter_value(s, i, &temps, None)
             }
         }
@@ -5202,7 +5293,7 @@ impl<'a> Gen<'a> {
     /// The getter of default `i` of method `s` called on the receiver on the stack with the
     /// arguments in `temps`, leaving the parameter's type, a by-name one's value; through
     /// `site`'s instruction and owner where given, else the method's.
-    fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[(u16, ErasedType)], site: Option<(Invoke, Rc<str>, bool)>) -> ErasedType {
+    fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[Prior], site: Option<(Invoke, Rc<str>, bool)>) -> ErasedType {
         let m = self.mref(s);
         let shape = self.default_getter_shape(s, i);
         let want = if shape.by_name {
@@ -5214,7 +5305,7 @@ impl<'a> Gen<'a> {
             }
         };
         let args = self.getter_args(s, shape.before, temps);
-        let before: Vec<ErasedType> = args.iter().map(|(_, t)| t.clone()).collect();
+        let before: Vec<ErasedType> = args.iter().map(|p| p.ty().clone()).collect();
         let (name, desc) = self.default_getter_ref(s, i, &before);
         match site {
             Some((kind, owner, interface)) => self.getter_call(kind, &owner, interface, name, &desc, &args, &want, false),
@@ -5237,15 +5328,20 @@ impl<'a> Gen<'a> {
             let rest = self.erased_param_types(s);
             let module: Rc<str> = Rc::from(cx.companion_name(c));
             let module_type = ErasedType::L(module.clone());
-            self.expr(r, &u);
-            let recv = self.store_new(&u);
-            let temps = self.default_priors(priors, &rest);
+            let paths = self.default_operands_are_paths(Some(r), priors);
+            let receiver = if paths {
+                Prior::Written(r, u.clone())
+            } else {
+                self.expr(r, &u);
+                Prior::Held(self.store_new(&u), u.clone())
+            };
+            let temps = if paths { self.default_priors(priors, &rest) } else { self.default_priors_held(priors, &rest) };
             let shape = self.default_getter_shape(s, i);
             let (before, gret) = (shape.before, shape.ret.clone());
             let getter = format!("{}$default${}$extension", self.source_method_name(s), shape.index);
             let mut gparams = vec![u.clone()];
             gparams.extend(rest[..before].iter().cloned());
-            let mut gtemps = vec![(recv, u.clone())];
+            let mut gtemps = vec![receiver];
             gtemps.extend(temps.iter().take(before).cloned());
             let want = if shape.by_name { gret.clone() } else { rest[i].clone() };
             self.getstatic(&module, "MODULE$", &module_type);
@@ -5256,14 +5352,20 @@ impl<'a> Gen<'a> {
             let rest = self.erased_param_types(s);
             let owner = self.class_name(c);
             self.expr(r, &u);
-            let recv = self.store_new(&u);
-            let temps = self.default_priors(priors, &rest);
+            let temps = if self.default_operands_are_paths(Some(r), priors) {
+                self.vc_box(c, &u);
+                self.default_priors(priors, &rest)
+            } else {
+                let recv = self.store_new(&u);
+                let temps = self.default_priors_held(priors, &rest);
+                self.load(recv, &u);
+                self.vc_box(c, &u);
+                temps
+            };
             let shape = self.default_getter_shape(s, i);
             let desc = method_desc(&rest[..shape.before], &shape.ret);
             let getter = format!("{}$default${}", self.source_method_name(s), shape.index);
             let want = if shape.by_name { shape.ret.clone() } else { rest[i].clone() };
-            self.load(recv, &u);
-            self.vc_box(c, &u);
             self.getter_call(Invoke::Virtual, &owner, false, getter, &desc, &temps, &want, false);
             return Some(want);
         }
@@ -5276,15 +5378,23 @@ impl<'a> Gen<'a> {
         };
         let (gparams, gret) = parse_method_desc(&gm.descriptor);
         let module = ErasedType::L(Rc::from(companion.name.as_str()));
-        self.expr(r, &u);
-        let recv = self.store_new(&u);
-        let temps = self.default_priors(priors, &gparams[1..]);
-        self.getstatic(&companion.name, "MODULE$", &module);
-        self.load(recv, &u);
-        self.adapt(&u, &gparams[0]);
-        for ((slot, t), p) in temps.iter().zip(&gparams[1..]) {
-            self.load(*slot, t);
-            self.adapt(t, p);
+        let temps = if self.default_operands_are_paths(Some(r), priors) {
+            self.getstatic(&companion.name, "MODULE$", &module);
+            self.expr(r, &u);
+            self.adapt(&u, &gparams[0]);
+            self.default_priors(priors, &gparams[1..])
+        } else {
+            self.expr(r, &u);
+            let recv = self.store_new(&u);
+            let temps = self.default_priors_held(priors, &gparams[1..]);
+            self.getstatic(&companion.name, "MODULE$", &module);
+            self.load(recv, &u);
+            self.adapt(&u, &gparams[0]);
+            temps
+        };
+        for (prior, p) in temps.iter().zip(&gparams[1..]) {
+            self.write_prior(prior);
+            self.adapt(prior.ty(), p);
         }
         self.invoke_desc(Invoke::Virtual, &companion.name, false, &getter, &gm.descriptor, gparams.len(), &gret);
         Some(gret)
@@ -5312,11 +5422,11 @@ impl<'a> Gen<'a> {
     /// `want`: a by-name parameter's default is passed as a thunk that calls the getter, as
     /// scalac's caller passes it, its value a function or not (`y: => (() => Long)`, whose getter
     /// and thunk both erase to `Function0`).
-    fn getter_call(&mut self, kind: Invoke, owner: &Rc<str>, interface: bool, name: String, desc: &str, temps: &[(u16, ErasedType)], want: &ErasedType, by_name: bool) {
+    fn getter_call(&mut self, kind: Invoke, owner: &Rc<str>, interface: bool, name: String, desc: &str, temps: &[Prior], want: &ErasedType, by_name: bool) {
         let (params, ret) = parse_method_desc(desc);
-        for ((slot, t), p) in temps.iter().zip(&params) {
-            self.load(*slot, t);
-            self.adapt(t, p);
+        for (prior, p) in temps.iter().zip(&params) {
+            self.write_prior(prior);
+            self.adapt(prior.ty(), p);
         }
         let thunk = self.function_type(0);
         if *want == thunk && (by_name || ret != thunk) {
@@ -5367,7 +5477,7 @@ impl<'a> Gen<'a> {
 
     /// The arguments of a default's getter among `temps`, the arguments before the default in the
     /// signature's order: those of the clauses before the default's as the class file orders them.
-    pub fn getter_args(&self, s: SymId, before: usize, temps: &[(u16, ErasedType)]) -> Vec<(u16, ErasedType)> {
+    pub fn getter_args(&self, s: SymId, before: usize, temps: &[Prior]) -> Vec<Prior> {
         match self.jvm_param_order(s) {
             Some(order) => order[..before.min(order.len())].iter().filter_map(|&k| temps.get(k).cloned()).collect(),
             None => temps.to_vec(),
@@ -6948,13 +7058,15 @@ impl<'a> Gen<'a> {
     }
 
     /// The default `i` of the local def `s`, its getter applied to `temps`: the value it leaves.
-    fn local_default(&mut self, s: SymId, i: usize, temps: &[(u16, ErasedType)]) -> ErasedType {
+    fn local_default(&mut self, s: SymId, i: usize, temps: &[Prior]) -> ErasedType {
         let cx = self.cx;
         let f = cx.fun_of_sym[s.idx()];
         if f == u32::MAX {
             self.unsupported("the default of a local def without a body");
             return ErasedType::V;
         }
+        // The getter's body is deferred once the arguments are written: their lambdas come first in the class.
+        let mut pending = None;
         let lifted = match self.lifted_defaults.get(&(s, i)) {
             Some(l) => l.clone(),
             None => {
@@ -6971,13 +7083,16 @@ impl<'a> Gen<'a> {
                 };
                 let l = self.make_lifted(name, &free, params, ret, Some(s));
                 self.lifted_defaults.insert((s, i), l.clone());
-                self.defer(Pending { lifted: l.clone(), body: PendingBody::Default(FunId(f), i) });
+                pending = Some(Pending { lifted: l.clone(), body: PendingBody::Default(FunId(f), i) });
                 l
             }
         };
         self.load_captures(&lifted);
-        for (slot, t) in temps {
-            self.load(*slot, t);
+        for prior in temps {
+            self.write_prior(prior);
+        }
+        if let Some(p) = pending {
+            self.defer(p);
         }
         let owner = self.this_name.clone();
         self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, lifted.arity(), &lifted.ret);

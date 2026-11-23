@@ -601,6 +601,7 @@ cases/declared_erasure_bodies	pass	-
 cases/def_refinement_receiver	pass	-	
 cases/default_getter_approximation_refinement	pass	-	
 cases/default_getter_infers	pass	-	
+cases/default_getter_operands	pass	-	
 cases/default_getter_wildapprox	pass	-	
 cases/default_names_member	pass	-	
 cases/default_receiver_inherited_parent_args	pass	-	

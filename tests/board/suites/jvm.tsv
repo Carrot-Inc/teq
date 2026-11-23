@@ -607,6 +607,7 @@ declared_erasure_bodies	pass	-
 def_refinement_receiver	pass	-	
 default_getter_approximation_refinement	pass	-	
 default_getter_infers	pass	-	
+default_getter_operands	pass	-	
 default_getter_wildapprox	pass	-	
 default_names_member	pass	-	
 default_receiver_inherited_parent_args	pass	-	
