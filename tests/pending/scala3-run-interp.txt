@@ -219,7 +219,6 @@ i19270	compile-error: value getDeclaringClass is not a member of Method
 i19394	compile-error: bar is already defined as method bar
 i19619	compile-error: test contains Java sources
 i1990b	run-error: the local $thisr0jxdn_6 is not in scope
-i20145	compile-error: Cannot rewrite recursive call: it is not in tail position
 i20561_gadts	compile-error: test contains Java sources
 i20561_joint	compile-error: test contains Java sources
 i20561_separ	compile-error: test contains Java sources
@@ -667,7 +666,6 @@ t8823	compile-error: type Product2 not found
 t9400	compile-error: type Retention not found
 t949	compile-error: type Enumeration not found
 t9915	compile-error: test contains Java sources
-tailrec-return	compile-error: Cannot rewrite recursive call: it is not in tail position
 targetName-interop	compile-error: test contains Java sources
 targetName-modules-1	compile-error: test contains Java sources
 targetName-modules-2	compile-error: test contains Java sources

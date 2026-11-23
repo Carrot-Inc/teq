@@ -1046,6 +1046,12 @@ synthesized_collision_after_typer_error	pass	-
 synthesized_erased_collision	pass	-	
 synthesized_target_name_collision	pass	-	
 tailrec	pass	-	
+tailrec_guarded	pass	-	
+tailrec_guarded_monitor	pass	-	
+tailrec_inline_by_name	pass	-	
+tailrec_lazy_init	pass	-	
+tailrec_return_js	pass	-	
+tailrec_return_js_build	pass	-	
 tailrec_walk	pass	-	
 target_name_parenthesized	fail	-	exit code 0
 time_stopped_in_inline	fail	-	missing 'stopped in inline: 1 error'

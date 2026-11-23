@@ -188,6 +188,8 @@ reducer_literal_bound	compile
 reducer_wildcard_bound	compile
 reflect_declared_method	verify
 reflect_encoded_parameter	backend
+return_tail_call_nested_receiver	verify
+return_tail_call_operand	verify
 scala2_auto_application	output
 scala_package_member_before_predef	output
 script_bounded_output	compile

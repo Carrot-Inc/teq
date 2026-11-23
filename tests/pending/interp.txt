@@ -198,6 +198,7 @@ reducer_literal_bound	compile
 reducer_wildcard_bound	compile
 regex_case_properties	output
 regex_comments	output
+return_tail_call_try_unguarded	exception
 sam_literal_receiver_unchanged_local_default	unsupported
 scala2_auto_application	output
 scala2_std_auto_application	unsupported

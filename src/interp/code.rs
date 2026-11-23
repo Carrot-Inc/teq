@@ -1629,8 +1629,13 @@ impl<'a, 't> Interp<'a, 't> {
                 self.lower(b, r);
                 b.emit(Op::Index(i));
             }
+            // A call of the looping def by itself in a tail position of the value goes round the loop
+            // (the walker's `Return` in `eval.rs`).
             TExpr::Return(v) => {
-                self.lower(b, v);
+                match b.tail {
+                    Some((sym, _)) if self.jumps_back(sym, e) => self.lower_tail(b, v),
+                    _ => self.lower(b, v),
+                }
                 b.emit(Op::Return);
             }
             TExpr::Throw(inner, _) => {

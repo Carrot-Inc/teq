@@ -263,6 +263,9 @@ pub struct TailLoop {
     pub sym: SymId,
     pub params: Vec<SymId>,
     pub head: Label,
+    /// The calls of the def by itself under its `return`s that go round the loop
+    /// (`Program::tail_jumps`).
+    pub jumps: Vec<TExprId>,
 }
 
 pub struct MethodCx {
@@ -3146,8 +3149,33 @@ impl<'a> Gen<'a> {
 
     /// Emits `e` and brings its value to the type `want`: lowered, then written.
     pub fn expr(&mut self, e: TExprId, want: &ErasedType) {
+        if let Some((recv, args)) = self.jump_call(e) {
+            return self.tail_jump_wanted(recv, args, want);
+        }
         let lowered = self.lowering(|g| g.lower_expr(e, want));
         self.write(lowered);
+    }
+
+    /// The receiver (where another instance is called) and the arguments of the call `e` where it
+    /// is a jump of the def that loops (`TailLoop::jumps`).
+    fn jump_call(&self, e: TExprId) -> Option<(Option<TExprId>, ListRef)> {
+        let tail = self.m.tail.as_ref().filter(|t| t.jumps.contains(&e))?;
+        self.cx.input.prog.self_call(tail.sym, tail.params.len(), e)
+    }
+
+    /// The loop's jump where a value of the type `want` is wanted: the operands under it dropped,
+    /// dead as the jump leaves them, and the dead code that follows verified against them and a
+    /// value of that type.
+    fn tail_jump_wanted(&mut self, recv: Option<TExprId>, args: ListRef, want: &ErasedType) {
+        let dropped = self.drop_stack();
+        self.tail_jump(recv, args);
+        for vt in dropped {
+            self.code.push(vt);
+        }
+        if *want != ErasedType::V {
+            let vt = self.vt(want);
+            self.code.push(vt);
+        }
     }
 
     /// `expr` for a node the lowering does not make yet.
@@ -7002,18 +7030,27 @@ impl<'a> Gen<'a> {
         let types: Vec<ErasedType> = params.iter().map(|p| self.m.locals[p].ty.clone()).collect();
         let items = cx.input.prog.expr_list(args).to_vec();
         let mark = self.code.locals_mark();
+        // The receiver, then the arguments, each into a temporary in the source's order, as dotty's
+        // TailRec assigns them (TailRec.scala 350-372); then `this` and the parameters. A value
+        // class's extension method holds its instance unboxed (`$this`): the receiver is written at the
+        // underlying type, as the call's lowering writes it (`Gen::call_extension`).
+        let this_type = match (self.m.this_home, self.m.this_underlying.clone(), self.this_class) {
+            (None, Some(u), Some(_)) => u,
+            (_, _, Some(c)) => self.class_type(c),
+            (_, _, None) => ErasedType::object(),
+        };
+        let receiver = recv.map(|r| {
+            self.expr(r, &this_type);
+            self.store_new(&this_type)
+        });
         let mut temps: Vec<(u16, ErasedType)> = Vec::new();
         for (i, &a) in items.iter().enumerate() {
             self.expr(a, &types[i]);
             let slot = self.store_new(&types[i]);
             temps.push((slot, types[i].clone()));
         }
-        if let Some(r) = recv {
-            let this_type = match self.this_class {
-                Some(c) => self.class_type(c),
-                None => ErasedType::object(),
-            };
-            self.expr(r, &this_type);
+        if let Some(temp) = receiver {
+            self.load(temp, &this_type);
             let slot = self.m.this_slot.unwrap_or(0);
             self.store(slot, &this_type);
         }
@@ -7225,6 +7262,16 @@ impl<'a> Gen<'a> {
                 self.code.locals_release(mark);
             }
             _ => {
+                // The loop's jump (`&&`'s or `||`'s right operand under a `return`) leaves: no branch
+                // follows it, and the dead code after it is verified against the operands under it.
+                if let Some((recv, args)) = self.jump_call(e) {
+                    let dropped = self.drop_stack();
+                    self.tail_jump(recv, args);
+                    for vt in dropped {
+                        self.code.push(vt);
+                    }
+                    return;
+                }
                 self.expr(e, &ErasedType::Z);
                 self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
             }

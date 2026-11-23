@@ -30,7 +30,10 @@ teq compiler build src/ --target jvm -o out/main.jar   # JVM class files linked 
 node out/main.js                  # a build runs under node (script or ES module), a jar under java
 teq interp src/ [-- args]         # run in the compiler's own interpreter, without an output file
 teq compiler fix src/ --config c.conf      # teq fix's rules over files, typed with the compiler's options
-teq compiler check src/                    # type check only
+teq compiler check src/                    # type check only, for the target a build would have: JavaScript
+                                           # unless --target jvm is given, so a check answers as that build does
+                                           # (on JavaScript `@tailrec` refuses a def whose call of itself stands
+                                           # under a `return`, which --target jvm and teq interp accept)
       --classpath a.jar:b.jar     # read the classes the program names from the jars' TASTy files
       --std=scala-library         # on JavaScript, scala-library as the std from its jar (default: lean,
                                   # teq's own); the JVM's std is always scala-library's jar, named

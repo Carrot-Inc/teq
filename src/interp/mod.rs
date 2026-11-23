@@ -1170,6 +1170,8 @@ pub struct InterpCaches {
     product_defs: crate::arena::Dense<u16>,
     has_body: crate::arena::Dense<Option<bool>>,
     tail_of: crate::arena::Dense<u8>,
+    /// The returns of a looping def that go round its loop (`Program::tail_jumps`), once known.
+    jump_returns_of: crate::arena::Dense<Option<Rc<[TExprId]>>>,
     template_cache: crate::arena::Dense<Option<Template>>,
     qnames: FxMap<SymId, Rc<str>>,
     class_values: FxMap<Rc<str>, Rc<ClassValueRef>>,
@@ -1256,6 +1258,7 @@ impl InterpCaches {
             product_defs: _,
             has_body: _,
             tail_of: _,
+            jump_returns_of: _,
             template_cache: _,
             qnames: _,
             class_values: _,
@@ -1372,6 +1375,8 @@ pub struct Interp<'a, 't> {
     enum_values: FxMap<ClassId, Rc<[Value]>>,
     has_body: crate::arena::Dense<Option<bool>>,
     tail_of: crate::arena::Dense<u8>,
+    /// The returns of a looping def that go round its loop (`Program::tail_jumps`), once known.
+    jump_returns_of: crate::arena::Dense<Option<Rc<[TExprId]>>>,
     builtins: Rc<FxMap<String, Builtin>>,
     template_cache: crate::arena::Dense<Option<Template>>,
     qnames: FxMap<SymId, Rc<str>>,
@@ -1522,6 +1527,7 @@ impl<'a, 't> Interp<'a, 't> {
             enum_values: FxMap::default(),
             has_body: crate::arena::Dense::new(None),
             tail_of: crate::arena::Dense::new(0),
+            jump_returns_of: crate::arena::Dense::new(None),
             builtins: builtins::table(),
             template_cache: crate::arena::Dense::new(None),
             qnames: FxMap::default(),
@@ -1614,6 +1620,7 @@ impl<'a, 't> Interp<'a, 't> {
             product_defs: self.product_defs,
             has_body: self.has_body,
             tail_of: self.tail_of,
+            jump_returns_of: self.jump_returns_of,
             template_cache: self.template_cache,
             qnames: self.qnames,
             class_values: self.class_values,
@@ -1685,6 +1692,7 @@ impl<'a, 't> Interp<'a, 't> {
         self.product_defs = c.product_defs;
         self.has_body = c.has_body;
         self.tail_of = c.tail_of;
+        self.jump_returns_of = c.jump_returns_of;
         self.template_cache = c.template_cache;
         self.qnames = c.qnames;
         self.class_values = c.class_values;

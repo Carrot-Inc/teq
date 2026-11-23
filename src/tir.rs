@@ -1303,6 +1303,11 @@ pub struct Program {
     /// does (`ConstFold`'s `ConstantTree` looks through `Typed`). The two marks are kept apart: an
     /// ascription of such a call is in both.
     pub opaque_bits: Bits,
+    /// The copies of an inline method's by-name argument where the expansion reads its parameter
+    /// (`Worker::inline_arg`), as bits by expression: dotty binds such an argument to a proxy def,
+    /// so a `return` in it is in no tail position of the method around the call
+    /// (`Program::tail_jumps`).
+    pub by_name_arg_bits: Bits,
     /// The arrays spread into a varargs as they are written (`f(arr*)`), as bits by expression:
     /// the sequence the typer converts one to is no sequence a program wrote, and a Java
     /// parameter takes the array itself, as scalac passes it.
@@ -1626,6 +1631,7 @@ impl Program {
         self.taken_else_bits.fork();
         self.widened_bits.fork();
         self.opaque_bits.fork();
+        self.by_name_arg_bits.fork();
         self.spread_bits.fork();
         self.ascribed_bits.fork();
         self.inlined_null_bits.fork();
@@ -1649,7 +1655,7 @@ impl Program {
             let own_base = self.exprs.own_base();
             self.expr_types.follow_escapes(marks.clone(), own_base);
             self.expr_spans.follow_escapes(marks.clone(), own_base);
-            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.inlined_null_bits, &mut self.cast_bits, &mut self.setter_assign_bits, &mut self.removed_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
+            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.by_name_arg_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.inlined_null_bits, &mut self.cast_bits, &mut self.setter_assign_bits, &mut self.removed_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
                 bits.follow_escapes(marks.clone(), own_base);
             }
         }
@@ -1726,6 +1732,7 @@ impl Program {
             taken_else_bits: Bits::attach(self.taken_else_bits.shared_arc(), worker),
             widened_bits: Bits::attach(self.widened_bits.shared_arc(), worker),
             opaque_bits: Bits::attach(self.opaque_bits.shared_arc(), worker),
+            by_name_arg_bits: Bits::attach(self.by_name_arg_bits.shared_arc(), worker),
             spread_bits: Bits::attach(self.spread_bits.shared_arc(), worker),
             ascribed_bits: Bits::attach(self.ascribed_bits.shared_arc(), worker),
             inlined_null_bits: Bits::attach(self.inlined_null_bits.shared_arc(), worker),
@@ -1851,6 +1858,7 @@ impl Default for Program {
             taken_else_bits: Bits::default(),
             widened_bits: Bits::default(),
             opaque_bits: Bits::default(),
+            by_name_arg_bits: Bits::default(),
             spread_bits: Bits::default(),
             ascribed_bits: Bits::default(),
             inlined_null_bits: Bits::default(),
@@ -2133,6 +2141,15 @@ impl Program {
         self.widened_bits.has(e.0)
     }
 
+    /// Marks `e` as `by_name_arg_bits` says.
+    pub fn mark_by_name_arg(&mut self, e: TExprId) {
+        self.by_name_arg_bits.set(e.0);
+    }
+
+    pub fn is_by_name_arg(&self, e: TExprId) -> bool {
+        self.by_name_arg_bits.has(e.0)
+    }
+
     /// Marks `e` as `opaque_bits` says.
     pub fn mark_opaque(&mut self, e: TExprId) {
         self.opaque_bits.set(e.0);
@@ -2389,6 +2406,124 @@ impl Program {
         complete.then_some((recv, args))
     }
 
+    /// The `return`s of the def `sym`'s body `body` whose value holds a call of the def by itself
+    /// with all its `arity` parameters in a tail position (`tail_self_calls`'s positions), and those
+    /// calls: dotty's TailRec takes a return from the method as a tail position wherever it stands
+    /// (TailRec.scala 474-478), so each call is the def's loop going round again. Not in a closure's
+    /// or a local def's code, which is another method, and not where a `try`'s body, a case of a
+    /// `try` with a finalizer or a `synchronized` body guards the `return`: a jump there skips the
+    /// finalizer, an enclosing handler or the monitor's exit, where scalac's does
+    /// (docs/DIFFERENCES.md).
+    pub fn tail_jumps(&self, syms: &Symbols, sym: SymId, arity: usize, body: TExprId) -> TailJumps {
+        let mut out = TailJumps::default();
+        // Each expression with whether nothing guards it.
+        let mut stack: Vec<(TExprId, bool)> = vec![(body, true)];
+        while let Some((e, free)) = stack.pop() {
+            // An inline method's by-name argument is a proxy def of dotty's expansion, whose code is
+            // none of the method's own (TailRec.scala 450-461 enters no nested DefDef).
+            if self.is_by_name_arg(e) {
+                continue;
+            }
+            match self.expr(e) {
+                TExpr::Return(v) => {
+                    if free {
+                        let before = out.calls.len();
+                        self.tail_calls(sym, arity, v, &mut out.calls);
+                        if out.calls.len() > before {
+                            out.returns.push(e);
+                        }
+                    }
+                    stack.push((v, free));
+                }
+                TExpr::Lambda(..) => {}
+                TExpr::Js(template, args) if self.strings[template.idx()] == "$synchronized($0, $1)" => {
+                    let &[lock, inner] = self.expr_list(args) else { continue };
+                    stack.push((lock, free));
+                    stack.push((inner, false));
+                }
+                TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
+                | TExpr::Spread(r) | TExpr::JsSelect(r, _) | TExpr::Throw(r, _) => stack.push((r, free)),
+                TExpr::CallStatic(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args)
+                | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) | TExpr::New(_, args) => {
+                    stack.extend(self.expr_list(args).iter().map(|&a| (a, free)));
+                }
+                TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
+                    stack.push((r, free));
+                    stack.extend(self.expr_list(args).iter().map(|&a| (a, free)));
+                }
+                TExpr::If(c, t, els) => {
+                    stack.push((c, free));
+                    stack.push((t, free));
+                    stack.extend(els.map(|x| (x, free)));
+                }
+                TExpr::While(a, b) | TExpr::Assign(a, b) | TExpr::Prim(_, a, b) => {
+                    stack.push((a, free));
+                    stack.push((b, free));
+                }
+                TExpr::Block(stmts, res) => {
+                    for st in &self.stmts[stmts.range()] {
+                        match *st {
+                            TStmt::Expr(x) | TStmt::Pat(_, x) => stack.push((x, free)),
+                            // A lazy val's initialiser runs in a method of its own (LazyVals, after
+                            // TailRec, which takes its right-hand side as no tail position).
+                            TStmt::Val(s, _) if syms.sym(s).mods & mods::LAZY != 0 => {}
+                            TStmt::Val(_, init) => stack.push((init, free)),
+                            TStmt::Fun(_) => {}
+                        }
+                    }
+                    stack.push((res, free));
+                }
+                TExpr::Match(scrut, cases) => {
+                    stack.push((scrut, free));
+                    for c in self.case_list(cases) {
+                        stack.extend(c.guard.map(|g| (g, free)));
+                        stack.push((c.body, free));
+                    }
+                }
+                TExpr::Try(i) => {
+                    let t = &self.tries[i as usize];
+                    let cases_free = free && t.finalizer.is_none();
+                    stack.push((t.body, false));
+                    for c in self.case_list(t.cases) {
+                        stack.extend(c.guard.map(|g| (g, cases_free)));
+                        stack.push((c.body, cases_free));
+                    }
+                    stack.extend(t.finalizer.map(|f| (f, free)));
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// The calls of `sym` by itself in the tail positions of `e`, as `tail_self_calls` counts them.
+    pub fn tail_calls(&self, sym: SymId, arity: usize, e: TExprId, out: &mut Vec<TExprId>) {
+        match self.expr(e) {
+            TExpr::Block(_, res) | TExpr::Prim(PrimOp::BoolAnd | PrimOp::BoolOr, _, res) | TExpr::Return(res) => self.tail_calls(sym, arity, res, out),
+            TExpr::If(_, t, els) => {
+                self.tail_calls(sym, arity, t, out);
+                if let Some(x) = els {
+                    self.tail_calls(sym, arity, x, out);
+                }
+            }
+            TExpr::Match(_, cases) => {
+                for c in self.case_list(cases) {
+                    self.tail_calls(sym, arity, c.body, out);
+                }
+            }
+            TExpr::Try(i) if self.tries[i as usize].finalizer.is_none() => {
+                for c in self.case_list(self.tries[i as usize].cases) {
+                    self.tail_calls(sym, arity, c.body, out);
+                }
+            }
+            _ => {
+                if self.self_call(sym, arity, e).is_some() && !out.contains(&e) {
+                    out.push(e);
+                }
+            }
+        }
+    }
+
     /// The tail positions of `e` (the value of a block, the branches of an `if`, the bodies of
     /// the cases of a `match` or of a `catch` without `finally`, the right operand of `&&` and
     /// `||`) that hold such a call, and whether one of them has a receiver other than `this`.
@@ -2416,6 +2551,14 @@ impl Program {
             },
         }
     }
+}
+
+/// The `return`s of a def's body that go round the def's loop, and their calls of the def
+/// (`Program::tail_jumps`).
+#[derive(Default)]
+pub struct TailJumps {
+    pub returns: Vec<TExprId>,
+    pub calls: Vec<TExprId>,
 }
 
 /// The expressions under a root, the root included, in no particular order: the bodies of the

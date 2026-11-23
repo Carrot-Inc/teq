@@ -293,10 +293,11 @@ impl<'a> Gen<'a> {
             return self.keyed_body(sym, params, body);
         }
         let (calls, _) = cx.input.prog.tail_self_calls(sym, params.len(), body);
-        if calls > 0 && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell)) {
+        let jumps = cx.input.prog.tail_jumps(cx.input.syms, sym, params.len(), body).calls;
+        if (calls > 0 || !jumps.is_empty()) && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell)) {
             let head = self.code.new_label();
             self.code.bind(head);
-            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head });
+            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head, jumps });
         }
         self.tail(body);
         self.m.tail = None;
@@ -320,11 +321,12 @@ impl<'a> Gen<'a> {
         let from = self.code.pc();
         let cx = self.cx;
         let (calls, _) = cx.input.prog.tail_self_calls(sym, params.len(), body);
-        let tail = calls > 0 && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell));
+        let jumps = cx.input.prog.tail_jumps(cx.input.syms, sym, params.len(), body).calls;
+        let tail = (calls > 0 || !jumps.is_empty()) && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell));
         if tail {
             let head = self.code.new_label();
             self.code.bind(head);
-            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head });
+            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head, jumps });
         }
         self.tail(body);
         self.m.tail = None;

@@ -90,6 +90,7 @@ impl Program {
             taken_else_bits,
             widened_bits,
             opaque_bits,
+            by_name_arg_bits,
             spread_bits,
             ascribed_bits,
             inlined_null_bits,
@@ -164,6 +165,7 @@ impl Program {
             + taken_else_bits.held()
             + widened_bits.held()
             + opaque_bits.held()
+            + by_name_arg_bits.held()
             + spread_bits.held()
             + ascribed_bits.held()
             + inlined_null_bits.held()

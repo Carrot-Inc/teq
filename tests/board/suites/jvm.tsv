@@ -2630,6 +2630,32 @@ repeated_args_value_class_cast	pass	-
 result_takes_arguments	pass	-	
 return_local	pass	-	
 return_stmt	pass	-	
+return_tail_call	pass	-	
+return_tail_call_and_or	pass	-	
+return_tail_call_argument_jump	pass	-	
+return_tail_call_deep	pass	-	
+return_tail_call_default_capture	pass	-	
+return_tail_call_default_receiver	pass	-	
+return_tail_call_finally_jump	pass	-	
+return_tail_call_guarded	pass	-	
+return_tail_call_if_both	pass	-	
+return_tail_call_inline_by_name	pass	-	
+return_tail_call_lazy_init	pass	-	
+return_tail_call_local_beside_nonlocal	pass	-	
+return_tail_call_local_defs	pass	-	
+return_tail_call_monitor	pass	-	
+return_tail_call_nested_receiver	fail	-	verify
+return_tail_call_operand	fail	-	verify
+return_tail_call_receiver_loop	pass	-	
+return_tail_call_receiver_operand	pass	-	
+return_tail_call_receiver_order	pass	-	
+return_tail_call_receiver_while	pass	-	
+return_tail_call_tailrec	pass	-	
+return_tail_call_try_rethrow	pass	-	
+return_tail_call_try_unguarded	pass	-	
+return_tail_call_untagged	pass	-	
+return_tail_call_value_class	pass	-	
+return_tail_call_while_label	pass	-	
 right_assoc_ext	pass	-	
 right_assoc_extension_calls	pass	-	
 right_assoc_extension_selected	pass	-	

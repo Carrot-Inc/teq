@@ -177,6 +177,22 @@ quoted_values_class_tests	< true false true false typed
 quoted_values_reflection_kinds	< other expr other type expr
 reducer_literal_bound	< true
 reducer_wildcard_bound	< true
+return_tail_call_and_or	< true
+return_tail_call_argument_jump	< 100
+return_tail_call_deep	< 0
+return_tail_call_finally_jump	< RuntimeException:e 100001
+return_tail_call_guarded	< 42
+return_tail_call_inline_by_name	< 3
+return_tail_call_lazy_init	< 6
+return_tail_call_local_beside_nonlocal	< 31
+return_tail_call_local_defs	< 100003
+return_tail_call_operand	< xe
+return_tail_call_receiver_loop	< plain 2 RABRAB
+return_tail_call_receiver_operand	RangeError: Maximum call stack size exceeded
+return_tail_call_receiver_while	< 123
+return_tail_call_tailrec	< 0
+return_tail_call_try_unguarded	< 8
+return_tail_call_value_class	< 100001
 string_constant_fold_surrogates	< folded to the pair
 super_rebind_result	< text
 trait_empty_parameters	< empty

@@ -534,7 +534,7 @@ i1991.scala	pass	interp:pass
 i2004.scala	pass	interp:pass	
 i2004b.scala	pass	interp:pass	
 i20095.scala	pass	interp:pass	
-i20145.scala	fail	interp:fail	i20145.scala:3:5: Cannot rewrite recursive call: it is not in tail position
+i20145.scala	pass	interp:pass	
 i2020.scala	pass	interp:pass	
 i20225.scala	pass	interp:pass	
 i20284.scala	pass	interp:pass	
@@ -1540,7 +1540,7 @@ t9516.scala	pass	interp:pass
 t978.scala	pass	interp:pass	
 t9915	pass	interp:fail	
 tagless.scala	pass	interp:pass	
-tailrec-return.scala	fail	interp:fail	tailrec-return.scala:4:7: Cannot rewrite recursive call: it is not in tail position
+tailrec-return.scala	pass	interp:pass	
 takeAndDrop.scala	pass	interp:pass	
 targetName-interop	fail	interp:fail	javac: tests/run/targetName-interop/Test_2.java:7: error: type Alpha does not take parameters
 targetName-modules-1	fail	interp:fail	javac: tests/run/targetName-modules-1/Test_2.java:6: error: cannot find symbol

@@ -699,6 +699,10 @@ pub struct InlineArg {
     /// binds as a proxy method whose call stands at each use (`InlineByNameProxy`): no literal
     /// at either. Set on the JVM alone, the target that reads the mark (`Program::is_ascribed`).
     pub ascribed: bool,
+    /// Whether that method is a def of its own in dotty's expansion: a by-name parameter's that is
+    /// not `inline`, or an argument standing for one. Its copies are marked
+    /// (`Program::by_name_arg_bits`): the code is no part of the method the call stands in.
+    pub proxy_def: bool,
 }
 
 /// The worker's state where a definition is made, beyond its environment: what the definition's check runs under
@@ -1925,7 +1929,7 @@ impl<'a> Worker<'a> {
                     _ => prior,
                 };
                 let tree = self.own_getter_expansion(sym, sig, subst, body, bound, tree, span);
-                self.bind_inline_arg_as(local, tree, pty, true);
+                self.bind_inline_arg_as(local, tree, pty, true, !inline_param);
             } else if let Some(bound) = bound.filter(|b| !inline_param && k < b.params.len()) {
                 // The parameter's own binding, which holds the argument's value once.
                 let proxy = bound.params[k].proxy;
@@ -2032,8 +2036,10 @@ impl<'a> Worker<'a> {
             // tree whose casts say no type (`copy_for_proxy`).
             let expr = if !inline && met_cast && te == written { self.copy_for_proxy(te) } else { te };
             // An argument that is a by-name parameter's copy stands for that parameter here too.
-            let by_name = by_name || self.by_name_copy(self.creation_under(expr));
-            self.bind_inline_arg_as(proxy, expr, ty, by_name);
+            let copy = self.by_name_copy(self.creation_under(expr));
+            let proxy_def = by_name && !inline || copy;
+            let by_name = by_name || copy;
+            self.bind_inline_arg_as(proxy, expr, ty, by_name, proxy_def);
             if self.jvm && (inline || by_name) && self.prog.type_of(expr).is_some_and(|t| self.is_bottom_after_erasure(t)) {
                 if let Some(arg) = self.inline.args.get_mut(&proxy) {
                     arg.ascribed = true;
@@ -2057,7 +2063,7 @@ impl<'a> Worker<'a> {
                 self.index_unrecord(given);
             }
             let value = if self.inline.args.contains_key(&proxy) { te } else { self.prog.add(TExpr::Local(proxy)) };
-            self.bind_inline_arg_as(given, value, local_ty, by_name);
+            self.bind_inline_arg_as(given, value, local_ty, by_name, by_name && !inline);
             self.inline.param_bindings.insert(given, (te, declared));
             bound.givens.push(given);
             self.bind_given(given);
@@ -2876,13 +2882,13 @@ impl<'a> Worker<'a> {
 
     /// Binds `s` to the tree that stands for it at each use.
     pub(super) fn bind_inline_arg(&mut self, s: SymId, expr: TExprId, ty: TypeId) {
-        self.bind_inline_arg_as(s, expr, ty, false);
+        self.bind_inline_arg_as(s, expr, ty, false, false);
     }
 
     /// `bind_inline_arg` for a parameter that may be by-name (`InlineArg::by_name`).
-    pub(super) fn bind_inline_arg_as(&mut self, s: SymId, expr: TExprId, ty: TypeId, by_name: bool) {
+    pub(super) fn bind_inline_arg_as(&mut self, s: SymId, expr: TExprId, ty: TypeId, by_name: bool, proxy_def: bool) {
         let this_class = self.frame_class();
-        self.inline.args.insert(s, InlineArg { expr, ty, source: None, this_class, by_name, ascribed: false });
+        self.inline.args.insert(s, InlineArg { expr, ty, source: None, this_class, by_name, ascribed: false, proxy_def });
     }
 
     /// Makes each `this` of the tree `e`, a fresh copy, the instance of `k` as a class nested in
@@ -2928,6 +2934,9 @@ impl<'a> Worker<'a> {
         }
         self.part_end(part);
         self.inline.copies.push((copied, s));
+        if arg.proxy_def {
+            self.prog.mark_by_name_arg(copied);
+        }
         // The copy stands where the proxy stood, so it carries the proxy's type: a mirror
         // passed for a `Mirror.ProductOf[T]` keeps the refinement its value's own type lacks.
         if self.types.has_paths(arg.ty) || matches!(self.types.get(arg.ty), Type::Refined(..) | Type::Rec(_)) {

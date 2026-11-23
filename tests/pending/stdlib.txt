@@ -359,6 +359,24 @@ regex_class_sets	error: not supported on JavaScript: method split of java.util.r
 regex_scoped_flags	throw new PatternSyntaxException(error, regex, -1);
 regex_unicode_class_case	throw new PatternSyntaxException(error, regex, -1);
 regroup_bincompat_lib	error: not found: rgb
+return_tail_call	error: Not found: type IllegalThreadStateException
+return_tail_call_and_or	RangeError: Maximum call stack size exceeded
+return_tail_call_argument_jump	RangeError: Maximum call stack size exceeded
+return_tail_call_deep	RangeError: Maximum call stack size exceeded
+return_tail_call_finally_jump	output differs
+return_tail_call_guarded	output differs
+return_tail_call_inline_by_name	RangeError: Maximum call stack size exceeded
+return_tail_call_lazy_init	output differs
+return_tail_call_local_beside_nonlocal	RangeError: Maximum call stack size exceeded
+return_tail_call_local_defs	RangeError: Maximum call stack size exceeded
+return_tail_call_monitor	output differs
+return_tail_call_operand	RangeError: Maximum call stack size exceeded
+return_tail_call_receiver_loop	output differs
+return_tail_call_receiver_operand	RangeError: Maximum call stack size exceeded
+return_tail_call_receiver_while	output differs
+return_tail_call_tailrec	error: Cannot rewrite recursive call: it is not in tail position
+return_tail_call_try_unguarded	RangeError: Maximum call stack size exceeded
+return_tail_call_value_class	RangeError: Maximum call stack size exceeded
 runtime_objects	error: not supported on JavaScript: method equals of scala.runtime.BoxesRunTime (a Java definition without an implementation in the std's pl
 sam_conversion_after_overloaded_apply	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 sam_literal_receiver_shapes	error: type IllegalThreadStateException not found

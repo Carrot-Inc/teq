@@ -177,7 +177,6 @@ i19270.scala	i19270.scala:13:12: value getDeclaringClass is not a member of Meth
 i19394.scala	i19394.scala:11:7: bar is already defined as method bar
 i19619	java source: teq reads none
 i1990b.scala	teq: jvm backend: A2: the local $thisr0jxdn_6 is not in scope of the generated method
-i20145.scala	i20145.scala:3:5: Cannot rewrite recursive call: it is not in tail position
 i21213-min.scala	i21213-min.scala:4:35: expected ':', found 'val'
 i21213.scala	i21213.scala:4:18: expected ':', found 'val'
 i21346.scala	i21346.scala:4:33: expected '=', found '['
@@ -403,7 +402,6 @@ t8346.scala	t8346.scala:5:33: not found: Value
 t8549b.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
 t8803.scala	t8803.scala:20:68: expected an identifier, found 'super'
 t949.scala	t949.scala:6:20: not found: Value
-tailrec-return.scala	tailrec-return.scala:4:7: Cannot rewrite recursive call: it is not in tail position
 targetName-interop	java source: teq reads none
 targetName-modules-1	java source: teq reads none
 targetName-modules-2	java source: teq reads none

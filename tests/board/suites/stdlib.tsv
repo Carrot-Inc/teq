@@ -2579,6 +2579,32 @@ repeated_args_value_class_cast	pass	-
 result_takes_arguments	pass	-	
 return_local	pass	-	
 return_stmt	pass	-	
+return_tail_call	fail	-	error: Not found: type IllegalThreadStateException
+return_tail_call_and_or	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_argument_jump	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_deep	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_default_capture	pass	-	
+return_tail_call_default_receiver	pass	-	
+return_tail_call_finally_jump	fail	-	output differs
+return_tail_call_guarded	fail	-	output differs
+return_tail_call_if_both	pass	-	
+return_tail_call_inline_by_name	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_lazy_init	fail	-	output differs
+return_tail_call_local_beside_nonlocal	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_local_defs	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_monitor	fail	-	output differs
+return_tail_call_nested_receiver	pass	-	
+return_tail_call_operand	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_receiver_loop	fail	-	output differs
+return_tail_call_receiver_operand	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_receiver_order	pass	-	
+return_tail_call_receiver_while	fail	-	output differs
+return_tail_call_tailrec	fail	-	error: Cannot rewrite recursive call: it is not in tail position
+return_tail_call_try_rethrow	pass	-	
+return_tail_call_try_unguarded	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_untagged	pass	-	
+return_tail_call_value_class	fail	-	RangeError: Maximum call stack size exceeded
+return_tail_call_while_label	pass	-	
 right_assoc_ext	pass	-	
 right_assoc_extension_calls	pass	-	
 right_assoc_extension_selected	pass	-	

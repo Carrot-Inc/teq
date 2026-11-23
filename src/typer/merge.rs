@@ -3008,7 +3008,7 @@ impl<'a> Worker<'a> {
         prog.expr_types.place(expr_numbering, crew);
         prog.expr_spans.place(expr_numbering, crew);
         // The bit sets, a task of the crew each.
-        let bits: Vec<std::sync::Mutex<&mut crate::arena::Bits>> = [&mut prog.expansion_bits, &mut prog.leaf_bits, &mut prog.chain_end_bits, &mut prog.taken_then_bits, &mut prog.taken_else_bits, &mut prog.widened_bits, &mut prog.opaque_bits, &mut prog.spread_bits, &mut prog.ascribed_bits, &mut prog.inlined_null_bits, &mut prog.cast_bits, &mut prog.setter_assign_bits, &mut prog.removed_bits, &mut prog.kept_bits, &mut prog.tuple_index_bits].into_iter().map(std::sync::Mutex::new).collect();
+        let bits: Vec<std::sync::Mutex<&mut crate::arena::Bits>> = [&mut prog.expansion_bits, &mut prog.leaf_bits, &mut prog.chain_end_bits, &mut prog.taken_then_bits, &mut prog.taken_else_bits, &mut prog.widened_bits, &mut prog.opaque_bits, &mut prog.by_name_arg_bits, &mut prog.spread_bits, &mut prog.ascribed_bits, &mut prog.inlined_null_bits, &mut prog.cast_bits, &mut prog.setter_assign_bits, &mut prog.removed_bits, &mut prog.kept_bits, &mut prog.tuple_index_bits].into_iter().map(std::sync::Mutex::new).collect();
         crew.each(bits.len(), &|i| bits[i].lock().unwrap_or_else(|e| e.into_inner()).place(expr_numbering));
         drop(bits);
         let owned_at = owned.append(&mut self.prog);

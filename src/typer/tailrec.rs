@@ -32,9 +32,28 @@ impl<'a> Worker<'a> {
         if calls == 0 {
             let msg = format!("TailRec optimisation not applicable, method {} contains no recursive calls", name);
             self.tailrec_error(span, msg);
-        } else if calls > self.prog.tail_self_calls(sym, arity, body).0 {
+        } else if calls > self.loop_calls(sym, arity, body) {
             self.tailrec_error(span, "Cannot rewrite recursive call: it is not in tail position");
         }
+    }
+
+    /// How many calls of the def by itself are its loop's: those in tail positions of the body
+    /// and those under a `return` nothing guards (`Program::tail_jumps`). A call under a `return`
+    /// a finalizer, a handler or a monitor guards is not one, so a def that has one is refused
+    /// where scalac rewrites it wrongly (docs/DIFFERENCES.md). JavaScript writes a call under a
+    /// `return` as a call, so there the tail positions alone are the loop's.
+    fn loop_calls(&self, sym: SymId, arity: usize, body: TExprId) -> usize {
+        if !self.jvm && !self.interp {
+            return self.prog.tail_self_calls(sym, arity, body).0;
+        }
+        let mut calls = Vec::new();
+        self.prog.tail_calls(sym, arity, body, &mut calls);
+        for c in self.prog.tail_jumps(&self.syms, sym, arity, body).calls {
+            if !calls.contains(&c) {
+                calls.push(c);
+            }
+        }
+        calls.len()
     }
 
     /// An error of scalac's `TailRec`, which runs after `Inlining` and `Erasure`: late, holding back

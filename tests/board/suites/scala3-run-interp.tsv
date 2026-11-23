@@ -548,7 +548,7 @@ i1991	pass	-
 i2004	pass	-	
 i2004b	pass	-	
 i20095	pass	-	
-i20145	fail	-	compile-error: Cannot rewrite recursive call: it is not in tail position
+i20145	pass	-	
 i2020	pass	-	
 i20225	pass	-	
 i20284	pass	-	
@@ -1658,7 +1658,7 @@ t9516	pass	-
 t978	pass	-	
 t9915	fail	-	compile-error: test contains Java sources
 tagless	pass	-	
-tailrec-return	fail	-	compile-error: Cannot rewrite recursive call: it is not in tail position
+tailrec-return	pass	-	
 takeAndDrop	pass	-	
 targetName	pass	-	
 targetName-interop	fail	-	compile-error: test contains Java sources

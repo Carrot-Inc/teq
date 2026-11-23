@@ -201,6 +201,17 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   over another module's products, see scalac's places: `(x: Int) /* => */ => x` puts its arrow at the real one, and
   `case /* c */ x =>` keeps its `CaseDef` at `case`. The `Quotes` a macro's reflection refers to is the one its
   parameter's written type, or its body's first import, names, a lambda's parameter included.
+- On the JVM and in the interpreter a def's call of itself under a `return` is the def's loop wherever the `return`
+  stands, as scalac makes it: in a statement, a `val`'s initialiser, a case, a `while`, a `catch` case or an operand,
+  `final def f(n: Int): Int = { if n > 0 then return f(n - 1); 0 }` no longer overflows the stack there. Under a
+  `return` in a `try`'s body (whatever its handlers), in a handler of a `try` with a `finally` or in a `synchronized`
+  body the call stays a call (scalac's jump there skips the finalizer, a guard, a handler an outer frame would run, or
+  the monitor's release), and `@tailrec` refuses such a def as scalac refuses a call not in tail position; so does a
+  `return` in a local lazy val's initialiser or in an inline method's by-name argument, as in scalac. A call on another
+  instance goes round the loop too, its receiver evaluated before its arguments, as scalac (the JVM ran the arguments
+  first), a value class's included. On JavaScript such a call stays a call: a deep recursion there ends in a
+  RangeError where Scala.js loops, and `@tailrec` refuses a def whose call of itself stands under a `return`, as
+  before.
 
 ## 0.1.11 (2026-11-20)
 

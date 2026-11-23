@@ -2630,6 +2630,32 @@ repeated_args_value_class_cast	pass	-
 result_takes_arguments	pass	-	
 return_local	pass	-	
 return_stmt	pass	-	
+return_tail_call	cannot run	-	the JVM's platform
+return_tail_call_and_or	fail	-	< true
+return_tail_call_argument_jump	fail	-	< 100
+return_tail_call_deep	fail	-	< 0
+return_tail_call_default_capture	pass	-	
+return_tail_call_default_receiver	pass	-	
+return_tail_call_finally_jump	fail	-	< RuntimeException:e 100001
+return_tail_call_guarded	fail	-	< 42
+return_tail_call_if_both	pass	-	
+return_tail_call_inline_by_name	fail	-	< 3
+return_tail_call_lazy_init	fail	-	< 6
+return_tail_call_local_beside_nonlocal	fail	-	< 31
+return_tail_call_local_defs	fail	-	< 100003
+return_tail_call_monitor	cannot run	-	the JVM's platform
+return_tail_call_nested_receiver	pass	-	
+return_tail_call_operand	fail	-	< xe
+return_tail_call_receiver_loop	fail	-	< plain 2 RABRAB
+return_tail_call_receiver_operand	fail	-	< 100000
+return_tail_call_receiver_order	pass	-	
+return_tail_call_receiver_while	fail	-	< 123
+return_tail_call_tailrec	fail	-	< 0
+return_tail_call_try_rethrow	pass	-	
+return_tail_call_try_unguarded	fail	-	< 8
+return_tail_call_untagged	pass	-	
+return_tail_call_value_class	fail	-	< 100001
+return_tail_call_while_label	pass	-	
 right_assoc_ext	pass	-	
 right_assoc_extension_calls	pass	-	
 right_assoc_extension_selected	pass	-	

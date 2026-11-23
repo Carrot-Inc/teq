@@ -324,7 +324,12 @@ impl<'a, 't> Interp<'a, 't> {
                 self.index_of(v, i)
             }
             TExpr::Return(v) => {
-                let value = self.eval(v, fr, cx)?;
+                // A call of the looping def by itself in a tail position of the value goes round the
+                // loop (`Program::tail_jumps`), the finalizers and monitors it stands in run as it leaves.
+                let value = match cx.tail {
+                    Some((sym, _)) if self.jumps_back(sym, e) => self.eval_tail(v, fr, cx)?,
+                    _ => self.eval(v, fr, cx)?,
+                };
                 Err(Control::Return(cx.def_key, value))
             }
             TExpr::Throw(inner, _) => {
@@ -1259,6 +1264,16 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// Whether the `return` `e` in the looping def `sym` goes round its loop: one of the def's
+    /// returns `Program::tail_jumps` takes, none a finalizer, a handler or a monitor guards.
+    pub(super) fn jumps_back(&mut self, sym: SymId, e: TExprId) -> bool {
+        let Some(f) = self.fun_of(sym) else { return false };
+        if self.jump_returns_of[f.idx()].is_none() {
+            self.tail_info(f);
+        }
+        self.jump_returns_of[f.idx()].as_ref().is_some_and(|returns| returns.contains(&e))
+    }
+
     pub(super) fn tail_info(&mut self, f: FunId) -> Option<(SymId, u32)> {
         let fun = &self.prog().funs[f.idx()];
         let (sym, arity) = (fun.sym, fun.params.len() as u32);
@@ -1267,11 +1282,15 @@ impl<'a, 't> Interp<'a, 't> {
             2 => return Some((sym, arity)),
             _ => {}
         }
-        let loops = match self.exec_body(f) {
-            Some(body) if self.syms().is_effectively_final(sym) => self.prog().tail_self_calls(sym, arity as usize, body).0 > 0,
-            _ => false,
+        let (loops, returns) = match self.exec_body(f) {
+            Some(body) if self.syms().is_effectively_final(sym) => {
+                let returns = self.prog().tail_jumps(self.syms(), sym, arity as usize, body).returns;
+                (self.prog().tail_self_calls(sym, arity as usize, body).0 > 0 || !returns.is_empty(), returns)
+            }
+            _ => (false, Vec::new()),
         };
         self.tail_of[f.idx()] = if loops { 2 } else { 1 };
+        self.jump_returns_of[f.idx()] = Some(Rc::from(returns));
         loops.then_some((sym, arity))
     }
 
