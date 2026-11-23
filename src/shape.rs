@@ -67,7 +67,7 @@ impl<'a> Cmp<'a> {
 
     fn top(&mut self) -> Check {
         let (o, n) = (self.old, self.new);
-        if o.package != n.package || o.package_clauses != n.package_clauses {
+        if o.package != n.package || o.package_clauses != n.package_clauses || o.package_object != n.package_object {
             return differ("package clause");
         }
         // The unit's version, which a source version import sets (one of `imports`, as dotty's

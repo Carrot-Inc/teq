@@ -388,10 +388,6 @@ impl<'a> Worker<'a> {
                     Some(full) => add_path(b, &full, if kind == ClassKind::Object { '.' } else { '#' }),
                     None => {
                         self.sem_add_owner(b, owner)?;
-                        // A class of a `package object`, which teq reads as a block of its package, is the object's.
-                        if matches!(owner, Owner::Package(_)) && self.ast(self.syms.class(c).file).package_object && self.name_ref(name) != "package" {
-                            b.push_str("package.");
-                        }
                         add_name(b, self.name_ref(name));
                         // `addDescriptor`: a module class is its module, a term; every other class a type.
                         b.push(if kind == ClassKind::Object { '.' } else { '#' });
@@ -521,14 +517,9 @@ impl<'a> Worker<'a> {
         Some(b)
     }
 
-    /// The owner of a top-level definition of `file` in the package `p`: its file's module, `p/<File>$package.`; of
-    /// a member of a `package object p`, which teq reads as a block of the package, the object, `p/package.`.
+    /// The owner of a top-level definition of `file` in the package `p`: its file's module, `p/<File>$package.`.
     fn sem_add_file_module(&self, b: &mut String, p: PkgId, file: FileId) {
         self.sem_add_pkg(b, p);
-        if self.ast(file).package_object {
-            b.push_str("package.");
-            return;
-        }
         let stem = std::path::Path::new(&self.source(file).path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         add_name(b, &format!("{}$package", stem));
         b.push('.');

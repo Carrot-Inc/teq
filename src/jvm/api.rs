@@ -77,9 +77,6 @@ struct ClassData {
     module: bool,
     trait_: bool,
     top_level: bool,
-    /// `path` as scalac names the class: the object of a `package object p`'s members, which is
-    /// `<stem>$package` by its binary name, and what is nested in it are `p.package`'s.
-    api_path: Vec<String>,
     /// The class's pickle carries the attribute of a unit that behaves as Scala 2 (the Scala 2
     /// standard library's TASTy, a unit of a source under `2.13`, this build's own among them): scalac
     /// marks the class `Scala2x`, and its members are not inherited into the API (`ExtractAPI`:
@@ -97,7 +94,7 @@ struct ClassData {
 impl ClassData {
     /// scalac's `fullName`: `p.O$.C`.
     fn full(&self) -> String {
-        self.api_path.join(".")
+        self.path.join(".")
     }
 
     /// The name zinc knows the class by, `fullName` without an object's `$`.
@@ -363,8 +360,6 @@ struct Renderer<'r, 'a> {
     available: FxMap<FileId, Vec<crate::tasty::write::Product>>,
     pickled: FxMap<FileId, ()>,
     units_of: FxMap<FileId, Vec<u32>>,
-    /// The pickles of a `package object`'s members, by unit, with their object's name.
-    package_objects: FxMap<u32, String>,
     /// What the pickler could not write, which leaves the graph out.
     errors: Vec<String>,
     units: Vec<Arc<TastyFile>>,
@@ -489,7 +484,6 @@ pub fn render(w: &mut Worker, files: &[FileId], unit_file: &[FileId], pickled: O
         available,
         pickled: FxMap::default(),
         units_of: FxMap::default(),
-        package_objects: FxMap::default(),
         errors: Vec::new(),
         units: Vec::new(),
         libs: Vec::new(),
@@ -695,9 +689,6 @@ impl<'r, 'a> Renderer<'r, 'a> {
                     let u = self.units.len() as u32;
                     self.units.push(Arc::new(t));
                     self.units_of.entry(f).or_default().push(u);
-                    if self.w.package_object_holder(f) && p.name.ends_with("$package") {
-                        self.package_objects.insert(u, p.name.clone());
-                    }
                     let src = Src::Unit(u);
                     let paths = self.paths_of(src);
                     for (&addr, cp) in paths.iter() {
@@ -758,19 +749,10 @@ impl<'r, 'a> Renderer<'r, 'a> {
         let paths = self.paths_of(at.src);
         let cp = paths.get(&at.addr).cloned().unwrap_or_else(|| ClassPath { pkg_len: 0, path: vec![self.name(&f, sig.name)] });
         let flags = sig.mods.flags;
-        let in_package_object = match at.src {
-            Src::Unit(u) => self.package_objects.get(&u).is_some_and(|holder| cp.path.get(cp.pkg_len).is_some_and(|n| n.trim_end_matches('$') == holder)),
-            Src::Lib(_) => false,
-        };
-        let mut api_path = cp.path.clone();
-        if in_package_object {
-            api_path[cp.pkg_len] = if api_path[cp.pkg_len].ends_with('$') { "package$" } else { "package" }.to_string();
-        }
         let data = ClassData {
             at,
             pkg_len: cp.pkg_len,
             top_level: cp.path.len() == cp.pkg_len + 1,
-            api_path,
             path: cp.path,
             module: flags.has(OBJECT),
             trait_: flags.has(TRAIT),
@@ -1135,14 +1117,12 @@ impl<'r, 'a> Renderer<'r, 'a> {
         }
         if own {
             let class_like = g.reserve();
-            let renamed = d.api_path != d.path;
             let mut self_type = match (&d.self_type, d.module) {
-                (Some(t), _) if !(d.module && renamed) => self.ty(g, at.src, t, &scope, &Subst::default()),
-                // An object's class has its object's singleton type as its self type, a package
-                // object's by scalac's name.
+                (Some(t), _) => self.ty(g, at.src, t, &scope, &Subst::default()),
+                // An object's class has its object's singleton type as its self type.
                 (_, true) => {
-                    let owner = self.this_path(g, &d.api_path[..d.api_path.len() - 1], d.pkg_len);
-                    let own = d.api_path.last().map(|n| n.strip_suffix('$').unwrap_or(n).to_string()).unwrap_or_default();
+                    let owner = self.this_path(g, &d.path[..d.path.len() - 1], d.pkg_len);
+                    let own = d.path.last().map(|n| n.strip_suffix('$').unwrap_or(n).to_string()).unwrap_or_default();
                     g.node_fmt(format_args!("[\"Projection\",{},{}]", owner, jstr(&own)))
                 }
                 (_, false) => g.node("[\"EmptyType\"]".to_string()),
@@ -1273,8 +1253,8 @@ impl<'r, 'a> Renderer<'r, 'a> {
 
     /// `c.typeRef`: the class seen from its owner's `this`.
     fn class_type_ref(&mut self, g: &mut Graph, d: &ClassData) -> u32 {
-        let owner = self.this_path(g, &d.api_path[..d.api_path.len() - 1], d.pkg_len);
-        let own = d.api_path.last().cloned().unwrap_or_default();
+        let owner = self.this_path(g, &d.path[..d.path.len() - 1], d.pkg_len);
+        let own = d.path.last().cloned().unwrap_or_default();
         g.node_fmt(format_args!("[\"Projection\",{},{}]", owner, jstr(&own)))
     }
 
@@ -1684,8 +1664,8 @@ impl<'r, 'a> Renderer<'r, 'a> {
             Decl::ProxyModule(at) => Some(self.proxy_module(g, *at)),
             Decl::ProxyVal(at) => {
                 let d = self.class_data(*at);
-                let owner = self.this_path(g, &d.api_path[..d.api_path.len() - 1], d.pkg_len);
-                let own = d.api_path.last().cloned().unwrap_or_default();
+                let owner = self.this_path(g, &d.path[..d.path.len() - 1], d.pkg_len);
+                let own = d.path.last().cloned().unwrap_or_default();
                 let t = g.node_fmt(format_args!("[\"Projection\",{},{}]", owner, jstr(&format!("{}$", own))));
                 let access = self.proxy_access(&d);
                 Some(g.node_fmt(format_args!("[\"Val\",{},{},{},[],{}]", jstr(&own), access, bits::FINAL | bits::LAZY, t)))
@@ -1701,7 +1681,7 @@ impl<'r, 'a> Renderer<'r, 'a> {
                         match cls {
                             Some(Cls::Tasty(at)) => {
                                 let d = self.class_data(at);
-                                (self.this_path(g, &d.api_path[..d.api_path.len() - 1], d.pkg_len), d.api_path.last().cloned().unwrap_or_default())
+                                (self.this_path(g, &d.path[..d.path.len() - 1], d.pkg_len), d.path.last().cloned().unwrap_or_default())
                             }
                             _ => (g_empty(g), name.clone()),
                         }
@@ -1754,8 +1734,8 @@ impl<'r, 'a> Renderer<'r, 'a> {
         if own {
             g.class_likes.insert(key);
             let class_like = g.reserve();
-            let owner = self.this_path(g, &d.api_path[..d.api_path.len() - 1], d.pkg_len);
-            let own = d.api_path.last().cloned().unwrap_or_default();
+            let owner = self.this_path(g, &d.path[..d.path.len() - 1], d.pkg_len);
+            let own = d.path.last().cloned().unwrap_or_default();
             let self_type = g.node_fmt(format_args!("[\"Projection\",{},{}]", owner, jstr(&own)));
             let module_ref = g.node_fmt(format_args!("[\"Projection\",{},{}]", owner, jstr(&format!("{}$", own))));
             let any = scala_type(g, "Any");
@@ -1922,7 +1902,7 @@ impl<'r, 'a> Renderer<'r, 'a> {
             "apply".to_string()
         } else if is_ctor {
             let d = self.class_data(owner);
-            format!("{};init;", d.api_path.iter().map(|p| crate::jvm::names::encode(p)).collect::<Vec<_>>().join(";"))
+            format!("{};init;", d.path.iter().map(|p| crate::jvm::names::encode(p)).collect::<Vec<_>>().join(";"))
         } else {
             self.name(&f, sig.name)
         };

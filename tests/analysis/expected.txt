@@ -113,6 +113,7 @@ exact importrelative_a
 exact importrelative_b
 exact importvalue
 exact constants
+exact pkgobjmembers_b
 
 # The mapped projects.
 
@@ -128,6 +129,7 @@ enum_a na.Color java;io;Serializable;init; enum-serializable
 enum_a na.Opt Opt enum-serializable
 enum_a na.Opt java;io;Serializable;init; enum-serializable
 given_a ga.Show$.listShow ga;Show$;listShow;init; given-constructor
+pkgobjgiven_a pga.inner.package$.listTC pga;inner;package$;listTC;init; given-constructor
 hkbounds_a ha.Api$package lift hk-parameter-name
 hkbounds_a ha.Functor ha;Functor;init; hk-parameter-name
 hkbounds_a ha.Functor$.given_Functor_List ha;Functor;init; hk-parameter-name
@@ -226,7 +228,6 @@ inline_a ila.Macros twice inline-fingerprint
 inline_a ila.Tuner adjust inline-fingerprint
 macrofieldreference_a macrofieldreference.Read derived inline-fingerprint
 matchtype_a mta.Elems first alias-expanded
-pkgobj_a pa.nested.package <products> package-object
 sealed_a sa.Expr Expr mirror-companion
 sealed_a sa.Expr MirroredElemLabels mirror-companion
 sealed_a sa.Expr MirroredLabel mirror-companion
@@ -634,10 +635,6 @@ overload_a usedName ova.Container ImpureFunction1 impure-function scalac Default
 overload_a binaryDependency ova.Container scala.collection.IterableOps member-owner scalac jar:scala-library,Api.scala,DependencyByMemberRef
 overload_a binaryDependency ova.Container scala.collection.LinearSeqOps member-owner teq jar:scala-library,Api.scala,DependencyByMemberRef
 overload_b usedName ovb.Use _$1 synthetic-local scalac Default
-pkgobj_b usedName pb.Use package package-object scalac Default
-pkgobj_b usedName pb.Use Obj$package package-object teq Default
-pkgobj_b binaryDependency pb.Use pa.nested.package$ package-object scalac products:pkgobj_a/pa/nested/package.class,Use.scala,DependencyByMemberRef
-pkgobj_b binaryDependency pb.Use pa.nested.Obj$package$ package-object teq products:pkgobj_a/pa/nested/Obj$package.class,Use.scala,DependencyByMemberRef
 refinement_b usedName rb.Use Nothing refinement-member teq Default
 scala2source_a usedName oldsrc.Odd Object member-owner teq Default
 scala2source_a binaryDependency oldsrc.Odd java.lang.Object member-owner teq jrt:/modules/java.base/java/lang/Object.class,Lib.scala,DependencyByInheritance

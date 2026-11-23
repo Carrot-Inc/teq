@@ -190,6 +190,9 @@ mod neutral {
     pub fn max(n: &u32) -> bool {
         *n == u32::MAX
     }
+    pub fn zero(n: &u32) -> bool {
+        *n == 0
+    }
     pub fn empty<T>(v: &[T]) -> bool {
         v.is_empty()
     }
@@ -252,7 +255,9 @@ worker_fields! {
         simplifying_normal is no,
         fit_pass is none,
         lifted_list is none,
-        lifted_operand is none
+        lifted_operand is none,
+        expr_depth is zero,
+        pending_places is empty
     }
     own_waiting {
         retry_depth is none,

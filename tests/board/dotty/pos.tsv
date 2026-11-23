@@ -1074,8 +1074,8 @@ i1737.scala	pass	check:pass
 i17380.scala	pass	check:pass	
 i17381.scala	pass	check:pass	
 i17391	pass	check:pass	
-i17394	fail	check:pass	teq: jvm backend: two classes are named example/_1$package
-i17394b	fail	check:pass	teq: jvm backend: two classes are named example/_1$package
+i17394	pass	check:pass	
+i17394b	pass	check:pass	
 i17395-spec.ordered.scala	pass	check:pass	
 i17395-spec.scala	pass	check:pass	
 i17395.scala	pass	check:pass	
@@ -1097,7 +1097,7 @@ i17741.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag f
 i1776.scala	pass	check:pass	
 i17763	pass	check:pass	
 i1777.scala	pass	check:fail	
-i1786.scala	fail	check:fail	i1786.scala:12:3: value package is not a member of meta
+i1786.scala	pass	check:pass	
 i1790.scala	pass	check:pass	
 i1793.scala	pass	check:fail	
 i17948.all.scala	pass	check:pass	
@@ -2945,7 +2945,7 @@ t2504.scala	pass	check:pass
 t252.scala	pass	check:pass	
 t2545.scala	pass	check:pass	
 t2591.scala	fail	check:fail	t2591.scala:14:4: Found:    A
-t2610.scala	fail	check:fail	t2610.scala:5:5: expected a definition, found identifier
+t2610.scala	pass	check:pass	
 t2613.scala	pass	check:pass	
 t2619.scala	pass	check:pass	
 t262.scala	pass	check:pass	
@@ -3081,7 +3081,7 @@ t3960.scala	pass	check:pass
 t397.scala	pass	check:pass	
 t3972.scala	pass	check:pass	
 t3986.scala	pass	check:pass	
-t3999	fail	check:fail	a_1.scala:7:41: type Val not found
+t3999	pass	check:pass	
 t4018.scala	pass	check:pass	
 t402.scala	pass	check:pass	
 t4020.scala	pass	check:pass	

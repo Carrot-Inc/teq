@@ -1492,7 +1492,7 @@ impl<'c, 'a> Collector<'c, 'a> {
     fn enter(&mut self, owned: Owned) {
         let (name, file) = match owned {
             Owned::Class(c) => (self.zinc_name(c), self.w.syms.class(c).file),
-            Owned::Package(f, p) => (self.package_object_name(f, p), f),
+            Owned::Package(f, p) => (self.package_object_binary(f, p), f),
         };
         self.package_this = match owned {
             Owned::Package(..) => Some(format!("{}$", name)),
@@ -1559,7 +1559,7 @@ impl<'c, 'a> Collector<'c, 'a> {
         let info = self.w.syms.class(c);
         let own = format!("{}{}", self.w.name_ref(info.name), if self.is_module(c) { "$" } else { "" });
         if let Some(&(f, p)) = self.wrapped.get(&c) {
-            return format!("{}$.{}", self.package_object_name(f, p), own);
+            return format!("{}$.{}", self.package_object_binary(f, p), own);
         }
         match info.owner {
             Owner::Class(o) => format!("{}.{}", self.full_name(o), own),
@@ -1585,23 +1585,9 @@ impl<'c, 'a> Collector<'c, 'a> {
         }
     }
 
-    /// The name zinc knows the object of a package block's top-level definitions by: scalac's
-    /// `p.package` for a `package object p`'s members (`package_object_holder`),
-    /// `p.<stem>$package` otherwise.
-    fn package_object_name(&self, f: FileId, p: PkgId) -> String {
-        if !self.w.package_object_holder(f) {
-            return self.package_object_binary(f, p);
-        }
-        let path = self.w.pkg_path(p);
-        if path.is_empty() {
-            "package".to_string()
-        } else {
-            format!("{}.package", path)
-        }
-    }
-
     /// `p.<stem>$package`, the binary name of the object of a package block's top-level
-    /// definitions, a package object's too.
+    /// definitions (`Desugar.packageDef`), the name zinc knows it by. A `package object p` is
+    /// the module `p.package`, a class of its own.
     fn package_object_binary(&self, f: FileId, p: PkgId) -> String {
         let stem = crate::tasty::write::file_stem(&self.w.source(self.unit(f)).path);
         let path = self.w.pkg_path(p);
@@ -1683,7 +1669,7 @@ impl<'c, 'a> Collector<'c, 'a> {
     /// defined in, or of the TASTy file of the class path that holds it.
     fn package_member_target(&mut self, m: PackageMember, file: FileId, p: PkgId) -> Option<Target> {
         if self.w.program_file(file) {
-            return Some(Target::Source(self.package_object_name(file, p), self.unit(file)));
+            return Some(Target::Source(self.package_object_binary(file, p), self.unit(file)));
         }
         let loaded = self.w.loaded.as_ref()?;
         let lfile = match m {
@@ -1976,7 +1962,7 @@ impl<'c, 'a> Collector<'c, 'a> {
         let info = self.w.syms.class(c);
         let own = format!("{}{}", crate::jvm::names::encode(self.w.name_ref(info.name)), if self.is_module(c) { "$" } else { "" });
         if let Some(&(f, p)) = self.wrapped.get(&c) {
-            return format!("{}$.{}", self.package_object_name(f, p), own);
+            return format!("{}$.{}", self.package_object_binary(f, p), own);
         }
         match info.owner {
             Owner::Class(o) => format!("{}.{}", self.mangled_full_name(o), own),
@@ -2225,7 +2211,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             match owner {
                 Owner::Class(o) => self.class_dep(o, Context::MemberRef),
                 Owner::Package(p) => {
-                    let t = Target::Source(self.package_object_name(file, p), self.unit(file));
+                    let t = Target::Source(self.package_object_binary(file, p), self.unit(file));
                     if self.w.program_file(file) {
                         self.package_object_dep(t);
                     }
@@ -2236,7 +2222,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             // (`Any` unwritten) above.
             let within = match owner {
                 Owner::Class(o) => self.lexically_within(o),
-                Owner::Package(p) => self.owner_class.is_none() && self.owner_pkg == Some(p) && self.owner == self.package_object_name(file, p),
+                Owner::Package(p) => self.owner_class.is_none() && self.owner_pkg == Some(p) && self.owner == self.package_object_binary(file, p),
                 Owner::Local => true,
             };
             if !within {

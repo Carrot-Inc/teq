@@ -222,6 +222,9 @@ pub struct Output {
     pub kept: kept::Use,
     /// The class file of each class `Input::named` gives, by its binary name.
     pub names: Vec<(ClassId, String)>,
+    /// A second class of one binary name, by its name and the two classes' sources: no build
+    /// writes it (`shared_class_name`).
+    pub twice: Vec<(String, Option<FileId>, Option<FileId>)>,
 }
 
 /// A class file by binary name, with the file and the class of the program it stands for: a
@@ -423,10 +426,7 @@ impl<'a> Cx<'a> {
             };
         }
         let mut out = match info.owner {
-            // A top-level given object or class is scalac's class in its file's `X$package`. One of
-            // a package object too, whose members teq's pickles and class files hold in the
-            // file's `X$package` (`tasty::write`, units): a downstream finds it there, where
-            // scalac's are the object's `package$`.
+            // A top-level given object or class is scalac's class in its file's `X$package`.
             Owner::Package(_) if (self.given_object_classes.contains_key(&c) || self.given_class_classes.contains_key(&c)) && (info.file.0 as usize) < self.file_modules.len() => {
                 self.file_modules[info.file.0 as usize].clone()
             }
@@ -1219,16 +1219,16 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
     }
     lap.done("launchers and interfaces", 0);
     classes.sort_by(|a, b| a.name.cmp(&b.name));
-    // Two classes under one binary name would be two jar entries, one of them unreachable.
-    let mut twice: Vec<String> = Vec::new();
+    // Two classes under one binary name would be two jar entries, one of them unreachable: kept
+    // with both sources for the writer's internal error (`shared_class_name`).
+    let mut twice: Vec<(String, Option<FileId>, Option<FileId>)> = Vec::new();
     classes.dedup_by(|later, kept| {
         let same = later.name == kept.name;
         if same {
-            twice.push(later.name.clone());
+            twice.push((later.name.clone(), kept.source, later.source));
         }
         same
     });
-    errors.extend(twice.into_iter().map(|n| format!("two classes are named {}", n)));
     errors.sort();
     errors.dedup();
     refused.sort_by(|a, b| (a.0 .0, a.1.start, a.1.end, &a.2).cmp(&(b.0 .0, b.1.start, b.1.end, &b.2)));
@@ -1252,10 +1252,33 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         lap.done("store updated", usage.kept + usage.emitted);
     }
     let names = cx.input.named.iter().map(|&c| (c, cx.class_names[c.idx()].clone())).collect();
-    Output { classes, main_class, errors, refused, main_classes, inits, kept: usage, names }
+    Output { classes, main_class, errors, refused, main_classes, inits, kept: usage, names, twice }
 }
 
 /// Writes the classes as a jar when the path ends in `.jar`, else as a directory tree.
+/// A second class file of one name in the JVM writer's output, an internal compiler error that names
+/// both sources (main.rs's `shared_tasty_path` for the TASTy products): every class has one binary
+/// name, as dotty's, so two of one name are teq's fault, which the writer would settle by whichever
+/// it wrote last.
+pub fn shared_class_name(files: &[crate::source::SourceFile], output: &Output) -> Option<String> {
+    let mut seen: crate::intern::FxMap<&str, Option<FileId>> = crate::intern::FxMap::default();
+    let named = |f: Option<FileId>| match f {
+        Some(f) if files.get(f.0 as usize).is_some_and(|s| s.is_std) => "the standard library".to_string(),
+        Some(f) => crate::source::product_source(files, f),
+        None => "no source".to_string(),
+    };
+    if let Some((name, first, second)) = output.twice.first() {
+        return Some(format!("internal error: two class files of one name, {}.class: of {} and of {}", name, named(*first), named(*second)));
+    }
+    for c in &output.classes {
+        if let Some(&first) = seen.get(c.name.as_str()) {
+            return Some(format!("internal error: two class files of one name, {}.class: of {} and of {}", c.name, named(first), named(c.source)));
+        }
+        seen.insert(c.name.as_str(), c.source);
+    }
+    None
+}
+
 pub fn write(path: &str, out: &Output) -> std::io::Result<()> {
     if path.ends_with(".jar") {
         let entries: Vec<(String, Vec<u8>)> = out.classes.iter().map(|c| (c.name.clone(), c.bytes.to_vec())).collect();

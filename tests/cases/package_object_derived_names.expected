@@ -1,0 +1,14 @@
+case class owner=p.package full=p.package.C short=C
+  param i
+sealed trait owner=p.package full=p.package.S short=S
+  subtype owner=p.package full=p.package.S1 short=S1
+  subtype owner=p.package full=p.package.S2 short=S2
+case class owner=p.package full=p.package.S1 short=S1
+C (i)
+S (S1,S2)
+S1 ()
+p.package$O$
+p.package$C
+C(1)
+p.package$S2$
+S2

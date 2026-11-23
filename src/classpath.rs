@@ -28,6 +28,14 @@ pub struct CpFile {
     pub entry: u32,
 }
 
+/// A class path file as a package's member selection compares it (`Classpath::associated_file`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AssociatedFile {
+    pub display: String,
+    pub modified: i64,
+    pub container: u16,
+}
+
 pub struct CpPackage {
     /// `scala/collection`, the empty string for the root package.
     pub path: String,
@@ -459,6 +467,25 @@ impl Classpath {
 
     pub fn entry_name(&self, f: CpFile) -> &str {
         self.sources[f.jar as usize].name(f.entry as usize)
+    }
+
+    /// The file a symbol read from `f` is associated with, as scalac's `Symbol.associatedFile` names it in a
+    /// package's member selection (`PackageClassDenotation.dropStale`, SymDenotations.scala 2584-2624): its path as
+    /// the class path writes it (a jar's entry `jar(entry)`), its modification time in milliseconds
+    /// (`AbstractFile.lastModified`; a jar's entry the jar's), and its container, the class path entry.
+    pub fn associated_file(&self, f: CpFile) -> AssociatedFile {
+        let j = f.jar as usize;
+        let name = self.entry_name(f);
+        let (display, at) = match &self.sources[j] {
+            Source::Dir { root, .. } => (format!("{}/{}", self.paths[j].trim_end_matches('/'), name), root.join(name)),
+            Source::Jar(_) => (format!("{}({})", self.paths[j], name), PathBuf::from(&self.paths[j])),
+        };
+        let modified = std::fs::metadata(&at)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_millis() as i64);
+        AssociatedFile { display, modified, container: f.jar }
     }
 
     /// Whether a class file of package `p` was written by a Scala compiler: its stem, or a

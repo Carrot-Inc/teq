@@ -22,9 +22,14 @@ pub const MANIFEST: &str = "teq-products.json";
 /// that carries their manifest, takes only products of its own number (docs/TOOLING.md, "The
 /// products' number"); a jar without one is a library whatever its attribute names, never refused
 /// for its writer. A manifest without the field is of number 0,
-/// which every teq up to 0.1.11 wrote. A change of what a product means raises it: 1, a value of an
-/// intersection of value classes boxed as the class the intersection erases to (`Gen::value_class_type_in`).
-pub const PRODUCTS_ABI: u32 = 1;
+/// which every teq up to 0.1.11 wrote. A change of what a product means raises it:
+/// - 1: a value of an intersection of value classes boxed as the class the intersection erases to
+///   (`Gen::value_class_type_in`);
+/// - 2: a source `package object p` is the module `p.package` (`Desugar.packageModuleDef`), its
+///   members its own, written in `p/package.tasty`, `p/package.class` and `p/package$.class`, a
+///   member class `p/package$C.class`; numbers 0 and 1 wrote them as members of the file's
+///   `p/<file>$package`, a member class as `p/C.class`.
+pub const PRODUCTS_ABI: u32 = 2;
 
 /// The attribute of a jar's manifest that names the number of the products it holds: provenance,
 /// which no class path refuses a jar for.

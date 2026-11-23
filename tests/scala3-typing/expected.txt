@@ -1391,7 +1391,7 @@ neg/i9327.scala	different	type {} is already defined
 neg/i9328.scala	syntax	unmatched closing bracket
 neg/i9329.scala	same	
 neg/i9330.scala	superset	+1 lines: values of types {} and {} cannot be compared
-neg/i9331.scala	syntax	expected a definition, found {}
+neg/i9331.scala	same	
 neg/i9332.scala	accepts	
 neg/i9344.scala	same	
 neg/i9408b	different	type mismatch
@@ -3129,7 +3129,7 @@ pos/i17741.scala	accepts
 pos/i1776.scala	accepts	
 pos/i17763	oos	java
 pos/i1777.scala	rejects	type mismatch
-pos/i1786.scala	rejects	value {} is not a member of {}
+pos/i1786.scala	accepts	
 pos/i1790.scala	accepts	
 pos/i1793.scala	rejects	cannot resolve import
 pos/i17948.all.scala	accepts	
@@ -4679,7 +4679,7 @@ pos/p11210-refinement.scala	accepts
 pos/p11210-values.scala	accepts	
 pos/package-case.scala	accepts	
 pos/package-indented.scala	accepts	
-pos/package-ob-case	rejects	type {} is already defined
+pos/package-ob-case	rejects	{} is already defined
 pos/packageObjectValues.scala	rejects	{} is a package, not a value
 pos/packageobject.scala	accepts	
 pos/packageobjs.scala	accepts	
@@ -5187,7 +5187,7 @@ pos/t2504.scala	accepts
 pos/t252.scala	accepts	
 pos/t2545.scala	accepts	
 pos/t2591.scala	rejects	type mismatch
-pos/t2610.scala	syntax	expected a definition, found {}
+pos/t2610.scala	accepts	
 pos/t2613.scala	accepts	
 pos/t2619.scala	accepts	
 pos/t262.scala	accepts	
@@ -5323,7 +5323,7 @@ pos/t3960.scala	accepts
 pos/t397.scala	accepts	
 pos/t3972.scala	accepts	
 pos/t3986.scala	accepts	
-pos/t3999	rejects	type mismatch
+pos/t3999	accepts	
 pos/t4018.scala	accepts	
 pos/t402.scala	accepts	
 pos/t4020.scala	accepts	

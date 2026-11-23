@@ -71,6 +71,16 @@ impl SourceFile {
     }
 }
 
+/// The source a product is written for, as an internal error names it: its file's path, a package
+/// block's (`frontend::lay_out`'s `<key>#<n>`) with the block.
+pub fn product_source(files: &[SourceFile], f: FileId) -> String {
+    let Some(file) = files.get(f.0 as usize) else { return "no source".to_string() };
+    match file.key.rsplit_once('#').filter(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) {
+        Some((_, n)) => format!("{} (its package block {})", file.path, n),
+        None => file.path.clone(),
+    }
+}
+
 /// The FNV-1a hash of a file's key, which fresh names carry in the place of its `FileId`.
 pub fn file_tag(key: &str) -> u32 {
     key.bytes().fold(0x811c_9dc5u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193))
@@ -324,6 +334,8 @@ pub struct Diagnostic {
     pub position: Position,
     /// Made by the code a unit's suspension leaves (`Unwound`), which equality and hashing ignore.
     pub unwound: Unwound,
+    /// Made before its place was known, which it waits for (`AwaitingPlace`); equality and hashing ignore it.
+    pub awaiting: AwaitingPlace,
 }
 
 /// The phase group of the reference's that makes a record, in the order of a run's phases (dotty
@@ -487,6 +499,24 @@ impl std::hash::Hash for Unwound {
     fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
 }
 
+/// Whether the record was made before its place was known and has not been given it yet (`Diagnostics::place`):
+/// dropStale's tie met while an expression was being typed, which that expression places on its return
+/// (`Worker::place_pending`). No record is presented so. Equality and hashing ignore it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AwaitingPlace(pub bool);
+
+impl PartialEq for AwaitingPlace {
+    fn eq(&self, _: &AwaitingPlace) -> bool {
+        true
+    }
+}
+
+impl Eq for AwaitingPlace {}
+
+impl std::hash::Hash for AwaitingPlace {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+
 /// A change of the source a diagnostic proposes, dotty's `CodeAction`: its title, what it does,
 /// and its patches, each a span of the diagnostic's file and the text that replaces it.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -581,7 +611,7 @@ impl Diagnostic {
 
     /// A diagnostic of nothing but its place, message and severity.
     pub fn plain(file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
-        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, by_phase: false, inlined_from: None, at_expansion: false, yields: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), position: Position::default(), unwound: Unwound(false) }
+        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, by_phase: false, inlined_from: None, at_expansion: false, yields: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, missing: MissingName(None), phase: 0, unplaced: false, ordinal: Ordinal(0), position: Position::default(), unwound: Unwound(false), awaiting: AwaitingPlace(false) }
     }
 
     /// What the reporting policy's filters read of the diagnostic.
@@ -830,9 +860,53 @@ pub struct Diagnostics {
     /// the typer where an expansion begins and ends and where a definition's own typing sets the
     /// expansions aside (`Worker::expansion_context`).
     pub context: Context,
+    /// The places given records made before their place was known (`place`) while the records stood outside
+    /// `items` (held for a later flush), by identity (`Ordinal`): each such record takes its place when it comes
+    /// back (`push`).
+    pub placements: Vec<(u64, Span, Option<(String, Option<Place>)>)>,
+}
+
+/// `Diagnostics::place` of the record `d`: its span, and a library body's message and place worded by it.
+fn placed(d: &mut Diagnostic, span: Span, worded: &Option<(String, Option<Place>)>) {
+    d.span = span;
+    d.awaiting = AwaitingPlace(false);
+    if let Some((msg, place)) = worded {
+        d.msg = msg.clone();
+        d.place = place.clone().map(Box::new);
+    }
 }
 
 impl Diagnostics {
+    /// The place of the record made before it was known, `ordinal` (`Worker::place_pending`): its span, and where
+    /// it is a library body's its message and place worded by it. A record that left the diagnostics with what
+    /// discarded them has none; one held outside them for a later flush takes it when it comes back (`push`).
+    pub fn place(&mut self, ordinal: u64, span: Span, worded: Option<(String, Option<Place>)>) {
+        match self.items.iter_mut().rev().find(|d| d.ordinal.0 == ordinal) {
+            Some(d) => placed(d, span, &worded),
+            None => self.placements.push((ordinal, span, worded)),
+        }
+    }
+
+    /// The places given while the records `ds` stood outside these diagnostics (`placements`), applied to them
+    /// where they come back by another way than `push`: the workers' merge, which takes each worker's places
+    /// with its records.
+    pub fn apply_placements(&self, ds: &mut [Diagnostic]) {
+        if self.placements.is_empty() {
+            return;
+        }
+        for d in ds.iter_mut().filter(|d| d.awaiting.0) {
+            if let Some((_, span, worded)) = self.placements.iter().find(|p| p.0 == d.ordinal.0) {
+                placed(d, *span, worded);
+            }
+        }
+    }
+
+    /// A record of these diagnostics still waiting for its place (`AwaitingPlace`): none once the typing that made
+    /// it is over, every place given (`place`, `push`, `apply_placements`).
+    pub fn awaiting_place(&self) -> Option<&Diagnostic> {
+        self.items.iter().find(|d| d.awaiting.0)
+    }
+
     /// A diagnostic of the definition being typed (`owner`), made by the caller's caller
     /// (`Position::site`: the reporting helpers pass their own callers on).
     #[track_caller]
@@ -890,6 +964,10 @@ impl Diagnostics {
             d.ordinal = Ordinal(self.made.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1);
             if self.unwinding.is_some_and(|f| !d.owner.is_none() && d.owner.file == f) {
                 d.unwound = Unwound(true);
+            }
+        } else if !self.placements.is_empty() {
+            if let Some((_, span, worded)) = self.placements.iter().find(|p| p.0 == d.ordinal.0) {
+                placed(&mut d, *span, worded);
             }
         }
         self.items.push(d);
@@ -1023,6 +1101,7 @@ impl Diagnostics {
     /// Of the typer's diagnostics from the index `from` on, those before left out, and the
     /// syntax diagnostics where the report is not `whole`.
     fn presented_from(&self, from: usize, whole: bool) -> impl Iterator<Item = &Diagnostic> {
+        debug_assert!(self.awaiting_place().is_none(), "a record presented before its place was given: {:?}", self.awaiting_place().map(|d| (d.file, d.ordinal.0, d.msg.lines().next().unwrap_or(""))));
         let syntax = self.syntax_errors;
         // A late record of PostTyper's (the deferred bounds checks) gives way to the parser's and the typer's errors only
         // (PostTyper does not run after the typer reported one), and stops the phases after it as a typer error does
@@ -1619,6 +1698,47 @@ pub fn locate(text: &str, offset: usize) -> (usize, usize, &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A record made before its place was known waits for it (`AwaitingPlace`) wherever it stands when the place is
+    /// given: among the diagnostics, held outside them and back by `push`, or back by the workers' merge
+    /// (`apply_placements`); one that comes back by another way still waits, which `awaiting_place` finds.
+    #[test]
+    fn a_record_takes_its_place_wherever_it_stood() {
+        let made = |diags: &mut Diagnostics| {
+            diags.error(FileId(3), Span::default(), "Toplevel definition value is defined in");
+            let d = diags.items.last_mut().unwrap();
+            d.awaiting = AwaitingPlace(true);
+            d.ordinal.0
+        };
+        let at = Span::new(10, 15);
+        // Among the diagnostics.
+        let mut diags = Diagnostics::default();
+        let ordinal = made(&mut diags);
+        diags.place(ordinal, at, None);
+        assert!(diags.awaiting_place().is_none());
+        assert_eq!(diags.items[0].span, at);
+        // Held outside them, back by `push`.
+        let mut diags = Diagnostics::default();
+        let ordinal = made(&mut diags);
+        let held = diags.items.pop().unwrap();
+        diags.place(ordinal, at, None);
+        diags.push(held);
+        assert!(diags.awaiting_place().is_none());
+        assert_eq!(diags.items[0].span, at);
+        // Held, back by another way: still waiting, until the places are applied.
+        let mut diags = Diagnostics::default();
+        let ordinal = made(&mut diags);
+        let held = diags.items.pop().unwrap();
+        diags.place(ordinal, at, None);
+        let mut merged = vec![held];
+        diags.items.append(&mut merged.clone());
+        assert!(diags.awaiting_place().is_some_and(|d| d.span == Span::default()));
+        diags.items.clear();
+        diags.apply_placements(&mut merged);
+        diags.items.append(&mut merged);
+        assert!(diags.awaiting_place().is_none());
+        assert_eq!(diags.items[0].span, at);
+    }
 
     /// FNV-1a's test vectors, 32 bits for a file's tag and 64 for a body's: both reach names in
     /// the output.

@@ -20,7 +20,7 @@ use crate::ast::mods;
 use crate::intern::FxMap;
 use crate::source::FileId;
 use crate::symbols::*;
-use crate::types::{ClassId, PkgId, SymId};
+use crate::types::{ClassId, SymId};
 
 use crate::typer::{TypeRef, Worker};
 use crate::watch::json_string;
@@ -148,11 +148,7 @@ fn binaries(t: &Worker, c: ClassId) -> Vec<String> {
     if info.kind == ClassKind::EnumCase && info.singleton.is_some() {
         return Vec::new();
     }
-    let binary = match package_object_member(t, c) {
-        Some(p) => through_package_object(&t.pkg_path(p), &t.binary_name(c), "$"),
-        None => t.binary_name(c),
-    }
-    .replace('.', "/");
+    let binary = t.binary_name(c).replace('.', "/");
     let mirror = info.kind == ClassKind::Object && is_top_level(t, c) && info.companion.map_or(true, |k| t.syms.class(k).def.is_none());
     if mirror {
         vec![binary.strip_suffix('$').unwrap_or(&binary).to_string(), binary]
@@ -161,62 +157,32 @@ fn binaries(t: &Worker, c: ClassId) -> Vec<String> {
     }
 }
 
-/// The package whose `package object` declares the class, or the class it is nested in: scalac
-/// makes such a class a member of the object `p.package`. The object itself, which the package
-/// object's parents make (`object package`), is the package's own.
-fn package_object_member(t: &Worker, c: ClassId) -> Option<PkgId> {
-    let mut k = c;
-    loop {
-        let info = t.syms.class(k);
-        match info.owner {
-            Owner::Package(_) if info.name == crate::names::PACKAGE => return None,
-            Owner::Package(p) => return t.ast(info.file).package_object.then_some(p),
-            Owner::Class(o) => k = o,
-            Owner::Local => return None,
-        }
-    }
-}
-
-/// The name zinc knows a module class of a `package object p`'s block by
-/// (`Worker::package_object_holder`): `p.package` for the object of its members,
-/// `p.<stem>$package` by its binary name; any other keeps its own.
-fn package_object_holder(t: &Worker, block: FileId, dotted: &str) -> String {
-    let stem = crate::tasty::write::file_stem(&t.source(block).path);
-    let holder = format!("{}$package", stem);
-    match dotted.rsplit_once('.') {
-        Some((pkg, own)) if own == holder => format!("{}.package", pkg),
-        None if dotted == holder => "package".to_string(),
-        _ => dotted.to_string(),
-    }
-}
-
-/// `p.Suite` as a member of `p.package`: `p.package$.Suite` for zinc's name (`sep` "."), and
-/// `p.package$Suite` for the binary one (`sep` "$").
-fn through_package_object(pkg: &str, name: &str, sep: &str) -> String {
-    let (head, rest) = if pkg.is_empty() { (String::new(), name) } else { (format!("{}.", pkg), name.strip_prefix(&format!("{}.", pkg)).unwrap_or(name)) };
-    let joined = if sep == "." { format!("package$.{}", rest) } else { format!("package${}", rest) };
-    format!("{}{}", head, joined)
-}
-
-/// The class's name in zinc's API, as scalac's callback gives it.
+/// The class's name in zinc's API, as scalac's callback gives it: dotty's `fullName`, where an
+/// object's class stands as `O$` for what it holds (`p.package$.InObject`, `p.O$.Inner`), the
+/// class's own name without an object's `$` (zinc's `classNameAsString`).
 fn api_name(t: &Worker, c: ClassId) -> String {
-    match package_object_member(t, c) {
-        Some(p) => through_package_object(&t.pkg_path(p), &t.class_path(c), "."),
-        None => t.class_path(c),
+    let info = t.syms.class(c);
+    let own = t.name_str(info.name);
+    match info.owner {
+        Owner::Class(o) => {
+            let module = matches!(t.syms.class(o).kind, ClassKind::Object) || (t.syms.class(o).kind == ClassKind::EnumCase && t.syms.class(o).singleton.is_some());
+            format!("{}{}.{}", api_name(t, o), if module { "$" } else { "" }, own)
+        }
+        Owner::Package(_) => t.class_path(c),
+        Owner::Local => own.to_string(),
     }
 }
 
-/// Whether the class is a top-level one for discovery: a package's own, not a member of its
-/// `package object`.
+/// Whether the class is a top-level one for discovery: a package's own.
 fn is_top_level(t: &Worker, c: ClassId) -> bool {
-    matches!(t.syms.class(c).owner, Owner::Package(_)) && package_object_member(t, c).is_none()
+    matches!(t.syms.class(c).owner, Owner::Package(_))
 }
 
 fn render_file(t: &mut Worker, out: &Output, file: FileId, emitted: &[usize], mains: &[&str]) -> String {
     let syms = &t.syms;
     let mut of_class: Vec<(ClassId, Vec<String>)> = Vec::new();
     let mut local: Vec<String> = Vec::new();
-    let mut standalone: Vec<(String, Option<FileId>)> = Vec::new();
+    let mut standalone: Vec<String> = Vec::new();
     for &i in emitted {
         let c = &out.classes[i];
         let path = format!("{}.class", c.name);
@@ -229,7 +195,7 @@ fn render_file(t: &mut Worker, out: &Output, file: FileId, emitted: &[usize], ma
                 Some((_, paths)) => paths.push(path),
                 None => of_class.push((id, vec![path])),
             },
-            None => standalone.push((c.name.clone(), c.source)),
+            None => standalone.push(c.name.clone()),
         }
     }
     let mut classes: Vec<String> = Vec::new();
@@ -239,12 +205,8 @@ fn render_file(t: &mut Worker, out: &Output, file: FileId, emitted: &[usize], ma
     // A class without a class of the program behind it is the module class of the file's
     // top-level definitions (with its mirror class), or the class of a `@main` method.
     let mut modules: FxMap<String, Vec<String>> = FxMap::default();
-    for (name, source) in standalone {
+    for name in standalone {
         let dotted = name.trim_end_matches('$').replace('/', ".");
-        let dotted = match source {
-            Some(block) if t.package_object_holder(block) => package_object_holder(t, block, &dotted),
-            _ => dotted,
-        };
         modules.entry(dotted).or_default().push(format!("{}.class", name));
     }
     let mut module_names: Vec<String> = modules.keys().cloned().collect();
@@ -284,7 +246,7 @@ fn render_class(t: &mut Worker, c: ClassId, paths: &[String], mains: &[&str]) ->
     let public = info.mods & (mods::PRIVATE | mods::PROTECTED) == 0;
     let abstract_ = info.kind == ClassKind::Trait || info.mods & mods::ABSTRACT != 0;
     let final_ = kind == "object" || info.mods & mods::FINAL != 0;
-    let bases: Vec<String> = info.base_types.iter().skip(1).map(|&(b, _)| b).collect::<Vec<_>>().into_iter().map(|b| t.class_path(b)).collect();
+    let bases: Vec<String> = info.base_types.iter().skip(1).map(|&(b, _)| b).collect::<Vec<_>>().into_iter().map(|b| api_name(t, b)).collect();
     let annotations = annotation_names(t, c);
     let method_annotations = method_annotation_names(t, c);
     let main = mains.contains(&name.as_str());

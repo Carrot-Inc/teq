@@ -57,9 +57,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   other way takes scalac's type (`def three(x: Meters & Feet & Grams)` takes an `int`; it took a `long`), so a
   library's method signature moves. Upcast to the class it does not erase to (`val s: VS = x` for `x: VS & VI`), such
   a value throws a `ClassCastException`, as the explicit cast does (scalac's class fails the verifier there; teq's
-  did too). The products' number is 1: a module's products written by an earlier teq (of number 0) are refused on
-  the class path, or rebuilt where they are the module's own, as an earlier teq's box of such a value is not this
-  one's.
+  did too). The products' number is raised for it (to 1; a source package object's products, below, raise it to 2):
+  a module's products written by an earlier teq are refused on the class path, or rebuilt where they are the
+  module's own, as an earlier teq's box of such a value is not this one's.
 - A call of a value class's method initialises the class's companion object as under scalac, which calls the
   companion's extension method: before the receiver is evaluated, but for a generic class's receiver that is not
   idempotent (a call, a `var`, a def, a written cast), which is evaluated first; an object's val, a lazy val, a
@@ -100,8 +100,19 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   beside the new ones, unlisted, for a downstream build to read.
   A library jar is never refused for its writer: a jar is read as scalac's whoever wrote it. The sbt plugin, sbt-teq
   1.0.3 with this release, compiles a class directory of another number afresh, passes no upstream one of another
-  number to teq, and leaves `teq-products.json` out of the jars it packages. This release's number is 0: 0.1.11's
-  products read as before.
+  number to teq, and leaves `teq-products.json` out of the jars it packages. This release's number is 2 (1, a value
+  of an intersection of value classes boxed as the class it erases to, above; 2, a source package object's products,
+  below): 0.1.11's products are refused, to be rebuilt with this release.
+- A `package object p` is the object `p.package`, as under scalac: its members are the object's, written in
+  `p/package.tasty`, `p/package.class` and `p/package$.class` (a member class `C` as `p/package$C.class`, the
+  class `p.package.C`), no longer in the file's `p/<file>$package` (a member class as `p/C.class`), and the file's
+  `<file>$package` holds the file's other top-level definitions alone. A file holding `package object p` beside a
+  `package p` clause with top-level definitions wrote two products of one path, one of them lost (on the JVM a
+  `ClassNotFoundException` at run time); a package object's class and an object of the package of one name shared
+  `p/ID.tasty`. ``p.`package` `` names the object, and a member a definition of the package also has is "already
+  defined", as scalac's. Products written by 0.1.11 hold the old layout: a module built with it must be built
+  again, which the products' number (above) asks for. A second product of one path is now an internal error that
+  names both sources.
 - `teq interp` refuses a Java definition the run must execute and has nothing to execute for: no typed body and no
   native. It refuses where the run meets the definition, with the place in the sources and exit 3:
   `a.scala:6:11: error: the creation of Wide runs the constructor of the Java class jlib.Span, which does more than

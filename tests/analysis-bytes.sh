@@ -365,9 +365,9 @@ cp "$own/out/od/A.class" "$own/out/Unlisted.class"
 "$TEQ" compiler build --target jvm --sourceroot "$own" --classpath "$own/out:$SL" --products "$own/out" --analysis-version 3 "$own/B.scala" > "$own/answer.json" 2> /dev/null
 named_by_pickles "$own/answer.json" "$own/out" od/A.tasty 'od/Alias$package.tasty'
 check "version 3 names the own directory's classes by their pickles" $?
-# A `package object`'s members are the class `p.package` of the answer, as scalac's, their class
-# files teq's `p.<File>$package`; with parents, whose `object package` is `p.package`, the members'
-# object keeps its file's name, and no class is named twice.
+# A `package object`'s members are the class `p.package` of the answer, its class files
+# `p/package.class` and `p/package$.class`, as scalac's (`Desugar.packageModuleDef`); with parents
+# too, and no class is named twice.
 "$TEQ" compiler build --target jvm --sourceroot "$root/tests/modules/pkgobj" --classpath "$work/pkgobj:$SL" --products "$work/pkgobj" --analysis-version 3 tests/modules/pkgobj/a > "$work/pkgobj.json" 2> /dev/null
 "$TEQ" compiler build --target jvm --sourceroot "$root/tests/cases/package_object_parents" --classpath "$work/pkgparents:$SL" --products "$work/pkgparents" --analysis-version 3 tests/cases/package_object_parents > "$work/pkgparents.json" 2> /dev/null
 python3 - "$work/pkgobj.json" "$work/pkgparents.json" << 'EOF' > /dev/null 2>&1
@@ -377,7 +377,7 @@ products = [p for f in holder["api"]["files"] for p in f["products"] if p[0] == 
 named = sorted(c["name"] for f in holder["analysis"] for c in f["classes"])
 likes = [n[1] for n in parents["api"]["nodes"] if isinstance(n, list) and n and n[0] == "ClassLike"]
 listed = [c["name"] for f in parents["analysis"] for c in f["classes"]]
-ok = sorted(b for _, b in products) == ["pa.nested.Obj$package", "pa.nested.Obj$package$"] and named == ["pa.Top$package", "pa.nested.package"]
+ok = sorted(b for _, b in products) == ["pa.nested.package", "pa.nested.package$"] and named == ["pa.Top$package", "pa.nested.package"]
 sys.exit(0 if ok and len(likes) == len(set(likes)) and len(listed) == len(set(listed)) else 1)
 EOF
 check "a package object's members are the class p.package, by their binary names" $?

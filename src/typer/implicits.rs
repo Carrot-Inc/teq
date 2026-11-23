@@ -640,12 +640,21 @@ impl<'a> Worker<'a> {
             self.enter_pkg_objects(p);
         }
         let mut givens = self.syms.pkg(p).givens.clone();
+        // A given of the package is a name of it looked up (dotty's `implicitMembers`), what its
+        // selection among the package objects reports given (`note_pkg_selection`).
+        let names: Vec<Name> = givens.iter().map(|&g| self.syms.sym(g).name).collect();
+        for n in names {
+            self.note_pkg_selection(p, n, false);
+        }
         if let Some(exports) = self.pkg_exports_of(p) {
             givens.extend(exports.givens.iter().copied());
         }
         if let Some(obj) = self.syms.pkg(p).package_object {
             self.complete_class(obj);
-            givens.extend(self.syms.class(obj).givens.iter().copied());
+            // The object's own givens are the package's through its entries, as their selection
+            // admits them (`select_pkg_member`).
+            let own: Vec<SymId> = self.syms.class(obj).givens.iter().copied().filter(|&g| self.syms.sym(g).owner != Owner::Class(obj) || self.syms.pkg(p).givens.contains(&g)).collect();
+            givens.extend(own);
             if let Some(exports) = self.exports_of(obj) {
                 givens.extend(exports.givens.iter().copied());
             }

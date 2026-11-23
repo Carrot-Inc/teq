@@ -260,8 +260,6 @@ i1704.scala	i1704.scala:3:22: AnyRef is a trait; it cannot be instantiated
 i17100a.scala	i17100a.scala:11:12: type mismatch: found (sel2 : Sel{def foo: String}), required Selectable | Dynamic
 i17192.scala	i17192.scala:11:14: value v1 is not a member of RT
 i17222.izumi.rep	InspectorBase.scala:7:7: recursive value qctx needs type
-i17394	teq: jvm backend: two classes are named example/_1$package
-i17394b	teq: jvm backend: two classes are named example/_1$package
 i17465.scala	i17465.scala:3:53: type mismatch: found "Hello", required (StringOps | String){def *(y: Int): StringOps | String}
 i1747.scala	i1747.scala:2:16: method toArray overrides nothing
 i1753.scala	i1753.scala:20:28: type mismatch: found (BCodeSkelBuilder.this.int : BackendInterface), required (BCodeSkelBuilder.this.bTypes.int : I)
@@ -269,7 +267,6 @@ i17631.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17735.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17735a.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i17741.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-i1786.scala	i1786.scala:12:3: value package is not a member of meta
 i1812b.scala	i1812b.scala:7:24: type S not found
 i18135.scala	i18135.scala:16:12: not found: conf
 i18151c.scala	i18151c.scala:17:47: type mismatch: found Any, required Attr
@@ -656,7 +653,6 @@ t1832.scala	t1832.scala:9:14: operator * cannot be applied to Int and Foo
 t2060.scala	t2060.scala:31:11: operator + cannot be applied to Double and Op[Int]
 t2399.scala	t2399.scala:11:69: value next is not a member of This
 t2591.scala	t2591.scala:14:4: type mismatch: found A, required Int
-t2610.scala	t2610.scala:5:5: expected a definition, found identifier
 t2712-6.scala	t2712-6.scala:11:7: type mismatch: found Tagged[Int, Disjunction], required M[A]
 t284-pos.scala	t284-pos.scala:2:24: expected end of statement, found '{'
 t2910.scala	t2910.scala:8:13: not found: s
@@ -668,7 +664,6 @@ t3567	java source: teq reads none
 t374.scala	t374.scala:3:17: not found: Value
 t3866.scala	t3866.scala:13:3: Ambiguous overload. The overloaded alternatives of method f in class ImplicitRepeated with types
 t3946	java source: teq reads none
-t3999	a_1.scala:7:41: type Val not found
 t4070.scala	t4070.scala:4:61: type argument tv does not have the same kind as its bound [X]
 t4579.scala	t4579.scala:45:8: object creation impossible, since it has 2 unimplemented members: evaluate, lisp2string
 t4737	java source: teq reads none

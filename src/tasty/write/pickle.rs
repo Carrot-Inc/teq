@@ -6371,14 +6371,7 @@ impl<'w, 'a> P<'w, 'a> {
                 crate::ast::DefKind::Fun(f) if f.is_extension => ast.notes.places.extension_keyword(f.ext_group).map_or(r, |k| Span { start: k.min(r.start), end: r.end }),
                 _ => r,
             };
-            let e = defs.iter().map(|&d| (d, self.written_def_range(self.file, d))).filter(|(_, r)| *r != crate::ast::NO_RANGE).map(|(d, r)| in_group(d, r)).reduce(|a, b| Span { start: a.start.min(b.start), end: a.end.max(b.end) });
-            // A package object's statements are its `object package`'s, whose `objectDef(start, ..)` starts at its
-            // `package` keyword (Parsers.scala 5054-5059): `moduleDef` puts its val there.
-            let written = ast.notes.places.package_object();
-            match (e, written) {
-                (Some(e), Some(at)) => Some(Span { start: at.min(e.start), end: e.end }),
-                (e, _) => e,
-            }
+            defs.iter().map(|&d| (d, self.written_def_range(self.file, d))).filter(|(_, r)| *r != crate::ast::NO_RANGE).map(|(d, r)| in_group(d, r)).reduce(|a, b| Span { start: a.start.min(b.start), end: a.end.max(b.end) })
         } else {
             None
         };

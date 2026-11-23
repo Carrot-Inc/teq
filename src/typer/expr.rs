@@ -2212,7 +2212,14 @@ impl<'a> Worker<'a> {
         }
         let vars_mark = self.tvars.len();
         let accessor_mark = self.accessor_pending.len();
+        self.expr_depth += 1;
         let (te, ty) = self.type_expr_untracked(e, expected);
+        // An error a lookup met while this was the innermost expression being typed takes its place
+        // (`Worker::pending_places`).
+        if !self.pending_places.is_empty() {
+            self.place_pending(e);
+        }
+        self.expr_depth -= 1;
         // A protected method's reference whose call this tree did not make (`accessor_pending`) made none.
         if self.accessor_pending.len() > accessor_mark {
             self.accessor_pending.truncate(accessor_mark);

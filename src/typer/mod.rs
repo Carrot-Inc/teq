@@ -506,6 +506,23 @@ pub struct BodyNode {
     pub call: crate::ast::ExprId,
 }
 
+/// An error made where a lookup met it, whose place the expression being typed then gives on its return
+/// (`Worker::pending_places`): dotty's `TypeError`, which the innermost `typedUnadapted` catches and reports at
+/// its tree.
+#[derive(Clone, Debug)]
+pub struct PendingPlace {
+    /// The record's identity among the diagnostics (`source::Ordinal`).
+    pub ordinal: u64,
+    /// How many expressions were being typed when the lookup met it: the innermost one's.
+    pub depth: u32,
+    /// The file being typed then.
+    pub file: FileId,
+    /// The message as given, which a library body's record words with its place.
+    pub msg: std::sync::Arc<str>,
+    /// Where the record is a library body's (`Worker::error`): the selection being typed then (`Worker::body_node`).
+    pub body: Option<Option<BodyNode>>,
+}
+
 /// The extension method whose body is being typed.
 #[derive(Clone, Copy)]
 pub struct ExtScope {
@@ -1911,6 +1928,15 @@ pub struct Worker<'a> {
     pub compilation_unported: bool,
     /// Whether the body phase began: the prefix typed before the fork, or the workers.
     pub bodies_started: bool,
+    /// How many expressions are being typed (`type_expr`) in the code's own context: whether a lookup stands in one,
+    /// and which is the innermost.
+    pub expr_depth: u32,
+    /// The errors of a package's member that its package objects' selection refuses (`dropStale`'s tie of two
+    /// youngest files), made where the lookup met it and placed by the innermost expression being typed then, on its
+    /// return (`place_pending`), as dotty's `TypeError` unwinds to the innermost `typedUnadapted`, which reports it
+    /// at its tree (Typer.scala 3907, 3937). The record waits among the diagnostics, so that what discards them
+    /// discards it.
+    pub pending_places: Vec<PendingPlace>,
     /// The info messages the macros' runs gave while a build or a retype is typed, held until
     /// the driver accepts the attempt (`flush_infos`); `None` outside, where a message is
     /// printed as it comes.
@@ -3082,6 +3108,7 @@ impl<'a> Typer<'a> {
             w.check_deferred_bounds();
             w.forward_references(None);
             w.phase_end(p);
+            w.report_package_conflicts();
             w.report_unused(None);
             w.register_suppressions();
             w.tell_cacheable_warnings();
@@ -3509,6 +3536,8 @@ impl<'a> Worker<'a> {
             walk_by_size: false,
             compilation_unported: Worker::scan_compilation_unported(asts, files),
             bodies_started: false,
+            expr_depth: 0,
+            pending_places: Vec::new(),
             infos: None,
             std_seen: 0,
             lists_at_fork: 0,
@@ -3975,6 +4004,8 @@ impl<'a> Worker<'a> {
             walk_by_size: self.walk_by_size,
             compilation_unported: self.compilation_unported,
             bodies_started: self.bodies_started,
+            expr_depth: 0,
+            pending_places: Vec::new(),
             infos: self.infos.as_ref().map(|_| Vec::new()),
             std_seen: self.std_seen,
             lists_at_fork: self.lists_at_fork,
@@ -4821,14 +4852,6 @@ impl<'a> Worker<'a> {
     /// Whether `f` is the pseudo file of a directory of teq's products: another module's program.
     pub fn in_products(&self, f: FileId) -> bool {
         self.loaded.as_ref().is_some_and(|l| l.jar_files.iter().position(|&j| j == f).is_some_and(|i| l.cp.is_products_entry(i)))
-    }
-
-    /// Whether the object of the block's top-level definitions is the members of a `package
-    /// object` without parents, which zinc knows by scalac's `p.package`; with parents, the
-    /// `object package` they make is `p.package` and the members' object keeps its file's name.
-    pub fn package_object_holder(&self, f: FileId) -> bool {
-        let ast = self.ast(f);
-        ast.package_object && !ast.top_level.iter().any(|&d| ast.def(d).name == crate::names::PACKAGE && matches!(ast.def(d).kind, crate::ast::DefKind::Class(_)))
     }
 
     /// Marks what the loader finished as done for the lookups outside its lock: at the end of

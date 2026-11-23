@@ -168,6 +168,7 @@ native_overload_reflection	< replace(scala.Char, scala.Char)
 opaque_selector_matchable	> tests/cases/opaque_selector_matchable.scala:20:8: warning: unreachable case
 overloaded_type_argument_kinds	< 2
 package_extension_path	< 4
+package_object_default_to_string	< p.package$O$
 pattern_literal_primitive_types	> tests/cases/pattern_literal_primitive_types.scala:8:42: warning: unreachable case
 poly_function_class_tag	< scala.Function1
 poly_function_type_tests	< true

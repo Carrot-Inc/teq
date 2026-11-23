@@ -2323,6 +2323,7 @@ cases/package_extension_path	cannot run	-	no leg builds
 cases/package_main	pass	-	
 cases/package_member_mangled_names	pass	-	
 cases/package_object_braces	pass	-	
+cases/package_object_default_to_string	pass	-	
 cases/package_object_import_parent	pass	-	
 cases/package_object_parents	pass	-	
 cases/package_val_object_accessor	pass	-	

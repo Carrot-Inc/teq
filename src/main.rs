@@ -2763,6 +2763,11 @@ fn build_jvm(
         answer_failure(opts);
         exit_with_report(opts, &report, 3);
     }
+    if let Some(e) = jvm::shared_class_name(&all_sources, &output) {
+        eprintln!("{}", e);
+        answer_failure(opts);
+        exit_with_report(opts, &report, 2);
+    }
     let mut output = output;
     let (out_path, publication) = match &opts.products {
         Some(dir) => {
@@ -2838,6 +2843,23 @@ fn build_jvm(
 
 /// The TASTy files of the program's owned files, for the products' publication; a definition
 /// the writer cannot write fails the build with the construct named.
+/// A second TASTy product of one path, an internal compiler error that names both sources: every
+/// definition has one owner and each owner one unit, as dotty's (a `package object p` is the
+/// module `p.package`, a file's other top-level definitions its `<file>$package`), so two of one
+/// path are teq's fault, which no program can be refused for and no write may settle by its order.
+/// The JVM writer's twin is `jvm::shared_class_name`.
+fn shared_tasty_path(files: &[SourceFile], written: &[tasty::write::Product]) -> Option<String> {
+    let mut seen: intern::FxMap<String, source::FileId> = intern::FxMap::default();
+    for p in written {
+        let path = products::tasty_path(p);
+        if let Some(&first) = seen.get(&path) {
+            return Some(format!("internal error: two products of one path, {}: of {} and of {}", path, source::product_source(files, first), source::product_source(files, p.source)));
+        }
+        seen.insert(path, p.source);
+    }
+    None
+}
+
 fn pickle_products(opts: &Options, typer: &mut typer::Typer) -> tasty::write::Written {
     // The accessors the inline bodies read private members through, which the pickles hold,
     // and the results of the inline methods declared without one.
@@ -2870,6 +2892,10 @@ fn pickle_products(opts: &Options, typer: &mut typer::Typer) -> tasty::write::Wr
         eprintln!("{} definition{} cannot be written as TASTy", written.errors.len(), if written.errors.len() == 1 { "" } else { "s" });
         answer_failure(opts);
         std::process::exit(1);
+    }
+    if let Some(e) = shared_tasty_path(typer.w.files.as_slice(), &written.products) {
+        eprintln!("{}", e);
+        exit_failed(opts, 2);
     }
     if let Some(path) = std::env::var_os("TEQ_BODIES_CENSUS") {
         let mut rows: Vec<(&String, &u32)> = written.bodies.iter().collect();
@@ -3699,4 +3725,48 @@ pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str]
         });
         typed.expect("the test's typer thread").join().expect("the test's typer panicked")
     })
+}
+
+#[cfg(test)]
+mod shared_path_tests {
+    use super::shared_tasty_path;
+    use crate::source::{FileId, SourceFile};
+
+    fn file(path: &str, key: &str) -> SourceFile {
+        SourceFile { path: path.to_string(), text: String::new(), is_std: false, key: key.to_string() }
+    }
+
+    fn product(package: &str, name: &str, source: u32) -> crate::tasty::write::Product {
+        crate::tasty::write::Product { package: package.to_string(), name: name.to_string(), source: FileId(source), bytes: Vec::new(), uuid: [0; 16], complete: true }
+    }
+
+    #[test]
+    fn a_second_product_of_one_path_is_an_internal_error_naming_both_sources() {
+        let files = vec![file("Lib.scala", "Lib.scala"), file("Lib.scala", "Lib.scala#1"), file("Other.scala", "Other.scala")];
+        assert_eq!(shared_tasty_path(&files, &[product("p", "Lib$package", 0), product("p", "package", 1), product("q", "Lib$package", 2)]), None);
+        assert_eq!(
+            shared_tasty_path(&files, &[product("p", "Lib$package", 0), product("p", "Lib$package", 1)]).as_deref(),
+            Some("internal error: two products of one path, p/Lib$package.tasty: of Lib.scala and of Lib.scala (its package block 1)")
+        );
+        assert_eq!(
+            shared_tasty_path(&files, &[product("p", "ID", 1), product("", "X", 0), product("p", "ID", 2)]).as_deref(),
+            Some("internal error: two products of one path, p/ID.tasty: of Lib.scala (its package block 1) and of Other.scala")
+        );
+    }
+
+    #[test]
+    fn a_second_class_file_of_one_name_is_an_internal_error_naming_both_sources() {
+        let files = vec![file("A.scala", "A.scala"), file("A.scala", "A.scala#2")];
+        let class = |name: &str, source: Option<u32>| crate::jvm::Emitted { name: name.to_string(), bytes: std::sync::Arc::new(Vec::new()), source: source.map(FileId), of: None };
+        let output = |classes: Vec<crate::jvm::Emitted>| crate::jvm::Output { classes, main_class: None, errors: Vec::new(), refused: Vec::new(), main_classes: Vec::new(), inits: Vec::new(), kept: Default::default(), names: Vec::new(), twice: Vec::new() };
+        assert_eq!(crate::jvm::shared_class_name(&files, &output(vec![class("p/A", Some(0)), class("p/A$", Some(0))])), None);
+        assert_eq!(
+            crate::jvm::shared_class_name(&files, &output(vec![class("p/ID", Some(0)), class("p/ID", Some(1)), class("p/ID", None)])).as_deref(),
+            Some("internal error: two class files of one name, p/ID.class: of A.scala and of A.scala (its package block 2)")
+        );
+        // The emitter's, which keeps one of the two.
+        let mut kept = output(vec![class("p/ID", Some(0))]);
+        kept.twice.push(("p/ID".to_string(), Some(FileId(0)), Some(FileId(1))));
+        assert_eq!(crate::jvm::shared_class_name(&files, &kept).as_deref(), Some("internal error: two class files of one name, p/ID.class: of A.scala and of A.scala (its package block 2)"));
+    }
 }

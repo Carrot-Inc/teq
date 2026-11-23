@@ -900,9 +900,45 @@ pub(super) fn bare_class_text(prog: &Program, syms: &Symbols, interner: &Interne
     match module_suffix(&info) {
         Some(suffix) => s.push_str(suffix),
         None if info.kind == ClassKind::EnumCase && info.singleton.is_some() => s.push_str("$V"),
-        None => naming.avoid_taken(&mut s),
+        None => {
+            // A class nested in an object, or in a class beside its companion object, shares one name space with
+            // that module's own names (its class's, its accessor's, its instance's): a member that would take one
+            // (`class M` of `object Holder` is `Holder$M`, the module class) is spelled apart by the naming's rule
+            // for a clash, by the definitions alone.
+            if owner_module_names(prog, syms, interner, reach, naming, shared, info.owner).iter().any(|n| *n == s) {
+                s.push_str("$$");
+            }
+            naming.avoid_taken(&mut s)
+        }
     }
     s
+}
+
+/// The names the output gives the module that owns a class, or the companion module of the class that owns it: its
+/// class's (`Holder$M`), its accessor's (`Holder$`) and its instance's (`Holder$i`).
+fn owner_module_names(prog: &Program, syms: &Symbols, interner: &Interner, reach: &reach::Reach, naming: &Naming, shared: &share::Shared, owner: Owner) -> Vec<String> {
+    let Owner::Class(o) = owner else { return Vec::new() };
+    let mut modules = Vec::new();
+    if is_module(syms, o) {
+        modules.push(o);
+    }
+    if let Some(k) = syms.class(o).companion {
+        if k != o && is_module(syms, k) {
+            modules.push(k);
+        }
+    }
+    let mut out = Vec::new();
+    for m in modules {
+        let name = bare_class_text(prog, syms, interner, reach, naming, shared, m);
+        if name.len() < 2 {
+            continue;
+        }
+        let accessor = accessor_of(&name);
+        out.push(instance_of(&accessor));
+        out.push(accessor);
+        out.push(name);
+    }
+    out
 }
 
 /// The suffix the name of a class the output reaches as an instance (an object's, a given's)

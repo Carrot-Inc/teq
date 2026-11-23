@@ -510,8 +510,7 @@ const WRAPPED: u32 = 1 << 31;
 /// `<file>$package` object, which `Desugar.packageDef` places after the file's other statements
 /// (`topStats :+ grouped`): `isTopLevelDef` takes a val, a def, a type alias, a given and an
 /// implicit class or object, and an object named as such a type (an opaque type's companion)
-/// goes with it. A `package object`'s members, read as a package block, are the object's own,
-/// in their order.
+/// goes with it.
 pub(super) fn wrapped_top_level(ast: &crate::ast::Ast, d: crate::ast::DefId) -> bool {
     wrapped_def(ast, d, |name| ast.top_level.iter().any(|&t| ast.def(t).name == name && wraps_type(ast.def(t))))
 }
@@ -531,9 +530,6 @@ fn wraps_type(o: &crate::ast::Def) -> bool {
 /// by `wrapped_type_named`.
 fn wrapped_def(ast: &crate::ast::Ast, d: crate::ast::DefId, wrapped_type_named: impl Fn(crate::intern::Name) -> bool) -> bool {
     use crate::ast::{ClassKind, DefKind};
-    if ast.package_object {
-        return false;
-    }
     let def = ast.def(d);
     match &def.kind {
         DefKind::Val { .. } | DefKind::Fun(_) | DefKind::TypeAlias { .. } | DefKind::Given(_) => true,
@@ -562,7 +558,7 @@ fn key_of(ast: &crate::ast::Ast, d: crate::ast::DefId, wrapped: bool) -> u32 {
 /// (`Desugar.packageDef`'s `topStats :+ grouped`). `None` where that is the order they are
 /// written in.
 pub(super) fn desugared_order(ast: &crate::ast::Ast) -> Option<Vec<u32>> {
-    if ast.package_object || ast.top_level.len() < 2 {
+    if ast.top_level.len() < 2 {
         return None;
     }
     let types: FxMap<crate::intern::Name, ()> = ast.top_level.iter().map(|&t| ast.def(t)).filter(|t| wraps_type(t)).map(|t| (t.name, ())).collect();

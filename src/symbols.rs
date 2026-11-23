@@ -652,6 +652,39 @@ pub struct PkgInfo {
     /// The `object package` of a `package object p extends ...`: what the package's own
     /// entries lack is looked up among its members, the inherited ones included.
     pub package_object: Option<ClassId>,
+    /// The package objects the class path holds for the package (`p/package` and every
+    /// `p/<file>$package`), each with the file it was read from: the alternatives among which a
+    /// name of the package is selected (`Worker::select_pkg_member`).
+    pub package_objects: Vec<PackageObject>,
+    /// The names whose selection among the package objects is reported (dotty's `dropStale`): a
+    /// warning or an error, given where the name is looked up.
+    pub conflicts: Vec<PkgConflict>,
+    /// The warning of `dropStale` given for one name of the package, the package's only one
+    /// (dotty's `ambiguityWarningIssued`), presented at the run's end: the first lookup's in one
+    /// worker's walk, by the rank of the item that looked the name up (`Worker::diag_rank`).
+    pub conflict_warning: Option<((u32, u32), Arc<str>)>,
+}
+
+/// A package object read from the class path: its object, and the file it was read from as a
+/// package's member selection compares it (`Classpath::associated_file`).
+#[derive(Clone, Debug)]
+pub struct PackageObject {
+    pub class: ClassId,
+    pub file: Arc<crate::classpath::AssociatedFile>,
+    /// Where dotty lists it among the package's objects (`packageObjs`, the package's
+    /// declarations, whose order names the chosen of tied files): an object `package` before the
+    /// `<file>$package` ones, each kind in class path order, as scalac 3.8.4 names them.
+    pub rank: (bool, u16, u32),
+}
+
+/// A name of a package whose selection among the package objects reports: `types` for the
+/// name of a type, `error` for dotty's `TypeError` where the youngest files tie (else a warning).
+#[derive(Clone, Debug)]
+pub struct PkgConflict {
+    pub name: Name,
+    pub types: bool,
+    pub error: bool,
+    pub msg: Arc<str>,
 }
 
 impl PkgInfo {
@@ -892,6 +925,9 @@ impl Symbols {
             forwarders_done: false,
             forwarders: Vec::new(),
             package_object: None,
+            package_objects: Vec::new(),
+            conflicts: Vec::new(),
+            conflict_warning: None,
         };
         Symbols {
             classes: Arena::new(),
@@ -1234,6 +1270,9 @@ impl Symbols {
             forwarders_done: false,
             forwarders: Vec::new(),
             package_object: None,
+            package_objects: Vec::new(),
+            conflicts: Vec::new(),
+            conflict_warning: None,
         }));
         self.enter_at(parent, key).pkg = Some(id);
         id

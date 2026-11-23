@@ -1335,7 +1335,7 @@ impl<'a> Parser<'a> {
     /// end, as dotty restores `languageImportContext` after `templateStatSeq`; its case classes get
     /// the companions `Desugar` gives them (`add_derived_givens`), a class's or a trait's an object
     /// of each instance.
-    fn parse_template_body(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
+    pub(super) fn parse_template_body(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
         let saved = self.syntax.postfix_ops;
         let body = self.parse_template_body_scoped(is_enum);
         self.syntax.postfix_ops = saved;

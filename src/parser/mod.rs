@@ -1364,9 +1364,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// The members of `package object p` are the top-level definitions of the package `p`, read
-    /// as a package block. Its parents are those of an `object package` in that block, whose
-    /// members the lookups of the package fall back to.
+    /// `package object p { body }` is `package p { object package { body } }` (dotty's
+    /// `Desugar.packageModuleDef`, Desugar.scala 1157-1166; `Parsers.topStatSeq` reads it by
+    /// `objectDef(start, Modifiers(Package))`, Parsers.scala 5054-5059): a block of package `p`
+    /// holding the module `package`, its statements the object's template, its members the
+    /// object's. The block holds no top-level definition of its own.
     fn parse_package_object(&mut self) {
         let start = self.span().start;
         self.bump();
@@ -1379,28 +1381,21 @@ impl<'a> Parser<'a> {
         self.ast.notes.places.note_package_object(start);
         self.ast.package.push(name);
         self.ast.package_clauses.push(self.ast.package.len() as u32);
+        let first = self.ast.defs.len();
         let parents = self.parse_parents();
-        if !parents.is_empty() {
-            let class = ClassDef {
-                kind: ClassKind::Object,
-                tparams: Vec::new(),
-                clauses: Vec::new(),
-                parents,
-                body: Vec::new(),
-                exports: ListRef::EMPTY,
-                self_type: None,
-                self_alias: names::EMPTY,
-            };
-            let def = self.ast.add_def(Def {
-                name: names::PACKAGE,
-                span,
-                mods: 0,
-                annots: Vec::new(),
-                kind: DefKind::Class(Box::new(class)),
-            });
-            self.ast.top_level.push(def);
+        let body_start = self.span().start;
+        let (body, exports, self_type, self_alias) = self.parse_template_body(false);
+        let self_start = self.self_start.take();
+        if self.syntax.keep && self.prev_span().end > body_start {
+            self.ast.notes.package_body = Some(Span::new(body_start, self.prev_span().end));
         }
-        self.parse_package_body();
+        let class = ClassDef { kind: ClassKind::Object, tparams: Vec::new(), clauses: Vec::new(), parents, body, exports, self_type, self_alias };
+        let def = self.ast.add_def(Def { name: names::PACKAGE, span, mods: 0, annots: Vec::new(), kind: DefKind::Class(Box::new(class)) });
+        if let Some(s) = self_start {
+            self.ast.notes.places.note_self_start(def, s);
+        }
+        self.close_def_ranges(first, start);
+        self.ast.top_level.push(def);
         self.ast.package_object = true;
         self.close_package_block(outer);
     }

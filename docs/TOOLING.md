@@ -115,7 +115,9 @@ directory.
 **The products' number.** What a module's products mean (the class files, the TASTy and `teq-products.json` that
 `--products` writes) has a number of its own, the products ABI, which `teq --version --verbose` prints (`products
 ABI <n>`) and the manifest carries as its `abi` field; a manifest without it, as every teq up to 0.1.11 wrote it, is
-of number 0. A release that changes what products mean raises it, and a teq reads only products of its own number:
+of number 0. A release that changes what products mean raises it (1: a value of an intersection of value classes boxed as
+the class it erases to; 2: a source `package object p` written as the object `p.package`, its members no longer in the
+file's `<file>$package`), and a teq reads only products of its own number:
 a directory of another on `--classpath` is refused with one line at its manifest, `error: <dir>/teq-products.json: these products are of ABI <n> (written by teq <version>); this teq
 (<version>) reads ABI <m>: rebuild <dir> with this teq`; a build over its own `--products` directory of another
 number keeps none of its entries, every file it does not write again removed, and `--removed` alone over one is

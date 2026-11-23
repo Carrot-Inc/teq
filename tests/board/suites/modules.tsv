@@ -247,7 +247,7 @@ loadedindirectkindok	pass	-
 loadednestedkind	pass	-	
 loadednestedkindok	pass	-	
 loadedopaquekind	pass	-	
-loadedpackageholders	fail	-	loadedpackageholders members
+loadedpackageholders	pass	-	
 localcaseapply	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the macro's implementation in teq's class files, which do not have it, the JVM prerequisite
 localclass	pass	-	
 localclasstrait	pass	-	
@@ -338,7 +338,7 @@ pathclass	pass	-
 pathequality	pass	-	
 perfile	pass	-	
 pkgobj	pass	-	
-pkgobjgiven	fail	-	known classes: the split build's signature of the package object's given class names it through the file's object (`listTC([1], pga.TC): pga.inner.Lib$package$.listTC`), the whole build's through the
+pkgobjgiven	pass	-	
 pkgobjname	fail	-	known js-run: the split build reads the product's object `Token$package`, a name of a package object's form, as the package `pon.foreign` (`_root_ is a package, not a value`): the reader's rule for a
 pkgobjparents	pass	-	
 pkgobjplain	pass	-	

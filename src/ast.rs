@@ -1074,8 +1074,8 @@ pub struct Ast {
     pub enumerators: Vec<Enumerator>,
     pub tries: Vec<TryExpr>,
     pub package: Vec<Name>,
-    /// Whether the file is the block a `package object` was read as: its top-level
-    /// definitions are the object's members, which scalac names through `package$`.
+    /// Whether the file is the block a `package object` was read as: its one top-level
+    /// definition is the object `package` (`Desugar.packageModuleDef`).
     pub package_object: bool,
     /// Where each `package` clause ends in `package`, so that `package a` followed by
     /// `package b.c` gives the clauses `a` and `a.b.c`.

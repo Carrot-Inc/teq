@@ -1504,6 +1504,11 @@ fn finish_jvm(
         report.diagnostics = Some(output.errors.iter().map(|e| json_object(&[("severity", JsonValue::Str("error")), ("message", JsonValue::Str(&format!("jvm backend: {}", e)))])).collect());
         return false;
     }
+    if let Some(e) = jvm::shared_class_name(&all_sources, &output) {
+        report.errors = vec![json_object(&[("message", JsonValue::Str(&e))])];
+        report.diagnostics = Some(vec![json_object(&[("severity", JsonValue::Str("error")), ("message", JsonValue::Str(&e))])]);
+        return false;
+    }
     let t_write = Instant::now();
     crate::measure::Lap::begin(crate::measure::Pass::After);
     match write::classes_after(dir, &output.classes, &mut state.written) {

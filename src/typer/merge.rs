@@ -2817,6 +2817,9 @@ impl<'a> Worker<'a> {
                     items.push(std::mem::take(&mut o.diags.items).into_iter().map(Some).collect());
                     reports.push(std::mem::take(&mut o.inlining.suspension_reports).into_iter().map(Some).collect());
                     ranges.extend(std::mem::take(&mut o.diag_ranges).into_iter().map(|r| (r, k + 1)));
+                    // The places the worker gave its records while they stood outside its diagnostics
+                    // (`Diagnostics::placements`) go with them.
+                    self.diags.placements.append(&mut o.diags.placements);
                 }
                 None => {
                     items.push(Vec::new());
@@ -2858,6 +2861,10 @@ impl<'a> Worker<'a> {
         }
         placed_items.extend(items[0].iter_mut().filter_map(Option::take));
         placed_reports.extend(reports[0].iter_mut().filter_map(Option::take));
+        // A record a worker gave its place while it stood outside the worker's diagnostics takes it here, or, still
+        // held, where it comes back (`Diagnostics::push`).
+        self.diags.apply_placements(&mut placed_items);
+        self.diags.apply_placements(&mut placed_reports);
         self.diags.items.append(&mut placed_items);
         self.inlining.suspension_reports.append(&mut placed_reports);
     }

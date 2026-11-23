@@ -39,6 +39,7 @@ impl<'a> Worker<'a> {
             }
             self.enter_file_defs(file);
         }
+        self.enter_source_package_objects();
         self.check_root_scope_conflicts();
         self.check_java_conflicts();
         self.build_java_source_records();
@@ -76,6 +77,126 @@ impl<'a> Worker<'a> {
             self.env.file = file;
             self.error(span, msg);
         }
+    }
+
+    /// The members of each `package object p` of the program, the module `p.package`
+    /// (`Desugar.packageModuleDef`), or of an `object `package`` written in `p`, entered among
+    /// its package's: dotty's members of a package
+    /// named N are its package objects' and its own (`PackageClassDenotation.computeMembersNamed`,
+    /// SymDenotations.scala 2558-2600), every one of the current run kept (`dropStale`). Once
+    /// every file is entered, in file order: one of them that a definition of the package meets
+    /// is "already defined" at the later of the two (`Namer.checkNoConflict`, Namer.scala
+    /// 137-180), the earlier one keeping the name (dotty freshens the later one's).
+    fn enter_source_package_objects(&mut self) {
+        for i in 0..self.asts.len() {
+            let file = FileId(i as u32);
+            if self.std.slot_of(file).is_some() {
+                continue;
+            }
+            // A `package object p`'s block, or an `object `package`` written in a package: both
+            // are its package object (`NameOps.isPackageObjectName`, NameOps.scala 126-127).
+            let ast = self.ast(file);
+            let Some(d) = ast.top_level.iter().copied().find(|&d| ast.def(d).name == names::PACKAGE && matches!(&ast.def(d).kind, DefKind::Class(c) if c.kind == ast::ClassKind::Object)) else { continue };
+            let Some(&obj) = self.def_classes.get(i, &d) else { continue };
+            let Owner::Package(pkg) = self.syms.class(obj).owner else { continue };
+            if self.syms.pkg(pkg).package_object != Some(obj) {
+                continue;
+            }
+            self.env.file = file;
+            let conflicts = self.package_object_conflicts(pkg, obj);
+            self.spill_object(pkg, obj, &mut |_, name, types| match conflicts.iter().find(|c| (c.0, c.1) == (name, types)) {
+                Some(&(_, _, object_first)) => object_first.then_some(true),
+                None => Some(false),
+            });
+        }
+    }
+
+    /// Where a definition stands in the order the sources are entered in: its file's place among
+    /// the files (a package block's, its file's: `frontend::lay_out` gives blocks the ids after
+    /// every file), then its place in the file.
+    fn written_order(&self, f: FileId, span: crate::source::Span) -> (usize, u32) {
+        let files = self.files.as_slice();
+        let key = &files[f.0 as usize].key;
+        let file = key
+            .rsplit_once('#')
+            .filter(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+            .and_then(|(base, _)| files.iter().position(|s| s.key == base))
+            .unwrap_or(f.0 as usize);
+        (file, span.start)
+    }
+
+    fn alias_span(&self, a: AliasId) -> crate::source::Span {
+        let info = &self.syms.aliases[a.idx()];
+        info.def.map_or_else(crate::source::Span::default, |d| self.ast(info.file).def(d).span)
+    }
+
+    /// The names of the package object `obj` that a definition of its package `pkg` of the
+    /// program has too, each reported where the later of the two is (`checkNoConflict`): a term
+    /// against a term, an extension or a given; a type against a class or a type alias. A
+    /// private member of a package object is `private[p]` (Namer.scala 231-235), no exception.
+    /// Each with whether the object's stands first, the name the earlier one's (dotty freshens
+    /// the later one's name).
+    fn package_object_conflicts(&mut self, pkg: PkgId, obj: ClassId) -> Vec<(crate::intern::Name, bool, bool)> {
+        let own_term = |w: &Self, s: SymId| w.syms.sym(s).owner == Owner::Package(pkg) && w.program_file(w.syms.sym(s).file);
+        let info = self.syms.class(obj);
+        let mut terms: Vec<SymId> = info.member_order.clone();
+        terms.extend(info.extensions.iter().copied());
+        terms.extend(info.givens.iter().copied());
+        let mut types: Vec<(crate::intern::Name, crate::source::Span)> = info.nested.iter().map(|(&n, &c)| (n, self.syms.class(c).span)).collect();
+        types.extend(info.type_aliases.iter().map(|(&n, &a)| (n, self.alias_span(a))));
+        let mut found: Vec<(FileId, crate::source::Span, String)> = Vec::new();
+        let mut names: Vec<(crate::intern::Name, bool, bool)> = Vec::new();
+        for s in terms {
+            let (name, span) = (self.syms.sym(s).name, self.syms.sym(s).span);
+            if names.iter().any(|c| (c.0, c.1) == (name, false)) || self.syms.sym(s).mods & mods::SETTER != 0 {
+                continue;
+            }
+            let entry = self.syms.package_object_entry(pkg, name);
+            let mut own: Vec<SymId> = entry.map_or(Vec::new(), |e| e.term.into_iter().chain(e.extensions.iter().copied()).collect());
+            own.extend(self.syms.pkg(pkg).givens.iter().copied().filter(|&g| self.syms.sym(g).name == name));
+            let Some(other) = own.into_iter().filter(|&o| own_term(self, o)).min_by_key(|&o| self.written_order(self.syms.sym(o).file, self.syms.sym(o).span)) else { continue };
+            let (ofile, ospan) = (self.syms.sym(other).file, self.syms.sym(other).span);
+            let object_first = self.written_order(ofile, ospan) > self.written_order(self.env.file, span);
+            names.push((name, false, object_first));
+            if object_first {
+                let saved = std::mem::replace(&mut self.env.file, ofile);
+                found.push((ofile, ospan, self.already_defined(name, s)));
+                self.env.file = saved;
+            } else {
+                found.push((self.env.file, span, self.already_defined(name, other)));
+            }
+        }
+        for (name, span) in types {
+            if names.iter().any(|c| (c.0, c.1) == (name, true)) {
+                continue;
+            }
+            let class = self.syms.scoped(self.interner, pkg, name).and_then(|e| e.class).filter(|&c| self.syms.class(c).owner == Owner::Package(pkg) && self.program_file(self.syms.class(c).file));
+            let alias = self.syms.package_object_entry(pkg, name).and_then(|e| e.alias).filter(|&a| self.syms.aliases[a.idx()].owner == Owner::Package(pkg) && self.program_file(self.syms.aliases[a.idx()].file));
+            let other = match (class, alias) {
+                (Some(c), _) => (self.syms.class(c).file, self.syms.class(c).span, if self.syms.class(c).kind == ClassKind::Trait { "trait" } else { "class" }),
+                (None, Some(a)) => (self.syms.aliases[a.idx()].file, self.alias_span(a), "type"),
+                (None, None) => continue,
+            };
+            let n = self.name_str(name).to_string();
+            let (ofile, ospan, okind) = other;
+            let here = self.env.file;
+            let object_first = self.written_order(ofile, ospan) > self.written_order(here, span);
+            names.push((name, true, object_first));
+            let mine = if self.syms.class(obj).nested.contains_key(&name) { "class" } else { "type" };
+            let elsewhere = |w: &Self, f: FileId, at: FileId| if f != at { format!(" in {}", w.source(f).path) } else { String::new() };
+            if object_first {
+                found.push((ofile, ospan, format!("{n} is already defined as {mine} {n}{}", elsewhere(self, here, ofile))));
+            } else {
+                found.push((here, span, format!("{n} is already defined as {okind} {n}{}", elsewhere(self, ofile, here))));
+            }
+        }
+        let here = self.env.file;
+        for (file, span, msg) in found {
+            self.env.file = file;
+            self.error(span, msg);
+        }
+        self.env.file = here;
+        names
     }
 
     /// dotty's `Namer.checkNoConflict` across the root package's two scopes, once every file is entered. A
@@ -299,6 +420,11 @@ impl<'a> Worker<'a> {
     /// top-level definitions of one file can be overloaded, those of two files cannot.
     fn overloads(&mut self, old: SymId, sym: SymId) -> bool {
         let (o, s) = (self.syms.sym(old), self.syms.sym(sym));
+        // A package object's member the package's entry holds is no alternative of the package's
+        // own (`checkNoConflict`).
+        if matches!(s.owner, Owner::Package(_)) && !matches!(o.owner, Owner::Package(_)) {
+            return false;
+        }
         let is_method = |k: SymKind| matches!(k, SymKind::Def | SymKind::Overloaded(_));
         if s.kind == SymKind::Def && is_method(o.kind) {
             return o.file == s.file || !matches!(s.owner, Owner::Package(_));
@@ -369,10 +495,9 @@ impl<'a> Worker<'a> {
             _ => "value",
         };
         let n = self.name_str(name);
-        let elsewhere = match info.owner {
-            Owner::Package(_) if info.file != self.env.file => {
-                format!(" in {}", self.source(info.file).path)
-            }
+        // A member of a package, or of a package object (`skipWeakOwner`), with its file.
+        let elsewhere = match self.effective_package(info.owner) {
+            Some(_) if info.file != self.env.file => format!(" in {}", self.source(info.file).path),
             _ => String::new(),
         };
         // The definition there by its own spelling, which another spelling of one encoded name may meet in the root

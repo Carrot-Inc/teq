@@ -1754,8 +1754,17 @@ impl<'a> Worker<'a> {
         self.lookup::<TypeRef>(name, Some(span))
     }
 
+    /// The type named `name` of package `p`: its entries' (the package objects' members as their
+    /// selection admits them, `select_pkg_member`), what the selection reports given.
     #[inline]
     pub fn pkg_type(&mut self, p: PkgId, name: Name) -> Option<TypeRef> {
+        let found = self.pkg_type_entered(p, name);
+        self.note_pkg_selection(p, name, true);
+        found
+    }
+
+    #[inline]
+    fn pkg_type_entered(&mut self, p: PkgId, name: Name) -> Option<TypeRef> {
         self.complete_package_forwarders(p, name);
         let (class, alias) = self.syms.type_named(self.interner, p, name);
         if let Some(found) = class.map(TypeRef::Class).or(alias.map(TypeRef::Alias)) {
@@ -1904,6 +1913,14 @@ impl<'a> Worker<'a> {
     /// a bare reference finds it through its receiver, so that it takes no name from a
     /// companion's synthesized members and clashes with no import.
     pub fn pkg_term(&mut self, p: PkgId, name: Name) -> Option<TermRef> {
+        let found = self.pkg_term_entered(p, name);
+        self.note_pkg_selection(p, name, false);
+        found
+    }
+
+    /// `pkg_term` of the package's entries, the package objects' members as their selection
+    /// admits them (`select_pkg_member`).
+    fn pkg_term_entered(&mut self, p: PkgId, name: Name) -> Option<TermRef> {
         self.complete_package_forwarders(p, name);
         let lone_extension = self.extension_call_head || self.in_jar(self.env.file);
         // The entry's alias, an export's type forwarder of a class standing for the class's
@@ -2082,7 +2099,19 @@ impl<'a> Worker<'a> {
             out.extend(e.extensions.iter().copied());
         }
         if let Some(obj) = pkg.package_object {
+            // The object's own extensions are the package's through its entries, as their
+            // selection admits them (`select_pkg_member`).
+            let from = out.len();
             self.module_extensions(obj, name, out);
+            let admitted: Vec<SymId> = self.syms.package_object_entry(p, name).map_or(Vec::new(), |e| e.extensions.clone());
+            let mut k = from;
+            while k < out.len() {
+                if self.syms.sym(out[k]).owner == Owner::Class(obj) && !admitted.contains(&out[k]) {
+                    out.remove(k);
+                } else {
+                    k += 1;
+                }
+            }
             // And those it inherits, the package's as its own are (dotty's
             // `PackageClassDenotation.computeMembersNamed`).
             for i in 1..self.syms.class_raw(obj).base_types.len() {
@@ -2092,6 +2121,7 @@ impl<'a> Worker<'a> {
                 out.extend(found);
             }
         }
+        self.note_pkg_selection(p, name, false);
         if !self.syms.pkg(p).has_exports() {
             return;
         }

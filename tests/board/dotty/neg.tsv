@@ -1341,7 +1341,7 @@ i9327.scala	fail	-	marks: 1 errors where 2 are marked
 i9328.scala	fail	-	marks: 12 errors where 5 are marked: i9328.scala:16:1: unmatched closing bracket
 i9329.scala	fail	-	check: diagnostic 1 of 1: error i9329.scala:8:7, line 2 of the message: scalac's is (The class implements abstract override def name: String in trait Son but that definition still needs an implementation); teq's is nothing
 i9330.scala	fail	-	marks: error on an unmarked line i9330.scala:2: Values of types Unit and String cannot be compared with == or !=
-i9331.scala	fail	-	marks: error on an unmarked line i9331.scala:2: expected a definition, found '('
+i9331.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9331.scala:3:10 package Foo is not a value; teq's is error i9331.scala:3:10 Foo is a package, not a value
 i9332.scala	fail	-	marks: no error where 1 are marked
 i9344.scala	pass	-	
 i9408b	fail	-	marks: error on an unmarked line Test_2.scala:8: Found:    "abc"
@@ -1762,7 +1762,7 @@ toplevel-doubledef	fail	-	check: diagnostic 1 of 1: scalac's is error moredefs_1
 toplevel-opaque	fail	-	check: diagnostic 1 of 2: scalac's is error Test.scala:2:19 Found:    (2 : Int); teq's is error Test.scala:2:19 Found:    2
 toplevel-overload	fail	-	check: diagnostic 1 of 2: scalac's is error moredefs_1.scala:3:1 f is already defined as method f in tests/neg/toplevel-overload/defs_1.scala; teq's is error moredefs_1.scala:3:5 f is already defined as method f in tests/neg/toplevel-overlo
 toplevel-package	fail	-	marks: no error where 1 are marked
-toplevel-privates	fail	-	marks: no error where 3 are marked
+toplevel-privates	fail	-	marks: 2 errors where 3 are marked
 toplevel.scala	fail	-	check: diagnostic 1 of 1: scalac's is error toplevel.scala:1:1 Illegal start of toplevel definition; teq's is error toplevel.scala:1:1 expected a definition, found identifier
 tracked.scala	fail	-	marks: 17 errors where 8 are marked: tracked.scala:2:17: expected ':', found identifier
 tracked2.scala	fail	-	check: diagnostic 1 of 1: scalac's is error tracked2.scala:1:17 ':' expected, but 'val' found; teq's is error tracked2.scala:1:17 expected ':', found 'val'

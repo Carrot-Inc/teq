@@ -10,7 +10,6 @@ inlineoverloadsequality	classes, subset, jvm-run, scalac-run; queued: two inacce
 inlineoverloadsnamed	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
 javasuperstable	javasuperstable bundle
 leanaliasowner	leanaliasowner scalac-lean-b
-loadedpackageholders	loadedpackageholders members
 macroclausekinds	macroclausekinds build
 macroinlinearg	macroinlinearg build
 macrosuperseen	macrosuperseen build

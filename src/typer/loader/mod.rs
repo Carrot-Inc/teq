@@ -8,6 +8,7 @@ pub mod bodies;
 pub mod compile;
 pub mod declared;
 pub mod javaclass;
+mod package_objects;
 pub mod occurrences;
 pub mod places;
 mod provenance;
@@ -710,8 +711,15 @@ impl<'a> Worker<'a> {
                     objects.push(f);
                 }
             }
-            if objects.is_empty() {
-                objects.extend(loaded.cp.packages[i].scala2_objects.first().copied());
+            // A Scala 2 `package.class` is the package's object `package` where no TASTy file of the name stands
+            // before it on the class path, whose first entry of a name is the one dotty lists
+            // (`AggregateClassPath.list`).
+            if let Some(&f) = loaded.cp.packages[i].scala2_objects.first() {
+                match objects.iter().position(|&o| loaded.cp.stem(o) == "package") {
+                    None => objects.push(f),
+                    Some(k) if f.jar < objects[k].jar => objects[k] = f,
+                    Some(_) => {}
+                }
             }
             loaded.pkg_states[i].package_objects = objects;
         }
@@ -922,11 +930,14 @@ impl<'a> Worker<'a> {
         }
         loaded.pkg_states[slot].objects_entered = true;
         let objects = loaded.pkg_states[slot].package_objects.clone();
+        // Every object is entered before a name of the package is selected among them
+        // (`spill_package_objects`), so that the selection reads the whole set.
         for f in objects {
             if self.jvm || !self.loaded.as_ref().unwrap().cp.is_scala2(f) {
                 self.enter_package_object(f, p);
             }
         }
+        self.spill_package_objects(p);
         self.loader_done(super::LoaderDone::Objects(slot));
         true
     }
@@ -977,8 +988,10 @@ impl<'a> Worker<'a> {
         Some(file)
     }
 
-    /// Enters a package object and spills its members into the package: what stands in
-    /// `object package` or `object file$package` is what the package defines.
+    /// Enters a package object and records it with the file it was read from among the
+    /// package's objects (`PkgInfo::package_objects`): what stands in `object package` or
+    /// `object file$package` is what the package defines, its members spilled into the package's
+    /// entries once every object of the package is entered (`spill_package_objects`).
     fn enter_package_object(&mut self, f: CpFile, pkg: PkgId) {
         let Some(file) = self.enter_file(f, pkg) else { return };
         let stem = self.loaded.as_ref().unwrap().cp.stem(f).to_string();
@@ -990,56 +1003,29 @@ impl<'a> Worker<'a> {
             return;
         };
         self.complete_class(obj);
-        if stem == "package" {
+        // The program's own `package object` stays the package's object `package`: its members
+        // are the current run's, which dotty's `dropStale` keeps alone.
+        let source_object = self.syms.pkg(pkg).package_object.is_some_and(|o| self.program_source(self.syms.class(o).file));
+        if stem == "package" && !source_object {
             self.syms.pkgs[pkg.idx()].package_object = Some(obj);
         }
+        let associated = Arc::new(self.loaded.as_ref().unwrap().cp.associated_file(f));
+        let rank = (stem != "package", f.jar, f.entry);
+        self.syms.pkgs[pkg.idx()].package_objects.push(PackageObject { class: obj, file: associated, rank });
         let info = self.syms.class(obj);
         let members: Vec<SymId> = info.member_order.clone();
-        let nested: Vec<(Name, ClassId)> = info.nested.iter().map(|(&n, &c)| (n, c)).collect();
-        let aliases: Vec<(Name, AliasId)> = info.type_aliases.iter().map(|(&n, &a)| (n, a)).collect();
+        let nested: Vec<Name> = info.nested.keys().copied().collect();
+        let aliases: Vec<Name> = info.type_aliases.keys().copied().collect();
         let extensions = info.extensions.clone();
-        let givens = info.givens.clone();
         // What the std defines under a name the object spills is the binding: its file enters
         // first, so that the package's entry is the std's.
-        for &(n, _) in &nested {
-            self.demand_std(pkg, n, crate::stdindex::TYPE);
-        }
-        for &(n, _) in &aliases {
+        for &n in nested.iter().chain(&aliases) {
             self.demand_std(pkg, n, crate::stdindex::TYPE);
         }
         for &s in &members {
             let n = self.syms.sym(s).name;
             self.demand_std(pkg, n, crate::stdindex::TERM | crate::stdindex::TYPE);
         }
-        for (n, c) in nested {
-            let e = self.syms.enter_scoped(self.interner, pkg, n);
-            if e.class.is_none() {
-                e.class = Some(c);
-            }
-        }
-        for (n, a) in aliases {
-            let class = self.syms.scoped(self.interner, pkg, n).and_then(|e| e.class);
-            let e = self.syms.enter_package_object(pkg, n);
-            if class.is_none() && e.alias.is_none() {
-                e.alias = Some(a);
-            }
-        }
-        for s in members {
-            let name = self.syms.sym(s).name;
-            let entry = self.syms.class(obj).members[&name];
-            // `val Right = scala.util.Right` of `scala.package` names the companion of a class
-            // the std defines itself, whose constructor the name means there.
-            let std_class = self.syms.scoped(self.interner, pkg, name).and_then(|e| e.class).map_or(false, |c| !self.in_jar(self.syms.class(c).file));
-            let e = self.syms.enter_package_object(pkg, name);
-            if e.term.is_none() && !std_class {
-                e.term = Some(entry);
-            }
-        }
-        for s in &extensions {
-            let name = self.syms.sym(*s).name;
-            self.syms.enter_package_object(pkg, name).extensions.push(*s);
-        }
-        self.syms.pkgs[pkg.idx()].givens.extend(givens);
         // Where a product's bodies are converted, its file's top-level definitions are the
         // package's, as the whole program has them: called by their paths, typed and emitted as
         // the top level of a pseudo file of their own (`Worker::check_product_package`).

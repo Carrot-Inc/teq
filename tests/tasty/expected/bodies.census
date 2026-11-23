@@ -30,7 +30,7 @@ js.native                                                   1
 macro body                                                 11
 module val                                                 97
 ordinal                                                     4
-parent constructor call                                   159
+parent constructor call                                   160
 parent constructor call with arguments                      5
 productArity                                               25
 productElement                                             25

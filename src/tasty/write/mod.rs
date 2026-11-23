@@ -123,8 +123,7 @@ fn normalize(p: &std::path::Path) -> std::path::PathBuf {
 pub(crate) enum UnitKind {
     /// A top-level class, trait or object with its companion.
     Class { class: Option<ClassId>, module: Option<ClassId> },
-    /// The top-level definitions of a file in one package, the object `<file>$package` or,
-    /// for a package object's file, `package`.
+    /// The top-level definitions of a file in one package, the object `<file>$package`.
     Package { pkg: PkgId, name: String, defs: Vec<crate::ast::DefId> },
 }
 

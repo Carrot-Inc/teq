@@ -440,7 +440,7 @@ impl Layout {
 /// Classes in their canonical order: the named ones by file and position, then the anonymous
 /// classes the same way, then the tuple and function classes the typer makes on first use, two
 /// at one position by kind and name. Two classes that share all of those share their emitted
-/// name as well, which the output cannot hold (the JVM backend's "two classes are named"); every
+/// name as well, which the output cannot hold (the JVM writer's internal error, `jvm::shared_class_name`); every
 /// caller sorts stably, so such a tie keeps the program's order, and the assertion-enabled builds
 /// write it to the checks' log (`tie`).
 pub fn compare_classes(syms: &Symbols, interner: &Interner, a: ClassId, b: ClassId) -> Ordering {

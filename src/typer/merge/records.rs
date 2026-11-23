@@ -296,6 +296,9 @@ pub(in crate::typer) fn package<M: Mapping + ?Sized>(m: &M, p: &mut PkgInfo, par
     syms_in(m, &mut p.givens);
     forwarders(m, &mut p.forwarders);
     p.package_object = p.package_object.map(|c| m.class(c));
+    for o in &mut p.package_objects {
+        o.class = m.class(o.class);
+    }
     if parent {
         p.parent = p.parent.map(|q| m.pkg(q));
     }

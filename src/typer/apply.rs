@@ -2576,6 +2576,13 @@ impl<'a> Worker<'a> {
         if info.mods & crate::ast::mods::PRIVATE == 0 {
             return self.qualified_reachable(s);
         }
+        // A private member of a program's package object is `private[p]` of its package (dotty's
+        // Namer: "widen private to private[p]", Namer.scala 231-235).
+        if self.is_package_object(owner) && !self.in_jar(info.file) && !self.has_access_scope(info.file, info.span.start) {
+            if let Some(p) = self.effective_package(info.owner) {
+                return self.site_in_package(p) || self.in_jar(self.env.file) || self.is_body_file(self.env.file);
+            }
+        }
         let companion = self.syms.class(owner).companion.or_else(|| self.inner_companion(owner));
         let inside = self.env.frames.iter().any(|f| match f {
             super::Frame::Class(c) | super::Frame::Ctor(c) => *c == owner || Some(*c) == companion,
@@ -2651,7 +2658,10 @@ impl<'a> Worker<'a> {
             }
             _ => return None,
         };
-        if mods & crate::ast::mods::PRIVATE == 0 || self.in_jar(file) {
+        if self.in_jar(file) {
+            return self.loaded_member_denied(pre, r, owner, word, name);
+        }
+        if mods & crate::ast::mods::PRIVATE == 0 {
             return None;
         }
         let site = self.env.file;
@@ -2682,6 +2692,36 @@ impl<'a> Worker<'a> {
             boundary,
             shown,
             if scoped { boundary.clone() } else { self.package_full_name(home) },
+        ))
+    }
+
+    /// `package_member_denied` of a member the class path holds: a `private[q]` one of a package
+    /// object, `q` a package, selected from outside `q` (`qualified_reachable`), as dotty reads
+    /// its `privateWithin` from the pickle.
+    fn loaded_member_denied(&mut self, pre: PkgId, r: crate::typer::resolve::TermRef, owner: Owner, word: &str, name: crate::intern::Name) -> Option<String> {
+        use crate::typer::resolve::TermRef;
+        let (TermRef::Global(s) | TermRef::ModuleMember(_, s)) = r else { return None };
+        if self.syms.sym(s).mods & crate::ast::mods::QUALIFIED == 0 || self.qualified_reachable(s) {
+            return None;
+        }
+        let loaded = self.loaded.as_ref()?;
+        let (scope, protected) = loaded.access_within.get(&s).copied()?;
+        let path = loaded.access_within_pkg.get(&s).copied()?;
+        if protected {
+            return None;
+        }
+        let home = self.effective_package(owner)?;
+        let shown = format!("{} {}", word, self.name_str(name));
+        let from = self.owner_class().map(|k| format!(" from {}", self.class_description(k))).unwrap_or_default();
+        Some(format!(
+            "{} in package {} cannot be accessed as a member of {}.type{}.\n  private[{}] {} can only be accessed from package {}.",
+            shown,
+            self.package_full_name(home),
+            self.package_full_name(pre),
+            from,
+            self.name_str(scope),
+            shown,
+            self.interner.get(path),
         ))
     }
 

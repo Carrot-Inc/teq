@@ -2376,6 +2376,8 @@ package_extension_path	fail	-	< 4
 package_main	pass	-	
 package_member_mangled_names	pass	-	
 package_object_braces	pass	-	
+package_object_default_to_string	fail	-	< p.package$O$
+package_object_derived_names	pass	-	
 package_object_import_parent	pass	-	
 package_object_parents	pass	-	
 package_val_object_accessor	pass	-	
