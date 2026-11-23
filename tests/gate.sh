@@ -1544,7 +1544,10 @@ done
 status=0
 recordable=1
 printf '\n%-18s %-9s %6s  %-5s %s\n' line where secs exit result
-order="pool claim sync collect release shard build ship"
+# shard_steps: the steps a shard writes beside its suites (tests/gate-shard.sh's `step <name>` lines): its build of
+# the head and the native suites' zig. A step it writes under another name is a result of no line the gate declares.
+shard_steps="build zig"
+order="pool claim sync collect release shard $shard_steps ship"
 for entry in "${machine[@]}"; do
   order="$order ${entry%% *}"
   pn=$(pieces_of "${entry%% *}")

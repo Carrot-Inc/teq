@@ -1011,6 +1011,48 @@ check "driver: a line dealt by its seconds on its shard's kind of machine, and r
   grep -q -x "parser@16 $(row parser m1 "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
   grep -q -x "fold $(row fold m2 "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" && grep -q -x "parser 100" "$landing/tests/gate-times.txt"'
 git -C "$landing" reset -q --hard "$base"
+# A shard's own steps are lines the gate declares (tests/gate.sh's shard_steps). Every step tests/gate-shard.sh
+# writes by name is one of them, and a shard script with another fails that reading. Through the driver: over
+# stand-ins of bench/zig.sh and of idna's script, the shard that takes idna writes its zig step, whose row passes; a
+# step the shard writes that the gate does not declare fails the gate on each machine.
+shard_steps() { python3 - "$1" "$2" <<'PY'
+import re, sys
+declared = re.search(r'^shard_steps="([^"]*)"$', open(sys.argv[1]).read(), re.M).group(1).split()
+written = sorted(set(re.findall(r"^\s*step ([a-z][a-z0-9-]*) ", open(sys.argv[2]).read(), re.M)))
+unknown = [s for s in written if s not in declared]
+print(f"shard steps: {' '.join(written)}; declared: {' '.join(declared)}" + (f"; not declared: {' '.join(unknown)}" if unknown else ""))
+sys.exit(1 if unknown or not written else 0)
+PY
+}
+shard_steps "$landing/tests/gate.sh" "$landing/tests/gate-shard.sh" > "$work/shard-steps.log" 2>&1
+code=$?
+base=$(git -C "$landing" rev-parse HEAD)
+python3 - "$landing/tests/gate-shard.sh" <<'PY'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+built = "step build $code $started $gate/build.log\n"
+assert s.count(built) == 1
+open(path, "w").write(s.replace(built, built + "step warmup 0 $started $gate/build.log\n"))
+PY
+shard_steps "$landing/tests/gate.sh" "$landing/tests/gate-shard.sh" >> "$work/shard-steps.log" 2>&1
+code2=$?
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "a step the gate does not declare"
+gate "$work/driver-step.log" "$(printf 'm1 free\nm2 free')" --only parser,fold
+code3=$?
+git -C "$landing" reset -q --hard "$base"
+printf '%s\n' 'zig_fetch() {' '  zig=$PWD/target/cross/zig' '  mkdir -p target/cross && printf "#!/bin/sh\\necho 0.0.0-stand-in\\n" > "$zig" && chmod +x "$zig"' '}' > "$landing/bench/zig.sh"
+printf '%s\n' '@main def idna(): Unit = println("idna: 1 passed, 0 failed (a stand-in)")' > "$landing/tests/idna.scala"
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "stand-ins of zig's fetch and idna"
+gate "$work/driver-zig.log" "$(printf 'm1 free\nm2 free')" --only parser,idna
+code4=$?
+git -C "$landing" reset -q --hard "$base"
+log=$work/driver-zig.log
+check "driver: a shard's zig step is a line the gate declares, a step it does not declare fails the gate" "$log" eval '[ $code = 0 ] && [ $code2 = 1 ] &&
+  grep -q -x "shard steps: build zig; declared: build zig" "$work/shard-steps.log" && grep -q "; not declared: warmup$" "$work/shard-steps.log" &&
+  [ $code3 = 1 ] && [ "$(grep -c -E "^warmup +m[12] .* FAIL +not a line of the gate.s" "$work/driver-step.log")" = 2 ] &&
+  [ $code4 = 0 ] && [ "$(row zig "m[12]" "$log" | grep -c " ok .*zig 0.0.0-stand-in at ")" = 1 ] && row idna "m[12]" "$log" | grep -q " ok .*idna: 1 passed" &&
+  ! grep -q "not a line of the gate.s" "$log"'
 # The projects' chains dealt over the machines holding them: two holding complementary projects each run their own,
 # neither taken by the shards; a project whose holder is busy and one no machine holds each fail as not run, saying
 # which; a holder busy at the first ask and free at a later one is left to its project; the eighteen project lines run
