@@ -180,6 +180,13 @@ jobs:
             minutes: 45
             jars: true
             rust: true
+          # The native target's C compiled by the pinned zig and run: the IDNA library against GNU libidn2's answers,
+          # and executables built from Scala Native's NIR against scalac's outputs.
+          - group: native
+            suites: idna native-build
+            minutes: 25
+            jars: true
+            zig: true
     name: ${{ matrix.group }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -258,6 +265,12 @@ jobs:
           cd proptests
           timeout 600 cargo fetch --locked
           timeout 900 cargo build --tests --locked
+      # The pinned zig where bench/zig.sh puts it, which tests/idna.scala and tests/native-build.scala look for;
+      # zig_fetch asks rustc for the host.
+      - if: matrix.zig
+        run: |
+          timeout 600 rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" --profile minimal
+          timeout 300 bash -c '. bench/zig.sh && zig_fetch'
       - run: |
           export COURSIER_CACHE="$HOME/.cache/coursier/v1"
           export SCALA3="$HOME/teq-ref/scala3"

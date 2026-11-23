@@ -1,0 +1,33 @@
+The IDNA library's suite (tests/idna.scala) holds src/native/idn2/idna.c to GNU libidn2 2.3.8's answers.
+
+expected.txt  host names and what GNU libidn2 2.3.8's idn2_to_ascii_8z answers for each with the flags 0: under
+              `# <group>`, a row `<name>\t<code>\t<output>`, the name and the output as the hex of their bytes
+              (a name may be ill-formed UTF-8), the output only where the code is 0. It is GNU's answers, never
+              the library's: 2,873 rows in 58 groups, 628 of them converted, the others refused with each of the
+              15 error codes GNU gives on the whole table
+driver.c      what the suite links the library with: it converts the names of a table in one run
+
+The answers were recorded outside the repository: GNU libidn2 2.3.8, built from its release tarball for
+x86_64-linux-musl, linked statically into a program that converts each name with the flags 0. They are a sample of a
+table of 60,347,346 names in 58 groups, on every row of which the library answers as GNU does, return code and
+output alike. The sample is drawn with a fixed seed: in each group up to three rows of each return code and twelve
+more at random; in the groups that put one code point in a context, also up to two rows of each pair of the code
+point's UTS #46 status and the return code, and the rows of the four deviation characters (U+00DF, U+03C2, U+200C,
+U+200D). Each sampled name was converted again and its answer is the one the whole table's run gave.
+
+The groups, by the start of their names:
+  01, 02  the strings of UTS #46's IdnaTestV2.txt, 15.1.0 and 18.0.0
+  03      ASCII: dots, hyphens, `xn--` shapes, every pair of ASCII characters, alone and beside a non-ASCII letter
+  04-cp   every code point in 34 contexts: alone, twice, upper-cased neighbours, between Latin, Hebrew and Arabic
+          letters, beside European and Arabic digits, in a label of a name with a right-to-left label, around the
+          joiners and after a virama, after `xn--`, among hyphens and dots, before combining marks, after
+          precomposed letters and Hangul
+  05      the strings of UAX #15's NormalizationTest.txt, 15.1.0
+  06      Punycode: `xn--` labels short and long, valid and not, and the A-label of every code point alone and
+          after `a`
+  07      lengths of labels and names; 12 and 16: which length error a long name gets, before and after mapping
+  08      ill-formed UTF-8
+  09      real names, addresses, top-level domains, random names of letters, digits and hyphens
+  10      emoji and mixed scripts; 11: random names of scripts' letters, characters with rules, any code point
+  13, 14  bidi and joiner sequences; 15: which error a name with several gets
+  20      GNU's own outputs fed back: as they are, upper-cased, truncated, extended, a letter changed

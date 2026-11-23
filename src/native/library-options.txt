@@ -1,0 +1,53 @@
+# The forms of a library's compile options (compile.c.options and compile.cpp.options of its scala-native.properties)
+# the native build takes, read by src/native/library_options.rs and by the suite tests/native-build.scala: each form one
+# token zig 0.16.0 takes no argument after, given to zig as it is (`kept`); or an option of clang's that writes or
+# shapes a dependency output, left out with its value (`dropped`, the value in the token; `dropped+next`, the value the
+# token after it), as the compilation's list of what it read is the build's own (`-MD -MF <list> -MQ <object>`,
+# src/native/build.rs). Any other option of a library's is refused by name. tests/native-build/library-options.scala
+# checks every row against zig's option table (src/clang_options.zon at zig's tag) and writes the cases the suite
+# builds from it. The kept forms: `-std=` and `-fcxx-exceptions`, which the descriptors of the libraries published for
+# Scala Native 0.5 hold (Scala Native's own and sn-sizemap's, the only ones with options), and `-D`, `-U` and `-I`, the
+# spellings the build itself gives a descriptor's defines and include paths. The dropped ones are clang 21.1.0's
+# dependency output options a compiler driver takes (clang/include/clang/Driver/Options.td: the M group, the options
+# marshalled into DependencyOutputOptions, the driver's dependency outputs, their aliases).
+#
+# <form> <role> <zig's entry> <its kind> [<field>]...
+#   form   a token as it is written, or `<prefix>*`: the prefix and a value that is not empty
+#   field  `!<value>` or `!<start>*`: a value the form does not take (one by which zig takes another entry);
+#          `c:<value>`, `cpp:<value>`: a value the suite builds the form with, in C or C++; `cpp`: a token the suite
+#          builds in C++
+-D*                                 kept          D                                joined_or_separate  c:NAME c:NAME=1 c:NAME=a#$:b
+-U*                                 kept          U                                joined_or_separate  c:NAME
+-I*                                 kept          I                                joined_or_separate  !- !=* !$SYSROOT*  c:/nowhere/include c:relative/include
+-std=*                              kept          std=                             joined              c:gnu11 c:c17 cpp:c++17
+-fcxx-exceptions                    kept          fcxx-exceptions                  flag                cpp
+-M                                  dropped       M                                flag
+-MM                                 dropped       MM                               flag
+-MD                                 dropped       MD                               flag
+-MMD                                dropped       MMD                              flag
+-MF*                                dropped       MF                               joined_or_separate
+-MF                                 dropped+next  MF                               joined_or_separate
+-MG                                 dropped       MG                               flag
+-MJ*                                dropped       MJ                               joined_or_separate
+-MJ                                 dropped+next  MJ                               joined_or_separate
+-MP                                 dropped       MP                               flag
+-MQ*                                dropped       MQ                               joined_or_separate
+-MQ                                 dropped+next  MQ                               joined_or_separate
+-MT*                                dropped       MT                               joined_or_separate  !d
+-MT                                 dropped+next  MT                               joined_or_separate
+-MV                                 dropped       MV                               flag
+--dependencies                      dropped       dependencies                     flag
+--user-dependencies                 dropped       user-dependencies                flag
+--write-dependencies                dropped       write-dependencies               flag
+--write-user-dependencies           dropped       write-user-dependencies          flag
+--print-missing-file-dependencies   dropped       print-missing-file-dependencies  flag
+-dependency-file                    dropped+next  dependency-file                  separate
+-dependency-dot                     dropped+next  dependency-dot                   separate
+-module-dependency-dir              dropped+next  module-dependency-dir            separate
+-fdepfile-entry=*                   dropped       fdepfile-entry=                  joined
+-fmodule-file-deps                  dropped       fmodule-file-deps                flag
+-fno-module-file-deps               dropped       fno-module-file-deps             flag
+-H                                  dropped       H                                flag
+--trace-includes                    dropped       trace-includes                   flag
+-fshow-skipped-includes             dropped       fshow-skipped-includes           flag
+-gen-cdb-fragment-path              dropped+next  gen-cdb-fragment-path            separate

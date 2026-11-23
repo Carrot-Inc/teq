@@ -1,0 +1,47 @@
+Fixtures of the native build's tests (tests/native-build.scala).
+
+fixtures/<name>/  the .nir files Scala Native 0.5.12's compiler plugin wrote for Scala 3.8.4 (scala-cli compile with
+                  `//> using platform native` and `//> using nativeVersion 0.5.12`, the files taken from the
+                  classes directory) for ten programs: hello, of src/hello.scala, and adts, boxing, closures,
+                  codec, collections, dispatch, numeric, strings and toplevel, of tests/cases/bench_<name>.scala
+fixtures/renamed/ the .nir files of src/renamed (package renamed), written the same way: renamed.First, which reaches
+                  B (AaBB/B.scala) alone, and renamed.Second, which reaches A (AaAa/A.scala) too, of directories of one
+                  String.hashCode (1f0080), so that Second's build gives B's module another name; renamed-first.expected
+                  and renamed-second.expected what scalac 3.8.4's JVM build of each prints
+hello.expected    what src/hello.scala prints when scalac 3.8.4 compiles it for the JVM and it runs there
+                  (scala-cli run); the programs of tests/cases print what their .expected files beside them
+                  hold, which scalac's JVM build printed too
+commands.txt      the commands Scala Native's own build (tools_3 0.5.12, a debug build with the immix collector,
+                  its optimizer off, for x86_64-unknown-linux-musl, hello's directory and the jars of the suite's
+                  class path) ran to compile hello's C code and LLVM IR, as its log lists them, one a line in the
+                  lines' order, each written as teq gives it to zig: `cc` or `c++` for clang or clang++, zig's
+                  name of the target (x86_64-linux-musl), `-fno-sanitize=undefined` after `-fomit-frame-pointer`
+                  (zig would otherwise check undefined behaviour in a C file compiled without an optimizer), and
+                  the build's work directory written `<work>` with Scala Native's `native/` taken out of it.
+                  Two are not among them: that of __buildInfo.ll, a module this build leaves empty and teq
+                  does not write, and the link: teq links a static musl executable, which Scala Native does not.
+descriptor-features.txt  pieces of a library's scala-native.properties (the properties grammar's separators, comments,
+descriptors.expected     continued lines, escapes and line ends, bytes that are not UTF-8, Scala Native's lists and
+descriptor-oracle.scala  project.gcProject): descriptors.expected is what Scala Native 0.5.12's own Descriptor.load,
+                  run on the JVM, reads of each piece alone and of every two of them (src/native/descriptor.rs's
+                  test reads each the same); descriptor-oracle.scala wrote it with scala-cli on Temurin 24.0.2, under
+                  Scala 2.12.20 (sbt's build) and 3.3.6 (mill's, scala-cli's), and says how to run it again
+library-options.expected  the cases of src/native/library-options.txt, the forms of a library's compile options a
+library-options.scala     build takes: each written by library-options.scala from that table and zig 0.16.0's option
+                  table, which it checks the forms against and says how to run again (`--check` compares)
+jar-names.expected     what Scala Native 0.5.12's build makes of each jar of the table (refused with its exception, of
+jar-names-oracle.scala no library, or the files it unpacks), by its own findNativeLibs and unpackNativeCode on the JDK:
+tool-jars.py      the jars real tools wrote (tool-jars.py: the JDK's jar and its zip writers, ZipWriter.java;
+ZipWriter.java    Info-ZIP, Python's zipfile, 7-Zip, sbt, Mill, Maven and Gradle, each over the entry shapes, each
+                  jar's tool, version and command in the file's header), which decide the part, and crafted ones
+                  (names, central directories, end records, stubs, copies, zlib's refusals of a deflate stream, each
+                  beside its neighbour), whose differences are rows; the suite builds each and holds teq to it
+inflate-flips.expected what the JDK's zip file system reads of 3,000 deflated entries whose streams have one to three
+                  bits flipped (a fixed seed), refused or the bytes; src/native/jar.rs's test holds the copy to
+                  it. jar-names-oracle.scala writes both with scala-cli on Temurin 24.0.2 and says how
+trust_roots.c     the check of src/native/static_musl.c's wraps for a system's trust roots: its main, linked
+libcrypto_stub.c  with static_musl.c as a build links it and with the stand-in for libcrypto the wraps call
+                  (libcrypto_stub.c: a store that counts certificates, places that never hold a bundle when
+                  the wraps add a distribution's); trust_roots.c says what each of its runs does
+
+Nothing here is written from teq's output: the expectations are scalac's, Scala Native's, the JVM's and zig's.

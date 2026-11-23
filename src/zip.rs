@@ -23,6 +23,8 @@ pub struct Zip {
     len: u64,
     /// The central directory as it stands in the file; entry names point into it.
     directory: Vec<u8>,
+    /// Where in the file the directory starts.
+    directory_at: u64,
     pub entries: Vec<Entry>,
 }
 
@@ -117,7 +119,7 @@ impl Zip {
         if entries.len() != count {
             return Err(format!("{}: central directory lists {} entries, found {}", path, count, entries.len()));
         }
-        Ok(Zip { file, len: file_len, directory, entries })
+        Ok(Zip { file, len: file_len, directory, directory_at: dir_offset as u64, entries })
     }
 
     /// An archive opened whole: its central directory read (`open`), then every entry's local
@@ -182,6 +184,11 @@ impl Zip {
     pub fn name(&self, e: &Entry) -> &str {
         let bytes = &self.directory[e.name_start as usize..e.name_start as usize + e.name_len as usize];
         std::str::from_utf8(bytes).unwrap_or("")
+    }
+
+    /// Where in the file the central directory starts, and its size.
+    pub fn directory_place(&self) -> (u64, u64) {
+        (self.directory_at, self.directory.len() as u64)
     }
 
     /// The uncompressed data of the entry, checked against its CRC-32.

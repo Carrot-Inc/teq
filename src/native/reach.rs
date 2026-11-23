@@ -181,6 +181,12 @@ pub struct Linked {
     pub dynimpls: Vec<Global>,
     pub resolved: FxMap<Str, Val>,
     pub multithreading: bool,
+    /// The C libraries the reached code names (`@link`), in their names' order.
+    pub links: Vec<Str>,
+    /// The preprocessor definitions it names (`@define`), in their names' order.
+    pub defines: Vec<Str>,
+    /// Whether it needs C++'s runtime (`@linkCppRuntime`).
+    pub link_cpp_runtime: bool,
 }
 
 struct Reach<'a> {
@@ -196,6 +202,9 @@ struct Reach<'a> {
     todo: VecDeque<Global>,
     done: FxMap<Global, Option<Defn>>,
     stack: Vec<Global>,
+    links: FxSet<Str>,
+    defines: FxSet<Str>,
+    link_cpp_runtime: bool,
     infos: FxMap<Global, Info>,
     scopes: Vec<Scope>,
     from: FxMap<Global, Global>,
@@ -433,6 +442,9 @@ impl<'a> Reach<'a> {
             todo: VecDeque::new(),
             done: FxMap::default(),
             stack: Vec::new(),
+            links: FxSet::default(),
+            defines: FxSet::default(),
+            link_cpp_runtime: false,
             infos: FxMap::default(),
             scopes: Vec::new(),
             from: FxMap::default(),
@@ -487,18 +499,24 @@ impl<'a> Reach<'a> {
             scope.subclasses.sort_by(|&a, &b| cx.cmp_globals(names[a as usize], names[b as usize]));
             scope.implementors.sort_by(|&a, &b| cx.cmp_globals(names[a as usize], names[b as usize]));
         }
-        let mut dynsigs: Vec<Str> = self.dynsigs.into_iter().collect();
-        dynsigs.sort_by(|&a, &b| names::cmp_strings(cx.bytes(a), cx.bytes(b)));
+        let sorted = |set: FxSet<Str>| {
+            let mut v: Vec<Str> = set.into_iter().collect();
+            v.sort_by(|&a, &b| names::cmp_strings(cx.bytes(a), cx.bytes(b)));
+            v
+        };
         let mut dynimpls: Vec<Global> = self.dynimpls.into_iter().collect();
         dynimpls.sort_by(|&a, &b| cx.cmp_globals(a, b));
         Ok(Linked {
             defns,
             infos: self.infos,
             scopes: self.scopes,
-            dynsigs,
+            dynsigs: sorted(self.dynsigs),
             dynimpls,
             resolved: self.resolved.into_iter().map(|(k, v)| (k, v.val())).collect(),
             multithreading: self.multithreading,
+            links: sorted(self.links),
+            defines: sorted(self.defines),
+            link_cpp_runtime: self.link_cpp_runtime,
         })
     }
 
@@ -658,12 +676,14 @@ impl<'a> Reach<'a> {
                 let is_const = matches!(defn.kind, DefnKind::Const { .. });
                 let owner = self.scope_or_unavailable(self.cx.owner(name))?;
                 self.new_member(name, Info::Field { owner, is_const });
+                self.reach_attrs(&defn.attrs);
                 self.reach_type(*ty);
                 self.reach_val(rhs)?;
             }
             DefnKind::Declare { ty } => {
                 let owner = self.scope_or_unavailable(self.cx.owner(name))?;
                 self.new_member(name, Info::Method { owner, concrete: false });
+                self.reach_attrs(&defn.attrs);
                 self.reach_type(*ty);
             }
             DefnKind::Define { ty, insts, .. } => {
@@ -676,6 +696,7 @@ impl<'a> Reach<'a> {
                 }
                 let owner = self.scope_or_unavailable(self.cx.owner(name))?;
                 self.new_member(name, Info::Method { owner, concrete: !insts.is_empty() });
+                self.reach_attrs(&defn.attrs);
                 self.reach_type(*ty);
                 let class = self.cx.owner(name);
                 for inst in insts {
@@ -686,6 +707,7 @@ impl<'a> Reach<'a> {
             DefnKind::Trait { traits } => {
                 let traits = self.trait_infos(traits)?;
                 self.new_scope(name, &defn.attrs, defn.pos, true, false, None, traits);
+                self.reach_attrs(&defn.attrs);
                 self.reach_exported(name);
             }
             DefnKind::Class { parent, traits } | DefnKind::Module { parent, traits } => {
@@ -696,6 +718,7 @@ impl<'a> Reach<'a> {
                 };
                 let traits = self.trait_infos(traits)?;
                 self.new_scope(name, &defn.attrs, defn.pos, false, is_module, parent, traits);
+                self.reach_attrs(&defn.attrs);
                 self.reach_exported(name);
             }
         }
@@ -1003,6 +1026,13 @@ impl<'a> Reach<'a> {
     }
 
     // ---- what a definition refers to ----
+
+    /// `Reach.reachAttrs`: the libraries, definitions and runtime a definition's attributes name.
+    fn reach_attrs(&mut self, attrs: &Attrs) {
+        self.links.extend(&attrs.links);
+        self.defines.extend(&attrs.defines);
+        self.link_cpp_runtime |= attrs.link_cpp_runtime;
+    }
 
     fn reach_type(&mut self, ty: Ty) {
         match self.cx.type_of(ty) {

@@ -2,15 +2,16 @@
 //! text of Scala Native's `nir.Show`: the debugging tool, and what the reader is checked with.
 //! `--link` prints in the same text what a program reaches on a class path, which is what the
 //! link is checked with, and `--lower` the same lowered to the runtime's object model, which is
-//! what the lowering is checked with; `--ll` writes the lowered program as LLVM IR instead.
+//! what the lowering is checked with; `--ll` writes the lowered program as LLVM IR instead, and
+//! `--build` the executable built from it.
 
 use super::names::Rt;
 use super::read::NirFile;
 use super::show::Show;
-use super::Cx;
+use super::{Cx, Str};
 use crate::native::classpath::{self, ClassPath};
 use crate::native::reach::{self, Config, Triple};
-use crate::native::{codegen, generate, lower, meta};
+use crate::native::{build, codegen, generate, lower, meta, tools};
 use crate::zip::Zip;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -24,9 +25,13 @@ fn usage() -> ! {
          a filter is a substring of the entry's name (java/lang/String.nir)\n\
          a class path is directories and jars joined by '{}', or @<file> for a file that holds them so\n\
          a link takes --triple=<target> ({}) and --threads=<true|false> (true where the program can start a thread)\n\
-         --lower takes --ll=<directory>: the program written there as LLVM IR in the listing's place, a module for each directory of sources",
+         --lower takes --ll=<directory>: the program written there as LLVM IR in the listing's place, a module for each directory of sources\n\
+         --link takes --build=<executable> and --work=<directory>: the program built there by zig, a static x86_64-linux-musl executable,\n\
+         \x20 with --zig=<path> (else TEQ_ZIG) naming zig {}, --zig-cache=<directory> (<work>/zig-cache) and --lib-dir=<directory>,\n\
+         \x20 each a directory of lib<name>.a archives with their headers under include/",
         crate::classpath::SEPARATOR,
-        crate::native::DEFAULT_TRIPLE
+        crate::native::DEFAULT_TRIPLE,
+        tools::ZIG_VERSION
     );
     std::process::exit(2);
 }
@@ -92,13 +97,19 @@ fn items(input: &str, filter: Option<&str>) -> Result<Vec<Item>, String> {
 
 /// The program's definitions after the link, sorted by name, each as `nir.Show` prints it: the
 /// text Scala Native's build dumps as `linked.hnir`; lowered, the one it dumps as `lowered.hnir`,
-/// or its LLVM IR, the modules Scala Native's build writes.
+/// or its LLVM IR, the modules Scala Native's build writes; or the executable built from them.
 fn link(args: &[String], lowers: bool) -> ! {
     let (mut triple, mut threads, mut ll_dir, mut plain) = (crate::native::DEFAULT_TRIPLE.to_string(), None, None, Vec::new());
+    let (mut output, mut work, mut zig, mut zig_cache, mut lib_dirs) = (None, None, None, None, Vec::new());
     for arg in args {
         match arg.split_once('=') {
             Some(("--triple", target)) => triple = target.to_string(),
             Some(("--ll", dir)) if lowers => ll_dir = Some(dir.to_string()),
+            Some(("--build", file)) if !lowers => output = Some(PathBuf::from(file)),
+            Some(("--work", dir)) if !lowers => work = Some(PathBuf::from(dir)),
+            Some(("--zig", file)) if !lowers => zig = Some(PathBuf::from(file)),
+            Some(("--zig-cache", dir)) if !lowers => zig_cache = Some(PathBuf::from(dir)),
+            Some(("--lib-dir", dir)) if !lowers => lib_dirs.push(PathBuf::from(dir)),
             Some(("--threads", "true")) => threads = Some(true),
             Some(("--threads", "false")) => threads = Some(false),
             _ if arg.starts_with("--") => usage(),
@@ -106,6 +117,24 @@ fn link(args: &[String], lowers: bool) -> ! {
         }
     }
     let [main, class_path] = plain[..] else { usage() };
+    if output.is_none() && (work.is_some() || zig.is_some() || zig_cache.is_some() || !lib_dirs.is_empty()) {
+        usage();
+    }
+    // What a build needs is checked before the link, which takes a while.
+    let building = output.map(|output| {
+        let absolute = |path: &Path| std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+        let work = absolute(&work.unwrap_or_else(|| fail("--build needs --work=<directory>".to_string())));
+        build::Options {
+            zig: tools::zig(zig.as_deref()).unwrap_or_else(|e| fail(e)),
+            zig_cache: zig_cache.map_or_else(|| work.join("zig-cache"), |dir| absolute(&dir)),
+            target: build::target(&Triple::parse(&triple)).unwrap_or_else(|e| fail(e)),
+            output: absolute(&output),
+            lib_dirs: lib_dirs.iter().map(|dir| absolute(dir)).collect(),
+            lib_dir_option: "--lib-dir=<dir>".to_string(),
+            workers: std::thread::available_parallelism().map_or(1, |n| n.get()),
+            work,
+        }
+    });
     let paths = classpath::entries(class_path);
     let mut cx = Cx::new();
     let rt = Rt::new(&mut cx);
@@ -113,7 +142,7 @@ fn link(args: &[String], lowers: bool) -> ! {
     // A debug build with the default collector, as Scala Native's build links one.
     let config = Config { main: main.to_string(), multithreading: threads, release: false, gc: "immix", triple: Triple::parse(&triple), link_stubs: false, service_providers: Vec::new() };
     let linked = reach::link(&mut cx, &rt, &cp, &config).unwrap_or_else(|e| fail(e));
-    let lowered = lowers.then(|| {
+    let lowered = (lowers || building.is_some()).then(|| {
         let main = cx.top(main);
         let proxies = generate::reflective_proxies(&mut cx, &rt, &linked);
         let meta = meta::Meta::new(&mut cx, &rt, &linked, &proxies).unwrap_or_else(|e| fail(e));
@@ -132,6 +161,13 @@ fn link(args: &[String], lowers: bool) -> ! {
                 let path = Path::new(dir).join(format!("{}.ll", module.name));
                 std::fs::write(&path, module.text).unwrap_or_else(|e| fail(format!("cannot write {}: {}", path.display(), e)));
             }
+            std::process::exit(0);
+        }
+        if let Some(options) = &building {
+            let modules = codegen::modules(&cx, &rt, &linked, &meta, &out, &triple).unwrap_or_else(|e| fail(e));
+            let text = |names: &[Str]| names.iter().map(|s| String::from_utf8_lossy(cx.bytes(*s)).into_owned()).collect::<Vec<_>>();
+            let program = build::Program { modules: &modules, links: text(&linked.links), defines: text(&linked.defines), multithreading: linked.multithreading, link_cpp_runtime: linked.link_cpp_runtime, gc: config.gc };
+            build::build(&paths, &program, options).unwrap_or_else(|e| fail(e));
             std::process::exit(0);
         }
         out

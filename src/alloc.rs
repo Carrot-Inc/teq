@@ -3904,6 +3904,7 @@ mod tests {
         ("src/lsp/mod.rs", 7, "alloc::spawn six times, the generators' worker among them; the seventh starts a child process"),
         ("src/lsp/sources.rs", 1, "alloc::spawn for the workers that fetch the libraries' sources"),
         ("src/main.rs", 1, "a builder for the stack's size; alloc::enter is the first statement of compile"),
+        ("src/native/build.rs", 1, "alloc::spawn_in for the workers that run zig's compilations"),
         ("src/products.rs", 1, "alloc::spawn_in for the publication's steps"),
         ("src/shake.rs", 3, "spawn_scoped_refusable, a builder's spawn_scoped that the forced refusal of a start may refuse, declared and implemented: the closures its callers hand it (src/typer/mod.rs, src/typer/inlining.rs, src/crew.rs) enter first"),
         ("src/task/client.rs", 1, "starts the daemon process"),

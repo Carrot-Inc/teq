@@ -68,6 +68,14 @@ fn walk(dir: &Path, prefix: &str, above: &mut Vec<PathBuf>, out: &mut Vec<(Strin
     Ok(())
 }
 
+/// The files under a directory, each with its name from there, in the names' order: `walk` from
+/// the directory itself.
+pub(super) fn files(dir: &Path) -> Result<Vec<(String, PathBuf)>, String> {
+    let mut out = Vec::new();
+    walk(dir, "", &mut Vec::new(), &mut out)?;
+    Ok(out)
+}
+
 /// What an entry of the class path is to a link.
 pub enum Entry {
     Dir,

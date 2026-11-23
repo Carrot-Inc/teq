@@ -1,0 +1,86 @@
+# The pieces of a library's scala-native.properties whose readings tests/native-build/descriptors.expected holds:
+# `<name> <bytes>`, the bytes after the first blank with `\xHH` for a byte and `\\` for a backslash. Each piece is a
+# descriptor alone and, with every piece after it, the first of a pair (src/native/descriptor.rs, the test
+# `reads_every_descriptor_of_the_table_as_the_jvm_does`). The pieces that end without a line end come first.
+eof-unterminated compile.c.options=-DA
+eof-continued compile.c.options=-DA,\\
+eof-backslashes-even compile.c.options=-DA\\\\
+eof-backslash-alone \\
+eof-utf8-cut-short compile.c.options=-DA=\xe2\x82
+eof-cr compile.c.options=-DA,\\\x0d
+empty-file
+sep-eq compile.c.options=-DA=1\x0a
+sep-colon compile.c.options:-DA=1\x0a
+sep-blank compile.c.options -DA=1\x0a
+sep-tab compile.c.options\x09-DA=1\x0a
+sep-formfeed compile.c.options\x0c-DA=1\x0a
+sep-blanks-around-eq compile.c.options = -DA=1\x0a
+sep-blanks-around-colon compile.c.options : -DA=1\x0a
+sep-twice compile.c.options == -DA=1\x0a
+sep-blank-then-colon compile.c.options  :=-DA=1\x0a
+key-alone compile.c.options\x0a
+value-empty compile.c.options=\x0a
+value-blanks compile.c.options=\x20\x20\x20\x0a
+leading-blanks \x20\x09\x0ccompile.c.options=-DA=1\x0a
+trailing-blanks compile.c.options=-DA=1\x20\x09\x0a
+comment-hash # compile.c.options=-DX\x0a
+comment-bang ! compile.c.options=-DX\x0a
+comment-indented \x20\x20# compile.c.options=-DX\x0a
+comment-continued # x \\\x0acompile.c.options=-DC\x0a
+blank-lines \x0a\x0a\x20\x20\x0a\x09\x0a
+continued compile.c.options=-DA=1,\\\x0a\x20\x20\x20\x20-DB=2\x0a
+continued-even compile.c.options=-DA\\\\\x0apreprocessor.defines=B\x0a
+continued-key compile.c.\\\x0a\x20\x20options=-DK\x0a
+continued-blank-line compile.c.options=-DA\\\x0a\x0apreprocessor.defines=Z\x0a
+continued-twice compile.c.options=-DA,\\\x0a\x20-DB,\\\x0a\x09-DC\x0a
+crlf compile.c.options=-DA\x0d\x0apreprocessor.defines=B\x0d\x0a
+cr compile.c.options=-DA\x0dpreprocessor.defines=B\x0d
+crlf-continued compile.c.options=-DA,\\\x0d\x0a\x20\x20-DB\x0d\x0a
+cr-continued compile.c.options=-DA,\\\x0d\x20\x20-DB\x0d
+backslash-line-then-hash \\\x0a#compile.c.options=-DH\x0a
+escapes-tnrf compile.c.options=-DA=\\t\\n\\r\\f,-DB\x0a
+escape-unicode compile.c.options=-DA=\\u0041\\u00e9\\u20AC\x0a
+escape-surrogate-pair compile.c.options=-DA=\\uD83D\\uDE00\x0a
+escape-lone-surrogate compile.c.options=-DA=\\uD800\x0a
+escape-short compile.c.options=-DA=\\u12\x0a
+escape-not-hex compile.c.options=-DA=\\u12G4\x0a
+escape-in-key compile\\.c\\.options=-DE\x0a
+escape-separator-in-key compile.c.options\\=x=-DE\x0a
+escape-blank-in-key compile.c.options\\ =-DE\x0a
+escape-other compile.c.options=-D\\q\\#\\!\\=\\:\x0a
+escape-backslash compile.c.options=-DA=\\\\\x0a
+key-twice compile.c.options=-DFIRST\x0acompile.c.options=-DSECOND\x0a
+utf8 compile.c.options=-DA=\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80\x0a
+latin1-comment # \xa9 2024 a library\x0apreprocessor.defines = FOO=1\x0a
+latin1-value compile.c.options=-DA=\xa9\x0a
+utf8-surrogate compile.c.options=-DA=\xed\xa0\x80\x0a
+utf8-overlong compile.c.options=-DA=\xc0\xaf\xe0\x80\xaf\xf0\x80\x80\x80\x0a
+utf8-above-unicode compile.c.options=-DA=\xf4\x90\x80\x80\xf5\x80\x0a
+utf8-cut-short compile.c.options=-DA=\xf0\x9f\x98-\xe2\x82-\xc3-\x0a
+utf8-continuation-alone compile.c.options=-DA=\x80\xbf\xfe\xff\x0a
+bom \xef\xbb\xbfcompile.c.options=-DBOM\x0a
+nul compile.c.options=-DA\x00B\x0a
+control-characters compile.c.options=\x01-DA\x01,\x1f-DB\x7f\x0a
+no-break-space compile.c.options=\xc2\xa0-DA\xc2\xa0\x0a
+trailing-comma compile.c.options = -DFOO=1,\x0a
+trailing-comma-blank compile.c.options = -DFOO=1,\x20\x0a
+leading-comma compile.c.options=,-DA\x0a
+commas-twice compile.c.options=-DA,,-DB\x0a
+commas-alone compile.c.options=,,\x0a
+comma-blank compile.c.options= , \x0a
+blanks-in-element compile.c.options=-DA=1 -DB=2\x0a
+defines-trailing-comma preprocessor.defines = FOO=1,\x0a
+defines-empty preprocessor.defines =\x0a
+links nir.link.names = z, crypto\x0a
+includes compile.include.paths = gc/, /abs, a//b, ., .., platform/posix/libunwind\x0a
+includes-empty compile.include.paths =\x0a
+includes-nul compile.include.paths = a\\u0000b\x0a
+cpp compile.cpp.options = -std=c++17, -DCPP\x0a
+gc-true project.gcProject = true\x0a
+gc-upper project.gcProject=TRUE\x0a
+gc-mixed project.gcProject=False\x0a
+gc-yes project.gcProject=yes\x0a
+gc-empty project.gcProject=\x0a
+gc-trailing-blank project.gcProject=true\x20\x0a
+gc-long-s project.gcProject=fal\xc5\xbfe\x0a
+other-keys project.organization = org.example\x0aproject.name = a-library\x0a

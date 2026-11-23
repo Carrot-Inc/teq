@@ -43,7 +43,11 @@ src/native/        the native target; nir/ Scala Native's intermediate represent
                    printer (`teq nir`); classpath.rs and reach.rs the link, what a program reaches of a
                    class path's NIR (`teq nir --link`), scala.rs the Scala collections whose order it
                    keeps; meta.rs, generate.rs and lower.rs its lowering to the runtime's object model
-                   (`teq nir --lower`), codegen.rs the LLVM IR of it (`--ll`)
+                   (`teq nir --lower`), codegen.rs the LLVM IR of it (`--ll`); build.rs and tools.rs the
+                   executable zig builds of it (`teq nir --link --build`), with static_musl.c, linked into
+                   every one, and idn2/, teq's own IDNA library; descriptor.rs a library's
+                   scala-native.properties as Scala Native reads it, library_options.rs the compile options
+                   of a library's a build takes (its table library-options.txt, checked against zig's own)
 src/classpath.rs   `--classpath`; zip.rs jars, jarcache.rs the jar cache, products.rs `--products`
 src/write.rs       the output file, or the changed modules of a split build
 src/watch.rs       `teq compiler watch`; held.rs its `stats`, index.rs and complete.rs the resident check's

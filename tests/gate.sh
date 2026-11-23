@@ -218,6 +218,8 @@ machine=(
   "classfile ./teq interp tests/classfile.scala"
   "nir ./teq interp tests/nir.scala"
   "native-link ./teq interp tests/native-link.scala"
+  "idna ./teq interp tests/idna.scala"
+  "native-build ./teq interp tests/native-build.scala"
   "classpath ./tests/classpath.sh"
   "java-sources ./tests/java-sources.sh"
   "java-reader ./tests/java-reader.sh"

@@ -13,11 +13,12 @@ limitations under the License.
 A program teq compiles for JavaScript or runs in its interpreter carries the parts of teq's standard library it
 uses, which may include the adaptations from Scala.js, the Scala standard library, scalajs-dom and
 scala-java-locales named below and the character tables made from the Unicode Character Database; a build with
---hot carries the react-refresh runtime. Those entries' notices accompany a distribution of a program that
-contains them. The entries for the test programs, the rules of `teq fix`, the Zed extension's files, the
-compiler's hash algorithm, the reader of Scala Native's intermediate representation, the link, the lowering and
-the LLVM IR writer over it, the Rust crates linked into teq's binary and the two signature files of OpenJDK
-compiled into it concern teq itself, not the programs it compiles.
+--hot carries the react-refresh runtime; a native executable whose program links idn2 carries teq's IDNA code
+and its tables made from the Unicode Character Database. Those entries' notices accompany a distribution of a
+program that contains them. The entries for the test programs, the rules of `teq fix`, the Zed extension's
+files, the compiler's hash algorithm, the reader of Scala Native's intermediate representation, the link, the
+lowering, the LLVM IR writer and the build over it, the Rust crates linked into teq's binary and the two
+signature files of OpenJDK compiled into it concern teq itself, not the programs it compiles.
 
 This product includes test programs adapted from the Scala 3 compiler
 (https://github.com/scala/scala3), Copyright 2012-2026 EPFL and
@@ -303,11 +304,13 @@ This product includes code adapted from Scala Native (https://github.com/scala-n
 tag v0.5.12, commit 65dd513df188300d0180514ad828308facc5ca61), Copyright (c) 2013-2018 EPFL, licensed
 under the Apache License, Version 2.0: the model, the reader, the printer and the names of its intermediate
 representation under src/native/nir (from nir/src/main/scala/scala/scalanative/nir), its linker in
-src/native/reach.rs and src/native/classpath.rs (from tools/src/main/scala/scala/scalanative/linker), and the
+src/native/reach.rs and src/native/classpath.rs (from tools/src/main/scala/scala/scalanative/linker), the
 lowering and the LLVM IR writer of its code generator in src/native/meta.rs, src/native/generate.rs,
 src/native/lower.rs and src/native/codegen.rs (from tools/src/main/scala/scala/scalanative/codegen and
-interflow). The fixtures under tests/nir/fixtures were written by its compiler plugin, and
-tests/nir/expected.txt and the expectations under tests/native-link by its tools.
+interflow), and its build of an executable in src/native/build.rs (from
+tools/src/main/scala/scala/scalanative/build). The fixtures under tests/nir/fixtures and
+tests/native-build/fixtures were written by its compiler plugin, and tests/nir/expected.txt, the
+expectations under tests/native-link and tests/native-build/commands.txt by its tools.
 
 This product includes the hash algorithm of rustc-hash 1.1.0
 (https://github.com/rust-lang/rustc-hash), Copyright 2015 The Rust Project Developers,
@@ -744,3 +747,53 @@ with its NOTICE, each zip holding its licence texts under licenses/; and the JDK
 24, cut from Eclipse Temurin 24.0.2+12's lib/ct.sym, under the GNU General Public License, version 2, with the
 Classpath Exception, its LICENSE and ASSEMBLY_EXCEPTION at the top of that archive. A native executable carries the
 archives of the libraries its program links, and their notices accompany a distribution of it.
+
+This product includes data of the Unicode Character Database, versions 15.1.0 and 16.0.0
+(https://www.unicode.org/ucd/), and of the IDNA Mapping Table of Unicode Technical Standard #46,
+version 15.1.0 (https://www.unicode.org/Public/idna/), licensed under the Unicode License V3: the tables
+of src/native/idn2/idna_tables.h, which bench/idna-tables.scala generates from those files, and the host
+names of tests/idna/expected.txt taken from the test files of UTS #46 (IdnaTestV2.txt, versions 15.1.0
+and 18.0.0) and UAX #15 (NormalizationTest.txt, version 15.1.0). The code that reads the tables,
+src/native/idn2/idna.c and idn2.h, is teq's own and contains no code of GNU libidn2, whose interface it
+follows in the names, signatures and return codes of three functions. The license, as unicode.org
+publishes it:
+
+    UNICODE LICENSE V3
+
+    COPYRIGHT AND PERMISSION NOTICE
+
+    Copyright © 1991-2026 Unicode, Inc.
+
+    NOTICE TO USER: Carefully read the following legal agreement. BY
+    DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+    SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+    TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+    DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of data files and any associated documentation (the "Data Files") or
+    software and any associated documentation (the "Software") to deal in the
+    Data Files or Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, and/or sell
+    copies of the Data Files or Software, and to permit persons to whom the
+    Data Files or Software are furnished to do so, provided that either (a)
+    this copyright and permission notice appear with all copies of the Data
+    Files or Software, or (b) this copyright and permission notice appear in
+    associated Documentation.
+
+    THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+    KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+    THIRD PARTY RIGHTS.
+
+    IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+    BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+    OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+    WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+    ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+    FILES OR SOFTWARE.
+
+    Except as contained in this notice, the name of a copyright holder shall
+    not be used in advertising or otherwise to promote the sale, use or other
+    dealings in these Data Files or Software without prior written
+    authorization of the copyright holder.

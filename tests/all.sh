@@ -8,7 +8,8 @@
 # or javap, the nir suite's jars and the native-link suite without them in the coursier cache, the app suite
 # without the jars its corpus reads, and the budget and
 # runtime suites on a machine other than the one that recorded bench/budgets.txt and
-# bench/runtime-budgets.txt, the prop suite without the crates of proptests/ fetched, and the
+# bench/runtime-budgets.txt, the prop suite without the crates of proptests/ fetched, the idna suite without zig
+# 0.16.0, the native-build suite without it or its jars, both on a host other than x86_64 Linux, and the
 # test runner's classes without a javac (a javac other than 17's only notes a difference). Such a suite exits 0, and
 # its line here is `part` with the first line that says what did not run (tests/gate.sh's want-of rule, which fails
 # it at the gate), not `ok`. Each suite's whole
@@ -109,6 +110,8 @@ suite analysis-bytes ./tests/analysis-bytes.sh
 suite classfile     ./teq interp tests/classfile.scala
 suite nir           ./teq interp tests/nir.scala
 suite native-link   ./teq interp tests/native-link.scala
+suite idna          ./teq interp tests/idna.scala
+suite native-build  ./teq interp tests/native-build.scala
 suite classpath     ./tests/classpath.sh
 suite java-sources  ./tests/java-sources.sh
 suite java-reader   ./tests/java-reader.sh

@@ -1,0 +1,179 @@
+# Written by tests/native-build/library-options.scala from src/native/library-options.txt and zig 0.16.0's
+# src/clang_options.zon (sha256 2d589a35c427aa3f83d0d11855cfed6f92d6a25b80a856852298c7ac209656ee): `<answer> <language> <options>`, the options as a
+# library's descriptor writes them, the answer the build's (passed: zig is given each as it is; dropped: none;
+# refused: the first, by name), the language the suite compiles them in.
+passed c -DNAME
+passed c -DNAME=1
+passed c -DNAME=a#$:b
+passed c -UNAME
+passed c -I/nowhere/include
+passed c -Irelative/include
+refused c -I-
+refused c -I=x
+refused c -I$SYSROOTx
+passed c -std=gnu11
+passed c -std=c17
+passed cpp -std=c++17
+passed cpp -fcxx-exceptions
+dropped c -M
+dropped c -MM
+dropped c -MD
+dropped c -MMD
+dropped c -MFhash#target
+dropped c -MFdollar$target
+dropped c -MFa blank
+dropped c -MFcolon:target
+dropped c -MF,hash#target
+dropped c -MF,dollar$target
+dropped c -MF,a blank
+dropped c -MF,colon:target
+dropped c -MG
+dropped c -MJhash#target
+dropped c -MJdollar$target
+dropped c -MJa blank
+dropped c -MJcolon:target
+dropped c -MJ,hash#target
+dropped c -MJ,dollar$target
+dropped c -MJ,a blank
+dropped c -MJ,colon:target
+dropped c -MP
+dropped c -MQhash#target
+dropped c -MQdollar$target
+dropped c -MQa blank
+dropped c -MQcolon:target
+dropped c -MQ,hash#target
+dropped c -MQ,dollar$target
+dropped c -MQ,a blank
+dropped c -MQ,colon:target
+dropped c -MThash#target
+dropped c -MTdollar$target
+dropped c -MTa blank
+dropped c -MTcolon:target
+refused c -MTd
+dropped c -MT,hash#target
+dropped c -MT,dollar$target
+dropped c -MT,a blank
+dropped c -MT,colon:target
+dropped c -MV
+dropped c --dependencies
+dropped c --user-dependencies
+dropped c --write-dependencies
+dropped c --write-user-dependencies
+dropped c --print-missing-file-dependencies
+dropped c -dependency-file,hash#target
+dropped c -dependency-file,dollar$target
+dropped c -dependency-file,a blank
+dropped c -dependency-file,colon:target
+dropped c -dependency-dot,hash#target
+dropped c -dependency-dot,dollar$target
+dropped c -dependency-dot,a blank
+dropped c -dependency-dot,colon:target
+dropped c -module-dependency-dir,hash#target
+dropped c -module-dependency-dir,dollar$target
+dropped c -module-dependency-dir,a blank
+dropped c -module-dependency-dir,colon:target
+dropped c -fdepfile-entry=hash#target
+dropped c -fdepfile-entry=dollar$target
+dropped c -fdepfile-entry=a blank
+dropped c -fdepfile-entry=colon:target
+dropped c -fmodule-file-deps
+dropped c -fno-module-file-deps
+dropped c -H
+dropped c --trace-includes
+dropped c -fshow-skipped-includes
+dropped c -gen-cdb-fragment-path,hash#target
+dropped c -gen-cdb-fragment-path,dollar$target
+dropped c -gen-cdb-fragment-path,a blank
+dropped c -gen-cdb-fragment-path,colon:target
+refused c --include-directory=/abs/shA
+refused c -isystem-after,/abs/shB
+refused c -I,-MD,-DFOO=1
+refused c -iprefix,-MD,-DFOO=1
+refused c -Xarch_,-MD,-DFOO=1
+refused c -I,-MD
+refused c -header-include-file,-DFOO=1
+refused c @more.rsp
+refused c --config,my.cfg
+refused c --config=my.cfg
+refused c --config-system-dir=/etc/clang
+refused c --config-user-dir=/clang
+refused c -Xclang,-MD
+refused c -Xclang=-MD
+refused c -Xpreprocessor,-MD
+refused c -Xarch_host,-MD
+refused c -Xarch_device,-MD
+refused c -Xarch_x86_64,-MD
+refused c -Wp
+refused c -sys-header-deps
+refused c -module-file-deps
+refused c -header-include-format=json
+refused c -header-include-filtering=only-direct-system
+refused c --show-includes
+refused c -include,extra.h
+refused c -imacros,extra.h
+refused c -working-directory,/abs
+refused c -include-pch,a.pch
+refused c -fmodules
+refused c -fmodule-map-file=a.modulemap
+refused c -fprebuilt-module-path=/abs
+refused c --embed-dir=/abs
+refused c -fsanitize-ignorelist=a.txt
+refused c -fprofile-list=a.txt
+refused c -ffile-prefix-map=/=/x/
+refused c -fdebug-prefix-map=/=/x/
+refused c -fmacro-prefix-map=/=/x/
+refused c -fdebug-compilation-dir=/x
+refused c -no-canonical-prefixes
+refused c -save-temps
+refused c -iquote,/abs
+refused c -isystem,/abs
+refused c -idirafter,/abs
+refused c -x,c
+refused c -flto
+refused c -flto=thin
+refused c -emit-llvm
+refused c -fsyntax-only
+refused c -E
+refused c -S
+refused c -###
+refused c -o,a.o
+refused c -c
+refused c foo.c
+refused c -
+refused c
+refused c -fprofile-sample-use=a.prof
+refused c -fplugin=a.so
+refused c -Wl,-z,now
+refused c -L/abs
+refused c -lfoo
+refused c -target,x86_64-linux-gnu
+refused c --sysroot=/abs
+refused c -fsanitize-undefined-ignore-overflow-pattern=x
+refused c -fno-sanitize-coverage=x
+refused c -fopenmp-targets=x
+refused c -mno-tocdata=x
+refused c -C
+refused c -fexperimental-relative-c++-abi-vtables
+refused c -fno-swift-version-independent-apinotes
+refused c -mlittle-endian
+refused c -fsanitize-coverage-stack-depth-callback-min=x
+refused c -fgpu-inline-threshold=x
+refused c -fmemory-profile=x
+refused c --classpath=x
+refused c -Xoffload-linkerx,y
+refused c -Xopenmp-target=x,y
+refused c -plugin-arg-x,y
+refused c -Xarch_x,y
+refused c -sourceDependencies:directivesx
+refused c -iwithsysrootx
+refused c -undefinedx
+refused c -Tpx
+refused c -fget-definition,x,x,x
+refused c -sectcreate,x,x,x
+refused c -sectorder,x,x,x
+refused c -segcreate,x,x,x
+refused c -linkx
+refused c -Xanalyzer,x
+refused c -alias_list,x
+refused c -dylib_file,x
+refused c -mregparm,x
