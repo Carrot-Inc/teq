@@ -235,9 +235,8 @@ impl<'a> Gen<'a> {
                         self.write_at(then, falls);
                         self.code.locals_release(mark);
                         if then_completes {
-                            self.goto(done);
-                        }
-                        if ty != ErasedType::V {
+                            self.leave_to_join(&ty, done);
+                        } else if ty != ErasedType::V {
                             self.code.pop();
                         }
                         self.code.bind(unless);
@@ -638,21 +637,10 @@ impl<'a> Gen<'a> {
         if let Some(mark) = mark {
             self.code.locals_release(mark);
         }
-        match exit {
-            // A handler of a `try` carries its value to the try's normal exit.
-            Some(exit) => {
-                let held = value.map_or(ErasedType::V, |v| self.lir.ty(v).clone());
-                self.leave_try(&held, exit);
-            }
-            None => {
-                let end = self.m.labels[&label];
-                self.goto(end);
-                // The value goes with the jump.
-                if value.is_some_and(|v| *self.lir.ty(v) != ErasedType::V) {
-                    self.code.pop();
-                }
-            }
-        }
+        // A handler of a `try` carries its value to the try's normal exit, a case of a match to the block's end.
+        let held = value.map_or(ErasedType::V, |v| self.lir.ty(v).clone());
+        let exit = exit.unwrap_or_else(|| self.m.labels[&label]);
+        self.leave_to_join(&held, exit);
     }
 
     /// A `try`'s or a `synchronized` block's recorded `returns` is the tree's answer wherever no

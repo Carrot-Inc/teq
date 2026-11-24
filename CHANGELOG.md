@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM an `if` or a `match` whose first branch is `null` where an `Any`, an `AnyRef` or an `Object` is wanted
+  (`show(if c then null else s)` with `show(x: Any)`) is written so that its class loads; the verifier refused it
+  ("Instruction type does not match stack map").
 - A given instance's export clauses and their forwarders are in its class's pickle, as a class's are: another
   module built against the products calls the forwarders (`egh.Indented.h.f(1)` for `given h: AnyRef with { val c
   = Codecs; export c.* }`), where it was refused ("value f is not a member of h"). Exports in a given instance's body

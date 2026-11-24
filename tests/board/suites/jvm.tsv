@@ -1649,6 +1649,7 @@ jdk_member_missing_class	fail	-	compile
 jdk_routes_compiler_subset	pass	-	
 jdk_static_values_stable	fail	-	compile
 jdk_statics_import	pass	-	
+join_null_first_branch	pass	-	
 js_any_tostring_dispatch	cannot run	-	its expectation is Scala.js's
 js_array_from_slice	cannot run	-	its expectation is Scala.js's
 js_array_in_place	cannot run	-	its expectation is Scala.js's

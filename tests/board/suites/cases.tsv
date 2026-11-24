@@ -1649,6 +1649,7 @@ jdk_member_missing_class	cannot run	-	the JVM's platform
 jdk_routes_compiler_subset	cannot run	-	the JVM's platform
 jdk_static_values_stable	fail	-	< us france other
 jdk_statics_import	cannot run	-	the JVM's platform
+join_null_first_branch	pass	-	
 js_any_tostring_dispatch	fail	-	< obj [object Object] | [object Object] | [object Object] | [object Object] | [object Object]
 js_array_from_slice	pass	-	
 js_array_in_place	pass	-	

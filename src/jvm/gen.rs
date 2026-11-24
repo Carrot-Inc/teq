@@ -3931,7 +3931,7 @@ impl<'a> Gen<'a> {
             self.code.op(op::NOP);
         }
         self.code.bind(end);
-        self.leave_try(want, normal_exit);
+        self.leave_to_join(want, normal_exit);
         // Each handler entered with the exception of its class, each protecting the body, in the cases' order
         // (`genLoadTry` 2.a-2.c, BCodeSyncAndTry.scala 295-328).
         if let Some(catch) = catch {
@@ -4144,9 +4144,10 @@ impl<'a> Gen<'a> {
         dropped
     }
 
-    /// The value of a `try`'s body or handler, at the type `want`, carried on the stack to the normal
-    /// exit `exit`, whose frame takes it at that type.
-    pub(super) fn leave_try(&mut self, want: &ErasedType, exit: Label) {
+    /// A value at the type `want` carried on the stack to a join `exit` (a `try`'s normal exit, an `if`'s end, a
+    /// labelled block's end), whose frame takes it at that type: the frame is recorded at the first jump, and the
+    /// branch that jumps first may have left a narrower value (a `null`), which the other branches' are not.
+    pub(super) fn leave_to_join(&mut self, want: &ErasedType, exit: Label) {
         if *want != ErasedType::V {
             let vt = self.vt(want);
             self.code.retype_top(vt);

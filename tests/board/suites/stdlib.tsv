@@ -1646,6 +1646,7 @@ jdk_member_missing_class	fail	-	error: Found: Throwable
 jdk_routes_compiler_subset	fail	-	error: not supported on JavaScript: class File java.io.File (a Java definition without an implementation in the std's platform layer)
 jdk_static_values_stable	fail	-	error: a singleton type needs a val, a parameter or an object
 jdk_statics_import	fail	-	error: Not found: getType
+join_null_first_branch	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 js_default_before_super	pass	-	
 junit_comparison_failure	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 jvm_direct_interfaces	fail	-	error: method andThen overrides nothing
