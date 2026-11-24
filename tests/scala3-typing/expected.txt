@@ -1254,8 +1254,8 @@ neg/i6891.scala	same
 neg/i7028.scala	different	value {} is not a member of {}
 neg/i7040.scala	different	cannot resolve import
 neg/i7045.scala	same	
-neg/i705-inner-value-class.scala	subset	3/6 lines
-neg/i705-inner-value-class2.scala	subset	1/2 lines
+neg/i705-inner-value-class.scala	subset	5/6 lines
+neg/i705-inner-value-class2.scala	same	
 neg/i7060.scala	syntax	expected {}, found {}
 neg/i7068-a.scala	same	
 neg/i7068-b.scala	same	
@@ -1512,7 +1512,7 @@ neg/inlinevals-2.scala	same
 neg/inlinevals-3.scala	same	
 neg/inlinevals-4.scala	same	
 neg/inlinevals.scala	subset	2/4 lines
-neg/inner-classes-of-universal-traits.scala	accepts	
+neg/inner-classes-of-universal-traits.scala	subset	1/3 lines
 neg/insertapply.scala	superset	+1 lines: {} needs to be abstract
 neg/instantiateAbstract.scala	different	AA is abstract; it cannot be instantiated
 neg/int-extractor.scala	same	
@@ -1987,7 +1987,7 @@ neg/validate-parsing-2.scala	same
 neg/validate-parsing.scala	same	
 neg/validate-refchecks.scala	subset	1/2 lines
 neg/validate.scala	different	modifier abstract is not allowed for this definition
-neg/valueClasses.scala	accepts	
+neg/valueClasses.scala	same	
 neg/valueOf-skolem.scala	different	no given instance
 neg/valueclass-unreachable.scala	same	
 neg/valueclasses-doubledefs2.scala	accepts	

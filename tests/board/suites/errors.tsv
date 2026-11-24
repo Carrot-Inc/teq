@@ -1186,6 +1186,7 @@ using_list_splice_call	pass	-
 using_list_splice_forms	pass	-	
 using_list_splice_overloads	pass	-	
 using_list_splice_quote_arg	pass	-	
+value_class_contained	pass	-	
 value_class_rules	pass	-	
 value_import_given_conversion	pass	-	
 value_import_wildcard_givens	pass	-	

@@ -1058,7 +1058,6 @@ i7028.scala	marks: error on an unmarked line i7028.scala:2: value foo is not a m
 i7040.scala	check: diagnostic 1 of 1: scalac's is error i7040.scala:11:13 Type-checking succeeded unexpectedly.; teq's is error i7040.scala:11:13 not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 i7045.scala	marks: 3 errors where 1 are marked: i7045.scala:7:31: 'with' expected, but ':' found
 i705-inner-value-class.scala	marks: 3 errors where 6 are marked
-i705-inner-value-class2.scala	marks: 1 errors where 2 are marked
 i7060.scala	marks: 2 errors where 1 are marked: i7060.scala:5:44: expected ')', found '=>'
 i7068-b.scala	check: diagnostic 1 of 1: scalac's is error i7068-b.scala:2:3 Case class definitions are not allowed in inline methods or quoted code. Use a normal class instead.; teq's is error i7068-b.scala:2:14 Case class definitions are not allowed in
 i7078.scala	marks: no error where 3 are marked
@@ -1628,7 +1627,6 @@ use-experimental-def.scala	marks: no error where 1 are marked
 validate-parsing.scala	marks: 10 errors where 6 are marked: validate-parsing.scala:2:3: modifier sealed is not allowed for this definition
 validate-refchecks.scala	marks: 1 errors where 2 are marked
 validate.scala	marks: 15 errors where 17 are marked
-valueClasses.scala	marks: no error where 2 are marked
 valueclasses-doubledefs2.scala	marks: no error where 1 are marked
 valueclasses-impl-restrictions.scala	check: diagnostic 1 of 3: scalac's is error valueclasses-impl-restrictions.scala:2:3 Value classes may not define an inner class; teq's is error valueclasses-impl-restrictions.scala:2:9 Value classes may not define an inner class
 varargs-annot-2.scala	marks: no error where 1 are marked

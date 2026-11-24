@@ -8120,13 +8120,40 @@ impl<'a> Worker<'a> {
         s.state().set(Completion::Done);
     }
 
-    /// scalac's restrictions on a value class, in its words: one parameter, which is no var,
-    /// and a body without fields, nested classes or objects.
+    /// Whether `owner` is static as dotty's `isStatic` reads a class's owner: a package, or a module
+    /// that is itself so placed: an object, an object nested in a class (`inner_object`, a module
+    /// where that class is one), or a given with no parameters, which dotty makes a module (`given
+    /// G: T with {..}`; one with parameters is a class and its instances).
+    fn is_module_owner(&self, owner: Owner) -> bool {
+        match owner {
+            Owner::Package(_) => true,
+            Owner::Class(o) => {
+                let info = self.syms.class(o);
+                let module = match info.kind {
+                    ClassKind::Object => info.local_module.is_none(),
+                    ClassKind::Class => info.inner_object.is_some(),
+                    ClassKind::GivenImpl => info.tparams.is_empty() && info.ctor.iter().all(|cl| cl.params.is_empty()),
+                    _ => false,
+                };
+                module && self.is_module_owner(info.owner)
+            }
+            Owner::Local => false,
+        }
+    }
+
+    /// scalac's restrictions on a value class, in its words: placed statically, one parameter,
+    /// which is no var, and a body without fields, nested classes or objects.
     #[cold]
     fn check_value_class(&mut self, c: ClassId, cls: &'a ast::ClassDef) {
         let span = self.syms.class(c).span;
         if self.syms.class(c).mods & mods::ABSTRACT != 0 {
             self.error(span, "Value classes may not be abstract");
+        }
+        // dotty's `!clazz.isStatic` (`Checking.scala` 871-872, `ValueClassesMayNotBeContainted` at 3.8.4).
+        let owner = self.syms.class(c).owner;
+        if !self.is_module_owner(owner) {
+            let place = if matches!(owner, Owner::Local) { "local class" } else { "member of another class" };
+            self.error(span, format!("Value classes may not be a {place}"));
         }
         let params: Vec<&ast::Param> = cls.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter()).collect();
         match params.as_slice() {
