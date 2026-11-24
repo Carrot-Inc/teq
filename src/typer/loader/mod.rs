@@ -995,10 +995,12 @@ impl<'a> Worker<'a> {
     fn enter_package_object(&mut self, f: CpFile, pkg: PkgId) {
         let Some(file) = self.enter_file(f, pkg) else { return };
         let stem = self.loaded.as_ref().unwrap().cp.stem(f).to_string();
-        let object_name = self.interner.intern(&stem);
+        // The file's object is the one whose name, encoded, is the file's, as a class file is named by its class's
+        // name encoded (`class_file_named`): `a$minusb$package.tasty` holds `a-b$package` (of `a-b.scala`) or
+        // `a$minusb$package` (of `a$minusb.scala`), and scalac's separate compilation reads the members of both.
         let Some(obj) = self.file_tables(file).classes.values().copied().find(|&c| {
             let info = self.syms.class(c);
-            info.kind == ClassKind::Object && info.name == object_name && info.owner == Owner::Package(pkg)
+            info.kind == ClassKind::Object && info.owner == Owner::Package(pkg) && encode_name(self.interner.get(info.name)) == stem.as_str()
         }) else {
             return;
         };
