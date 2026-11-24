@@ -1108,8 +1108,9 @@ impl<'a> Gen<'a> {
     }
 
     /// `a + b + c` on strings over the chain's operands (`Gen::concat_route`): a string
-    /// literal and each constant the typer folds are constants of the result, any other operand
-    /// a value at its own type, a value class's as its box and one of no value as the unit value.
+    /// literal and each constant the typer folds are constants of the result; any other operand
+    /// is lowered at its own type, a value class's as its box and one of no value as the unit
+    /// value, and is a constant of the result where it lowers to a string constant.
     pub(super) fn lower_concat(&mut self, operands: &[TExprId]) -> LirId {
         let prog = self.cx.input.prog;
         let string = ErasedType::L(Rc::from(STRING));
@@ -1158,9 +1159,17 @@ impl<'a> Gen<'a> {
             } else {
                 self.lower_expr(value, &t)
             };
-            // The writer reads a constant of the result off a part's kind.
-            assert!(!matches!(self.lir.node(part).kind, Kind::Str(_) | Kind::Text(_)), "a value part that reads as a constant");
-            parts.push(part);
+            // An operand that lowers to a string constant, the literal branch of a condition reduced as
+            // `FirstTransform` reduces it, is the literal dotty's back end meets: a constant of the result,
+            // which the writer reads off the part's kind, and dropped where empty.
+            let empty = match &self.lir.node(part).kind {
+                Kind::Str(text) => prog.strings[text.idx()].is_empty(),
+                Kind::Text(text) => text.is_empty(),
+                _ => false,
+            };
+            if !empty {
+                parts.push(part);
+            }
         }
         let parts = self.lir.list(&parts);
         self.lir.push(Kind::Concat { parts }, string)
