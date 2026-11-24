@@ -1158,6 +1158,8 @@ need_driver
 # its row of eight (140 or 80 against 60); a guest builder deals alike and is the head's line; --record writes m1's
 # parser as the kind's row, the larger of the run and nine tenths of the row it replaces, 18.
 base=$(git -C "$landing" rev-parse HEAD)
+# the cell's rows alone for its lines: the tree's own rows of them, of either kind, go first
+sed -i -E '/^(parser|fold|planted|head-wait|speed)(@guest)? /d' "$landing/tests/gate-times.txt"
 printf '%s\n' "parser 100" "parser@guest 20" "fold 60" "planted 50" "head-wait 0" "head-wait@guest 0" "speed@guest 200" >> "$landing/tests/gate-times.txt"
 git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "rows of a named kind"
 GATE_ENV_m1="export GATE_KIND=guest" gate "$work/driver-named.log" "$(printf 'm1 free\nm2 free')" --only parser,fold,planted --record

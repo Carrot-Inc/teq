@@ -166,10 +166,10 @@ gate-scripts@16 537
 # setups (its tools' check, the landing, the stand-ins) not counted; on the kind guest, the row of eight over its speed
 gate-scripts.1/3 285
 gate-scripts.1/3@16 237
-gate-scripts.1/3@guest 407
+gate-scripts.1/3@guest 366
 gate-scripts.2/3 284
 gate-scripts.2/3@16 236
-gate-scripts.2/3@guest 406
+gate-scripts.2/3@guest 587
 gate-scripts.3/3 286
 gate-scripts.3/3@16 265
 gate-scripts.3/3@guest 409
@@ -252,3 +252,19 @@ head-wait@guest 205
 # without --record then builds those caches on the kind's machines, and the next gate with --record writes the rows.
 classfile@guest -1
 init-view@guest -1
+board-run@guest 125
+fix@guest 315
+fold@guest 1
+idna@guest 12
+interop@guest 6
+interp@guest 48
+java-sources@guest 28
+mill-test-verb@guest 42
+native-build@guest 359
+native-link@guest 109
+parser@guest 28
+reference-test-verb@guest 22
+scala3-macros-interp@guest 2
+split-determinism@guest 107
+split.2/2@guest 274
+tasty@guest 219
