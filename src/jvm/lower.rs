@@ -115,7 +115,7 @@ impl<'a> Gen<'a> {
                 let body = self.lower_expr(t.body, want);
                 let catch = (!t.cases.is_empty()).then(|| self.lower_catch(t.cases, want));
                 let finalizer = t.finalizer.map(|f| self.lower_expr(f, &ErasedType::V));
-                self.lir.push(Kind::Try { body, catch, finalizer }, want.clone())
+                self.push_protected(Kind::Try { body, catch, finalizer, returns: false }, want.clone())
             }
             // A def's call of itself in a tail position of a `return`'s value: the loop's jump
             // (`Gen::jump_call`); nothing follows it, so its type is the place's.
@@ -222,7 +222,7 @@ impl<'a> Gen<'a> {
             TExpr::While(c, body) => {
                 let cond = self.lower_cond(c);
                 let body = self.lower_expr(body, &ErasedType::V);
-                self.lir.push(Kind::While { cond, body }, ErasedType::V)
+                self.lir.push(Kind::While { cond: Some(cond), body }, ErasedType::V)
             }
             TExpr::Module(c) => self.lower_module(c),
             TExpr::ClassOf(c, dims) => self.lower_class_of(e, c, dims),
@@ -1171,7 +1171,35 @@ impl<'a> Gen<'a> {
         let t = self.static_type(body);
         let lock = self.lower_expr(lock, &ErasedType::object());
         let body = self.lower_expr(body, &t);
-        self.lir.push(Kind::Synchronized { lock, body }, t)
+        self.push_protected(Kind::Synchronized { lock, body, returns: false }, t)
+    }
+
+    /// The `try` or `synchronized` node, its `returns` recorded (`Body::returns_through`), an escape
+    /// node inside answering by its typed IR.
+    pub(super) fn push_protected(&mut self, kind: Kind, ty: ErasedType) -> LirId {
+        let id = self.lir.push(kind, ty);
+        let through = self.lir.returns_through(id, &|e| self.escape_returns(e));
+        match &mut self.lir.nodes[id.0 as usize].kind {
+            Kind::Try { returns, .. } | Kind::Synchronized { returns, .. } => *returns = through,
+            _ => unreachable!("a `try` or a `synchronized` block"),
+        }
+        id
+    }
+
+    /// Whether the typed IR of an escape node holds a `return` of the method being lowered: not one
+    /// of a lambda's or a local def's, and none out of a closure, where a `return` is thrown.
+    fn escape_returns(&self, root: TExprId) -> bool {
+        if self.m.closure {
+            return false;
+        }
+        let prog = self.cx.input.prog;
+        let mut in_lambda = crate::intern::FxMap::default();
+        for e in prog.descendants(root).without_local_defs() {
+            if let TExpr::Lambda(_, body) = prog.expr(e) {
+                in_lambda.extend(prog.descendants(body).map(|r| (r, ())));
+            }
+        }
+        prog.descendants(root).without_local_defs().any(|e| matches!(prog.expr(e), TExpr::Return(_)) && !in_lambda.contains_key(&e))
     }
 
     /// The instance of the object that holds a file's top-level definitions.

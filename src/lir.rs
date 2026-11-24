@@ -255,8 +255,6 @@ pub struct Node {
 pub enum Unlowered {
     /// `val (a, b) = p`, a definition by a pattern, among a block's statements.
     PatternDefinition,
-    /// A `lazy val` among a block's statements that is not a local lazy val.
-    LazyValNotLocal,
     /// `return x` where it is not the def's result: a statement, an operand, inside a `try`.
     ReturnInValuePosition,
     /// `return x` inside a lambda, which leaves the def around it by a throw.
@@ -307,21 +305,10 @@ pub enum Unlowered {
     LocalDefDeclaration,
     /// `class B extends A` where every parameter of `A` has a default and none is written.
     CtorSuperDefaults,
-    /// An enum case that does not pass its enum's arguments (reported).
-    CtorSuperRefused,
-    /// A `lazy val` in the block before a superclass's arguments.
-    CtorPreludeLazyVal,
     /// A class body whose local trait's initialiser takes values of the enclosing block.
     CtorTraitProxies,
-    /// A trait's arguments that do not match its parameters, or a `lazy val` before them.
-    CtorTraitArguments,
     /// An enum companion's `fromOrdinal` over its stored values.
     EnumCompanionMembers,
-    /// A `lazy val` of a class or object: its thread-safe initialiser, and its getter where its
-    /// type admits a control state.
-    LazyMember,
-    /// A `@threadUnsafe lazy val` member's getter.
-    ThreadUnsafeLazyMember,
     /// A value class's `productElement`, `productElementName`, and `equals` over a reference.
     ValueClassSynthesized,
     /// A def with a `return` inside a lambda: the key it makes and the handler around its body.
@@ -413,8 +400,9 @@ pub enum Kind {
     /// `then` where the condition holds, `otherwise` where it does not; with no `otherwise`
     /// nothing is left.
     If { cond: LirId, then: LirId, otherwise: Option<LirId> },
-    /// The body, for as long as the condition holds before it.
-    While { cond: LirId, body: LirId },
+    /// The body, for as long as the condition holds before it; with no condition, for ever (dotty's
+    /// `WhileDo(EmptyTree, body)`, which only the compiler makes: nothing follows it).
+    While { cond: Option<LirId>, body: LirId },
     /// The exception thrown. Nothing follows it: the node's type is the one its place wants.
     Throw(LirId),
     /// The def's result: the value is returned.
@@ -500,12 +488,16 @@ pub enum Kind {
     /// writer's.
     Concat { parts: List },
     /// `try`: the body; where it throws, the cases (`Catch`); the finalizer, which runs on every
-    /// way out.
-    Try { body: LirId, catch: Option<Catch>, finalizer: Option<LirId> },
+    /// way out. `returns`: whether a `return` of the method leaves through the finalizer
+    /// (`Body::returns_through`), which the JVM writer must know before the `try` to make the
+    /// method's early-return slot (dotty's `shouldEmitCleanup`). Recorded by the lowering, which
+    /// sees into the typed IR of the escape nodes inside.
+    Try { body: LirId, catch: Option<Catch>, finalizer: Option<LirId>, returns: bool },
     /// The body's value, evaluated holding the monitor of the object `lock`, which is evaluated
     /// first; the monitor is released on every way out of the body, a throw and a `return`
-    /// included.
-    Synchronized { lock: LirId, body: LirId },
+    /// included. `returns`: whether a `return` of the method leaves through the monitor exit,
+    /// as `Try`'s.
+    Synchronized { lock: LirId, body: LirId, returns: bool },
     /// A value of the type `from` as one of the node's type: dropped, the unit value or a zero
     /// for none, a cast, a box or its content, a primitive conversion (`Gen::adapt`).
     Adapt { value: LirId, from: ErasedType, how: Adaptation },
@@ -547,6 +539,13 @@ pub enum Kind {
     /// before its right side and a `Let` filled (`Gen::lower_variables_definition`); the pattern's own binder of
     /// the same symbol, inside the match, holds another. No value, no instruction.
     LocalAt { sym: SymId, temp: TempId, ty: ErasedType },
+    /// A new value of the temporary a `Let` made. No value.
+    SetTemp { temp: TempId, value: LirId },
+    /// A boolean: a lazy member's container, the field `field` of the class `owner` on `object`, set to `new` where
+    /// it holds `expected`, at once (dotty's `casFlag` over the field, LazyVals.scala 365-369). The field is an
+    /// `Object`; how the operation is spelled is the writer's (the JVM's: the field's `VarHandle`, which the class's
+    /// lazy member holds).
+    LazyCas { object: LirId, owner: Rc<str>, field: Rc<str>, expected: LirId, new: LirId },
     /// The value of the temporary.
     Temp(TempId),
     /// A boolean: whether the reference is an instance of the class, interface or array class
@@ -578,6 +577,10 @@ pub enum Refusal {
     NoJvmBody { name: Rc<str>, owner: Option<Rc<str>> },
     /// A template text of the typer's that is JavaScript's alone.
     JavaScriptTemplate(Rc<str>),
+    /// An enum case's call of its enum's constructor that passes none of the enum's arguments.
+    EnumCaseWithoutArguments,
+    /// A class's arguments to a trait that do not match the trait's parameters.
+    TraitArgumentsMismatch,
 }
 
 impl Refusal {
@@ -590,6 +593,8 @@ impl Refusal {
             Refusal::NoJvmBody { name, owner: Some(owner) } => format!("no @jvm intrinsic or body for {} of {}", name, owner),
             Refusal::NoJvmBody { name, owner: None } => format!("no @jvm intrinsic or body for {}", name),
             Refusal::JavaScriptTemplate(text) => format!("the JavaScript template {}", text),
+            Refusal::EnumCaseWithoutArguments => "an enum case without the arguments of its enum".to_string(),
+            Refusal::TraitArgumentsMismatch => "the arguments of a trait that its parameters do not match".to_string(),
         }
     }
 }
@@ -614,8 +619,8 @@ impl Kind {
             Kind::Underlying { .. } => false,
             // The body is queued, and the definition named: neither is written where the node stands.
             Kind::Closure { .. } | Kind::LiftedCall { .. } | Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) => false,
-            Kind::Let { .. } | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Temp(_) | Kind::Is { .. } | Kind::Labeled { .. } | Kind::Break { .. } => false,
-            Kind::Refused(_) => false,
+            Kind::Let { .. } | Kind::SetTemp { .. } | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Temp(_) | Kind::Is { .. } | Kind::Labeled { .. } | Kind::Break { .. } => false,
+            Kind::Refused(_) | Kind::LazyCas { .. } => false,
         }
     }
 }
@@ -680,6 +685,96 @@ impl Body {
 
     pub fn ty(&self, id: LirId) -> &ErasedType {
         &self.nodes[id.0 as usize].ty
+    }
+
+    fn items(&self, list: List) -> impl Iterator<Item = LirId> + '_ {
+        self.lists[list.start as usize..(list.start + list.len) as usize].iter().copied()
+    }
+
+    /// The nodes the node evaluates, in the order it lists them: a closure's captures (its body is
+    /// another method's). Every kind is listed, so that
+    /// a new one is classified.
+    pub fn operands(&self, id: LirId) -> Vec<LirId> {
+        let mut out = Vec::new();
+        match &self.node(id).kind {
+            Kind::Legacy(..) | Kind::LegacyTail(..) | Kind::LocalFun(_) => {}
+            Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => {}
+            Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
+            Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
+            Kind::Block { stmts, result } => {
+                out.extend(self.items(*stmts));
+                out.push(*result);
+            }
+            Kind::Val { init: value, .. } | Kind::Assign { value, .. } | Kind::StaticFieldStore { value, .. } | Kind::Let { init: value, .. } | Kind::SetTemp { value, .. } => out.push(*value),
+            Kind::Field { receiver: value, .. } | Kind::Neg(value) | Kind::Not(value) | Kind::Test { value, .. } | Kind::Throw(value) | Kind::Return(value) => out.push(*value),
+            Kind::Underlying { value, .. } | Kind::Typed(value) | Kind::ArrayLength(value) | Kind::ArrayClone(value) | Kind::NewArray { length: value } => out.push(*value),
+            Kind::Cast { value, .. } | Kind::StringOf { value } | Kind::Adapt { value, .. } | Kind::Is { value, .. } => out.push(*value),
+            Kind::LazyCas { object, expected, new, .. } => out.extend([*object, *expected, *new]),
+            Kind::Labeled { body, .. } => out.push(*body),
+            Kind::Binary { left, right, .. } | Kind::Compare { left, right, .. } | Kind::And(left, right) | Kind::Or(left, right) => out.extend([*left, *right]),
+            Kind::ArrayLoad { array, index } => out.extend([*array, *index]),
+            Kind::ArrayStore { array, index, value } => out.extend([*array, *index, *value]),
+            Kind::FieldStore { receiver, value, .. } => out.extend([*receiver, *value]),
+            Kind::Synchronized { lock, body, .. } => out.extend([*lock, *body]),
+            Kind::While { cond, body } => {
+                out.extend(*cond);
+                out.push(*body);
+            }
+            Kind::If { cond, then, otherwise } => {
+                out.extend([*cond, *then]);
+                out.extend(*otherwise);
+            }
+            Kind::Helper { args, .. } | Kind::New { args, .. } | Kind::InitCall { args, .. } | Kind::StaticCall { args, .. } => out.extend(self.items(*args)),
+            Kind::ArrayOf { items, .. } | Kind::Concat { parts: items } => out.extend(self.items(*items)),
+            Kind::Call { receiver, args, .. } | Kind::SuperCall { receiver, args, .. } => {
+                out.push(*receiver);
+                out.extend(self.items(*args));
+            }
+            Kind::SelfTailCall { receiver, args } => {
+                out.extend(*receiver);
+                out.extend(self.items(*args));
+            }
+            Kind::Closure { captures, .. } => out.extend(self.items(*captures)),
+            Kind::LiftedCall { captures, args, .. } => {
+                out.extend(self.items(*captures));
+                out.extend(self.items(*args));
+            }
+            Kind::Try { body, catch, finalizer, .. } => {
+                out.push(*body);
+                out.extend(catch.map(|c| c.cases));
+                out.extend(*finalizer);
+            }
+            Kind::Break { value, .. } => out.extend(*value),
+        }
+        out
+    }
+
+    /// Whether a `return` of the method stands in the node's code, from where it leaves through
+    /// every finalizer and monitor exit around it. An escape node's typed IR is not the tree's to
+    /// see into: `escaped` answers for it.
+    pub fn holds_return(&self, id: LirId, escaped: &dyn Fn(TExprId) -> bool) -> bool {
+        match &self.node(id).kind {
+            Kind::Return(_) => true,
+            Kind::Legacy(e, _) | Kind::LegacyTail(e, _) => escaped(*e),
+            _ => self.operands(id).into_iter().any(|o| self.holds_return(o, escaped)),
+        }
+    }
+
+    /// Whether a `return` of the method leaves through the node: a `try` with a finalizer whose
+    /// body or cases hold one, a `synchronized` block whose body does (`Body::holds_return`).
+    pub fn returns_through(&self, id: LirId, escaped: &dyn Fn(TExprId) -> bool) -> bool {
+        match &self.node(id).kind {
+            Kind::Try { body, catch, finalizer: Some(_), .. } => {
+                self.holds_return(*body, escaped) || catch.is_some_and(|c| self.holds_return(c.cases, escaped))
+            }
+            Kind::Synchronized { body, .. } => self.holds_return(*body, escaped),
+            _ => false,
+        }
+    }
+
+    /// Whether the node's code holds an escape node, whose typed IR the tree does not see into.
+    pub fn holds_escape(&self, id: LirId) -> bool {
+        matches!(self.node(id).kind, Kind::Legacy(..) | Kind::LegacyTail(..)) || self.operands(id).into_iter().any(|o| self.holds_escape(o))
     }
 }
 

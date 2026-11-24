@@ -249,17 +249,7 @@ impl<'a> Gen<'a> {
                     }
                 }
             }
-            Kind::While { cond, body } => {
-                let head = self.code.new_label();
-                let exit = self.code.new_label();
-                self.code.bind(head);
-                self.write_cond(cond, exit, false);
-                let mark = self.code.locals_mark();
-                self.write(body);
-                self.code.locals_release(mark);
-                self.goto(head);
-                self.code.bind(exit);
-            }
+            Kind::While { cond, body } => self.write_while(cond, body),
             Kind::Throw(value) => {
                 self.write(value);
                 self.code.op(op::ATHROW);
@@ -429,9 +419,13 @@ impl<'a> Gen<'a> {
                 self.vc_select = outer;
             }
             Kind::Concat { parts } => self.write_concat(parts),
-            Kind::Try { body, catch, finalizer } => self.write_try(&ty, body, catch, finalizer),
-            Kind::Synchronized { lock, body } => {
-                self.monitor_block(|g| g.write(lock), ty, |g, _| g.write(body));
+            Kind::Try { body, catch, finalizer, returns } => {
+                self.check_returns(id, returns);
+                self.write_try(&ty, body, catch, finalizer, returns)
+            }
+            Kind::Synchronized { lock, body, returns } => {
+                self.check_returns(id, returns);
+                self.monitor_block(|g| g.write(lock), ty, returns, |g, _| g.write(body));
             }
             Kind::Adapt { value, from, how } => {
                 self.write(value);
@@ -490,6 +484,23 @@ impl<'a> Gen<'a> {
                 let slot = self.m.temps[&temp];
                 self.m.locals.insert(sym, Local { slot, ty, cell: false });
             }
+            // The container's `VarHandle` (`Gen::lazy_holder`'s static field, found in the class's `<clinit>`),
+            // its signature-polymorphic `compareAndSet` of scalac's descriptor `(Object, Object, Object)Z`.
+            Kind::LazyCas { object, owner, field, expected, new } => {
+                let handle = ErasedType::L(Rc::from(VAR_HANDLE));
+                self.getstatic(&owner, &format!("{}$lzyHandle", field), &handle);
+                self.write(object);
+                self.write(expected);
+                self.write(new);
+                let any = ErasedType::object();
+                self.invoke(Invoke::Virtual, VAR_HANDLE, false, "compareAndSet", &[any.clone(), any.clone(), any], &ErasedType::Z);
+            }
+            Kind::SetTemp { temp, value } => {
+                self.write(value);
+                let held = self.lir.ty(value).clone();
+                let slot = self.m.temps[&temp];
+                self.store(slot, &held);
+            }
             Kind::Temp(temp) if self.m.stacked == Some(temp) => self.m.stacked = None,
             Kind::Temp(temp) => {
                 let slot = self.m.temps[&temp];
@@ -511,6 +522,105 @@ impl<'a> Gen<'a> {
         }
         self.code.in_node -= 1;
         (self.line_floor, self.line_hold) = lines;
+    }
+
+    /// A loop as dotty's `genWhileDo` writes it (BCodeBodyBuilder.scala 677-705): the head; with no
+    /// condition, the body written to the jump back to it (nothing follows); with a unit body, the
+    /// condition jumping back to the head where it holds (do-while's shape, `while ({ body; cond }) ()`);
+    /// else the condition leaving the loop where it fails, then the body written to the jump back.
+    fn write_while(&mut self, cond: Option<LirId>, body: LirId) {
+        let head = self.code.new_label();
+        self.code.bind(head);
+        let Some(cond) = cond else {
+            self.write_to(body, head);
+            return;
+        };
+        if matches!(self.lir.node(body).kind, Kind::Unit) {
+            self.write_cond(cond, head, true);
+            return;
+        }
+        let exit = self.code.new_label();
+        self.write_cond(cond, exit, false);
+        self.write_to(body, head);
+        self.code.bind(exit);
+    }
+
+    /// The node written with a jump to `dest` after it, as dotty's `genLoadTo` writes a tree to a
+    /// jump destination (BCodeBodyBuilder.scala 324-528): a conditional's branches each written to
+    /// it, the jump where the condition fails standing for a missing `else` (`genLoadIfTo`, 234-270);
+    /// a block's result written to it (`genBlockTo`); a labelled block's body written to it, a break
+    /// out of the block a jump to it (`genLabeledTo`, 620-637, a match's `genMatchTo` alike); any
+    /// other node written, then the jump where its code goes on. The jump out of a labelled block
+    /// where a condition holds keeps its own form.
+    fn write_to(&mut self, id: LirId, dest: Label) {
+        debug_assert!(*self.lir.ty(id) == ErasedType::V, "a value written to a jump");
+        let lines = (self.line_floor, self.line_hold);
+        if let Some(e) = self.lir.node(id).of {
+            self.mark_line(e);
+        }
+        match self.lir.node(id).kind.clone() {
+            Kind::If { cond, then, otherwise } if !(otherwise.is_none() && matches!(self.lir.node(then).kind, Kind::Break { value: None, .. })) => {
+                let failure = self.code.new_label();
+                self.write_cond(cond, failure, false);
+                let mark = self.code.locals_mark();
+                self.write_to(then, dest);
+                self.code.locals_release(mark);
+                self.code.bind(failure);
+                match otherwise {
+                    Some(otherwise) => {
+                        self.write_to(otherwise, dest);
+                        self.code.locals_release(mark);
+                    }
+                    None => self.goto(dest),
+                }
+            }
+            Kind::Block { stmts, result } if self.kept_on_stack(stmts, result).is_none() && !matches!(self.lir.node(result).kind, Kind::Break { .. }) => {
+                let mark = self.code.locals_mark();
+                for i in 0..stmts.len {
+                    let stmt = self.lir.lists[(stmts.start + i) as usize];
+                    self.write(stmt);
+                }
+                self.write_to(result, dest);
+                self.code.locals_release(mark);
+            }
+            Kind::Labeled { label, body } => {
+                self.m.labels.insert(label, dest);
+                self.write_to(body, dest);
+            }
+            _ => {
+                self.write(id);
+                if self.falls_through(id) {
+                    self.goto(dest);
+                }
+            }
+        }
+        (self.line_floor, self.line_hold) = lines;
+    }
+
+    /// Whether an expression of the typed IR ends where its code goes nowhere on: a throw, a return (a closure's is
+    /// thrown), a jump of the tail loop, or a block or a conditional that ends so (`Gen::leaves`, a throw and a
+    /// closure's return besides).
+    fn legacy_ends(&self, e: crate::tir::TExprId) -> bool {
+        use crate::tir::TExpr;
+        match self.cx.input.prog.expr(e) {
+            TExpr::Return(_) | TExpr::Throw(..) => true,
+            TExpr::Block(_, res) => self.legacy_ends(res),
+            TExpr::If(_, t, Some(els)) => self.legacy_ends(t) && self.legacy_ends(els),
+            _ => self.leaves(e),
+        }
+    }
+
+    /// Whether the code of the node goes on after it, as dotty's `genLoadTo` tells by the destination a tree leaves
+    /// to (`generatedDest`, BCodeBodyBuilder.scala 324-503): not after a throw, a return, a jump of the tail loop, a
+    /// break or a loop with no condition, nor after a block that ends in one or a conditional whose branches both do.
+    fn falls_through(&self, id: LirId) -> bool {
+        match &self.lir.node(id).kind {
+            Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::LegacyTail(..) | Kind::Break { .. } | Kind::While { cond: None, .. } => false,
+            Kind::Legacy(e, _) => !self.legacy_ends(*e),
+            Kind::Block { stmts, result } => (0..stmts.len).all(|i| self.falls_through(self.lir.lists[(stmts.start + i) as usize])) && self.falls_through(*result),
+            Kind::If { then, otherwise: Some(otherwise), .. } => self.falls_through(*then) || self.falls_through(*otherwise),
+            _ => true,
+        }
     }
 
     /// The labelled block `label` left with `value`; the locals above `mark` (a block's own, where
@@ -539,6 +649,12 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+    }
+
+    /// A `try`'s or a `synchronized` block's recorded `returns` is the tree's answer wherever no
+    /// escape node inside holds typed IR the tree does not see into (`Body::returns_through`).
+    fn check_returns(&self, id: LirId, returns: bool) {
+        debug_assert!(self.lir.holds_escape(id) || returns == self.lir.returns_through(id, &|_| false), "the recorded `returns` of {id:?}");
     }
 
     /// Whether the branch leaves the method or goes round its loop, where a value is wanted: the

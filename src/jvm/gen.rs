@@ -534,6 +534,10 @@ pub struct MethodCx {
     /// The exits of those frames a `return` has jumped to, as dotty's `shouldEmitCleanup` records
     /// that a cleanup block is wanted (BCodeBodyBuilder `genReturn`).
     pub exits_taken: Vec<Label>,
+    /// The slot a `return` through those frames keeps the method's value in until the outermost
+    /// cleanup returns it (dotty's `earlyReturnVar`), made by the outermost frame whose code returns
+    /// (`Gen::early_return_for`).
+    pub early_return: Option<u16>,
     /// The slots that hold the lowering's temporaries.
     pub temps: FxMap<crate::lir::TempId, u16>,
     /// The nodes of the null tests that open a value class's box (`Gen::lower_vc_open_null_safe`),
@@ -556,14 +560,13 @@ pub struct MethodCx {
     pub outside: Vec<Unlowered>,
 }
 
-/// A `try` with a finalizer around the code being generated: `pending` is the slot a `return`
-/// sets before it jumps to `exit`, where the finalizer runs once and the method returns the
-/// value kept in `value` (none for a `Unit` method) or hands it on to the enclosing frame.
+/// A `try` with a finalizer or a `synchronized` block around the code being generated: a `return`
+/// inside keeps its value in `MethodCx::early_return` and jumps to `cleanup`, the finalizer's or the
+/// monitor exit's copy written for it, which returns or goes on to the enclosing frame's cleanup
+/// (dotty's `registerCleanup` and `pendingCleanups`, BCodeSyncAndTry.scala 426-440).
 #[derive(Clone, Copy)]
 pub struct FinallyFrame {
-    pub pending: u16,
-    pub value: Option<u16>,
-    pub exit: Label,
+    pub cleanup: Label,
 }
 
 impl Default for MethodCx {
@@ -586,6 +589,7 @@ impl Default for MethodCx {
             home_slots: Vec::new(),
             finalizers: Vec::new(),
             exits_taken: Vec::new(),
+            early_return: None,
             temps: FxMap::default(),
             null_tests: Vec::new(),
             reserved: FxMap::default(),
@@ -3672,20 +3676,20 @@ impl<'a> Gen<'a> {
         } else {
             let ret = self.m.ret.clone();
             match self.m.finalizers.last().copied() {
-                // Through the enclosing finalizer or monitor exit: the value kept in the frame's slot, the
-                // operands under it dropped, dead as the method leaves (dotty's `genReturn` jumps to the
-                // cleanup over them), the flag set, the frame's exit taken; the operands dropped stand under
-                // the dead code again.
+                // Through the enclosing finalizer or monitor exit, as dotty's `genReturn` leaves
+                // (BCodeBodyBuilder.scala 649-661): the value kept in the early-return slot, the
+                // operands under it dropped, dead as the method leaves, the frame's cleanup taken; the
+                // operands dropped stand under the dead code again.
                 Some(frame) => {
                     self.expr(v, &ret);
-                    if let Some(slot) = frame.value {
-                        self.store(slot, &ret);
+                    match self.m.early_return {
+                        Some(slot) if ret != ErasedType::V => self.store(slot, &ret),
+                        None if ret != ErasedType::V => self.unsupported("internal error: a return through a finalizer before its slot"),
+                        _ => {}
                     }
                     let dropped = self.drop_stack();
-                    self.iconst(1);
-                    self.store(frame.pending, &ErasedType::I);
-                    self.m.exits_taken.push(frame.exit);
-                    self.goto(frame.exit);
+                    self.m.exits_taken.push(frame.cleanup);
+                    self.goto(frame.cleanup);
                     for vt in dropped {
                         self.code.push(vt);
                     }
@@ -3850,12 +3854,13 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// `try`/`catch`/`finally` through the exception table. The body and the cases leave their
-    /// value in a local; the finalizer is copied onto the normal exit and into a handler that
-    /// takes every exception of the body and the cases and throws it again, as javac lays it
-    /// out. A `try` with operands on the stack spills them to locals first, since a handler
-    /// starts with an empty stack.
-    pub(super) fn write_try(&mut self, want: &ErasedType, body: LirId, catch: Option<crate::lir::Catch>, finalizer: Option<LirId>) {
+    /// `try`/`catch`/`finally` through the exception table, as dotty's `genLoadTry` lays it out
+    /// (BCodeSyncAndTry.scala 181-423). The body and the cases leave their value in a local; the
+    /// finalizer is copied into a handler that takes every exception of the whole `try` up to it
+    /// and throws it again, then, where a `return` inside took it, into the cleanup that returns
+    /// (or goes on to the enclosing frame's), then onto the normal exit. A `try` with operands on
+    /// the stack spills them to locals first, since a handler starts with an empty stack.
+    pub(super) fn write_try(&mut self, want: &ErasedType, body: LirId, catch: Option<crate::lir::Catch>, finalizer: Option<LirId>, returns: bool) {
         let outer = self.code.locals_mark();
         let spilled = self.spill_stack();
         let result = if *want == ErasedType::V {
@@ -3871,32 +3876,17 @@ impl<'a> Gen<'a> {
             Some(self.store_new(want))
         };
         // A `return` inside the body or a case leaves through the finalizer, as the language runs
-        // it on every exit: the value is kept in a slot, a flag set, and the normal exit taken, where
-        // the finalizer runs once and the flag sends the method on (javac's lowering; scalac's prints
+        // it on every exit: its value kept in the method's early-return slot, it jumps to the
+        // finalizer's cleanup copy, which returns it (`genLoadTry` 3.B, 353-375; scalac's prints
         // `finally ran` before `fin: 1` for `try { return 1 } finally { println("finally ran") }`).
-        let pending = finalizer.map(|_| {
-            self.iconst(0);
-            self.store_new(&ErasedType::I)
-        });
+        let made_early = self.early_return_for(returns);
         let ret = self.m.ret.clone();
-        let return_slot = match (finalizer, &ret) {
-            (None, _) | (Some(_), ErasedType::V) => None,
-            (Some(_), ErasedType::L(_)) => {
-                self.code.op(op::ACONST_NULL);
-                self.code.push(VT::Null);
-                Some(self.store_new(&ret))
-            }
-            (Some(_), _) => {
-                self.adapt(&ErasedType::V, &ret);
-                Some(self.store_new(&ret))
-            }
-        };
         let throwable = ErasedType::L(Rc::from(THROWABLE));
         let throwable_vt = self.vt(&throwable);
-        let (start, end, normal_exit, after) =
-            (self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label());
-        if let Some(pending) = pending {
-            self.m.finalizers.push(FinallyFrame { pending, value: return_slot, exit: normal_exit });
+        let (start, end, normal_exit, after, cleanup) =
+            (self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label());
+        if finalizer.is_some() {
+            self.m.finalizers.push(FinallyFrame { cleanup });
         }
         // A handler's frame holds the locals of the whole protected range, not those a body made.
         let protected = self.code.locals_mark();
@@ -3912,7 +3902,6 @@ impl<'a> Gen<'a> {
         }
         self.code.bind(end);
         self.goto(normal_exit);
-        let mut any_ranges = vec![(start, end)];
         if let Some(catch) = catch {
             let (handler, catch_end) = (self.code.new_label(), self.code.new_label());
             self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
@@ -3925,51 +3914,36 @@ impl<'a> Gen<'a> {
             self.write(catch.cases);
             self.code.bind(catch_end);
             self.code.locals_release(mark);
-            any_ranges.push((handler, catch_end));
         }
         if let Some(f) = finalizer {
-            // A `return` inside the finalizer itself belongs to the enclosing frame.
+            // A `return` inside the finalizer itself belongs to the enclosing frame; one in the body
+            // or a case asked for the cleanup copy (`currentFinallyBlockNeedsCleanup`, 329-332).
             self.m.finalizers.pop();
+            let needs_cleanup = self.m.exits_taken.contains(&cleanup);
+            // The handler's range is the whole `try` up to it, the body's and the cases' jumps to
+            // the normal exit inside (`protect(startTryBody, finalHandler, ...)`, 342-351).
             let any = self.code.new_label();
-            for (from, to) in any_ranges {
-                self.code.add_handler(Handler { start: from, end: to, handler: any, catch_type: 0 });
-            }
+            self.code.add_handler(Handler { start, end: any, handler: any, catch_type: 0 });
             self.code.locals_release(protected);
             self.code.bind_handler(any, throwable_vt);
-            let mark = self.code.locals_mark();
+            // Its exception's slot is held until the `try` ends (dotty's `makeLocal`), so the copies
+            // after it take the slots after it, and a finalizer's own vals the same slots in every
+            // copy, as dotty's (`getOrMakeLocal`, BCodeBodyBuilder.scala 331-335).
             let thrown = self.store_new(&throwable);
             self.write(f);
             self.load(thrown, &throwable);
             self.code.op(op::ATHROW);
             self.code.pop();
             self.code.end_path();
-            self.code.locals_release(mark);
-            self.code.bind(normal_exit);
-            self.write(f);
-            if let Some(pending) = pending {
-                let skip = self.code.new_label();
-                self.load(pending, &ErasedType::I);
-                self.jump_if(op::IFEQ, 1, skip);
-                match self.m.finalizers.last().copied() {
-                    Some(outer) => {
-                        self.iconst(1);
-                        self.store(outer.pending, &ErasedType::I);
-                        if let (Some(slot), Some(outer_slot)) = (return_slot, outer.value) {
-                            self.load(slot, &ret);
-                            self.store(outer_slot, &ret);
-                        }
-                        self.m.exits_taken.push(outer.exit);
-                        self.goto(outer.exit);
-                    }
-                    None => {
-                        if let Some(slot) = return_slot {
-                            self.load(slot, &ret);
-                        }
-                        self.return_value(&ret);
-                    }
-                }
-                self.code.bind(skip);
+            if needs_cleanup {
+                self.code.bind(cleanup);
+                self.code.hold_local(thrown);
+                self.write(f);
+                self.pending_cleanups(&ret);
             }
+            self.code.bind(normal_exit);
+            self.code.hold_local(thrown);
+            self.write(f);
         } else {
             self.code.bind(normal_exit);
         }
@@ -3979,6 +3953,47 @@ impl<'a> Gen<'a> {
             self.load(slot, want);
         }
         self.code.locals_release(outer);
+        if made_early {
+            self.m.early_return = None;
+        }
+    }
+
+    /// After a cleanup copy (`pendingCleanups`, BCodeSyncAndTry.scala 426-440): on to the enclosing
+    /// frame's cleanup, or the early-return slot returned.
+    fn pending_cleanups(&mut self, ret: &ErasedType) {
+        match self.m.finalizers.last().copied() {
+            Some(outer) => {
+                self.m.exits_taken.push(outer.cleanup);
+                self.goto(outer.cleanup);
+            }
+            None => {
+                if let Some(slot) = self.m.early_return {
+                    self.load(slot, ret);
+                }
+                self.return_value(ret);
+            }
+        }
+    }
+
+    /// The early-return slot made before a frame whose code returns (`returns`), where the method
+    /// returns a value and no enclosing frame made it: dotty makes `earlyReturnVar` at the first such
+    /// return, but a frame of this writer's is its scope's, so the slot stands before the frame,
+    /// given the zero of its type. Whether this frame made it, to drop it with its scope.
+    fn early_return_for(&mut self, returns: bool) -> bool {
+        let ret = self.m.ret.clone();
+        // Out of a closure a `return` is thrown, through no frame.
+        if !returns || self.m.closure || self.m.early_return.is_some() || ret == ErasedType::V {
+            return false;
+        }
+        match &ret {
+            ErasedType::L(_) => {
+                self.code.op(op::ACONST_NULL);
+                self.code.push(VT::Null);
+            }
+            _ => self.adapt(&ErasedType::V, &ret),
+        }
+        self.m.early_return = Some(self.store_new(&ret));
+        true
     }
 
     /// The code `body` writes at the type `t` under the monitor of the object `recv` loads (a `Synchronized` node), as
@@ -3988,8 +4003,9 @@ impl<'a> Gen<'a> {
     /// `return` inside leaves through this block's frame (`registerCleanup`): its cleanup, written only where a return
     /// took it (`shouldEmitCleanup`), exits the monitor and goes on to the next enclosing frame's exit or returns
     /// (`pendingCleanups`). The value's type is the body's; the operands under the block stay where they are, a
-    /// `return` inside dropping them as it leaves (`drop_stack`).
-    pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: ErasedType, body: impl FnOnce(&mut Self, &ErasedType)) -> ErasedType {
+    /// `return` inside dropping them as it leaves (`drop_stack`). `returns`: whether the body holds a `return` of the
+    /// method (the node's `returns`), for which the early-return slot is made before the block.
+    pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: ErasedType, returns: bool, body: impl FnOnce(&mut Self, &ErasedType)) -> ErasedType {
         let object = ErasedType::object();
         recv(self);
         self.dup();
@@ -4011,23 +4027,10 @@ impl<'a> Gen<'a> {
             }
         };
         let ret = self.m.ret.clone();
-        let return_slot = match &ret {
-            ErasedType::V => None,
-            ErasedType::L(_) => {
-                self.code.op(op::ACONST_NULL);
-                self.code.push(VT::Null);
-                Some(self.store_new(&ret))
-            }
-            _ => {
-                self.adapt(&ErasedType::V, &ret);
-                Some(self.store_new(&ret))
-            }
-        };
-        self.iconst(0);
-        let pending = self.store_new(&ErasedType::I);
+        let made_early = self.early_return_for(returns);
         let (start, end, handler, cleanup, post) =
             (self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label());
-        self.m.finalizers.push(FinallyFrame { pending, value: return_slot, exit: cleanup });
+        self.m.finalizers.push(FinallyFrame { cleanup });
         let protected = self.code.locals_mark();
         self.code.bind(start);
         let from = self.code.pc();
@@ -4061,28 +4064,14 @@ impl<'a> Gen<'a> {
             self.load(monitor, &object);
             self.code.op(op::MONITOREXIT);
             self.code.pop();
-            match self.m.finalizers.last().copied() {
-                Some(outer) => {
-                    self.iconst(1);
-                    self.store(outer.pending, &ErasedType::I);
-                    if let (Some(slot), Some(outer_slot)) = (return_slot, outer.value) {
-                        self.load(slot, &ret);
-                        self.store(outer_slot, &ret);
-                    }
-                    self.m.exits_taken.push(outer.exit);
-                    self.goto(outer.exit);
-                }
-                None => {
-                    if let Some(slot) = return_slot {
-                        self.load(slot, &ret);
-                    }
-                    self.return_value(&ret);
-                }
-            }
+            self.pending_cleanups(&ret);
         }
         self.code.bind(post);
         if let Some(slot) = result {
             self.load(slot, &t);
+        }
+        if made_early {
+            self.m.early_return = None;
         }
         t
     }
@@ -7025,8 +7014,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Whether a block's statements are lowered whole, or why not: a pattern definition, and a
-    /// lazy val that `Gen::is_lazy_local` does not take, declare their locals as they are written.
+    /// Whether a block's statements are lowered whole, or why not: a pattern definition declares its
+    /// locals as it is written. A `lazy val` among them is a local lazy val (`Gen::is_lazy_local`): its
+    /// symbol is made by `Typer::enter_local_val` (Owner::Local, a `Val` or a `Var`), and no other
+    /// statement of a block is lazy (a hoisted temporary, a macro's `Symbol.newVal` are not).
     pub(super) fn block_lowers(&mut self, stmts: ListRef) -> Result<(), Unlowered> {
         let cx = self.cx;
         cx.input.prog.stmts[stmts.range()].iter().try_for_each(|s| match *s {
@@ -7036,7 +7027,6 @@ impl<'a> Gen<'a> {
             TStmt::Pat(pat, _, PatDefForm::SimpleTuple) if self.lowered_simple_tuple_definition(pat) => Ok(()),
             TStmt::Pat(pat, _, PatDefForm::ForAlias) if self.lowered_alias_definition(pat) => Ok(()),
             TStmt::Pat(..) => Err(Unlowered::PatternDefinition),
-            TStmt::Val(sym, _) if !self.is_lazy_local(sym) && cx.input.syms.sym(sym).mods & mods::LAZY != 0 => Err(Unlowered::LazyValNotLocal),
             TStmt::Val(..) | TStmt::Expr(_) | TStmt::Fun(_) => Ok(()),
         })
     }

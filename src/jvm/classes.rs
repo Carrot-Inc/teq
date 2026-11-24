@@ -1,6 +1,6 @@
 //! Classes, traits, objects, enums and the module class of a file's top-level definitions.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodFlags, MethodRef, Relation, Unlowered, Visibility};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodFlags, MethodRef, Refusal, Relation, Unlowered, Visibility};
 use super::classfile::*;
 use super::free;
 use super::gen::*;
@@ -271,14 +271,6 @@ impl<'a> Gen<'a> {
         }
         self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
         self.overflow |= self.cw.overflow;
-    }
-
-    /// Leaves the method begun without an end, where its code cannot be finished: it is none of
-    /// the class's.
-    fn abandon_method(&mut self) {
-        if self.repeated.take().is_none() {
-            self.plan.methods.pop();
-        }
     }
 
     /// The lifted methods that the methods emitted so far asked for, and the ones those ask for.
@@ -1124,9 +1116,11 @@ impl<'a> Gen<'a> {
         let mut early_lookups: Option<usize> = None;
         for f in fields.iter().filter(|f| f.constant.is_none()) {
             if f.lazy && self.is_thread_unsafe(f.sym) {
-                // `@threadUnsafe`: the unsynchronised holder alone, no handle (`lazy_holder_body`).
-                let container = self.lazy_member_names(&f.name).0;
-                self.field(FieldFlags::PRIVATE, &container, &ErasedType::object());
+                // `@threadUnsafe`: the container of the member's type and its flag, no handle
+                // (`transformMemberDefThreadUnsafe`, `Gen::thread_unsafe_getter`).
+                let (container, flag) = self.thread_unsafe_names(&f.name);
+                self.field(FieldFlags::PRIVATE, &container, &f.ty);
+                self.field(FieldFlags::PRIVATE, &flag, &ErasedType::Z);
                 continue;
             }
             if f.lazy {
@@ -1572,17 +1566,11 @@ impl<'a> Gen<'a> {
     }
 
     /// Whether every part of a class's body has nodes (`Gen::class_body`), or why not: no local
-    /// trait's initialiser takes the values of the block (`Gen::load_proxies` reads the `Extras`),
-    /// and every trait's arguments match its parameters with no lazy val before them.
+    /// trait's initialiser takes the values of the block (`Gen::load_proxies` reads the `Extras`).
     fn class_body_lowers(&mut self, tc: &TClass) -> Result<(), Unlowered> {
-        let prog = self.cx.input.prog;
         tc.init.iter().try_for_each(|init| match *init {
             TInit::Parent(b, _) if self.trait_init_proxies(b).is_some() => Err(Unlowered::CtorTraitProxies),
-            TInit::Parent(b, call) => match call.args.is_empty() || self.trait_params(b).len() == call.args.len as usize && self.prelude_lowers(&prog.stmts[call.prelude.range()]).is_ok() {
-                true => Ok(()),
-                false => Err(Unlowered::CtorTraitArguments),
-            },
-            TInit::Field(..) | TInit::Stmt(_) => Ok(()),
+            TInit::Parent(..) | TInit::Field(..) | TInit::Stmt(_) => Ok(()),
         })
     }
 
@@ -1691,15 +1679,11 @@ impl<'a> Gen<'a> {
     }
 
     /// The statements a constructor's or a trait's arguments hold before them (the values of
-    /// named and default arguments): an expression's and a val's, nothing else.
+    /// named and default arguments): an expression's and a val's, nothing else. Each val is a
+    /// temporary the typer hoists ahead of the call (`Typer::hoist`, `elaborate_clause`), never lazy.
     fn prelude(&mut self, parts: &mut Parts, stmts: &[TStmt]) {
         for &s in stmts {
             match s {
-                // A lazy local's holder: written in place (`Gen::prelude_lowers`).
-                TStmt::Val(sym, init) if self.lazy_val(sym) => {
-                    assert!(matches!(parts, Parts::Written), "a lazy val in a tree");
-                    self.local_val(sym, init);
-                }
                 TStmt::Expr(_) | TStmt::Val(..) => {
                     let nodes = self.lowering(|g| {
                         let mut nodes = Vec::new();
@@ -1710,13 +1694,6 @@ impl<'a> Gen<'a> {
                 }
                 TStmt::Fun(_) | TStmt::Pat(..) => {}
             }
-        }
-    }
-
-    fn prelude_lowers(&self, stmts: &[TStmt]) -> Result<(), Unlowered> {
-        match stmts.iter().any(|s| matches!(*s, TStmt::Val(sym, _) if self.lazy_val(sym))) {
-            true => Err(Unlowered::CtorPreludeLazyVal),
-            false => Ok(()),
         }
     }
 
@@ -1776,87 +1753,6 @@ impl<'a> Gen<'a> {
         out
     }
 
-    /// The body of a `@threadUnsafe` lazy member's getter over the field `container` of the class being
-    /// written (an `Object`, null until the value is computed): computed once by `init`, then read. Not
-    /// safe across threads, and no state for a value being computed: a read from inside the initialiser
-    /// runs it again, as under dotty's `mkThreadUnsafeDef`, whose flag is set after the right-hand
-    /// side. A computed null is held as scala-library's `LazyVals$NullValue$`, so that it is computed
-    /// once too; an initialiser that throws leaves the holder empty.
-    fn lazy_holder_body(&mut self, name: &str, container: &str, ty: &ErasedType, init: HolderInit) {
-        self.outside(Unlowered::ThreadUnsafeLazyMember);
-        let owner = self.this_name.clone();
-        let this = ErasedType::L(owner.clone());
-        let object = ErasedType::object();
-        let null_once = matches!(ty, ErasedType::L(_));
-        let ready = self.code.new_label();
-        let done = self.code.new_label();
-        self.load(0, &this);
-        self.getfield(&owner, container, &object);
-        self.dup();
-        self.jump_if(op::IFNONNULL, 1, ready);
-        self.pop_value(&object);
-        match init {
-            HolderInit::TraitStatic(base) => {
-                self.load(0, &this);
-                self.invoke(Invoke::Static, &base, true, &format!("{}$", name), &[ErasedType::L(base.clone())], ty);
-            }
-            HolderInit::Expr(init) => self.expr(init, ty),
-            HolderInit::Module { class, outer } => {
-                self.new_object(&class);
-                self.load(0, &this);
-                self.invoke(Invoke::Special, &class, false, "<init>", &[ErasedType::L(outer)], &ErasedType::V);
-            }
-        }
-        self.adapt(ty, &object);
-        let vt = self.vt(&object);
-        self.code.retype_top(vt);
-        let value = self.store_new(&object);
-        self.load(0, &this);
-        self.load(value, &object);
-        if null_once {
-            self.null_to_sentinel();
-        }
-        self.putfield(&owner, container, &object);
-        self.load(value, &object);
-        self.goto(done);
-        self.code.bind(ready);
-        if null_once {
-            self.sentinel_to_null();
-        }
-        self.code.bind(done);
-        self.adapt(&object, ty);
-    }
-
-    /// The value on the stack, about to be stored in a lazy holder, with null replaced by
-    /// `LazyVals$NullValue$`: the holder's null stands for a value not computed yet.
-    fn null_to_sentinel(&mut self) {
-        let object = ErasedType::object();
-        let null_value = ErasedType::L(Rc::from(NULL_VALUE));
-        let vt = self.vt(&object);
-        self.code.retype_top(vt);
-        let computed = self.code.new_label();
-        self.dup();
-        self.jump_if(op::IFNONNULL, 1, computed);
-        self.pop_value(&object);
-        self.getstatic(NULL_VALUE, "MODULE$", &null_value);
-        self.code.bind(computed);
-    }
-
-    /// The value on the stack, read from a computed lazy holder, with `LazyVals$NullValue$`
-    /// replaced by the null it stands for.
-    fn sentinel_to_null(&mut self) {
-        let object = ErasedType::object();
-        let null_value = ErasedType::L(Rc::from(NULL_VALUE));
-        let held = self.code.new_label();
-        self.dup();
-        self.getstatic(NULL_VALUE, "MODULE$", &null_value);
-        self.jump_if(op::IF_ACMPNE, 2, held);
-        self.pop_value(&object);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        self.code.bind(held);
-    }
-
     /// Whether `@volatile` marks the val or var a field holds, which scalac's field carries as
     /// `ACC_VOLATILE` (`Mixin` copies a trait's var's annotations to the class's member,
     /// `Memoize` to its field): a source's by the annotation's class (`Worker::jvm_volatile`), a
@@ -1870,7 +1766,7 @@ impl<'a> Gen<'a> {
     /// `sym.isThreadUnsafe`, which `LazyVals.transformLazyVal` sends to `transformMemberDefThreadUnsafe`. A class
     /// holding a trait's marked member asks of the trait's symbol, whose annotations `MixinOps.mkForwarderSym`
     /// copies to the class's.
-    fn is_thread_unsafe(&self, s: SymId) -> bool {
+    pub(super) fn is_thread_unsafe(&self, s: SymId) -> bool {
         self.cx.input.source_thread_unsafe.map_or(false, |m| m.contains_key(&s))
     }
 
@@ -1887,7 +1783,7 @@ impl<'a> Gen<'a> {
         let params = self.trait_params(b);
         let args = prog.expr_list(call.args).to_vec();
         if params.len() != args.len() {
-            self.unsupported("the arguments of a trait that its parameters do not match");
+            self.part(parts, |g| g.lower_refused(Refusal::TraitArgumentsMismatch));
             return false;
         }
         self.prelude(parts, &prog.stmts[call.prelude.range()]);
@@ -2102,9 +1998,7 @@ impl<'a> Gen<'a> {
         self.bind_extras(&extras, slot);
         if let Err(why) = self.constructor_lowers(k) {
             self.outside(why);
-            if !self.constructor_parts(&mut Parts::Written, k) {
-                return;
-            }
+            self.constructor_parts(&mut Parts::Written, k);
             self.return_value(&ErasedType::V);
         } else if k.is_object {
             self.write_module(true, |g| g.primary_tree(k));
@@ -2140,9 +2034,7 @@ impl<'a> Gen<'a> {
     /// Whether every part of a primary constructor has nodes, an object's body among them, so
     /// that the constructor is one tree; or why not.
     fn constructor_lowers(&mut self, k: &PrimaryCtor) -> Result<(), Unlowered> {
-        let prelude = &self.cx.input.prog.stmts[k.tc.parent_prelude.range()];
         self.super_call_lowers(k)?;
-        self.prelude_lowers(prelude)?;
         self.class_body_lowers(k.tc)
     }
 
@@ -2151,8 +2043,7 @@ impl<'a> Gen<'a> {
     fn super_call_lowers(&self, k: &PrimaryCtor) -> Result<(), Unlowered> {
         match k.route {
             SuperCall::Defaults(..) => Err(Unlowered::CtorSuperDefaults),
-            SuperCall::Refused => Err(Unlowered::CtorSuperRefused),
-            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Unwritten(..) | SuperCall::Via(..) | SuperCall::Captured(..) => Ok(()),
+            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Unwritten(..) | SuperCall::Via(..) | SuperCall::Captured(..) | SuperCall::Refused => Ok(()),
         }
     }
 
@@ -2222,9 +2113,9 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The parts of a primary constructor's body in order: false where it is refused, the method
-    /// abandoned.
-    fn constructor_parts(&mut self, parts: &mut Parts, k: &PrimaryCtor) -> bool {
+    /// The parts of a primary constructor's body in order. A refused call of the superclass's
+    /// constructor is the last: nothing after it is lowered or reported.
+    fn constructor_parts(&mut self, parts: &mut Parts, k: &PrimaryCtor) {
         let prog = self.cx.input.prog;
         let tc = k.tc;
         let this = ErasedType::L(self.this_name.clone());
@@ -2245,8 +2136,9 @@ impl<'a> Gen<'a> {
             self.param_fields(parts, tc, k.fields);
         }
         self.prelude(parts, &prog.stmts[tc.parent_prelude.range()]);
-        if !self.super_call(parts, k) {
-            return false;
+        self.super_call(parts, k);
+        if let SuperCall::Refused = k.route {
+            return;
         }
         if k.n_captures > 0 {
             // What the class captures, then the instances and the keys its copies of local defs
@@ -2274,7 +2166,6 @@ impl<'a> Gen<'a> {
             }
             self.class_body(parts, tc, k.fields, &this);
         }
-        true
     }
 
     /// The fields of the class's own constructor parameters set from them.
@@ -2292,20 +2183,14 @@ impl<'a> Gen<'a> {
     }
 
     /// The superclass's constructor run on the instance: the name and ordinal of a value of a
-    /// Java enum first, then the arguments by the route. False where the route refuses.
-    fn super_call(&mut self, parts: &mut Parts, k: &PrimaryCtor) -> bool {
+    /// Java enum first, then the arguments by the route.
+    fn super_call(&mut self, parts: &mut Parts, k: &PrimaryCtor) {
         if self.super_call_lowers(k).is_ok() {
             self.part(parts, |g| g.lower_superclass_ctor(k));
-            return true;
+            return;
         }
-        // The refused route, and every parameter's default (not lowered yet), written in place
-        // (`Gen::constructor`).
+        // Every parameter's default, not lowered yet, written in place (`Gen::constructor`).
         assert!(matches!(parts, Parts::Written), "a route not lowered in a tree");
-        if let SuperCall::Refused = k.route {
-            self.unsupported("an enum case without the arguments of its enum");
-            self.abandon_method();
-            return false;
-        }
         let leading = k.leading_params();
         let mut params: Vec<ErasedType> = leading.iter().map(|&i| self.m.params[i].1.clone()).collect();
         let this = ErasedType::L(self.this_name.clone());
@@ -2319,7 +2204,6 @@ impl<'a> Gen<'a> {
         self.m.before_super = false;
         params.extend(types.iter().cloned());
         self.invoke(Invoke::Special, k.super_name, false, "<init>", &params, &ErasedType::V);
-        true
     }
 
     /// The superclass's constructor run on the instance, by a route that has nodes (`Gen::super_call_lowers`):
@@ -2328,6 +2212,9 @@ impl<'a> Gen<'a> {
     /// them through its selected constructor, what it captures first, or as its class file takes them
     /// (`Gen::lower_via_arguments`, `Gen::lower_new_arguments`, `Gen::lower_unwritten_ctor_arguments`).
     fn lower_superclass_ctor(&mut self, k: &PrimaryCtor) -> LirId {
+        if let SuperCall::Refused = k.route {
+            return self.lower_refused(Refusal::EnumCaseWithoutArguments);
+        }
         let leading = k.leading_params();
         let mut params: Vec<ErasedType> = leading.iter().map(|&i| self.m.params[i].1.clone()).collect();
         let mut args: Vec<LirId> = leading.iter().map(|&i| self.param(i)).collect();
@@ -2351,7 +2238,8 @@ impl<'a> Gen<'a> {
                 let (outer, declared) = self.unwritten_ctor_layout(e, via).expect("its class file's layout, by the route");
                 self.lower_unwritten_ctor_arguments(via, written, outer, declared)
             }
-            SuperCall::Defaults(..) | SuperCall::Refused => unreachable!("not lowered (`Gen::super_call_lowers`)"),
+            SuperCall::Defaults(..) => unreachable!("not lowered (`Gen::super_call_lowers`)"),
+            SuperCall::Refused => unreachable!("refused above"),
         };
         self.m.before_super = false;
         args.extend(nodes);
@@ -2409,18 +2297,11 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        match self.prelude_lowers(prelude) {
-            Ok(()) => self.body(|g| {
-                let mut parts = Parts::Tree(Vec::new(), Vec::new());
-                g.secondary_parts(&mut parts, prelude, route, after);
-                g.returning(parts).0
-            }),
-            Err(why) => {
-                self.outside(why);
-                self.secondary_parts(&mut Parts::Written, prelude, route, after);
-                self.return_value(&ErasedType::V);
-            }
-        }
+        self.body(|g| {
+            let mut parts = Parts::Tree(Vec::new(), Vec::new());
+            g.secondary_parts(&mut parts, prelude, route, after);
+            g.returning(parts).0
+        });
         self.end_method();
         if !self.this_class.map_or(false, |c| cx.ctor_defaults_on_companion(c) || cx.ctor_defaults_on_inner_companion(c) || cx.ctor_defaults_on_local_companion(c)) {
             let clauses: Vec<ClauseSig> = cx.input.syms.sym(fun.sym).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone());
@@ -2543,13 +2424,14 @@ impl<'a> Gen<'a> {
 
     /// The getters of the forwarders `Mixin` gives the class for its traits' lazy members, in the order the class
     /// holds them (`class_fields`' trait part, then `class_file_storage`'s holders), each with its name as written
-    /// (a class file's holder by its name there decoded, as dotty's unpickler reads it).
-    pub(super) fn lazy_forwarder_names(&mut self, tc: &TClass) -> Vec<(String, String)> {
+    /// (a class file's holder by its name there decoded, as dotty's unpickler reads it) and whether `@threadUnsafe`
+    /// marks it (`Gen::is_thread_unsafe`: a member of the build's sources alone).
+    pub(super) fn lazy_forwarder_names(&mut self, tc: &TClass) -> Vec<(String, String, bool)> {
         let c = tc.id;
         let captures = if self.cx.input.syms.class(c).kind == ClassKind::Anon { tc.ctor_params.len() } else { tc.captures };
         let fields = self.class_fields(tc, captures);
         let interner = self.cx.input.interner;
-        let mut out: Vec<(String, String)> = fields.iter().filter(|f| f.lazy && f.lazy_owner.is_some()).map(|f| (f.name.clone(), interner.get(self.cx.input.syms.sym(f.sym).name).to_string())).collect();
+        let mut out: Vec<(String, String, bool)> = fields.iter().filter(|f| f.lazy && f.lazy_owner.is_some()).map(|f| (f.name.clone(), interner.get(self.cx.input.syms.sym(f.sym).name).to_string(), self.is_thread_unsafe(f.sym))).collect();
         let cx = self.cx;
         let syms = cx.input.syms;
         let inherited = self.traits_implemented_above(c);
@@ -2560,8 +2442,8 @@ impl<'a> Gen<'a> {
             }
             let read = self.class_file_trait_fields(b);
             for (name, _, _) in &read.holders {
-                if !fields.iter().any(|f| &f.name == name) && !out.iter().any(|(n, _)| n == name) {
-                    out.push((name.clone(), super::names::decode(name)));
+                if !fields.iter().any(|f| &f.name == name) && !out.iter().any(|(n, _, _)| n == name) {
+                    out.push((name.clone(), super::names::decode(name), false));
                 }
             }
         }
@@ -2571,7 +2453,7 @@ impl<'a> Gen<'a> {
     fn accessors(&mut self, f: &FieldDef) {
         let owner = self.this_name.clone();
         let getter_desc = method_desc(&[], &f.ty);
-        // A `@threadUnsafe` member's getter computes its right-hand side itself (`lazy_holder_body`).
+        // A `@threadUnsafe` member's getter computes its right-hand side itself (`Gen::thread_unsafe_getter`).
         let thread_unsafe = f.lazy && self.is_thread_unsafe(f.sym);
         // A trait's final val, object and given are final in the class that holds them, as
         // scalac's `Mixin` copies the member's flags (`mkForwarderSym`); a using parameter's is
@@ -2590,16 +2472,15 @@ impl<'a> Gen<'a> {
         self.begin_method(MethodFlags { is_final, ..MethodFlags::PUBLIC }, &f.name, &getter_desc, false, &[], f.ty.clone(), &f.init.filter(|_| thread_unsafe && f.lazy_owner.is_none()).into_iter().collect::<Vec<_>>());
         let mut holder = None;
         if thread_unsafe {
-            let container = self.lazy_member_names(&f.name).0;
-            match (f.lazy_owner, f.init) {
-                (Some(t), _) => {
-                    let base = self.class_name(t);
-                    self.lazy_holder_body(&f.name, &container, &f.ty, HolderInit::TraitStatic(base));
-                }
-                (None, Some(init)) => self.lazy_holder_body(&f.name, &container, &f.ty, HolderInit::Expr(init)),
-                (None, None) => self.unsupported("a lazy member without an initialiser"),
+            let init = match (f.lazy_owner, f.init) {
+                (Some(t), _) => Some(HolderInit::TraitStatic(self.class_name(t))),
+                (None, Some(init)) => Some(HolderInit::Expr(init)),
+                (None, None) => None,
+            };
+            if init.is_none() {
+                self.unsupported("a lazy member without an initialiser");
             }
-            self.return_value(&f.ty);
+            self.thread_unsafe_getter(&f.name, &f.ty, init);
         } else if f.lazy {
             // `transformMemberDefThreadSafe`: the getter over the holder, the initialiser after it.
             let init = match (f.lazy_owner, f.init) {
@@ -2662,13 +2543,6 @@ impl<'a> Gen<'a> {
                 self.emit_bridges_as(f.sym, name, &setter);
             }
         }
-    }
-
-    /// `VarHandle.compareAndSet` over the handle, the receiver, the expected and the new value on
-    /// the stack, a signature-polymorphic call of scalac's descriptor `(Object, Object, Object)Z`.
-    pub(super) fn var_handle_cas(&mut self) {
-        let object = ErasedType::object();
-        self.invoke(Invoke::Virtual, VAR_HANDLE, false, "compareAndSet", &[object.clone(), object.clone(), object], &ErasedType::Z);
     }
 
     /// Whether `s` is the implementation the class being written was given for a deferred given
@@ -4377,9 +4251,10 @@ impl<'a> Gen<'a> {
         }
         for f in &fields {
             if f.lazy && self.is_thread_unsafe(f.sym) {
-                // `@threadUnsafe`: the unsynchronised holder alone (`emit_class`).
-                let container = self.lazy_member_names(&f.name).0;
-                self.field(FieldFlags::PRIVATE, &container, &ErasedType::object());
+                // `@threadUnsafe`: its container and flag (`emit_class`).
+                let (container, flag) = self.thread_unsafe_names(&f.name);
+                self.field(FieldFlags::PRIVATE, &container, &f.ty);
+                self.field(FieldFlags::PRIVATE, &flag, &ErasedType::Z);
                 continue;
             }
             if f.lazy {

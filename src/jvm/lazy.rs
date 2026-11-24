@@ -2,8 +2,7 @@
 //! 3.8.4), over scala-library's runtime: a local's holder of the `LazyRef` family, read through an accessor and
 //! computed by an initialiser under the holder's monitor (`transformLocalDef`, `transformStats`).
 
-use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Unlowered, Visibility};
-use super::classfile::*;
+use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Visibility};
 use super::gen::*;
 use super::names::*;
 use crate::ast::{mods, ListRef};
@@ -229,7 +228,7 @@ impl<'a> Gen<'a> {
             let stored = g.lir.call(&initialize, initialized_by, &[computed]);
             let otherwise = Some(g.lower_adapt(stored, &value, &ret));
             let body = g.lir.push(Kind::If { cond, then, otherwise }, ret.clone());
-            let synchronized = g.lir.push(Kind::Synchronized { lock, body }, ret.clone());
+            let synchronized = g.push_protected(Kind::Synchronized { lock, body, returns: false }, ret.clone());
             g.lir.ret(synchronized)
         });
     }
@@ -319,54 +318,55 @@ impl<'a> Gen<'a> {
         matches!(tp, ErasedType::L(n) if self.cx.control_state_bases.iter().any(|b| **b == **n))
     }
 
-    /// The getter's body over the holder (`mkThreadSafeDef` 374-389), returned: the container read,
-    /// returned where it holds a value (`immediateValueCondition`), null where it holds `NullValue`,
-    /// else the initialiser's. A type a control state's class derives from tests the value as
-    /// neither null nor a control state, whose null test no node writes yet (`ifnull`): its
-    /// getter is written here; any other's is a tree (`Gen::lower_thread_safe_getter`).
-    pub fn thread_safe_getter(&mut self, h: &LazyHolder) {
-        if !self.control_state_super(&h.ty) {
-            return self.body(|g| g.lower_thread_safe_getter(h));
-        }
-        self.outside(Unlowered::LazyMember);
+    /// The getter of a `@threadUnsafe` member `getter` of the type `ty` over its container and flag
+    /// (`mkThreadUnsafeDef`, LazyVals.scala 230-239): `if !flag then { container = rhs; flag = true }; container`,
+    /// the right-hand side the member's own or a trait's static (`HolderInit::TraitStatic`), none where it has none
+    /// (reported by the caller).
+    pub fn thread_unsafe_getter(&mut self, getter: &str, ty: &ErasedType, init: Option<super::classes::HolderInit>) {
+        use super::classes::HolderInit;
+        let (container, flag) = self.thread_unsafe_names(getter);
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
-        let object = ErasedType::object();
-        let tp = h.ty.clone();
-        self.load(0, &this);
-        self.getfield(&owner, &h.container, &object);
-        let r = self.store_new(&object);
-        let slow = self.code.new_label();
-        let call = self.code.new_label();
-        let done = self.code.new_label();
-        self.load(r, &object);
-        self.jump_if(op::IFNULL, 1, slow);
-        self.load(r, &object);
-        self.instance_of(LAZY_CONTROL);
-        self.jump_if(op::IFNE, 1, slow);
-        self.load(r, &object);
-        self.adapt(&object, &tp);
-        self.goto(done);
-        self.code.bind(slow);
-        self.load(r, &object);
-        let null_value = ErasedType::L(Rc::from(NULL_VALUE));
-        self.getstatic(NULL_VALUE, "MODULE$", &null_value);
-        self.jump_if(op::IF_ACMPNE, 2, call);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        self.adapt(&object, &tp);
-        self.goto(done);
-        self.code.bind(call);
-        self.load(0, &this);
-        self.invoke(Invoke::Special, &owner, false, &h.init, &[], &object);
-        self.adapt(&object, &tp);
-        self.code.bind(done);
-        self.return_value(&tp);
+        self.body(|g| {
+            let mut stmts = Vec::new();
+            if let Some(init) = init {
+                let receiver = g.lir.this(this.clone());
+                let set = g.lir.field(receiver, &owner, &flag, ErasedType::Z);
+                let unset = g.lir.push(Kind::Not(set), ErasedType::Z);
+                let value = match init {
+                    HolderInit::Expr(e) => g.lower_expr(e, ty),
+                    HolderInit::TraitStatic(base) => {
+                        let forwarder = method_ref(Invoke::Static, &base, true, &format!("{}$", getter), &[ErasedType::L(base.clone())], ty);
+                        let instance = g.lir.this(this.clone());
+                        g.lir.static_call(&forwarder, &[instance])
+                    }
+                    HolderInit::Module { .. } => unreachable!("a `@threadUnsafe` member's own or its trait's right-hand side"),
+                };
+                let receiver = g.lir.this(this.clone());
+                let stored = g.lir.store(receiver, &owner, &container, value);
+                let receiver = g.lir.this(this.clone());
+                let done = g.lir.bool(true);
+                let flagged = g.lir.store(receiver, &owner, &flag, done);
+                let unit = g.lir.unit();
+                let compute = g.lir.seq(&[stored, flagged], unit);
+                stmts.push(g.lir.push(Kind::If { cond: unset, then: compute, otherwise: None }, ErasedType::V));
+            }
+            let receiver = g.lir.this(this.clone());
+            let held = g.lir.field(receiver, &owner, &container, ty.clone());
+            let answer = g.lir.ret(held);
+            g.lir.seq(&stmts, answer)
+        });
     }
 
-    /// The getter of a lazy member whose type no control state's class derives from: `val r =
-    /// container; if r.isInstanceOf[T] then r.asInstanceOf[T] else if r eq NullValue then null
-    /// else x$lzyINITN()`, returned.
+    /// The getter's body over the holder (`mkThreadSafeDef` 374-389), returned (`Gen::lower_thread_safe_getter`).
+    pub fn thread_safe_getter(&mut self, h: &LazyHolder) {
+        self.body(|g| g.lower_thread_safe_getter(h));
+    }
+
+    /// The getter of a lazy member: `val r = container; if <r holds a value> then r.asInstanceOf[T] else if r eq
+    /// NullValue then null else x$lzyINITN()`, returned. A value is `r.isInstanceOf[T]`, or for a type a control
+    /// state's class derives from `r != null && !r.isInstanceOf[LazyValControlState]` (`immediateValueCondition`,
+    /// 367-371).
     fn lower_thread_safe_getter(&mut self, h: &LazyHolder) -> LirId {
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
@@ -381,7 +381,16 @@ impl<'a> Gen<'a> {
         let container = self.lir.field(receiver, &owner, &h.container, object.clone());
         let held = self.lir.push(Kind::Let { temp: r, init: container }, ErasedType::V);
         let value = self.lir.push(Kind::Temp(r), object.clone());
-        let cond = self.lir.push(Kind::Is { value, class: tested }, ErasedType::Z);
+        let cond = if self.control_state_super(&tp) {
+            let null = self.lir.push(Kind::Null, object.clone());
+            let present = self.lir.push(Kind::Compare { relation: Relation::Ne, how: Comparing::Identity, left: value, right: null }, ErasedType::Z);
+            let value = self.lir.push(Kind::Temp(r), object.clone());
+            let control = self.lir.push(Kind::Is { value, class: Rc::from(LAZY_CONTROL) }, ErasedType::Z);
+            let settled = self.lir.push(Kind::Not(control), ErasedType::Z);
+            self.lir.push(Kind::And(present, settled), ErasedType::Z)
+        } else {
+            self.lir.push(Kind::Is { value, class: tested }, ErasedType::Z)
+        };
         let value = self.lir.push(Kind::Temp(r), object.clone());
         let then = self.lower_adapt(value, &object, &tp);
         let value = self.lir.push(Kind::Temp(r), object.clone());
@@ -400,20 +409,15 @@ impl<'a> Gen<'a> {
         self.lir.seq(&[held], answer)
     }
 
-    /// `x$lzyINITN`, the initialiser's state machine over the container (`mkThreadSafeDef`
-    /// 391-457): `null` to `Evaluating` by a compare-and-set, the right-hand side computed, the
-    /// value (or `NullValue` for null) published in a `finally`, which hands it to the waiters'
-    /// `Waiting` latch where one was installed and resets the state where the computation threw;
-    /// `Evaluating` met is replaced by a `Waiting` and waited on, `Waiting` waited on, `NullValue`
-    /// answered as null, a value answered.
+    /// `x$lzyINITN`, the initialiser as dotty's `mkThreadSafeDef` builds it (LazyVals.scala 353-469): a loop with no
+    /// condition over the container's state (`initMainLoop`, 466); where it is null, `null` to `Evaluating` by a
+    /// compare-and-set, the right-hand side computed in a `try` whose `finally` publishes the value (or `NullValue`
+    /// for null), handing it to the waiters' `Waiting` latch where one was installed, and the value returned;
+    /// `Evaluating` met is replaced by a `Waiting`, `Waiting` waited on, `NullValue` answered as null, a value
+    /// answered (`ifNotUninitialized`, 445-463).
     pub fn thread_safe_init(&mut self, h: &LazyHolder, rhs: &super::classes::HolderInit) {
         use super::classes::HolderInit;
-        let owner = self.this_name.clone();
-        let this = ErasedType::L(owner.clone());
         let object = ErasedType::object();
-        let handle_type = ErasedType::L(Rc::from(VAR_HANDLE));
-        let evaluating = ErasedType::L(Rc::from(LAZY_EVALUATING));
-        let waiting: Rc<str> = Rc::from(LAZY_WAITING);
         let roots: Vec<TExprId> = match rhs {
             HolderInit::Expr(e) => vec![*e],
             _ => Vec::new(),
@@ -424,156 +428,138 @@ impl<'a> Gen<'a> {
             self.unsupported(&format!("internal error: a second lazy initialiser {} in the class", h.init));
             return;
         }
-        self.begin_method(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, &h.init, "()Ljava/lang/Object;", false, &[], object.clone(), &roots);
-        self.outside(Unlowered::LazyMember);
-        let lp = self.code.new_label();
-        self.code.bind(lp);
-        self.load(0, &this);
-        self.getfield(&owner, &h.container, &object);
-        let cur = self.store_new(&object);
-        let not_null = self.code.new_label();
-        self.load(cur, &object);
-        self.jump_if(op::IFNONNULL, 1, not_null);
-        // `if CAS(this, null, Evaluating)`, else round again.
-        self.getstatic(&owner, &h.handle, &handle_type);
-        self.load(0, &this);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
-        self.var_handle_cas();
-        self.jump_if(op::IFEQ, 1, lp);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        let result = self.store_new(&object);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        let nullable = self.store_new(&object);
-        let (start, end, handler) = (self.code.new_label(), self.code.new_label(), self.code.new_label());
-        let protected = self.code.locals_mark();
-        self.code.bind(start);
-        let from = self.code.pc();
-        // `resultNullable = rhs`, boxed (412).
-        match rhs {
-            HolderInit::Expr(e) => self.expr(*e, &h.ty),
-            HolderInit::TraitStatic(base) => {
-                self.load(0, &this);
-                self.invoke(Invoke::Static, base, true, &format!("{}$", h.getter), &[ErasedType::L(base.clone())], &h.ty);
-            }
-            HolderInit::Module { class, outer } => {
-                self.new_object(class);
-                self.load(0, &this);
-                self.invoke(Invoke::Special, class, false, "<init>", &[ErasedType::L(outer.clone())], &ErasedType::V);
-            }
-        }
-        let ty = h.ty.clone();
-        self.adapt(&ty, &object);
-        let vt = self.vt(&object);
-        self.code.retype_top(vt);
-        self.store(nullable, &object);
-        // `if resultNullable eq null then result = NullValue else result = resultNullable`.
-        let present = self.code.new_label();
-        let set = self.code.new_label();
-        self.load(nullable, &object);
-        self.jump_if(op::IFNONNULL, 1, present);
-        let null_value = ErasedType::L(Rc::from(NULL_VALUE));
-        self.getstatic(NULL_VALUE, "MODULE$", &null_value);
-        self.store(result, &object);
-        self.goto(set);
-        self.code.bind(present);
-        self.load(nullable, &object);
-        self.store(result, &object);
-        self.code.bind(set);
-        if self.code.pc() == from {
-            self.code.op(op::NOP);
-        }
-        self.code.bind(end);
-        self.thread_safe_publish(h, result);
-        self.load(nullable, &object);
-        self.return_value(&object);
-        self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
-        self.code.locals_release(protected);
-        let throwable = ErasedType::L(Rc::from(THROWABLE));
-        let tvt = self.vt(&throwable);
-        self.code.bind_handler(handler, tvt);
-        let thrown = self.store_new(&throwable);
-        self.thread_safe_publish(h, result);
-        self.load(thrown, &throwable);
-        self.code.op(op::ATHROW);
-        self.code.pop();
-        self.code.end_path();
-        // A control state: `Evaluating` gets a latch to wait on, `Waiting` is waited on,
-        // `NullValue` answers null; a value is answered.
-        self.code.bind(not_null);
-        let answer = self.code.new_label();
-        let not_evaluating = self.code.new_label();
-        let answer_null = self.code.new_label();
-        self.load(cur, &object);
-        self.instance_of(LAZY_CONTROL);
-        self.jump_if(op::IFEQ, 1, answer);
-        self.load(cur, &object);
-        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
-        self.jump_if(op::IF_ACMPNE, 2, not_evaluating);
-        self.getstatic(&owner, &h.handle, &handle_type);
-        self.load(0, &this);
-        self.load(cur, &object);
-        self.new_object(&waiting);
-        self.invoke(Invoke::Special, &waiting, false, "<init>", &[], &ErasedType::V);
-        self.var_handle_cas();
-        self.pop_value(&ErasedType::Z);
-        self.goto(lp);
-        self.code.bind(not_evaluating);
-        self.load(cur, &object);
-        self.instance_of(&waiting);
-        self.jump_if(op::IFEQ, 1, answer_null);
-        self.load(cur, &object);
-        self.checkcast(&waiting);
-        self.invoke(Invoke::Virtual, &waiting, false, "await", &[], &ErasedType::V);
-        self.goto(lp);
-        self.code.bind(answer_null);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        self.return_value(&object);
-        self.code.bind(answer);
-        self.load(cur, &object);
-        self.return_value(&object);
+        self.begin_method(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, &h.init, "()Ljava/lang/Object;", false, &[], object, &roots);
+        self.body(|g| g.lower_thread_safe_init(h, rhs));
         self.end_method();
     }
 
-    /// The initialiser's `finally` (424-436): `if !CAS(this, Evaluating, result) then { val lock =
-    /// x$lzy.asInstanceOf[Waiting]; CAS(this, lock, result); lock.countDown() }`.
-    fn thread_safe_publish(&mut self, h: &LazyHolder, result: u16) {
+    fn lower_thread_safe_init(&mut self, h: &LazyHolder, rhs: &super::classes::HolderInit) -> LirId {
+        use super::classes::HolderInit;
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
         let object = ErasedType::object();
-        let handle_type = ErasedType::L(Rc::from(VAR_HANDLE));
-        let evaluating = ErasedType::L(Rc::from(LAZY_EVALUATING));
-        let waiting = ErasedType::L(Rc::from(LAZY_WAITING));
-        let done = self.code.new_label();
-        self.getstatic(&owner, &h.handle, &handle_type);
-        self.load(0, &this);
-        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
-        self.load(result, &object);
-        self.var_handle_cas();
-        self.jump_if(op::IFNE, 1, done);
-        self.load(0, &this);
-        self.getfield(&owner, &h.container, &object);
-        self.checkcast(LAZY_WAITING);
-        let lock = self.store_new(&waiting);
-        self.getstatic(&owner, &h.handle, &handle_type);
-        self.load(0, &this);
-        self.load(lock, &waiting);
-        self.load(result, &object);
-        self.var_handle_cas();
-        self.pop_value(&ErasedType::Z);
-        self.load(lock, &waiting);
-        self.invoke(Invoke::Virtual, LAZY_WAITING, false, "countDown", &[], &ErasedType::V);
-        self.code.bind(done);
+        let z = ErasedType::Z;
+        let evaluating: Rc<str> = Rc::from(LAZY_EVALUATING);
+        let waiting: Rc<str> = Rc::from(LAZY_WAITING);
+        let waiting_ty = ErasedType::L(waiting.clone());
+        let null_value: Rc<str> = Rc::from(NULL_VALUE);
+        let control: Rc<str> = Rc::from(LAZY_CONTROL);
+        // `CAS(this, expected, new)` over the container (`casFlag`, 365-369)
+        let container_name: Rc<str> = Rc::from(h.container.as_str());
+        let cas_of = |g: &mut Self, expected: LirId, new: LirId| {
+            let object = g.lir.this(ErasedType::L(owner.clone()));
+            g.lir.push(Kind::LazyCas { object, owner: owner.clone(), field: container_name.clone(), expected, new }, ErasedType::Z)
+        };
+        let container = |g: &mut Self| {
+            let receiver = g.lir.this(ErasedType::L(owner.clone()));
+            g.lir.field(receiver, &owner, &h.container, ErasedType::object())
+        };
+        let eq = |g: &mut Self, left: LirId, right: LirId| g.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Identity, left, right }, ErasedType::Z);
+        let method = |owner: &Rc<str>, name: &str, kind: Invoke| Rc::new(MethodRef { owner: owner.clone(), owner_is_interface: false, name: name.into(), params: Vec::new(), ret: ErasedType::V, desc: "()V".into(), kind });
+        // `if CAS(_x, null, Evaluating) then { var result = null; var resultNullable = null; try ...; return
+        // resultNullable }` (`initialize`, 393-441)
+        let (result, nullable) = (self.lir.temp(), self.lir.temp());
+        let initialize = {
+            let null = self.lir.push(Kind::Null, object.clone());
+            let ev = self.lir.module(&evaluating);
+            let cond = cas_of(self, null, ev);
+            let null = self.lir.push(Kind::Null, object.clone());
+            let declare_result = self.lir.push(Kind::Let { temp: result, init: null }, ErasedType::V);
+            let null = self.lir.push(Kind::Null, object.clone());
+            let declare_nullable = self.lir.push(Kind::Let { temp: nullable, init: null }, ErasedType::V);
+            let value = match rhs {
+                HolderInit::Expr(e) => self.lower_expr(*e, &h.ty),
+                HolderInit::TraitStatic(base) => {
+                    let static_ = Rc::new(MethodRef { owner: base.clone(), owner_is_interface: true, name: format!("{}$", h.getter), params: vec![ErasedType::L(base.clone())], ret: h.ty.clone(), desc: method_desc(&[ErasedType::L(base.clone())], &h.ty), kind: Invoke::Static });
+                    let receiver = self.lir.this(this.clone());
+                    self.lir.static_call(&static_, &[receiver])
+                }
+                HolderInit::Module { class, outer } => {
+                    let ctor = Rc::new(MethodRef { owner: class.clone(), owner_is_interface: false, name: "<init>".into(), params: vec![ErasedType::L(outer.clone())], ret: ErasedType::V, desc: method_desc(&[ErasedType::L(outer.clone())], &ErasedType::V), kind: Invoke::Special });
+                    let receiver = self.lir.this(this.clone());
+                    self.lir.make(&ctor, &[receiver])
+                }
+            };
+            // `resultNullable = rhs`, boxed (412)
+            let boxed = self.lower_adapt(value, &h.ty.clone(), &object);
+            let assign_nullable = self.lir.push(Kind::SetTemp { temp: nullable, value: boxed }, ErasedType::V);
+            // `if resultNullable eq null then result = NullValue else result = resultNullable` (413-417)
+            let read = self.lir.push(Kind::Temp(nullable), object.clone());
+            let null = self.lir.push(Kind::Null, object.clone());
+            let is_null = eq(self, read, null);
+            let marker = self.lir.module(&null_value);
+            let to_marker = self.lir.push(Kind::SetTemp { temp: result, value: marker }, ErasedType::V);
+            let read = self.lir.push(Kind::Temp(nullable), object.clone());
+            let to_value = self.lir.push(Kind::SetTemp { temp: result, value: read }, ErasedType::V);
+            let publish_value = self.lir.push(Kind::If { cond: is_null, then: to_marker, otherwise: Some(to_value) }, ErasedType::V);
+            let unit = self.lir.unit();
+            let body = self.lir.seq(&[assign_nullable, publish_value], unit);
+            // `finally if !CAS(_x, Evaluating, result) then { val lock = _x.asInstanceOf[Waiting]; CAS(_x, lock,
+            // result); lock.countDown() }` (`fin`, `lockRel`, 396-406), with no `else` (dotty's `unitLiteral`)
+            let ev = self.lir.module(&evaluating);
+            let read = self.lir.push(Kind::Temp(result), object.clone());
+            let published = cas_of(self, ev, read);
+            let failed = self.lir.push(Kind::Not(published), z.clone());
+            let lock = self.lir.temp();
+            let held = container(self);
+            let held = self.lir.push(Kind::Cast { value: held, op: crate::lir::Cast::Checked }, waiting_ty.clone());
+            let declare_lock = self.lir.push(Kind::Let { temp: lock, init: held }, ErasedType::V);
+            let read_lock = self.lir.push(Kind::Temp(lock), waiting_ty.clone());
+            let read = self.lir.push(Kind::Temp(result), object.clone());
+            let handed = cas_of(self, read_lock, read);
+            let handed = self.lower_adapt(handed, &z, &ErasedType::V);
+            let read_lock = self.lir.push(Kind::Temp(lock), waiting_ty.clone());
+            let release = self.lir.call(&method(&waiting, "countDown", Invoke::Virtual), read_lock, &[]);
+            let release_lock = self.lir.seq(&[declare_lock, handed], release);
+            let finalizer = self.lir.push(Kind::If { cond: failed, then: release_lock, otherwise: None }, ErasedType::V);
+            let evaluate = self.push_protected(Kind::Try { body, catch: None, finalizer: Some(finalizer), returns: false }, ErasedType::V);
+            let read = self.lir.push(Kind::Temp(nullable), object.clone());
+            let answer = self.lir.ret(read);
+            let then = self.lir.seq(&[declare_result, declare_nullable, evaluate], answer);
+            self.lir.push(Kind::If { cond, then, otherwise: None }, ErasedType::V)
+        };
+        // A control state: `Evaluating` gets a latch, `Waiting` is waited on, `NullValue` answers null; a value is
+        // answered (`ifNotUninitialized`, 445-463).
+        let current = self.lir.temp();
+        let not_uninitialized = {
+            let read = self.lir.push(Kind::Temp(current), object.clone());
+            let is_control = self.lir.push(Kind::Is { value: read, class: control.clone() }, z.clone());
+            let read = self.lir.push(Kind::Temp(current), object.clone());
+            let ev = self.lir.module(&evaluating);
+            let is_evaluating = eq(self, read, ev);
+            let latch = self.lir.make(&method(&waiting, "<init>", Invoke::Special), &[]);
+            let read = self.lir.push(Kind::Temp(current), object.clone());
+            let install = cas_of(self, read, latch);
+            let install = self.lower_adapt(install, &z, &ErasedType::V);
+            let read = self.lir.push(Kind::Temp(current), object.clone());
+            let is_waiting = self.lir.push(Kind::Is { value: read, class: waiting.clone() }, z.clone());
+            let read = self.lir.push(Kind::Temp(current), object.clone());
+            let latch = self.lir.push(Kind::Cast { value: read, op: crate::lir::Cast::Checked }, waiting_ty.clone());
+            let wait = self.lir.call(&method(&waiting, "await", Invoke::Virtual), latch, &[]);
+            let null = self.lir.push(Kind::Null, object.clone());
+            let answer_null = self.lir.ret(null);
+            let not_evaluating = self.lir.push(Kind::If { cond: is_waiting, then: wait, otherwise: Some(answer_null) }, ErasedType::V);
+            let state = self.lir.push(Kind::If { cond: is_evaluating, then: install, otherwise: Some(not_evaluating) }, ErasedType::V);
+            let read = self.lir.push(Kind::Temp(current), object.clone());
+            let answer = self.lir.ret(read);
+            self.lir.push(Kind::If { cond: is_control, then: state, otherwise: Some(answer) }, ErasedType::V)
+        };
+        // `while <EmptyTree> do { val current = _x; if current eq null then initialize else ifNotUninitialized }`
+        // (`initBody`, `initMainLoop`, 465-466)
+        let held = container(self);
+        let declare_current = self.lir.push(Kind::Let { temp: current, init: held }, ErasedType::V);
+        let read = self.lir.push(Kind::Temp(current), object.clone());
+        let null = self.lir.push(Kind::Null, object);
+        let uninitialized = eq(self, read, null);
+        let step = self.lir.push(Kind::If { cond: uninitialized, then: initialize, otherwise: Some(not_uninitialized) }, ErasedType::V);
+        let body = self.lir.seq(&[declare_current], step);
+        self.lir.push(Kind::While { cond: None, body }, ErasedType::V)
     }
 }
 
-/// The numbers of the lazy names of a source file (`LazyLocalName`, `LazyLocalInitName`, counted per compilation unit
-/// by `FreshNameCreator`, NameKinds.scala 220-222, util/FreshNameCreator.scala 24-28): per member its container's and
-/// initialiser's, per local lazy val its initialiser's.
+/// The numbers of the lazy names of a source file (`LazyLocalName`, `LazyLocalInitName`, `LazyBitMapName`, counted per
+/// compilation unit by `FreshNameCreator`, NameKinds.scala 220-222, util/FreshNameCreator.scala 24-28): per member its
+/// container's and its initialiser's (a `@threadUnsafe` member's: its flag's), per local lazy val its initialiser's.
 #[derive(Default)]
 pub struct LazyNames {
     members: crate::intern::FxMap<(Option<ClassId>, String), (u32, u32)>,
@@ -584,7 +570,7 @@ pub struct LazyNames {
 /// The walk of a file in the order dotty's `LazyVals` meets its lazy definitions (`Gen::walk_lazy_names`).
 #[derive(Default)]
 struct NameWalk {
-    counts: crate::intern::FxMap<(String, bool), u32>,
+    counts: crate::intern::FxMap<(String, NameCount), u32>,
     out: LazyNames,
     walked: crate::intern::FxMap<ClassId, ()>,
     /// The file's local classes by the start of their spans.
@@ -596,6 +582,14 @@ struct NameWalk {
     scope: u32,
 }
 
+/// A kind of lazy name, each counted apart per name: `x$lzyN`, `x$lzyINITN`, `xbitmap$N`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum NameCount {
+    Container,
+    Initialiser,
+    Flag,
+}
+
 /// `StdNames.str.sanitize` (StdNames.scala 44-45): `<` and `>` replaced by `$`.
 fn sanitize(raw: &str) -> String {
     raw.replace(['<', '>'], "$")
@@ -604,31 +598,32 @@ fn sanitize(raw: &str) -> String {
 impl NameWalk {
     /// `FreshNameCreator.newName` (24-28): the counter of `sanitize(prefix) + separator`, the prefix the
     /// definition's name as written (`raw`), apart from its mangling in the emitted name.
-    fn fresh(&mut self, raw: &str, init: bool) -> u32 {
-        let n = self.counts.entry((sanitize(raw), init)).or_insert(0);
+    fn fresh(&mut self, raw: &str, kind: NameCount) -> u32 {
+        let n = self.counts.entry((sanitize(raw), kind)).or_insert(0);
         *n += 1;
         *n
     }
 
     /// A thread-safe member: its container's number, then its initialiser's (`transformMemberDefThreadSafeNew`
-    /// 476, `mkThreadSafeDef` 359), kept by its getter's emitted name.
-    fn member(&mut self, owner: Option<ClassId>, getter: &str, raw: &str) {
-        let n = self.fresh(raw, false);
-        let m = self.fresh(raw, true);
+    /// 476, `mkThreadSafeDef` 359), kept by its getter's emitted name; a `@threadUnsafe` one: its container's, then
+    /// its flag's (`transformMemberDefThreadUnsafe` 268, 276).
+    fn member(&mut self, owner: Option<ClassId>, getter: &str, raw: &str, thread_unsafe: bool) {
+        let n = self.fresh(raw, NameCount::Container);
+        let m = self.fresh(raw, if thread_unsafe { NameCount::Flag } else { NameCount::Initialiser });
         self.out.members.entry((owner, getter.to_string())).or_insert((n, m));
     }
 
     /// A made companion of a class: `transformSyntheticModule` names its eager holder alone (140); teq's
     /// thread-safe holder takes the container's number for its initialiser too.
     fn made(&mut self, owner: Option<ClassId>, getter: &str, raw: &str) {
-        let n = self.fresh(raw, false);
+        let n = self.fresh(raw, NameCount::Container);
         self.out.members.entry((owner, getter.to_string())).or_insert((n, n));
     }
 
     /// A local lazy val: its holder's number, then its initialiser's (`transformLocalDef` 168, 181).
     fn local(&mut self, s: SymId, raw: &str) {
-        let n = self.fresh(raw, false);
-        let m = self.fresh(raw, true);
+        let n = self.fresh(raw, NameCount::Container);
+        let m = self.fresh(raw, NameCount::Initialiser);
         self.out.locals.insert(s, (n, m));
     }
 }
@@ -646,16 +641,28 @@ impl<'a> Gen<'a> {
     /// The names of a lazy member's container and initialiser in the class being written, `x$lzyN` and
     /// `x$lzyINITM`, by the file's walk.
     pub(super) fn lazy_member_names(&mut self, getter: &str) -> (String, String) {
+        let (n, m) = self.lazy_member_numbers(getter);
+        (format!("{}$lzy{}", getter, n), format!("{}$lzyINIT{}", getter, m))
+    }
+
+    /// The names of a `@threadUnsafe` member's container and flag in the class being written, `x$lzyN` and
+    /// `xbitmap$M`, by the file's walk.
+    pub(super) fn thread_unsafe_names(&mut self, getter: &str) -> (String, String) {
+        let (n, m) = self.lazy_member_numbers(getter);
+        (format!("{}$lzy{}", getter, n), format!("{}bitmap${}", getter, m))
+    }
+
+    fn lazy_member_numbers(&mut self, getter: &str) -> (u32, u32) {
         let owner = self.this_class;
         let file = match owner {
             Some(c) => self.cx.input.syms.class(c).module_file(),
             None => self.line_file,
         };
-        let Some((n, m)) = self.file_lazy_names(file).members.get(&(owner, getter.to_string())).copied() else {
+        let Some(numbers) = self.file_lazy_names(file).members.get(&(owner, getter.to_string())).copied() else {
             self.unsupported(&format!("internal error: the lazy member {} has no number in its unit", getter));
-            return (format!("{}$lzy", getter), format!("{}$lzyINIT", getter));
+            return (0, 0);
         };
-        (format!("{}$lzy{}", getter, n), format!("{}$lzyINIT{}", getter, m))
+        numbers
     }
 
     /// Whether the class `owner` (the file `file`'s module for `None`; for a class, `file` the unit holding it,
@@ -746,7 +753,7 @@ impl<'a> Gen<'a> {
                     let lazy = info.mods & mods::LAZY != 0 || (info.kind == SymKind::Given && !self.is_given_def(s));
                     if lazy && !cx.given_objects.contains_key(&s) && !cx.given_classes.contains_key(&s) {
                         let name = self.field_name(s);
-                        w.member(None, &name, cx.input.interner.get(info.name));
+                        w.member(None, &name, cx.input.interner.get(info.name), self.is_thread_unsafe(s));
                     }
                 }
                 1 => self.walk_fun_names(&mut w, FunId(id)),
@@ -837,7 +844,7 @@ impl<'a> Gen<'a> {
                         self.walk_expr_names(w, e);
                         if fields_lazy.contains_key(&s) {
                             let name = self.field_name(s);
-                            w.member(Some(c), &name, cx.input.interner.get(syms.sym(s).name));
+                            w.member(Some(c), &name, cx.input.interner.get(syms.sym(s).name), self.is_thread_unsafe(s));
                         }
                         if let SymKind::Object(k) = syms.sym(s).kind {
                             self.walk_class_names(w, k);
@@ -873,8 +880,8 @@ impl<'a> Gen<'a> {
         // Its local classes the walk has not met yet, at their places.
         self.walk_local_classes_before(w, info.span.end);
         if holds {
-            for (name, raw) in self.lazy_forwarder_names(tc) {
-                w.member(Some(c), &name, &raw);
+            for (name, raw, thread_unsafe) in self.lazy_forwarder_names(tc) {
+                w.member(Some(c), &name, &raw, thread_unsafe);
             }
         }
         w.scope = outer_scope;

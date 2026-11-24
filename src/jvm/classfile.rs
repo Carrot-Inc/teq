@@ -499,6 +499,17 @@ impl Code {
         }
     }
 
+    /// Holds a slot taken before the label just bound, whose frame (cut to the locals at the
+    /// label's making) does not have it: the locals made from here take the slots after it, and a
+    /// later frame records it as unset.
+    pub fn hold_local(&mut self, slot: u16) {
+        self.writing();
+        while self.locals.len() <= slot as usize {
+            self.locals.push(VT::Top);
+        }
+        self.max_locals = self.max_locals.max(self.locals.len() as u16);
+    }
+
     pub fn locals_mark(&self) -> usize {
         self.locals.len()
     }
