@@ -33,7 +33,7 @@ mkdir -p "$logs"
 rm -f "$logs/times.txt"
 # A suite named `<suite>.<k>/<n>` runs the k-th of its n pieces (`--piece k/n`, the suites the gate deals as
 # pieces: tests/support/pieces.sh) under that name in the summary, the log and the times; one piece of a suite a run.
-pieced=" lsp jvm-watch modules split "
+pieced=" lsp jvm-watch modules split gate-scripts "
 declare -A piece
 only="  "
 for name in "$@"; do

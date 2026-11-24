@@ -37,7 +37,7 @@ for f in bench/actions/*.sh tests/windows.sh tests/support/identity.sh tests/sup
   check "bash -n $f" "$(bash -n "$f" 2>&1)" ""
 done
 for f in .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml .github/workflows/native-assets.yml; do
-  check "$f: every action pinned by a commit" "$(grep -E '^\s*(- )?uses:' "$f" | grep -vE 'uses: [A-Za-z0-9-]+/[a-z0-9-]+@[0-9a-f]{40} # v[0-9.]+$')" ""
+  check "$f: every action pinned by a commit" "$(grep -E '^\s*(- )?uses:' "$f" | grep -vE 'uses: [A-Za-z0-9-]+/[a-z0-9-]+(/[a-z0-9-]+)?@[0-9a-f]{40} # v[0-9.]+$')" ""
   check "$f: no permission by default" "$(grep -c '^permissions: {}$' "$f")" 1
 done
 for f in .github/workflows/release.yml .github/workflows/ship-image.yml; do

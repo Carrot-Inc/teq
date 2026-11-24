@@ -134,11 +134,19 @@ jobs:
             suites: modules.4/4
             minutes: 35
             jars: true
-          # The gate's own scripts apart, the one job planned past twenty minutes (25 of its 40 by the slowest of the
-          # last runs): one suite, in no pieces of its own.
-          - group: gate-scripts
-            suites: gate-scripts
-            minutes: 40
+          # The gate's own scripts as three pieces (tests/all.sh's `gate-scripts.1/3`, as tests/gate.sh deals them):
+          # whole they outgrew the job's forty minutes; each piece is a third of their cells, planned under twenty.
+          - group: gate-scripts-1
+            suites: gate-scripts.1/3
+            minutes: 30
+            jars: true
+          - group: gate-scripts-2
+            suites: gate-scripts.2/3
+            minutes: 30
+            jars: true
+          - group: gate-scripts-3
+            suites: gate-scripts.3/3
+            minutes: 30
             jars: true
           - group: corpus
             suites: app planted asymptotics conversion-matrix kept-body-cut kept-body-lists workers
@@ -266,11 +274,41 @@ jobs:
           timeout 600 cargo fetch --locked
           timeout 900 cargo build --tests --locked
       # The pinned zig where bench/zig.sh puts it, which tests/idna.scala and tests/native-build.scala look for;
-      # zig_fetch asks rustc for the host.
+      # zig_fetch asks rustc for the host. Its tarball is kept in a cache under its version and digest
+      # (bench/zig.sh's zig_version and zig_sha256_x86_64), which zig_fetch takes where its digest is the pinned one.
+      # On a miss it comes from the first of ziglang.org's community mirrors that serves it (any is safe behind the
+      # digest: ziglang.org itself serves it slowly), else by zig_fetch from ziglang.org; it is kept as soon as
+      # zig_fetch has checked it.
       - if: matrix.zig
+        id: zig
+        run: |
+          version=$(sed -n 's/^zig_version=//p' bench/zig.sh)
+          echo "tarball=target/cross/zig-x86_64-linux-$version.tar.xz" >> "$GITHUB_OUTPUT"
+          echo "key=zig-$version-$(sed -n 's/^zig_sha256_x86_64=//p' bench/zig.sh)" >> "$GITHUB_OUTPUT"
+      - if: matrix.zig
+        id: zig-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.zig.outputs.tarball }}
+          key: ${{ steps.zig.outputs.key }}
+      - if: matrix.zig
+        env:
+          TARBALL: ${{ steps.zig.outputs.tarball }}
         run: |
           timeout 600 rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" --profile minimal
+          if [ ! -f "$TARBALL" ]; then
+            mkdir -p target/cross
+            for mirror in https://pkg.hexops.org/zig https://zig.linus.dev/zig https://pkg.earth/zig; do
+              timeout 120 curl -sSfLo "$TARBALL" "$mirror/$(basename "$TARBALL")?source=github-actions" && break
+              rm -f "$TARBALL"
+            done
+          fi
           timeout 300 bash -c '. bench/zig.sh && zig_fetch'
+      - if: matrix.zig && steps.zig-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.zig.outputs.tarball }}
+          key: ${{ steps.zig.outputs.key }}
       - run: |
           export COURSIER_CACHE="$HOME/.cache/coursier/v1"
           export SCALA3="$HOME/teq-ref/scala3"
