@@ -68,7 +68,7 @@ fn write_products_now(w: &mut Worker, owned: Option<&[bool]>, sourceroot: &std::
         let rel = relative_path(&src.path, sourceroot, index.cwd.as_deref());
         // A file with nothing to pickle (a Java source, whose definitions the Scala parser does not read) needs no
         // record of places.
-        let units = units_of(w, file);
+        let units = without_main_proxies(w, file, units_of(w, file));
         if units.is_empty() {
             continue;
         }
@@ -88,6 +88,31 @@ fn write_products_now(w: &mut Worker, owned: Option<&[bool]>, sourceroot: &std::
         }
     }
     out
+}
+
+/// The file's units without the proxies `parser::add_main_proxies` made (`Ast::main_proxies`): dotty's `MainProxies`
+/// makes no such member (its launcher is a class of its own, MainProxies.scala:112-120), so the pickle has none, by
+/// the recorded identity, never by the name; the runtime's entry (`Symbols::main_adapter`) reads the program's own
+/// symbols. A `<file>$package` that held the proxies alone is no unit then, as scalac writes none.
+fn without_main_proxies(w: &Worker, file: FileId, units: Vec<Unit>) -> Vec<Unit> {
+    let ast = w.ast(file);
+    if ast.main_proxies.is_empty() {
+        return units;
+    }
+    let exports = !ast.top_exports.is_empty();
+    units
+        .into_iter()
+        .filter_map(|mut u| {
+            if let UnitKind::Package { defs, .. } = &mut u.kind {
+                let before = defs.len();
+                defs.retain(|d| !ast.main_proxies.iter().any(|&(p, _)| p == *d));
+                if defs.is_empty() && before > 0 && !exports {
+                    return None;
+                }
+            }
+            Some(u)
+        })
+        .collect()
 }
 
 /// A file's path as scalac's `SourceFile.relativePath` gives it against `-sourceroot`: under

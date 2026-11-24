@@ -5150,7 +5150,7 @@ impl<'w, 'a> P<'w, 'a> {
         if let Some(o) = obj.class {
             self.count_template_roots(o);
         }
-        if self.is_static(obj.owner) {
+        if self.receives_write_replace(obj.class, obj.owner) {
             // An opaque type's companion's class literal names it from its `$package` object's
             // `this`, as scalac's `writeReplace` does (`guard$package.this.Step`).
             match obj.class.filter(|&o| self.opaque_companion_package(o).is_some() && self.package_members_this.is_some()) {
@@ -5594,6 +5594,61 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.end_length(len);
     }
 
+    /// Whether dotty gives the module class `c`, owned by `owner`, its `writeReplace`
+    /// (`SyntheticMembers.serializableObjectMethod`, SyntheticMembers.scala:469-480 at 3.8.4): a module class that is
+    /// static (`clazz.isStatic`), has no member `writeReplace` of the zero-argument `AnyRef` signature, declared or
+    /// inherited (`hasWriteReplace`, :441-444), and stands on a platform that gives it Java's serialization methods:
+    /// the JVM always (JavaPlatform.scala:75), Scala.js no subclass of `js.Any` (SJSPlatform.scala:37-38).
+    fn receives_write_replace(&mut self, c: Option<ClassId>, owner: Owner) -> bool {
+        if !self.is_static(owner) {
+            return false;
+        }
+        let Some(c) = c else { return true };
+        if self.has_write_replace(c) {
+            return false;
+        }
+        self.w.jvm || !self.derives_js_any(c)
+    }
+
+    /// `hasWriteReplace` (:441-444): a member `writeReplace` of the class, or one a base declares and does not make
+    /// private (`membersNamed` inherits no `Private` member, SymDenotations.scala:2224), the program's own (no synthetic
+    /// one the writer makes), whose signature is `Signature(defn.AnyRefType)`: no parameter and the result
+    /// `java.lang.Object`, the writer's own signature of the member (`member_signature`).
+    fn has_write_replace(&mut self, c: ClassId) -> bool {
+        let Some(name) = self.w.interner.lookup("writeReplace") else { return false };
+        let mut classes = vec![c];
+        classes.extend(self.w.syms.class(c).base_types.iter().map(|&(k, _)| k));
+        for k in classes {
+            let Some(&s) = self.w.syms.class(k).members.get(&name) else { continue };
+            let alts: Vec<SymId> = self.w.syms.alternatives(s).map_or_else(|| vec![s], |a| a.to_vec());
+            for a in alts {
+                let info = self.w.syms.sym(a);
+                if info.synthetic || k != c && info.mods & mods::PRIVATE != 0 && !info.scoped_private {
+                    continue;
+                }
+                match self.member_signature(a) {
+                    Ok(Some((params, result))) if params.is_empty() && result == "java.lang.Object" => return true,
+                    Ok(_) => {}
+                    // A result the writer cannot erase answers neither way: the writer's refusal, no synthetic beside.
+                    Err(_) => {
+                        self.fail("a writeReplace whose result the writer cannot erase".to_string());
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Whether the class derives Scala.js's `js.Any`: in the lean std `js.Any` is an alias of `scala.Any`
+    /// (std/scalajs/js.scala), so a JavaScript class is one that derives `js.Object`, as Scala.js's every JavaScript
+    /// class does (its `js.Array` and `js.Function` included); a trait that extends `js.Any` alone is no class here.
+    fn derives_js_any(&self, c: ClassId) -> bool {
+        std::iter::once(c)
+            .chain(self.w.syms.class(c).base_types.iter().map(|&(k, _)| k))
+            .any(|k| matches!(scala_name(self.w, k).as_str(), "scala.scalajs.js.Any" | "scala.scalajs.js.Object"))
+    }
+
     fn write_replace(&mut self, self_type: Option<usize>) {
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
@@ -5615,7 +5670,11 @@ impl<'w, 'a> P<'w, 'a> {
                     }
                 }
             }
-            None => self.rhs(Producer::Synthesized("writeReplace"), any_ref),
+            // `receives_write_replace` writes it for a static object alone, whose self type is placed.
+            None => {
+                self.fail("a writeReplace of an object whose self type is not placed".to_string());
+                self.elided(any_ref);
+            }
         }
         self.write_flags(&[PRIVATE, SYNTHETIC]);
         self.synthetic_position(addr);
@@ -6333,7 +6392,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.constructor(k, &info);
         self.count_template_roots(k);
-        if object {
+        if object && self.receives_write_replace(Some(k), info.owner) {
             self.write_replace(self_type);
         }
         let body = self.body_order(k, &info);

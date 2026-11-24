@@ -44,4 +44,4 @@ toString                                                   42
 trait parent call with arguments                            1
 valueOf                                                     4
 values                                                      4
-writeReplace                                               97
+writeReplace                                               96

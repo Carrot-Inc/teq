@@ -37,13 +37,13 @@ facades/fix/facades/JsArr.tasty 00ebec1bc43807df00a0731d3c4833a0
 facades/fix/facades/JsBindings.tasty 0049ea1fdf0c73ca0059f634120451c6
 facades/fix/facades/JsCasts.tasty 00049df2c5c51cca00fad58b0a879aa9
 facades/fix/facades/JsEmitter.tasty 00ed36fd845a0fde00afc568b01ac7a9
-facades/fix/facades/JsGlobals.tasty 0010802c1cdd92d800a4c7309cf421c5
+facades/fix/facades/JsGlobals.tasty 00f632caa1feb8d800f413a2b25e8dcc
 facades/fix/facades/JsMap.tasty 007d2c131b962cc6000b0d2c904827ff
-facades/fix/facades/JsMath.tasty 00bb75a1f681ebd8007464c051c08dab
+facades/fix/facades/JsMath.tasty 00122b1d5c4bcfd800a2724f19416eb0
 facades/fix/facades/JsMathOps.tasty 008749409070e7d60065438f78bdccfc
 facades/fix/facades/JsOptions.tasty 005d3f2b86e274d000c90cf0c6a5d2a8
-facades/fix/facades/JsPath.tasty 0021b9b0843bb4d800a3e81b0893a9ed
-facades/fix/facades/JsPathDefault.tasty 0064a2267fa451d800d357bdc02638ef
+facades/fix/facades/JsPath.tasty 002640d38e4812d800bed52c663e2be2
+facades/fix/facades/JsPathDefault.tasty 002804937e55bcd800a47b463d7d54e6
 facades/fix/facades/JsPoint.tasty 006539f04cbbb7d7009f5eda10d36a93
 facades/fix/facades/facades$package.tasty 008814d2fa90a1c1003af88b28d6a6b3
 guard/fix/guard/Steps.tasty 00420c09c8e85ecb008fc55035c6faf4
