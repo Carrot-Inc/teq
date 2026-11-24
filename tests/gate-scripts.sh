@@ -1011,7 +1011,7 @@ gate() {
   (cd "$landing" && for v in $(compgen -e | grep -E '^(GATE_|LILA_|APP_|CHAIN_KNOWN$|SCALAC_KNOWN$|NODE$)' | grep -v '^GATE_AGENT_'); do unset "$v"; done &&
     env -u JOBS REMOTE_AGENT="$scripts" GATE_AGENT_ROOT="$agent" GATE_AGENT_TEQ="$TEQ" GATE_POLL_SECONDS=2 \
     GATE_CLAIM_WAIT=6 GATE_CLAIM_SECONDS=6 GATE_HEAD_WAIT=120 ${suite_seconds:+GATE_SUITE_SECONDS=$suite_seconds} \
-    timeout 300 tests/gate.sh "$landing" "$@") > "$log" 2>&1
+    ${compare_stall:+GATE_COMPARE_STALL=$compare_stall} timeout 300 "${driver:-.}/tests/gate.sh" "$landing" "$@") > "$log" 2>&1
 }
 row() { grep -E "^$1 +$2 " "$3"; }
 if piece_has driver-ship; then
@@ -1049,6 +1049,19 @@ check "driver: a passing run records its suites' times" "$log" eval '[ $code = 0
   grep -q -x "parser $(row parser "m[12]" "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
   grep -q -x "fold $(row fold "m[12]" "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
   [ "$(echo "$times_before" | grep -v -E "^(parser|fold) ")" = "$(grep -v -E "^(parser|fold) " "$landing/tests/gate-times.txt")" ]'
+git -C "$landing" checkout -q tests/gate-times.txt
+# The same from a driver run out of a copy of the tree (a branch's driver, whose own tree is not the landing's and is
+# removed after the run): the times go into the landing worktree's file, which the gate names, and the driver's own
+# file is as it was.
+rm -rf "${work:?}/driver-copy"
+cp -r "$landing" "$work/driver-copy"
+driver=$work/driver-copy gate "$work/driver-3c.log" "$(printf 'm1 free\nm2 free')" --only parser,fold --record
+code=$?
+log=$work/driver-3c.log
+check "driver: --record by a driver out of the landing's tree writes the landing worktree's times and names the file" "$log" eval '[ $code = 0 ] &&
+  grep -q -x "gate: the times recorded in $landing/tests/gate-times.txt" "$log" &&
+  grep -q -x "parser $(row parser "m[12]" "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
+  cmp -s "$work/driver-copy/tests/gate-times.txt" <(git -C "$landing" show HEAD:tests/gate-times.txt)'
 git -C "$landing" checkout -q tests/gate-times.txt
 fi
 if piece_has driver-wait; then
@@ -1348,15 +1361,31 @@ piece_ran driver-compare
 need_driver
 # The comparison: three machines prepared beside the suites; with the recorded times the lines measure on one of
 # them, after the shards' suites; with times that one machine would end past thirty minutes, on as many as fit.
-gate "$work/driver-4.log" "$(printf 'm1 free\nm2 free\nm3 free\nm4 free\nm5 free')" --only parser,fold,budget,runtime,sentinel --master-rev HEAD
+# Its stall bound at 3 s: the jobs wait for the shards' suites, still and alive, far past it, and none is failed. Each
+# machine's start (its CPUs' pressure and its free memory) is a line of the log.
+compare_stall=3 gate "$work/driver-4.log" "$(printf 'm1 free\nm2 free\nm3 free\nm4 free\nm5 free')" --only parser,fold,budget,runtime,sentinel --master-rev HEAD
 code=$?
 log=$work/driver-4.log
 check "driver: the comparison prepared on three machines, measuring on one after the shards' suites, over the builder's binary" "$log" eval '[ $code = 0 ] &&
+  [ "$(grep -c -E "^[0-9:]+ m[0-9] \((comparison|8 CPUs)\): cpu pressure (some avg10=|unread)" "$log")" -ge 5 ] &&
   [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | grep -c " ok .*the stand-in of bench/pairs.py")" = 3 ] &&
   [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | awk "{print \$2}" | sort -u | wc -l)" = 1 ] &&
   [ "$(grep -c -E "^compare .* ok +head: copied from " "$log")" = 3 ] && grep -q -E "^compare .* ok +measure: the lines on 1 of 3 machines ready" "$log" &&
   [ "$(grep -c -E "^compare .* ok +quiet: measured after the suites on the other machines.*here: *$" "$log")" = 2 ] &&
   [ "$(grep -n "shard done after" "$log" | tail -1 | cut -d: -f1)" -lt "$(grep -n -E "^[0-9:]+ m[0-9] +quiet " "$log" | head -1 | cut -d: -f1)" ]'
+# A comparison job killed before its line answers (bench/pairs-stand-in.txt's `die:budget`: the stand-in kills the
+# job, as a kill for memory would): its status stills and its process is gone, and its line fails within the stall
+# bound, not GATE_COMPARE_SECONDS' hour, naming its machine, its process gone and its last status line.
+echo die:budget > "$landing/bench/pairs-stand-in.txt"
+git -C "$landing" add -A && git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "a comparison job killed"
+started=$(date +%s)
+compare_stall=3 gate "$work/driver-dead.log" "$(printf 'm1 free\nm2 free\nm3 free')" --only parser,budget --master-rev HEAD
+code=$?
+took=$(($(date +%s) - started))
+log=$work/driver-dead.log
+git -C "$landing" reset -q --hard HEAD~1
+check "driver: a comparison job killed fails its line within the stall bound, naming its machine, its process gone and its last status" "$log" eval '[ $code = 1 ] && [ $took -lt 240 ] &&
+  grep -q -E "^compare +m[0-9] .* FAIL +the job on m[0-9] ended without its done line: its process is gone \(pid [0-9]+\); its last status line, unchanged for [0-9]+ s: " "$log"'
 sed -i -E 's/^(budget|runtime|sentinel) [0-9]+$/\1 1500/' "$landing/tests/gate-times.txt"
 echo budget > "$landing/bench/pairs-stand-in.txt"
 git -C "$landing" add -A && git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "times past thirty minutes on one machine; budget inconclusive"
@@ -2627,6 +2656,36 @@ check "refused reads: the judge's planted records judged as they must be" "$work
 # without one is dealt as 120 s, whatever it takes. Its check on planted lists first, then the tree's own.
 check "gate's rows: every line dealt to the shards has its row in tests/gate-times.txt" "$work/gate-rows.log" \
   eval 'python3 tests/support/gate_rows.py --self-test > "$work/gate-rows.log" 2>&1 && python3 tests/support/gate_rows.py tests/gate.sh tests/gate-times.txt >> "$work/gate-rows.log" 2>&1'
+# A comparison job left running by an aborted gate, on the machine a later gate's job starts on (tests/gate.sh's
+# earlier_job): ended with its children, a process its pid file names whose command is not a job's left alone (a pid
+# the system gave another process since); and a job's end (tests/gate-compare.sh's finish) removes the pid file while
+# it is its own, and leaves a later job's.
+ej=$work/earlier-job
+mkdir -p "$ej/out/compare"
+eval "$(sed -n '/^earlier_job=/p' tests/gate.sh)"
+(exec -a "bash out/compare/gate-compare.sh" sleep 300) &
+fake=$!
+sleep 1
+echo $fake > "$ej/out/compare/pid"
+ej_said=$(cd "$ej" && bash -c "$earlier_job")
+sleep 1
+if kill -0 $fake 2> /dev/null; then ej_fake=alive; kill $fake; else ej_fake=ended; fi
+sleep 300 &
+other=$!
+echo $other > "$ej/out/compare/pid"
+ej_other_said=$(cd "$ej" && bash -c "$earlier_job")
+if kill -0 $other 2> /dev/null; then ej_other=alive; else ej_other=ended; fi
+kill $other 2> /dev/null
+eval "$(sed -n '/^finish() {/p' tests/gate-compare.sh)"
+echo 1 > "$ej/out/compare/pid"
+(out=$ej/out/compare status=$ej/out/compare/status; finish 0) > /dev/null 2>&1
+ej_later=$([ -s "$ej/out/compare/pid" ] && echo kept || echo removed)
+(out=$ej/out/compare status=$ej/out/compare/status; echo $$ > "$out/pid"; finish 0) > /dev/null 2>&1
+ej_own=$([ -e "$ej/out/compare/pid" ] && echo kept || echo removed)
+echo "fake $ej_fake ($ej_said); unrelated $ej_other ($ej_other_said); a later job's pid file $ej_later; its own $ej_own" > "$work/earlier-job.log"
+check "comparison: an aborted gate's job ended at a later gate's start, another process left, a job's end removing its own pid file alone" "$work/earlier-job.log" \
+  eval '[ $ej_fake = ended ] && [ "$ej_said" = "an earlier gate'"'"'s job ended: pid $fake" ] && [ $ej_other = alive ] && [ -z "$ej_other_said" ] &&
+    [ $ej_later = kept ] && [ $ej_own = removed ]'
 
 # The table of inline methods called through an export from a third module (tests/support/export_inline.py, run
 # by tests/support/export-inline.sh): its templates and its judge over planted tables.

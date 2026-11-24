@@ -12,12 +12,15 @@
 # deals it one after another (bench/pairs.py: budget and runtime against master, sentinel against the reference),
 # once the gate says the suites on the other machines have ended (GATE_MEASURE_AFTER). Each step appends "<name> <exit> <seconds>
 # <its last line>" to out/compare/status, "head-wanted" says it waits for the head, "measure-wanted" for the other
-# machines' suites, and "done" ends it; the logs, the raw runs and the manifests go to out/compare/logs.
+# machines' suites, and "done" ends it; the logs, the raw runs and the manifests go to out/compare/logs. Its process
+# id is in out/compare/pid while it runs, removed at its end, so that the gate tells a job that died (killed for
+# memory) from one that waits.
 cd "$(dirname "$0")/../.." || exit 1
 out=out/compare
 logs=$out/logs
 status=$out/status
 mkdir -p "$logs"
+echo $$ > $out/pid
 . tests/support/build-manifest.sh
 now() { date +%s; }
 # step <name> <exit> <started> <log or message>
@@ -26,7 +29,9 @@ step() {
   [ -f "$4" ] && last=$(grep -v '^[[:space:]]*$' "$4" | tail -1 | tr -d '\r' | tr '\t' ' ' | cut -c1-300)
   printf '%s %s %s %s\n' "$1" "$2" $(($(now) - $3)) "$last" >> $status
 }
-finish() { echo done >> $status; exit "${1:-0}"; }
+# the pid file goes at the end only while it is this job's: a later gate's job, started over an aborted gate's, has
+# its own there
+finish() { echo done >> $status; [ "$(cat $out/pid 2> /dev/null)" != "$$" ] || rm -f $out/pid; exit "${1:-0}"; }
 tail_key=$(toolchain_key .)
 lines=" ${GATE_LINES:-budget runtime sentinel} "
 

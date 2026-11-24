@@ -955,11 +955,26 @@ compare_half() {
   wait
   now > "$out/compare.ended"
 }
+# earlier_job: run on a comparison machine before its job starts: a job an aborted gate left running there (the pid
+# out/compare/pid names, a live process whose command is out/compare/gate-compare.sh, so that a pid the system has
+# given another process since is never one) is ended with its children, so that no two jobs share out/compare: the
+# old one would append to the new one's status, take its measure file and, at its end, remove its pid file.
+earlier_job='p=$(cat out/compare/pid 2> /dev/null); if [ -n "$p" ] && ps -o args= -p "$p" 2> /dev/null | grep -q "out/compare/gate-compare\.sh"; then pkill -TERM -P "$p" 2> /dev/null; kill -TERM "$p" 2> /dev/null; echo "an earlier gate'"'"'s job ended: pid $p"; fi'
+# machine_start: what a machine prints at its start, `pressure <the first line of /proc/pressure/cpu>` (its host's: the
+# file is the system's) and `memory <MemAvailable in kB>`; start_line <file>: the two as a line of the gate's log.
+machine_start='echo "pressure $(head -1 /proc/pressure/cpu 2> /dev/null)"; echo "memory $(sed -n "s/^MemAvailable: *\([0-9]*\) kB$/\1/p" /proc/meminfo 2> /dev/null)"'
+start_line() {
+  local p m
+  p=$(sed -n 's/^pressure //p' "$1" | tail -1)
+  m=$(sed -n 's/^memory \([0-9][0-9]*\)$/\1/p' "$1" | tail -1)
+  echo "cpu pressure ${p:-unread}; $([ -n "$m" ] && echo "$((m / 1024)) MB free" || echo "free memory unread")"
+}
 # compare_on <handle> <lines>: that machine prepared for the lines and measuring those the comparison deals it, its
 # logs under $out/compare-<machine>/.
 compare_on() {
   local handle=$1 lines=" $2" host=${1%%/*} file=$out/compare.results t=$tmp/compare-${1%%/*} from seen=0 answered=0
   local refdir= reftree=../teq-master tree i job envs deadline left name code secs last s=$(now) logs=$out/compare-${1%%/*} measured=0 here
+  local n moved asked=0 answer gone= stall=${GATE_COMPARE_STALL:-300}
   mkdir -p "$t"
   # master's sources and the reference's, the comparison's one clone of each (compare_half), mirrored as projects
   if [ ! -e "$tmp/compare-trees/ready" ]; then
@@ -976,6 +991,10 @@ compare_on() {
     "$ra/sync.sh" "$handle" "$tree" >> "$t/sync" 2>&1 || { result compare "$host" $(($(now) - i)) 1 "sync: $(tail -1 "$t/sync")" "$file"; release "$handle"; return; }
   done
   result compare "$host" $(($(now) - i)) 0 "sync: the head, master ($crev) and the reference ($refrev) mirrored for$lines" "$file"
+  # the machine at its start, a line of the gate's log: its CPUs' pressure (its host's: /proc/pressure/cpu) and its
+  # free memory
+  "$ra/run.sh" "$handle" teq -t 30 "$machine_start" > "$t/start" 2> /dev/null
+  echo "$(clock) $host (comparison): $(start_line "$t/start")"
   # the head's origin is decided once the shards' first claim is over
   for i in $(seq 1 120); do [ -e "$tmp/shards.asked" ] && break; sleep 5; done
   from=
@@ -986,12 +1005,15 @@ compare_on() {
   envs="$envs GATE_REFERENCE=$refrev GATE_REFERENCE_SOURCE=$(sources "$refrev") GATE_REFERENCE_TREE=$reftree GATE_LINES=$(printf %q "$lines")"
   envs="$envs GATE_MEASURE_AFTER=1"
   [ -z "$from" ] || envs="$envs GATE_HEAD_FROM=here"
-  "$ra/run.sh" "$handle" teq -t 60 "rm -rf out/compare ../teq-head && mkdir -p out/compare && echo $job | base64 -d > out/compare/gate-compare.sh && { $envs nohup bash out/compare/gate-compare.sh > out/compare/job.out 2>&1 < /dev/null & }" > "$t/launch" 2>&1 ||
+  "$ra/run.sh" "$handle" teq -t 60 "$earlier_job; rm -rf out/compare ../teq-head && mkdir -p out/compare && echo $job | base64 -d > out/compare/gate-compare.sh && { $envs nohup bash out/compare/gate-compare.sh > out/compare/job.out 2>&1 < /dev/null & }" > "$t/launch" 2>&1 ||
     { result compare "$host" 0 1 "the job did not start: $(tail -1 "$t/launch")" "$file"; release "$handle"; return; }
+  grep -h "^an earlier gate's job ended" "$t/launch" | sed "s/^/$(clock) $host (comparison): /"
   # Polled every 15 s (half of GATE_POLL_SECONDS) until GATE_COMPARE_SECONDS (default 3600) have passed since the
-  # job started.
+  # job started, or until the job is dead: its status has not grown for GATE_COMPARE_STALL seconds (300) and the
+  # process out/compare/pid names is gone (a status alone says nothing: its measure-wanted wait is long and alive).
   deadline=$(($(now) + ${GATE_COMPARE_SECONDS:-3600}))
   touch "$t/status"
+  moved=$(now)
   for i in $(seq 1 100000); do
     left=$((deadline - $(now)))
     [ $left -gt 0 ] || break
@@ -999,9 +1021,17 @@ compare_on() {
       tail -n +$((seen + 1)) "$t/status.new" | while read -r name code secs last; do
         [ "$name" = done ] || printf '%s %-8s %-18s [%s] %5ss  %s\n' "$(clock)" "$host" "$name" "$code" "$secs" "$(echo "$last" | cut -c1-100)"
       done
-      seen=$(wc -l < "$t/status.new")
+      n=$(wc -l < "$t/status.new")
+      [ "$n" -gt "$seen" ] && moved=$(now)
+      seen=$n
       mv "$t/status.new" "$t/status"
       [ "$(tail -1 "$t/status")" = done ] && break
+      # a status still for the stall bound: whether the job lives, asked once a bound
+      if [ $(($(now) - moved)) -ge $stall ] && [ $(($(now) - asked)) -ge $stall ]; then
+        asked=$(now)
+        answer=$("$ra/run.sh" "$handle" teq -t 30 'p=$(cat out/compare/pid 2> /dev/null); if [ -n "$p" ] && kill -0 "$p" 2> /dev/null; then echo alive "$p"; else echo gone "${p:-none}"; fi' 2> /dev/null | tail -1)
+        case $answer in gone*) gone=$answer; break ;; esac
+      fi
       if [ $answered = 0 ] && grep -q '^head-wanted ' "$t/status"; then
         if [ -e "$tmp/head.ready" ]; then
           "$ra/sync.sh" "$handle" "$tmp/teq-head" > "$t/head" 2>&1 &&
@@ -1030,7 +1060,11 @@ compare_on() {
       *) result "$name" "$host" "$secs" "$code" "$last" "$file" ;;
     esac
   done < "$t/status"
-  [ "$(tail -1 "$t/status")" = done ] || result compare "$host" $(($(now) - s)) 1 "the job did not end within GATE_COMPARE_SECONDS" "$file"
+  if [ -n "$gone" ]; then
+    result compare "$host" $(($(now) - s)) 1 "the job on $host ended without its done line: its process is gone (pid ${gone#gone }); its last status line, unchanged for $(($(now) - moved)) s: $(tail -1 "$t/status" | cut -c1-160)" "$file"
+  elif [ "$(tail -1 "$t/status")" != done ]; then
+    result compare "$host" $(($(now) - s)) 1 "the job did not end within GATE_COMPARE_SECONDS" "$file"
+  fi
 }
 compare_started=$(now)
 if [ $compare_selected = 1 ]; then
@@ -1360,6 +1394,7 @@ if [ $n -gt 0 ]; then
     [ -d "$SCALA3/tests" ] || { echo "no scala3 checkout at $SCALA3"; exit 1; }
     for c in cargo java javap node scala-cli python3; do command -v $c > /dev/null || { echo "no $c"; exit 1; }; done
     echo "cpus ${GATE_CPUS:-$(nproc)}"
+    '"$machine_start"'
     echo "kind ${GATE_KIND:-}"'
   pids=()
   for i in "${!handles[@]}"; do
@@ -1395,6 +1430,8 @@ if [ $n -gt 0 ]; then
     echo "${c:-8}" >> "$tmp/cpus"
     echo "${k:--}" >> "$tmp/kinds"
     echo "${hosts[$i]} ${k:-${c:-8}}" >> "$tmp/host-cpus"
+    # the machine at its start, a line of the gate's log
+    echo "$(clock) ${hosts[$i]} (${k:+$k, }${c:-8} CPUs): $(start_line "$tmp/sync.$i")"
   done
   if [ $n = 0 ]; then
     for entry in "${want[@]}"; do result "${entry%% *}" - 0 1 "not run: no machine took the tree"; done
@@ -1640,9 +1677,11 @@ done
 # The times of the suites, of the pieces of those run as pieces (never the merged rows) and of the comparison's lines
 # are recorded from a run whose every line passed, or whose only lines not passed are timing lines inconclusive (none
 # over), whose durations do not depend on their verdicts; from no other run. A piece's row under another number of
-# pieces of its suite goes.
+# pieces of its suite goes. They are written into the landing worktree's tests/gate-times.txt, the tree the caller
+# holds, as the project lines' records are: the driver's own tree is a snapshot under a branch's driver, removed
+# after the run.
 if [ $record = 1 ] && [ $recordable = 1 ]; then
-  python3 - "$results" tests/gate-times.txt "$(cut -d' ' -f1 "$tmp/want") $compare $(for p in $projects; do project_lines_of "$p"; done)" "$compare" "$tmp/host-cpus" <<'PY'
+  python3 - "$results" "$wt/tests/gate-times.txt" "$(cut -d' ' -f1 "$tmp/want") $compare $(for p in $projects; do project_lines_of "$p"; done)" "$compare" "$tmp/host-cpus" <<'PY'
 import os, re, sys
 recorded, timing = set(sys.argv[3].split()), set(sys.argv[4].split())
 # a line measured on a machine of other than eight CPUs is that kind's row, `<line>@<n>`, and on a machine whose look
@@ -1668,7 +1707,7 @@ out = [l if l.startswith("#") or not l.strip() or l.split()[0] not in measured e
 out += [f"{name} {secs}" for name, secs in measured.items()]
 open(sys.argv[2], "w").write("\n".join(out) + "\n")
 PY
-  echo "gate: the times recorded in tests/gate-times.txt"
+  echo "gate: the times recorded in $wt/tests/gate-times.txt"
   # The records the project lines' verbs stepped from their passing runs, each installed in the worktree once
   # admitted against the one it replaces (bench/reference/ratchet.scala install), for the landing to commit.
   ratchet_bin=$bin
