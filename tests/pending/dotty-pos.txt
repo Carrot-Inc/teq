@@ -236,7 +236,6 @@ i15926.scala	i15926.scala:18:24: type argument Y does not conform to upper bound
 i15931.scala	i15931.scala:18:17: type mismatch: found Foo#P, required TP#P
 i15944.scala	i15944.scala:44:5: value D is not a member of Baz
 i15964.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
-i16104.scala	i16104.scala:11:9: local givens cannot take parameters
 i16123.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i16183	Test_2.scala:4:24: no given instance of type Foo2[Qux] was found for parameter e
 i16186.scala	option: -Wsafe-init with -Werror (teq has no flag for it)

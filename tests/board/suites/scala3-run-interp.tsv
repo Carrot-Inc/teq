@@ -101,7 +101,7 @@ bridges	fail	-	compile-error: error overriding method f in class Foo___ of type 
 buffer-slice	pass	-	
 builder	fail	-	wrong-output
 byNameVarargs	pass	-	
-byname-given	fail	-	compile-error: local givens cannot take parameters
+byname-given	pass	-	
 byname-implicits-17	pass	-	
 byname-implicits-28	pass	-	
 byname-implicits-30	pass	-	
@@ -850,7 +850,7 @@ i9939	fail	-	wrong-output
 iarrays	fail	-	compile-error: value concat is not a member of IArray
 ift-return	fail	-	compile-error: type mismatch: found Ctx#T, required contextual$1.T
 impconvtimes	fail	-	compile-error: operator * cannot be applied to Double and Hour
-implicit-alias	fail	-	compile-error: local givens cannot take parameters
+implicit-alias	pass	-	
 implicit-disambiguation	pass	-	
 implicit-functors	pass	-	
 implicit-functors2	pass	-	

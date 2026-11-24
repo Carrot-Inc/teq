@@ -39,7 +39,6 @@ break-opt	compile-error: boundary is not a member of the package
 breaks	compile-error: boundary is not a member of the package
 bridges	compile-error: error overriding method f in class Foo___ of type Foo___.this.I: method f in trait Bar_If of type I has incompatible type
 builder	wrong-output
-byname-given	compile-error: local givens cannot take parameters
 capturing	compile-error: value getDeclaredFields is not a member of Class[_]
 case-class-serializable	compile-error: type NotSerializableException not found
 caseclasses	compile-error: expected an expression, found ';'
@@ -337,7 +336,6 @@ i9939	wrong-output
 iarrays	compile-error: value concat is not a member of IArray
 ift-return	compile-error: type mismatch: found Ctx#T, required contextual$1.T
 impconvtimes	compile-error: operator * cannot be applied to Double and Hour
-implicit-alias	compile-error: local givens cannot take parameters
 implicit-specifity	compile-error: expected ':', found ','
 implicitFuns	compile-error: value unary_! is not a member of Boolean
 implicitFuns2	compile-error: values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=

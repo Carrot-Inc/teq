@@ -73,7 +73,7 @@ bridges.scala	fail	lean:fail	bridges.scala:64:21: error overriding method f in c
 buffer-slice.scala	pass	lean:pass	
 builder.scala	fail	lean:fail	output: line 1: the .check has 'Table(Row(Cell(top left), Cell(top right)), Row(Cell(botttom left), Cell(bottom right)))', the program printed 'Table()'
 byNameVarargs	pass	lean:pass	
-byname-given.scala	fail	lean:fail	byname-given.scala:3:3: local givens cannot take parameters
+byname-given.scala	pass	lean:pass	
 byname-implicits-17.scala	pass	lean:pass	
 byname-implicits-28.scala	pass	lean:pass	
 byname-implicits-30.scala	pass	lean:pass	
@@ -697,7 +697,7 @@ i9928.scala	pass	lean:pass
 iarrays.scala	fail	lean:fail	iarrays.scala:49:12: value concat is not a member of IArray
 ift-return.scala	fail	lean:fail	run: exit 1: Node.js v25.9.0
 impconvtimes.scala	fail	lean:fail	impconvtimes.scala:17:40: operator * cannot be applied to Double and Hour
-implicit-alias.scala	fail	lean:fail	implicit-alias.scala:56:11: local givens cannot take parameters
+implicit-alias.scala	pass	lean:pass	
 implicit-disambiguation.scala	pass	lean:pass	
 implicit-functors.scala	pass	lean:pass	
 implicit-functors2.scala	pass	lean:pass	

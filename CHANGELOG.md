@@ -7,6 +7,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A given alias with a using clause or type parameters defined in a block (`given g(using n: Int): String = ...`,
+  `given g[A](using o: Ordering[A]): Ordering[List[A]] = ...`, an inline or anonymous one) is the local method scalac
+  makes it, found by a summon, a call's implicit argument or another local given's using clause, where it was refused
+  ("local givens cannot take parameters"). Two of them of one type are scalac's ambiguity, and two anonymous ones
+  of one type scalac's double definition.
 - An inline given whose using clause has a default (`inline given bark(using msg: String = "Woof!"): String`) has
   that default's getter as a method of its class (`Dog.bark$default$1`), as scalac's has: a call that leaves the
   argument out through an export of an instance or an import of its givens applies it, where it was missing (the

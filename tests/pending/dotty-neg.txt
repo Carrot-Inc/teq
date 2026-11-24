@@ -235,7 +235,7 @@ extendsTest.scala	check: diagnostic 1 of 2: scalac's is error extendsTest.scala:
 extension-colon.scala	marks: no error where 1 are marked
 extension-method-not-allowed.scala	check: diagnostic 1 of 1: scalac's is error extension-method-not-allowed.scala:3:5 end of extension method expected but identifier found; teq's is error extension-method-not-allowed.scala:3:5 only defs are allowed in an extension
 extension-methods.scala	marks: 4 errors where 5 are marked
-extension-specificity2.scala	marks: 5 errors where 1 are marked: extension-specificity2.scala:7:9: local givens cannot take parameters
+extension-specificity2.scala	check: diagnostic 1 of 1: scalac's is error extension-specificity2.scala:10:3 Found:    (1 : Int); teq's is error extension-specificity2.scala:10:3 ambiguous extension methods: both bla2 and bla1 provide foo on 1
 extensions-can-only-have-defs.scala	check: diagnostic 1 of 1: scalac's is error extensions-can-only-have-defs.scala:3:5 values are not allowed inside extensions; teq's is error extensions-can-only-have-defs.scala:3:5 only defs are allowed in an extension
 extensions-can-only-have-using.scala	marks: 2 errors where 1 are marked: extensions-can-only-have-using.scala:1:19: an extension needs exactly one receiver parameter
 extmethod-overload.scala	marks: 2 errors where 1 are marked: extmethod-overload.scala:11:11: ambiguous extension methods: both a and b provide |+| on Int
@@ -546,9 +546,9 @@ i1642.scala	check: diagnostic 1 of 2: scalac's is error i1642.scala:1:7 A value 
 i1643.scala	marks: 6 errors where 7 are marked
 i16438.scala	check: diagnostic 3 of 4: scalac's is warning i16438.scala:4:36 cannot override val parameter value string in trait AnotherTrait; teq's is error i16438.scala:4:12 parameterized trait ATrait is indirectly implemented, needs to be implemented
 i16452.scala	marks: error on an unmarked line i16452.scala:1: expected end of statement, found ':'
-i16453.scala	marks: 12 errors where 6 are marked: i16453.scala:10:9: local givens cannot take parameters
+i16453.scala	check: diagnostic 1 of 6: scalac's is error i16453.scala:21:20 No given instance of type List[Int] was found for parameter x of method summon in object Predef; teq's is error i16453.scala:21:20 No implicit view available from Int => Int.
 i16453b1.scala	check: diagnostic 1 of 1: scalac's is error i16453b1.scala:11:20 No given instance of type Ctx => Option[Int] was found for parameter fn of method get; teq's is error i16453b1.scala:11:20 No implicit view available from Ctx => Option[Int].
-i16453b2.scala	marks: 2 errors where 1 are marked: i16453b2.scala:9:9: local givens cannot take parameters
+i16453b2.scala	check: diagnostic 1 of 1: scalac's is error i16453b2.scala:11:20 No given instance of type Ctx => Option[Int] was found for parameter fn of method get; teq's is error i16453b2.scala:11:20 No implicit view available from Ctx => Option[Int].
 i16464.scala	marks: 2 errors where 1 are marked: i16464.scala:4:7: Conflicting definitions:
 i1647.scala	marks: error on an unmarked line i1647.scala:1: class ann needs to be abstract, since def foo(): Unit in class ann is not defined
 i1648.scala	check: diagnostic 1 of 1: scalac's is error i1648.scala:1:20 Not found: type A; teq's is error i1648.scala:1:13 not found: Object
@@ -772,7 +772,7 @@ i22906.scala	option: -rewrite (teq has no flag for it)
 i2292.scala	check: diagnostic 1 of 1: scalac's is error i2292.scala:1:12 ';' expected, but identifier found; teq's is error i2292.scala:1:12 expected a definition, found identifier
 i23036.scala	check: diagnostic 1 of 10: scalac's is error i23036.scala:2:3 imports are not allowed inside extensions; teq's is error i23036.scala:2:3 only defs are allowed in an extension
 i23111.scala	marks: 4 errors where 2 are marked: i23111.scala:2:46: missing parameter type
-i23119.scala	marks: 9 errors where 2 are marked: i23119.scala:4:17: `yield` or `do` expected
+i23119.scala	marks: 1 errors where 2 are marked
 i23155a.scala	marks: 2 errors where 1 are marked: i23155a.scala:4:10: wrong number of patterns for an extractor of (x : Int, y : Int): found 2
 i23156.scala	marks: 3 errors where 1 are marked: i23156.scala:3:10: wrong number of patterns for an extractor of <error>: found 2
 i23179-reverse.scala	marks: 1 errors where 2 are marked
@@ -1129,7 +1129,7 @@ i8362.scala	check: diagnostic 1 of 1: scalac's is error i8362.scala:4:49 A liter
 i8405.scala	check: diagnostic 1 of 1: scalac's is error i8405.scala:10:7 Cannot resolve reference to type (ActorClassificationUnsubscriber.this.bus : ManagedActorClassification).Subscriber.; teq's is error i8405.scala:10:19 type mismatch: found Nothing
 i8464.scala	marks: 7 errors where 5 are marked: i8464.scala:3:18: type Id not found
 i8569a.scala	check: diagnostic 1 of 1: scalac's is error i8569a.scala:13:15 (Test.outer2 : => Outer2) is not a valid type prefix, since it is not an immutable path; teq's is error i8569a.scala:13:15 (outer2 : => Outer2) is not a valid type prefix, since
-i8623.scala	marks: error on an unmarked line i8623.scala:9: local givens cannot take parameters
+i8623.scala	check: diagnostic 1 of 1: scalac's is error i8623.scala:11:3 value pos is not a member of ?1.tasty.Tree.; teq's is error i8623.scala:11:3 value pos is not a member of Any
 i8623a.scala	marks: error on an unmarked line i8623a.scala:14: type mismatch: found Int, required String
 i866.scala	check: diagnostic 1 of 2: scalac's is error i866.scala:2:16 Found: ("" : String); teq's is error i866.scala:2:16 type mismatch: found "", required Int
 i8681.scala	marks: 2 errors where 3 are marked
@@ -1308,7 +1308,7 @@ missing-implicit-2.scala	check: diagnostic 1 of 2: scalac's is error missing-imp
 missing-implicit-3.scala	check: diagnostic 1 of 2: scalac's is error missing-implicit-3.scala:6:45 Found: (Int, java.util.concurrent.TimeUnit); teq's is error missing-implicit-3.scala:6:45 type mismatch: found (Int, TimeUnit), required Duration
 missing-implicit.scala	check: diagnostic 1 of 2: scalac's is error missing-implicit.scala:5:20 value > is not a member of T, but could be made available as an extension method.; teq's is error missing-implicit.scala:5:20 value > is not a member of T
 missing-implicit1.scala	check: diagnostic 1 of 3: scalac's is error missing-implicit1.scala:17:5 No given instance of type testObjectInstance.Zip[Option] was found for parameter xs of method ff in object testObjectInstance; teq's is error missing-implicit1.scala:1
-missing-implicit2.scala	marks: error on an unmarked line missing-implicit2.scala:9: local givens cannot take parameters
+missing-implicit2.scala	check: diagnostic 1 of 2: error missing-implicit2.scala:10:19, line 3 of the message: scalac's is The following import might fix the problem:; teq's is nothing
 missing-implicit3.scala	check: diagnostic 1 of 1: scalac's is error missing-implicit3.scala:13:37 No given instance of type ord.Ord[ord.Foo] was found for a context parameter of method sort in package ord.; teq's is error missing-implicit3.scala:13:37 no given ins
 missing-implicit4.scala	check: diagnostic 1 of 3: scalac's is error missing-implicit4.scala:14:5 No given instance of type Zip[Option] was found for parameter xs of method ff; teq's is error missing-implicit4.scala:14:5 no given instance of type Zip[Option] was fo
 missing-implicit5.scala	check: diagnostic 1 of 3: scalac's is error missing-implicit5.scala:15:3 value first is not a member of List[Int], but could be made available as an extension method.; teq's is error missing-implicit5.scala:15:3 value first is not a member

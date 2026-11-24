@@ -295,7 +295,7 @@ neg/extendsTest.scala	same
 neg/extension-colon.scala	accepts	
 neg/extension-method-not-allowed.scala	same	
 neg/extension-methods.scala	subset	4/5 lines
-neg/extension-specificity2.scala	oos	local-givens
+neg/extension-specificity2.scala	same	
 neg/extensions-can-only-have-defs.scala	same	
 neg/extensions-can-only-have-using.scala	superset	+1 lines: an extension needs exactly one receiver parameter
 neg/extmethod-overload.scala	superset	+1 lines: ambiguous extension methods: both a and b provide |+| on Int
@@ -646,9 +646,9 @@ neg/i1642.scala	same
 neg/i1643.scala	oos	inheritance
 neg/i16438.scala	same	
 neg/i16452.scala	syntax	expected end of statement, found {}
-neg/i16453.scala	oos	local-givens
+neg/i16453.scala	same	
 neg/i16453b1.scala	same	
-neg/i16453b2.scala	oos	local-givens
+neg/i16453b2.scala	same	
 neg/i16464.scala	superset	+1 lines: Conflicting definitions:
 neg/i1647.scala	different	{} needs to be abstract
 neg/i1648.scala	std	Object
@@ -905,7 +905,7 @@ neg/i22941.scala	same
 neg/i22979.scala	different	{} is not a member of the package
 neg/i23036.scala	same	
 neg/i23111.scala	same	
-neg/i23119.scala	oos	local-givens
+neg/i23119.scala	subset	1/2 lines
 neg/i23155a.scala	same	
 neg/i23156.scala	superset	+1 lines: wrong number of patterns for an extractor of <error>: found 2
 neg/i23179-reverse.scala	subset	1/2 lines
@@ -1337,7 +1337,7 @@ neg/i8405.scala	same
 neg/i8464.scala	std	Id
 neg/i8569.scala	same	
 neg/i8569a.scala	same	
-neg/i8623.scala	oos	local-givens
+neg/i8623.scala	same	
 neg/i8623a.scala	different	type mismatch
 neg/i8632.scala	same	
 neg/i866.scala	same	
@@ -1586,7 +1586,7 @@ neg/missing-implicit-2.scala	same
 neg/missing-implicit-3.scala	same	
 neg/missing-implicit.scala	same	
 neg/missing-implicit1.scala	same	
-neg/missing-implicit2.scala	oos	local-givens
+neg/missing-implicit2.scala	same	
 neg/missing-implicit3.scala	same	
 neg/missing-implicit4.scala	same	
 neg/missing-implicit5.scala	same	
@@ -2991,7 +2991,7 @@ pos/i16049.scala	accepts
 pos/i16076.scala	accepts	
 pos/i16091.scala	accepts	
 pos/i16092.scala	accepts	
-pos/i16104.scala	oos	local-givens
+pos/i16104.scala	accepts	
 pos/i16105.scala	accepts	
 pos/i16119.scala	accepts	
 pos/i16123.scala	accepts	

@@ -5787,6 +5787,28 @@ impl<'a> Worker<'a> {
                     ast::ClassKind::EnumCase => {}
                 },
                 DefKind::TypeAlias { rhs, .. } if !rhs.map_or(false, |r| self.names_term_path(r)) => self.declare_local_alias(file, *d),
+                // A given alias with type or term parameters is a method (dotty's `Parsers.givenDef`, `hasParams`: a
+                // `DefDef`), a local one entered as a local `implicit def` is, its signature its definition's.
+                DefKind::Given(g) if g.alias.is_some() && (!g.tparams.is_empty() || !g.clauses.is_empty()) => {
+                    if def.mods & mods::INLINE != 0 && self.checks_inline_definition() {
+                        self.error(def.span, "Implementation restriction: nested inline methods are not supported");
+                    }
+                    // dotty's `checkNoDoubleDeclaration`, at the definition's point: its name, an anonymous one's
+                    // clause after `given`.
+                    if let Some(&(_, kind)) = defined.iter().find(|(n, _)| *n == def.name) {
+                        let msg = format!("{0} is already defined as {1} {0}", self.name_str(def.name), kind);
+                        let at = self.given_point(file, def.span);
+                        self.error(at, msg);
+                    }
+                    defined.push((def.name, "given instance"));
+                    let sym = self.syms.new_sym(def.name, SymKind::Def, def.mods | mods::GIVEN, Owner::Local, file, Some(*d), def.span);
+                    if self.index.is_some() {
+                        self.index_local(sym);
+                    }
+                    self.def_syms.insert(file.0 as usize, *d, sym);
+                    self.bind_local(def.name, sym);
+                    self.bind_given(sym);
+                }
                 DefKind::Given(g) if g.alias.is_none() && (!g.tparams.is_empty() || !g.clauses.is_empty()) => {
                     self.enter_local_given_class(file, *d);
                     if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
@@ -6330,8 +6352,26 @@ impl<'a> Worker<'a> {
                     }
                     return;
                 };
+                // A given with parameters is the local method the block entered: typed as a local def is.
                 if !g.clauses.is_empty() || !g.tparams.is_empty() {
-                    self.error_by(crate::source::Group::Own, def.span, "local givens cannot take parameters");
+                    let Some(&sym) = self.def_syms.get(file.0 as usize, &d) else { return };
+                    let sig = self.sig_arc(sym);
+                    if !self.fun_of_sym.contains_key(&sym) && !self.is_inline_callee(sym) {
+                        let ret = sig.ret;
+                        let outer = self.inferring_depth;
+                        if outer != 0 && outer == self.body_depth {
+                            self.inferring_depth = self.body_depth + 1;
+                        }
+                        self.type_body(sym, &sig, Some(ret));
+                        self.inferring_depth = outer;
+                    } else if self.is_inline_callee(sym) {
+                        self.check_local_inline_definition(sym);
+                        self.type_local_inline_getters(sym, &sig);
+                    }
+                    if let Some(&f) = self.fun_of_sym.get(&sym) {
+                        out.push(TStmt::Fun(f));
+                    }
+                    return;
                 }
                 let ty = self.resolve_type(g.ty);
                 // An `inline given`, transparent or not, is an inline method (dotty's
@@ -6368,6 +6408,18 @@ impl<'a> Worker<'a> {
                 out.push(TStmt::Val(sym, init));
             }
         }
+    }
+
+    /// A given definition's point as dotty's tree has it: the first word after its `given` keyword, the name or an
+    /// anonymous given's clause (`given (using n: Int): String`), where the definition's span starts at the keyword.
+    fn given_point(&self, file: FileId, span: crate::source::Span) -> crate::source::Span {
+        let text = &self.source(file).text;
+        let (start, end) = (span.start as usize, (span.end as usize).min(text.len()));
+        let Some(slice) = text.get(start..end) else { return span };
+        let Some(k) = slice.find("given") else { return span };
+        let after = k + "given".len();
+        let skip = slice[after..].len() - slice[after..].trim_start().len();
+        crate::source::Span { start: (start + after + skip) as u32, end: span.end }
     }
 
     /// `val (a, b) = (x, y)` over plain or typed binders is `val a = x; val b = y`, as scalac

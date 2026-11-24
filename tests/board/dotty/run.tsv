@@ -94,7 +94,7 @@ bridges.scala	fail	interp:fail	bridges.scala:64:21: error overriding method f in
 buffer-slice.scala	pass	interp:pass	
 builder.scala	fail	interp:fail	output: line 1: the .check has 'Table(Row(Cell(top left), Cell(top right)), Row(Cell(botttom left), Cell(bottom right)))', the program printed 'Table()'
 byNameVarargs	pass	interp:pass	
-byname-given.scala	fail	interp:fail	byname-given.scala:3:3: local givens cannot take parameters
+byname-given.scala	pass	interp:pass	
 byname-implicits-17.scala	pass	interp:pass	
 byname-implicits-28.scala	pass	interp:pass	
 byname-implicits-30.scala	pass	interp:pass	
@@ -821,7 +821,7 @@ i9939.scala	fail	interp:fail	output: line 1: the .check has '[3.0, 42]', the pro
 iarrays.scala	fail	interp:fail	iarrays.scala:62:7: IArray is not a case class, so it cannot be used as a pattern
 ift-return.scala	fail	interp:fail	run: exit 1: Exception in thread "main" scala.runtime.NonLocalReturnControl
 impconvtimes.scala	fail	interp:fail	impconvtimes.scala:17:40: operator * cannot be applied to Double and Hour
-implicit-alias.scala	fail	interp:fail	implicit-alias.scala:56:11: local givens cannot take parameters
+implicit-alias.scala	pass	interp:pass	
 implicit-disambiguation.scala	pass	interp:pass	
 implicit-functors.scala	pass	interp:pass	
 implicit-functors2.scala	pass	interp:pass	

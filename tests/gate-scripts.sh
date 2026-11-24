@@ -2638,6 +2638,11 @@ check "export-default: the table's templates, its part and its judge's planted t
 check "inline-getters: the table's templates and its judge's planted tables judged as they must be" "$work/inline-getters.log" \
   eval 'python3 tests/support/inline_getters.py --self-test > "$work/inline-getters.log" 2>&1'
 
+# The table of a local given that takes parameters (tests/support/local_given_params.py, run by
+# tests/support/local-given-params.sh): its templates and its judge over planted tables.
+check "local-given-params: the table's templates and its judge's planted tables judged as they must be" "$work/local-given-params.log" \
+  eval 'python3 tests/support/local_given_params.py --self-test > "$work/local-given-params.log" 2>&1'
+
 fi
 echo "gate-scripts: $pass passed, $fail failed"
 pieces_end $((fail > 0)) passed=$pass failed=$fail

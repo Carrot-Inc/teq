@@ -958,7 +958,7 @@ i16049.scala	pass	check:pass
 i16076.scala	pass	check:pass	
 i16091.scala	pass	check:pass	
 i16092.scala	pass	check:pass	
-i16104.scala	fail	check:fail	i16104.scala:11:9: local givens cannot take parameters
+i16104.scala	pass	check:pass	
 i16105.scala	pass	check:pass	
 i16119.scala	pass	check:pass	
 i16123.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)

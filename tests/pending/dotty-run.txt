@@ -24,7 +24,6 @@ assert-stack.scala	output: line 5: the .check has 'Test$.main(assert-stack.scala
 beans	java source: teq reads none
 bridges.scala	bridges.scala:64:21: error overriding method f in class Foo___ of type Foo___.this.I: method f in trait Bar_If of type I has incompatible type
 builder.scala	output: line 1: the .check has 'Table(Row(Cell(top left), Cell(top right)), Row(Cell(botttom left), Cell(bottom right)))', the program printed 'Table()'
-byname-given.scala	byname-given.scala:3:3: local givens cannot take parameters
 capturing.scala	output: line 1: the .check has 'private final java.lang.String MT.s', the program printed 'private final scala.Function1 MT.sf'
 caseclasses.scala	caseclasses.scala:22:20: expected an expression, found ';'
 catch-sub-cases.scala	catch-sub-cases.scala:13:28: expected '=>', found 'if'
@@ -263,7 +262,6 @@ i9939.scala	output: line 1: the .check has '[3.0, 42]', the program printed '[3.
 iarrays.scala	iarrays.scala:62:7: IArray is not a case class, so it cannot be used as a pattern
 ift-return.scala	run: exit 1: Exception in thread "main" scala.runtime.NonLocalReturnControl
 impconvtimes.scala	impconvtimes.scala:17:40: operator * cannot be applied to Double and Hour
-implicit-alias.scala	implicit-alias.scala:56:11: local givens cannot take parameters
 implicit-specifity.scala	implicit-specifity.scala:34:33: expected ':', found ','
 implicitFuns.scala	implicitFuns.scala:22:14: value unary_! is not a member of Boolean
 implicitFuns2.scala	implicitFuns2.scala:32:12: values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
