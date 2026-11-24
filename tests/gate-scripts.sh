@@ -2618,6 +2618,11 @@ check "words: a placed expectation is held by a diagnostic's header, never by it
 # row's keys reversed reads the same suites by job, and a matrix of an axis and an `exclude` is refused.
 check "workflow-jobs: the gate's matrix read in any key order, a form the reader does not handle refused" "$work/workflow-jobs.log" \
   eval 'python3 tests/support/workflow-jobs.py --self-test > "$work/workflow-jobs.log" 2>&1'
+# The judge of tests/workers.sh's refused reads (tests/support/refused_reads.py) on planted records: the property at
+# every read a build reaches, a read no build reaches said and not failed; red for a build not one worker's, a refused
+# read not typed again, a count past the read with no refusal, five builds without a count, nothing reached.
+check "refused reads: the judge's planted records judged as they must be" "$work/refused-reads.log" \
+  eval 'python3 tests/support/refused_reads.py --self-test > "$work/refused-reads.log" 2>&1'
 # Every line the gate deals to the shards has its row in tests/gate-times.txt (tests/support/gate_rows.py): a line
 # without one is dealt as 120 s, whatever it takes. Its check on planted lists first, then the tree's own.
 check "gate's rows: every line dealt to the shards has its row in tests/gate-times.txt" "$work/gate-rows.log" \

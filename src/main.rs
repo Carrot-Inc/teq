@@ -2150,6 +2150,11 @@ fn compile() -> i32 {
         }
         return serial_again(&why, t_start.elapsed(), opts.timings);
     }
+    // The parallel attempt went to its end: with the trace, how many reads the forced refusal counted
+    // (`shake::refuse`), as a build given to one worker says, so that a read named past them is known as not reached.
+    if shake::refusing() && std::env::var_os("TEQ_SERIAL_TRACE").is_some() {
+        eprintln!("teq: reads under the loader's lock counted: {}", shake::reads());
+    }
     // The merge's check refused the merged program: nothing reads it.
     if typer.merge_failed {
         let (shown, n, _) = typer.report_diags();

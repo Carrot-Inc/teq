@@ -2496,22 +2496,21 @@ part_as_one partial_rebuild_refused_use tests/workers/partial_rebuild_refused_us
 # stands. A schedule puts it there at the reads where another worker happens to hold the signature; with
 # `TEQ_REFUSE_READ=<k>` (src/shake.rs) the k-th read of a program's signature under the lock is refused whatever
 # the schedule, so that the path after each read named is walked in every run of the suite. How many such reads a
-# build makes is its schedule's: where its first wait under the lock is on a class's check and not on a signature,
-# one worker takes the build over sooner (read 987 was not reached in 3 of 25 builds at two workers on eight CPUs
-# beside sixteen busy loops; at 610 and below in none of 75), and the build says how many
-# it counted (`teq: reads under the loader's lock counted: <n>`, printed as the build is handed to one worker). So a
-# k a build does not reach (it counted fewer than k reads) is built again, up to five builds, each held to one
-# worker's. A build that counted k or more reached read k and did not refuse it: red at once. A build that prints
-# no count went to its end in parallel and refused none; whether it reached read k is not known, so it is built
-# again as one that counted fewer (a clean build that met no wait under the lock ends so). Five builds none of which
-# refused read k are red whatever they counted: a teq that never refuses says no count in all five.
+# build makes before it is given to one worker is its schedule's: the first wait under the lock hands it over, and a
+# traced build says how many it counted, given to one worker or typed in parallel to its end. In
+# partial_rebuild_macro_in_initialiser the hand-over comes at read 774, a read of Helper's signature, where the worker
+# typing Helper (a source built again) has not finished it, else at read 2,728: fewer CPUs and a shared host make 774
+# likelier (the gate's machines meet it in every build), so a read past it is not reached there. So each k is built
+# up to five times, each held to one worker's, stopping at the first that refuses it, and tests/support/refused_reads.py
+# judges the records: the property (a refused read reads as one worker's build) at every k a build reaches; a k past
+# every build's count said, with the counts, and no failure; red where a build is not one worker's, a refused read is
+# not typed again, a build counted k or more reads and refused none of them, five builds said no count, or no k was
+# reached in any build. Each k's line says how many of its builds reached it.
 # refused_reads_as_one <name> <dir> "<products' sources>" "<sources built again>" <k...>: one worker accepts the
-# part build, and each part build at two workers with its k-th such read refused says that it was (a k none of
-# five builds reaches fails, with the reads each counted), is typed again by one worker, and is one worker's by
-# its exit, its text and its directory.
+# part build, and the part builds at two workers with each k-th such read refused are judged as above.
 REFUSED_READ_BUILDS=5
 refused_reads_as_one() {
-  local name=$1_refused dir=$2 k n counts counted reached differ=""
+  local name=$1_refused dir=$2 k n counted refused again one records code
   if ! part_products "$name" "$dir" "$3" "$4"; then
     bad "$name: the products' build failed: $(head -1 "$work/$name.products.out" | cut -c1-120)"
     return
@@ -2521,35 +2520,32 @@ refused_reads_as_one() {
     return
   fi
   shift 4
+  records=$work/$name.records
+  : > "$records"
+  : > "$work/$name.differs"
   for k in "$@"; do
-    counts="" reached=""
     for n in $(seq 1 $REFUSED_READ_BUILDS); do
-      if ! part_build "$name" 2 TEQ_REFUSE_READ=$k; then
-        differ="$differ read $k ($part_differs);"
-        reached=failed
-        break
-      elif grep -q "^teq: a read under the loader's lock refused: read $k, " "$work/$name.traced"; then
-        grep -q "^teq: typed again by one worker: " "$work/$name.traced" || differ="$differ read $k (not typed again);"
-        reached=yes
-        break
-      fi
+      one=yes
+      part_build "$name" 2 TEQ_REFUSE_READ=$k || { one=no; echo "read $k, build $n: $part_differs" >> "$work/$name.differs"; }
+      refused=no
+      grep -q "^teq: a read under the loader's lock refused: read $k, " "$work/$name.traced" && refused=yes
+      again=no
+      grep -q "^teq: typed again by one worker: " "$work/$name.traced" && again=yes
       counted=$(sed -n "s/^teq: reads under the loader's lock counted: //p" "$work/$name.traced" | head -1)
       [[ $counted =~ ^[0-9]+$ ]] || counted=none
-      if [ "$counted" != none ] && [ "$counted" -ge "$k" ]; then
-        differ="$differ read $k (a build counted $counted reads and refused none of them);"
-        reached=failed
-        break
-      fi
-      counts="$counts $counted"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$k" "$n" "$refused" "$counted" "$again" "$one" >> "$records"
+      # the k's builds end at the first that refuses it, is not one worker's, or counted it and refused none
+      [ $refused = yes ] || [ $one = no ] || { [ "$counted" != none ] && [ "$counted" -ge "$k" ]; } && break
     done
-    if [ -z "$reached" ] && [[ $counts =~ [0-9] ]]; then
-      differ="$differ read $k (not reached in $REFUSED_READ_BUILDS builds, which counted$counts reads);"
-    elif [ -z "$reached" ]; then
-      differ="$differ read $k ($REFUSED_READ_BUILDS builds said no count of their reads: none refused read k);"
-    fi
-    [ "$reached" != yes ] || [ -z "$counts" ] || echo "workers: $name: read $k reached after builds that counted$counts reads"
   done
-  [ -z "$differ" ] && ok || bad "$name: a part build with a read under the loader's lock refused is not one worker's at$differ"
+  python3 tests/support/refused_reads.py "$records" > "$work/$name.judged" 2>&1
+  code=$?
+  sed -n 's/^\(read \|not reached \)/workers: &/p' "$work/$name.judged"
+  if [ $code = 0 ]; then
+    ok
+  else
+    bad "$name: $(grep -m1 '^red ' "$work/$name.judged" | cut -c1-300)$([ -s "$work/$name.differs" ] && echo " ($(head -1 "$work/$name.differs" | cut -c1-120))")"
+  fi
 }
 refused_reads_as_one partial_rebuild_initialiser_reads_files "$work/partial_rebuild_initialiser_reads_files.src" "Stock Helper Counter" "Stock Helper Use" 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987
 refused_reads_as_one partial_rebuild_macro_in_initialiser "$work/partial_rebuild_macro_in_initialiser.src" "Stock Helper Counter Rack" "Stock Helper Use" 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987
