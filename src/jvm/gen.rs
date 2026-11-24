@@ -550,14 +550,29 @@ pub struct MethodCx {
     pub stacked: Option<crate::lir::TempId>,
     /// The ends of the lowering's labelled blocks being written (`Kind::Labeled`).
     pub labels: FxMap<crate::lir::LabelId, Label>,
-    /// The `try`s whose cases are being written, by the label their cases leave by: the slot of
-    /// the try's result, none where it leaves nothing, and its normal exit.
-    pub try_exits: FxMap<crate::lir::LabelId, (Option<u16>, Label)>,
+    /// The `try`s whose handlers are being written, by the label their bodies leave by: the try's
+    /// normal exit, which the value is carried to on the operand stack.
+    pub try_exits: FxMap<crate::lir::LabelId, Label>,
     /// Why the escape nodes written in the method were not lowered, in the order they were
     /// written: what the statistics name the method by (`Gen::end_method`).
     pub unlowered: Vec<Unlowered>,
     /// Why instructions of the method are written with no node (`Gen::outside`).
     pub outside: Vec<Unlowered>,
+}
+
+/// The state of a `try` that `Gen::open_try` began, for `Gen::close_try`.
+pub struct TryOpen {
+    outer: usize,
+    stash: Vec<(u16, ErasedType, VT)>,
+    kept: Option<Reserved>,
+    made_early: bool,
+    throwable_vt: VT,
+    start: Label,
+    end: Label,
+    normal_exit: Label,
+    cleanup: Label,
+    protected: usize,
+    from: u32,
 }
 
 /// A `try` with a finalizer or a `synchronized` block around the code being generated: a `return`
@@ -3859,36 +3874,41 @@ impl<'a> Gen<'a> {
     }
 
     /// `try`/`catch`/`finally` through the exception table, as dotty's `genLoadTry` lays it out
-    /// (BCodeSyncAndTry.scala 181-423). The body and the cases leave their value in a local; the
-    /// finalizer is copied into a handler that takes every exception of the whole `try` up to it
-    /// and throws it again, then, where a `return` inside took it, into the cleanup that returns
-    /// (or goes on to the enclosing frame's), then onto the normal exit. A `try` with operands on
-    /// the stack spills them to locals first, since a handler starts with an empty stack.
+    /// (BCodeSyncAndTry.scala 181-423). The body and each handler leave their value on the operand stack
+    /// and jump to the normal exit; the finalizer is copied into a handler that takes every exception of
+    /// the whole `try` up to it and throws it again, then, where a `return` inside took it, into the
+    /// cleanup that returns (or goes on to the enclosing frame's), then onto the normal exit, over the
+    /// value. Where a handler takes an exception, whose entry holds no operands, the operands under the
+    /// `try` are stashed in locals and loaded again after it.
     pub(super) fn write_try(&mut self, want: &ErasedType, body: LirId, catch: Option<crate::lir::Catch>, finalizer: Option<LirId>, returns: bool) {
+        // The body's recursion stands on this frame alone: what comes before it and after it is written by
+        // functions of their own, which hold their locals only while they run.
+        let open = self.open_try(want, catch.is_some(), finalizer, returns);
+        self.write(body);
+        self.close_try(want, open, catch, finalizer);
+    }
+
+    /// What `write_try` writes before the body: the stash, the kept value's slot, the early-return slot, the
+    /// labels, and the protected range's start.
+    #[inline(never)]
+    fn open_try(&mut self, want: &ErasedType, caught: bool, finalizer: Option<LirId>, returns: bool) -> TryOpen {
         let outer = self.code.locals_mark();
-        let spilled = self.spill_stack();
-        let result = if *want == ErasedType::V {
-            None
-        } else {
-            match want {
-                ErasedType::L(_) => {
-                    self.code.op(op::ACONST_NULL);
-                    self.code.push(VT::Null);
-                }
-                _ => self.adapt(&ErasedType::V, want),
-            }
-            Some(self.store_new(want))
+        let stash = if caught { self.stash_stack() } else { Vec::new() };
+        // The value is kept in a local across the normal exit's copy of a finalizer that holds a `try`
+        // (`guardResult`, 219-225).
+        // Its slot is taken here and holds nothing until the normal exit stores the value.
+        let kept = match finalizer {
+            Some(f) if *want != ErasedType::V && self.lir.holds_try(f) => Some(self.code.reserve_local(want.wide())),
+            _ => None,
         };
         // A `return` inside the body or a case leaves through the finalizer, as the language runs
         // it on every exit: its value kept in the method's early-return slot, it jumps to the
         // finalizer's cleanup copy, which returns it (`genLoadTry` 3.B, 353-375; scalac's prints
         // `finally ran` before `fin: 1` for `try { return 1 } finally { println("finally ran") }`).
         let made_early = self.early_return_for(returns);
-        let ret = self.m.ret.clone();
-        let throwable = ErasedType::L(Rc::from(THROWABLE));
-        let throwable_vt = self.vt(&throwable);
-        let (start, end, normal_exit, after, cleanup) =
-            (self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label());
+        // Named in the class's constants before the body's, as `genLoadTry` names it.
+        let throwable_vt = self.vt(&ErasedType::L(Rc::from(THROWABLE)));
+        let (start, end, normal_exit, cleanup) = (self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label());
         if finalizer.is_some() {
             self.m.finalizers.push(FinallyFrame { cleanup });
         }
@@ -3896,28 +3916,52 @@ impl<'a> Gen<'a> {
         let protected = self.code.locals_mark();
         self.code.bind(start);
         let from = self.code.pc();
-        self.write(body);
-        if let Some(slot) = result {
-            self.store(slot, want);
-        }
+        TryOpen { outer, stash, kept, made_early, throwable_vt, start, end, normal_exit, cleanup, protected, from }
+    }
+
+    /// What `write_try` writes after the body: the jump to the normal exit, the handlers, the finalizer's copies
+    /// and the stash loaded again.
+    #[inline(never)]
+    fn close_try(&mut self, want: &ErasedType, open: TryOpen, catch: Option<crate::lir::Catch>, finalizer: Option<LirId>) {
+        let TryOpen { outer, stash, kept, made_early, throwable_vt, start, end, normal_exit, cleanup, protected, from } = open;
+        let ret = self.m.ret.clone();
+        let throwable = ErasedType::L(Rc::from(THROWABLE));
         // A protected range has to hold an instruction.
         if self.code.pc() == from {
             self.code.op(op::NOP);
         }
         self.code.bind(end);
-        self.goto(normal_exit);
+        self.leave_try(want, normal_exit);
+        // Each handler entered with the exception of its class, each protecting the body, in the cases' order
+        // (`genLoadTry` 2.a-2.c, BCodeSyncAndTry.scala 295-328).
         if let Some(catch) = catch {
-            let (handler, catch_end) = (self.code.new_label(), self.code.new_label());
-            self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
-            self.code.locals_release(protected);
-            self.code.bind_handler(handler, throwable_vt);
-            let mark = self.code.locals_mark();
-            let e = self.store_new(&throwable);
-            self.m.temps.insert(catch.caught, e);
-            self.m.try_exits.insert(catch.done, (result, normal_exit));
-            self.write(catch.cases);
-            self.code.bind(catch_end);
-            self.code.locals_release(mark);
+            self.m.try_exits.insert(catch.done, normal_exit);
+            for h in catch.handlers.iter() {
+                let handler = self.code.new_label();
+                self.code.locals_release(protected);
+                let class = ErasedType::L(h.class.clone());
+                let vt = self.vt(&class);
+                self.code.bind_handler(handler, vt);
+                let mark = self.code.locals_mark();
+                match h.caught {
+                    crate::lir::Caught::Dropped => {
+                        self.code.op(op::POP);
+                        self.code.pop();
+                    }
+                    crate::lir::Caught::Local(sym) => {
+                        let slot = self.store_new(&class);
+                        self.m.locals.insert(sym, Local { slot, ty: class.clone(), cell: false });
+                    }
+                    crate::lir::Caught::Temp(temp) => {
+                        let slot = self.store_new(&class);
+                        self.m.temps.insert(temp, slot);
+                    }
+                }
+                self.write(h.body);
+                self.code.locals_release(mark);
+                let catch_type = self.cw.cp.class(&h.class);
+                self.code.add_handler(Handler { start, end, handler, catch_type });
+            }
         }
         if let Some(f) = finalizer {
             // A `return` inside the finalizer itself belongs to the enclosing frame; one in the body
@@ -3947,15 +3991,19 @@ impl<'a> Gen<'a> {
             }
             self.code.bind(normal_exit);
             self.code.hold_local(thrown);
+            if let Some(reserved) = kept {
+                let vt = self.vt(want);
+                self.code.type_local(reserved, vt);
+                self.store(reserved.slot, want);
+            }
             self.write(f);
+            if let Some(reserved) = kept {
+                self.load(reserved.slot, want);
+            }
         } else {
             self.code.bind(normal_exit);
         }
-        self.code.bind(after);
-        self.reload_stack(spilled);
-        if let Some(slot) = result {
-            self.load(slot, want);
-        }
+        self.unstash_stack(stash, kept.map(|r| r.slot), want);
         self.code.locals_release(outer);
         if made_early {
             self.m.early_return = None;
@@ -4096,10 +4144,26 @@ impl<'a> Gen<'a> {
         dropped
     }
 
-    /// Moves the operands on the stack into fresh locals, deepest first.
-    fn spill_stack(&mut self) -> Vec<(u16, ErasedType)> {
-        let mut spilled = Vec::new();
-        while let Some(&top) = self.code.stack.last() {
+    /// The value of a `try`'s body or handler, at the type `want`, carried on the stack to the normal
+    /// exit `exit`, whose frame takes it at that type.
+    pub(super) fn leave_try(&mut self, want: &ErasedType, exit: Label) {
+        if *want != ErasedType::V {
+            let vt = self.vt(want);
+            self.code.retype_top(vt);
+        }
+        self.goto(exit);
+        if *want != ErasedType::V {
+            self.code.pop();
+        }
+    }
+
+    /// The operands on the stack, under a `try` whose handlers enter with none, moved into fresh locals: a local
+    /// for each, the deepest's first, then stored from the top down (`genLoadTry` (0), BCodeSyncAndTry.scala
+    /// 208-212, 233-240).
+    fn stash_stack(&mut self) -> Vec<(u16, ErasedType, VT)> {
+        let operands = self.code.stack.clone();
+        let mut stash = Vec::new();
+        for top in operands {
             let t = match top {
                 VT::Int => ErasedType::I,
                 VT::Long => ErasedType::J,
@@ -4108,21 +4172,53 @@ impl<'a> Gen<'a> {
                 VT::Object(_) | VT::Null => ErasedType::object(),
                 _ => {
                     self.unsupported("not supported on the JVM yet: try as an argument of a constructor");
-                    return spilled;
+                    return Vec::new();
                 }
             };
-            let slot = self.code.new_local(top);
-            self.store(slot, &t);
-            spilled.push((slot, t));
+            stash.push((self.code.new_local(top), t, top));
         }
-        spilled.reverse();
-        spilled
+        for (slot, t, _) in stash.iter().rev() {
+            self.store(*slot, t);
+        }
+        stash
     }
 
-    fn reload_stack(&mut self, spilled: Vec<(u16, ErasedType)>) {
-        for (slot, t) in spilled {
-            self.load(slot, &t);
+    /// The stashed operands loaded again under the `try`'s value, each at the type it had on the stack (a module's
+    /// class, not `Object`: dotty's `makeTempLocal` of the operand's own type), each reference's local cleared after
+    /// it; the value kept meanwhile in the local `kept` holds where there is one, else in a fresh one, cleared after
+    /// it too (`genLoadTry` (5), BCodeSyncAndTry.scala 386-418).
+    fn unstash_stack(&mut self, stash: Vec<(u16, ErasedType, VT)>, kept: Option<u16>, want: &ErasedType) {
+        if stash.is_empty() {
+            return;
         }
+        let result = (*want != ErasedType::V).then(|| {
+            kept.unwrap_or_else(|| {
+                let vt = self.vt(want);
+                self.code.new_local(vt)
+            })
+        });
+        if let Some(slot) = result {
+            self.store(slot, want);
+        }
+        for (slot, t, vt) in stash {
+            self.load(slot, &t);
+            if t.is_ref() {
+                self.code.retype_top(vt);
+                self.clear_local(slot, &t);
+            }
+        }
+        if let Some(slot) = result {
+            self.load(slot, want);
+            if want.is_ref() {
+                self.clear_local(slot, want);
+            }
+        }
+    }
+
+    fn clear_local(&mut self, slot: u16, t: &ErasedType) {
+        self.code.op(op::ACONST_NULL);
+        self.code.push(VT::Null);
+        self.store(slot, t);
     }
 
     /// The parameter type under which the JDK renders a value of type `t`: `String.valueOf`,

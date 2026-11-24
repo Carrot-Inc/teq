@@ -156,7 +156,7 @@ inline val topstr = "is"
 inline val topempty = ""
 // A class no program makes, and a value class with a right-associative method.
 final class NeverMade
-final class VR(val n: Int) extends AnyVal { def +:(x: Int): Int = n + x }
+final class VRM(val n: Int) extends AnyVal { def +:(x: Int): Int = n + x }
 inline val topk = classOf[Peer]
 extension (x: Int) def +:(s: String): String = s + x
 // An inline parameter's default, expanded into a later default's arguments where it stands: the later getter's
@@ -447,7 +447,7 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("call-generic-value-class-new", "", "new G(ps).pair(pi)", "String", ""),
     Shape("call-generic-value-class-held-pair", "", "Mk.g(ps).pair(pi)", "String", ""),
     Shape("call-jar-value-class", "", "pi.max(3)", "Int", ""), Shape("call-jar-value-class-string", "", "ps.reverse", "String", ""),
-    Shape("call-value-class-right-assoc", "", "(1 +: new VR(pi))", "Int", ""),
+    Shape("call-value-class-right-assoc", "", "(1 +: new VRM(pi))", "Int", ""),
     Shape("call-jar-generic-value-class-held", "", "(pi -> ps)", "(Int, String)", ""),
     Shape("call-right-associative-member", "import O.*", "(pi ++: ps)", "String", ""),
     Shape("call-java-array", "", "java.util.Arrays.asList(ps, \"x\")", "java.util.List[String]", ""),

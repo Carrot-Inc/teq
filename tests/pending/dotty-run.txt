@@ -410,7 +410,6 @@ traitNoInit.scala	teq: This construct can be rewritten automatically under -rewr
 transparent	teq: jvm backend: Test$.main: the local $thisnbtu8x_616 is not in scope of the generated method
 transparentProtected.scala	teq: jvm backend: Test$: the local $this1hob1ao_83 is not in scope of the generated method
 triemap-hash.scala	triemap-hash.scala:15:53: reference to Hashing is ambiguous: it is both imported by name by import scala.util.hashing.Hashing and imported subsequently by import scala.collection.*
-try.scala	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad type on operand stack
 tupled-function-andThen.scala	tupled-function-andThen.scala:10:28: (Int, Int) => (Int, Int, Int) cannot be tupled as Tuple => Tuple
 tupled-function-apply.scala	tupled-function-apply.scala:10:13: too many arguments: expected 0
 tupled-function-compose.scala	tupled-function-compose.scala:9:28: (Int, Int) => (Int, Int, Int) cannot be tupled as Tuple => Tuple

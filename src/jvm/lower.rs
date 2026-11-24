@@ -3,7 +3,7 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Refusal, Relation, TempId, Unlowered};
+use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Refusal, Relation, TempId, Unlowered};
 use super::gen::{rank_type, CallRoute, CaptureArgument, ConcatRoute, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::names::*;
 use crate::ast::ListRef;
@@ -121,12 +121,22 @@ impl<'a> Gen<'a> {
                 let value = self.lower_expr(inner, &ErasedType::L(Rc::from(THROWABLE)));
                 self.lir.push(Kind::Throw(value), want.clone())
             }
+            // A statement's `try` is written at its own type and what it leaves dropped after the join, as dotty's
+            // `genStat` loads it (BCodeBodyBuilder.scala 135) and `genLoad` adapts the type `genLoadTry` gives
+            // (363, 504-507); where a value is wanted, Erasure's `typedTry` has adapted each branch to it
+            // (Erasure.scala 865-866). One of type `Nothing` leaves nothing to drop.
             TExpr::Try(index) => {
+                let nothing = self.recorded_type(e).map(|t| self.cx.input.types.canonical(t)) == Some(NOTHING);
+                let own = match self.recorded(e) {
+                    Some(own) if *want == ErasedType::V && !nothing => own,
+                    _ => want.clone(),
+                };
                 let t = &prog.tries[index as usize];
-                let body = self.lower_expr(t.body, want);
-                let catch = (!t.cases.is_empty()).then(|| self.lower_catch(t.cases, want));
+                let body = self.lower_expr(t.body, &own);
+                let catch = (!t.cases.is_empty()).then(|| self.lower_catch(t.cases, &own));
                 let finalizer = t.finalizer.map(|f| self.lower_expr(f, &ErasedType::V));
-                self.push_protected(Kind::Try { body, catch, finalizer, returns: false }, want.clone())
+                let node = self.push_protected(Kind::Try { body, catch, finalizer, returns: false }, own.clone());
+                self.lower_adapt(node, &own, want)
             }
             // A def's call of itself in a tail position of a `return`'s value: the loop's jump
             // (`Gen::jump_call`); nothing follows it, so its type is the place's.
@@ -1215,6 +1225,46 @@ impl<'a> Gen<'a> {
 
     /// The `try` or `synchronized` node, its `returns` recorded (`Body::returns_through`), an escape
     /// node inside answering by its typed IR.
+    /// A def's body that a closure it makes returns from, as dotty's `NonLocalReturns.nonLocalReturnTry` makes it
+    /// (NonLocalReturns.scala 80-91): the `Let` of a fresh key of each run, which the closures capture
+    /// (`Kind::ReturnKey`) and their `return`s throw in a `NonLocalReturnControl`; and the method's return of the
+    /// body in a `try` whose handler of `NonLocalReturnControl` (`case ex: NonLocalReturnControl`, a handler of its
+    /// own) gives the value of one carrying this run's key and throws any other on. The key's temporary too.
+    pub(super) fn lower_keyed_body(&mut self, body: TExprId) -> (TempId, LirId, LirId) {
+        let object = ErasedType::object();
+        let control: Rc<str> = Rc::from(NON_LOCAL_RETURN);
+        let control_type = ErasedType::L(control.clone());
+        let ret = self.m.ret.clone();
+        let key = self.lir.temp();
+        let ctor = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
+        let made = self.lir.make(&ctor, &[]);
+        let kept = self.lir.keep(key, made);
+        let value = self.lower_expr(body, &ret);
+        // A def that loops returns its body's value from inside the loop, as TailRec wraps the body it loops in a
+        // return to the method (TailRec.scala 219-221) before NonLocalReturns wraps the whole in its `try`.
+        let value = match self.m.tail {
+            Some(_) => self.lir.push(Kind::Return(value), ret.clone()),
+            None => value,
+        };
+        let (caught, done) = (self.lir.temp(), self.lir.label());
+        let key_of = method_ref(Invoke::Virtual, &control, false, "key", &[], &object);
+        let value_of = method_ref(Invoke::Virtual, &control, false, "value", &[], &object);
+        let ex = self.lir.push(Kind::Temp(caught), control_type.clone());
+        let theirs = self.lir.call(&key_of, ex, &[]);
+        let mine = self.lir.push(Kind::Temp(key), object.clone());
+        let same = self.lir.compare(Relation::Eq, Comparing::Identity, theirs, mine);
+        let ex = self.lir.push(Kind::Temp(caught), control_type.clone());
+        let carried = self.lir.call(&value_of, ex, &[]);
+        let returned = self.lower_adapt(carried, &object, &ret);
+        let ex = self.lir.push(Kind::Temp(caught), control_type.clone());
+        let rethrown = self.lir.push(Kind::Throw(ex), ret.clone());
+        let handled = self.lir.push(Kind::If { cond: same, then: returned, otherwise: Some(rethrown) }, ret.clone());
+        let handler = self.lower_handler_value(handled, Vec::new(), done, &ret);
+        let handlers = Rc::from([ExceptionHandler { class: control, caught: Caught::Temp(caught), body: handler }]);
+        let protected = self.push_protected(Kind::Try { body: value, catch: Some(Catch { done, handlers }), finalizer: None, returns: false }, ret.clone());
+        (key, kept, self.lir.push(Kind::Return(protected), ErasedType::V))
+    }
+
     pub(super) fn push_protected(&mut self, kind: Kind, ty: ErasedType) -> LirId {
         let id = self.lir.push(kind, ty);
         let through = self.lir.returns_through(id, &|e| self.escape_returns(e));

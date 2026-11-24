@@ -2,13 +2,13 @@
 //! per case against a scrutinee held in a local, with jumps to the next case in the place of
 //! nested `if`s.
 
-use crate::lir::{Catch, Comparing, ErasedType, Invoke, Kind, LabelId, LirId, MethodRef, Relation, TempId};
+use crate::lir::{Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LabelId, LirId, MethodRef, Relation, TempId};
 use super::classfile::*;
 use super::gen::Gen;
 use super::names::*;
 use crate::ast::ListRef;
 use crate::tir::*;
-use crate::types::SymId;
+use crate::types::{ClassId, SymId};
 use std::rc::Rc;
 
 impl<'a> Gen<'a> {
@@ -257,18 +257,121 @@ impl<'a> Gen<'a> {
         nodes
     }
 
-    /// A `try`'s cases at the type `want` over the exception it caught; after the last, the
-    /// exception thrown again.
+    /// A `try`'s cases at the type `want` as dotty's TryCatchPatterns leaves them (TryCatchPatterns.scala 61-99): a
+    /// handler for each of the leading cases a handler takes as it stands (`Gen::catch_case`), then, from the first
+    /// other case on, one handler of `Throwable` that binds the exception, matches the cases left over it and throws
+    /// it again where none matches (`mkFallbackPatterMatchCase`).
     pub(super) fn lower_catch(&mut self, cases: ListRef, want: &ErasedType) -> Catch {
-        let throwable = ErasedType::L(Rc::from(THROWABLE));
-        let caught = self.lir.temp();
+        let prog = self.cx.input.prog;
         let done = self.lir.label();
-        let nodes = self.lower_cases(cases, caught, &throwable, Some((done, want)));
-        let exception = self.lir.push(Kind::Temp(caught), throwable);
-        let result = self.lir.push(Kind::Throw(exception), ErasedType::V);
-        let stmts = self.lir.list(&nodes);
-        let cases = self.lir.push(Kind::Block { stmts, result }, ErasedType::V);
-        Catch { caught, done, cases }
+        let mut handlers = Vec::new();
+        for case in &prog.cases[cases.range()] {
+            let Some((class, binder)) = self.catch_case(case) else { break };
+            let caught = match binder {
+                Some(sym) => {
+                    self.lower_declared.insert(sym, (ErasedType::L(class.clone()), false));
+                    Caught::Local(sym)
+                }
+                None => Caught::Dropped,
+            };
+            let body = self.lower_handler(case.body, Vec::new(), done, want);
+            handlers.push(ExceptionHandler { class, caught, body });
+        }
+        let taken = handlers.len() as u32;
+        if taken < cases.len {
+            let rest = ListRef { start: cases.start + taken, len: cases.len - taken };
+            let throwable = ErasedType::L(Rc::from(THROWABLE));
+            let (caught, selector, matched) = (self.lir.temp(), self.lir.temp(), self.lir.label());
+            let exception = self.lir.push(Kind::Temp(caught), throwable.clone());
+            let held = self.lir.keep(selector, exception);
+            // The match over the exception, its last case the exception thrown again; its value leaves the `try`.
+            let cases = self.lower_cases(rest, selector, &throwable, Some((matched, want)));
+            let exception = self.lir.push(Kind::Temp(caught), throwable.clone());
+            let rethrown = self.lir.push(Kind::Throw(exception), ErasedType::V);
+            let stmts = self.lir.list(&cases);
+            let matching = self.lir.push(Kind::Block { stmts, result: rethrown }, ErasedType::V);
+            let matched = self.lir.push(Kind::Labeled { label: matched, body: matching }, want.clone());
+            let body = self.lower_handler_value(matched, vec![held], done, want);
+            handlers.push(ExceptionHandler { class: Rc::from(THROWABLE), caught: Caught::Temp(caught), body });
+        }
+        Catch { done, handlers: handlers.into() }
+    }
+
+    /// A handler's body: the statements, then the case's body, leaving the `try` with its value at `want`.
+    fn lower_handler(&mut self, body: TExprId, stmts: Vec<LirId>, done: LabelId, want: &ErasedType) -> LirId {
+        let value = self.lower_expr(body, want);
+        self.lower_handler_value(value, stmts, done, want)
+    }
+
+    pub(super) fn lower_handler_value(&mut self, value: LirId, mut stmts: Vec<LirId>, done: LabelId, want: &ErasedType) -> LirId {
+        let value = if *want == ErasedType::V {
+            stmts.push(value);
+            None
+        } else {
+            Some(value)
+        };
+        let result = self.lir.push(Kind::Break { label: done, value }, ErasedType::V);
+        let stmts = self.lir.list(&stmts);
+        self.lir.push(Kind::Block { stmts, result }, ErasedType::V)
+    }
+
+    /// The class a handler of `case` catches by and the binder it stores the exception in, where a handler takes the
+    /// case as it stands: dotty's `isCatchCase` (TryCatchPatterns.scala 68-83), a case with no guard that is `_`, a
+    /// binder of `_`, or a type test of `_`, bound or not, of a class a handler can name (`isSimpleThrowable`: one
+    /// that derives from `Throwable`, is no trait, and whose prefix is none or static, so that no outer test is due).
+    fn catch_case(&mut self, case: &TCase) -> Option<(Rc<str>, Option<SymId>)> {
+        let prog = self.cx.input.prog;
+        if case.guard.is_some() {
+            return None;
+        }
+        let (binder, pat) = match prog.pats[case.pat.idx()] {
+            TPat::Bind(sym, inner) => (Some(sym), inner),
+            _ => (None, Some(case.pat)),
+        };
+        let Some(pat) = pat else { return Some((Rc::from(THROWABLE), binder)) };
+        match prog.pats[pat.idx()] {
+            TPat::Wildcard => Some((Rc::from(THROWABLE), binder)),
+            TPat::Test(test, tested, inner) => {
+                // The typer binds `case e: E` inside the test.
+                let binder = match (binder, prog.pats[inner.idx()]) {
+                    (binder, TPat::Wildcard) => binder,
+                    (None, TPat::Bind(sym, None)) => Some(sym),
+                    _ => return None,
+                };
+                let c = self.tested_class(test, tested)?;
+                let syms = self.cx.input.syms;
+                let lineage: Vec<ClassId> = std::iter::once(c).chain(syms.class(c).base_types.iter().map(|&(b, _)| b)).collect();
+                let derives = lineage.into_iter().any(|b| &*self.class_name(b) == THROWABLE);
+                // The prefix: none for a local class, else the owner, static where it is a package or a class placed so.
+                let placed = match syms.class(c).owner {
+                    crate::symbols::Owner::Local | crate::symbols::Owner::Package(_) => true,
+                    crate::symbols::Owner::Class(o) => self.cx.statically_placed(o),
+                };
+                (derives && placed && syms.class(c).kind != crate::symbols::ClassKind::Trait).then(|| (self.class_name(c), binder))
+            }
+            _ => None,
+        }
+    }
+
+    /// The class a type test of the type `tested` tests by, as a catch takes it before the pattern matcher adds an
+    /// outer test: one class's test, the outer test after it, or a test its type proves.
+    fn tested_class(&self, test: TestId, tested: crate::types::TypeId) -> Option<ClassId> {
+        let prog = self.cx.input.prog;
+        let class_of = |t: TestId| match prog.tests[t.idx()] {
+            TypeTest::Class(c) => Some(c),
+            _ => None,
+        };
+        match prog.tests[test.idx()] {
+            TypeTest::Class(c) => Some(c),
+            // A test of the scrutinee's own class, `Throwable`'s, is the test that it is no null.
+            TypeTest::Always | TypeTest::AnyRef | TypeTest::AnyVal => match self.cx.input.types.get(tested) {
+                crate::types::Type::Class(c, _) => Some(c),
+                _ => None,
+            },
+            TypeTest::Proven(t, _) => class_of(t),
+            TypeTest::And(t, outer) if matches!(prog.tests[outer.idx()], TypeTest::Outer(..)) => class_of(t),
+            _ => None,
+        }
     }
 
     /// `MatchError` of the scrutinee in `temp` thrown, at the type `want`.

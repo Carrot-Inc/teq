@@ -265,6 +265,11 @@ impl<'a> Gen<'a> {
                 self.write(value);
                 let ret = self.m.ret.clone();
                 self.return_value(&ret);
+                // Where a value is wanted, the dead code after it stands over one, as after a jump.
+                if ty != ErasedType::V {
+                    let vt = self.vt(&ty);
+                    self.code.push(vt);
+                }
             }
             Kind::SelfTailCall { receiver, args } => {
                 self.write_self_tail_call(receiver, args);
@@ -630,16 +635,15 @@ impl<'a> Gen<'a> {
             self.write(value);
         }
         let exit = self.m.try_exits.get(&label).copied();
-        // A case of a `try` leaves its value in the try's result.
-        if let (Some((Some(slot), _)), Some(value)) = (exit, value) {
-            let held = self.lir.ty(value).clone();
-            self.store(slot, &held);
-        }
         if let Some(mark) = mark {
             self.code.locals_release(mark);
         }
         match exit {
-            Some((_, exit)) => self.goto(exit),
+            // A handler of a `try` carries its value to the try's normal exit.
+            Some(exit) => {
+                let held = value.map_or(ErasedType::V, |v| self.lir.ty(v).clone());
+                self.leave_try(&held, exit);
+            }
             None => {
                 let end = self.m.labels[&label];
                 self.goto(end);

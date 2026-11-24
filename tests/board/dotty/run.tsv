@@ -1584,7 +1584,7 @@ triemap-hash.scala	fail	interp:fail	triemap-hash.scala:15:53: reference to Hashi
 triple-quoted-expr.scala	pass	interp:pass	
 try-2.scala	pass	interp:fail	
 try-catch-unify.scala	pass	interp:fail	
-try.scala	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad type on operand stack
+try.scala	pass	interp:fail	
 tryPatternMatch.scala	pass	interp:fail	
 tuple-accessors.scala	pass	interp:pass	
 tuple-concat.scala	pass	interp:pass	

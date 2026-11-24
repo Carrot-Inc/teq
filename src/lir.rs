@@ -307,8 +307,6 @@ pub enum Unlowered {
     CtorTraitProxies,
     /// An enum companion's `fromOrdinal` over its stored values.
     EnumCompanionMembers,
-    /// A def with a `return` inside a lambda: the key it makes and the handler around its body.
-    NonLocalReturnKey,
     /// A value class's method forwarding to its `m$extension`, and the copies of extension methods.
     ValueClassForwarder,
     /// The function a by-name default of a jar's method is passed as.
@@ -621,14 +619,34 @@ impl Kind {
     }
 }
 
-/// A `try`'s cases: the exception the body threw in the temporary `caught`, then `cases`, which
+/// A `try`'s cases as dotty's TryCatchPatterns leaves them (`Gen::lower_catch`): a handler for each
+/// leading case a catch takes by the class of what it catches, then, where cases are left, one of
+/// `java/lang/Throwable` whose body matches them and throws the exception again. A handler's body
 /// leaves the `try` by a `Break` to `done` with the try's value (none for a `try` that leaves
-/// nothing) or throws.
-#[derive(Clone, Copy)]
+/// nothing), or throws.
+#[derive(Clone)]
 pub struct Catch {
-    pub caught: TempId,
     pub done: LabelId,
-    pub cases: LirId,
+    pub handlers: Rc<[ExceptionHandler]>,
+}
+
+/// A handler of a `try` (`Catch`): its body run for an exception of the class `class`, which it
+/// holds as `caught` says.
+#[derive(Clone)]
+pub struct ExceptionHandler {
+    pub class: Rc<str>,
+    pub caught: Caught,
+    pub body: LirId,
+}
+
+/// How a handler holds the exception it takes: dropped (dotty's `NamelessEH`), in the local of the
+/// case's binder (`BoundEH`), or in a temporary, the binder TryCatchPatterns makes for the cases
+/// matched in one handler.
+#[derive(Clone, Copy)]
+pub enum Caught {
+    Dropped,
+    Local(SymId),
+    Temp(TempId),
 }
 
 /// The nodes of one method.
@@ -737,7 +755,7 @@ impl Body {
             }
             Kind::Try { body, catch, finalizer, .. } => {
                 out.push(*body);
-                out.extend(catch.map(|c| c.cases));
+                out.extend(catch.iter().flat_map(|c| c.handlers.iter().map(|h| h.body)));
                 out.extend(*finalizer);
             }
             Kind::Break { value, .. } => out.extend(*value),
@@ -758,10 +776,16 @@ impl Body {
 
     /// Whether a `return` of the method leaves through the node: a `try` with a finalizer whose
     /// body or cases hold one, a `synchronized` block whose body does (`Body::holds_return`).
+    /// Whether a `try` is the node or stands under it, as dotty's `mayCleanStack` finds one in a finalizer
+    /// (BCodeSyncAndTry.scala 466-469): a closure's or a lifted def's body, a method of its own, is not under it.
+    pub fn holds_try(&self, id: LirId) -> bool {
+        matches!(self.node(id).kind, Kind::Try { .. }) || self.operands(id).into_iter().any(|o| self.holds_try(o))
+    }
+
     pub fn returns_through(&self, id: LirId, escaped: &dyn Fn(TExprId) -> bool) -> bool {
         match &self.node(id).kind {
             Kind::Try { body, catch, finalizer: Some(_), .. } => {
-                self.holds_return(*body, escaped) || catch.is_some_and(|c| self.holds_return(c.cases, escaped))
+                self.holds_return(*body, escaped) || catch.iter().flat_map(|c| c.handlers.iter()).any(|h| self.holds_return(h.body, escaped))
             }
             Kind::Synchronized { body, .. } => self.holds_return(*body, escaped),
             _ => false,

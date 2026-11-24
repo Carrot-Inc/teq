@@ -443,77 +443,76 @@ impl<'a> Gen<'a> {
     }
 
     /// The body in return position, as a loop when the def calls itself in tail position and
-    /// nothing can override it.
+    /// nothing can override it. A def that a closure it makes returns from is dotty's
+    /// `NonLocalReturns.nonLocalReturnTry` tree (`Gen::lower_keyed_body`): the key made first, then
+    /// the loop's head, which stands inside the `try`, as TailRec runs before NonLocalReturns
+    /// (Compiler.scala 122, 127).
     pub fn method_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) {
         let cx = self.cx;
-        if self.an.returns_through_closure(cx, body) {
-            return self.keyed_body(sym, params, body);
-        }
         let (calls, _) = cx.input.prog.tail_self_calls(sym, params.len(), body);
         let jumps = cx.input.prog.tail_jumps(cx.input.syms, sym, params.len(), body).calls;
-        if (calls > 0 || !jumps.is_empty()) && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell)) {
+        let looping = (calls > 0 || !jumps.is_empty()) && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell));
+        if !self.an.returns_through_closure(cx, body) {
+            if looping {
+                let head = self.code.new_label();
+                self.code.bind(head);
+                self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head, jumps });
+            }
+            self.tail(body);
+            self.m.tail = None;
+            return;
+        }
+        // The loop's jumps are lowered with the body, which is a value in the `try`: its calls in the tail positions
+        // `Program::tail_self_calls` counts are jumps as its `return`s' are. The head, a label of the locals after
+        // the key's, is made once the key is written.
+        let placeholder = self.code.new_label();
+        if looping {
+            let mut jumps = jumps;
+            self.tail_position_calls(sym, params.len(), body, &mut jumps);
+            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head: placeholder, jumps });
+        }
+        let (key, made, keyed) = self.lowering(|g| g.lower_keyed_body(body));
+        self.write(made);
+        let outer_key = self.m.return_key.replace(self.m.temps[&key]);
+        if let Some(tail) = self.m.tail.as_mut() {
             let head = self.code.new_label();
             self.code.bind(head);
-            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head, jumps });
+            tail.head = head;
         }
-        self.tail(body);
+        self.write(keyed);
         self.m.tail = None;
+        self.m.return_key = outer_key;
     }
 
-    /// A def's body that a closure it makes returns from, as dotty's
-    /// `NonLocalReturns.nonLocalReturnTry` writes it: a fresh key of each run, which the closures
-    /// capture and their `return`s throw in a `NonLocalReturnControl`, and around the body the
-    /// handler that returns the value of one carrying this run's key and throws any other on.
-    fn keyed_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) {
-        self.outside(Unlowered::NonLocalReturnKey);
-        let object = ErasedType::object();
-        let control = ErasedType::L(Rc::from(NON_LOCAL_RETURN));
-        self.new_object(OBJECT);
-        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &ErasedType::V);
-        let key = self.store_new(&object);
-        let outer_key = self.m.return_key.replace(key);
-        let (start, end, handler) = (self.code.new_label(), self.code.new_label(), self.code.new_label());
-        // A handler's frame holds the locals of the whole protected range.
-        let protected = self.code.locals_mark();
-        self.code.bind(start);
-        let from = self.code.pc();
-        let cx = self.cx;
-        let (calls, _) = cx.input.prog.tail_self_calls(sym, params.len(), body);
-        let jumps = cx.input.prog.tail_jumps(cx.input.syms, sym, params.len(), body).calls;
-        let tail = (calls > 0 || !jumps.is_empty()) && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell));
-        if tail {
-            let head = self.code.new_label();
-            self.code.bind(head);
-            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head, jumps });
+    /// The calls of the def by itself in the tail positions of `e` that `Program::tail_self_calls` counts.
+    fn tail_position_calls(&self, sym: SymId, arity: usize, e: TExprId, out: &mut Vec<TExprId>) {
+        let prog = self.cx.input.prog;
+        match prog.expr(e) {
+            TExpr::Block(_, res) | TExpr::Prim(PrimOp::BoolAnd | PrimOp::BoolOr, _, res) | TExpr::Return(res) => {
+                self.tail_position_calls(sym, arity, res, out)
+            }
+            TExpr::If(_, t, els) => {
+                self.tail_position_calls(sym, arity, t, out);
+                if let Some(x) = els {
+                    self.tail_position_calls(sym, arity, x, out);
+                }
+            }
+            TExpr::Match(_, cases) => {
+                for c in prog.case_list(cases) {
+                    self.tail_position_calls(sym, arity, c.body, out);
+                }
+            }
+            TExpr::Try(i) if prog.tries[i as usize].finalizer.is_none() => {
+                for c in prog.case_list(prog.tries[i as usize].cases) {
+                    self.tail_position_calls(sym, arity, c.body, out);
+                }
+            }
+            _ => {
+                if prog.self_call(sym, arity, e).is_some() && !out.contains(&e) {
+                    out.push(e);
+                }
+            }
         }
-        self.tail(body);
-        self.m.tail = None;
-        if self.code.pc() == from {
-            self.code.op(op::NOP);
-        }
-        self.code.bind(end);
-        let index = self.cw.cp.class(NON_LOCAL_RETURN);
-        self.code.add_handler(Handler { start, end, handler, catch_type: index });
-        self.code.locals_release(protected);
-        let vt = self.vt(&control);
-        self.code.bind_handler(handler, vt);
-        let caught = self.store_new(&control);
-        let rethrow = self.code.new_label();
-        self.load(caught, &control);
-        self.invoke(Invoke::Virtual, NON_LOCAL_RETURN, false, "key", &[], &object);
-        self.load(key, &object);
-        self.jump_if(op::IF_ACMPNE, 2, rethrow);
-        self.load(caught, &control);
-        self.invoke(Invoke::Virtual, NON_LOCAL_RETURN, false, "value", &[], &object);
-        let ret = self.m.ret.clone();
-        self.adapt(&object, &ret);
-        self.return_value(&ret);
-        self.code.bind(rethrow);
-        self.load(caught, &control);
-        self.code.op(op::ATHROW);
-        self.code.pop();
-        self.code.end_path();
-        self.m.return_key = outer_key;
     }
 
     fn emit_fun(&mut self, f: FunId) {
