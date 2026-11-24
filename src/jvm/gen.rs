@@ -2,7 +2,7 @@
 //! stack, brought to the static type the typer recorded for it (a cast or an unboxing where a
 //! generic result is used at a concrete type), and then to the type its consumer wants.
 
-use crate::lir::{Adaptation, Capture, ErasedType, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodRef, Unlowered};
+use crate::lir::{Adaptation, Capture, Comparing, ErasedType, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodRef, Relation, Unlowered};
 use super::classfile::*;
 use super::free::{Analysis, Free};
 use super::names::*;
@@ -36,12 +36,22 @@ pub enum ThisValue {
 /// How the value a node left is brought to the type wanted: one decision (`Gen::fit`), read
 /// by the lowering and by the old code.
 pub enum Fit {
-    /// A value class's value, its box made or opened (`Gen::adapt_vc_as`), a null tested for
-    /// where the flag is set.
+    /// A value class's value, its box made or opened (`Gen::lower_value_class`), a null tested
+    /// for where the flag is set.
     ValueClass(ClassId, TList, bool),
     /// Through the type the typer recorded, where it knows more than the erased signature.
     Through(ErasedType),
     Direct,
+}
+
+/// What bringing a value class's value to a type takes (`Gen::vc_form`).
+pub(super) enum VcForm {
+    /// The value adapted as it is: dropped, a box kept, the underlying value where it is wanted.
+    Adapt,
+    /// The underlying value, of the class's erasure, boxed.
+    Box(ErasedType),
+    /// The box opened, after a null test where the flag is set.
+    Open { null_safe: bool },
 }
 
 /// The way a member read `r.s` is generated: one decision (`Gen::field_route`), read by the
@@ -495,11 +505,13 @@ pub struct MethodCx {
     /// The exits of those frames a `return` has jumped to, as dotty's `shouldEmitCleanup` records
     /// that a cleanup block is wanted (BCodeBodyBuilder `genReturn`).
     pub exits_taken: Vec<Label>,
-    /// The locals of the matches being emitted that hold a value class's primitive underlying
-    /// value, with the class: a type pattern tests, and a `MatchError` holds, its box.
-    pub vc_slots: Vec<(u16, ClassId)>,
     /// The slots that hold the lowering's temporaries.
     pub temps: FxMap<crate::lir::TempId, u16>,
+    /// The nodes of the null tests that open a value class's box (`Gen::lower_vc_open_null_safe`),
+    /// whose `If` takes a return into its branches (`Gen::returned`).
+    pub null_tests: Vec<LirId>,
+    /// The temporaries whose slot a `Kind::Reserve` took and whose `Let` is still to come.
+    pub reserved: FxMap<crate::lir::TempId, Reserved>,
     /// A temporary whose value is on the operand stack for its next read, which writes nothing
     /// (`Gen::kept_on_stack`).
     pub stacked: Option<crate::lir::TempId>,
@@ -543,8 +555,9 @@ impl Default for MethodCx {
             home_slots: Vec::new(),
             finalizers: Vec::new(),
             exits_taken: Vec::new(),
-            vc_slots: Vec::new(),
             temps: FxMap::default(),
+            null_tests: Vec::new(),
+            reserved: FxMap::default(),
             stacked: None,
             labels: FxMap::default(),
             try_exits: FxMap::default(),
@@ -711,6 +724,9 @@ pub enum Mode<'t> {
     /// Return position: every path ends in a return or in a jump of the tail loop.
     Tail,
 }
+
+/// The arity of the largest tuple class, above which a tuple is a `TupleXXL`.
+const MAX_TUPLE_ARITY: usize = 22; // dotty's `Definitions.MaxTupleArity`
 
 impl<'a> Gen<'a> {
     pub fn new(cx: &'a Cx<'a>) -> Gen<'a> {
@@ -2204,17 +2220,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Boxes the underlying value on the stack in its value class.
-    pub fn vc_box(&mut self, c: ClassId, u: &ErasedType) {
-        let slot = self.store_new(u);
-        let ctor = self.vc_box_ctor(c);
-        self.new_object(&ctor.owner);
-        self.load(slot, u);
-        let param = ctor.params[0].clone();
-        self.adapt(u, &param);
-        self.invoke_mref(&ctor);
-    }
-
     /// The constructor a value class `c`'s box is made by: its class file's of one parameter, or
     /// the one over the declared underlying value.
     pub(super) fn vc_box_ctor(&mut self, c: ClassId) -> Rc<MethodRef> {
@@ -2233,17 +2238,23 @@ impl<'a> Gen<'a> {
         Rc::new(MethodRef { owner: name, owner_is_interface: false, name: "<init>".to_string(), params, ret: ErasedType::V, desc, kind: Invoke::Special })
     }
 
-    /// The box of a value class `c` made over `value`, its underlying value of the type `u`
-    /// (`Gen::vc_box`): the value held in a temporary while the instance is made.
+    /// The box of a value class `c` made over `value`, its underlying value of the type `u`, as
+    /// dotty's `Boxing.box` makes it (`Erasure.scala` 272-275 at 3.8.4): `New(tycon, cast(tree,
+    /// underlying))`, the value evaluated inside the instance's creation.
     pub(super) fn lower_vc_box(&mut self, c: ClassId, value: LirId, u: &ErasedType) -> LirId {
         let ctor = self.vc_box_ctor(c);
-        let held = self.lir.temp();
-        let kept = self.lir.keep(held, value);
-        let underlying = self.lir.kept(held, u.clone());
         let param = ctor.params[0].clone();
-        let passed = self.lower_adapt(underlying, u, &param);
-        let made = self.lir.make(&ctor, &[passed]);
-        self.lir.seq(&[kept], made)
+        let passed = self.lower_adapt(value, u, &param);
+        // A class with an outer has the value held first, as master writes it: the value the typer
+        // takes from the outer fails before the class is loaded (`Cx::vc_with_outer`).
+        if self.cx.vc_with_outer(c) {
+            let temp = self.lir.temp();
+            let held = self.lir.keep(temp, passed);
+            let read = self.lir.kept(temp, param);
+            let made = self.lir.make(&ctor, &[read]);
+            return self.lir.seq(&[held], made);
+        }
+        self.lir.make(&ctor, &[passed])
     }
 
     /// The underlying value of the value class box on the stack, through the accessor of its
@@ -2293,23 +2304,40 @@ impl<'a> Gen<'a> {
         Some(Rc::new(MethodRef { owner: name, owner_is_interface: false, name: accessor, params, ret, desc, kind: Invoke::Virtual }))
     }
 
-    /// Brings a value to the type a symbol is declared with; where that is a value class, a
-    /// generic value (a lambda's parameter, a pattern's binding) arrives as its box.
-    pub fn adapt_to_sym(&mut self, from: &ErasedType, s: SymId) -> ErasedType {
+    /// `value`, of the type `from`, brought to the type the symbol `s` is declared with; where that
+    /// is a value class, a generic value (a lambda's parameter, a pattern's binding) arrives as its
+    /// box, which is opened after a null test (`Gen::lower_value_class`).
+    pub(super) fn lower_to_sym(&mut self, value: LirId, from: &ErasedType, s: SymId) -> (LirId, ErasedType) {
         let declared = self.sym_type(s);
-        let vc = self.cx.input.syms.sym(s).sig.as_ref().and_then(|sig| self.value_class_type(sig.ret));
-        match vc {
-            Some((c, args)) if !self.cx.input.syms.sym(s).by_name => self.adapt_vc(c, args, from.clone(), &declared),
-            _ => self.adapt(from, &declared),
-        }
+        let to = match self.sym_value_class(s) {
+            Some((c, args)) => self.lower_value_class(value, from, c, args, true, &declared, None),
+            None => self.lower_adapt(value, from, &declared),
+        };
+        (to, declared)
+    }
+
+    /// The value the code here holds in `slot`, of the type `from`, written as the type the symbol
+    /// `s` is declared with (`Gen::lower_to_sym`), which it gives.
+    pub(super) fn write_slot_to_sym(&mut self, slot: u16, from: &ErasedType, s: SymId) -> ErasedType {
+        let value = self.slot_value(slot, from);
+        let (to, declared) = self.lowering(|g| g.lower_to_sym(value, from, s));
+        self.write(to);
         declared
+    }
+
+    /// A read of the value the code here holds in `slot`, of the type `ty`, as a node: the slot
+    /// read as a temporary of the lowering.
+    pub(super) fn slot_value(&mut self, slot: u16, ty: &ErasedType) -> LirId {
+        let temp = self.lir.temp();
+        self.m.temps.insert(temp, slot);
+        self.lir.push(Kind::Temp(temp), ty.clone())
     }
 
     /// The value of `s`, stored as `from`, brought to `want`: a value class's underlying value
     /// is boxed where a reference is wanted (a case class's `productElement` of a field of one).
     pub(super) fn lower_adapt_from_sym(&mut self, value: LirId, s: SymId, from: &ErasedType, want: &ErasedType) -> LirId {
         match self.sym_value_class(s) {
-            Some((class, args)) => self.lir.push(Kind::ValueClass { value, from: from.clone(), class, args, null_safe: true }, want.clone()),
+            Some((class, args)) => self.lower_value_class(value, from, class, args, true, want, None),
             None => self.lower_adapt(value, from, want),
         }
     }
@@ -2323,23 +2351,16 @@ impl<'a> Gen<'a> {
         info.sig.as_ref().and_then(|sig| self.value_class_type(sig.ret))
     }
 
-    /// Brings a value of the value class `c` applied to `args`, left by a node as `t`, to
-    /// `want`: a boxed one is unboxed, and the underlying value is boxed where a reference
-    /// other than the class's erasure is wanted (a type parameter, `Any`, a trait the class
-    /// extends).
-    pub(super) fn adapt_vc(&mut self, c: ClassId, args: TList, t: ErasedType, want: &ErasedType) {
-        self.adapt_vc_as(c, args, t, want, true)
-    }
-
-    /// `adapt_vc`, where a reference that is not statically the box is unboxed after a null test
-    /// (`null_safe`), a null giving the underlying type's zero, as dotty's `Boxing.unbox` does for
-    /// a tree that is no subtype of the class (`Erasure.scala` 292-317); a box that is
-    /// statically one, and a selection of the class's parameter, go through the accessor.
-    pub(super) fn adapt_vc_as(&mut self, c: ClassId, args: TList, t: ErasedType, want: &ErasedType, null_safe: bool) {
+    /// What bringing a value of the value class `c` applied to `args`, left as `t`, to `want` takes:
+    /// a boxed one is opened, after a null test where `null_safe` and the value is not statically
+    /// the box, as dotty's `Boxing.unbox` opens a tree that is no subtype of the class (`Erasure.scala`
+    /// 292-317 at 3.8.4); the underlying value is boxed where a reference other than the class's
+    /// erasure is wanted (a type parameter, `Any`, a trait the class extends).
+    fn vc_form(&mut self, c: ClassId, args: TList, t: &ErasedType, want: &ErasedType, null_safe: bool) -> VcForm {
         // A value dropped is adapted to nothing (dotty adapts toward a consumer alone,
         // `Erasure.Boxing.adaptToType`): a cast to the class whose value is dropped tests nothing.
         if *want == ErasedType::V {
-            return self.pop_value(&t);
+            return VcForm::Adapt;
         }
         let u = self.vc_erasure(c, args);
         // A reference wanted that the value class is not (a jar descriptor's `Encoder` for
@@ -2347,60 +2368,135 @@ impl<'a> Gen<'a> {
         // parameter declares) is the underlying value's own.
         let underlying_wanted = u.is_ref() && matches!(want, ErasedType::L(n) if !n.starts_with('[') && !self.is_vc_mark(want) && !want.is_object() && !self.vc_conforms(c, n));
         let boxing = want.is_ref() && !self.holds_underlying(want, &u) && !underlying_wanted;
-        // A reference that holds the box goes to a destination that takes the box as it is, a
-        // null and the reference's identity kept: dotty keeps a tree that conforms (`Erasure.scala`
-        // 392-393) and unboxes only toward an `ErasedValueType` (399-400), where the null branch is
-        // (292-317).
-        if boxing && !self.holds_underlying(&t, &u) {
-            return self.adapt(&t, want);
-        }
-        let held = if self.holds_underlying(&t, &u) {
-            t
-        } else {
-            let boxed = self.class_type(c);
-            let declared = self.vc_underlying(c);
-            if null_safe && t != boxed {
-                // The value is evaluated once: tested on a copy, unboxed or replaced by the zero.
-                let unbox = self.code.new_label();
-                let done = self.code.new_label();
-                self.dup();
-                self.jump_if(op::IFNONNULL, 1, unbox);
-                self.pop_value(&t);
-                self.vc_zero(&declared);
-                self.goto(done);
-                self.code.bind(unbox);
-                self.adapt(&t, &boxed);
-                self.vc_unbox(c, &declared);
-                self.code.bind(done);
-            } else {
-                self.adapt(&t, &boxed);
-                self.vc_unbox(c, &declared);
-            }
-            declared
-        };
-        if boxing {
-            self.adapt(&held, &u);
-            self.vc_box(c, &u);
-            let boxed = self.class_type(c);
-            self.adapt(&boxed, want);
-        } else {
-            self.adapt(&held, want);
+        match (self.holds_underlying(t, &u), boxing) {
+            (true, true) => VcForm::Box(u),
+            (true, false) => VcForm::Adapt,
+            // A reference that holds the box goes to a destination that takes the box as it is, a
+            // null and the reference's identity kept: dotty keeps a tree that conforms (`Erasure.scala`
+            // 392-393) and unboxes only toward an `ErasedValueType` (399-400), where the null branch is
+            // (292-317).
+            (false, true) => VcForm::Adapt,
+            (false, false) => VcForm::Open { null_safe: null_safe && *t != self.class_type(c) },
         }
     }
 
-    /// The zero of a value class's underlying type, what a null unboxes to; a `null` is of the
-    /// underlying type in the frame of the join it flows to.
-    fn vc_zero(&mut self, u: &ErasedType) {
-        match u {
-            ErasedType::J => self.lconst(0),
-            ErasedType::D => self.dconst(0.0),
-            ErasedType::F => self.fconst(0.0),
-            ErasedType::L(_) => {
-                self.code.op(op::ACONST_NULL);
-                let vt = self.vt(u);
-                self.code.push(vt);
+    /// `value`, of the value class `c` applied to `args` and left as `from`, brought to `want` in
+    /// dotty's erasure's trees (`Gen::vc_form`): the box a `New` of the class over the underlying
+    /// value (`Gen::lower_vc_box`), a box opened by its accessor (`Gen::lower_vc_unbox`), and with
+    /// the null test, `Gen::lower_vc_open_null_safe`. `of` is the expression of the typed IR
+    /// `value` was lowered from, where there is one.
+    pub(super) fn lower_value_class(&mut self, value: LirId, from: &ErasedType, c: ClassId, args: TList, null_safe: bool, want: &ErasedType, of: Option<TExprId>) -> LirId {
+        match self.vc_form(c, args, from, want, null_safe) {
+            VcForm::Adapt => self.lower_adapt(value, from, want),
+            VcForm::Box(u) => {
+                let underlying = self.lower_adapt(value, from, &u);
+                let made = self.lower_vc_box(c, underlying, &u);
+                let boxed = self.class_type(c);
+                self.lower_adapt(made, &boxed, want)
             }
-            _ => self.iconst(0),
+            VcForm::Open { null_safe } => {
+                let declared = self.vc_underlying(c);
+                let opened = if null_safe {
+                    self.lower_vc_open_null_safe(value, from, c, &declared, of)
+                } else {
+                    let boxed = self.class_type(c);
+                    let cast = self.lower_adapt(value, from, &boxed);
+                    self.lower_vc_unbox(c, cast, &declared)
+                };
+                self.lower_adapt(opened, &declared, want)
+            }
+        }
+    }
+
+    /// The underlying value, of the type `u`, of `value`, a reference of the type `from` that may be
+    /// null, as dotty's `Boxing.unbox` gives it (`Erasure.scala` 302-314 at 3.8.4): a tree of type `Null`
+    /// unboxed as it is (`adaptToType(null, underlying)`), else `evalOnce(tree) { t => If(t eq null,
+    /// unboxed null, t.u) }`, the value read again where it is idempotent (`Gen::lower_reread`) and
+    /// held in a temporary otherwise. A null unboxed is `BoxesRunTime`'s `unboxTo*` of it for a
+    /// primitive, and for a reference the null itself, which reaches the test's join as the
+    /// underlying type (a widening that writes nothing: the frame's type there).
+    fn lower_vc_open_null_safe(&mut self, value: LirId, from: &ErasedType, c: ClassId, u: &ErasedType, of: Option<TExprId>) -> LirId {
+        let object = ErasedType::object();
+        let null_unboxed = |g: &mut Self| {
+            if u.is_ref() {
+                let null = g.lir.push(Kind::Null, u.clone());
+                return g.lir.push(Kind::Adapt { value: null, from: u.clone(), how: Adaptation::Widen }, u.clone());
+            }
+            let null = g.lir.push(Kind::Null, object.clone());
+            g.lower_adapt(null, &object, u)
+        };
+        // The null, the literal or one an ascription holds (`Kind::Typed`, dotty's `Typed` over the literal): the
+        // tree erasure adapts is of type `Null` either way.
+        let null_typed = match &self.lir.node(value).kind {
+            Kind::Null => true,
+            Kind::Typed(inner) => matches!(self.lir.node(*inner).kind, Kind::Null),
+            _ => false,
+        };
+        if null_typed {
+            return null_unboxed(self);
+        }
+        let (held, tested, opened) = match self.lower_reread(value, of) {
+            Some(again) => (None, value, again),
+            None => {
+                let temp = self.lir.temp();
+                let held = self.lir.keep(temp, value);
+                (Some(held), self.lir.kept(temp, from.clone()), self.lir.kept(temp, from.clone()))
+            }
+        };
+        let null = self.lir.push(Kind::Null, object.clone());
+        let cond = self.lir.compare(Relation::Eq, Comparing::Identity, tested, null);
+        let then = null_unboxed(self);
+        let boxed = self.class_type(c);
+        let cast = self.lower_adapt(opened, from, &boxed);
+        let otherwise = self.lower_vc_unbox(c, cast, u);
+        let test = self.lir.push(Kind::If { cond, then, otherwise: Some(otherwise) }, u.clone());
+        self.m.null_tests.push(test);
+        let Some(held) = held else { return test };
+        let block = self.lir.seq(&[held], test);
+        self.m.null_tests.push(block);
+        block
+    }
+
+    /// A second read of `value`, where dotty's `evalOnce` leaves its operand in place
+    /// (`isIdempotentExpr`). A cast to the value class is the opening itself, not its operand
+    /// (`a.asInstanceOf[V]` unboxes `a`): its operand is read again under it; any other read
+    /// is `Gen::lower_read_again`'s.
+    fn lower_reread(&mut self, value: LirId, of: Option<TExprId>) -> Option<LirId> {
+        let node = self.lir.node(value);
+        let (kind, ty) = (node.kind.clone(), node.ty.clone());
+        let cast_of = of.and_then(|e| match self.cx.input.prog.expr(e) {
+            TExpr::Cast(inner, ..) => Some(inner),
+            _ => None,
+        });
+        match (kind, cast_of) {
+            (Kind::Cast { value: inner, op }, Some(inner_of)) => {
+                let again = self.lower_read_again(inner, Some(inner_of))?;
+                Some(self.lir.push(Kind::Cast { value: again, op }, ty))
+            }
+            _ => self.lower_read_again(value, of),
+        }
+    }
+
+    /// The one function on nodes for idempotence: a read idempotent by
+    /// what it is (a parameter, a temporary, a local val, `this`, a literal) read again, else the
+    /// expression `of` of the typed IR where the typer marks it idempotent
+    /// (`Program::in_place_operands`), lowered again. A read the source wrote a cast around, which
+    /// erasure dropped (`Program::is_cast`), is the typer's to answer: a written cast is impure.
+    fn lower_read_again(&mut self, value: LirId, of: Option<TExprId>) -> Option<LirId> {
+        let prog = self.cx.input.prog;
+        let in_place = |e: TExprId| prog.operand_in_place(e);
+        if of.is_some_and(|e| prog.is_cast(e)) {
+            return of.filter(|&e| in_place(e)).and_then(|e| self.lower_node(e).ok());
+        }
+        let node = self.lir.node(value);
+        let (kind, ty) = (node.kind.clone(), node.ty.clone());
+        let syms = self.cx.input.syms;
+        match kind {
+            Kind::Param(_) | Kind::Temp(_) | Kind::This | Kind::Null | Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) => {
+                Some(self.lir.push(kind, ty))
+            }
+            Kind::Local(s) if syms.sym(s).kind != SymKind::Var && !self.m.cells.contains(&s) => Some(self.lir.push(kind, ty)),
+            _ => of.filter(|&e| in_place(e)).and_then(|e| self.lower_node(e).ok()),
         }
     }
 
@@ -3485,8 +3581,7 @@ impl<'a> Gen<'a> {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             TExpr::If(..) => unreachable!("lowered (`Gen::lower_if`)"),
-            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases).is_ok() => unreachable!("lowered (`Gen::lower_match`)"),
-            TExpr::Match(scrut, cases) => self.match_(scrut, cases, Mode::Value(want)),
+            TExpr::Match(..) => unreachable!("lowered (`Gen::lower_match`)"),
             TExpr::Block(stmts, _) if self.block_lowers(stmts).is_ok() => unreachable!("lowered (`Gen::lower_block`)"),
             TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Value(want)),
             TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered (`Gen::lower_expr`)"),
@@ -3494,7 +3589,12 @@ impl<'a> Gen<'a> {
             _ => {
                 let t = self.node(e);
                 match self.fit(e, &t, want) {
-                    Fit::ValueClass(c, args, null_safe) => self.adapt_vc_as(c, args, t, want, null_safe),
+                    // The lowering asks the value of a value class at the type the code here leaves it
+                    // as (`Gen::lower_marked`), and brings it on from there: an adaptation is left.
+                    Fit::ValueClass(c, args, null_safe) => match self.vc_form(c, args, &t, want, null_safe) {
+                        VcForm::Adapt => self.adapt(&t, want),
+                        _ => self.write_value_class_left(e, &t, c, args, null_safe, want),
+                    },
                     Fit::Through(s) => {
                         self.adapt(&t, &s);
                         self.adapt(&s, want);
@@ -3721,7 +3821,7 @@ impl<'a> Gen<'a> {
     /// takes every exception of the body and the cases and throws it again, as javac lays it
     /// out. A `try` with operands on the stack spills them to locals first, since a handler
     /// starts with an empty stack.
-    pub(super) fn write_try(&mut self, want: &ErasedType, body: LirId, cases: Option<crate::lir::Cases>, finalizer: Option<LirId>) {
+    pub(super) fn write_try(&mut self, want: &ErasedType, body: LirId, catch: Option<crate::lir::Catch>, finalizer: Option<LirId>) {
         let outer = self.code.locals_mark();
         let spilled = self.spill_stack();
         let result = if *want == ErasedType::V {
@@ -3779,43 +3879,16 @@ impl<'a> Gen<'a> {
         self.code.bind(end);
         self.goto(normal_exit);
         let mut any_ranges = vec![(start, end)];
-        if let Some(cases) = cases {
+        if let Some(catch) = catch {
             let (handler, catch_end) = (self.code.new_label(), self.code.new_label());
             self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
             self.code.locals_release(protected);
             self.code.bind_handler(handler, throwable_vt);
             let mark = self.code.locals_mark();
             let e = self.store_new(&throwable);
-            match cases {
-                crate::lir::Cases::Lowered { caught, done, cases } => {
-                    self.m.temps.insert(caught, e);
-                    self.m.try_exits.insert(done, (result, normal_exit));
-                    self.write(cases);
-                }
-                crate::lir::Cases::Legacy(i, why) => {
-                    self.m.unlowered.push(why);
-                    let prog = self.cx.input.prog;
-                    for case in &prog.cases[prog.tries[i as usize].cases.range()] {
-                        let next = self.code.new_label();
-                        let case_mark = self.code.locals_mark();
-                        self.pattern(case.pat, e, &throwable, next);
-                        if let Some(g) = case.guard {
-                            self.cond(g, next, false);
-                        }
-                        self.expr(case.body, want);
-                        if let Some(slot) = result {
-                            self.store(slot, want);
-                        }
-                        self.code.locals_release(case_mark);
-                        self.goto(normal_exit);
-                        self.code.bind(next);
-                    }
-                    self.load(e, &throwable);
-                    self.code.op(op::ATHROW);
-                    self.code.pop();
-                    self.code.end_path();
-                }
-            }
+            self.m.temps.insert(catch.caught, e);
+            self.m.try_exits.insert(catch.done, (result, normal_exit));
+            self.write(catch.cases);
             self.code.bind(catch_end);
             self.code.locals_release(mark);
             any_ranges.push((handler, catch_end));
@@ -4067,7 +4140,7 @@ impl<'a> Gen<'a> {
         self.lir.ty(node).clone()
     }
 
-    pub(super) fn concat_route(&self, items: ListRef) -> ConcatRoute {
+    pub(super) fn concat_route(&mut self, items: ListRef) -> ConcatRoute {
         let prog = self.cx.input.prog;
         let (mut statements, mut operands) = (Vec::new(), Vec::new());
         if let Some((&head, rest)) = prog.expr_list(items).split_first() {
@@ -5450,27 +5523,6 @@ impl<'a> Gen<'a> {
             let want = if shape.by_name { gret.clone() } else { rest[i].clone() };
             self.getstatic(&module, "MODULE$", &module_type);
             self.getter_call(Invoke::Virtual, &module, false, getter, &method_desc(&gparams, &gret), &gtemps, &want, false);
-            return Some(want);
-        }
-        if cx.tclass_of[c.idx()] != u32::MAX && !cx.input.link.jar_classes.contains_key(&c) {
-            let rest = self.erased_param_types(s);
-            let owner = self.class_name(c);
-            self.expr(r, &u);
-            let temps = if self.default_operands_are_paths(Some(r), priors) {
-                self.vc_box(c, &u);
-                self.default_priors(priors, &rest)
-            } else {
-                let recv = self.store_new(&u);
-                let temps = self.default_priors_held(priors, &rest);
-                self.load(recv, &u);
-                self.vc_box(c, &u);
-                temps
-            };
-            let shape = self.default_getter_shape(s, i);
-            let desc = method_desc(&rest[..shape.before], &shape.ret);
-            let getter = format!("{}$default${}", self.source_method_name(s), shape.index);
-            let want = if shape.by_name { shape.ret.clone() } else { rest[i].clone() };
-            self.getter_call(Invoke::Virtual, &owner, false, getter, &desc, &temps, &want, false);
             return Some(want);
         }
         let companion: &'a crate::classfile::ClassFile = cx.vc_companions.get(&c)?;
@@ -7087,11 +7139,10 @@ impl<'a> Gen<'a> {
         self.write_body(root);
     }
 
-    /// A match, and a block the lowering does not take, in return position.
+    /// A block the lowering does not take, in return position.
     pub(super) fn tail_legacy(&mut self, e: TExprId) {
         match self.cx.input.prog.expr(e) {
-            TExpr::Match(scrut, cases) if self.match_lowers(scrut, cases).is_ok() => unreachable!("lowered (`Gen::lower_match`)"),
-            TExpr::Match(scrut, cases) => self.match_(scrut, cases, Mode::Tail),
+            TExpr::Match(..) => unreachable!("lowered (`Gen::lower_match`)"),
             TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Tail),
             _ => unreachable!("lowered (`Gen::lower_tail`)"),
         }
@@ -7111,9 +7162,14 @@ impl<'a> Gen<'a> {
 
     /// Whether a block's statements are lowered whole, or why not: a pattern definition, and a
     /// lazy val that `Gen::is_lazy_local` does not take, declare their locals as they are written.
-    pub(super) fn block_lowers(&self, stmts: ListRef) -> Result<(), Unlowered> {
+    pub(super) fn block_lowers(&mut self, stmts: ListRef) -> Result<(), Unlowered> {
         let cx = self.cx;
         cx.input.prog.stmts[stmts.range()].iter().try_for_each(|s| match *s {
+            TStmt::Pat(pat, init, PatDefForm::MatchableTuple) if self.lowered_tuple_definition(pat, init) => Ok(()),
+            TStmt::Pat(pat, _, PatDefForm::MatchableTuple) if self.xxl_definition_items(pat).is_some() => Ok(()),
+            TStmt::Pat(pat, _, PatDefForm::General) if self.lowered_variables_definition(pat) => Ok(()),
+            TStmt::Pat(pat, _, PatDefForm::SimpleTuple) if self.lowered_simple_tuple_definition(pat) => Ok(()),
+            TStmt::Pat(pat, _, PatDefForm::ForAlias) if self.lowered_alias_definition(pat) => Ok(()),
             TStmt::Pat(..) => Err(Unlowered::PatternDefinition),
             TStmt::Val(sym, _) if !self.is_lazy_local(sym) && cx.input.syms.sym(sym).mods & mods::LAZY != 0 => Err(Unlowered::LazyValNotLocal),
             TStmt::Val(..) | TStmt::Expr(_) | TStmt::Fun(_) => Ok(()),
@@ -7129,7 +7185,13 @@ impl<'a> Gen<'a> {
                 // Its holder stands at the head of the list.
                 TStmt::Val(sym, _) if self.is_lazy_local(sym) => {}
                 TStmt::Val(sym, init) => self.local_val(sym, init),
-                TStmt::Pat(pat, init) => {
+                // A definition the lowering takes is written by its nodes here too.
+                s @ TStmt::Pat(pat, init, PatDefForm::MatchableTuple) if self.lowered_tuple_definition(pat, init) => self.write_statement(s),
+                s @ TStmt::Pat(pat, _, PatDefForm::MatchableTuple) if self.xxl_definition_items(pat).is_some() => self.write_statement(s),
+                s @ TStmt::Pat(pat, _, PatDefForm::General) if self.lowered_variables_definition(pat) => self.write_statement(s),
+                s @ TStmt::Pat(pat, _, PatDefForm::SimpleTuple) if self.lowered_simple_tuple_definition(pat) => self.write_statement(s),
+                s @ TStmt::Pat(pat, _, PatDefForm::ForAlias) if self.lowered_alias_definition(pat) => self.write_statement(s),
+                TStmt::Pat(pat, init, _) => {
                     let t = self.expr_static(init);
                     let t = self.materialise_unit(t);
                     let slot = self.store_new(&t);
@@ -7146,6 +7208,129 @@ impl<'a> Gen<'a> {
                 s @ (TStmt::Expr(_) | TStmt::Fun(_)) => self.write_statement(s),
             }
         }
+    }
+
+    /// Whether the lowering takes the pattern definition (`Gen::lower_tuple_definition`): a tuple of
+    /// variables over a right side of its class (`Gen::tuple_definition_class`), a primitive element
+    /// typed only as its type proves.
+    pub(super) fn lowered_tuple_definition(&mut self, pat: TPatId, init: TExprId) -> bool {
+        let cx = self.cx;
+        let prog = cx.input.prog;
+        let Some(c) = self.tuple_definition_class(pat, init) else { return false };
+        let TPat::Class(_, ct, _, subs) = prog.pats[pat.idx()] else { return false };
+        debug_assert!(tuple_arity(cx, c).is_some());
+        let elems = self.tuple_definition_elements(ct);
+        let subs = &prog.pat_lists[subs.range()];
+        elems.len() == subs.len()
+            && subs.iter().zip(&elems).all(|(&p, e)| match prog.pats[p.idx()] {
+                TPat::Wildcard | TPat::Bind(_, None) => true,
+                _ => typed_element(prog, p).is_some_and(|(test, _, _)| e.is_ref() || matches!(prog.tests[test.idx()], TypeTest::Always)),
+            })
+    }
+
+    /// The tuple class of a pattern definition of a tuple of variables (`Gen::lowered_tuple_definition`): a `TupleN` of
+    /// variables (a wildcard or a typed variable among them) over a right side whose static type
+    /// erases to that class (a named tuple's too).
+    pub(super) fn tuple_definition_class(&mut self, pat: TPatId, init: TExprId) -> Option<ClassId> {
+        let cx = self.cx;
+        let prog = cx.input.prog;
+        let TPat::Class(c, _, _, subs) = prog.pats[pat.idx()] else { return None };
+        let arity = tuple_arity(cx, c)?;
+        let subs = &prog.pat_lists[subs.range()];
+        if subs.len() != arity || !subs.iter().all(|&p| matches!(prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None)) || typed_element(prog, p).is_some()) {
+            return None;
+        }
+        let tuple = ErasedType::L(self.class_name(c));
+        (self.static_type(init) == tuple).then_some(c)
+    }
+
+    /// The erased elements of the tuple type `ct`, a value class as no primitive (the
+    /// specialisation does not take it, whatever it erases to).
+    pub(super) fn tuple_definition_elements(&mut self, ct: TypeId) -> Vec<ErasedType> {
+        let cx = self.cx;
+        match cx.input.types.get(cx.input.types.underlying(ct)) {
+            Type::Class(_, args) => cx.input.types.items(args).to_vec().into_iter().map(|a| if self.value_class_of(a).is_some() { ErasedType::object() } else { self.erase(a) }).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// dotty's `SpecializeTuples` accessor of the element `i` of a tuple of the elements `elems`:
+    /// `_1$mcI$sp` where every element of a `Tuple1` or `Tuple2` is a primitive its specialisation
+    /// takes (Int, Long, Double; for `Tuple2` Char and Boolean too), with its type, else `_i` of
+    /// `Object`.
+    pub(super) fn tuple_accessor(elems: &[ErasedType], i: usize) -> (String, ErasedType) {
+        let code = |t: &ErasedType| match (t, elems.len()) {
+            (ErasedType::I, _) => Some("I"),
+            (ErasedType::J, _) => Some("J"),
+            (ErasedType::D, _) => Some("D"),
+            (ErasedType::C, 2) => Some("C"),
+            (ErasedType::Z, 2) => Some("Z"),
+            _ => None,
+        };
+        if elems.len() <= 2 && elems.iter().all(|t| code(t).is_some()) {
+            (format!("_{}$mc{}$sp", i + 1, code(&elems[i]).unwrap()), elems[i].clone())
+        } else {
+            (format!("_{}", i + 1), ErasedType::object())
+        }
+    }
+
+    /// Whether the lowering takes a pattern definition of the general match (`Gen::lower_variables_definition`): its
+    /// variables those `Gen::definition_variables` takes.
+    pub(super) fn lowered_variables_definition(&self, pat: TPatId) -> bool {
+        self.definition_variables(pat).is_some()
+    }
+
+    /// The elements of a tuple pattern past 22 (`case (a1, .., an)` on scalac's `TupleXXL`: the typer's
+    /// `xxl_elements_pattern`, a test of the class over `TupleXXL.unapplySeq`'s `Some` of a sequence of exactly `n`)
+    /// where each is a wildcard, a variable or a typed one: a `MatchableTuple` `Gen::lower_xxl_definition` lowers.
+    pub(super) fn xxl_definition_items(&mut self, pat: TPatId) -> Option<Vec<TPatId>> {
+        let prog = self.cx.input.prog;
+        let TPat::Test(_, _, u) = prog.pats[pat.idx()] else { return None };
+        let TPat::Unapply(_, call, some) = prog.pats[u.idx()] else { return None };
+        let TExpr::CallMethod(r, _, _) = prog.expr(call) else { return None };
+        let TExpr::Module(m) = prog.expr(r) else { return None };
+        if !self.class_name(m).starts_with("scala/runtime/TupleXXL") {
+            return None;
+        }
+        let TPat::Class(_, _, _, subs) = prog.pats[some.idx()] else { return None };
+        let [seq] = prog.pat_lists[subs.range()] else { return None };
+        let TPat::Seq(items, None) = prog.pats[seq.idx()] else { return None };
+        let items = prog.pat_lists[items.range()].to_vec();
+        items.iter().all(|&p| matches!(prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None)) || typed_element(prog, p).is_some()).then_some(items)
+    }
+
+    /// Whether the lowering takes a for-comprehension's alias (`Gen::lower_variables_definition`): its pattern's
+    /// variables those `Gen::definition_variables` takes, with `x$1` before them at most `MAX_TUPLE_ARITY`.
+    pub(super) fn lowered_alias_definition(&self, pat: TPatId) -> bool {
+        self.definition_variables(pat).is_some_and(|vars| vars.len() < MAX_TUPLE_ARITY)
+    }
+
+    /// Whether the lowering takes a pattern definition of `makePatDef`'s `SimpleTuple` the typer left as a
+    /// statement (`Gen::lower_simple_tuple_definition`): a tuple of variables, each a wildcard, a variable or a
+    /// typed one, of a tuple class of its arity.
+    pub(super) fn lowered_simple_tuple_definition(&self, pat: TPatId) -> bool {
+        let cx = self.cx;
+        let prog = cx.input.prog;
+        let TPat::Class(c, ct, _, subs) = prog.pats[pat.idx()] else { return false };
+        let subs = &prog.pat_lists[subs.range()];
+        let elements = match cx.input.types.get(cx.input.types.underlying(ct)) {
+            Type::Class(_, args) => cx.input.types.items(args).len(),
+            _ => return false,
+        };
+        tuple_arity(cx, c) == Some(subs.len())
+            && elements == subs.len()
+            && subs.iter().all(|&p| matches!(prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None)) || typed_element(prog, p).is_some())
+    }
+
+    /// The variables of a pattern definition of the general match, in `getVariables`' order: none if there are
+    /// more than `MAX_TUPLE_ARITY`, or one is held in a cell or is of a value class (whose definitions keep the old
+    /// form).
+    pub(super) fn definition_variables(&self, pat: TPatId) -> Option<Vec<SymId>> {
+        let cx = self.cx;
+        let mut vars = Vec::new();
+        pattern_variables(cx.input.prog, pat, &mut vars);
+        let vc = |s: SymId| cx.input.syms.sym(s).sig.as_ref().is_some_and(|sig| self.value_class_of(sig.ret).is_some());
+        (vars.len() <= MAX_TUPLE_ARITY && !vars.iter().any(|&v| self.m.cells.contains(&v) || vc(v))).then_some(vars)
     }
 
     fn write_statement(&mut self, s: TStmt) {
@@ -7176,14 +7361,6 @@ impl<'a> Gen<'a> {
             return;
         }
         self.write_statement(TStmt::Val(sym, init));
-    }
-
-    // ---- conditions ----
-
-    /// A jump to `target` where `e` is `jump_if`, falling through otherwise.
-    pub fn cond(&mut self, e: TExprId, target: Label, jump_if: bool) {
-        let cond = self.lowering(|g| g.lower_cond(e));
-        self.write_cond(cond, target, jump_if);
     }
 
     // ---- primitive operations ----
@@ -7231,10 +7408,12 @@ impl<'a> Gen<'a> {
         self.invoke_mref(m);
     }
 
-    pub fn match_error(&mut self, slot: u16, t: &ErasedType) {
+    /// `MatchError` of the value in `slot`, thrown: a pattern definition's failure.
+    fn match_error(&mut self, slot: u16, t: &ErasedType) {
         self.new_object(MATCH_ERROR);
         let object = ErasedType::object();
-        self.load_slot_as(slot, t, &object);
+        self.load(slot, t);
+        self.adapt(t, &object);
         self.invoke(Invoke::Special, MATCH_ERROR, false, "<init>", &[object], &ErasedType::V);
         self.code.op(op::ATHROW);
         self.code.pop();
@@ -7356,6 +7535,70 @@ fn special_erasure(cx: &Cx, c: ClassId) -> Option<&'static str> {
         "Tuple" | "NonEmptyTuple" => Some(PRODUCT),
         "Singleton" => Some(OBJECT),
         _ => None,
+    }
+}
+
+/// A typed element of a tuple pattern, `x: T` or `_: T` (dotty's `isVarPattern` or `Typed(Ident, tpt)`; `x @ (_: T)` is
+/// neither): its test, the tested type and the variable.
+pub(super) fn typed_element(prog: &Program, p: TPatId) -> Option<(TestId, TypeId, Option<SymId>)> {
+    let wild = |w: TPatId| matches!(prog.pats[w.idx()], TPat::Wildcard);
+    match prog.pats[p.idx()] {
+        TPat::Test(test, t, inner) if wild(inner) => Some((test, t, None)),
+        TPat::Test(test, t, inner) => match prog.pats[inner.idx()] {
+            TPat::Bind(sym, None) => Some((test, t, Some(sym))),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The variable of an element of a tuple pattern `Gen::lower_tuple_definition` lowers.
+pub(super) fn tuple_variable(prog: &Program, p: TPatId) -> Option<SymId> {
+    match prog.pats[p.idx()] {
+        TPat::Bind(sym, None) => Some(sym),
+        _ => typed_element(prog, p).and_then(|(_, _, sym)| sym),
+    }
+}
+
+/// The class `SpecializeTuples` makes of a pair of the elements' types, each I, J, D, C or Z (`Tuple2$mcII$sp`);
+/// none for another tuple, which `TupleN$.apply` makes.
+pub(super) fn specialised_tuple(elems: &[ErasedType]) -> Option<String> {
+    let code = |t: &ErasedType| match t {
+        ErasedType::I => Some('I'),
+        ErasedType::J => Some('J'),
+        ErasedType::D => Some('D'),
+        ErasedType::C => Some('C'),
+        ErasedType::Z => Some('Z'),
+        _ => None,
+    };
+    let codes: String = if elems.len() == 2 { elems.iter().map(code).collect::<Option<String>>()? } else { return None };
+    Some(format!("scala/Tuple2$mc{codes}$sp"))
+}
+
+/// The variables a pattern binds, in the order they are written (dotty's `getVariables`).
+fn pattern_variables(prog: &Program, p: TPatId, out: &mut Vec<SymId>) {
+    match prog.pats[p.idx()] {
+        TPat::Wildcard | TPat::Equals(..) => {}
+        TPat::Bind(sym, inner) => {
+            out.push(sym);
+            if let Some(i) = inner {
+                pattern_variables(prog, i, out);
+            }
+        }
+        TPat::Test(_, _, inner) | TPat::Unapply(_, _, inner) => pattern_variables(prog, inner, out),
+        TPat::Class(_, _, _, subs) | TPat::Alt(subs) => {
+            for &q in &prog.pat_lists[subs.range()] {
+                pattern_variables(prog, q, out);
+            }
+        }
+        TPat::Seq(items, rest) => {
+            for &q in &prog.pat_lists[items.range()] {
+                pattern_variables(prog, q, out);
+            }
+            if let Some(r) = rest {
+                pattern_variables(prog, r, out);
+            }
+        }
     }
 }
 

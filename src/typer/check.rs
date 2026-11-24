@@ -731,7 +731,7 @@ impl<'a> Worker<'a> {
         self.settle_val_accessors();
         self.name_all_alternatives();
         self.choose_entry_point();
-        self.mark_in_place_receivers();
+        self.mark_in_place_operands();
         self.phase_end(p);
     }
 
@@ -919,7 +919,7 @@ impl<'a> Worker<'a> {
                 };
                 for st in prog.stmt_list(stmts) {
                     match *st {
-                        TStmt::Expr(x) | TStmt::Pat(_, x) => out.push(SuperVisit::Expr(x)),
+                        TStmt::Expr(x) | TStmt::Pat(_, x, _) => out.push(SuperVisit::Expr(x)),
                         TStmt::Fun(f) => out.push(SuperVisit::Fun(f)),
                         TStmt::Val(local, x) => match (lifted, prog.expr(x)) {
                             (Some((t, args)), TExpr::Default(DefaultOf::Method(m), at, priors))
@@ -4631,7 +4631,7 @@ impl<'a> Worker<'a> {
             TExpr::Block(stmts, res) => {
                 for s in &prog.stmts[stmts.range()] {
                     match *s {
-                        TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x) => self.nonlocal_returns(x, in_lambda, out),
+                        TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x, _) => self.nonlocal_returns(x, in_lambda, out),
                         TStmt::Fun(_) => {}
                     }
                 }

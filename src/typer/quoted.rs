@@ -790,7 +790,7 @@ impl<'a> Worker<'a> {
                             out.push(v);
                             self.tree_binders(x, out);
                         }
-                        TStmt::Pat(p, x) => {
+                        TStmt::Pat(p, x, _) => {
                             self.pat_binders(p, out);
                             self.tree_binders(x, out);
                         }
@@ -946,7 +946,7 @@ impl<'a> Worker<'a> {
             TExpr::Block(stmts, res) => {
                 for s in &prog.stmts[stmts.range()] {
                     match *s {
-                        TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x) => self.tree_type_params(x, out),
+                        TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x, _) => self.tree_type_params(x, out),
                         TStmt::Fun(f) => {
                             if let Some(b) = prog.funs[f.idx()].body {
                                 self.tree_type_params(b, out);
@@ -2297,7 +2297,7 @@ impl<'a> Worker<'a> {
                     for st in &self.prog.stmts[stmts.range()] {
                         match *st {
                             TStmt::Val(v, _) => out.push(v),
-                            TStmt::Pat(p, _) => self.pat_binders(p, &mut out),
+                            TStmt::Pat(p, _, _) => self.pat_binders(p, &mut out),
                             TStmt::Fun(f) => {
                                 let fun = &self.prog.funs[f.idx()];
                                 out.push(fun.sym);
@@ -4386,9 +4386,9 @@ impl<'c> Copier<'c> {
         match s {
             TStmt::Expr(x) => TStmt::Expr(self.expr(t, x)),
             TStmt::Val(v, x) => TStmt::Val(self.sym(v), self.expr(t, x)),
-            TStmt::Pat(p, x) => {
+            TStmt::Pat(p, x, form) => {
                 let p = self.pat(t, p);
-                TStmt::Pat(p, self.expr(t, x))
+                TStmt::Pat(p, self.expr(t, x), form)
             }
             TStmt::Fun(f) => {
                 let (sym, params, defaults, body, captures, lifted) = {

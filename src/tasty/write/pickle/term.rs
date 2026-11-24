@@ -5901,14 +5901,14 @@ impl<'w, 'a> P<'w, 'a> {
                 TStmt::Expr(x) => self.term(x),
                 TStmt::Val(s, x) => self.local_val(s, x),
                 TStmt::Fun(f) => self.local_def(f),
-                TStmt::Pat(p, e) => self.pattern_definition(p, e),
+                TStmt::Pat(p, e, _) => self.pattern_definition(p, e),
             }
         }
     }
 
     fn stmt_start(&self, st: &TStmt) -> Option<u32> {
         match *st {
-            TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x) => self.w.prog.span_of(x).map(|(_, s)| s.start),
+            TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x, _) => self.w.prog.span_of(x).map(|(_, s)| s.start),
             TStmt::Fun(f) => Some(self.w.syms.sym(self.w.prog.funs[f.idx()].sym).span.start),
         }
     }

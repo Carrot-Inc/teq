@@ -6291,7 +6291,7 @@ impl<'a> Worker<'a> {
                 }
                 match (pat, sym) {
                     (Some(p), _) if def.mods & mods::LAZY != 0 => self.lazy_pattern_val(*p, rhs, init, ity, def.span, out),
-                    (Some(p), _) => out.push(self.pattern_val(*p, rhs, init, ity)),
+                    (Some(p), _) => out.push(self.pattern_val(*p, rhs, init, ity, false)),
                     (None, Some(sym)) => {
                         if declared.is_none() {
                             // Its reference is the `TermRef`, which carries no annotation.
@@ -6720,15 +6720,27 @@ impl<'a> Worker<'a> {
     }
 
     /// `val pat = rhs`: a pattern that can fail is a warning, unless the rhs is `: @unchecked`
-    /// or of the type `.runtimeChecked` gives.
-    fn pattern_val(&mut self, pat: ast::PatId, rhs: ExprId, init: TExprId, ity: TypeId) -> TStmt {
+    /// or of the type `.runtimeChecked` gives. A for-comprehension's alias (`alias`) takes
+    /// `makePatDef`'s general match, as `makeFor` binds its pattern.
+    fn pattern_val(&mut self, pat: ast::PatId, rhs: ExprId, init: TExprId, ity: TypeId, alias: bool) -> TStmt {
         let tp = self.type_pattern(pat, ity);
         self.check_tuple_components(pat, rhs, ity);
         let ast = self.cur_ast();
         if !ast.is_unchecked(rhs) && !self.has_runtime_checked(ity) {
             self.check_irrefutable(tp, pat, ity, Some(ast.expr_span(rhs)));
         }
-        TStmt::Pat(tp, init)
+        let form = if alias {
+            PatDefForm::ForAlias
+        } else if is_id_pattern(ast, pat) {
+            PatDefForm::Id
+        } else {
+            match ast.patdef_tuple(pat, rhs) {
+                Some((ast::PatDefTuple::Simple, _)) => PatDefForm::SimpleTuple,
+                Some((ast::PatDefTuple::Matchable, _)) => PatDefForm::MatchableTuple,
+                None => PatDefForm::General,
+            }
+        };
+        TStmt::Pat(tp, init, form)
     }
 
     /// dotty's `MatchableTuple` component vals of a local pattern definition (`Ast::patdef_tuple`):
@@ -7471,7 +7483,7 @@ impl<'a> Worker<'a> {
                             self.bind_local(name, sym);
                             TStmt::Val(sym, init)
                         }
-                        _ => self.pattern_val(pat, value, init, ity),
+                        _ => self.pattern_val(pat, value, init, ity, true),
                     });
                 }
                 let base = self.for_bases.last().copied().unwrap_or(0);
@@ -7531,7 +7543,7 @@ impl<'a> Worker<'a> {
                                     self.bind_local(name, sym);
                                     TStmt::Val(sym, init)
                                 }
-                                _ => self.pattern_val(pat, value, init, ity),
+                                _ => self.pattern_val(pat, value, init, ity, true),
                             }
                         }
                     };

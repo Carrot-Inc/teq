@@ -7,7 +7,7 @@
 
 use crate::source::FileId;
 use crate::tir::{StrRef, TExprId, TestId};
-use crate::types::{ClassId, SymId, TList, TypeId};
+use crate::types::{ClassId, SymId, TypeId};
 use std::rc::Rc;
 
 /// An erased type: a primitive, or a class or interface by its binary name with `/` between
@@ -92,6 +92,12 @@ pub enum Comparing {
     /// As numbers of the operands' type, or as booleans for equality. A NaN is in no order
     /// with anything and equal to nothing.
     Numbers,
+    /// An `Int` by its sign, the right operand `Int(0)` and not written: the left alone and one
+    /// `ifXX`. teq's own tests of what its helpers give (`seqPattern`'s parts, empty for no
+    /// match), which no comparison of a program lowers to: a program's `x == 0` is `Numbers`
+    /// (`iconst_0; if_icmpXX`, scalac's `genCJUMP`; `BCodeBodyBuilder.genComparisonOp` at 3.8.4
+    /// folds no comparison with zero).
+    Sign,
     /// By the sign of what this method of the left operand gives for the right one
     /// (`Comparable.compareTo`).
     Ordering(Rc<MethodRef>),
@@ -243,22 +249,10 @@ pub struct Node {
 }
 
 /// Why a form of the typed IR is not lowered yet: what an escape node (`Kind::Legacy`,
-/// `Kind::LegacyTail`, `Cases::Legacy`) carries, so that the forms the old generator still writes
+/// `Kind::LegacyTail`) carries, so that the forms the old generator still writes
 /// are this list (docs/LIR.md, "How the extraction goes").
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Unlowered {
-    /// `case null =>`, in a match or a catch.
-    PatternNull,
-    /// A sequence pattern: `case Seq(a, _*)`, `case List(x, y)`.
-    PatternSequence,
-    /// A type test of `Null` in a pattern: `case _: Null`.
-    TestNull,
-    /// `case _: AnyRef` or `case _: AnyVal`.
-    TestAnyRefOrAnyVal,
-    /// A type test that also checks the enclosing instance: `case _: this.Inner`.
-    TestOuter,
-    /// A match on a value whose static type is an intersection of two value classes.
-    MatchValueClassIntersection,
     /// `val (a, b) = p`, a definition by a pattern, among a block's statements.
     PatternDefinition,
     /// A `lazy val` among a block's statements that is not a local lazy val.
@@ -398,8 +392,11 @@ pub enum Kind {
     Or(LirId, LirId),
     /// A boolean: the relation between two operands.
     Compare { relation: Relation, how: Comparing, left: LirId, right: LirId },
-    /// A boolean: a type test of the typed IR on a reference. Transitional until the tests of
-    /// patterns are lowered (`Gen::test`).
+    /// A boolean: a type test of the program that erasure makes constant (`x.isInstanceOf[Matchable]`,
+    /// a class no program of the build makes), on a reference, written by `Gen::test`, which folds
+    /// it. Transitional: a block in a condition whose result is a constant is written as the
+    /// constant tested (`Gen::write_cond`), which this test's temporary in a block would be; it
+    /// ends when the two take one form.
     Test { value: LirId, test: TestId, tested: TypeId },
     /// The runtime's helper applied: the arguments are evaluated in order, then the helper's
     /// object, which is not an operand.
@@ -419,8 +416,8 @@ pub enum Kind {
     /// it: the node's type is the one its place wants, the operands under it dropped; as a
     /// condition (`&&`'s or `||`'s right operand) nothing tests it.
     SelfTailCall { receiver: Option<LirId>, args: List },
-    /// A match, or a block not lowered, in return position, and why: the generator of the typed
-    /// IR writes it, each of its results returned. Transitional.
+    /// A block not lowered, in return position, and why: the generator of the typed IR writes it,
+    /// each of its results returned. Transitional.
     LegacyTail(TExprId, Unlowered),
     /// A field of an instance assigned.
     FieldStore { receiver: LirId, owner: Rc<str>, name: Rc<str>, value: LirId },
@@ -493,8 +490,9 @@ pub enum Kind {
     /// many calls make the string, and what is text of their recipes, is the class-file
     /// writer's.
     Concat { parts: List },
-    /// `try`: the body; where it throws, the cases; the finalizer, which runs on every way out.
-    Try { body: LirId, cases: Option<Cases>, finalizer: Option<LirId> },
+    /// `try`: the body; where it throws, the cases (`Catch`); the finalizer, which runs on every
+    /// way out.
+    Try { body: LirId, catch: Option<Catch>, finalizer: Option<LirId> },
     /// The body's value, evaluated holding the monitor of the object `lock`, which is evaluated
     /// first; the monitor is released on every way out of the body, a throw and a `return`
     /// included.
@@ -502,11 +500,6 @@ pub enum Kind {
     /// A value of the type `from` as one of the node's type: dropped, the unit value or a zero
     /// for none, a cast, a box or its content, a primitive conversion (`Gen::adapt`).
     Adapt { value: LirId, from: ErasedType, how: Adaptation },
-    /// A value of the value class `class` applied to `args`, left as `from`, as one of the
-    /// node's type: the box opened or the underlying value boxed; a null reference gives the
-    /// underlying type's zero where `null_safe`. The cases are not lowered yet
-    /// (`Gen::adapt_vc_as`).
-    ValueClass { value: LirId, from: ErasedType, class: ClassId, args: TList, null_safe: bool },
     /// A function object: an instance of the interface of `method` whose `method` calls the
     /// lifted method `lifted` with the captured values, then its own arguments, and gives its
     /// result. `captures` are those values as `lifted` takes them (the instance, the key, the
@@ -534,6 +527,17 @@ pub enum Kind {
     /// The temporary declared with the value of `init`; it lives to the end of the block that
     /// holds this node. No value.
     Let { temp: TempId, init: LirId },
+    /// The slots of the temporary taken here, before the `Let` that gives it its value, of the type `ty` (two for a
+    /// long or a double): a definition whose own slot comes before its right side's (dotty's `val $1` of a pattern
+    /// definition, `Gen::lower_tuple_definition`; the one variable of its general match, `Kind::LocalAt`), as dotty
+    /// makes a val's local before it loads the right side (`getOrMakeLocal`, BCodeBodyBuilder.scala 331-339 at
+    /// 3.8.4). No value.
+    Reserve { temp: TempId, ty: ErasedType },
+    /// The local `sym`, of the type `ty`, held from here in the slot of the temporary: the one variable of a
+    /// pattern definition's general match, `val x = rhs match { case pat => x }`, whose slot a `Reserve` took
+    /// before its right side and a `Let` filled (`Gen::lower_variables_definition`); the pattern's own binder of
+    /// the same symbol, inside the match, holds another. No value, no instruction.
+    LocalAt { sym: SymId, temp: TempId, ty: ErasedType },
     /// The value of the temporary.
     Temp(TempId),
     /// A boolean: whether the reference is an instance of the class, interface or array class
@@ -553,36 +557,33 @@ impl Kind {
     fn leaves_typed_ir(&self) -> bool {
         match self {
             Kind::Legacy(..) | Kind::LegacyTail(..) | Kind::Test { .. } => true,
-            Kind::Try { cases, .. } => matches!(cases, Some(Cases::Legacy(..))),
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => false,
             Kind::Local(_) | Kind::Param(_) | Kind::Block { .. } | Kind::Val { .. } | Kind::Assign { .. } | Kind::LocalFun(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This => false,
             Kind::Field { .. } | Kind::Binary { .. } | Kind::Neg(_) | Kind::Not(_) | Kind::And(..) | Kind::Or(..) | Kind::Compare { .. } => false,
             Kind::Helper { .. } | Kind::If { .. } | Kind::While { .. } | Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Synchronized { .. } => false,
+            Kind::Try { .. } => false,
             Kind::FieldStore { .. } | Kind::StaticField { .. } | Kind::Call { .. } | Kind::SuperCall { .. } | Kind::New { .. } | Kind::InitCall { .. } | Kind::StaticCall { .. } => false,
             Kind::StaticFieldStore { .. } => false,
             Kind::ArrayOf { .. } | Kind::ArrayLoad { .. } | Kind::Cast { .. } | Kind::StringOf { .. } | Kind::Concat { .. } => false,
             Kind::ArrayStore { .. } | Kind::ArrayLength(_) | Kind::ArrayClone(_) | Kind::NewArray { .. } => false,
-            Kind::Adapt { .. } | Kind::ValueClass { .. } | Kind::Typed(_) => false,
+            Kind::Adapt { .. } | Kind::Typed(_) => false,
             // Its operand is a node of its own, which says whether it leaves any.
             Kind::Underlying { .. } => false,
             // The body is queued, and the definition named: neither is written where the node stands.
             Kind::Closure { .. } | Kind::LiftedCall { .. } | Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) => false,
-            Kind::Let { .. } | Kind::Temp(_) | Kind::Is { .. } | Kind::Labeled { .. } | Kind::Break { .. } => false,
+            Kind::Let { .. } | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Temp(_) | Kind::Is { .. } | Kind::Labeled { .. } | Kind::Break { .. } => false,
         }
     }
 }
 
-/// A `try`'s cases (`Kind::Try`).
+/// A `try`'s cases: the exception the body threw in the temporary `caught`, then `cases`, which
+/// leaves the `try` by a `Break` to `done` with the try's value (none for a `try` that leaves
+/// nothing) or throws.
 #[derive(Clone, Copy)]
-pub enum Cases {
-    /// The exception the body threw in the temporary `caught`, then `cases`, which leaves the
-    /// `try` by a `Break` to `done` with the try's value (none for a `try` that leaves nothing),
-    /// or throws.
-    Lowered { caught: TempId, done: LabelId, cases: LirId },
-    /// The cases of the typed IR's `tries[index]`, where one of their patterns is not lowered
-    /// (`Gen::pattern_lowers`, which says why), generated by `Gen::write_try`. Transitional until
-    /// those patterns are.
-    Legacy(u32, Unlowered),
+pub struct Catch {
+    pub caught: TempId,
+    pub done: LabelId,
+    pub cases: LirId,
 }
 
 /// The nodes of one method.
@@ -739,12 +740,6 @@ impl Body {
 
     pub fn store_static(&mut self, owner: &Rc<str>, name: &str, value: LirId) -> LirId {
         self.push(Kind::StaticFieldStore { owner: owner.clone(), name: Rc::from(name), value }, ErasedType::V)
-    }
-
-    /// `value`, of the value class `class` applied to `args` and left as `from`, as one of the
-    /// type `to` (`Kind::ValueClass`).
-    pub fn value_class(&mut self, value: LirId, from: &ErasedType, class: ClassId, args: TList, null_safe: bool, to: &ErasedType) -> LirId {
-        self.push(Kind::ValueClass { value, from: from.clone(), class, args, null_safe }, to.clone())
     }
 
     pub fn static_field(&mut self, owner: &Rc<str>, name: &str, ty: ErasedType) -> LirId {

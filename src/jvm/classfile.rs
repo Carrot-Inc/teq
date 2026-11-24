@@ -324,6 +324,13 @@ pub struct Handler {
     pub catch_type: u16,
 }
 
+/// Slots taken before the value they hold is computed (`Code::reserve_local`), as many as that value takes.
+#[derive(Clone, Copy)]
+pub struct Reserved {
+    pub slot: u16,
+    wide: bool,
+}
+
 pub struct Code {
     /// The locals on entry, which the first frame is relative to.
     initial_locals: Vec<VT>,
@@ -348,6 +355,9 @@ pub struct Code {
     /// Set when a pop met an empty model: the method's code is wrong and is reported, not
     /// written.
     pub underflow: bool,
+    /// Set when a value was stored in slots `reserve_local` took for another width: the method's code is wrong and
+    /// is reported, not written.
+    pub misreserved: bool,
     /// A lowering runs (`Gen::lowering`): nothing may be written, since what a lowering decides
     /// must not depend on what is written, nor the output on the order of the lowerings.
     pub frozen: bool,
@@ -373,6 +383,7 @@ impl Code {
             wide: false,
             overflow: false,
             underflow: false,
+            misreserved: false,
             frozen: false,
         }
     }
@@ -451,6 +462,34 @@ impl Code {
         }
         self.max_locals = self.max_locals.max(self.locals.len() as u16);
         slot
+    }
+
+    /// Takes the next free slot for a value computed later, two for a long or a double (dotty makes a val's local by
+    /// its kind's size before its right side: `makeLocal`, BCodeSkelBuilder.scala 582-591 at 3.8.4). They are unset
+    /// until `type_local` types them.
+    pub fn reserve_local(&mut self, wide: bool) -> Reserved {
+        self.writing();
+        let slot = self.locals.len() as u16;
+        self.locals.push(VT::Top);
+        if wide {
+            self.locals.push(VT::Top);
+        }
+        self.max_locals = self.max_locals.max(self.locals.len() as u16);
+        Reserved { slot, wide }
+    }
+
+    /// Gives the slots `reserve_local` took the type `t` from here on, as the value's first store does: a long's or a
+    /// double's second slot its second half.
+    pub fn type_local(&mut self, reserved: Reserved, t: VT) {
+        self.writing();
+        if reserved.wide != t.wide() {
+            self.misreserved = true;
+            return;
+        }
+        self.locals[reserved.slot as usize] = t;
+        if reserved.wide {
+            self.locals[reserved.slot as usize + 1] = VT::Top2;
+        }
     }
 
     pub fn locals_mark(&self) -> usize {

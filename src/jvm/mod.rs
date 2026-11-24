@@ -814,7 +814,7 @@ impl<'a> Cx<'a> {
             // for an anonymous class are evaluated where it is made (`lazy_locals_in`).
             let stmt_roots = |l: crate::ast::ListRef| {
                 prog.stmts[l.range()].iter().filter_map(|s| match *s {
-                    TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x) => Some(x),
+                    TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x, _) => Some(x),
                     TStmt::Fun(_) => None,
                 })
             };
@@ -1458,7 +1458,7 @@ fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, out: &m
                     match *st {
                         TStmt::Expr(x) if prog.is_removed(x) => {}
                         TStmt::Expr(x) => stack.push(x),
-                        TStmt::Pat(p, x) => {
+                        TStmt::Pat(p, x, _) => {
                             stack.push(x);
                             pat_exprs(prog, p, &mut stack);
                         }

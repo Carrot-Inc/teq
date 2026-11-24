@@ -3,7 +3,7 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cases, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Relation, Unlowered};
+use crate::lir::{Arith, Capture, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Relation, Unlowered};
 use super::gen::{rank_type, CallRoute, CaptureArgument, ConcatRoute, CtorArguments, CtorDefault, DefaultRoute, Extras, FieldRoute, Fit, Gen, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::names::*;
 use crate::ast::ListRef;
@@ -91,10 +91,7 @@ impl<'a> Gen<'a> {
                 Err(why) => self.lower_legacy(e, want, why),
             },
             TExpr::If(c, t, els) => self.lower_if(c, t, els, want),
-            TExpr::Match(scrut, cases) => match self.match_lowers(scrut, cases) {
-                Ok(()) => self.lower_match(scrut, cases, Some(want)),
-                Err(why) => self.lower_legacy(e, want, why),
-            },
+            TExpr::Match(scrut, cases) => self.lower_match(scrut, cases, Some(want)),
             TExpr::Throw(inner, _) => {
                 let value = self.lower_expr(inner, &ErasedType::L(Rc::from(THROWABLE)));
                 self.lir.push(Kind::Throw(value), want.clone())
@@ -102,14 +99,9 @@ impl<'a> Gen<'a> {
             TExpr::Try(index) => {
                 let t = &prog.tries[index as usize];
                 let body = self.lower_expr(t.body, want);
-                let cases = (!t.cases.is_empty()).then(|| match prog.cases[t.cases.range()].iter().try_for_each(|case| self.pattern_lowers(case.pat)) {
-                    Ok(()) => self.lower_catch(t.cases, want),
-                    Err(why) => Cases::Legacy(index, why),
-                });
-                // Cases the lowering does not take are written between the body and the finalizer.
-                self.lir.typed_ir_left |= matches!(cases, Some(Cases::Legacy(..)));
+                let catch = (!t.cases.is_empty()).then(|| self.lower_catch(t.cases, want));
                 let finalizer = t.finalizer.map(|f| self.lower_expr(f, &ErasedType::V));
-                self.lir.push(Kind::Try { body, cases, finalizer }, want.clone())
+                self.lir.push(Kind::Try { body, catch, finalizer }, want.clone())
             }
             // A def's call of itself in a tail position of a `return`'s value: the loop's jump
             // (`Gen::jump_call`); nothing follows it, so its type is the place's.
@@ -129,13 +121,17 @@ impl<'a> Gen<'a> {
             | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::TypeTest(..) | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_)
             | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_)
             | TExpr::Spread(_) | TExpr::Return(_) | TExpr::Splice(_) => {
-                let node = match self.lower_node(e) {
-                    Ok(node) => node,
-                    Err(why) => return self.lower_legacy(e, want, why),
+                let (node, t) = match self.lower_node(e) {
+                    Ok(node) => (node, self.lir.ty(node).clone()),
+                    Err(why) => match self.expr_value_class(e).map(|_| self.static_type(e)) {
+                        // A value class's value the lowering does not make is asked of the old code
+                        // at the type it leaves (`Gen::expr_marked`), and brought on from there.
+                        Some(t) if t != ErasedType::V => (self.lower_legacy(e, &t, why), t),
+                        _ => return self.lower_legacy(e, want, why),
+                    },
                 };
-                let t = self.lir.ty(node).clone();
-                match self.fit(e, &t, want) {
-                    Fit::ValueClass(class, args, null_safe) => self.lir.push(Kind::ValueClass { value: node, from: t, class, args, null_safe }, want.clone()),
+                match self.fit_lowered(e, &t, want) {
+                    Fit::ValueClass(class, args, null_safe) => self.lower_value_class(node, &t, class, args, null_safe, want, Some(e)),
                     Fit::Through(s) => {
                         let through = self.lower_adapt(node, &t, &s);
                         self.lower_adapt(through, &s, want)
@@ -146,8 +142,26 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// `Gen::fit` for a node the lowering made: besides, the underlying value of a class with an outer wanted as
+    /// the class (a method's default getter called on its box) is boxed as the class, as master writes it
+    /// (`Cx::vc_with_outer`).
+    fn fit_lowered(&mut self, e: TExprId, t: &ErasedType, want: &ErasedType) -> Fit {
+        let fit = self.fit(e, t, want);
+        if matches!(fit, Fit::ValueClass(..)) || t.is_ref() || *t == ErasedType::V {
+            return fit;
+        }
+        let cx = self.cx;
+        match want {
+            ErasedType::L(name) => match cx.class_named(name).filter(|&c| cx.vc_with_outer(c)) {
+                Some(c) => Fit::ValueClass(c, crate::types::EMPTY_LIST, false),
+                None => fit,
+            },
+            _ => fit,
+        }
+    }
+
     /// One node of the typed IR at the type it leaves, or why it is not lowered yet.
-    fn lower_node(&mut self, e: TExprId) -> Result<LirId, Unlowered> {
+    pub(super) fn lower_node(&mut self, e: TExprId) -> Result<LirId, Unlowered> {
         let prog = self.cx.input.prog;
         Ok(match prog.expr(e) {
             TExpr::Int(v) => {
@@ -184,7 +198,13 @@ impl<'a> Gen<'a> {
             TExpr::Assign(target, value) => return self.lower_assign(target, value),
             TExpr::Prim(op, a, b) => return self.lower_prim(op, a, b),
             TExpr::Unary(op, a) => self.lower_unary(op, a),
-            TExpr::TypeTest(inner, test, tested) => self.lower_test(inner, test, tested),
+            // A test's value is the condition's.
+            TExpr::TypeTest(inner, test, tested) => {
+                let cond = self.lower_test(inner, test, tested);
+                let yes = self.lir.push(Kind::Bool(true), ErasedType::Z);
+                let no = self.lir.push(Kind::Bool(false), ErasedType::Z);
+                self.lir.push(Kind::If { cond, then: yes, otherwise: Some(no) }, ErasedType::Z)
+            }
             TExpr::While(c, body) => {
                 let cond = self.lower_cond(c);
                 let body = self.lower_expr(body, &ErasedType::V);
@@ -371,8 +391,28 @@ impl<'a> Gen<'a> {
     /// `e` as a condition: the connectives and the comparisons under it are conditions too,
     /// evaluated only as far as the outcome needs; anything else is a boolean value.
     pub(super) fn lower_cond(&mut self, e: TExprId) -> LirId {
-        match self.cx.input.prog.expr(e) {
-            TExpr::Bool(v) => self.lir.push(Kind::Bool(v), ErasedType::Z),
+        let prog = self.cx.input.prog;
+        match prog.expr(e) {
+            // A block's constant result is written as a value (`Gen::write_cond`), at its place.
+            TExpr::Bool(v) => {
+                let id = self.lir.push(Kind::Bool(v), ErasedType::Z);
+                self.lir.nodes[id.0 as usize].of = Some(e);
+                id
+            }
+            // A block's result is a condition too, at its own place: an inline method's expansion is written whole
+            // as a value (`Gen::write_cond`), its result's line entry where `lower_expr` would mark it.
+            TExpr::Block(stmts, res) if self.block_lowers(stmts).is_ok() => {
+                let nodes = self.lower_block_statements(stmts);
+                let result = self.lower_cond(res);
+                let node = &mut self.lir.nodes[result.0 as usize];
+                if node.of.is_none() && !matches!(node.kind, Kind::Legacy(..) | Kind::SelfTailCall { .. }) {
+                    node.of = Some(res);
+                }
+                let stmts = self.lir.list(&nodes);
+                let id = self.lir.push(Kind::Block { stmts, result }, ErasedType::Z);
+                self.lir.nodes[id.0 as usize].of = Some(e);
+                id
+            }
             TExpr::Unary(UnOp::BoolNot, a) => {
                 let value = self.lower_cond(a);
                 self.lir.push(Kind::Not(value), ErasedType::Z)
@@ -397,12 +437,21 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// No cast to the static type: `box.fruit.isInstanceOf[Apple]` asks because the static type
-    /// may be wrong. The tested type goes with the test, as a pattern's does: an array's test
-    /// reads its element there.
+    /// `inner.isInstanceOf[T]` as a condition: the value in a temporary and its test
+    /// (`Gen::lower_test_on`), or `Kind::Test` where the test is a constant. No cast to the static
+    /// type: `box.fruit.isInstanceOf[Apple]` asks because the static type may be wrong. The tested
+    /// type goes with the test, as a pattern's does: an array's test reads its element there.
     fn lower_test(&mut self, inner: TExprId, test: TestId, tested: TypeId) -> LirId {
-        let value = self.lower_expr(inner, &ErasedType::object());
-        self.lir.push(Kind::Test { value, test, tested }, ErasedType::Z)
+        let object = ErasedType::object();
+        let init = self.lower_expr(inner, &object);
+        let temp = self.lir.temp();
+        let result = self.lower_test_on(temp, &object, test, Some(tested));
+        if let Kind::Bool(_) = self.lir.node(result).kind {
+            return self.lir.push(Kind::Test { value: init, test, tested }, ErasedType::Z);
+        }
+        let held = self.lir.push(Kind::Let { temp, init }, ErasedType::V);
+        let stmts = self.lir.list(&[held]);
+        self.lir.push(Kind::Block { stmts, result }, ErasedType::Z)
     }
 
     /// An order or an equality of two operands, compared as their static types say.
@@ -504,14 +553,11 @@ impl<'a> Gen<'a> {
                 }
                 Err(why) => Kind::LegacyTail(e, why),
             },
-            TExpr::Match(scrut, cases) if !boxed_whole => match self.match_lowers(scrut, cases) {
-                Ok(()) => {
-                    let id = self.lower_match(scrut, cases, None);
-                    self.lir.nodes[id.0 as usize].of = Some(e);
-                    return id;
-                }
-                Err(why) => Kind::LegacyTail(e, why),
-            },
+            TExpr::Match(scrut, cases) if !boxed_whole => {
+                let id = self.lower_match(scrut, cases, None);
+                self.lir.nodes[id.0 as usize].of = Some(e);
+                return id;
+            }
             // A return out of the method here is that return, its value the method's result (dotty's
             // `genReturn` sends the value to the method's return); out of a closure it is a throw,
             // after which the return of what it leaves is dead.
@@ -533,13 +579,36 @@ impl<'a> Gen<'a> {
                 Some((receiver, args)) => self.lower_self_tail_call(receiver, args),
                 None => {
                     let ret = self.m.ret.clone();
-                    Kind::Return(self.lower_expr(e, &ret))
+                    let value = self.lower_expr(e, &ret);
+                    self.returned(value)
                 }
             },
         };
         let id = self.lir.push(kind, ErasedType::V);
         self.lir.nodes[id.0 as usize].of = Some(e);
         id
+    }
+
+    /// The return of `value`: from each branch of a value class's null test
+    /// (`Gen::lower_vc_open_null_safe`), through the block that holds its temporary, as the back end
+    /// writes an `If` in return position (`BCodeBodyBuilder.genLoadIfTo` with
+    /// `LoadDestination.Return`, 234 and 648 at 3.8.4).
+    fn returned(&mut self, value: LirId) -> Kind {
+        if !self.m.null_tests.contains(&value) {
+            return Kind::Return(value);
+        }
+        match self.lir.node(value).kind.clone() {
+            Kind::If { cond, then, otherwise: Some(otherwise) } => {
+                let then = self.lir.push(Kind::Return(then), ErasedType::V);
+                let otherwise = Some(self.lir.push(Kind::Return(otherwise), ErasedType::V));
+                Kind::If { cond, then, otherwise }
+            }
+            Kind::Block { stmts, result } => {
+                let kind = self.returned(result);
+                Kind::Block { stmts, result: self.lir.push(kind, ErasedType::V) }
+            }
+            _ => unreachable!("a null test is an `If`, or a block around one"),
+        }
     }
 
     pub(super) fn lower_self_tail_call(&mut self, receiver: Option<TExprId>, args: ListRef) -> Kind {
@@ -565,15 +634,23 @@ impl<'a> Gen<'a> {
     /// A block whose statements are lowered whole (`Gen::block_lowers`), its result at `want`.
     fn lower_block(&mut self, stmts: ListRef, res: TExprId, want: &ErasedType) -> LirId {
         let prog = self.cx.input.prog;
+        let nodes = self.lower_block_statements(stmts);
+        // The pure result of an ascribed block that is a statement is not evaluated (`Program::removed_bits`).
+        let result = if *want == ErasedType::V && prog.is_removed(res) { self.lir.push(Kind::Unit, ErasedType::V) } else { self.lower_expr(res, want) };
+        let stmts = self.lir.list(&nodes);
+        self.lir.push(Kind::Block { stmts, result }, want.clone())
+    }
+
+    /// The statements of a block the lowering takes whole (`Gen::block_lowers`): the holders of its
+    /// lazy vals, then each statement.
+    fn lower_block_statements(&mut self, stmts: ListRef) -> Vec<LirId> {
+        let prog = self.cx.input.prog;
         let mut nodes = Vec::new();
         self.lower_lazy_holders(stmts, &mut nodes);
         for &s in &prog.stmts[stmts.range()] {
             self.lower_statement(s, &mut nodes);
         }
-        // The pure result of an ascribed block that is a statement is not evaluated (`Program::removed_bits`).
-        let result = if *want == ErasedType::V && prog.is_removed(res) { self.lir.push(Kind::Unit, ErasedType::V) } else { self.lower_expr(res, want) };
-        let stmts = self.lir.list(&nodes);
-        self.lir.push(Kind::Block { stmts, result }, want.clone())
+        nodes
     }
 
     /// A statement of a block as the nodes it is, in order; a pattern definition is not lowered
@@ -596,7 +673,11 @@ impl<'a> Gen<'a> {
                     nodes.push(self.lir.push(Kind::LocalFun(sym), ErasedType::V));
                 }
             }
-            TStmt::Pat(..) => unreachable!("a pattern definition is not lowered (`Gen::block_lowers`)"),
+            TStmt::Pat(pat, init, PatDefForm::General) => self.lower_variables_definition(pat, init, false, nodes),
+            TStmt::Pat(pat, init, PatDefForm::ForAlias) => self.lower_variables_definition(pat, init, true, nodes),
+            TStmt::Pat(pat, init, PatDefForm::SimpleTuple) => self.lower_simple_tuple_definition(pat, init, nodes),
+            TStmt::Pat(pat, init, PatDefForm::MatchableTuple) if self.xxl_definition_items(pat).is_some() => self.lower_xxl_definition(pat, init, nodes),
+            TStmt::Pat(pat, init, _) => self.lower_tuple_definition(pat, init, nodes),
         }
     }
 
@@ -1493,7 +1574,7 @@ impl<'a> Gen<'a> {
         let held = self.lir.ty(this).clone();
         let value = self.lower_adapt(this, &held, &u);
         let boxed = self.class_type(c);
-        self.lir.push(Kind::ValueClass { value, from: u, class: c, args: EMPTY_LIST, null_safe: false }, boxed)
+        self.lower_value_class(value, &u, c, EMPTY_LIST, false, &boxed, None)
     }
 
     /// The instance of the class `h` as the code holds it: an object's own, the instance the

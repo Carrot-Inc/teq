@@ -257,7 +257,7 @@ impl Collector<'_, '_> {
                             }
                         }
                         TStmt::Fun(f) => self.declared.push(prog.funs[f.idx()].sym),
-                        TStmt::Pat(p, init) => {
+                        TStmt::Pat(p, init, _) => {
                             self.expr(init);
                             self.pat(p);
                         }
@@ -517,7 +517,7 @@ impl CellWalk<'_, '_> {
                                 self.nested(body);
                             }
                         }
-                        TStmt::Pat(p, init) => {
+                        TStmt::Pat(p, init, _) => {
                             self.expr(init);
                             self.pat(p);
                         }

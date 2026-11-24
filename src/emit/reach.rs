@@ -3188,7 +3188,7 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
                     TStmt::Expr(x) if prog.is_removed(x) => {}
                     TStmt::Expr(x) | TStmt::Val(_, x) => visit(m, cx, x),
                     TStmt::Fun(f) => m.local_fun(cx, f),
-                    TStmt::Pat(p, x) => {
+                    TStmt::Pat(p, x, _) => {
                         visit_pat(m, cx, p);
                         visit(m, cx, x);
                     }

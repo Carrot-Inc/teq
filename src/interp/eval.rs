@@ -1119,7 +1119,7 @@ impl<'a, 't> Interp<'a, 't> {
                     };
                     inner.bind(sym, v);
                 }
-                TStmt::Pat(pat, init) => {
+                TStmt::Pat(pat, init, _) => {
                     let v = self.eval(init, &inner, cx)?;
                     if !self.match_pat(pat, &v, &inner, cx)? {
                         return self.match_error(v);

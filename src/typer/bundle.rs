@@ -705,7 +705,7 @@ impl<'a> Worker<'a> {
                                 work.push(Node::Expr(e.0));
                             }
                             TStmt::Fun(f) => work.push(Node::Fun(f.0)),
-                            TStmt::Pat(q, e) => {
+                            TStmt::Pat(q, e, _) => {
                                 work.push(Node::Pat(q.0));
                                 work.push(Node::Expr(e.0));
                             }

@@ -573,7 +573,7 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                     w.top().bind(sym);
                 }
-                TStmt::Pat(pat, init) => {
+                TStmt::Pat(pat, init, _) => {
                     self.expr_layout(w, init);
                     let mut scope = std::mem::replace(w.top(), Scope::new());
                     self.pat_binders(pat, &mut scope);
@@ -1821,7 +1821,7 @@ impl<'a, 't> Interp<'a, 't> {
                         b.emit(Op::Bind(sym));
                     }
                 }
-                TStmt::Pat(pat, init) => {
+                TStmt::Pat(pat, init, _) => {
                     self.lower(b, init);
                     b.emit(Op::BindPat(pat));
                 }

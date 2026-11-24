@@ -1866,7 +1866,7 @@ impl<'a, 't> Interp<'a, 't> {
                 TStmt::Expr(x) => return self.view(TreeRef::Expr(x)),
                 TStmt::Val(v, init) => View::ValDef(v, Some(TreeRef::Expr(init))),
                 TStmt::Fun(f) => return self.view(TreeRef::Fun(f)),
-                TStmt::Pat(p, init) => {
+                TStmt::Pat(p, init, _) => {
                     let binder = self.pattern_binder(p);
                     match binder {
                         Some(v) => View::ValDef(v, Some(TreeRef::Expr(init))),
@@ -3024,7 +3024,7 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Stmt(i) => match self.prog().stmts[i as usize] {
                 TStmt::Val(v, _) => SymRef::Term(v),
                 TStmt::Fun(f) => SymRef::Term(self.prog().funs[f.idx()].sym),
-                TStmt::Pat(p, _) => self.pattern_binder(p).map_or(SymRef::None, SymRef::Term),
+                TStmt::Pat(p, _, _) => self.pattern_binder(p).map_or(SymRef::None, SymRef::Term),
                 TStmt::Expr(x) => return self.tree_symbol(TreeRef::Expr(x)),
             },
             TreeRef::Fun(f) => SymRef::Term(self.prog().funs[f.idx()].sym),

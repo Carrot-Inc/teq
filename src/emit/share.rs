@@ -863,7 +863,7 @@ impl<'a> Enc<'a> {
                     self.fun(f);
                     self.leave_lambda();
                 }
-                TStmt::Pat(p, e) => {
+                TStmt::Pat(p, e, _) => {
                     self.tok(4);
                     self.expr(e);
                     self.pat(p);
@@ -1782,7 +1782,7 @@ impl<'a> Enc<'a> {
                                 self.scan(b, out);
                             }
                         }
-                        TStmt::Pat(p, x) => {
+                        TStmt::Pat(p, x, _) => {
                             self.scan_pat(p, out);
                             self.scan(x, out);
                         }

@@ -1401,7 +1401,7 @@ impl<'a> Worker<'a> {
                         }
                         TExpr::Block(stmts, _) => {
                             for st in self.prog.stmt_list(stmts) {
-                                if let TStmt::Pat(p, _) = *st {
+                                if let TStmt::Pat(p, _, _) = *st {
                                     self.pat_binders(p, &mut pattern_binders);
                                 }
                             }
@@ -1985,7 +1985,7 @@ impl<'a> Worker<'a> {
                             out.push(v);
                             self.region_binders(x, reducible, classes, seen, out);
                         }
-                        TStmt::Pat(p, x) => {
+                        TStmt::Pat(p, x, _) => {
                             self.pat_binders(p, out);
                             self.region_binders(x, reducible, classes, seen, out);
                         }
@@ -2111,7 +2111,7 @@ impl<'a> Worker<'a> {
                 TExpr::Match(_, cases) => pats.extend(self.prog.case_list(cases).iter().map(|c| c.pat)),
                 TExpr::Try(i) => pats.extend(self.prog.case_list(self.prog.tries[i as usize].cases).iter().map(|c| c.pat)),
                 TExpr::Block(stmts, _) => pats.extend(self.prog.stmt_list(stmts).iter().filter_map(|s| match *s {
-                    TStmt::Pat(p, _) => Some(p),
+                    TStmt::Pat(p, _, _) => Some(p),
                     _ => None,
                 })),
                 _ => {}
@@ -2684,7 +2684,7 @@ impl<'a> Worker<'a> {
                 TExpr::Match(_, cases) => pats.extend(self.prog.case_list(cases).iter().map(|c| c.pat)),
                 TExpr::Try(i) => pats.extend(self.prog.case_list(self.prog.tries[i as usize].cases).iter().map(|c| c.pat)),
                 TExpr::Block(stmts, _) => pats.extend(self.prog.stmt_list(stmts).iter().filter_map(|s| match *s {
-                    TStmt::Pat(p, _) => Some(p),
+                    TStmt::Pat(p, _, _) => Some(p),
                     _ => None,
                 })),
                 _ => {}

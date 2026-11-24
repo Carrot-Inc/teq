@@ -2,9 +2,9 @@
 //! per case against a scrutinee held in a local, with jumps to the next case in the place of
 //! nested `if`s.
 
-use crate::lir::{Cases, Comparing, ErasedType, Invoke, Kind, LabelId, LirId, MethodRef, Relation, TempId, Unlowered};
+use crate::lir::{Catch, Comparing, ErasedType, Invoke, Kind, LabelId, LirId, MethodRef, Relation, TempId};
 use super::classfile::*;
-use super::gen::{Gen, Mode};
+use super::gen::Gen;
 use super::names::*;
 use crate::ast::ListRef;
 use crate::tir::*;
@@ -12,268 +12,6 @@ use crate::types::SymId;
 use std::rc::Rc;
 
 impl<'a> Gen<'a> {
-    pub fn match_(&mut self, scrut: TExprId, cases: ListRef, mode: Mode) {
-        let prog = self.cx.input.prog;
-        let outer = self.code.locals_mark();
-        // A reference is matched as it comes, without a cast to its static type: the patterns
-        // test its class, and an unchecked type argument may have promised too much.
-        let t = self.static_type(scrut);
-        let t = if t.is_ref() || t == ErasedType::V { ErasedType::object() } else { t };
-        // A value class's primitive underlying value stays as it is, and is boxed where a pattern
-        // tests it.
-        let vc = if t.is_ref() { None } else { self.expr_value_class(scrut).map(|(c, _)| c) };
-        self.expr(scrut, &t);
-        let slot = self.store_new(&t);
-        let vc_slots = self.m.vc_slots.len();
-        if let Some(c) = vc {
-            self.m.vc_slots.push((slot, c));
-        }
-        let done = self.code.new_label();
-        for case in &prog.cases[cases.range()] {
-            let next = self.code.new_label();
-            let mark = self.code.locals_mark();
-            self.pattern(case.pat, slot, &t, next);
-            if let Some(g) = case.guard {
-                self.cond(g, next, false);
-            }
-            self.finish(case.body, mode);
-            self.code.locals_release(mark);
-            if let Mode::Value(want) = mode {
-                self.goto(done);
-                if *want != ErasedType::V {
-                    self.code.pop();
-                }
-            }
-            self.code.bind(next);
-        }
-        self.match_error(slot, &t);
-        self.m.vc_slots.truncate(vc_slots);
-        if let Mode::Value(want) = mode {
-            if *want != ErasedType::V {
-                let vt = self.vt(want);
-                self.code.push(vt);
-            }
-            self.code.bind(done);
-        }
-        self.code.locals_release(outer);
-    }
-
-    /// Tests the value in `slot` against the pattern and binds its variables; jumps to `fail`
-    /// when it does not match.
-    pub fn pattern(&mut self, pat: TPatId, slot: u16, ty: &ErasedType, fail: Label) {
-        let cx = self.cx;
-        let prog = cx.input.prog;
-        match prog.pats[pat.idx()] {
-            TPat::Wildcard => {}
-            TPat::Bind(sym, inner) => {
-                if let Some(i) = inner {
-                    self.pattern(i, slot, ty, fail);
-                }
-                self.load(slot, ty);
-                let declared = self.adapt_to_sym(ty, sym);
-                let cell = self.m.cells.contains(&sym);
-                self.declare_local(sym, declared, cell);
-            }
-            TPat::Test(test, tested, inner) => {
-                let (slot, ty) = self.boxed_slot(slot, ty);
-                // `case Array(a, b)` takes an array of any kind, as scalac's `isArray(x, 1)` does.
-                let tested = (!matches!(prog.pats[inner.idx()], TPat::Seq(..))).then_some(tested);
-                self.test(test, slot, &ty, tested, fail, false);
-                self.pattern(inner, slot, &ty, fail);
-            }
-            TPat::Equals(e, strict) => {
-                let et = self.static_type(e);
-                if strict && ty.is_ref() && et.is_ref() && !et.is_string() && !ty.is_string() {
-                    // `case _: x.type`: the identity of a reference; `null` tested alone, as
-                    // `Gen::write_compare` tests it.
-                    if let TExpr::Null = prog.expr(e) {
-                        // The test at the pattern's line, which the null's load marked.
-                        self.mark_line(e);
-                        self.load(slot, ty);
-                        return self.jump_if(op::IFNONNULL, 1, fail);
-                    }
-                    self.expr(e, &et);
-                    self.load(slot, ty);
-                    return self.jump_if(op::IF_ACMPNE, 2, fail);
-                }
-                // A value class's underlying value compares as its box (`pattern == scrutinee`,
-                // dotty's `EqualTest`, `PatternMatcher.scala` 811-812, the operand boxed by erasure).
-                let vc_slot = self.m.vc_slots.iter().any(|&(s, _)| s == slot);
-                // So does a value class's instance as the pattern, against a primitive too (`1 match
-                // { case `key` => }` for a `key: V` is `key == 1`, `V`'s box unequal to the number).
-                let vc_pattern = self.recorded_type(e).and_then(|rt| self.value_class_of(rt)).is_some();
-                if !ty.is_ref() && !vc_slot && !vc_pattern {
-                    let et = self.static_type(e);
-                    if !et.is_ref() && et != ErasedType::V {
-                        use crate::typer::prims::*;
-                        let k = match (ty.numeric_rank(), et.numeric_rank()) {
-                            (Some(a), Some(b)) if a.max(b) == R_DOUBLE => ErasedType::D,
-                            (Some(a), Some(b)) if a.max(b) == R_FLOAT => ErasedType::F,
-                            (Some(a), Some(b)) if a.max(b) == R_LONG => ErasedType::J,
-                            _ => ErasedType::I,
-                        };
-                        self.load(slot, ty);
-                        self.adapt(ty, &k);
-                        self.expr(e, &k);
-                        let cmp = match k {
-                            ErasedType::J => Some(op::LCMP),
-                            ErasedType::F => Some(op::FCMPL),
-                            ErasedType::D => Some(op::DCMPL),
-                            _ => None,
-                        };
-                        match cmp {
-                            Some(cmp) => {
-                                self.code.op(cmp);
-                                self.code.popn(2);
-                                self.code.push(VT::Int);
-                                self.jump_if(op::IFNE, 1, fail);
-                            }
-                            None => self.jump_if(op::IF_ICMPNE, 2, fail),
-                        }
-                        return;
-                    }
-                }
-                let object = ErasedType::object();
-                self.expr(e, &object);
-                self.load_slot_as(slot, ty, &object);
-                self.helper_call("equal", 2);
-                self.jump_if(op::IFEQ, 1, fail);
-            }
-            TPat::Class(c, _, fields, subs) => {
-                // A value class's pattern on its underlying value, which the typer let through as
-                // the class itself: no test, and its one field is the value.
-                if cx.input.syms.class(c).value_class {
-                    let u = self.vc_underlying(c);
-                    let held = if self.is_vc_mark(&u) { self.is_vc_mark(ty) } else { *ty == u };
-                    if held {
-                        let subs = &prog.pat_lists[subs.range()];
-                        if let Some(&sub) = subs.first() {
-                            // The field's pattern matches the field, the slot's value as itself, not
-                            // the class it is the underlying value of: dotty extracts `x1._1` before
-                            // testing it (`matchArgsPlan`, `PatternMatcher.scala` 253-262, 411-414), so
-                            // `case C(`key`)` compares the `Int` (811-812).
-                            let outer = self.m.vc_slots.clone();
-                            self.m.vc_slots.retain(|&(s, _)| s != slot);
-                            self.pattern(sub, slot, ty, fail);
-                            self.m.vc_slots = outer;
-                        }
-                        return;
-                    }
-                }
-                if !ty.is_ref() {
-                    return self.goto(fail);
-                }
-                // No instance of a class the program never makes, unless another module may.
-                if !cx.input.reach.classes[c.idx()] && !cx.linked_class(c) && !cx.input.open_world {
-                    return self.goto(fail);
-                }
-                let name = self.class_name(c);
-                self.load(slot, ty);
-                self.instance_of(&name);
-                self.jump_if(op::IFEQ, 1, fail);
-                let fields = prog.sym_list(fields);
-                let subs = &prog.pat_lists[subs.range()];
-                if subs.iter().all(|&s| matches!(prog.pats[s.idx()], TPat::Wildcard)) {
-                    return;
-                }
-                let class_type = ErasedType::L(name.clone());
-                self.load(slot, ty);
-                if *ty != class_type {
-                    self.checkcast(&name);
-                }
-                let cslot = self.store_new(&class_type);
-                for (&field, &sub) in fields.iter().zip(subs) {
-                    if matches!(prog.pats[sub.idx()], TPat::Wildcard) {
-                        continue;
-                    }
-                    let m = self.mref(field);
-                    self.load(cslot, &class_type);
-                    self.invoke_mref(&m);
-                    let ft = m.ret.clone();
-                    let fslot = self.store_new(&ft);
-                    self.pattern(sub, fslot, &ft, fail);
-                }
-            }
-            TPat::Unapply(sym, call, inner) => {
-                self.load(slot, ty);
-                let declared = self.adapt_to_sym(ty, sym);
-                let cell = self.m.cells.contains(&sym);
-                self.declare_local(sym, declared, cell);
-                let result = self.static_type(call);
-                self.expr(call, &result);
-                let rslot = self.store_new(&result);
-                self.pattern(inner, rslot, &result, fail);
-            }
-            TPat::Alt(alts) => {
-                let alts = &prog.pat_lists[alts.range()];
-                let matched = self.code.new_label();
-                let mark = self.code.locals_mark();
-                for (i, &alt) in alts.iter().enumerate() {
-                    if i + 1 == alts.len() {
-                        self.pattern(alt, slot, ty, fail);
-                        self.code.locals_release(mark);
-                    } else {
-                        let next = self.code.new_label();
-                        self.pattern(alt, slot, ty, next);
-                        self.code.locals_release(mark);
-                        self.goto(matched);
-                        self.code.bind(next);
-                    }
-                }
-                self.code.bind(matched);
-            }
-            TPat::Seq(items, rest) => {
-                let items = &prog.pat_lists[items.range()];
-                let object = ErasedType::object();
-                let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
-                self.load(slot, ty);
-                self.adapt(ty, &object);
-                self.iconst(items.len() as i32);
-                self.iconst(rest.is_some() as i32);
-                let parts_type = self.helper_call("seqPattern", 3);
-                self.adapt(&parts_type, &array);
-                let parts = self.store_new(&array);
-                self.load(parts, &array);
-                self.array_length(&array);
-                self.jump_if(op::IFEQ, 1, fail);
-                for (i, &sub) in items.iter().chain(rest.iter()).enumerate() {
-                    if matches!(prog.pats[sub.idx()], TPat::Wildcard) {
-                        continue;
-                    }
-                    self.load(parts, &array);
-                    self.iconst(i as i32 + 1);
-                    self.array_load(&array);
-                    let eslot = self.store_new(&object);
-                    self.pattern(sub, eslot, &object, fail);
-                }
-            }
-        }
-    }
-
-    /// A primitive scrutinee is boxed for the tests that look at its class.
-    fn boxed_slot(&mut self, slot: u16, ty: &ErasedType) -> (u16, ErasedType) {
-        if ty.is_ref() {
-            return (slot, ty.clone());
-        }
-        let object = ErasedType::object();
-        self.load_slot_as(slot, ty, &object);
-        (self.store_new(&object), object)
-    }
-
-    /// Loads the value of `slot`, of type `ty`, as `want`: a value class's underlying value a
-    /// match holds (`vc_slots`) as its box.
-    pub fn load_slot_as(&mut self, slot: u16, ty: &ErasedType, want: &ErasedType) {
-        self.load(slot, ty);
-        match self.m.vc_slots.iter().rev().find(|&&(s, _)| s == slot) {
-            Some(&(_, c)) if want.is_ref() => {
-                self.vc_box(c, ty);
-                let boxed = self.class_type(c);
-                self.adapt(&boxed, want);
-            }
-            _ => self.adapt(ty, want),
-        }
-    }
-
     /// The two members of the tested type where it is a union (`inter`: an intersection) by its form
     /// (`Gen::tested_form`); the type itself for both sides otherwise.
     fn tested_members(&mut self, tested: Option<crate::types::TypeId>, inter: bool) -> (Option<crate::types::TypeId>, Option<crate::types::TypeId>) {
@@ -286,14 +24,11 @@ impl<'a> Gen<'a> {
     }
 
     /// The tests and the bindings of a pattern definition's pattern over the value in `slot`,
-    /// leaving through `fail`: as the lowering makes them (`Gen::lower_pattern`), the slot read as a
-    /// temporary and `fail` the end of a labelled block, where the pattern is lowered. Transitional:
+    /// leaving through `fail`, as the lowering makes them (`Gen::lower_pattern`), the slot read as a
+    /// temporary and `fail` the end of a labelled block. Transitional:
     /// the failure stands before the tests (`Gen::block_statements`), which no labelled block
     /// says; it ends when the failure follows the tests, a change of the class files of its own.
     pub(super) fn definition_pattern(&mut self, pat: TPatId, slot: u16, ty: &ErasedType, fail: Label) {
-        if self.pattern_lowers(pat).is_err() {
-            return self.pattern(pat, slot, ty, fail);
-        }
         let temp = self.lir.temp();
         self.m.temps.insert(temp, slot);
         let label = self.lir.label();
@@ -308,87 +43,18 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Whether a type test is lowered (`Gen::lower_test_on`), read by the lowering and by
-    /// `Gen::test`: not a test of null or of its absence, which compares with the constant in
-    /// another form (`ifnull`) than a comparison of the program (`Gen::write_compare`), nor an
-    /// outer test, whose temporary stays held to the end of a pattern's case; nor a connective
-    /// over one. Each waits for a change of the class files of its own.
-    pub(super) fn test_lowers(&self, test: TestId) -> Result<(), Unlowered> {
-        match self.cx.input.prog.tests[test.idx()] {
-            TypeTest::Null => Err(Unlowered::TestNull),
-            TypeTest::AnyRef | TypeTest::AnyVal => Err(Unlowered::TestAnyRefOrAnyVal),
-            TypeTest::Outer(..) => Err(Unlowered::TestOuter),
-            TypeTest::Or(a, b) | TypeTest::And(a, b) => self.test_lowers(a).and_then(|()| self.test_lowers(b)),
-            TypeTest::Proven(inner, _) => self.test_lowers(inner),
-            TypeTest::Always | TypeTest::Class(_) | TypeTest::Trait(_) | TypeTest::Number | TypeTest::Int | TypeTest::Array | TypeTest::Long
-            | TypeTest::Byte | TypeTest::Short | TypeTest::Float | TypeTest::Str | TypeTest::Char | TypeTest::Bool | TypeTest::Unit
-            | TypeTest::Function(_) | TypeTest::Value(_) => Ok(()),
-        }
-    }
-
-    /// Jumps to `target` when the test of the reference in `slot` comes out as `jump_if`: a test
-    /// that is lowered as the lowering makes it, the slot read as a temporary of the lowering.
+    /// Jumps to `target` when the test of the reference in `slot` comes out as `jump_if`: the
+    /// test as the lowering makes it (`Gen::lower_test_on`), the slot read as a temporary of the
+    /// lowering.
     pub fn test(&mut self, test: TestId, slot: u16, ty: &ErasedType, tested: Option<crate::types::TypeId>, target: Label, jump_if: bool) {
-        if self.test_lowers(test).is_ok() {
-            let temp = self.lir.temp();
-            self.m.temps.insert(temp, slot);
-            let passes = self.lowering(|g| g.lower_test_on(temp, ty, test, tested));
-            return self.write_cond(passes, target, jump_if);
-        }
-        match self.cx.input.prog.tests[test.idx()] {
-            TypeTest::Proven(inner, _) => self.test(inner, slot, ty, tested, target, jump_if),
-            TypeTest::Null => {
-                self.load(slot, ty);
-                self.jump_if(if jump_if { op::IFNULL } else { op::IFNONNULL }, 1, target);
-            }
-            // Every value is boxed to an object where it is tested; `AnyVal` erases to `Object`,
-            // so scalac's test takes every value but `null`.
-            TypeTest::AnyRef | TypeTest::AnyVal => {
-                self.load(slot, ty);
-                self.jump_if(if jump_if { op::IFNONNULL } else { op::IFNULL }, 1, target);
-            }
-            // The members' tests as `Gen::lower_test_on` says.
-            TypeTest::Or(a, b) => {
-                let (ta, tb) = self.tested_members(tested, false);
-                if jump_if {
-                    self.test(a, slot, ty, ta, target, true);
-                    self.test(b, slot, ty, tb, target, true);
-                } else {
-                    let yes = self.code.new_label();
-                    self.test(a, slot, ty, ta, yes, true);
-                    self.test(b, slot, ty, tb, target, false);
-                    self.code.bind(yes);
-                }
-            }
-            TypeTest::And(a, b) => {
-                let (ta, tb) = self.tested_members(tested, true);
-                if jump_if {
-                    let no = self.code.new_label();
-                    self.test(a, slot, ty, ta, no, false);
-                    self.test(b, slot, ty, tb, target, true);
-                    self.code.bind(no);
-                } else {
-                    self.test(a, slot, ty, ta, target, false);
-                    self.test(b, slot, ty, tb, target, false);
-                }
-            }
-            // The enclosing instance, read through the outer accessor of the instance's class
-            // (which a test before this one established), is tested in its own slot.
-            TypeTest::Outer(accessor, inner) => {
-                let m = self.mref(accessor);
-                self.load(slot, ty);
-                self.checkcast(&m.owner);
-                self.invoke_mref(&m);
-                let outer_ty = m.ret.clone();
-                let outer = self.store_new(&outer_ty);
-                self.test(inner, outer, &outer_ty, None, target, jump_if);
-            }
-            _ => unreachable!("lowered (`Gen::lower_test_on`)"),
-        }
+        let temp = self.lir.temp();
+        self.m.temps.insert(temp, slot);
+        let passes = self.lowering(|g| g.lower_test_on(temp, ty, test, tested));
+        self.write_cond(passes, target, jump_if)
     }
 
     /// The condition that the reference in `temp`, of the type `ty`, passes the test `test` of the
-    /// type `tested`, a test that is lowered (`Gen::test_lowers`).
+    /// type `tested`.
     pub(super) fn lower_test_on(&mut self, temp: TempId, ty: &ErasedType, test: TestId, tested: Option<crate::types::TypeId>) -> LirId {
         let cx = self.cx;
         let prog = cx.input.prog;
@@ -458,7 +124,25 @@ impl<'a> Gen<'a> {
                 let right = self.lower_test_on(temp, ty, b, tb);
                 return self.lir.push(if and { Kind::And(left, right) } else { Kind::Or(left, right) }, ErasedType::Z);
             }
-            TypeTest::Null | TypeTest::AnyRef | TypeTest::AnyVal | TypeTest::Outer(..) => unreachable!("written by `Gen::test` (`Gen::test_lowers`)"),
+            TypeTest::Null => return self.lower_null_test(temp, ty, Relation::Eq),
+            // Every value is boxed to an object where it is tested; `AnyVal` erases to `Object`,
+            // so scalac's test takes every value but `null`.
+            TypeTest::AnyRef | TypeTest::AnyVal => return self.lower_null_test(temp, ty, Relation::Ne),
+            // The enclosing instance, read through the outer accessor of the instance's class
+            // (which a test before this one established), is tested in a temporary of its own.
+            TypeTest::Outer(accessor, inner) => {
+                let m = self.mref(accessor);
+                let value = self.lir.push(Kind::Temp(temp), ty.clone());
+                let instance = self.lir.push(Kind::Cast { value, op: crate::lir::Cast::Checked }, ErasedType::L(m.owner.clone()));
+                let args = self.lir.list(&[]);
+                let outer_ty = m.ret.clone();
+                let read = self.lir.push(Kind::Call { method: m, at: None, receiver: instance, args, order: None }, outer_ty.clone());
+                let outer = self.lir.temp();
+                let held = self.lir.push(Kind::Let { temp: outer, init: read }, ErasedType::V);
+                let result = self.lower_test_on(outer, &outer_ty, inner, None);
+                let stmts = self.lir.list(&[held]);
+                return self.lir.push(Kind::Block { stmts, result }, ErasedType::Z);
+            }
         };
         let value = self.lir.push(Kind::Temp(temp), ty.clone());
         self.lir.push(Kind::Is { value, class }, ErasedType::Z)
@@ -468,6 +152,13 @@ impl<'a> Gen<'a> {
     fn lower_temp(&mut self, temp: TempId, ty: &ErasedType, want: &ErasedType) -> LirId {
         let value = self.lir.push(Kind::Temp(temp), ty.clone());
         self.lower_adapt(value, ty, want)
+    }
+
+    /// Whether the reference in `temp` is null (`Relation::Eq`) or not (`Ne`).
+    fn lower_null_test(&mut self, temp: TempId, ty: &ErasedType, relation: Relation) -> LirId {
+        let value = self.lir.push(Kind::Temp(temp), ty.clone());
+        let null = self.lir.push(Kind::Null, ErasedType::object());
+        self.lir.push(Kind::Compare { relation, how: Comparing::Identity, left: value, right: null }, ErasedType::Z)
     }
 
     /// A static test of the runtime's class `owner`, its result a boolean.
@@ -498,41 +189,6 @@ impl<'a> Gen<'a> {
         let ret = method.ret.clone();
         let args = self.lir.list(values);
         self.lir.push(Kind::Helper { method, args }, ret)
-    }
-
-    /// Whether a match is lowered (`Gen::lower_match`), read by the lowering and by the
-    /// generator of the typed IR: each of its patterns is (`Gen::pattern_lowers`), and its
-    /// scrutinee is not a value class's underlying value of another erasure than the class's (an
-    /// intersection of two value classes), which `Gen::match_` boxes as the class all the same.
-    pub(super) fn match_lowers(&mut self, scrut: TExprId, cases: ListRef) -> Result<(), Unlowered> {
-        let prog = self.cx.input.prog;
-        prog.cases[cases.range()].iter().try_for_each(|case| self.pattern_lowers(case.pat))?;
-        let t = self.static_type(scrut);
-        if t.is_ref() || t == ErasedType::V {
-            return Ok(());
-        }
-        match self.expr_value_class(scrut) {
-            Some((c, args)) if self.vc_erasure(c, args) != t => Err(Unlowered::MatchValueClassIntersection),
-            Some(_) | None => Ok(()),
-        }
-    }
-
-    /// Whether a pattern is lowered (`Gen::lower_pattern`): not `null`, a sequence's pattern or
-    /// a type test that is not (`Gen::test_lowers`), whose comparisons with `null` and zero and
-    /// whose outer test's temporary wait for a change of the class files.
-    pub(super) fn pattern_lowers(&self, pat: TPatId) -> Result<(), Unlowered> {
-        let prog = self.cx.input.prog;
-        match prog.pats[pat.idx()] {
-            TPat::Wildcard => Ok(()),
-            TPat::Bind(_, inner) => inner.map_or(Ok(()), |i| self.pattern_lowers(i)),
-            TPat::Test(test, _, inner) => self.test_lowers(test).and_then(|()| self.pattern_lowers(inner)),
-            TPat::Equals(e, _) if matches!(prog.expr(e), TExpr::Null) => Err(Unlowered::PatternNull),
-            TPat::Equals(..) => Ok(()),
-            TPat::Class(_, _, _, subs) => prog.pat_lists[subs.range()].iter().try_for_each(|&s| self.pattern_lowers(s)),
-            TPat::Unapply(_, _, inner) => self.pattern_lowers(inner),
-            TPat::Alt(alts) => prog.pat_lists[alts.range()].iter().try_for_each(|&a| self.pattern_lowers(a)),
-            TPat::Seq(..) => Err(Unlowered::PatternSequence),
-        }
     }
 
     /// `scrut match { cases }` at the type `want`, or in return position where there is none:
@@ -603,7 +259,7 @@ impl<'a> Gen<'a> {
 
     /// A `try`'s cases at the type `want` over the exception it caught; after the last, the
     /// exception thrown again.
-    pub(super) fn lower_catch(&mut self, cases: ListRef, want: &ErasedType) -> Cases {
+    pub(super) fn lower_catch(&mut self, cases: ListRef, want: &ErasedType) -> Catch {
         let throwable = ErasedType::L(Rc::from(THROWABLE));
         let caught = self.lir.temp();
         let done = self.lir.label();
@@ -612,7 +268,7 @@ impl<'a> Gen<'a> {
         let result = self.lir.push(Kind::Throw(exception), ErasedType::V);
         let stmts = self.lir.list(&nodes);
         let cases = self.lir.push(Kind::Block { stmts, result }, ErasedType::V);
-        Cases::Lowered { caught, done, cases }
+        Catch { caught, done, cases }
     }
 
     /// `MatchError` of the scrutinee in `temp` thrown, at the type `want`.
@@ -632,8 +288,294 @@ impl<'a> Gen<'a> {
     fn lower_temp_as(&mut self, temp: TempId, ty: &ErasedType, want: &ErasedType) -> LirId {
         let value = self.lir.push(Kind::Temp(temp), ty.clone());
         match self.vc_temps.get(&temp) {
-            Some(&(class, args)) if want.is_ref() => self.lir.push(Kind::ValueClass { value, from: ty.clone(), class, args, null_safe: false }, want.clone()),
+            Some(&(class, args)) if want.is_ref() => self.lower_value_class(value, ty, class, args, false, want, None),
             _ => self.lower_adapt(value, ty, want),
+        }
+    }
+
+    /// A pattern definition `Gen::lowered_tuple_definition` takes, as scalac writes it (dotty's
+    /// `makePatDef`, `MatchableTuple`, `Desugar.scala` 1568-1605 and 1622-1671 at 3.8.4, `val $1 =
+    /// init match { case $t @ (x1, .., xn) => $t }` then `val xi = $1._i`): `val $1`'s slot first, the scrutinee
+    /// held, a labelled block left where it is null, each element read into the pattern's own
+    /// binder, the scrutinee the value of the labelled match, its `MatchError` after; then `$1`,
+    /// and each variable read from it.
+    pub(super) fn lower_tuple_definition(&mut self, pat: TPatId, init: TExprId, nodes: &mut Vec<LirId>) {
+        let cx = self.cx;
+        let prog = cx.input.prog;
+        let TPat::Class(c, ct, _, subs) = prog.pats[pat.idx()] else { unreachable!("a tuple of variables (`Gen::lowered_tuple_definition`)") };
+        let subs = prog.pat_lists[subs.range()].to_vec();
+        let name = self.class_name(c);
+        let tuple = ErasedType::L(name.clone());
+        let elems = self.tuple_definition_elements(ct);
+        let held = self.lir.temp();
+        nodes.push(self.lir.push(Kind::Reserve { temp: held, ty: tuple.clone() }, ErasedType::V));
+        let value = self.lower_expr(init, &tuple);
+        let x1 = self.lir.temp();
+        nodes.push(self.lir.push(Kind::Let { temp: x1, init: value }, ErasedType::V));
+        let fail = self.lir.label();
+        let done = self.lir.label();
+        let mut tests = Vec::new();
+        let scrutinee = self.lir.push(Kind::Temp(x1), tuple.clone());
+        let null = self.lir.push(Kind::Null, ErasedType::object());
+        let there = self.lir.compare(Relation::Ne, Comparing::Identity, scrutinee, null);
+        self.lower_fail_unless(there, fail, &mut tests);
+        for (i, &sub) in subs.iter().enumerate() {
+            match prog.pats[sub.idx()] {
+                TPat::Wildcard => {}
+                TPat::Bind(sym, None) => {
+                    let read = self.lower_tuple_element(x1, &name, &elems, i, Some(sym));
+                    let binder = self.lir.temp();
+                    tests.push(self.lir.push(Kind::Let { temp: binder, init: read }, ErasedType::V));
+                }
+                _ => {
+                    // A typed element: held, tested, then its variable.
+                    let Some((test, tested, sym)) = super::gen::typed_element(prog, sub) else { unreachable!("a typed element (`Gen::lowered_tuple_definition`)") };
+                    let read = self.lower_tuple_element(x1, &name, &elems, i, None);
+                    let element = self.lir.temp();
+                    tests.push(self.lir.push(Kind::Let { temp: element, init: read }, ErasedType::V));
+                    // None where its type proves it, else the test as `Gen::test` writes it
+                    // (`AnyVal`: that it is not null, as the scrutinee's).
+                    match prog.tests[test.idx()] {
+                        TypeTest::Always => {}
+                        TypeTest::AnyVal => {
+                            let value = self.lir.push(Kind::Temp(element), elems[i].clone());
+                            let null = self.lir.push(Kind::Null, ErasedType::object());
+                            let there = self.lir.compare(Relation::Ne, Comparing::Identity, value, null);
+                            self.lower_fail_unless(there, fail, &mut tests);
+                        }
+                        _ => {
+                            let passes = self.lower_test_on(element, &elems[i], test, Some(tested));
+                            self.lower_fail_unless(passes, fail, &mut tests);
+                        }
+                    }
+                    if let Some(sym) = sym {
+                        let value = self.lir.push(Kind::Temp(element), elems[i].clone());
+                        let init = self.lower_to_sym(value, &elems[i], sym).0;
+                        let binder = self.lir.temp();
+                        tests.push(self.lir.push(Kind::Let { temp: binder, init }, ErasedType::V));
+                    }
+                }
+            }
+        }
+        let bound = self.lir.temp();
+        let whole = self.lir.push(Kind::Temp(x1), tuple.clone());
+        tests.push(self.lir.push(Kind::Let { temp: bound, init: whole }, ErasedType::V));
+        let yielded = self.lir.push(Kind::Temp(bound), tuple.clone());
+        let leave = self.lir.push(Kind::Break { label: done, value: Some(yielded) }, ErasedType::V);
+        let stmts = self.lir.list(&tests);
+        let body = self.lir.push(Kind::Block { stmts, result: leave }, ErasedType::V);
+        let tested = self.lir.push(Kind::Labeled { label: fail, body }, ErasedType::V);
+        let failure = self.lower_match_error(x1, &tuple, &tuple);
+        let stmts = self.lir.list(&[tested]);
+        let body = self.lir.push(Kind::Block { stmts, result: failure }, tuple.clone());
+        let matched = self.lir.push(Kind::Labeled { label: done, body }, tuple.clone());
+        nodes.push(self.lir.push(Kind::Let { temp: held, init: matched }, ErasedType::V));
+        for (i, &sub) in subs.iter().enumerate() {
+            let Some(sym) = super::gen::tuple_variable(prog, sub) else { continue };
+            let read = self.lower_tuple_element(held, &name, &elems, i, Some(sym));
+            let declared = self.lir.ty(read).clone();
+            self.lower_declare(sym, read, declared, nodes);
+        }
+    }
+
+    /// A pattern definition of the general match `Gen::lowered_variables_definition` takes, as scalac
+    /// writes it (dotty's `makePatDef`, `None`, `Desugar.scala` 1590-1671 at 3.8.4): the scrutinee
+    /// held, a labelled block left where the pattern does not match (`Gen::lower_pattern`, binding
+    /// the variables), its value the case's, its `MatchError` after. Without a variable the match
+    /// alone; with one, `val x` is the match, its slot taken first (`Kind::LocalAt`); with more, `val $1` is the tuple
+    /// of the variables (`specialised_tuple`'s class, else `TupleN$.apply`), its slot taken first,
+    /// and each variable is read from it. A for-comprehension's alias (`alias`) is the general match
+    /// over `x$1 @ pat` (`makeFor`'s `makeIdPat`, `Desugar.scala` 2214 at 3.8.4): its first element
+    /// the scrutinee itself, read back into a temporary of its own (dotty's `x$1`, which teq's pack
+    /// does not read).
+    pub(super) fn lower_variables_definition(&mut self, pat: TPatId, init: TExprId, alias: bool, nodes: &mut Vec<LirId>) {
+        let vars = self.definition_variables(pat).expect("the variables `Gen::lowered_variables_definition` took");
+        let parts: Vec<Option<SymId>> = alias.then_some(None).into_iter().chain(vars.iter().map(|&v| Some(v))).collect();
+        let n = parts.len();
+        let right = self.static_type(init);
+        // A Unit right side is matched as its box.
+        let t = if right == ErasedType::V { ErasedType::L(Rc::from(BOXED_UNIT)) } else { right.clone() };
+        let elems: Vec<ErasedType> = parts.iter().map(|p| p.map_or_else(|| t.clone(), |v| self.sym_type(v))).collect();
+        let ty = match n {
+            0 => ErasedType::V,
+            1 => elems[0].clone(),
+            _ => Self::made_tuple_type(&elems),
+        };
+        let held = self.lir.temp();
+        if n > 0 {
+            nodes.push(self.lir.push(Kind::Reserve { temp: held, ty: ty.clone() }, ErasedType::V));
+        }
+        let value = self.lower_expr(init, &right);
+        let value = if right == ErasedType::V { self.lower_adapt(value, &right, &t) } else { value };
+        let x1 = self.lir.temp();
+        nodes.push(self.lir.push(Kind::Let { temp: x1, init: value }, ErasedType::V));
+        let fail = self.lir.label();
+        let done = self.lir.label();
+        let mut tests = Vec::new();
+        self.lower_pattern(pat, x1, &t, fail, &mut tests);
+        let mut reads: Vec<LirId> = Vec::with_capacity(n);
+        for (p, e) in parts.iter().zip(&elems) {
+            reads.push(match p {
+                Some(v) => self.lir.push(Kind::Local(*v), e.clone()),
+                None => self.lir.push(Kind::Temp(x1), e.clone()),
+            });
+        }
+        let yielded = match n {
+            0 => None,
+            1 => Some(reads[0]),
+            _ => Some(self.lower_made_tuple(&reads, &elems)),
+        };
+        let leave = self.lir.push(Kind::Break { label: done, value: yielded }, ErasedType::V);
+        let stmts = self.lir.list(&tests);
+        let body = self.lir.push(Kind::Block { stmts, result: leave }, ErasedType::V);
+        let tested = self.lir.push(Kind::Labeled { label: fail, body }, ErasedType::V);
+        let failure = self.lower_match_error(x1, &t, &ty);
+        let stmts = self.lir.list(&[tested]);
+        let body = self.lir.push(Kind::Block { stmts, result: failure }, ty.clone());
+        let matched = self.lir.push(Kind::Labeled { label: done, body }, ty.clone());
+        match n {
+            0 => nodes.push(matched),
+            1 => {
+                nodes.push(self.lir.push(Kind::Let { temp: held, init: matched }, ErasedType::V));
+                if let Some(v) = parts[0] {
+                    self.lower_declared.insert(v, (elems[0].clone(), false));
+                    nodes.push(self.lir.push(Kind::LocalAt { sym: v, temp: held, ty: elems[0].clone() }, ErasedType::V));
+                }
+            }
+            _ => {
+                nodes.push(self.lir.push(Kind::Let { temp: held, init: matched }, ErasedType::V));
+                let owner: Rc<str> = Rc::from(format!("scala/Tuple{n}"));
+                for (i, p) in parts.iter().enumerate() {
+                    let read = self.lower_tuple_element(held, &owner, &elems, i, *p);
+                    match *p {
+                        Some(v) => {
+                            self.lower_declared.insert(v, (elems[i].clone(), false));
+                            nodes.push(self.lir.push(Kind::Val { sym: v, init: read, cell: None }, ErasedType::V));
+                        }
+                        None => {
+                            let binder = self.lir.temp();
+                            nodes.push(self.lir.push(Kind::Let { temp: binder, init: read }, ErasedType::V));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A pattern definition of a tuple of variables past 22 (`MatchableTuple` over a `TupleXXL`), as scalac writes it:
+    /// `val $1`'s slot first, the scrutinee held, the pattern's tests and bindings (`Gen::lower_pattern`: the class,
+    /// `TupleXXL.unapplySeq`, the sequence's length and elements), the scrutinee the match's value, its `MatchError`
+    /// after; then each variable `$1.apply(i)` (`Desugar.scala` 1650-1654 at 3.8.4), which `Tuple.apply`'s inline
+    /// expansion makes `$1` copied into a temporary and `productElement(i)` of it.
+    pub(super) fn lower_xxl_definition(&mut self, pat: TPatId, init: TExprId, nodes: &mut Vec<LirId>) {
+        let prog = self.cx.input.prog;
+        let items = self.xxl_definition_items(pat).expect("a tuple pattern past 22 (`Gen::xxl_definition_items`)");
+        let t = self.static_type(init);
+        let held = self.lir.temp();
+        nodes.push(self.lir.push(Kind::Reserve { temp: held, ty: t.clone() }, ErasedType::V));
+        let value = self.lower_expr(init, &t);
+        let x1 = self.lir.temp();
+        nodes.push(self.lir.push(Kind::Let { temp: x1, init: value }, ErasedType::V));
+        let fail = self.lir.label();
+        let done = self.lir.label();
+        let mut tests = Vec::new();
+        self.lower_pattern(pat, x1, &t, fail, &mut tests);
+        let bound = self.lir.temp();
+        let whole = self.lir.push(Kind::Temp(x1), t.clone());
+        tests.push(self.lir.push(Kind::Let { temp: bound, init: whole }, ErasedType::V));
+        let yielded = self.lir.push(Kind::Temp(bound), t.clone());
+        let leave = self.lir.push(Kind::Break { label: done, value: Some(yielded) }, ErasedType::V);
+        let stmts = self.lir.list(&tests);
+        let body = self.lir.push(Kind::Block { stmts, result: leave }, ErasedType::V);
+        let tested = self.lir.push(Kind::Labeled { label: fail, body }, ErasedType::V);
+        let failure = self.lower_match_error(x1, &t, &t);
+        let stmts = self.lir.list(&[tested]);
+        let body = self.lir.push(Kind::Block { stmts, result: failure }, t.clone());
+        let matched = self.lir.push(Kind::Labeled { label: done, body }, t.clone());
+        nodes.push(self.lir.push(Kind::Let { temp: held, init: matched }, ErasedType::V));
+        let owner: Rc<str> = Rc::from("scala/runtime/TupleXXL");
+        let xxl = ErasedType::L(owner.clone());
+        let object = ErasedType::object();
+        let method = Rc::new(MethodRef { owner, owner_is_interface: false, name: "productElement".to_string(), params: vec![ErasedType::I], ret: object.clone(), desc: method_desc(&[ErasedType::I], &object), kind: Invoke::Virtual });
+        for (i, &item) in items.iter().enumerate() {
+            let Some(sym) = super::gen::tuple_variable(prog, item) else { continue };
+            let whole = self.lir.push(Kind::Temp(held), t.clone());
+            let whole = self.lower_adapt(whole, &t, &xxl);
+            let copy = self.lir.temp();
+            nodes.push(self.lir.push(Kind::Let { temp: copy, init: whole }, ErasedType::V));
+            let receiver = self.lir.push(Kind::Temp(copy), xxl.clone());
+            let index = self.lir.int(i as i32);
+            let read = self.lir.call(&method, receiver, &[index]);
+            let (init, declared) = self.lower_to_sym(read, &object, sym);
+            self.lower_declare(sym, init, declared, nodes);
+        }
+    }
+
+    /// A pattern definition of `makePatDef`'s `SimpleTuple` the typer left as a statement (a typed one, `val (c, d): T =
+    /// (e1, e2)`), as scalac writes it (`Desugar.scala` 1638-1662 at 3.8.4: no match, `val $1: T = rhs`, then
+    /// `val c = $1._1`, ...): `val $1`'s slot first, the right side at the tuple's class, each variable read from it.
+    pub(super) fn lower_simple_tuple_definition(&mut self, pat: TPatId, init: TExprId, nodes: &mut Vec<LirId>) {
+        let prog = self.cx.input.prog;
+        let TPat::Class(c, ct, _, subs) = prog.pats[pat.idx()] else { unreachable!("a tuple pattern (`Gen::lowered_simple_tuple_definition`)") };
+        let subs = prog.pat_lists[subs.range()].to_vec();
+        let name = self.class_name(c);
+        let tuple = ErasedType::L(name.clone());
+        let elems = self.tuple_definition_elements(ct);
+        let held = self.lir.temp();
+        nodes.push(self.lir.push(Kind::Reserve { temp: held, ty: tuple.clone() }, ErasedType::V));
+        let value = self.lower_expr(init, &tuple);
+        nodes.push(self.lir.push(Kind::Let { temp: held, init: value }, ErasedType::V));
+        for (i, &sub) in subs.iter().enumerate() {
+            let Some(sym) = super::gen::tuple_variable(prog, sub) else { continue };
+            let read = self.lower_tuple_element(held, &name, &elems, i, Some(sym));
+            let declared = self.lir.ty(read).clone();
+            self.lower_declare(sym, read, declared, nodes);
+        }
+    }
+
+    /// The tuple the general match makes of its variables, as `SpecializeTuples` leaves it:
+    /// `new Tuple2$mcII$sp(a, b)`-like where `specialised_tuple` names a class, else
+    /// `TupleN$.MODULE$.apply` of the variables as objects.
+    fn lower_made_tuple(&mut self, reads: &[LirId], elems: &[ErasedType]) -> LirId {
+        let made = Self::made_tuple_type(elems);
+        if let Some(class) = super::gen::specialised_tuple(elems) {
+            let owner: Rc<str> = Rc::from(class.as_str());
+            let params = elems.to_vec();
+            let desc = method_desc(&params, &ErasedType::V);
+            let ctor = Rc::new(MethodRef { owner, owner_is_interface: false, name: "<init>".to_string(), params, ret: ErasedType::V, desc, kind: Invoke::Special });
+            let args = self.lir.list(reads);
+            return self.lir.push(Kind::New { touch: None, ctor, args }, made);
+        }
+        let n = reads.len();
+        let object = ErasedType::object();
+        let module: Rc<str> = Rc::from(format!("scala/Tuple{n}$"));
+        let receiver = self.lir.push(Kind::Module(module.clone()), ErasedType::L(module.clone()));
+        let args: Vec<LirId> = reads.iter().zip(elems).map(|(&r, t)| self.lower_adapt(r, t, &object)).collect();
+        let params = vec![object; n];
+        let desc = method_desc(&params, &made);
+        let apply = Rc::new(MethodRef { owner: module, owner_is_interface: false, name: "apply".to_string(), params, ret: made, desc, kind: Invoke::Virtual });
+        self.lir.call(&apply, receiver, &args)
+    }
+
+    /// The class of the tuple `Gen::lower_made_tuple` makes of variables of the types `elems`.
+    fn made_tuple_type(elems: &[ErasedType]) -> ErasedType {
+        match super::gen::specialised_tuple(elems) {
+            Some(class) => ErasedType::L(Rc::from(class.as_str())),
+            None => ErasedType::L(Rc::from(format!("scala/Tuple{}", elems.len()))),
+        }
+    }
+
+    /// The element `i` of the tuple in `temp` as the variable `sym` takes it (as the element's type
+    /// without one), by the accessor `Gen::tuple_accessor` names.
+    fn lower_tuple_element(&mut self, temp: TempId, owner: &Rc<str>, elems: &[ErasedType], i: usize, sym: Option<SymId>) -> LirId {
+        let tuple = ErasedType::L(owner.clone());
+        let value = self.lir.push(Kind::Temp(temp), tuple);
+        let (accessor, t) = Self::tuple_accessor(elems, i);
+        let method = Rc::new(MethodRef { owner: owner.clone(), owner_is_interface: false, name: accessor, params: Vec::new(), ret: t.clone(), desc: method_desc(&[], &t), kind: Invoke::Virtual });
+        let read = self.lir.call(&method, value, &[]);
+        match sym {
+            Some(sym) => self.lower_to_sym(read, &t, sym).0,
+            None => self.lower_adapt(read, &t, &elems[i]),
         }
     }
 
@@ -677,9 +619,17 @@ impl<'a> Gen<'a> {
             TPat::Equals(e, strict) => {
                 let et = self.static_type(e);
                 if strict && ty.is_ref() && et.is_ref() && !et.is_string() && !ty.is_string() {
-                    // `case _: x.type`: the identity of a reference.
-                    let expected = self.lower_expr(e, &et);
+                    // `case _: x.type`: the identity of a reference; `case null`, the null constant's.
+                    let expected = match prog.expr(e) {
+                        TExpr::Null => self.lir.push(Kind::Null, ErasedType::object()),
+                        _ => self.lower_expr(e, &et),
+                    };
                     let value = self.lir.push(Kind::Temp(temp), ty.clone());
+                    // `case null`'s test stands at the pattern's line, which the null it drops would have marked
+                    // (`Gen::write_compare`): the scrutinee's load takes it.
+                    if let TExpr::Null = prog.expr(e) {
+                        self.lir.nodes[value.0 as usize].of = Some(e);
+                    }
                     let same = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Identity, left: expected, right: value }, ErasedType::Z);
                     return self.lower_fail_unless(same, fail, out);
                 }
@@ -801,21 +751,64 @@ impl<'a> Gen<'a> {
                 let body = self.lir.push(Kind::Block { stmts, result }, ErasedType::V);
                 out.push(self.lir.push(Kind::Labeled { label: matched, body }, ErasedType::V));
             }
-            TPat::Seq(..) => unreachable!("written by `Gen::pattern` (`Gen::pattern_lowers`)"),
+            // The runtime's `seqPattern` gives the elements the pattern names and the rest, behind
+            // a first element, or an empty array where the sequence does not fit.
+            TPat::Seq(items, rest) => {
+                let items = &prog.pat_lists[items.range()];
+                let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
+                let value = self.lir.push(Kind::Temp(temp), ty.clone());
+                let sequence = self.lower_adapt(value, ty, &object);
+                let count = self.lir.push(Kind::Int(items.len() as i32), ErasedType::I);
+                let has_rest = self.lir.push(Kind::Bool(rest.is_some()), ErasedType::Z);
+                let Some(&helper) = cx.helpers.defs.get("seqPattern") else {
+                    self.unsupported("the runtime helper seqPattern is missing");
+                    return out.push(self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V));
+                };
+                let method = self.mref(helper);
+                let ret = method.ret.clone();
+                let args = self.lir.list(&[sequence, count, has_rest]);
+                let parts = self.lir.push(Kind::Helper { method, args }, ret.clone());
+                let init = self.lower_adapt(parts, &ret, &array);
+                let parts = self.lir.temp();
+                out.push(self.lir.push(Kind::Let { temp: parts, init }, ErasedType::V));
+                let held = self.lir.push(Kind::Temp(parts), array.clone());
+                let length = self.lir.push(Kind::ArrayLength(held), ErasedType::I);
+                let zero = self.lir.push(Kind::Int(0), ErasedType::I);
+                let empty = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Sign, left: length, right: zero }, ErasedType::Z);
+                let leave = self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V);
+                out.push(self.lir.push(Kind::If { cond: empty, then: leave, otherwise: None }, ErasedType::V));
+                for (i, &sub) in items.iter().chain(rest.iter()).enumerate() {
+                    if matches!(prog.pats[sub.idx()], TPat::Wildcard) {
+                        continue;
+                    }
+                    let array_value = self.lir.push(Kind::Temp(parts), array.clone());
+                    let index = self.lir.push(Kind::Int(i as i32 + 1), ErasedType::I);
+                    let init = self.lir.push(Kind::ArrayLoad { array: array_value, index }, object.clone());
+                    let element = self.lir.temp();
+                    out.push(self.lir.push(Kind::Let { temp: element, init }, ErasedType::V));
+                    self.lower_pattern(sub, element, &object, fail, out);
+                }
+            }
         }
     }
 
     /// The pattern's variable `sym` declared with the value in `temp`, of the type `ty`: brought
     /// to the type declared for it, where that is a value class a generic value arriving as its
-    /// box (`Gen::adapt_to_sym`); in a cell where a closure assigns or shares it.
+    /// box (`Gen::lower_to_sym`); in a cell where a closure assigns or shares it.
     fn lower_bind(&mut self, sym: SymId, temp: TempId, ty: &ErasedType, out: &mut Vec<LirId>) {
-        let declared = self.sym_type(sym);
         let value = self.lir.push(Kind::Temp(temp), ty.clone());
-        let info = self.cx.input.syms.sym(sym);
-        let init = match info.sig.as_ref().and_then(|sig| self.value_class_type(sig.ret)) {
-            Some((class, args)) if !info.by_name => self.lir.push(Kind::ValueClass { value, from: ty.clone(), class, args, null_safe: true }, declared.clone()),
-            _ => self.lower_adapt(value, ty, &declared),
-        };
+        self.lower_define(sym, value, ty, out);
+    }
+
+    /// The variable `sym` declared with `value`, of the type `ty`, as `Gen::lower_bind` declares it.
+    fn lower_define(&mut self, sym: SymId, value: LirId, ty: &ErasedType, out: &mut Vec<LirId>) {
+        let (init, declared) = self.lower_to_sym(value, ty, sym);
+        self.lower_declare(sym, init, declared, out);
+    }
+
+    /// The variable `sym` declared with `init`, a value of its declared type `declared`: in a cell
+    /// where a closure assigns or shares it.
+    fn lower_declare(&mut self, sym: SymId, init: LirId, declared: ErasedType, out: &mut Vec<LirId>) {
         if !self.m.cells.contains(&sym) {
             self.lower_declared.insert(sym, (declared, false));
             return out.push(self.lir.push(Kind::Val { sym, init, cell: None }, ErasedType::V));

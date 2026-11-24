@@ -378,8 +378,27 @@ pub enum TStmt {
     Expr(TExprId),
     Val(SymId, TExprId),
     Fun(FunId),
-    /// Pattern definition; the bound variables stay visible in the enclosing block.
-    Pat(TPatId, TExprId),
+    /// Pattern definition; the bound variables stay visible in the enclosing block. The form is the branch of
+    /// dotty's `makePatDef` the typer took for it.
+    Pat(TPatId, TExprId, PatDefForm),
+}
+
+/// The branch of dotty's `makePatDef` (`Desugar.scala` 1505-1673 at 3.8.4) a pattern definition takes, as the typer
+/// reads the written pattern and right side (`Ast::patdef_tuple`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PatDefForm {
+    /// `IdPattern`: a variable alone, typed or not.
+    Id,
+    /// `SimpleTuple`: a tuple of variables over a right side whose every result is a tuple literal of its arity.
+    SimpleTuple,
+    /// `MatchableTuple`: a tuple of variables, `rhs match { case $t @ (x1, .., xn) => $t }`.
+    MatchableTuple,
+    /// The general match (`None`): `rhs match { case pat => (x1, .., xn) }`; an annotated right side
+    /// (`: @unchecked`) and a parenthesised typed element among them.
+    General,
+    /// A for-comprehension's alias: the general match over `x$1 @ pat` (`makeIdPat` in `makeFor`), whose binder
+    /// the typer does not make.
+    ForAlias,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1358,10 +1377,11 @@ pub struct Program {
     pub leaf_bits: Bits,
     /// The type tests of an expansion whose type came from a type argument of the call.
     pub leaf_tests: FxMap<TestId, ()>,
-    /// The receivers of a generic value class's method calls that dotty's `evalOnce` leaves in
-    /// place, idempotent by `exprPurity` (`Worker::mark_in_place_receivers`); any other such
-    /// receiver is evaluated before the companion (`emit::receiver_first`).
-    pub in_place_receivers: FxMap<TExprId, ()>,
+    /// The operands dotty's `evalOnce` leaves in place, idempotent by `exprPurity`
+    /// (`Worker::mark_in_place_operands`): a generic value class's receiver, which is otherwise
+    /// evaluated before the companion (`emit::receiver_first`), and a value of a value class that
+    /// erasure may open after a null test, which is otherwise held in a temporary for it.
+    pub in_place_operands: FxMap<TExprId, ()>,
     /// The type tests and patterns of the inline bodies stored at their definitions
     /// (`InlineDefinition`), which no output holds: what numbers the classes of the output
     /// from every test of the program leaves them out.
@@ -1743,7 +1763,7 @@ impl Program {
             kept_bits: Bits::attach(self.kept_bits.shared_arc(), worker),
             leaf_bits: Bits::attach(self.leaf_bits.shared_arc(), worker),
             leaf_tests: FxMap::default(),
-            in_place_receivers: FxMap::default(),
+            in_place_operands: FxMap::default(),
             stored_tests: FxMap::default(),
             stored_pats: FxMap::default(),
         }
@@ -1869,7 +1889,7 @@ impl Default for Program {
             kept_bits: Bits::default(),
             leaf_bits: Bits::default(),
             leaf_tests: FxMap::default(),
-            in_place_receivers: FxMap::default(),
+            in_place_operands: FxMap::default(),
             stored_tests: FxMap::default(),
             stored_pats: FxMap::default(),
         }
@@ -2200,9 +2220,9 @@ impl Program {
         self.spread_bits.has(e.0)
     }
 
-    /// Whether `e` is a receiver `Program::in_place_receivers` holds.
-    pub fn receiver_in_place(&self, e: TExprId) -> bool {
-        self.in_place_receivers.contains_key(&e)
+    /// Whether `e` is an operand `Program::in_place_operands` holds.
+    pub fn operand_in_place(&self, e: TExprId) -> bool {
+        self.in_place_operands.contains_key(&e)
     }
 
     /// Marks `e` as `setter_assign_bits` says.
@@ -2463,7 +2483,7 @@ impl Program {
                 TExpr::Block(stmts, res) => {
                     for st in &self.stmts[stmts.range()] {
                         match *st {
-                            TStmt::Expr(x) | TStmt::Pat(_, x) => stack.push((x, free)),
+                            TStmt::Expr(x) | TStmt::Pat(_, x, _) => stack.push((x, free)),
                             // A lazy val's initialiser runs in a method of its own (LazyVals, after
                             // TailRec, which takes its right-hand side as no tail position).
                             TStmt::Val(s, _) if syms.sym(s).mods & mods::LAZY != 0 => {}
@@ -2684,7 +2704,7 @@ impl<'a> Iterator for Descendants<'a> {
                 for s in &prog.stmts[stmts.range()] {
                     match *s {
                         TStmt::Expr(e) | TStmt::Val(_, e) => self.exprs.push(e),
-                        TStmt::Pat(p, e) => {
+                        TStmt::Pat(p, e, _) => {
                             self.pats.push(p);
                             self.exprs.push(e);
                         }

@@ -2207,7 +2207,7 @@ impl<'a> Worker<'a> {
                                     }
                                     binder_paths(s, &mut types);
                                 }
-                                TStmt::Pat(p, _) => pats.push(p),
+                                TStmt::Pat(p, _, _) => pats.push(p),
                                 TStmt::Expr(_) => {}
                             }
                         }
@@ -3427,7 +3427,7 @@ impl<'a> Worker<'a> {
                     .map(|s| match s {
                         TStmt::Expr(x) => TStmt::Expr(self.copy_expr(x)),
                         TStmt::Val(v, x) => TStmt::Val(v, self.copy_expr(x)),
-                        TStmt::Pat(p, x) => TStmt::Pat(p, self.copy_expr(x)),
+                        TStmt::Pat(p, x, form) => TStmt::Pat(p, self.copy_expr(x), form),
                         TStmt::Fun(f) => TStmt::Fun(f),
                     })
                     .collect();

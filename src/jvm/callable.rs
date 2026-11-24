@@ -90,6 +90,13 @@ fn type_name_order(a: &ErasedType, b: &ErasedType, result: bool) -> std::cmp::Or
 }
 
 impl<'a> Cx<'a> {
+    /// A value class the typer gave an outer instance: one nested in a parameterless given, which dotty places as an
+    /// object and teq's typer as the class of an instance. The typer's row of that given's class deletes it; until
+    /// then such a class is written so that a program fails where master's does (`Gen::lower_vc_box`, `Gen::fit`).
+    pub fn vc_with_outer(&self, c: ClassId) -> bool {
+        self.input.syms.class(c).value_class && !self.statically_placed(c)
+    }
+
     /// A class of a package or of objects, whose companion module is reached statically.
     pub fn statically_placed(&self, c: ClassId) -> bool {
         let syms = self.input.syms;

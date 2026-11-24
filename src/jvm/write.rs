@@ -49,6 +49,20 @@ fn recipe_bytes(text: &str) -> usize {
 }
 
 impl<'a> Gen<'a> {
+    /// A value class's value the old code left on the stack at `t` where the lowering asked another type
+    /// (`Gen::expr_marked`: a method's result under an ascription to a wider type, which the static type is): held
+    /// in a slot and brought to `want` by `Gen::lower_value_class`'s nodes.
+    pub(super) fn write_value_class_left(&mut self, e: crate::tir::TExprId, t: &ErasedType, c: crate::types::ClassId, args: crate::types::TList, null_safe: bool, want: &ErasedType) {
+        let slot = self.store_new(t);
+        let temp = self.lir.temp();
+        self.m.temps.insert(temp, slot);
+        let brought = self.lowering(|g| {
+            let held = g.lir.push(Kind::Temp(temp), t.clone());
+            g.lower_value_class(held, t, c, args, null_safe, want, Some(e))
+        });
+        self.write(brought);
+    }
+
     /// The node's code where code is written after it on its way: an operand's, a statement's, a
     /// value's the old code writes.
     pub(super) fn write(&mut self, id: LirId) {
@@ -413,17 +427,13 @@ impl<'a> Gen<'a> {
                 self.vc_select = outer;
             }
             Kind::Concat { parts } => self.write_concat(parts),
-            Kind::Try { body, cases, finalizer } => self.write_try(&ty, body, cases, finalizer),
+            Kind::Try { body, catch, finalizer } => self.write_try(&ty, body, catch, finalizer),
             Kind::Synchronized { lock, body } => {
                 self.monitor_block(|g| g.write(lock), ty, |g, _| g.write(body));
             }
             Kind::Adapt { value, from, how } => {
                 self.write(value);
                 self.write_adaptation(how, &from, &ty);
-            }
-            Kind::ValueClass { value, from, class, args, null_safe } => {
-                self.write(value);
-                self.adapt_vc_as(class, args, from, &ty, null_safe);
             }
             // The lifted method takes its number, and its body its place among the class's
             // methods, where the closure is written.
@@ -458,8 +468,25 @@ impl<'a> Gen<'a> {
             Kind::Let { temp, init } => {
                 self.write(init);
                 let held = self.lir.ty(init).clone();
-                let slot = self.store_new(&held);
+                let slot = match self.m.reserved.remove(&temp) {
+                    Some(reserved) => {
+                        let vt = self.vt(&held);
+                        self.code.type_local(reserved, vt);
+                        self.store(reserved.slot, &held);
+                        reserved.slot
+                    }
+                    None => self.store_new(&held),
+                };
                 self.m.temps.insert(temp, slot);
+            }
+            Kind::Reserve { temp, ty: held } => {
+                let reserved = self.code.reserve_local(held.wide());
+                self.m.temps.insert(temp, reserved.slot);
+                self.m.reserved.insert(temp, reserved);
+            }
+            Kind::LocalAt { sym, temp, ty } => {
+                let slot = self.m.temps[&temp];
+                self.m.locals.insert(sym, Local { slot, ty, cell: false });
             }
             Kind::Temp(temp) if self.m.stacked == Some(temp) => self.m.stacked = None,
             Kind::Temp(temp) => {
@@ -641,6 +668,13 @@ impl<'a> Gen<'a> {
     }
 
     /// A jump to `target` where the condition `id` is `jump_if`, falling through otherwise.
+    /// Whether the node is what an inline method's call gave (`Program::is_expansion` of its
+    /// expression): dotty's `Inlined`, which the back end loads as a value where a condition is
+    /// wanted.
+    fn is_expansion_node(&self, id: LirId) -> bool {
+        self.lir.node(id).of.is_some_and(|e| self.cx.input.prog.is_expansion(e))
+    }
+
     pub(super) fn write_cond(&mut self, id: LirId, target: Label, jump_if: bool) {
         match self.lir.node(id).kind.clone() {
             Kind::Bool(v) => {
@@ -672,10 +706,33 @@ impl<'a> Gen<'a> {
                 }
             }
             Kind::Compare { relation, how, left, right } => self.write_compare(relation, how, left, right, target, jump_if),
+            // The statements, then the result's jump, as scalac's `genCond` pushes the decision
+            // into a block; a constant result is a value tested, as there, and so is an inline
+            // method's expansion, dotty's `Inlined`, which `genCond` does not look into: a block
+            // that is one is tested whole, a block whose result is one tests that value.
+            Kind::Block { stmts, result } if !self.is_expansion_node(id) => {
+                let lines = (self.line_floor, self.line_hold);
+                if let Some(e) = self.lir.node(id).of {
+                    self.mark_line(e);
+                }
+                let mark = self.code.locals_mark();
+                for i in 0..stmts.len {
+                    let stmt = self.lir.lists[(stmts.start + i) as usize];
+                    self.write(stmt);
+                }
+                if matches!(self.lir.node(result).kind, Kind::Bool(_)) || self.is_expansion_node(result) {
+                    self.write(result);
+                    self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
+                } else {
+                    self.write_cond(result, target, jump_if);
+                }
+                self.code.locals_release(mark);
+                (self.line_floor, self.line_hold) = lines;
+            }
             Kind::Test { value, test, tested } => {
                 let boxed = self.lir.ty(value).clone();
-                self.write(value);
                 let mark = self.code.locals_mark();
+                self.write(value);
                 let slot = self.store_new(&boxed);
                 self.test(test, slot, &boxed, Some(tested), target, jump_if);
                 self.code.locals_release(mark);
@@ -704,12 +761,6 @@ impl<'a> Gen<'a> {
                 return self.jump_if(if equal { op::IFNULL } else { op::IFNONNULL }, 1, target);
             }
         }
-        self.write(left);
-        self.write(right);
-        // A NaN operand makes the comparison false: the jump that tests it is not taken, the
-        // one that tests its negation is, so NaN's side of `dcmpg` and `dcmpl` follows the
-        // comparison as written.
-        let nan_high = matches!(relation, Relation::Lt | Relation::Le);
         // The relation under which the jump is taken.
         let taken = match (relation, jump_if) {
             (r, true) => r,
@@ -728,6 +779,17 @@ impl<'a> Gen<'a> {
             Relation::Eq => op::IFEQ,
             Relation::Ne => op::IFNE,
         };
+        if let Comparing::Sign = how {
+            debug_assert!(matches!(self.lir.node(right).kind, Kind::Int(0)), "a sign is compared with zero");
+            self.write(left);
+            return self.jump_if(against_zero, 1, target);
+        }
+        self.write(left);
+        self.write(right);
+        // A NaN operand makes the comparison false: the jump that tests it is not taken, the
+        // one that tests its negation is, so NaN's side of `dcmpg` and `dcmpl` follows the
+        // comparison as written.
+        let nan_high = matches!(relation, Relation::Lt | Relation::Le);
         match how {
             Comparing::Identity | Comparing::ArrayEquality => self.jump_if(if taken == Relation::Eq { op::IF_ACMPEQ } else { op::IF_ACMPNE }, 2, target),
             Comparing::Numbers => match self.lir.ty(left).clone() {
@@ -764,6 +826,7 @@ impl<'a> Gen<'a> {
                 self.invoke_mref(&method);
                 self.jump_if(if taken == Relation::Eq { op::IFNE } else { op::IFEQ }, 1, target);
             }
+            Comparing::Sign => unreachable!("a sign is written before its operands"),
             Comparing::Units => {
                 if taken == Relation::Eq {
                     self.iconst(1);

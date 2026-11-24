@@ -1912,7 +1912,7 @@ impl<'a> Worker<'a> {
             TExpr::Block(stmts, res) => {
                 for st in &prog.stmts[stmts.range()] {
                     match *st {
-                        TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x) => self.referenced_in_order(x, origin, key, out),
+                        TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x, _) => self.referenced_in_order(x, origin, key, out),
                         TStmt::Fun(f) => {
                             let fun = &prog.funs[f.idx()];
                             for &d in fun.defaults.iter().flatten() {
@@ -2164,7 +2164,7 @@ impl<'a> Worker<'a> {
                     self.stand_for_inline_val(w, s, x2, &mut inline_vals);
                     TStmt::Val(s, x2)
                 }
-                TStmt::Pat(p, x) => {
+                TStmt::Pat(p, x, form) => {
                     let x2 = self.walk(w, x);
                     self.walk_pattern(w, p);
                     let mut binders = Vec::new();
@@ -2172,7 +2172,7 @@ impl<'a> Worker<'a> {
                     for b in binders {
                         self.bind_walked(b);
                     }
-                    TStmt::Pat(p, x2)
+                    TStmt::Pat(p, x2, form)
                 }
                 TStmt::Fun(f) => {
                     self.walk_fun(w, f);
@@ -2456,7 +2456,7 @@ impl<'a> Worker<'a> {
         let mut n = reads(res);
         for st in items {
             n += match *st {
-                TStmt::Expr(e) | TStmt::Val(_, e) | TStmt::Pat(_, e) => reads(e),
+                TStmt::Expr(e) | TStmt::Val(_, e) | TStmt::Pat(_, e, _) => reads(e),
                 TStmt::Fun(f) => {
                     let fun = &self.prog.funs[f.idx()];
                     fun.body.map_or(0, reads) + fun.defaults.iter().flatten().map(|&d| reads(d)).sum::<usize>()

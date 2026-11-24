@@ -272,7 +272,7 @@ impl<'w, 'a> Walk<'w, 'a> {
                     self.local_annotations(self.w.prog.funs[f.idx()].sym, ctx);
                     self.fun(f, ctx);
                 }
-                TStmt::Pat(p, e) => {
+                TStmt::Pat(p, e, _) => {
                     self.count("pattern definition", Status::Derived, None, ctx);
                     self.pat(p, ctx);
                     self.expr(e, ctx);

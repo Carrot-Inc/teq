@@ -1850,7 +1850,7 @@ impl<'a> Emitter<'a> {
                     self.emit_local_val(sym, init);
                     self.note_val_init(sym, init);
                 }
-                TStmt::Pat(pat, init) => self.emit_pattern_val(pat, init),
+                TStmt::Pat(pat, init, _) => self.emit_pattern_val(pat, init),
             }
         }
     }

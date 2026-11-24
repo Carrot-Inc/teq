@@ -93,6 +93,10 @@ object LoweredShapes:
   def twice: V = new V(u * 2)
 }
 final class VS(val s: String) extends AnyVal
+final class VL(val l: Long) extends AnyVal
+object HoldsV {
+  val bv: Box[V] = new Box[V](new V(3))
+}
 final class VG[A](val g: A) extends AnyVal
 trait Universal extends Any
 final class VU(val n: Int) extends AnyVal with Universal
@@ -311,6 +315,8 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     "Nothing" -> Vector("Nothing", "Int", "Long", "Double", "Boolean", "String", "Any", "Unit", "V", "Peer"),
     "Base" -> Vector("Base", "Any"),
     "VS" -> Vector("VS", "Any"),
+    "VL" -> Vector("VL", "Any"),
+    "CV" -> Vector("CV", "Any", "Product"),
     "Shade" -> Vector("Shade", "Any", "AnyRef"), "Sized" -> Vector("Sized", "Any"), "O.Tone" -> Vector("O.Tone", "Any"),
     "Ordering[Shade]" -> Vector("Ordering[Shade]", "Any", "AnyRef"))
   // What the typer narrows an integer literal to, beside the types an Int is wanted as.
@@ -837,6 +843,9 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("match-value-class-any", "", "((pv: Any) match { case v: V => v.u; case _ => 0 })", "Int", ""),
     Shape("match-value-class-field", "", "(Option(pv) match { case Some(v) => v.u; case None => 0 })", "Int", ""),
     Shape("match-value-class-result", "", "(pi match { case 1 => pv; case _ => new V(2) })", "V", ""),
+    // An intersection of two value classes erases to the first by scalac's order, `V`, whichever is written first.
+    Shape("match-value-class-intersection", "val vi: VD & V = pv.asInstanceOf[VD & V]", "(vi match { case y if y.u > 0 => y.u })", "Int", ""),
+    Shape("match-value-class-intersection-test", "val vi: VD & V = pv.asInstanceOf[VD & V]", "(vi match { case y: V if y.u > 0 => y.u; case _ => 0 })", "Int", ""),
     Shape("match-enum", "", "((if pb then Color.Red else Color.Green) match { case Color.Red => 1; case Color.Green => 2 })", "Int", ""),
     Shape("match-enum-class", "", "((if pb then Figure.Circle(pi) else Figure.Square(pi)) match { case Figure.Circle(r) => r; case Figure.Square(_) => 0 })", "Int", ""),
     Shape("match-alternatives", "", "(pa match { case _: String | _: Int => 1; case _ => 0 })", "Int", ""),
@@ -865,6 +874,11 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("try-wildcard", "", "(try ps catch { case _: Throwable => \"x\" })", "String", ""),
     Shape("try-unit", "", "(try other.mu() catch { case _: RuntimeException => () })", "Unit", ""),
     Shape("try-cases-finally", "", "(try pi catch { case _: RuntimeException => 1 } finally other.mu())", "Int", ""),
+    Shape("cond-block", "", "({ other.mu(); pi < 3 })", "Boolean", ""), Shape("cond-block-test", "", "({ other.mu(); pa.isInstanceOf[String] })", "Boolean", ""),
+    Shape("cond-block-not-test", "", "({ other.mu(); !pa.isInstanceOf[String] })", "Boolean", ""),
+    Shape("cond-block-constant", "", "({ other.mu(); true })", "Boolean", ""), Shape("cond-block-null", "", "({ other.mu(); pa == null })", "Boolean", ""),
+    Shape("cond-block-nested", "", "({ other.mu(); { other.mu(); pi > 1 && pb } })", "Boolean", ""),
+    Shape("cond-null", "", "(pa eq null)", "Boolean", ""), Shape("cond-null-left", "", "(null ne other)", "Boolean", ""),
     Shape("to-string-int", "", "pi.toString", "String", ""), Shape("to-string-long", "", "pl.toString", "String", ""),
     Shape("to-string-double", "", "pd.toString", "String", ""), Shape("to-string-float", "", "pf.toString", "String", ""),
     Shape("to-string-bool", "", "pb.toString", "String", ""), Shape("to-string-char", "", "pc.toString", "String", ""),
@@ -1063,7 +1077,19 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("typer-mirror-ordinal-nested", "val tones = new Tones", "summon[scala.deriving.Mirror.SumOf[tones.Tone]].ordinal(tones.Tone.High)", "Int", ""),
     Shape("typer-enum-values", "", "Hue.values", "Array[Hue]", ""), Shape("typer-enum-value-of", "", "Hue.valueOf(\"Red\")", "Hue", ""),
     Shape("typer-enum-from-ordinal", "", "Hue.fromOrdinal(0)", "Hue", ""),
-    Shape("typer-partial-function", "", "({ case 1 => \"one\" }: PartialFunction[Int, String])", "PartialFunction[Int, String]", "")) ++ jumpFamily
+    Shape("typer-partial-function", "", "({ case 1 => \"one\" }: PartialFunction[Int, String])", "PartialFunction[Int, String]", ""),
+    // A value class's box over its operand and its opening after a null test (`Gen::lower_value_class`): over a
+    // call, a cast, `null`, a stable path (read twice), a binder, a `var`; a `String` and a `Long` underlying;
+    // a lazy local's box; a case value class's box (its members' are the `synth-vc-case` rows).
+    Shape("vc-open-call", "", "Option(pv).get", "V", ""), Shape("vc-open-null", "", "null.asInstanceOf[V]", "V", ""),
+    Shape("vc-open-cast-string", "", "pa.asInstanceOf[VS]", "VS", ""), Shape("vc-open-cast-long", "", "pa.asInstanceOf[VL]", "VL", ""),
+    Shape("vc-open-call-long", "", "Option(new VL(pl)).get", "VL", ""), Shape("vc-open-stable", "", "HoldsV.bv.item", "V", ""),
+    Shape("vc-open-bind-some", "", "(Option(pv) match { case Some(v) => v; case None => new V(0) })", "V", ""),
+    Shape("vc-open-bind-pair", "", "((pv, pi) match { case (v, n) => v })", "V", ""),
+    Shape("vc-open-var", "var wv: V = Option(pv).get; wv = Option(new V(pi)).get", "wv", "V", ""),
+    Shape("vc-box-lazy", "lazy val lzv: V = new V(pi + 1)", "lzv", "V", ""),
+    Shape("vc-box-lambda-result", "", "((n: Int) => new V(n))", "Int => V", ""),
+    Shape("vc-case-new", "", "new CV(pi)", "CV", "")) ++ jumpFamily
 
   // The def's own jump under each branch form, for the writer's decision whether code follows a branch (where a
   // conditional writes its `goto` and binds its join): a def `jf` whose body is a `return`'s value or its result,

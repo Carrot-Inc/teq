@@ -2366,6 +2366,7 @@ partial_function_reflect_lambda	pass	-
 partial_functions	pass	-	
 partial_sites	pass	-	
 partial_unification_fixed_args	pass	-	
+patdef_two_slot_binders	pass	-	
 path_member_override_prefix	pass	-	
 path_operations	fail	-	error: not supported on JavaScript: method getProperties of java.lang.System (a Java definition without an implementation in the std's platf
 path_value_exported_constants	pass	-	
@@ -3343,7 +3344,10 @@ vc_box_product	pass	-
 vc_box_same_erasure	pass	-	
 vc_box_stable	pass	-	
 vc_box_stable_extractor	pass	-	
+vc_method_result_ascribed	pass	-	
+vc_named_arguments_result_ascribed	pass	-	
 vc_null_interpolation	pass	-	
+vc_right_assoc_result_ascribed	pass	-	
 vc_stable_pattern	pass	-	
 vdom_dsl	pass	-	
 vector_trie	pass	-	

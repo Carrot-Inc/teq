@@ -2153,7 +2153,7 @@ impl<'a> Worker<'a> {
         let Some(tc) = self.checked_class(c).cloned() else { return Vec::new() };
         let mut roots = Vec::new();
         for &st in self.prog.stmt_list(tc.parent_prelude) {
-            if let TStmt::Val(_, x) | TStmt::Expr(x) | TStmt::Pat(_, x) = st {
+            if let TStmt::Val(_, x) | TStmt::Expr(x) | TStmt::Pat(_, x, _) = st {
                 roots.push(x);
             }
         }
@@ -2241,7 +2241,7 @@ impl<'a> Worker<'a> {
                 let stmts = self.prog.stmt_list(stmts).to_vec();
                 for st in stmts {
                     let at = match st {
-                        TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x) => self.prog.span_of(x).map(|(_, s)| s.start),
+                        TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x, _) => self.prog.span_of(x).map(|(_, s)| s.start),
                         TStmt::Fun(f) => Some(self.syms.sym(self.prog.funs[f.idx()].sym).span.start),
                     };
                     if let Some(at) = at {
@@ -2249,7 +2249,7 @@ impl<'a> Worker<'a> {
                     }
                     match st {
                         TStmt::Expr(x) | TStmt::Val(_, x) => self.rank_expr(walk, x),
-                        TStmt::Pat(p, x) => {
+                        TStmt::Pat(p, x, _) => {
                             self.rank_expr(walk, x);
                             self.rank_pat(walk, p);
                         }

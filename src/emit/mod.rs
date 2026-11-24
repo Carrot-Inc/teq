@@ -1039,9 +1039,9 @@ pub(crate) fn extension_companion_of(syms: &Symbols, s: SymId) -> Option<(ClassI
 /// receiver before it loads the companion, as `VCInlineMethods.rewire` leaves the call: a class
 /// with no type parameters passes the receiver in place (`ref(extensionMeth).appliedTo(qual)`),
 /// so the companion comes first; a generic one binds the receiver to a temporary first
-/// (`evalOnce`) unless the typer found it idempotent (`Program::in_place_receivers`).
+/// (`evalOnce`) unless the typer found it idempotent (`Program::in_place_operands`).
 pub(crate) fn receiver_first(prog: &Program, syms: &Symbols, c: ClassId, r: TExprId) -> bool {
-    !syms.class(c).tparams.is_empty() && !prog.receiver_in_place(r)
+    !syms.class(c).tparams.is_empty() && !prog.operand_in_place(r)
 }
 
 /// The companion a call of the value class's method `s` on the receiver `r` initialises, where

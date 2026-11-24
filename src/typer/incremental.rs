@@ -205,7 +205,7 @@ impl<'a> Worker<'a> {
         self.add_bridges_of(&files);
         self.finish_capture_of(Some(&files));
         self.choose_entry_point();
-        self.mark_in_place_receivers();
+        self.mark_in_place_operands();
         self.check_deferred_bounds();
         self.forward_references(Some(&files));
         for (s, old) in constants {

@@ -3593,7 +3593,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                     self.member(s);
                     self.fun(f);
                 }
-                TStmt::Pat(p, e) => {
+                TStmt::Pat(p, e, _) => {
                     self.pat(p);
                     self.expr(e);
                     self.pattern_definition(p);
@@ -4391,7 +4391,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 }
                 TStmt::Expr(x) => self.expr(x),
                 TStmt::Fun(f) => self.fun(f),
-                TStmt::Pat(p, x) => {
+                TStmt::Pat(p, x, _) => {
                     self.pat(p);
                     self.expr(x);
                 }

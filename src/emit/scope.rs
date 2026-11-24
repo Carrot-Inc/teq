@@ -806,7 +806,7 @@ impl<'a> Emitter<'a> {
             match *s {
                 TStmt::Val(sym, _) => binders.push(sym),
                 TStmt::Fun(f) => binders.push(self.prog.funs[f.idx()].sym),
-                TStmt::Pat(p, _) => self.pattern_binders(p, &mut binders),
+                TStmt::Pat(p, _, _) => self.pattern_binders(p, &mut binders),
                 TStmt::Expr(_) => {}
             }
         }
@@ -1423,7 +1423,7 @@ impl<'a> Emitter<'a> {
                 TStmt::Val(sym, _) if moved.contains(&sym) => {}
                 TStmt::Val(sym, _) => binders.push(sym),
                 TStmt::Fun(f) => binders.push(prog.funs[f.idx()].sym),
-                TStmt::Pat(p, _) => self.pattern_binders(p, &mut binders),
+                TStmt::Pat(p, _, _) => self.pattern_binders(p, &mut binders),
                 TStmt::Expr(_) => {}
             }
         }
@@ -1443,7 +1443,7 @@ impl<'a> Emitter<'a> {
                         self.note_val_init(sym, init);
                     }
                 }
-                TStmt::Pat(p, init) => {
+                TStmt::Pat(p, init, _) => {
                     w.name("$matchError");
                     self.walk(w, init);
                     self.walk_pat(w, p);

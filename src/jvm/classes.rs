@@ -242,10 +242,11 @@ impl<'a> Gen<'a> {
     pub fn end_method(&mut self) {
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
         let repeated = self.repeated.take();
-        if code.underflow {
+        if code.underflow || code.misreserved {
             let m = repeated.or_else(|| self.plan.methods.pop()).expect("a method was begun");
             let line = code.last_line().map_or(String::new(), |l| format!(" at line {}", l));
-            self.unsupported(&format!("the operand stack model underflowed while writing {}{}{}", m.name, m.desc, line));
+            let fault = if code.underflow { "the operand stack model underflowed" } else { "internal error: a value stored in slots reserved for another width" };
+            self.unsupported(&format!("{} while writing {}{}{}", fault, m.name, m.desc, line));
             return;
         }
         if repeated.is_some() {
@@ -389,8 +390,7 @@ impl<'a> Gen<'a> {
                 if declared.is_object() && !self.is_vc_object(&declared) {
                     self.m.locals.insert(s, Local { slot, ty: declared, cell: false });
                 } else {
-                    self.load(slot, &object);
-                    let declared = self.adapt_to_sym(&object, s);
+                    let declared = self.write_slot_to_sym(slot, &object, s);
                     let cell = self.m.cells.contains(&s);
                     self.declare_local(s, declared, cell);
                 }
@@ -821,7 +821,7 @@ impl<'a> Gen<'a> {
         self.body(|g| {
             let receiver = g.lir.module(&module);
             let instance = g.lir.this(this.clone());
-            let mut args = vec![g.lir.value_class(instance, &this, c, EMPTY_LIST, false, &u)];
+            let mut args = vec![g.lower_value_class(instance, &this, c, EMPTY_LIST, false, &u, None)];
             for i in 0..own.len() {
                 args.push(g.param(i));
             }
@@ -921,13 +921,13 @@ impl<'a> Gen<'a> {
             for (i, (from, to)) in bm.params.iter().zip(&m.params).enumerate() {
                 let given = g.param(i);
                 args.push(match declared.get(i).and_then(|&t| g.value_class_type(t)) {
-                    Some((c, vargs)) => g.lir.value_class(given, from, c, vargs, true, to),
+                    Some((c, vargs)) => g.lower_value_class(given, from, c, vargs, true, to, None),
                     None => g.lower_adapt(given, from, to),
                 });
             }
             let result = g.lir.call(&target, receiver, &args);
             let result = match g.value_class_type(declared_ret) {
-                Some((c, vargs)) if m.ret != ErasedType::V => g.lir.value_class(result, &m.ret, c, vargs, true, &bm.ret),
+                Some((c, vargs)) if m.ret != ErasedType::V => g.lower_value_class(result, &m.ret, c, vargs, true, &bm.ret, None),
                 _ => g.lower_adapt(result, &m.ret, &bm.ret),
             };
             g.lir.ret(result)
@@ -3929,8 +3929,9 @@ impl<'a> Gen<'a> {
                 if self.cx.synthesized(c) & synthetic::EQUALS_CALLS_CAN_EQUAL != 0 {
                     self.load(ps, &object);
                     self.checkcast(&class);
-                    self.load(us, u);
-                    self.vc_box(c, u);
+                    let underlying = self.slot_value(us, u);
+                    let made = self.lowering(|g| g.lower_vc_box(c, underlying, u));
+                    self.write(made);
                     let boxed = ErasedType::L(class.clone());
                     self.adapt(&boxed, &object);
                     self.invoke(Invoke::Virtual, &class, false, "canEqual", &[object.clone()], &ErasedType::Z);

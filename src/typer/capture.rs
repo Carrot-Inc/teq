@@ -206,7 +206,7 @@ impl<'a> Worker<'a> {
                                 self.tree_types(b, out);
                             }
                         }
-                        TStmt::Pat(p, x) => {
+                        TStmt::Pat(p, x, _) => {
                             self.pat_types(p, out);
                             self.tree_types(x, out);
                         }

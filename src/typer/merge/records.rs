@@ -406,7 +406,7 @@ pub(in crate::typer) fn stmt<M: Mapping + ?Sized>(m: &M, s: &mut TStmt) {
         TStmt::Expr(e) => TStmt::Expr(m.expr(e)),
         TStmt::Val(v, e) => TStmt::Val(m.sym(v), m.expr(e)),
         TStmt::Fun(f) => TStmt::Fun(m.fun(f)),
-        TStmt::Pat(pat, e) => TStmt::Pat(m.pat(pat), m.expr(e)),
+        TStmt::Pat(pat, e, form) => TStmt::Pat(m.pat(pat), m.expr(e), form),
     };
 }
 

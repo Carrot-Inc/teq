@@ -341,34 +341,90 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// dotty's `evalOnce` in `VCInlineMethods.rewire`: the receiver of a call of a generic value
-    /// class's method stays in place where it is idempotent (`isIdempotentExpr`, the reference's
-    /// purity, a written cast impure), and is bound to a temporary first otherwise. The receivers
-    /// that stay are marked once the program's code is complete, for every back end
-    /// (`emit::receiver_first`): by the final passes, and again where a session types changed files
-    /// anew (`Worker::retype`), over the whole program, since a receiver's verdict can rest on
-    /// another file's definitions.
-    pub(super) fn mark_in_place_receivers(&mut self) {
-        self.prog.in_place_receivers.clear();
-        let mut receivers = Vec::new();
+    /// dotty's `evalOnce`, which leaves an operand in place where it is idempotent
+    /// (`isIdempotentExpr`, the reference's purity, a written cast impure) and binds it to a
+    /// temporary first otherwise: the receiver of a call of a generic value class's method
+    /// (`VCInlineMethods.rewire`), and a value of a value class read through a member, which
+    /// erasure may open after a null test (`Erasure.Boxing.unbox`), the operand of a cast to one
+    /// as well (the cast is the opening; marked for the JVM alone, the one target that opens).
+    /// The operands that stay are marked once the program's code is complete, for every back end
+    /// (`emit::receiver_first`, the JVM's `Gen::lower_reread`): by the final passes, and again
+    /// where a session types changed files anew (`Worker::retype`), over the whole program, since
+    /// an operand's verdict can rest on another file's definitions. One walk collects them: a read
+    /// whose recorded type is a class is decided there, and the class of any other type is asked
+    /// after it, once per type.
+    pub(super) fn mark_in_place_operands(&mut self) {
+        self.prog.in_place_operands.clear();
         let exprs = self.prog.exprs.iter().as_slice();
-        if exprs.len() == self.prog.exprs.len() {
-            for e in exprs {
-                if let Some(r) = generic_extension_receiver(&self.syms, e) {
-                    receivers.push(r);
+        // An arena some of whose records are other workers': each read by its id.
+        let whole = exprs.len() == self.prog.exprs.len();
+        let mut operands = Vec::new();
+        // An opening is the JVM's erasure, which only its lowering asks of (`Gen::lower_reread`): another target's
+        // typing walks for the receivers alone.
+        if !self.jvm {
+            if whole {
+                for e in exprs {
+                    if let Some(r) = generic_extension_receiver(&self.syms, e) {
+                        operands.push(r);
+                    }
+                }
+            } else {
+                for i in 0..self.prog.exprs.len() as u32 {
+                    if let Some(r) = generic_extension_receiver(&self.syms, self.prog.exprs.get(i)) {
+                        operands.push(r);
+                    }
                 }
             }
-        } else {
-            // An arena some of whose records are other workers': each read by its id.
-            for i in 0..self.prog.exprs.len() as u32 {
-                if let Some(r) = generic_extension_receiver(&self.syms, self.prog.exprs.get(i)) {
-                    receivers.push(r);
-                }
+            return self.mark_idempotent(operands);
+        }
+        // An operand read through a member: none where its recorded type is a value class, else
+        // the recorded type, whose class is asked.
+        let mut reads = Vec::new();
+        for i in 0..self.prog.exprs.len() {
+            let at = TExprId(i as u32);
+            let e = if whole { exprs[i] } else { *self.prog.exprs.get(i as u32) };
+            if let Some(r) = generic_extension_receiver(&self.syms, &e) {
+                operands.push(r);
+                continue;
+            }
+            let operand = match e {
+                TExpr::Static(_) | TExpr::Field(..) | TExpr::CallStatic(..) | TExpr::CallMethod(..) => at,
+                TExpr::Cast(inner, ..) => inner,
+                _ => continue,
+            };
+            let Some(t) = self.prog.type_of(at) else { continue };
+            match self.types.get(t) {
+                Type::Class(c, _) if !self.syms.class(c).value_class => {}
+                Type::Class(..) => reads.push((operand, None)),
+                _ => reads.push((operand, Some(t))),
             }
         }
-        for r in receivers {
-            if self.expr_purity_under(r, Purity::IMPURE).at_least(Purity::IDEMPOTENT) {
-                self.prog.in_place_receivers.insert(r, ());
+        let mut of_value_class = crate::intern::FxMap::default();
+        for (o, t) in reads {
+            let Some(t) = t else {
+                operands.push(o);
+                continue;
+            };
+            let held = match of_value_class.get(&t) {
+                Some(&held) => held,
+                None => {
+                    let held = self.class_of(t).is_some_and(|c| self.syms.class(c).value_class);
+                    of_value_class.insert(t, held);
+                    held
+                }
+            };
+            if held {
+                operands.push(o);
+            }
+        }
+        self.mark_idempotent(operands);
+    }
+
+    /// The operands among `operands` that stay in place, idempotent by `exprPurity`.
+    fn mark_idempotent(&mut self, operands: Vec<TExprId>) {
+        for o in operands {
+            if self.expr_purity_under(o, Purity::IMPURE).at_least(Purity::IDEMPOTENT) {
+                self.prog.in_place_operands.insert(o, ());
             }
         }
     }

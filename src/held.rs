@@ -82,7 +82,7 @@ impl Program {
             expansion_bits,
             leaf_bits,
             leaf_tests,
-            in_place_receivers,
+            in_place_operands,
             stored_tests,
             stored_pats,
             chain_end_bits,
@@ -157,7 +157,7 @@ impl Program {
             + expansion_bits.held()
             + leaf_bits.held()
             + table(leaf_tests)
-            + table(in_place_receivers)
+            + table(in_place_operands)
             + table(stored_tests)
             + table(stored_pats)
             + chain_end_bits.held()

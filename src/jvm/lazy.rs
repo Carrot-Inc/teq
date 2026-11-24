@@ -933,7 +933,7 @@ impl<'a> Gen<'a> {
                     self.walk_local_classes_before(w, syms.sym(prog.funs[f.idx()].sym).span.start);
                     self.walk_fun_names(w, f);
                 }
-                TStmt::Pat(p, init) => {
+                TStmt::Pat(p, init, _) => {
                     if let Some(sp) = self.expr_span(init) {
                         self.walk_local_classes_before(w, sp.start);
                     }

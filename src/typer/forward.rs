@@ -1283,7 +1283,7 @@ impl<'a> Worker<'a> {
     fn forward_plain_stmt(&mut self, w: &mut Walk, st: TStmt) {
         match st {
             TStmt::Expr(x) | TStmt::Val(_, x) => self.forward_expr(w, x),
-            TStmt::Pat(p, x) => {
+            TStmt::Pat(p, x, _) => {
                 self.forward_expr(w, x);
                 self.forward_pat(w, p);
             }
@@ -1569,7 +1569,7 @@ impl<'a> Worker<'a> {
         let s = match st {
             TStmt::Val(s, _) => s,
             TStmt::Fun(f) => self.prog.funs[f.idx()].sym,
-            TStmt::Pat(p, _) => {
+            TStmt::Pat(p, _, _) => {
                 let mut binders = Vec::new();
                 self.forward_binders(p, &mut binders);
                 *binders.first()?
@@ -1665,7 +1665,7 @@ impl<'a> Worker<'a> {
                         let info = self.syms.sym(s);
                         info.mods & (mods::LAZY | mods::LIFTED) == 0 && matches!(info.kind, SymKind::Val | SymKind::Var)
                     }
-                    TStmt::Pat(p, _) => {
+                    TStmt::Pat(p, _, _) => {
                         let mut binders = Vec::new();
                         self.forward_binders(p, &mut binders);
                         !binders.is_empty()
@@ -1768,7 +1768,7 @@ impl<'a> Worker<'a> {
                     let s = self.prog.funs[f.idx()].sym;
                     w.named.insert(Named::Term(s), (level, o));
                 }
-                TStmt::Pat(p, _) => {
+                TStmt::Pat(p, _, _) => {
                     let mut binders = Vec::new();
                     self.forward_binders(p, &mut binders);
                     for s in binders {
@@ -1907,7 +1907,7 @@ impl<'a> Worker<'a> {
                 }
                 (name, start, Some(s))
             }
-            TStmt::Pat(p, _) => {
+            TStmt::Pat(p, _, _) => {
                 let mut binders = Vec::new();
                 self.forward_binders(p, &mut binders);
                 // A tuple of names and wildcards against a value has a holder whatever it binds
