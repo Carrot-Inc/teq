@@ -2,7 +2,7 @@
 //! bytecode, reflection and the `java` launcher. A case class's companion with `apply`,
 //! `unapply` and `fromProduct`, the case class's `copy`.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodDef, MethodFlags, MethodRef, Relation, Visibility};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodDef, MethodFlags, MethodRef, Relation, Unlowered, Visibility};
 use super::classfile::*;
 use super::gen::*;
 use super::names::*;
@@ -1300,6 +1300,7 @@ impl<'a> Gen<'a> {
             }
             let params: Vec<(Option<SymId>, ErasedType)> = types.iter().map(|t| (None, t.clone())).collect();
             self.begin_method(MethodFlags::PUBLIC, &name, &desc, false, &params, m.ret.clone(), &[]);
+            self.outside(Unlowered::ValueClassForwarder);
             let mut slot = 1u16;
             for t in &types {
                 self.load(slot, t);
@@ -1593,30 +1594,17 @@ impl<'a> Gen<'a> {
         self.end_method();
     }
 
-    /// An enum's value as its companion's own code reads it: a static field, or the field of the
-    /// companion's instance where it is one.
-    fn enum_value_read(&mut self, v: SymId, instance: bool) -> ErasedType {
-        match self.lowering(|g| g.lower_enum_value_read(v, instance)) {
-            Some(read) => {
-                self.write(read);
-                self.lir.ty(read).clone()
-            }
-            None => self.static_value(v),
-        }
-    }
-
     /// The value `v` of an enum as its companion reads it: the instance's field for an enum of
-    /// an instance, else as a read with no receiver; None for a route with no node yet
-    /// (`StaticRoute::EnumValue`).
-    fn lower_enum_value_read(&mut self, v: SymId, instance: bool) -> Option<LirId> {
+    /// an instance, else as a read with no receiver.
+    fn lower_enum_value_read(&mut self, v: SymId, instance: bool) -> LirId {
         if !instance {
-            return self.lower_static(v).ok();
+            return self.lower_static(v).expect("an enum's value, which every route lowers");
         }
         let t = self.sym_type(v);
         let name = self.field_name(v);
         let receiver = self.lower_this().expect("the companion's instance");
         let owner = self.this_name.clone();
-        Some(self.lir.field(receiver, &owner, &name, t))
+        self.lir.field(receiver, &owner, &name, t)
     }
 
     /// scalac's `fromOrdinal` of an enum's companion, and `values` and `valueOf` where every case
@@ -1649,8 +1637,6 @@ impl<'a> Gen<'a> {
         // dotty's `enumLookupMethods`: `$values(ordinal)` where every case is a value, whose every
         // failure is the `NoSuchElementException`, else the value case of the ordinal.
         let stored = all_values && cx.has_enum_fields(e) && values.len() == syms.class(e).children.len();
-        // Every value's read has a node (`Gen::lower_enum_value_read`).
-        let reads_lower = values.iter().all(|&(v, _, _)| instance || !matches!(self.static_route(v), StaticRoute::EnumValue(_)));
         let value_of = method_ref(Invoke::Static, &Rc::from(STRING), false, "valueOf", &[ErasedType::I], &string);
         let no_such: Rc<str> = Rc::from("java/util/NoSuchElementException");
         let no_ordinal: Rc<str> = Rc::from(format!("enum {} has no case with ordinal: ", display));
@@ -1658,6 +1644,7 @@ impl<'a> Gen<'a> {
             let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
             let module = self.this_name.clone();
             self.begin_method(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
+            self.outside(Unlowered::EnumCompanionMembers);
             let fail = self.code.new_label();
             self.getstatic(&module, "$values", &array);
             let store = self.store_new(&array);
@@ -1688,42 +1675,23 @@ impl<'a> Gen<'a> {
             self.end_method();
         } else if !written("fromOrdinal") {
             self.begin_method(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
-            if reads_lower {
-                self.body(|g| {
-                    let mut answers = Vec::with_capacity(values.len());
-                    for (v, ordinal, _) in &values {
-                        let given = g.param(0);
-                        let at = g.lir.int(*ordinal as i32);
-                        let matched = g.lir.compare(Relation::Eq, Comparing::Numbers, given, at);
-                        let value = g.lower_enum_value_read(*v, instance).expect("a read with a node, by the route");
-                        let t = g.lir.ty(value).clone();
-                        let value = g.lower_adapt(value, &t, &enum_type);
-                        let answer = g.lir.ret(value);
-                        answers.push(g.lir.when(matched, answer));
-                    }
-                    let ordinal = g.param(0);
-                    let shown = g.lir.static_call(&value_of, &[ordinal]);
-                    let failed = g.lower_throw_with(&no_such, &no_ordinal, shown);
-                    g.lir.seq(&answers, failed)
-                });
-            } else {
+            self.body(|g| {
+                let mut answers = Vec::with_capacity(values.len());
                 for (v, ordinal, _) in &values {
-                    let next = self.code.new_label();
-                    self.load(1, &ErasedType::I);
-                    self.iconst(*ordinal as i32);
-                    self.jump_if(op::IF_ICMPNE, 2, next);
-                    let t = self.enum_value_read(*v, instance);
-                    self.adapt(&t, &enum_type);
-                    self.return_value(&enum_type);
-                    self.code.bind(next);
+                    let given = g.param(0);
+                    let at = g.lir.int(*ordinal as i32);
+                    let matched = g.lir.compare(Relation::Eq, Comparing::Numbers, given, at);
+                    let value = g.lower_enum_value_read(*v, instance);
+                    let t = g.lir.ty(value).clone();
+                    let value = g.lower_adapt(value, &t, &enum_type);
+                    let answer = g.lir.ret(value);
+                    answers.push(g.lir.when(matched, answer));
                 }
-                let failed = self.lowering(|g| {
-                    let ordinal = g.param(0);
-                    let shown = g.lir.static_call(&value_of, &[ordinal]);
-                    g.lower_throw_with(&no_such, &no_ordinal, shown)
-                });
-                self.write(failed);
-            }
+                let ordinal = g.param(0);
+                let shown = g.lir.static_call(&value_of, &[ordinal]);
+                let failed = g.lower_throw_with(&no_such, &no_ordinal, shown);
+                g.lir.seq(&answers, failed)
+            });
             self.end_method();
         }
         if !all_values {
@@ -1744,13 +1712,13 @@ impl<'a> Gen<'a> {
             });
             self.end_method();
         }
-        if !written("values") && reads_lower {
+        if !written("values") {
             let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
             self.begin_method(MethodFlags::PUBLIC, "values", &method_desc(&[], &array), false, &[], array.clone(), &[]);
             self.body(|g| {
                 let mut items = Vec::with_capacity(values.len());
                 for (v, _, _) in &values {
-                    let value = g.lower_enum_value_read(*v, instance).expect("a read with a node, by the route");
+                    let value = g.lower_enum_value_read(*v, instance);
                     let t = g.lir.ty(value).clone();
                     items.push(g.lower_adapt(value, &t, &enum_type));
                 }
@@ -1759,67 +1727,28 @@ impl<'a> Gen<'a> {
                 g.lir.ret(made)
             });
             self.end_method();
-        } else if !written("values") {
-            let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
-            self.begin_method(MethodFlags::PUBLIC, "values", &method_desc(&[], &array), false, &[], array.clone(), &[]);
-            self.iconst(values.len() as i32);
-            let element = self.class_name(e);
-            let class = self.cw.cp.class(&element);
-            self.code.op_u16(op::ANEWARRAY, class);
-            self.code.pop();
-            let vt = self.vt(&array);
-            self.code.push(vt);
-            for (i, (v, _, _)) in values.iter().enumerate() {
-                self.dup();
-                self.iconst(i as i32);
-                let t = self.enum_value_read(*v, instance);
-                self.adapt(&t, &enum_type);
-                self.code.op(op::AASTORE);
-                self.code.popn(3);
-            }
-            self.return_value(&array);
-            self.end_method();
         }
         if !written("valueOf") {
             let no_name: Rc<str> = Rc::from(format!("enum {} has no case with name: ", display));
             let illegal: Rc<str> = Rc::from("java/lang/IllegalArgumentException");
             self.begin_method(MethodFlags::PUBLIC, "valueOf", &method_desc(&[string.clone()], &enum_type), false, &[(None, string.clone())], enum_type.clone(), &[]);
-            if reads_lower {
-                let equals = method_ref(Invoke::Virtual, &Rc::from(STRING), false, "equals", &[ErasedType::object()], &ErasedType::Z);
-                self.body(|g| {
-                    let mut answers = Vec::with_capacity(values.len());
-                    for (v, _, name) in &values {
-                        let text = g.lir.text(&Rc::from(name.as_str()), string.clone());
-                        let given = g.param(0);
-                        let matched = g.lir.call(&equals, text, &[given]);
-                        let value = g.lower_enum_value_read(*v, instance).expect("a read with a node, by the route");
-                        let t = g.lir.ty(value).clone();
-                        let value = g.lower_adapt(value, &t, &enum_type);
-                        let answer = g.lir.ret(value);
-                        answers.push(g.lir.when(matched, answer));
-                    }
-                    let given = g.param(0);
-                    let failed = g.lower_throw_with(&illegal, &no_name, given);
-                    g.lir.seq(&answers, failed)
-                });
-            } else {
+            let equals = method_ref(Invoke::Virtual, &Rc::from(STRING), false, "equals", &[ErasedType::object()], &ErasedType::Z);
+            self.body(|g| {
+                let mut answers = Vec::with_capacity(values.len());
                 for (v, _, name) in &values {
-                    let next = self.code.new_label();
-                    self.sconst(name);
-                    self.load(1, &string);
-                    self.invoke(Invoke::Virtual, STRING, false, "equals", &[ErasedType::object()], &ErasedType::Z);
-                    self.jump_if(op::IFEQ, 1, next);
-                    let t = self.enum_value_read(*v, instance);
-                    self.adapt(&t, &enum_type);
-                    self.return_value(&enum_type);
-                    self.code.bind(next);
-                }
-                let failed = self.lowering(|g| {
+                    let text = g.lir.text(&Rc::from(name.as_str()), string.clone());
                     let given = g.param(0);
-                    g.lower_throw_with(&illegal, &no_name, given)
-                });
-                self.write(failed);
-            }
+                    let matched = g.lir.call(&equals, text, &[given]);
+                    let value = g.lower_enum_value_read(*v, instance);
+                    let t = g.lir.ty(value).clone();
+                    let value = g.lower_adapt(value, &t, &enum_type);
+                    let answer = g.lir.ret(value);
+                    answers.push(g.lir.when(matched, answer));
+                }
+                let given = g.param(0);
+                let failed = g.lower_throw_with(&illegal, &no_name, given);
+                g.lir.seq(&answers, failed)
+            });
             self.end_method();
         }
     }
@@ -2002,8 +1931,10 @@ impl<'a> Gen<'a> {
             let module: Rc<str> = Rc::from(cx.companion_name(k));
             let t = ErasedType::L(module.clone());
             self.begin_method(MethodFlags { is_final: !self.is_interface, ..MethodFlags::PUBLIC }, &name, &method_desc(&[], &t), false, &[], t.clone(), &[]);
-            self.getstatic(&module, "MODULE$", &t);
-            self.return_value(&t);
+            self.body(|g| {
+                let companion = g.lir.module(&module);
+                g.lir.ret(companion)
+            });
             self.end_method();
             if self.is_interface {
                 self.trait_static_forwarder(&name, &[], &t);
@@ -2244,6 +2175,7 @@ impl<'a> Gen<'a> {
     fn proxied_super_accessor(&mut self, m: &MethodRef, t: SymId, o: ClassId, proxies: &[SymId]) {
         let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
         self.begin_method(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, false, &params, m.ret.clone(), &[]);
+        self.outside(Unlowered::ProxiedSuperAccessor);
         let this = ErasedType::L(self.this_name.clone());
         self.load(0, &this);
         for &p in proxies {

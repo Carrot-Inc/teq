@@ -3,7 +3,7 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Relation, Unlowered};
+use crate::lir::{Arith, Capture, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Refusal, Relation, Unlowered};
 use super::gen::{rank_type, CallRoute, CaptureArgument, ConcatRoute, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::names::*;
 use crate::ast::ListRef;
@@ -68,6 +68,12 @@ impl<'a> Gen<'a> {
             node.of = Some(e);
         }
         id
+    }
+
+    /// A form the target has no translation of, refused where it stands (`Kind::Refused`): no
+    /// value, nothing of the form evaluated.
+    pub(super) fn lower_refused(&mut self, refusal: Refusal) -> LirId {
+        self.lir.push(Kind::Refused(refusal), ErasedType::V)
     }
 
     fn lower_legacy(&mut self, e: TExprId, want: &ErasedType, why: Unlowered) -> LirId {
@@ -256,8 +262,14 @@ impl<'a> Gen<'a> {
             TExpr::Js(template, args) => return self.lower_template(e, template, args),
             TExpr::Return(_) if self.m.closure => return Err(Unlowered::NonLocalReturn),
             TExpr::Return(_) => return Err(Unlowered::ReturnInValuePosition),
-            TExpr::Spread(_) => return Err(Unlowered::SpreadArgument),
-            TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => return Err(Unlowered::JavaScriptOnly),
+            // `xs*` passed to a JavaScript member with repeated parameters (the typer's `js_call_args`):
+            // the sequence as it is, at its own type.
+            TExpr::Spread(inner) => {
+                let t = self.static_type(inner);
+                let value = self.lower_expr(inner, &t);
+                self.lir.push(Kind::Typed(value), t)
+            }
+            TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => self.lower_refused(Refusal::JavaScriptInterop),
             TExpr::If(..) | TExpr::Match(..) | TExpr::Block(..) | TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered by `Gen::lower_marked`"),
             TExpr::Splice(_) => unreachable!("a stored inline body is lowered nowhere"),
         })
@@ -842,23 +854,28 @@ impl<'a> Gen<'a> {
         Ok(self.lir.push(Kind::FieldStore { receiver: cell, owner: Rc::from(OBJECT_REF), name: Rc::from("elem"), value }, ErasedType::V))
     }
 
-    /// An assignment to the member `s`, on the receiver `r` where one is written: a Java
-    /// instance's field assigned, else the member's setter called, on the receiver or on the
-    /// object of the file that declares the member. Not a Java class's static field, a Java
-    /// field with no receiver nor a setter on the member's own object, not lowered yet.
+    /// An assignment to the member `s`, on the receiver `r` where one is written: a Java field
+    /// assigned, else the member's setter called, on the receiver, on the member's object or on
+    /// the object of the file that declares the member. Not a Java instance's field with no
+    /// receiver, not lowered yet.
     fn lower_member_assign(&mut self, r: Option<TExprId>, s: SymId, value: TExprId) -> Result<LirId, Unlowered> {
         let cx = self.cx;
         if let Some((cf, JMember::Field(i))) = cx.input.java_member(s) {
             let f = &cf.fields[i as usize];
-            let r = match (f.access & ACC_STATIC != 0, r) {
-                (true, _) => return Err(Unlowered::AssignJavaStatic),
-                (false, None) => return Err(Unlowered::AssignJavaFieldNoReceiver),
-                (false, Some(r)) => r,
-            };
             let t = parse_type(&f.descriptor).0;
+            let name: Rc<str> = Rc::from(f.name.as_str());
+            // A static's receiver is not evaluated.
+            let r = match (f.access & ACC_STATIC != 0, r) {
+                (true, _) => {
+                    let value = self.lower_expr(value, &t);
+                    return Ok(self.lir.push(Kind::StaticFieldStore { owner: Rc::from(cf.name.as_str()), name, value }, ErasedType::V));
+                }
+                (false, Some(r)) => r,
+                (false, None) => return Err(Unlowered::AssignJavaFieldNoReceiver),
+            };
             let (receiver, owner) = self.lower_java_qualifier(r, s, &cf.name);
             let value = self.lower_expr(value, &t);
-            return Ok(self.lir.push(Kind::FieldStore { receiver, owner, name: Rc::from(f.name.as_str()), value }, ErasedType::V));
+            return Ok(self.lir.push(Kind::FieldStore { receiver, owner, name, value }, ErasedType::V));
         }
         let (receiver, at, m) = match r {
             Some(r) => {
@@ -868,10 +885,11 @@ impl<'a> Gen<'a> {
             }
             None => {
                 let info = cx.input.syms.sym(s);
-                if let Owner::Class(_) = info.owner {
-                    return Err(Unlowered::AssignObjectMemberNoReceiver);
-                }
-                (self.lower_file_module(info.file), None, self.mref(s))
+                let receiver = match info.owner {
+                    Owner::Class(c) => self.lower_module(c),
+                    _ => self.lower_file_module(info.file),
+                };
+                (receiver, None, self.mref(s))
             }
         };
         let value = self.lower_expr(value, &m.ret);
@@ -1187,7 +1205,7 @@ impl<'a> Gen<'a> {
                 let name = encode(cx.input.interner.get(info.name));
                 Ok(self.lir.push(Kind::StaticField { owner, name: Rc::from(&*name) }, t))
             }
-            StaticRoute::EnumValue(_) => Err(Unlowered::EnumValueOwnClass),
+            StaticRoute::EnumValue(case) => Ok(self.lower_own_enum_value(info.owner, case)),
             // One with no constant type is refused (`Gen::load_static`).
             StaticRoute::InlineVal => self.inline_val_constant(s).flatten().map(|l| self.lower_literal(l)).ok_or(Unlowered::InlineValNoConstant),
             StaticRoute::JavaField => {
@@ -1211,6 +1229,30 @@ impl<'a> Gen<'a> {
                 Ok(self.lir.push(Kind::Call { method: m, at: None, receiver, args, order: None }, ret))
             }
         }
+    }
+
+    /// The value of the enum case `case` held by its own class, read once the values are made:
+    /// the companion `owner` initialised first where this build writes its body, else the enum,
+    /// which makes its values when it is initialised. A read that initialised the value's class
+    /// first would wait for the enum, its superclass, while another thread making the values
+    /// waited for it.
+    fn lower_own_enum_value(&mut self, owner: Owner, case: ClassId) -> LirId {
+        let cx = self.cx;
+        let name = self.class_name(case);
+        let value = self.lir.static_field(&name, "$instance", ErasedType::L(name.clone()));
+        let Owner::Class(companion) = owner else { return value };
+        let first = if cx.layout.has_body(companion) && cx.input.reach.classes[companion.idx()] {
+            let module = self.lower_module(companion);
+            let t = self.lir.ty(module).clone();
+            self.lower_adapt(module, &t, &ErasedType::V)
+        } else if let Some(e) = cx.enum_of_case(case) {
+            let enum_name = self.class_name(e);
+            let touch = method_ref(Invoke::Static, &enum_name, false, "$touch", &[], &ErasedType::V);
+            self.lir.static_call(&touch, &[])
+        } else {
+            return value;
+        };
+        self.lir.seq(&[first], value)
     }
 
     /// A given object's instance as a value of the given's declared type, which its class
@@ -1321,7 +1363,7 @@ impl<'a> Gen<'a> {
                 let value = self.lower_expr(a, &param);
                 return Ok(self.lir.push(Kind::Typed(value), u));
             }
-            NewRoute::Js => return Err(Unlowered::JavaScriptOnly),
+            NewRoute::Js => return Ok(self.lower_refused(Refusal::JavaScriptClass)),
         };
         let touch = self.touched_module(c);
         let name = self.class_name(c);
@@ -1336,7 +1378,7 @@ impl<'a> Gen<'a> {
         }
         let (c, route) = match self.via_route(s, args) {
             ViaRoute::Unowned => return Err(Unlowered::NewViaUnowned),
-            ViaRoute::Js(_) => return Err(Unlowered::JavaScriptOnly),
+            ViaRoute::Js(_) => return Ok(self.lower_refused(Refusal::JavaScriptClass)),
             ViaRoute::Instance(c, route) => (c, route),
         };
         let touch = self.touched_module(c);
@@ -1854,9 +1896,8 @@ impl<'a> Gen<'a> {
     /// accessor's call; or why its route is not lowered yet.
     fn lower_field_read(&mut self, r: TExprId, s: SymId) -> Result<LirId, Unlowered> {
         match self.field_route(r, s) {
-            FieldRoute::Js => Err(Unlowered::JavaScriptOnly),
+            FieldRoute::Js => Ok(self.lower_refused(Refusal::JavaScriptMember)),
             FieldRoute::Object(_) => Err(Unlowered::ObjectThroughOwner),
-            FieldRoute::Early => Err(Unlowered::EarlyParameter),
             // The receiver evaluated for its effect, then the instance, which does not read it.
             FieldRoute::GivenObject { receiver_evaluated: true } => {
                 let effect = self.lower_expr(r, &ErasedType::V);
@@ -1866,6 +1907,7 @@ impl<'a> Gen<'a> {
                 Ok(self.lir.push(Kind::Block { stmts, result: instance }, ty))
             }
             FieldRoute::GivenObject { receiver_evaluated: false } => Ok(self.lower_given_object(s)),
+            FieldRoute::Early => Ok(self.lower_local(s).expect("a local of the constructor, by the route")),
             FieldRoute::Java => {
                 let Some((cf, JMember::Field(i))) = self.cx.input.java_member(s) else { unreachable!("a Java field, by the route") };
                 let f = &cf.fields[i as usize];
@@ -1988,7 +2030,7 @@ impl<'a> Gen<'a> {
             // The proxies are the capture analysis's, asked in order only (`Gen::analysis_in_order`).
             CallRoute::Proxied(t) => return self.analysis_in_order().then(|| self.lower_proxied_call(t, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
             CallRoute::Lifted => return self.analysis_in_order().then(|| self.lower_lifted_member_call(r, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
-            CallRoute::Js => return Err(Unlowered::JavaScriptOnly),
+            CallRoute::Js => return Ok(self.lower_refused(Refusal::JavaScriptMember)),
             CallRoute::Extension(c, route) => return self.lower_extension_call(r, s, args, c, route),
             CallRoute::Interpolator(_, None) => return Err(Unlowered::InterpolatorWithoutRuntime),
             CallRoute::Object(_) => return Err(Unlowered::ObjectThroughOwner),

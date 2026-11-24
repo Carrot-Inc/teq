@@ -6,7 +6,9 @@
 # `// teq: <flags>` line passes those flags to teq, a `// command: build` line builds the program
 # in the place of checking it (for what only a build rejects), a `// jars: <names>` line puts those jars on
 # the class path (tests/support/jars.sh); without one of them in the coursier cache the program
-# is skipped. A `// jdk: none` line runs teq with no JDK to find (no JAVA_HOME, an empty PATH). Each program's exit and complete diagnostics go to out/errors-tests/<name>.out, and
+# is skipped. A `// jdk: none` line runs teq with no JDK to find (no JAVA_HOME, an empty PATH). A program is rejected
+# when teq exits 1, or with the code a `// exit: <code>` line names (3 for a construct the JVM back end refuses, which it
+# reports as `jvm backend: <method>: <what>` and `<n> constructs not supported by the JVM backend`). Each program's exit and complete diagnostics go to out/errors-tests/<name>.out, and
 # the last line says whether every program was rejected as expected, with the counts of
 # tests/warnings/unused-imports.sh, tests/warnings/unused-kinds.sh, tests/warnings/matches.sh,
 # tests/warnings/policy.sh, tests/warnings/workers.sh and tests/source-version.scala, which run after them.
@@ -56,6 +58,7 @@ run_program() {
   grep -q '^// jdk: none' "$src" "$src"/*.scala 2>/dev/null && nojdk=(env -u JAVA_HOME PATH=/nonexistent)
   out=$(timeout 20 "${nojdk[@]}" "$teq" compiler ${command:-check} "$src" $flags 2>&1)
   code=$?
+  rejected=$(grep -h -o '^// exit: [0-9][0-9]*$' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// exit: ||')
   printf 'exit %s\n%s\n' "$code" "$out" > "$dir/$(basename "$src" .scala).out"
 }
 if [ -n "$write_base" ]; then
@@ -84,7 +87,7 @@ for src in tests/errors/*.scala tests/errors/*/; do
     printf 'skip %s\tnot in the coursier cache:%s\n' "$name" "$JARS_MISSING" >> "$records/results.txt"
     continue
   fi
-  if [ $code -ne 1 ]; then
+  if [ $code -ne "${rejected:-1}" ]; then
     said "FAIL $src: exit code $code"
     why=${why:-"exit code $code"}
   fi

@@ -3,7 +3,7 @@
 //! assembled from the text (`Gen::assemble`). Of the texts the typer makes itself, one that
 //! is a call becomes that call; `Gen::intrinsic` writes the others.
 
-use crate::lir::{Arith, Cast, ErasedType, Invoke, Kind, LirId, MethodRef, Unlowered};
+use crate::lir::{Arith, Cast, ErasedType, Invoke, Kind, LirId, MethodRef, Refusal, Unlowered};
 use super::classfile::op;
 use super::gen::{erased_array_method, primitive_conversion, Gen, Referenced, Site};
 use super::intrinsic::{plain_op, single_form, split_method, tokenize, typer_text};
@@ -13,6 +13,7 @@ use crate::ast::ListRef;
 use crate::symbols::Owner;
 use crate::tir::*;
 use crate::types::{ClassId, Type};
+use crate::typer::prims::UNBOX;
 use std::rc::Rc;
 
 /// What a template's text is, whatever uses it.
@@ -108,6 +109,12 @@ pub(super) enum TemplateRoute {
     /// The typer's text for `x.synchronized(body)`, which it keeps for the JVM: the body under the
     /// monitor of the first argument.
     Synchronized,
+    /// The typer's text for `x.getClass` of a primitive receiver: the receiver evaluated for its
+    /// effects, then the primitive's class, the static `TYPE` of this box class.
+    PrimitiveClass(Rc<str>),
+    /// A template the JVM has no translation of, refused: a member with no `@jvm` template or
+    /// body, or a JavaScript text of the typer's.
+    Refused(Refusal),
     /// From the text: assembled, or the typer's own text.
     Text,
 }
@@ -128,7 +135,13 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let text: &str = &cx.input.prog.strings[template.idx()];
         if text.starts_with('!') || typer_text(text) {
-            return self.typer_route(template, text, args).unwrap_or(TemplateRoute::Text);
+            if let Some(route) = self.typer_route(template, text, args) {
+                return route;
+            }
+            return match self.refused_template(template, text) {
+                Some(why) => TemplateRoute::Refused(why),
+                None => TemplateRoute::Text,
+            };
         }
         match &*self.template(text) {
             Template::Single(m) if args.len() >= m.params.len() + (m.kind != Invoke::Static) as usize => TemplateRoute::Single(m.clone()),
@@ -137,6 +150,25 @@ impl<'a> Gen<'a> {
             }
             _ => TemplateRoute::Text,
         }
+    }
+
+    /// The refusal of a template the JVM has no translation of: a member whose template names no
+    /// body (`!name`), unless it is the std's quoted reflection, which runs at compile time only
+    /// (`Gen::intrinsic`); a typer's text that is JavaScript's alone. None for the typer's texts the
+    /// old generator writes (`Gen::intrinsic`): a quote, an unboxing, an enum's lookup and a
+    /// partial function the typer's routes do not take. A primitive's class and a product's prefix
+    /// with no argument (a program's own `@jvm` on a top-level def) are refused like the others.
+    fn refused_template(&mut self, template: StrRef, text: &str) -> Option<Refusal> {
+        if let Some(name) = text.strip_prefix('!') {
+            let owner = self.template_owner(template);
+            if owner.as_deref().is_some_and(|o| o.starts_with("scala/quoted/")) {
+                return None;
+            }
+            return Some(Refusal::NoJvmBody { name: Rc::from(name), owner });
+        }
+        let written = text.starts_with("$quote")
+            || matches!(text, UNBOX | "$enumValues($0)" | "$enumValueOf($0, $1, $2, $3, $4)" | "$enumFromOrdinal($0, $1, $2)" | "$enumCaseOfOrdinal($0, $1, $2, $3, $4)" | "$pf($0, $1)");
+        (!written).then(|| Refusal::JavaScriptTemplate(Rc::from(text)))
     }
 
     /// A use of a template, or why its route is not lowered yet.
@@ -157,6 +189,14 @@ impl<'a> Gen<'a> {
                 Ok(self.lir.push(Kind::New { touch: None, ctor: ctor.clone(), args: operands }, ErasedType::L(ctor.owner.clone())))
             }
             TemplateRoute::Synchronized => Ok(self.lower_synchronized(args[0], args[1])),
+            TemplateRoute::PrimitiveClass(boxed) => {
+                let class = ErasedType::L(Rc::from("java/lang/Class"));
+                let dropped = self.lower_expr(args[0], &ErasedType::V);
+                let read = self.lir.push(Kind::StaticField { owner: boxed, name: Rc::from("TYPE") }, class.clone());
+                let stmts = self.lir.list(&[dropped]);
+                Ok(self.lir.push(Kind::Block { stmts, result: read }, class))
+            }
+            TemplateRoute::Refused(refusal) => Ok(self.lower_refused(refusal)),
             TemplateRoute::Text => Err(Unlowered::TemplateText),
         }
     }
@@ -175,9 +215,12 @@ impl<'a> Gen<'a> {
         Some(match text {
             "$hashCode($0)" if !args.is_empty() => TemplateRoute::ObjectMember(named(Invoke::Virtual, OBJECT, "hashCode", Vec::new(), ErasedType::I)),
             "$equals($0, $1)" if args.len() >= 2 => TemplateRoute::ObjectMember(named(Invoke::Virtual, OBJECT, "equals", vec![object], ErasedType::Z)),
-            "$getClass($0)" if !args.is_empty() && self.primitive_receiver(args[0]).is_none() => {
-                TemplateRoute::ObjectMember(named(Invoke::Virtual, OBJECT, "getClass", Vec::new(), ErasedType::L(Rc::from("java/lang/Class"))))
-            }
+            "$getClass($0)" if !args.is_empty() => match self.primitive_receiver(args[0]) {
+                None => TemplateRoute::ObjectMember(named(Invoke::Virtual, OBJECT, "getClass", Vec::new(), ErasedType::L(Rc::from("java/lang/Class")))),
+                Some(ErasedType::V) => TemplateRoute::PrimitiveClass(Rc::from("java/lang/Void")),
+                Some(erased) => TemplateRoute::PrimitiveClass(Rc::from(erased.box_class())),
+            },
+            "$productPrefix($0)" if !args.is_empty() => TemplateRoute::Member(named(Invoke::Interface, PRODUCT, "productPrefix", Vec::new(), ErasedType::L(Rc::from(STRING)))),
             "$synchronized($0, $1)" if args.len() >= 2 => TemplateRoute::Synchronized,
             "$identityHash($0)" if !args.is_empty() => TemplateRoute::Member(named(Invoke::Static, "java/lang/System", "identityHashCode", vec![object], ErasedType::I)),
             "$0.$ordinal" if !args.is_empty() => TemplateRoute::Member(named(Invoke::Interface, ENUM, "ordinal", Vec::new(), ErasedType::I)),

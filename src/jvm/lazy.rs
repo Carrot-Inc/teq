@@ -2,7 +2,7 @@
 //! 3.8.4), over scala-library's runtime: a local's holder of the `LazyRef` family, read through an accessor and
 //! computed by an initialiser under the holder's monitor (`transformLocalDef`, `transformStats`).
 
-use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Visibility};
+use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Unlowered, Visibility};
 use super::classfile::*;
 use super::gen::*;
 use super::names::*;
@@ -328,6 +328,7 @@ impl<'a> Gen<'a> {
         if !self.control_state_super(&h.ty) {
             return self.body(|g| g.lower_thread_safe_getter(h));
         }
+        self.outside(Unlowered::LazyMember);
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
         let object = ErasedType::object();
@@ -424,6 +425,7 @@ impl<'a> Gen<'a> {
             return;
         }
         self.begin_method(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, &h.init, "()Ljava/lang/Object;", false, &[], object.clone(), &roots);
+        self.outside(Unlowered::LazyMember);
         let lp = self.code.new_label();
         self.code.bind(lp);
         self.load(0, &this);

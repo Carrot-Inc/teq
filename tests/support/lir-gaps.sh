@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/support/lir-gaps.sh <teq> <out>: every program of tests/cases built for the JVM by <teq> with TEQ_LIR_STATS
-# set, the statistics lines of each (`LIRGAPS<TAB><class>.<name><desc><TAB><reasons>`, src/jvm/classes.rs's
+# set, the statistics lines of each (`LIRGAPS<TAB><class>.<name><desc><TAB>...`, src/jvm/classes.rs's
 # `lir_stats`) kept in <out>/<program>.gaps with the build's exit, then the count of methods a reason holds back:
 # `python3 tests/support/lir_gaps.py summary <out>` (docs/LIR.md, "How the extraction goes"). A program whose jars are
 # not in the coursier cache is not built and is named.
@@ -14,7 +14,7 @@ spellings "$teq"
 python3 tests/support/lir_gaps.py --self-test || exit 1
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2> /dev/null || echo 4)}
 sl=$(jar_of scala-library)
-rm -rf "$out"
+rm -rf "${out:?}"
 mkdir -p "$out"
 export teq out sl
 one() {

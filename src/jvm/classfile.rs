@@ -361,6 +361,11 @@ pub struct Code {
     /// A lowering runs (`Gen::lowering`): nothing may be written, since what a lowering decides
     /// must not depend on what is written, nor the output on the order of the lowerings.
     pub frozen: bool,
+    /// The nodes being written around the next instruction (`Gen::write`).
+    pub in_node: u32,
+    /// The instructions written with no node around them: what the statistics hold a method's
+    /// recorded reasons against (`Gen::end_method`).
+    pub outside: u32,
 }
 
 impl Code {
@@ -385,6 +390,8 @@ impl Code {
             underflow: false,
             misreserved: false,
             frozen: false,
+            in_node: 0,
+            outside: 0,
         }
     }
 
@@ -565,6 +572,9 @@ impl Code {
 
     fn before_insn(&mut self) {
         self.writing();
+        if self.in_node == 0 {
+            self.outside += 1;
+        }
         if !self.reachable {
             self.reachable = true;
             let offset = self.pc();

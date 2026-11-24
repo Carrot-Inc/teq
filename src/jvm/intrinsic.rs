@@ -62,16 +62,11 @@ impl<'a> Gen<'a> {
         if !matches!(self.template_route(e, template, args), TemplateRoute::Text) {
             unreachable!("lowered (`Gen::lower_template`)");
         }
-        if let Some(name) = text.strip_prefix('!') {
-            let owner = self.template_owner(template);
-            // The std's quoted reflection is the compiler's: a member of it the output keeps
-            // (`TreeMethods.asExpr` beside a macro's expansion) never runs.
-            if owner.as_deref().map_or(false, |o| o.starts_with("scala/quoted/")) {
-                return self.compile_time_only();
-            }
-            let of = owner.as_deref().map_or(String::new(), |o| format!(" of {}", o));
-            self.unsupported(&format!("no @jvm intrinsic or body for {}{}", name, of));
-            return ErasedType::V;
+        // The std's quoted reflection is the compiler's: a member of it the output keeps
+        // (`TreeMethods.asExpr` beside a macro's expansion) never runs. Any other member with no
+        // body is refused by the lowering (`Gen::refused_template`).
+        if text.starts_with('!') {
+            return self.compile_time_only();
         }
         // A quote runs at compile time only: a method holding one that the output keeps (an
         // override of a jar trait's member, `Literally.validate`) throws if it is ever called.
@@ -89,24 +84,9 @@ impl<'a> Gen<'a> {
             }
             // A receiver whose static type is a primitive (`Gen::primitive_receiver`) runs for its
             // effects alone.
-            "$getClass($0)" => {
-                let class = ErasedType::L(Rc::from("java/lang/Class"));
-                let erased = self.primitive_receiver(args[0]).expect("a primitive, by `Gen::template_route`");
-                self.statement(args[0]);
-                let boxed = if erased == ErasedType::V { "java/lang/Void" } else { erased.box_class() };
-                self.getstatic(boxed, "TYPE", &class);
-                return class;
-            }
             "$enumValues($0)" | "$enumValueOf($0, $1, $2, $3, $4)" | "$enumFromOrdinal($0, $1, $2)" | "$enumCaseOfOrdinal($0, $1, $2, $3, $4)" => {
                 self.unsupported("an enum lookup whose companion is not known");
                 return ErasedType::object();
-            }
-            "$productPrefix($0)" => {
-                let product = ErasedType::L(Rc::from(PRODUCT));
-                self.expr(args[0], &product);
-                let string = ErasedType::L(Rc::from(STRING));
-                self.invoke(Invoke::Interface, PRODUCT, true, "productPrefix", &[], &string);
-                return string;
             }
             "$pf($0, $1)" => {
                 self.unsupported("the runtime class PartialFunctionImpl is missing");
@@ -114,10 +94,7 @@ impl<'a> Gen<'a> {
             }
             _ => {}
         }
-        if typer_text(text) {
-            self.unsupported(&format!("the JavaScript template {}", text));
-            return ErasedType::V;
-        }
+        assert!(!typer_text(text), "refused by the lowering (`Gen::refused_template`)");
         self.assemble(e, text, args)
     }
 

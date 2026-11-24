@@ -265,29 +265,18 @@ pub enum Unlowered {
     /// captures, or a local trait's member call, after an earlier part of the method was left to
     /// the old generator: what it captures is asked in the order the code is written.
     AfterEscape,
-    /// `JavaClass.field = v`: a Java static field assigned.
-    AssignJavaStatic,
     /// `field = v` of a Java instance field with no receiver written.
     AssignJavaFieldNoReceiver,
-    /// `x = v` of a `var` of an object, with no receiver written.
-    AssignObjectMemberNoReceiver,
     /// An assignment to any other target (reported).
     AssignOtherTarget,
     /// `a == b` in a build whose runtime has no universal equality helper.
     EqualityWithoutHelper,
     /// `this` or `super` where the method has no instance (reported).
     NoInstance,
-    /// An enum's value held by its own class, the enum initialised first.
-    EnumValueOwnClass,
     /// An `inline val` with no constant type (reported).
     InlineValNoConstant,
     /// `a.O`: an object selected on a value of its owner, the value evaluated first.
     ObjectThroughOwner,
-    /// A constructor's parameter read before the superclass's constructor ran.
-    EarlyParameter,
-    /// JavaScript interop: `js.Dynamic`, a JavaScript import, a native JavaScript class or
-    /// member, an object literal (reported on the JVM).
-    JavaScriptOnly,
     /// `v.m(..)` of a value class's method, called as its `m$extension`.
     ValueClassMethodCall,
     /// A string interpolator of the library (`s"..."`, `f"..."`) where the build's runtime has
@@ -316,8 +305,45 @@ pub enum Unlowered {
     VarargsWithoutArraySeq,
     /// A `@jvm` template written from its text, or the typer's own text that is no one call.
     TemplateText,
-    /// `xs*` where no array parameter takes it.
-    SpreadArgument,
+    /// A local `def`'s declaration, where its lifted method is named and queued (`Kind::LocalFun`).
+    LocalDefDeclaration,
+    /// `class B extends A` where every parameter of `A` has a default and none is written.
+    CtorSuperDefaults,
+    /// An enum case that does not pass its enum's arguments (reported).
+    CtorSuperRefused,
+    /// A `lazy val` in the block before a superclass's arguments.
+    CtorPreludeLazyVal,
+    /// A class body whose local trait's initialiser takes values of the enclosing block.
+    CtorTraitProxies,
+    /// A trait's arguments that do not match its parameters, or a `lazy val` before them.
+    CtorTraitArguments,
+    /// `def this(..) = this(..)` other than to the primary constructor at its declared types.
+    SecondaryCtorSelfCall,
+    /// An enum companion's `fromOrdinal` over its stored values.
+    EnumCompanionMembers,
+    /// A `lazy val` of a class or object: its thread-safe initialiser, and its getter where its
+    /// type admits a control state.
+    LazyMember,
+    /// A `@threadUnsafe lazy val` member's getter.
+    ThreadUnsafeLazyMember,
+    /// A value class's `productElement`, `productElementName`, and `equals` over a reference.
+    ValueClassSynthesized,
+    /// A def with a `return` inside a lambda: the key it makes and the handler around its body.
+    NonLocalReturnKey,
+    /// A value class's method forwarding to its `m$extension`, and the copies of extension methods.
+    ValueClassForwarder,
+    /// The function a by-name default of a jar's method is passed as.
+    JarGetterThunk,
+    /// The super accessor of a local trait's member that takes what the trait captures.
+    ProxiedSuperAccessor,
+    /// An object's `<clinit>` own code: the handles of its lazy members, its instance made and
+    /// stored in `MODULE$`.
+    ModuleClinit,
+    /// A lambda's or local def's parameter that its lifted method takes as an `Object`, opened
+    /// into a local of its own type before the body.
+    LiftedParameterPrologue,
+    /// A local `def` without a body (reported).
+    LocalDefWithoutBody,
 }
 
 #[derive(Clone)]
@@ -536,6 +562,40 @@ pub enum Kind {
     /// Nothing follows it: the node's type is the one its place wants. A conditional with no
     /// `otherwise` whose `then` is a `Break` without a value is a jump on the condition.
     Break { label: LabelId, value: Option<LirId> },
+    /// A form the target has no translation of: the program is refused here, with the
+    /// refusal's message, and nothing is evaluated. No value.
+    Refused(Refusal),
+}
+
+/// Why a form is refused (`Kind::Refused`): one variant a form no back end of the class-based
+/// targets translates, carrying what its message names.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Refusal {
+    /// JavaScript interop: `js.Dynamic`, a JavaScript import or global, an object literal.
+    JavaScriptInterop,
+    /// A member of a JavaScript type.
+    JavaScriptMember,
+    /// An instance of a JavaScript class made.
+    JavaScriptClass,
+    /// A member with no `@jvm` template or body, by its name and the class that declares it
+    /// where the build knows it.
+    NoJvmBody { name: Rc<str>, owner: Option<Rc<str>> },
+    /// A template text of the typer's that is JavaScript's alone.
+    JavaScriptTemplate(Rc<str>),
+}
+
+impl Refusal {
+    /// The refusal as a back end reports it.
+    pub fn message(&self) -> String {
+        match self {
+            Refusal::JavaScriptInterop => "JavaScript interop".to_string(),
+            Refusal::JavaScriptMember => "a member of a JavaScript type".to_string(),
+            Refusal::JavaScriptClass => "a JavaScript class".to_string(),
+            Refusal::NoJvmBody { name, owner: Some(owner) } => format!("no @jvm intrinsic or body for {} of {}", name, owner),
+            Refusal::NoJvmBody { name, owner: None } => format!("no @jvm intrinsic or body for {}", name),
+            Refusal::JavaScriptTemplate(text) => format!("the JavaScript template {}", text),
+        }
+    }
 }
 
 impl Kind {
@@ -559,6 +619,7 @@ impl Kind {
             // The body is queued, and the definition named: neither is written where the node stands.
             Kind::Closure { .. } | Kind::LiftedCall { .. } | Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) => false,
             Kind::Let { .. } | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Temp(_) | Kind::Is { .. } | Kind::Labeled { .. } | Kind::Break { .. } => false,
+            Kind::Refused(_) => false,
         }
     }
 }

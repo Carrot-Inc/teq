@@ -2,12 +2,14 @@
 """lir_gaps.py summary <out> | --self-test
 
 The count of methods each reason of `lir::Unlowered` holds back, over the statistics of a corpus's JVM builds that
-tests/support/lir-gaps.sh keeps: <out>/<program>.gaps holds a program's lines
-`LIRGAPS<TAB><class>.<name><desc><TAB><reasons>` (the reasons comma-separated in the enum's order, `-` for none) and
-its build's `exit <code>`, or `notrun <program> <why>`. Prints the corpus's line, then one line a reason in the enum's
-order (read from src/lir.rs): `<reason><TAB><methods><TAB><programs>`, a reason no method holds included. Exits 1
-on a record it cannot read whole: a built program with no line, a line of another shape, a reason the enum lacks or
-out of its order, a method read twice; --self-test plants each and a control of known counts.
+tests/support/lir-gaps.sh keeps: <out>/<program>.gaps holds a program's lines `LIRGAPS<TAB><class>.<name><desc>
+<TAB><reasons of its nodes><TAB><reasons of its code outside nodes><TAB><instructions outside nodes>` (the reasons
+comma-separated in the enum's order, `-` for none) and its build's `exit <code>`, or `notrun <program> <why>`. Prints
+the corpus's line, then one line a reason in the enum's order (read from src/lir.rs): `<reason><TAB><methods><TAB>
+<programs><TAB><methods of programs whose build fails>`, a reason no method holds included. Exits 1 on a record it cannot read whole: a built program with no
+line, a line of another shape, a reason the enum lacks or out of its order, a method read twice, instructions
+outside nodes with no reason recorded for them or a reason recorded for none; --self-test plants each and a
+control of known counts.
 """
 import os
 import re
@@ -39,22 +41,25 @@ def read(out, order):
         methods, seen = [], set()
         for line in lines[:-1]:
             fields = line.split('\t')
-            if len(fields) != 3 or fields[0] != 'LIRGAPS' or not fields[1]:
+            if len(fields) != 5 or fields[0] != 'LIRGAPS' or not fields[1] or not fields[4].isdigit():
                 bad.append(f'{name}: a line of another shape: {line!r}')
                 continue
-            why = [] if fields[2] == '-' else fields[2].split(',')
-            unknown = [w for w in why if w not in rank]
+            nodes, outside = ([] if f == '-' else f.split(',') for f in fields[2:4])
+            unknown = [w for w in nodes + outside if w not in rank]
             if unknown:
                 bad.append(f'{name}: a reason the enum lacks: {",".join(unknown)}')
                 continue
-            if [rank[w] for w in why] != sorted({rank[w] for w in why}):
-                bad.append(f'{name}: reasons out of the enum\'s order or twice: {fields[2]}')
+            if any([rank[w] for w in why] != sorted({rank[w] for w in why}) for why in (nodes, outside)):
+                bad.append(f'{name}: reasons out of the enum\'s order or twice: {fields[2]} {fields[3]}')
+                continue
+            if (int(fields[4]) > 0) != bool(outside):
+                bad.append(f'{name}: {fields[1]} writes {fields[4]} instructions outside nodes and records {fields[3]}')
                 continue
             if fields[1] in seen:
                 bad.append(f'{name}: the method {fields[1]} read twice')
                 continue
             seen.add(fields[1])
-            methods.append((fields[1], why))
+            methods.append((fields[1], sorted(set(nodes + outside), key=rank.get)))
         if code == 0 and not methods:
             bad.append(f'{name}: built with no statistics line')
         programs[name] = ('built' if code == 0 else 'failed', methods)
@@ -69,10 +74,12 @@ def summary(out, order):
     total = sum(len(m) for m in built.values())
     held = sum(1 for m in built.values() for _, why in m if why)
     lines = [f'lir-gaps: {len(built)} programs built ({failed} failed, {notrun} not run), {total} methods, {held} of them held back by a reason']
+    failing = [m for k, m in programs.values() if k == 'failed']
     for r in order:
         methods = sum(1 for m in built.values() for _, why in m if r in why)
         progs = sum(1 for m in built.values() if any(r in why for _, why in m))
-        lines.append(f'{r}\t{methods}\t{progs}')
+        refused = sum(1 for m in failing for _, why in m if r in why)
+        lines.append(f'{r}\t{methods}\t{progs}\t{refused}')
     return bad, lines
 
 
@@ -81,19 +88,22 @@ def self_test():
     import tempfile
     order = ['Alpha', 'Beta', 'Gamma']
     control = {
-        'one': 'LIRGAPS\tA.f()V\tAlpha,Gamma\nLIRGAPS\tA.g()V\t-\nexit 0\n',
-        'two': 'LIRGAPS\tB.f()V\tAlpha\nexit 0\n',
-        'broken': 'LIRGAPS\tC.f()V\tBeta\nexit 1\n',
+        'one': 'LIRGAPS\tA.f()V\tAlpha\tGamma\t3\nLIRGAPS\tA.g()V\t-\t-\t0\nexit 0\n',
+        'two': 'LIRGAPS\tB.f()V\tAlpha\t-\t0\nexit 0\n',
+        'broken': 'LIRGAPS\tC.f()V\tBeta\t-\t0\nexit 1\n',
         'skipped': 'notrun skipped jars missing: x\n',
     }
     plants = {
         'no line': 'exit 0\n',
-        'no exit': 'LIRGAPS\tA.f()V\t-\n',
-        'short line': 'LIRGAPS\tA.f()V\nexit 0\n',
-        'unknown reason': 'LIRGAPS\tA.f()V\tDelta\nexit 0\n',
-        'out of order': 'LIRGAPS\tA.f()V\tGamma,Alpha\nexit 0\n',
-        'twice': 'LIRGAPS\tA.f()V\tAlpha,Alpha\nexit 0\n',
-        'method twice': 'LIRGAPS\tA.f()V\t-\nLIRGAPS\tA.f()V\tBeta\nexit 0\n',
+        'no exit': 'LIRGAPS\tA.f()V\t-\t-\t0\n',
+        'short line': 'LIRGAPS\tA.f()V\t-\nexit 0\n',
+        'no count': 'LIRGAPS\tA.f()V\t-\t-\tx\nexit 0\n',
+        'unknown reason': 'LIRGAPS\tA.f()V\tDelta\t-\t0\nexit 0\n',
+        'out of order': 'LIRGAPS\tA.f()V\tGamma,Alpha\t-\t0\nexit 0\n',
+        'twice': 'LIRGAPS\tA.f()V\t-\tAlpha,Alpha\t2\nexit 0\n',
+        'method twice': 'LIRGAPS\tA.f()V\t-\t-\t0\nLIRGAPS\tA.f()V\tBeta\t-\t0\nexit 0\n',
+        'outside unrecorded': 'LIRGAPS\tA.f()V\tAlpha\t-\t4\nexit 0\n',
+        'recorded, none outside': 'LIRGAPS\tA.f()V\t-\tBeta\t0\nexit 0\n',
     }
     base = tempfile.mkdtemp(prefix='lir-gaps-self-test-')
     caught = 0
@@ -114,7 +124,7 @@ def self_test():
         for n, t in control.items():
             open(os.path.join(d, n + '.gaps'), 'w').write(t)
         bad, lines = summary(d, order)
-        want = ['lir-gaps: 2 programs built (1 failed, 1 not run), 3 methods, 2 of them held back by a reason', 'Alpha\t2\t2', 'Beta\t0\t0', 'Gamma\t1\t1']
+        want = ['lir-gaps: 2 programs built (1 failed, 1 not run), 3 methods, 2 of them held back by a reason', 'Alpha\t2\t2\t0', 'Beta\t0\t0\t1', 'Gamma\t1\t1\t0']
         control_ok = not bad and lines == want
         if not control_ok:
             print(f'lir-gaps self-test: the control read {bad or lines}, not {want}')

@@ -1,6 +1,6 @@
 //! Classes, traits, objects, enums and the module class of a file's top-level definitions.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodFlags, MethodRef, Relation, Visibility};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodFlags, MethodRef, Relation, Unlowered, Visibility};
 use super::classfile::*;
 use super::free;
 use super::gen::*;
@@ -135,9 +135,10 @@ impl Underlying {
     }
 }
 
-/// Whether a build prints, for each method it writes, why parts of it were left to the
-/// generator of the typed IR (`TEQ_LIR_STATS` set): one line `LIRGAPS<TAB><class>.<name><desc>
-/// <TAB><reasons>`, the reasons the names of `lir::Unlowered`, `-` for none.
+/// Whether a build prints, for each method it writes, why parts of it were left to the old
+/// generator (`TEQ_LIR_STATS` set): one line `LIRGAPS<TAB><class>.<name><desc><TAB><reasons of
+/// its nodes><TAB><reasons of its code outside nodes><TAB><instructions outside nodes>`, the
+/// reasons the names of `lir::Unlowered`, `-` for none.
 fn lir_stats() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("TEQ_LIR_STATS").is_some())
@@ -255,11 +256,14 @@ impl<'a> Gen<'a> {
         }
         let m = self.plan.methods.last().expect("a method was begun");
         if lir_stats() {
-            self.m.unlowered.sort_unstable();
-            self.m.unlowered.dedup();
-            let why: Vec<String> = self.m.unlowered.iter().map(|why| format!("{:?}", why)).collect();
-            let why = if why.is_empty() { "-".to_string() } else { why.join(",") };
-            self.gaps_lines.push(format!("LIRGAPS\t{}.{}{}\t{}", self.this_name, m.name, m.desc, why));
+            let named = |why: &mut Vec<Unlowered>| {
+                why.sort_unstable();
+                why.dedup();
+                let names: Vec<String> = why.iter().map(|why| format!("{:?}", why)).collect();
+                if names.is_empty() { "-".to_string() } else { names.join(",") }
+            };
+            let (nodes, outside) = (named(&mut self.m.unlowered), named(&mut self.m.outside));
+            self.gaps_lines.push(format!("LIRGAPS\t{}.{}{}\t{}\t{}\t{}", self.this_name, m.name, m.desc, nodes, outside, code.outside));
         }
         self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
         self.overflow |= self.cw.overflow;
@@ -391,6 +395,7 @@ impl<'a> Gen<'a> {
                 if declared.is_object() && !self.is_vc_object(&declared) {
                     self.m.locals.insert(s, Local { slot, ty: declared, cell: false });
                 } else {
+                    self.outside(Unlowered::LiftedParameterPrologue);
                     let declared = self.write_slot_to_sym(slot, &object, s);
                     let cell = self.m.cells.contains(&s);
                     self.declare_local(s, declared, cell);
@@ -422,6 +427,7 @@ impl<'a> Gen<'a> {
             }
             (_, Some(body)) => self.tail(body),
             (_, None) => {
+                self.outside(Unlowered::LocalDefWithoutBody);
                 self.unsupported("a local def without a body");
                 let ret = l.ret.clone();
                 self.adapt(&ErasedType::V, &ret);
@@ -435,6 +441,7 @@ impl<'a> Gen<'a> {
         let (captured, _) = parse_method_desc(&l.desc);
         let params: Vec<(Option<SymId>, ErasedType)> = captured.iter().map(|t| (None, t.clone())).collect();
         self.begin_method(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, false, &params, l.ret.clone(), &[]);
+        self.outside(Unlowered::JarGetterThunk);
         let mut slot = 0;
         for t in &captured {
             self.load(slot, t);
@@ -470,6 +477,7 @@ impl<'a> Gen<'a> {
     /// capture and their `return`s throw in a `NonLocalReturnControl`, and around the body the
     /// handler that returns the value of one carrying this run's key and throws any other on.
     fn keyed_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) {
+        self.outside(Unlowered::NonLocalReturnKey);
         let object = ErasedType::object();
         let control = ErasedType::L(Rc::from(NON_LOCAL_RETURN));
         self.new_object(OBJECT);
@@ -793,6 +801,7 @@ impl<'a> Gen<'a> {
         self.method_body(fun.sym, &fun.params, body);
         self.end_method();
         self.begin_method(MethodFlags::PUBLIC, &m.name, &m.desc, false, params, m.ret.clone(), &[]);
+        self.outside(Unlowered::ValueClassForwarder);
         let this = self.class_type(c);
         self.load(0, &this);
         self.vc_unbox(c, &u);
@@ -1441,6 +1450,7 @@ impl<'a> Gen<'a> {
     /// for `this` in the body, which the caller writes next.
     pub fn begin_module_clinit(&mut self, flags: MethodFlags, name: &Rc<str>, roots: &[TExprId]) {
         self.begin_method(flags, "<clinit>", "()V", false, &[], ErasedType::V, roots);
+        self.outside(Unlowered::ModuleClinit);
         // The handles of the module class's lazy members come first (`MoveStatics.rebuild`'s
         // static constructor, which `genPlainClass` puts before the instance's making).
         self.var_handle_lookups();
@@ -1462,13 +1472,14 @@ impl<'a> Gen<'a> {
         let this = ErasedType::L(name.clone());
         let roots = self.primary_roots(k);
         self.begin_module_clinit(self.clinit_flags(), &name, &roots);
-        if self.constructor_lowers(k) {
-            self.write_module(false, |g| g.primary_tree(k));
-        } else {
+        if let Err(why) = self.constructor_lowers(k) {
+            self.outside(why);
             let mut parts = Parts::Written;
             self.object_enum_parts(&mut parts, tc);
             self.class_body(&mut parts, tc, k.fields, &this);
             self.return_value(&ErasedType::V);
+        } else {
+            self.write_module(false, |g| g.primary_tree(k));
         }
         self.end_method();
     }
@@ -1556,16 +1567,18 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Whether every part of a class's body has nodes (`Gen::class_body`): no local trait's
-    /// initialiser takes the values of the block (`Gen::load_proxies` reads the `Extras`), and
-    /// every trait's arguments match its parameters with no lazy val before them.
-    fn class_body_lowers(&mut self, tc: &TClass) -> bool {
+    /// Whether every part of a class's body has nodes (`Gen::class_body`), or why not: no local
+    /// trait's initialiser takes the values of the block (`Gen::load_proxies` reads the `Extras`),
+    /// and every trait's arguments match its parameters with no lazy val before them.
+    fn class_body_lowers(&mut self, tc: &TClass) -> Result<(), Unlowered> {
         let prog = self.cx.input.prog;
-        tc.init.iter().all(|init| match *init {
-            TInit::Parent(b, call) => {
-                self.trait_init_proxies(b).is_none() && (call.args.is_empty() || self.trait_params(b).len() == call.args.len as usize && self.prelude_lowers(&prog.stmts[call.prelude.range()]))
-            }
-            TInit::Field(..) | TInit::Stmt(_) => true,
+        tc.init.iter().try_for_each(|init| match *init {
+            TInit::Parent(b, _) if self.trait_init_proxies(b).is_some() => Err(Unlowered::CtorTraitProxies),
+            TInit::Parent(b, call) => match call.args.is_empty() || self.trait_params(b).len() == call.args.len as usize && self.prelude_lowers(&prog.stmts[call.prelude.range()]).is_ok() {
+                true => Ok(()),
+                false => Err(Unlowered::CtorTraitArguments),
+            },
+            TInit::Field(..) | TInit::Stmt(_) => Ok(()),
         })
     }
 
@@ -1696,8 +1709,11 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn prelude_lowers(&self, stmts: &[TStmt]) -> bool {
-        !stmts.iter().any(|s| matches!(*s, TStmt::Val(sym, _) if self.lazy_val(sym)))
+    fn prelude_lowers(&self, stmts: &[TStmt]) -> Result<(), Unlowered> {
+        match stmts.iter().any(|s| matches!(*s, TStmt::Val(sym, _) if self.lazy_val(sym))) {
+            true => Err(Unlowered::CtorPreludeLazyVal),
+            false => Ok(()),
+        }
     }
 
     /// Whether a val is lazy, which `Gen::local_val` gives a holder.
@@ -1763,6 +1779,7 @@ impl<'a> Gen<'a> {
     /// side. A computed null is held as scala-library's `LazyVals$NullValue$`, so that it is computed
     /// once too; an initialiser that throws leaves the holder empty.
     fn lazy_holder_body(&mut self, name: &str, container: &str, ty: &ErasedType, init: HolderInit) {
+        self.outside(Unlowered::ThreadUnsafeLazyMember);
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
         let object = ErasedType::object();
@@ -2079,7 +2096,8 @@ impl<'a> Gen<'a> {
         }
         let extras = Extras { homes: self.class_homes.iter().map(|h| h.0).collect(), keys: self.class_keys.iter().map(|k| k.0).collect() };
         self.bind_extras(&extras, slot);
-        if !self.constructor_lowers(k) {
+        if let Err(why) = self.constructor_lowers(k) {
+            self.outside(why);
             if !self.constructor_parts(&mut Parts::Written, k) {
                 return;
             }
@@ -2116,19 +2134,22 @@ impl<'a> Gen<'a> {
     }
 
     /// Whether every part of a primary constructor has nodes, an object's body among them, so
-    /// that the constructor is one tree.
-    fn constructor_lowers(&mut self, k: &PrimaryCtor) -> bool {
+    /// that the constructor is one tree; or why not.
+    fn constructor_lowers(&mut self, k: &PrimaryCtor) -> Result<(), Unlowered> {
         let prelude = &self.cx.input.prog.stmts[k.tc.parent_prelude.range()];
-        self.super_call_lowers(k) && self.prelude_lowers(prelude) && self.class_body_lowers(k.tc)
+        self.super_call_lowers(k)?;
+        self.prelude_lowers(prelude)?;
+        self.class_body_lowers(k.tc)
     }
 
-    /// Whether the lowering has nodes for the superclass's call by its route: its own and its
-    /// declared parameters, a secondary constructor's and a captured superclass's arguments, and
-    /// an unwritten superclass's as its class file takes them.
-    fn super_call_lowers(&mut self, k: &PrimaryCtor) -> bool {
+    /// Whether the lowering has nodes for the superclass's call by its route, or why not: its own
+    /// and its declared parameters, a secondary constructor's and a captured superclass's
+    /// arguments, and an unwritten superclass's as its class file takes them.
+    fn super_call_lowers(&mut self, k: &PrimaryCtor) -> Result<(), Unlowered> {
         match &k.route {
-            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Unwritten(..) | SuperCall::Via(..) | SuperCall::Captured(..) => true,
-            SuperCall::Defaults(..) | SuperCall::Refused => false,
+            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Unwritten(..) | SuperCall::Via(..) | SuperCall::Captured(..) => Ok(()),
+            SuperCall::Defaults(..) => Err(Unlowered::CtorSuperDefaults),
+            SuperCall::Refused => Err(Unlowered::CtorSuperRefused),
         }
     }
 
@@ -2293,7 +2314,7 @@ impl<'a> Gen<'a> {
         }
         // A secondary constructor's, a captured superclass's and an unwritten superclass's arguments, as a creation
         // of the superclass passes them (`Gen::via_arguments`, `Gen::new_arguments`, `Gen::unwritten_ctor_arguments`).
-        if matches!(parts, Parts::Tree(..)) && self.super_call_lowers(k) {
+        if matches!(parts, Parts::Tree(..)) && self.super_call_lowers(k).is_ok() {
             let super_name: Rc<str> = Rc::from(k.super_name);
             let route = k.route.clone();
             let via = k.tc.parent_via;
@@ -2401,16 +2422,23 @@ impl<'a> Gen<'a> {
             }
         }
         let route = self.self_call_route(call);
-        if matches!(route, SelfCall::Declared(..)) && self.prelude_lowers(prelude) {
-            self.body(|g| {
+        let lowers = match route {
+            SelfCall::Declared(..) => self.prelude_lowers(prelude),
+            SelfCall::Primary(..) | SelfCall::Via(..) | SelfCall::Unowned => Err(Unlowered::SecondaryCtorSelfCall),
+        };
+        match lowers {
+            Ok(()) => self.body(|g| {
                 let mut parts = Parts::Tree(Vec::new(), Vec::new());
                 g.secondary_parts(&mut parts, prelude, route, after);
                 g.returning(parts).0
-            });
-        } else if self.secondary_parts(&mut Parts::Written, prelude, route, after) {
-            self.return_value(&ErasedType::V);
-        } else {
-            return;
+            }),
+            Err(why) => {
+                self.outside(why);
+                if !self.secondary_parts(&mut Parts::Written, prelude, route, after) {
+                    return;
+                }
+                self.return_value(&ErasedType::V);
+            }
         }
         self.end_method();
         if !self.this_class.map_or(false, |c| cx.ctor_defaults_on_companion(c) || cx.ctor_defaults_on_inner_companion(c) || cx.ctor_defaults_on_local_companion(c)) {
@@ -3946,6 +3974,7 @@ impl<'a> Gen<'a> {
     /// (`vc_member_lowers`), returning `ret`, over the underlying value in local `us` of type `u`
     /// and the member's parameter in local `ps`: `equals` over a reference, and the elements.
     pub(super) fn vc_synthesized_body(&mut self, c: ClassId, member: &str, ret: &ErasedType, u: &ErasedType, us: u16, ps: u16) {
+        self.outside(Unlowered::ValueClassSynthesized);
         let cx = self.cx;
         let syms = cx.input.syms;
         let string = ErasedType::L(Rc::from(STRING));

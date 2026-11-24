@@ -533,6 +533,8 @@ pub struct MethodCx {
     /// Why the escape nodes written in the method were not lowered, in the order they were
     /// written: what the statistics name the method by (`Gen::end_method`).
     pub unlowered: Vec<Unlowered>,
+    /// Why instructions of the method are written with no node (`Gen::outside`).
+    pub outside: Vec<Unlowered>,
 }
 
 /// A `try` with a finalizer around the code being generated: `pending` is the slot a `return`
@@ -572,6 +574,7 @@ impl Default for MethodCx {
             labels: FxMap::default(),
             try_exits: FxMap::default(),
             unlowered: Vec::new(),
+            outside: Vec::new(),
         }
     }
 }
@@ -842,6 +845,11 @@ impl<'a> Gen<'a> {
         self.overflow = false;
         self.print_gaps();
         out
+    }
+
+    /// Records why the method begun is written, from here, with no node.
+    pub(super) fn outside(&mut self, why: Unlowered) {
+        self.m.outside.push(why);
     }
 
     fn print_gaps(&mut self) {
@@ -3814,12 +3822,9 @@ impl<'a> Gen<'a> {
                 }
             },
             TExpr::ArrayLit(_) | TExpr::Index(..) => unreachable!("lowered (`Gen::lower_node`)"),
-            TExpr::Spread(inner) => self.expr_static(inner),
+            TExpr::Spread(_) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Return(_) => unreachable!("written where the type wanted is known (`Gen::return_`)"),
-            TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => {
-                self.unsupported("JavaScript interop");
-                ErasedType::V
-            }
+            TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => unreachable!("refused by the lowering (`Gen::lower_refused`)"),
             TExpr::Null => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Throw(..) | TExpr::Try(_) => unreachable!("emitted by expr"),
             TExpr::Splice(_) => unreachable!("a stored inline body is emitted nowhere"),
@@ -4447,10 +4452,6 @@ impl<'a> Gen<'a> {
         name
     }
 
-    pub fn static_value(&mut self, s: SymId) -> ErasedType {
-        self.load_static(s)
-    }
-
     pub(super) fn static_route(&mut self, s: SymId) -> StaticRoute {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
@@ -4484,24 +4485,6 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
         match self.static_route(s) {
-            StaticRoute::EnumValue(case) => {
-                if let Owner::Class(companion) = info.owner {
-                    if cx.layout.has_body(companion) && cx.input.reach.classes[companion.idx()] {
-                        let t = self.load_module(companion);
-                        self.pop_value(&t);
-                    } else if let Some(e) = cx.enum_of_case(case) {
-                        // The enum makes its values when it is initialised, so a read starts there:
-                        // one that initialised the value's class first would wait for the enum, as
-                        // its superclass, while another thread making the values waited for it.
-                        let enum_name = self.class_name(e);
-                        self.invoke(Invoke::Static, &enum_name, false, "$touch", &[], &ErasedType::V);
-                    }
-                }
-                let name = self.class_name(case);
-                let t = ErasedType::L(name.clone());
-                self.getstatic(&name, "$instance", &t);
-                t
-            }
             StaticRoute::InlineVal => match self.inline_val_constant(s).flatten() {
                 Some(l) => self.literal_value(l),
                 None => {
@@ -4510,11 +4493,8 @@ impl<'a> Gen<'a> {
                     self.sym_type(s)
                 }
             },
-            // Written from its node, for the callers that hold no expression of the read too.
-            StaticRoute::GivenObject | StaticRoute::JavaField | StaticRoute::EnumField(..) | StaticRoute::Field | StaticRoute::Accessor => {
-                let node = self.lowering(|g| g.lower_static(s)).expect("lowered, by the route");
-                self.write(node);
-                self.lir.ty(node).clone()
+            StaticRoute::GivenObject | StaticRoute::JavaField | StaticRoute::EnumField(..) | StaticRoute::EnumValue(_) | StaticRoute::Field | StaticRoute::Accessor => {
+                unreachable!("lowered (`Gen::lower_static`)")
             }
         }
     }
@@ -4774,16 +4754,12 @@ impl<'a> Gen<'a> {
 
     fn field_read(&mut self, r: TExprId, s: SymId) -> ErasedType {
         match self.field_route(r, s) {
-            FieldRoute::Js => {
-                self.unsupported("a member of a JavaScript type");
-                ErasedType::V
-            }
+            FieldRoute::Js => unreachable!("refused by the lowering (`Gen::lower_refused`)"),
             FieldRoute::Object(c) => {
                 self.statement(r);
                 self.load_module(c)
             }
-            FieldRoute::Early => self.load_local(s),
-            FieldRoute::Java | FieldRoute::GivenObject { .. } | FieldRoute::Underlying(_) | FieldRoute::Own | FieldRoute::PrivateParam(_) | FieldRoute::Accessor => {
+            FieldRoute::Java | FieldRoute::GivenObject { .. } | FieldRoute::Underlying(_) | FieldRoute::Early | FieldRoute::Own | FieldRoute::PrivateParam(_) | FieldRoute::Accessor => {
                 unreachable!("lowered (`Gen::lower_field_read`)")
             }
         }
@@ -4837,22 +4813,14 @@ impl<'a> Gen<'a> {
 
     fn assign(&mut self, target: TExprId, value: TExprId) {
         let cx = self.cx;
-        if let TExpr::Field(_, s) | TExpr::Static(s) = cx.input.prog.expr(target) {
+        if let TExpr::Static(s) = cx.input.prog.expr(target) {
             if let Some((cf, JMember::Field(i))) = cx.input.java_member(s) {
-                return self.java_field_write(target, &cf.name, &cf.fields[i as usize], value);
+                return self.java_field_write(&cf.name, &cf.fields[i as usize], value);
             }
         }
         match cx.input.prog.expr(target) {
             TExpr::Local(s) => self.store_local(s, value),
-            TExpr::Static(s) => {
-                let Owner::Class(c) = cx.input.syms.sym(s).owner else { unreachable!("lowered (`Gen::lower_assign`)") };
-                self.load_module(c);
-                let m = self.mref(s);
-                self.expr(value, &m.ret);
-                let setter = self.setter_ref(&m);
-                self.invoke_mref(&setter);
-            }
-            TExpr::Field(..) => unreachable!("lowered (`Gen::lower_assign`)"),
+            TExpr::Field(..) | TExpr::Static(_) => unreachable!("lowered (`Gen::lower_assign`)"),
             _ => self.unsupported("assignment to this kind of target"),
         }
     }
@@ -4864,22 +4832,10 @@ impl<'a> Gen<'a> {
         MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name: format!("{}_$eq", m.name), params, ret: ErasedType::V, desc, kind: m.kind }
     }
 
-    fn java_field_write(&mut self, target: TExprId, owner: &str, f: &crate::classfile::Field, value: TExprId) {
+    fn java_field_write(&mut self, owner: &str, f: &crate::classfile::Field, value: TExprId) {
         let t = parse_type(&f.descriptor).0;
-        if self.java_value_type(t.clone()) != t {
-            self.unsupported("assignment to a Java array field outside link mode");
-            return;
-        }
-        if f.access & ACC_STATIC != 0 {
-            self.expr(value, &t);
-            self.putstatic(owner, &f.name, &t);
-        } else {
-            if let TExpr::Field(..) = self.cx.input.prog.expr(target) {
-                unreachable!("lowered (`Gen::lower_assign`)")
-            }
-            self.expr(value, &t);
-            self.putfield(owner, &f.name, &t);
-        }
+        self.expr(value, &t);
+        self.putfield(owner, &f.name, &t);
     }
 
     // ---- calls ----
@@ -5810,10 +5766,7 @@ impl<'a> Gen<'a> {
 
     fn call_method(&mut self, r: TExprId, s: SymId, args: ListRef) -> ErasedType {
         match self.call_route(r, s, args) {
-            CallRoute::Js => {
-                self.unsupported("a member of a JavaScript type");
-                ErasedType::V
-            }
+            CallRoute::Js => unreachable!("refused by the lowering (`Gen::lower_refused`)"),
             CallRoute::Extension(c, route) => self.call_extension(r, s, args, c, route),
             CallRoute::Interpolator(helper, None) => self.call_interpolator(r, s, helper, args),
             CallRoute::Object(c) => {

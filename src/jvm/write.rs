@@ -1,7 +1,7 @@
 //! Bytecode from the lowered IR (`crate::lir`): each node's code in the order the generator
 //! wrote it from the typed IR, so that the class files are the same byte for byte.
 
-use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LiftedFrom, LirId, List, Relation, TempId};
+use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LiftedFrom, LirId, List, Relation, TempId, Unlowered};
 use super::classfile::{op, Label, VT};
 use super::classes::Declared;
 use super::gen::{Gen, Lifted, Local, Pending, PendingBody};
@@ -85,6 +85,7 @@ impl<'a> Gen<'a> {
         if let Some(e) = of {
             self.mark_line(e);
         }
+        self.code.in_node += 1;
         match kind {
             Kind::Legacy(e, why) => {
                 self.m.unlowered.push(why);
@@ -164,6 +165,7 @@ impl<'a> Gen<'a> {
                 self.store(slot, &held);
             }
             Kind::LocalFun(sym) => {
+                self.m.unlowered.push(Unlowered::LocalDefDeclaration);
                 self.lifted_fun(sym);
             }
             Kind::Binary { op, left, right } => {
@@ -504,7 +506,10 @@ impl<'a> Gen<'a> {
                 self.code.bind(end);
             }
             Kind::Break { label, value } => self.write_break(label, value, None),
+            // The program is refused where the form stands, in the method being written.
+            Kind::Refused(refusal) => self.unsupported(&refusal.message()),
         }
+        self.code.in_node -= 1;
         (self.line_floor, self.line_hold) = lines;
     }
 
@@ -585,6 +590,8 @@ impl<'a> Gen<'a> {
         let made = all.iter().position(|&s| matches!(self.lir.node(s).kind, Kind::InitCall { .. })).map_or(0, |i| i + 1);
         debug_assert!(fields.iter().all(|f| f.at >= made), "a field declared in the constructor before the instance is made");
         let part = if init { 0..made } else { made..all.len() };
+        // Each part writes of the root its statements and its return.
+        self.code.in_node += 1;
         for i in part {
             if !init {
                 for f in fields.iter().filter(|f| f.at == i) {
@@ -600,6 +607,7 @@ impl<'a> Gen<'a> {
         }
         let ret = self.m.ret.clone();
         self.return_value(&ret);
+        self.code.in_node -= 1;
     }
 
     /// The def's call of itself where it loops: its operands into the parameters and `this`, then
