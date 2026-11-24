@@ -5579,7 +5579,13 @@ impl<'a> Worker<'a> {
                 // A nested object is its class's definition, which holds the instance.
                 Stat::Val(sig, _) if sig.mods.flags.has(tags::OBJECT) => {}
                 Stat::Class(inner) => {
-                    if let Some(d) = self.conv_local_class(cv, inner) {
+                    // A class's defaults are its synthetic companion's getters, as a local class's at its block are.
+                    let name = tasty.source_name(inner.name);
+                    let getters = cd.template.stats.iter().find_map(|t| match t {
+                        Stat::Class(m) if m.mods.flags.has(tags::OBJECT) && m.mods.flags.has(tags::SYNTHETIC) && !inner.mods.flags.has(tags::OBJECT) && tasty.source_name(m.name) == name => Some(&**m),
+                        _ => None,
+                    });
+                    if let Some(d) = self.conv_local_class_with(cv, inner, getters) {
                         body.push(Stmt::Def(d));
                     }
                 }
