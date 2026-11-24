@@ -231,7 +231,7 @@ impl<'a> Gen<'a> {
         let syms: Vec<SymId> = params.iter().filter_map(|p| p.0).collect();
         m.cells = free::cells(self.cx, &mut self.an, &syms, roots);
         self.code = Code::new(locals);
-        self.code.wide = self.wide;
+        self.code.relax = self.relax;
         self.lir.clear();
         self.lower_declared.clear();
         self.m = m;

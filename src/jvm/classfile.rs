@@ -316,6 +316,20 @@ struct Frame {
     stack: Vec<VT>,
 }
 
+/// A jump as it is written first, 16-bit: the instruction's offset and its target.
+struct Jump {
+    at: u32,
+    target: Label,
+}
+
+/// The state a conditional jump falls through with (`Code::relax`): the frame its inverse lands
+/// on where the jump is widened.
+struct Falls {
+    jump: usize,
+    locals: Vec<VT>,
+    stack: Vec<VT>,
+}
+
 pub struct Handler {
     pub start: Label,
     pub end: Label,
@@ -341,16 +355,19 @@ pub struct Code {
     max_stack: u16,
     max_locals: u16,
     labels: Vec<LabelInfo>,
-    fixups: Vec<(u32, u32, Label)>,
+    jumps: Vec<Jump>,
+    falls: Vec<Falls>,
     frames: Vec<Frame>,
     handlers: Vec<Handler>,
     lines: Vec<(u16, u16)>,
     /// False after an unconditional transfer until a label is bound.
     pub reachable: bool,
-    /// Every jump takes a 32-bit offset: a conditional one as its inverse over a `goto_w`. For
-    /// the methods whose code is too long for 16-bit offsets.
-    pub wide: bool,
-    /// Set by `finish` when a 16-bit offset did not reach its target.
+    /// The method is written again because a jump of its unit did not reach in 16 bits: each
+    /// conditional jump keeps the state it falls through with, so that `finish` can widen the
+    /// jumps that do not reach (`Code::widen`).
+    pub relax: bool,
+    /// Set by `finish` when a 16-bit offset did not reach its target outside `relax`, or the code
+    /// is longer than the JVM allows.
     pub overflow: bool,
     /// Set when a pop met an empty model: the method's code is wrong and is reported, not
     /// written.
@@ -380,12 +397,13 @@ impl Code {
             max_stack: 0,
             max_locals,
             labels: Vec::new(),
-            fixups: Vec::new(),
+            jumps: Vec::new(),
+            falls: Vec::new(),
             frames: Vec::new(),
             handlers: Vec::new(),
             lines: Vec::new(),
             reachable: true,
-            wide: false,
+            relax: false,
             overflow: false,
             underflow: false,
             misreserved: false,
@@ -643,38 +661,17 @@ impl Code {
         }
     }
 
-    /// A branch instruction; the operands it pops are already gone from the model.
+    /// A branch instruction; the operands it pops are already gone from the model. It is written
+    /// with a 16-bit offset, which `finish` widens where it does not reach.
     pub fn jump(&mut self, opcode: u8, target: Label) {
         self.before_insn();
-        if self.wide {
-            if opcode != op::GOTO {
-                let inverse = match opcode {
-                    op::IFNULL => op::IFNONNULL,
-                    op::IFNONNULL => op::IFNULL,
-                    o if (o - op::IFEQ) % 2 == 0 => o + 1,
-                    o => o - 1,
-                };
-                self.bytes.push(inverse);
-                self.bytes.extend_from_slice(&8u16.to_be_bytes());
-            }
-            let at = self.pc();
-            self.bytes.push(0xc8);
-            self.fixups.push((at, (at + 1) | 0x8000_0000, target));
-            self.bytes.extend_from_slice(&[0, 0, 0, 0]);
-            self.record_target(target);
-            if opcode == op::GOTO {
-                self.reachable = false;
-            } else {
-                // The inverse lands behind the `goto_w`.
-                let offset = self.pc();
-                self.add_frame(offset);
-            }
-            return;
-        }
         let at = self.pc();
         self.bytes.push(opcode);
-        self.fixups.push((at, at + 1, target));
+        self.jumps.push(Jump { at, target });
         self.bytes.extend_from_slice(&[0, 0]);
+        if self.relax && opcode != op::GOTO {
+            self.falls.push(Falls { jump: self.jumps.len() - 1, locals: self.locals.clone(), stack: self.stack.clone() });
+        }
         self.record_target(target);
         if opcode == op::GOTO {
             self.reachable = false;
@@ -692,21 +689,7 @@ impl Code {
             // A label bound at the very end needs an instruction to stand on.
             self.frames.retain(|f| f.offset < self.bytes.len() as u32 || self.bytes.is_empty());
         }
-        for &(insn, pos, label) in &self.fixups {
-            let target = self.labels[label.0 as usize].offset.expect("unbound label") as i64;
-            let delta = target - insn as i64;
-            if pos & 0x8000_0000 != 0 {
-                let p = (pos & 0x7fff_ffff) as usize;
-                self.bytes[p..p + 4].copy_from_slice(&(delta as i32).to_be_bytes());
-            } else {
-                if delta < i16::MIN as i64 || delta > i16::MAX as i64 {
-                    self.overflow = true;
-                    continue;
-                }
-                let p = pos as usize;
-                self.bytes[p..p + 2].copy_from_slice(&(delta as i16).to_be_bytes());
-            }
-        }
+        self.lay_out();
         let code_len = self.bytes.len() as u32;
         let mut out = Vec::with_capacity(self.bytes.len() + 64);
         out.extend_from_slice(&self.max_stack.to_be_bytes());
@@ -793,8 +776,136 @@ impl Code {
                 out.extend_from_slice(&line.to_be_bytes());
             }
         }
-        let overflow = self.overflow || code_len > 65535;
+        let overflow = self.overflow || code_len as usize > MAX_CODE;
         (out, overflow)
+    }
+
+    /// Writes each jump's offset: in 16 bits where every one reaches, else, while the method is
+    /// written again (`relax`), with the jumps that do not reach widened (`Code::widen`).
+    fn lay_out(&mut self) {
+        for j in &self.jumps {
+            let delta = self.labels[j.target.0 as usize].offset.expect("unbound label") as i64 - j.at as i64;
+            if delta < i16::MIN as i64 || delta > i16::MAX as i64 {
+                if self.relax && self.bytes.len() <= MAX_CODE {
+                    self.widen();
+                } else {
+                    self.overflow = true;
+                }
+                return;
+            }
+            let p = j.at as usize + 1;
+            self.bytes[p..p + 2].copy_from_slice(&(delta as i16).to_be_bytes());
+        }
+    }
+
+    /// Lays the code out again with the jumps that do not reach in 16 bits wide, as scalac's ASM
+    /// writes them (`MethodWriter.visitJumpInsn`, and `ClassReader` for a forward one): a `goto`
+    /// as a `goto_w`, a conditional jump as its inverse over a `goto_w`, whose 8 bytes the inverse
+    /// jumps over to the code it falls through to. A widened jump moves what follows it, so the
+    /// layout is taken again until every narrow jump reaches; a jump once wide stays wide, which
+    /// makes the wide ones the least set. Every offset then follows the final layout: the labels
+    /// (the jumps' targets, the handlers' ranges), the frames and the uninitialised types in them,
+    /// the line table; the inverse of a widened conditional jump lands on a frame of the state it
+    /// falls through with.
+    fn widen(&mut self) {
+        let n = self.jumps.len();
+        let growth = |c: &Code, k: usize| if c.bytes[c.jumps[k].at as usize] == op::GOTO { 2 } else { 5 };
+        let mut wide = vec![false; n];
+        // moved[k]: what the wide jumps before jump k add to its offset.
+        let mut moved = vec![0u32; n + 1];
+        loop {
+            let mut more = false;
+            for k in 0..n {
+                if wide[k] {
+                    continue;
+                }
+                let j = &self.jumps[k];
+                let target = self.labels[j.target.0 as usize].offset.expect("unbound label");
+                let delta = Self::moved_to(&self.jumps, &moved, target) as i64 - (j.at + moved[k]) as i64;
+                if delta < i16::MIN as i64 || delta > i16::MAX as i64 {
+                    wide[k] = true;
+                    more = true;
+                }
+            }
+            if !more {
+                break;
+            }
+            for k in 0..n {
+                moved[k + 1] = moved[k] + if wide[k] { growth(self, k) } else { 0 };
+            }
+        }
+        let mut bytes = Vec::with_capacity(self.bytes.len() + moved[n] as usize);
+        let mut from = 0;
+        for (k, j) in self.jumps.iter().enumerate() {
+            bytes.extend_from_slice(&self.bytes[from..j.at as usize]);
+            from = j.at as usize + 3;
+            let opcode = self.bytes[j.at as usize];
+            let target = Self::moved_to(&self.jumps, &moved, self.labels[j.target.0 as usize].offset.expect("unbound label")) as i64;
+            let at = bytes.len() as i64;
+            if !wide[k] {
+                bytes.push(opcode);
+                bytes.extend_from_slice(&((target - at) as i16).to_be_bytes());
+            } else if opcode == op::GOTO {
+                bytes.push(op::GOTO_W);
+                bytes.extend_from_slice(&((target - at) as i32).to_be_bytes());
+            } else {
+                bytes.push(inverse(opcode));
+                bytes.extend_from_slice(&8u16.to_be_bytes());
+                bytes.push(op::GOTO_W);
+                bytes.extend_from_slice(&((target - at - 3) as i32).to_be_bytes());
+            }
+        }
+        bytes.extend_from_slice(&self.bytes[from..]);
+        let at = |o: u32| Self::moved_to(&self.jumps, &moved, o);
+        let place = |t: VT| match t {
+            VT::Uninit(o) => VT::Uninit(at(o as u32) as u16),
+            t => t,
+        };
+        let mut landings = self.falls.iter().filter(|f| wide[f.jump]).map(|f| Frame {
+            offset: at(self.jumps[f.jump].at) + 8,
+            locals: f.locals.iter().map(|&t| place(t)).collect(),
+            stack: f.stack.iter().map(|&t| place(t)).collect(),
+        }).peekable();
+        let mut frames = Vec::with_capacity(self.frames.len() + n);
+        for f in &self.frames {
+            let offset = at(f.offset);
+            while let Some(l) = landings.next_if(|l| l.offset <= offset) {
+                if l.offset < offset {
+                    frames.push(l);
+                }
+            }
+            frames.push(Frame { offset, locals: f.locals.iter().map(|&t| place(t)).collect(), stack: f.stack.iter().map(|&t| place(t)).collect() });
+        }
+        frames.extend(landings);
+        for line in &mut self.lines {
+            line.0 = at(line.0 as u32) as u16;
+        }
+        for label in &mut self.labels {
+            if let Some(o) = label.offset {
+                label.offset = Some(Self::moved_to(&self.jumps, &moved, o));
+            }
+        }
+        self.frames = frames;
+        self.bytes = bytes;
+        self.overflow = self.bytes.len() > MAX_CODE;
+    }
+
+    /// Where the code at the 16-bit layout's offset `o` lands once the wide jumps before it grew.
+    fn moved_to(jumps: &[Jump], moved: &[u32], o: u32) -> u32 {
+        o + moved[jumps.partition_point(|j| j.at < o)]
+    }
+}
+
+/// The longest code a method may have: the JVM's `code_length` is below 65536.
+const MAX_CODE: usize = 65535; // jdk: JVMS 4.7.3
+
+/// The conditional jump taken where `opcode`'s is not.
+fn inverse(opcode: u8) -> u8 {
+    match opcode {
+        op::IFNULL => op::IFNONNULL,
+        op::IFNONNULL => op::IFNULL,
+        o if (o - op::IFEQ) % 2 == 0 => o + 1,
+        o => o - 1,
     }
 }
 
@@ -1192,6 +1303,7 @@ pub mod op {
     pub const INSTANCEOF: u8 = 0xc1;
     pub const IFNULL: u8 = 0xc6;
     pub const IFNONNULL: u8 = 0xc7;
+    pub const GOTO_W: u8 = 0xc8;
 }
 
 /// A jar is a zip archive; the entries are stored without compression. Its manifest names the
@@ -1289,6 +1401,156 @@ fn crc32(table: &[u32; 256], data: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use super::{op, Code, ConstPool, Handler, VT};
+
+    /// The code of a `finish`ed method: its bytes, and whether it was refused.
+    fn code_of(c: Code) -> (Vec<u8>, bool) {
+        let (out, overflow) = c.finish(&mut ConstPool::new());
+        let len = u32::from_be_bytes([out[4], out[5], out[6], out[7]]) as usize;
+        (out[8..][..len].to_vec(), overflow)
+    }
+
+    fn filler(c: &mut Code, bytes: usize) {
+        for _ in 0..bytes {
+            c.op(op::NOP);
+        }
+    }
+
+    /// `iload_0; if<cond> L; nop * gap; L: return`, the jump's offset 3 + gap.
+    fn forward(gap: usize, relax: bool) -> (Vec<u8>, bool) {
+        let mut c = Code::new(vec![VT::Int]);
+        c.relax = relax;
+        let l = c.new_label();
+        c.var_insn(op::ILOAD, op::ILOAD_0, 0);
+        c.jump(op::IFLE, l);
+        filler(&mut c, gap);
+        c.bind(l);
+        c.op(op::RETURN);
+        code_of(c)
+    }
+
+    fn short_at(code: &[u8], at: usize) -> i64 {
+        i16::from_be_bytes([code[at], code[at + 1]]) as i64
+    }
+
+    fn int_at(code: &[u8], at: usize) -> i64 {
+        i32::from_be_bytes([code[at], code[at + 1], code[at + 2], code[at + 3]]) as i64
+    }
+
+    #[test]
+    fn a_forward_jump_is_widened_past_32767_alone() {
+        let (code, overflow) = forward(32764, false);
+        assert!(!overflow);
+        assert_eq!((code[1], short_at(&code, 2)), (op::IFLE, 32767));
+        let (_, overflow) = forward(32765, false);
+        assert!(overflow, "outside `relax` a jump that does not reach makes the unit be written again");
+        let (code, overflow) = forward(32765, true);
+        assert!(!overflow);
+        // The inverse over a `goto_w` to the label, which moved by the 5 bytes the jump grew.
+        assert_eq!((code[1], short_at(&code, 2), code[4]), (op::IFGT, 8, op::GOTO_W));
+        assert_eq!(int_at(&code, 5), 1 + 8 + 32765 - 4);
+        assert_eq!(code.len(), 1 + 8 + 32765 + 1);
+        let (code, _) = forward(32764, true);
+        assert_eq!((code[1], short_at(&code, 2), code.len()), (op::IFLE, 32767, 1 + 3 + 32764 + 1));
+    }
+
+    /// `L: nop * gap; goto L; return`, the jump's offset -gap.
+    fn backward(gap: usize) -> Vec<u8> {
+        let mut c = Code::new(vec![]);
+        c.relax = true;
+        let l = c.new_label();
+        c.bind(l);
+        filler(&mut c, gap);
+        c.jump(op::GOTO, l);
+        c.op(op::RETURN);
+        code_of(c).0
+    }
+
+    #[test]
+    fn a_backward_jump_is_widened_past_minus_32768_alone() {
+        let code = backward(32768);
+        assert_eq!((code[32768], short_at(&code, 32769), code.len()), (op::GOTO, -32768, 32768 + 3 + 1));
+        let code = backward(32769);
+        assert_eq!((code[32769], int_at(&code, 32770), code.len()), (op::GOTO_W, -32769, 32769 + 5 + 1));
+    }
+
+    /// A jump that reaches in the 16-bit layout is widened where the jumps widened inside its
+    /// span push its target out of reach, and one whose span no wide jump is in stays narrow.
+    #[test]
+    fn a_jump_is_widened_where_the_widened_ones_push_it_out_of_reach() {
+        let mut c = Code::new(vec![VT::Int]);
+        c.relax = true;
+        let (near, far, after) = (c.new_label(), c.new_label(), c.new_label());
+        c.var_insn(op::ILOAD, op::ILOAD_0, 0);
+        c.jump(op::IFEQ, near); // at 1: 32767 to `near` in the 16-bit layout
+        c.jump(op::GOTO, far); // at 4: past 32767 to `far`
+        filler(&mut c, 32767 - 6);
+        c.bind(near);
+        c.var_insn(op::ILOAD, op::ILOAD_0, 0);
+        c.jump(op::IFNE, after); // reaches: no wide jump between it and its target
+        filler(&mut c, 10);
+        c.bind(after);
+        filler(&mut c, 40);
+        c.bind(far);
+        c.op(op::RETURN);
+        let (code, overflow) = code_of(c);
+        assert!(!overflow);
+        assert_eq!((code[1], code[4], code[9]), (op::IFNE, op::GOTO_W, op::GOTO_W), "the first widened by the second's growth");
+        let near_at = 32768 + 7;
+        assert_eq!(code[near_at + 1], op::IFNE);
+        assert_eq!(short_at(&code, near_at + 2), 3 + 10);
+        assert_eq!(int_at(&code, 5), near_at as i64 - 4);
+        assert_eq!(int_at(&code, 10), (near_at + 1 + 3 + 10 + 40) as i64 - 9);
+    }
+
+    /// The frames, the uninitialised types in them, the handlers' ranges and the line table follow
+    /// the widened layout, and the widened jump's inverse lands on a frame of the state it falls
+    /// through with.
+    #[test]
+    fn every_offset_follows_the_widened_layout() {
+        let mut c = Code::new(vec![VT::Int]);
+        c.relax = true;
+        let (skip, start, end, handler) = (c.new_label(), c.new_label(), c.new_label(), c.new_label());
+        c.var_insn(op::ILOAD, op::ILOAD_0, 0);
+        c.jump(op::IFLE, skip); // at 1, widened
+        c.new_local(VT::Int);
+        c.op(op::ICONST_0);
+        c.var_insn(op::ISTORE, op::ISTORE_0, 1); // a local the code after the jump has
+        c.line(7);
+        c.bind(start);
+        let new_at = c.pc();
+        c.op_u16(op::NEW, 1);
+        c.push(VT::Uninit(new_at as u16));
+        let mid = c.new_label();
+        c.jump(op::GOTO, mid);
+        c.bind(mid);
+        c.op(op::POP);
+        c.pop();
+        c.bind(end);
+        filler(&mut c, 32770);
+        c.op(op::RETURN);
+        c.end_path();
+        c.bind_handler(handler, VT::Object(2));
+        c.op(op::ATHROW);
+        c.end_path();
+        c.add_handler(Handler { start, end, handler, catch_type: 0 });
+        c.bind(skip);
+        c.op(op::RETURN);
+        c.lay_out();
+        assert_eq!((c.bytes[1], c.bytes[4]), (op::IFGT, op::GOTO_W));
+        let at = |o: u32| o + 5;
+        let offsets: Vec<u32> = c.frames.iter().map(|f| f.offset).collect();
+        assert_eq!(offsets[0], 9, "the inverse's landing");
+        let landing = &c.frames[0];
+        assert_eq!((landing.locals.clone(), landing.stack.clone()), (vec![VT::Int], vec![]));
+        let mid_frame = c.frames.iter().find(|f| f.offset == at(new_at + 3 + 3)).expect("the label after the `new`'s frame");
+        assert_eq!(mid_frame.stack, vec![VT::Uninit(at(new_at) as u16)]);
+        assert_eq!(c.lines, vec![(at(new_at) as u16, 7)]);
+        assert_eq!(c.labels[start.0 as usize].offset, Some(at(new_at)));
+        assert_eq!(c.labels[handler.0 as usize].offset, Some(at(new_at + 7 + 32770 + 1)));
+        assert_eq!(c.labels[skip.0 as usize].offset, Some(at(new_at + 7 + 32770 + 2)));
+    }
+
     /// The jar writer's CRC-32 is the one zip.rs reads jars by: the check value, and every length
     /// past the slicing by 8's blocks.
     #[test]

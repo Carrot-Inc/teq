@@ -732,10 +732,12 @@ pub struct Gen<'a> {
     /// an inherited method of that descriptor with a body takes a forwarder as scalac's has one.
     pub pair_bridged: Vec<(String, String)>,
     pub forward_from: Option<(Rc<str>, Vec<crate::lir::MethodDef>)>,
-    pub wide: bool,
+    /// The unit is written again because a jump of one of its methods did not reach in 16 bits
+    /// (`Code::relax`).
+    pub relax: bool,
     pub overflow: bool,
     /// The statistics lines of the methods written (`TEQ_LIR_STATS`, `Gen::end_method`), printed
-    /// once a unit is kept: a unit written again with wide jumps prints its methods once.
+    /// once a unit is kept: a unit written again to widen its jumps prints its methods once.
     pub gaps_lines: Vec<String>,
     /// The `Object` a value class over a type parameter erases to in link mode, told apart by
     /// identity from the `Object` of a generic slot, where the value is boxed.
@@ -822,7 +824,7 @@ impl<'a> Gen<'a> {
             keep_table: false,
             pair_bridged: Vec::new(),
             forward_from: None,
-            wide: false,
+            relax: false,
             overflow: false,
             gaps_lines: Vec::new(),
             vc_object: Rc::from(OBJECT),
@@ -846,9 +848,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A class with a method too long for 16-bit jump offsets is emitted again with wide jumps.
+    /// A class with a method too long for 16-bit jump offsets is emitted again, its jumps that do
+    /// not reach widened (`Code::widen`).
     pub fn emit_unit(&mut self, unit: Unit) -> (String, Vec<u8>) {
-        self.wide = false;
+        self.relax = false;
         let (errors, refused, gaps) = (self.errors.len(), self.refused.len(), self.gaps_lines.len());
         let out = self.emit_unit_once(unit);
         if !self.overflow {
@@ -858,13 +861,13 @@ impl<'a> Gen<'a> {
         self.errors.truncate(errors);
         self.refused.truncate(refused);
         self.gaps_lines.truncate(gaps);
-        self.wide = true;
+        self.relax = true;
         self.overflow = false;
         let out = self.emit_unit_once(unit);
         if self.overflow {
             self.unsupported("a method whose code exceeds what the JVM allows");
         }
-        self.wide = false;
+        self.relax = false;
         self.overflow = false;
         self.print_gaps();
         out
