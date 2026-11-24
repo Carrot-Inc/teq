@@ -3223,7 +3223,7 @@ fn dump_product_inits(typer: &mut typer::Worker, path: &str) {
     for &(_, c) in &objects {
         typer.check_library_class(c);
     }
-    let layout = emit::layout::Layout::new(&typer.prog, &typer.syms, typer.interner);
+    let layout = emit::layout::Layout::new(&typer.prog, &typer.syms, &typer.types, typer.interner);
     let mut lines: Vec<String> = Vec::new();
     for (dir, c) in objects {
         if let Some(name) = products::object_inits(&typer.syms, typer.interner, &layout, std::iter::once(c)).pop() {
@@ -3241,7 +3241,7 @@ fn dump_product_inits(typer: &mut typer::Worker, path: &str) {
 /// A check build's `inits`: the objects of the owned sources whose construction runs code, by
 /// the rule the JVM build applies to the module classes it emits (`products::object_inits`).
 fn check_inits(typer: &typer::Worker, entries: &mut [products::Entry]) {
-    let layout = emit::layout::Layout::new(&typer.prog, &typer.syms, typer.interner);
+    let layout = emit::layout::Layout::new(&typer.prog, &typer.syms, &typer.types, typer.interner);
     let owned = |f: source::FileId| (f.0 as usize) < typer.files.len() && typer.is_program_file(f) && !typer.in_jar(f);
     let objects: Vec<types::ClassId> = typer.prog.classes.iter().map(|tc| tc.id).filter(|&c| owned(typer.syms.class(c).file) && typer.syms.class(c).owner != symbols::Owner::Local).collect();
     for c in objects {

@@ -710,17 +710,21 @@ impl<'a, 't> Interp<'a, 't> {
             (tc.ctor_params.clone(), tc.ctor_defaults.clone(), tc.parent_args, tc.parent_via, tc.parent_prelude, tc.captures)
         };
         let is_anon = kind == ClassKind::Anon;
+        let at_creation = crate::tir::parent_call_at_creation(self.syms(), &self.typer.types, c);
         let this = Value::Obj(obj.clone());
         let key = self.fresh_key();
         let cx = Ctx { this: this.clone(), def_key: key, class: Some(c), tail: None };
         let frame = Frame::with(obj.env.clone(), Vec::with_capacity(params.len()));
         // What the class captures is read from its environment; the values that follow go to
-        // the parameters of a named local class, or to the superclass of an anonymous one.
+        // the parameters of a named local class, or to the superclass of an anonymous one over a
+        // class, whose creation evaluates them (`tir::parent_call_at_creation`).
         let captures = if is_anon { params.len() } else { captures };
         let mut args = args.into_iter();
         let mut parent_vals: Option<Vec<Value>> = None;
         if is_anon {
-            parent_vals = Some(args.by_ref().skip(captures).collect());
+            if at_creation {
+                parent_vals = Some(args.by_ref().skip(captures).collect());
+            }
         } else {
             // A named class's captures (the outer instance of a jar's nested class) passed as
             // arguments are kept as fields, where the methods it lends a subclass read them.

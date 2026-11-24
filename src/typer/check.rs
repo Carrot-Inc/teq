@@ -6899,16 +6899,19 @@ impl<'a> Worker<'a> {
             self.parent_args_of = outer;
         }
         // An anonymous class whose superclass comes through a trait (`new T {}` of `trait T extends P`) calls
-        // that class's constructor as a named one does, which is asked at `type_parent_ctor` below: the creation
-        // is refused where the place may call none (dotty's `ensureConstrCall` on the first parent, Typer.scala).
+        // that class's constructor as a named one does, typed below in its own constructor
+        // (`tir::parent_call_at_creation`): the creation is refused where the place may call none (dotty's
+        // `ensureConstrCall` on the first parent, Typer.scala).
+        let mut refused = false;
         if kind == ClassKind::Anon && clause.is_none() {
             let ctors: Vec<SymId> = self.syms.class(superclass).ctors.iter().copied().filter(|&s| self.ctor_callable_here(s)).collect();
             if !self.creation_accessible(superclass, None, true) && !ctors.into_iter().any(|s| self.creation_accessible(superclass, Some(s), true)) {
                 let span = self.syms.class(c).span;
                 self.refuse_ctor(superclass, span);
+                refused = true;
             }
         }
-        if kind == ClassKind::Anon || kind == ClassKind::Trait {
+        if kind == ClassKind::Trait || refused || (kind == ClassKind::Anon && crate::tir::parent_call_at_creation(&self.syms, &self.types, c)) {
             return None;
         }
         if let Some(&call) = self.inferred_parent_args.get(&c) {

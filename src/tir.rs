@@ -974,6 +974,20 @@ fn is_primitive_value_class(syms: &crate::symbols::Symbols, types: &crate::types
     }
 }
 
+/// Whether the place that creates `c` evaluates the call of its superclass's constructor and
+/// passes the values in (`TClass::parent_args`): an anonymous class whose first parent is a class
+/// (`new A(args) {}`, `new A {}`, `new A(x) with T {}`, a `new { }` of an expected class). Every
+/// other class's constructor evaluates its own parent call, an anonymous class's over a trait
+/// (`new T {}` of `trait T extends A`) as a named class's: dotty's `Namer.ensureFirstIsClass`
+/// puts the superclass first and `Typer.ensureConstrCall` applies its constructor in the class's
+/// template.
+pub fn parent_call_at_creation(syms: &Symbols, types: &crate::types::TypeStore, c: ClassId) -> bool {
+    use crate::symbols::ClassKind;
+    let info = syms.class(c);
+    info.kind == ClassKind::Anon
+        && info.parents.first().and_then(|&t| types.named_class(t)).is_some_and(|k| matches!(syms.class(k).kind, ClassKind::Class | ClassKind::EnumCase))
+}
+
 #[derive(Clone)]
 pub struct TClass {
     pub id: ClassId,
@@ -983,7 +997,8 @@ pub struct TClass {
     /// from the block it is defined in; an anonymous class captures through all of them.
     pub captures: usize,
     /// What an enum case passes to the `$init` of its enum, a class to the constructor of its
-    /// superclass, and the place that creates an anonymous class to the superclass of that.
+    /// superclass, and the place that creates an anonymous class to the superclass of that where
+    /// it evaluates them (`parent_call_at_creation`).
     pub parent_args: Option<ListRef>,
     /// The secondary constructor of the superclass that `parent_args` go to.
     pub parent_via: Option<SymId>,

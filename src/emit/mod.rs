@@ -439,7 +439,7 @@ pub fn emit(
     let report_files = size_report;
     let size_report = size_report.is_some();
     let runtime = runtime::Runtime::parse(RUNTIME, release);
-    let mut layout = layout::Layout::new(prog, syms, interner);
+    let mut layout = layout::Layout::new(prog, syms, types, interner);
     layout.lower_closures(prog, syms, interner, reach);
     lap.done("closures lowered", layout.closure_anons.len());
     if outline {
@@ -2725,6 +2725,9 @@ impl<'a> Emitter<'a> {
         // (`given_module_of`).
         let is_object = info.kind == ClassKind::Object || self.given_module_class(tc.id);
         let is_anon = info.kind == ClassKind::Anon;
+        // An anonymous class over a class takes its superclass's arguments from its creation; one over a trait
+        // calls its superclass as a named class does (`tir::parent_call_at_creation`).
+        let at_creation = crate::tir::parent_call_at_creation(self.syms, self.types, tc.id);
         // A trait's captures are its initialiser's proxies, parameters it holds in no field.
         let n_captures = if is_anon { tc.ctor_params.len() } else if info.kind == ClassKind::Trait { 0 } else { tc.captures };
         if n_captures > 0 {
@@ -2824,8 +2827,8 @@ impl<'a> Emitter<'a> {
                     let _ = write!(self.out, "{}$c{}", if i > 0 { ", " } else { "" }, i);
                     self.declare_fixed(&format!("$c{}", i));
                 }
-                // What an anonymous class passes to its superclass is evaluated where it is created.
-                for i in 0..tc.parent_args.map_or(0, |args| args.len) {
+                // What an anonymous class over a class passes to its superclass is evaluated where it is created.
+                for i in 0..tc.parent_args.filter(|_| at_creation).map_or(0, |args| args.len) {
                     let _ = write!(self.out, "{}$p{}", if i > 0 || !tc.ctor_params.is_empty() { ", " } else { "" }, i);
                     self.declare_fixed(&format!("$p{}", i));
                 }
@@ -2858,7 +2861,7 @@ impl<'a> Emitter<'a> {
                 self.this_name = "$f";
             }
             let this = self.this_name;
-            if !is_anon {
+            if !at_creation {
                 self.emit_block_stmts(tc.parent_prelude);
             }
             if is_throwable {
@@ -2878,13 +2881,13 @@ impl<'a> Emitter<'a> {
             let outer_locals = std::mem::replace(&mut self.ctor_locals, tc.ctor_params.clone());
             self.before_super = true;
             if let (Some(via), Some(_), false) = (tc.parent_via, superclass, makes_function) {
-                via_inits = self.emit_super_via(tc, via, is_anon, "super", "");
+                via_inits = self.emit_super_via(tc, via, at_creation, "super", "");
             } else if let (Some(via), Some(_), true) = (tc.parent_via, superclass, makes_function) {
                 // The first callable class of a chain over a secondary constructor of its
                 // superclass: the superclass constructed apart through it, its fields copied.
                 let own_name = self.class_name(tc.id);
                 let primary = format!("{}{}{}{}{}", SUPER_FIELDS[0], this, SUPER_FIELDS[1], own_name, SUPER_FIELDS[2]);
-                via_inits = self.emit_super_via(tc, via, is_anon, &primary, ", new.target))");
+                via_inits = self.emit_super_via(tc, via, at_creation, &primary, ", new.target))");
                 for init in via_inits.iter_mut() {
                     if let Some(rest) = init.strip_prefix("this.") {
                         *init = format!("{}.{}", this, rest);
@@ -2896,7 +2899,7 @@ impl<'a> Emitter<'a> {
                 self.line();
                 self.out.push_str("super");
                 match tc.parent_args {
-                    Some(args) if !is_anon => self.emit_parent_args(superclass.unwrap(), args),
+                    Some(args) if !at_creation => self.emit_parent_args(superclass.unwrap(), args),
                     Some(args) => {
                         self.out.push('(');
                         for i in 0..args.len {
@@ -2915,7 +2918,7 @@ impl<'a> Emitter<'a> {
                 self.line();
                 let _ = write!(self.out, "{}{}{}{}{}", SUPER_FIELDS[0], this, SUPER_FIELDS[1], own_name, SUPER_FIELDS[2]);
                 match tc.parent_args {
-                    Some(args) if !is_anon => self.emit_parent_args(parent, args),
+                    Some(args) if !at_creation => self.emit_parent_args(parent, args),
                     Some(args) => {
                         self.out.push('(');
                         for i in 0..args.len {
@@ -3606,15 +3609,16 @@ impl<'a> Emitter<'a> {
     /// the parameters of that constructor are bound to the arguments, then those of the
     /// constructor its self call goes to, down to the primary constructor's call (`primary`: `super`,
     /// or an enum case's `$init` of its enum); a self call's arguments cannot refer to `this`, so they
-    /// may run before it. Returns the
+    /// may run before it; the arguments are the constructor's `$p` parameters where the creation of
+    /// an anonymous class evaluates them (`at_creation`, `tir::parent_call_at_creation`). Returns the
     /// calls that run the statements after each self call, innermost first, for the caller to
     /// place once the superclass's body has run.
-    fn emit_super_via(&mut self, tc: &TClass, via: SymId, anon: bool, primary: &str, suffix: &str) -> Vec<String> {
+    fn emit_super_via(&mut self, tc: &TClass, via: SymId, at_creation: bool, primary: &str, suffix: &str) -> Vec<String> {
         let mut inits: Vec<String> = Vec::new();
         let mut placeholders: Vec<String> = Vec::new();
         let mut args: Vec<TExprId> = Vec::new();
         match tc.parent_args {
-            Some(l) if anon => placeholders = (0..l.len).map(|i| format!("$p{}", i)).collect(),
+            Some(l) if at_creation => placeholders = (0..l.len).map(|i| format!("$p{}", i)).collect(),
             Some(l) => args = self.prog.expr_list(l).to_vec(),
             None => {}
         }

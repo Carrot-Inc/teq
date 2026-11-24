@@ -837,8 +837,9 @@ impl<'a, 't> Interp<'a, 't> {
         let mut vals = Vec::with_capacity(args.len as usize);
         let mut bound = Vec::new();
         // What an anonymous class's creation passes on to its superclass's second constructor starts with that
-        // class's captures, which stay in the scope as a creation through it leaves them (`eval_args`).
-        let via = self.tclass_field(c, |tc| tc.parent_via).flatten().filter(|_| self.syms().class(c).kind == ClassKind::Anon);
+        // class's captures, which stay in the scope as a creation through it leaves them (`eval_args`): an
+        // anonymous class over a class (`tir::parent_call_at_creation`).
+        let via = self.tclass_field(c, |tc| tc.parent_via).flatten().filter(|_| crate::tir::parent_call_at_creation(self.syms(), &self.typer.types, c));
         let passed_on = via.map_or(Vec::new(), |v| self.ctor_own_captures(v));
         for i in 0..args.len as usize {
             if i >= captures.len() && passed_on.get(i - captures.len()) == Some(&true) {

@@ -7,6 +7,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An anonymous class of a trait over a class (`new T {}` for `trait T extends A`) passes `A`'s secondary-constructor
+  arguments and a local `A`'s captured default, as scalac (JavaScript printed `undefined` or `0`; the JVM refused).
 - An `export` clause in a given instance's body (`given h: AnyRef with { val c = Codecs; export c.* }`, indented, in
   braces or after a colon; a wildcard, a selection, a renaming, a `given` selector) makes forwarders of the given's
   class, as a class's export clause does, where it was refused ("export clauses are not supported in a given",

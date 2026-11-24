@@ -122,8 +122,8 @@ pub struct Layout {
     /// The number of the partial functions' trait where a test asks for it, which a partial
     /// function value carries on its prototype.
     pub partial_function_number: Option<u32>,
-    /// How many of the arguments that create an anonymous class go on to its superclass; they
-    /// follow what the class captures.
+    /// How many of the arguments that create an anonymous class over a class go on to its
+    /// superclass (`tir::parent_call_at_creation`); they follow what the class captures.
     pub anon_parent_args: FxMap<ClassId, u32>,
     /// How many of the arguments that create a named local class are its captures, which lead
     /// its own parameters.
@@ -142,7 +142,7 @@ pub struct Layout {
 }
 
 impl Layout {
-    pub fn new(prog: &Program, syms: &Symbols, interner: &Interner) -> Layout {
+    pub fn new(prog: &Program, syms: &Symbols, types: &TypeStore, interner: &Interner) -> Layout {
         let mut const_vals = vec![false; syms.syms.len()];
         for (sym, init) in &prog.top_vals {
             if is_literal_init(prog, *init) && syms.sym(*sym).kind == SymKind::Val {
@@ -191,7 +191,7 @@ impl Layout {
             shared: Default::default(),
         };
         for tc in &prog.classes {
-            layout.note_class(prog, syms, tc);
+            layout.note_class(prog, syms, types, tc);
         }
         layout
     }
@@ -229,12 +229,12 @@ impl Layout {
 
     /// Records what the construction of `tc` runs; for a class the typer added after the layout
     /// was made, when the reach pass compiled it from a library.
-    pub fn note_class(&mut self, prog: &Program, syms: &Symbols, tc: &TClass) {
+    pub fn note_class(&mut self, prog: &Program, syms: &Symbols, types: &TypeStore, tc: &TClass) {
         if self.has_body.len() <= tc.id.idx() {
             self.has_body.resize(syms.classes.len().max(tc.id.idx() + 1), false);
         }
         self.has_body[tc.id.idx()] = runs_body(prog, syms, tc);
-        if let Some(args) = tc.parent_args.filter(|_| syms.class(tc.id).kind == ClassKind::Anon) {
+        if let Some(args) = tc.parent_args.filter(|_| crate::tir::parent_call_at_creation(syms, types, tc.id)) {
             self.anon_parent_args.insert(tc.id, args.len);
         }
         if tc.captures > 0 && syms.class(tc.id).kind != ClassKind::Anon {

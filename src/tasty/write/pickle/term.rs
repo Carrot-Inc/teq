@@ -1434,10 +1434,11 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     fn this_ref(&mut self) {
-        // An anonymous class's parent arguments are its creation's, evaluated outside it (a
-        // named class reads its constructor's parameters through its own `this` there).
+        // An anonymous class's parent arguments are its creation's where its first parent is a class
+        // (`tir::parent_call_at_creation`), evaluated outside it (a named class reads its constructor's
+        // parameters through its own `this` there).
         if let [.., outer, anon] = self.enclosing[..] {
-            if self.in_parent_args && self.w.syms.class(anon).kind == ClassKind::Anon {
+            if self.in_parent_args && crate::tir::parent_call_at_creation(&self.w.syms, &self.w.types, anon) {
                 return self.qual_this(outer);
             }
         }
@@ -4887,7 +4888,9 @@ impl<'w, 'a> P<'w, 'a> {
         self.tpt(ty);
         self.next_tree_pos = None;
         self.buf.end_length(t);
-        self.anon_parent_args = Some(parent_args);
+        // What the creation passes its superclass, where it evaluates that call (`tir::parent_call_at_creation`);
+        // a class over a trait has its own, as a named class's.
+        self.anon_parent_args = crate::tir::parent_call_at_creation(&self.w.syms, &self.w.types, c).then_some(parent_args);
         self.local_class(c);
         self.anon_parent_args = None;
         self.buf.end_length(b);

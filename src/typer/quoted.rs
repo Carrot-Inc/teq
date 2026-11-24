@@ -3550,7 +3550,7 @@ impl<'c> Copier<'c> {
         let outer = self.locals.replace(Vec::new());
         let ctor_params: Vec<SymId> = tc.ctor_params.iter().map(|&p| self.sym(p)).collect();
         let ctor_defaults: Vec<Option<TExprId>> = tc.ctor_defaults.iter().map(|d| d.map(|e| self.expr(t, e))).collect();
-        let created_outside = self.class_depth > 0 && info.kind == ClassKind::Anon;
+        let created_outside = self.class_depth > 0 && crate::tir::parent_call_at_creation(&t.syms, &t.types, c);
         let parent_args = tc.parent_args.map(|l| if created_outside { self.outside_class(t, l) } else { self.list(t, l) });
         let parent_prelude = self.stmts(t, tc.parent_prelude);
         self.body_depth += 1;

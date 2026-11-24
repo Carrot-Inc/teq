@@ -1479,9 +1479,10 @@ impl<'a> Emitter<'a> {
         }
         self.walk_block(w, tc.parent_prelude, None);
         if let Some(args) = tc.parent_args {
-            // What a local superclass captures, as `emit_parent_args` passes it.
+            // What a local superclass captures, as `emit_parent_args` passes it, but where an anonymous class's
+            // creation evaluates the arguments (`tir::parent_call_at_creation`).
             match info.superclass {
-                Some(sup) if info.kind != ClassKind::Anon && self.local_captures.contains_key(&sup) => self.walk_capture_args(w, sup, args),
+                Some(sup) if !crate::tir::parent_call_at_creation(self.syms, self.types, tc.id) && self.local_captures.contains_key(&sup) => self.walk_capture_args(w, sup, args),
                 _ => self.walk_list(w, args),
             }
         }

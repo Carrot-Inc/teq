@@ -242,7 +242,7 @@ pub struct Emitted {
 
 impl<'a> Cx<'a> {
     fn new(input: Input<'a>, lap: &mut crate::measure::Lap) -> Cx<'a> {
-        let layout = Layout::new(input.prog, input.syms, input.interner);
+        let layout = Layout::new(input.prog, input.syms, input.types, input.interner);
         lap.done("tables: layout", 0);
         let syms = input.syms;
         let n_classes = syms.classes.len();
@@ -819,7 +819,9 @@ impl<'a> Cx<'a> {
                 })
             };
             out.extend(stmt_roots(tc.parent_prelude).map(|x| (x, home, file)));
-            if syms.class(tc.id).kind != ClassKind::Anon {
+            // Where the class's constructor evaluates its superclass's arguments: not those an anonymous class's
+            // creation evaluates (`tir::parent_call_at_creation`), which are the creation's code.
+            if !crate::tir::parent_call_at_creation(syms, self.input.types, tc.id) {
                 out.extend(tc.parent_args.iter().flat_map(|&l| prog.expr_list(l).iter().map(|&a| (a, home, file))));
             }
             for init in &tc.init {
@@ -1432,9 +1434,10 @@ fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, out: &m
             | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => stack.extend(prog.expr_list(args).iter().copied()),
             TExpr::New(c, args) => {
                 stack.extend(prog.expr_list(args).iter().copied());
-                // An anonymous class's superclass arguments are evaluated where it is made (`lower_new_arguments`).
+                // An anonymous class's superclass arguments are evaluated where it is made (`lower_new_arguments`)
+                // when its first parent is a class (`tir::parent_call_at_creation`).
                 let idx = cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
-                if idx != u32::MAX && syms.class(c).kind == ClassKind::Anon {
+                if idx != u32::MAX && crate::tir::parent_call_at_creation(syms, cx.input.types, c) {
                     if let Some(parent) = prog.classes[idx as usize].parent_args {
                         stack.extend(prog.expr_list(parent).iter().copied());
                     }

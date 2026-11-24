@@ -324,11 +324,15 @@ impl<'a> Worker<'a> {
         if let Some(k) = extends_class {
             self.capture_passed_on(parent_args, k, &mut captures);
         }
+        // A class over a trait has its superclass's call from its check, in its own constructor.
+        let at_creation = crate::tir::parent_call_at_creation(&self.syms, &self.types, c);
         let tclass = self.checked_class_mut(c).expect("the class was just checked");
         tclass.ctor_defaults = vec![None; captures.len()];
         tclass.ctor_params = captures.clone();
-        tclass.parent_args = parent_args.map(|call| call.args);
-        tclass.parent_via = parent_args.and_then(|call| call.via);
+        if at_creation {
+            tclass.parent_args = parent_args.map(|call| call.args);
+            tclass.parent_via = parent_args.and_then(|call| call.via);
+        }
         self.capture_through_nested(c, &captures);
         self.anon_captures.insert(c, captures);
         if let Some(call) = parent_args {
@@ -393,11 +397,15 @@ impl<'a> Worker<'a> {
         if let Some(k) = class_parent {
             self.capture_passed_on(parent_args, k, &mut captures);
         }
+        // A class over a trait has its superclass's call from its check, in its own constructor.
+        let at_creation = crate::tir::parent_call_at_creation(&self.syms, &self.types, c);
         let tclass = self.checked_class_mut(c).expect("the class was just checked");
         tclass.ctor_defaults = vec![None; captures.len()];
         tclass.ctor_params = captures.clone();
-        tclass.parent_args = parent_args.map(|call| call.args);
-        tclass.parent_via = parent_args.and_then(|call| call.via);
+        if at_creation {
+            tclass.parent_args = parent_args.map(|call| call.args);
+            tclass.parent_via = parent_args.and_then(|call| call.via);
+        }
         self.capture_through_nested(c, &captures);
         self.anon_captures.insert(c, captures);
         if let Some(call) = parent_args {
@@ -1422,8 +1430,9 @@ impl<'a> Worker<'a> {
                             }
                             news.push((e, made));
                             makes[i].push(made);
-                            // An anonymous class's parent arguments are evaluated where it is made.
-                            if let Part::Lifted { anon: true } = parts[made].1 {
+                            // An anonymous class's parent arguments are evaluated where it is made
+                            // (`tir::parent_call_at_creation`).
+                            if crate::tir::parent_call_at_creation(&self.syms, &self.types, m) {
                                 if let Some(sup) = self.syms.class(m).superclass.and_then(|s| parts.iter().position(|p| p.0 == s && p.1 == Part::Nested)) {
                                     makes[i].push(sup);
                                 }
@@ -1436,7 +1445,7 @@ impl<'a> Worker<'a> {
             if i > 0 && tc.parent_args.is_some() {
                 if let Some(sup) = self.syms.class(k).superclass.and_then(|s| parts.iter().position(|p| p.0 == s)).filter(|&s| s > 0) {
                     parents.push((i, sup));
-                    if parts[i].1 != (Part::Lifted { anon: true }) {
+                    if !crate::tir::parent_call_at_creation(&self.syms, &self.types, k) {
                         makes[i].push(sup);
                     }
                 }
@@ -1510,7 +1519,7 @@ impl<'a> Worker<'a> {
                 _ => continue,
             };
             let items = match parts[made].1 {
-                Part::Lifted { anon: true } => {
+                Part::Lifted { anon: true } if crate::tir::parent_call_at_creation(&self.syms, &self.types, m) => {
                     let Some(index) = self.prog_index.class(&self.prog, m) else { continue };
                     let parent: Vec<TExprId> = self.prog.classes[index].parent_args.map_or(Vec::new(), |p| self.prog.expr_list(p).to_vec());
                     let old = self.prog.expr_list(args).to_vec();

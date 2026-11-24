@@ -6178,12 +6178,14 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The superclass of an anonymous class, the secondary constructor its arguments go to,
-    /// and the parameter types of that constructor.
+    /// The superclass of an anonymous class whose creation evaluates its superclass's call
+    /// (`tir::parent_call_at_creation`: its first parent is a class), the secondary constructor
+    /// its arguments go to, and the parameter types of that constructor; nothing for any other
+    /// class, whose constructor makes the call.
     pub fn anon_super_params(&mut self, c: ClassId) -> Option<(ClassId, Option<SymId>, Vec<ErasedType>)> {
         let cx = self.cx;
         let idx = cx.tclass_of[c.idx()];
-        if idx == u32::MAX || cx.input.syms.class(c).kind != ClassKind::Anon {
+        if idx == u32::MAX || !crate::tir::parent_call_at_creation(cx.input.syms, cx.input.types, c) {
             return None;
         }
         let tc = &cx.input.prog.classes[idx as usize];

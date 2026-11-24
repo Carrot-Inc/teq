@@ -345,11 +345,13 @@ impl<'a> Emitter<'a> {
         (0..tc.captures.min(params.len()).min(tc.ctor_params.len())).filter(|&j| params[j] == tc.ctor_params[j]).collect()
     }
 
-    /// Where, among the arguments of a creation of the anonymous class `c`, stand the captures it passes on
-    /// to a second constructor of the local class it extends (`via_own_captures`), after its own.
+    /// Where, among the arguments of a creation of the anonymous class `c` over a class
+    /// (`tir::parent_call_at_creation`), stand the captures it passes on to a second constructor of the
+    /// local class it extends (`via_own_captures`), after its own.
     fn anon_passed_on(&self, c: ClassId, own: usize) -> Vec<usize> {
         let info = self.syms.class(c);
-        let Some(sup) = info.superclass.filter(|sup| info.kind == ClassKind::Anon && self.local_captures.contains_key(sup)) else { return Vec::new() };
+        let at_creation = crate::tir::parent_call_at_creation(self.syms, self.types, c);
+        let Some(sup) = info.superclass.filter(|sup| at_creation && self.local_captures.contains_key(sup)) else { return Vec::new() };
         let Some(via) = self.prog.classes.iter().find(|tc| tc.id == c).and_then(|tc| tc.parent_via) else { return Vec::new() };
         self.via_own_captures(sup, via).into_iter().map(|j| own + j).collect()
     }

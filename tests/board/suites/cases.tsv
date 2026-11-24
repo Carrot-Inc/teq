@@ -34,6 +34,7 @@ anon_js_object_undefined	pass	-
 anon_members	pass	-	
 anon_parentless_prefixed	pass	-	
 anon_sites	pass	-	
+anon_trait_superclass_call_forms	pass	-	
 anon_unused_capture	pass	-	
 anonymous_class_secondary_constructor	pass	-	
 anonymous_subclass_jdk_constructor	pass	-	

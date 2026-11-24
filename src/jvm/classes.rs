@@ -1955,8 +1955,10 @@ impl<'a> Gen<'a> {
         }
         let first_super_arg = params.len();
         // An anonymous class over a class receives the arguments of the superclass's
-        // constructor, evaluated where the instance is created, after its captures.
-        let anon_super = if is_anon { self.anon_super_params(tc.id) } else { None };
+        // constructor, evaluated where the instance is created, after its captures; one over a
+        // trait makes the call itself, as a named class does (`tir::parent_call_at_creation`).
+        let at_creation = crate::tir::parent_call_at_creation(self.cx.input.syms, self.cx.input.types, tc.id);
+        let anon_super = if at_creation { self.anon_super_params(tc.id) } else { None };
 
         for t in anon_super.iter().flat_map(|(_, _, types)| types.iter()) {
             params.push((None, t.clone()));
@@ -1965,7 +1967,7 @@ impl<'a> Gen<'a> {
             let t = self.sym_type(p);
             params.push((Some(p), t));
         }
-        let route = self.super_call_route(tc, enum_class, anon_super.map(|(_, _, types)| types), is_anon);
+        let route = self.super_call_route(tc, enum_class, anon_super.map(|(_, _, types)| types), at_creation);
         (params, PrimaryCtor { tc, fields, super_name, fields_first, is_value_case, is_object, is_anon, java_enum, n_captures, name_param, first_super_arg, route })
     }
 
@@ -2018,14 +2020,15 @@ impl<'a> Gen<'a> {
     }
 
     /// What a primary constructor's locals are found shared in (`free::cells`): its body's
-    /// initialisers and statements, an object's too, and the superclass's arguments.
+    /// initialisers and statements, an object's too, and the superclass's arguments where it
+    /// evaluates them (`tir::parent_call_at_creation`).
     fn primary_roots(&self, k: &PrimaryCtor) -> Vec<TExprId> {
         let prog = self.cx.input.prog;
         let mut roots: Vec<TExprId> = Vec::new();
         for init in &k.tc.init {
             init_roots(prog, init, &mut roots);
         }
-        if let Some(args) = k.tc.parent_args.filter(|_| !k.is_anon) {
+        if let Some(args) = k.tc.parent_args.filter(|_| !crate::tir::parent_call_at_creation(self.cx.input.syms, self.cx.input.types, k.tc.id)) {
             roots.extend_from_slice(prog.expr_list(args));
         }
         roots
@@ -2078,14 +2081,16 @@ impl<'a> Gen<'a> {
     }
 
     /// How a primary constructor passes the arguments of its superclass's constructor
-    /// (`SuperCall`), `superclass` the superclass or the enum it is a value of.
-    fn super_call_route(&mut self, tc: &TClass, superclass: Option<ClassId>, anon_super: Option<Vec<ErasedType>>, is_anon: bool) -> SuperCall {
+    /// (`SuperCall`), `superclass` the superclass or the enum it is a value of, `at_creation`
+    /// where the creation of an anonymous class over a class evaluates them
+    /// (`tir::parent_call_at_creation`).
+    fn super_call_route(&mut self, tc: &TClass, superclass: Option<ClassId>, anon_super: Option<Vec<ErasedType>>, at_creation: bool) -> SuperCall {
         let cx = self.cx;
         let Some(e) = superclass else { return SuperCall::Declared(Vec::new(), crate::ast::ListRef::EMPTY) };
         if let Some(types) = anon_super {
             return SuperCall::Own(types);
         }
-        if !is_anon {
+        if !at_creation {
             // A superclass this build does not write is called as its class file declares the
             // selected constructor, the enclosing instance first where it takes one, as a creation
             // of it is (`ExplicitOuter.OuterOps.args` for `New` and `Super` alike).

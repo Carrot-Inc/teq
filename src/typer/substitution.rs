@@ -1769,9 +1769,9 @@ impl<'a> Worker<'a> {
         self.env.frames.push(super::Frame::Class(c));
         w.settling += 1;
         let replaced_mark = w.replaced.len();
-        // A named class passes its parent's arguments from its constructor (an anonymous one's
-        // creation passes them, `finish_class_copy`).
-        let own_parent_args = self.syms.class(c).kind != ClassKind::Anon;
+        // A class passes its parent's arguments from its constructor, but where its creation passes
+        // them (`tir::parent_call_at_creation`, `finish_class_copy`).
+        let own_parent_args = !crate::tir::parent_call_at_creation(&self.syms, &self.types, c);
         if own_parent_args {
             self.walk_prelude(w, tc.parent_prelude);
             if let Some(args) = tc.parent_args {

@@ -1579,7 +1579,7 @@ impl Walker {
     /// A walker over the program as `typer` holds it, with what `setup` took from the typer.
     fn begin(typer: &Worker, setup: &Setup) -> Walker {
         let std_files: Vec<bool> = typer.files.as_slice().iter().map(|f| f.is_std).collect();
-        let layout = Layout::new(&typer.prog, &typer.syms, typer.interner);
+        let layout = Layout::new(&typer.prog, &typer.syms, &typer.types, typer.interner);
         let mut w = Walker::new(Cx::of(typer), setup.array_seq, layout, std_files, typer.link_mode());
         w.abstract_syms = typer.abstract_members();
         if let Some(helpers) = &setup.helpers {
@@ -1633,7 +1633,7 @@ impl Walker {
             for &f in tc.methods.iter().chain(&tc.ctors).chain(tc.mirror_members()) {
                 self.fun_of[cx.prog.funs[f.idx()].sym.idx()] = slot(f.idx());
             }
-            self.layout.note_class(cx.prog, cx.syms, tc);
+            self.layout.note_class(cx.prog, cx.syms, &cx.typer.types, tc);
         }
         self.note_loaded_classes(cx);
         self.n_classes = cx.prog.classes.len();
