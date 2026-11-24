@@ -458,7 +458,7 @@ finish() {
   done
   [ ${#claimers[@]} = 0 ] || echo "gate: waiting for ${#claimers[@]} claims in flight before releasing" >&2
   for p in "${claimers[@]}"; do wait "$p" 2> /dev/null; done
-  for f in "$tmp"/claim.* "$tmp"/cclaim.* "$tmp"/pclaim.*; do
+  for f in "$tmp"/claim.* "$tmp"/cclaim.* "$tmp"/pclaim.* "$tmp"/gclaim.*; do
     [ -e "$f" ] || continue
     read -r h _ < "$f"
     [ -e "$tmp/released.$(mark "$h")" ] || release "$h" || { echo "gate: FAIL: could not release $h: $(tail -1 "$tmp/release.$(mark "$h")")" >&2; code=1; }
@@ -885,10 +885,21 @@ compare_half() {
       echo "$k" > "$tmp/compare.k"
     fi
     for host in $free; do
+      [ ! -e "$tmp/gclaim.$host" ] || continue
       [ "$(ls "$tmp"/cclaim.* 2> /dev/null | wc -l)" -lt "$k" ] || break
       touch "$tmp/compare.claiming"
       [ ! -e "$tmp/stop" ] || { rm -f "$tmp/compare.claiming"; break 2; }
-      handle=$("$ra/claim.sh" "gate-$head" "$host" 2> "$tmp/claim-err.compare") && echo "$handle $(($(now) - s))" > "$tmp/cclaim.$host"
+      if handle=$("$ra/claim.sh" "gate-$head" "$host" 2> "$tmp/claim-err.compare"); then
+        # A machine whose login environment names a kind (GATE_KIND: another host's) runs no timing line: released at
+        # once and never asked again by this half (its record, gclaim, released at the exit if this release failed).
+        if [ -n "$("$ra/run.sh" "$handle" teq -t 30 'echo "${GATE_KIND:-}"' 2> /dev/null | tail -1)" ]; then
+          echo "$handle" > "$tmp/gclaim.$host"
+          release "$handle"
+          result compare "$host" 0 0 "not a comparison machine: its kind is named (GATE_KIND), and no timing line runs on another host's kind; released" "$file"
+        else
+          echo "$handle $(($(now) - s))" > "$tmp/cclaim.$host"
+        fi
+      fi
       rm -f "$tmp/compare.claiming"
     done
     touch "$tmp/compare.asked"
@@ -1348,7 +1359,8 @@ if [ $n -gt 0 ]; then
     [ -z "$missing" ] || { echo "not in the coursier cache:$missing"; exit 1; }
     [ -d "$SCALA3/tests" ] || { echo "no scala3 checkout at $SCALA3"; exit 1; }
     for c in cargo java javap node scala-cli python3; do command -v $c > /dev/null || { echo "no $c"; exit 1; }; done
-    echo "cpus ${GATE_CPUS:-$(nproc)}"'
+    echo "cpus ${GATE_CPUS:-$(nproc)}"
+    echo "kind ${GATE_KIND:-}"'
   pids=()
   for i in "${!handles[@]}"; do
     ("$ra/sync.sh" "${handles[$i]}" "$wt" > "$tmp/sync.$i" 2>&1 && "$ra/run.sh" "${handles[$i]}" teq -t 60 "$ready" >> "$tmp/sync.$i" 2>&1
@@ -1366,13 +1378,23 @@ if [ $n -gt 0 ]; then
   done
   echo "$(clock) synced to ${#good[@]} of $n machines"
   n=${#good[@]}
-  # each shard's machine's CPUs, as its look said them (8 where it said none), in the shards' order; and each host's,
-  # for --record
+  # A machine whose look names a kind (GATE_KIND in its own login environment: machines of another host, whose rows
+  # are `<line>@<kind>`) is never the builder while a machine of no named kind took the tree: those come first.
+  named=() plain=()
+  for i in "${good[@]}"; do
+    if [ -n "$(sed -n 's/^kind \([A-Za-z0-9_-][A-Za-z0-9_-]*\)$/\1/p' "$tmp/sync.$i" | tail -1)" ]; then named+=("$i"); else plain+=("$i"); fi
+  done
+  good=("${plain[@]}" "${named[@]}")
+  # each shard's machine's CPUs, as its look said them (8 where it said none), and its kind's word (none where it
+  # named none), in the shards' order; and each host's kind for --record: its word, else its CPUs
   : > "$tmp/cpus"
+  : > "$tmp/kinds"
   for i in "${good[@]}"; do
     c=$(sed -n 's/^cpus \([0-9][0-9]*\)$/\1/p' "$tmp/sync.$i" | tail -1)
+    k=$(sed -n 's/^kind \([A-Za-z0-9_-][A-Za-z0-9_-]*\)$/\1/p' "$tmp/sync.$i" | tail -1)
     echo "${c:-8}" >> "$tmp/cpus"
-    echo "${hosts[$i]} ${c:-8}" >> "$tmp/host-cpus"
+    echo "${k:--}" >> "$tmp/kinds"
+    echo "${hosts[$i]} ${k:-${c:-8}}" >> "$tmp/host-cpus"
   done
   if [ $n = 0 ]; then
     for entry in "${want[@]}"; do result "${entry%% *}" - 0 1 "not run: no machine took the tree"; done
@@ -1385,7 +1407,12 @@ if [ $n -gt 0 ]; then
   # on n, the row of eight where a kind has none); the shards past the first, whose machine builds the head (the
   # builder), start from the file's head-wait, the seconds they wait for its binary beyond its own build, so that the
   # shards end together.
-  python3 - "$tmp/want" "$tmp/times" "$n" "$tmp/cpus" > "$tmp/deal" <<'PY'
+  # A shard whose machine names a kind is charged that kind's row, `<line>@<kind>`, else the row of eight over the
+  # kind's `speed@<kind>` (its speed in percent of an eight-CPU machine's), never 120; it starts from
+  # `head-wait@<kind>`, else head-wait. A line stays off a machine whose kind's row for it is -1 (its row to be
+  # measured there first); the gate says so, a line a machine, and a line no shard can take is dealt to none
+  # (`- <line>`), which fails it.
+  python3 - "$tmp/want" "$tmp/times" "$n" "$tmp/cpus" "$tmp/kinds" > "$tmp/deal" 2> "$tmp/deal.off" <<'PY'
 import sys
 want = [l.rstrip("\n") for l in open(sys.argv[1]) if l.strip()]
 times = {}
@@ -1396,18 +1423,52 @@ for l in open(sys.argv[2]):
 n = int(sys.argv[3])
 cpus = [int(l) for l in open(sys.argv[4]) if l.strip()]
 cpus += [8] * (n - len(cpus))
+kinds = [l.strip() for l in open(sys.argv[5])]
+kinds = [k if k != "-" else "" for k in kinds] + [""] * (n - len(kinds))
 def secs(name, s):
+    k = kinds[s]
+    if k:
+        if f"{name}@{k}" in times:
+            return times[f"{name}@{k}"]
+        return round(times.get(name, 120) * 100 / max(times.get(f"speed@{k}", 100), 1))
     return times.get(f"{name}@{cpus[s]}", times.get(name, 120)) if cpus[s] != 8 else times.get(name, 120)
-load = [0] + [times.get("head-wait", 0)] * (n - 1)
+def off(name, s):
+    base = name.split(".")[0] if "/" in name else name
+    if kinds[s] and -1 in (times.get(f"{name}@{kinds[s]}"), times.get(f"{base}@{kinds[s]}")):
+        return f"marked -1 for the kind {kinds[s]}, its row there to be measured first"
+    return None
+def start(s):
+    if s == 0:
+        return 0
+    return times.get(f"head-wait@{kinds[s]}", times.get("head-wait", 0)) if kinds[s] else times.get("head-wait", 0)
+load = [start(s) for s in range(n)]
 for entry in sorted(want, key=lambda e: -times.get(e.split()[0], 120)):
     name = entry.split()[0]
-    shard = min(range(n), key=lambda s: load[s] + secs(name, s))
+    can = [s for s in range(n) if not off(name, s)]
+    for s in range(n):
+        if off(name, s):
+            print(s, name, off(name, s), sep="\t", file=sys.stderr)
+    if not can:
+        print("-", entry)
+        continue
+    shard = min(can, key=lambda s: load[s] + secs(name, s))
     load[shard] += secs(name, shard)
     print(shard, entry)
 PY
+  # what each machine was kept from, one line a machine, and a line no machine of the pool can run failed with why
+  hostkind() { echo "${hosts[${good[$1]}]} ($(sed -n "$(($1 + 1))p" "$tmp/kinds" | sed 's/^-$/no named kind/'))"; }
+  for s in $(cut -f1 "$tmp/deal.off" | sort -un); do
+    echo "gate: $(hostkind "$s"): kept off $(awk -F'\t' -v s="$s" '$1 == s {printf "%s%s: %s", sep, $2, $3; sep = "; "}' "$tmp/deal.off")"
+  done
+  while read -r dash entry; do
+    [ "$dash" = - ] || continue
+    name=${entry%% *}
+    why=$(sep=; while IFS=$'\t' read -r s line reason; do if [ "$line" = "$name" ]; then printf '%s%s: %s' "$sep" "$(hostkind "$s")" "$reason"; sep="; "; fi; done < "$tmp/deal.off")
+    result "$name" - 0 1 "not run: no machine of the pool can run it; $why"
+  done < "$tmp/deal"
   ref=
   ref_shard=
-  if [ -n "$mfull" ] && [ "$mfull" != "$full" ] && [ -z "$manifest" ] && grep -q ' split-determinism ' "$tmp/deal"; then
+  if [ -n "$mfull" ] && [ "$mfull" != "$full" ] && [ -z "$manifest" ] && grep -q '^[0-9][0-9]* split-determinism ' "$tmp/deal"; then
     # master's sources for REF: this gate's own clone at master's revision, mirrored as a project of its own
     refdir=$tmp/teq-master
     git clone -q --shared --no-checkout "$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)" "$refdir"
@@ -1584,16 +1645,23 @@ if [ $record = 1 ] && [ $recordable = 1 ]; then
   python3 - "$results" tests/gate-times.txt "$(cut -d' ' -f1 "$tmp/want") $compare $(for p in $projects; do project_lines_of "$p"; done)" "$compare" "$tmp/host-cpus" <<'PY'
 import os, re, sys
 recorded, timing = set(sys.argv[3].split()), set(sys.argv[4].split())
-# a line measured on a machine of other than eight CPUs is that kind's row, `<line>@<n>`
+# a line measured on a machine of other than eight CPUs is that kind's row, `<line>@<n>`, and on a machine whose look
+# named a kind, `<line>@<kind>`: there the row kept is the larger of the run and nine tenths of the row it replaces
+# (that kind's host is shared, its load swings), so that its shard does not end last on a busy day
 kinds = dict(l.split() for l in open(sys.argv[5]) if l.strip()) if os.path.exists(sys.argv[5]) else {}
 measured = {}
 for l in open(sys.argv[1]):
     name, where, secs, code, _ = l.rstrip("\n").split("\t", 4)
     if name in recorded and where not in ("-", "local") and (code == "0" or (code == "3" and name in timing)):
         measured[name if kinds.get(where, "8") == "8" else f"{name}@{kinds[where]}"] = secs
-pieces = {m.group(1): m.group(2) for m in (re.fullmatch(r"(.+)\.\d+/(\d+)(?:@\d+)?", name) for name in measured) if m}
+previous = {l.split()[0]: l.split()[1] for l in open(sys.argv[2]).read().splitlines() if l.strip() and not l.startswith("#")}
+for name, secs in list(measured.items()):
+    kind = name.rpartition("@")[2] if "@" in name else ""
+    if kind and not kind.isdigit() and name in previous and int(previous[name]) > 0:
+        measured[name] = str(max(int(secs), round(int(previous[name]) * 0.9)))
+pieces = {m.group(1): m.group(2) for m in (re.fullmatch(r"(.+)\.\d+/(\d+)(?:@[A-Za-z0-9_-]+)?", name) for name in measured) if m}
 def stale(name):
-    m = re.fullmatch(r"(.+)\.\d+/(\d+)(?:@\d+)?", name)
+    m = re.fullmatch(r"(.+)\.\d+/(\d+)(?:@[A-Za-z0-9_-]+)?", name)
     return m is not None and m.group(1) in pieces and m.group(2) != pieces[m.group(1)]
 lines = [l for l in open(sys.argv[2]).read().splitlines() if l.startswith("#") or not l.strip() or not stale(l.split()[0])]
 out = [l if l.startswith("#") or not l.strip() or l.split()[0] not in measured else f"{l.split()[0]} {measured.pop(l.split()[0])}" for l in lines]

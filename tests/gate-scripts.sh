@@ -1055,6 +1055,53 @@ check "driver: a shard's zig step is a line the gate declares, a step it does no
   [ $code3 = 1 ] && [ "$(grep -c -E "^warmup +m[12] .* FAIL +not a line of the gate.s" "$work/driver-step.log")" = 2 ] &&
   [ $code4 = 0 ] && [ "$(row zig "m[12]" "$log" | grep -c " ok .*zig 0.0.0-stand-in at ")" = 1 ] && row idna "m[12]" "$log" | grep -q " ok .*idna: 1 passed" &&
   ! grep -q "not a line of the gate.s" "$log"'
+# A named kind (a machine whose look names it, GATE_KIND in its own login environment: another host's): m1 of the
+# kind guest, m2 of eight CPUs, in one run that two cells read. m1 is never the builder while m2 took the tree, so m2
+# builds from 0 and m1 starts at head-wait@guest, both 0 over the tree's own. parser 100 on eight and its row of 20 on
+# guest; fold 60 and planted 50 with no guest row, the kind's speed 200 (so 30 and 25 there): m1 takes parser (20
+# against 100), then fold (50 against 60); m2 takes planted (50 against 75). Each defect turns the deal by itself:
+# parser charged the speed's 50 instead of its row sends fold to m2 (80 against 60), and so does fold charged 120 or
+# its row of eight (140 or 80 against 60); a guest builder deals alike and is the head's line; --record writes m1's
+# parser as the kind's row, the larger of the run and nine tenths of the row it replaces, 18.
+base=$(git -C "$landing" rev-parse HEAD)
+printf '%s\n' "parser 100" "parser@guest 20" "fold 60" "planted 50" "head-wait 0" "head-wait@guest 0" "speed@guest 200" >> "$landing/tests/gate-times.txt"
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "rows of a named kind"
+GATE_ENV_m1="export GATE_KIND=guest" gate "$work/driver-named.log" "$(printf 'm1 free\nm2 free')" --only parser,fold,planted --record
+code=$?
+log=$work/driver-named.log
+check "driver: a machine naming a kind is dealt by that kind's rows and never builds the head while another can, its line recorded as the kind's row" "$log" eval '[ $code = 0 ] &&
+  row parser m1 "$log" | grep -q " ok " && row fold m1 "$log" | grep -q " ok " &&
+  grep -q "m2: the head" "$log" && ! grep -q "m1: the head" "$log" && r=$(row parser m1 "$log" | awk "{print \$3}") &&
+  grep -q -x "parser@guest $((r > 18 ? r : 18))" "$landing/tests/gate-times.txt" && grep -q -x "parser 100" "$landing/tests/gate-times.txt"'
+check "driver: a named kind without a line's row is charged its row of eight over the kind's speed, never 120" "$log" eval '[ $code = 0 ] &&
+  row fold m1 "$log" | grep -q " ok " && row planted m2 "$log" | grep -q " ok "'
+git -C "$landing" reset -q --hard "$base"
+# A line kept off a machine: fold marked -1 for the kind guest (its row there to be measured first) runs on m2 though
+# m1 would end it first, the gate saying, a line a machine, what it kept off and why. Then two machines of the kind
+# guest: fold, marked -1 there, can run on neither and fails the gate as not run, saying why; planted runs.
+printf '%s\n' "parser 100" "fold 60" "planted 50" "head-wait 0" "head-wait@guest 0" "speed@guest 400" "fold@guest -1" >> "$landing/tests/gate-times.txt"
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "a line kept off a kind"
+GATE_ENV_m1="export GATE_KIND=guest" gate "$work/driver-off.log" "$(printf 'm1 free\nm2 free')" --only parser,fold,planted
+code=$?
+log=$work/driver-off.log
+check "driver: a line kept off a machine for its kind's mark runs on another, the gate saying which and why" "$log" eval '[ $code = 0 ] &&
+  row fold m2 "$log" | grep -q " ok " && ! grep -q -E "^fold +m1 " "$log" &&
+  grep -q "^gate: m1 (guest): kept off fold: marked -1 for the kind guest, its row there to be measured first$" "$log"'
+GATE_ENV_m1="export GATE_KIND=guest" GATE_ENV_m2="export GATE_KIND=guest" gate "$work/driver-none.log" "$(printf 'm1 free\nm2 free')" --only fold,planted
+code=$?
+log=$work/driver-none.log
+check "driver: a line no machine of the pool can run fails the gate as not run, saying why, and the others run" "$log" eval '[ $code != 0 ] &&
+  grep -q "^fold .*not run: no machine of the pool can run it; m[12] (guest): marked -1 for the kind guest, its row there to be measured first; m[12] (guest): marked -1" "$log" &&
+  grep -E "^planted +m[12] " "$log" | grep -q " ok "'
+git -C "$landing" reset -q --hard "$base"
+# The comparison never measures on a machine of a named kind: m1, the first free, is of the kind guest; the comparison
+# claims it, finds its kind, releases it and measures elsewhere, the gate saying so.
+GATE_ENV_m1="export GATE_KIND=guest" gate "$work/driver-guest-compare.log" "$(printf 'm1 free\nm2 free\nm3 free\nm4 free\nm5 free')" --only parser,fold,budget,runtime,sentinel --master-rev HEAD
+code=$?
+log=$work/driver-guest-compare.log
+check "driver: a machine of a named kind is no comparison machine: claimed, found, released, the timing lines measured elsewhere" "$log" eval '[ $code = 0 ] &&
+  [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | grep -c " ok ")" = 3 ] && ! grep -q -E "^(budget|runtime|sentinel) +m1 " "$log" &&
+  grep -q -E "^compare +m1 .*not a comparison machine: its kind is named" "$log"'
 # The projects' chains dealt over the machines holding them: two holding complementary projects each run their own,
 # neither taken by the shards; a project whose holder is busy and one no machine holds each fail as not run, saying
 # which; a holder busy at the first ask and free at a later one is left to its project; the eighteen project lines run
