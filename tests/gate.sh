@@ -264,7 +264,7 @@ machine=(
 # tests/gate-times.txt (else the suite's divided by n, else 120), and the suite's row of the table merges the pieces'
 # rows and summaries (tests/support/pieces.py merge), failing when one of them failed, is missing or is not one of
 # the plan's.
-pieced="lsp:4 jvm-watch:2 modules:2 split:2"
+pieced="lsp:4 jvm-watch:2 modules:2 split:2 gate-scripts:3"
 # pieces_of <suite>: its number of pieces, nothing for a suite run whole.
 pieces_of() { local spec; for spec in $pieced; do [ "${spec%%:*}" != "$1" ] || echo "${spec#*:}"; done; }
 compare="budget runtime sentinel"

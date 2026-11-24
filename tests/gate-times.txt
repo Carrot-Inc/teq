@@ -161,6 +161,18 @@ gate-coverage 0
 gate-coverage@16 0
 gate-scripts 854
 gate-scripts@16 537
+# estimated: gate-scripts' three pieces, the whole's 854 s on eight CPUs and 711 s on sixteen (the gate's last run of
+# it whole) dealt by the pieces' weights (tests/support/piece-weights.txt: 286, 285 and 287 of 858), each piece's own
+# setups (its tools' check, the landing, the stand-ins) not counted; on the kind guest, the row of eight over its speed
+gate-scripts.1/3 285
+gate-scripts.1/3@16 237
+gate-scripts.1/3@guest 407
+gate-scripts.2/3 284
+gate-scripts.2/3@16 236
+gate-scripts.2/3@guest 406
+gate-scripts.3/3 286
+gate-scripts.3/3@16 238
+gate-scripts.3/3@guest 409
 lila-export 24
 lila-compile 11
 lila-test 130
@@ -230,9 +242,9 @@ idna@16 8
 # one at a time on one machine of that host gave the row of eight over its seconds there a median of 0.97 (30 lines)
 # and 0.76 (33 lines), quartiles 0.68 to 1.10; 70 against that host's swinging load.
 speed@guest 70
-# estimated: head-wait on the kind guest, the 40 s of eight and the head's binary shipped to another host, unmeasured
-# (60 s)
-head-wait@guest 100
+# measured: head-wait on the kind guest, the seconds from the builder's start to the head's binary reaching the
+# kind's machines in the two gates of 23 Nov that first dealt to them (191 to 205 s); the largest
+head-wait@guest 205
 # kept off the kind guest (-1): their caches live with the checkout and are cold on a machine's first gate (jars.sh's
 # built fixture jars under $TMPDIR/teq-<checkout>, init-view's scalac dumps under out/init-view/oracle): classfile ran
 # 1,099 s against its row of 34 on such a machine, init-view 586 against 30. Their rows come out by hand: a gate

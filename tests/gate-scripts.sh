@@ -142,6 +142,16 @@
 # Every run is bounded; the script exits 1 on a failure. Needs the release binary (TEQ), scala-cli and the coursier
 # cache the suites read.
 cd "$(dirname "$0")/.." || exit 1
+. tests/support/pieces.sh
+# The units, in the order this script runs them: a group of cells, or one run of the gate's driver that its cells read.
+# A piece of them (--piece <k>/<n>; --pieces <n> lists them) runs its units alone, each building the trees it reads
+# (need_stand, need_driver); the gate deals the pieces as lines of their own (tests/gate.sh's `pieced`).
+suite_units() { printf '%s\n' early pieces-lists pieces-stamps pieces-merge records setup pieces-mutants driver-ship driver-unheld driver-record driver-wait driver-cpus driver-steps driver-kind driver-off driver-guest-compare driver-holders driver-held-later driver-unnamed driver-without driver-two-holders driver-record-step driver-compare driver-pieces board board-cap outcomes tools tail; }
+! pieces_option gate-scripts "$1" "$2" || shift 2
+pieces_refuse gate-scripts "$@"
+[ $# = 0 ] || { echo "tests/gate-scripts.sh: no argument $1" >&2; pieces_usage; }
+# a piece's own stamps: the suites this script runs keep theirs apart
+export -n PIECES_RAN
 export TEQ=${TEQ:-$PWD/target/release/teq}
 work=$(mktemp -d "${TMPDIR:-/tmp}/gate-scripts.XXXXXX") || exit 1
 trap 'rm -rf "$work"' EXIT
@@ -170,7 +180,32 @@ stand_in() {
   printf '#!/bin/bash\n%s\n' "$2" > "$1/scala-cli"
   chmod +x "$1/scala-cli"
 }
+# need_stand: the stand-in binaries of the long suites' pieces (a teq whose sessions answer at once and whose builds
+# fail, a node that runs the language server's driver as a list of its scenarios, a java and a scala-cli that fail),
+# once a run.
+need_stand() {
+  [ -z "$stand" ] || return 0
+  stand=$work/stand
+  mkdir -p "$stand"
+  printf '%s\n' '#!/bin/bash' 'case "$1 $2" in' \
+    '  "compiler watch") echo "{\"ok\":false}"; while read -r line; do case $line in quit) exit 0 ;; build*) echo "{\"ok\":false}" ;; esac; done; exit 0 ;;' \
+    '  "compiler check") exit 0 ;;' '  "--version "*) echo "teq 0.0.0 stand-in"; exit 0 ;;' 'esac' 'exit 1' > "$stand/teq"
+  printf '%s\n' '#!/bin/bash' 'case $1 in tests/lsp/driver.mjs) ;; *) exec "$REAL_NODE" "$@" ;; esac' \
+    'names=$(sed -n "s/^const scenarios = { \(.*\) }$/\1/p" tests/lsp/driver.mjs | tr -d " " | tr "," "\n")' \
+    '[ -z "$LSP_UNITS" ] || echo "$names" > "$LSP_UNITS"' \
+    'for name in $names; do' \
+    '  case ,${LSP_ONLY:-}, in *,$name,*) ;; ,,) case $name in idleMinute|jarFetch|librarySources|sourcesFailures|sourcesHeld|sourcesBackoff|sourcesPaths) continue ;; esac ;; *) continue ;; esac' \
+    '  [ -z "$PIECES_RAN" ] || echo "$name ${TEQ_SESSION_THREADS:-auto}" >> "$PIECES_RAN"' 'done' 'echo "0 passed, 0 failed"' > "$stand/node"
+  for tool in java javap scala-cli; do printf '#!/bin/sh\nexit 1\n' > "$stand/$tool"; done
+  chmod +x "$stand"/*
+  real_node=$(command -v node)
+}
+stand=
+# the gate's want-of rule (`lacking`), which the skips' and the JVM runner's cells read
+source <(sed -n '/^skips=/,/^lacking()/p' tests/gate.sh)
 
+if piece_has early; then
+piece_ran early
 # The module oracle: a negative check passes on scalac's refusal alone.
 stand_in "$work/timeout" 'echo "stand-in: the oracle ran out of time" >&2; exit 124'
 stand_in "$work/killed" 'kill -9 $$'
@@ -299,7 +334,6 @@ PY
 check "api: the API's type phase is judged in pairs and fails closed" "$work/api.log" grep -q "^api: ok$" "$work/api.log"
 
 # The gate's want-of rule: what is skipped by design passes, what is skipped for want of something fails.
-source <(sed -n '/^skips=/,/^lacking()/p' tests/gate.sh)
 : > "$work/skips.log"
 while IFS='|' read -r verdict line; do
   [ -n "$line" ] || continue
@@ -398,9 +432,12 @@ done
 check "appfix: the check teq fix --check alone, a failing check, coverage or fixture failing the line, no record or an empty one failing it, the copy removed, the checkout untouched" "$work/appfix.log" \
   eval '! grep -q ": exit " "$work/appfix.log"'
 
+fi
+if piece_has pieces-lists; then
+piece_ran pieces-lists
 # The long suites' pieces (tests/support/pieces.sh): every unit a suite lists in exactly one piece, in the suite's
 # order, for every number of pieces; the units only a whole run used to reach among them.
-for suite in lsp jvm-watch modules split; do
+for suite in lsp jvm-watch modules split gate-scripts; do
   tests/$suite.sh --pieces 1 > "$work/pieces-$suite.1" 2>&1
   tests/$suite.sh --pieces 3 > "$work/pieces-$suite.3" 2>&1
   python3 - "$suite" "$work/pieces-$suite.1" "$work/pieces-$suite.3" > "$work/pieces-$suite.log" 2>&1 <<'PY'
@@ -440,7 +477,7 @@ check "pieces: lsp lists every scenario of the driver once, the idle minute, the
 # A selector out of range or misspelled, or another option, is refused before any setup; a piece of no units passes
 # as one.
 : > "$work/selectors.log"
-for suite in lsp jvm-watch modules split; do
+for suite in lsp jvm-watch modules split gate-scripts; do
   for bad in "--piece 0/2" "--piece 3/2" "--piece 1/0" "--piece a/b" "--piece" "--pieces 0" "--peice 1/2" "--bogus"; do
     out=$(TEQ=/nonexistent COURSIER_CACHE=$work/no-cache timeout 60 tests/$suite.sh $bad 2> /dev/null)
     code=$?
@@ -456,7 +493,7 @@ code=$?
 [ $code = 0 ] && [ "$out" = "$(printf 'pieces: lsp %s/%s: 0 units:\npieces: lsp %s/%s summary: exit=0 units=0' $n $n $n $n)" ] || echo "lsp --piece $n/$n: exit $code, $out" >> "$work/selectors.log"
 check "pieces: selectors out of range or misspelled refused before setup, a piece of no units passed" "$work/selectors.log" eval '[ ! -s "$work/selectors.log" ]'
 # Each suite's places that run units ask for every unit it lists once (PIECES_DRY=1: none runs).
-for suite in lsp jvm-watch modules split; do
+for suite in lsp jvm-watch modules split gate-scripts; do
   PIECES_DRY=1 timeout 300 tests/$suite.sh --piece 1/2 > "$work/dry-$suite.log" 2>&1
   code=$?
   check "pieces: every unit of $suite's list is asked for once by the places that run it" "$work/dry-$suite.log" eval \
@@ -485,25 +522,16 @@ a b c|a b c|the unit b never ran at again
 a b c|a b b:again c d|the unit d ran 1 times, 0 due
 CASES
 check "pieces: a unit asked for twice, never or unlisted, a body run twice, never or unasked fails the piece" "$work/stub.log" eval '[ ! -s "$work/stub.log" ]'
+fi
+if piece_has pieces-stamps; then
+piece_ran pieces-stamps
 # Execution identities: each unit's body stamps its name and site as it starts (PIECES_STAMPS), over stand-in
 # binaries (a teq whose sessions answer at once and whose builds fail, a node that runs the language server's driver
 # as a list of its scenarios, a java and a scala-cli that fail) and PIECES_STAMP_ONLY=1 (a program's body ends at its
 # stamp, a section runs on): every piece of every n of 1 to 8 runs each site of each of its units once and nothing
 # else, the pieces of each n together run the bodies the whole run runs, and the whole run's are 1/1's.
-stand=$work/stand
-mkdir -p "$stand" "$work/stamps" "$work/exec"
-printf '%s\n' '#!/bin/bash' 'case "$1 $2" in' \
-  '  "compiler watch") echo "{\"ok\":false}"; while read -r line; do case $line in quit) exit 0 ;; build*) echo "{\"ok\":false}" ;; esac; done; exit 0 ;;' \
-  '  "compiler check") exit 0 ;;' '  "--version "*) echo "teq 0.0.0 stand-in"; exit 0 ;;' 'esac' 'exit 1' > "$stand/teq"
-printf '%s\n' '#!/bin/bash' 'case $1 in tests/lsp/driver.mjs) ;; *) exec "$REAL_NODE" "$@" ;; esac' \
-  'names=$(sed -n "s/^const scenarios = { \(.*\) }$/\1/p" tests/lsp/driver.mjs | tr -d " " | tr "," "\n")' \
-  '[ -z "$LSP_UNITS" ] || echo "$names" > "$LSP_UNITS"' \
-  'for name in $names; do' \
-  '  case ,${LSP_ONLY:-}, in *,$name,*) ;; ,,) case $name in idleMinute|jarFetch|librarySources|sourcesFailures|sourcesHeld|sourcesBackoff|sourcesPaths) continue ;; esac ;; *) continue ;; esac' \
-  '  [ -z "$PIECES_RAN" ] || echo "$name ${TEQ_SESSION_THREADS:-auto}" >> "$PIECES_RAN"' 'done' 'echo "0 passed, 0 failed"' > "$stand/node"
-for tool in java javap scala-cli; do printf '#!/bin/sh\nexit 1\n' > "$stand/$tool"; done
-chmod +x "$stand"/*
-real_node=$(command -v node)
+need_stand
+mkdir -p "$work/stamps" "$work/exec"
 for suite in split modules jvm-watch lsp; do
   echo "$suite whole -"
   for n in 1 2 3 4 5 6 7 8; do for k in $(seq 1 $n); do echo "$suite $n $k"; done; done
@@ -535,6 +563,9 @@ PY
 for n in 1 2 3 4 5 6 7 8; do for k in $(seq 1 $n); do rm -rf "out/split.${k}of$n"; done; done
 check "pieces: every unit's body runs once over the pieces of every n of 1 to 8, the whole run's bodies 1/1's" "$work/identities.log" \
   grep -q -x "identities: ok" "$work/identities.log"
+fi
+if piece_has pieces-merge; then
+piece_ran pieces-merge
 # The merge of the pieces' summaries: counters summed, a verdict of every piece's counted once, a failure any piece
 # finds counted once, evidence summed before its check; a piece missing, doubled, unexpected, of another number or
 # without its summary fails the suite.
@@ -580,14 +611,20 @@ check "pieces: the merge sums counters, counts a whole suite's verdict once and 
 check "pieces: tests/all.sh runs the long suites whole" /dev/null eval \
   '[ "$(grep -c -E "^suite (lsp|jvm-watch|modules|split) +\./tests/(lsp|jvm-watch|modules|split)\.sh$" tests/all.sh)" = 4 ]'
 
+fi
 # The project records (bench/reference/records.scala) through bench/reference/ratchet.scala's verbs, the code the
 # compile verbs hold their runs with, in a repository of their own: a stand-in project p whose transcripts name the
 # errors a (an absolute path under the checkout, a message of two lines), a3 (a's message one line lower), b and c.
-rec=$work/records
-mkdir -p "$rec/bench/reference" "$rec/bench/p" "$rec/bench/q" "$rec/tools" "$rec/co" "$rec/co2" "$rec/out" &&
-  cp -R tools/script "$rec/tools/" && cp bench/reference/records.scala bench/reference/ratchet.scala "$rec/bench/reference/" &&
-  for p in p q; do echo '{"commit": "c0ffee"}' > "$rec/bench/$p/pin.json" && echo '{}' > "$rec/bench/$p/generated.json"; done &&
-  git -C "$rec" init -q || { echo "FAIL records: no repository in $rec"; fail=$((fail + 1)); }
+# need_records makes the repository once a run; the helpers below read it (the driver's record step too).
+rec=
+need_records() {
+  [ -z "$rec" ] || return 0
+  rec=$work/records
+  mkdir -p "$rec/bench/reference" "$rec/bench/p" "$rec/bench/q" "$rec/tools" "$rec/co" "$rec/co2" "$rec/out" &&
+    cp -R tools/script "$rec/tools/" && cp bench/reference/records.scala bench/reference/ratchet.scala "$rec/bench/reference/" &&
+    for p in p q; do echo '{"commit": "c0ffee"}' > "$rec/bench/$p/pin.json" && echo '{}' > "$rec/bench/$p/generated.json"; done &&
+    git -C "$rec" init -q || { echo "FAIL records: no repository in $rec"; fail=$((fail + 1)); }
+}
 commit_records() { git -C "$rec" add -A && git -C "$rec" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "$1"; }
 diag() {
   local co=${2:-$rec/co}
@@ -620,6 +657,9 @@ held() {
   python3 -u tests/support/teq_channels.py --records "$t.out.diagnostics" < "$t" > "$t.out" 2>&1
   ratchet compile "bench/$p" "$t.out" "${CWD:-$rec/co}" "$rec/co" "$rec/out" "$@"
 }
+if piece_has records; then
+piece_ran records
+need_records
 transcript_of "$work/t-ab" 1 a b
 held "$work/t-ab" p --baseline --binary "teq 0.1.8 aaaaaaaaa" && held "$work/t-ab"
 code=$?
@@ -839,6 +879,9 @@ code3=$?
 git -C "$rec" checkout -q master
 check "records: a head forked before master stepped a record down is refused against master, and passes rebased onto it" "$work/records.log" eval '[ $code = 0 ] && [ $code2 = 1 ] && [ $code3 = 0 ]'
 
+fi
+if piece_has setup; then
+piece_ran setup
 # The setup of the projects' checkouts (bench/gate-projects/setup.scala) over a stand-in project in a copy of the
 # tree, its driver a stand-in whose checkout installs the npm fixture and whose export refuses a checkout without it:
 # a run makes the machine ready; with the fixture deleted, a second run installs it again before calling the machine
@@ -887,7 +930,12 @@ check "setup: a machine ready, its npm fixture deleted and installed again befor
   [ -d "$work/sp/airstream/node_modules/jsdom" ] && grep -q "FAIL setup: not ready: airstream" "$work/setup-3.log" && [ ! -e "$work/sp/ready" ] &&
   grep -q -x "export GATE_AIRSTREAM_CHECKOUT=$work/sp/airstream" "$work/sp/gate-projects.env"'
 
-# The gate's driver over stand-in machines.
+fi
+# The gate's driver over stand-in machines: need_driver builds them and the landing once a run.
+driver_ready=
+need_driver() {
+  [ -z "$driver_ready" ] || return 0
+  driver_ready=1
 agent=$work/agent
 mkdir -p "$agent/bin" "$agent/scala3/tests"
 printf '%s\n' '#!/bin/bash' 'case $1 in' \
@@ -913,6 +961,12 @@ mkdir -p "$landing" && git -C "$landing" init -q &&
   echo "reference $(git -C "$landing" rev-parse --short HEAD) 2026-10-14 ceiling 1.20 the landing's own" >> "$landing/bench/reference.txt" &&
   git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "the reference" ||
   { echo "FAIL driver: no landing in $landing"; fail=$((fail + 1)); }
+  times_before=$(cat "$landing/tests/gate-times.txt")
+}
+if piece_has pieces-mutants; then
+piece_ran pieces-mutants
+need_stand
+need_driver
 # A program's body run twice behind its one guard, another's guard kept and its body dropped, a section's body
 # dropped behind its guard, a retype session called twice and another's call deleted: each fails the piece, on a
 # copy of tests/jvm-watch.sh in the landing.
@@ -941,6 +995,7 @@ check "pieces: a body run twice behind its guard, or dropped behind it, a retype
   [ "$(grep -c -E "^FAIL pieces: the unit passing/[^ ]+ ran 2 times, 1 due$" "$work/mutants.log")" = "$(python3 tests/support/pending.py passing jvm | wc -w)" ] &&
   [ "$(grep -c -E "^FAIL pieces: the unit watch-only/[^ ]+ never ran$" "$work/mutants.log")" = 6 ] &&
   grep -q -x "FAIL pieces: the unit owned-mirrors never ran" "$work/mutants.log"'
+fi
 # gate <log> <pool lines> <gate's arguments...>: the landing's gate over a fresh pool of stand-in machines.
 gate() {
   local log=$1 pool=$2
@@ -959,7 +1014,9 @@ gate() {
     timeout 300 tests/gate.sh "$landing" "$@") > "$log" 2>&1
 }
 row() { grep -E "^$1 +$2 " "$3"; }
-times_before=$(cat "$landing/tests/gate-times.txt")
+if piece_has driver-ship; then
+piece_ran driver-ship
+need_driver
 GATE_AGENT_CORRUPT=m3 gate "$work/driver-1.log" "$(printf 'm1 free\nm2 free\nm3 free\nh1 free holds=lila,airstream\nb1 busy')" --only parser,fold,planted,lila-export --record
 code=$?
 log=$work/driver-1.log
@@ -972,11 +1029,19 @@ check "driver: the builder's head shipped, a spoilt copy refused, lila's line on
   grep -q "^gate: [0-9]*m[0-9]*s from its first command to its last, within thirty minutes" "$log"'
 check "driver: a file whose name git quotes reaches the machines with the head's tree" "$log" eval \
   '! grep -q "rsync" "$log" && [ -f "$agent/machines/m1/rw/teq/$quoted" ] && [ -f "$agent/machines/m2/rw/teq/$quoted" ]'
+fi
+if piece_has driver-unheld; then
+piece_ran driver-unheld
+need_driver
 gate "$work/driver-2.log" "$(printf 'm1 free\nm2 free')" --only fold,lila-run
 code=$?
 log=$work/driver-2.log
 check "driver: a project line without a machine holding its checkout fails as not run" "$log" eval '[ $code = 1 ] &&
   row lila-run - "$log" | grep -q "FAIL .*not run: no free machine holds lila" && row fold "m[12]" "$log" | grep -q " ok "'
+fi
+if piece_has driver-record; then
+piece_ran driver-record
+need_driver
 gate "$work/driver-3.log" "$(printf 'm1 free\nm2 free')" --only parser,fold --record
 code=$?
 log=$work/driver-3.log
@@ -985,6 +1050,10 @@ check "driver: a passing run records its suites' times" "$log" eval '[ $code = 0
   grep -q -x "fold $(row fold "m[12]" "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
   [ "$(echo "$times_before" | grep -v -E "^(parser|fold) ")" = "$(grep -v -E "^(parser|fold) " "$landing/tests/gate-times.txt")" ]'
 git -C "$landing" checkout -q tests/gate-times.txt
+fi
+if piece_has driver-wait; then
+piece_ran driver-wait
+need_driver
 # The deal: the suites longest first, each to the shard with the least so far, the shards past the builder's starting
 # from tests/gate-times.txt's head-wait. With parser 100, fold 60 and planted 50 over two machines and a head-wait of
 # 60, the builder (m1) takes parser and then planted (100 against fold's 60 and the wait), m2 fold; from 0 for both,
@@ -998,6 +1067,10 @@ log=$work/driver-wait.log
 git -C "$landing" reset -q --hard "$base"
 check "driver: the shards past the builder's start the deal from head-wait, the builder taking the longest and the next" "$log" eval '[ $code = 0 ] &&
   row parser m1 "$log" | grep -q " ok " && row planted m1 "$log" | grep -q " ok " && row fold m2 "$log" | grep -q " ok "'
+fi
+if piece_has driver-cpus; then
+piece_ran driver-cpus
+need_driver
 # A line's seconds by its shard's kind of machine (its look's `cpus`, GATE_CPUS on a stand-in): parser 100 on eight
 # CPUs and 20 on sixteen, fold and planted 60 and 50 on either, no head-wait, m1 of sixteen and m2 of eight. m1 takes
 # parser (20 against m2's 100) and then planted (70 against 110), m2 fold; by the eights alone, planted would go to
@@ -1013,6 +1086,10 @@ check "driver: a line dealt by its seconds on its shard's kind of machine, and r
   grep -q -x "parser@16 $(row parser m1 "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
   grep -q -x "fold $(row fold m2 "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" && grep -q -x "parser 100" "$landing/tests/gate-times.txt"'
 git -C "$landing" reset -q --hard "$base"
+fi
+if piece_has driver-steps; then
+piece_ran driver-steps
+need_driver
 # A shard's own steps are lines the gate declares (tests/gate.sh's shard_steps). Every step tests/gate-shard.sh
 # writes by name is one of them, and a shard script with another fails that reading. Through the driver: over
 # stand-ins of bench/zig.sh and of idna's script, the shard that takes idna writes its zig step, whose row passes; a
@@ -1055,6 +1132,10 @@ check "driver: a shard's zig step is a line the gate declares, a step it does no
   [ $code3 = 1 ] && [ "$(grep -c -E "^warmup +m[12] .* FAIL +not a line of the gate.s" "$work/driver-step.log")" = 2 ] &&
   [ $code4 = 0 ] && [ "$(row zig "m[12]" "$log" | grep -c " ok .*zig 0.0.0-stand-in at ")" = 1 ] && row idna "m[12]" "$log" | grep -q " ok .*idna: 1 passed" &&
   ! grep -q "not a line of the gate.s" "$log"'
+fi
+if piece_has driver-kind; then
+piece_ran driver-kind
+need_driver
 # A named kind (a machine whose look names it, GATE_KIND in its own login environment: another host's): m1 of the
 # kind guest, m2 of eight CPUs, in one run that two cells read. m1 is never the builder while m2 took the tree, so m2
 # builds from 0 and m1 starts at head-wait@guest, both 0 over the tree's own. parser 100 on eight and its row of 20 on
@@ -1076,6 +1157,11 @@ check "driver: a machine naming a kind is dealt by that kind's rows and never bu
 check "driver: a named kind without a line's row is charged its row of eight over the kind's speed, never 120" "$log" eval '[ $code = 0 ] &&
   row fold m1 "$log" | grep -q " ok " && row planted m2 "$log" | grep -q " ok "'
 git -C "$landing" reset -q --hard "$base"
+fi
+if piece_has driver-off; then
+piece_ran driver-off
+need_driver
+base=$(git -C "$landing" rev-parse HEAD)
 # A line kept off a machine: fold marked -1 for the kind guest (its row there to be measured first) runs on m2 though
 # m1 would end it first, the gate saying, a line a machine, what it kept off and why. Then two machines of the kind
 # guest: fold, marked -1 there, can run on neither and fails the gate as not run, saying why; planted runs.
@@ -1094,6 +1180,10 @@ check "driver: a line no machine of the pool can run fails the gate as not run, 
   grep -q "^fold .*not run: no machine of the pool can run it; m[12] (guest): marked -1 for the kind guest, its row there to be measured first; m[12] (guest): marked -1" "$log" &&
   grep -E "^planted +m[12] " "$log" | grep -q " ok "'
 git -C "$landing" reset -q --hard "$base"
+fi
+if piece_has driver-guest-compare; then
+piece_ran driver-guest-compare
+need_driver
 # The comparison never measures on a machine of a named kind: m1, the first free, is of the kind guest; the comparison
 # claims it, finds its kind, releases it and measures elsewhere, the gate saying so.
 GATE_ENV_m1="export GATE_KIND=guest" gate "$work/driver-guest-compare.log" "$(printf 'm1 free\nm2 free\nm3 free\nm4 free\nm5 free')" --only parser,fold,budget,runtime,sentinel --master-rev HEAD
@@ -1102,6 +1192,10 @@ log=$work/driver-guest-compare.log
 check "driver: a machine of a named kind is no comparison machine: claimed, found, released, the timing lines measured elsewhere" "$log" eval '[ $code = 0 ] &&
   [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | grep -c " ok ")" = 3 ] && ! grep -q -E "^(budget|runtime|sentinel) +m1 " "$log" &&
   grep -q -E "^compare +m1 .*not a comparison machine: its kind is named" "$log"'
+fi
+if piece_has driver-holders; then
+piece_ran driver-holders
+need_driver
 # The projects' chains dealt over the machines holding them: two holding complementary projects each run their own,
 # neither taken by the shards; a project whose holder is busy and one no machine holds each fail as not run, saying
 # which; a holder busy at the first ask and free at a later one is left to its project; the eighteen project lines run
@@ -1119,6 +1213,10 @@ check "driver: a project whose holder is busy, and one no machine holds, fail as
   row lila-export - "$log" | grep -q "FAIL .*not run: no free machine holds lila: the machines holding it were busy (h1(busy))" &&
   row indigo-export - "$log" | grep -q "FAIL .*not run: no free machine holds indigo: no machine of the pool holds it" &&
   row tyrian-export h2 "$log" | grep -q "FAIL .*needs GATE_TYRIAN_CHECKOUT" && row fold m1 "$log" | grep -q " ok "'
+fi
+if piece_has driver-held-later; then
+piece_ran driver-held-later
+need_driver
 # A holder busy at the projects' first ask and free at a later one stays theirs: the shards, which find no free machine
 # at their first ask and ask again once both are free, take the other.
 ( sleep 3; printf '%s\n' "m1 free" "h1 free holds=lila" > "$agent/pool" ) &
@@ -1130,6 +1228,10 @@ log=$work/driver-p8.log
 check "driver: a holder busy at the first ask and free at a later one is left to its project, the shards taking the other" "$log" eval '[ $code = 1 ] &&
   row lila-export h1 "$log" | grep -q "FAIL .*needs GATE_LILA_CHECKOUT" && row parser m1 "$log" | grep -q " ok " && row fold m1 "$log" | grep -q " ok " &&
   ! grep -q -E "^claim +h1 " "$log"'
+fi
+if piece_has driver-unnamed; then
+piece_ran driver-unnamed
+need_driver
 # The project lines run in every gate unnamed: every other line left out (--without, the names read from the gate's
 # own lists), the eighteen run on the machine holding the five projects; --without one of them leaves it out.
 others=$(python3 - "$landing/tests/gate.sh" <<'PY'
@@ -1152,6 +1254,10 @@ check "driver: the eighteen project lines run in every gate unnamed, --without l
   [ "$(grep -c -E "^(lila|airstream|laminar|tyrian|indigo)-(export|compile|test|run) +h1 .* FAIL .*needs GATE_[A-Z]*_CHECKOUT" "$log")" = 18 ] &&
   ! grep -q -E "^(airstream|laminar)-run " "$log" && ! grep -q "not a line of the gate.s" "$log" &&
   [ "$(grep -c -E "^(lila|airstream|laminar|tyrian|indigo)-(export|compile|test|run) +h1 " "$work/driver-p10.log")" = 17 ] && ! grep -q "^lila-run " "$work/driver-p10.log"'
+fi
+if piece_has driver-without; then
+piece_ran driver-without
+need_driver
 gate "$work/driver-p3.log" "$(printf 'm1 free\nm2 free')" --only parser,fold --without fold
 code=$?
 log=$work/driver-p3.log
@@ -1159,6 +1265,10 @@ gate "$work/driver-p3b.log" "$(printf 'm1 free')" --only fold --without nosuch
 code2=$?
 check "driver: --without leaves a line out after --only, and refuses a name it does not know" "$log" eval '[ $code = 0 ] && [ $code2 = 2 ] &&
   row parser "m[12]" "$log" | grep -q " ok " && ! grep -q "^fold " "$log" && grep -q "^gate: no line named nosuch" "$work/driver-p3b.log"'
+fi
+if piece_has driver-two-holders; then
+piece_ran driver-two-holders
+need_driver
 # One holder or two, by the recorded times: chains that end after the shards on one machine are dealt over two,
 # chains that end within them stay on one, the other left to the shards.
 base=$(git -C "$landing" rev-parse HEAD)
@@ -1176,6 +1286,11 @@ git -C "$landing" reset -q --hard "$base"
 check "driver: the projects over two holders when one would end them after the shards, over one when it would not" "$log" eval '[ $code = 1 ] && [ $code2 = 1 ] &&
   [ "$(grep -E "^(lila|tyrian)-export " "$log" | awk "{print \$2}" | sort -u | tr "\n" " ")" = "h1 h2 " ] &&
   [ "$(grep -E "^(lila|tyrian)-export " "$work/driver-p5.log" | awk "{print \$2}" | sort -u | tr "\n" " ")" = "h1 " ]'
+fi
+if piece_has driver-record-step; then
+piece_ran driver-record-step
+need_driver
+need_records
 # --record: on a holder whose login environment names a TEQ_PLUGIN_VERSION, the lines run without it (their exports take
 # the head's sbt-teq); a chain whose compile passes within its record steps it, and the gate installs the step in the worktree
 # once every line passed (bench/reference/ratchet.scala install); a run whose compile shows an error the record lacks
@@ -1227,6 +1342,10 @@ check "driver: --record installs a passing chain's record step in the worktree, 
   grep -q "^gate: recorded bench/lila/errors.txt: records: bench/lila/errors.txt: 1 error installed (record)" "$log" &&
   [ "$recorded_errors" = 1 ] && [ "$recorded_kind" = record ] &&
   row lila-compile h1 "$work/driver-p7.log" | grep -q " FAIL " && grep -q "^gate: no times recorded, and no records" "$work/driver-p7.log" && [ -z "$errors_after" ]'
+fi
+if piece_has driver-compare; then
+piece_ran driver-compare
+need_driver
 # The comparison: three machines prepared beside the suites; with the recorded times the lines measure on one of
 # them, after the shards' suites; with times that one machine would end past thirty minutes, on as many as fit.
 gate "$work/driver-4.log" "$(printf 'm1 free\nm2 free\nm3 free\nm4 free\nm5 free')" --only parser,fold,budget,runtime,sentinel --master-rev HEAD
@@ -1251,6 +1370,10 @@ check "driver: the lines on three machines when one would end the gate past thir
   grep -q -E "^budget .* INCONCLUSIVE " "$log" && grep -q "^gate: the times recorded" "$log" &&
   [ "$recorded" = "$({ echo "budget $(row budget "m[0-9]" "$log" | awk "{print \$3}")"; echo "fold $(row fold "m[0-9]" "$log" | awk "{print \$3}")"; echo "parser $(row parser "m[0-9]" "$log" | awk "{print \$3}")"; echo "runtime $(row runtime "m[0-9]" "$log" | awk "{print \$3}")"; echo "sentinel $(row sentinel "m[0-9]" "$log" | awk "{print \$3}")"; } | sort | tr "\n" " ")" ]'
 
+fi
+if piece_has driver-pieces; then
+piece_ran driver-pieces
+need_driver
 # A suite run as pieces: tests/lsp.sh a stand-in over tests/support/pieces.sh with six units, each passing unless
 # tests/lsp/plant names it. The pieces are dealt as lines of their own, their rows under the suite's merged row, their
 # times recorded and the suite's left as it was; the comparison's planner and the dealer read them again, and a
@@ -1312,6 +1435,9 @@ check "driver: a failed, a killed, a timed-out and a skipping piece fail the sui
   [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | grep -c " ok ")" = 3 ] &&
   grep -q "^gate: no times recorded" "$log" && [ "$times_before" = "$times_after" ]'
 
+fi
+if piece_has board; then
+piece_ran board
 # The conformance board's judge (tests/board/dotty.py): what it says of a neg or warn test is one function of the
 # test's sources, teq's records and the row's oracle (neg_or_warn), held here over made-up ones. No compiler runs but
 # teq once, on a deprecated call, for the summary it prints of the warnings a flag leaves out.
@@ -1779,6 +1905,9 @@ while IFS=$'\t' read -r said scenario; do
 done < <(grep -E $'^(ok|FAIL)\t' "$work/board.log")
 check "board: every scenario of the judge was held" "$work/board.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board.log")" = 121 ]'
 
+fi
+if piece_has board-cap; then
+piece_ran board-cap
 # The board's memory cap leaves no cgroup behind: a test's cap is the run's watchdog, the run in one scope of its
 # own (a cgroup a test's teq wrote files in outlives it while their page cache stays charged to it). Over a made-up
 # corpus of 30 pos tests, outputs on a tmpfs, the real teq behind a stand-in that notes the cgroup it runs in: the
@@ -2121,6 +2250,9 @@ done < <(grep -E $'^(ok|FAIL|skip)\t' "$work/memcap.log")
 memcap_reported=$(grep -c -E $'^(ok|FAIL|skip)\t' "$work/memcap.log")
 check "the board's memory cap: every check reported" "$work/memcap.log" [ "$memcap_reported" = 17 ]
 
+fi
+if piece_has outcomes; then
+piece_ran outcomes
 # The board counts no check that did not run: a test's one outcome (a failure, then not run, then a pass) through
 # tests/support/pending.py in a copy of the tree's lists, tests/board/board.py's project rows over a made-up record,
 # the modules' known and deferred lists held both ways, a watch session's opening check that fails, and the JVM
@@ -2330,6 +2462,9 @@ mkdir -p "$oc/killed-teq" && printf '#!/bin/bash\n[ "$1" = --help ] && exit 0\nk
 check "outcomes: a workers check whose command did not run fails, with its reason" "$oc/workers.log" eval '
   grep -q -x "counts: pass=0 fail=6" "$oc/workers.log" && [ "$(grep -c "(its command did not run: exit 137)$" "$oc/workers.log")" = 6 ]'
 
+fi
+if piece_has tools; then
+piece_ran tools
 # The gate's cs and scala-cli (bench/actions/tools.sh), never coursier/setup-action, which resolved its apps channel on
 # Maven Central in every job: copies of the script whose digests are stand-in archives' (both, or cs's alone), against a
 # curl answering 429 for its first tries (or hanging on its first) and then serving the archive its URL names, uname's
@@ -2411,6 +2546,9 @@ tools_run "$t/tools.sh" 0 "$t/d8"
 check "tools: a directory where a tool goes refused, said, nothing asked, installed nor added" "$t/err" \
   eval '[ $code = 1 ] && grep -q "d8/scala-cli is a directory, where the scala-cli binary goes" "$t/err" && [ ! -s "$t/urls" ] && [ "$(ls "$t/d8")" = scala-cli ] && [ -z "$(ls "$t/d8/scala-cli")" ] && [ ! -s "$t/path" ]'
 
+fi
+if piece_has tail; then
+piece_ran tail
 # The first words' readers are master's code, fed the head's output rendered back whole (rewording.render_stream): the
 # rendered stream is master's byte for byte, and each reader decides on it as on master's (run.py's bucket and its
 # source line, the typing harness's category, the parser's normalised lines, the app oracle's record); a backticked
@@ -2500,5 +2638,7 @@ check "export-default: the table's templates, its part and its judge's planted t
 check "inline-getters: the table's templates and its judge's planted tables judged as they must be" "$work/inline-getters.log" \
   eval 'python3 tests/support/inline_getters.py --self-test > "$work/inline-getters.log" 2>&1'
 
+fi
 echo "gate-scripts: $pass passed, $fail failed"
+pieces_end $((fail > 0)) passed=$pass failed=$fail
 [ $fail = 0 ]

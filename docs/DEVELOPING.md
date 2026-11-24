@@ -311,8 +311,9 @@ inconclusive row not a pass), every run complete with a positive type phase and 
 lines and count);
 `bench/app/fixture-lists.scala` writes those lists for the public corpus, to run it on any machine.
 The longest suites run as pieces, so that the machines' half shrinks with their number: `tests/lsp.sh`,
-`tests/jvm-watch.sh`, `tests/modules.sh` and `tests/split.sh` take `--piece <k>/<n>`, which runs the k-th of n parts
-of the units they list (a scenario, a program with its checks, a section of sessions; `--pieces <n>` prints the
+`tests/jvm-watch.sh`, `tests/modules.sh`, `tests/split.sh` and `tests/gate-scripts.sh` take `--piece <k>/<n>`, which
+runs the k-th of n parts of the units they list (a scenario, a program with its checks, a section of sessions, a run
+of the gate's driver; `--pieces <n>` prints the
 parts), dealt by the weights of `tests/support/piece-weights.txt` and never by the recorded times, so that a unit
 added lands in one part (`tests/support/pieces.sh`); each unit's body stamps itself as it starts, and a piece fails
 unless every unit of its part ran exactly once. The gate deals each piece as a suite of its own (`lsp.1/4`, a

@@ -57,3 +57,34 @@ lsp sourcesFailures 20
 lsp sourcesHeld 1
 lsp sourcesBackoff 12
 lsp sourcesPaths 9
+# tests/gate-scripts.sh's are each unit's seconds in one whole run on eight CPUs (855 s), the time from the check
+# before its first to its last; its driver's runs over stand-in machines are most of them.
+gate-scripts early 20
+gate-scripts pieces-lists 29
+gate-scripts pieces-stamps 55
+gate-scripts pieces-merge 1
+gate-scripts records 8
+gate-scripts setup 1
+gate-scripts pieces-mutants 8
+gate-scripts driver-ship 36
+gate-scripts driver-unheld 12
+gate-scripts driver-record 34
+gate-scripts driver-wait 35
+gate-scripts driver-cpus 35
+gate-scripts driver-steps 70
+gate-scripts driver-kind 42
+gate-scripts driver-off 55
+gate-scripts driver-guest-compare 43
+gate-scripts driver-holders 26
+gate-scripts driver-held-later 36
+gate-scripts driver-unnamed 13
+gate-scripts driver-without 34
+gate-scripts driver-two-holders 21
+gate-scripts driver-record-step 22
+gate-scripts driver-compare 90
+gate-scripts driver-pieces 44
+gate-scripts board 2
+gate-scripts board-cap 72
+gate-scripts outcomes 8
+gate-scripts tools 5
+gate-scripts tail 1
