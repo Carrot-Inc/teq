@@ -2658,6 +2658,61 @@ fn exit_with_report(opts: &Options, report: &report::Report, code: i32) -> ! {
     std::process::exit(code)
 }
 
+/// The JVM emitter's input over the typed program of `typer`, handed to `f` with the class path the emitter
+/// reads: what `build_jvm` emits from, and the back end's unit tests (`with_jvm_output`).
+#[allow(clippy::too_many_arguments)]
+fn with_jvm_input<R>(
+    opts: &Options,
+    typer: &mut typer::Worker,
+    array_seq: Option<types::ClassId>,
+    reach: &emit::reach::Reach,
+    source_target_names: &intern::FxMap<types::SymId, intern::Name>,
+    asts: &Asts,
+    all_sources: &[SourceFile],
+    class_sites: &[(source::FileId, types::ClassId)],
+    f: impl FnOnce(jvm::Input, &mut classpath::Classpath) -> R,
+) -> R {
+    let owned = owned_files(opts, all_sources);
+    let stackable = stackable_overrides(typer, reach);
+    let mut named: Vec<types::ClassId> = class_sites.iter().map(|&(_, c)| c).collect();
+    named.sort_unstable();
+    named.dedup();
+    let typer::Worker { prog, syms, file_pkgs, types, tvars, interner, loaded, entry_points, mixin_supers, jvm_volatile, jvm_thread_unsafe, getters, .. } = typer;
+    let product_inits = loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
+    // A JVM build always reads the class path: scala-library is on it.
+    let typer::loader::Loaded { cp, classes, java, target_names, product_target_names, volatile, .. } = loaded.as_ref().expect("a JVM build reads its class path").get_mut();
+    let input = jvm::Input {
+        prog: &*prog,
+        syms: &*syms,
+        types: &*types,
+        insts: &*tvars,
+        interner: &**interner,
+        reach,
+        array_seq,
+        sources: all_sources,
+        file_pkgs: file_pkgs.own(),
+        asts,
+        getters: Some(&**getters),
+        java: Some(&*java),
+        target_names: Some(&*target_names),
+        source_target_names: Some(source_target_names),
+        product_target_names: Some(&*product_target_names),
+        volatile: Some(&*volatile),
+        source_volatile: Some(&*jvm_volatile),
+        source_thread_unsafe: Some(&*jvm_thread_unsafe),
+        link: jvm::Link { jar_classes: &*classes },
+        owned: owned.as_deref(),
+        all_mains: opts.all_mains.then_some(entry_points.as_slice()),
+        output_version: opts.java_output_version,
+        open_world: opts.products.is_some(),
+        mixin_supers: opts.products.is_some().then_some(&*mixin_supers),
+        stackable: Some(&stackable),
+        product_inits: Some(&product_inits),
+        named: &named,
+    };
+    f(input, cp)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_jvm(
     opts: &Options,
@@ -2682,62 +2737,27 @@ fn build_jvm(
                 .collect()
         })
         .unwrap_or_default();
-    let owned = owned_files(opts, &all_sources);
-    let stackable = stackable_overrides(&typer, reach);
     // The sources that expand a quote's shared classes, whose products use them (`products::Entry::uses`).
     let class_sites: Vec<(source::FileId, types::ClassId)> = typer.quoted_class_sites().to_vec();
-    let mut named: Vec<types::ClassId> = class_sites.iter().map(|&(_, c)| c).collect();
-    named.sort_unstable();
-    named.dedup();
-    let typer::Worker { prog, syms, file_pkgs, types, tvars, interner, loaded, entry_points, mixin_supers, jvm_volatile, jvm_thread_unsafe, getters, .. } = &mut typer;
-    let product_inits = loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
-    // A JVM build always reads the class path: scala-library is on it.
-    let typer::loader::Loaded { cp, classes, java, target_names, product_target_names, volatile, .. } = loaded.as_ref().expect("a JVM build reads its class path").get_mut();
-    let input = jvm::Input {
-        prog: &*prog,
-        syms: &*syms,
-        types: &*types,
-        insts: &*tvars,
-        interner: &**interner,
-        reach,
-        array_seq,
-        sources: &all_sources,
-        file_pkgs: file_pkgs.own(),
-        asts,
-        getters: Some(&**getters),
-        java: Some(&*java),
-        target_names: Some(&*target_names),
-        source_target_names: Some(source_target_names),
-        product_target_names: Some(&*product_target_names),
-        volatile: Some(&*volatile),
-        source_volatile: Some(&*jvm_volatile),
-        source_thread_unsafe: Some(&*jvm_thread_unsafe),
-        link: jvm::Link { jar_classes: &*classes },
-        owned: owned.as_deref(),
-        all_mains: opts.all_mains.then_some(entry_points.as_slice()),
-        output_version: opts.java_output_version,
-        open_world: opts.products.is_some(),
-        mixin_supers: opts.products.is_some().then_some(&*mixin_supers),
-        stackable: Some(&stackable),
-        product_inits: Some(&product_inits),
-        named: &named,
-    };
     // The program's Java sources are read for typing and compiled by none of teq's targets (javac compiles them
     // against teq's output): a jar would lack their classes, so none is written.
     let java_sources: Vec<source::FileId> = (0..all_sources.len()).filter(|&i| !all_sources[i].is_std && all_sources[i].path.ends_with(".java")).map(|i| source::FileId(i as u32)).collect();
-    if !java_sources.is_empty() && opts.products.is_none() && opts.output.as_deref().unwrap_or("out/main.jar").ends_with(".jar") {
-        let mut refused = source::Diagnostics::default();
-        refused.error(java_sources[0], source::Span::default(), "not supported yet: a jar of a program with Java sources, whose classes teq does not compile: build to a directory (-o <dir>) and compile the Java sources with javac against it".to_string());
-        eprint!("{}", refused.render(&all_sources));
-        source::errors_found(1);
-        answer_more_diagnostics(&refused, &all_sources);
-        answer_failure(opts);
-        exit_with_report(opts, &report, 1);
-    }
-    let t_emit_start = Instant::now();
-    let output = jvm::emit(input, cp, None);
-    let t_emit = Instant::now();
-    measure::report_parts(&mut report, measure::Pass::Emit, t_emit - t_emit_start, &[]);
+    let (output, t_emit) = with_jvm_input(opts, &mut typer, array_seq, reach, source_target_names, asts, &all_sources, &class_sites, |input, cp| {
+        if !java_sources.is_empty() && opts.products.is_none() && opts.output.as_deref().unwrap_or("out/main.jar").ends_with(".jar") {
+            let mut refused = source::Diagnostics::default();
+            refused.error(java_sources[0], source::Span::default(), "not supported yet: a jar of a program with Java sources, whose classes teq does not compile: build to a directory (-o <dir>) and compile the Java sources with javac against it".to_string());
+            eprint!("{}", refused.render(&all_sources));
+            source::errors_found(1);
+            answer_more_diagnostics(&refused, &all_sources);
+            answer_failure(opts);
+            exit_with_report(opts, &report, 1);
+        }
+        let t_emit_start = Instant::now();
+        let output = jvm::emit(input, cp, None);
+        let t_emit = Instant::now();
+        measure::report_parts(&mut report, measure::Pass::Emit, t_emit - t_emit_start, &[]);
+        (output, t_emit)
+    });
     // The references the backend refused (`Gen::refuse`) are the program's compile errors, as
     // dotty's erasure reports them.
     if !output.refused.is_empty() {
@@ -2776,7 +2796,7 @@ fn build_jvm(
             note_uses(&mut entries, &output, &class_sites, &all_sources, &owned);
             let pickles = products.as_ref().map_or(&[][..], |(w, _)| w.products.as_slice());
             let mut fresh = jvm_fresh_products(&output, entries, &all_sources, &owned, pickles);
-            fresh.shared = output.classes.iter().filter(|c| c.of.is_some_and(|k| syms.class(k).placed_at.is_some())).map(|c| format!("{}.class", c.name)).collect();
+            fresh.shared = output.classes.iter().filter(|c| c.of.is_some_and(|k| typer.syms.class(k).placed_at.is_some())).map(|c| format!("{}.class", c.name)).collect();
             let own = typer.loaded.as_ref().and_then(|l| l.cp.own.as_ref());
             let publication = products_publication(own, dir, "jvm", fresh).unwrap_or_else(|e| {
                 eprintln!("{}", e);
@@ -3679,6 +3699,40 @@ mod identity_tests {
 /// The source is written to a directory of its own under the system's temporary directory.
 #[cfg(test)]
 pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str], f: impl FnOnce(&mut typer::Worker) -> R + Send) -> R {
+    with_test_typer(name, text, flags, |typer, _, _| {
+        let mut f = Some(f);
+        let mut out = None;
+        typer.on_thread(|w| out = Some((f.take().expect("run once"))(w)));
+        out.expect("the worker ran the test")
+    })
+}
+
+/// The program `text` built for the JVM as `teq compiler build --target jvm` builds it with `flags`, for the
+/// unit tests of the back end: `f` reads what the emitter made of it (`jvm::Output`, its class files and what it
+/// refused) and the build's sources, which the refusals' places name. The emitter's input is the build's own
+/// (`with_jvm_input`); nothing is written and the process does not exit.
+#[cfg(test)]
+pub(crate) fn with_jvm_output<R: Send>(name: &str, text: &str, flags: &[&str], f: impl FnOnce(&jvm::Output, &[SourceFile]) -> R + Send) -> R {
+    let flags: Vec<&str> = ["--target", "jvm"].into_iter().chain(flags.iter().copied()).collect();
+    with_test_typer(name, text, &flags, |typer, opts, asts| {
+        // As the build's path does between the typing and `build_jvm`.
+        let array_seq = typer.on_thread(|w| w.array_seq_class());
+        let source_target_names = typer.on_thread(|w| w.source_target_names());
+        let mut reach = typer.on_thread(|w| emit::reach::compute(w, array_seq, false));
+        assert!(reach.unexpanded.is_empty() && !typer.diags.has_errors(), "the test's program types and reaches");
+        typer.rank_files();
+        reach.cover(typer.w.syms.classes.len(), typer.w.syms.syms.len());
+        let all_sources = typer.w.all_sources();
+        let class_sites: Vec<(source::FileId, types::ClassId)> = typer.w.quoted_class_sites().to_vec();
+        let output = with_jvm_input(opts, &mut typer.w, array_seq, &reach, &source_target_names, asts, &all_sources, &class_sites, |input, cp| jvm::emit(input, cp, None));
+        f(&output, &all_sources)
+    })
+}
+
+/// The program `text` typed as `teq compiler check` types it with `flags`: `f` gets the typer once its run
+/// ended, the build's options and its trees.
+#[cfg(test)]
+fn with_test_typer<R: Send>(name: &str, text: &str, flags: &[&str], f: impl FnOnce(&mut typer::Typer, &Options, &Asts) -> R + Send) -> R {
     // The typing thread's exit hands its caches back to the allocator's centre, whose counts
     // the allocator's tests read.
     let _serial = alloc::serial_test();
@@ -3718,13 +3772,37 @@ pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str]
                 typer.set_jvm();
             }
             typer.run();
-            let mut f = Some(f);
-            let mut out = None;
-            typer.on_thread(|w| out = Some((f.take().expect("run once"))(w)));
-            out.expect("the worker ran the test")
+            f(&mut typer, &opts, &asts)
         });
         typed.expect("the test's typer thread").join().expect("the test's typer panicked")
     })
+}
+
+#[cfg(test)]
+mod jvm_output_tests {
+    /// `Big.m`, a method of `n` statements of about ten bytes of code each.
+    fn big_method(n: usize) -> String {
+        let mut text = String::from("object Big:\n  def m(x: Int): Int =\n    var k = x\n");
+        for i in 0..n {
+            text.push_str(&format!("    k = k * 31 + {}\n", i + 1000));
+        }
+        text.push_str("    k\n  def main(args: Array[String]): Unit = println(m(args.length))\n");
+        text
+    }
+
+    /// The back end refuses a method whose code passes the JVM's 65,535 bytes even with wide jumps, and writes
+    /// its twin of a hundred statements: the helper drives the emitter from a source text.
+    #[test]
+    fn the_back_end_refuses_a_method_past_the_jvm_code_bound() {
+        crate::with_jvm_output("big_method", &big_method(8000), &[], |output, _| {
+            assert_eq!(output.errors, vec!["Big: a method whose code exceeds what the JVM allows".to_string()]);
+            assert!(output.refused.is_empty(), "{:?}", output.refused);
+        });
+        crate::with_jvm_output("small_method", &big_method(100), &[], |output, _| {
+            assert!(output.errors.is_empty() && output.refused.is_empty(), "{:?} {:?}", output.errors, output.refused);
+            assert!(output.classes.iter().any(|c| c.name == "Big$"), "the module class is written");
+        });
+    }
 }
 
 #[cfg(test)]
