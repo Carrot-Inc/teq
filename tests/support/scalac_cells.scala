@@ -10,7 +10,11 @@
 // the first error scalac reports (columns from 1, as teq's), with scalac's console filters (UniqueMessagePositions,
 // HideNonSensicalMessages), or the exception the run throws.
 //
-//   scala-cli run tests/support/scalac_cells.scala --server=false -q -- <cells dir> <out dir> <scala-library jar> [<first> <last>]
+// With `--over <tag>`, scalac compiles each cell's user over teq's library instead, the products of the split build
+// tests/support/pkgobj-given-import.sh's run <tag> left (<cells>/teq-<tag>/<cell>/split/lib, class files and TASTy),
+// and runs it beside them: `cell <TAB> split <TAB> over <TAB> <verdict>` lines in <cells>/scalac-over-<tag>.tsv.
+//
+//   scala-cli run tests/support/scalac_cells.scala --server=false -q -- <cells dir> <out dir> <scala-library jar> [<first> <last>] [--over <tag>]
 
 import dotty.tools.dotc.Driver
 import dotty.tools.dotc.core.Contexts.*
@@ -57,29 +61,43 @@ def run(dirs: Seq[Path], main: String): String =
     case e: Throwable => s"err:-:-:-: $e".take(240).replace('\t', ' ')
   finally loader.close()
 
-@main def scalacCells(cellsDir: String, outDir: String, library: String, range: String*): Unit =
+@main def scalacCells(cellsDir: String, outDir: String, library: String, rest: String*): Unit =
   val cells = Paths.get(cellsDir)
   val names = Files.readAllLines(cells.resolve("cells.txt")).asScala.map(_.trim).filter(_.nonEmpty).toSeq
+  val over = rest.sliding(2).collectFirst { case Seq("--over", tag) => tag }
+  val range = rest.filterNot(a => a == "--over" || over.contains(a))
   val (first, last) = range match
     case Seq(a, b) => (a.toInt, b.toInt)
     case _ => (1, names.size)
-  val table = new java.io.PrintWriter(Files.newBufferedWriter(cells.resolve("scalac.tsv"), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND))
+  val tableName = over.fold("scalac.tsv")(tag => s"scalac-over-$tag.tsv")
+  val table = new java.io.PrintWriter(Files.newBufferedWriter(cells.resolve(tableName), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND))
   for name <- names.slice(first - 1, last) do
     val lib = sources(cells.resolve(name).resolve("lib"))
     val use = sources(cells.resolve(name).resolve("use"))
     val out = Paths.get(outDir, name)
     val mainFile = cells.resolve(name).resolve("main.txt")
     val main = if Files.exists(mainFile) then Files.readString(mainFile).trim else "fd.run"
-    val whole = compile(lib ++ use, out.resolve("whole"), library) match
-      case Some(e) => s"err:$e"
-      case None => run(Seq(out.resolve("whole")), main)
-    val split = compile(lib, out.resolve("lib"), library) match
-      case Some(e) => s"err:$e"
-      case None => compile(use, out.resolve("use"), s"$library:${out.resolve("lib")}") match
-        case Some(e) => s"err:$e"
-        case None => run(Seq(out.resolve("use"), out.resolve("lib")), main)
-    table.println(s"$name\twhole\trun\t$whole")
-    table.println(s"$name\tsplit\trun\t$split")
-    table.flush()
+    over match
+      case Some(tag) =>
+        val teqLib = cells.resolve(s"teq-$tag").resolve(name).resolve("split").resolve("lib")
+        val verdict =
+          if !Files.isDirectory(teqLib) then "err:-:-:-: no products of teq's library"
+          else compile(use, out.resolve(s"over-$tag"), s"$library:$teqLib") match
+            case Some(e) => s"err:$e"
+            case None => run(Seq(out.resolve(s"over-$tag"), teqLib), main)
+        table.println(s"$name\tsplit\tover\t$verdict")
+        table.flush()
+      case None =>
+        val whole = compile(lib ++ use, out.resolve("whole"), library) match
+          case Some(e) => s"err:$e"
+          case None => run(Seq(out.resolve("whole")), main)
+        val split = compile(lib, out.resolve("lib"), library) match
+          case Some(e) => s"err:$e"
+          case None => compile(use, out.resolve("use"), s"$library:${out.resolve("lib")}") match
+            case Some(e) => s"err:$e"
+            case None => run(Seq(out.resolve("use"), out.resolve("lib")), main)
+        table.println(s"$name\twhole\trun\t$whole")
+        table.println(s"$name\tsplit\trun\t$split")
+        table.flush()
   table.close()
   println(s"scalac_cells: cells $first-$last of ${names.size}")

@@ -1,10 +1,12 @@
 #!/bin/bash
 # tests/support/pkgobj-given-import.sh scalac <cells dir> [<first> <last>] | teq <cells dir> <tag> <teq binary> [<first>
-# <last>]: the runs of the table of tests/support/pkgobj_given_import.py (`pkgobj_given_import.py cells <dir>` writes the
+# <last>] | over <cells dir> <tag>: the runs of the table of tests/support/pkgobj_given_import.py (`pkgobj_given_import.py cells <dir>` writes the
 # cells, `pkgobj_given_import.py judge <dir> <base> <head>` judges the runs), the cells of cells.txt's lines <first> to
 # <last> (all by default). Not a suite of the gate: a table run by hand.
 #   scalac: tests/support/scalac_cells.scala, scalac 3.8.4 over the cells in one JVM, each WHOLE and SPLIT, appending to
 #     <cells>/scalac.tsv.
+#   over: scalac 3.8.4 compiling each cell's user over teq's library, the products run <tag>'s split build left, and
+#     running it beside them (scalac_cells.scala --over), appending to <cells>/scalac-over-<tag>.tsv.
 #   teq: per cell, WHOLE (lib/ and use/ in one build) and SPLIT (lib/ built to products first, use/ against them), the
 #     legs `interp` (the interpreter), `jvm` (an -o jar run on the JVM), `js` (an -o build run by node; the split's
 #     library products a check's pickles), each its output or its first error as scalac's is written (`<file>:<line>:
@@ -18,6 +20,10 @@ SL=$(jar_of scala-library)
 [ -f "$SL" ] || { echo "pkgobj-given-import: scala-library is not in the coursier cache"; exit 1; }
 if [ "$mode" = scalac ]; then
   timeout 1200 scala-cli run tests/support/scalac_cells.scala --server=false -q -- "$C" "$C/scalac-out" "$SL" ${3:+"$3"} ${4:+"$4"}
+  exit $?
+fi
+if [ "$mode" = over ]; then
+  timeout 1200 scala-cli run tests/support/scalac_cells.scala --server=false -q -- "$C" "$C/scalac-out" "$SL" --over "$3"
   exit $?
 fi
 first=${5:-1}; last=${6:-100000}

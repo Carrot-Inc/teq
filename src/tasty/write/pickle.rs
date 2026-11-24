@@ -3208,15 +3208,16 @@ impl<'w, 'a> P<'w, 'a> {
         self.names.get(NK::Expanded(prefix, member))
     }
 
-    /// The export clauses of class `c`, each as the `EXPORT` tree the typed body keeps where the
-    /// clause stands (dotty's `typedStats`: the `Export`, then its forwarders, which
-    /// `value_forwarder_defs` writes after the members, as the class's own definitions).
+    /// The export clauses of class `c`, a class's or a given instance's body's (`template_exports`),
+    /// each as the `EXPORT` tree the typed body keeps where the clause stands (dotty's
+    /// `typedStats`: the `Export`, then its forwarders, which `value_forwarder_defs` writes after
+    /// the members, as the class's own definitions).
     fn class_export_trees(&mut self, c: ClassId) {
         let info = self.w.syms.class(c);
         let (file, def) = (info.file, info.def);
         let Some(d) = def else { return };
-        let DefKind::Class(cls) = &self.w.ast(file).def(d).kind else { return };
-        let clauses: Vec<crate::ast::Import> = self.w.ast(file).exports[cls.exports.range()].to_vec();
+        let exports = self.w.ast(file).def(d).kind.template_exports();
+        let clauses: Vec<crate::ast::Import> = self.w.ast(file).exports[exports.range()].to_vec();
         let fwds: Vec<std::sync::Arc<Forward>> = self.w.syms.class(c).forwarders.iter().map(|(_, f)| f.clone()).collect();
         self.export_trees(&clauses, &fwds);
     }
@@ -6408,6 +6409,12 @@ impl<'w, 'a> P<'w, 'a> {
             }
         }
         self.statements_before(k, &mut stmts, None);
+        // A given instance's body's export clauses and forwarders, as a class's template writes
+        // them (dotty's `Parsers.givenDef` reads the body as a `templateBody`).
+        if info.has_exports {
+            self.class_export_trees(k);
+        }
+        self.value_forwarder_defs(k);
         self.enclosing.pop();
         self.tparams.truncate(tmark);
         self.buf.end_length(len);

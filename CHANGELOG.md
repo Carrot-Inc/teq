@@ -7,6 +7,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A given instance's export clauses and their forwarders are in its class's pickle, as a class's are: another
+  module built against the products calls the forwarders (`egh.Indented.h.f(1)` for `given h: AnyRef with { val c
+  = Codecs; export c.* }`), where it was refused ("value f is not a member of h"). Exports in a given instance's body
+  were right in a build of the sources together alone.
 - A given that takes nothing and whose type is a path's singleton, an exported given's forwarder (`export
   Impl.given` in an object, a package object or a package's top-level file) or one written so (`given a:
   Impl.gi.type = Impl.gi`), is ranked against another given of its type as the given the path names, a structural
