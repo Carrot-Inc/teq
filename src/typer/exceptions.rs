@@ -823,7 +823,7 @@ impl<'a> Worker<'a> {
                     let fl = self.prog.syms(&field_syms);
                     let pl = self.prog.pat_lists.push_slice(&pats);
                     let tuple = self.prog.add_pat(TPat::Class(tc, value, fl, pl));
-                    let some_ty = self.types.class(some, &[value]);
+                    let some_ty = self.applied_class(some, &[value]);
                     let sfl = self.prog.syms(&[field]);
                     let spl = self.prog.pat_lists.push_slice(&[tuple]);
                     return self.prog.add_pat(TPat::Class(some, some_ty, sfl, spl));
@@ -834,7 +834,7 @@ impl<'a> Worker<'a> {
         if self.capturing() {
             self.capture_pat(seq, crate::tir::capture::PatForm::Elements);
         }
-        let some_ty = self.types.class(some, &[value]);
+        let some_ty = self.applied_class(some, &[value]);
         let fl = self.prog.syms(&[field]);
         let pl = self.prog.pat_lists.push_slice(&[seq]);
         self.prog.add_pat(TPat::Class(some, some_ty, fl, pl))
@@ -858,7 +858,7 @@ impl<'a> Worker<'a> {
         }
         let rest = rest.map(|inner| {
             let seq_ty = match self.seq_class() {
-                Some(seq) => self.types.class(seq, &[elem]),
+                Some(seq) => self.applied_class(seq, &[elem]),
                 None => ERROR,
             };
             self.type_pattern(inner, seq_ty)
@@ -935,7 +935,7 @@ impl<'a> Worker<'a> {
                 }
             }
         };
-        let some_ty = self.types.class(some, &[value]);
+        let some_ty = self.applied_class(some, &[value]);
         let fl = self.prog.syms(&[field]);
         let pl = self.prog.pat_lists.push_slice(&[sub]);
         self.prog.add_pat(TPat::Class(some, some_ty, fl, pl))

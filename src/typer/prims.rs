@@ -2226,6 +2226,7 @@ impl<'a> Worker<'a> {
             }
             Type::Class(c, args) if covariant => {
                 let args: Vec<TypeId> = self.types.items(args).to_vec();
+                self.unmade_read(c, args.len());
                 let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
                 if args.is_empty() || args.len() != variances.len() {
                     return t;
@@ -2515,7 +2516,7 @@ impl<'a> Worker<'a> {
     /// Whether a given `CanEqual[l, r]` is found; without `defaults` only a definition counts.
     fn can_equal_given(&mut self, l: TypeId, r: TypeId, defaults: bool, span: Span) -> bool {
         let Some(can_equal) = self.can_equal_class() else { return true };
-        let target = self.types.class(can_equal, &[l, r]);
+        let target = self.applied_class(can_equal, &[l, r]);
         let target = self.zonk(target);
         let outer = std::mem::replace(&mut self.defined_equality_only, (!defaults).then_some(target));
         let found = self.resolve_given(target, span).is_some();
@@ -3636,7 +3637,7 @@ impl<'a> Worker<'a> {
             Erased::Nothing(d) => (NOTHING, d),
         };
         for _ in 0..dims {
-            t = self.types.class(self.b.array, &[t]);
+            t = self.applied_class(self.b.array, &[t]);
         }
         t
     }
@@ -3860,7 +3861,7 @@ impl<'a> Worker<'a> {
                 }
                 // The type arguments differ from case to case, which is `E[?]` in Scala.
                 let arity = self.class_arity(enum_class);
-                let enum_ty = self.types.class(enum_class, &vec![WILD; arity]);
+                let enum_ty = self.applied_class(enum_class, &vec![WILD; arity]);
                 // The enum through the companion's path (`a.E` of `a.E.fromOrdinal`), an enum
                 // nested in a class being one type per enclosing instance.
                 let enum_ty = self.as_seen_from(enum_ty, recv_ty, module);
@@ -3905,8 +3906,7 @@ impl<'a> Worker<'a> {
                     if !no_args {
                         return None;
                     }
-                    let args = self.types.list(&[enum_ty]);
-                    let array = self.types.mk(Type::Class(self.b.array, args));
+                    let array = self.applied_class(self.b.array, &[enum_ty]);
                     let te = match held {
                         // A new array of the companion's value cases, as `$values.clone()` is.
                         Some(_) => {
@@ -3995,7 +3995,7 @@ impl<'a> Worker<'a> {
                 // `Class[? <: T]`, as scalac's `Any.getClass` types it: a subclass's instance is
                 // the receiver's.
                 let arg = self.types.bounded_wild(NOTHING, recv_ty);
-                let ty = self.types.class(class, &[arg]);
+                let ty = self.applied_class(class, &[arg]);
                 let te = self.prog.add(TExpr::Js(s, l));
                 Some((self.builtin_member(te, name), ty))
             }

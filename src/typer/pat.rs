@@ -1564,7 +1564,7 @@ impl<'a> Worker<'a> {
         let sty = if self.types.is_path(sty) { self.widen_path(sty) } else { sty };
         let first_var = self.tvars.len();
         let vars: Vec<TypeId> = (0..arity).map(|_| self.fresh_var()).collect();
-        let class_ty = self.types.class(c, &vars);
+        let class_ty = self.applied_class(c, &vars);
         let class_ty = match self.scrutinee_prefix(c, sty) {
             Some(p) => self.nested_type(p, class_ty),
             None => class_ty,
@@ -1662,7 +1662,7 @@ impl<'a> Worker<'a> {
             None => self.solve_pattern_class(c, tparams.len(), sty).0,
         };
         let subst: Subst = tparams.iter().copied().zip(args.iter().copied()).collect();
-        let class_ty = self.types.class(c, &args);
+        let class_ty = self.applied_class(c, &args);
         let class_ty = match written.or_else(|| self.scrutinee_prefix(c, sty)) {
             Some(p) => self.nested_type(p, class_ty),
             None => class_ty,
@@ -1726,6 +1726,7 @@ impl<'a> Worker<'a> {
             let Type::Param(p) = self.types.get(s) else { continue };
             let known = self.zonk(self.types.items(pargs)[i]);
             self.settle_class(sc);
+            self.unmade_read(sc, self.types.items(sargs).len());
             let variance = self.syms.tparam(self.syms.class(sc).tparams[i]).variance;
             let uk = self.canon(known);
             let says_nothing = (variance == 1 && uk == NOTHING) || (variance == -1 && uk == ANY);
@@ -1822,7 +1823,7 @@ impl<'a> Worker<'a> {
         self.rollback(&mark);
         let test = if always { self.prog.add_test(TypeTest::Always) } else { self.test_for(class_ty, sty, span, true) };
         let seq_ty = match self.seq_class() {
-            Some(seq) => self.types.class(seq, &[elem]),
+            Some(seq) => self.applied_class(seq, &[elem]),
             None => ERROR,
         };
         let seq = self.seq_elements_pattern(seq_ty, &subs);
@@ -1874,10 +1875,10 @@ impl<'a> Worker<'a> {
             self.capture_pat(seq, PatForm::Elements);
         }
         let seq_ty = match self.seq_class() {
-            Some(sc) => self.types.class(sc, &[ANY]),
+            Some(sc) => self.applied_class(sc, &[ANY]),
             None => ERROR,
         };
-        let some_ty = self.types.class(some, &[seq_ty]);
+        let some_ty = self.applied_class(some, &[seq_ty]);
         let fl = self.prog.syms(&[field]);
         let pl = self.prog.pat_lists.push_slice(&[seq]);
         let inner = self.prog.add_pat(TPat::Class(some, some_ty, fl, pl));
@@ -2023,7 +2024,7 @@ impl<'a> Worker<'a> {
             }
             let elem = self.types.subst(last.ty, &subst);
             let seq_ty = match self.seq_class() {
-                Some(seq) => self.types.class(seq, &[elem]),
+                Some(seq) => self.applied_class(seq, &[elem]),
                 None => ERROR,
             };
             field_syms.push(last.sym);
@@ -2123,13 +2124,13 @@ impl<'a> Worker<'a> {
             return None;
         }
         if let Some(tt) = self.class_at(&["scala", "reflect", "TypeTest"]) {
-            let target = self.types.class(tt, &[s, t]);
+            let target = self.applied_class(tt, &[s, t]);
             if let Some(found) = self.resolve_given_search_only(target, span) {
                 return Some(found);
             }
         }
         let ct = self.class_at(&["scala", "reflect", "ClassTag"])?;
-        let target = self.types.class(ct, &[t]);
+        let target = self.applied_class(ct, &[t]);
         self.resolve_given_search_only(target, span)
     }
 
@@ -2172,7 +2173,7 @@ impl<'a> Worker<'a> {
         let some = self.std_class("Some")?;
         self.complete_class(some);
         let field = self.syms.class(some).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym)?;
-        let some_ty = self.types.class(some, &[value]);
+        let some_ty = self.applied_class(some, &[value]);
         let fl = self.prog.syms(&[field]);
         let pl = self.prog.pat_lists.push_slice(&[inner]);
         let result = self.prog.add_pat(TPat::Class(some, some_ty, fl, pl));
@@ -2203,7 +2204,7 @@ impl<'a> Worker<'a> {
             Some(super::site::Erased::Of(c, dims)) => {
                 let mut erased = self.types.class(c, &[]);
                 for _ in 0..dims {
-                    erased = self.types.class(self.b.array, &[erased]);
+                    erased = self.applied_class(self.b.array, &[erased]);
                 }
                 self.test_for(erased, sty, span, true)
             }
@@ -3270,7 +3271,7 @@ impl<'a> Worker<'a> {
     /// `Option[Int]`, but not `List[Int]` on `Any`, whose elements the run time cannot see.
     fn args_determined(&mut self, c: ClassId, args: TList, sty: TypeId) -> bool {
         let asked = self.types.items(args).to_vec();
-        let tested = self.types.class(c, &asked);
+        let tested = self.applied_class(c, &asked);
         let mark = self.snapshot();
         let below = self.is_sub(sty, tested);
         self.rollback(&mark);
@@ -3488,7 +3489,7 @@ impl<'a> Worker<'a> {
         let first_var = self.tvars.len();
         let mark = self.snapshot();
         let vars: Vec<TypeId> = tparams.iter().map(|_| self.fresh_var()).collect();
-        let applied = self.types.class(c, &vars);
+        let applied = self.applied_class(c, &vars);
         // Constrained where the class can be the scrutinee's element at all; unrelated, nothing is known.
         let inner = self.snapshot();
         if !self.is_sub(applied, from) {

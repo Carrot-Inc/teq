@@ -282,7 +282,7 @@ impl<'a> Worker<'a> {
     /// forwarder's descriptor is the target's (`Function0` for `=> Int`, `Seq` for `Int*`).
     pub(super) fn accessor_param(&mut self, p: &ParamSig, file: FileId, span: Span) -> SymId {
         let local_ty = match (p.repeated, self.seq_class()) {
-            (true, Some(seq)) => self.types.class(seq, &[p.ty]),
+            (true, Some(seq)) => self.applied_class(seq, &[p.ty]),
             _ => p.ty,
         };
         let q = self.syms.new_sym(p.name, SymKind::Param, 0, Owner::Local, file, None, span);

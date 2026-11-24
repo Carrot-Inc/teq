@@ -391,7 +391,7 @@ impl<'a> Worker<'a> {
             return self.types.mk(Type::Term(s));
         }
         let n = info.tparams.len();
-        self.types.class(child, &vec![WILD; n])
+        self.applied_class(child, &vec![WILD; n])
     }
 
     /// Whether `o` extends `Mirror.Sum`, as a companion that is its sum's mirror does.
@@ -989,7 +989,7 @@ impl<'a> Worker<'a> {
             let a_ref = self.prog.add(TExpr::Local(a));
             // The case's class, of any arguments (`case _: C[?] => i`).
             let n = self.syms.class(child).tparams.len();
-            let t = self.types.class(child, &vec![ANY; n]);
+            let t = self.applied_class(child, &vec![ANY; n]);
             let is_child = self.prog.add(TExpr::TypeTest(a_ref, test, t));
             if self.capturing() {
                 self.capture_form(is_child, crate::tir::capture::Form::Test(t));
@@ -1611,7 +1611,7 @@ Failed to synthesize an instance of type {}:", shown, shown);
             for (i, &child) in children.iter().enumerate().rev().skip(1) {
                 let test = self.class_test(child);
                 let n = self.syms.class(child).tparams.len();
-                let t = self.types.class(child, &vec![ANY; n]);
+                let t = self.applied_class(child, &vec![ANY; n]);
                 let is_child = self.prog.add(TExpr::TypeTest(a_ref, test, t));
                 let index = self.prog.add(TExpr::Int(i as i32));
                 ordinal = self.prog.add(TExpr::If(is_child, index, Some(ordinal)));
@@ -1631,7 +1631,7 @@ Failed to synthesize an instance of type {}:", shown, shown);
         }
         let arity = self.syms.class(child).tparams.len();
         let vars: Vec<TypeId> = (0..arity).map(|_| self.fresh_var()).collect();
-        let mut ty = self.types.class(child, &vars);
+        let mut ty = self.applied_class(child, &vars);
         // A child nested in a class is seen through the prefix `childPrefix` gives it, as
         // `sumMirror` sees it (`asSeenFrom(childPre, child.owner)`, Synthesizer.scala 567).
         if self.is_inner_class(child) {

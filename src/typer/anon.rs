@@ -72,6 +72,7 @@ impl<'a> Worker<'a> {
         let Some(&(_, seen)) = self.syms.class(k).base_types.iter().find(|&&(b, _)| b == ec) else { return false };
         let Type::Class(_, sargs) = self.types.get(self.types.strip_nested(seen)) else { return false };
         let sargs = self.types.items(sargs).to_vec();
+        self.unmade_read(ec, eargs.len());
         let variances: Vec<i8> = self.syms.class(ec).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
         if tparams.is_empty() || sargs.len() != eargs.len() {
             return false;
@@ -681,7 +682,7 @@ impl<'a> Worker<'a> {
                     if let Type::Class(ec, args) = self.types.get(self.types.strip_nested(t)) {
                         if ec == c {
                             let args = self.types.items(args).to_vec();
-                            return self.types.apply_ctor(ctor, &args);
+                            return self.applied_ctor(ctor, &args);
                         }
                     }
                 }
@@ -1790,6 +1791,7 @@ impl<'a> Worker<'a> {
         }
         if let Type::Class(k, args) = self.types.get(t) {
             let items: Vec<TypeId> = self.types.items(args).to_vec();
+            self.unmade_read(k, items.len());
             let variances: Vec<i8> = self.syms.class(k).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
             let out: Vec<TypeId> = items
                 .iter()
@@ -2137,6 +2139,7 @@ impl<'a> Worker<'a> {
             Type::Class(k, args) => {
                 self.settle_class(k);
                 let items = self.types.items(args).to_vec();
+                self.unmade_read(k, items.len());
                 for (i, a) in items.into_iter().enumerate() {
                     let v = self.syms.class(k).tparams.get(i).map_or(0, |&q| self.syms.tparam(q).variance);
                     self.collect_param_variances(a, sign * v, out);
@@ -2248,7 +2251,7 @@ impl<'a> Worker<'a> {
             // A repeated parameter `A*` is a `Seq[A]` in the body, a by-name `=> A` an `A` read
             // where the body reads it; the method keeps the forms it overrides.
             let seq = |t: &mut Self, elem: TypeId| match t.seq_class() {
-                Some(c) => t.types.class(c, &[elem]),
+                Some(c) => t.applied_class(c, &[elem]),
                 None => ERROR,
             };
             let (ty, elem) = match lp.ty {

@@ -1629,7 +1629,7 @@ impl<'a> Worker<'a> {
                     if !accept(self, result) {
                         self.rollback(&bound);
                     }
-                    Some(self.types.class(conversion, &[recv_ty, result]))
+                    Some(self.applied_class(conversion, &[recv_ty, result]))
                 }
                 _ => None,
             };

@@ -3070,7 +3070,7 @@ impl<'c, 'a> Collector<'c, 'a> {
         // `E[?]` of an enum of type parameters.
         let enum_type = if generic {
             let items = vec![crate::types::WILD; self.w.syms.class(e).tparams.len()];
-            self.w.types.class(e, &items)
+            self.w.applied_class(e, &items)
         } else {
             self.w.syms.this_type(e)
         };
@@ -3219,7 +3219,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             Type::Class(pc, args) if pc == e && case_class.is_some() && self.w.types.items(args).is_empty() && !self.w.syms.class(e).tparams.is_empty() => {
                 let nothing = crate::types::NOTHING;
                 let items = vec![nothing; self.w.syms.class(e).tparams.len()];
-                self.w.types.class(e, &items)
+                self.w.applied_class(e, &items)
             }
             _ => parent,
         };

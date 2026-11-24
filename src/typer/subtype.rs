@@ -432,7 +432,7 @@ impl<'a> Worker<'a> {
                     Some(ctor) => {
                         let items: Vec<TypeId> = self.types.items(args).to_vec();
                         let ctor = self.deref(ctor);
-                        t = self.types.apply_ctor(ctor, &items);
+                        t = self.applied_ctor(ctor, &items);
                     }
                     None => return t,
                 },
@@ -508,7 +508,7 @@ impl<'a> Worker<'a> {
                 let zm = self.zonk(m);
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
                 let z: Vec<TypeId> = items.iter().map(|&a| self.zonk(a)).collect();
-                self.types.apply_ctor(zm, &z)
+                self.applied_ctor(zm, &z)
             }
             Type::Refined(p, r) => {
                 let zp = self.zonk(p);
@@ -650,6 +650,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Class(k, args) => {
+                self.unmade_read(k, self.types.items(args).len());
                 let variances: Vec<i8> = self.syms.class(k).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
                 for (i, &x) in self.types.items(args).iter().enumerate() {
                     at(self, x, v * variances.get(i).copied().unwrap_or(0), allowed, aliases);
@@ -1531,7 +1532,7 @@ impl<'a> Worker<'a> {
             (Type::Ctor(c1), Type::Class(c2, args)) if self.types.items(args).is_empty() && self.syms.class(c2).tparams.is_empty() => {
                 self.complete_class(c1);
                 let own: Vec<TypeId> = self.syms.class(c1).tparams.clone().into_iter().map(|p| self.types.param(p)).collect();
-                let applied = self.types.class(c1, &own);
+                let applied = self.applied_class(c1, &own);
                 self.is_sub(applied, b)
             }
             (_, Type::Class(c2, args2)) if !matches!(ta, Type::AppParam(..) | Type::AppVar(..)) => {
@@ -1565,6 +1566,7 @@ impl<'a> Worker<'a> {
                 };
                 let xs: Vec<TypeId> = self.types.items(args1).to_vec();
                 let ys: Vec<TypeId> = self.types.items(args2).to_vec();
+                self.unmade_read(c2, ys.len());
                 let variances: Vec<i8> = self
                     .syms
                     .class(c2)
@@ -2184,6 +2186,7 @@ impl<'a> Worker<'a> {
         let xs: Vec<TypeId> = self.types.items(xa).to_vec();
         let ys: Vec<TypeId> = self.types.items(ya).to_vec();
         self.settle_class(c);
+        self.unmade_read(c, xs.len());
         let tparams = self.syms.class(c).tparams.clone();
         let mut merged = Vec::with_capacity(xs.len());
         for i in 0..xs.len().min(ys.len()) {
@@ -2270,12 +2273,12 @@ impl<'a> Worker<'a> {
             // base; deriving from the bound's class at all is taken as conforming.
             (_, Type::Lambda(qs, y)) if self.is_type_ctor(ra) => {
                 let args: Vec<TypeId> = self.types.items(qs).to_vec();
-                let applied = self.types.apply_ctor(ra, &args);
+                let applied = self.applied_ctor(ra, &args);
                 applied != ERROR && (self.is_sub_under_binders(applied, y, &args) || self.derives_shape(applied, y))
             }
             (Type::Lambda(ps, x), _) if self.is_type_ctor(rb) => {
                 let args: Vec<TypeId> = self.types.items(ps).to_vec();
-                let applied = self.types.apply_ctor(rb, &args);
+                let applied = self.applied_ctor(rb, &args);
                 applied != ERROR && self.is_sub_under_binders(x, applied, &args)
             }
             (Type::Lambda(..), _) | (_, Type::Lambda(..)) => false,
@@ -2420,7 +2423,7 @@ impl<'a> Worker<'a> {
             }
         };
         match self.types.get(body) {
-            Type::Class(c, args) if binders(self, args) => self.types.mk(Type::Ctor(c)),
+            Type::Class(c, args) if binders(self, args) => self.ctor_of(c),
             Type::AppParam(p, args) if binders(self, args) => self.types.param(p),
             // `[A] =>> Impl.Type[A]` is the abstract type constructor itself.
             Type::AppMember(m, args) if binders(self, args) => m,
@@ -2460,7 +2463,7 @@ impl<'a> Worker<'a> {
             "CharSequence" => Some(self.types.class(target, &[])),
             "Comparable" => {
                 let string = self.types.class(self.b.string, &[]);
-                Some(self.types.class(target, &[string]))
+                Some(self.applied_class(target, &[string]))
             }
             _ => None,
         }
@@ -2491,7 +2494,7 @@ impl<'a> Worker<'a> {
         }
         let a = *self.syms.class(self.b.array).tparams.first()?;
         let elem = self.types.param(a);
-        Some(self.types.class(target, &[elem]))
+        Some(self.applied_class(target, &[elem]))
     }
 
     /// The upper bound of the higher-kinded parameter `p` applied to `args`: `Semigroup[A]` for
@@ -2512,7 +2515,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         let items: Vec<TypeId> = self.types.items(args).to_vec();
-        let t = self.types.apply_ctor(upper, &items);
+        let t = self.applied_ctor(upper, &items);
         // `A[X] <: A[X]` bounds the parameter by itself, which is reported where it is written.
         let cyclic = matches!(self.types.get(t), Type::AppParam(q, _) if q == p);
         (t != ERROR && !cyclic).then_some(t)
@@ -2526,7 +2529,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         let items: Vec<TypeId> = self.types.items(args).to_vec();
-        let t = self.types.apply_ctor(lower, &items);
+        let t = self.applied_ctor(lower, &items);
         let cyclic = matches!(self.types.get(t), Type::AppParam(q, _) if q == p);
         (t != ERROR && !cyclic).then_some(t)
     }
@@ -2792,6 +2795,7 @@ impl<'a> Worker<'a> {
         if upper == ANY && lower == NOTHING {
             return (lo, hi);
         }
+        self.unmade_read(c, args.len());
         let tparams = self.syms.class(c).tparams.clone();
         let hi = match upper {
             ANY => hi,
@@ -2846,6 +2850,7 @@ impl<'a> Worker<'a> {
                 if items.is_empty() {
                     return Some(t);
                 }
+                self.unmade_read(c, items.len());
                 let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&q| self.syms.tparam(q).variance).collect();
                 let mut out = Vec::with_capacity(items.len());
                 for (k, &x) in items.iter().enumerate() {
@@ -3117,6 +3122,7 @@ impl<'a> Worker<'a> {
         let xs: Vec<TypeId> = self.types.items(xa).to_vec();
         let ys: Vec<TypeId> = self.types.items(ya).to_vec();
         self.settle_class(c);
+        self.unmade_read(c, xs.len());
         let tparams = self.syms.class(c).tparams.clone();
         let mut merged = Vec::with_capacity(xs.len());
         for i in 0..xs.len() {
@@ -4848,6 +4854,7 @@ impl<'a> Worker<'a> {
             }
             Type::Class(k, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
+                self.unmade_read(k, items.len());
                 let variances: Vec<i8> = self.syms.class(k).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
                 let mut out = Vec::with_capacity(items.len());
                 for (i, &a) in items.iter().enumerate() {
@@ -5086,12 +5093,12 @@ impl<'a> Worker<'a> {
             // `TypeRef`), its record the alias applied to the parameters.
             Some((under, r)) => match self.types.retention(r) {
                 crate::types::Retention::Alias(a, given) if given == EMPTY_LIST => {
-                    let applied = self.types.apply_ctor(under, &args);
+                    let applied = self.applied_ctor(under, &args);
                     self.types.retained(applied, crate::types::Retention::Alias(a, l))
                 }
-                _ => self.types.apply_ctor(t, &args),
+                _ => self.applied_ctor(t, &args),
             },
-            None => self.types.apply_ctor(t, &args),
+            None => self.applied_ctor(t, &args),
         };
         Some((l, body))
     }
@@ -5491,6 +5498,7 @@ impl<'a> Worker<'a> {
                     if !self.types.has_vars(a) {
                         continue;
                     }
+                    self.unmade_read(c, self.types.items(args).len());
                     let declared = self.syms.class(c).tparams.get(i).map_or(0, |&p| self.syms.tparam(p).variance);
                     let inner = match declared {
                         1 => sign,
@@ -5659,7 +5667,7 @@ impl<'a> Worker<'a> {
     fn app_var_instance(&mut self, a: TypeId, b: TypeId, v: TVarId, c: ClassId, cargs: TList, n: usize) -> bool {
         let m = self.types.items(cargs).len();
         let ctor = if n == m {
-            self.types.mk(Type::Ctor(c))
+            self.ctor_of(c)
         } else {
             // Partial unification: the leftmost arguments are fixed, the rest abstracted
             // over. Each fixed argument is an open variable the class's own argument
@@ -6227,6 +6235,7 @@ impl<'a> Worker<'a> {
             return y;
         }
         let (xs, ys) = (self.types.items(xs).to_vec(), self.types.items(ys).to_vec());
+        self.unmade_read(c, xs.len());
         let tparams = self.syms.class(c).tparams.clone();
         let mut args = Vec::with_capacity(xs.len());
         for (i, (&a, &b)) in xs.iter().zip(&ys).enumerate() {
@@ -6272,6 +6281,7 @@ impl<'a> Worker<'a> {
             Some(j) => j.clone(),
             None => self.sig_arc(s),
         };
+        self.unmade_read(c, args.len());
         let tparams = self.syms.class(c).tparams.clone();
         let mut exact: Subst = Vec::new();
         let (mut ranged, mut ranges) = (Vec::new(), Vec::new());
@@ -7299,6 +7309,7 @@ impl<'a> Worker<'a> {
             // Int <: String & Int`), read by position.
             Type::Inter(a, b) => match (self.types.get(a), self.types.get(b)) {
                 (Type::Class(ca, aargs), Type::Class(cb, bargs)) if ca == cb => {
+                    self.unmade_read(ca, self.types.items(aargs).len());
                     let tparams = self.syms.class(ca).tparams.clone();
                     let (aargs, bargs) = (self.types.items(aargs).to_vec(), self.types.items(bargs).to_vec());
                     tparams

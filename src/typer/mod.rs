@@ -2817,6 +2817,9 @@ impl<'a> Typer<'a> {
     }
 
     pub fn run(&mut self) {
+        if crate::types::unmade::on() {
+            self.w.types.unmade_applied().reset();
+        }
         let threads = self.threads;
         self.on_thread(move |w| {
             // What the interpreter cached for an earlier program on this thread (a watch
@@ -3126,6 +3129,10 @@ impl<'a> Typer<'a> {
                 w.interner.release_retired();
             }
         });
+        // `types::unmade` at the build's end, whichever way the run above ended.
+        if crate::types::unmade::on() {
+            self.on_thread(|w| w.unmade_end());
+        }
     }
 
     /// Runs `f` over the worker where the phases run (`thread::run`).
@@ -5981,7 +5988,7 @@ impl<'a> Worker<'a> {
         let c = self.context_function_class(params.len());
         let mut args = params.to_vec();
         args.push(ret);
-        self.types.class(c, &args)
+        self.applied_class(c, &args)
     }
 
     /// For a context function type returns its parameter types and result type.
@@ -6004,7 +6011,7 @@ impl<'a> Worker<'a> {
 
     pub fn tuple_type(&mut self, elems: &[TypeId]) -> TypeId {
         let c = self.tuple_class(elems.len());
-        self.types.class(c, elems)
+        self.applied_class(c, elems)
     }
 
     /// For a function type returns its parameter types and result type.

@@ -1079,7 +1079,7 @@ impl<'a> Worker<'a> {
             TermKind::Repeated(ty, _) => {
                 let elem = self.map_type(cx, ty);
                 let seq = self.b.seq?;
-                Some(self.types.class(seq, &[elem]))
+                Some(self.applied_class(seq, &[elem]))
             }
             _ => None,
         }

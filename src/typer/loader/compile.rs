@@ -892,7 +892,7 @@ impl<'a> Worker<'a> {
             self.error(span, format!("classOf[{}] needs a class type", shown));
             return (self.prog.add(crate::tir::TExpr::Unit), ERROR);
         };
-        let result = self.types.class(class, &[ty]);
+        let result = self.applied_class(class, &[ty]);
         let (c, dims) = match self.stable_erasure(ty) {
             Some(super::super::site::Erased::Of(e, dims)) if c == self.b.array && dims > 0 => (self.runtime_tuple_class(e), dims),
             Some(super::super::site::Erased::Null(dims)) if c == self.b.array && dims > 0 => (self.b.null, dims),

@@ -3336,7 +3336,7 @@ impl<'a> Worker<'a> {
                     self.types.class(c, &[])
                 } else {
                     let _ = (span, applied);
-                    self.types.mk(Type::Ctor(c))
+                    self.ctor_of(c)
                 }
             }
             TypeRef::Alias(a) => {
@@ -3851,7 +3851,7 @@ impl<'a> Worker<'a> {
             // A bare generic class outside of a constructor position gets unknown arguments.
             let n = self.class_arity(c);
             let args = vec![ERROR; n];
-            return self.types.class(c, &args);
+            return self.applied_class(c, &args);
         }
         let t = self.normalize(t);
         self.seen_from_receiver_paths(t)
@@ -3989,7 +3989,7 @@ impl<'a> Worker<'a> {
                 self.note_declared(id, view);
             }
             _ if views.iter().any(Option::is_some) && matches!(self.types.get(ctor), Type::Ctor(c) if c == self.b.array) => {
-                let view = self.types.class(self.b.array, &items);
+                let view = self.applied_class(self.b.array, &items);
                 self.note_declared(id, view);
             }
             _ => {}
@@ -4029,7 +4029,7 @@ impl<'a> Worker<'a> {
         let (cons, empty) = (self.b.cons_tuple?, self.b.empty_tuple?);
         let mut chain = self.types.class(empty, &[]);
         for &e in elems.iter().rev() {
-            chain = self.types.class(cons, &[e, chain]);
+            chain = self.applied_class(cons, &[e, chain]);
         }
         Some(chain)
     }
@@ -4329,7 +4329,7 @@ impl<'a> Worker<'a> {
                 if !self.binder_completing.is_empty() && self.pre_check_applied(ctor, &params, &arg_ids, &mut resolved, span) {
                     return ERROR;
                 }
-                let t = self.types.apply_ctor(ctor, &resolved);
+                let t = self.applied_ctor(ctor, &resolved);
                 self.applied_class_last = matches!(self.types.get(ctor), Type::Ctor(_));
                 if t == ERROR {
                     // An argument of another kind than its parameter's is what fails a type
@@ -5147,6 +5147,7 @@ impl<'a> Worker<'a> {
             }
             Type::Class(c, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
+                self.unmade_read(c, items.len());
                 let params: Vec<i8> = self.syms.class(c).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
                 items.into_iter().enumerate().any(|(i, x)| {
                     let pv = params.get(i).copied().unwrap_or(0);
@@ -6819,7 +6820,7 @@ impl<'a> Worker<'a> {
                 let ty = spelled.unwrap_or(resolved);
                 let local_ty = if repeated {
                     match self.seq_class() {
-                        Some(seq) => self.types.class(seq, &[ty]),
+                        Some(seq) => self.applied_class(seq, &[ty]),
                         None => ERROR,
                     }
                 } else {
@@ -6885,7 +6886,7 @@ impl<'a> Worker<'a> {
             for (i, &bound) in tp.context_bounds.iter().enumerate() {
                 let ctor = self.resolve_type_ctor(bound);
                 let arg = self.types.param(id);
-                let ty = self.types.apply_ctor(ctor, &[arg]);
+                let ty = self.applied_ctor(ctor, &[arg]);
                 if ty == ERROR && ctor != ERROR {
                     self.error(tp.span, "a context bound needs a type constructor with one parameter");
                 }
@@ -7478,6 +7479,113 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// An application of the class `c` to `args`, the class's type parameters made first, as a written application's
+    /// are: dotty's `appliedTo` reads the constructor's `typeParams`, which completes them, so a reader of the
+    /// application (the comparer's variances, inference's, the variance check's) never finds them missing. A class
+    /// with a definition makes them lazily (`complete_class_tparams`, which sets them before it resolves their bounds,
+    /// so an F-bound's application of the class finds them); one without, a library's or a Java class's, has them
+    /// from its entry, and its bounds are a kind query's (`class_tparam_infos`), not the application's. Every
+    /// application the typer builds of a class by its handle, not from a written type, is made here; the count
+    /// `types::unmade` tells one that is not.
+    #[inline]
+    pub(in crate::typer) fn applied_class(&mut self, c: ClassId, args: &[TypeId]) -> TypeId {
+        if !args.is_empty() {
+            self.make_tparams_for_application(c);
+        }
+        self.types.class(c, args)
+    }
+
+    /// The class's type parameters made for an application of it (`complete_class_tparams`), where the class has a
+    /// definition and is not complete; a completed class's, and one without a definition, are there.
+    #[inline]
+    fn make_tparams_for_application(&mut self, c: ClassId) {
+        let info = self.syms.class(c);
+        if info.def.is_some() && info.state().get() != Completion::Done {
+            self.make_tparams_for_application_now(c);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn make_tparams_for_application_now(&mut self, c: ClassId) {
+        self.complete_class_tparams(c);
+    }
+
+    /// The class `c` as a type constructor (`List` as a higher-kinded argument), its type parameters made as
+    /// `applied_class` makes them: the store applies a constructor where a substitution meets a higher-kinded
+    /// parameter (`CC[A]` with `CC := List`), as dotty's `appliedTo` does, and cannot make them there.
+    pub(in crate::typer) fn ctor_of(&mut self, c: ClassId) -> TypeId {
+        self.make_tparams_for_application(c);
+        self.types.mk(Type::Ctor(c))
+    }
+
+    /// `Types::apply_ctor`, a class constructor's type parameters made first as `applied_class` makes them.
+    pub(in crate::typer) fn applied_ctor(&mut self, ctor: TypeId, args: &[TypeId]) -> TypeId {
+        if let (Type::Ctor(c), false) = (self.types.get(ctor), args.is_empty()) {
+            self.make_tparams_for_application(c);
+        }
+        self.types.apply_ctor(ctor, args)
+    }
+
+    /// `types::unmade` (i): the class's type parameters are being made, or its completion claimed; each application of
+    /// it with arguments made before now is told where the class has no parameters yet. A completion makes them
+    /// without the parameter-only path's flag (`tparams_made`), and one a macro suspended is claimed again in a
+    /// later build (`reopen_suspended`): what was applied meanwhile, its parameters there, is no application of an
+    /// unmade class.
+    pub(in crate::typer) fn unmade_made(&mut self, c: ClassId) {
+        if !crate::types::unmade::on() {
+            return;
+        }
+        let before = self.types.unmade_applied().take(c);
+        if before.is_empty() || !self.syms.class(c).tparams.is_empty() {
+            return;
+        }
+        let name = self.name_str(self.syms.class(c).name).to_string();
+        for p in before {
+            crate::types::unmade::tell(&format!("applied before made\t{}\t{}", name, crate::types::unmade::place(p)));
+        }
+    }
+
+    /// `types::unmade` (i) at the build's end: each class of the shared region with a definition whose parameters
+    /// were never made, of which an application with arguments was.
+    pub(in crate::typer) fn unmade_end(&mut self) {
+        if !crate::types::unmade::on() {
+            return;
+        }
+        for (c, places) in self.types.unmade_applied().drain() {
+            if crate::arena::worker_of(c.0).is_some() || c.0 as usize >= self.syms.classes.len() {
+                continue;
+            }
+            let info = self.syms.class(c);
+            if info.def.is_none() || info.tparams_made || !info.tparams.is_empty() || info.state().get() != Completion::NotStarted {
+                continue;
+            }
+            let name = self.name_str(info.name).to_string();
+            for p in places {
+                crate::types::unmade::tell(&format!("applied, never made\t{}\t{}", name, crate::types::unmade::place(p)));
+            }
+        }
+    }
+
+    /// `types::unmade` (ii): a read of the class's type parameters where the type at hand has `nargs` arguments.
+    #[inline(always)]
+    #[cfg_attr(debug_assertions, track_caller)]
+    pub(in crate::typer) fn unmade_read(&self, c: ClassId, nargs: usize) {
+        if nargs > 0 && crate::types::unmade::on() {
+            self.unmade_read_told(c, std::panic::Location::caller());
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn unmade_read_told(&self, c: ClassId, at: &'static std::panic::Location<'static>) {
+        let info = self.syms.class(c);
+        if info.def.is_some() && !info.tparams_made && info.tparams.is_empty() && info.state().get() == Completion::NotStarted {
+            let place = if cfg!(debug_assertions) { Some((at.file(), at.line())) } else { None };
+            crate::types::unmade::tell(&format!("read unmade\t{}\t{}", self.name_str(info.name), crate::types::unmade::place(place)));
+        }
+    }
+
     /// `class_tparam_infos` of a library class, out of a program class's line.
     #[cold]
     #[inline(never)]
@@ -7535,6 +7643,7 @@ impl<'a> Worker<'a> {
         // parameter under it (`Namer.ClassCompleter.init` indexes a class's parameters in the
         // context the class was created in), not in the file of the application that asked.
         let free = self.free_class(c);
+        self.unmade_made(c);
         let ids = self.with_env(env.clone(), |t| t.make_tparams_of(&cls.tparams, free));
         {
             let mut info = self.syms.class_mut(c);
@@ -7635,6 +7744,9 @@ impl<'a> Worker<'a> {
             return;
         }
         {
+            if crate::types::unmade::on() && self.syms.class(c).def.is_some() {
+                self.unmade_made(c);
+            }
             let p = self.phase_split(super::profile::Phase::Complete, super::profile::Phase::LibraryComplete, |t| t.is_library_class(c));
             self.complete_class_now(c);
             self.phase_end(p);
@@ -8047,7 +8159,7 @@ impl<'a> Worker<'a> {
                     Some(self.interpolated_enum_args(c, &enum_word, &etparams))
                 };
                 if let Some(args) = args {
-                    let t = self.types.class(e, &args);
+                    let t = self.applied_class(e, &args);
                     parents.insert(0, (t, self.syms.class(c).span));
                 }
             }
@@ -8058,7 +8170,7 @@ impl<'a> Worker<'a> {
                 let span = self.syms.class(c).span;
                 self.error(span, format!("enum case does not extend its enum {}", enum_word));
                 let args: Vec<TypeId> = etparams.iter().map(|&p| self.syms.tparam(p).lower).collect();
-                let t = self.types.class(e, &args);
+                let t = self.applied_class(e, &args);
                 parents.insert(0, (t, span));
             }
         }
@@ -8594,7 +8706,7 @@ impl<'a> Worker<'a> {
         }
         let targs: Vec<TypeId> =
             self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
-        let self_ty = self.types.class(c, &targs);
+        let self_ty = self.applied_class(c, &targs);
         let mut linearisations: Vec<ParentBases> = Vec::with_capacity(parents.len());
         let mut parent_types = Vec::new();
         let (file, kind, is_anon) = {
@@ -9348,8 +9460,8 @@ impl<'a> Worker<'a> {
                         self.types.param(p)
                     })
                     .collect();
-                let fx = self.types.apply_ctor(x, &ps);
-                let gy = self.types.apply_ctor(y, &ps);
+                let fx = self.applied_ctor(x, &ps);
+                let gy = self.applied_ctor(y, &ps);
                 let body = self.types.inter(fx, gy);
                 let l = self.types.list(&ps);
                 self.types.mk(Type::Lambda(l, body))

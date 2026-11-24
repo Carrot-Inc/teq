@@ -2224,7 +2224,7 @@ impl<'a> Worker<'a> {
                     };
                     let local_ty = if repeated {
                         match self.seq_class() {
-                            Some(seq) => self.types.class(seq, &[ty]),
+                            Some(seq) => self.applied_class(seq, &[ty]),
                             None => ty,
                         }
                     } else {
@@ -2235,7 +2235,7 @@ impl<'a> Worker<'a> {
                 }
                 let ret = if is_ctor {
                     let args: Vec<TypeId> = self.syms.class(js.class).tparams.iter().map(|&p| self.types.param(p)).collect();
-                    self.types.class(js.class, &args)
+                    self.applied_class(js.class, &args)
                 } else {
                     self.map_jtype(&mut cx, &msig.ret, false)
                 };
@@ -2287,7 +2287,7 @@ impl<'a> Worker<'a> {
             }
             JType::Array(elem) => {
                 let e = self.map_jtype(cx, elem, false);
-                self.types.class(self.b.array, &[e])
+                self.applied_class(self.b.array, &[e])
             }
             JType::Class(ct) => self.map_jclass(cx, ct, param, false),
         }
@@ -2331,7 +2331,7 @@ impl<'a> Worker<'a> {
         if args.len() != arity {
             return self.java_blocked(&format!("{} applied to {} type arguments, takes {}", ct.name.replace('/', "."), args.len(), arity));
         }
-        self.types.class(c, &args)
+        self.applied_class(c, &args)
     }
 
     /// The class of a binary name, `java/util/Map$Entry`: the top-level class through its

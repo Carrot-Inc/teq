@@ -38,7 +38,7 @@ impl<'a> Worker<'a> {
         let lits: Vec<TypeId> = names.iter().map(|&n| self.types.lit(LitVal::Str(n))).collect();
         let n = self.tuple_type(&lits);
         let v = self.tuple_type(values);
-        self.types.class(nt, &[n, v])
+        self.applied_class(nt, &[n, v])
     }
 
     /// The names and value types of a named tuple type, when `t` is one with both settled.

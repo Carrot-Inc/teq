@@ -389,7 +389,7 @@ impl<'a> Worker<'a> {
                 let upper = match self.types.get(upper) {
                     Type::Lambda(..) => {
                         let args = self.types.items(args).to_vec();
-                        self.types.apply_ctor(upper, &args)
+                        self.applied_ctor(upper, &args)
                     }
                     _ => upper,
                 };

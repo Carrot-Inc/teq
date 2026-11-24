@@ -355,7 +355,7 @@ impl<'a> Worker<'a> {
     /// `scala.quoted.Expr[t]`.
     fn expr_type(&mut self, t: TypeId) -> TypeId {
         match self.quoted_classes().expr {
-            Some(c) => self.types.class(c, &[t]),
+            Some(c) => self.applied_class(c, &[t]),
             None => ERROR,
         }
     }
@@ -363,7 +363,7 @@ impl<'a> Worker<'a> {
     /// `scala.quoted.Type[t]`.
     pub(super) fn quoted_type_of(&mut self, t: TypeId) -> TypeId {
         match self.quoted_classes().ty {
-            Some(c) => self.types.class(c, &[t]),
+            Some(c) => self.applied_class(c, &[t]),
             None => ERROR,
         }
     }
@@ -1037,7 +1037,7 @@ impl<'a> Worker<'a> {
         let binder = self.prog.syms(&[q]);
         let lambda = self.prog.add(TExpr::Lambda(binder, code));
         let context_function = self.context_function_class(1);
-        let lambda_ty = self.types.class(context_function, &[quotes_ty, code_ty]);
+        let lambda_ty = self.applied_class(context_function, &[quotes_ty, code_ty]);
         self.prog.set_type(lambda, lambda_ty);
         let te = self.prog.add(TExpr::Splice(lambda));
         self.prog.set_type(te, ty);
@@ -1246,6 +1246,7 @@ impl<'a> Worker<'a> {
             }
             Type::Class(c, args) => {
                 let args = self.types.items(args).to_vec();
+                self.unmade_read(c, args.len());
                 let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&q| self.syms.tparam(q).variance).collect();
                 for (k, a) in args.into_iter().enumerate() {
                     self.first_variances(a, variance * variances.get(k).copied().unwrap_or(0), vars, first);
@@ -1569,7 +1570,7 @@ impl<'a> Worker<'a> {
         self.complete_class(some);
         let field = self.syms.class(some).ctor_syms.first().and_then(|f| f.first().copied());
         let Some(field) = field else { return self.prog.add_pat(TPat::Wildcard) };
-        let some_ty = self.types.class(some, &[value_ty]);
+        let some_ty = self.applied_class(some, &[value_ty]);
         let fl = self.prog.syms(&[field]);
         let pl = self.prog.pat_lists.push_slice(&[value_pat]);
         let inner = self.prog.add_pat(TPat::Class(some, some_ty, fl, pl));

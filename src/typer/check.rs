@@ -2124,7 +2124,7 @@ impl<'a> Worker<'a> {
             return Ok(KindInfo::Unknown);
         }
         if let Type::Lambda(..) = self.types.get(hi) {
-            let applied = self.types.apply_ctor(hi, args);
+            let applied = self.applied_ctor(hi, args);
             return Ok(if applied == ERROR { KindInfo::Unknown } else { KindInfo::Bounds(applied) });
         }
         // `typeParams.nonEmpty`: the reference's own query, which guards its own walk (`type_params_reads`), so the
@@ -2134,7 +2134,7 @@ impl<'a> Worker<'a> {
         }
         match self.types.get(hi) {
             Type::Ctor(_) | Type::Param(_) | Type::Member(..) | Type::Decl(_) | Type::Alias(..) | Type::Var(_) => {
-                let applied = self.types.apply_ctor(hi, args);
+                let applied = self.applied_ctor(hi, args);
                 Ok(if applied == ERROR { KindInfo::Unknown } else { KindInfo::Bounds(applied) })
             }
             // An application's own `superType`, applied in turn: the walk keeps a bound that reaches itself.
@@ -3207,6 +3207,7 @@ impl<'a> Worker<'a> {
                 if self.types.items(args).is_empty() {
                     return Ok(());
                 }
+                self.unmade_read(c, self.types.items(args).len());
                 let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
                 let args = self.types.items(args).to_vec();
                 self.nc_map_args(m, &args, &variances)
@@ -10590,6 +10591,7 @@ impl<'a> Worker<'a> {
                 for i in 0..n {
                     let arg = self.types.items(args)[i];
                     self.settle_class(k);
+                    self.unmade_read(k, n);
                     let Some(&tp) = self.syms.class(k).tparams.get(i) else { break };
                     let v = self.syms.tparam(tp).variance;
                     let inner = if v == 0 { 0 } else { sign * v };

@@ -51,6 +51,9 @@ impl<'a> super::Typer<'a> {
     /// build takes the full path. The diagnostics kept for a file (`Diagnostic::of_body`) stand
     /// while its builds are incremental and keep none of them so: a full build has its own.
     pub fn retype(&mut self, changes: &[Change]) -> Result<Vec<FileId>, String> {
+        if crate::types::unmade::on() {
+            self.w.types.unmade_applied().reset();
+        }
         self.on_thread(|w| {
             // The files' classes are entered again: what their bases were searched for by name
             // is found again (`members::InheritedNamed`).
@@ -78,6 +81,10 @@ impl<'a> super::Typer<'a> {
             // classpath programs' instructions by 1.3% either way.
             w.types.release_retired();
             w.interner.release_retired();
+            // `types::unmade` at the retype's end, as at a build's.
+            if r.is_ok() && crate::types::unmade::on() {
+                w.unmade_end();
+            }
             r
         })
     }

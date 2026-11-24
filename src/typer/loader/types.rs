@@ -168,7 +168,7 @@ impl<'a> Worker<'a> {
         if let Type::Ctor(c) = self.types.get(mapped) {
             let n = self.class_arity(c);
             let args = vec![ERROR; n];
-            return self.types.class(c, &args);
+            return self.applied_class(c, &args);
         }
         mapped
     }
@@ -399,7 +399,7 @@ impl<'a> Worker<'a> {
                 let loaded = self.loaded.as_ref().unwrap();
                 let product = loaded.cp.is_products(loaded.file(cx.file).cp);
                 match self.types.get(body) {
-                    Type::Class(c, args) if args == l && !product => self.types.mk(Type::Ctor(c)),
+                    Type::Class(c, args) if args == l && !product => self.ctor_of(c),
                     Type::AppParam(p, args) if args == l && !product => self.types.param(p),
                     _ => self.types.mk(Type::Lambda(l, body)),
                 }
@@ -437,7 +437,7 @@ impl<'a> Worker<'a> {
                         let of = of.clone();
                         let t_of = self.map_type(cx, &of);
                         let Some(class) = self.java_lang_class("Class") else { return self.blocked(cx, Shape::ConstantType, t) };
-                        LitVal::Class(self.types.class(class, &[t_of]))
+                        LitVal::Class(self.applied_class(class, &[t_of]))
                     }
                     _ => return self.blocked(cx, Shape::ConstantType, t),
                 };
@@ -826,7 +826,7 @@ impl<'a> Worker<'a> {
         if self.class_arity(c) == 0 {
             self.types.class(c, &[])
         } else {
-            self.types.mk(Type::Ctor(c))
+            self.ctor_of(c)
         }
     }
 
@@ -1293,13 +1293,13 @@ impl<'a> Worker<'a> {
                 _ => {
                     if let Some((context, arity)) = function_class(text) {
                         let c = if context { self.context_function_class(arity) } else { self.function_class(arity) };
-                        return Some(self.types.mk(Type::Ctor(c)));
+                        return Some(self.ctor_of(c));
                     }
                     if let Some(digits) = text.strip_prefix("Tuple") {
                         if let Ok(n) = digits.parse::<usize>() {
                             if n > 0 && n <= 22 {
                                 let c = self.tuple_class(n);
-                                return Some(self.types.mk(Type::Ctor(c)));
+                                return Some(self.ctor_of(c));
                             }
                         }
                     }
@@ -1904,7 +1904,7 @@ impl<'a> Worker<'a> {
                 if name == "<repeated>" && args.len() == 1 {
                     let elem = self.map_type(cx, &args[0]);
                     return match self.seq_class() {
-                        Some(seq) => self.types.class(seq, &[elem]),
+                        Some(seq) => self.applied_class(seq, &[elem]),
                         None => elem,
                     };
                 }
@@ -1946,7 +1946,7 @@ impl<'a> Worker<'a> {
                 return self.blocked(cx, Shape::Unknown, t);
             }
         }
-        let applied = self.types.apply_ctor(ctor, &resolved);
+        let applied = self.applied_ctor(ctor, &resolved);
         if applied == ERROR {
             return self.blocked(cx, Shape::Unknown, t);
         }

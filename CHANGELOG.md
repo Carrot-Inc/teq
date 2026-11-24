@@ -9,6 +9,18 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 - An anonymous class of a trait over a class (`new T {}` for `trait T extends A`) passes `A`'s secondary-constructor
   arguments and a local `A`'s captured default, as scalac (JavaScript printed `undefined` or `0`; the JVM refused).
+- On JavaScript and in the interpreter a named tuple's values are covariant, as under scalac (`NamedTuple[N, +V]`):
+  `(a = 1, b = 2)` conforms to `(a: Any, b: Int)` wherever the two are compared, a file's first definitions and a
+  build of several workers included, where it was refused ("Found: (a : Int, b : Int)"), or refused at one worker
+  count and accepted at another. A type variable met only through a named tuple's values is inferred by their
+  variance, as scalac's (`def mk[T >: Int](): (a: T => Unit, b: Int)`, then `val q: (a: Any => Unit, b: Int) = mk()`).
+- A class's variance is checked through a named tuple, as under scalac: `trait Src[+T]: def put(x: (a: T, b: Int))`
+  is refused ("covariant type T occurs in contravariant position in type (a : T, b : Int) of parameter x") on
+  JavaScript and in the interpreter, where it was accepted, and an implementation called through a widened receiver
+  threw a `ClassCastException` in the interpreter and gave another value on JavaScript. The JVM answered as scalac.
+  A private constructor var and a `private[this]` parameter of such a type (`class C[+T](private var row: (a: T,
+  b: Int))`) are refused as their `List[T]` twins already are, where scalac accepts both: they were accepted only
+  while a named tuple's values had no variance.
 - An `export` clause in a given instance's body (`given h: AnyRef with { val c = Codecs; export c.* }`, indented, in
   braces or after a colon; a wildcard, a selection, a renaming, a `given` selector) makes forwarders of the given's
   class, as a class's export clause does, where it was refused ("export clauses are not supported in a given",

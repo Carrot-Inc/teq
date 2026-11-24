@@ -610,7 +610,7 @@ impl<'a> Worker<'a> {
         let Some(ce) = self.b.can_equal else { return };
         let (l, r) = (self.widen_path(l), self.widen_path(r));
         let (l, r) = (self.widen_lit(l), self.widen_lit(r));
-        let target = self.types.class(ce, &[l, r]);
+        let target = self.applied_class(ce, &[l, r]);
         let wanted = super::implicits::Wanted::Class(ce);
         let n_local = self.env.imports.len();
         let mut next = 0;

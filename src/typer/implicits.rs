@@ -1200,7 +1200,7 @@ impl<'a> Worker<'a> {
                     let mut args: Vec<TypeId> = clause.params.iter().map(|p| self.types.subst(p.ty, &subst)).collect();
                     args.push(normalized);
                     let f = self.function_class(clause.params.len());
-                    normalized = self.types.class(f, &args);
+                    normalized = self.applied_class(f, &args);
                 }
                 self.is_sub(normalized, bound)
             }
@@ -3806,6 +3806,7 @@ impl<'a> Worker<'a> {
     fn target_variance(&mut self, heads: &mut TargetHeads, tc: ClassId, i: usize) -> i8 {
         if heads.variances.is_none() {
             self.settle_class(tc);
+            self.unmade_read(tc, 1);
             let variances: Box<[i8]> = self.syms.class(tc).tparams.iter().map(|&tp| self.syms.tparam(tp).variance).collect();
             heads.variances = Some(variances);
         }
@@ -4239,9 +4240,9 @@ impl<'a> Worker<'a> {
                 let p = self.syms.new_tparam(crate::names::WILDCARD, 0);
                 self.types.param(p)
             }).collect();
-            let applied = self.types.apply_ctor(var, &args);
+            let applied = self.applied_ctor(var, &args);
             let bound = self.types.subst(upper, subst);
-            let bound = self.types.apply_ctor(bound, &args);
+            let bound = self.applied_ctor(bound, &args);
             if applied == ERROR || bound == ERROR {
                 continue;
             }
@@ -4731,6 +4732,7 @@ impl<'a> Worker<'a> {
             return t;
         }
         self.complete_class(c);
+        self.unmade_read(c, items.len());
         let tparams = self.syms.class(c).tparams.clone();
         let function1 = self.function_class(1);
         let unit = self.b.t_unit;
@@ -4740,7 +4742,7 @@ impl<'a> Worker<'a> {
             .map(|(i, &arg)| {
                 let arg = self.flip_contravariant(arg);
                 match tparams.get(i).map(|&p| self.syms.tparam(p).variance) {
-                    Some(v) if v < 0 => self.types.class(function1, &[arg, unit]),
+                    Some(v) if v < 0 => self.applied_class(function1, &[arg, unit]),
                     _ => arg,
                 }
             })

@@ -2289,7 +2289,7 @@ impl<'a> Worker<'a> {
             }
         }
         let tys: Vec<TypeId> = arg_ids.iter().map(|&t| self.resolve_type(t)).collect();
-        let ty = self.types.class(c, &tys);
+        let ty = self.applied_class(c, &tys);
         let te = match self.resolve_given(ty, span) {
             Some(te) => te,
             None => {
@@ -6308,7 +6308,7 @@ impl<'a> Worker<'a> {
                         }
                         let mut pty = self.param_type(p.ty, &subst);
                         if let (true, Some(seq)) = (p.repeated, self.seq_class()) {
-                            pty = self.types.class(seq, &[pty]);
+                            pty = self.applied_class(seq, &[pty]);
                         }
                         let expected_param = exp_fn.as_ref().filter(|(eps, _)| eps.len() == expanded).map(|(eps, _)| eps[i]);
                         if let Some(inner) = expected_param.filter(|_| self.b.by_name.is_some()).and_then(|e| self.by_name_arg(e)) {
@@ -7117,7 +7117,7 @@ impl<'a> Worker<'a> {
             return true;
         }
         let Some(tag_class) = tag_class else { return true };
-        let target = self.types.class(tag_class, &[elem]);
+        let target = self.applied_class(tag_class, &[elem]);
         if let Some(tag) = self.class_tag_given(tag_class, target) {
             *args.last_mut().unwrap() = tag;
         }
@@ -7708,7 +7708,7 @@ impl<'a> Worker<'a> {
             if p.repeated {
                 if splice {
                     let seq_ty = match self.seq_class() {
-                        Some(seq) => self.types.class(seq, &[pty]),
+                        Some(seq) => self.applied_class(seq, &[pty]),
                         None => ERROR,
                     };
                     self.spread_arg = true;
@@ -7747,7 +7747,7 @@ impl<'a> Worker<'a> {
                     // The sequence's type says what its elements are, which the JVM boxes
                     // them as: an `Int` written where a `Double` is expected is one.
                     if let Some(seq_class) = self.seq_class() {
-                        let seq_ty = self.types.class(seq_class, &[pty]);
+                        let seq_ty = self.applied_class(seq_class, &[pty]);
                         self.prog.set_type(seq, seq_ty);
                     }
                     results[i] = Some(seq);
@@ -8504,7 +8504,7 @@ impl<'a> Worker<'a> {
         let Type::Class(_, args) = self.types.get(seq) else { return seq };
         let &[elem] = self.types.items(args) else { return seq };
         let wild = self.types.bounded_wild(NOTHING, elem);
-        let array = self.types.class(self.b.array, &[wild]);
+        let array = self.applied_class(self.b.array, &[wild]);
         self.types.union(seq, array)
     }
 
@@ -8818,7 +8818,7 @@ impl<'a> Worker<'a> {
                 if let Some(elems) = tuple {
                     let tys: Vec<TypeId> = self.types.items(elems).to_vec();
                     if let Some(c) = self.b.tuples.get(tys.len()).copied().flatten() {
-                        let t = self.types.class(c, &tys);
+                        let t = self.applied_class(c, &tys);
                         self.capture_local(sym, |l| l.ty = Some(t));
                     }
                 }
@@ -10553,7 +10553,7 @@ impl<'a> Worker<'a> {
                     return (self.prog.add(TExpr::Unit), ERROR);
                 };
                 let class_ty = match class_class {
-                    Some(k) => self.types.class(k, &[WILD]),
+                    Some(k) => self.applied_class(k, &[WILD]),
                     None => ANY,
                 };
                 for (c, dims) in erased {
@@ -11769,7 +11769,7 @@ impl<'a> Worker<'a> {
             }
         };
         let own: Vec<TypeId> = self.syms.class(owner).tparams.iter().map(|&p| self.types.param(p)).collect();
-        let owner_ty = self.types.class(owner, &own);
+        let owner_ty = self.applied_class(owner, &own);
         let (g, _) = self.find_member(owner_ty, name)?;
         let (ret, own_tparams) = {
             let sig = self.sig_of(g);
@@ -11948,7 +11948,7 @@ impl<'a> Worker<'a> {
                     // A repeated parameter's sequence, passed as `xs*`.
                     Some(p) if p.repeated => {
                         let seq = match self.seq_class() {
-                            Some(seq) => self.types.class(seq, &[p.ty]),
+                            Some(seq) => self.applied_class(seq, &[p.ty]),
                             None => ANY,
                         };
                         let ast = self.cur_ast();
@@ -13803,7 +13803,7 @@ impl<'a> Worker<'a> {
             JType::Void => self.b.t_unit,
             JType::Array(elem) => {
                 let elem = self.jdk_type(elem)?;
-                self.types.class(self.b.array, &[elem])
+                self.applied_class(self.b.array, &[elem])
             }
             JType::Class(c) if c.args.is_empty() && c.outer.is_none() => match c.name.as_str() {
                 "java/lang/String" => self.b.t_string,
@@ -13902,7 +13902,7 @@ impl<'a> Worker<'a> {
     /// `Seq[T]`, or `Array[T]`, of a repeated parameter's element `T`.
     fn spliced_formal(&mut self, elem: TypeId, array: bool) -> Option<TypeId> {
         let c = if array { self.b.array } else { self.seq_class()? };
-        Some(self.types.class(c, &[elem]))
+        Some(self.applied_class(c, &[elem]))
     }
 
     /// `T` of `Array[T]`.

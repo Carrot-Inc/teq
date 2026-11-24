@@ -394,6 +394,8 @@ pub struct TypeStore {
     /// dense table may be sized by (`arena::LOCAL_BASE`): a sparse map each.
     op_local: UnsafeCell<SharedMap<ClassId, ()>>,
     path_local: UnsafeCell<SharedMap<ClassId, ()>>,
+    /// `unmade`'s record of the applications made of each class: this store's own.
+    unmade_applied: unmade::Applied,
 }
 
 // The store is shared by reference across the parallel typer's workers: readers take no lock
@@ -440,7 +442,13 @@ impl TypeStore {
     /// A store with room for a program of some tens of thousands of types (the budget's
     /// variants and the core-only benchmark) before its first resize; a small program touches
     /// the table's tags (32 KB) and few pages of the rest.
+    /// `unmade`'s record of this store.
+    pub fn unmade_applied(&self) -> &unmade::Applied {
+        &self.unmade_applied
+    }
+
     pub fn new() -> TypeStore {
+        unmade::init();
         let s = TypeStore {
             serial: Serial::new(true, crate::measure::Wait::TypeStore),
             types: SlabVec::with_capacity(16384),
@@ -469,6 +477,7 @@ impl TypeStore {
             overlaid: AtomicBool::new(false),
             reclaimed: AtomicBool::new(false),
             reclaiming: std::sync::Mutex::new(None),
+            unmade_applied: unmade::Applied::default(),
         };
         assert_eq!(s.mk(Type::Any), ANY);
         assert_eq!(s.mk(Type::Nothing), NOTHING);
@@ -546,7 +555,22 @@ impl TypeStore {
         let id = self.types.push(t);
         self.flags.push(flags);
         self.type_index.insert(h, id as u32);
+        if unmade::on() {
+            self.note_application(t);
+        }
         TypeId(id as u32)
+    }
+
+    /// `unmade`'s record of a new application with arguments, by the place that asked for it (in a debug build).
+    #[cold]
+    #[inline(never)]
+    #[cfg_attr(debug_assertions, track_caller)]
+    fn note_application(&self, t: Type) {
+        if let Type::Class(c, l) = t {
+            if !self.entry_items(l).is_empty() {
+                self.unmade_applied.applied(c, std::panic::Location::caller());
+            }
+        }
     }
 
     /// The store's lock for an insert past a miss of the index: none while one thread owns
@@ -1549,6 +1573,7 @@ impl TypeStore {
         self.lists.get(l.idx())
     }
 
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn class(&self, c: ClassId, args: &[TypeId]) -> TypeId {
         let l = self.list(args);
         self.mk(Type::Class(c, l))
@@ -2916,6 +2941,7 @@ impl TypeStore {
             overlaid: AtomicBool::new(false),
             reclaimed: AtomicBool::new(false),
             reclaiming: std::sync::Mutex::new(None),
+            unmade_applied: unmade::Applied::default(),
         };
         let retired = self.blocked_found(RETIRED);
         let forms = self.forms.lock().unwrap();
@@ -3394,6 +3420,9 @@ impl TypeStore {
                 id
             },
         );
+        if unmade::on() {
+            self.note_application(t);
+        }
         TypeId(id)
     }
 
@@ -5697,4 +5726,97 @@ mod tests {
         view::compared("a retained record", base_ca);
     }
 
+}
+
+
+/// The count of the invariant that no application with arguments is made of a class whose type parameters are not
+/// made (dotty's `appliedTo` reads the constructor's `typeParams`, which completes them; `Worker::applied_class`):
+/// (i) applications made while their class's parameters were not (each new application recorded here by its class,
+/// and in a debug build by the place that asked for it; told when the parameters are made, `Worker::unmade_made`, or
+/// at the build's end, `Worker::unmade_end`), and (ii) reads of a class's parameters that find none where the type
+/// at hand has arguments (`Worker::unmade_read`). On in a debug build, and under `TEQ_UNMADE=<file>` in any, where
+/// each is one line of the file; a debug build without the variable prints them.
+pub mod unmade {
+    use super::ClassId;
+    use std::collections::{HashMap, HashSet};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Mutex;
+
+    type Place = Option<(&'static str, u32)>;
+    static ON: AtomicBool = AtomicBool::new(false);
+    static READ: std::sync::Once = std::sync::Once::new();
+
+    /// The switch read once, where a store is made (`TypeStore::new`): on in a debug build or under `TEQ_UNMADE`.
+    #[cold]
+    pub fn init() {
+        READ.call_once(|| ON.store(cfg!(debug_assertions) || std::env::var_os("TEQ_UNMADE").is_some(), Ordering::Relaxed));
+    }
+
+    /// Whether the count is on.
+    #[inline(always)]
+    pub fn on() -> bool {
+        ON.load(Ordering::Relaxed)
+    }
+
+    /// A store's record: the places that made an application of each class, by the class's id. Each store has its
+    /// own (`TypeStore::unmade_applied`): two typers of one process (the fix engine's rule workers) number their
+    /// classes each from the start; a typer's workers share its store.
+    #[derive(Default)]
+    pub struct Applied(Mutex<Option<HashMap<u32, HashSet<Place>>>>);
+
+    impl Applied {
+        pub fn applied(&self, c: ClassId, at: &'static std::panic::Location<'static>) {
+            let place = if cfg!(debug_assertions) { Some((at.file(), at.line())) } else { None };
+            let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+            g.get_or_insert_with(HashMap::new).entry(c.0).or_default().insert(place);
+        }
+
+        /// The places that made an application of the class so far, taken out.
+        pub fn take(&self, c: ClassId) -> Vec<Place> {
+            let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+            let mut v: Vec<Place> = g.as_mut().and_then(|m| m.remove(&c.0)).map(|s| s.into_iter().collect()).unwrap_or_default();
+            v.sort();
+            v
+        }
+
+        /// What is held forgotten: a typer's run or a retype starts, whose classes the ids name from now on (a
+        /// session whose retype gave way types again from the start with new records under the same ids).
+        pub fn reset(&self) {
+            *self.0.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+
+        /// Every class's places still held, taken out.
+        pub fn drain(&self) -> Vec<(ClassId, Vec<Place>)> {
+            let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+            let mut v: Vec<(ClassId, Vec<Place>)> = g
+                .take()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(c, s)| {
+                    let mut s: Vec<Place> = s.into_iter().collect();
+                    s.sort();
+                    (ClassId(c), s)
+                })
+                .collect();
+            v.sort_by_key(|(c, _)| c.0);
+            v
+        }
+    }
+
+    /// One line of the count: to `TEQ_UNMADE`'s file, else (a debug build) to stderr.
+    pub fn tell(line: &str) {
+        match std::env::var_os("TEQ_UNMADE") {
+            Some(path) => {
+                use std::io::Write;
+                if let Ok(mut fh) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                    let _ = writeln!(fh, "{}", line);
+                }
+            }
+            None => eprintln!("teq: unmade: {}", line),
+        }
+    }
+
+    pub fn place(p: Place) -> String {
+        p.map_or("-".to_string(), |(f, l)| format!("{}:{}", f, l))
+    }
 }

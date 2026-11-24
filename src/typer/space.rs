@@ -1064,11 +1064,11 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 let t = match fixed {
                     Some(sty) if arity > 0 => {
                         let (cargs, _) = self.t.solve_pattern_class(c, arity, sty);
-                        self.t.types.class(c, &cargs)
+                        self.t.applied_class(c, &cargs)
                     }
                     _ => {
                         let cargs = vec![ANY; arity];
-                        self.t.types.class(c, &cargs)
+                        self.t.applied_class(c, &cargs)
                     }
                 };
                 let text = self.show_type_space(t);
@@ -1419,13 +1419,13 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// that the lengths the cases leave are what the match misses (`List(_)`, `Nil`).
     fn seq_space(&mut self, items: crate::ast::ListRef, rest: Option<TPatId>, elem: TypeId) -> Option<Space> {
         let (list, cons, nil) = self.list_classes()?;
-        let cons_ty = self.t.types.class(cons, &[elem]);
+        let cons_ty = self.t.applied_class(cons, &[elem]);
         let fields = self.field_types(cons_ty)?;
         if fields.len != 2 {
             return None;
         }
         let mut acc = match rest {
-            Some(_) => Space::Typ(self.t.types.class(list, &[elem])),
+            Some(_) => Space::Typ(self.t.applied_class(list, &[elem])),
             None => Space::Typ(self.t.types.class(nil, &[])),
         };
         let elems: Vec<TPatId> = items.range().map(|i| self.t.prog.pat_lists[i]).collect();
@@ -1467,7 +1467,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 let elem = self.extractor_result(call).and_then(|t| self.seq_element(t));
                 let (Some(elem), Some((list, ..))) = (elem, self.list_classes()) else { return Space::Opaque };
                 let Some(space) = self.seq_space(items, rest, elem) else { return Space::Opaque };
-                (self.t.types.class(list, &[elem]), space)
+                (self.t.applied_class(list, &[elem]), space)
             }
             _ => return Space::Opaque,
         };
@@ -1818,7 +1818,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
                         if ground && !conforms {
                             continue;
                         }
-                        self.t.types.class(child, &cargs)
+                        self.t.applied_class(child, &cargs)
                     };
                     self.sc.stack.push(Space::Typ(child_ty));
                 }
@@ -1862,7 +1862,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
         if let Some(elem) = self.seq_element(t) {
             let (list, ..) = self.list_classes()?;
             let base = self.sc.stack.len();
-            self.sc.stack.push(Space::Typ(self.t.types.class(list, &[elem])));
+            self.sc.stack.push(Space::Typ(self.t.applied_class(list, &[elem])));
             return Some(Space::Prod(c, t, self.seal(base)));
         }
         let fields = self.field_types(t)?;

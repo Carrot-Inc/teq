@@ -878,7 +878,7 @@ impl<'a> Worker<'a> {
         let items: Vec<TypeId> = self.types.items(args).to_vec();
         let Type::Member(p, name) = self.types.get(m) else { return self.approx_range(NOTHING, ANY, v) };
         let applied = |w: &mut Self, t: TypeId| match w.types.get(t) {
-            Type::Lambda(..) | Type::Ctor(_) | Type::Param(_) | Type::Member(..) => w.types.apply_ctor(t, &items),
+            Type::Lambda(..) | Type::Ctor(_) | Type::Param(_) | Type::Member(..) => w.applied_ctor(t, &items),
             _ => t,
         };
         match self.approx(p, leaves, v.max(0)) {
@@ -1031,7 +1031,7 @@ impl<'a> Worker<'a> {
                 let l = self.types.list(args);
                 self.types.mk(Type::AppParam(p, l))
             }
-            Tycon::Member(m) => self.types.apply_ctor(m, args),
+            Tycon::Member(m) => self.applied_ctor(m, args),
         }
     }
 

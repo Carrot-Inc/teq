@@ -3586,7 +3586,7 @@ impl<'a> Worker<'a> {
                 .map(|p| {
                     let t = self.types.subst(p.ty, subst);
                     match (p.repeated, self.seq_class()) {
-                        (true, Some(seq)) => self.types.class(seq, &[t]),
+                        (true, Some(seq)) => self.applied_class(seq, &[t]),
                         _ => t,
                     }
                 })
@@ -3983,7 +3983,7 @@ impl<'a> Worker<'a> {
                 let partial = is_cases && any_partial;
                 let partial_function = if partial { self.partial_function_class() } else { None };
                 let expected = match (partial, partial_function, params.as_slice()) {
-                    (true, Some(pf), [a]) => self.types.class(pf, &[*a, result]),
+                    (true, Some(pf), [a]) => self.applied_class(pf, &[*a, result]),
                     _ => self.fun_type(&params, result),
                 };
                 let prof = self.prof(Kind::Retry, self.cur_ast().expr_span(value), About::None);
@@ -4237,7 +4237,7 @@ impl<'a> Worker<'a> {
                     let Some(ty) = info.types[j] else { continue };
                     let elem = self.types.subst(declared, subst);
                     let Some(seq) = self.seq_class() else { continue };
-                    let wanted = self.types.class(seq, &[elem]);
+                    let wanted = self.applied_class(seq, &[elem]);
                     let mark = self.snapshot();
                     let fits = self.is_sub(ty, wanted);
                     if !fits {

@@ -290,7 +290,7 @@ impl<'a> Worker<'a> {
         // A curried alias applied further (`(Eq |: Derived)[A]`): the rest goes to its lambda.
         if items.len() > tparams.len() {
             let rest = &items[tparams.len()..];
-            return Some(self.types.apply_ctor(expanded, rest));
+            return Some(self.applied_ctor(expanded, rest));
         }
         Some(expanded)
     }
@@ -731,6 +731,7 @@ impl<'a> Worker<'a> {
         let xs: Vec<TypeId> = self.types.items(xs).to_vec();
         let ys: Vec<TypeId> = self.types.items(ys).to_vec();
         self.settle_class(c);
+        self.unmade_read(c, xs.len());
         let tparams = self.syms.class(c).tparams.clone();
         for i in 0..xs.len().min(ys.len()) {
             let Some(&p) = tparams.get(i) else { break };
@@ -914,7 +915,7 @@ impl<'a> Worker<'a> {
             Type::AppMember(m, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
                 let nargs: Vec<TypeId> = items.iter().map(|&x| self.normalize(x)).collect();
-                self.types.apply_ctor(m, &nargs)
+                self.applied_ctor(m, &nargs)
             }
             Type::Lambda(ps, body) => {
                 let nb = self.normalize(body);

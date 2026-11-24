@@ -1410,6 +1410,7 @@ impl<'a> Worker<'a> {
             }
             Type::Class(c, args) => {
                 let items = self.types.items(args).to_vec();
+                self.unmade_read(c, self.types.items(args).len());
                 let tparams = self.syms.class(c).tparams.clone();
                 let mapped: Vec<TypeId> = items
                     .iter()
@@ -2903,7 +2904,7 @@ impl<'a> Worker<'a> {
                     self.capture_form(seq, crate::tir::capture::Form::Repeated(elem));
                 }
                 let ty = match self.seq_class() {
-                    Some(seq_class) => self.types.class(seq_class, &[elem]),
+                    Some(seq_class) => self.applied_class(seq_class, &[elem]),
                     None => ERROR,
                 };
                 self.prog.set_type(seq, ty);
@@ -3556,11 +3557,11 @@ impl<'a> Worker<'a> {
         let (t_string, array) = (self.b.t_string, self.b.array);
         let part_list = self.prog.list(&strs);
         let parts_array = self.prog.add(TExpr::ArrayLit(part_list));
-        let parts_ty = self.types.class(array, &[t_string]);
+        let parts_ty = self.applied_class(array, &[t_string]);
         self.prog.set_type(parts_array, parts_ty);
         let value_list = self.prog.list(&values);
         let values_array = self.prog.add(TExpr::ArrayLit(value_list));
-        let values_ty = self.types.class(array, &[ANY]);
+        let values_ty = self.applied_class(array, &[ANY]);
         self.prog.set_type(values_array, values_ty);
         let call_args = self.prog.list(&[parts_array, values_array]);
         let call = super::apply::MethodCall { recv: None, sym: format, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
@@ -3833,7 +3834,7 @@ impl<'a> Worker<'a> {
                     return (self.prog.add(TExpr::Unit), ERROR);
                 };
                 let arg_tys: Vec<TypeId> = ast.ty_list(l).to_vec().into_iter().map(|a| self.resolve_type_ctor(a)).collect();
-                let instance = self.types.apply_ctor(ctor, &arg_tys);
+                let instance = self.applied_ctor(ctor, &arg_tys);
                 let instance = self.dealias(instance);
                 let lists = self.new_arg_lists(args, span);
                 let (te, ty) = self.apply_callee(super::apply::Callee::Ctor(c), None, lists, span, Some(instance));
@@ -3960,7 +3961,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         let tag_class = self.class_tag_class(true)?;
-        let target = self.types.class(tag_class, &[elem]);
+        let target = self.applied_class(tag_class, &[elem]);
         let Some(evidence) = self.resolve_given(target, span) else {
             let file = self.env.file;
             if !(self.source(file).is_std || self.in_jar(file) || self.is_body_file(file)) {
@@ -3974,7 +3975,7 @@ impl<'a> Worker<'a> {
         let int = self.b.t_int;
         let (len, _) = self.type_expr(len, Some(int));
         let args = self.prog.list(&[len]);
-        let array = self.types.class(self.b.array, &[elem]);
+        let array = self.applied_class(self.b.array, &[elem]);
         let call = super::apply::MethodCall { recv: Some(evidence), sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         let call = self.build_call(&call, args);
         self.prog.set_type(call, array);
@@ -4928,7 +4929,7 @@ impl<'a> Worker<'a> {
         let args = self.prog.list(&[apply_or_else, is_defined_at]);
         let template = self.prog.add_str("$pf($0, $1)");
         let ty = match self.partial_function_class() {
-            Some(c) => self.types.class(c, &[param_ty, body_ty]),
+            Some(c) => self.applied_class(c, &[param_ty, body_ty]),
             None => ERROR,
         };
         let te = self.prog.add(TExpr::Js(template, args));
@@ -5422,7 +5423,7 @@ impl<'a> Worker<'a> {
         let mut ty = ty;
         if p.repeated {
             if let Some(seq) = self.seq_class() {
-                ty = self.types.class(seq, &[ty]);
+                ty = self.applied_class(seq, &[ty]);
             }
         }
         CalleeFormal { ty, by_name: p.by_name, spread: false }

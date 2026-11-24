@@ -1355,7 +1355,7 @@ impl<'a> Worker<'a> {
         };
         match static_class {
             Some(k) if !self.takes_type_params(k) => Some(self.types.class(k, &[])),
-            Some(k) => Some(self.types.mk(Type::Ctor(k))),
+            Some(k) => Some(self.ctor_of(k)),
             None => {
                 let t = self.member_type(vp.path, name)?;
                 Some(self.forwarded_lambda_bounds(t, vp.path))
@@ -1724,7 +1724,7 @@ impl<'a> Worker<'a> {
                             let ty = self.types.subst(p.ty, &pm_subst);
                             let ty = self.subst_paths(ty, &pm_terms);
                             let local_ty = match (p.repeated, self.seq_class()) {
-                                (true, Some(seq)) => self.types.class(seq, &[ty]),
+                                (true, Some(seq)) => self.applied_class(seq, &[ty]),
                                 _ => ty,
                             };
                             let q = next.next().expect("a fresh parameter per parameter");
@@ -1825,7 +1825,7 @@ impl<'a> Worker<'a> {
                     .map(|p| {
                         let ty = rebind(self, p.ty);
                         let local_ty = match (p.repeated, self.seq_class()) {
-                            (true, Some(seq)) => self.types.class(seq, &[ty]),
+                            (true, Some(seq)) => self.applied_class(seq, &[ty]),
                             _ => ty,
                         };
                         let q = next.next().expect("a fresh parameter per parameter");
@@ -1997,7 +1997,7 @@ impl<'a> Worker<'a> {
                     let e = self.prog.add(TExpr::Local(p.sym));
                     match (p.repeated, self.seq_class()) {
                         (true, Some(seq)) => {
-                            let seq_ty = self.types.class(seq, &[p.ty]);
+                            let seq_ty = self.applied_class(seq, &[p.ty]);
                             self.prog.set_type(e, seq_ty);
                             if self.capturing() {
                                 self.capture_wrap(e, crate::tir::capture::Wrap::Splice(p.ty));

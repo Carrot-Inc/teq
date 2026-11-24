@@ -292,7 +292,7 @@ impl<'a> Worker<'a> {
         // (dotty's unapplied `TypeRef`), not a lambda over it: `new Success[U](..) { .. }` in a
         // jar's body of a member of the enclosing trait.
         if !matches!(self.types.get(class), Type::Nested(..)) {
-            return Some(self.types.mk(Type::Ctor(c)));
+            return Some(self.ctor_of(c));
         }
         let l = self.types.list(&own_types);
         Some(self.types.mk(Type::Lambda(l, class)))
@@ -650,6 +650,7 @@ impl<'a> Worker<'a> {
     /// parameters and the intersection is provably nonempty (`normalizedArgBounds`, Denotations.scala 1146-1162 at
     /// 3.8.4). Asked only by a bounds check (`bounds_projections`), whose `<app>#A` it is.
     fn class_param_projection(&mut self, c: ClassId, args: crate::types::TList, name: Name) -> Option<MemberInfo> {
+        self.unmade_read(c, self.types.items(args).len());
         let tparams = self.syms.class(c).tparams.clone();
         let i = tparams.iter().position(|&p| self.syms.tparam(p).name == name)?;
         let arg = *self.types.items(args).get(i)?;
@@ -1264,7 +1265,7 @@ impl<'a> Worker<'a> {
         let underlying = underlying.map(|u| this_of(self, u));
         let parents: Vec<TypeId> = parents.iter().map(|&p| this_of(self, p)).collect();
         let fresh_types: Vec<TypeId> = fresh.iter().map(|&q| self.types.param(q)).collect();
-        let own = self.types.class(d, &fresh_types);
+        let own = self.applied_class(d, &fresh_types);
         let mut base_types = vec![(d, own)];
         for &(b, bt) in bases.iter().filter(|&&(b, _)| b != c) {
             base_types.push((b, this_of(self, bt)));
@@ -1463,7 +1464,7 @@ impl<'a> Worker<'a> {
                 let (lo, hi) = self.member_bounds(m);
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
                 let apply = |t: &mut Self, bound: TypeId| match t.types.get(bound) {
-                    Type::Lambda(..) | Type::Ctor(_) | Type::Param(_) => t.types.apply_ctor(bound, &items),
+                    Type::Lambda(..) | Type::Ctor(_) | Type::Param(_) => t.applied_ctor(bound, &items),
                     _ => bound,
                 };
                 (apply(self, lo), apply(self, hi))
@@ -1987,7 +1988,7 @@ impl<'a> Worker<'a> {
                 if nm == m && nargs == items {
                     t
                 } else {
-                    self.types.apply_ctor(nm, &nargs)
+                    self.applied_ctor(nm, &nargs)
                 }
             }
             Type::Class(c, args) => {
@@ -2009,7 +2010,7 @@ impl<'a> Worker<'a> {
                 if nargs == items && seen == c {
                     t
                 } else {
-                    self.types.class(seen, &nargs)
+                    self.applied_class(seen, &nargs)
                 }
             }
             // An inner class as a type constructor (`Bounded[.., Parameter]`) is its type through

@@ -333,7 +333,7 @@ impl<'a> Worker<'a> {
     /// the form the parameter's erasure gives it.
     fn ctor_function(&mut self, c: ClassId, via: Option<SymId>, outer: Option<ClassId>, params: &[ParamSig]) -> crate::tir::TExprId {
         let any = self.b.t_any_ref;
-        let array = self.types.class(self.b.array, &[any]);
+        let array = self.applied_class(self.b.array, &[any]);
         let a = self.fresh_local("a", array, crate::source::Span::default());
         let arity = params.len() + outer.is_some() as usize;
         let mut args: Vec<crate::tir::TExprId> = Vec::with_capacity(arity);

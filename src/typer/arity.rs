@@ -61,7 +61,7 @@ impl<'a> Worker<'a> {
         let a = self.syms.new_tparam(a, 1);
         let at = self.types.param(a);
         let thunk = self.function_class(0);
-        let underlying = self.types.class(thunk, &[at]);
+        let underlying = self.applied_class(thunk, &[at]);
         let self_ty = self.types.class(c, &[at]);
         let mut info = self.syms.class_mut(c);
         info.tparams = vec![a];
@@ -82,7 +82,7 @@ impl<'a> Worker<'a> {
             Some(c) => c,
             None => self.with_loader(|w| w.repeated_class_unlocked()),
         };
-        self.types.class(c, &[t])
+        self.applied_class(c, &[t])
     }
 
     fn repeated_class_unlocked(&mut self) -> ClassId {
@@ -100,7 +100,7 @@ impl<'a> Worker<'a> {
         let a = self.syms.new_tparam(a, 1);
         let at = self.types.param(a);
         let underlying = match self.seq_class() {
-            Some(seq) => self.types.class(seq, &[at]),
+            Some(seq) => self.applied_class(seq, &[at]),
             None => ANY,
         };
         let self_ty = self.types.class(c, &[at]);
@@ -128,7 +128,7 @@ impl<'a> Worker<'a> {
 
     pub fn by_name_type(&mut self, t: TypeId) -> TypeId {
         let c = self.by_name_class();
-        self.types.class(c, &[t])
+        self.applied_class(c, &[t])
     }
 
     /// `A` of a by-name function parameter's type `=> A`.
@@ -602,7 +602,7 @@ impl<'a> Worker<'a> {
                     value = self.prog.add(TExpr::New(cons, l));
                 }
                 let elem = elems.iter().fold(NOTHING, |acc, &e| self.types.union(acc, e));
-                (value, self.types.class(list, &[elem]))
+                (value, self.applied_class(list, &[elem]))
             }
             "apply" => {
                 let (arg, _) = one_arg(self)?;

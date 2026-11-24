@@ -2446,7 +2446,7 @@ impl<'a> Worker<'a> {
                     _ => None,
                 };
                 let field_ty = match (repeated, self.seq_class()) {
-                    (true, Some(seq)) => self.types.class(seq, &[ty]),
+                    (true, Some(seq)) => self.applied_class(seq, &[ty]),
                     _ => ty,
                 };
                 let sym = self.syms.new_sym(name, kind, m, Owner::Class(c), file_id, None, Span::default());
@@ -3010,7 +3010,7 @@ impl<'a> Worker<'a> {
                 };
                 let local_ty = if repeated {
                     match self.seq_class() {
-                        Some(seq) => self.types.class(seq, &[ty]),
+                        Some(seq) => self.applied_class(seq, &[ty]),
                         None => ERROR,
                     }
                 } else {

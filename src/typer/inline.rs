@@ -5914,7 +5914,7 @@ impl<'a> Worker<'a> {
     pub(super) fn type_level_op(&mut self, op: ClassId, args: ListRef) -> TypeId {
         let arg_ids: Vec<TyExprId> = self.cur_ast().ty_list(args).to_vec();
         let operands: Vec<TypeId> = arg_ids.iter().map(|&a| self.resolve_type(a)).collect();
-        let applied = self.types.class(op, &operands);
+        let applied = self.applied_class(op, &operands);
         self.normalize(applied)
     }
 

@@ -221,13 +221,13 @@ impl<'a> Worker<'a> {
             let (cast, cast_ty) = typer.lower_cast(value, x_ty, t, span);
             let l = typer.prog.list(&[cast]);
             let yes = typer.prog.add(TExpr::New(some, l));
-            let some_ty = typer.types.class(some, &[cast_ty]);
+            let some_ty = typer.applied_class(some, &[cast_ty]);
             typer.prog.set_type(yes, some_ty);
             let no = typer.prog.add(TExpr::Module(none));
             let none_ty = typer.types.class(none, &[]);
             typer.prog.set_type(no, none_ty);
             let e = typer.prog.add(TExpr::If(cond, yes, Some(no)));
-            let opt = typer.types.class(option, &[t]);
+            let opt = typer.applied_class(option, &[t]);
             typer.prog.set_type(e, opt);
             e
         })?;
@@ -354,7 +354,7 @@ impl<'a> Worker<'a> {
             .filter(|&(i, _)| i < 32 && tags & (1 << i) != 0)
             .map(|(_, &tp)| {
                 let of = self.types.param(tp);
-                ParamSig { name: names::EMPTY, ty: self.types.class(tag_class, &[of]), by_name: false, repeated: false, has_default: false, sym }
+                ParamSig { name: names::EMPTY, ty: self.applied_class(tag_class, &[of]), by_name: false, repeated: false, has_default: false, sym }
             })
             .collect();
         self.search_tags(params, sig, subst, written, erroneous_arg, site, span)
@@ -508,7 +508,7 @@ impl<'a> Worker<'a> {
         if c == self.b.array {
             let Type::Class(_, elem) = self.types.get(subject) else { return None };
             let elem = *self.types.items(elem).first()?;
-            let elem_tag = self.types.class(class, &[elem]);
+            let elem_tag = self.applied_class(class, &[elem]);
             let evidence = self.resolve_given(elem_tag, crate::source::Span::default())?;
             return self.wrapped_tag(class, evidence);
         }

@@ -1949,7 +1949,7 @@ impl<'a> Worker<'a> {
                 match self.outer_applied_class(ctor) {
                     Some((c, outer)) => {
                         outer_args = outer;
-                        let ctor = self.types.mk(Type::Ctor(c));
+                        let ctor = self.ctor_of(c);
                         cv.ty(TyExpr::Resolved(ctor))
                     }
                     None => cv.ty(TyExpr::Resolved(ctor)),
@@ -1979,7 +1979,7 @@ impl<'a> Worker<'a> {
         if let Type::Class(c, args) = self.types.get(resolved) {
             let items: Vec<TypeId> = self.types.items(args).to_vec();
             if !items.is_empty() {
-                let ctor = self.types.mk(Type::Ctor(c));
+                let ctor = self.ctor_of(c);
                 let head = cv.ty(TyExpr::Resolved(ctor));
                 let targs: Vec<TyExprId> = items.into_iter().map(|a| cv.ty(TyExpr::Resolved(a))).collect();
                 let l = push_list(&mut cv.ast.ty_lists, &targs);
@@ -3696,7 +3696,8 @@ impl<'a> Worker<'a> {
     fn summon_type_of(&mut self, cv: &mut Conv, var: Name) -> ExprId {
         match self.quoted_classes().ty {
             Some(c) => {
-                let ctor = cv.ty(TyExpr::Resolved(self.types.mk(Type::Ctor(c))));
+                let made = self.ctor_of(c);
+                let ctor = cv.ty(TyExpr::Resolved(made));
                 let arg = cv.ty(TyExpr::Name(var));
                 let al = push_list(&mut cv.ast.ty_lists, &[arg]);
                 let t = cv.ty(TyExpr::Apply(ctor, al));
