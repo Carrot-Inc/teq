@@ -869,7 +869,7 @@ impl<'a> Worker<'a> {
         // inherits and what the parents' tables give, no clause of its own.
         let program = !self.in_jar(file) && self.std.slot_of(file).is_none();
         let clauses: &'a [Import] = match def.map(|d| &self.ast(file).def(d).kind) {
-            Some(DefKind::Class(cls)) if !program => &self.ast(file).exports[cls.exports.range()],
+            Some(kind @ (DefKind::Class(_) | DefKind::Given(_))) if !program => &self.ast(file).exports[kind.template_exports().range()],
             _ => &[],
         };
         let parents = self.direct_parents(c, build);

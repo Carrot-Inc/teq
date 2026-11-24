@@ -1312,7 +1312,7 @@ impl<'a> Parser<'a> {
         let alias = Some(self.ast.add_expr(Expr::Derived, span));
         let name = format!("derived${}", self.interner.get(tc_name));
         let name = self.interner.intern(&name);
-        let given = GivenDef { tparams, clauses: Vec::new(), ty, alias, parents: Vec::new(), body: Vec::new(), self_alias: names::EMPTY };
+        let given = GivenDef { tparams, clauses: Vec::new(), ty, alias, parents: Vec::new(), body: Vec::new(), exports: ListRef::EMPTY, self_alias: names::EMPTY };
         // Lazy as in scalac, so that the instance may depend on givens defined after it.
         let d = self.ast.add_def(Def { name, span, mods: mods::LAZY, annots: Vec::new(), kind: DefKind::Given(Box::new(given)) });
         self.ast.derived_givens.push(d);
@@ -1976,6 +1976,7 @@ impl<'a> Parser<'a> {
         let no_term_params = clauses.is_empty() || (clauses.len() == 1 && clauses[0].params.is_empty());
         let mut alias = None;
         let mut body = Vec::new();
+        let mut exports = ListRef::EMPTY;
         let mut self_alias = names::EMPTY;
         // The statement's end after the type (`isStatSep || isStatSeqEnd`): a line's end, a `;`, a region's end or the
         // file's. An `=` starting the next line continues the given (`given g:` / `Long` / `= 5L`).
@@ -2018,23 +2019,20 @@ impl<'a> Parser<'a> {
                 // A given of one type reads the body all the same, as the reference's `templateBody` reads the braces
                 // after its failed `accept(WITH)`; one over a constructor call does not (teq's recovery, as before).
                 if self.at(Tok::ColonEol) && parents_is_type {
-                    let (stmts, exports, _, named) = self.parse_template_body(false);
+                    let (stmts, clauses, _, named) = self.parse_template_body(false);
                     body = stmts;
+                    exports = clauses;
                     self_alias = named;
-                    if !exports.is_empty() {
-                        self.error_at(ty_span, "export clauses are not supported in a given");
-                    }
                 }
-            } else if let Some((stmts, named)) = self.parse_given_with_body() {
+            } else if let Some((stmts, clauses, named)) = self.parse_given_with_body() {
                 self_alias = named;
                 body = stmts;
+                exports = clauses;
             } else if self.at(Tok::LBrace) {
-                let (stmts, exports, _, named) = self.parse_template_body(false);
+                let (stmts, clauses, _, named) = self.parse_template_body(false);
                 body = stmts;
+                exports = clauses;
                 self_alias = named;
-                if !exports.is_empty() {
-                    self.error_at(ty_span, "export clauses are not supported in a given");
-                }
             }
         } else if self.at(Tok::KwWith) {
             // Under 3.6's syntax a given with conditions takes its body after a colon or in braces. A given of one type
@@ -2042,25 +2040,23 @@ impl<'a> Parser<'a> {
             self.error_at(self.span(), "end of statement expected but 'with' found");
             if parents_is_type {
                 self.bump();
-                if let Some((stmts, named)) = self.parse_given_with_body() {
+                if let Some((stmts, clauses, named)) = self.parse_given_with_body() {
                     self_alias = named;
                     body = stmts;
+                    exports = clauses;
                 }
             }
         } else {
             // `possibleTemplateStart` and `templateBodyOpt`: the body after a colon or in braces.
-            let exports_at = self.span();
-            let (stmts, exports, _, named) = self.parse_template_body(false);
+            let (stmts, clauses, _, named) = self.parse_template_body(false);
             body = stmts;
+            exports = clauses;
             self_alias = named;
-            if !exports.is_empty() {
-                self.error_at(exports_at, "export clauses are not supported in a given");
-            }
         }
         self.end_annotation_region(region);
         // The parents of a structural instance; an alias's or a body's one type is the given's type alone.
         let parents = if parents.len() == 1 && parents[0].args.is_empty() { Vec::new() } else { parents };
-        let given = GivenDef { tparams, clauses, ty, alias, parents, body, self_alias };
+        let given = GivenDef { tparams, clauses, ty, alias, parents, body, exports, self_alias };
         let m = if named.is_none() { m | mods::ANONYMOUS } else { m };
         self.ast.add_def(Def { name, span, mods: m, annots, kind: DefKind::Given(Box::new(given)) })
     }
@@ -2260,19 +2256,27 @@ impl<'a> Parser<'a> {
 
     /// A given's body after its `with`, the region the lexer opens for its braces or its lines: its statements and its
     /// self alias.
-    fn parse_given_with_body(&mut self) -> Option<(Vec<Stmt>, Name)> {
+    fn parse_given_with_body(&mut self) -> Option<(Vec<Stmt>, ListRef, Name)> {
         if !self.eat(Tok::Indent) {
             return None;
         }
         self.skip_separators();
         let (alias_indent, _, named) = self.parse_self_alias();
         let mut body = Vec::new();
-        self.statements(RecoverySite::GivenBody, |p| p.parse_block_stmt(&mut body));
+        // The body is the given's class's template: its export clauses are the class's (dotty's `templateBody`).
+        let exports_mark = self.export_scratch.len();
+        self.statements(RecoverySite::GivenBody, |p| {
+            if p.at(Tok::KwExport) {
+                p.parse_export();
+            } else {
+                p.parse_block_stmt(&mut body);
+            }
+        });
         self.end_region();
         if alias_indent {
             self.eat(Tok::Outdent);
         }
-        Some((body, named))
+        Some((body, self.export_list(exports_mark), named))
     }
 
     /// The token past the group (`(..)`, `[..]`, a brace's) that opens `n` tokens ahead, its brackets matched: the

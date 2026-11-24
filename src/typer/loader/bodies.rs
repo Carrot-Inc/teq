@@ -986,7 +986,7 @@ impl<'a> Worker<'a> {
         let span = cv.line(&format!("given {}", self.name_ref(name)));
         let ty = self.sig_of(sym).ret;
         let ty = cv.ty(TyExpr::Resolved(ty));
-        let given = ast::GivenDef { tparams: Vec::new(), clauses: Vec::new(), ty, alias: None, parents: Vec::new(), body: Vec::new(), self_alias: names::EMPTY };
+        let given = ast::GivenDef { tparams: Vec::new(), clauses: Vec::new(), ty, alias: None, parents: Vec::new(), body: Vec::new(), exports: ast::ListRef::EMPTY, self_alias: names::EMPTY };
         let m = self.syms.sym(sym).mods;
         let d = cv.ast.add_def(Def { name, span, mods: m, annots: Vec::new(), kind: DefKind::Given(Box::new(given)) });
         cv.def_at.push((d, sig.addr));
@@ -5850,7 +5850,7 @@ impl<'a> Worker<'a> {
                 if sig.mods.flags.has(tags::GIVEN) {
                     let ty = ty.unwrap_or_else(|| self.conv_type(cv, &sig.ret));
                     cv.local_givens.insert(sig.addr, ());
-                    let given = GivenDef { tparams: Vec::new(), clauses: Vec::new(), ty, alias: init, parents: Vec::new(), body: Vec::new(), self_alias: crate::names::EMPTY };
+                    let given = GivenDef { tparams: Vec::new(), clauses: Vec::new(), ty, alias: init, parents: Vec::new(), body: Vec::new(), exports: crate::ast::ListRef::EMPTY, self_alias: crate::names::EMPTY };
                     let d = cv.ast.add_def(Def { name, span: cv.span, mods: mods::LAZY, annots: Vec::new(), kind: DefKind::Given(Box::new(given)) });
                     cv.def_at.push((d, sig.addr));
                     out.push(Stmt::Def(d));

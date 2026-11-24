@@ -478,8 +478,8 @@ impl<'a> Worker<'a> {
             (info.file, info.def?)
         };
         let ast = self.ast(file);
-        let crate::ast::DefKind::Class(cls) = &ast.def(def).kind else { return None };
-        let clauses: Vec<(Vec<Name>, crate::ast::ImportSel)> = ast.exports[cls.exports.range()].iter().map(|i| (i.path.clone(), i.sel.clone())).collect();
+        let exports = ast.def(def).kind.template_exports();
+        let clauses: Vec<(Vec<Name>, crate::ast::ImportSel)> = ast.exports[exports.range()].iter().map(|i| (i.path.clone(), i.sel.clone())).collect();
         for (path, sel) in clauses {
             let selected = match sel {
                 crate::ast::ImportSel::Name(n, rename) if rename.unwrap_or(n) == name => n,

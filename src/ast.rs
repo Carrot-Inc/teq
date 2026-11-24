@@ -548,6 +548,9 @@ pub struct GivenDef {
     /// `constrApps`); empty for `given t: T with { .. }`, whose one parent is `ty`.
     pub parents: Vec<Parent>,
     pub body: Vec<Stmt>,
+    /// `export` clauses of the body, one entry per selector, in `Ast::exports`: the given's class's, as a class
+    /// template's are (dotty's `Parsers.givenDef` reads a `templateBody`).
+    pub exports: ListRef,
     /// `self =>` at the start of a `given ... with` body, as a class's.
     pub self_alias: Name,
 }
@@ -561,6 +564,17 @@ pub enum DefKind {
     /// has both `rhs` and `upper`.
     TypeAlias { tparams: Vec<TypeParam>, rhs: Option<TyExprId>, lower: Option<TyExprId>, upper: Option<TyExprId> },
     Given(Box<GivenDef>),
+}
+
+impl DefKind {
+    /// The export clauses of a template's body: a class's, or a structural given's class's (`GivenDef::exports`).
+    pub fn template_exports(&self) -> ListRef {
+        match self {
+            DefKind::Class(c) => c.exports,
+            DefKind::Given(g) => g.exports,
+            _ => ListRef::EMPTY,
+        }
+    }
 }
 
 #[derive(Debug)]

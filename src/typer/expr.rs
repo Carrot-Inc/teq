@@ -148,6 +148,7 @@ impl<'a> Worker<'a> {
         let DefKind::Given(g) = &def.kind else { return };
         let c = self.syms.new_class(def.name, ClassKind::Class, mods::FINAL, Owner::Local, file, Some(d), def.span);
         self.def_classes.insert(file.0 as usize, d, c);
+        self.syms.class_mut(c).has_exports = !g.exports.is_empty();
         self.record_self_alias(c);
         self.enter_body(file, c, &g.body);
         let ty = self.types.class(c, &[]);
@@ -170,6 +171,7 @@ impl<'a> Worker<'a> {
         let DefKind::Given(g) = &def.kind else { return };
         let c = self.syms.new_class(def.name, ClassKind::Class, mods::FINAL, Owner::Local, file, Some(d), def.span);
         self.def_classes.insert(file.0 as usize, d, c);
+        self.syms.class_mut(c).has_exports = !g.exports.is_empty();
         self.record_self_alias(c);
         self.enter_ctor_params(file, c, &g.clauses);
         self.enter_body(file, c, &g.body);

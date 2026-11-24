@@ -104,8 +104,8 @@ impl<'a> Worker<'a> {
         let info = self.syms.class(c);
         let Some(d) = info.def else { return Vec::new() };
         let ast = self.ast(info.file);
-        let DefKind::Class(cls) = &ast.def(d).kind else { return Vec::new() };
-        ast.exports[cls.exports.start as usize..(cls.exports.start + cls.exports.len) as usize].to_vec()
+        let exports = ast.def(d).kind.template_exports();
+        ast.exports[exports.start as usize..(exports.start + exports.len) as usize].to_vec()
     }
 
     /// The qualifier of an export clause that goes through a value, typed as a path where the

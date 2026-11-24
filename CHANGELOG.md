@@ -7,6 +7,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An `export` clause in a given instance's body (`given h: AnyRef with { val c = Codecs; export c.* }`, indented, in
+  braces or after a colon; a wildcard, a selection, a renaming, a `given` selector) makes forwarders of the given's
+  class, as a class's export clause does, where it was refused ("export clauses are not supported in a given",
+  "exports are only allowed from objects and classes").
 - A given alias with a using clause or type parameters defined in a block (`given g(using n: Int): String = ...`,
   `given g[A](using o: Ordering[A]): Ordering[List[A]] = ...`, an inline or anonymous one) is the local method scalac
   makes it, found by a summon, a call's implicit argument or another local given's using clause, where it was refused

@@ -2643,6 +2643,11 @@ check "inline-getters: the table's templates and its judge's planted tables judg
 check "local-given-params: the table's templates and its judge's planted tables judged as they must be" "$work/local-given-params.log" \
   eval 'python3 tests/support/local_given_params.py --self-test > "$work/local-given-params.log" 2>&1'
 
+# The table of an export in a given instance's body (tests/support/export_given_body.py, run by
+# tests/support/local-given-params.sh): its templates.
+check "export-given-body: the table's templates" "$work/export-given-body.log" \
+  eval 'python3 tests/support/export_given_body.py --self-test > "$work/export-given-body.log" 2>&1'
+
 fi
 echo "gate-scripts: $pass passed, $fail failed"
 pieces_end $((fail > 0)) passed=$pass failed=$fail

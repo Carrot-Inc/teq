@@ -873,6 +873,7 @@ impl<'a> Worker<'a> {
                     );
                     self.def_classes.insert(file.0 as usize, id, cid);
                     self.syms.sym_mut(sym).impl_class = Some(cid);
+                    self.syms.class_mut(cid).has_exports = !g.exports.is_empty();
                     self.enter_ctor_params(file, cid, &g.clauses);
                     self.enter_body(file, cid, &g.body);
                     self.record_self_alias(cid);

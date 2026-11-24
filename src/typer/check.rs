@@ -5979,11 +5979,9 @@ impl<'a> Worker<'a> {
         if kind == ClassKind::EnumCase && self.unused.on() {
             self.mark_enum_case_parents(c, file, parents);
         }
-        if let DefKind::Class(cls) = &def.kind {
-            // Errors in export clauses are reported even when nothing looks the exports up.
-            if !cls.exports.is_empty() {
-                self.exports_of(c);
-            }
+        // Errors in export clauses are reported even when nothing looks the exports up.
+        if !def.kind.template_exports().is_empty() {
+            self.exports_of(c);
         }
         // A call of the class's header (a parent's arguments, a parameter's default) and of each
         // statement is the inlining phase's at that place, as `InliningTreeMap` walks the template.

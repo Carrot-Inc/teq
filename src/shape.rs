@@ -181,6 +181,13 @@ impl<'a> Cmp<'a> {
                 if ga.alias.is_some() != gb.alias.is_some() {
                     return what(self, "alias changed to a structural given or back");
                 }
+                if !self.imports_eq(&old_ast.exports[ga.exports.range()], &new_ast.exports[gb.exports.range()]) {
+                    return what(self, "export clauses changed");
+                }
+                if record {
+                    let pairs = old_ast.exports[ga.exports.range()].iter().zip(&new_ast.exports[gb.exports.range()]);
+                    self.remap.exports.extend(pairs.map(|(x, y)| (x.span, y.span)));
+                }
                 self.body_sig(&ga.body, &gb.body, record).map_err(|e| format!("{}.{}", self.name(da.name), e))?;
             }
             _ => return what(self, "kind changed"),
