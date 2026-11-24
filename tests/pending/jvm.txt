@@ -215,6 +215,8 @@ typer_state_landing_given_warning	output
 typer_state_landing_paren_warning	output
 typer_state_macro_info	output
 union_erasure_bases	backend
+value_class_right_assoc_companion_load_order	output; queued: the row "an infix right-associative call's left operand left unlifted": the companion's load against the operands, turned by the clause swap
+value_class_right_assoc_infix_object_path	output; queued: the row "an infix right-associative call's left operand left unlifted": the companion's load against an operand that reads an object, turned by the clause swap
 vector_retention	compile
 view_import_renamed_prefixes	compile
 wildcard_capture_param_bounds	compile

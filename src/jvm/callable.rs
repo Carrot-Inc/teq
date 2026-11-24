@@ -1327,7 +1327,7 @@ impl<'a> Gen<'a> {
             let info = cx.input.syms.sym(fun.sym);
             self.context = format!("{}.{}$extension", self.this_name, m.name);
             let mut params: Vec<(Option<SymId>, ErasedType)> = vec![(None, u.clone())];
-            params.extend(fun.params.iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
+            params.extend(self.class_file_params(fun.sym, &fun.params).iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
             let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
             self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), false, &params, m.ret.clone(), &[body]);
             self.m.this_slot = Some(1);
@@ -1358,12 +1358,7 @@ impl<'a> Gen<'a> {
             let typed: Vec<(Option<SymId>, ErasedType)> = types.iter().map(|t| (None, t.clone())).collect();
             self.context = format!("{}.{}$extension", self.this_name, member);
             self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", member), &method_desc(&types, &ret), false, &typed, ret.clone(), &[]);
-            if super::classes::vc_member_lowers(member, &u) {
-                self.body(|g| g.vc_member_tree(c, member, &u, super::classes::Underlying::Param(0), 1));
-            } else {
-                let ps = if u.wide() { 3 } else { 2 };
-                self.vc_synthesized_body(c, member, &ret, &u, 1, ps);
-            }
+            self.body(|g| g.vc_member_tree(c, member, &u, super::classes::Underlying::Param(0), 1));
             self.end_method();
         }
         if cx.is_case_class(c) {

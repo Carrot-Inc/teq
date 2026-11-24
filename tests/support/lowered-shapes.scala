@@ -225,6 +225,10 @@ case class HoldsValues(v: V, s: VS)
 final class GO[A](val g: A) extends AnyVal { def holder: O.type = O }
 final class G[A](val g: A) extends AnyVal { def pair(x: Int): String = s"$g/$x" }
 final class VB(val u: Int) extends AnyVal { def plus(x: Int): Int = u + x }
+final class VR(val u: Int) extends AnyVal {
+  extension (x: Int) def +:(s: String): String = s * (x + u)
+  extension (x: Int) def ::(s: String)(n: Int): String = s * (x + u + n)
+}
 object VB { val k: Int = 2 }
 object Mk {
   def go(s: String): GO[String] = new GO(s)
@@ -434,6 +438,10 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     // A value class's method through its companion's instance (`Gen::extension_method`): the instance first, the
     // receiver in place; a generic class's receiver that is no path is evaluated first and held in a slot.
     Shape("call-value-class-companion", "", "new VB(pi).plus(pi)", "Int", ""),
+    // A right-associative extension method of a value class: its own clause, the left operand, evaluated first.
+    Shape("call-value-class-right-associative", "", "new VR(pi).+:(ps)(pi)", "String", ""),
+    Shape("call-value-class-right-associative-block", "val vr: VR = new VR(pi)", "vr.+:({ other.mu(); ps })({ other.mu(); 2 })", "String", ""),
+    Shape("call-value-class-right-associative-two", "", "new VR(pi).::(ps)(pi)(2)", "String", ""),
     Shape("call-value-class-local", "val lb: VB = new VB(pi)", "lb.plus(2)", "Int", ""),
     Shape("call-generic-value-class-local", "val lg: G[String] = new G(ps)", "lg.pair(pi)", "String", ""),
     Shape("call-generic-value-class-new", "", "new G(ps).pair(pi)", "String", ""),

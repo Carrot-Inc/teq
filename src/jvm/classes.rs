@@ -141,14 +141,6 @@ fn lir_stats() -> bool {
     *ON.get_or_init(|| std::env::var_os("TEQ_LIR_STATS").is_some())
 }
 
-/// Whether a value class's synthesized member is a tree (`Gen::vc_member_tree`). Not
-/// `productElement` and `productElementName`, whose index is tested by `ifne` (an `Int` against
-/// zero), nor `equals` over a reference, which holds the other's value in a slot while this one's
-/// is adapted under it.
-pub(super) fn vc_member_lowers(member: &str, u: &ErasedType) -> bool {
-    !matches!(member, "productElement" | "productElementName") && !(member == "equals" && u.is_ref())
-}
-
 /// An object's constructor tree, kept from the first of the class file's two methods written
 /// from it to the second (`Gen::write_module`), with the locals its lowering declared.
 pub(super) struct ModuleTree {
@@ -534,11 +526,7 @@ impl<'a> Gen<'a> {
         let m = self.mref(fun.sym);
         let name = cx.input.interner.get(info.name);
         self.context = format!("{}.{}", self.this_name, name);
-        let ordered: Vec<SymId> = match self.jvm_param_order(fun.sym) {
-            Some(order) if order.len() == fun.params.len() => order.iter().map(|&k| fun.params[k]).collect(),
-            _ => fun.params.clone(),
-        };
-        let params: Vec<(Option<SymId>, ErasedType)> = ordered.iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())).collect();
+        let params: Vec<(Option<SymId>, ErasedType)> = self.class_file_params(fun.sym, &fun.params).iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())).collect();
         if params.len() != m.params.len() {
             self.unsupported("a def whose parameters differ from its signature");
             return;
@@ -3693,23 +3681,15 @@ impl<'a> Gen<'a> {
                 continue;
             }
             self.begin_method(MethodFlags::PUBLIC, member, &method_desc(&params, &ret), false, &typed, ret.clone(), &[]);
-            if vc_member_lowers(member, &u) {
-                self.body(|g| {
-                    let instance = g.lir.this(this.clone());
-                    let read = g.lir.field(instance, &owner, &name, ty.clone());
-                    let underlying = g.lower_adapt(read, &ty, &u);
-                    let held = g.lir.temp();
-                    let kept = g.lir.keep(held, underlying);
-                    let answer = g.vc_member_tree(c, member, &u, Underlying::Kept(held), 0);
-                    g.lir.seq(&[kept], answer)
-                });
-            } else {
-                self.load(0, &this);
-                self.getfield(&owner, &name, &ty);
-                self.adapt(&ty, &u);
-                let us = self.store_new(&u);
-                self.vc_synthesized_body(c, member, &ret, &u, us, 1);
-            }
+            self.body(|g| {
+                let instance = g.lir.this(this.clone());
+                let read = g.lir.field(instance, &owner, &name, ty.clone());
+                let underlying = g.lower_adapt(read, &ty, &u);
+                let held = g.lir.temp();
+                let kept = g.lir.keep(held, underlying);
+                let answer = g.vc_member_tree(c, member, &u, Underlying::Kept(held), 0);
+                g.lir.seq(&[kept], answer)
+            });
             self.end_method();
         }
     }
@@ -3737,20 +3717,18 @@ impl<'a> Gen<'a> {
         all.into_iter().filter(|&(bit, ..)| synthesized & bit != 0).map(|(_, name, params, ret)| (name, params, ret)).collect()
     }
 
-    /// The tree of synthesized member `member` of value class `c` (`Gen::vc_synthesized_body`),
-    /// over its underlying value `us` of type `u` and the member's parameter at the position
-    /// `ps`: a primitive underlying value hashes as its own `hashCode`, a reference one through
-    /// the null-safe `Objects.hashCode` (`SyntheticMembers.scala` 338-346); `equals` is a test of
-    /// the class and `==` of the underlying values, primitive comparison for a primitive (`NaN`
-    /// unequal, `-0.0` equal to `0.0`), then a `canEqual` the class defines, without the `eq` test
-    /// of a case class (297-332).
+    /// The tree of synthesized member `member` of value class `c` (`Gen::vc_synthesized`),
+    /// over its underlying value `us` of type `u` and the member's parameter, the method's
+    /// parameter at the position `ps`: a primitive underlying value hashes as its own `hashCode`,
+    /// a reference one through the null-safe `Objects.hashCode` (`SyntheticMembers.scala`
+    /// 338-346); `equals` and the elements are scalac's (`Gen::vc_equals_tree`,
+    /// `Gen::vc_element_tree`).
     pub(super) fn vc_member_tree(&mut self, c: ClassId, member: &str, u: &ErasedType, us: Underlying, ps: usize) -> LirId {
         let cx = self.cx;
         let syms = cx.input.syms;
         let string = ErasedType::L(Rc::from(STRING));
         let object = ErasedType::object();
         let class = self.class_name(c);
-        let boxed = ErasedType::L(class.clone());
         let answer = match member {
             "hashCode" => {
                 let primitive = match u {
@@ -3771,42 +3749,8 @@ impl<'a> Gen<'a> {
                 };
                 self.lir.static_call(&hash, &[value])
             }
-            "equals" => {
-                let no = self.lir.label();
-                let mut tests = Vec::new();
-                let given = self.param(ps);
-                let same_class = self.lir.is(given, &class);
-                let other_class = self.lir.not(same_class);
-                let unequal = self.lir.leave(no);
-                tests.push(self.lir.when(other_class, unequal));
-                let mine = us.node(self, u);
-                let given = self.param(ps);
-                let cast = self.lir.checked(given, boxed.clone());
-                let theirs = self.lower_vc_unbox(c, cast, u);
-                let differs = self.lir.compare(Relation::Ne, Comparing::Numbers, mine, theirs);
-                let unequal = self.lir.leave(no);
-                tests.push(self.lir.when(differs, unequal));
-                // A `canEqual` of the class's own is asked last, `that.canEqual(this)` (297-332).
-                if cx.synthesized(c) & synthetic::EQUALS_CALLS_CAN_EQUAL != 0 {
-                    let given = self.param(ps);
-                    let other = self.lir.checked(given, boxed.clone());
-                    let value = us.node(self, u);
-                    let mine = self.lower_vc_box(c, value, u);
-                    let mine = self.lower_adapt(mine, &boxed, &object);
-                    let can_equal = method_ref(Invoke::Virtual, &class, false, "canEqual", &[object.clone()], &ErasedType::Z);
-                    let can = self.lir.call(&can_equal, other, &[mine]);
-                    let cannot = self.lir.not(can);
-                    let unequal = self.lir.leave(no);
-                    tests.push(self.lir.when(cannot, unequal));
-                }
-                let truth = self.lir.bool(true);
-                let answer = self.lir.ret(truth);
-                let refused = self.lir.seq(&tests, answer);
-                let refused = self.lir.labeled(no, refused);
-                let falsity = self.lir.bool(false);
-                let answer = self.lir.ret(falsity);
-                return self.lir.seq(&[refused], answer);
-            }
+            "equals" => return self.vc_equals_tree(c, u, us, ps),
+            "productElement" | "productElementName" => return self.vc_element_tree(c, member, u, us, ps),
             // `ScalaRunTime._toString` of the box, which reads its `productPrefix` and elements
             // through it.
             "toString" => {
@@ -3825,82 +3769,142 @@ impl<'a> Gen<'a> {
                 let display: Rc<str> = Rc::from(info.product_name(cx.input.interner.get(info.name)));
                 self.lir.text(&display, string)
             }
-            _ => unreachable!("a member with a tree (`vc_member_lowers`)"),
+            _ => unreachable!("a member `Gen::vc_synthesized` names"),
         };
         self.lir.ret(answer)
     }
 
-    /// The code of synthesized member `member` of value class `c` whose body is no tree
-    /// (`vc_member_lowers`), returning `ret`, over the underlying value in local `us` of type `u`
-    /// and the member's parameter in local `ps`: `equals` over a reference, and the elements.
-    pub(super) fn vc_synthesized_body(&mut self, c: ClassId, member: &str, ret: &ErasedType, u: &ErasedType, us: u16, ps: u16) {
-        self.outside(Unlowered::ValueClassSynthesized);
-        let cx = self.cx;
-        let syms = cx.input.syms;
-        let string = ErasedType::L(Rc::from(STRING));
+    /// `equals$extension(u, that)` of value class `c` as scalac 3.8.4 writes dotty's `equalsBody`
+    /// (`SyntheticMembers.scala` 297-332) after its pattern matcher and erasure: `that` held in a
+    /// temporary and tested for the class, then opened null-safe into another (`Boxing.unbox`,
+    /// `Gen::lower_vc_open_null_safe`), and the answer the underlying values' `==` (`Gen::vc_equality`)
+    /// and, where the class defines `canEqual`, `that.canEqual(this)` through the companion; any
+    /// other `that` unequal. The underlying value and `that` are the method's parameters at the
+    /// positions `us` and `ps`.
+    fn vc_equals_tree(&mut self, c: ClassId, u: &ErasedType, us: Underlying, ps: usize) -> LirId {
         let object = ErasedType::object();
         let class = self.class_name(c);
-        match member {
-            "equals" => {
-                let no = self.code.new_label();
-                self.load(ps, &object);
-                self.instance_of(&class);
-                self.jump_if(op::IFEQ, 1, no);
-                self.load(us, u);
-                self.load(ps, &object);
-                self.checkcast(&class);
-                self.vc_unbox(c, u);
-                // The other's underlying value held while this one is adapted under it.
-                self.adapt(u, &object);
-                let that = self.store_new(&object);
-                self.adapt(u, &object);
-                self.load(that, &object);
-                self.helper_call("equal", 2);
-                self.jump_if(op::IFEQ, 1, no);
-                // A `canEqual` of the class's own is asked last, `that.canEqual(this)` (297-332).
-                if self.cx.synthesized(c) & synthetic::EQUALS_CALLS_CAN_EQUAL != 0 {
-                    self.load(ps, &object);
-                    self.checkcast(&class);
-                    let underlying = self.slot_value(us, u);
-                    let made = self.lowering(|g| g.lower_vc_box(c, underlying, u));
-                    self.write(made);
-                    let boxed = ErasedType::L(class.clone());
-                    self.adapt(&boxed, &object);
-                    self.invoke(Invoke::Virtual, &class, false, "canEqual", &[object.clone()], &ErasedType::Z);
-                    self.jump_if(op::IFEQ, 1, no);
-                }
-                self.iconst(1);
-                self.return_value(ret);
-                self.code.bind(no);
-                self.iconst(0);
-                self.return_value(ret);
-            }
-            "productElement" | "productElementName" => {
-                // `productElement` and `productElementName`: the one element, else
-                // `IndexOutOfBoundsException`.
-                let fail = self.code.new_label();
-                self.load(ps, &ErasedType::I);
-                self.jump_if(op::IFNE, 1, fail);
-                if member == "productElement" {
-                    self.load(us, u);
-                    self.adapt(u, &object);
-                } else {
-                    let field = syms.class(c).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym);
-                    let name = field.map_or(String::new(), |f| cx.input.interner.get(syms.sym(f).name).to_string());
-                    self.sconst(&name);
-                }
-                self.return_value(ret);
-                self.code.bind(fail);
-                self.new_object("java/lang/IndexOutOfBoundsException");
-                self.load(ps, &ErasedType::I);
-                self.invoke(Invoke::Static, STRING, false, "valueOf", &[ErasedType::I], &string);
-                self.invoke(Invoke::Special, "java/lang/IndexOutOfBoundsException", false, "<init>", &[string], &ErasedType::V);
-                self.code.op(op::ATHROW);
-                self.code.pop();
-                self.code.end_path();
-            }
-            _ => unreachable!("lowered (`Gen::vc_member_tree`)"),
+        let held = self.lir.temp();
+        let that = self.param(ps);
+        let hold = self.lir.keep(held, that);
+        let tested = self.lir.kept(held, object.clone());
+        let same_class = self.lir.is(tested, &class);
+        let theirs = self.lir.temp();
+        let boxed = self.lir.kept(held, object.clone());
+        let opened = self.lower_vc_open_null_safe(boxed, &object, c, u, None);
+        let open = self.lir.keep(theirs, opened);
+        let mine = us.node(self, u);
+        let other = self.lir.kept(theirs, u.clone());
+        let mut answer = self.vc_equality(u, mine, other);
+        if self.cx.synthesized(c) & synthetic::EQUALS_CALLS_CAN_EQUAL != 0 {
+            // `that.canEqual(this)`: the class's own method is its companion's `canEqual$extension` on
+            // `that`'s value; one a universal trait gives it is the box's, made of `that`'s value.
+            let mine = us.node(self, u);
+            let mine = self.lower_vc_box(c, mine, u);
+            let mine = self.lower_adapt(mine, &ErasedType::L(class.clone()), &object);
+            let other = self.lir.kept(theirs, u.clone());
+            let can = if self.declares_can_equal(c) {
+                let companion = self.this_name.clone();
+                let can_equal = method_ref(Invoke::Virtual, &companion, false, "canEqual$extension", &[u.clone(), object.clone()], &ErasedType::Z);
+                let instance = self.lir.this(ErasedType::L(companion));
+                self.lir.call(&can_equal, instance, &[other, mine])
+            } else {
+                let can_equal = method_ref(Invoke::Virtual, &class, false, "canEqual", &[object.clone()], &ErasedType::Z);
+                let boxed = self.lower_vc_box(c, other, u);
+                self.lir.call(&can_equal, boxed, &[mine])
+            };
+            answer = self.lir.push(Kind::And(answer, can), ErasedType::Z);
         }
+        let answer = self.lir.ret(answer);
+        let then = self.lir.seq(&[open], answer);
+        let falsity = self.lir.bool(false);
+        let otherwise = Some(self.lir.ret(falsity));
+        let test = self.lir.push(Kind::If { cond: same_class, then, otherwise }, ErasedType::V);
+        self.lir.seq(&[hold], test)
+    }
+
+    /// Whether value class `c` defines `canEqual` itself, which its companion then holds as
+    /// `canEqual$extension` (an inherited one stays the box's).
+    fn declares_can_equal(&self, c: ClassId) -> bool {
+        let cx = self.cx;
+        let t = cx.tclass_of[c.idx()];
+        t != u32::MAX && cx.input.prog.classes[t as usize].methods.iter().any(|&f| cx.input.interner.get(cx.input.syms.sym(cx.input.prog.funs[f.idx()].sym).name) == "canEqual")
+    }
+
+    /// `this.u == that.u` of two underlying values of the type `u`, as scalac's back end compares
+    /// them (`BCodeBodyBuilder.genEqEqPrimitive`, 1675-1744 at 3.8.4; the two sides are two
+    /// selections, never the same final type): a primitive by its value, an array by identity, a
+    /// reference that may hold a box (`isMaybeBoxed`: `Object`, `Serializable`, `Comparable`, a
+    /// `Number`, a `Character` or a `Boolean`) by universal equality (the runtime's helper, where
+    /// scalac calls `BoxesRunTime.equals`), any other by `Objects.equals`.
+    fn vc_equality(&mut self, u: &ErasedType, mine: LirId, theirs: LirId) -> LirId {
+        let how = match u {
+            ErasedType::L(name) if name.starts_with('[') => Comparing::Identity,
+            ErasedType::L(name) if self.maybe_boxed(name) => return self.lower_helper("equal", &[mine, theirs], ErasedType::Z),
+            ErasedType::L(_) => {
+                let object = ErasedType::object();
+                Comparing::Equality(method_ref(Invoke::Static, &Rc::from("java/util/Objects"), false, "equals", &[object.clone(), object], &ErasedType::Z))
+            }
+            _ => Comparing::Numbers,
+        };
+        self.lir.compare(Relation::Eq, how, mine, theirs)
+    }
+
+    /// Whether a value of the erased class `name` may be a box of a primitive at run time
+    /// (`genEqEqPrimitive`'s `isMaybeBoxed`).
+    fn maybe_boxed(&self, name: &str) -> bool {
+        matches!(name, OBJECT | "java/io/Serializable" | "java/lang/Comparable")
+            || ["java/lang/Number", "java/lang/Character", "java/lang/Boolean"].iter().any(|b| name == *b || self.erased_derives(name, b))
+    }
+
+    /// A case value class's `productElement$extension(u, n)` and `productElementName$extension(u, n)`
+    /// as scalac 3.8.4 writes dotty's `productElementBody` and `productElementNameBody`
+    /// (`SyntheticMembers.scala` 159-187): the index held in a temporary and matched against `0`,
+    /// the element `_1$extension(u)` or the field's name, any other index
+    /// `IndexOutOfBoundsException(n.toString)`. An element of a primitive type is boxed after the
+    /// match; a reference is returned from its case. The underlying value and the index are the
+    /// method's parameters at the positions `us` and `ps`.
+    fn vc_element_tree(&mut self, c: ClassId, member: &str, u: &ErasedType, us: Underlying, ps: usize) -> LirId {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let object = ErasedType::object();
+        let string = ErasedType::L(Rc::from(STRING));
+        let integer = ErasedType::L(Rc::from("java/lang/Integer"));
+        let held = self.lir.temp();
+        let index = self.param(ps);
+        let hold = self.lir.keep(held, index);
+        let zero = self.lir.int(0);
+        let at = self.lir.kept(held, ErasedType::I);
+        let first = self.lir.compare(Relation::Eq, Comparing::Numbers, zero, at);
+        let (element, ty) = if member == "productElement" {
+            let companion = self.this_name.clone();
+            let accessor = method_ref(Invoke::Virtual, &companion, false, "_1$extension", std::slice::from_ref(u), u);
+            let instance = self.lir.this(ErasedType::L(companion));
+            let value = us.node(self, u);
+            (self.lir.call(&accessor, instance, &[value]), u.clone())
+        } else {
+            let field = syms.class(c).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym);
+            let name: Rc<str> = Rc::from(field.map_or("", |f| cx.input.interner.get(syms.sym(f).name)));
+            (self.lir.text(&name, string.clone()), string.clone())
+        };
+        let to_string = method_ref(Invoke::Virtual, &Rc::from("java/lang/Integer"), false, "toString", &[], &string);
+        let out_of_bounds = method_ref(Invoke::Special, &Rc::from("java/lang/IndexOutOfBoundsException"), false, "<init>", &[string.clone()], &ErasedType::V);
+        let index = self.param(ps);
+        let boxed = self.lower_adapt(index, &ErasedType::I, &integer);
+        let shown = self.lir.call(&to_string, boxed, &[]);
+        let error = self.lir.make(&out_of_bounds, &[shown]);
+        let test = if ty.is_ref() {
+            let element = self.lower_adapt(element, &ty, &object);
+            let then = self.lir.ret(element);
+            let thrown = self.lir.throw(error, ErasedType::V);
+            self.lir.push(Kind::If { cond: first, then, otherwise: Some(thrown) }, ErasedType::V)
+        } else {
+            let thrown = self.lir.throw(error, ty.clone());
+            let chosen = self.lir.push(Kind::If { cond: first, then: element, otherwise: Some(thrown) }, ty.clone());
+            let boxed = self.lower_adapt(chosen, &ty, &object);
+            self.lir.ret(boxed)
+        };
+        self.lir.seq(&[hold], test)
     }
 
     /// A method `(I)ret` answering the `n`th of `count` elements, as `productElement` does:

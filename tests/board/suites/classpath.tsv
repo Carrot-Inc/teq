@@ -367,6 +367,7 @@ jvm/pureconfig_derived_reader	pass	-
 jvm/reflected_java_member_classes	pass	-	
 jvm/reflected_java_member_classes_from_eight	pass	-	
 jvm/retained_library_inline_in_quoted_class	pass	-	
+jvm/right_assoc_class_path_object_order	pass	-	
 jvm/scala2_case_companion_function	pass	-	
 jvm/scala2_companion_trait_storage	pass	-	
 jvm/scala2_dollar_trait_storage	pass	-	

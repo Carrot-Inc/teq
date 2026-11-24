@@ -200,6 +200,8 @@ tuple_apply_known_prefix	< 2
 type_checks_nested_package_clauses	< mine 1
 unused_params_constant_bodies	> tests/cases/unused_params_constant_bodies.scala:18:10: warning: unused explicit parameter
 value_class_intersection_upcast	< a local: java.lang.ClassCastException
+value_class_right_assoc_companion_load_order	the companion's load against the operands (v,n1 for n1,v; b,w,n2 for w,b,n2); queued: the row "an infix right-associative call's left operand left unlifted", turned by the clause swap
+value_class_right_assoc_infix_object_path	the companion's load against an operand that reads an object (v,n1 for n1,v; w,f,n2 for f,w,n2); queued: the row "an infix right-associative call's left operand left unlifted", turned by the clause swap
 value_companion_strings	< object scala.Boolean
 view_import_renamed_prefixes	< 2
 wildcard_capture_param_bounds	< true

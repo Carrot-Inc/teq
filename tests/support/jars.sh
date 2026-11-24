@@ -16,7 +16,8 @@
 # set (zio-jvm, zio-stacktracer-jvm, zio-internal-macros-jvm, izumi-reflect-jvm,
 # izumi-reflect-boopickle-jvm, scala-collection-compat-jvm, zio-test-jvm, zio-interop-cats-jvm, zio-interop-tracer-jvm), chimney-jvm and chimney-macro-commons-jvm, tapir-core-jvm (1.13.29) with magnolia123-jvm,
 # sttp-model-core-jvm, sttp-shared-core-jvm and sttp-shared-ws-jvm; the interp-script fixture's lock jars its script reaches, named so that the actions cache holds them (decline-jvm, geny-jvm, os-lib-jvm, os-zip-jvm, magnolia1318-jvm, sttp-client4-core-jvm, sttp-client4-zio-jvm, sttp-shared-zio-jvm, sttp-model-core-1717-jvm, zio-interop-reactivestreams-jvm, zio-managed-jvm, jline-jdk8-jvm, reactive-streams-jvm, scodec-bits-jvm, algebra-jvm, cats-collections-core-jvm, idna4s-core-jvm); abi-callbacks-lib,
-# tests/support/abi_callbacks_lib.scala compiled by scalac (scala-cli) into a jar; typetest-lib,
+# tests/support/abi_callbacks_lib.scala compiled by scalac (scala-cli) into a jar; object-init-lib,
+# tests/support/object_init_lib.scala compiled the same way; typetest-lib,
 # tests/support/typetest_lib.scala compiled the same way; jdkparent-lib, tests/support/jdkparent_lib.scala compiled the same way; callable-lib, tests/support/callable_lib.scala compiled the
 # same way; package-overloads-lib, tests/support/package_overloads_lib.scala compiled the same way; ctor-lib, tests/support/ctor_lib.scala compiled the same way; predef-lib,
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
@@ -838,6 +839,19 @@ missingclass_mixed_jar() {
   fi
   echo "$jar"
 }
+# tests/support/object_init_lib.scala compiled by scalac into a jar: objects that run code when first loaded.
+object_init_lib_jar() {
+  local src=tests/support/object_init_lib.scala
+  local jar=$scratch/object-init-lib.jar
+  local dir=$scratch/object-init-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/object_init_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/lazyorder_lib.scala compiled by scalac into a jar: an object's lazy vals.
 lazyorder_lib_jar() {
   local src=tests/support/lazyorder_lib.scala
@@ -1242,6 +1256,7 @@ jar_of() {
     javafix) javafix_jar ;;
     javafixdir) echo tests/classfile/fixtures ;;
     abi-callbacks-lib) abi_callbacks_jar ;;
+    object-init-lib) object_init_lib_jar ;;
     typetest-lib) typetest_lib_jar ;;
     jdkparent-lib) jdkparent_lib_jar ;;
     quote-patterns33-lib) quote_patterns33_lib_jar ;;

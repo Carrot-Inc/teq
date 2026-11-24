@@ -378,6 +378,7 @@ return_tail_call_receiver_while	output differs
 return_tail_call_tailrec	error: Cannot rewrite recursive call: it is not in tail position
 return_tail_call_try_unguarded	RangeError: Maximum call stack size exceeded
 return_tail_call_value_class	RangeError: Maximum call stack size exceeded
+right_assoc_throwing_operand_order	TypeError: Cannot read properties of null (reading 'value')
 runtime_objects	error: not supported on JavaScript: method equals of scala.runtime.BoxesRunTime (a Java definition without an implementation in the std's pl
 sam_conversion_after_overloaded_apply	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 sam_literal_receiver_shapes	error: type IllegalThreadStateException not found
@@ -494,9 +495,12 @@ unapply_seq_product	output differs
 union_erasure_bases	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 unit_printed	output differs
 unused_params_constant_bodies	output differs
+value_class_field_constant_if	output differs
 value_class_intersection_upcast	output differs
 value_class_library_equality	error: cannot resolve import: unieq not found
 value_class_library_equality_called	error: cannot resolve import: unieq not found
+value_class_right_assoc_companion_load_order	the companion's load against the operands; queued: the row "an infix right-associative call's left operand left unlifted", turned by the clause swap
+value_class_right_assoc_infix_object_path	the companion's load against an operand that reads an object; queued: the row "an infix right-associative call's left operand left unlifted", turned by the clause swap
 view_import_renamed_prefixes	error: type mismatch: found 1, required Box[Int]
 view_kinds	output differs
 view_lib_alias	error: cannot resolve import: viewlib not found

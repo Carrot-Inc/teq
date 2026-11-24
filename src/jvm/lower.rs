@@ -23,6 +23,17 @@ pub(super) enum Reduced {
     Expr(TExprId),
 }
 
+/// What the first reference of an object runs (`Gen::object_inits`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum ObjectInits {
+    /// Nothing: its class is an `isNoInitsRealClass`, the reference a `PurePath`.
+    Quiet,
+    /// Its class or a base runs code when the instance is made: the reference an `IdempotentPath`.
+    Initialises,
+    /// Nothing records it: a class-path object the typer never completed.
+    NotRecorded,
+}
+
 impl<'a> Gen<'a> {
     /// Runs a lowering with the writers refusing.
     /// Writes the body of the method begun as the tree `compose` makes of it: a body the back
@@ -446,6 +457,25 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The expression a selection reads its member on, as dotty's `FirstTransform` leaves the
+    /// qualifier `r`: a block's result, and the branch an `if` over a constant takes
+    /// (`Gen::reduced_condition`), each as far as they go.
+    fn selected_operand(&self, r: TExprId) -> TExprId {
+        let prog = self.cx.input.prog;
+        let mut operand = r;
+        loop {
+            operand = match prog.expr(operand) {
+                TExpr::Block(_, res) => res,
+                TExpr::If(c, t, els) => match (self.reduced_condition(c), els) {
+                    (Reduced::Constant(true, _), _) => t,
+                    (Reduced::Constant(false, _), Some(e)) => e,
+                    _ => return operand,
+                },
+                _ => return operand,
+            };
+        }
+    }
+
     /// The branch an `if` over a constant takes, alone (`FirstTransform.transformIf`); none is
     /// `()` at the type wanted.
     fn lower_taken(&mut self, branch: Option<TExprId>, want: &ErasedType) -> LirId {
@@ -702,7 +732,7 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let params = self.m.tail.as_ref().expect("a def that loops").params.clone();
         // A value class's extension method holds its instance unboxed (`$this`): the receiver is
-        // lowered at the underlying type, as the call's lowering lowers it (`Gen::call_extension`).
+        // lowered at the underlying type, as the call's lowering lowers it (`Gen::lower_extension_call`).
         let this_type = match (self.m.this_home, self.m.this_underlying.clone(), self.this_class) {
             (None, Some(u), Some(_)) => u,
             (_, _, Some(c)) => self.class_type(c),
@@ -1999,14 +2029,12 @@ impl<'a> Gen<'a> {
             }
             // `missing[V].u` is the box's accessor on the reference, as scalac casts the qualifier
             // to the class and selects (`Erasure.scala` 733-737): a null throws. A block's result
-            // is the qualifier, where a conditional's, a match's or a `try`'s branches are each
-            // adapted to the value class, a null to its zero.
+            // is the qualifier, and so is the branch an `if` over a constant takes (dotty's
+            // `FirstTransform` leaves that branch alone before erasure), where a conditional's, a
+            // match's or a `try`'s branches are each adapted to the value class, a null to its zero.
             FieldRoute::Underlying(c) => {
                 let u = self.vc_underlying(c);
-                let mut operand = r;
-                while let TExpr::Block(_, res) = self.cx.input.prog.expr(operand) {
-                    operand = res;
-                }
+                let operand = self.selected_operand(r);
                 let outer = self.vc_select.replace(operand);
                 let value = self.lower_expr(r, &u);
                 self.vc_select = outer;
@@ -2108,7 +2136,7 @@ impl<'a> Gen<'a> {
             CallRoute::Proxied(t) => return self.analysis_in_order().then(|| self.lower_proxied_call(t, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
             CallRoute::Lifted => return self.analysis_in_order().then(|| self.lower_lifted_member_call(r, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
             CallRoute::Js => return Ok(self.lower_refused(Refusal::JavaScriptMember)),
-            CallRoute::Extension(c, route) => return self.lower_extension_call(r, s, args, c, route),
+            CallRoute::Extension(c, route) => return Ok(self.lower_extension_call(r, s, args, c, route)),
             CallRoute::Interpolator(_, None) => return Err(Unlowered::InterpolatorWithoutRuntime),
             CallRoute::Object(_) => return Err(Unlowered::ObjectThroughOwner),
         }
@@ -2120,20 +2148,49 @@ impl<'a> Gen<'a> {
         Ok(self.lir.push(Kind::Call { method: m, at: site.map(|site| (site.owner, site.interface)), receiver, args, order }, ret))
     }
 
+    /// The parameters `params` of the def `s` in its class file's order (`Gen::jvm_param_order`): a
+    /// right-associative extension method's own clause before the receiver's, which its class file's
+    /// slots hold in that order (`Gen::emit_fun`, `Gen::extension_bodies`); else as they are.
+    pub(super) fn class_file_params(&self, s: SymId, params: &[SymId]) -> Vec<SymId> {
+        match self.jvm_param_order(s) {
+            Some(order) if order.len() == params.len() => order.iter().map(|&k| params[k]).collect(),
+            _ => params.to_vec(),
+        }
+    }
+
     /// `r.s(args)` of a method of the value class `c`, the method of its companion's instance
     /// over the underlying value (`Gen::extension_method`): the instance first, then the receiver
     /// in place; or, for a generic class's receiver evaluated before the instance, the receiver
-    /// held in a temporary of a block that ends with the call (`Gen::extension_receiver`, dotty's
-    /// `evalOnce`). Not for the class's own static method, which takes the receiver through a
-    /// slot, nor for a right-associative method.
-    fn lower_extension_call(&mut self, r: TExprId, s: SymId, args: ListRef, c: ClassId, route: ExtensionRoute) -> Result<LirId, Unlowered> {
+    /// held in a temporary of a block that ends with the call (dotty's `evalOnce`, as
+    /// `VCInlineMethods.rewire` leaves the receiver: in place, so that the companion is initialised
+    /// before its effects, unless `emit::receiver_first`). A right-associative method takes its
+    /// arguments in its class file's order (`Gen::jvm_param_order`), which the typed IR evaluates in
+    /// its own (`Gen::reordered_operands`).
+    /// The class's own static method, where this build writes no companion, takes the receiver
+    /// through a temporary (`Gen::lower_static_extension_call`).
+    fn lower_extension_call(&mut self, r: TExprId, s: SymId, args: ListRef, c: ClassId, route: ExtensionRoute) -> LirId {
         let cx = self.cx;
-        if route == ExtensionRoute::Static || self.jvm_param_order(s).is_some() {
-            return Err(Unlowered::ValueClassMethodCall);
+        if route == ExtensionRoute::Static {
+            return self.lower_static_extension_call(r, s, args, c);
         }
         let method = Rc::new(self.extension_method(s, c, route));
         let u = self.vc_underlying(c);
-        let held = crate::emit::receiver_first(cx.input.prog, cx.input.syms, c, r).then(|| {
+        let receiver_first = crate::emit::receiver_first(cx.input.prog, cx.input.syms, c, r);
+        if let Some((items, order)) = self.extension_order(s, args) {
+            let receiver = self.lir.push(Kind::Module(method.owner.clone()), ErasedType::L(method.owner.clone()));
+            let mut value = self.lower_expr(r, &u);
+            if items.iter().any(|&e| self.reads_initialising_object(e)) {
+                return self.extension_call_in_list_order(method, receiver, value, &u, receiver_first, &items, &order);
+            }
+            let (holds, rest) = self.reordered_operands(Some((r, &mut value)), receiver_first, &items, &order, |g, item, j| g.lower_argument_at(item, &method.params[1 + j]));
+            let mut nodes = vec![self.lower_adapt(value, &u, &method.params[0])];
+            nodes.extend(rest);
+            let args = self.lir.list(&nodes);
+            let ret = method.ret.clone();
+            let call = self.lir.push(Kind::Call { method, at: None, receiver, args, order: None }, ret);
+            return if holds.is_empty() { call } else { self.lir.seq(&holds, call) };
+        }
+        let held = receiver_first.then(|| {
             let init = self.lower_expr(r, &u);
             let temp = self.lir.temp();
             (temp, self.lir.keep(temp, init))
@@ -2148,10 +2205,176 @@ impl<'a> Gen<'a> {
         let args = self.lir.list(&nodes);
         let ret = method.ret.clone();
         let call = self.lir.push(Kind::Call { method, at: None, receiver, args, order: None }, ret);
-        Ok(match held {
+        match held {
             Some((_, keep)) => self.lir.seq(&[keep], call),
             None => call,
-        })
+        }
+    }
+
+    /// Whether the operand `e` is a path that reads an object whose first reference may run code
+    /// (`Gen::operand_has_effect` of a path: `Gen::object_inits` other than quiet).
+    fn reads_initialising_object(&self, e: TExprId) -> bool {
+        self.default_operand_is_path(e) && self.operand_has_effect(e)
+    }
+
+    /// A right-associative call of a value class's extension through its companion where an operand
+    /// reads an object with initialisers: the companion's instance, then the operands in the typed
+    /// IR's order, each passed to the parameter that takes it (`Call`'s `order`), no operand held
+    /// ahead of the call, as the old generator orders them. A hold there is right for an infix call
+    /// and wrong for a written-out one, which the typed IR does not tell apart until the typer swaps
+    /// the clauses at definition; that swap replaces this (docs/NATIVE.md, "A right-associative
+    /// call's operands on the lowered path").
+    fn extension_call_in_list_order(&mut self, method: Rc<MethodRef>, receiver: LirId, value: LirId, u: &ErasedType, receiver_first: bool, items: &[TExprId], order: &[usize]) -> LirId {
+        let (holds, value) = if receiver_first {
+            let temp = self.lir.temp();
+            (vec![self.lir.keep(temp, value)], self.lir.kept(temp, u.clone()))
+        } else {
+            (Vec::new(), value)
+        };
+        let mut place = vec![0usize; items.len()];
+        for (j, &k) in order.iter().enumerate() {
+            place[k] = j;
+        }
+        let mut nodes = vec![self.lower_adapt(value, u, &method.params[0])];
+        for (i, &item) in items.iter().enumerate() {
+            nodes.push(self.lower_argument_at(item, &method.params[1 + place[i]]));
+        }
+        let args = self.lir.list(&nodes);
+        let call_order: Rc<[usize]> = std::iter::once(0).chain(order.iter().map(|&k| 1 + k)).collect();
+        let ret = method.ret.clone();
+        let call = self.lir.push(Kind::Call { method, at: None, receiver, args, order: Some(call_order) }, ret);
+        if holds.is_empty() { call } else { self.lir.seq(&holds, call) }
+    }
+
+    /// `r.s(args)` of a method of the value class `c` whose companion this build does not write
+    /// (`Cx::vc_on_companion`): the class's own static `m$extension`, the receiver's underlying value
+    /// held in a temporary, then the arguments.
+    fn lower_static_extension_call(&mut self, r: TExprId, s: SymId, args: ListRef, c: ClassId) -> LirId {
+        let method = Rc::new(self.extension_method(s, c, ExtensionRoute::Static));
+        let u = self.vc_underlying(c);
+        let mut value = self.lower_expr(r, &u);
+        let (holds, rest) = match self.extension_order(s, args) {
+            Some((items, order)) => self.reordered_operands(Some((r, &mut value)), true, &items, &order, |g, item, j| g.lower_argument_at(item, &method.params[1 + j])),
+            None => {
+                let temp = self.lir.temp();
+                let keep = self.lir.keep(temp, value);
+                value = self.lir.kept(temp, u.clone());
+                let mut rest = Vec::new();
+                self.lower_rest(s, args, 0, &method.params[1..], &mut rest);
+                (vec![keep], rest)
+            }
+        };
+        let mut nodes = vec![value];
+        nodes.extend(rest);
+        let args = self.lir.list(&nodes);
+        let ret = method.ret.clone();
+        let call = self.lir.push(Kind::StaticCall { method, args, order: None }, ret);
+        self.lir.seq(&holds, call)
+    }
+
+    /// The arguments of a right-associative extension method `s` and the order its class file takes
+    /// them in (`Gen::jvm_param_order`); none for another method.
+    fn extension_order(&self, s: SymId, args: ListRef) -> Option<(Vec<TExprId>, Vec<usize>)> {
+        let items: Vec<TExprId> = self.cx.input.prog.expr_list(args).to_vec();
+        let order = self.jvm_param_order(s).filter(|o| o.len() == items.len())?;
+        Some((items, order))
+    }
+
+    /// An argument at the type of the parameter that takes it.
+    fn lower_argument_at(&mut self, a: TExprId, want: &ErasedType) -> LirId {
+        match want {
+            ErasedType::L(array) if array.starts_with('[') => self.lower_array_argument(a, array),
+            _ => self.lower_expr(a, want),
+        }
+    }
+
+    /// Whether evaluating the operand `e` may have an effect, as dotty's `isPureExpr` answers it (`exprPurity`
+    /// below `Pure`, TreeInfo.scala 589-696 at 3.8.4): what is no path (`Gen::default_operand_is_path`), and a path
+    /// through an object whose first reference may run code or of which nothing says, a module reference or an
+    /// object's term (`Gen::object_inits`); a selection's purity is its prefix's at most.
+    fn operand_has_effect(&self, e: TExprId) -> bool {
+        if !self.default_operand_is_path(e) {
+            return true;
+        }
+        let cx = self.cx;
+        let loads = |s: SymId| matches!(cx.input.syms.sym(s).kind, SymKind::Object(c) if self.object_inits(c) != ObjectInits::Quiet);
+        match cx.input.prog.expr(e) {
+            TExpr::Module(c) => self.object_inits(c) != ObjectInits::Quiet,
+            TExpr::Local(s) | TExpr::Static(s) => loads(s),
+            TExpr::Field(q, s) | TExpr::CallMethod(q, s, _) => loads(s) || self.operand_has_effect(q),
+            _ => false,
+        }
+    }
+
+    /// Whether the operand `e`, a path, may throw (a read through a receiver that may be null): the back end's own
+    /// complement of dotty's purity for its reordering (docs/NATIVE.md, "A right-associative call's operands").
+    fn operand_may_throw(&self, e: TExprId) -> bool {
+        let prog = self.cx.input.prog;
+        match prog.expr(e) {
+            TExpr::Field(q, _) | TExpr::CallMethod(q, _, _) => !matches!(prog.expr(q), TExpr::This | TExpr::Module(_)) || self.operand_may_throw(q),
+            _ => false,
+        }
+    }
+
+    /// What the first reference of the object of class `c` runs, for every asker that orders an operand around it:
+    /// `typer::elaborate::no_inits` (`refPurity`: an object that is no `isNoInitsRealClass` is an `IdempotentPath`)
+    /// where the class is completed; `NotRecorded` for a class-path object the typer never completed, which has
+    /// neither its pickle's `NoInits` nor its record read and no base types, over which `no_inits` would answer from
+    /// empty tables. An asker takes `NotRecorded` as `Initialises`, never guessing it quiet.
+    pub(super) fn object_inits(&self, c: ClassId) -> ObjectInits {
+        let cx = self.cx;
+        if cx.input.syms.class(c).base_types.is_empty() {
+            ObjectInits::NotRecorded
+        } else if crate::typer::elaborate::no_inits(cx.input.syms, cx.input.interner, c) {
+            ObjectInits::Quiet
+        } else {
+            ObjectInits::Initialises
+        }
+    }
+
+    /// The operands of a call that evaluates `ahead` (its receiver, the expression and its lowered
+    /// value) before its arguments `items`, which it takes in the order `order` (`order[j]`, the item
+    /// of its `j`-th argument), each lowered by `lower` for its place: the holds that stand before the
+    /// call, then the arguments in the call's order. The typed IR's list is the order of the effects,
+    /// whatever the typer binds ahead of the call: an operand scalac's typer lifts there (dotty's
+    /// `Typer.typedInfixOp` and `LiftImpure.liftArgs`, Typer.scala 3696-3720 and EtaExpansion.scala
+    /// 100-108 at 3.8.4, as `Worker::lift_impure`) or a written-out call's operand. An item that has an
+    /// effect (`Gen::operand_has_effect`) is held in a temporary where one that comes after it in the list
+    /// and has an effect or may throw (`Gen::operand_may_throw`) is taken before it, and so is each such
+    /// item before that one, so that the effects keep the list's order and none is lost to an exception
+    /// the list raises after it; any other is read in its place. `ahead` is held first where `hold_ahead`
+    /// asks it, or where an item is held and it is no path.
+    pub(super) fn reordered_operands(&mut self, ahead: Option<(TExprId, &mut LirId)>, hold_ahead: bool, items: &[TExprId], order: &[usize], mut lower: impl FnMut(&mut Self, TExprId, usize) -> LirId) -> (Vec<LirId>, Vec<LirId>) {
+        let n = items.len();
+        let mut place = vec![0usize; n];
+        for (j, &k) in order.iter().enumerate() {
+            place[k] = j;
+        }
+        let effect: Vec<bool> = items.iter().map(|&e| self.operand_has_effect(e)).collect();
+        let first = |k: usize| effect[k] || self.operand_may_throw(items[k]);
+        let last = (0..n).filter(|&i| effect[i] && (i + 1..n).any(|k| place[k] < place[i] && first(k))).max();
+        let mut holds = Vec::new();
+        if let Some((r, value)) = ahead {
+            if hold_ahead || last.is_some() && !self.default_operand_is_path(r) {
+                let temp = self.lir.temp();
+                let ty = self.lir.ty(*value).clone();
+                holds.push(self.lir.keep(temp, *value));
+                *value = self.lir.kept(temp, ty);
+            }
+        }
+        let mut held: Vec<Option<LirId>> = vec![None; n];
+        for i in (0..n).filter(|&i| effect[i] && last.is_some_and(|m| i <= m)) {
+            let value = lower(self, items[i], place[i]);
+            let temp = self.lir.temp();
+            let ty = self.lir.ty(value).clone();
+            holds.push(self.lir.keep(temp, value));
+            held[i] = Some(self.lir.kept(temp, ty));
+        }
+        let args = order.iter().enumerate().map(|(j, &k)| match held[k] {
+            Some(read) => read,
+            None => lower(self, items[k], j),
+        }).collect();
+        (holds, args)
     }
 
     /// `super.s(args)`, the call `e`: through the accessor a class that mixes the trait in

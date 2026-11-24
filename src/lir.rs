@@ -275,8 +275,6 @@ pub enum Unlowered {
     InlineValNoConstant,
     /// `a.O`: an object selected on a value of its owner, the value evaluated first.
     ObjectThroughOwner,
-    /// `v.m(..)` of a value class's method, called as its `m$extension`.
-    ValueClassMethodCall,
     /// A string interpolator of the library (`s"..."`, `f"..."`) where the build's runtime has
     /// no definition of it.
     InterpolatorWithoutRuntime,
@@ -309,8 +307,6 @@ pub enum Unlowered {
     CtorTraitProxies,
     /// An enum companion's `fromOrdinal` over its stored values.
     EnumCompanionMembers,
-    /// A value class's `productElement`, `productElementName`, and `equals` over a reference.
-    ValueClassSynthesized,
     /// A def with a `return` inside a lambda: the key it makes and the handler around its body.
     NonLocalReturnKey,
     /// A value class's method forwarding to its `m$extension`, and the copies of extension methods.

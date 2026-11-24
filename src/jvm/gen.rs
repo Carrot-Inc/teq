@@ -284,7 +284,7 @@ pub enum CallRoute {
     Spread(TExprId),
     /// A member of a JavaScript type, which the JVM has none of.
     Js,
-    /// A value class's method, called as scalac calls it (`Gen::call_extension`).
+    /// A value class's method, called as scalac calls it (`Gen::lower_extension_call`).
     Extension(ClassId, ExtensionRoute),
     /// An interpolator of scala-library that has no bytecode: the runtime's helper, and the
     /// runtime's definition of its name where the build holds one.
@@ -306,7 +306,7 @@ pub enum CallRoute {
 }
 
 /// How a method of the value class it names is called: one decision (`Gen::extension_route`),
-/// read by `Gen::call_route` and `Gen::call_extension`.
+/// read by `Gen::call_route` and `Gen::lower_extension_call`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ExtensionRoute {
     /// The companion's `m$extension`, where this build writes the companion.
@@ -2312,8 +2312,9 @@ impl<'a> Gen<'a> {
         self.adapt(&accessor.ret, u);
     }
 
-    /// The underlying value, of the type `u`, of `value`, a box of the value class `c`
-    /// (`Gen::vc_unbox`); its zero, reported, where the class has no accessor.
+    /// The underlying value, of the type `u`, of `value`, a box of the value class `c`, through the
+    /// accessor of its field (`self()`, or the expanded `scala$collection$StringOps$$s()` of a
+    /// private one); its zero, reported, where the class has no accessor.
     pub(super) fn lower_vc_unbox(&mut self, c: ClassId, value: LirId, u: &ErasedType) -> LirId {
         let Some(accessor) = self.vc_accessor(c, u) else {
             self.unsupported("the underlying value of a value class without an accessor");
@@ -2459,7 +2460,7 @@ impl<'a> Gen<'a> {
     /// held in a temporary otherwise. A null unboxed is `BoxesRunTime`'s `unboxTo*` of it for a
     /// primitive, and for a reference the null itself, which reaches the test's join as the
     /// underlying type (a widening that writes nothing: the frame's type there).
-    fn lower_vc_open_null_safe(&mut self, value: LirId, from: &ErasedType, c: ClassId, u: &ErasedType, of: Option<TExprId>) -> LirId {
+    pub(super) fn lower_vc_open_null_safe(&mut self, value: LirId, from: &ErasedType, c: ClassId, u: &ErasedType, of: Option<TExprId>) -> LirId {
         let object = ErasedType::object();
         let null_unboxed = |g: &mut Self| {
             if u.is_ref() {
@@ -4633,7 +4634,7 @@ impl<'a> Gen<'a> {
     /// erased qualifier (`derivesFrom` after erasure, where a trait's parents are interfaces
     /// alone): `is_subclass`, and over every class the program names where that knows the
     /// reached ones alone (a JDK class, `ArrayList` for `Collection`).
-    fn erased_derives(&self, from: &str, to: &str) -> bool {
+    pub(super) fn erased_derives(&self, from: &str, to: &str) -> bool {
         if to == OBJECT || self.is_subclass(from, to) {
             return true;
         }
@@ -5356,7 +5357,7 @@ impl<'a> Gen<'a> {
         recv.is_none_or(|r| self.default_operand_is_path(r)) && priors.iter().all(|&a| self.default_operand_is_path(a))
     }
 
-    fn default_operand_is_path(&self, e: TExprId) -> bool {
+    pub(super) fn default_operand_is_path(&self, e: TExprId) -> bool {
         let cx = self.cx;
         let stable = |s: SymId| {
             let info = cx.input.syms.sym(s);
@@ -5524,7 +5525,7 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The default of a method a value class declares, as `call_extension` calls the method: its
+    /// The default of a method a value class declares, as `Gen::lower_extension_call` calls the method: its
     /// getter on the underlying value, the companion's `m$default$N$extension` where it holds
     /// them, the class's `m$default$N` on the box otherwise; None for any other method.
     fn value_class_default(&mut self, r: TExprId, s: SymId, i: usize, priors: &[TExprId]) -> Option<ErasedType> {
@@ -5775,7 +5776,7 @@ impl<'a> Gen<'a> {
     fn call_method(&mut self, r: TExprId, s: SymId, args: ListRef) -> ErasedType {
         match self.call_route(r, s, args) {
             CallRoute::Js => unreachable!("refused by the lowering (`Gen::lower_refused`)"),
-            CallRoute::Extension(c, route) => self.call_extension(r, s, args, c, route),
+            CallRoute::Extension(..) => unreachable!("lowered (`Gen::lower_extension_call`)"),
             CallRoute::Interpolator(helper, None) => self.call_interpolator(r, s, helper, args),
             CallRoute::Object(c) => {
                 self.statement(r);
@@ -5944,53 +5945,6 @@ impl<'a> Gen<'a> {
         };
         let desc = method_desc(&params, &ret);
         MethodRef { owner, owner_is_interface: false, name, params, ret, desc, kind }
-    }
-
-    /// In link mode, a method a value class declares is called as scalac calls it: the
-    /// companion's `m$extension` on the underlying value, `C$.MODULE$.m$extension(u, args)`,
-    /// by the route `Gen::extension_route` gives for it. The class's own static method takes the
-    /// receiver through a slot.
-    fn call_extension(&mut self, r: TExprId, s: SymId, args: ListRef, c: ClassId, route: ExtensionRoute) -> ErasedType {
-        let u = self.vc_underlying(c);
-        let method = self.extension_method(s, c, route);
-        let held = if route == ExtensionRoute::Static {
-            self.expr(r, &u);
-            let recv = self.store_new(&u);
-            self.load(recv, &u);
-            None
-        } else {
-            let module = ErasedType::L(method.owner.clone());
-            let held = self.extension_receiver(r, c, &u, &method.owner, &module);
-            self.adapt(&u, &method.params[0]);
-            held
-        };
-        self.arguments(Some(s), args, &method.params[1..]);
-        self.invoke_mref(&method);
-        if let Some(mark) = held {
-            self.code.locals_release(mark);
-        }
-        method.ret
-    }
-
-    /// The companion `module`'s instance and the receiver `r` of a call of the value class `c`'s
-    /// extension method, as dotty's `VCInlineMethods.rewire` leaves them: the companion first,
-    /// then the receiver in place, so that the companion is initialised before the receiver's
-    /// effects; or, for a generic class's receiver that is not idempotent, the receiver first,
-    /// held in a slot (`evalOnce`), then the companion (`emit::receiver_first`). Where it holds
-    /// the receiver, the locals' mark before it, which the caller releases at the call's end, as
-    /// the block `evalOnce` makes ends there.
-    fn extension_receiver(&mut self, r: TExprId, c: ClassId, u: &ErasedType, module: &str, module_type: &ErasedType) -> Option<usize> {
-        if !crate::emit::receiver_first(self.cx.input.prog, self.cx.input.syms, c, r) {
-            self.getstatic(module, "MODULE$", module_type);
-            self.expr(r, u);
-            return None;
-        }
-        let mark = self.code.locals_mark();
-        self.expr(r, u);
-        let recv = self.store_new(u);
-        self.getstatic(module, "MODULE$", module_type);
-        self.load(recv, u);
-        Some(mark)
     }
 
     /// `context.s(args)` of scala-library, which has no bytecode, where the build holds no

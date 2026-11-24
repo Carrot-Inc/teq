@@ -2688,6 +2688,7 @@ right_assoc_lift_repeated_order	pass	-
 right_assoc_lift_toplevel_value	pass	-	
 right_assoc_lift_written_cast	pass	-	
 right_assoc_member_retry	pass	-	
+right_assoc_object_operand_order	pass	-	
 right_assoc_operand_before_object_load	pass	-	
 right_assoc_operand_object_receivers	pass	-	
 right_assoc_order_concat	pass	-	
@@ -2705,6 +2706,7 @@ right_assoc_order_quoted	pass	-
 right_assoc_order_tuple_cons	pass	-	
 right_assoc_order_two_clauses	pass	-	
 right_assoc_order_using	pass	-	
+right_assoc_throwing_operand_order	cannot run	-	the JVM's platform
 root_method_calls	pass	-	
 root_method_singleton_chain	pass	-	
 runtime_exception_caught	pass	-	
@@ -3384,16 +3386,23 @@ val_refinement_subst	pass	-
 value_class_array_store	pass	-	
 value_class_can_equal	pass	-	
 value_class_extension_order	pass	-	
+value_class_field_constant_if	cannot run	-	the JVM's platform
 value_class_inherited_equality	pass	-	
 value_class_intersection_box	pass	-	
 value_class_intersection_upcast	fail	-	< a local: java.lang.ClassCastException
 value_class_library_equality	pass	-	
 value_class_library_equality_called	pass	-	
 value_class_renamed_equality	pass	-	
+value_class_right_assoc_companion_load_order	fail	-	< infix a17 n1,v
+value_class_right_assoc_companion_shapes	pass	-	
+value_class_right_assoc_infix_object_path	fail	-	< call left 10 n1,v
+value_class_right_assoc_operand_order	pass	-	
+value_class_right_assoc_written_object_path	pass	-	
 value_class_scala2_library_equality	pass	-	
 value_class_scala2_source_equality	pass	-	
 value_class_signature_only	pass	-	
 value_class_synthesized_equality	pass	-	
+value_class_synthesized_members	pass	-	
 value_classes	pass	-	
 value_companion_strings	fail	-	< object scala.Boolean
 value_export_case_selectors	pass	-	

@@ -1,0 +1,45 @@
+V_int eq true false false false false
+C_int eq true false false false false
+C_int pe 1 u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_long eq true false false false false
+C_long eq true false false false false
+C_long pe 1 u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_double eq true false false false false
+C_double eq true false false false false
+C_double pe 1.5 u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_float eq true false false false false
+C_float eq true false false false false
+C_float pe 1.5 u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_boolean eq true false false false false
+C_boolean eq true false false false false
+C_boolean pe true u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_char eq true false false false false
+C_char eq true false false false false
+C_char pe a u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_short eq true false false false false
+C_short eq true false false false false
+C_short pe 1 u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_byte eq true false false false false
+C_byte eq true false false false false
+C_byte pe 1 u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_string eq true false false false false
+C_string eq true false false false false
+C_string pe a u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_any eq true false false false false
+C_any eq true false false false false
+C_any pe 1 u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_class eq true false false false false
+C_class eq true false false false false
+C_class pe K(1) u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_generic eq true false false false false
+C_generic eq true false false false false
+C_generic pe g u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_array eq false false false false false
+C_array eq false false false false false
+C_array pe Array(1) u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+V_list eq true false false false false
+C_list eq true false false false false
+C_list pe List(1) u java.lang.IndexOutOfBoundsException:1 java.lang.IndexOutOfBoundsException:-1
+canEqual Q_int eq true false false
+canEqual Q_string eq true false false
+canEqual Q_inherited eq true false false

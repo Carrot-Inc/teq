@@ -198,6 +198,7 @@ reducer_wildcard_bound	compile
 regex_case_properties	output
 regex_comments	output
 return_tail_call_try_unguarded	exception
+right_assoc_throwing_operand_order	output
 sam_literal_receiver_unchanged_local_default	unsupported
 scala2_auto_application	output
 scala2_std_auto_application	unsupported
@@ -225,7 +226,10 @@ typer_state_macro_info	output
 union_erasure_bases	compile
 unit_printed	output
 url_encoder	output
+value_class_field_constant_if	output
 value_class_intersection_upcast	output
+value_class_right_assoc_companion_load_order	output; queued: the row "an infix right-associative call's left operand left unlifted": the companion's load against the operands, turned by the clause swap
+value_class_right_assoc_infix_object_path	output; queued: the row "an infix right-associative call's left operand left unlifted": the companion's load against an operand that reads an object, turned by the clause swap
 value_companion_strings	compile
 view_import_renamed_prefixes	compile
 wildcard_capture_param_bounds	compile
