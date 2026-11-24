@@ -1432,7 +1432,7 @@ fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, out: &m
             | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => stack.extend(prog.expr_list(args).iter().copied()),
             TExpr::New(c, args) => {
                 stack.extend(prog.expr_list(args).iter().copied());
-                // An anonymous class's superclass arguments are evaluated where it is made (`new_arguments`).
+                // An anonymous class's superclass arguments are evaluated where it is made (`lower_new_arguments`).
                 let idx = cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
                 if idx != u32::MAX && syms.class(c).kind == ClassKind::Anon {
                     if let Some(parent) = prog.classes[idx as usize].parent_args {

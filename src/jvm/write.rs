@@ -920,12 +920,6 @@ impl<'a> Gen<'a> {
         self.code.push(vt);
     }
 
-    pub(super) fn write_each(&mut self, nodes: &[LirId]) {
-        for &node in nodes {
-            self.write(node);
-        }
-    }
-
     /// The arguments in the order written; where the method takes them in another (`order`),
     /// into locals and loaded in the method's.
     pub(super) fn write_arguments(&mut self, args: List, order: Option<&[usize]>) {

@@ -84,7 +84,6 @@ pub(super) struct Declared {
 
 /// How a primary constructor passes the arguments of its superclass's constructor, after the
 /// name and ordinal a value of a Java enum passes up: one decision (`Gen::super_call_route`).
-#[derive(Clone)]
 enum SuperCall {
     /// The parameters an anonymous class takes for them, of these types.
     Own(Vec<ErasedType>),
@@ -110,12 +109,10 @@ enum SuperCall {
 enum SelfCall {
     /// To the primary constructor, at its declared parameters' types (`CtorArguments::Declared`).
     Declared(ClassId, crate::ast::ListRef),
-    /// To the primary constructor otherwise. Not lowered yet.
+    /// To the primary constructor otherwise: what the class captures first.
     Primary(ClassId, crate::ast::ListRef),
-    /// To another secondary constructor. Not lowered yet.
+    /// To another secondary constructor.
     Via(ClassId, SymId, crate::ast::ListRef),
-    /// To no constructor of a class: the method is left out.
-    Unowned,
 }
 
 /// Where a value class's synthesized member finds the underlying value (`Gen::vc_member_tree`):
@@ -178,6 +175,13 @@ struct PrimaryCtor<'t> {
     /// The position of the first parameter an anonymous class passes its superclass.
     first_super_arg: usize,
     route: SuperCall,
+}
+
+impl PrimaryCtor<'_> {
+    /// The parameters a value of a Java enum passes up first: its name and ordinal.
+    fn leading_params(&self) -> Vec<usize> {
+        if self.java_enum { vec![self.name_param, self.name_param + 1] } else { Vec::new() }
+    }
 }
 
 impl<'a> Gen<'a> {
@@ -2142,14 +2146,13 @@ impl<'a> Gen<'a> {
         self.class_body_lowers(k.tc)
     }
 
-    /// Whether the lowering has nodes for the superclass's call by its route, or why not: its own
-    /// and its declared parameters, a secondary constructor's and a captured superclass's
-    /// arguments, and an unwritten superclass's as its class file takes them.
-    fn super_call_lowers(&mut self, k: &PrimaryCtor) -> Result<(), Unlowered> {
-        match &k.route {
-            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Unwritten(..) | SuperCall::Via(..) | SuperCall::Captured(..) => Ok(()),
+    /// Whether the lowering has nodes for the superclass's call by its route, or why not: every
+    /// route but every parameter's default and the refused one.
+    fn super_call_lowers(&self, k: &PrimaryCtor) -> Result<(), Unlowered> {
+        match k.route {
             SuperCall::Defaults(..) => Err(Unlowered::CtorSuperDefaults),
             SuperCall::Refused => Err(Unlowered::CtorSuperRefused),
+            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Unwritten(..) | SuperCall::Via(..) | SuperCall::Captured(..) => Ok(()),
         }
     }
 
@@ -2291,86 +2294,70 @@ impl<'a> Gen<'a> {
     /// The superclass's constructor run on the instance: the name and ordinal of a value of a
     /// Java enum first, then the arguments by the route. False where the route refuses.
     fn super_call(&mut self, parts: &mut Parts, k: &PrimaryCtor) -> bool {
-        let leading: Vec<usize> = if k.java_enum { vec![k.name_param, k.name_param + 1] } else { Vec::new() };
-        let mut params: Vec<ErasedType> = leading.iter().map(|&i| self.m.params[i].1.clone()).collect();
-        if let SuperCall::Own(types) | SuperCall::Declared(types, _) = &k.route {
-            params.extend(types.iter().cloned());
-            let ctor = method_ref(Invoke::Special, &Rc::from(k.super_name), false, "<init>", &params, &ErasedType::V);
-            self.part(parts, |g| {
-                let mut args: Vec<LirId> = leading.iter().map(|&i| g.param(i)).collect();
-                match &k.route {
-                    SuperCall::Own(types) => args.extend((0..types.len()).map(|i| g.param(k.first_super_arg + i))),
-                    SuperCall::Declared(types, written) => {
-                        g.m.before_super = true;
-                        let (list, _) = g.lower_arguments(None, *written, types);
-                        g.m.before_super = false;
-                        args.extend_from_slice(&g.lir.lists[list.start as usize..(list.start + list.len) as usize]);
-                    }
-                    _ => unreachable!("a lowered route"),
-                }
-                g.lir.init(&ctor, &args)
-            });
+        if self.super_call_lowers(k).is_ok() {
+            self.part(parts, |g| g.lower_superclass_ctor(k));
             return true;
         }
-        // A secondary constructor's, a captured superclass's and an unwritten superclass's arguments, as a creation
-        // of the superclass passes them (`Gen::via_arguments`, `Gen::new_arguments`, `Gen::unwritten_ctor_arguments`).
-        if matches!(parts, Parts::Tree(..)) && self.super_call_lowers(k).is_ok() {
-            let super_name: Rc<str> = Rc::from(k.super_name);
-            let route = k.route.clone();
-            let via = k.tc.parent_via;
-            self.part(parts, |g| {
-                let mut args: Vec<LirId> = leading.iter().map(|&i| g.param(i)).collect();
-                g.m.before_super = true;
-                let (nodes, types) = match route {
-                    SuperCall::Via(e, s, written) => {
-                        let r = g.via_arguments_route(e, s, written);
-                        g.lower_via_arguments(e, s, written, r)
-                    }
-                    SuperCall::Captured(e, written) => {
-                        let r = g.ctor_arguments_route(e, written);
-                        g.lower_new_arguments(e, written, r)
-                    }
-                    SuperCall::Unwritten(e, written) => {
-                        let (outer, declared) = g.unwritten_ctor_layout(e, via).expect("its class file's layout, by the route");
-                        g.lower_unwritten_ctor_arguments(via, written, outer, declared)
-                    }
-                    _ => unreachable!("a lowered route"),
-                };
-                g.m.before_super = false;
-                args.extend(nodes);
-                params.extend(types);
-                let ctor = method_ref(Invoke::Special, &super_name, false, "<init>", &params, &ErasedType::V);
-                g.lir.init(&ctor, &args)
-            });
-            return true;
-        }
-        // The routes not lowered yet, written in place (`Gen::constructor`).
+        // The refused route, and every parameter's default (not lowered yet), written in place
+        // (`Gen::constructor`).
         assert!(matches!(parts, Parts::Written), "a route not lowered in a tree");
         if let SuperCall::Refused = k.route {
             self.unsupported("an enum case without the arguments of its enum");
             self.abandon_method();
             return false;
         }
+        let leading = k.leading_params();
+        let mut params: Vec<ErasedType> = leading.iter().map(|&i| self.m.params[i].1.clone()).collect();
         let this = ErasedType::L(self.this_name.clone());
         self.load(0, &this);
         for &i in &leading {
             self.part(parts, |g| g.param(i));
         }
+        let SuperCall::Defaults(e, types) = &k.route else { unreachable!("a route taken above") };
         self.m.before_super = true;
-        let types = match &k.route {
-            SuperCall::Unwritten(e, args) => self.unwritten_ctor_arguments(*e, k.tc.parent_via, *args).expect("its class file's layout, by the route"),
-            SuperCall::Via(e, via, args) => self.via_arguments(*e, *via, *args),
-            SuperCall::Captured(e, args) => self.new_arguments(*e, *args),
-            SuperCall::Defaults(e, types) => {
-                self.all_ctor_defaults(*e, types);
-                types.clone()
-            }
-            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Refused => unreachable!("a route taken above"),
-        };
+        self.all_ctor_defaults(*e, types);
         self.m.before_super = false;
-        params.extend(types);
+        params.extend(types.iter().cloned());
         self.invoke(Invoke::Special, k.super_name, false, "<init>", &params, &ErasedType::V);
         true
+    }
+
+    /// The superclass's constructor run on the instance, by a route that has nodes (`Gen::super_call_lowers`):
+    /// the name and ordinal of a value of a Java enum, then an anonymous class's own parameters, the written
+    /// arguments at the declared parameters' types, or the arguments as a creation of the superclass passes
+    /// them through its selected constructor, what it captures first, or as its class file takes them
+    /// (`Gen::lower_via_arguments`, `Gen::lower_new_arguments`, `Gen::lower_unwritten_ctor_arguments`).
+    fn lower_superclass_ctor(&mut self, k: &PrimaryCtor) -> LirId {
+        let leading = k.leading_params();
+        let mut params: Vec<ErasedType> = leading.iter().map(|&i| self.m.params[i].1.clone()).collect();
+        let mut args: Vec<LirId> = leading.iter().map(|&i| self.param(i)).collect();
+        self.m.before_super = true;
+        let (nodes, types) = match &k.route {
+            SuperCall::Own(types) => ((0..types.len()).map(|i| self.param(k.first_super_arg + i)).collect(), types.clone()),
+            SuperCall::Declared(types, written) => {
+                let (list, _) = self.lower_arguments(None, *written, types);
+                (self.lir.lists[list.start as usize..(list.start + list.len) as usize].to_vec(), types.clone())
+            }
+            &SuperCall::Via(e, s, written) => {
+                let route = self.via_arguments_route(e, s, written);
+                self.lower_via_arguments(e, s, written, route)
+            }
+            &SuperCall::Captured(e, written) => {
+                let route = self.ctor_arguments_route(e, written);
+                self.lower_new_arguments(e, written, route)
+            }
+            &SuperCall::Unwritten(e, written) => {
+                let via = k.tc.parent_via;
+                let (outer, declared) = self.unwritten_ctor_layout(e, via).expect("its class file's layout, by the route");
+                self.lower_unwritten_ctor_arguments(via, written, outer, declared)
+            }
+            SuperCall::Defaults(..) | SuperCall::Refused => unreachable!("not lowered (`Gen::super_call_lowers`)"),
+        };
+        self.m.before_super = false;
+        args.extend(nodes);
+        params.extend(types);
+        let ctor = method_ref(Invoke::Special, &Rc::from(k.super_name), false, "<init>", &params, &ErasedType::V);
+        self.lir.init(&ctor, &args)
     }
 
     /// `def this(params) = { this(args); stmts }`: an `<init>` overload, as scalac's, that calls
@@ -2383,6 +2370,7 @@ impl<'a> Gen<'a> {
         let Some(body) = fun.body else { return };
         let TExpr::Block(stmts, after) = prog.expr(body) else { return };
         let Some((&TStmt::Expr(call), prelude)) = prog.stmts[stmts.range()].split_last() else { return };
+        let Some(route) = self.self_call_route(call) else { return };
         // What a local class captures leads every constructor's parameters (dotty's `LambdaLift.addFreeParams`),
         // as the primary's and the default getters' take it: a `var` as its cell, a lazy val as its holder, a
         // local def's own captures in its place. A parameter that is not the capture itself (the enclosing
@@ -2421,12 +2409,7 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        let route = self.self_call_route(call);
-        let lowers = match route {
-            SelfCall::Declared(..) => self.prelude_lowers(prelude),
-            SelfCall::Primary(..) | SelfCall::Via(..) | SelfCall::Unowned => Err(Unlowered::SecondaryCtorSelfCall),
-        };
-        match lowers {
+        match self.prelude_lowers(prelude) {
             Ok(()) => self.body(|g| {
                 let mut parts = Parts::Tree(Vec::new(), Vec::new());
                 g.secondary_parts(&mut parts, prelude, route, after);
@@ -2434,9 +2417,7 @@ impl<'a> Gen<'a> {
             }),
             Err(why) => {
                 self.outside(why);
-                if !self.secondary_parts(&mut Parts::Written, prelude, route, after) {
-                    return;
-                }
+                self.secondary_parts(&mut Parts::Written, prelude, route, after);
                 self.return_value(&ErasedType::V);
             }
         }
@@ -2448,58 +2429,58 @@ impl<'a> Gen<'a> {
     }
 
     /// How a secondary constructor's call of another constructor of its class passes the
-    /// arguments (`SelfCall`).
-    fn self_call_route(&mut self, call: TExprId) -> SelfCall {
+    /// arguments (`SelfCall`); nothing for a call of no class's constructor, whose method is left
+    /// out.
+    fn self_call_route(&mut self, call: TExprId) -> Option<SelfCall> {
         let cx = self.cx;
         match cx.input.prog.expr(call) {
             // The primary constructor, its captures (the enclosing instance of a class nested
             // in a class, the secondary's own outer parameter) first.
             TExpr::New(c, args) => match self.ctor_arguments_route(c, args) {
-                CtorArguments::Declared => SelfCall::Declared(c, args),
-                _ => SelfCall::Primary(c, args),
+                CtorArguments::Declared => Some(SelfCall::Declared(c, args)),
+                _ => Some(SelfCall::Primary(c, args)),
             },
             TExpr::NewVia(s, args) => match cx.input.syms.sym(s).owner {
-                Owner::Class(c) => SelfCall::Via(c, s, args),
-                _ => SelfCall::Unowned,
+                Owner::Class(c) => Some(SelfCall::Via(c, s, args)),
+                _ => None,
             },
-            _ => SelfCall::Unowned,
+            _ => None,
         }
     }
 
     /// The parts of a secondary constructor's body in order: the statements before its call,
-    /// the call, then what follows it. False where the method is left out.
-    fn secondary_parts(&mut self, parts: &mut Parts, prelude: &[TStmt], route: SelfCall, after: TExprId) -> bool {
-        let owner = self.this_name.clone();
+    /// the call, then what follows it.
+    fn secondary_parts(&mut self, parts: &mut Parts, prelude: &[TStmt], route: SelfCall, after: TExprId) {
         self.prelude(parts, prelude);
-        if let SelfCall::Declared(c, args) = route {
-            self.part(parts, |g| {
-                let types = g.ctor_param_types(c);
-                let ctor = method_ref(Invoke::Special, &owner, false, "<init>", &types, &ErasedType::V);
-                g.m.before_super = true;
-                let (list, _) = g.lower_arguments(None, args, &types);
-                g.m.before_super = false;
-                let args = g.lir.lists[list.start as usize..(list.start + list.len) as usize].to_vec();
-                g.lir.init(&ctor, &args)
-            });
-        } else {
-            // The routes not lowered yet, written in place (`Gen::secondary_ctor`).
-            assert!(matches!(parts, Parts::Written), "a route not lowered in a tree");
-            self.load(0, &ErasedType::L(owner.clone()));
-            self.m.before_super = true;
-            let types = match route {
-                SelfCall::Primary(c, args) => self.new_arguments(c, args),
-                SelfCall::Via(c, s, args) => self.via_arguments(c, s, args),
-                SelfCall::Unowned => {
-                    self.abandon_method();
-                    return false;
-                }
-                SelfCall::Declared(..) => unreachable!("a route taken above"),
-            };
-            self.m.before_super = false;
-            self.invoke(Invoke::Special, &owner, false, "<init>", &types, &ErasedType::V);
-        }
+        self.part(parts, |g| g.lower_self_call(route));
         self.part(parts, |g| g.lower_expr(after, &ErasedType::V));
-        true
+    }
+
+    /// A secondary constructor's call of another constructor of its class on the instance: the
+    /// written arguments at the primary's declared parameters' types, or the arguments as a
+    /// creation passes them, what the class captures first (`Gen::lower_new_arguments`), through a
+    /// secondary (`Gen::lower_via_arguments`).
+    fn lower_self_call(&mut self, route: SelfCall) -> LirId {
+        let owner = self.this_name.clone();
+        self.m.before_super = true;
+        let (args, types) = match route {
+            SelfCall::Declared(c, args) => {
+                let types = self.ctor_param_types(c);
+                let (list, _) = self.lower_arguments(None, args, &types);
+                (self.lir.lists[list.start as usize..(list.start + list.len) as usize].to_vec(), types)
+            }
+            SelfCall::Primary(c, args) => {
+                let route = self.ctor_arguments_route(c, args);
+                self.lower_new_arguments(c, args, route)
+            }
+            SelfCall::Via(c, s, args) => {
+                let route = self.via_arguments_route(c, s, args);
+                self.lower_via_arguments(c, s, args, route)
+            }
+        };
+        self.m.before_super = false;
+        let ctor = method_ref(Invoke::Special, &owner, false, "<init>", &types, &ErasedType::V);
+        self.lir.init(&ctor, &args)
     }
 
     /// The defaults of a constructor of a class whose companion is not static (an inner or a

@@ -159,6 +159,10 @@ final class NeverMade
 final class VR(val n: Int) extends AnyVal { def +:(x: Int): Int = n + x }
 inline val topk = classOf[Peer]
 extension (x: Int) def +:(s: String): String = s + x
+// An inline parameter's default, expanded into a later default's arguments where it stands: the later getter's
+// operand is no path (`Worker::own_getter_expansion`), on a file's member and on an object's.
+inline def idp(inline a: Int = Takes.id[Int](1))(b: Int = a + 1): Int = a + b
+object Idp { inline def m(inline a: Int = Takes.id[Int](2))(b: Int = a + 2): Int = a + b }
 // Two interfaces the superclass brings, which a class lists for its super calls in the order of the calls' ends:
 // a self tail call evaluates the arguments before the receiver, so the later call is written first.
 abstract class TailStart extends java.util.Iterator[String] with java.util.function.Predicate[Int] {
@@ -537,6 +541,21 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("ctor-super-secondary", "class Sb2(val x: Int) { def this(s: String) = this(s.length) }; class Sc2 extends Sb2(ps)", "new Sc2().x", "Int", "method"),
     Shape("ctor-super-captured", "class Lb(val a: Int) { def g: Int = a + pi }; class Lc extends Lb(2)", "new Lc().g", "Int", "method"),
     Shape("ctor-super-unwritten-inner", "val srcx = scala.io.Source.fromString(ps); class Lix extends srcx.LineIterator", "new Lix().hasNext", "Boolean", "method"),
+    // The same calls in a constructor written in place, where a local trait's initialiser takes a value of the block.
+    Shape("ctor-super-secondary-in-place", "trait Cw { val d: Int = pi + 2 }; class Sb3(val x: Int) { def this(s: String) = this(s.length) }; class Sc3 extends Sb3(ps) with Cw", "new Sc3().x + new Sc3().d", "Int", "method"),
+    Shape("ctor-super-captured-in-place", "trait Cv { val d: Int = pi + 3 }; class Lb4(val a: Int) { def g: Int = a + pi }; class Lc4 extends Lb4(2) with Cv", "new Lc4().g + new Lc4().d", "Int", "method"),
+    Shape("ctor-super-unwritten-in-place", "object Ev extends Enumeration { def mk(n: Int): Int = { trait Cu { val d: Int = n + 1 }; class Lv extends Val(\"v\") with Cu; new Lv().d } }", "Ev.mk(pi)", "Int", "method"),
+    // A secondary constructor's call of the primary and through another secondary: of a class nested in a class (the
+    // enclosing instance first), and of a local class that reads a lazy local whose initialiser reads the host's
+    // instance, which the class takes beside its captures.
+    Shape("ctor-self-outer", "class Ou6(val o: Int) { class In6(val x: Int) { def this(s: String) = this(s.length + o); def this() = this(\"abc\") } }", "{ val ou = new Ou6(pi); new ou.In6().x }", "Int", "method"),
+    Shape("ctor-self-extras", "lazy val lz: Int = pi + toString.length; class Lh5(val a: Int) { def this() = this(1); def this(s: String) = this(s.length); def this(b: Boolean) = this(if b then \"yes\" else \"no\"); def g: Int = lz + a }", "new Lh5().g + new Lh5(true).g", "Int", "method"),
+    // A secondary constructor's call whose named arguments' statements hold a form the lowering leaves to the old
+    // generator (a local def's default argument) beside a lambda: the call's captures lowered before they are written.
+    Shape("ctor-self-after-escape", "var cnt = pi; class Lc7(val a: Int, val b: Int) { def this(s: String) = this(b = { def lf(y: Int = 3): Int = y + s.length; lf() + List(pi).map(x => x + cnt).head }, a = pi); def g: Int = a + b + cnt }", "new Lc7(ps).g", "Int", "method"),
+    // The superclass's call and a secondary constructor's call in a given object's class, an object's class, and a
+    // class over a Java class's secondary constructor.
+    Shape("ctor-owners", "class Bs8(val b: Int) { def this(s: String) = this(s.length) }; given Gv8: AnyRef with { class InG(x: Int) extends Bs8(x) { def this(s: String) = this(s.length + 1) }; class InG2 extends Bs8(\"given\") }; object Tc8 { class InT(x: Int) extends Bs8(x) { def this() = this(pi) }; class InT2 extends Bs8(\"obj\") }; class Jx8(v: Int) extends java.util.concurrent.atomic.AtomicLong(v.toLong) { def this(s: String) = this(s.length) }", "new Gv8.InG(ps).b + new Gv8.InG2().b + new Tc8.InT().b + new Tc8.InT2().b + new Jx8(ps).get.toInt", "Int", "method"),
     Shape("default-jar", "", "new scala.collection.mutable.ArrayDeque[Int]()", "Any", ""),
     Shape("default-inner-companion", "", "new ou.In()", "Any", ""),
     Shape("default-local-companion", "class Lc(val x: Int = pi)", "new Lc()", "Any", ""),
@@ -544,6 +563,13 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     // getter on a local companion held as a lazy val, in order, is the corpus's local_ctor_captures_default_argument:
     // here, a secondary constructor's default of a class that captures is refused in some positions by every binary
     // ("the local Lq is not in scope of the generated method", 23 Nov), a row of its own.
+    // An inline parameter's default expanded into a later default's arguments, held in temporaries: with no local
+    // after it, a later local, a later local in a nested block.
+    Shape("default-inline-held-file", "", "idp()()", "Int", ""), Shape("default-inline-held-module", "", "Idp.m()()", "Int", ""),
+    Shape("default-inline-held-file-later-local", "", "{ val r1 = idp()(); val later = pi + 1; r1 + later }", "Int", ""),
+    Shape("default-inline-held-module-later-local", "", "{ val r3 = Idp.m()(); val later3 = pi + 3; r3 + later3 }", "Int", ""),
+    Shape("default-inline-held-file-nested-local", "", "{ val r2 = idp()(); { val inner = pi + 2; r2 + inner } }", "Int", ""),
+    Shape("default-inline-held-module-nested-local", "", "{ val r4 = Idp.m()(); { val inner4 = pi + 4; r4 + inner4 } }", "Int", ""),
     Shape("default-local-companion-after-escape", "def eq2(n: Int): String = { val q: Int = (if (n > 100) return \"\" else n); class Lr(val tag: String = \"r\"); new Lr().tag + q }", "eq2(pi)", "String", ""),
     // The companion's getter of a jar class where the companion's class file is read, its static forwarder where not.
     Shape("default-jar-companion", "val st0 = scala.collection.mutable.Stack[Int]()", "new scala.collection.mutable.Stack[String]", "Any", ""),

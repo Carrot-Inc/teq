@@ -3,7 +3,7 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Refusal, Relation, Unlowered};
+use crate::lir::{Arith, Capture, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Refusal, Relation, TempId, Unlowered};
 use super::gen::{rank_type, CallRoute, CaptureArgument, ConcatRoute, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::names::*;
 use crate::ast::ListRef;
@@ -1397,7 +1397,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The arguments of the primary constructor of `c` as a creation passes them, in order, and
-    /// the constructor's parameter types: what the class captures first (`Gen::new_arguments`).
+    /// the constructor's parameter types: what the class captures first.
     pub(super) fn lower_new_arguments(&mut self, c: ClassId, args: ListRef, route: CtorArguments) -> (Vec<LirId>, Vec<ErasedType>) {
         match route {
             CtorArguments::Captured => {
@@ -1467,7 +1467,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The arguments of the secondary constructor `s` of `c` as a creation passes them, in
-    /// order, and the constructor's parameter types (`Gen::via_arguments`).
+    /// order, and the constructor's parameter types.
     pub(super) fn lower_via_arguments(&mut self, c: ClassId, s: SymId, args: ListRef, route: ViaArguments) -> (Vec<LirId>, Vec<ErasedType>) {
         match route {
             ViaArguments::Unwritten(outer, declared) => self.lower_unwritten_ctor_arguments(Some(s), args, outer, declared),
@@ -1505,7 +1505,7 @@ impl<'a> Gen<'a> {
         let rest = ListRef { start: args.start + 1, len: args.len - 1 };
         let Some(outer) = outer else { return (self.lower_declared_arguments(rest, &declared), declared) };
         // As the whole build passes it, so that the two builds' class files agree: through a
-        // secondary constructor at the enclosing class (`Gen::via_arguments`); through the
+        // secondary constructor at the enclosing class (`Gen::lower_via_arguments`); through the
         // primary as a captured outer is (`Gen::load_capture_arg`): a local at the enclosing
         // class, the capture's type, whatever subclass the instance is of, and any other value
         // at its own type, cast where the verifier does not take that type for the parameter's
@@ -1590,28 +1590,69 @@ impl<'a> Gen<'a> {
         if !self.analysis_in_order() && self.default_ctor_class(of).is_some_and(|c| self.asks_captures(c)) {
             return Err(Unlowered::AfterEscape);
         }
-        Ok(match self.default_route(of, at, args) {
+        let (held, route) = match self.default_route(of, at, args) {
             DefaultRoute::Unlowered(why) => return Err(why),
-            // A local companion held as a lazy val is read by its accessor, which the analysis of captures shapes.
-            DefaultRoute::Ctor(_, None, CtorDefault::LocalCompanion(v, _), ..) if self.is_lazy_local(v) && !self.analysis_in_order() => return Err(Unlowered::AfterEscape),
-            DefaultRoute::Ctor(c, recv, route, args, want) => self.lower_ctor_default(c, route, recv, &args, &want),
+            DefaultRoute::Held(held, route) => (Some(held), *route),
+            route => (None, route),
+        };
+        // A local companion held as a lazy val is read by its accessor, which the analysis of captures shapes.
+        if let DefaultRoute::Ctor(_, None, CtorDefault::LocalCompanion(v, _), ..) = route {
+            if self.is_lazy_local(v) && !self.analysis_in_order() {
+                return Err(Unlowered::AfterEscape);
+            }
+        }
+        let Some(held) = held else { return Ok(self.lower_default_route(route, &[], None)) };
+        // The receiver first, then the arguments before the default, each in a temporary.
+        let mut stmts = Vec::new();
+        let receiver = match &route {
+            DefaultRoute::Method { receiver, receiver_type, .. } => {
+                let init = self.lower_expr(*receiver, receiver_type);
+                let temp = self.lir.temp();
+                stmts.push(self.lir.keep(temp, init));
+                Some((temp, receiver_type.clone()))
+            }
+            _ => None,
+        };
+        let mut temps = Vec::with_capacity(held.len());
+        for (e, ty) in held {
+            let init = self.lower_expr(e, &ty);
+            let temp = self.lir.temp();
+            stmts.push(self.lir.keep(temp, init));
+            temps.push((e, temp, ty));
+        }
+        let call = self.lower_default_route(route, &temps, receiver);
+        Ok(self.lir.seq(&stmts, call))
+    }
+
+    /// A default's getter called by its route, the arguments `held` in temporaries read where the
+    /// getter takes them, the receiver too where it is `receiver`'s.
+    fn lower_default_route(&mut self, route: DefaultRoute, held: &[(TExprId, TempId, ErasedType)], receiver: Option<(TempId, ErasedType)>) -> LirId {
+        match route {
+            DefaultRoute::Ctor(c, recv, route, args, want) => {
+                let args = self.lower_getter_arguments(&args, held);
+                self.lower_ctor_default(c, route, recv, &args, &want)
+            }
             DefaultRoute::FileMember(file, getter, args, want) => {
                 let receiver = self.lower_file_module(file);
-                let args = self.lower_getter_arguments(&args);
+                let args = self.lower_getter_arguments(&args, held);
                 self.lower_getter_call_at(receiver, None, getter, &args, &want)
             }
-            DefaultRoute::Method { receiver, receiver_type, getter, at, args, want } => {
-                let receiver = self.lower_expr(receiver, &receiver_type);
-                let args = self.lower_getter_arguments(&args);
+            DefaultRoute::Method { receiver: r, receiver_type, getter, at, args, want } => {
+                let receiver = match receiver {
+                    Some((temp, ty)) => self.lir.kept(temp, ty),
+                    None => self.lower_expr(r, &receiver_type),
+                };
+                let args = self.lower_getter_arguments(&args, held);
                 self.lower_getter_call_at(receiver, at, getter, &args, &want)
             }
-        })
+            DefaultRoute::Held(..) | DefaultRoute::Unlowered(_) => unreachable!("a route of a call, by `lower_default`"),
+        }
     }
 
     /// The default of a parameter of a constructor of `c`, of the type `want`, over the arguments
     /// before it (`Gen::ctor_default_route`); `recv` is the receiver the typer selected the getter
     /// on.
-    pub(super) fn lower_ctor_default(&mut self, c: ClassId, route: CtorDefault, recv: Option<TExprId>, args: &[GetterArgument], want: &ErasedType) -> LirId {
+    pub(super) fn lower_ctor_default(&mut self, c: ClassId, route: CtorDefault, recv: Option<TExprId>, args: &[LirId], want: &ErasedType) -> LirId {
         match route {
             CtorDefault::InPlace(Some(d)) => {
                 let value = self.lower_expr(d, want);
@@ -1634,8 +1675,7 @@ impl<'a> Gen<'a> {
                         self.lower_adapt(local, &t, &module)
                     }
                 };
-                let args = self.lower_getter_arguments(args);
-                self.lower_getter_call_at(receiver, None, getter, &args, want)
+                self.lower_getter_call_at(receiver, None, getter, args, want)
             }
             CtorDefault::InnerCompanion(accessor, getter) => {
                 let outer = ErasedType::L(accessor.owner.clone());
@@ -1651,8 +1691,7 @@ impl<'a> Gen<'a> {
                 let module = accessor.ret.clone();
                 let none = self.lir.list(&[]);
                 let companion = self.lir.push(Kind::Call { method: Rc::new(accessor), at: None, receiver: instance, args: none, order: None }, module);
-                let args = self.lower_getter_arguments(args);
-                self.lower_getter_call_at(companion, None, getter, &args, want)
+                self.lower_getter_call_at(companion, None, getter, args, want)
             }
             CtorDefault::Captured(captures, getter) => {
                 let mut nodes = Vec::new();
@@ -1666,24 +1705,21 @@ impl<'a> Gen<'a> {
                 }
                 let extras = self.class_extras(c);
                 nodes.extend(self.lower_extras(&extras));
-                nodes.extend(self.lower_getter_arguments(args));
+                nodes.extend_from_slice(args);
                 self.lower_static_getter_call(&nodes, getter, want)
             }
             CtorDefault::Companion(getter) => {
                 let module = getter.owner.clone();
                 let receiver = self.lir.push(Kind::Module(module.clone()), ErasedType::L(module));
-                let args = self.lower_getter_arguments(args);
-                self.lower_getter_call_at(receiver, None, getter, &args, want)
+                self.lower_getter_call_at(receiver, None, getter, args, want)
             }
             CtorDefault::Jar(getter) if getter.kind == Invoke::Virtual => {
                 let module = getter.owner.clone();
                 let receiver = self.lir.push(Kind::Module(module.clone()), ErasedType::L(module));
-                let args = self.lower_getter_arguments(args);
-                self.lower_getter_call_at(receiver, None, getter, &args, want)
+                self.lower_getter_call_at(receiver, None, getter, args, want)
             }
             CtorDefault::Jar(getter) | CtorDefault::Static(getter) => {
-                let args = self.lower_getter_arguments(args);
-                self.lower_static_getter_call(&args, getter, want)
+                self.lower_static_getter_call(args, getter, want)
             }
         }
     }
@@ -1697,10 +1733,14 @@ impl<'a> Gen<'a> {
     }
 
     /// A getter's arguments in the order it takes them, each at its type, then as its parameter's.
-    fn lower_getter_arguments(&mut self, args: &[GetterArgument]) -> Vec<LirId> {
+    /// A getter's arguments read from `held` where it holds them.
+    fn lower_getter_arguments(&mut self, args: &[GetterArgument], held: &[(TExprId, TempId, ErasedType)]) -> Vec<LirId> {
         args.iter()
             .map(|a| {
-                let value = self.lower_expr(a.expr, &a.ty);
+                let value = match held.iter().find(|h| h.0 == a.expr) {
+                    Some((_, temp, ty)) => self.lir.kept(*temp, ty.clone()),
+                    None => self.lower_expr(a.expr, &a.ty),
+                };
                 self.lower_adapt(value, &a.ty, &a.param)
             })
             .collect()

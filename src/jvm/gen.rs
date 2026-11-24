@@ -115,7 +115,7 @@ pub enum StaticCallRoute {
 }
 
 /// How the arguments of a constructor are passed: one decision (`Gen::ctor_arguments_route`),
-/// read by `Gen::new_arguments` and through `Gen::new_route` by the lowering.
+/// read through `Gen::new_route` and directly by the lowering.
 pub enum CtorArguments {
     /// What the class captures first, an anonymous class's superclass's after.
     Captured,
@@ -153,7 +153,7 @@ pub enum ConcatRoute {
 }
 
 /// How the arguments of a secondary constructor are passed: one decision
-/// (`Gen::via_arguments_route`), read by `Gen::via_arguments` and by the lowering.
+/// (`Gen::via_arguments_route`), read by the lowering.
 pub enum ViaArguments {
     /// As `CtorArguments::Unwritten`.
     Unwritten(Option<ErasedType>, Vec<ErasedType>),
@@ -179,8 +179,7 @@ pub enum ViaRoute {
 }
 
 /// How the creation of an anonymous class passes its superclass's arguments, after what the
-/// class captures: one decision (`Gen::anon_super_route`), read by `Gen::new_arguments` and by
-/// the lowering.
+/// class captures: one decision (`Gen::anon_super_route`), read by the lowering.
 pub(super) enum SuperArguments {
     /// As a creation of the superclass, a class that captures, passes its primary constructor's.
     Captured,
@@ -264,12 +263,17 @@ pub(super) enum DefaultRoute {
     /// class the call names where that is the receiver's (`Gen::qualifier_site`), with whether it
     /// is an interface, and the type the default is left as.
     Method { receiver: TExprId, receiver_type: ErasedType, getter: MethodRef, at: Option<(Rc<str>, bool)>, args: Vec<GetterArgument>, want: ErasedType },
-    /// Not lowered yet, and why: the getter called on its receiver with the arguments before the
-    /// default (`Gen::default_priors`, `Gen::method_default`) where that receiver is a value
-    /// class's or an operand is no path (each argument held in a local, `Gen::default_priors_held`);
-    /// a local def's getter is lifted (`Gen::local_default`); a by-name parameter's getter is passed
-    /// as a function made where it is called (`Gen::jar_default_thunk`); a getter takes what the
-    /// method being written alone holds (`Gen::ctor_default_lowers`).
+    /// The route where an operand of the getter is no path (`Gen::default_operands_are_paths`): a
+    /// method's receiver, then the arguments before the default, each at its type, are evaluated in
+    /// order into temporaries before the getter is called over them, so that one evaluated for its
+    /// effect is evaluated once and in its place (a constructor's receiver is evaluated where the
+    /// route has it, after the arguments).
+    Held(Vec<(TExprId, ErasedType)>, Box<DefaultRoute>),
+    /// Not lowered yet, and why: the getter called on a value class's receiver
+    /// (`Gen::method_default`); a local def's getter is lifted (`Gen::local_default`); a by-name
+    /// parameter's getter is passed as a function made where it is called
+    /// (`Gen::jar_default_thunk`); a getter takes what the method being written alone holds
+    /// (`Gen::ctor_default_lowers`).
     Unlowered(Unlowered),
 }
 
@@ -442,6 +446,21 @@ pub struct GetterShape {
 pub enum Prior {
     Held(u16, ErasedType),
     Written(TExprId, ErasedType),
+}
+
+impl DefaultRoute {
+    /// The route, or the route over the arguments `priors` held in temporaries where its operands
+    /// are not all paths.
+    fn held_unless_paths(self, paths: bool, priors: &[Prior]) -> DefaultRoute {
+        if paths {
+            return self;
+        }
+        let held = priors.iter().map(|p| match p {
+            Prior::Written(e, t) => (*e, t.clone()),
+            Prior::Held(..) => unreachable!("a route's priors are written"),
+        });
+        DefaultRoute::Held(held.collect(), Box::new(self))
+    }
 }
 
 impl Prior {
@@ -5147,11 +5166,6 @@ impl<'a> Gen<'a> {
         if let DefaultOf::Method(s) = of {
             if cx.input.syms.sym(s).name != crate::names::INIT {
                 let priors = items[recv.is_some() as usize..].to_vec();
-                // A getter with an operand that is no path is written as before, each argument held in a
-                // local (`Gen::default_priors_held`).
-                if !self.default_operands_are_paths(recv, &priors) {
-                    return DefaultRoute::Unlowered(Unlowered::DefaultAfterArguments);
-                }
                 return self.method_default_route(s, index, recv, &priors);
             }
         }
@@ -5164,12 +5178,7 @@ impl<'a> Gen<'a> {
             }
             DefaultOf::Method(_) => unreachable!("a method's default: `method_default_route` above"),
         };
-        // A constructor's default whose arguments before it are not all paths is written as before, each
-        // held in a local (`Gen::default_priors_held`).
-        if !self.default_operands_are_paths(None, &items[recv.is_some() as usize..]) {
-            return DefaultRoute::Unlowered(Unlowered::DefaultAfterArguments);
-        }
-        let priors = self.default_priors(&items[recv.is_some() as usize..], &types);
+        let priors = self.written_priors(&items[recv.is_some() as usize..], &types);
         let route = self.ctor_default_route(c, via, recv.is_some(), index, priors.len(), &types);
         if let Err(why) = self.ctor_default_lowers(c, &route, recv) {
             return DefaultRoute::Unlowered(why);
@@ -5195,7 +5204,7 @@ impl<'a> Gen<'a> {
                 GetterArgument { expr, ty: ty.clone(), param: ty }
             }).collect(),
         };
-        DefaultRoute::Ctor(c, recv, route, args, types[index].clone())
+        DefaultRoute::Ctor(c, recv, route, args, types[index].clone()).held_unless_paths(self.default_operands_are_paths(None, &items[recv.is_some() as usize..]), &priors)
     }
 
     /// The class whose constructor the default `of` is of; None for a method's default and for a
@@ -5228,7 +5237,9 @@ impl<'a> Gen<'a> {
         };
         let shape = self.default_getter_shape(s, i);
         let want = self.default_getter_want(s, i, &shape);
-        let priors = self.default_priors(priors, &types);
+        let paths = self.default_operands_are_paths(recv, priors);
+        let written = self.written_priors(priors, &types);
+        let priors = written.clone();
         let taken = self.getter_args(s, shape.before, &priors);
         let before: Vec<ErasedType> = taken.iter().map(|p| p.ty().clone()).collect();
         let (name, desc) = self.default_getter_ref(s, i, &before);
@@ -5248,7 +5259,7 @@ impl<'a> Gen<'a> {
             .collect();
         let Some(r) = recv else {
             let getter = MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name, params, ret, desc, kind: m.kind };
-            return DefaultRoute::FileMember(info.file, getter, args, want);
+            return DefaultRoute::FileMember(info.file, getter, args, want).held_unless_paths(paths, &written);
         };
         match cx.input.prog.expr(r) {
             // A getter selected on `super` inside a trait: the accessor the classes mixing the trait
@@ -5268,7 +5279,7 @@ impl<'a> Gen<'a> {
                     })
                     .collect();
                 let receiver_type = self.receiver_type(s, &None);
-                return DefaultRoute::Method { receiver: r, receiver_type, getter, at: None, args, want };
+                return DefaultRoute::Method { receiver: r, receiver_type, getter, at: None, args, want }.held_unless_paths(paths, &written);
             }
             // A getter selected on `super` is the superclass's or the class's, as
             // `Applications.findDefaultGetter` selects it on the receiver: `invokespecial`.
@@ -5282,7 +5293,7 @@ impl<'a> Gen<'a> {
                     Some(c) => MethodRef { owner: self.class_name(c), owner_is_interface: cx.input.syms.class(c).kind == ClassKind::Trait, name, params, ret, desc, kind: Invoke::Special },
                     None => MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name, params, ret, desc, kind: m.kind },
                 };
-                return DefaultRoute::Method { receiver: r, receiver_type, getter, at: None, args, want };
+                return DefaultRoute::Method { receiver: r, receiver_type, getter, at: None, args, want }.held_unless_paths(paths, &written);
             }
             _ => {}
         }
@@ -5293,7 +5304,7 @@ impl<'a> Gen<'a> {
             None => (self.receiver_type(s, &None), None),
         };
         let getter = MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name, params, ret, desc, kind: m.kind };
-        DefaultRoute::Method { receiver: r, receiver_type, getter, at, args, want }
+        DefaultRoute::Method { receiver: r, receiver_type, getter, at, args, want }.held_unless_paths(paths, &written)
     }
 
     /// How many of `s`'s parameters, flattened, come before the clause of parameter `i`: those
@@ -5332,6 +5343,11 @@ impl<'a> Gen<'a> {
         if !self.default_operands_are_paths(None, priors) {
             return self.default_priors_held(priors, types);
         }
+        self.written_priors(priors, types)
+    }
+
+    /// The arguments of a getter's application as they are written, each at its parameter's type.
+    fn written_priors(&self, priors: &[TExprId], types: &[ErasedType]) -> Vec<Prior> {
         priors.iter().enumerate().map(|(k, &a)| Prior::Written(a, types.get(k).cloned().unwrap_or_else(ErasedType::object))).collect()
     }
 
@@ -6041,7 +6057,7 @@ impl<'a> Gen<'a> {
             return ViaArguments::Unwritten(outer, declared);
         }
         // What a local class captures leads every constructor's parameters (dotty's `LambdaLift.addFreeParams`),
-        // passed as a creation through the primary passes them (`new_arguments`).
+        // passed as a creation through the primary passes them (`lower_new_arguments`).
         if self.via_asks_captures(c, s) {
             return ViaArguments::Captured(self.via_own_captures(c, s).len().min(args.len as usize));
         }
@@ -6069,16 +6085,6 @@ impl<'a> Gen<'a> {
         let n = self.capture_count(c).min(tc.ctor_params.len());
         let Some(fun) = tc.ctors.iter().map(|&f| &cx.input.prog.funs[f.idx()]).find(|f| f.sym == s) else { return Vec::new() };
         tc.ctor_params[..n].iter().zip(fun.params.iter()).map(|(a, b)| a == b).collect()
-    }
-
-    /// Loads the arguments of the secondary constructor `s` of `c` and gives its parameter
-    /// types: a class nested in a class takes the enclosing instance first, as every one of its
-    /// constructors does (dotty's `ExplicitOuter`, the typer's `new_outer_arg`).
-    pub fn via_arguments(&mut self, c: ClassId, s: SymId, args: ListRef) -> Vec<ErasedType> {
-        let route = self.via_arguments_route(c, s, args);
-        let (nodes, types) = self.lowering(|g| g.lower_via_arguments(c, s, args, route));
-        self.write_each(&nodes);
-        types
     }
 
     /// The type of the enclosing instance a secondary constructor of `c` takes first: a class
@@ -6193,19 +6199,19 @@ impl<'a> Gen<'a> {
         let sup = cx.input.syms.class(c).superclass?;
         let via = tc.parent_via;
         // A superclass this build does not write: the selected constructor as its class file
-        // declares it, the enclosing instance first where it takes one (`unwritten_ctor_arguments`).
+        // declares it, the enclosing instance first where it takes one (`lower_unwritten_ctor_arguments`).
         if let Some((outer, declared)) = self.unwritten_ctor_layout(sup, via).filter(|(_, declared)| n_args == declared.len() + 1) {
             return Some((sup, via, outer.into_iter().chain(declared).collect()));
         }
         let types = match via {
-            // A local superclass's second constructor takes its class's captures first (`via_arguments`).
+            // A local superclass's second constructor takes its class's captures first (`lower_via_arguments`).
             Some(v) if self.via_own_captures(sup, v).contains(&true) => {
                 let mut types = self.anon_ctor_params(sup);
                 types.extend(self.param_types(v));
                 types
             }
             // A secondary constructor of a class nested in a class takes the enclosing instance
-            // first, as every one of its constructors does (`via_arguments`).
+            // first, as every one of its constructors does (`lower_via_arguments`).
             Some(v) => {
                 let params = self.param_types(v);
                 self.via_outer(sup, n_args, params.len()).into_iter().chain(params).collect()
@@ -6218,15 +6224,6 @@ impl<'a> Gen<'a> {
             None => self.ctor_param_types(sup),
         };
         Some((sup, via, types))
-    }
-
-    /// The arguments of a constructor of `c` with what it captures in front: the parameter
-    /// types they were loaded as.
-    pub fn new_arguments(&mut self, c: ClassId, args: ListRef) -> Vec<ErasedType> {
-        let route = self.ctor_arguments_route(c, args);
-        let (nodes, params) = self.lowering(|g| g.lower_new_arguments(c, args, route));
-        self.write_each(&nodes);
-        params
     }
 
     /// The type of the enclosing instance a `new` of `c` passes first where this build does not
@@ -6288,22 +6285,6 @@ impl<'a> Gen<'a> {
             found = Some(layout);
         }
         found
-    }
-
-    /// The arguments `args` of that constructor where the typer passed the enclosing instance
-    /// first, one argument more than the constructor declares (`pass_outer`), loaded as the
-    /// class file's constructor takes them, and the types they were loaded as: the instance at
-    /// its parameter's type where the constructor takes one, neither loaded nor evaluated where
-    /// it takes none. Nothing where the layout says nothing (`unwritten_ctor_layout`) or no
-    /// instance was passed: the call is then emitted from the declared parameters.
-    pub(crate) fn unwritten_ctor_arguments(&mut self, c: ClassId, via: Option<SymId>, args: ListRef) -> Option<Vec<ErasedType>> {
-        let (outer, declared) = self.unwritten_ctor_layout(c, via)?;
-        if args.len as usize != declared.len() + 1 {
-            return None;
-        }
-        let (nodes, types) = self.lowering(|g| g.lower_unwritten_ctor_arguments(via, args, outer, declared));
-        self.write_each(&nodes);
-        Some(types)
     }
 
     /// Loads the argument `a` that hands a lifted class or a local trait's lifted member the

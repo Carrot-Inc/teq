@@ -289,8 +289,6 @@ pub enum Unlowered {
     LocalTraitMemberUnplain,
     /// `new C(..)` through a constructor of no class (reported).
     NewViaUnowned,
-    /// A default argument after written arguments, which its getter takes.
-    DefaultAfterArguments,
     /// A method's default whose getter is called on a receiver: `obj.f()`, `super.f()`.
     DefaultOnReceiver,
     /// A local def's default argument.
@@ -317,8 +315,6 @@ pub enum Unlowered {
     CtorTraitProxies,
     /// A trait's arguments that do not match its parameters, or a `lazy val` before them.
     CtorTraitArguments,
-    /// `def this(..) = this(..)` other than to the primary constructor at its declared types.
-    SecondaryCtorSelfCall,
     /// An enum companion's `fromOrdinal` over its stored values.
     EnumCompanionMembers,
     /// A `lazy val` of a class or object: its thread-safe initialiser, and its getter where its
