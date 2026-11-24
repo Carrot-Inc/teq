@@ -53,6 +53,8 @@ enum Op {
     Module(Rc<str>),
     /// `ipush n`, `iconst_n`.
     Int(i32),
+    /// `aconst_null`: the null reference.
+    Null,
     /// A primitive conversion, to this type.
     Convert(ErasedType),
     /// An operation on two values of this type.
@@ -362,6 +364,13 @@ impl<'a> Gen<'a> {
                 Op::StaticField(owner, name, ty) => self.lir.push(Kind::StaticField { owner: owner.clone(), name: name.clone() }, ty.clone()),
                 Op::Module(class) => self.lir.push(Kind::Module(class.clone()), ErasedType::L(class.clone())),
                 Op::Int(v) => self.lir.push(Kind::Int(*v), ErasedType::I),
+                // The null seen at `Object`, as `Gen::assemble` types it: compared with `eq`/`ne` it is
+                // loaded beside the other side (`aconst_null; if_acmpXX`), where a `Null` node alone is
+                // tested by `ifnull`/`ifnonnull` (`Gen::write_compare`).
+                Op::Null => {
+                    let null = self.lir.push(Kind::Null, ErasedType::object());
+                    self.lir.push(Kind::Typed(null), ErasedType::object())
+                }
                 Op::Convert(to) => {
                     let value = take(&mut stack);
                     let from = self.lir.ty(value).clone();
@@ -610,8 +619,8 @@ fn int(stack: &mut Vec<Slot>) -> Option<()> {
 /// Stack code as a tree; None for code that is none (a value used twice, one dropped in the
 /// middle, an instruction that finds too little), for an instruction no node is made of yet (the
 /// builder instructions, a field of an instance or a field written, a
-/// comparison), for the constants below, and for an argument alone but at a reference type the
-/// template declares, whose node would be the argument's own.
+/// comparison), for a string constant (`ldc`, below), and for an argument alone but at a reference
+/// type the template declares, whose node would be the argument's own.
 fn read_tree(tokens: &[String]) -> Option<Tree> {
     const ARITHS: [Arith; 11] = [Arith::Add, Arith::Sub, Arith::Mul, Arith::Div, Arith::Rem, Arith::And, Arith::Or, Arith::Xor, Arith::Shl, Arith::Shr, Arith::Ushr];
     let mut ops: Vec<Op> = Vec::new();
@@ -750,9 +759,14 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                 stack.push(Slot::Value(None));
                 ops.push(Op::NewArray);
             }
-            // `Gen::assemble` models the null as an `Object` (its class constant entered there),
-            // a `Null` node as the null type.
-            "aconst_null" => return None,
+            // `Gen::assemble` models the null as an `Object`, a `Null` node as the null type: the
+            // two write the same bytes where no frame holds the value (the std's `nullRef`, read by
+            // a branch's `areturn`), and a frame that holds it says `null` where it said `Object`.
+            // Lowered as `Typed(Null)` (`lower_tree`), a comparison keeps the class file's form.
+            "aconst_null" => {
+                stack.push(Slot::Value(Some(ErasedType::object())));
+                ops.push(Op::Null);
+            }
             // A `Text` node in a concatenation is text of its recipe, where `Gen::assemble`'s
             // string is an operand of it.
             "ldc" => return None,
@@ -838,4 +852,156 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
     }
     let arguments = placeholders.iter().try_fold(0, |most: usize, &n| Some(most.max(n.checked_add(1)?)))?;
     Some(Tree { ops, arguments, makes_array })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    /// The node kinds a template's tree is made of, in its instructions' order.
+    fn tree_kinds(tree: &Tree) -> String {
+        let kinds: Vec<&str> = tree
+            .ops
+            .iter()
+            .filter_map(|op| match op {
+                Op::Operand(..) => None,
+                Op::Call(_) => Some("Call"),
+                Op::StaticCall(_) => Some("StaticCall"),
+                Op::New(_) => Some("New"),
+                Op::StaticField(..) => Some("StaticField"),
+                Op::Module(_) => Some("Module"),
+                Op::Int(_) => Some("Int"),
+                Op::Null => Some("Null"),
+                Op::Convert(_) | Op::AsRecorded => Some("Adapt"),
+                Op::Binary(..) => Some("Binary"),
+                Op::Cast(_) => Some("Cast"),
+                Op::Is(_) => Some("Is"),
+                Op::Erased => Some("Cast(erased)"),
+                Op::ArrayLoad => Some("ArrayLoad"),
+                Op::ArrayStore => Some("ArrayStore"),
+                Op::ArrayLength => Some("ArrayLength"),
+                Op::ArrayClone => Some("ArrayClone"),
+                Op::NewArray => Some("NewArray"),
+                Op::Drop => Some("Drop"),
+                Op::Dup => Some("Block(temporary)"),
+                Op::Statement => Some("Block(statement)"),
+                Op::Throw => Some("Throw"),
+            })
+            .collect();
+        kinds.join(" ")
+    }
+
+    /// Every `@jvm("...")` text of the std's sources with the place of its first use and how many
+    /// declarations carry it, the literal's escapes read as the typer reads them; and each source read
+    /// with the number of declarations it holds.
+    fn std_templates() -> (Vec<(String, String, usize)>, Vec<(String, usize)>) {
+        fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+            let mut entries: Vec<_> = std::fs::read_dir(dir).expect("the std's sources").map(|e| e.expect("an entry").path()).collect();
+            entries.sort();
+            for path in entries {
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if path.extension().is_some_and(|x| x == "scala") {
+                    out.push(path);
+                }
+            }
+        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut files = Vec::new();
+        walk(&root.join("std"), &mut files);
+        let mut found: Vec<(String, String, usize)> = Vec::new();
+        let mut read = Vec::new();
+        for file in files {
+            let source = std::fs::read_to_string(&file).expect("a std source");
+            let name = file.strip_prefix(root).expect("under the root").display().to_string();
+            read.push((name.clone(), source.matches("@jvm(\"").count()));
+            for (n, line) in source.lines().enumerate() {
+                let mut rest = line;
+                while let Some(at) = rest.find("@jvm(\"") {
+                    let mut text = String::new();
+                    let mut chars = rest[at + 6..].chars();
+                    while let Some(c) = chars.next() {
+                        match c {
+                            '"' => break,
+                            '\\' => match chars.next() {
+                                Some('n') => text.push('\n'),
+                                Some('t') => text.push('\t'),
+                                Some(other) => text.push(other),
+                                None => {}
+                            },
+                            _ => text.push(c),
+                        }
+                    }
+                    rest = chars.as_str();
+                    match found.iter_mut().find(|(t, _, _)| *t == text) {
+                        Some(row) => row.2 += 1,
+                        None => found.push((text, format!("{}:{}", name, n + 1), 1)),
+                    }
+                }
+            }
+        }
+        (found, read)
+    }
+
+    /// Every code template of the std is a node or nodes of the lowered IR: one member's call, a tree
+    /// of nodes, or a typer's text with a route; a text no node is made of stays the class file's own
+    /// (`Kind::Legacy` of `TExpr::Js`) and is listed here with the reason, so that a new one fails.
+    /// A use can still be the class file's where the template is one of these and the use gives too
+    /// few arguments, or makes an array of a type that is none (`Gen::template_route`). With
+    /// `TEQ_TEMPLATE_TABLE=<file>`, the table of every template and what it lowers to is written there.
+    #[test]
+    fn std_templates_are_nodes() {
+        // The texts no node is made of yet, each with what keeps it: `newString()`'s empty string (a
+        // `Str` node in a concatenation is text of its recipe, where the template's string is an
+        // operand of it); `className`'s two calls with no placeholder (operands are implicit in the
+        // one-member form alone); `listStorage`'s lone argument with no declared type (its node
+        // would be the argument's own); the builder instructions (`builder_append`,
+        // `builder_insert`: the overload follows the operand's type); `nonEmpty`'s `iconst_1 ixor`
+        // on a boolean (no `Binary` of a boolean); `last`'s `dup` whose copy a call reads after
+        // another call (`copies_read_first`).
+        const LEFT: [&str; 7] = [
+            "ldc \"\"",
+            "invokevirtual java/lang/Object.getClass()Ljava/lang/Class; invokevirtual java/lang/Class.getName()Ljava/lang/String;",
+            "$0",
+            "$0 $1 builder_append",
+            "$0 $1:I $2 builder_insert",
+            "$0 invokevirtual java/lang/StringBuilder.isEmpty()Z iconst_1 ixor",
+            "$0 dup invokevirtual java/lang/StringBuilder.length()I iconst_1 isub invokevirtual java/lang/StringBuilder.charAt(I)C",
+        ];
+        let (templates, read) = std_templates();
+        // The walk read the std whole: each source the compiler embeds (its layers' tables) is among the files
+        // read with the declarations it holds, and every declaration read is a use of a template.
+        for (path, text) in crate::STD_SOURCES.iter().chain(crate::JVM_STD_SOURCES).chain(crate::SCALA_LIBRARY_LAYER).chain(crate::SCALAJS_SOURCES) {
+            let name = path.replacen("<std>", "std", 1);
+            let walked = read.iter().find(|(n, _)| *n == name).map(|&(_, k)| k);
+            assert_eq!(walked, Some(text.matches("@jvm(\"").count()), "{name}: the declarations read against the embedded source's");
+        }
+        assert_eq!(templates.iter().map(|t| t.2).sum::<usize>(), read.iter().map(|r| r.1).sum::<usize>(), "every declaration read as a template's use");
+        let mut rows = Vec::new();
+        let mut without_node: Vec<&str> = Vec::new();
+        for (text, at, uses) in &templates {
+            let lowered = if text.starts_with('!') || typer_text(text) {
+                "a typer's text".to_string()
+            } else {
+                match read_template(text) {
+                    Template::Single(m) => (if m.kind == Invoke::Static { "StaticCall" } else { "Call" }).to_string(),
+                    Template::Tree(tree) => format!("tree: {}", tree_kinds(&tree)),
+                    Template::Text => {
+                        without_node.push(text);
+                        "no node: Legacy Js".to_string()
+                    }
+                }
+            };
+            rows.push(format!("{}\t{}\t{}\t{}", text.replace('\n', "\\n"), at, uses, lowered));
+        }
+        if let Some(file) = std::env::var_os("TEQ_TEMPLATE_TABLE") {
+            std::fs::write(file, rows.join("\n") + "\n").expect("the table written");
+        }
+        // Exactly the listed texts: a new one fails, and so does one listed that is a node now or gone.
+        without_node.sort_unstable();
+        let mut listed = LEFT.to_vec();
+        listed.sort_unstable();
+        assert_eq!(without_node, listed, "the std's templates no node is made of, against the list");
+    }
 }

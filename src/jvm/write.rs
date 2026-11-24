@@ -677,11 +677,6 @@ impl<'a> Gen<'a> {
 
     pub(super) fn write_cond(&mut self, id: LirId, target: Label, jump_if: bool) {
         match self.lir.node(id).kind.clone() {
-            Kind::Bool(v) => {
-                if v == jump_if {
-                    self.goto(target);
-                }
-            }
             Kind::Not(value) => self.write_cond(value, target, !jump_if),
             Kind::And(left, right) => {
                 if jump_if {
@@ -740,6 +735,9 @@ impl<'a> Gen<'a> {
             // The loop's jump (`&&`'s or `||`'s right operand under a `return`) leaves: no branch
             // follows it, and the dead code after it is verified against the operands under it.
             Kind::SelfTailCall { receiver, args } => self.write_self_tail_call(receiver, args),
+            // A boolean value, tested; a constant left as a condition too (a loop's, a guard's, a
+            // right operand, a pattern's test that always or never passes), as scalac's back end
+            // tests one (`genCond`), at the position of the read it stands for.
             _ => {
                 self.write(id);
                 self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);

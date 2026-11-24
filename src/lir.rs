@@ -279,21 +279,15 @@ pub enum Unlowered {
     NoInstance,
     /// An enum's value held by its own class, the enum initialised first.
     EnumValueOwnClass,
-    /// A top-level `inline val` of a `Boolean` or `String` constant read as a value.
-    InlineValBooleanOrString,
     /// An `inline val` with no constant type (reported).
     InlineValNoConstant,
     /// `a.O`: an object selected on a value of its owner, the value evaluated first.
     ObjectThroughOwner,
     /// A constructor's parameter read before the superclass's constructor ran.
     EarlyParameter,
-    /// A given object selected on a receiver that is evaluated for its effect.
-    GivenObjectThroughReceiver,
     /// JavaScript interop: `js.Dynamic`, a JavaScript import, a native JavaScript class or
     /// member, an object literal (reported on the JVM).
     JavaScriptOnly,
-    /// `f(x)` of a local function value held in a lazy val, a captured `var`'s cell or a field.
-    LocalFunctionValueNotPlain,
     /// `v.m(..)` of a value class's method, called as its `m$extension`.
     ValueClassMethodCall,
     /// A string interpolator of the library (`s"..."`, `f"..."`) where the build's runtime has
@@ -304,13 +298,6 @@ pub enum Unlowered {
     /// A member of a local trait that takes what the trait captures, called on `super`, or with
     /// a value for a capture that is no read of a local.
     LocalTraitMemberUnplain,
-    /// `new C(..)` of a local or anonymous class that is passed something with no node yet: an
-    /// enclosing instance of another class, a lazy val's key, a holder made for a captured
-    /// value, a captured local held nowhere.
-    NewCapturedUnlowered,
-    /// `new o.Inner(..)` of an inner class this build does not write, whose class file gives
-    /// no single answer for the enclosing instance.
-    NewUnwrittenOuter,
     /// `new C(..)` through a constructor of no class (reported).
     NewViaUnowned,
     /// A default argument after written arguments, which its getter takes.

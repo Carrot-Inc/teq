@@ -84,18 +84,19 @@ pub(super) struct Declared {
 
 /// How a primary constructor passes the arguments of its superclass's constructor, after the
 /// name and ordinal a value of a Java enum passes up: one decision (`Gen::super_call_route`).
+#[derive(Clone)]
 enum SuperCall {
     /// The parameters an anonymous class takes for them, of these types.
     Own(Vec<ErasedType>),
     /// The written arguments at the declared parameters' types (none where the superclass
     /// takes none).
     Declared(Vec<ErasedType>, crate::ast::ListRef),
-    /// As the class file of a superclass this build does not write takes them. Not lowered yet.
+    /// As the class file of a superclass this build does not write takes them.
     Unwritten(ClassId, crate::ast::ListRef),
-    /// Through a secondary constructor of the superclass. Not lowered yet.
+    /// Through a secondary constructor of the superclass (a Java superclass's selected
+    /// constructor among them).
     Via(ClassId, SymId, crate::ast::ListRef),
-    /// What the superclass, a class nested in a class or local, captures first. Not lowered
-    /// yet.
+    /// What the superclass, a class nested in a class or local, captures first.
     Captured(ClassId, crate::ast::ListRef),
     /// Every parameter's default, none written. Not lowered yet.
     Defaults(ClassId, Vec<ErasedType>),
@@ -2118,7 +2119,17 @@ impl<'a> Gen<'a> {
     /// that the constructor is one tree.
     fn constructor_lowers(&mut self, k: &PrimaryCtor) -> bool {
         let prelude = &self.cx.input.prog.stmts[k.tc.parent_prelude.range()];
-        matches!(k.route, SuperCall::Own(_) | SuperCall::Declared(..)) && self.prelude_lowers(prelude) && self.class_body_lowers(k.tc)
+        self.super_call_lowers(k) && self.prelude_lowers(prelude) && self.class_body_lowers(k.tc)
+    }
+
+    /// Whether the lowering has nodes for the superclass's call by its route: its own and its
+    /// declared parameters, a secondary constructor's and a captured superclass's arguments, and
+    /// an unwritten superclass's as its class file takes them.
+    fn super_call_lowers(&mut self, k: &PrimaryCtor) -> bool {
+        match &k.route {
+            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Unwritten(..) | SuperCall::Via(..) | SuperCall::Captured(..) => true,
+            SuperCall::Defaults(..) | SuperCall::Refused => false,
+        }
     }
 
     /// A primary constructor's one tree (`Gen::constructor_lowers`).
@@ -2276,6 +2287,38 @@ impl<'a> Gen<'a> {
                     }
                     _ => unreachable!("a lowered route"),
                 }
+                g.lir.init(&ctor, &args)
+            });
+            return true;
+        }
+        // A secondary constructor's, a captured superclass's and an unwritten superclass's arguments, as a creation
+        // of the superclass passes them (`Gen::via_arguments`, `Gen::new_arguments`, `Gen::unwritten_ctor_arguments`).
+        if matches!(parts, Parts::Tree(..)) && self.super_call_lowers(k) {
+            let super_name: Rc<str> = Rc::from(k.super_name);
+            let route = k.route.clone();
+            let via = k.tc.parent_via;
+            self.part(parts, |g| {
+                let mut args: Vec<LirId> = leading.iter().map(|&i| g.param(i)).collect();
+                g.m.before_super = true;
+                let (nodes, types) = match route {
+                    SuperCall::Via(e, s, written) => {
+                        let r = g.via_arguments_route(e, s, written);
+                        g.lower_via_arguments(e, s, written, r)
+                    }
+                    SuperCall::Captured(e, written) => {
+                        let r = g.ctor_arguments_route(e, written);
+                        g.lower_new_arguments(e, written, r)
+                    }
+                    SuperCall::Unwritten(e, written) => {
+                        let (outer, declared) = g.unwritten_ctor_layout(e, via).expect("its class file's layout, by the route");
+                        g.lower_unwritten_ctor_arguments(via, written, outer, declared)
+                    }
+                    _ => unreachable!("a lowered route"),
+                };
+                g.m.before_super = false;
+                args.extend(nodes);
+                params.extend(types);
+                let ctor = method_ref(Invoke::Special, &super_name, false, "<init>", &params, &ErasedType::V);
                 g.lir.init(&ctor, &args)
             });
             return true;

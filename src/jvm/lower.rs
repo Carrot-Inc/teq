@@ -4,7 +4,7 @@
 //! written is the output's bytes.
 
 use crate::lir::{Arith, Capture, Cast, Comparing, ErasedType, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Relation, Unlowered};
-use super::gen::{rank_type, CallRoute, CaptureArgument, ConcatRoute, CtorArguments, CtorDefault, DefaultRoute, Extras, FieldRoute, Fit, Gen, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
+use super::gen::{rank_type, CallRoute, CaptureArgument, ConcatRoute, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::names::*;
 use crate::ast::ListRef;
 use crate::classfile::ACC_STATIC;
@@ -14,6 +14,14 @@ use crate::tir::*;
 use crate::typer::loader::javaclass::JMember;
 use crate::types::*;
 use std::rc::Rc;
+
+/// A condition reduced as dotty's `FirstTransform` reduces it (`Gen::reduced_condition`): a
+/// constant with the expression it stands for, or the expression left to test.
+#[derive(Clone, Copy)]
+pub(super) enum Reduced {
+    Constant(bool, TExprId),
+    Expr(TExprId),
+}
 
 impl<'a> Gen<'a> {
     /// Runs a lowering with the writers refusing.
@@ -311,6 +319,14 @@ impl<'a> Gen<'a> {
                 return Ok(self.lir.push(Kind::Binary { op: Arith::Xor, left: equal, right: yes }, ErasedType::Z));
             }
             Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame => return Ok(self.lower_compare(op, a, b)),
+            // A constant left operand folds (`foldCondition`).
+            BoolAnd | BoolOr if matches!(self.reduced_condition(a), Reduced::Constant(..)) => {
+                let Reduced::Constant(v, _) = self.reduced_condition(a) else { unreachable!("a constant, by the guard") };
+                if v == (op == BoolAnd) {
+                    return Ok(self.lower_cond(b));
+                }
+                return Ok(self.lir.push(Kind::Bool(v), ErasedType::Z));
+            }
             BoolAnd => {
                 let (left, right) = (self.lower_cond(a), self.lower_cond(b));
                 return Ok(self.lir.push(Kind::And(left, right), ErasedType::Z));
@@ -350,6 +366,9 @@ impl<'a> Gen<'a> {
                 return self.lir.push(Kind::Neg(value), t);
             }
             BoolNot => {
+                if let Reduced::Constant(v, _) = self.reduced_condition(a) {
+                    return self.lir.push(Kind::Bool(!v), ErasedType::Z);
+                }
                 let value = self.lower_expr(a, &ErasedType::Z);
                 return self.lir.push(Kind::Not(value), ErasedType::Z);
             }
@@ -388,17 +407,66 @@ impl<'a> Gen<'a> {
         self.lower_adapt(value, &from, &to)
     }
 
+    /// A condition as dotty's `FirstTransform` leaves it, before the back end: a literal or a
+    /// top-level inline val's boolean is a constant (`constToLiteral`), `!` of a constant one
+    /// (`ConstFold`), and `&&` and `||` whose left operand is a constant fold (`foldCondition`:
+    /// `true && b` is `b`, `false && b` false, `true || b` true, `false || b` is `b`); a
+    /// constant on the right stays an operand. A constant stands for the tree the reduction
+    /// leaves: `b` itself where the connective is `b`, the expression otherwise.
+    pub(super) fn reduced_condition(&self, e: TExprId) -> Reduced {
+        let cx = self.cx;
+        match cx.input.prog.expr(e) {
+            TExpr::Bool(v) => Reduced::Constant(v, e),
+            TExpr::Static(s) => match self.inline_val_constant(s).flatten().map(|l| cx.input.types.lit_val(l)) {
+                Some(LitVal::Bool(v)) => Reduced::Constant(v, e),
+                _ => Reduced::Expr(e),
+            },
+            TExpr::Unary(UnOp::BoolNot, a) => match self.reduced_condition(a) {
+                Reduced::Constant(v, _) => Reduced::Constant(!v, e),
+                Reduced::Expr(_) => Reduced::Expr(e),
+            },
+            TExpr::Prim(op @ (PrimOp::BoolAnd | PrimOp::BoolOr), a, b) => match (op, self.reduced_condition(a)) {
+                (PrimOp::BoolAnd, Reduced::Constant(true, _)) | (PrimOp::BoolOr, Reduced::Constant(false, _)) => self.reduced_condition(b),
+                (_, Reduced::Constant(v, _)) => Reduced::Constant(v, e),
+                (_, Reduced::Expr(_)) => Reduced::Expr(e),
+            },
+            _ => Reduced::Expr(e),
+        }
+    }
+
+    /// The branch an `if` over a constant takes, alone (`FirstTransform.transformIf`); none is
+    /// `()` at the type wanted.
+    fn lower_taken(&mut self, branch: Option<TExprId>, want: &ErasedType) -> LirId {
+        match branch {
+            Some(b) => self.lower_expr(b, want),
+            None => {
+                let nothing = self.lir.push(Kind::Unit, ErasedType::V);
+                self.lower_adapt(nothing, &ErasedType::V, want)
+            }
+        }
+    }
+
     /// `e` as a condition: the connectives and the comparisons under it are conditions too,
-    /// evaluated only as far as the outcome needs; anything else is a boolean value.
+    /// evaluated only as far as the outcome needs; anything else is a boolean value. A constant
+    /// the reduction leaves is a `Bool`, a reduced connective its remaining operand.
     pub(super) fn lower_cond(&mut self, e: TExprId) -> LirId {
         let prog = self.cx.input.prog;
-        match prog.expr(e) {
-            // A block's constant result is written as a value (`Gen::write_cond`), at its place.
-            TExpr::Bool(v) => {
+        // A constant keeps the place of the tree it stands for (dotty's `constToLiteral`, `Literal(value)
+        // .withSpan(tree.span)`; `foldCondition` leaves the right operand itself of `true && b` and `false || b`,
+        // and the left literal of the others, which starts where the connective does): a block's constant result
+        // is written as a value (`Gen::write_cond`), at its place.
+        match self.reduced_condition(e) {
+            // An inline val's read alone is lowered as the read, which holds its position.
+            Reduced::Constant(v, of) if !matches!(prog.expr(e), TExpr::Static(_)) => {
                 let id = self.lir.push(Kind::Bool(v), ErasedType::Z);
-                self.lir.nodes[id.0 as usize].of = Some(e);
-                id
+                self.lir.nodes[id.0 as usize].of = Some(of);
+                return id;
             }
+            Reduced::Expr(x) if x != e => return self.lower_cond(x),
+            _ => {}
+        }
+        match prog.expr(e) {
+            TExpr::Bool(_) => unreachable!("a constant, reduced above"),
             // A block's result is a condition too, at its own place: an inline method's expansion is written whole
             // as a value (`Gen::write_cond`), its result's line entry where `lower_expr` would mark it.
             TExpr::Block(stmts, res) if self.block_lowers(stmts).is_ok() => {
@@ -512,6 +580,9 @@ impl<'a> Gen<'a> {
     /// A conditional whose value is wanted at `want`: each branch is brought to it; one with no
     /// `else` leaves the unit value where a value is wanted.
     fn lower_if(&mut self, c: TExprId, t: TExprId, els: Option<TExprId>, want: &ErasedType) -> LirId {
+        if let Reduced::Constant(v, _) = self.reduced_condition(c) {
+            return self.lower_taken(if v { Some(t) } else { els }, want);
+        }
         let cond = self.lower_cond(c);
         let (then, otherwise) = match els {
             Some(els) => (self.lower_expr(t, want), Some(self.lower_expr(els, want))),
@@ -534,6 +605,10 @@ impl<'a> Gen<'a> {
         // A widened value returned as a reference is boxed as one, not branch by branch.
         let boxed_whole = self.m.ret.is_ref() && self.widened_branches(e).is_some();
         let kind = match prog.expr(e) {
+            TExpr::If(c, t, Some(els)) if !boxed_whole && matches!(self.reduced_condition(c), Reduced::Constant(..)) => {
+                let Reduced::Constant(v, _) = self.reduced_condition(c) else { unreachable!("a constant, by the guard") };
+                return self.lower_tail(if v { t } else { els });
+            }
             TExpr::If(c, t, Some(els)) if !boxed_whole => {
                 let cond = self.lower_cond(c);
                 let then = self.lower_tail(t);
@@ -1037,6 +1112,13 @@ impl<'a> Gen<'a> {
                     parts.push(self.lir.push(Kind::Str(text), string.clone()));
                     continue;
                 }
+                // An inline val's read is its literal by the back end (dotty's `Inlining`, after the
+                // typer, which folds nothing of it), a string literal text of the recipe.
+                TExpr::Static(s) => match self.inline_val_constant(s).flatten().map(|l| self.cx.input.types.lit_val(l)) {
+                    Some(LitVal::Str(n)) if self.cx.input.interner.get(n).is_empty() => continue,
+                    Some(LitVal::Str(n)) => Some(self.cx.input.interner.get(n).to_string()),
+                    _ => None,
+                },
                 TExpr::Int(v) if i < folded && self.static_type(value) == ErasedType::I => Some(v.to_string()),
                 TExpr::Long(v) if i < folded => Some(v.to_string()),
                 TExpr::Bool(v) if i < folded => Some(v.to_string()),
@@ -1106,15 +1188,8 @@ impl<'a> Gen<'a> {
                 Ok(self.lir.push(Kind::StaticField { owner, name: Rc::from(&*name) }, t))
             }
             StaticRoute::EnumValue(_) => Err(Unlowered::EnumValueOwnClass),
-            // One with no constant type is refused (`Gen::load_static`). A boolean's is the value a
-            // condition tests where `Gen::write_cond` would take a `Bool` node for a constant
-            // condition and write no test; a string's is a value of a concatenation where a `Text`
-            // node would be text of its recipe.
-            StaticRoute::InlineVal => match info.sig.as_ref().map(|sig| cx.input.types.get(sig.ret)) {
-                Some(Type::Lit(l)) if !matches!(cx.input.types.lit_val(l), LitVal::Bool(_) | LitVal::Str(_)) => Ok(self.lower_literal(l)),
-                Some(Type::Lit(_)) => Err(Unlowered::InlineValBooleanOrString),
-                _ => Err(Unlowered::InlineValNoConstant),
-            },
+            // One with no constant type is refused (`Gen::load_static`).
+            StaticRoute::InlineVal => self.inline_val_constant(s).flatten().map(|l| self.lower_literal(l)).ok_or(Unlowered::InlineValNoConstant),
             StaticRoute::JavaField => {
                 let Some((cf, JMember::Field(i))) = cx.input.java_member(s) else { unreachable!("a Java field, by the route") };
                 let f = &cf.fields[i as usize];
@@ -1155,15 +1230,9 @@ impl<'a> Gen<'a> {
             StaticCallRoute::Lifted => self.analysis_in_order().then(|| self.lower_lifted_call(s, args)).ok_or(Unlowered::AfterEscape),
             StaticCallRoute::Spread(array) => Ok(self.lower_wrapped_spread(array, None)),
             StaticCallRoute::JavaStatic | StaticCallRoute::JdkStatic => Ok(self.lower_static_call(s, args)),
-            // A lazy local, a captured one and a cell are not lowered yet.
-            StaticCallRoute::LocalValue => {
-                let t = self.plain_local(s).ok_or(Unlowered::LocalFunctionValueNotPlain)?;
-                let items: Vec<TExprId> = cx.input.prog.expr_list(args).to_vec();
-                let ft = self.function_type(items.len());
-                let local = self.lir.push(Kind::Local(s), t.clone());
-                let function = self.lower_adapt(local, &t, &ft);
-                Ok(self.lower_application(function, &ft, items))
-            }
+            // A lazy local is read by its accessor, which the analysis of captures shapes.
+            StaticCallRoute::LocalValue if self.is_lazy_local(s) && !self.analysis_in_order() => Err(Unlowered::AfterEscape),
+            StaticCallRoute::LocalValue => Ok(self.lower_local_function_call(s, args)),
             StaticCallRoute::FileModule => {
                 let m = self.mref(s);
                 let receiver = self.lower_file_module(cx.input.syms.sym(s).file);
@@ -1172,6 +1241,21 @@ impl<'a> Gen<'a> {
                 Ok(self.lir.push(Kind::Call { method: m, at: None, receiver, args, order }, ret))
             }
         }
+    }
+
+    /// `f(args)` of the local function value `s`, read as the scope holds it (a lazy val's by its
+    /// accessor, a cell's content, a field of the instance for a captured one), then applied.
+    pub(super) fn lower_local_function_call(&mut self, s: SymId, args: ListRef) -> LirId {
+        let items: Vec<TExprId> = self.cx.input.prog.expr_list(args).to_vec();
+        let ft = self.function_type(items.len());
+        let read = match self.is_lazy_local(s) {
+            true => self.lower_lazy_call(s, false),
+            // One the scope does not hold is reported, as `Gen::load_local` reports it.
+            false => self.lower_local(s).unwrap_or_else(|| self.lower_capture(s)),
+        };
+        let t = self.lir.ty(read).clone();
+        let function = self.lower_adapt(read, &t, &ft);
+        self.lower_application(function, &ft, items)
     }
 
     /// An array spread into a Scala varargs parameter, wrapped as it is, not copied: dotty's
@@ -1227,8 +1311,6 @@ impl<'a> Gen<'a> {
             return Err(Unlowered::AfterEscape);
         }
         let route = match self.new_route(e, c, args) {
-            NewRoute::Instance(CtorArguments::CapturedUnlowered) => return Err(Unlowered::NewCapturedUnlowered),
-            NewRoute::Instance(CtorArguments::UnwrittenOuter(_)) => return Err(Unlowered::NewUnwrittenOuter),
             NewRoute::Instance(route) => route,
             NewRoute::Underlying(u, a) => {
                 // The argument takes the constructor parameter's own representation (dotty types it
@@ -1255,7 +1337,6 @@ impl<'a> Gen<'a> {
         let (c, route) = match self.via_route(s, args) {
             ViaRoute::Unowned => return Err(Unlowered::NewViaUnowned),
             ViaRoute::Js(_) => return Err(Unlowered::JavaScriptOnly),
-            ViaRoute::Instance(_, ViaArguments::CapturedUnlowered(_)) => return Err(Unlowered::NewCapturedUnlowered),
             ViaRoute::Instance(c, route) => (c, route),
         };
         let touch = self.touched_module(c);
@@ -1313,7 +1394,19 @@ impl<'a> Gen<'a> {
                 let params = self.ctor_param_types(c);
                 (self.lower_declared_arguments(args, &params), params)
             }
-            CtorArguments::CapturedUnlowered | CtorArguments::UnwrittenOuter(_) => unreachable!("not lowered (`Gen::new_arguments`)"),
+            // Its class file gives no one answer (two of its constructors fit the primary's
+            // parameters, or it is not read): the enclosing instance the typer passes first is taken
+            // by the owner's kind and the count, at the parameter's type where it is a local's read,
+            // else at its own.
+            CtorArguments::UnwrittenOuter(outer) => {
+                let first = self.cx.input.prog.expr_list(args)[0];
+                let at = if matches!(self.cx.input.prog.expr(first), TExpr::Local(_)) { outer.clone() } else { self.static_type(first) };
+                let mut nodes = vec![self.lower_expr(first, &at)];
+                let rest = ListRef { start: args.start + 1, len: args.len - 1 };
+                let declared = self.ctor_param_types(c);
+                nodes.extend(self.lower_declared_arguments(rest, &declared));
+                (nodes, std::iter::once(outer).chain(declared).collect())
+            }
         }
     }
 
@@ -1359,7 +1452,6 @@ impl<'a> Gen<'a> {
                 let params = self.param_types(s);
                 (self.lower_declared_arguments(args, &params), params)
             }
-            ViaArguments::CapturedUnlowered(_) => unreachable!("not lowered (`Gen::via_arguments`)"),
         }
     }
 
@@ -1402,9 +1494,11 @@ impl<'a> Gen<'a> {
                     let route = self.capture_argument_route(a, p);
                     self.lower_capture_argument(a, route)
                 }
-                PassedCapture::Held(s) => self.lower_held(s).expect("held by the scope, by the route"),
+                PassedCapture::Held(s) => self.lower_capture(s),
             });
         }
+        let extras = self.class_extras(c);
+        nodes.extend(self.lower_extras(&extras));
         nodes
     }
 
@@ -1413,14 +1507,32 @@ impl<'a> Gen<'a> {
     pub(super) fn lower_capture_argument(&mut self, a: TExprId, route: CaptureArgument) -> LirId {
         match route {
             CaptureArgument::Value(t) => self.lower_expr(a, &t),
-            CaptureArgument::Held(s) => self.lower_held(s).expect("held by the scope, by the route"),
+            CaptureArgument::Held(s) => self.lower_capture(s),
             CaptureArgument::Own => {
                 let t = self.static_type(a);
                 let value = self.lower_expr(a, &t);
                 if t == ErasedType::V { self.lower_adapt(value, &t, &ErasedType::L(Rc::from(BOXED_UNIT))) } else { value }
             }
-            CaptureArgument::Holder(_) => unreachable!("not lowered (`Gen::load_capture_arg`)"),
+            CaptureArgument::Holder { lazy, value } => self.lower_filled_holder(lazy, value),
         }
+    }
+
+    /// A new holder of the local lazy val `lazy` (`Gen::lazy_holder_class`), initialised with the
+    /// value of `value`: the holder, which `initialize` is called on and its result dropped.
+    fn lower_filled_holder(&mut self, lazy: SymId, value: TExprId) -> LirId {
+        let (class, held) = self.lazy_holder_class(lazy);
+        let holder = ErasedType::L(class.clone());
+        let ctor = method_ref(Invoke::Special, &class, false, "<init>", &[], &ErasedType::V);
+        let initialize = method_ref(Invoke::Virtual, &class, false, "initialize", std::slice::from_ref(&held), &held);
+        let temp = self.lir.temp();
+        let made = self.lir.make(&ctor, &[]);
+        let made = self.lir.keep(temp, made);
+        let receiver = self.lir.kept(temp, holder.clone());
+        let value = self.lower_expr(value, &held);
+        let filled = self.lir.call(&initialize, receiver, &[value]);
+        let filled = self.lower_adapt(filled, &held, &ErasedType::V);
+        let result = self.lir.kept(temp, holder);
+        self.lir.seq(&[made, filled], result)
     }
 
     /// Arguments as they are written, each at its parameter's type, as nodes in order.
@@ -1438,18 +1550,26 @@ impl<'a> Gen<'a> {
         }
         Ok(match self.default_route(of, at, args) {
             DefaultRoute::Unlowered(why) => return Err(why),
-            DefaultRoute::Ctor(c, recv, route, want) => self.lower_ctor_default(c, route, recv, &want),
-            DefaultRoute::FileMember(file, getter, want) => {
+            // A local companion held as a lazy val is read by its accessor, which the analysis of captures shapes.
+            DefaultRoute::Ctor(_, None, CtorDefault::LocalCompanion(v, _), ..) if self.is_lazy_local(v) && !self.analysis_in_order() => return Err(Unlowered::AfterEscape),
+            DefaultRoute::Ctor(c, recv, route, args, want) => self.lower_ctor_default(c, route, recv, &args, &want),
+            DefaultRoute::FileMember(file, getter, args, want) => {
                 let receiver = self.lower_file_module(file);
-                self.lower_getter_call(receiver, getter, &want)
+                let args = self.lower_getter_arguments(&args);
+                self.lower_getter_call_at(receiver, None, getter, &args, &want)
+            }
+            DefaultRoute::Method { receiver, receiver_type, getter, at, args, want } => {
+                let receiver = self.lower_expr(receiver, &receiver_type);
+                let args = self.lower_getter_arguments(&args);
+                self.lower_getter_call_at(receiver, at, getter, &args, &want)
             }
         })
     }
 
-    /// The default of a parameter of a constructor of `c`, of the type `want`, where no
-    /// argument precedes it (`Gen::ctor_default_route`); `recv` is the receiver the typer
-    /// selected the getter on.
-    pub(super) fn lower_ctor_default(&mut self, c: ClassId, route: CtorDefault, recv: Option<TExprId>, want: &ErasedType) -> LirId {
+    /// The default of a parameter of a constructor of `c`, of the type `want`, over the arguments
+    /// before it (`Gen::ctor_default_route`); `recv` is the receiver the typer selected the getter
+    /// on.
+    pub(super) fn lower_ctor_default(&mut self, c: ClassId, route: CtorDefault, recv: Option<TExprId>, args: &[GetterArgument], want: &ErasedType) -> LirId {
         match route {
             CtorDefault::InPlace(Some(d)) => {
                 let value = self.lower_expr(d, want);
@@ -1464,12 +1584,16 @@ impl<'a> Gen<'a> {
                 let receiver = match recv {
                     Some(r) => self.lower_expr(r, &module),
                     None => {
-                        let local = self.lower_local(v).expect("held by the scope, by the route");
+                        let local = match self.is_lazy_local(v) {
+                            true => self.lower_lazy_call(v, false),
+                            false => self.lower_local(v).expect("held by the scope, by the route"),
+                        };
                         let t = self.lir.ty(local).clone();
                         self.lower_adapt(local, &t, &module)
                     }
                 };
-                self.lower_getter_call(receiver, getter, want)
+                let args = self.lower_getter_arguments(args);
+                self.lower_getter_call_at(receiver, None, getter, &args, want)
             }
             CtorDefault::InnerCompanion(accessor, getter) => {
                 let outer = ErasedType::L(accessor.owner.clone());
@@ -1483,9 +1607,10 @@ impl<'a> Gen<'a> {
                     }
                 };
                 let module = accessor.ret.clone();
-                let args = self.lir.list(&[]);
-                let companion = self.lir.push(Kind::Call { method: Rc::new(accessor), at: None, receiver: instance, args, order: None }, module);
-                self.lower_getter_call(companion, getter, want)
+                let none = self.lir.list(&[]);
+                let companion = self.lir.push(Kind::Call { method: Rc::new(accessor), at: None, receiver: instance, args: none, order: None }, module);
+                let args = self.lower_getter_arguments(args);
+                self.lower_getter_call_at(companion, None, getter, &args, want)
             }
             CtorDefault::Captured(captures, getter) => {
                 let mut nodes = Vec::new();
@@ -1497,27 +1622,46 @@ impl<'a> Gen<'a> {
                 for s in self.class_captures_after(c, recv.is_some() as usize) {
                     nodes.push(self.lower_held(s).expect("held by the scope, by the route"));
                 }
+                let extras = self.class_extras(c);
+                nodes.extend(self.lower_extras(&extras));
+                nodes.extend(self.lower_getter_arguments(args));
                 self.lower_static_getter_call(&nodes, getter, want)
             }
             CtorDefault::Companion(getter) => {
                 let module = getter.owner.clone();
                 let receiver = self.lir.push(Kind::Module(module.clone()), ErasedType::L(module));
-                self.lower_getter_call(receiver, getter, want)
+                let args = self.lower_getter_arguments(args);
+                self.lower_getter_call_at(receiver, None, getter, &args, want)
             }
             CtorDefault::Jar(getter) if getter.kind == Invoke::Virtual => {
                 let module = getter.owner.clone();
                 let receiver = self.lir.push(Kind::Module(module.clone()), ErasedType::L(module));
-                self.lower_getter_call(receiver, getter, want)
+                let args = self.lower_getter_arguments(args);
+                self.lower_getter_call_at(receiver, None, getter, &args, want)
             }
-            CtorDefault::Jar(getter) | CtorDefault::Static(getter) => self.lower_static_getter_call(&[], getter, want),
+            CtorDefault::Jar(getter) | CtorDefault::Static(getter) => {
+                let args = self.lower_getter_arguments(args);
+                self.lower_static_getter_call(&args, getter, want)
+            }
         }
     }
 
-    /// A getter that takes no argument called on `receiver`, its result as the type `want`.
-    fn lower_getter_call(&mut self, receiver: LirId, getter: MethodRef, want: &ErasedType) -> LirId {
+    /// A getter called on `receiver` over `args`, named at `at` where that is the receiver's class
+    /// and not the declaring one's, its result as the type `want`.
+    fn lower_getter_call_at(&mut self, receiver: LirId, at: Option<(Rc<str>, bool)>, getter: MethodRef, args: &[LirId], want: &ErasedType) -> LirId {
         let ret = getter.ret.clone();
-        let args = self.lir.list(&[]);
-        self.lower_as(Kind::Call { method: Rc::new(getter), at: None, receiver, args, order: None }, &ret, want)
+        let args = self.lir.list(args);
+        self.lower_as(Kind::Call { method: Rc::new(getter), at, receiver, args, order: None }, &ret, want)
+    }
+
+    /// A getter's arguments in the order it takes them, each at its type, then as its parameter's.
+    fn lower_getter_arguments(&mut self, args: &[GetterArgument]) -> Vec<LirId> {
+        args.iter()
+            .map(|a| {
+                let value = self.lower_expr(a.expr, &a.ty);
+                self.lower_adapt(value, &a.ty, &a.param)
+            })
+            .collect()
     }
 
     /// A static getter called over `nodes`, its result as the type `want`.
@@ -1713,7 +1857,14 @@ impl<'a> Gen<'a> {
             FieldRoute::Js => Err(Unlowered::JavaScriptOnly),
             FieldRoute::Object(_) => Err(Unlowered::ObjectThroughOwner),
             FieldRoute::Early => Err(Unlowered::EarlyParameter),
-            FieldRoute::GivenObject { receiver_evaluated: true } => Err(Unlowered::GivenObjectThroughReceiver),
+            // The receiver evaluated for its effect, then the instance, which does not read it.
+            FieldRoute::GivenObject { receiver_evaluated: true } => {
+                let effect = self.lower_expr(r, &ErasedType::V);
+                let instance = self.lower_given_object(s);
+                let ty = self.lir.ty(instance).clone();
+                let stmts = self.lir.list(&[effect]);
+                Ok(self.lir.push(Kind::Block { stmts, result: instance }, ty))
+            }
             FieldRoute::GivenObject { receiver_evaluated: false } => Ok(self.lower_given_object(s)),
             FieldRoute::Java => {
                 let Some((cf, JMember::Field(i))) = self.cx.input.java_member(s) else { unreachable!("a Java field, by the route") };
@@ -1838,7 +1989,7 @@ impl<'a> Gen<'a> {
             CallRoute::Proxied(t) => return self.analysis_in_order().then(|| self.lower_proxied_call(t, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
             CallRoute::Lifted => return self.analysis_in_order().then(|| self.lower_lifted_member_call(r, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
             CallRoute::Js => return Err(Unlowered::JavaScriptOnly),
-            CallRoute::Extension(..) => return Err(Unlowered::ValueClassMethodCall),
+            CallRoute::Extension(c, route) => return self.lower_extension_call(r, s, args, c, route),
             CallRoute::Interpolator(_, None) => return Err(Unlowered::InterpolatorWithoutRuntime),
             CallRoute::Object(_) => return Err(Unlowered::ObjectThroughOwner),
         }
@@ -1848,6 +1999,40 @@ impl<'a> Gen<'a> {
         let (args, order) = self.lower_arguments(Some(s), args, &m.params);
         let ret = m.ret.clone();
         Ok(self.lir.push(Kind::Call { method: m, at: site.map(|site| (site.owner, site.interface)), receiver, args, order }, ret))
+    }
+
+    /// `r.s(args)` of a method of the value class `c`, the method of its companion's instance
+    /// over the underlying value (`Gen::extension_method`): the instance first, then the receiver
+    /// in place; or, for a generic class's receiver evaluated before the instance, the receiver
+    /// held in a temporary of a block that ends with the call (`Gen::extension_receiver`, dotty's
+    /// `evalOnce`). Not for the class's own static method, which takes the receiver through a
+    /// slot, nor for a right-associative method.
+    fn lower_extension_call(&mut self, r: TExprId, s: SymId, args: ListRef, c: ClassId, route: ExtensionRoute) -> Result<LirId, Unlowered> {
+        let cx = self.cx;
+        if route == ExtensionRoute::Static || self.jvm_param_order(s).is_some() {
+            return Err(Unlowered::ValueClassMethodCall);
+        }
+        let method = Rc::new(self.extension_method(s, c, route));
+        let u = self.vc_underlying(c);
+        let held = crate::emit::receiver_first(cx.input.prog, cx.input.syms, c, r).then(|| {
+            let init = self.lower_expr(r, &u);
+            let temp = self.lir.temp();
+            (temp, self.lir.keep(temp, init))
+        });
+        let receiver = self.lir.push(Kind::Module(method.owner.clone()), ErasedType::L(method.owner.clone()));
+        let value = match held {
+            Some((temp, _)) => self.lir.kept(temp, u.clone()),
+            None => self.lower_expr(r, &u),
+        };
+        let mut nodes = vec![self.lower_adapt(value, &u, &method.params[0])];
+        self.lower_rest(s, args, 0, &method.params[1..], &mut nodes);
+        let args = self.lir.list(&nodes);
+        let ret = method.ret.clone();
+        let call = self.lir.push(Kind::Call { method, at: None, receiver, args, order: None }, ret);
+        Ok(match held {
+            Some((_, keep)) => self.lir.seq(&[keep], call),
+            None => call,
+        })
     }
 
     /// `super.s(args)`, the call `e`: through the accessor a class that mixes the trait in

@@ -612,8 +612,11 @@ impl<'a> Gen<'a> {
                 };
                 // `case Array(a, b)` takes an array of any kind, as scalac's `isArray(x, 1)` does.
                 let tested = (!matches!(prog.pats[inner.idx()], TPat::Seq(..))).then_some(tested);
-                let passes = self.lower_test_on(temp, &ty, test, tested);
-                self.lower_fail_unless(passes, fail, out);
+                // None where its type proves it, as a tuple's element has none.
+                if !matches!(prog.tests[test.idx()], TypeTest::Always) {
+                    let passes = self.lower_test_on(temp, &ty, test, tested);
+                    self.lower_fail_unless(passes, fail, out);
+                }
                 self.lower_pattern(inner, temp, &ty, fail, out);
             }
             TPat::Equals(e, strict) => {

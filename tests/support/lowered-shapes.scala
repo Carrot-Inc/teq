@@ -69,6 +69,8 @@ object LoweredShapes:
   def mu(): Unit = ()
   def mg[A](a: A): A = a
   def dflt(x: Int = 4, y: String = "d"): String = y + x
+  def dfp(a: Int)(b: Int = a + 1): Int = a + b
+  def dfr(a: Int, b: Int = 2, c: String): String = c + a + b
   def va(xs: Int*): Int = xs.length
   final def tl(n: Int, acc: Long): Long = if n <= 0 then acc else tl(n - 1, acc + n)
   final def tls(n: Int, s: String): String = { val t: String = s + n; if n <= 0 then t else tls(n - 1, t) }
@@ -105,12 +107,14 @@ class Box[A](val item: A) {
   def get: A = item
   def put(a: A): Box[A] = new Box[A](a)
   var held: A = item
+  def dfg(n: Int = 1): Int = n
 }
 trait Tr {
   def abs: Int
   def im(x: Int): Int = x + abs
   def sd: Int = 7
   def td(x: Int = 2): Int = x + 1
+  def tdp(a: Int)(b: Int = a + 1): Int = a + b
   val tv: String = "tv"
   var tvar: Int = 0
 }
@@ -146,8 +150,13 @@ inline val topl = 7L
 inline val topdv = 2.5
 inline val topfl = 1.5f
 inline val topb = true
+inline val topno = false
 inline val topch = 'q'
 inline val topstr = "is"
+inline val topempty = ""
+// A class no program makes, and a value class with a right-associative method.
+final class NeverMade
+final class VR(val n: Int) extends AnyVal { def +:(x: Int): Int = n + x }
 inline val topk = classOf[Peer]
 extension (x: Int) def +:(s: String): String = s + x
 // Two interfaces the superclass brings, which a class lists for its super calls in the order of the calls' ends:
@@ -209,6 +218,14 @@ object Coin {
   lazy val face: Int = Heads.ordinal + 1
 }
 case class HoldsValues(v: V, s: VS)
+final class GO[A](val g: A) extends AnyVal { def holder: O.type = O }
+final class G[A](val g: A) extends AnyVal { def pair(x: Int): String = s"$g/$x" }
+final class VB(val u: Int) extends AnyVal { def plus(x: Int): Int = u + x }
+object VB { val k: Int = 2 }
+object Mk {
+  def go(s: String): GO[String] = new GO(s)
+  def g(s: String): G[String] = new G(s)
+}
 enum Hue { case Red, Green }
 class Tones { enum Tone { case Low, High } }
 class Two(val a: Int, val b: String) {
@@ -222,8 +239,11 @@ class Outer {
 val outer: Outer = new Outer
 class Dc(val x: Int = 4, val y: String = "d")
 class Dm(val a: Int)(val b: Int = a + 1)
+class Dq(val a: Int)(val b: String)(val c: Int = a + b.length)
+case class Cp(a: Int)(b: Int = a * 2)
 class Ou {
   class In(val x: Int = 5)
+  class Ip(val a: Int)(val b: Int = a)
 }
 val ou: Ou = new Ou
 class Hn {
@@ -233,6 +253,9 @@ class Hn {
 }
 val hn: Hn = new Hn
 def topd(x: Int = 4, s: String = "t"): String = s + x
+def topp(a: Int)(b: Int = a + 1): Int = a + b
+object Om { def g(a: Int)(b: Int = a * 2): Int = a + b }
+extension (s: String) def extd(n: Int = s.length): Int = n
 class Chs(val name: String)
 trait EncP { def cs: Chs }
 object EncP {
@@ -330,6 +353,15 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("lit-int", "", "1", "Int", ""), Shape("lit-long", "", "1L", "Long", ""), Shape("lit-double", "", "1.5", "Double", ""),
     Shape("lit-float", "", "1.5f", "Float", ""), Shape("lit-bool", "", "true", "Boolean", ""), Shape("lit-char", "", "'a'", "Char", ""),
     Shape("lit-string", "", "\"s\"", "String", ""), Shape("lit-unit", "", "()", "Unit", ""), Shape("lit-null", "", "null", "Null", ""),
+    // A code template of the std that is a null (`@jvm("aconst_null")`): at the program's own call, compared with
+    // `eq` (its two sides loaded, `aconst_null; if_acmpXX`, as the class file's template writes it, not `ifnull`),
+    // and in the runtime's methods that return it on a branch (in a method host: a products build of the
+    // constructor host fails on both binaries, `cannot write TASTy for a reference to the type parameter A`).
+    Shape("template-null", "", "js.undefined", "Any", ""), Shape("template-null-compared", "", "(pa eq js.undefined)", "Boolean", ""),
+    Shape("template-null-int", "", "scala.runtime.intOrNull(ps)", "Any", "method"),
+    Shape("template-null-long", "", "scala.runtime.longOrNull(ps)", "Any", "method"),
+    Shape("template-null-double", "", "scala.runtime.doubleOrNull(ps)", "Any", "method"),
+    Shape("template-null-regex", "", "scala.runtime.regexExec(ps, \"\", ps)", "Any", "method"),
     Shape("param-int", "", "pi", "Int", ""), Shape("param-long", "", "pl", "Long", ""), Shape("param-double", "", "pd", "Double", ""),
     Shape("param-float", "", "pf", "Float", ""), Shape("param-bool", "", "pb", "Boolean", ""), Shape("param-char", "", "pc", "Char", ""),
     Shape("param-byte", "", "pby", "Byte", ""), Shape("param-short", "", "psh", "Short", ""), Shape("param-string", "", "ps", "String", ""),
@@ -363,6 +395,10 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("field-param-underlying", "", "pv.u", "Int", ""),
     Shape("field-given-object", "", "O.og", "Ordering[Shade]", ""),
     Shape("field-given-object-receiver", "", "{ other.mu(); O }.og", "Ordering[Shade]", ""),
+    // The receiver's code holds a slot (a generic value class's receiver that is no path), freed once it is evaluated.
+    Shape("field-given-object-receiver-held", "", "Mk.go(ps).holder.og", "Ordering[Shade]", ""),
+    // A generic value class's method on a receiver that is no path: the receiver held in a slot to the call's end.
+    Shape("call-generic-value-class-held", "", "Mk.go(ps).holder", "O.type", ""),
     Shape("field-java-instance", "val tok = new java.io.StreamTokenizer(new java.io.StringReader(ps))", "tok.ttype", "Int", ""),
     Shape("field-java-instance-string", "val tok = new java.io.StreamTokenizer(new java.io.StringReader(ps))", "tok.sval", "String", ""),
     Shape("field-java-static", "", "java.io.File.separator", "String", ""), Shape("field-java-static-long", "", "java.lang.Long.MAX_VALUE", "Long", ""),
@@ -391,6 +427,16 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("call-box-put", "", "pbox.put(pi)", "Box[Int]", ""), Shape("call-object", "", "O.m(pi)", "Int", ""),
     Shape("call-object-generic-string", "", "O.gen(ps)", "String", ""), Shape("call-object-generic-int", "", "O.gen(pi)", "Int", ""),
     Shape("call-value-class", "", "pv.twice", "V", ""), Shape("call-right-associative", "", "(pi +: ps)", "String", ""),
+    // A value class's method through its companion's instance (`Gen::extension_method`): the instance first, the
+    // receiver in place; a generic class's receiver that is no path is evaluated first and held in a slot.
+    Shape("call-value-class-companion", "", "new VB(pi).plus(pi)", "Int", ""),
+    Shape("call-value-class-local", "val lb: VB = new VB(pi)", "lb.plus(2)", "Int", ""),
+    Shape("call-generic-value-class-local", "val lg: G[String] = new G(ps)", "lg.pair(pi)", "String", ""),
+    Shape("call-generic-value-class-new", "", "new G(ps).pair(pi)", "String", ""),
+    Shape("call-generic-value-class-held-pair", "", "Mk.g(ps).pair(pi)", "String", ""),
+    Shape("call-jar-value-class", "", "pi.max(3)", "Int", ""), Shape("call-jar-value-class-string", "", "ps.reverse", "String", ""),
+    Shape("call-value-class-right-assoc", "", "(1 +: new VR(pi))", "Int", ""),
+    Shape("call-jar-generic-value-class-held", "", "(pi -> ps)", "(Int, String)", ""),
     Shape("call-right-associative-member", "import O.*", "(pi ++: ps)", "String", ""),
     Shape("call-java-array", "", "java.util.Arrays.asList(ps, \"x\")", "java.util.List[String]", ""),
     Shape("call-java-array-member", "", "ps.formatted(pa, ps)", "String", "method"),
@@ -406,9 +452,23 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("static-inline-int", "", "topc", "Int", ""), Shape("static-inline-long", "", "topl", "Long", ""),
     Shape("static-inline-double", "", "topdv", "Double", ""), Shape("static-inline-float", "", "topfl", "Float", ""),
     Shape("static-inline-bool", "", "topb", "Boolean", ""), Shape("static-inline-char", "", "topch", "Char", ""),
+    // An inline val's boolean left as a condition: a right operand, a loop's, a guard's (an `if` over one is its branch).
+    Shape("static-inline-bool-and", "", "(pb && topb)", "Boolean", ""), Shape("static-inline-bool-or", "", "(pb || topno)", "Boolean", ""),
+    Shape("static-inline-bool-loop", "var k = pi", "{ while (topno) k += 1; k }", "Int", ""),
+    Shape("static-inline-bool-guard", "", "(pi match { case 0 if topb => 1; case _ => 2 })", "Int", ""),
+    // The read on a line of its own, whose position the condition's writer marks.
+    Shape("static-inline-bool-and-line", "", "(pb &&\n      topb)", "Boolean", ""),
     Shape("static-inline-string", "", "topstr", "String", ""), Shape("static-inline-class", "", "topk", "Class[Peer]", ""),
+    Shape("static-inline-empty", "", "topempty", "String", ""),
     Shape("local-function-value", "val lf: Int => Int = (x: Int) => x + 1", "lf(pi)", "Int", ""),
     Shape("local-function-lazy", "lazy val lzf: Int => Int = (x: Int) => x + 2", "lzf(pi)", "Int", ""),
+    // A function value held in a cell (a `var` a closure assigns), in a local class's field, and a lazy one read
+    // inside a local class.
+    Shape("local-function-cell", "var cf: Int => Int = (x: Int) => x + 3; val bump = () => { cf = (x: Int) => x + 4 }; bump()", "cf(pi)", "Int", ""),
+    Shape("local-function-field", "val ff2: Int => Int = (x: Int) => x + 5; class Uf { def g: Int = ff2(pi) }", "new Uf().g", "Int", ""),
+    Shape("local-function-lazy-field", "lazy val lzg: Int => Int = (x: Int) => x + 6; class Ug { def g: Int = lzg(pi) }", "new Ug().g", "Int", ""),
+    // A lazy function value called after the code before it was left to the old generator (a `return` in a value).
+    Shape("local-function-lazy-after-escape", "lazy val lzh: Int => Int = (x: Int) => x + 7; def eh(n: Int): Int = { val q: Int = (if (n > 100) return 0 else n); lzh(q) }", "eh(pi)", "Int", ""),
     Shape("local-def", "def ld(x: Int): Int = x + pi", "ld(3)", "Int", ""),
     // A local trait's member that captures takes its proxies first; through `super[T]` it is the trait's static
     // `m$`. The proxies are the capture analysis's, which a lowering that left typed IR asks out of order.
@@ -453,9 +513,38 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("default-companion", "", "new Dc()", "Any", ""), Shape("default-companion-second", "", "new Dc(pi)", "Any", ""),
     Shape("default-prior", "", "new Dm(pi)()", "Any", ""),
     Shape("default-file-member", "", "topd()", "String", ""), Shape("default-file-member-second", "", "topd(pi)", "String", ""),
+    // A method's default on the receiver the typer selected its getter on, over the arguments before it: the getter's
+    // call on the receiver and those arguments, written in place (a file member's on the file's object).
+    Shape("default-receiver", "", "other.dflt()", "String", ""), Shape("default-receiver-named", "", "other.dflt(y = ps)", "String", ""),
+    Shape("default-receiver-second", "", "other.dflt(pi)", "String", ""), Shape("default-receiver-prior", "", "other.dfp(pi)()", "Int", ""),
+    Shape("default-receiver-reordered", "", "other.dfr(c = ps, a = pi)", "String", ""),
+    Shape("default-receiver-new", "", "new Peer(pi, ps, 1, ps).dfp(pi)()", "Int", ""),
+    Shape("default-trait", "", "tr.td()", "Int", ""), Shape("default-generic", "", "pbox.dfg()", "Int", ""),
+    Shape("default-module", "", "Om.g(pi)()", "Int", ""), Shape("default-file-member-prior", "", "topp(pi)()", "Int", ""),
+    Shape("default-extension", "", "ps.extd()", "Int", ""),
+    // A constructor's default after an earlier list, on each route's getter, and `super`'s over an earlier list.
+    Shape("default-prior-curried", "", "new Dq(pi)(ps)()", "Any", ""), Shape("default-inner-companion-prior", "", "new ou.Ip(pi)()", "Any", ""),
+    Shape("default-local-companion-prior", "class Lp(val a: Int)(val b: Int = a + pi)", "new Lp(pi)()", "Any", ""),
+    Shape("default-case-apply-prior", "", "Cp(pi)().a", "Int", ""),
+    // A creation of a class that reads a lazy local of the method: its holder and, beside the captures, the instance
+    // of the class whose code declares the val (the class's `Extras`).
+    Shape("new-extras-home", "lazy val lz: Int = pi + 2; class Lh { def g: Int = lz }", "new Lh().g", "Int", "method"),
+    Shape("new-extras-anonymous", "lazy val la: Int = pi + 3", "(new Tr { def abs: Int = la }).abs", "Int", "method"),
+    Shape("new-extras-default", "lazy val ld: Int = pi + 4; class Ld(val x: Int = ld) { def g: Int = x + ld }", "new Ld().g", "Int", "method"),
+    // A constructor whose superclass's call goes through a selected constructor: a Java superclass's, a secondary one,
+    // a captured superclass's.
+    Shape("ctor-super-java", "class Jc(v: Int) extends java.util.concurrent.atomic.AtomicInteger(v)", "new Jc(pi).get", "Int", "method"),
+    Shape("ctor-super-secondary", "class Sb2(val x: Int) { def this(s: String) = this(s.length) }; class Sc2 extends Sb2(ps)", "new Sc2().x", "Int", "method"),
+    Shape("ctor-super-captured", "class Lb(val a: Int) { def g: Int = a + pi }; class Lc extends Lb(2)", "new Lc().g", "Int", "method"),
+    Shape("ctor-super-unwritten-inner", "val srcx = scala.io.Source.fromString(ps); class Lix extends srcx.LineIterator", "new Lix().hasNext", "Boolean", "method"),
     Shape("default-jar", "", "new scala.collection.mutable.ArrayDeque[Int]()", "Any", ""),
     Shape("default-inner-companion", "", "new ou.In()", "Any", ""),
     Shape("default-local-companion", "class Lc(val x: Int = pi)", "new Lc()", "Any", ""),
+    // A local class's default met after the code before it was left to the old generator (a `return` in a value). Its
+    // getter on a local companion held as a lazy val, in order, is the corpus's local_ctor_captures_default_argument:
+    // here, a secondary constructor's default of a class that captures is refused in some positions by every binary
+    // ("the local Lq is not in scope of the generated method", 23 Nov), a row of its own.
+    Shape("default-local-companion-after-escape", "def eq2(n: Int): String = { val q: Int = (if (n > 100) return \"\" else n); class Lr(val tag: String = \"r\"); new Lr().tag + q }", "eq2(pi)", "String", ""),
     // The companion's getter of a jar class where the companion's class file is read, its static forwarder where not.
     Shape("default-jar-companion", "val st0 = scala.collection.mutable.Stack[Int]()", "new scala.collection.mutable.Stack[String]", "Any", ""),
     Shape("default-given", "", "summon[EncP].cs.name", "String", ""),
@@ -548,6 +637,24 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("if-char", "", "(if ps == \"s\" then 'a' else pc)", "Char", ""), Shape("if-bool", "", "(if pb then true else pi > 2)", "Boolean", ""),
     Shape("if-peer", "", "(if pb || pi == 2 then other else new Peer(1, \"s\", 2, \"q\"))", "Peer", ""), Shape("if-throw", "", "(if pb then pi else throw new RuntimeException(\"x\"))", "Int", ""),
     Shape("if-constant", "", "(if true then pi else 2)", "Int", ""), Shape("if-widened", "", "(if pb then 1 else 2L)", "Long", ""),
+    // Constants reduced as dotty's FirstTransform reduces them, in every position, and constants left as conditions.
+    Shape("fold-true-and", "", "(true && pb)", "Boolean", ""), Shape("fold-false-and", "", "(false && pb)", "Boolean", ""),
+    Shape("fold-true-or", "", "(true || pb)", "Boolean", ""), Shape("fold-false-or", "", "(false || pb)", "Boolean", ""),
+    Shape("fold-not-true", "", "(!true)", "Boolean", ""), Shape("fold-not-inline", "", "(!topno)", "Boolean", ""),
+    Shape("if-false-no-else", "", "(if false then other.mu())", "Unit", ""), Shape("if-inline-constant", "", "(if topb then pi else 2)", "Int", ""),
+    Shape("if-constant-any", "", "(if true then pi else ps)", "Any", ""),
+    // A pure block with a constant result, which dotty folds (`FirstTransform.transformBlock`) and teq tests: a row.
+    Shape("if-pure-block-constant", "", "(if ({ val kq = 1; true }) pi else 2)", "Int", ""),
+    Shape("cond-right-true", "", "(pb && true)", "Boolean", ""), Shape("cond-right-false", "", "(pb || false)", "Boolean", ""),
+    Shape("guard-true", "", "(pi match { case 0 if true => 1; case _ => 2 })", "Int", ""),
+    // A constant left by a fold at the place of the tree it stands for, the connective's right operand on another line:
+    // that operand where it is what the fold leaves (`true && b`, `false || b`), the connective where the left one is.
+    Shape("fold-true-and-line", "", "(pb && (true &&\n      true))", "Boolean", ""), Shape("fold-false-or-line", "", "(pb && (false ||\n      true))", "Boolean", ""),
+    Shape("fold-nested-line", "", "(pb && (true &&\n      (false ||\n      true)))", "Boolean", ""),
+    Shape("fold-false-and-line", "", "(pb || (false &&\n      pb))", "Boolean", ""), Shape("fold-true-or-line", "", "(pb && (true ||\n      pb))", "Boolean", ""),
+    Shape("guard-true-and-line", "", "(pi match { case 0 if true &&\n      true => 1; case _ => 2 })", "Int", ""),
+    Shape("while-true-return", "def wl(n: Int): Int = { var k = n; while (true) { if (k > 3) return k; k += 1 }; 0 }", "wl(pi)", "Int", ""),
+    Shape("match-never-made", "", "(pa match { case _: NeverMade => 1; case _ => 2 })", "Int", ""),
     Shape("if-or", "", "(if pb || ps.isEmpty then pf else 1.5f)", "Float", ""), Shape("if-condition-if", "", "(if (if pb then pi > 1 else pi < 1) then ps else \"u\")", "String", ""),
     Shape("if-block", "", "(if pb then { val ib: Int = pi + 1; ib } else { other.mu(); 2 })", "Int", ""), Shape("while-count", "", "{ var wi: Int = 0; while wi < pi do wi = wi + 1; wi }", "Int", ""),
     Shape("while-and", "", "{ var wj: Int = pi; while wj > 0 && pb do { wj = wj - 2 }; wj }", "Int", ""), Shape("while-long", "", "{ var wk: Long = 0L; while (wk < 3L) { wk = wk + 1L; other.mu() }; wk }", "Long", ""),
@@ -637,7 +744,7 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("spread-held-receiver", "", "{ val sh: Int = other.va(Array(pv.twice.u, 2)*); sh + pi }", "Int", ""),
     Shape("spread-held-order", "", "{ val so: Int = other.vs(Array(pi +: ps)*); so + pi }", "Int", ""),
     Shape("super-call", "", "super.im(pi)", "Int", "members"), Shape("super-def", "", "super.sd", "Int", "members"),
-    Shape("super-default", "", "super.td()", "Int", "members"),
+    Shape("super-default", "", "super.td()", "Int", "members"), Shape("super-default-prior", "", "super.tdp(pi)()", "Int", "members"),
     Shape("bridge-value-class", "", "((new GivesV: Gives[V]).give().u + (new TakesV: TakesIn[V]).take(pv))", "Int", "method"),
     Shape("jar-trait-super-object", "", "new CloneCell(pi).clone().n", "Int", "method"),
     Shape("super-tail-receiver", "", "new TailBoth().loop(pi, pb)", "Boolean", "method"),
@@ -878,6 +985,12 @@ def tnarrow(a: Double): Char = a.toInt.toChar
     Shape("cond-block-not-test", "", "({ other.mu(); !pa.isInstanceOf[String] })", "Boolean", ""),
     Shape("cond-block-constant", "", "({ other.mu(); true })", "Boolean", ""), Shape("cond-block-null", "", "({ other.mu(); pa == null })", "Boolean", ""),
     Shape("cond-block-nested", "", "({ other.mu(); { other.mu(); pi > 1 && pb } })", "Boolean", ""),
+    // A constant reduced inside a block's result, and a block under a reduced connective.
+    Shape("cond-block-constant-and", "", "({ other.mu(); true && pb })", "Boolean", ""),
+    Shape("cond-block-constant-not", "", "({ other.mu(); !false })", "Boolean", ""),
+    Shape("cond-block-constant-or", "", "({ other.mu(); false || pi > 1 })", "Boolean", ""),
+    Shape("cond-constant-and-block", "", "(true && { other.mu(); pb })", "Boolean", ""),
+    Shape("if-block-constant", "", "(if ({ other.mu(); true }) pi else 2)", "Int", ""),
     Shape("cond-null", "", "(pa eq null)", "Boolean", ""), Shape("cond-null-left", "", "(null ne other)", "Boolean", ""),
     Shape("to-string-int", "", "pi.toString", "String", ""), Shape("to-string-long", "", "pl.toString", "String", ""),
     Shape("to-string-double", "", "pd.toString", "String", ""), Shape("to-string-float", "", "pf.toString", "String", ""),
