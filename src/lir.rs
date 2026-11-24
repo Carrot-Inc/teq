@@ -283,18 +283,12 @@ pub enum Unlowered {
     /// A member of a local trait that takes what the trait captures, called on `super`, or with
     /// a value for a capture that is no read of a local.
     LocalTraitMemberUnplain,
-    /// `new C(..)` through a constructor of no class (reported).
-    NewViaUnowned,
     /// A method's default whose getter is called on a receiver: `obj.f()`, `super.f()`.
     DefaultOnReceiver,
     /// A local def's default argument.
     DefaultOfLocalDef,
-    /// A by-name parameter's default whose getter is passed as a function.
-    DefaultByName,
     /// A constructor's default whose getter takes what only the method being written holds.
     DefaultCtorHeldHere,
-    /// A default of a constructor of no class (reported).
-    DefaultCtorUnowned,
     /// Varargs in a build whose library has no `ArraySeq` (reported).
     VarargsWithoutArraySeq,
     /// A `@jvm` template written from its text, or the typer's own text that is no one call.
@@ -575,6 +569,13 @@ pub enum Refusal {
     EnumCaseWithoutArguments,
     /// A class's arguments to a trait that do not match the trait's parameters.
     TraitArgumentsMismatch,
+    /// A by-name parameter's default whose getter returns the value while the parameter is read as a
+    /// function: a class file with no Scala signature, where scalac sees no default at all.
+    ByNameDefaultWithoutSignature,
+    /// A default of a constructor whose owner is no class.
+    DefaultOfConstructorOfNoClass,
+    /// A new instance through a secondary constructor whose owner is no class.
+    SecondaryConstructorOfNoClass,
 }
 
 impl Refusal {
@@ -589,6 +590,9 @@ impl Refusal {
             Refusal::JavaScriptTemplate(text) => format!("the JavaScript template {}", text),
             Refusal::EnumCaseWithoutArguments => "an enum case without the arguments of its enum".to_string(),
             Refusal::TraitArgumentsMismatch => "the arguments of a trait that its parameters do not match".to_string(),
+            Refusal::ByNameDefaultWithoutSignature => "the default of a by-name parameter of a class file without its Scala signature".to_string(),
+            Refusal::DefaultOfConstructorOfNoClass => "the default of a constructor that is not in a class".to_string(),
+            Refusal::SecondaryConstructorOfNoClass => "a secondary constructor that is not in a class".to_string(),
         }
     }
 }

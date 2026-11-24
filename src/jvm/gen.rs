@@ -270,11 +270,11 @@ pub(super) enum DefaultRoute {
     /// route has it, after the arguments).
     Held(Vec<(TExprId, ErasedType)>, Box<DefaultRoute>),
     /// Not lowered yet, and why: the getter called on a value class's receiver
-    /// (`Gen::method_default`); a local def's getter is lifted (`Gen::local_default`); a by-name
-    /// parameter's getter is passed as a function made where it is called
-    /// (`Gen::jar_default_thunk`); a getter takes what the method being written alone holds
-    /// (`Gen::ctor_default_lowers`).
+    /// (`Gen::method_default`); a local def's getter is lifted (`Gen::local_default`); a getter
+    /// takes what the method being written alone holds (`Gen::ctor_default_lowers`).
     Unlowered(Unlowered),
+    /// A default refused where it stands (`Kind::Refused`).
+    Refused(crate::lir::Refusal),
 }
 
 /// The way a call `r.s(args)` is generated: one decision (`Gen::call_route`), read by the
@@ -4554,12 +4554,6 @@ impl<'a> Gen<'a> {
         t
     }
 
-    pub fn load_file_module(&mut self, file: crate::source::FileId) -> Rc<str> {
-        let name = self.file_module_name(file);
-        self.get_module(&name);
-        name
-    }
-
     pub(super) fn static_route(&mut self, s: SymId) -> StaticRoute {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
@@ -5234,10 +5228,7 @@ impl<'a> Gen<'a> {
                 types.get(index).cloned().unwrap_or_else(ErasedType::object)
             }
             DefaultOf::Method(s) if cx.input.syms.sym(s).name == crate::names::INIT => {
-                let Owner::Class(c) = cx.input.syms.sym(s).owner else {
-                    self.unsupported("the default of a constructor of no class");
-                    return ErasedType::V;
-                };
+                let Owner::Class(c) = cx.input.syms.sym(s).owner else { unreachable!("refused by the route (`Gen::default_route`)") };
                 let types = self.param_types(s);
                 let temps = self.default_priors(&priors, &types);
                 self.ctor_default(c, Some(s), recv, index, &temps, &types);
@@ -5262,7 +5253,7 @@ impl<'a> Gen<'a> {
             DefaultOf::Ctor(c) => (c, None, self.ctor_param_types(c)),
             DefaultOf::Method(s) if cx.input.syms.sym(s).name == crate::names::INIT => {
                 // A constructor of no class is refused.
-                let Some(c) = self.ctor_class(s) else { return DefaultRoute::Unlowered(Unlowered::DefaultCtorUnowned) };
+                let Some(c) = self.ctor_class(s) else { return DefaultRoute::Refused(crate::lir::Refusal::DefaultOfConstructorOfNoClass) };
                 (c, Some(s), self.param_types(s))
             }
             DefaultOf::Method(_) => unreachable!("a method's default: `method_default_route` above"),
@@ -5336,7 +5327,7 @@ impl<'a> Gen<'a> {
         // A by-name parameter's getter passed as a function made where it is called.
         let thunk = self.function_type(0);
         if want == thunk && ret != thunk {
-            return DefaultRoute::Unlowered(Unlowered::DefaultByName);
+            return DefaultRoute::Refused(crate::lir::Refusal::ByNameDefaultWithoutSignature);
         }
         let args: Vec<GetterArgument> = taken
             .iter()
@@ -5357,7 +5348,7 @@ impl<'a> Gen<'a> {
                 let getter = self.super_getter_accessor_ref(t, s, i);
                 let want = if shape.by_name { shape.ret.clone() } else { m.params[i].clone() };
                 if want == thunk && getter.ret != thunk {
-                    return DefaultRoute::Unlowered(Unlowered::DefaultByName);
+                    return DefaultRoute::Refused(crate::lir::Refusal::ByNameDefaultWithoutSignature);
                 }
                 let args: Vec<GetterArgument> = taken
                     .iter()
@@ -5519,26 +5510,8 @@ impl<'a> Gen<'a> {
             None => m.params.clone(),
         };
         match recv {
-            // A getter selected on `super` inside a trait: the accessor the classes mixing the
-            // trait in implement (`SuperAccessors`), on the trait's `this`.
             Some(r) if matches!(cx.input.prog.expr(r), TExpr::Super(SuperTarget::Mixin(_))) => {
-                let TExpr::Super(SuperTarget::Mixin(t)) = cx.input.prog.expr(r) else { unreachable!() };
-                let accessor = self.super_getter_accessor_ref(t, s, i);
-                self.receiver(r, s);
-                let temps = if self.default_operands_are_paths(Some(r), priors) {
-                    self.default_priors(priors, &types)
-                } else {
-                    let owner_type = ErasedType::L(accessor.owner.clone());
-                    let slot = self.store_new(&owner_type);
-                    let temps = self.default_priors_held(priors, &types);
-                    self.load(slot, &owner_type);
-                    temps
-                };
-                let shape = self.default_getter_shape(s, i);
-                let want = if shape.by_name { shape.ret.clone() } else { m.params[i].clone() };
-                let args = self.getter_args(s, shape.before, &temps);
-                self.getter_call(Invoke::Interface, &accessor.owner, true, accessor.name, &accessor.desc, &args, &want, false);
-                want
+                unreachable!("a trait's super default is lowered (`Gen::method_default_route`)")
             }
             Some(r) => {
                 // A getter selected on `super` is the superclass's or the class's, as
@@ -5577,18 +5550,7 @@ impl<'a> Gen<'a> {
                 };
                 self.default_getter_value(s, i, &temps, special)
             }
-            None => {
-                // Arguments that are not all paths are evaluated before the file's object is loaded, as before.
-                let temps = if self.default_operands_are_paths(None, priors) {
-                    self.load_file_module(info.file);
-                    self.default_priors(priors, &types)
-                } else {
-                    let temps = self.default_priors_held(priors, &types);
-                    self.load_file_module(info.file);
-                    temps
-                };
-                self.default_getter_value(s, i, &temps, None)
-            }
+            None => unreachable!("a file member's default is lowered or refused (`Gen::method_default_route`)"),
         }
     }
 
@@ -6057,7 +6019,7 @@ impl<'a> Gen<'a> {
     /// `new C(args)` through the secondary constructor `s`: scalac's own `<init>` overload.
     fn new_via(&mut self, s: SymId, args: ListRef) -> ErasedType {
         match self.via_route(s, args) {
-            ViaRoute::Unowned => ErasedType::V,
+            ViaRoute::Unowned => unreachable!("refused by the lowering (`Gen::lower_new_via`)"),
             ViaRoute::Js(c) => {
                 self.new_object_of(c);
                 ErasedType::V

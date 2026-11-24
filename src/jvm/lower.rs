@@ -1494,7 +1494,7 @@ impl<'a> Gen<'a> {
             return Err(Unlowered::AfterEscape);
         }
         let (c, route) = match self.via_route(s, args) {
-            ViaRoute::Unowned => return Err(Unlowered::NewViaUnowned),
+            ViaRoute::Unowned => return Ok(self.lower_refused(Refusal::SecondaryConstructorOfNoClass)),
             ViaRoute::Js(_) => return Ok(self.lower_refused(Refusal::JavaScriptClass)),
             ViaRoute::Instance(c, route) => (c, route),
         };
@@ -1709,6 +1709,7 @@ impl<'a> Gen<'a> {
         }
         let (held, route) = match self.default_route(of, at, args) {
             DefaultRoute::Unlowered(why) => return Err(why),
+            DefaultRoute::Refused(refusal) => return Ok(self.lower_refused(refusal)),
             DefaultRoute::Held(held, route) => (Some(held), *route),
             route => (None, route),
         };
@@ -1762,7 +1763,7 @@ impl<'a> Gen<'a> {
                 let args = self.lower_getter_arguments(&args, held);
                 self.lower_getter_call_at(receiver, at, getter, &args, &want)
             }
-            DefaultRoute::Held(..) | DefaultRoute::Unlowered(_) => unreachable!("a route of a call, by `lower_default`"),
+            DefaultRoute::Held(..) | DefaultRoute::Unlowered(_) | DefaultRoute::Refused(_) => unreachable!("a route of a call, by `lower_default`"),
         }
     }
 
