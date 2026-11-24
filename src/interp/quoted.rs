@@ -2386,6 +2386,8 @@ impl<'a, 't> Interp<'a, 't> {
                     if let [t] = p.targs.as_slice() {
                         let (te, ty) = self.typer.lower_cast(recv, recv_ty, *t, span);
                         self.typer.prog.set_type(te, ty);
+                        // Any_asInstanceOf, as the macro's tree holds it (`Program::written_cast_bits`).
+                        self.typer.prog.mark_written_cast(te);
                         return Ok(te);
                     }
                 }

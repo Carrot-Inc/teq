@@ -4702,8 +4702,12 @@ impl<'a> Worker<'a> {
                 // `new String(..)` leave it set for the first class their arguments name.
                 let (te, ty) = self.apply_ctor(c, targs, lists, span, expected, named);
                 self.apply_seen_from = outer_seen;
-                if !explicit && self.capturing() && self.syms.class(c).mods & crate::ast::mods::CASE != 0 && matches!(self.prog.expr(te), TExpr::New(..)) {
-                    self.capture_form(te, Form::CaseApply);
+                if !explicit && self.syms.class(c).mods & crate::ast::mods::CASE != 0 && matches!(self.prog.expr(te), TExpr::New(..)) {
+                    // A creation of the companion's synthetic apply, `CI(1)` (`Program::apply_creation_bits`).
+                    self.prog.mark_apply_creation(te);
+                    if self.capturing() {
+                        self.capture_form(te, Form::CaseApply);
+                    }
                 }
                 (te, ty)
             }
@@ -5130,8 +5134,11 @@ impl<'a> Worker<'a> {
             if self.deps.is_some() {
                 self.deps_node(te, super::deps::Node::Apply(c));
             }
-            if self.capturing() && self.syms.class(c).mods & crate::ast::mods::CASE != 0 && matches!(self.prog.expr(te), TExpr::New(..)) {
-                self.capture_form(te, Form::CaseApply);
+            if self.syms.class(c).mods & crate::ast::mods::CASE != 0 && matches!(self.prog.expr(te), TExpr::New(..)) {
+                self.prog.mark_apply_creation(te);
+                if self.capturing() {
+                    self.capture_form(te, Form::CaseApply);
+                }
             }
             return (te, ty);
         }

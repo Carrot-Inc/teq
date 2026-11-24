@@ -1251,6 +1251,9 @@ impl<'a> Worker<'a> {
             }
             lowering => {
                 let (cast, ty) = self.lower_cast_as(walked, from, to, lowering);
+                if self.prog.is_written_cast(e) {
+                    self.prog.mark_written_cast(cast);
+                }
                 self.set_walked_type(w, cast, ty);
                 self.move_written_this(e, cast);
                 cast

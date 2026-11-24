@@ -219,6 +219,8 @@ impl<'a> Worker<'a> {
             let value = typer.prog.add(TExpr::Local(x));
             typer.prog.set_type(value, x_ty);
             let (cast, cast_ty) = typer.lower_cast(value, x_ty, t, span);
+            // `s.asInstanceOf[s.type & T]`, as `Synthesizer.synthesizedTypeTest` writes it (`Program::written_cast_bits`).
+            typer.prog.mark_written_cast(cast);
             let l = typer.prog.list(&[cast]);
             let yes = typer.prog.add(TExpr::New(some, l));
             let some_ty = typer.applied_class(some, &[cast_ty]);

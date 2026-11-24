@@ -95,6 +95,8 @@ impl Program {
             ascribed_bits,
             inlined_null_bits,
             cast_bits,
+            written_cast_bits,
+            apply_creation_bits,
             setter_assign_bits,
             removed_bits,
             tuple_index_bits,
@@ -170,6 +172,8 @@ impl Program {
             + ascribed_bits.held()
             + inlined_null_bits.held()
             + cast_bits.held()
+            + written_cast_bits.held()
+            + apply_creation_bits.held()
             + setter_assign_bits.held()
             + removed_bits.held()
             + tuple_index_bits.held()

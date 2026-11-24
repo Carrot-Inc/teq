@@ -1371,6 +1371,17 @@ pub struct Program {
     /// cast, a mirror's value), as bits by expression: what a macro's view of a body another worker
     /// typed reads (`tree_type`), every worker's marks in one set while forked.
     pub cast_bits: Bits,
+    /// The casts dotty's tree spells `asInstanceOf` (a TypeApply of Any_asInstanceOf), as bits by expression: the ones
+    /// the source writes, the synthesized TypeTest's (`Synthesizer.synthesizedTypeTest`) and a macro's
+    /// (`Select.unique(x, "asInstanceOf")`), each the node its lowering returns, the operand itself where the cast's
+    /// erasure makes it redundant. The typer's own casts (`lower_cast`: a product's element in `fromProduct`, a mirror's,
+    /// a `*:` chain's tuple class) are unmarked, as dotty makes them with `tpd.cast`, Any_typeCast before erasure.
+    /// dotty's exprPurity reads the first as Impure and the second as Pure; this mark tells them apart.
+    pub written_cast_bits: Bits,
+    /// The creations the typer made of a case class's companion's synthetic `apply` (`CI(1)`), as bits by expression;
+    /// a `new CI(1)` is unmarked. Both are a `New` of the class, but dotty's `CI(1)` is an Apply of the companion's
+    /// apply, whose qualifier is the companion's reference (isPureSyntheticCaseApply), and its `new` runs no companion.
+    pub apply_creation_bits: Bits,
     /// The setter calls the typer made of an assignment through an abstract var (`c.x = v`,
     /// `Worker::assignment`), as bits by expression: scalac's tree keeps an assignment, where a
     /// call written `c.x_=(v)` is an application (dotty's `Typer.typedAssign`), which the trees a
@@ -1675,6 +1686,8 @@ impl Program {
         self.ascribed_bits.fork();
         self.inlined_null_bits.fork();
         self.cast_bits.fork();
+        self.written_cast_bits.fork();
+        self.apply_creation_bits.fork();
         self.setter_assign_bits.fork();
         self.removed_bits.fork();
         self.tuple_index_bits.fork();
@@ -1694,7 +1707,7 @@ impl Program {
             let own_base = self.exprs.own_base();
             self.expr_types.follow_escapes(marks.clone(), own_base);
             self.expr_spans.follow_escapes(marks.clone(), own_base);
-            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.by_name_arg_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.inlined_null_bits, &mut self.cast_bits, &mut self.setter_assign_bits, &mut self.removed_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
+            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.by_name_arg_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.inlined_null_bits, &mut self.cast_bits, &mut self.written_cast_bits, &mut self.apply_creation_bits, &mut self.setter_assign_bits, &mut self.removed_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
                 bits.follow_escapes(marks.clone(), own_base);
             }
         }
@@ -1776,6 +1789,8 @@ impl Program {
             ascribed_bits: Bits::attach(self.ascribed_bits.shared_arc(), worker),
             inlined_null_bits: Bits::attach(self.inlined_null_bits.shared_arc(), worker),
             cast_bits: Bits::attach(self.cast_bits.shared_arc(), worker),
+            written_cast_bits: Bits::attach(self.written_cast_bits.shared_arc(), worker),
+            apply_creation_bits: Bits::attach(self.apply_creation_bits.shared_arc(), worker),
             setter_assign_bits: Bits::attach(self.setter_assign_bits.shared_arc(), worker),
             removed_bits: Bits::attach(self.removed_bits.shared_arc(), worker),
             tuple_index_bits: Bits::attach(self.tuple_index_bits.shared_arc(), worker),
@@ -1902,6 +1917,8 @@ impl Default for Program {
             ascribed_bits: Bits::default(),
             inlined_null_bits: Bits::default(),
             cast_bits: Bits::default(),
+            written_cast_bits: Bits::default(),
+            apply_creation_bits: Bits::default(),
             setter_assign_bits: Bits::default(),
             removed_bits: Bits::lazy(),
             tuple_index_bits: Bits::default(),
@@ -2232,6 +2249,26 @@ impl Program {
     #[inline(always)]
     pub fn is_cast(&self, e: TExprId) -> bool {
         self.cast_bits.has(e.0)
+    }
+
+    /// Marks `e` as a cast the source wrote (`written_cast_bits`).
+    pub fn mark_written_cast(&mut self, e: TExprId) {
+        self.written_cast_bits.set(e.0);
+    }
+
+    #[inline(always)]
+    pub fn is_written_cast(&self, e: TExprId) -> bool {
+        self.written_cast_bits.has(e.0)
+    }
+
+    /// Marks `e` as a creation made of a companion's synthetic `apply` (`apply_creation_bits`).
+    pub fn mark_apply_creation(&mut self, e: TExprId) {
+        self.apply_creation_bits.set(e.0);
+    }
+
+    #[inline(always)]
+    pub fn is_apply_creation(&self, e: TExprId) -> bool {
+        self.apply_creation_bits.has(e.0)
     }
 
     #[inline(always)]

@@ -3794,6 +3794,8 @@ impl<'a> Worker<'a> {
                     let js_written = self.written_js_alias(ids[0]);
                     let t = self.resolve_declared_type(ids[0]);
                     let cast = self.lower_cast_written(recv, recv_ty, t, span, js_written);
+                    // The cast the source wrote, whatever its lowering made of it (`Program::written_cast_bits`).
+                    self.prog.mark_written_cast(cast.0);
                     self.note_written_this(cast.0, ids[0]);
                     if cast.0 == recv && self.denotation_marks.is_some() {
                         self.mark_collapsed_call(cast.0);
@@ -4437,5 +4439,39 @@ mod op_memo_tests {
         // A class type whose companion has the extension: the first try applies, nothing is kept for it; a var of
         // an alias of Int is not a kept type's.
         assert_eq!(hits("opmemo-companion", "class E(val n: Int)\nobject E:\n  extension (e: E) def +=(i: Int): Unit = ()\nobject A:\n  type I = Int\n  def g(): Unit = { var e = new E(0); e += 1; e += 2 }\n  def h(): Int = { var i: I = 1; i += 1; i }\n"), 1);
+    }
+}
+
+#[cfg(test)]
+mod written_mark_tests {
+    /// The written casts and the creations of a companion's apply marked in a typed program
+    /// (`Program::written_cast_bits`, `Program::apply_creation_bits`), counted over its expressions: the casts the source
+    /// writes, whatever their lowering, and the case class creations written as the companion's apply, never `new`.
+    fn marks(name: &str, text: &str) -> (usize, usize) {
+        crate::with_typed_program(name, text, &[], |w| {
+            let errors: Vec<String> = w.diags.items.iter().filter(|d| !d.is_warning).map(|d| d.msg.clone()).collect();
+            assert!(errors.is_empty(), "{}: {:?}", name, errors);
+            // Every typed expression: the test's program types no standard library body, and its builds record no spans.
+            let ids: Vec<crate::tir::TExprId> = (0..w.prog.exprs.len() as u32).map(crate::tir::TExprId).collect();
+            let written = ids.iter().filter(|&&e| w.prog.is_written_cast(e)).count();
+            let created = ids.iter().filter(|&&e| w.prog.is_apply_creation(e)).count();
+            (written, created)
+        })
+    }
+
+    #[test]
+    fn the_source_s_casts_and_companion_applies_are_marked_and_nothing_else() {
+        // Two casts written, one an upcast its erasure makes the operand itself, one a downcast that keeps a node.
+        assert_eq!(marks("written-two", "object A:\n  def f(x: Any): Int = x.asInstanceOf[String].length\n  def g(s: String): Any = s.asInstanceOf[Any]\n"), (2, 0));
+        // No cast written: a pattern's test and the typer's own reading of its binder are not marked.
+        assert_eq!(marks("written-none", "object A:\n  def f(x: Any): Int = x match\n    case s: String => s.length\n    case _ => 0\n"), (0, 0));
+        // A case class made through its companion's apply is marked; one made with `new` is not. The case class's own
+        // members write no cast: `fromProduct`'s element is dotty's `ensureConforms`, an Any_typeCast.
+        assert_eq!(marks("created-apply", "case class CI(i: Int)\nobject A:\n  def f(): CI = CI(1)\n"), (0, 1));
+        assert_eq!(marks("created-new", "case class CI(i: Int)\nobject A:\n  def f(): CI = new CI(1)\n"), (0, 0));
+        // The synthesized TypeTest writes `s.asInstanceOf[s.type & T]`: marked. A product's mirror is the companion
+        // cast to the mirror's type, dotty's `mirrorRef.cast`: unmarked.
+        assert_eq!(marks("type-test", "import scala.reflect.TypeTest\nobject A:\n  def f(x: Any): Option[String] = summon[TypeTest[Any, String]].unapply(x)\n"), (1, 0));
+        assert_eq!(marks("mirror", "case class P(a: Int)\nobject A:\n  def m = summon[scala.deriving.Mirror.ProductOf[P]]\n"), (0, 0));
     }
 }

@@ -4125,6 +4125,9 @@ impl<'c> Copier<'c> {
                             // makes the value itself).
                             lowering => {
                                 let (id, ty) = t.lower_cast_as(a, from, to, lowering);
+                                if t.prog.is_written_cast(e) {
+                                    t.prog.mark_written_cast(id);
+                                }
                                 t.move_written_this(e, id);
                                 if id != a {
                                     t.prog.copy_span(e, id);
@@ -4201,6 +4204,13 @@ impl<'c> Copier<'c> {
         }
         if t.prog.is_inlined_null(e) {
             t.prog.mark_inlined_null(id);
+        }
+        // A written cast and a creation of a companion's apply stay what they are in every copy.
+        if t.prog.is_written_cast(e) {
+            t.prog.mark_written_cast(id);
+        }
+        if t.prog.is_apply_creation(e) {
+            t.prog.mark_apply_creation(id);
         }
         if t.capturing() {
             self.captured(t, e, id);

@@ -3537,6 +3537,13 @@ impl<'a> Worker<'a> {
         if self.prog.is_inlined_null(e) {
             self.prog.mark_inlined_null(id);
         }
+        // A written cast and a creation of a companion's apply stay what they are in every copy.
+        if self.prog.is_written_cast(e) {
+            self.prog.mark_written_cast(id);
+        }
+        if self.prog.is_apply_creation(e) {
+            self.prog.mark_apply_creation(id);
+        }
         // What `PureStats` removes of a block is removed of the block's copy where the copy is pure by itself
         // (`Program::removed_bits`).
         if self.prog.is_removed(e) && self.removed_copy(e, id) {
