@@ -99,6 +99,7 @@ suite runner-classes ./tests/runner-classes.sh
 suite watch-memory  ./tests/watch-memory.sh
 suite split-determinism ./tests/split-determinism.sh
 suite workers       ./tests/workers.sh
+suite constants     ./tests/constants/run.sh
 suite budget        ./bench/budget.sh
 suite runtime       ./tests/runtime.sh
 suite asymptotics   ./tests/asymptotics.sh

@@ -228,6 +228,7 @@ nir@16 1
 pairs-twin 70
 # estimated: pairs-twin on sixteen CPUs, from its 70 s on eight by every measured line's ratio 0.89 (17 lines)
 pairs-twin@16 62
+constants 37
 head-wait 40
 # measured: native-build by tests/gate-shard.sh's own run under taskset, on eight cores (the median of nine runs, 274 to
 # 288 s) and on their sixteen threads, host load 51 to 88, not by a gate's --record (the next one writes its machine's)

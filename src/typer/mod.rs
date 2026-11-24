@@ -6,6 +6,7 @@ mod arity;
 pub mod bundle;
 pub mod capture;
 mod capture_census;
+mod force_const;
 pub mod check;
 mod complete;
 mod constructors;

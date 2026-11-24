@@ -2424,6 +2424,9 @@ impl<'a> Worker<'a> {
     }
 
     fn global_callee(&mut self, s: SymId) -> Callee {
+        if super::force_const::on() {
+            self.force_const_asked(s);
+        }
         if let SymKind::Overloaded(_) = self.syms.sym(s).kind {
             return Callee::Overloaded { recv: None, recv_ty: None, set: s };
         }
@@ -4055,6 +4058,16 @@ impl<'a> Worker<'a> {
     /// `final val x = 1` without a type is a constant in Scala: a use is replaced by the literal
     /// (`constant_value`), another worker's initialiser read through its chunk.
     pub(super) fn constant_of(&mut self, s: SymId) -> Option<TExpr> {
+        let answer = self.constant_of_decided(s);
+        // A forced schedule's reader side (`TEQ_FORCE_CONST`): noted once the constant is decided, so that a
+        // withheld initialiser is published only after the decision that could have read it.
+        if super::force_const::on() {
+            self.force_const_asked(s);
+        }
+        answer
+    }
+
+    fn constant_of_decided(&mut self, s: SymId) -> Option<TExpr> {
         let mut s = s;
         for _ in 0..8 {
             if let Some(literal) = self.constant_by_signature(s) {

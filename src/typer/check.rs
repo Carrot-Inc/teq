@@ -3867,6 +3867,9 @@ impl<'a> Worker<'a> {
             let s = self.syms.sym(sym);
             (s.state().get(), s.file, s.def, s.owner, s.kind, s.span)
         };
+        if super::force_const::on() && state != Completion::Done {
+            self.force_const_reached(sym);
+        }
         // A signature of the std or a library is claimed and completed within one hold of the
         // loader's lock, whose holder then never meets another thread's claim;
         // outside the lock, a claimed one is waited for.
@@ -3937,6 +3940,9 @@ impl<'a> Worker<'a> {
             Completion::NotStarted => {
                 if self.forked {
                     crate::shake::point(crate::shake::Point::Claimed);
+                }
+                if super::force_const::on() {
+                    self.force_const_claimed(sym);
                 }
                 if self.profile.on && self.walk.taken_elsewhere(file) {
                     self.profile.stolen += 1;
@@ -4288,7 +4294,9 @@ impl<'a> Worker<'a> {
         let measured = crate::measure::wait_begin();
         let holder = if measured.is_some() { self.cell_owner(key).unwrap_or(0) } else { 0 };
         // The cycle check is the wait's own, under its lock (`shared::wait_until`).
-        let waited = crate::shared::wait_until(key, |k| self.cell_owner(k), || done(self));
+        // A forced refusal (`TEQ_FORCE_CONST=refuse:<name>`) is the cycle's answer, given without waiting.
+        let refused = super::force_const::on() && self.force_const_wait(key);
+        let waited = !refused && crate::shared::wait_until(key, |k| self.cell_owner(k), || done(self));
         crate::measure::wait_end(measured, if waited { crate::measure::Wait::cell(key.kind()) } else { crate::measure::Wait::CellRefused }, holder);
         if !waited {
             // Which of the cycle's members reports it is the order's to say.

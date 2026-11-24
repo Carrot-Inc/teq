@@ -162,6 +162,9 @@ impl<'a> Worker<'a> {
     pub(super) fn publish_body_bundle(&mut self, sym: crate::types::SymId) {
         let fun = self.fun_of_sym.local.get(&sym).copied();
         let init = self.val_init.local.get(&sym).copied();
+        if init.is_some() && super::force_const::on() {
+            self.force_const_unpublished(sym);
+        }
         let outside = crate::shared::lock_depth() == 0;
         if outside {
             crate::shake::point(crate::shake::Point::Computed);
@@ -323,6 +326,9 @@ impl<'a> Worker<'a> {
                 continue;
             }
             if let Some(&e) = self.val_init.local.get(&s) {
+                if super::force_const::on() {
+                    self.force_const_unpublished(s);
+                }
                 if held {
                     self.val_init.insert_shared(s, e);
                 } else if self.val_init.publish(s, e) {

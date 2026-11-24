@@ -66,6 +66,8 @@ const_trait_parent_argument	output differs
 const_unary_operand_before_init	output differs
 const_unary_plus_block_before_init	output differs
 const_unary_plus_effect_before_init	output differs
+constant_edges	error: inline value must have a literal constant type
+constant_top_level_reads	output differs
 conversion_open_var_lock	error: ambiguous given instances for Enc[List[Double]]: Enc.seq, Enc.list
 conversion_open_var_prefix	error: ambiguous given instances for Enc[List[Double]]: Enc.seq, Enc.list
 curried_alias_null_comparison	error: type mismatch: found Null, required Const[Any, Int]

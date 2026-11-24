@@ -535,13 +535,19 @@ const_trait_parent_argument	fail	-	output
 const_unary_operand_before_init	fail	-	output
 const_unary_plus_block_before_init	fail	-	output
 const_unary_plus_effect_before_init	fail	-	output
+constant_edges	fail	-	compile
 constant_final_val_accessor	pass	-	
 constant_final_val_early	pass	-	
 constant_final_vals	pass	-	
 constant_member_receiver	pass	-	
 constant_numeric_conversion	pass	-	
+constant_protected_read	pass	-	
+constant_reentry	pass	-	
+constant_rules	pass	-	
 constant_singleton_inferred	pass	-	
 constant_singleton_path	pass	-	
+constant_top_level	pass	-	
+constant_top_level_reads	fail	-	output
 constant_typed_literal	pass	-	
 constant_union_join	pass	-	
 constructor_access	pass	-	

@@ -527,13 +527,19 @@ cases/const_trait_parent_argument	pass	-
 cases/const_unary_operand_before_init	pass	-	
 cases/const_unary_plus_block_before_init	pass	-	
 cases/const_unary_plus_effect_before_init	pass	-	
+cases/constant_edges	cannot run	-	no leg builds
 cases/constant_final_val_accessor	pass	-	
 cases/constant_final_val_early	pass	-	
 cases/constant_final_vals	pass	-	
 cases/constant_member_receiver	pass	-	
 cases/constant_numeric_conversion	pass	-	
+cases/constant_protected_read	pass	-	
+cases/constant_reentry	pass	-	
+cases/constant_rules	pass	-	
 cases/constant_singleton_inferred	pass	-	
 cases/constant_singleton_path	pass	-	
+cases/constant_top_level	pass	-	
+cases/constant_top_level_reads	pass	-	
 cases/constant_typed_literal	pass	-	
 cases/constant_union_join	pass	-	
 cases/constructor_access	pass	-	

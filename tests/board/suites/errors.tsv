@@ -158,6 +158,7 @@ companion_proxy_prefix	pass	-
 condition_bracket_line_then_statement	pass	-	
 conflicting_bases	pass	-	
 conformance_extras	pass	-	
+constant_cycle	fail	-	missing '2:58: error: Cyclic reference involving val a'
 constructor_access	pass	-	
 constructor_access_anonymous	pass	-	
 constructor_access_default_getter	pass	-	

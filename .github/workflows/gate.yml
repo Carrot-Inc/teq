@@ -104,7 +104,7 @@ jobs:
             minutes: 25
             jars: true
           - group: jvm
-            suites: jvm jvm-21 pairs-twin java-sources java-reader
+            suites: jvm jvm-21 pairs-twin java-sources java-reader constants
             minutes: 40
             jars: true
           - group: libraries
