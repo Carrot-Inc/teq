@@ -27,9 +27,6 @@ Per scenario and variant, the differences are kept in four classes:
   or ownership against the fresh build's (`relation`), the run's diagnostics where the fresh
   build has others (`error`); a file that differs only in its class file's constant pool order or
   its TASTy identifier is `equivalent`, counted;
-- an accepted representation difference: the binary names of a package object's classes,
-  scalac's `p.package` and teq's `p.<File>$package` (the package-object mapping; both name the
-  class `p.package`), products and external changes compared through the mapping, counted;
 - an obligation of the scenario (its `expect` lines) that a side breaks, or an outcome other
   than its `status`.
 
@@ -152,33 +149,10 @@ def load(path):
     return d
 
 
-def mapping(scalac):
-    """scalac's binary names in teq's: a package object's class `p.package`, owned by `<dir>/F.scala`,
-    is teq's `p.F$package` by its binary name."""
-    owner = {}
-    for m in scalac["modules"]:
-        for src, cls in m.get("ownership", {}).get("classes", []):
-            owner[cls] = src
-        for src, cls in m.get("reference", {}).get("ownership", {}).get("classes", []) if isinstance(m.get("reference"), dict) else []:
-            owner.setdefault(cls, src)
-
-    def to_teq(cls):
-        # A binary class name, an object's with its `$`, maps as its class does.
-        name, dollar = (cls[:-1], "$") if cls.endswith("$") else (cls, "")
-        if name.endswith(".package") or name == "package":
-            src = owner.get(name)
-            if src:
-                base = os.path.basename(src)[:-len(".scala")]
-                return name[:-len("package")] + base + "$package" + dollar
-        return cls
-    return to_teq
-
-
 class Diffs:
     def __init__(self, key):
         self.key = key
         self.items = []  # (project, side, kind, cycle, name)
-        self.mapped = 0
         self.equivalent = 0
 
     def add(self, project, side, kind, cycle, name):
@@ -199,36 +173,21 @@ def changes_of(cycle):
     return {(c[0], c[1]): set((n, ",".join(sc)) for n, sc in c[2]) for c in cycle["changes"]}
 
 
-def product_mapping(to_teq):
-    """A product `<project>:<path>` of scalac's in teq's names: its class's binary name mapped."""
-    def to_teq_product(product):
-        project, _, path = product.partition(":")
-        if not path.endswith(".class"):
-            return product
-        binary = path[:-len(".class")].replace("/", ".")
-        return "%s:%s.class" % (project, to_teq(binary).replace(".", "/"))
-    return to_teq_product
-
-
 def token(text):
     """A name as one word of an expected.txt line."""
     return "_".join(str(text).split()) or "-"
 
 
-def compare_items(diffs, p, kind, cycle, a, b, mapped=lambda x: x):
-    """a, b: scalac's and teq's sets of words, scalac's through `mapped`."""
-    ma = set(mapped(x) for x in a)
-    if ma != set(a) and ma == set(b):
-        diffs.mapped += 1
-    for x in sorted(ma - set(b)):
+def compare_items(diffs, p, kind, cycle, a, b):
+    """a, b: scalac's and teq's sets of words."""
+    for x in sorted(set(a) - set(b)):
         diffs.add(p, "scalac", kind, cycle, token(x))
-    for x in sorted(set(b) - ma):
+    for x in sorted(set(b) - set(a)):
         diffs.add(p, "teq", kind, cycle, token(x))
 
 
-def compare_projects(diffs, ms, mt, to_teq):
+def compare_projects(diffs, ms, mt):
     p = ms["module"]
-    to_teq_product = product_mapping(to_teq)
     if ms["status"] != mt["status"]:
         diffs.add(p, "scalac", "status", "-", ms["status"])
         diffs.add(p, "teq", "status", "-", mt["status"])
@@ -265,16 +224,16 @@ def compare_projects(diffs, ms, mt, to_teq):
     ia, ib = ms["initial"] or {}, mt["initial"] or {}
     for field in ("added", "removed", "changed", "libraryDeps"):
         compare_items(diffs, p, "initial-" + field, "-", set(ia.get(field, [])), set(ib.get(field, [])))
-    compare_items(diffs, p, "initial-removedProducts", "-", set(ia.get("removedProducts", [])), set(ib.get("removedProducts", [])), to_teq_product)
+    compare_items(diffs, p, "initial-removedProducts", "-", set(ia.get("removedProducts", [])), set(ib.get("removedProducts", [])))
 
-    def external(changes, mapped):
-        return set("%s:%s:%s" % (mapped(c[0]), c[1], ";".join("%s/%s" % (n, ",".join(sc)) for n, sc in c[2])) for c in changes)
-    compare_items(diffs, p, "initial-external", "-", external(ia.get("external", []), to_teq), external(ib.get("external", []), lambda c: c))
+    def external(changes):
+        return set("%s:%s:%s" % (c[0], c[1], ";".join("%s/%s" % (n, ",".join(sc)) for n, sc in c[2])) for c in changes)
+    compare_items(diffs, p, "initial-external", "-", external(ia.get("external", [])), external(ib.get("external", [])))
     # What each source owns: its classes, and its products by binary name.
     compare_items(diffs, p, "owner", "-", set("%s:%s" % (s, c) for s, c in ms["ownership"]["classes"]),
                   set("%s:%s" % (s, c) for s, c in mt["ownership"]["classes"]))
     compare_items(diffs, p, "product-owner", "-", set("%s:%s" % (s, b) for s, b, _ in ms["ownership"]["products"]),
-                  set("%s:%s" % (s, b) for s, b, _ in mt["ownership"]["products"]), lambda x: x.split(":", 1)[0] + ":" + to_teq(x.split(":", 1)[1]))
+                  set("%s:%s" % (s, b) for s, b, _ in mt["ownership"]["products"]))
 
 
 def error_counts(errors):
@@ -439,15 +398,14 @@ def compare(results, name, variant, scenario):
         options = dumps[side].get("options")
         if options != scenario["options"][variant]:
             raise Broken("%s: the %s run took the options %s, the variant names %s" % (key, side, options, scenario["options"][variant]))
-    to_teq = mapping(dumps["scalac"])
-    ps = {m["module"]: m for m in dumps["scalac"]["modules"]}
+    ps ={m["module"]: m for m in dumps["scalac"]["modules"]}
     pt = {m["module"]: m for m in dumps["teq"]["modules"]}
     if list(ps) != list(pt):
         raise Broken("%s: the sides have other projects" % key)
     # A side that refused a project before the edit is held to its obligations alone.
     if not any(dumps[side].get("refused") for side in SIDES):
         for p in ps:
-            compare_projects(diffs, ps[p], pt[p], to_teq)
+            compare_projects(diffs, ps[p], pt[p])
     for side in SIDES:
         if not dumps[side].get("refused"):
             for m in dumps[side]["modules"]:
@@ -506,7 +464,7 @@ def main():
         sys.exit(1)
     used = set()
     out_lines = []
-    totals = {"stale": 0, "missing": 0, "extra": 0, "mapped": 0, "observed": 0, "obligation": 0, "equivalent": 0}
+    totals = {"stale": 0, "missing": 0, "extra": 0, "observed": 0, "obligation": 0, "equivalent": 0}
     if only is not None:
         unknown = only - set(scenarios)
         if unknown:
@@ -523,7 +481,6 @@ def main():
                 failures += 1
                 print("FAIL    %s: %s" % (key, e))
                 continue
-            totals["mapped"] += diffs.mapped
             totals["equivalent"] += diffs.equivalent
             batches, statuses = frozen(dumps)
             batches, statuses = merge_sides(batches, 4), merge_sides(statuses, 3)
@@ -555,7 +512,7 @@ def main():
                     print("FAIL    %s %s %s %s %s %s: %s" % (key, project, side, kind, cycle, item, cls))
             failures += bad
             if not bad:
-                print("pass    %s: %d differences named, %d mapped" % (key, len(set(diffs.items)), diffs.mapped))
+                print("pass    %s: %d differences named" % (key, len(set(diffs.items))))
     if freeze:
         print("\n".join(out_lines))
         sys.exit(0)
@@ -567,8 +524,8 @@ def main():
         if (e[0] in keys or only is None) and e not in used:
             failures += 1
             print("stale   inv-diff %s: nothing differs there now" % " ".join(e))
-    print("summary invalidation: %d stale, %d missing, %d extra, %d observed, %d obligations; %d mapped, %d equivalent files; %d failing" % (
-        totals["stale"], totals["missing"], totals["extra"], totals["observed"], totals["obligation"], totals["mapped"], totals["equivalent"], failures))
+    print("summary invalidation: %d stale, %d missing, %d extra, %d observed, %d obligations; %d equivalent files; %d failing" % (
+        totals["stale"], totals["missing"], totals["extra"], totals["observed"], totals["obligation"], totals["equivalent"], failures))
     sys.exit(1 if failures else 0)
 
 

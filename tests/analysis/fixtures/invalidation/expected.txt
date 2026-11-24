@@ -22,8 +22,3 @@ inv-diff inline-body/default a scalac next 1 iba.Caller inline-body
 inv-diff inline-body/default a scalac recompiled 2 iba.Caller inline-body
 inv-diff inline-body/default a teq continues 1 False inline-body
 inv-diff inline-body/default a teq stale - iba/Caller$.class:differs inline-body
-inv-status package-object/default a both passed
-inv-status package-object/default b both passed
-inv-batch package-object/default a both 1 a/Obj.scala
-inv-batch package-object/default a both 2 a/UserA.scala
-inv-batch package-object/default b both 1 b/UserB.scala

@@ -223,8 +223,7 @@ def invalidation_tests():
     difference beneath an active exception, a changed file owner, a product's owner changed on
     one side, a dropped source batch, a stale relation, a modified name's scope, a removed
     product, an error's message, line or multiplicity in a file both builds report, a run's options, a broken obligation, a frozen batch
-    changed or an exception with nothing to explain; a package object's products, which the
-    package-object mapping names otherwise, compare equal through it."""
+    changed or an exception with nothing to explain."""
     base = {}
     for f in sorted(os.listdir(INVALIDATION)):
         if f.endswith(".json"):
@@ -267,11 +266,6 @@ def invalidation_tests():
 
     def compiled_non_user(dumps):
         module(teq(dumps, "result-type"), "a")["batches"][1]["sources"].append("a/NonUserA.scala")
-
-    def package_object_owner(dumps):
-        o = module(teq(dumps, "package-object"), "a")["ownership"]["classes"]
-        i = next(i for i, (s, c) in enumerate(o) if c.endswith(".package"))
-        o[i] = ["a/UserA.scala", o[i][1]]
 
     def product_moved(dumps):
         """A product attributed to another source of the file's project on teq's side, in the run's
@@ -324,7 +318,6 @@ def invalidation_tests():
     check("a stale relation in the run's analysis", stale_relation, 1)
     check("another stale file beneath the inline-body exception", another_stale, 1)
     check("a non-user compiled again", compiled_non_user, 1)
-    check("a package object's class moved to another source", package_object_owner, 1)
     check("a side's dump missing", no_dump, 1)
     check("a product's owner changed on one side, its run and fresh build alike", product_moved, 1)
     check("a modified name's scope changed", scope_changed, 1)

@@ -541,8 +541,8 @@ scenario package-object
   pad 3
   edit replace a/Obj.scala
   status pass
-  rule a package object's member changed: its class `p.package` on both sides, which zinc's rule for package objects invalidates, teq's class files `p/<File>$package` (the package-object mapping)
-  obligation the users of `f` are compiled again in the project and downstream, the user of `g` is not, the products compared through the mapping
+  rule a package object's member changed: its class `p.package` on both sides, which zinc's rule for package objects invalidates
+  obligation the users of `f` are compiled again in the project and downstream, the user of `g` is not
   expect compiled a/UserA.scala b/UserB.scala
   expect not-compiled a/NonUserA.scala
 
