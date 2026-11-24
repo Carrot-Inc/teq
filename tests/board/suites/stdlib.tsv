@@ -31,6 +31,7 @@ anon_givens	pass	-
 anon_hidden_generic	fail	-	output differs
 anon_instance_refined	pass	-	
 anon_members	pass	-	
+anon_parent_lambda_outer	pass	-	
 anon_parentless_prefixed	pass	-	
 anon_sites	pass	-	
 anon_trait_superclass_call_forms	pass	-	
@@ -1645,6 +1646,7 @@ jdk_member_missing_class	fail	-	error: Found: Throwable
 jdk_routes_compiler_subset	fail	-	error: not supported on JavaScript: class File java.io.File (a Java definition without an implementation in the std's platform layer)
 jdk_static_values_stable	fail	-	error: a singleton type needs a val, a parameter or an object
 jdk_statics_import	fail	-	error: Not found: getType
+js_default_before_super	pass	-	
 junit_comparison_failure	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 jvm_direct_interfaces	fail	-	error: method andThen overrides nothing
 jvm_lazy_local_closure	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
@@ -1741,7 +1743,7 @@ lazy_inline_expansions_jar	fail	-	error: cannot resolve import: lazyinline not f
 lazy_inline_unapply	pass	-	
 lazy_list_seq	pass	-	
 lazy_local_class_forward_names	fail	-	TypeError: $getClass(...).getDeclaredFields is not a function
-lazy_local_constructor_homes	fail	-	ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor
+lazy_local_constructor_homes	pass	-	
 lazy_local_constructor_names	fail	-	TypeError: $classValue(...).getDeclaredMethods is not a function
 lazy_local_constructors	pass	-	
 lazy_local_enclosing_this	pass	-	
@@ -2338,6 +2340,7 @@ package_object_braces	pass	-
 package_object_default_to_string	fail	-	output differs
 package_object_derived_names	fail	-	error: cannot resolve import: magnolia1 not found
 package_object_import_parent	pass	-	
+package_object_outlined_derivation	fail	-	error: cannot resolve import: magnolia1 not found
 package_object_parents	pass	-	
 package_val_object_accessor	pass	-	
 pair_extractor	pass	-	
@@ -2591,7 +2594,7 @@ return_tail_call_argument_jump	fail	-	RangeError: Maximum call stack size exceed
 return_tail_call_deep	fail	-	RangeError: Maximum call stack size exceeded
 return_tail_call_default_capture	pass	-	
 return_tail_call_default_receiver	pass	-	
-return_tail_call_finally_jump	fail	-	output differs
+return_tail_call_finally_jump	fail	-	JavaScriptException:RangeError: Maximum call stack size exceeded 7373
 return_tail_call_guarded	fail	-	output differs
 return_tail_call_if_both	pass	-	
 return_tail_call_inline_by_name	fail	-	RangeError: Maximum call stack size exceeded
@@ -3312,6 +3315,7 @@ val_overrides_tostring	pass	-
 val_refinement_subst	pass	-	
 value_class_array_store	pass	-	
 value_class_can_equal	pass	-	
+value_class_extension_order	pass	-	
 value_class_inherited_equality	pass	-	
 value_class_intersection_box	pass	-	
 value_class_intersection_upcast	fail	-	output differs

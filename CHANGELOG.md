@@ -30,6 +30,12 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   makes it, found by a summon, a call's implicit argument or another local given's using clause, where it was refused
   ("local givens cannot take parameters"). Two of them of one type are scalac's ambiguity, and two anonymous ones
   of one type scalac's double definition.
+- On JavaScript, a class nested in another class (or in a local class, a local object or a trait) whose parent call
+  is evaluated ahead of the parent's constructor (a default before a written argument, named arguments out of
+  order, a secondary constructor's default) runs: the hoisted default getters and the hoisted written arguments that
+  read the enclosing instance take it from the constructor's own parameter, as Scala.js's are, where they read it
+  from `this` before `super` (a `ReferenceError` at run time) or, for an enum's case, from a field not yet set (a
+  `TypeError`).
 - An inline given whose using clause has a default (`inline given bark(using msg: String = "Woof!"): String`) has
   that default's getter as a method of its class (`Dog.bark$default$1`), as scalac's has: a call that leaves the
   argument out through an export of an instance or an import of its givens applies it, where it was missing (the

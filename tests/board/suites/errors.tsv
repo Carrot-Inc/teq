@@ -771,7 +771,7 @@ missing_given_contexts_given_instance	pass	-
 missing_given_contexts_named_package	pass	-	
 missing_given_contexts_object	pass	-	
 missing_given_contexts_package_object	pass	-	
-missing_given_contexts_row_interpolation_definition	fail	-	missing 'empty_package_k18.scala:1:68: error: No given instance of type Numeric[String] was found for parameter need of method call'
+missing_given_contexts_row_interpolation_definition	fail	-	missing '21 errors found'
 missing_given_contexts_row_local_given_class	fail	-	missing 'class_k01.scala:2:82: error: No given instance of type Numeric[String] was found for parameter need of given instance call in class C01'
 missing_given_contexts_row_local_given_parameters	fail	-	missing 'class_k01.scala:2:69: error: No given instance of type Numeric[String] was found for parameter need of given instance call in class C01'
 missing_given_contexts_row_pattern_definitions	fail	-	missing 'empty_package_k02.scala:1:73: error: No given instance of type Numeric[String] was found for parameter need of method call'

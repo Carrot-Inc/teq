@@ -240,6 +240,11 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   run time, and a superclass body reading a `val` the subclass overrides sees its own value until the
   subclass body runs, where scalac reads `0` or `null`; on JavaScript a concatenation renders an operand as its
   `+` runs, as under Scala.js.
+- An anonymous class whose parent's arguments are evaluated ahead of the parent's constructor (a default before a
+  written argument, or named arguments out of order) and include a lambda reading the enclosing instance
+  (`new C(z = n(9), f = k => k + q) {}`, `C` an inner class) runs on every target and prints what Scala.js prints
+  (`519` for `q = 5`), where the class scalac 3.8.4 writes for the JVM does not load (`java.lang.VerifyError: Bad
+  type on operand stack ... Type uninitializedThis (current frame, stack[0]) is not assignable to '..$anon$1'`).
 - A call of a def through a top-level export does not initialise the exporting file, and on JavaScript and in
   the interpreter an export of a trait is no member of the classes below it (`needs to be abstract` where
   scalac accepts), a call being compiled as a call of the original.

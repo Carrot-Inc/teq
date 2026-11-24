@@ -229,7 +229,6 @@ lambda_spread_poly_function_bound	error: type mismatch: found Any, required Seq[
 lazy_initializer_release	TypeError: $getClass(...).getDeclaredField is not a function
 lazy_inline_expansions_jar	error: cannot resolve import: lazyinline not found
 lazy_local_class_forward_names	TypeError: $getClass(...).getDeclaredFields is not a function
-lazy_local_constructor_homes	ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor
 lazy_local_constructor_names	TypeError: $classValue(...).getDeclaredMethods is not a function
 lazy_local_extras_names	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
 lazy_local_forward	ReferenceError: Cannot access 'x' before initialization

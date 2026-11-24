@@ -32,6 +32,7 @@ anon_hidden_generic	pass	-
 anon_instance_refined	pass	-	
 anon_js_object_undefined	pass	-	
 anon_members	pass	-	
+anon_parent_lambda_outer	pass	-	
 anon_parentless_prefixed	pass	-	
 anon_sites	pass	-	
 anon_trait_superclass_call_forms	pass	-	
@@ -1663,6 +1664,7 @@ js_closure_null_param	fail	-	< 42
 js_computed_name	fail	-	< 1
 js_constructor_of	pass	-	
 js_ctor_param_jsname_suspended	pass	-	
+js_default_before_super	pass	-	
 js_dictionary_not_object	pass	-	
 js_dom_list_foreach	pass	-	
 js_dynamic_is_scala_dynamic	pass	-	
@@ -2381,6 +2383,7 @@ package_object_braces	pass	-
 package_object_default_to_string	fail	-	< p.package$O$
 package_object_derived_names	pass	-	
 package_object_import_parent	pass	-	
+package_object_outlined_derivation	pass	-	
 package_object_parents	pass	-	
 package_val_object_accessor	pass	-	
 pair_extractor	pass	-	
@@ -3380,6 +3383,7 @@ val_overrides_tostring	pass	-
 val_refinement_subst	pass	-	
 value_class_array_store	pass	-	
 value_class_can_equal	pass	-	
+value_class_extension_order	pass	-	
 value_class_inherited_equality	pass	-	
 value_class_intersection_box	pass	-	
 value_class_intersection_upcast	fail	-	< a local: java.lang.ClassCastException

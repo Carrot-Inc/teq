@@ -2862,7 +2862,15 @@ impl<'a> Emitter<'a> {
             }
             let this = self.this_name;
             if !at_creation {
+                // The parent's prelude (its arguments and default getters hoisted ahead of the call)
+                // runs before `super()`, as the arguments do: it reads the constructor's parameters
+                // and captures as such, the outer instance a getter takes being the parameter passed
+                // to `super` (Scala.js's `JSCodeGen`); `this` and its fields are not there yet.
+                let outer_locals = std::mem::replace(&mut self.ctor_locals, tc.ctor_params.clone());
+                let before_super = std::mem::replace(&mut self.before_super, true);
                 self.emit_block_stmts(tc.parent_prelude);
+                self.before_super = before_super;
+                self.ctor_locals = outer_locals;
             }
             if is_throwable {
                 // The message reaches `Error`, so JavaScript code and stack traces see it.
