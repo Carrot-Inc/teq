@@ -6603,8 +6603,18 @@ impl<'a> Worker<'a> {
             self.inline.copies.push((te, parameter));
         }
         if eta.is_empty() {
-            te = self.wrap_hoisted(hoist_mark, te);
             ty = self.skolemized_annotated_result(call.sym, ty);
+            // A call that leaves a default out and binds something ahead for its getter (its
+            // receiver, an earlier clause's arguments) is typed before the block of those bindings
+            // is made around it, as dotty types the application and then wraps it
+            // (`Applications.scala`'s `assignType`, then `wrapDefs`; the block's type is its
+            // expression's): the call inside keeps its own type, which the JVM's lowering reads to
+            // convert its result.
+            let leaves_default = plan.as_ref().is_some_and(|p| !p.defaults.is_empty());
+            if leaves_default && self.hoisted.len() > hoist_mark && self.prog.type_of(te).is_none() {
+                self.prog.set_type(te, ty);
+            }
+            te = self.wrap_hoisted(hoist_mark, te);
         } else {
             (te, ty) = self.widen_lambda_result(te, ty, eta_ret_expected, None, span);
             if let (Some(ret), true, 1) = (eta_ret_expected, eta_sam.is_some(), eta.len()) {

@@ -24,6 +24,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   name), and so does the package's own code, chained package clauses' included, as scalac's does, where a build of
   the sources together found none of them and went on to the implicit scope: the program ran with another given. A
   package object read from another module's products had them.
+- A generic method's call that leaves a default out after binding something ahead (an earlier clause's arguments,
+  `def f[A](x: A)(y: A = x): A` called as `f(new V(2))()`, or its receiver, `(new K).f(v)`) gives a value class its
+  own type on the JVM, as scalac: such a call at a value class `V` threw `ClassCastException` (`V` cannot be cast to
+  `Integer`).
 - An anonymous class of a trait over a class (`new T {}` for `trait T extends A`) passes `A`'s secondary-constructor
   arguments and a local `A`'s captured default, as scalac (JavaScript printed `undefined` or `0`; the JVM refused).
 - On JavaScript and in the interpreter a named tuple's values are covariant, as under scalac (`NamedTuple[N, +V]`):
