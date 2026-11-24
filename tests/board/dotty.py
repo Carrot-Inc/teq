@@ -1465,6 +1465,47 @@ def held_to_scalac(ctx, test, diags, rx, prefixes):
     return held_to_oracle(ctx.root, entry, diags)
 
 
+# An error of a phase after the typing, which `teq compiler check` cannot give and dotty's neg tests meet (vulpix
+# compiles them to the back end): a neg test whose .check names one is built for the JVM too where the check gives
+# fewer errors than it marks (`later_phase`). dotty 3.8.4's sources:
+LATER_PHASES = [
+    # the back end's names past the JVM's limits: BCodeBodyBuilder.scala:593 (a string constant) and 614,
+    # BCodeHelpers.scala:371 and 530, BCodeSkelBuilder.scala:344 and 752
+    re.compile(r"is too long for the JVM"),
+    # the back end's parameter list past 254 slots: BCodeSkelBuilder.scala:866
+    re.compile(r"Platform restriction: a parameter list's length cannot exceed"),
+    # a clash after erasure, E120 in ElimErasedValueType.scala:119 (E120's "Conflicting definitions" is the
+    # typer's, Checking.scala:1378, which the check gives)
+    re.compile(r"\[E120\][^\n]*\n(?:[^\n]*\n)*?[^\n]*after erasure"),
+]
+
+
+def later_phase(test):
+    """Whether the test's .check names an error of a phase after the typing (LATER_PHASES)."""
+    path = check_file(test)
+    if not path:
+        return False
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    return any(rx.search(text) for rx in LATER_PHASES)
+
+
+def neg_judged(ctx, test, scratch, outcome, line, diags):
+    """A neg or warn test's (verdict, first line) from its check (`neg_or_warn`); a neg test of the JVM's the check
+    leaves failing, whose .check names an error of a phase after the typing (`later_phase`), built for the JVM too,
+    the marks held to the check's diagnostics and the build's, its line saying so; that build's timeout or crash the
+    test's."""
+    verdict, why = neg_or_warn(ctx, test, outcome, line, diags)
+    if test.row.kind != "neg" or verdict != "fail" or test.row.platform == "scala-js" or not later_phase(test):
+        return verdict, why
+    j_outcome, j_line, j_diags, _ = compile_groups(ctx, test, scratch, "jvm", "jvm")
+    if j_outcome in ("timeout", "crash"):
+        return j_outcome, f"{j_line} (the JVM build)"
+    merged = diags + [d for d in j_diags if d not in diags]
+    verdict, why = neg_or_warn(ctx, test, "errors" if any(d.get("severity") == "error" for d in merged) else outcome, line, merged)
+    return verdict, (f"{why} (the JVM build)" if why else why)
+
+
 def neg_or_warn(ctx, test, outcome, line, diags):
     """A neg or warn test from what teq's compilations gave (`compile_groups`: their outcome, its first line,
     their records): (verdict, first line). The whole decision, and a function of the test's files, those records
@@ -1667,7 +1708,7 @@ def judge(ctx, test):
     if kind == "nocrash":
         return "pass", other, ""
     if kind in ("neg", "warn"):
-        verdict, why = neg_or_warn(ctx, test, outcome, line, diags)
+        verdict, why = neg_judged(ctx, test, scratch, outcome, line, diags)
         return verdict, other, why
     if kind == "patmat":
         got = patmat_lines(diags)

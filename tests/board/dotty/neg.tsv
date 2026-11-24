@@ -601,8 +601,8 @@ i15741.scala	fail	-	marks: no error where 2 are marked
 i15750.scala	fail	-	marks: 2 errors where 3 are marked
 i15784.scala	fail	-	marks: 10 errors where 2 are marked: i15784.scala:2:21: expected ')', found '@'
 i15785.scala	fail	-	marks: no error where 1 are marked
-i15850-a.scala	fail	-	marks: no error where 1 are marked
-i15850-b.scala	fail	-	marks: no error where 1 are marked
+i15850-a.scala	fail	-	marks: no error where 1 are marked (the JVM build)
+i15850-b.scala	fail	-	marks: no error where 1 are marked (the JVM build)
 i15855.scala	pass	-	
 i15897.scala	fail	-	check: diagnostic 1 of 4: scalac's is error i15897.scala:7:31 end of statement expected but '=' found; teq's is error i15897.scala:4:24 Ambiguous overload. The overloaded alternatives of method mode in object O with types
 i15898.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i15898.scala:16:16 None of the overloaded alternatives of constructor AC in class AC with types; teq's is error i15898.scala:16:12 None of the overloaded alternatives of constructor AC in class AC
@@ -729,7 +729,7 @@ i18408c.scala	fail	-	check: diagnostic 1 of 3: scalac's is error i18408c.scala:2
 i1845.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i1845.scala:2:12 identifier expected; teq's is error i1845.scala:2:12 type this not found
 i18453.min.scala	pass	-	
 i18453.scala	pass	-	
-i18458.scala	fail	-	marks: no error where 1 are marked
+i18458.scala	fail	-	marks: no error where 1 are marked (the JVM build)
 i1846.scala	fail	-	marks: 21 errors where 12 are marked: i1846.scala:6:20: expected a pattern, found indented block
 i18533	pass	-	
 i18545.scala	fail	-	marks: 2 errors where 5 are marked
@@ -888,7 +888,7 @@ i23155a.scala	fail	-	marks: 2 errors where 1 are marked: i23155a.scala:4:10: wro
 i23156.scala	fail	-	marks: 3 errors where 1 are marked: i23156.scala:3:10: wrong number of patterns for an extractor of <error>: found 2
 i23179-reverse.scala	fail	-	marks: 1 errors where 2 are marked
 i23261.scala	fail	-	check: diagnostic 1 of 6: scalac's is error i23261.scala:2:23 Cannot prove that (0.0d : Double) =:= (-0.0d : Double).; teq's is error i23261.scala:2:23 Cannot prove that 0.0 =:= -0.0.
-i23350.scala	fail	-	marks: no error where 1 are marked
+i23350.scala	fail	-	marks: no error where 1 are marked (the JVM build)
 i23400.scala	fail	-	option: -preview (teq has no flag for it)
 i23402.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i23402.scala:6:6 Conflicting definitions:; teq's is error i23402.scala:6:6 apply is already defined as method apply
 i23402b.scala	fail	-	check: diagnostic 1 of 1: error i23402b.scala:4:6, line 4 of the message: scalac's is have the same type (p1: String, p2: Int): A after erasure.; teq's is have the same type after erasure.

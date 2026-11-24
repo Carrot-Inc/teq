@@ -1933,6 +1933,71 @@ while IFS=$'\t' read -r said scenario; do
   check "board: $scenario" "$work/board.log" [ "$said" = ok ]
 done < <(grep -E $'^(ok|FAIL)\t' "$work/board.log")
 check "board: every scenario of the judge was held" "$work/board.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board.log")" = 121 ]'
+# A neg test whose .check names an error of a phase after the typing (tests/board/dotty.py's LATER_PHASES: the back
+# end's names too long for the JVM and its parameter list past 254 slots, a clash after erasure): where the check
+# leaves it failing, built for the JVM too, the marks held to both and its line saying so; never built for a .check
+# naming the typer's error, for a row of Scala.js, nor where the check meets the marks; the JVM build's timeout or
+# crash the verdict. The builds are a stand-in's records (compile_groups planted), so that no compiler runs.
+python3 -B - "$work/board-later" > "$work/board-later.log" 2>&1 <<'PY'
+import os, sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, "tests/board")
+import dotty as D
+import rows as ROWS
+root = sys.argv[1]
+os.makedirs(os.path.join(root, "tests", "neg"))
+ctx = D.Ctx()
+ctx.root, ctx.group_args, ctx.oracle = root, {}, {}
+LONG = "-- Error: tests/neg/{0}:1:8 ---\n1 |val x = \"AAAA\" // error\n  |        ^\n  |        String constant is too long for the JVM\n"
+TYPER = "-- [E007] Type Mismatch Error: tests/neg/{0}:1:13 ---\n1 |val x: Int = \"\" // error\n  |             ^^\n"
+CLASH = "-- [E120] Naming Error: tests/neg/{0}:1:7 ---\n1 |object D extends A: // error\n  |       Name clash between defined and inherited member:\n  |       have the same type (a: Object): Unit after erasure.\n"
+def neg(name, check, platform="jvm"):
+    path = os.path.join(root, "tests", "neg", name)
+    with open(path, "w") as fh:
+        fh.write('val x = "AAAA" // error\n')
+    with open(path[:-len(".scala")] + ".check", "w") as fh:
+        fh.write(check.format(name))
+    return D.Test(ROWS.Row("neg", "neg", "neg", "made up", [], [], platform=platform), name, [[path]], [path[:-len(".scala")]])
+built = []
+def planted(error):
+    def compile_groups(ctx, test, scratch, target, tag, extra=None):
+        built.append((test.name, target))
+        errors = [{"severity": "error", "file": test.files[0], "line": 1, "col": 9, "message": error}] if error else []
+        return ("errors" if errors else "ok", errors[0]["message"] if errors else "", errors, None)
+    return compile_groups
+def said(name, got, verdict, line, builds):
+    ok = got[0] == verdict and (got[1] == line if not line.endswith("...") else got[1].startswith(line[:-3])) and builds == built
+    print(("ok\t" + name) if ok else f"FAIL\t{name}: wanted {(verdict, line, builds)}, the judge said {got} after the builds {built}")
+    built.clear()
+check_error = [{"severity": "error", "file": None, "line": None, "col": None, "message": "x"}]
+D.compile_groups = planted("String constant is too long for the JVM")
+t = neg("long.scala", LONG)
+said("a back end's error the JVM build gives turns its test", D.neg_judged(ctx, t, root, "ok", "", []), "marks", D.MARKS_ALONE + "...", [("long.scala", "jvm")])
+t = neg("clash.scala", CLASH)
+said("a clash after erasure is built for the JVM too", D.neg_judged(ctx, t, root, "ok", "", []), "marks", D.MARKS_ALONE + "...", [("clash.scala", "jvm")])
+D.compile_groups = planted(None)
+t = neg("long2.scala", LONG)
+said("a back end's error the JVM build does not give: failing, its line saying the build ran",
+     D.neg_judged(ctx, t, root, "ok", "", []), "fail", "marks: no error where 1 are marked (the JVM build)", [("long2.scala", "jvm")])
+t = neg("typer.scala", TYPER)
+said("a .check naming the typer's error is never built", D.neg_judged(ctx, t, root, "ok", "", []), "fail", "marks: no error where 1 are marked", [])
+t = neg("js.scala", LONG, platform="scala-js")
+said("a row of Scala.js is never built for the JVM", D.neg_judged(ctx, t, root, "ok", "", []), "fail", "marks: no error where 1 are marked", [])
+t = neg("met.scala", LONG)
+met = [{"severity": "error", "file": t.files[0], "line": 1, "col": 9, "message": "String constant is too long for the JVM"}]
+said("a test the check already meets is never built", D.neg_judged(ctx, t, root, "errors", "", met), "marks", D.MARKS_ALONE + "...", [])
+for outcome, line in (("timeout", "a limit of 60 s"), ("crash", "teq: internal error")):
+    def compile_groups(ctx, test, scratch, target, tag, extra=None, outcome=outcome, line=line):
+        built.append((test.name, target))
+        return (outcome, line, [], None)
+    D.compile_groups = compile_groups
+    t = neg(f"{outcome}.scala", LONG)
+    said(f"the JVM build's {outcome} is the verdict, its line saying the build", D.neg_judged(ctx, t, root, "ok", "", []), outcome, f"{line} (the JVM build)", [(f"{outcome}.scala", "jvm")])
+PY
+while IFS=$'\t' read -r said scenario; do
+  check "board: $scenario" "$work/board-later.log" [ "$said" = ok ]
+done < <(grep -E $'^(ok|FAIL)\t' "$work/board-later.log")
+check "board: every scenario of the later phases' leg was held" "$work/board-later.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board-later.log")" = 8 ]'
 
 fi
 if piece_has board-cap; then
