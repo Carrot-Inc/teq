@@ -290,11 +290,14 @@ def builtFiles(work: Path): Vector[Path] = files(work).filterNot(f => work.relat
   // Two builds into one work directory at once (the second started a moment after the first, the moment changing),
   // with --lib-dirs whose header gives the sixty C files of a library one value or the other: each build waits its turn
   // for the directory (`<work>/lock`) and its executable prints its own value, in every one of forty pairs; then three
-  // at once, ten times. Then a build killed (teq alone, SIGKILL) while it compiles, and the other built at once into the
-  // directory: the killed build's compilers (each a zig that waits three seconds after its compilation) hold the lock
-  // (src/native/build.rs, `locked`), so the next build says once that it waits, waits until the last of them has ended
-  // (none is left when it ends), then prints its own value; then the first again, its own. A work directory that cannot
-  // be written is refused naming its lock, and nothing is built.
+  // at once, ten times. Then a build killed (teq alone, SIGKILL) while it compiles, and the other built into the
+  // directory: the killed build's compilers (each a zig that, its compilation done, waits until the cell releases it)
+  // hold the lock (src/native/build.rs, `locked`), so the next build says once that it waits, and it is still waiting,
+  // with the compilers left, when the cell sees that line; only then are they released. The next build takes the lock
+  // only after its own link (`build::build`), seconds after it starts, so a compiler that ended on its own clock could
+  // be gone by then and leave nothing to wait for. Then the next build ends (no compiler is left by then) and prints its
+  // own value; then the first again, its own. A work directory that cannot be written is refused naming its lock, and
+  // nothing is built.
   val raceFiles = 60
   /// The lock's cells' library in `race`: sixty C files and the main one, and the two --lib-dirs' headers.
   def raceAt(race: Path): Path =
@@ -1155,11 +1158,16 @@ def builtFiles(work: Path): Vector[Path] = files(work).filterNot(f => work.relat
       println(s"FAIL three builds at once into one work directory: ${threeFaults.length} faults over 10 rounds")
       threeFaults.take(8).foreach(f => println(s"  $f"))
     val beforeKill = raceCmd(race, "B").run()
-    val slowZig = race.resolve("slow-zig")
-    Files.writeString(slowZig, s"#!/bin/sh\n[ \"$$1\" = version ] && exec ${shellQuoted(zig.get.toString)} version\n${shellQuoted(zig.get.toString)} \"$$@\"; c=$$?\nsleep 3\nexit $$c\n")
-    Sh("chmod", "755", slowZig.toString).run()
+    val heldZig = race.resolve("held-zig")
+    val released = race.resolve("released")
+    Files.deleteIfExists(released)
+    val waitingLine = ": another native build holds this work directory; waiting for it"
+    // zig, then the wait for the cell's release (half an hour at most), exiting with zig's status.
+    Files.writeString(heldZig, s"#!/bin/sh\n[ \"$$1\" = version ] && exec ${shellQuoted(zig.get.toString)} version\n${shellQuoted(zig.get.toString)} \"$$@\"; c=$$?\n" +
+      s"n=0; while [ ! -e ${shellQuoted(released.toString)} ] && [ $$n -lt 18000 ]; do sleep 0.1; n=$$((n+1)); done\nexit $$c\n")
+    Sh("chmod", "755", heldZig.toString).run()
     val killedFrom = System.currentTimeMillis()
-    val killed = raceCmd(race, "A", slowZig).spawn()
+    val killed = raceCmd(race, "A", heldZig).spawn()
     val raceObjects = race.resolve("work/dependencies/lib-0/scala-native")
     // Killed once its compilers run on the library's C files: an object of its own there, written since it started (the
     // build before wrote every object too, a moment earlier). A file that goes while it is looked at (zig writes an object
@@ -1178,19 +1186,33 @@ def builtFiles(work: Path): Vector[Path] = files(work).filterNot(f => work.relat
     def compilersLeft(): Int = Sh("pgrep", "-f", raceObjects.toString).check(false).run().out.linesIterator.count(_.nonEmpty)
     val leftAtKill = compilersLeft()
     val startedAfter = System.nanoTime()
-    val afterKill = raceCmd(race, "B").run()
+    val next = raceCmd(race, "B").spawn()
+    def nextSaysItWaits(): Boolean =
+      scala.util.Try(new String(Files.readAllBytes(next.out), "UTF-8").linesIterator.exists(_.endsWith(waitingLine))).getOrElse(false)
+    var polled = 0
+    while polled < 9000 && next.alive && !nextSaysItWaits() do
+      Thread.sleep(100)
+      polled += 1
+    val lineSeen = nextSaysItWaits()
+    val waitingWhenSeen = next.alive
+    val leftWhenSeen = compilersLeft()
+    Files.writeString(released, "")
+    val afterKill = next.await()
     val afterSeconds = (System.nanoTime() - startedAfter) / 1000000000
     val leftAfter = compilersLeft()
-    val waitedLine = afterKill.out.linesIterator.count(_.endsWith(": another native build holds this work directory; waiting for it"))
+    val waitedLine = afterKill.out.linesIterator.count(_.endsWith(waitingLine))
     val firstAgain = raceCmd(race, "A").run()
-    if raceRan(race, "B", beforeKill) && killedWhileCompiling && leftAtKill > 0 && raceRan(race, "B", afterKill) && waitedLine == 1 && leftAfter == 0 &&
-        raceRan(race, "A", firstAgain) then pass += 1
+    if raceRan(race, "B", beforeKill) && killedWhileCompiling && leftAtKill > 0 && lineSeen && waitingWhenSeen && leftWhenSeen > 0 &&
+        raceRan(race, "B", afterKill) && waitedLine == 1 && leftAfter == 0 && raceRan(race, "A", firstAgain) then pass += 1
     else
       fail += 1
-      println(s"FAIL a build killed while it compiles: killed while compiling $killedWhileCompiling, $leftAtKill of its compilers left; the next build exited " +
-        s"${afterKill.status} after $afterSeconds s, said it waits $waitedLine times, $leftAfter compilers left as it ended; the one after exited ${firstAgain.status}")
+      println(s"FAIL a build killed while it compiles: killed while compiling $killedWhileCompiling, $leftAtKill of its compilers left; the next build's " +
+        s"waiting line seen $lineSeen, it still waiting then $waitingWhenSeen with $leftWhenSeen compilers left; it exited ${afterKill.status} after " +
+        s"$afterSeconds s, said it waits $waitedLine times, $leftAfter compilers left as it ended; the one after exited ${firstAgain.status}")
       afterKill.out.linesIterator.take(5).foreach(println)
-    println(s"native-build lock: the build after one killed found $leftAtKill of its compilers holding the lock, said it waits $waitedLine times and ended after $afterSeconds s")
+    val leftAsItSaid = if lineSeen then s" ($leftWhenSeen compilers left as it said so)" else ""
+    println(s"native-build lock: the build after one killed found $leftAtKill of its compilers holding the lock, said it waits $waitedLine times" +
+      s"$leftAsItSaid and ended after $afterSeconds s")
     val readOnly = Files.createDirectories(race.resolve("read-only"))
     Sh("chmod", "555", readOnly.toString).run()
     val writable = scala.util.Try { Files.writeString(readOnly.resolve("probe"), ""); Files.delete(readOnly.resolve("probe")); true }.getOrElse(false)
