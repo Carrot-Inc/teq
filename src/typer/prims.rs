@@ -3794,8 +3794,12 @@ impl<'a> Worker<'a> {
                     let js_written = self.written_js_alias(ids[0]);
                     let t = self.resolve_declared_type(ids[0]);
                     let cast = self.lower_cast_written(recv, recv_ty, t, span, js_written);
-                    // The cast the source wrote, whatever its lowering made of it (`Program::written_cast_bits`).
-                    self.prog.mark_written_cast(cast.0);
+                    // The cast the source wrote, whatever its lowering made of it (`Program::written_cast_bits`); not a
+                    // library body's typeCast nor the converter's own cast (`Ast::typer_cast_lists`).
+                    let typer_cast = targs.is_some_and(|l| self.cur_ast().typer_cast_lists.binary_search(&l.start).is_ok());
+                    if !typer_cast {
+                        self.prog.mark_written_cast(cast.0);
+                    }
                     self.note_written_this(cast.0, ids[0]);
                     if cast.0 == recv && self.denotation_marks.is_some() {
                         self.mark_collapsed_call(cast.0);
@@ -4473,5 +4477,41 @@ mod written_mark_tests {
         // cast to the mirror's type, dotty's `mirrorRef.cast`: unmarked.
         assert_eq!(marks("type-test", "import scala.reflect.TypeTest\nobject A:\n  def f(x: Any): Option[String] = summon[TypeTest[Any, String]].unapply(x)\n"), (1, 0));
         assert_eq!(marks("mirror", "case class P(a: Int)\nobject A:\n  def m = summon[scala.deriving.Mirror.ProductOf[P]]\n"), (0, 0));
+    }
+
+    /// The body of the member `member` of the library class at `path`, read from scala-library's jar and typed as the
+    /// reach pass types it (`deferred_body`: its class compiled from its TASTy first): the written casts marked among the
+    /// body's own expressions (outside the expansions of its inline calls), and the casts its file's conversion noted as
+    /// no written one (`Ast::typer_cast_lists`).
+    fn library_body_marks(path: &[&str], member: &str) -> (usize, usize) {
+        crate::with_typed_program(&format!("library-body-{member}"), "object A:\n  val t = (1, 2)\n", &["--std=scala-library"], |w| {
+            let c = w.class_at(path).expect("the library's class");
+            w.complete_class(c);
+            let name = w.interner.intern(member);
+            let s = w.syms.class(c).members.get(&name).copied().expect("the member");
+            let s = match w.syms.sym(s).kind {
+                crate::symbols::SymKind::Overloaded(_) => w.syms.alternatives(s).and_then(|a| a.first().copied()).expect("an alternative"),
+                _ => s,
+            };
+            let Some(super::super::check::DeferredBody::Fun(f)) = w.deferred_body(s) else { panic!("{member}'s body") };
+            let body = w.prog.funs[f.idx()].body.expect("a body");
+            // The body's own expressions: an inline call's expansion in it is the callee's body, whose casts are its own.
+            let expanded: std::collections::HashSet<crate::tir::TExprId> =
+                w.prog.descendants(body).filter(|e| w.prog.expansions.contains_key(e)).flat_map(|x| w.prog.descendants(x)).collect();
+            let written = w.prog.descendants(body).filter(|e| !expanded.contains(e) && w.prog.is_written_cast(*e)).count();
+            (written, w.ast(w.syms.sym(s).file).typer_cast_lists.len())
+        })
+    }
+
+    #[test]
+    fn a_library_body_s_type_cast_is_no_written_cast() {
+        // IteratorStepperBase.estimateSize holds one `$asInstanceOf$` in its TASTy and no other cast of its own: dotty's Any_typeCast,
+        // which `tpd.cast` makes. It is noted, and unmarked.
+        let (written, noted) = library_body_marks(&["scala", "collection", "convert", "impl", "IteratorStepperBase"], "estimateSize");
+        assert_eq!(written, 0, "IteratorStepperBase.estimateSize's typeCast marked as written");
+        assert!(noted >= 1, "IteratorStepperBase.estimateSize's typeCast not noted: {noted}");
+        // ScalaRunTime.anyValClass writes `classTag[T].runtimeClass.asInstanceOf[jl.Class[T]]`: Any_asInstanceOf, marked.
+        let (written, _) = library_body_marks(&["scala", "runtime", "ScalaRunTime"], "anyValClass");
+        assert_eq!(written, 1, "ScalaRunTime.anyValClass' written cast");
     }
 }

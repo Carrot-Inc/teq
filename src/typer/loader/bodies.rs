@@ -1782,6 +1782,7 @@ impl<'a> Worker<'a> {
     fn cast_to(&mut self, cv: &mut Conv, e: ExprId, ty: TyExprId) -> ExprId {
         let cast = cv.expr(Expr::Select(e, names::AS_INSTANCE_OF));
         let l = push_list(&mut cv.ast.ty_lists, &[ty]);
+        cv.ast.typer_cast_lists.push(l.start);
         cv.expr(Expr::TypeApply(cast, l))
     }
 
@@ -3025,6 +3026,9 @@ impl<'a> Worker<'a> {
                         let fe = self.conv_expr(cv, f);
                         let item = self.conv_type_arg(cv, &meet);
                         let l = push_list(&mut cv.ast.ty_lists, &[item]);
+                        if self.selects_named(cv, f, "$asInstanceOf$") {
+                            cv.ast.typer_cast_lists.push(l.start);
+                        }
                         return cv.expr(Expr::TypeApply(fe, l));
                     }
                 }
@@ -3051,6 +3055,10 @@ impl<'a> Worker<'a> {
                 let l = push_list(&mut cv.ast.ty_lists, &items);
                 if *inferred {
                     cv.ast.inferred_type_lists.push(l.start);
+                }
+                // dotty's Any_typeCast, read as the source's cast but no written one (`Ast::typer_cast_lists`).
+                if self.selects_named(cv, f, "$asInstanceOf$") {
+                    cv.ast.typer_cast_lists.push(l.start);
                 }
                 cv.expr(Expr::TypeApply(fe, l))
             }

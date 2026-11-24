@@ -1376,7 +1376,8 @@ pub struct Program {
     /// the source writes, the synthesized TypeTest's (`Synthesizer.synthesizedTypeTest`) and a macro's
     /// (`Select.unique(x, "asInstanceOf")`), each the node its lowering returns, the operand itself where the cast's
     /// erasure makes it redundant. The typer's own casts (`lower_cast`: a product's element in `fromProduct`, a mirror's,
-    /// a `*:` chain's tuple class) are unmarked, as dotty makes them with `tpd.cast`, Any_typeCast before erasure.
+    /// a `*:` chain's tuple class) are unmarked, as dotty makes them with `tpd.cast`, Any_typeCast before erasure; so is
+    /// a library body's `$asInstanceOf$`, that same cast as scalac pickled it, and the converter's own (`Ast::typer_cast_lists`).
     /// dotty's exprPurity reads the first as Impure and the second as Pure; this mark tells them apart.
     pub written_cast_bits: Bits,
     /// The creations the typer made of a case class's companion's synthetic `apply` (`CI(1)`), as bits by expression;

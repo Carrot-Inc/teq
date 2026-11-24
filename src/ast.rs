@@ -1171,6 +1171,11 @@ pub struct Ast {
     /// A library body's type argument lists that scalac inferred, by their start in
     /// `ty_lists`, ascending: where they do not check, the typer infers the arguments again.
     pub inferred_type_lists: Vec<u32>,
+    /// A library body's casts that are no `asInstanceOf` in scalac's tree, by their type argument list's start in
+    /// `ty_lists`, ascending: a TypeApply of `$asInstanceOf$` (dotty's Any_typeCast, which `tpd.cast` makes) and the
+    /// converter's own cast of a local read with a wildcard's bound, where scalac's tree holds no cast. The typer
+    /// leaves them out of the written casts (`Program::written_cast_bits`).
+    pub typer_cast_lists: Vec<u32>,
     /// A library body's cast targets whose type, as written, names a member of Scala.js's
     /// `scala.scalajs.js` package that the std holds as an alias (`js.Array[Int]`): what a
     /// source's spelling tells the typer (`written_js_alias`), which the resolved type no longer does.
@@ -1473,6 +1478,7 @@ impl Ast {
             paren_annotated: Default::default(),
             new_empty_first: Vec::new(),
             inferred_type_lists: Vec::new(),
+            typer_cast_lists: Vec::new(),
             js_alias_types: Vec::new(),
             inferred_alternatives: Vec::new(),
             extractor_implicits: Vec::new(),
