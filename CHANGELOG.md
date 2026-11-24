@@ -7,6 +7,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A given that takes nothing and whose type is a path's singleton, an exported given's forwarder (`export
+  Impl.given` in an object, a package object or a package's top-level file) or one written so (`given a:
+  Impl.gi.type = Impl.gi`), is ranked against another given of its type as the given the path names, a structural
+  one by its parents, as scalac ranks it: the two found by one search are scalac's ambiguity, where the other one
+  was taken without a word.
+- An import of a package's givens (`import fd.pf.given`, `import fd.pf.{given Ordering[Int]}`) brings the givens its
+  package object exports (`package object pf: export Impl.given`, every kind of given, by `given`, `{given T}` or
+  name), and so does the package's own code, chained package clauses' included, as scalac's does, where a build of
+  the sources together found none of them and went on to the implicit scope: the program ran with another given. A
+  package object read from another module's products had them.
 - An anonymous class of a trait over a class (`new T {}` for `trait T extends A`) passes `A`'s secondary-constructor
   arguments and a local `A`'s captured default, as scalac (JavaScript printed `undefined` or `0`; the JVM refused).
 - On JavaScript and in the interpreter a named tuple's values are covariant, as under scalac (`NamedTuple[N, +V]`):

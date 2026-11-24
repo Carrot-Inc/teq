@@ -2777,6 +2777,11 @@ check "local-given-params: the table's templates and its judge's planted tables 
 check "export-given-body: the table's templates" "$work/export-given-body.log" \
   eval 'python3 tests/support/export_given_body.py --self-test > "$work/export-given-body.log" 2>&1'
 
+# The table of an import of exported givens, a package object's above all (tests/support/pkgobj_given_import.py, run
+# by tests/support/pkgobj-given-import.sh and tests/support/scalac_cells.scala): its templates, its judge's planted tables.
+check "pkgobj-given-import: the table's templates and its judge's planted tables judged as they must be" "$work/pkgobj-given-import.log" \
+  eval 'python3 tests/support/pkgobj_given_import.py --self-test > "$work/pkgobj-given-import.log" 2>&1'
+
 fi
 echo "gate-scripts: $pass passed, $fail failed"
 pieces_end $((fail > 0)) passed=$pass failed=$fail

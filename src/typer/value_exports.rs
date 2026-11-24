@@ -1901,6 +1901,15 @@ impl<'a> Worker<'a> {
                 self.syms.class_mut(c).forwarders.push((s, fwd));
                 if given {
                     self.syms.class_mut(c).givens.push(s);
+                    // A package object's given forwarder is a given of its package, as the object's
+                    // own givens are (`spill_object`): a member of the package object is the package's
+                    // (dotty's `PackageClassDenotation.computeMembersNamed`), which an import of the
+                    // package's givens brings (`ImportInfo.importedImplicits`).
+                    if let Owner::Package(p) = self.syms.class(c).owner {
+                        if self.syms.pkg(p).package_object == Some(c) {
+                            self.syms.pkgs[p.idx()].givens.push(s);
+                        }
+                    }
                 }
             }
             Home::File(p, _) => {

@@ -4458,6 +4458,39 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The path a reference stands for, through the stable vals and givens that take nothing and
+    /// whose type is a path (`given y: x.type = x` is `x`): dotty's `=:=` of two singletons, whose
+    /// comparison follows such a reference to its singleton (`y.type =:= x.type`), to the end of
+    /// a chain of them, a reference met again ending it (a cycle, which the typer reports).
+    fn singleton_alias_target(&mut self, mut t: TypeId) -> TypeId {
+        let mut passed: Vec<SymId> = Vec::new();
+        loop {
+            let (prefix, s) = match self.types.get(t) {
+                Type::Term(s) => (None, s),
+                Type::Select(p, s) => (Some(p), s),
+                _ => break,
+            };
+            if passed.contains(&s) {
+                break;
+            }
+            passed.push(s);
+            let info = self.syms.sym(s);
+            if !matches!(info.kind, SymKind::Val | SymKind::Given) || info.mods & crate::ast::mods::MUTABLE != 0 || info.by_name {
+                break;
+            }
+            let owner = info.owner;
+            let sig = self.sig_arc(s);
+            if !sig.tparams.is_empty() || !sig.clauses.is_empty() || !matches!(self.types.get(sig.ret), Type::Term(_) | Type::Select(..)) {
+                break;
+            }
+            t = match (prefix, owner) {
+                (Some(p), Owner::Class(k)) => self.as_seen_from(sig.ret, p, k),
+                _ => sig.ret,
+            };
+        }
+        t
+    }
+
     /// Whether two stable candidates are references to one value (`=:=` of their paths).
     fn same_reference(&mut self, a: GivenRef, b: GivenRef) -> bool {
         let path = |w: &mut Self, given: GivenRef| {
@@ -4465,6 +4498,7 @@ impl<'a> Worker<'a> {
             w.given_reference_path(given.0, site, &sig)
         };
         let (Some(x), Some(y)) = (path(self, a), path(self, b)) else { return false };
+        let (x, y) = (self.singleton_alias_target(x), self.singleton_alias_target(y));
         let mark = self.snapshot();
         let same = self.is_same(x, y);
         self.rollback(&mark);
@@ -4681,6 +4715,37 @@ impl<'a> Worker<'a> {
     /// the intersection of the class's parents (`Applications.widenGiven`: a co-defined given's
     /// result `widenToParents`).
     fn ranked_ret(&mut self, g: SymId, ret: TypeId) -> TypeId {
+        // A given that takes nothing is ranked by its type widened, as dotty ranks `alt.widen`
+        // (`Applications.compare`): a path's singleton, an export's forwarder's (`Impl.gi.type`) or
+        // one written (`given a: Impl.gi.type`), is ranked as the given the path names, the last of
+        // a chain of such paths: as general as it, a given class's by its parents (scalac 3.8.4
+        // finds a structural given's forwarder and another given of its parents' type ambiguous).
+        // A method's result is not widened.
+        if matches!(self.types.get(ret), Type::Term(_) | Type::Select(..)) {
+            let sig = self.sig_arc(g);
+            if sig.tparams.is_empty() && sig.clauses.is_empty() {
+                let widened = self.widen_path(ret);
+                // The chain followed to its end, a given met again ending it (a cycle).
+                let (mut named, mut at) = (g, ret);
+                let mut passed: Vec<SymId> = vec![g];
+                loop {
+                    let s = match self.types.get(at) {
+                        Type::Term(s) | Type::Select(_, s) => s,
+                        _ => break,
+                    };
+                    if passed.contains(&s) || !self.syms.is_given(s) {
+                        break;
+                    }
+                    passed.push(s);
+                    let next = self.sig_arc(s);
+                    if !next.tparams.is_empty() || !next.clauses.is_empty() {
+                        break;
+                    }
+                    (named, at) = (s, next.ret);
+                }
+                return if named == g { widened } else { self.ranked_ret(named, widened) };
+            }
+        }
         let Some(k) = self.syms.sym(g).impl_class else { return ret };
         let Type::Class(rk, args) = self.types.get(ret) else { return ret };
         if rk != k {
