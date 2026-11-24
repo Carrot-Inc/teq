@@ -7252,7 +7252,7 @@ impl<'a> Worker<'a> {
             // trait's, the bindings its call makes first (an argument lifted ahead of a searched one, a default reading
             // an earlier argument) kept in their scope as dotty's lifted application keeps them (`liftArgs`,
             // `spliceMeth`), the trait's fields set from them.
-            by_trait.push((b, ParentCall { prelude, args, via: None }));
+            by_trait.push((b, ParentCall { prelude, args, via: None, captures: 0 }));
         }
         by_trait
     }
@@ -7480,8 +7480,8 @@ impl<'a> Worker<'a> {
             _ => (ast::ListRef::EMPTY, te),
         };
         match self.prog.expr(call) {
-            TExpr::New(_, args) => Some((ParentCall { prelude, args, via: None }, ty)),
-            TExpr::NewVia(s, args) => Some((ParentCall { prelude, args, via: Some(s) }, ty)),
+            TExpr::New(_, args) => Some((ParentCall { prelude, args, via: None, captures: 0 }, ty)),
+            TExpr::NewVia(s, args) => Some((ParentCall { prelude, args, via: Some(s), captures: 0 }, ty)),
             _ => None,
         }
     }

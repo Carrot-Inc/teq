@@ -3639,7 +3639,7 @@ impl<'c> Copier<'c> {
             // A stored body's class passes its parent the one copy of the arguments its record
             // holds (`TClass::parent_args` is the same list), which its creation evaluates.
             let copied = match parent_args.filter(|_| stored) {
-                Some(args) => ParentCall { prelude: self.stmts(t, call.prelude), args, via: call.via.map(|s| self.sym(s)) },
+                Some(args) => ParentCall { prelude: self.stmts(t, call.prelude), args, via: call.via.map(|s| self.sym(s)), captures: call.captures },
                 None => self.parent_call(t, call),
             };
             t.anon_parent_args.insert(nc, copied);
@@ -3726,7 +3726,7 @@ impl<'c> Copier<'c> {
     }
 
     fn parent_call(&mut self, t: &mut Worker, call: ParentCall) -> ParentCall {
-        ParentCall { prelude: self.stmts(t, call.prelude), args: self.list(t, call.args), via: call.via.map(|s| self.sym(s)) }
+        ParentCall { prelude: self.stmts(t, call.prelude), args: self.list(t, call.args), via: call.via.map(|s| self.sym(s)), captures: call.captures }
     }
 
     fn syms(&self, t: &mut Worker, l: crate::ast::ListRef) -> crate::ast::ListRef {

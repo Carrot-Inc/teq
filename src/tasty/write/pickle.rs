@@ -2334,13 +2334,11 @@ impl<'w, 'a> P<'w, 'a> {
         let &i = self.index.tclasses.get(&c)?;
         let init = self.w.prog.classes[i as usize].init.clone();
         // A local trait's proxies lead the arguments, the lifting's, which the pickle leaves out.
-        let proxies = self.index.tclasses.get(&k).map_or(0, |&j| self.w.prog.classes[j as usize].captures);
-        let proxies = if self.w.syms.class(k).kind == ClassKind::Trait { proxies } else { 0 };
         if let Some(pc) = init.iter().find_map(|x| match x {
-            crate::tir::TInit::Parent(t, pc) if *t == k && pc.args.len as usize > proxies => Some(*pc),
+            crate::tir::TInit::Parent(t, pc) if *t == k && pc.args.len > pc.captures => Some(*pc),
             _ => None,
         }) {
-            return Some((self.w.prog.expr_list(pc.args)[proxies..].to_vec(), pc.via, Some(pc.prelude)));
+            return Some((self.w.prog.expr_list(pc.args)[pc.captures as usize..].to_vec(), pc.via, Some(pc.prelude)));
         }
         let params: Vec<SymId> = match self.index.tclasses.get(&k) {
             Some(&j) => {

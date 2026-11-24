@@ -1526,9 +1526,9 @@ impl<'a> Gen<'a> {
                     // The values of the block a local trait's body reads lead its arguments, and
                     // go to its `$init$` (`TClass::captures`).
                     let proxies = self.trait_init_proxies(b);
-                    let k = proxies.as_ref().map_or(0, |p| p.0);
-                    let given: Vec<TExprId> = self.cx.input.prog.expr_list(call.args).iter().take(k).copied().collect();
-                    let call = ParentCall { args: crate::ast::ListRef { start: call.args.start + k as u32, len: call.args.len - k as u32 }, ..call };
+                    let k = call.captures;
+                    let given: Vec<TExprId> = self.cx.input.prog.expr_list(call.args).iter().take(k as usize).copied().collect();
+                    let call = ParentCall { args: crate::ast::ListRef { start: call.args.start + k, len: call.args.len - k }, captures: 0, ..call };
                     if !call.args.is_empty() && !self.trait_arguments(parts, b, call, fields, this) {
                         return;
                     }

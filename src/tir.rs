@@ -800,10 +800,14 @@ pub struct ParentCall {
     pub args: ListRef,
     /// The secondary constructor the arguments go to, when they resolve to one.
     pub via: Option<SymId>,
+    /// How many of `args` lead them as the values of the block a local trait's body reads (its
+    /// proxies), which the typer passes before the written arguments (`Worker::add_trait_forwarders_of`,
+    /// dotty's `LambdaLift.addFreeArgs`); 0 for a call as written.
+    pub captures: u32,
 }
 
 impl ParentCall {
-    pub const NONE: ParentCall = ParentCall { prelude: ListRef::EMPTY, args: ListRef::EMPTY, via: None };
+    pub const NONE: ParentCall = ParentCall { prelude: ListRef::EMPTY, args: ListRef::EMPTY, via: None, captures: 0 };
 }
 
 #[derive(Clone)]

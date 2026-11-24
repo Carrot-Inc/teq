@@ -904,13 +904,15 @@ impl<'a> Worker<'a> {
                 if *b != t {
                     continue;
                 }
-                let given = self.prog.expr_list(pc.args);
-                if given.len() >= proxies.len() && proxies.iter().zip(given).all(|(&p, &a)| matches!(self.prog.exprs[a.idx()], TExpr::Local(s) if s == p)) {
+                // A call met again has them already, which its record says, not its arguments' form:
+                // a written argument may be a read of the very local the trait captures.
+                if pc.captures != 0 {
                     continue;
                 }
                 let mut all: Vec<TExprId> = proxies.iter().map(|&p| self.prog.add(TExpr::Local(p))).collect();
                 all.extend_from_slice(self.prog.expr_list(pc.args));
                 pc.args = self.prog.list(&all);
+                pc.captures = proxies.len() as u32;
             }
         }
         if let Some(tc) = self.checked_class_mut(k) {

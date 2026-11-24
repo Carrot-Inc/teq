@@ -998,7 +998,7 @@ impl<'a, 't> Interp<'a, 't> {
         // The values of the block the body reads (its proxies) are read in the instance's scope,
         // where the class that mixes the trait in holds them.
         let proxies = self.prog().classes[ti].captures;
-        let mut vals = vals.into_iter().skip(proxies);
+        let mut vals = vals.into_iter().skip(call.captures as usize);
         for (i, &p) in params.iter().enumerate().skip(proxies) {
             let key = self.field_key(p);
             let mut v = vals.next().unwrap_or(Value::Absent);
