@@ -392,7 +392,7 @@ neg/i11081.scala	accepts
 neg/i11100.scala	accepts	
 neg/i11101.scala	same	
 neg/i11103.scala	same	
-neg/i11118.scala	oos	pattern-defs
+neg/i11118.scala	same	
 neg/i11130.scala	subset	1/2 lines
 neg/i11170.scala	accepts	
 neg/i11208.scala	accepts	
@@ -983,7 +983,7 @@ neg/i25531.scala	same
 neg/i25531b.scala	accepts	
 neg/i25548.scala	syntax	expected {}, found {}
 neg/i25571.scala	accepts	
-neg/i25595.scala	oos	pattern-defs	--source future
+neg/i25595.scala	accepts		--source future
 neg/i2564.scala	accepts	
 neg/i25644.scala	syntax	expected end of statement, found {}
 neg/i2564b.scala	accepts	
@@ -4557,7 +4557,7 @@ pos/main-method-scheme.scala	accepts
 pos/main.scala	rejects	several entry points: List, main; choose one with --main
 pos/manifest-summoning.scala	std	optManifest
 pos/match-constant-type.scala	accepts	
-pos/match-precise-type-unchecked.scala	oos	pattern-defs
+pos/match-precise-type-unchecked.scala	rejects	type mismatch
 pos/match-single-sub-case.scala	syntax	expected {}, found {}
 pos/match-sub-sub-cases.scala	syntax	expected {}, found {}
 pos/match-type-disjoint-22076.scala	std	Last
@@ -5917,7 +5917,7 @@ warn/html.scala	wording	unreachable case
 warn/i10247.scala	different	there were 2 deprecation warnings; re-run with -deprecation for details
 warn/i10930.scala	silent	
 warn/i10994.scala	syntax	expected {}, found {}
-warn/i11022.scala	oos	pattern-defs
+warn/i11022.scala	different	there were 6 deprecation warnings; re-run with -deprecation for details
 warn/i11097.scala	silent	
 warn/i11178.scala	subset	3/4 diagnostics
 warn/i11333.scala	same	

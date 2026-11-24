@@ -11,7 +11,7 @@ i3246.scala	pass	check:pass
 i3396.scala	fail	check:fail	i3396.scala:28:32: ambiguous given instances for NotTagged[Int]: notTaggedAmbiguity1, notTaggedAmbiguity2
 i871.scala	fail	check:fail	i871.scala:2:7: an abstract def needs a result type
 i8715b.scala	fail	check:fail	i8715b.scala:3:88: expected ',' or ')', found identifier
-indented-parens.scala	fail	check:fail	indented-parens.scala:1:5: pattern definitions are only supported inside blocks
+indented-parens.scala	pass	check:pass	
 naming-resolution	fail	check:pass	callsite.scala:9:27: Found:    Stream[Path]
 newline-braces.scala	fail	check:fail	newline-braces.scala:3:5: missing parameter type
 pos-special	fail	check:fail	i871.scala:2:7: an abstract def needs a result type

@@ -6,7 +6,6 @@ i2201b.scala	i2201b.scala:13:7: type mismatch: found Two[Y, X], required M[? <: 
 i3396.scala	i3396.scala:28:32: ambiguous given instances for NotTagged[Int]: notTaggedAmbiguity1, notTaggedAmbiguity2
 i871.scala	i871.scala:2:7: an abstract def needs a result type
 i8715b.scala	i8715b.scala:3:88: expected ',' or ')', found identifier
-indented-parens.scala	indented-parens.scala:9:7: expected 'case', found 'val'
 naming-resolution	callsite.scala:9:27: type mismatch: found Stream[Path], required Files
 newline-braces.scala	newline-braces.scala:3:5: missing parameter type
 pos-special	i871.scala:2:7: an abstract def needs a result type

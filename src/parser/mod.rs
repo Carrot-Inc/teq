@@ -1351,7 +1351,18 @@ impl<'a> Parser<'a> {
             }
             _ if self.at_def_start() => {
                 let mut out = Vec::new();
+                let patdefs_mark = self.pattern_vals;
                 self.parse_def(&mut out);
+                // A top-level definition is a member of the file's package object (dotty's `Desugar.packageDef`), so a
+                // pattern definition there is desugared as a member's (`makePatDef`), as a template body's is.
+                if self.pattern_vals != patdefs_mark {
+                    let mut stmts: Vec<Stmt> = out.drain(..).map(Stmt::Def).collect();
+                    self.desugar_pattern_vals(&mut stmts, patdefs_mark);
+                    out.extend(stmts.into_iter().filter_map(|s| match s {
+                        Stmt::Def(d) => Some(d),
+                        _ => None,
+                    }));
+                }
                 self.ast.top_level.extend(out);
                 // The export clauses of a top-level extension group are the package object's.
                 let clauses = self.export_scratch.drain(..);

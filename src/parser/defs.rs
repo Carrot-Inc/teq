@@ -1449,7 +1449,7 @@ impl<'a> Parser<'a> {
     /// scalac's `makePatDef` for a member: `val (a, b) = e` is a private val holding
     /// `(e: @unchecked) match { case (a, b) => (a, b) }` and a val per variable reading its
     /// element; a lone variable is the match itself.
-    fn desugar_pattern_vals(&mut self, body: &mut Vec<Stmt>, mark: u32) {
+    pub(super) fn desugar_pattern_vals(&mut self, body: &mut Vec<Stmt>, mark: u32) {
         if self.pattern_vals != mark {
             self.desugar_pattern_vals_in(body, true);
         }

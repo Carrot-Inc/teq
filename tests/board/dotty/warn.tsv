@@ -35,7 +35,7 @@ html.scala	fail	-	check: diagnostic 1 of 1: scalac's is warning html.scala:15:14
 i10247.scala	fail	-	marks: 2 warnings where 4 are marked
 i10930.scala	fail	-	marks: 0 warnings where 4 are marked
 i10994.scala	fail	-	marks: an error where warnings are marked: i10994.scala:4:20: expected '=>', found ':'
-i11022.scala	fail	-	marks: an error where warnings are marked: i11022.scala:14:5: pattern definitions are only supported inside blocks
+i11022.scala	fail	-	marks: 5 warnings where 7 are marked
 i11097.scala	fail	-	marks: 0 warnings where 2 are marked
 i11178.scala	fail	-	marks: 3 warnings where 4 are marked
 i11333.scala	pass	-	

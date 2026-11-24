@@ -90,7 +90,7 @@ i17445-new-default	fail	interp:fail	run: exit 1: Exception in thread "main" java
 i17905	fail	interp:fail	Macro_1.scala:6:80: value apply is not a member of Any
 i18283	fail	interp:fail	output: line 1: the .check has '(Test_2$package.Id,Test_2$package.Id,scala.Long)', the program printed '(Id,Id,Id)'
 i18806	fail	interp:fail	run: exit 1: Exception in thread "main" scala.NotImplementedError: an implementation is missing
-i19676	fail	interp:fail	Test_2.scala:9:5: pattern definitions are only supported inside blocks
+i19676	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
 i19732	fail	interp:fail	output: line 1: the .check has 'Map(b -> 23)', the program printed 'Map()'
 i19905	fail	interp:fail	Test_2.scala:5:11: exception in macro: scala.MatchError: scala.Unit (of class scala.quoted.Type) (called by noPrefixStructure in object Macro_1$package) (in the body of Macro_1$package.noPrefixStructure)
 i19951-java-annotations-tasty-compat	fail	interp:fail	output: line 2: the .check has 'new JavaAnnot(c = _, a = 5, d = _, b = _)', the program printed nothing

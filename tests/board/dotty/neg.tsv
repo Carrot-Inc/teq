@@ -379,7 +379,7 @@ i11081.scala	fail	-	marks: no error where 2 are marked
 i11100.scala	fail	-	marks: no error where 1 are marked
 i11101.scala	pass	-	
 i11103.scala	pass	-	
-i11118.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i11118.scala:2:13 pattern's type (Any, Any) does not match the right hand side expression's type (Int, Int, Int); teq's is error i11118.scala:2:5 pattern definitions are only supported inside bl
+i11118.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i11118.scala:2:13 pattern's type (Any, Any) does not match the right hand side expression's type (Int, Int, Int); teq's is error i11118.scala:2:5 unreachable case: type (Int, Int, Int) is not a 
 i11130.scala	fail	-	marks: 1 errors where 2 are marked
 i11170.scala	fail	-	marks: no error where 1 are marked
 i11208.scala	fail	-	marks: no error where 1 are marked
@@ -753,7 +753,7 @@ i18695.scala	pass	-
 i18734.scala	fail	-	marks: 8 errors where 7 are marked: i18734.scala:7:9: expected ',' or ')', found literal
 i18737.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i18737.scala:3:37 Found:    (v : String & Long); teq's is error i18737.scala:3:37 Found:    String & Long
 i18750-format.scala	fail	-	marks: 3 errors where 1 are marked: i18750-format.scala:4:8: expected a pattern, found identifier
-i18750.scala	fail	-	marks: 15 errors where 11 are marked: i18750.scala:3:5: expected a pattern, found 'do'
+i18750.scala	fail	-	marks: 12 errors where 11 are marked: i18750.scala:3:5: expected a pattern, found 'do'
 i18862-future.scala	pass	-	
 i18884.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i18884.scala:2:3 method next$access$1 cannot be accessed as a member of (xs : ::[Int]) from the top-level definitions in package <empty>.; teq's is error i18884.scala:2:3 next$access$1 is private 
 i18922.scala	fail	-	check: diagnostic 1 of 1: error i18922.scala:11:20, line 2 of the message: scalac's is Required: Object{def close(): Unit}; teq's is Required: AnyRef{def close(): Unit}
@@ -1336,7 +1336,7 @@ i9299.scala	fail	-	marks: 1 errors where 2 are marked
 i9299a.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i9299a.scala:1:11 type a is not a member of Int => Unit; teq's is error i9299a.scala:1:11 (foo : => Unit) is not a valid type prefix, since it is not an immutable path
 i9308.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i9308.scala:6:7 value += is not a member of Int - did you mean Int.!=? or perhaps Int.<=?; teq's is error i9308.scala:6:7 value += is not a member of Int
 i9309.scala	fail	-	marks: 2 errors where 1 are marked: i9309.scala:2:14: foo is already defined as value foo
-i9310.scala	fail	-	marks: 3 errors where 1 are marked: i9310.scala:2:11: expected a pattern, found 'this'
+i9310.scala	fail	-	marks: error on an unmarked line i9310.scala:2: expected a pattern, found 'this'
 i9327.scala	fail	-	marks: 1 errors where 2 are marked
 i9328.scala	fail	-	marks: 12 errors where 5 are marked: i9328.scala:16:1: unmatched closing bracket
 i9329.scala	fail	-	check: diagnostic 1 of 1: error i9329.scala:8:7, line 2 of the message: scalac's is (The class implements abstract override def name: String in trait Son but that definition still needs an implementation); teq's is nothing

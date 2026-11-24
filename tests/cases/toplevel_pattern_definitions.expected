@@ -1,0 +1,17 @@
+main
+eval tuple
+eval some
+eval case class
+eval nested
+eval typed
+eval alias
+eval binderless
+eval underscore
+eval f
+eval var
+(1,2,3,4,5,6,8,9,j,P(10,11),11)
+14
+16
+eval lazy
+15
+15
