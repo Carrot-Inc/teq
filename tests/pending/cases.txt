@@ -141,6 +141,10 @@ lazy_thread_unsafe_reentrant_renamed	< renamed = 2 after 2 run(s)
 lazy_thread_unsafe_reentrant_toplevel	< x = 2 after 2 run(s)
 lazy_thread_unsafe_reentrant_trait	< in a class: x = 2 after 2 run(s)
 library_quote_pattern_enclosing_given	< false
+local_trait_default_clause	< 21
+local_trait_default_escape_prior	< 22
+local_trait_default_inline_capture	< 12
+local_trait_default_super_prior	< 21
 macro_by_name_views	< Apply(Apply(Select(F, c2), 100), 1, NamedArg(b, Apply(x, b, 2))) | true
 macro_ctor_clauses	< Apply(Apply(Select(New(C), <init>), [Literal(1)]), [Literal(x)])
 macro_ctor_printers	< BoxE

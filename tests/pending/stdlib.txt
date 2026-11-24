@@ -259,6 +259,10 @@ library_quote_pattern_outer_type	error: cannot resolve import: qnest not found
 library_type_pattern_from_above	error: cannot resolve import: qnest not found
 library_val_overridden	error: cannot resolve import: lvlib not found
 local_class_nested_members	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+local_trait_default_clause	ReferenceError: a$1 is not defined
+local_trait_default_escape_prior	output differs
+local_trait_default_inline_capture	error: the inline call T.m in C.m was not expanded
+local_trait_default_super_prior	TypeError: Cannot read properties of undefined (reading 'call')
 macro_bundle	error: not supported yet in a macro: no resource bundle msgs on the class path (called by message in object Macros)
 macro_by_name_views	output differs
 macro_ctor_clauses	output differs

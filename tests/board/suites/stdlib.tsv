@@ -1886,6 +1886,13 @@ local_object_import	pass	-
 local_objects	pass	-	
 local_trait_capture_as_argument	pass	-	
 local_trait_captures	pass	-	
+local_trait_default_clause	fail	-	ReferenceError: a$1 is not defined
+local_trait_default_escape_prior	fail	-	output differs
+local_trait_default_inline_capture	fail	-	error: the inline call T.m in C.m was not expanded
+local_trait_default_lazy	pass	-	
+local_trait_default_local_ctor	pass	-	
+local_trait_default_super_prior	fail	-	TypeError: Cannot read properties of undefined (reading 'call')
+local_trait_default_tail	pass	-	
 local_trait_dispatch	pass	-	
 local_trait_inline	pass	-	
 local_trait_member_lifted	pass	-	
