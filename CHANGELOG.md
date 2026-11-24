@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM a for comprehension's variable of a value class bound in an alias that a guard follows (`(n, v) = (k,
+  new V(7L)); if n > 1` or `v = new V(..); if ...`) is the value scalac reads, where it threw `ClassCastException`
+  (`V cannot be cast to class java.lang.Long`).
 - On the JVM an `if` or a `match` whose first branch is `null` where an `Any`, an `AnyRef` or an `Object` is wanted
   (`show(if c then null else s)` with `show(x: Any)`) is written so that its class loads; the verifier refused it
   ("Instruction type does not match stack map").

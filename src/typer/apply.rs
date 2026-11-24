@@ -8850,7 +8850,11 @@ impl<'a> Worker<'a> {
                         self.bind_given(local);
                     }
                     let packed = self.prog.add(TExpr::Local(sym));
-                    stmts.push(TStmt::Val(local, self.prog.add(TExpr::Index(packed, i as u32))));
+                    // The pack holds the value at Any: it is read back at the variable's type, a cast erasure drops.
+                    let element = self.prog.add(TExpr::Index(packed, i as u32));
+                    let read = self.prog.add(TExpr::Cast(element, CastOp::Erased, ty));
+                    self.prog.set_type(read, ty);
+                    stmts.push(TStmt::Val(local, read));
                 }
                 let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
                 yielded = Some(tb);

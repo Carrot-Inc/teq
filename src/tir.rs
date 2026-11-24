@@ -318,7 +318,8 @@ pub enum CastOp {
     Nothing,
     /// A cast whose operand's erasure conforms to the type's, which erasure drops
     /// (`TypeTestsCasts.interceptTypeApply`): the operand on every target, the node keeping the
-    /// type it was cast to, a synthesized mirror's refinement (`Worker::mirror_cast`).
+    /// type it was cast to, a synthesized mirror's refinement (`Worker::mirror_cast`); or a value known to be of
+    /// the type: a for comprehension's pack read back at its variable's type (`ForBinder::Unpack`).
     Erased,
 }
 

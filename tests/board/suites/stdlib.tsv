@@ -941,6 +941,7 @@ fold_targets	pass	-
 foldleft_empty_lambda	pass	-	
 foldleft_nil_lambda	pass	-	
 for_alias_value	pass	-	
+for_alias_value_class_read	pass	-	
 for_case	pass	-	
 for_check_modes_3_3	pass	-	
 for_check_modes_3_8	pass	-	

@@ -5,6 +5,7 @@ block                                       6          0        0            0  
 by-name argument                            0          1        0            0          1
 call                                        0          1        0            0          1
 case class pattern                          3          0        0            0          0
+cast                                        4          0        0            0          4
 closure                                     8          0        0            0          4
 comprehension packing                       0          1        0            0          1
 comprehension parameter                     2          0        0            0          0
