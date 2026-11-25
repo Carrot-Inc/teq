@@ -3178,6 +3178,8 @@ tostring_opaque_string	pass	-
 tostring_regex_binder	pass	-	
 trailing_commas	pass	-	
 trait_body	pass	-	
+trait_class_parent_scala_number	fail	-	error: method intValue needs `override` modifier to override method intValue in class Number
+trait_class_parent_superclass	pass	-	
 trait_empty_parameters	fail	-	error: parameterized trait Empty is indirectly implemented, needs to be implemented directly so that arguments can be passed
 trait_evidence	pass	-	
 trait_evidence_scope	pass	-	

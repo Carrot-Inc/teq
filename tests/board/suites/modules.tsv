@@ -437,6 +437,7 @@ targetname	pass	-
 toplevelprefix	pass	-	
 tostringreturn	pass	-	
 traitapi	pass	-	
+traitclassparent	fail	-	known check: the JVM build's pickles of the downstream's `Failed` and `Hushed` name the class their trait's class parent gives them (`Exception`, `Throwable`), the Scala.js check build's over scala-li
 traitfieldkinds	pass	-	
 traitfields	pass	-	
 traitgivendef	pass	-	

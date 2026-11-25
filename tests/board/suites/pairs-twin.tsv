@@ -3173,6 +3173,8 @@ cases/tostring_opaque_string	pass	-
 cases/tostring_regex_binder	pass	-	
 cases/trailing_commas	pass	-	
 cases/trait_body	pass	-	
+cases/trait_class_parent_scala_number	pass	-	
+cases/trait_class_parent_superclass	pass	-	
 cases/trait_empty_parameters	cannot run	-	no leg builds
 cases/trait_evidence	pass	-	
 cases/trait_evidence_scope	pass	-	

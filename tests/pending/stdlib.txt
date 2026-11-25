@@ -507,6 +507,7 @@ time_clock	error: not supported on JavaScript: class ProcessBuilder java.lang.Pr
 time_formatter_value_widths	error: not supported on JavaScript: method from of java.time.LocalDateTime (a Java definition without an implementation in the std's platfor
 time_formatter_widths	error: not supported on JavaScript: method from of java.time.LocalDate (a Java definition without an implementation in the std's platform la
 to_string_null	TypeError: Cannot read properties of null (reading 'toString')
+trait_class_parent_scala_number	error: method intValue needs `override` modifier to override method intValue in class Number
 trait_empty_parameters	error: parameterized trait Empty is indirectly implemented, needs to be implemented directly so that arguments can be passed
 tuple_xxl	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
 tuple_xxl_typed	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit

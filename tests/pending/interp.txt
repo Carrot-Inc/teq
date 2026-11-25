@@ -228,6 +228,7 @@ super_call_object_members_jvm	unsupported
 super_rebind_result	unsupported
 sync_break_direct	compile
 sync_exits_jvm	compile
+trait_class_parent_scala_number	compile
 trait_empty_parameters	compile
 trait_private_public_dispatch	output
 tuple_apply_known_prefix	compile

@@ -1066,6 +1066,7 @@ time_stopped_in_type	fail	-	missing 'error: Found: (1 : Int)'
 top_types_no_monitor_methods	fail	-	missing '6:25: error: value notify is not a member of Any'
 trait_evidence_scope	pass	-	
 trait_indirect_parameters	fail	-	missing '2 errors found'
+trait_inheritance_library_superclass	pass	-	
 trait_param_rules	pass	-	
 trait_params	pass	-	
 trait_parent_default_shadows_given	pass	-	

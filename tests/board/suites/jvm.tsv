@@ -3243,6 +3243,8 @@ tostring_opaque_string	pass	-
 tostring_regex_binder	pass	-	
 trailing_commas	pass	-	
 trait_body	pass	-	
+trait_class_parent_scala_number	pass	-	
+trait_class_parent_superclass	pass	-	
 trait_empty_parameters	fail	-	compile
 trait_evidence	pass	-	
 trait_evidence_scope	pass	-	

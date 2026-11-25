@@ -1573,7 +1573,7 @@ impl<'a> Worker<'a> {
             }
         }
         self.mapping_signature = was_mapping;
-        self.set_loaded_parents(c, parents);
+        self.set_loaded_parents(c, parents, false);
         if cf.sealed {
             for binary in self.java_source_children(&cf.name) {
                 if let Some(child) = self.java_class_by_binary(&binary, false, 0) {
@@ -1666,7 +1666,7 @@ impl<'a> Worker<'a> {
                 let name = self.syms.sym(f).name;
                 let case = self.syms.new_class(name, ClassKind::EnumCase, mods::FINAL, Owner::Class(obj), file, None, Span::default());
                 self.syms.class_mut(case).singleton = Some(f);
-                self.set_loaded_parents(case, vec![enum_ty]);
+                self.set_loaded_parents(case, vec![enum_ty], false);
                 self.syms.class_mut(case).state().set(Completion::Done);
                 if !self.syms.class(c).children.contains(&case) {
                     self.syms.class_mut(c).children.push(case);

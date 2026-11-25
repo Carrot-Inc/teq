@@ -1865,7 +1865,7 @@ impl<'a> Worker<'a> {
             let parent = self.map_type(&mut cx, &sig.ret);
             // The singleton case is its own `Mirror.Singleton`, as a program's (`mirror_parent`).
             let mirror = self.mirror_parent(c).map(|m| self.types.class(m, &[]));
-            self.set_loaded_parents(c, std::iter::once(parent).chain(mirror).collect());
+            self.set_loaded_parents(c, std::iter::once(parent).chain(mirror).collect(), true);
             self.syms.class_mut(c).state().set(Completion::Done);
             return;
         }
@@ -1904,7 +1904,7 @@ impl<'a> Worker<'a> {
             let declared = self.map_type(&mut cx, t);
             self.syms.class_mut(c).declared_self = Some(declared);
         }
-        self.set_loaded_parents(c, parents);
+        self.set_loaded_parents(c, parents, true);
         if sig.mods.flags.has(tags::SEALED) {
             self.enter_sealed_children(c, &mut cx, &sig.mods.annots);
         }
@@ -2231,8 +2231,9 @@ impl<'a> Worker<'a> {
     }
 
     /// Base types through the linearisation, without the checks a source class gets: the
-    /// library was checked by scalac.
-    fn set_loaded_parents(&mut self, c: ClassId, parents: Vec<TypeId>) {
+    /// library was checked by scalac. `pickled`: the parents are a pickle's, in its order (TASTy's, or a Scala 2
+    /// pickle's as transcoded), not a class file's.
+    fn set_loaded_parents(&mut self, c: ClassId, parents: Vec<TypeId>, pickled: bool) {
         if !self.syms.class(c).base_types.is_empty() {
             self.clear_base_caches();
         }
@@ -2248,7 +2249,7 @@ impl<'a> Worker<'a> {
         if kind == ClassKind::Trait && parents.first().is_some_and(|&p| self.deref_alias_canonical(p) == ANY) {
             self.syms.class_mut(c).mods |= mods::UNIVERSAL;
         }
-        for pt in parents {
+        for (i, pt) in parents.into_iter().enumerate() {
             let pt = self.deref_alias(pt);
             // A class nested in a class through its prefix: its base types seen from the prefix,
             // as a source class's (`set_parents`).
@@ -2276,9 +2277,12 @@ impl<'a> Worker<'a> {
             }
             // Nothing is emitted for a native JS class, so extending one costs no inheritance.
             if pinfo.kind == ClassKind::Class && pinfo.js == JsKind::Native {
-            } else if pinfo.kind == ClassKind::Class && (kind != ClassKind::Trait || self.in_jar(pinfo.file)) {
-                // A trait's class parent is the superclass of what mixes it in, unless a
-                // stand-in of the std plays the library's trait (`ClassTag`).
+            } else if pinfo.kind == ClassKind::Class && (kind != ClassKind::Trait || (pickled && i == 0)) {
+                // A trait's superclass, which what mixes it in extends, is its first parent where that is a class
+                // (dotty's `ClassDenotation.superClass`): a pickle's first parent, `Namer.ensureFirstIsClass` having put
+                // the class parent first (`Object` where there is none). A class file lists an interface's parents
+                // without `Object`, and an interface has no class parent: a class among them is a stand-in the std
+                // plays for an interface (`java.util.ListIterator`).
                 superclass = Some(pc);
             } else if pinfo.kind == ClassKind::Enum && kind == ClassKind::EnumCase && pinfo.superclass.is_some() {
                 // As in source: the cases of an enum that extends a class are subclasses of
