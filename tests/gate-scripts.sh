@@ -532,6 +532,14 @@ piece_ran pieces-stamps
 # else, the pieces of each n together run the bodies the whole run runs, and the whole run's are 1/1's.
 need_stand
 mkdir -p "$work/stamps" "$work/exec"
+# lsp.sh installs integrations/vite's modules where they are not (the driver imports its lock.js), into the tree the
+# runs below share: run at once, the installs race npm into one directory (ENOTEMPTY, ENOENT) and a run that loses
+# exits before its summary. They are installed here once, as a run alone would, before the runs start.
+vite_ok=0
+if [ -d integrations/vite/node_modules/yaml ] || timeout 300 npm --prefix integrations/vite install --legacy-peer-deps --prefer-offline --no-audit --no-fund > "$work/vite-npm.log" 2>&1; then
+  vite_ok=1
+fi
+check "pieces: integrations/vite's modules installed once before the suites' runs share the tree" "$work/vite-npm.log" [ $vite_ok = 1 ]
 for suite in split modules jvm-watch lsp; do
   echo "$suite whole -"
   for n in 1 2 3 4 5 6 7 8; do for k in $(seq 1 $n); do echo "$suite $n $k"; done; done
