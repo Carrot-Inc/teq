@@ -339,8 +339,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
-- On the JVM closures, local defs and local lazy vals are named as scalac names them (`f$$anonfun$1`, `g$1`), so a
-  stack trace shows scalac's names, and a lambda in a `finally` is one method.
+- On the JVM closures, local defs and local lazy vals in a top-level class's or object's methods are named as scalac
+  names them (`f$$anonfun$1`, `g$1`), and a lambda in a `finally` is one method; in a nested class or object they keep
+  teq's names.
 - On the JVM a local right-associative operator's operands are bound as scalac binds them: `1 +:: 2` of a local
   `extension (x: Int) def +::(y: Int)` passes 1 as `x`, where it passed it as `y`.
 
