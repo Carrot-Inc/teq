@@ -339,6 +339,7 @@ jvm/jvm_link_root_package_over_scala	pass	-
 jvm/jvm_link_shadowed_builtins	pass	-	
 jvm/jvm_link_static_forwarders	pass	-	
 jvm/jvm_link_std_jvm_runtime	pass	-	
+jvm/jvm_link_super_java_superclass	pass	-	
 jvm/jvm_link_top_level_vals	pass	-	
 jvm/jvm_link_trait_mixins	pass	-	
 jvm/jvm_link_value_classes	pass	-	

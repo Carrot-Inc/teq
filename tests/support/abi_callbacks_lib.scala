@@ -69,6 +69,15 @@ trait Doubling extends Base:
 trait Incrementing extends Base:
   override def m: Int = super.m + 10
 
+// Jar traits over a Java interface whose super calls of Object's members reach the class chain of the class that mixes
+// them in (no interface holds a body for toString, hashCode or equals).
+trait Shown extends java.util.RandomAccess:
+  override def toString(): String = "t:" + super.toString()
+trait Hashed extends java.util.RandomAccess:
+  override def hashCode(): Int = super.hashCode() + 1
+trait Equated extends java.util.RandomAccess:
+  override def equals(o: Any): Boolean = super.equals(o)
+
 object ReflectValue:
   def extension(className: String, method: String, args: Any*): Any =
     val module = Class.forName(className + "$").getField("MODULE$").get(null)
