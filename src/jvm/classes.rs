@@ -769,9 +769,9 @@ impl<'a> Gen<'a> {
     }
 
     /// The lifted method a call names (`method`, lowered against the shape `lowered`), its body found by its name in
-    /// the class's table and queued where the class first asks for it: as a held tree is held (`Gen::ask_lifted`), or
-    /// where the writer writes the call. The body of a local def's default getter is given back, to be queued once
-    /// the call's arguments are written. A call the table cannot answer asks for no body: its class is refused.
+    /// the class's table and queued where the class first asks for it, as a held tree is held (`Gen::ask_lifted`). The
+    /// body of a local def's default getter is given back, to be queued once the call's operands are visited. A call
+    /// the table cannot answer asks for no body: its class is refused.
     pub(super) fn ask_lifted_call(&mut self, method: &MethodRef, from: LiftedFrom, lowered: &Rc<LiftedShape>) -> Option<Pending> {
         let placed = match self.lifted_table.placed(&method.name, &method.desc) {
             Some(Some(placed)) => placed,
@@ -798,8 +798,8 @@ impl<'a> Gen<'a> {
 
     /// Queues the lifted bodies the tree `root` asks for, the closures, local defs, local lazy vals and local defaults'
     /// getters whose methods its writer calls, before any of its code is written. A default getter's body is queued
-    /// once the call's operands are visited, after the bodies its arguments ask for, as the writer queues it; asked
-    /// while a round of lifted bodies is lowered, it is queued for the next round, as the writer's deferral queued it.
+    /// once the call's operands are visited, after the bodies its arguments ask for; asked while a round of lifted
+    /// bodies is lowered, it is queued for the next round.
     fn ask_lifted(&mut self, root: LirId) {
         let mut stack = vec![(root, false)];
         while let Some((id, operands_asked)) = stack.pop() {
@@ -817,9 +817,9 @@ impl<'a> Gen<'a> {
                 continue;
             }
             match kind {
-                Kind::Closure { lifted, target, .. } => {
-                    let (lifted, target) = (lifted.clone(), target.clone());
-                    self.lambda_method(&target, &lifted);
+                Kind::Closure { target, .. } => {
+                    let target = target.clone();
+                    self.lambda_method(&target);
                 }
                 Kind::LiftedCall { from: LiftedFrom::Default(_), .. } => stack.push((id, true)),
                 Kind::LiftedCall { method, from, lifted, .. } => {

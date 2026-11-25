@@ -398,13 +398,12 @@ pub enum Kind {
     /// for none, a cast, a box or its content, a primitive conversion (`Gen::adapt`).
     Adapt { value: LirId, from: ErasedType, how: Adaptation },
     /// A function object: an instance of the interface of `method` whose `method` calls the
-    /// lifted method `target`, of the shape `lifted`, with the captured values, then its own
-    /// arguments, and gives its result. `captures` are those values as `target` takes them (the
-    /// instance, the key, the captured ones), evaluated here in that order. The node's type is the
-    /// interface. `target` is static, of the class being written, named where the closure is
-    /// lowered as dotty's LambdaLift names it in the unit: one method however often the node is
-    /// written.
-    Closure { captures: List, method: Rc<MethodRef>, lifted: Rc<LiftedShape>, target: Rc<MethodRef> },
+    /// lifted method `target` with the captured values, then its own arguments, and gives its
+    /// result. `captures` are those values as `target` takes them (the instance, the key, the
+    /// captured ones), evaluated here in that order. The node's type is the interface. `target` is
+    /// static, of the class being written, named where the closure is lowered as dotty's
+    /// LambdaLift names it in the unit: one method however often the node is written.
+    Closure { captures: List, method: Rc<MethodRef>, target: Rc<MethodRef> },
     /// A call of a lifted method (`from`): a local definition's, the getter of its default, or the
     /// accessor or the initialiser of a local lazy val. `method` is static, of the class being
     /// written or, for a lazy val's, of the class declaring the val, and named as `LambdaLift` names

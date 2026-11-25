@@ -400,20 +400,14 @@ impl<'a> Gen<'a> {
                 self.write(value);
                 self.write_adaptation(how, &from, &ty);
             }
-            Kind::Closure { captures, method, lifted, target } => {
+            Kind::Closure { captures, method, target } => {
                 self.write_arguments(captures, None);
-                let home = self.lambda_method(&target, &lifted).and_then(|l| l.home);
-                self.lambda_call_site(&target, &lifted, home, &ty, &method);
+                let captured: Vec<ErasedType> = (0..captures.len).map(|i| self.lir.ty(self.lir.lists[(captures.start + i) as usize]).clone()).collect();
+                self.lambda_call_site(&target, &captured, &ty, &method);
             }
-            // The method's body, where no held tree has asked for it, is asked for where the call is written.
-            Kind::LiftedCall { method, from, lifted, captures, args, order } => {
-                let pending = self.ask_lifted_call(&method, from, &lifted);
+            Kind::LiftedCall { method, captures, args, order, .. } => {
                 self.write_arguments(captures, None);
                 self.write_arguments(args, order.as_deref());
-                // A default getter's body is queued once its arguments are written, their lambdas first in the class.
-                if let Some(p) = pending {
-                    self.defer(p);
-                }
                 self.invoke_mref(&method);
             }
             Kind::ReturnKey => self.load_return_key(),

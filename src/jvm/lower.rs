@@ -2085,7 +2085,7 @@ impl<'a> Gen<'a> {
         let desc = method_desc(&taken, &object);
         let method = Rc::new(MethodRef { owner, owner_is_interface: true, name: "apply".to_string(), params: taken, ret: object, desc, kind: Invoke::Interface });
         let captures = self.lir.list(&captures);
-        self.lir.push(Kind::Closure { captures, method, lifted, target }, ft)
+        self.lir.push(Kind::Closure { captures, method, target }, ft)
     }
 
     /// A call of a local def: its lifted method over what it captures, then the arguments; a right-associative
