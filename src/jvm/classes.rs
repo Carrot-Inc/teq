@@ -1377,12 +1377,10 @@ impl<'a> Gen<'a> {
             self.trait_setters(c, &fields);
             self.class_file_storage(c);
         }
-        let mut methods = tc.methods.clone();
+        let mut methods: Vec<FunId> = cx.reached_methods(tc).collect();
         methods.sort_by(|&a, &b| crate::emit::layout::compare_syms(syms, cx.input.interner, prog.funs[a.idx()].sym, prog.funs[b.idx()].sym));
         for m in methods {
-            if cx.input.reach.funs[m.idx()] {
-                self.emit_fun(m);
-            }
+            self.emit_fun(m);
         }
         // A sealed class's companion's `ordinal` (`SyntheticMembers.addMirrorSupport`), and the
         // mirror members of a local class's companion, a local object of its block; the other

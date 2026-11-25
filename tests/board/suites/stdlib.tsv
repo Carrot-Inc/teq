@@ -3349,6 +3349,7 @@ val_overrides_tostring	pass	-
 val_refinement_subst	pass	-	
 value_class_array_store	pass	-	
 value_class_can_equal	pass	-	
+value_class_default_getter_owners	pass	-	
 value_class_extension_order	pass	-	
 value_class_field_constant_if	fail	-	TypeError: Cannot read properties of null (reading 'n')
 value_class_inherited_equality	pass	-	

@@ -5297,15 +5297,22 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The route of a default of a method a value class declares, its getter on the receiver's
+    /// The route of a default a value class's method declares itself, its getter on the receiver's
     /// underlying value as `Gen::lower_extension_call` calls the method: the companion's
     /// `m$default$N$extension` where this build writes it, a library companion's as its class file
-    /// declares it (refused where it has none); None for any other method, and for a value class
-    /// of the program whose companion this build does not write (its `m$default$N` on the box).
+    /// declares it (refused where it has none); None for any other method, for a default the method
+    /// inherits from a universal trait's member (that member's getter, which the box inherits, on
+    /// the boxed receiver), and for a value class of the program whose companion this build does
+    /// not write (its `m$default$N` on the box).
     fn value_class_default_route(&mut self, r: TExprId, s: SymId, i: usize, priors: &[TExprId]) -> Option<DefaultRoute> {
         let cx = self.cx;
-        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return None };
-        if !cx.input.syms.class(c).value_class || cx.input.syms.sym(s).kind != SymKind::Def {
+        let info = cx.input.syms.sym(s);
+        let Owner::Class(c) = info.owner else { return None };
+        if !cx.input.syms.class(c).value_class || info.kind != SymKind::Def {
+            return None;
+        }
+        let inherited = info.info.sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|cl| cl.params.iter()).nth(i)).is_some_and(|p| !p.has_default);
+        if inherited {
             return None;
         }
         let underlying = self.vc_underlying(c);

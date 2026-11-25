@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM a value class method's default argument is passed where the default is an inline method's (`inline def
+  m(a: Int)(b: Int = u + a)`) or inherited from a universal trait's method the class overrides without a default, as
+  scalac; the call threw `NoSuchMethodError` (`V$.m$default$2$extension`).
 - `java.lang.String.format(fmt, args*)` named in full builds and runs on the JVM and in the interpreter, as
   `String.format` does, where the JVM refused it ("no @jvm intrinsic or body for format of java/lang/String") and the
   interpreter stopped ("java.lang.String$ has no member format").

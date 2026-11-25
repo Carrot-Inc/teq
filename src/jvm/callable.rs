@@ -365,6 +365,13 @@ impl<'a> Cx<'a> {
         self.input.syms.class(c).ctor.len() == 1 && !self.input.syms.class(c).value_class
     }
 
+    /// The methods of the class `tc` this build writes, each with its own defaults' getters: those
+    /// the program reaches, a body of their own or none (an inline method's getters are ordinary
+    /// methods: dotty's `isMethodWithExtension` excludes the inline method alone).
+    pub fn reached_methods<'t>(&'t self, tc: &'t crate::tir::TClass) -> impl Iterator<Item = crate::tir::FunId> + 't {
+        tc.methods.iter().copied().filter(|f| self.input.reach.funs[f.idx()])
+    }
+
     /// A value class whose companion module class this build writes with the bodies of its
     /// methods, scalac's `m$extension(u, args)` instance methods, which the box's methods,
     /// the static forwarders of the class and every call go through.
@@ -1321,22 +1328,23 @@ impl<'a> Gen<'a> {
         // as the box, the class they were written in.
         self.drain_pending();
         let saved = self.this_class.replace(c);
-        let funs: Vec<crate::tir::FunId> = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].methods.clone();
+        let funs: Vec<crate::tir::FunId> = cx.reached_methods(&cx.input.prog.classes[cx.tclass_of[c.idx()] as usize]).collect();
         for f in funs {
             let fun = &cx.input.prog.funs[f.idx()];
-            let Some(body) = fun.body.filter(|_| cx.input.reach.funs[f.idx()]) else { continue };
             let m = self.mref(fun.sym);
             let info = cx.input.syms.sym(fun.sym);
             self.context = format!("{}.{}$extension", self.this_name, m.name);
             let mut params: Vec<(Option<SymId>, ErasedType)> = vec![(None, u.clone())];
             params.extend(self.class_file_params(fun.sym, &fun.params).iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
             let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
-            self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), false, &params, m.ret.clone(), &[body]);
-            self.m.this_slot = Some(1);
-            self.m.this_underlying = Some(u.clone());
-            self.code.line(cx.line_of(info.file, info.span.start));
-            self.method_body(fun.sym, &fun.params, body);
-            self.end_method();
+            if let Some(body) = fun.body {
+                self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), false, &params, m.ret.clone(), &[body]);
+                self.m.this_slot = Some(1);
+                self.m.this_underlying = Some(u.clone());
+                self.code.line(cx.line_of(info.file, info.span.start));
+                self.method_body(fun.sym, &fun.params, body);
+                self.end_method();
+            }
             for (i, d) in fun.own_defaults() {
                 let shape = self.default_getter_shape(fun.sym, i);
                 let (before, ret) = (shape.before, shape.ret.clone());

@@ -3345,6 +3345,7 @@ cases/val_overrides_tostring	pass	-
 cases/val_refinement_subst	pass	-	
 cases/value_class_array_store	pass	-	
 cases/value_class_can_equal	pass	-	
+cases/value_class_default_getter_owners	pass	-	
 cases/value_class_extension_order	pass	-	
 cases/value_class_field_constant_if	pass	-	
 cases/value_class_inherited_equality	pass	-	
