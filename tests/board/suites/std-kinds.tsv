@@ -17,6 +17,7 @@ scala.DelayedInit	pass	-
 scala.Double$	pass	-	
 scala.DummyImplicit	pass	-	
 scala.DummyImplicit$	pass	-	
+scala.Dynamic	pass	-	
 scala.EmptyTuple$	pass	-	
 scala.Equals	pass	-	
 scala.Float$	pass	-	
@@ -104,6 +105,7 @@ scala.annotation.tailrec	pass	-
 scala.annotation.targetName	pass	-	
 scala.annotation.threadUnsafe	pass	-	
 scala.annotation.unchecked.uncheckedCaptures	fail	-	class final in the std, class in scala-library
+scala.annotation.unchecked.uncheckedOverride	pass	-	
 scala.annotation.unchecked.uncheckedStable	pass	-	
 scala.annotation.unchecked.uncheckedVariance	pass	-	
 scala.annotation.unroll	pass	-	

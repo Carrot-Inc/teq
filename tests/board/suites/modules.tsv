@@ -60,6 +60,7 @@ companionvalue	pass	-
 compoundlift	pass	-	
 compoundpaths	pass	-	
 concretesetter	pass	-	
+constant_chain	fail	-	constant_chain classes
 constantpickle	pass	-	
 constantproducts	pass	-	
 copyextractors	pass	-	
@@ -137,7 +138,12 @@ exportinherit	pass	-
 exportinheritedbound	pass	-	
 exportinheritedclass	pass	-	
 exportinline	pass	-	
+exportinlinecls	pass	-	
 exportinlinedefaults	fail	-	exportinlinedefaults build
+exportinlineexex	pass	-	
+exportinlineren	pass	-	
+exportinlinesel	pass	-	
+exportinlinestar	pass	-	
 exportinlinevalue	fail	-	known classes: a nested transparent expansion over the products keeps the inner body's positions for what it folds (`7` at the member's literal, the receiver it binds at the call), where the whole bui
 exportorder	pass	-	
 exportoverdefault	pass	-	

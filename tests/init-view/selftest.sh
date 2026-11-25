@@ -75,6 +75,10 @@ cp -r "${digest_dir%/}" "$root/$work/oracle/"
 # scalac's dump names the program's source by its absolute path: the root's own.
 sed -i "s|$PWD/tests/init-view/programs/|$root/tests/init-view/programs/|g" "$root/$work/oracle/$(basename "$digest_dir")/pickler.dump"
 for p in init-view init-view-full init-view-scalac; do : > "$root/tests/pending/$p.txt"; done
+# the board lists hold the one program's row (a test with no row fails a run: tests/support/pending.py's unrecorded)
+for p in init-view init-view-full init-view-scalac; do
+  printf '# test\tverdict\tthe other ways\tthe first line of the difference\n%s\tpass\t-\t\n' "$prog" > "$root/tests/board/suites/$p.tsv"
+done
 # A compiler whose view of teq's products fails (`fail`) or prints nothing (`empty`), any other command the real one's.
 cat > "$tmp/teq-mutant" <<EOF
 #!/bin/bash

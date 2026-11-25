@@ -32,8 +32,10 @@ cases/anon_hidden_generic	pass	-
 cases/anon_instance_refined	pass	-	
 cases/anon_js_object_undefined	pass	-	
 cases/anon_members	pass	-	
+cases/anon_parent_lambda_outer	pass	-	
 cases/anon_parentless_prefixed	pass	-	
 cases/anon_sites	pass	-	
+cases/anon_trait_superclass_call_forms	pass	-	
 cases/anon_unused_capture	pass	-	
 cases/anonymous_class_secondary_constructor	pass	-	
 cases/anonymous_subclass_jdk_constructor	pass	-	
@@ -416,6 +418,7 @@ cases/concat_order_inline	pass	-
 cases/concat_order_long	pass	-	
 cases/concat_order_macro	pass	-	
 cases/concat_order_transparent	pass	-	
+cases/concat_reduced_condition_operand	pass	-	
 cases/concurrent_hash_map_views	pass	-	
 cases/condition_then_bracket_line	pass	-	
 cases/conditional_precedence	pass	-	
@@ -605,6 +608,7 @@ cases/decimal_format_scientific	pass	-
 cases/declared_equality	pass	-	
 cases/declared_erasure_bodies	pass	-	
 cases/def_refinement_receiver	pass	-	
+cases/default_call_bound_ahead_type	pass	-	
 cases/default_getter_approximation_refinement	pass	-	
 cases/default_getter_infers	pass	-	
 cases/default_getter_operands	pass	-	
@@ -938,6 +942,7 @@ cases/fold_targets	pass	-
 cases/foldleft_empty_lambda	pass	-	
 cases/foldleft_nil_lambda	pass	-	
 cases/for_alias_value	pass	-	
+cases/for_alias_value_class_read	pass	-	
 cases/for_case	pass	-	
 cases/for_check_modes_3_3	pass	-	
 cases/for_check_modes_3_8	pass	-	
@@ -1632,6 +1637,7 @@ cases/jdk_enum_stable_values	cannot run	-	no leg builds
 cases/jdk_routes_compiler_subset	pass	-	
 cases/jdk_static_values_stable	cannot run	-	no leg builds
 cases/jdk_statics_import	pass	-	
+cases/join_null_first_branch	pass	-	
 cases/js_any_tostring_dispatch	pass	-	
 cases/js_array_from_slice	pass	-	
 cases/js_array_in_place	pass	-	
@@ -1647,6 +1653,7 @@ cases/js_closure_null_param	cannot run	-	no leg builds
 cases/js_computed_name	cannot run	-	no leg builds
 cases/js_constructor_of	pass	-	
 cases/js_ctor_param_jsname_suspended	pass	-	
+cases/js_default_before_super	pass	-	
 cases/js_dictionary_not_object	pass	-	
 cases/js_dynamic_is_scala_dynamic	pass	-	
 cases/js_dynamic_literal_named	pass	-	
@@ -1892,7 +1899,15 @@ cases/local_lazy_val_return	pass	-
 cases/local_object_case_companion	pass	-	
 cases/local_object_import	pass	-	
 cases/local_objects	pass	-	
+cases/local_trait_capture_as_argument	pass	-	
 cases/local_trait_captures	pass	-	
+cases/local_trait_default_clause	pass	-	
+cases/local_trait_default_escape_prior	pass	-	
+cases/local_trait_default_inline_capture	cannot run	-	no leg builds
+cases/local_trait_default_lazy	pass	-	
+cases/local_trait_default_local_ctor	pass	-	
+cases/local_trait_default_super_prior	pass	-	
+cases/local_trait_default_tail	pass	-	
 cases/local_trait_dispatch	pass	-	
 cases/local_trait_inline	pass	-	
 cases/local_trait_member_lifted	pass	-	
@@ -2147,6 +2162,7 @@ cases/named_reorder_block_prefix_defaults	pass	-
 cases/named_reorder_companion_init	pass	-	
 cases/named_reorder_prefix_kept	pass	-	
 cases/named_then_positional	pass	-	
+cases/named_tuple_covariance	pass	-	
 cases/named_tuple_infix_operand	pass	-	
 cases/named_tuple_linked	pass	-	
 cases/named_tuple_map_values	pass	-	
@@ -2359,6 +2375,7 @@ cases/partial_function_reflect_lambda	pass	-
 cases/partial_functions	pass	-	
 cases/partial_sites	pass	-	
 cases/partial_unification_fixed_args	pass	-	
+cases/patdef_two_slot_binders	pass	-	
 cases/path_member_override_prefix	pass	-	
 cases/path_operations	pass	-	
 cases/path_value_exported_constants	pass	-	
@@ -2623,6 +2640,7 @@ cases/right_assoc_lift_repeated_order	pass	-
 cases/right_assoc_lift_toplevel_value	pass	-	
 cases/right_assoc_lift_written_cast	pass	-	
 cases/right_assoc_member_retry	pass	-	
+cases/right_assoc_object_operand_order	pass	-	
 cases/right_assoc_operand_before_object_load	pass	-	
 cases/right_assoc_operand_object_receivers	pass	-	
 cases/right_assoc_order_concat	pass	-	
@@ -2640,6 +2658,7 @@ cases/right_assoc_order_quoted	pass	-
 cases/right_assoc_order_tuple_cons	pass	-	
 cases/right_assoc_order_two_clauses	pass	-	
 cases/right_assoc_order_using	pass	-	
+cases/right_assoc_throwing_operand_order	pass	-	
 cases/root_method_calls	pass	-	
 cases/root_method_singleton_chain	pass	-	
 cases/runtime_exception_caught	pass	-	
@@ -3116,6 +3135,7 @@ cases/toplevel_init_failed	pass	-
 cases/toplevel_init_given_objects	pass	-	
 cases/toplevel_init_order	pass	-	
 cases/toplevel_init_triggers	pass	-	
+cases/toplevel_pattern_definitions	pass	-	
 cases/toplevel_trait_local_class_in_val_it_names	pass	-	
 cases/tostring_binder_shapes	pass	-	
 cases/tostring_opaque_string	pass	-	
@@ -3312,14 +3332,22 @@ cases/val_overrides_tostring	pass	-
 cases/val_refinement_subst	pass	-	
 cases/value_class_array_store	pass	-	
 cases/value_class_can_equal	pass	-	
+cases/value_class_extension_order	pass	-	
+cases/value_class_field_constant_if	pass	-	
 cases/value_class_inherited_equality	pass	-	
 cases/value_class_intersection_box	pass	-	
 cases/value_class_intersection_upcast	pass	-	
 cases/value_class_renamed_equality	pass	-	
+cases/value_class_right_assoc_companion_load_order	pass	-	
+cases/value_class_right_assoc_companion_shapes	pass	-	
+cases/value_class_right_assoc_infix_object_path	pass	-	
+cases/value_class_right_assoc_operand_order	pass	-	
+cases/value_class_right_assoc_written_object_path	pass	-	
 cases/value_class_scala2_library_equality	pass	-	
 cases/value_class_scala2_source_equality	pass	-	
 cases/value_class_signature_only	pass	-	
 cases/value_class_synthesized_equality	pass	-	
+cases/value_class_synthesized_members	pass	-	
 cases/value_classes	pass	-	
 cases/value_companion_strings	pass	-	
 cases/value_export_case_selectors	pass	-	
@@ -3344,7 +3372,10 @@ cases/vc_box_product	pass	-
 cases/vc_box_same_erasure	pass	-	
 cases/vc_box_stable	pass	-	
 cases/vc_box_stable_extractor	pass	-	
+cases/vc_method_result_ascribed	pass	-	
+cases/vc_named_arguments_result_ascribed	pass	-	
 cases/vc_null_interpolation	pass	-	
+cases/vc_right_assoc_result_ascribed	pass	-	
 cases/vc_stable_pattern	pass	-	
 cases/vdom_dsl	pass	-	
 cases/vector_retention	pass	-	

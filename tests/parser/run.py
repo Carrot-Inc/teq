@@ -579,6 +579,8 @@ def main():
         ran = {name for name, _ in fixtures()}
         update, add = "--update" in sys.argv, "--add" in sys.argv
         held = pending.hold("parser-fixtures", ran, failing, update, add)
+        if not (update or add):
+            held = pending.unrecorded("parser-fixtures", ran) and held
         if held and (update or add):
             pending.write_board_list("parser-fixtures", ran, failing, {})
         sys.exit(0 if held else 1)

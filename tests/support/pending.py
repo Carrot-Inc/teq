@@ -3,7 +3,10 @@
 a tab the first line of its difference when the line was written (information: only the name is compared).
 
 A run of a suite is held to its list: it fails when a listed test passes (the line goes: a list only shrinks)
-and when an unlisted test fails. Every runner calls this with what it ran and what failed:
+and when an unlisted test fails; and to the suite's board list (below): without --update or --add, it fails when a
+test it names (judged, skipped or held to the suite's own lists) has no row there, a test the tree gained that no
+--update recorded, listed or not (`unrecorded`; a suite under --fails-only keeps no row of a pass and is not held to
+it). Every runner calls this with what it ran and what failed:
 
   python3 tests/support/pending.py <suite> <results> [--update] [--add]
 
@@ -157,6 +160,20 @@ def hold(suite, ran, failing, update=False, add=False, out=sys.stdout, marks=0, 
     return not fixed and not new
 
 
+def unrecorded(suite, names, out=sys.stdout):
+    """The tests of a run with no row in the suite's board list (tests/board/suites/<suite>.tsv), printed with
+    their names: a test the tree gained that no --update recorded, whether the pending list names it or not (only
+    a run under --update or --add writes the board's rows). Whether every test of the run has its row."""
+    rows = set()
+    if os.path.exists(board_list(suite)):
+        with open(board_list(suite), encoding="utf-8") as fh:
+            rows = {l.split("\t")[0] for l in fh if l.strip() and not l.startswith("#")}
+    missing = sorted(n for n in names if n not in rows)
+    if missing:
+        print(f"{suite}: no row in tests/board/suites/{suite}.tsv for {len(missing)} of the run's tests (record them: --update): {' '.join(missing[:40])}{' ...' if len(missing) > 40 else ''}", file=out)
+    return not missing
+
+
 def main(argv):
     args = [a for a in argv if not a.startswith("--")]
     flags = [a for a in argv if a.startswith("--")]
@@ -218,6 +235,8 @@ def main(argv):
         unaccounted = sorted(set(read(suite)) - ran - set(skipped) - set(known))
     update, add = "--update" in flags, "--add" in flags
     held = hold(suite, ran, failing, update, add, known=known, skipped=len(skipped))
+    if "--fails-only" not in flags and not (update or add):
+        held = unrecorded(suite, ran | set(failing) | set(skipped) | set(known)) and held
     if unaccounted:
         print(f"{suite}: {len(unaccounted)} listed in tests/pending/{suite}.txt named neither failing, skipped nor passing (kept: no line names its check passing): {' '.join(unaccounted[:40])}{' ...' if len(unaccounted) > 40 else ''}")
         held = False

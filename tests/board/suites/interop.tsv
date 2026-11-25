@@ -1,5 +1,6 @@
 # test	verdict	the other ways	the first line of the difference
 abstract_var_js_object	pass	-	
+block_reduced_to_object_literal	pass	-	
 callbacks	pass	-	
 capture_template_names	pass	-	
 dom_std_shapes	pass	-	

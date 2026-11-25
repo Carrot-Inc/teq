@@ -792,6 +792,7 @@ modifiers	pass	-
 modifiers_table	pass	-	
 named_tuple_mismatch	pass	-	
 named_tuple_mixed	pass	-	
+named_tuple_variance	pass	-	
 narrowed_constant_tag	pass	-	
 negative_literal_comment_newline	pass	-	
 nested_class_override	pass	-	
@@ -1116,6 +1117,7 @@ typer_state_retry_conversion_nested	pass	-
 typer_state_set_aside_late	pass	-	
 typer_state_transparent_given_error	pass	-	
 typer_state_tuple_index_bounds	pass	-	
+typer_template_too_few_arguments_jvm	pass	-	
 types	pass	-	
 unapply_selection	pass	-	
 unapply_synthetic_clash	pass	-	
@@ -1199,6 +1201,8 @@ variance	pass	-
 variance_bounds	pass	-	
 variance_hk_param_args	pass	-	
 variance_private	pass	-	
+variance_private_ctor_var_compound	pass	-	
+variance_protected_this_param	pass	-	
 variance_rules	pass	-	
 variance_unchecked	pass	-	
 view_kinds_negative	pass	-	

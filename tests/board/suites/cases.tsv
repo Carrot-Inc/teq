@@ -424,6 +424,7 @@ concat_order_inline	pass	-
 concat_order_long	pass	-	
 concat_order_macro	pass	-	
 concat_order_transparent	pass	-	
+concat_reduced_condition_operand	pass	-	
 concurrent_hash_map_views	pass	-	
 condition_then_bracket_line	pass	-	
 conditional_precedence	pass	-	
@@ -2213,6 +2214,7 @@ named_reorder_block_prefix_defaults	fail	-	< init
 named_reorder_companion_init	fail	-	< x
 named_reorder_prefix_kept	fail	-	< dx
 named_then_positional	pass	-	
+named_tuple_covariance	pass	-	
 named_tuple_infix_operand	pass	-	
 named_tuple_linked	pass	-	
 named_tuple_map_values	pass	-	

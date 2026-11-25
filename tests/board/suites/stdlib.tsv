@@ -422,6 +422,7 @@ concat_order_inline	pass	-
 concat_order_long	pass	-	
 concat_order_macro	pass	-	
 concat_order_transparent	pass	-	
+concat_reduced_condition_operand	pass	-	
 concurrent_hash_map_views	fail	-	error: Ambiguous overload. The overloaded alternatives of method append in class StringBuilder with types
 condition_then_bracket_line	pass	-	
 conditional_precedence	pass	-	
@@ -611,6 +612,7 @@ decimal_format_scientific	fail	-	RangeError: Maximum call stack size exceeded
 declared_equality	pass	-	
 declared_erasure_bodies	pass	-	
 def_refinement_receiver	pass	-	
+default_call_bound_ahead_type	pass	-	
 default_getter_approximation_refinement	pass	-	
 default_getter_infers	pass	-	
 default_getter_operands	pass	-	
@@ -2169,6 +2171,7 @@ named_reorder_block_prefix_defaults	fail	-	output differs
 named_reorder_companion_init	fail	-	output differs
 named_reorder_prefix_kept	fail	-	output differs
 named_then_positional	pass	-	
+named_tuple_covariance	pass	-	
 named_tuple_infix_operand	pass	-	
 named_tuple_linked	pass	-	
 named_tuple_map_values	pass	-	
@@ -3137,6 +3140,7 @@ toplevel_init_failed	pass	-
 toplevel_init_given_objects	pass	-	
 toplevel_init_order	pass	-	
 toplevel_init_triggers	pass	-	
+toplevel_pattern_definitions	pass	-	
 toplevel_trait_local_class_in_val_it_names	pass	-	
 tostring_binder_shapes	pass	-	
 tostring_opaque_string	pass	-	

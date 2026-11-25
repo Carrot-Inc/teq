@@ -421,6 +421,8 @@ def main():
     # A note is the same on every machine: the checkout as $SCALA3 before the note is cut to its length.
     failing = {r["name"]: (r["status"] + ": " + " ".join(relative_paths(str(r.get("error", ""))).split())[:160]).rstrip(": ") for r in results if r["status"] != "pass"}
     held = pending.hold(suite, ran, failing, args.update, args.add)
+    if not (args.update or args.add):
+        held = pending.unrecorded(suite, ran) and held
     if held and (args.update or args.add) and not args.only and not args.listed and not args.no_dirs:
         pending.write_board_list(suite, ran, failing, {})
     return 0 if held else 1

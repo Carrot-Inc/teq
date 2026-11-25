@@ -1380,6 +1380,9 @@ echo '[toolchain]' > "$x/rust-toolchain.toml"
 echo 'object A' > "$x/tests/cases/end_markers.scala"
 echo ':' > "$x/tests/support/jars.sh"
 mkdir -p "$x/tests/pending" && cp tests/support/pending.py "$x/tests/support/" && : > "$x/tests/pending/cases.txt"
+# the row of the suite's stand-in's one test (below) in the board list (a test with no row fails a run:
+# tests/support/pending.py's unrecorded)
+mkdir -p "$x/tests/board/suites" && printf '# test\tverdict\tthe other ways\tthe first line of the difference\na\tpass\t-\t\n' > "$x/tests/board/suites/cases.tsv"
 printf '#!/bin/bash\n[ "$1" = restore ] && [ -f "$2" ]\n' > "$x/bench/actions/jars.sh"
 # The training's stand-in: one run of the instrumented binary in its place (the trainer, or qemu_wrapper's script).
 cat > "$x/bench/pgo.sh" << 'EOF'

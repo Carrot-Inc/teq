@@ -2379,6 +2379,33 @@ printf "skip win\tanother system's\n" > "$oc/os.txt"
 pend u os.txt --update
 check "outcomes: another system's test is not run on this one, no earlier machine's pass kept" "$oc/pending.log" \
   grep -q -x "$(printf "win\tcannot run\t-\tanother system's")" "$oc/r/tests/board/suites/u.tsv"
+# A run that writes no board list is held to it (tests/support/pending.py unrecorded): a test it names with no row
+# there fails the run, its name in the line, listed or not, judged or not run; --update writes the rows; a piece is
+# held on its own tests; a suite under --fails-only keeps no row of a pass and is not held to it.
+printf '# test\tverdict\tthe other ways\tthe first line of the difference\nold\tpass\t-\t\n' > "$oc/r/tests/board/suites/rec.tsv"
+printf 'lone\tearlier\n' > "$oc/r/tests/pending/rec.txt"
+printf "pass old\npass new\nfail lone\twhy\nskip far\tanother system's\n" > "$oc/rec.txt"
+pend rec rec.txt
+code=$?
+check "outcomes: a test with no row in its board list fails the run, listed or not, not run or not, each named" "$oc/pending.log" eval '[ $code = 1 ] &&
+  grep -q -x "rec: no row in tests/board/suites/rec.tsv for 3 of the run.s tests (record them: --update): far lone new" "$oc/pending.log"'
+pend rec rec.txt --update
+code=$?
+check "outcomes: --update writes the rows the board list lacked" "$oc/pending.log" eval '[ $code = 0 ] &&
+  [ "$(grep -v "^#" "$oc/r/tests/board/suites/rec.tsv" | cut -f1,2 | tr "\t\n" ": ")" = "far:cannot run lone:fail new:pass old:pass " ]'
+pend rec rec.txt
+code=$?
+check "outcomes: with its rows the same run is its board list's" "$oc/pending.log" eval '[ $code = 0 ] && ! grep -q "no row in" "$oc/pending.log"'
+printf 'pass piece\n' > "$oc/piece.txt"
+pend rec piece.txt --partial
+code=$?
+check "outcomes: a piece of a suite is held to the board list on its own tests" "$oc/pending.log" eval '[ $code = 1 ] &&
+  grep -q -x "rec: no row in tests/board/suites/rec.tsv for 1 of the run.s tests (record them: --update): piece" "$oc/pending.log"'
+: > "$oc/r/tests/pending/fo.txt"
+printf 'pass unrowed\n' > "$oc/fo.txt"
+pend fo fo.txt --fails-only --passed=1
+code=$?
+check "outcomes: a suite under --fails-only, which keeps no row of a pass, is not held to its board list" "$oc/pending.log" eval '[ $code = 0 ] && ! grep -q "no row in" "$oc/pending.log"'
 # a project's test the oracle's run ignored: not run, no pass
 printf '{}\n' > "$oc/r/bench/probe/pin.json"
 printf '{"cases_count":2,"modules":{"probe.js":{"cases":{"Success":["p.Ran.a"],"Ignored":["p.Unrun.b"]}}}}\n' > "$oc/r/bench/probe/tests.json"
