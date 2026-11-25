@@ -15,6 +15,7 @@ use super::lazy::{sanitize, UnitVisitor, UnitWalk};
 use super::names::{encode, method_desc};
 use crate::ast::{mods, ListRef};
 use crate::intern::FxMap;
+use crate::lir::{Capture, LiftedShape};
 use crate::source::FileId;
 use crate::symbols::*;
 use crate::tir::*;
@@ -47,16 +48,24 @@ pub(super) enum Folded {
 }
 
 /// The lifted methods of the class being written (`Gen::lifted_entry`), by what each lifts: its name and its place by
-/// its unit's walk (`LiftedNames`). Kept beside the class's plan, which holds such a method only once it is written.
-/// An entry is made where the class first asks for it: the unit's names know no class (a class writes copies of local
-/// defs another class's code declares, `Gen::copy_home`), and a class that lifts nothing walks no unit.
+/// its unit's walk (`LiftedNames`), and what it is made of. Kept beside the class's plan, which holds such a method only
+/// once it is written. An entry is made where the class first names the method: a closure or a call where it is
+/// lowered, a maker where a hold asks for its body; the unit's names know no class (a class writes copies of local defs
+/// another class's code declares, `Gen::copy_home`), and a class that lifts nothing walks no unit.
 #[derive(Default)]
 pub struct LiftedTable {
     entries: FxMap<Placed, (String, Option<u32>)>,
-    /// What each method, by its name and its descriptor, lifts: how a call's `MethodRef` finds the body it names
-    /// (`Gen::ask_lifted_call`). Two of one name and two descriptors are overloads, as dotty's counter numbers `+` and
-    /// `$plus` alike; `None` for a name and descriptor two methods were given, refused where the second was named.
+    /// What each method, by its name and its descriptor, lifts: how a node's `MethodRef` finds the body it names
+    /// (`Gen::ask_lifted_call`, `Gen::lambda_method`). Two of one name and two descriptors are overloads, as dotty's
+    /// counter numbers `+` and `$plus` alike; `None` for a name and descriptor two methods were given, refused where the
+    /// second was named.
     named: FxMap<(String, String), Option<Placed>>,
+    /// What each lifted method takes and is made of, from where the class first meets what it lifts (a closure where it
+    /// is lowered, `Gen::closure_entry`; a local def, a local lazy val and a default's getter where their shapes are
+    /// first asked) to where its body is queued. A local lazy val's accessor and initialiser share its `Def`'s.
+    made: FxMap<Placed, (Rc<LiftedShape>, Rc<LiftedBody>)>,
+    /// How many closures of each typed body the class's code has lowered (`Gen::closure_entry`).
+    lambda_places: FxMap<TExprId, u32>,
 }
 
 impl LiftedTable {
@@ -65,20 +74,46 @@ impl LiftedTable {
     pub(super) fn placed(&self, name: &str, desc: &str) -> Option<Option<Placed>> {
         self.named.get(&(name.to_string(), desc.to_string())).copied()
     }
+
+    /// What the lifted method of `p` takes and is made of, where the class has met it.
+    pub(super) fn made(&self, p: Placed) -> Option<(Rc<LiftedShape>, Rc<LiftedBody>)> {
+        self.made.get(&p).cloned()
+    }
+
+    pub(super) fn keep_made(&mut self, p: Placed, made: (Rc<LiftedShape>, Rc<LiftedBody>)) {
+        self.made.insert(p, made);
+    }
+
+    /// The place of the lifted method of `p` among the class's lifted methods, where the class has named it.
+    pub(super) fn place(&self, p: Placed) -> Option<u32> {
+        self.entries.get(&p).and_then(|(_, place)| *place)
+    }
 }
 
-/// Who makes an entry of the class's table: one of the four that make a lifted method where the class writes or holds
-/// what asks for it, or the lowering of a call, which names the method it calls (`Gen::lifted_call_ref`).
+/// What a lifted method's body is made of: a closure's parameters and body (`code`; a local definition's are its
+/// symbol's), the locals the captured values are in that code, the class whose instance the code runs on where that is
+/// not the class being written (`home`), and the object that stands for that instance where it is read with no
+/// receiver (`module`).
+pub(super) struct LiftedBody {
+    pub code: Option<(Vec<SymId>, TExprId)>,
+    pub captures: Vec<Capture>,
+    pub home: Option<ClassId>,
+    pub module: Option<Rc<str>>,
+}
+
+/// Who makes an entry of the class's table: a lowering, which names the method a closure or a call stands for
+/// (`Gen::closure_entry`, `Gen::lifted_call_ref`), or one of the three that make a lifted method where the class holds
+/// what asks for it.
 #[derive(Clone, Copy)]
 pub(super) enum Asker {
-    LambdaMethod,
+    ClosureEntry,
     LiftedFun,
     LazyMethod,
     LocalDefaultMethod,
     LiftedCallRef,
 }
 
-const ASKERS: [&str; 5] = ["lambda_method", "lifted_fun", "lazy_method", "local_default_method", "lifted_call_ref"];
+const ASKERS: [&str; 5] = ["closure_entry", "lifted_fun", "lazy_method", "local_default_method", "lifted_call_ref"];
 
 /// The entries made, by asker, once their class's plan held a method (`TEQ_LIFTED_LATE`).
 static LATE: [std::sync::atomic::AtomicU32; 5] = [const { std::sync::atomic::AtomicU32::new(0) }; 5];
@@ -91,7 +126,7 @@ fn lifted_late() -> bool {
     *ON.get_or_init(|| std::env::var_os("TEQ_LIFTED_LATE").is_some())
 }
 
-/// The build's line of the entries made late, `LIFTEDLATE<TAB>lambda_method N<TAB>...`, one count by asker, where
+/// The build's line of the entries made late, `LIFTEDLATE<TAB>closure_entry N<TAB>...`, one count by asker, where
 /// `TEQ_LIFTED_LATE` is set; the counts start again for the next build.
 pub fn report_late_entries() {
     if !lifted_late() {
@@ -275,8 +310,8 @@ impl<'a> UnitVisitor<'a> for LiftWalk {
     /// op-assignment's left side, `b(i) += 2` as `b.update(i, b.apply(i) + 2)` with `i` by-name, its thunk in both)
     /// is met at each and lifted at each, as scalac's tree holds it twice (`Applications.typedOpAssign` writes the
     /// lifted left side twice, `e' = e' + args`, and `ElimByName` makes a closure at each): two closures, two names.
-    /// A body the back end copies after the walk (a `finally`'s, which the writer writes on each exit) has one place,
-    /// its lambda one method (`Gen::lambda_method`).
+    /// A body the back end copies after the walk (a `finally`'s, which the writer writes on each exit) is lowered once:
+    /// one place, its lambda one method (`Gen::closure_entry`).
     /// A block dotty may replace by its constant, and with it what it defines: `FirstTransform.transformBlock`'s
     /// `constToLiteral` (FirstTransform.scala 202-203; TreeInfo.scala 753-780) of a pure block whose type is a
     /// constant, a definition a pure statement (`statPurity`). Read from the result's form alone
@@ -554,7 +589,7 @@ impl<'a> Gen<'a> {
     /// The name and the place of the lifted method of `p`, of the shape `shape`, in the class being written, by the
     /// class's table: a lookup of the unit's names the first time the class asks for it, which queues nothing. Two
     /// methods of one name and one descriptor in the class are an internal error, where the second is named.
-    pub(super) fn lifted_entry(&mut self, p: Placed, asker: Asker, shape: &crate::lir::LiftedShape) -> (String, Option<u32>) {
+    pub(super) fn lifted_entry(&mut self, p: Placed, asker: Asker, shape: &LiftedShape) -> (String, Option<u32>) {
         if let Some(entry) = self.lifted_table.entries.get(&p) {
             return entry.clone();
         }
@@ -579,6 +614,19 @@ impl<'a> Gen<'a> {
         let entry = (name, self.lifted_place(p));
         self.lifted_table.entries.insert(p, entry.clone());
         entry
+    }
+
+    /// The name of the lifted method of a closure of the typed body `code`, of the shape and body `made`, in the class
+    /// being written: its place among the class's closures of that body counted where the lowering makes the closure (a
+    /// tree the typer shares between two places is lowered at each, and scalac lifts a method at each, `LiftWalk::lambda`),
+    /// its entry made by the class's table, and what it is made of kept there for the hold that queues its body
+    /// (`Gen::lambda_method`).
+    pub(super) fn closure_entry(&mut self, code: TExprId, made: (Rc<LiftedShape>, Rc<LiftedBody>)) -> String {
+        let at = *self.lifted_table.lambda_places.entry(code).and_modify(|n| *n += 1).or_insert(0);
+        let p = Placed::Lambda(code, at);
+        let (name, _) = self.lifted_entry(p, Asker::ClosureEntry, &made.0);
+        self.lifted_table.keep_made(p, made);
+        name
     }
 
     /// The lifted method of the lambda whose body is `body`, by its unit's walk.

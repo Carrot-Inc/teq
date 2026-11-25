@@ -2,9 +2,9 @@
 //! 3.8.4), over scala-library's runtime: a local's holder of the `LazyRef` family, read through an accessor and
 //! computed by an initialiser under the holder's monitor (`transformLocalDef`, `transformStats`).
 
-use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodDef, MethodFlags, MethodRef, Relation, Visibility};
+use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedShape, LirId, MethodDef, MethodFlags, MethodRef, Relation, Visibility};
 use super::gen::*;
-use super::lifted::{Asker, Placed};
+use super::lifted::{Asker, LiftedBody, Placed};
 use super::names::*;
 use crate::ast::{mods, ListRef};
 use crate::symbols::*;
@@ -63,8 +63,8 @@ impl<'a> Gen<'a> {
     /// (a local lazy val as its holder, the key of its initialiser's returns beside it), then the holder;
     /// the val's value.
     pub(super) fn lazy_shape(&mut self, s: SymId) -> (Rc<LiftedShape>, Rc<LiftedBody>) {
-        if let Some(found) = self.lifted_shapes.get(&s) {
-            return found.clone();
+        if let Some(found) = self.lifted_table.made(Placed::Def(s)) {
+            return found;
         }
         let cx = self.cx;
         let free = self.an.of_lazy(cx, s);
@@ -98,7 +98,7 @@ impl<'a> Gen<'a> {
         let ret = self.sym_type(s);
         let shape = LiftedShape { instance, key: free.nonlocal, captured, params: vec![holder], ret };
         let made = (Rc::new(shape), Rc::new(LiftedBody { code: None, captures, home, module: None }));
-        self.lifted_shapes.insert(s, made.clone());
+        self.lifted_table.keep_made(Placed::Def(s), made.clone());
         made
     }
 

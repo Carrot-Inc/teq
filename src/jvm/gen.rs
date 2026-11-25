@@ -2,10 +2,10 @@
 //! stack, brought to the static type the typer recorded for it (a cast or an unboxing where a
 //! generic result is used at a concrete type), and then to the type its consumer wants.
 
-use crate::lir::{Adaptation, Capture, Comparing, ErasedType, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodRef, Relation};
+use crate::lir::{Adaptation, Capture, Comparing, ErasedType, Invoke, Kind, LiftedShape, LirId, MethodRef, Relation};
 use super::classfile::*;
 use super::free::{Analysis, Free};
-use super::lifted::{Asker, Placed};
+use super::lifted::{Asker, LiftedBody, Placed};
 use super::names::*;
 use super::{Cx, Unit};
 use crate::ast::{mods, ListRef};
@@ -580,8 +580,9 @@ pub struct FinallyFrame {
 pub struct FinallyCopy {
     /// The `try` whose finalizer it is, the same in every copy of the finalizers around it (`Gen::finalizer_of`).
     pub of: u32,
-    /// The lowered bodies of lambdas the copy has met, each its place among its typed body's in the finalizer.
-    pub lambdas: FxMap<*const LiftedBody, u32>,
+    /// The closures the copy has met, by their entries in the class's table, each its place among its typed body's in
+    /// the finalizer.
+    pub lambdas: FxMap<Placed, u32>,
     /// How many places of each lambda's typed body the copy has met.
     pub places: FxMap<TExprId, u32>,
     /// How many `try` blocks with a finalizer the copy has written.
@@ -811,9 +812,6 @@ pub struct Gen<'a> {
     pub(super) draining: bool,
     /// Checked by its key, as `lifted_table` is: a write that misses it panics (`Gen::lifted_fun`, `Gen::lazy_method`).
     pub lifted: FxMap<SymId, Rc<Lifted>>,
-    /// What the lifted method of each local def met takes and binds (`Gen::local_fun_shape`),
-    /// decided where the def is first met; `lifted` holds it once the writer has named it.
-    pub(super) lifted_shapes: FxMap<SymId, (Rc<LiftedShape>, Rc<LiftedBody>)>,
     /// The initialiser of each local lazy val the class's code reads (`x$lzyINITN`), beside its
     /// accessor in `lifted` (`LazyVals.transformLocalDef`).
     pub lifted_lazy_inits: FxMap<SymId, Rc<Lifted>>,
@@ -821,14 +819,10 @@ pub struct Gen<'a> {
     /// (`Gen::lazy_holder`).
     pub lazy_holders: Phased<Vec<super::lazy::LazyHolder>>,
     pub lifted_defaults: FxMap<(SymId, usize), Rc<Lifted>>,
-    /// What the getter of a local def's default takes and binds, decided where it is first lowered or written.
-    pub(super) lifted_default_shapes: FxMap<(SymId, usize), (Rc<LiftedShape>, Rc<LiftedBody>)>,
     pub an: Analysis,
-    /// The lifted methods of the lambdas of the class's code, by the lowered body each closure carries
-    /// (`Gen::lambda_method`), the body kept so that its address names it while the class is written.
-    pub lambdas: FxMap<*const LiftedBody, (Rc<LiftedBody>, Rc<Lifted>)>,
-    /// How many lowered bodies of each lambda's typed body the class's code has met (`Gen::lambda_method`).
-    pub lambda_places: FxMap<TExprId, u32>,
+    /// The lifted methods of the closures of the class's code, by their entries in the class's table
+    /// (`Gen::lambda_method`).
+    pub lambdas: FxMap<Placed, Rc<Lifted>>,
     /// The lifted methods of the lambdas of finalizers, by their typed body, the `try` whose finalizer holds them
     /// and their place among the body's in it: one method for every copy (`Gen::write_finalizer`).
     pub finally_lambdas: FxMap<(TExprId, u32, u32), Rc<Lifted>>,
@@ -956,14 +950,11 @@ impl<'a> Gen<'a> {
             pending_next: Vec::new(),
             draining: false,
             lifted: FxMap::default(),
-            lifted_shapes: FxMap::default(),
             lifted_lazy_inits: FxMap::default(),
             lazy_holders: Phased::new(PhasedField::LazyHolders, Vec::new()),
             lifted_defaults: FxMap::default(),
-            lifted_default_shapes: FxMap::default(),
             an: Analysis::default(),
             lambdas: FxMap::default(),
-            lambda_places: FxMap::default(),
             finally_lambdas: FxMap::default(),
             finally_tries: FxMap::default(),
             tries_written: 0,
@@ -1064,14 +1055,11 @@ impl<'a> Gen<'a> {
         self.pair_bridged.clear();
         self.lifted_table = Default::default();
         self.lifted.clear();
-        self.lifted_shapes.clear();
         self.lifted_lazy_inits.clear();
         self.lazy_holders.clear();
         self.lifted_defaults.clear();
-        self.lifted_default_shapes.clear();
         self.an = Analysis::default();
         self.lambdas.clear();
-        self.lambda_places.clear();
         self.finally_lambdas.clear();
         self.finally_tries.clear();
         self.class_captures.clear();
@@ -6093,49 +6081,55 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The method of the lambda whose shape is `shape` and whose body and captures `body` holds, in the class being
-    /// written: named by its unit (`lambda_name`) and queued where the class's code first meets it. A closure is the
-    /// lowering of one place of the typed tree, and a second lowered body of the same typed body a second place (a tree
-    /// the typer shares between two places, `LiftWalk::lambda`), the method of that place's name, as scalac lifts
-    /// each. What the BACK END copies is one method, as dotty's back end copies a finalizer after `LambdaLift` lifted
-    /// its closures once: one lowered body however often it is written, and a lambda at a place of a finalizer the
-    /// method of that place in every copy, which the writer may lower again (`Gen::write_finalizer`). The places are
-    /// counted in the order the code is written: every closure of a held body is asked when the body is held, before
-    /// it is written (`ask_lifted`), in the order its code is written. A lambda written again with another shape is an
-    /// internal error.
-    pub(super) fn lambda_method(&mut self, shape: &Rc<LiftedShape>, body: &Rc<LiftedBody>) -> Rc<Lifted> {
-        let (params, code) = body.code.clone().expect("a closure's body");
+    /// The method of the closure whose lifted method is `target`, lowered against `shape`: the class's table's entry of
+    /// that name, made where the closure was lowered (`Gen::closure_entry`), its body queued where the class's holds first
+    /// meet the closure, before any of its code is written (`ask_lifted`): one method however often the node is
+    /// written. A lambda at a place of a finalizer is the method of that place in every copy, which the writer may lower
+    /// again (`Gen::write_finalizer`). None where the table has no closure of that name, or two methods of it: the class
+    /// is refused.
+    pub(super) fn lambda_method(&mut self, target: &MethodRef, shape: &Rc<LiftedShape>) -> Option<Rc<Lifted>> {
+        let placed = match self.lifted_table.placed(&target.name, &target.desc) {
+            Some(Some(placed @ Placed::Lambda(..))) => placed,
+            // Refused where the second method of the name and descriptor was named (`Gen::lifted_entry`).
+            Some(None) => return None,
+            _ => {
+                self.unsupported(&format!("internal error: the closure's lifted method {} has no entry in the class", target.name));
+                return None;
+            }
+        };
+        let Some((body, (params, code))) = self.lifted_table.made(placed).and_then(|(_, body)| body.code.clone().map(|code| (body, code))) else {
+            self.unsupported(&format!("internal error: the closure's lifted method {} has no body in the class", target.name));
+            return None;
+        };
         let copy = self.m.finally_copies.last_mut().map(|copy| {
             let places = &mut copy.places;
-            let at = *copy.lambdas.entry(Rc::as_ptr(body)).or_insert_with(|| {
+            let at = *copy.lambdas.entry(placed).or_insert_with(|| {
                 let n = places.entry(code).or_insert(0);
                 *n += 1;
                 *n - 1
             });
             (code, copy.of, at)
         });
-        let met = self.lambdas.get(&Rc::as_ptr(body)).map(|(_, l)| l).or_else(|| copy.and_then(|k| self.finally_lambdas.get(&k)));
+        let met = self.lambdas.get(&placed).or_else(|| copy.and_then(|k| self.finally_lambdas.get(&k)));
         if let Some(l) = met.cloned() {
             if (&*l.shape, &l.captures, l.home, &l.module) != (&**shape, &body.captures, body.home, &body.module) {
                 self.unsupported(&format!("internal error: the lambda {} is written again with other captures", l.name));
             }
-            self.lambdas.insert(Rc::as_ptr(body), (body.clone(), l.clone()));
-            return l;
+            self.lambdas.insert(placed, l.clone());
+            return Some(l);
         }
         if writing() {
             panic!("a write of its class makes the first ask of a lambda's method");
         }
-        assert!(!self.code.frozen, "a lambda is named while a lowering runs");
-        let at = *self.lambda_places.entry(code).and_modify(|n| *n += 1).or_insert(0);
-        let (name, place) = self.lifted_entry(Placed::Lambda(code, at), Asker::LambdaMethod, shape);
-        let lifted = Rc::new(Lifted::new(name, shape.clone(), body.captures.clone(), body.home, body.module.clone(), place));
-        self.lambdas.insert(Rc::as_ptr(body), (body.clone(), lifted.clone()));
+        let place = self.lifted_table.place(placed);
+        let lifted = Rc::new(Lifted::new(target.name.clone(), shape.clone(), body.captures.clone(), body.home, body.module.clone(), place));
+        self.lambdas.insert(placed, lifted.clone());
         if let Some(k) = copy {
             self.finally_lambdas.insert(k, lifted.clone());
         }
         let return_target = if shape.key { self.return_target() } else { ReturnTarget::Unknown };
         self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params, code), return_target });
-        lifted
+        Some(lifted)
     }
 
     /// The def a `return` written here leaves: the method's own, or in a closure the one its key came with.
@@ -6177,33 +6171,31 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The closure whose `method` is the lifted method `lifted`, over the captures on the stack.
-    pub(super) fn lambda_call_site(&mut self, lifted: &Lifted, interface: &ErasedType, method: &MethodRef) {
+    /// The closure whose `method` is the lifted method `target` of the shape `shape`, over the captures on the stack;
+    /// `home` the class whose instance the method's code runs on where that is not the class being written.
+    pub(super) fn lambda_call_site(&mut self, target: &MethodRef, shape: &LiftedShape, home: Option<ClassId>, interface: &ErasedType, method: &MethodRef) {
         let mut captured: Vec<ErasedType> = Vec::new();
-        if lifted.this {
-            let this = match lifted.home {
+        if shape.instance.is_some() {
+            let this = match home {
                 Some(h) => self.class_type(h),
                 None => self.lifted_this_type(),
             };
             captured.push(this);
         }
-        if lifted.key {
+        if shape.key {
             captured.push(ErasedType::object());
         }
-        for c in &lifted.captures {
-            captured.push(if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
-        }
-        self.call_site(lifted, interface, &method.name, &method.desc, &captured);
+        captured.extend(shape.captured.iter().cloned());
+        self.call_site(target, interface, &method.name, &method.desc, &captured);
     }
 
     /// The call site of the interface's `method`, whose erased signature is `sam`.
-    fn call_site(&mut self, lifted: &Lifted, interface: &ErasedType, method: &str, sam: &str, captured: &[ErasedType]) {
-        let owner = self.this_name.clone();
+    fn call_site(&mut self, target: &MethodRef, interface: &ErasedType, method: &str, sam: &str, captured: &[ErasedType]) {
         let cp = &mut self.cw.cp;
-        let impl_ref = if self.is_interface {
-            cp.interface_method(&owner, &lifted.name, &lifted.desc)
+        let impl_ref = if target.owner_is_interface {
+            cp.interface_method(&target.owner, &target.name, &target.desc)
         } else {
-            cp.method(&owner, &lifted.name, &lifted.desc)
+            cp.method(&target.owner, &target.name, &target.desc)
         };
         let impl_handle = cp.method_handle(6, impl_ref);
         let sam_type = cp.method_type(sam);
@@ -6225,8 +6217,8 @@ impl<'a> Gen<'a> {
 
     /// What the lifted method of the local def `s` takes and binds, decided where the def is first met.
     pub(super) fn local_fun_shape(&mut self, s: SymId) -> (Rc<LiftedShape>, Rc<LiftedBody>) {
-        if let Some(found) = self.lifted_shapes.get(&s) {
-            return found.clone();
+        if let Some(found) = self.lifted_table.made(Placed::Def(s)) {
+            return found;
         }
         let cx = self.cx;
         let free = self.an.of_fun(cx, s);
@@ -6234,7 +6226,7 @@ impl<'a> Gen<'a> {
         let params = self.param_types(s);
         let ret = self.return_type(s);
         let made = self.lifted_shape(&free, params, ret, Some(s), None);
-        self.lifted_shapes.insert(s, made.clone());
+        self.lifted_table.keep_made(Placed::Def(s), made.clone());
         made
     }
 
@@ -6279,8 +6271,8 @@ impl<'a> Gen<'a> {
     /// the default's, in the class file's order); it returns what that getter returns, a by-name parameter's value
     /// (`Desugar.addDefaultGetters`).
     pub(super) fn local_default_shape(&mut self, s: SymId, i: usize) -> (Rc<LiftedShape>, Rc<LiftedBody>) {
-        if let Some(found) = self.lifted_default_shapes.get(&(s, i)) {
-            return found.clone();
+        if let Some(found) = self.lifted_table.made(Placed::Default(s, i)) {
+            return found;
         }
         let cx = self.cx;
         let free = Rc::new(self.an.of_default(cx, s, i));
@@ -6289,7 +6281,7 @@ impl<'a> Gen<'a> {
         let shape = self.default_getter_shape(s, i);
         let params: Vec<ErasedType> = def.params[..shape.before].to_vec();
         let made = self.lifted_shape(&free, params, shape.ret, Some(s), None);
-        self.lifted_default_shapes.insert((s, i), made.clone());
+        self.lifted_table.keep_made(Placed::Default(s, i), made.clone());
         made
     }
 

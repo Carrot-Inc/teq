@@ -201,27 +201,13 @@ pub enum LiftedFrom {
 
 /// A captured value as the code of a lifted method names it: the local `sym` of the declared
 /// type `ty`, held in its reference cell where `cell`; where `key`, not the local but the key of
-/// the non-local returns that travels with the local lazy val `sym`. Transitional with
-/// `LiftedBody`.
+/// the non-local returns that travels with the local lazy val `sym`.
 #[derive(Clone, PartialEq)]
 pub struct Capture {
     pub sym: SymId,
     pub cell: bool,
     pub ty: ErasedType,
     pub key: bool,
-}
-
-/// What the generator of the typed IR writes a lifted method's body from: a closure's
-/// parameters and body (`code`; a local definition's are its symbol's), the locals the captured
-/// values are in that code, the class whose instance the code runs on where that is not the
-/// class being written (`home`), and the object that stands for that instance where it is read
-/// with no receiver (`module`). Transitional: it ends when lifted bodies are methods of the
-/// class-level plan, their parameters carrying these roles.
-pub struct LiftedBody {
-    pub code: Option<(Vec<SymId>, TExprId)>,
-    pub captures: Vec<Capture>,
-    pub home: Option<ClassId>,
-    pub module: Option<Rc<str>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -412,13 +398,13 @@ pub enum Kind {
     /// for none, a cast, a box or its content, a primitive conversion (`Gen::adapt`).
     Adapt { value: LirId, from: ErasedType, how: Adaptation },
     /// A function object: an instance of the interface of `method` whose `method` calls the
-    /// lifted method `lifted` with the captured values, then its own arguments, and gives its
-    /// result. `captures` are those values as `lifted` takes them (the instance, the key, the
-    /// captured ones), evaluated here in that order. The node's type is the interface. A writer
-    /// makes the lifted method and names it (as dotty's LambdaLift names it in the unit, one
-    /// method however often the node is written). `body` is what the method is made of,
-    /// transitional (`LiftedBody`).
-    Closure { captures: List, method: Rc<MethodRef>, lifted: Rc<LiftedShape>, body: Rc<LiftedBody> },
+    /// lifted method `target`, of the shape `lifted`, with the captured values, then its own
+    /// arguments, and gives its result. `captures` are those values as `target` takes them (the
+    /// instance, the key, the captured ones), evaluated here in that order. The node's type is the
+    /// interface. `target` is static, of the class being written, named where the closure is
+    /// lowered as dotty's LambdaLift names it in the unit: one method however often the node is
+    /// written.
+    Closure { captures: List, method: Rc<MethodRef>, lifted: Rc<LiftedShape>, target: Rc<MethodRef> },
     /// A call of a lifted method (`from`): a local definition's, the getter of its default, or the
     /// accessor or the initialiser of a local lazy val. `method` is static, of the class being
     /// written or, for a lazy val's, of the class declaring the val, and named as `LambdaLift` names

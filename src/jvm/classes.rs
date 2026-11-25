@@ -817,9 +817,9 @@ impl<'a> Gen<'a> {
                 continue;
             }
             match kind {
-                Kind::Closure { lifted, body, .. } => {
-                    let (lifted, body) = (lifted.clone(), body.clone());
-                    self.lambda_method(&lifted, &body);
+                Kind::Closure { lifted, target, .. } => {
+                    let (lifted, target) = (lifted.clone(), target.clone());
+                    self.lambda_method(&target, &lifted);
                 }
                 Kind::LiftedCall { from: LiftedFrom::Default(_), .. } => stack.push((id, true)),
                 Kind::LiftedCall { method, from, lifted, .. } => {

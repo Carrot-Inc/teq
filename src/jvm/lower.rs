@@ -2068,22 +2068,24 @@ impl<'a> Gen<'a> {
         nodes
     }
 
-    /// A function value: its body lifted to a method over what it captures, and the instance
-    /// of `scala.FunctionN` whose `apply` calls that method.
-    pub(super) fn lower_lambda(&mut self, params: ListRef, body: TExprId) -> LirId {
+    /// A function value: its body `code` lifted to a method over what it captures, named where it is lowered
+    /// (`Gen::closure_entry`), and the instance of `scala.FunctionN` whose `apply` calls that method.
+    pub(super) fn lower_lambda(&mut self, params: ListRef, code: TExprId) -> LirId {
         let cx = self.cx;
         let params: Vec<SymId> = cx.input.prog.sym_list(params).to_vec();
-        let free = self.an.of_lambda(cx, &params, body);
+        let free = self.an.of_lambda(cx, &params, code);
         let object = ErasedType::object();
         let taken = vec![object.clone(); params.len()];
-        let (lifted, body) = self.lifted_shape(&free, taken.clone(), object.clone(), None, Some((params, body)));
+        let (lifted, body) = self.lifted_shape(&free, taken.clone(), object.clone(), None, Some((params, code)));
+        let name = self.closure_entry(code, (lifted.clone(), body.clone()));
+        let target = lifted_method_ref(name, &lifted, (self.this_name.clone(), self.is_interface));
         let captures = self.lower_captures(lifted.instance.is_some(), body.home, lifted.key, None, &body.captures);
         let ft = self.function_type(taken.len());
         let ErasedType::L(owner) = ft.clone() else { unreachable!("a function's class") };
         let desc = method_desc(&taken, &object);
         let method = Rc::new(MethodRef { owner, owner_is_interface: true, name: "apply".to_string(), params: taken, ret: object, desc, kind: Invoke::Interface });
         let captures = self.lir.list(&captures);
-        self.lir.push(Kind::Closure { captures, method, lifted, body }, ft)
+        self.lir.push(Kind::Closure { captures, method, lifted, target }, ft)
     }
 
     /// A call of a local def: its lifted method over what it captures, then the arguments; a right-associative
@@ -2132,11 +2134,9 @@ impl<'a> Gen<'a> {
 
     /// The method a call of the lifted method of `placed` calls, of the class `owner` and of the shape `lifted` the
     /// lowering has: its name by the class's table (`Gen::lifted_entry`), a lookup that queues nothing.
-    fn lifted_call_ref(&mut self, placed: Placed, lifted: &LiftedShape, (owner, owner_is_interface): (Rc<str>, bool)) -> Rc<MethodRef> {
+    fn lifted_call_ref(&mut self, placed: Placed, lifted: &LiftedShape, owner: (Rc<str>, bool)) -> Rc<MethodRef> {
         let (name, _) = self.lifted_entry(placed, Asker::LiftedCallRef, lifted);
-        let params = lifted.takes();
-        let desc = method_desc(&params, &lifted.ret);
-        Rc::new(MethodRef { owner, owner_is_interface, name, params, ret: lifted.ret.clone(), desc, kind: Invoke::Static })
+        lifted_method_ref(name, lifted, owner)
     }
 
     /// A member read on a receiver: its field where this class's own code may name it, else its
@@ -2744,4 +2744,12 @@ impl<'a> Gen<'a> {
         let how = self.adaptation(from, to);
         self.lir.push(Kind::Adapt { value, from: from.clone(), how }, to.clone())
     }
+}
+
+/// The static method of the class `owner` (an interface where `owner_is_interface`) named `name`, of the shape `lifted`:
+/// the lifted method a closure or a call names.
+fn lifted_method_ref(name: String, lifted: &LiftedShape, (owner, owner_is_interface): (Rc<str>, bool)) -> Rc<MethodRef> {
+    let params = lifted.takes();
+    let desc = method_desc(&params, &lifted.ret);
+    Rc::new(MethodRef { owner, owner_is_interface, name, params, ret: lifted.ret.clone(), desc, kind: Invoke::Static })
 }

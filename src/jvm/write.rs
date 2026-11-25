@@ -400,12 +400,10 @@ impl<'a> Gen<'a> {
                 self.write(value);
                 self.write_adaptation(how, &from, &ty);
             }
-            // The lifted method is named by its unit and its body takes its place among the class's
-            // methods where the class's code first writes the closure (`Gen::lambda_method`).
-            Kind::Closure { captures, method, lifted, body } => {
+            Kind::Closure { captures, method, lifted, target } => {
                 self.write_arguments(captures, None);
-                let lifted = self.lambda_method(&lifted, &body);
-                self.lambda_call_site(&lifted, &ty, &method);
+                let home = self.lambda_method(&target, &lifted).and_then(|l| l.home);
+                self.lambda_call_site(&target, &lifted, home, &ty, &method);
             }
             // The method's body, where no held tree has asked for it, is asked for where the call is written.
             Kind::LiftedCall { method, from, lifted, captures, args, order } => {
