@@ -2376,6 +2376,7 @@ cases/parent_arg_plain_local	pass	-
 cases/parent_argument_contents	pass	-	
 cases/parent_argument_enclosing_member	pass	-	
 cases/parent_argument_scope	pass	-	
+cases/parent_default_type_args	pass	-	
 cases/partial_application_expected_function	pass	-	
 cases/partial_application_once	pass	-	
 cases/partial_application_using_clause	pass	-	

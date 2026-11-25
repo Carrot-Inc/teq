@@ -1032,7 +1032,15 @@ impl<'w, 'a> P<'w, 'a> {
                     (DefaultOf::Method(s), Some((m, o, n))) if m == s && recv.is_some() => Getter::Forwarder(s, o, n),
                     (DefaultOf::Method(s), _) => Getter::Method(s, Some(recv.map_or(Qual::Owner, Qual::Expr))),
                 };
-                let targs: Vec<TypeId> = recs.targs.map(|l| self.w.types.items(l).to_vec()).unwrap_or_default();
+                // A constructor's getter is applied to its call's type arguments (scalac's `C.<init>$default$1[Int]`),
+                // which the typer records on a `new`'s defaults and not on a parent call's (a secondary constructor's
+                // there it infers as `Nothing`).
+                let mut targs: Vec<TypeId> = recs.targs.map(|l| self.w.types.items(l).to_vec()).unwrap_or_default();
+                if let (Getter::Ctor(k, ..), Some((c, t))) = (getter, &self.ctor_targs) {
+                    if k == *c {
+                        targs = t.clone();
+                    }
+                }
                 self.default_arg(getter, index, &targs, &priors)
             }
             TExpr::Lambda(params, body) => match form {
@@ -4375,6 +4383,12 @@ impl<'w, 'a> P<'w, 'a> {
     /// arguments after those a local class's captures take; `prelude` the temporaries of named
     /// arguments, before the call in a block.
     fn ctor_call(&mut self, c: ClassId, via: Option<SymId>, targs: &[TypeId], args: &[TExprId], new_ty: TypeId, prelude: Option<ListRef>) {
+        let outer = self.ctor_targs.replace((c, targs.to_vec()));
+        self.ctor_call_args(c, via, targs, args, new_ty, prelude);
+        self.ctor_targs = outer;
+    }
+
+    fn ctor_call_args(&mut self, c: ClassId, via: Option<SymId>, targs: &[TypeId], args: &[TExprId], new_ty: TypeId, prelude: Option<ListRef>) {
         // The type parameters of the constructor called, through `via` or the class's own, and of
         // its class, which a defined formal names none of (`ParamUse::defined`).
         let formals: Vec<TParamId> = match via {

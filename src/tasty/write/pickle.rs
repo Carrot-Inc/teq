@@ -336,6 +336,9 @@ struct P<'w, 'a> {
     /// Inside a parent constructor call's arguments, where the class's parameters are named
     /// without `this` (`TERMREF m (THIS C)`, an identifier), as the class has no instance there.
     in_parent_args: bool,
+    /// The class and type arguments of the constructor call whose arguments are being written, which a default
+    /// getter of that class is applied to (`C[Int](C.<init>$default$1[Int])`).
+    ctor_targs: Option<(ClassId, Vec<TypeId>)>,
     /// The classes the bodies define, by the wide address of their `TYPEDEF`, whose origins the
     /// section records.
     class_origins: Vec<(usize, ClassId)>,
@@ -613,6 +616,7 @@ impl<'w, 'a> P<'w, 'a> {
             span_ctx: None,
             anon_parent_args: None,
             in_parent_args: false,
+            ctor_targs: None,
             class_origins: Vec::new(),
             origin_sources: Vec::new(),
             inlined_callees: Vec::new(),

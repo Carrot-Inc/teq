@@ -2431,6 +2431,7 @@ parent_arg_plain_local	pass	-
 parent_argument_contents	pass	-	
 parent_argument_enclosing_member	pass	-	
 parent_argument_scope	pass	-	
+parent_default_type_args	pass	-	
 parser_combinators_regex	pass	-	
 parser_combinators_sequence	pass	-	
 partial_application_expected_function	pass	-	
