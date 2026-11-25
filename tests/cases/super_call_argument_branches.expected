@@ -1,0 +1,14 @@
+if 1: 1002 1002 102
+match 1: 1020 120
+try 1: 1010 110
+throw 1: -7
+nested 1: 1203
+lambda 1: List(1002, 1003)
+object 1: 1122
+if 0: 1003 1003 103
+match 0: 1010 110
+try 0: 999 99
+throw 0: 1000
+nested 0: 1204
+lambda 0: List(1003, 1003)
+object 0: 1113

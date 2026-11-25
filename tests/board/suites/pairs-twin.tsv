@@ -3061,6 +3061,7 @@ cases/structural_signatures	pass	-
 cases/structural_value_class	pass	-	
 cases/summon_from_wildcard_given	pass	-	
 cases/summoner_sugar	pass	-	
+cases/super_call_argument_branches	pass	-	
 cases/super_call_java_library_template	pass	-	
 cases/super_call_java_superclass	pass	-	
 cases/super_call_kinds	pass	-	

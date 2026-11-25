@@ -7,6 +7,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM a super call whose argument holds a branch, a match or a try (`super.g(1, if n > 0 then 2 else 3)`) no
+  longer fails to load ("VerifyError: Bad type on operand stack").
 - On the JVM and JavaScript, a class whose superclass comes through a trait read from a library or an upstream module
   (`class E extends NoStackTrace`) extends that class, as scalac's does; the JVM's verifier refused it.
 - On the JVM `super.toString()`, `super.hashCode()` and `super.equals(x)` in a class over `java.util.ArrayList`, or in a

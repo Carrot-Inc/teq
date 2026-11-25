@@ -2554,7 +2554,11 @@ impl<'a> Gen<'a> {
                 m
             }
         };
-        let receiver = self.lower_receiver(r, s, &None);
+        // The receiver is the instance at its own class, as the verifier tracks it and `invokespecial` requires it
+        // (JVMS 4.10.1.9), where a frame inside the arguments (a join, the code after a `return` or a `throw`) stands
+        // over it; as `lower_object_super_call` takes it. A value class's extension method has no instance of its class
+        // (`this` is the underlying value): its receiver stays the method's owner's.
+        let receiver = if self.m.this_underlying.is_some() { self.lower_receiver(r, s, &None) } else { self.lower_instance() };
         let (args, order) = self.lower_arguments(Some(s), args, &method.params);
         let place = cx.input.prog.span_of(e).map(|(file, span)| (file, span.end));
         let ret = method.ret.clone();
